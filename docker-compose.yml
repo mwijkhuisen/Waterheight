@@ -1,0 +1,47 @@
+services:
+  db:
+    # The storage decision is PostgreSQL + TimescaleDB; this is the official
+    # image, pinned to a PostgreSQL major so upgrades are deliberate.
+    image: timescale/timescaledb:2.17.2-pg16
+    environment:
+      POSTGRES_USER: rws
+      POSTGRES_PASSWORD: rws
+      POSTGRES_DB: rws
+    ports:
+      - '5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U rws -d rws']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Runs migrations once, then exits. The API waits for it to finish.
+  migrate:
+    build: .
+    command: ['npm', 'run', 'migrate', '--workspace', '@rws/server']
+    environment:
+      DATABASE_URL: postgres://rws:rws@db:5432/rws
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    command: ['node', 'packages/server/dist/index.js']
+    environment:
+      DATABASE_URL: postgres://rws:rws@db:5432/rws
+      PORT: '3000'
+      RWS_API_BASE: ${RWS_API_BASE:-https://ddapi20-waterwebservices.rijkswaterstaat.nl}
+      RWS_WFS_URL: ${RWS_WFS_URL:-https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/ows}
+      RWS_API_KEY: ${RWS_API_KEY:-dummy}
+      ACTIVE_WINDOW_DAYS: ${ACTIVE_WINDOW_DAYS:-7}
+    ports:
+      - '3000:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db-data:

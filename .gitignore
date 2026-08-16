@@ -7,3 +7,4 @@ dist/
 # versions used by the Phase 2 normaliser tests live in fixtures/trimmed/.
 /fixtures/*
 !/fixtures/trimmed/
+*.tsbuildinfo
