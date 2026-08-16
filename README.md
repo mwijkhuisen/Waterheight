@@ -3,9 +3,10 @@
 A map of the Netherlands showing the measurement locations Rijkswaterstaat monitors, backed by a thin
 API over the official Rijkswaterstaat WaterWebservices (WADAR / `ddapi20`).
 
-**Status: Phase 4 complete** — schema, ingestion, API, map frontend and the backfill pipeline.
-Charts over the full history and the polished detail panel are Phase 5. The full brief is in [`PROMPT.md`](PROMPT.md); the Phase 1 measurements that
-shaped these decisions are in [`spike/PHASE1-FINDINGS.md`](spike/PHASE1-FINDINGS.md).
+**Status: complete.** Schema, ingestion, API, clustered map, backfill pipeline and the detail panel
+with charts over the full history. The full brief is in [`PROMPT.md`](PROMPT.md); the Phase 1
+measurements that shaped these decisions are in
+[`spike/PHASE1-FINDINGS.md`](spike/PHASE1-FINDINGS.md).
 
 ## Quick start
 
@@ -201,6 +202,37 @@ compartment list narrows to what the chosen quantity can actually yield so the t
 combine into an empty map, search is debounced and flies the map to a unique match, and every state
 has an explicit rendering — loading skeletons, an empty state naming what to change, and an error
 notice — never a silent blank. On screens under 720px the sidebar becomes a bottom sheet.
+
+### The detail panel and chart
+
+Clicking a marker opens a panel with the location's identity, freshness with an explicit timestamp,
+the latest reading as a headline number, a measurement picker, a period selector (24h / 48h / 7d /
+30d / 1y) and a chart, plus a deep link to the matching waterinfo.rws.nl page.
+
+The chart is hand-rolled inline SVG rather than a charting library: the requirement is one line, one
+band, an axis pair and a crosshair, and owning the markup keeps theming, the aggregate band and the
+accessibility story straightforward for about 200 lines.
+
+**The client picks the resolution** — raw for 24h and 48h, hourly for 7d and 30d, daily for a year —
+so the one-year view never begins by asking for 52,000 raw points. The server may coarsen further
+under its own point cap and always reports what it actually served; when the two differ the panel
+says so rather than quietly drawing something other than what was asked for.
+
+**When the data is aggregated, it looks aggregated:** a min–max band sits behind the mean line, and
+the caption names it. The tooltip adds the bucket's range and reading count. A gap in the series
+breaks the line rather than drawing a straight segment across it, which would invent measurements
+that were never taken.
+
+Design rules the chart follows: a 2px line with round caps, the band as a ~10% wash of the same hue,
+hairline solid gridlines one step off the surface, one y-axis only, and text in text tokens rather
+than the series colour. The crosshair snaps to the nearest point so the reader aims at a time rather
+than at a 2px line, and the tooltip leads with the value because the reader already knows the series.
+Tooltips never gate a value: the latest reading is a headline number, the endpoint carries a dot, and
+**Show values** opens a table of the underlying numbers.
+
+If a location has no stored history for a measurement, the panel says so and names the fix — short
+periods are fetched on demand, and the full year comes from the batch backfill — rather than
+rendering an empty chart.
 
 ## Backfill
 

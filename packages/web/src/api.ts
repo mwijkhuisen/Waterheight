@@ -10,7 +10,9 @@ import type {
   LatestValue,
   Location,
   LocationDetail,
+  ObservationsResponse,
   QuantitiesResponse,
+  Resolution,
 } from '@rws/shared';
 
 export class ApiRequestError extends Error {
@@ -65,4 +67,30 @@ export function fetchLocation(code: string, signal?: AbortSignal): Promise<Locat
 
 export function fetchLatest(code: string, signal?: AbortSignal): Promise<LatestValue[]> {
   return get<LatestValue[]>(`/api/locations/${encodeURIComponent(code)}/latest`, signal);
+}
+
+export interface ObservationQuery {
+  code: string;
+  grootheid: string;
+  compartiment?: string | undefined;
+  from: Date;
+  to: Date;
+  resolution?: Resolution | undefined;
+}
+
+export function fetchObservations(
+  query: ObservationQuery,
+  signal?: AbortSignal,
+): Promise<ObservationsResponse> {
+  const params = new URLSearchParams({
+    grootheid: query.grootheid,
+    from: query.from.toISOString(),
+    to: query.to.toISOString(),
+  });
+  if (query.compartiment) params.set('compartiment', query.compartiment);
+  if (query.resolution) params.set('resolution', query.resolution);
+  return get<ObservationsResponse>(
+    `/api/locations/${encodeURIComponent(query.code)}/observations?${params}`,
+    signal,
+  );
 }

@@ -1,6 +1,7 @@
 node_modules/
 .env
 dist/
+dist-types/
 
 # Raw spike dumps are too large for git (the WFS layer alone is ~173 MB).
 # Regenerate them with `node spike/phase1-spike.mjs`; the trimmed, committed
