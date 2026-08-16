@@ -3,8 +3,8 @@
 A map of the Netherlands showing the measurement locations Rijkswaterstaat monitors, backed by a thin
 API over the official Rijkswaterstaat WaterWebservices (WADAR / `ddapi20`).
 
-**Status: Phase 2 complete** — schema, ingestion and API. The map frontend is Phase 3 and the batch
-backfill is Phase 4. The full brief is in [`PROMPT.md`](PROMPT.md); the Phase 1 measurements that
+**Status: Phase 3 complete** — schema, ingestion, API and the map frontend. The batch backfill is
+Phase 4; charts and the full detail panel are Phase 5. The full brief is in [`PROMPT.md`](PROMPT.md); the Phase 1 measurements that
 shaped these decisions are in [`spike/PHASE1-FINDINGS.md`](spike/PHASE1-FINDINGS.md).
 
 ## Quick start
@@ -14,7 +14,7 @@ cp .env.example .env
 docker compose up -d          # database + migrations + API on :3000
 npm install
 npm run refresh               # populate locations and the quantity catalogue
-curl localhost:3000/api/health
+npm run dev:web               # map on :5173, proxying /api to :3000
 ```
 
 `docker compose up` brings up TimescaleDB, applies migrations and leaves a usable but **empty**
@@ -43,7 +43,8 @@ OphalenWaarnemingen              ──► ingest/observations┤
 ```
 
 Three packages: `@rws/shared` holds the types both sides of the wire agree on, `@rws/server` is the
-API and ingestion, and the map client arrives in Phase 3.
+API and ingestion, and `@rws/web` is the map client. The shared package is the contract — a change to
+a server response shape is a compile error in the client rather than a runtime surprise.
 
 ### Why this API exists at all
 
@@ -168,6 +169,31 @@ page is retried in seconds rather than restarting 173 MB), it validates every ro
 timestamp plausibility, and it compares the parsed total against the layer's own `resultType=hits`
 count, refusing to reconcile `active` flags if too much is missing. Declining to refresh is always
 recoverable; mass-deactivating two-thirds of the map is not.
+
+## Frontend
+
+A React + Vite app rendering a MapLibre GL map over PDOK's grey Dutch basemap (free, no API key).
+
+**Clustering is native to the GeoJSON source**, not a plugin: markers are one GPU circle layer, so
+several thousand points cost one draw call rather than that many DOM nodes. Clicking a cluster zooms
+to its expansion level; clicking a marker opens the detail panel.
+
+**Marker colour encodes freshness, never value.** Values across quantities share no scale — a water
+level in cm and a wind speed in m/s are not comparable — so colouring by value would imply a
+comparison that does not exist. The two states use the reserved status colours, validated for
+colour-vision deficiency (worst-pair ΔE 11.3 protan, 27.6 normal vision). Because the "delayed"
+yellow sits below 3:1 on a light surface, it never carries meaning alone: every marker gets a dark
+ring, the legend names both states with their thresholds, and the panel prints the exact timestamp.
+
+The layers are added on the style's `style.load`, deliberately **not** on `load`. `load` waits for
+the first basemap tiles, so an unreachable or slow tile provider would take the entire data layer
+down with it. The markers are the product; the basemap is decoration.
+
+Other behaviour worth knowing: filters are driven server-side (`grootheid`, `compartiment`, `q`), the
+compartment list narrows to what the chosen quantity can actually yield so the two filters cannot
+combine into an empty map, search is debounced and flies the map to a unique match, and every state
+has an explicit rendering — loading skeletons, an empty state naming what to change, and an error
+notice — never a silent blank. On screens under 720px the sidebar becomes a bottom sheet.
 
 ## Tests
 
