@@ -1,0 +1,3 @@
+HTTP 400
+
+{"confirmationEmailData":"EmailData moet worden meegegeven als: Email_bevestiging","failureEmailData":"EmailData moet worden meegegeven als: Email_fout","bulkObservationSearchQueryRequest":"BulkObservationSearchQuery moet worden meegegeven als: Zoekvraag","successEmailData":"EmailData moet worden meegegeven als: Email_succes"}

@@ -1,0 +1,469 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1562",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          6.014182,
+          52.645198
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "genemuiden.vogeleiland.raai1.pq9",
+        "LOCATIE_NAAM": "Genemuiden, Vogeleiland, raai 1, PQ 009",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1563",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.884948,
+          51.350016
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "westerschelde.stortvak6",
+        "LOCATIE_NAAM": "Westerschelde, stortvak 06",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1564",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.79521,
+          51.215913
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "sasvangent.poelpolder",
+        "LOCATIE_NAAM": "Sas van Gent, Poel polder",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1565",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.799987,
+          51.367238
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "middelplaat.2242",
+        "LOCATIE_NAAM": "Middelplaat, pt.2242",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1566",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.780161,
+          52.590148
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "ketelmeer.8.4",
+        "LOCATIE_NAAM": "Ketelmeer, 8, 4",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1567",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.306642,
+          51.88056
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "vogeltelvak.sovoncodebr2331",
+        "LOCATIE_NAAM": "Vogeltelvak, SOVON-code BR2331",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1568",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.098274,
+          51.572734
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "wilhelminakanaal.km25",
+        "LOCATIE_NAAM": "Wilhelminakanaal, km 25",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1569",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.325,
+          52.7
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "hollandsekust.noord.windparkzuid",
+        "LOCATIE_NAAM": "Hollandse Kust, Noord Windpark Zuid",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_156a",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.075352,
+          52.450457
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "gouwzee.zuid.raai3.pq20",
+        "LOCATIE_NAAM": "Gouwzee, zuid, raai 3, PQ 020",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_156b",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.23029,
+          52.314152
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "huizen.raai1.pq4",
+        "LOCATIE_NAAM": "Huizen, raai 1, PQ 004",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_156c",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.920102,
+          51.947708
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "binnenlek.nevengeul",
+        "LOCATIE_NAAM": "Binnenlek, nevengeul",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_156d",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.71399,
+          51.895221
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "gorslandhoeve.raai4.3",
+        "LOCATIE_NAAM": "Gors Landhoeve, raai 4_3",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_156e",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.844526,
+          51.735989
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "zuiderklip.geul3.raai5.22",
+        "LOCATIE_NAAM": "Zuiderklip, geul 3, raai 5, 22",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_156f",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.17106,
+          52.328871
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "naarderbos.raai6.pq22",
+        "LOCATIE_NAAM": "Naarderbos, raai 6, PQ 022",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1570",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.714725,
+          51.895323
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "gorslandhoeve.raai5.7",
+        "LOCATIE_NAAM": "Gors Landhoeve, raai 5_7",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1571",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.096855,
+          52.132547
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "loswalnoord.",
+        "LOCATIE_NAAM": "Loswal Noord,",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1572",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.347933,
+          51.897598
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "nieuwemaaskmr.10051013.vaknm3.rmndnm3",
+        "LOCATIE_NAAM": "Nieuwe Maas kmr.1005-1013, vak nm3, RMNDNM3",
+        "LOCATIE_OMSCHRIJVING": "zie kaart HAVKT.ZIP in DONAR",
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1573",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.940452,
+          52.378349
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "javaeiland",
+        "LOCATIE_NAAM": "Javaeiland",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1574",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.170159,
+          51.771354
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "haringvliet.terrein407.pq7p1",
+        "LOCATIE_NAAM": "Haringvliet, terrein 407, PQ 7.1",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1575",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.680648,
+          51.992606
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "moordrecht.oost.3",
+        "LOCATIE_NAAM": "Moordrecht, oost, locatie 03",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1576",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.14202,
+          51.430663
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "oosterschelde.terrein203.pq76",
+        "LOCATIE_NAAM": "Oosterschelde, terrein 203, PQ 76",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1577",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.051773,
+          52.64033
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "markermeer.ondiep.23.2",
+        "LOCATIE_NAAM": "Markermeer, ondiep, 23, 2",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1578",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.774188,
+          51.779479
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "noordwaard.west.raai4.pq11",
+        "LOCATIE_NAAM": "Noordwaard, west, raai4, PQ 011",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_1579",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.0469,
+          52.6402
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "hoorn.noord",
+        "LOCATIE_NAAM": "Hoorn-Noord",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "locaties.fid-52f462e6_1a00bf713c8_157a",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.838236,
+          51.739009
+        ]
+      },
+      "geometry_name": "LON_LAT",
+      "properties": {
+        "LOCATIE_CODE": "zuiderklip.geul3.raai2.16",
+        "LOCATIE_NAAM": "Zuiderklip, geul 3, raai 2, 16",
+        "LOCATIE_OMSCHRIJVING": null,
+        "LOCATIE_TYPE": "Point"
+      }
+    }
+  ],
+  "totalFeatures": 19003,
+  "numberMatched": 19003,
+  "numberReturned": 19003,
+  "timeStamp": "2026-08-16T19:08:07.318Z",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:EPSG::4258"
+    }
+  },
+  "_trimmed": {
+    "originalFeatures": 19003,
+    "kept": 25
+  }
+}

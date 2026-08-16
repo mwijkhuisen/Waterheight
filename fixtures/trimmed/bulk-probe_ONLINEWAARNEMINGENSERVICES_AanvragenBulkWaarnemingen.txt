@@ -1,0 +1,3 @@
+HTTP 404
+
+{"detail":"No endpoint POST /ONLINEWAARNEMINGENSERVICES/AanvragenBulkWaarnemingen.","instance":"/ONLINEWAARNEMINGENSERVICES/AanvragenBulkWaarnemingen","status":404,"title":"Not Found"}

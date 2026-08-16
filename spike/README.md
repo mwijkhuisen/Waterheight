@@ -48,3 +48,21 @@ In a sandboxed Claude Code environment these hosts must be on the network egress
 allowlist, otherwise every call fails with a proxy 403 ("Host not in allowlist").
 The script degrades gracefully: it records each failure in the report and continues
 with whatever it can still reach.
+
+## Results
+
+See [`PHASE1-FINDINGS.md`](PHASE1-FINDINGS.md) for the measured numbers and the
+recommendation. Raw report: `fixtures/trimmed/phase1-report.json`.
+
+## Fixtures
+
+Raw responses land in `fixtures/` and are **not committed** — the WFS layer alone is
+~173 MB. `node spike/trim-fixtures.mjs` produces the committed, shape-preserving
+subsets in `fixtures/trimmed/` that the Phase 2 normaliser tests build on.
+
+## Note on Node and proxies
+
+Node's `fetch` (undici) ignores `HTTPS_PROXY` unless `NODE_USE_ENV_PROXY=1` is set at
+startup, so the script re-execs itself with that flag when a proxy is configured.
+Without it, requests bypass the proxy and a sandboxed egress gateway rejects them with
+an opaque 403 that reads like an API error rather than a networking one.
