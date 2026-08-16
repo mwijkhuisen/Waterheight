@@ -11,7 +11,9 @@
     "migrate": "tsx src/cli/migrate.ts",
     "refresh": "tsx src/cli/refresh.ts",
     "test": "vitest run",
-    "pretest": "npm run build --workspace @rws/shared"
+    "pretest": "npm run build --workspace @rws/shared",
+    "backfill": "tsx src/cli/backfill.ts",
+    "backfill:status": "tsx src/cli/backfill.ts status"
   },
   "dependencies": {
     "@rws/shared": "*",

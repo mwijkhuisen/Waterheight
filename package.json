@@ -21,7 +21,9 @@
     "start": "npm run start --workspace @rws/server",
     "refresh": "npm run refresh --workspace @rws/server",
     "dev:web": "npm run dev --workspace @rws/web",
-    "build:web": "npm run build --workspace @rws/web"
+    "build:web": "npm run build --workspace @rws/web",
+    "backfill": "npm run backfill --workspace @rws/server --",
+    "backfill:status": "npm run backfill:status --workspace @rws/server"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

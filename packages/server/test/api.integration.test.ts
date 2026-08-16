@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { seriesIdentity } from '../src/rws/normalise.js';
 
 const ADMIN_URL = process.env['TEST_DATABASE_URL']
   ?? 'postgres://postgres@127.0.0.1:5433/postgres';
@@ -360,6 +361,103 @@ suite('API integration', () => {
         WHERE hypertable_name = 'observations'`,
     );
     expect(dimensions.rows[0]?.time_interval).toMatchObject({ days: 7 });
+  });
+
+  describe('backfill queue semantics', () => {
+    it('marks a chunk done in the same transaction as its rows', async () => {
+      // This is the crash-safety property: a chunk can never be recorded as
+      // complete while its data is missing.
+      const { enqueue, claim, completeWithData, stats } = await import('../src/backfill/queue.js');
+      const { getPool } = await import('../src/db/pool.js');
+
+      const month = new Date('2026-04-01T00:00:00Z');
+      await enqueue([{
+        locationCode: 'vlissingen', compartiment: 'OW', grootheid: 'WATHTE',
+        month, tier: 'eager', priority: 10,
+      }]);
+
+      const job = await claim();
+      expect(job).not.toBeNull();
+
+      await completeWithData(job!, [{
+        identity: seriesIdentity('vlissingen',
+          { Compartiment: { Code: 'OW' }, Grootheid: { Code: 'WATHTE' }, ProcesType: 'meting' },
+          { Bemonsteringshoogte: '0' }),
+        location: { code: 'vlissingen', name: 'Vlissingen', lat: 51.4, lon: 3.6 },
+        points: [
+          { t: '2026-04-01T00:00:00.000Z', value: 10, text: '10', qualityCode: '00', status: 'Ongecontroleerd' },
+          { t: '2026-04-01T00:10:00.000Z', value: 12, text: '12', qualityCode: '00', status: 'Ongecontroleerd' },
+        ],
+      }]);
+
+      const { rows } = await getPool().query(
+        `SELECT status, rows_written, fetched_at FROM backfill_jobs WHERE id = $1`, [job!.id]);
+      expect(rows[0].status).toBe('done');
+      expect(Number(rows[0].rows_written)).toBe(2);
+      // fetched_at records how fresh this slice of history is.
+      expect(rows[0].fetched_at).not.toBeNull();
+
+      const s = await stats();
+      expect(s.done).toBeGreaterThan(0);
+    });
+
+    it('never re-queues a chunk that already completed, which is what makes resume work', async () => {
+      const { enqueue } = await import('../src/backfill/queue.js');
+      const job = {
+        locationCode: 'vlissingen', compartiment: 'OW', grootheid: 'WATHTE',
+        month: new Date('2026-04-01T00:00:00Z'), tier: 'eager', priority: 10,
+      };
+      const inserted = await enqueue([job]);
+      expect(inserted).toBe(0);
+    });
+
+    it('parks a chunk as failed only after the retry limit, so one bad chunk cannot stall the queue', async () => {
+      const { enqueue, claim, recordFailure } = await import('../src/backfill/queue.js');
+      await enqueue([{
+        locationCode: 'vlissingen', compartiment: 'OW', grootheid: 'T',
+        month: new Date('2026-04-01T00:00:00Z'), tier: 'eager', priority: 20,
+      }]);
+
+      let job = await claim(); // attempts -> 1
+      expect(job).not.toBeNull();
+      expect(await recordFailure(job!, 'upstream exploded', 3)).toBe('pending');
+
+      job = await claim(); // attempts -> 2
+      expect(await recordFailure(job!, 'upstream exploded', 3)).toBe('pending');
+
+      job = await claim(); // attempts -> 3, at the limit
+      expect(await recordFailure(job!, 'upstream exploded', 3)).toBe('failed');
+
+      // Parked, so the next claim moves on rather than looping on it.
+      expect(await claim()).toBeNull();
+    });
+
+    it('returns stale running claims to the queue after a crash', async () => {
+      const { claim, reclaimStale, retryFailed } = await import('../src/backfill/queue.js');
+      const { getPool } = await import('../src/db/pool.js');
+
+      await retryFailed();
+      const job = await claim();
+      expect(job).not.toBeNull();
+
+      // A live worker's claim must not be stolen.
+      expect(await reclaimStale(30)).toBe(0);
+
+      // Age it past the threshold, as a crashed worker's claim would be.
+      await getPool().query(
+        `UPDATE backfill_jobs SET started_at = now() - INTERVAL '2 hours' WHERE id = $1`,
+        [job!.id]);
+      expect(await reclaimStale(30)).toBe(1);
+    });
+
+    it('re-queues a window for the correction re-fetch', async () => {
+      // The archive revises published values in place, so done chunks in the
+      // recent window are deliberately reset to be downloaded again.
+      const { requeueWindow } = await import('../src/backfill/queue.js');
+      const n = await requeueWindow(
+        new Date('2026-04-01T00:00:00Z'), new Date('2026-05-01T00:00:00Z'));
+      expect(n).toBeGreaterThan(0);
+    });
   });
 
   it('has a fixture set the normalisers can be tested against', () => {

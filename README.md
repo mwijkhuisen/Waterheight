@@ -3,8 +3,8 @@
 A map of the Netherlands showing the measurement locations Rijkswaterstaat monitors, backed by a thin
 API over the official Rijkswaterstaat WaterWebservices (WADAR / `ddapi20`).
 
-**Status: Phase 3 complete** — schema, ingestion, API and the map frontend. The batch backfill is
-Phase 4; charts and the full detail panel are Phase 5. The full brief is in [`PROMPT.md`](PROMPT.md); the Phase 1 measurements that
+**Status: Phase 4 complete** — schema, ingestion, API, map frontend and the backfill pipeline.
+Charts over the full history and the polished detail panel are Phase 5. The full brief is in [`PROMPT.md`](PROMPT.md); the Phase 1 measurements that
 shaped these decisions are in [`spike/PHASE1-FINDINGS.md`](spike/PHASE1-FINDINGS.md).
 
 ## Quick start
@@ -19,7 +19,14 @@ npm run dev:web               # map on :5173, proxying /api to :3000
 
 `docker compose up` brings up TimescaleDB, applies migrations and leaves a usable but **empty**
 system. `npm run refresh` fills it: the catalogue (~1.2 s) and the location layer (~6 min). The
-historical backfill is started separately in Phase 4.
+historical backfill is started explicitly:
+
+```sh
+npm run backfill -- --dry-run                        # plan and projection, downloads nothing
+npm run backfill -- --locations vlissingen --limit 20   # prove it on a few chunks first
+npm run backfill                                     # the real thing; resumable
+npm run backfill:status
+```
 
 Working against a local database instead of the compose one:
 
@@ -74,7 +81,7 @@ scan speed at a volume PostgreSQL handles comfortably.
 | `observations` | Hypertable, 7-day chunks, `(series_id, ts)` primary key |
 | `observations_hourly` / `_daily` | Continuous aggregates with min/max/mean/count |
 | `aquo_codes` | Catalogue code lists, for filter labels |
-| `backfill_jobs` | Work queue for Phase 4 |
+| `backfill_jobs` | Work queue, one row per (location, quantity, month) |
 | `upstream_cache` | Cached upstream responses, for stale-serving |
 
 Compression is delayed to 90 days, comfortably beyond the 60-day correction window, so the rolling
@@ -194,6 +201,52 @@ compartment list narrows to what the chosen quantity can actually yield so the t
 combine into an empty map, search is debounced and flies the map to a unique match, and every state
 has an explicit rendering — loading skeletons, an empty state naming what to change, and an error
 notice — never a silent blank. On screens under 720px the sidebar becomes a bottom sheet.
+
+## Backfill
+
+A batch pipeline, not a loop in a route handler. The unit of work is
+`(location_code, compartiment, grootheid, month)` — one month per request keeps responses manageable
+and makes a failure cheap to retry.
+
+**Crash safety is the design centre.** A chunk is marked `done` in the *same transaction* that
+commits its rows, so either both land or neither does. A killed process can never leave a chunk
+recorded as complete while its data is missing. Verified by `SIGKILL`ing a running backfill: 24
+chunks done, 132 pending, 4 stale claims, and zero chunks marked done without data.
+
+Resuming is the default rather than a mode — planning never resets a completed chunk, so re-running
+the same command picks up exactly where it left off. A crashed worker leaves its claims behind;
+those are returned to the queue after an age threshold (`--reclaim-after`, default 30 minutes, set
+`0` when you know the only worker died). The threshold exists so a *live* worker's claims are never
+stolen, which is what lets several workers drain one queue via `SELECT … FOR UPDATE SKIP LOCKED`.
+
+**Tiering lives in exactly one place**, `src/backfill/tiers.ts`, and is driven by the Phase 1
+measurements. The brief's Tier 1 (`WATHTE` + `Q`) turned out to be only 18.7% of volume, while
+current direction, current speed and echo sounding are ~31% between them and are near-useless in a
+general map panel. So the default is eager-with-a-deferred-list rather than an eager allowlist:
+everything is backfilled except those three, which arrive lazily on first request.
+`BACKFILL_DEFERRED=` (empty) asks for a full eager backfill without touching code.
+
+**The count endpoint is deliberately not used to skip empty months.** The brief proposes
+pre-flighting each chunk with `OphalenAantalWaarnemingen`; Phase 1 measured that at 5–200 s per
+location against ~1 s to fetch a real month, so checking first costs more than it saves. An upstream
+204 is already a cheap "no data" answer and marks the chunk `empty`. `--check-counts` opts back in.
+
+**Corrections.** The archive publishes early as `ongecontroleerd` and revises in place, so
+`backfill refetch` re-downloads a rolling window (60 days by default) through the same idempotent
+upsert. Verified idempotent: re-fetching 230,503 rows left the table's row count unchanged and
+advanced `fetched_at`. The window sits comfortably inside the 90-day compression delay, so the
+re-fetch never has to rewrite a compressed chunk.
+
+Continuous aggregates are refreshed **once per run over the written range**, not per chunk. The
+scheduled policies only cover recent time, so backfilled history would otherwise never be
+materialised and a one-year chart would come back empty; doing it per chunk would mean tens of
+thousands of refreshes of the same buckets.
+
+Progress is observable from both sides: the CLI prints chunks done/total, rows, throughput, ETA and
+failure count, and `/api/health` reports the same figures.
+
+Set `ENABLE_SCHEDULES=true` on exactly one instance to run the daily refresh and weekly correction
+re-fetch in-process.
 
 ## Tests
 

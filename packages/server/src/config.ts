@@ -8,6 +8,12 @@ function str(name: string, fallback: string): string {
   return v === undefined || v === '' ? fallback : v;
 }
 
+function bool(name: string, fallback: boolean): boolean {
+  const v = process.env[name];
+  if (v === undefined || v === '') return fallback;
+  return v === 'true' || v === '1';
+}
+
 function int(name: string, fallback: number): number {
   const v = process.env[name];
   if (v === undefined || v === '') return fallback;
@@ -49,6 +55,13 @@ export const config = {
 
   /** Never send 50,000 points to a browser drawing a 400px-wide chart. */
   maxPointsPerResponse: int('MAX_POINTS_PER_RESPONSE', 2000),
+
+  /**
+   * Run the daily refresh and weekly correction re-fetch inside the API
+   * process. Off by default: with several API instances behind a load
+   * balancer, only one should carry the schedules.
+   */
+  enableSchedules: bool('ENABLE_SCHEDULES', false),
 } as const;
 
 export type Config = typeof config;
