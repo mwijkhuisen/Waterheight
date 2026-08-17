@@ -1,0 +1,32 @@
+{
+  "name": "rws-monitoring-map",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Map of Rijkswaterstaat measurement locations in the Netherlands",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/web"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --build --force",
+    "test": "npm run test --workspace @rws/server",
+    "migrate": "npm run migrate --workspace @rws/server",
+    "dev": "npm run dev --workspace @rws/server",
+    "start": "npm run start --workspace @rws/server",
+    "refresh": "npm run refresh --workspace @rws/server",
+    "dev:web": "npm run dev --workspace @rws/web",
+    "build:web": "npm run build --workspace @rws/web",
+    "backfill": "npm run backfill --workspace @rws/server --",
+    "backfill:status": "npm run backfill:status --workspace @rws/server"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

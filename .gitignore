@@ -1,0 +1,11 @@
+node_modules/
+.env
+dist/
+dist-types/
+
+# Raw spike dumps are too large for git (the WFS layer alone is ~173 MB).
+# Regenerate them with `node spike/phase1-spike.mjs`; the trimmed, committed
+# versions used by the Phase 2 normaliser tests live in fixtures/trimmed/.
+/fixtures/*
+!/fixtures/trimmed/
+*.tsbuildinfo

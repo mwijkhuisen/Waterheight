@@ -1,0 +1,507 @@
+{
+  "Succesvol": true,
+  "AantalWaarnemingenPerPeriodeLijst": [
+    {
+      "AantalMetingenPerPeriodeLijst": [
+        {
+          "AantalMetingen": 530,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2025,
+            "Maandnummer": 10
+          }
+        },
+        {
+          "AantalMetingen": 4319,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2025,
+            "Maandnummer": 11
+          }
+        },
+        {
+          "AantalMetingen": 4460,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2025,
+            "Maandnummer": 12
+          }
+        },
+        {
+          "AantalMetingen": 4464,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 1
+          }
+        },
+        {
+          "AantalMetingen": 4032,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 2
+          }
+        },
+        {
+          "AantalMetingen": 4464,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 3
+          }
+        },
+        {
+          "AantalMetingen": 4316,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 4
+          }
+        },
+        {
+          "AantalMetingen": 4438,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 5
+          }
+        },
+        {
+          "AantalMetingen": 3720,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 6
+          }
+        },
+        {
+          "AantalMetingen": 4447,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 7
+          }
+        },
+        {
+          "AantalMetingen": 7,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 8
+          }
+        }
+      ],
+      "AquoMetadata": {
+        "BemonsteringsApparaat": {
+          "Code": "8000",
+          "Omschrijving": "NVT"
+        },
+        "BemonsteringsMethode": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "BemonsteringsSoort": {
+          "Code": "SB",
+          "Omschrijving": "Steekbemonstering"
+        },
+        "BioTaxon": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "BioTaxonType": {
+          "Code": "",
+          "Omschrijving": ""
+        },
+        "Compartiment": {
+          "Code": "OW",
+          "Omschrijving": "Oppervlaktewater"
+        },
+        "Eenheid": {
+          "Code": "Hz",
+          "Omschrijving": "hertz"
+        },
+        "Groepering": {
+          "Code": "",
+          "Omschrijving": ""
+        },
+        "Grootheid": {
+          "Code": "Fp",
+          "Omschrijving": "Golffrequentie bij maximum v.h. variantiedichtheidspectrum"
+        },
+        "Hoedanigheid": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "MeetApparaat": {
+          "Code": "10220",
+          "Omschrijving": "other:Radarniveaumeter - RADAC type Waveguide F08/S12"
+        },
+        "Orgaan": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "Parameter": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "Parameter_Wat_Omschrijving": "Golffrequentie bij maximum v.h. variantiedichtheidspectrum in Oppervlaktewater in Hz",
+        "ProcesType": "meting",
+        "Typering": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "WaardeBepalingsMethode": {
+          "Code": "other:F046",
+          "Omschrijving": "Freq/tijd analyse energie en richtingen, methode CIC/GLFPAR"
+        },
+        "WaardeBepalingsTechniek": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "WaardeBewerkingsMethode": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        }
+      },
+      "Locatie": {
+        "Code": "a12",
+        "Coordinatenstelsel": "ETRS89",
+        "Lat": 55.383333,
+        "Lon": 3.8,
+        "Naam": "A12 platform",
+        "Omschrijving": "A12 platform"
+      },
+      "WaarnemingMetadata": {
+        "Bemonsteringshoogte": "0",
+        "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+        "Referentievlak": "NVT"
+      }
+    },
+    {
+      "AantalMetingenPerPeriodeLijst": [
+        {
+          "AantalMetingen": 530,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2025,
+            "Maandnummer": 10
+          }
+        },
+        {
+          "AantalMetingen": 4319,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2025,
+            "Maandnummer": 11
+          }
+        },
+        {
+          "AantalMetingen": 4460,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2025,
+            "Maandnummer": 12
+          }
+        },
+        {
+          "AantalMetingen": 4464,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 1
+          }
+        },
+        {
+          "AantalMetingen": 4032,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 2
+          }
+        },
+        {
+          "AantalMetingen": 4464,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 3
+          }
+        },
+        {
+          "AantalMetingen": 4316,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 4
+          }
+        },
+        {
+          "AantalMetingen": 4438,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 5
+          }
+        },
+        {
+          "AantalMetingen": 3720,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 6
+          }
+        },
+        {
+          "AantalMetingen": 4447,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 7
+          }
+        },
+        {
+          "AantalMetingen": 7,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 8
+          }
+        }
+      ],
+      "AquoMetadata": {
+        "BemonsteringsApparaat": {
+          "Code": "8000",
+          "Omschrijving": "NVT"
+        },
+        "BemonsteringsMethode": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "BemonsteringsSoort": {
+          "Code": "SB",
+          "Omschrijving": "Steekbemonstering"
+        },
+        "BioTaxon": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "BioTaxonType": {
+          "Code": "",
+          "Omschrijving": ""
+        },
+        "Compartiment": {
+          "Code": "OW",
+          "Omschrijving": "Oppervlaktewater"
+        },
+        "Eenheid": {
+          "Code": "cm",
+          "Omschrijving": "centimeter"
+        },
+        "Groepering": {
+          "Code": "",
+          "Omschrijving": ""
+        },
+        "Grootheid": {
+          "Code": "HTE3",
+          "Omschrijving": "Significante deiningshoogte in het spectrale domein"
+        },
+        "Hoedanigheid": {
+          "Code": "F003-010",
+          "Omschrijving": "golffrequentie tussen 30 en 100 mHz"
+        },
+        "MeetApparaat": {
+          "Code": "10220",
+          "Omschrijving": "other:Radarniveaumeter - RADAC type Waveguide F08/S12"
+        },
+        "Orgaan": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "Parameter": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "Parameter_Wat_Omschrijving": "Significante deiningshoogte in het spectrale domein in Oppervlaktewater golffrequentie tussen 30 en 100 mHz in cm",
+        "ProcesType": "meting",
+        "Typering": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "WaardeBepalingsMethode": {
+          "Code": "other:F046",
+          "Omschrijving": "Freq/tijd analyse energie en richtingen, methode CIC/GLFPAR"
+        },
+        "WaardeBepalingsTechniek": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "WaardeBewerkingsMethode": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        }
+      },
+      "Locatie": {
+        "Code": "a12",
+        "Coordinatenstelsel": "ETRS89",
+        "Lat": 55.383333,
+        "Lon": 3.8,
+        "Naam": "A12 platform",
+        "Omschrijving": "A12 platform"
+      },
+      "WaarnemingMetadata": {
+        "Bemonsteringshoogte": "0",
+        "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+        "Referentievlak": "NVT"
+      }
+    },
+    {
+      "AantalMetingenPerPeriodeLijst": [
+        {
+          "AantalMetingen": 530,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2025,
+            "Maandnummer": 10
+          }
+        },
+        {
+          "AantalMetingen": 4320,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2025,
+            "Maandnummer": 11
+          }
+        },
+        {
+          "AantalMetingen": 4459,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2025,
+            "Maandnummer": 12
+          }
+        },
+        {
+          "AantalMetingen": 4464,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 1
+          }
+        },
+        {
+          "AantalMetingen": 4032,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 2
+          }
+        },
+        {
+          "AantalMetingen": 4464,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 3
+          }
+        },
+        {
+          "AantalMetingen": 4318,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 4
+          }
+        },
+        {
+          "AantalMetingen": 4440,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 5
+          }
+        },
+        {
+          "AantalMetingen": 3724,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 6
+          }
+        },
+        {
+          "AantalMetingen": 4450,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 7
+          }
+        },
+        {
+          "AantalMetingen": 7,
+          "Groeperingsperiode": {
+            "Jaarnummer": 2026,
+            "Maandnummer": 8
+          }
+        }
+      ],
+      "AquoMetadata": {
+        "BemonsteringsApparaat": {
+          "Code": "8000",
+          "Omschrijving": "NVT"
+        },
+        "BemonsteringsMethode": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "BemonsteringsSoort": {
+          "Code": "SB",
+          "Omschrijving": "Steekbemonstering"
+        },
+        "BioTaxon": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "BioTaxonType": {
+          "Code": "",
+          "Omschrijving": ""
+        },
+        "Compartiment": {
+          "Code": "OW",
+          "Omschrijving": "Oppervlaktewater"
+        },
+        "Eenheid": {
+          "Code": "cm",
+          "Omschrijving": "centimeter"
+        },
+        "Groepering": {
+          "Code": "",
+          "Omschrijving": ""
+        },
+        "Grootheid": {
+          "Code": "WATHTE",
+          "Omschrijving": "Waterhoogte"
+        },
+        "Hoedanigheid": {
+          "Code": "MSL",
+          "Omschrijving": "t.o.v. Mean Sea Level"
+        },
+        "MeetApparaat": {
+          "Code": "10235",
+          "Omschrijving": "other:Radar - type Saab"
+        },
+        "Orgaan": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "Parameter": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "Parameter_Wat_Omschrijving": "Waterhoogte in Oppervlaktewater t.o.v. Mean Sea Level in cm",
+        "ProcesType": "meting",
+        "Typering": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "WaardeBepalingsMethode": {
+          "Code": "other:F007",
+          "Omschrijving": "Rekenkundig gemiddelde waarde over vorige 5 en volgende 5 minuten"
+        },
+        "WaardeBepalingsTechniek": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "WaardeBewerkingsMethode": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        }
+      },
+      "Locatie": {
+        "Code": "a12",
+        "Coordinatenstelsel": "ETRS89",
+        "Lat": 55.383333,
+        "Lon": 3.8,
+        "Naam": "A12 platform",
+        "Omschrijving": "A12 platform"
+      },
+      "WaarnemingMetadata": {
+        "Bemonsteringshoogte": "0",
+        "OpdrachtgevendeInstantie": "RIKZMON_WAT",
+        "Referentievlak": "NVT"
+      }
+    }
+  ],
+  "_trimmed": {
+    "originalSeries": 50,
+    "kept": 3
+  }
+}

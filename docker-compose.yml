@@ -1,0 +1,67 @@
+# Production-shaped compose. Copy .env.example to .env and set POSTGRES_PASSWORD
+# before running: the database password is deliberately required rather than
+# defaulted, so a real deployment cannot silently ship a known credential.
+
+x-db-url: &db-url
+  DATABASE_URL: postgres://rws:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/rws
+
+services:
+  db:
+    image: timescale/timescaledb:2.17.2-pg16
+    environment:
+      POSTGRES_USER: rws
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: rws
+    # Not published by default: only the API needs it. Uncomment to run the
+    # CLIs from the host against this database.
+    # ports:
+    #   - '127.0.0.1:5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U rws -d rws']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # Runs migrations once, then exits. The API waits for it to succeed.
+  migrate:
+    build: .
+    command: ['node', 'packages/server/dist/cli/migrate.js']
+    environment:
+      <<: *db-url
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build: .
+    environment:
+      <<: *db-url
+      PORT: '3000'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RWS_API_BASE: ${RWS_API_BASE:-https://ddapi20-waterwebservices.rijkswaterstaat.nl}
+      RWS_WFS_URL: ${RWS_WFS_URL:-https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/ows}
+      RWS_API_KEY: ${RWS_API_KEY:-dummy}
+      ACTIVE_WINDOW_DAYS: ${ACTIVE_WINDOW_DAYS:-7}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      # One instance carries the daily refresh and weekly correction re-fetch.
+      # Scale the API beyond one replica and this must move to a single worker.
+      ENABLE_SCHEDULES: ${ENABLE_SCHEDULES:-true}
+    ports:
+      - '${API_PORT:-3000}:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  db-data:

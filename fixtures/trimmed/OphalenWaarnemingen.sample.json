@@ -1,0 +1,667 @@
+{
+  "Succesvol": true,
+  "WaarnemingenLijst": [
+    {
+      "AquoMetadata": {
+        "BemonsteringsApparaat": {
+          "Code": "8000",
+          "Omschrijving": "NVT"
+        },
+        "BemonsteringsMethode": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "BemonsteringsSoort": {
+          "Code": "SB",
+          "Omschrijving": "Steekbemonstering"
+        },
+        "BioTaxon": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "BioTaxonType": {
+          "Code": "",
+          "Omschrijving": ""
+        },
+        "Compartiment": {
+          "Code": "OW",
+          "Omschrijving": "Oppervlaktewater"
+        },
+        "Eenheid": {
+          "Code": "Hz",
+          "Omschrijving": "hertz"
+        },
+        "Groepering": {
+          "Code": "",
+          "Omschrijving": ""
+        },
+        "Grootheid": {
+          "Code": "Fp",
+          "Omschrijving": "Golffrequentie bij maximum v.h. variantiedichtheidspectrum"
+        },
+        "Hoedanigheid": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "MeetApparaat": {
+          "Code": "10220",
+          "Omschrijving": "other:Radarniveaumeter - RADAC type Waveguide F08/S12"
+        },
+        "Orgaan": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "Parameter": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "Parameter_Wat_Omschrijving": "Golffrequentie bij maximum v.h. variantiedichtheidspectrum in Oppervlaktewater in Hz",
+        "ProcesType": "meting",
+        "Typering": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "WaardeBepalingsMethode": {
+          "Code": "other:F046",
+          "Omschrijving": "Freq/tijd analyse energie en richtingen, methode CIC/GLFPAR"
+        },
+        "WaardeBepalingsTechniek": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        },
+        "WaardeBewerkingsMethode": {
+          "Code": "NVT",
+          "Omschrijving": "NVT"
+        }
+      },
+      "Locatie": {
+        "Code": "a12",
+        "Coordinatenstelsel": "ETRS89",
+        "Lat": 55.383333,
+        "Lon": 3.8,
+        "Naam": "A12 platform",
+        "Omschrijving": "A12 platform"
+      },
+      "MetingenLijst": [
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "290",
+            "Waarde_Numeriek": 290
+          },
+          "Tijdstip": "2026-07-01T22:30:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "230",
+            "Waarde_Numeriek": 230
+          },
+          "Tijdstip": "2026-07-01T06:10:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "260",
+            "Waarde_Numeriek": 260
+          },
+          "Tijdstip": "2026-07-01T09:50:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "250",
+            "Waarde_Numeriek": 250
+          },
+          "Tijdstip": "2026-07-01T10:00:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "120",
+            "Waarde_Numeriek": 120
+          },
+          "Tijdstip": "2026-07-02T20:50:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "130",
+            "Waarde_Numeriek": 130
+          },
+          "Tijdstip": "2026-07-02T12:30:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "190",
+            "Waarde_Numeriek": 190
+          },
+          "Tijdstip": "2026-07-02T06:10:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "290",
+            "Waarde_Numeriek": 290
+          },
+          "Tijdstip": "2026-07-01T22:40:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "280",
+            "Waarde_Numeriek": 280
+          },
+          "Tijdstip": "2026-07-01T22:50:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "130",
+            "Waarde_Numeriek": 130
+          },
+          "Tijdstip": "2026-07-02T12:40:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "160",
+            "Waarde_Numeriek": 160
+          },
+          "Tijdstip": "2026-07-01T16:40:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "270",
+            "Waarde_Numeriek": 270
+          },
+          "Tijdstip": "2026-07-01T10:10:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "120",
+            "Waarde_Numeriek": 120
+          },
+          "Tijdstip": "2026-07-02T12:50:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "120",
+            "Waarde_Numeriek": 120
+          },
+          "Tijdstip": "2026-07-02T13:00:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "130",
+            "Waarde_Numeriek": 130
+          },
+          "Tijdstip": "2026-07-06T22:30:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "280",
+            "Waarde_Numeriek": 280
+          },
+          "Tijdstip": "2026-07-01T23:00:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "130",
+            "Waarde_Numeriek": 130
+          },
+          "Tijdstip": "2026-07-03T22:40:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "280",
+            "Waarde_Numeriek": 280
+          },
+          "Tijdstip": "2026-07-01T23:10:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "250",
+            "Waarde_Numeriek": 250
+          },
+          "Tijdstip": "2026-07-01T06:30:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "250",
+            "Waarde_Numeriek": 250
+          },
+          "Tijdstip": "2026-07-01T23:20:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "110",
+            "Waarde_Numeriek": 110
+          },
+          "Tijdstip": "2026-07-01T16:50:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "120",
+            "Waarde_Numeriek": 120
+          },
+          "Tijdstip": "2026-07-01T17:00:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "270",
+            "Waarde_Numeriek": 270
+          },
+          "Tijdstip": "2026-07-01T10:20:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "270",
+            "Waarde_Numeriek": 270
+          },
+          "Tijdstip": "2026-07-01T10:30:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "120",
+            "Waarde_Numeriek": 120
+          },
+          "Tijdstip": "2026-07-01T17:10:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "120",
+            "Waarde_Numeriek": 120
+          },
+          "Tijdstip": "2026-07-02T13:10:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "250",
+            "Waarde_Numeriek": 250
+          },
+          "Tijdstip": "2026-07-01T23:30:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "260",
+            "Waarde_Numeriek": 260
+          },
+          "Tijdstip": "2026-07-01T10:40:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "260",
+            "Waarde_Numeriek": 260
+          },
+          "Tijdstip": "2026-07-01T23:40:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "250",
+            "Waarde_Numeriek": 250
+          },
+          "Tijdstip": "2026-07-01T01:00:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "110",
+            "Waarde_Numeriek": 110
+          },
+          "Tijdstip": "2026-07-03T15:50:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "110",
+            "Waarde_Numeriek": 110
+          },
+          "Tijdstip": "2026-07-03T16:00:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "260",
+            "Waarde_Numeriek": 260
+          },
+          "Tijdstip": "2026-07-01T23:50:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "240",
+            "Waarde_Numeriek": 240
+          },
+          "Tijdstip": "2026-07-01T17:20:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "250",
+            "Waarde_Numeriek": 250
+          },
+          "Tijdstip": "2026-07-01T01:10:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "240",
+            "Waarde_Numeriek": 240
+          },
+          "Tijdstip": "2026-07-01T01:20:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "240",
+            "Waarde_Numeriek": 240
+          },
+          "Tijdstip": "2026-07-01T01:30:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "100",
+            "Waarde_Numeriek": 100
+          },
+          "Tijdstip": "2026-07-02T22:50:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "240",
+            "Waarde_Numeriek": 240
+          },
+          "Tijdstip": "2026-07-01T01:40:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "230",
+            "Waarde_Numeriek": 230
+          },
+          "Tijdstip": "2026-07-01T01:50:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "00",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        },
+        {
+          "Meetwaarde": {
+            "Waarde_Alfanumeriek": "99999",
+            "Waarde_Numeriek": 99999
+          },
+          "Tijdstip": "2026-07-07T12:30:00.000+01:00",
+          "WaarnemingMetadata": {
+            "Bemonsteringshoogte": "0",
+            "Kwaliteitswaardecode": "99",
+            "OpdrachtgevendeInstantie": "RIKZ_GOLVEN",
+            "Referentievlak": "NVT",
+            "Statuswaarde": "Ongecontroleerd"
+          }
+        }
+      ],
+      "_trimmed": {
+        "originalMetingen": 4448,
+        "kept": 41
+      }
+    }
+  ]
+}
