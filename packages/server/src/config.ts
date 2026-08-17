@@ -62,6 +62,27 @@ export const config = {
    * balancer, only one should carry the schedules.
    */
   enableSchedules: bool('ENABLE_SCHEDULES', false),
+
+  /**
+   * Directory of the built map client. When present the API serves it at the
+   * root, so the whole app is one origin and one container -- which also means
+   * the browser never needs CORS. Empty disables static serving (API only).
+   */
+  webRoot: str('WEB_ROOT', ''),
+
+  /**
+   * Allowed CORS origin for third-party API consumers. The data is public and
+   * the API is read-only, so '*' is the sensible default; set a specific origin
+   * to lock it down. The bundled client does not rely on this -- it is served
+   * from the same origin.
+   */
+  corsOrigin: str('CORS_ORIGIN', '*'),
+
+  /** Inbound rate limit per IP. The upstream politeness cap is separate. */
+  rateLimit: {
+    max: int('RATE_LIMIT_MAX', 300),
+    windowMs: int('RATE_LIMIT_WINDOW_MS', 60_000),
+  },
 } as const;
 
 export type Config = typeof config;

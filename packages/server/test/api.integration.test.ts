@@ -460,6 +460,51 @@ suite('API integration', () => {
     });
   });
 
+  describe('production hardening', () => {
+    it('rate-limits with a 429 and the standard envelope, not a 500', async () => {
+      // A throttled client told "500" retries immediately instead of backing
+      // off, so the status has to survive the shared error handler.
+      const { buildServer } = await import('../src/api/server.js');
+      process.env['RATE_LIMIT_MAX'] = '2';
+      vi.resetModules();
+      const limited = await (await import('../src/api/server.js')).buildServer();
+
+      try {
+        const codes: number[] = [];
+        for (let i = 0; i < 4; i++) {
+          codes.push((await limited.inject({ method: 'GET', url: '/api/quantities' })).statusCode);
+        }
+        expect(codes.filter((c) => c === 429).length).toBeGreaterThan(0);
+
+        const limitedRes = await limited.inject({ method: 'GET', url: '/api/quantities' });
+        expect(limitedRes.statusCode).toBe(429);
+        expect(limitedRes.json()).toEqual({
+          error: { code: 'rate_limited', message: expect.stringContaining('Too many requests') },
+        });
+
+        // A monitor must never be able to trip the limiter.
+        const health = await limited.inject({ method: 'GET', url: '/api/health' });
+        expect(health.statusCode).toBe(200);
+      } finally {
+        await limited.close();
+        delete process.env['RATE_LIMIT_MAX'];
+        vi.resetModules();
+        expect(buildServer).toBeTypeOf('function');
+      }
+    }, 30_000);
+
+    it('keeps the JSON envelope for unknown /api paths', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error.code).toBe('not_found');
+    });
+
+    it('sends a CORS header, since RWS itself sends none', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/health' });
+      expect(res.headers['access-control-allow-origin']).toBe('*');
+    });
+  });
+
   it('has a fixture set the normalisers can be tested against', () => {
     // Guards the trimmed fixtures against being dropped or emptied.
     const catalogue = JSON.parse(

@@ -358,17 +358,25 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         .send({ error: { code: error.code, message: error.message } });
     }
 
+    // Plugin errors carry their own status (the rate limiter's 429, a malformed
+    // request's 400). Preserve it rather than flattening everything to 500: a
+    // throttled client told "500" retries immediately instead of backing off.
+    const plugin = error as { statusCode?: number; message?: string };
+    if (typeof plugin.statusCode === 'number'
+        && plugin.statusCode >= 400 && plugin.statusCode < 500) {
+      return reply.status(plugin.statusCode).send({
+        error: {
+          code: plugin.statusCode === 429 ? 'rate_limited' : 'bad_request',
+          message: plugin.message ?? 'Request rejected',
+        },
+      });
+    }
+
     request.log.error({ err: error }, 'unhandled error');
     return reply.status(500).send({
       error: { code: 'internal_error', message: 'An unexpected error occurred' },
     });
   });
-
-  app.setNotFoundHandler((_request, reply) =>
-    reply.status(404).send({
-      error: { code: 'not_found', message: 'No such endpoint' },
-    }),
-  );
 }
 
 export { config };

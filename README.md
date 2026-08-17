@@ -8,34 +8,70 @@ with charts over the full history. The full brief is in [`PROMPT.md`](PROMPT.md)
 measurements that shaped these decisions are in
 [`spike/PHASE1-FINDINGS.md`](spike/PHASE1-FINDINGS.md).
 
-## Quick start
+What has actually been exercised, and what has not, is listed under
+[Verified and unverified](#verified-and-unverified) — worth reading before deploying.
+
+## Deploying
+
+One container serves the whole app: the API and the built map client on the same origin, which also
+means the browser never needs CORS.
 
 ```sh
 cp .env.example .env
-docker compose up -d          # database + migrations + API on :3000
+# POSTGRES_PASSWORD has no default — compose refuses to start until you set it,
+# so a known credential can never ship by accident.
+$EDITOR .env
+
+docker compose up -d --build          # database, migrations, then the app on :3000
+docker compose run --rm migrate node packages/server/dist/cli/refresh.js
+```
+
+`docker compose up` brings up TimescaleDB, applies migrations and starts the app, but the database is
+**empty** until that `refresh` runs: it loads the catalogue (~1.2 s) and the location layer (~6 min).
+After that the map works immediately — observations for short periods are fetched on demand.
+
+The API container carries the daily refresh and the weekly correction re-fetch (`ENABLE_SCHEDULES`,
+on by default in compose). If you scale it past one replica, turn that off and run the schedules on a
+single worker instead, or several instances will hit Rijkswaterstaat with the same job.
+
+Then load history when you want it, from the host or `docker compose exec api`:
+
+```sh
+node packages/server/dist/cli/backfill.js --dry-run   # plan and projection only
+node packages/server/dist/cli/backfill.js             # ~2.5 h for the eager tier
+```
+
+Health is at `/api/health`; the container healthcheck already uses it. It reports upstream
+reachability, cache age, location counts and backfill progress.
+
+### Before you expose it publicly
+
+- Put TLS in front of it. The app speaks plain HTTP and trusts `X-Forwarded-*`, so it expects a proxy.
+- Set `CORS_ORIGIN` if you do not want third parties calling the API from a browser.
+- Tune `RATE_LIMIT_MAX` (default 300/min per IP). This protects the upstream budget as much as this
+  service: `/observations` can trigger live fetches to Rijkswaterstaat.
+- The database port is not published by default — only the API container reaches it.
+
+## Development
+
+```sh
+cp .env.example .env
+docker compose up -d db               # just the database
 npm install
-npm run refresh               # populate locations and the quantity catalogue
-npm run dev:web               # map on :5173, proxying /api to :3000
-```
-
-`docker compose up` brings up TimescaleDB, applies migrations and leaves a usable but **empty**
-system. `npm run refresh` fills it: the catalogue (~1.2 s) and the location layer (~6 min). The
-historical backfill is started explicitly:
-
-```sh
-npm run backfill -- --dry-run                        # plan and projection, downloads nothing
-npm run backfill -- --locations vlissingen --limit 20   # prove it on a few chunks first
-npm run backfill                                     # the real thing; resumable
-npm run backfill:status
-```
-
-Working against a local database instead of the compose one:
-
-```sh
 npm run migrate
-npm run refresh               # or: npm run refresh -- catalogue
-npm run dev
+npm run refresh                       # catalogue + location layer
+npm run dev                           # API on :3000
+npm run dev:web                       # map on :5173, proxying /api to :3000
 npm test
+```
+
+The backfill CLI in development:
+
+```sh
+npm run backfill -- --dry-run                           # plan and projection, downloads nothing
+npm run backfill -- --locations vlissingen --limit 20   # prove it on a few chunks first
+npm run backfill                                        # the real thing; resumable
+npm run backfill:status
 ```
 
 ## Architecture
@@ -293,6 +329,30 @@ the suite stays useful without one.
 
 Raw spike dumps are gitignored (the WFS layer alone is 173 MB). The trimmed, shape-preserving subsets
 the tests build on are committed in `fixtures/trimmed/`, regenerable with `node spike/trim-fixtures.mjs`.
+
+## Verified and unverified
+
+Everything below was run rather than assumed, except where noted.
+
+**Verified against the live service:** the full ingest (942,378 rows parsed, 2,595 locations, 567
+active — matching an independent Phase 1 count exactly), the on-demand observation path, a crash-safe
+backfill (`SIGKILL` mid-run left zero chunks marked done without data, and the resume recovered
+cleanly), an idempotent correction re-fetch (230,503 rows rewritten, row count unchanged), and the
+map and detail panel in a real browser, both from the dev server and from the production
+single-origin build. 89 tests pass.
+
+**Not verified:** the Docker image and `docker compose up` have never actually run — there was no
+Docker daemon available in the environment this was built in. The compose file is validated for
+syntax and the CI workflow builds the image on every push, so the first real `docker compose up`
+should be treated as the smoke test it is.
+
+**Not yet run at scale:** the full backfill. The database has been exercised with ~924k rows across a
+handful of locations, not the ~190M across 567 that a year of history for every active location would
+hold. Phase 1's projections (~23 GB uncompressed, ~8 h for everything, ~2.5 h for the eager tier)
+are measured extrapolations, not observations.
+
+**Deliberately out of scope:** authentication (the data is public and the API read-only), multi-region
+or HA deployment, and metrics beyond `/api/health`.
 
 ## Attribution
 
