@@ -73,8 +73,15 @@ function formatValue(v: number | null): string {
 
 function formatTick(t: number, spanMs: number): string {
   const d = new Date(t);
-  if (spanMs <= 3 * 86_400_000) {
+  if (spanMs <= 86_400_000) {
     return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+  }
+  // Past a day the clock time repeats -- a 48h window would label all three
+  // ticks identically -- so the day has to come along.
+  if (spanMs <= 3 * 86_400_000) {
+    return d.toLocaleString('en-GB', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+    });
   }
   if (spanMs <= 120 * 86_400_000) {
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -278,7 +285,7 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
             hovering. The 2px surface ring keeps it legible over the line. */}
         <circle
           cx={geometry.last.x} cy={geometry.last.y} r={4}
-          fill={series} stroke="var(--surface-1)" strokeWidth={2}
+          fill={series} stroke="var(--bg)" strokeWidth={2}
         />
 
         {hovered && hovered.value !== null && (
@@ -290,7 +297,7 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
             />
             <circle
               cx={geometry.x(hovered.t)} cy={geometry.y(hovered.value)} r={4}
-              fill={series} stroke="var(--surface-1)" strokeWidth={2}
+              fill={series} stroke="var(--bg)" strokeWidth={2}
             />
           </g>
         )}

@@ -8,6 +8,7 @@
 
 import { useEffect, useRef } from 'react';
 import maplibregl, { type GeoJSONSource, type StyleSpecification } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { FeatureCollection, Point } from 'geojson';
 import type { Location } from '@rws/shared';
 import { FRESHNESS_COLOR, freshnessOf } from '../freshness.js';
@@ -143,7 +144,7 @@ export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewPro
             16, 10, 21, 50, 27, 200, 34,
           ],
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#fcfcfb',
+          'circle-stroke-color': '#ffffff',
         },
       });
 
@@ -195,7 +196,7 @@ export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewPro
         paint: {
           'circle-radius': 14,
           'circle-color': 'rgba(0,0,0,0)',
-          'circle-stroke-color': '#2a78d6',
+          'circle-stroke-color': '#cb3837',
           'circle-stroke-width': 3,
         },
       });
