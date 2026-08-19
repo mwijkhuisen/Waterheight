@@ -4,3 +4,11 @@ node_modules
 fixtures
 .git
 .env
+
+# tsc --build's incremental state. CI runs `npm run build` before `docker
+# build`, so without this the runner's freshly written *.tsbuildinfo travels
+# into the image while **/dist above keeps the outputs it describes out. Inside
+# the image tsc then reads that state, concludes everything is up to date, and
+# exits 0 having emitted nothing -- leaving no packages/*/dist for the runtime
+# stage to COPY.
+*.tsbuildinfo
