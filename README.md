@@ -3,8 +3,9 @@
 A map of the Netherlands showing the measurement locations Rijkswaterstaat monitors, backed by a thin
 API over the official Rijkswaterstaat WaterWebservices (WADAR / `ddapi20`).
 
-**Status: complete.** Schema, ingestion, API, clustered map, backfill pipeline and the detail panel
-with charts over the full history. The full brief is in [`PROMPT.md`](PROMPT.md); the Phase 1
+**Status: complete.** Schema, ingestion, API, backfill pipeline, and a registry-style frontend —
+global search, a result list, and a page per location with charts over the full history, plus the
+clustered map. The full brief is in [`PROMPT.md`](PROMPT.md); the Phase 1
 measurements that shaped these decisions are in
 [`spike/PHASE1-FINDINGS.md`](spike/PHASE1-FINDINGS.md).
 
@@ -216,43 +217,82 @@ recoverable; mass-deactivating two-thirds of the map is not.
 
 ## Frontend
 
-A React + Vite app rendering a MapLibre GL map over PDOK's grey Dutch basemap (free, no API key).
+A React + Vite app laid out as a **package registry**: a persistent masthead with global search, a
+results list, and a page per measurement location carrying tabs and a metadata rail. Search is the
+primary way in; the map is one of the views it leads to rather than the shell everything hangs off.
+
+| Route | What it is |
+| --- | --- |
+| `/` | Hero search, catalogue stats, browse-by-measurement-type, recently published |
+| `/search?q=&grootheid=&compartiment=&sort=&page=` | Result list with facets and sorting |
+| `/location/:code` | One location: Overview / Measurements / Data / Map, plus the metadata rail |
+| `/map` | The full clustered map, filtered |
+| `/docs` | API reference |
+
+Routing is a ~130-line history-based router rather than a dependency: four routes, a `Link` that
+leaves modifier-clicks to the browser, and a `popstate` subscription. Real paths, not a hash — Vite
+and the Fastify `setNotFoundHandler` both already serve `index.html` for unknown non-`/api` paths, so
+deep links work in dev and production alike.
+
+**All page state lives in the URL.** Filters, sort, pagination and the active tab are query
+parameters, so any view is a shareable link and the back button walks the refinement rather than
+dumping you at the home page. Filter changes `replaceState` (a run of typing does not bury the
+previous page under a dozen history entries); a tab change pushes.
+
+**Each route loads its own data.** There is no shell state to inherit, so a deep link lands on a
+complete page. The quantity/compartment catalogue is fetched once per page load and shared, since it
+backs the header, the facets and the browse grid and changes on the order of days.
+
+**MapLibre is code-split.** It and its stylesheet are about nine tenths of the JavaScript here and
+only two routes render a map, so it loads on demand — the entry bundle is 201 kB (63 kB gzipped)
+against 1.26 MB (351 kB) when the map was the shell. Note that MapLibre adds `.maplibregl-map` to the
+map container and its stylesheet now arrives *after* the app's, so the container is sized by
+`width/height: 100%` rather than absolute fill: a `position: absolute` there loses the tie and
+collapses the map to zero height.
+
+### The map
 
 **Clustering is native to the GeoJSON source**, not a plugin: markers are one GPU circle layer, so
 several thousand points cost one draw call rather than that many DOM nodes. Clicking a cluster zooms
-to its expansion level; clicking a marker opens the detail panel.
+to its expansion level; clicking a marker opens a card that links into the location page, so the map
+feeds the same detail pages as everything else.
 
 **Marker colour encodes freshness, never value.** Values across quantities share no scale — a water
 level in cm and a wind speed in m/s are not comparable — so colouring by value would imply a
 comparison that does not exist. The two states use the reserved status colours, validated for
 colour-vision deficiency (worst-pair ΔE 11.3 protan, 27.6 normal vision). Because the "delayed"
 yellow sits below 3:1 on a light surface, it never carries meaning alone: every marker gets a dark
-ring, the legend names both states with their thresholds, and the panel prints the exact timestamp.
+ring, the legend names both states with their thresholds, and the location page prints the exact
+timestamp.
 
 The layers are added on the style's `style.load`, deliberately **not** on `load`. `load` waits for
 the first basemap tiles, so an unreachable or slow tile provider would take the entire data layer
 down with it. The markers are the product; the basemap is decoration.
 
-Other behaviour worth knowing: filters are driven server-side (`grootheid`, `compartiment`, `q`), the
-compartment list narrows to what the chosen quantity can actually yield so the two filters cannot
-combine into an empty map, search is debounced and flies the map to a unique match, and every state
-has an explicit rendering — loading skeletons, an empty state naming what to change, and an error
-notice — never a silent blank. On screens under 720px the sidebar becomes a bottom sheet.
+### The location page
 
-### The detail panel and chart
+The main column carries the tabs — **Overview** (headline reading, period selector, chart, latest
+values), **Measurements** (every series with its stored coverage), **Data** (the request that
+produced the view, and the response as a table) and **Map**. The rail carries what a registry keeps
+there: the `curl` that fetches it, the latest reading, stored points and history span, last publish,
+coordinates, source links, the quantities as chips, and the licence.
 
-Clicking a marker opens a panel with the location's identity, freshness with an explicit timestamp,
-the latest reading as a headline number, a measurement picker, a period selector (24h / 48h / 7d /
-30d / 1y) and a chart, plus a deep link to the matching waterinfo.rws.nl page.
+Filters are driven server-side (`grootheid`, `compartiment`, `q`), the compartment list narrows to
+what the chosen quantity can actually yield so the two filters cannot combine into an empty map, the
+header search is debounced with a keyboard-navigable typeahead, and every state has an explicit
+rendering — loading skeletons, an empty state naming what to change, and an error notice — never a
+silent blank.
 
-The chart is hand-rolled inline SVG rather than a charting library: the requirement is one line, one
-band, an axis pair and a crosshair, and owning the markup keeps theming, the aggregate band and the
-accessibility story straightforward for about 200 lines.
+### The chart
+
+Hand-rolled inline SVG rather than a charting library: the requirement is one line, one band, an axis
+pair and a crosshair, and owning the markup keeps theming, the aggregate band and the accessibility
+story straightforward for about 200 lines.
 
 **The client picks the resolution** — raw for 24h and 48h, hourly for 7d and 30d, daily for a year —
 so the one-year view never begins by asking for 52,000 raw points. The server may coarsen further
-under its own point cap and always reports what it actually served; when the two differ the panel
-says so rather than quietly drawing something other than what was asked for.
+under its own point cap and always reports what it actually served; when the two differ the page says
+so rather than quietly drawing something other than what was asked for.
 
 **When the data is aggregated, it looks aggregated:** a min–max band sits behind the mean line, and
 the caption names it. The tooltip adds the bucket's range and reading count. A gap in the series
@@ -264,11 +304,22 @@ hairline solid gridlines one step off the surface, one y-axis only, and text in 
 than the series colour. The crosshair snaps to the nearest point so the reader aims at a time rather
 than at a 2px line, and the tooltip leads with the value because the reader already knows the series.
 Tooltips never gate a value: the latest reading is a headline number, the endpoint carries a dot, and
-**Show values** opens a table of the underlying numbers.
+**Show values** opens a table of the underlying numbers. Axis ticks carry the date once a window
+spans more than a day — the default 48h view would otherwise label all three ticks with the same
+clock time.
 
-If a location has no stored history for a measurement, the panel says so and names the fix — short
+If a location has no stored history for a measurement, the page says so and names the fix — short
 periods are fetched on demand, and the full year comes from the batch backfill — rather than
 rendering an empty chart.
+
+### Look and feel
+
+The palette is the npm registry's: a black masthead, white paper, hairline borders, and one red
+(`#cb3837`) for the mark, active tabs and the search button. It is 5.05:1 on white, so it is safe as
+text as well as decoration; on the dark scheme it falls to 3.6:1, so a lighter step carries text
+there while the brand red stays on the mark and the rules. Colours are role tokens, so the dark
+scheme is a token swap in one place. Type is the system stack with a monospace family for codes and
+commands — no webfont request, so nothing about the layout waits on a third party.
 
 ## Backfill
 
@@ -340,6 +391,14 @@ backfill (`SIGKILL` mid-run left zero chunks marked done without data, and the r
 cleanly), an idempotent correction re-fetch (230,503 rows rewritten, row count unchanged), and the
 map and detail panel in a real browser, both from the dev server and from the production
 single-origin build. 89 tests pass.
+
+**Verified for the registry-style frontend:** every route rendered in headless Chromium against a
+stubbed API — light and dark schemes, desktop and 390px widths — with no page errors, plus the
+typeahead (arrow keys and Enter into a location page), tab state surviving a reload, the back button,
+and facet clicks rewriting the query string. `service.pdok.nl` and `demotiles.maplibre.org` are
+unreachable from the build environment, so the map's data layer was confirmed with those two hosts
+stubbed: style loaded, source loaded, clusters rendered. It has *not* been run against the live API
+or a real basemap since the refactor.
 
 **Not verified:** the Docker image and `docker compose up` have never actually run — there was no
 Docker daemon available in the environment this was built in. The compose file is validated for

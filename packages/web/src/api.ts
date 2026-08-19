@@ -7,6 +7,7 @@
 
 import type {
   ApiError,
+  HealthResponse,
   LatestValue,
   Location,
   LocationDetail,
@@ -59,6 +60,10 @@ export function fetchLocations(
 
 export function fetchQuantities(signal?: AbortSignal): Promise<QuantitiesResponse> {
   return get<QuantitiesResponse>('/api/quantities', signal);
+}
+
+export function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
+  return get<HealthResponse>('/api/health', signal);
 }
 
 export function fetchLocation(code: string, signal?: AbortSignal): Promise<LocationDetail> {
