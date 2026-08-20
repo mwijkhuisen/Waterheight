@@ -170,14 +170,41 @@ if [[ $SKIP_POSTGRES -eq 0 ]]; then
     [[ $policy == *"Candidate: "[0-9]* ]]
   }
 
-  # Reuse the cluster that is already here rather than installing a second one.
-  if [[ -z $PG_MAJOR ]] && command -v pg_config >/dev/null; then
-    PG_MAJOR=$(pg_config --version | sed -E 's/^PostgreSQL ([0-9]+).*/\1/')
-    info "reusing installed PostgreSQL $PG_MAJOR"
-    if ! installable "timescaledb-2-postgresql-${PG_MAJOR}"; then
-      die "PostgreSQL ${PG_MAJOR} is installed but Timescale publishes no
+  # Which PostgreSQL majors actually have a server installed.
+  #
+  # Deliberately not `pg_config`. postgresql-common -- installed just above, to
+  # get PGDG -- provides /usr/bin/pg_config as a shim that forwards to a real
+  # one under $PGBINROOT. So on a machine with no PostgreSQL the binary exists
+  # while running it prints "You need to install postgresql-server-dev-NN for
+  # building a server-side extension or libpq-dev for building a client-side
+  # application." and exits 1, which under `set -e` killed this script during
+  # its own detection step. Probing the server directory is what the shim
+  # itself does, and no shim can satisfy it.
+  PGBINROOT=${PGBINROOT:-/usr/lib/postgresql/}
+  installed_pg_majors() {
+    local path major
+    for path in "${PGBINROOT}"*/bin/pg_ctl; do
+      [[ -x $path ]] || continue
+      major=${path#"$PGBINROOT"}
+      major=${major%%/*}
+      [[ $major =~ ^[0-9]+$ ]] && printf '%s\n' "$major"
+    done
+  }
+
+  # Reuse what is already here rather than installing a second cluster. A major
+  # with a real cluster wins over one that is merely installed.
+  if [[ -z $PG_MAJOR ]]; then
+    PG_MAJOR=$(pg_lsclusters --no-header 2>/dev/null | awk 'NR==1 {print $1}') || PG_MAJOR=""
+    if [[ ! $PG_MAJOR =~ ^[0-9]+$ ]]; then
+      PG_MAJOR=$(installed_pg_majors | sort -n | tail -1) || PG_MAJOR=""
+    fi
+    if [[ -n $PG_MAJOR ]]; then
+      info "reusing installed PostgreSQL $PG_MAJOR"
+      if ! installable "timescaledb-2-postgresql-${PG_MAJOR}"; then
+        die "PostgreSQL ${PG_MAJOR} is installed but Timescale publishes no
     timescaledb-2-postgresql-${PG_MAJOR} for ${CODENAME}. Install a major that
     Timescale supports and pass --pg-major, or upgrade the cluster."
+      fi
     fi
   fi
 

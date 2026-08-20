@@ -368,6 +368,25 @@ backfill queue itself is not precious — losing it costs download time, not dat
 Ubuntu's archive carries 18.x; this app needs >= 20. Install from NodeSource as
 in [step 1](#1-nodejs).
 
+### `You need to install postgresql-server-dev-NN ... or libpq-dev`
+
+`postgresql-common` provides `/usr/bin/pg_config` as a shim that forwards to a
+real one under `/usr/lib/postgresql/*/bin/`. On a machine with no PostgreSQL
+installed the shim exists but has nothing to forward to, so running it prints
+this and exits 1 — which is confusing, because it reads like a missing build
+dependency when nothing is being built.
+
+Nothing here needs `postgresql-server-dev-*` or `libpq-dev`; the server is
+installed from packages, and `pg` talks to it over TCP. If you hit this from
+the installer, update to a build that contains this fix — it detects the
+installed server by probing `/usr/lib/postgresql/` rather than by calling
+`pg_config`. To check by hand what is actually installed:
+
+```sh
+ls -d /usr/lib/postgresql/*/ 2>/dev/null || echo "no PostgreSQL server installed"
+pg_lsclusters
+```
+
 ### `Package 'postgresql-16' has no installation candidate`
 
 Ubuntu's own archive carries only one PostgreSQL major per release, and it is
