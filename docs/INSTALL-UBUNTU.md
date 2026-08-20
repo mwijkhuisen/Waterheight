@@ -454,6 +454,30 @@ backfill queue itself is not precious — losing it costs download time, not dat
 Ubuntu's archive carries 18.x; this app needs >= 20. Install from NodeSource as
 in [step 1](#1-nodejs).
 
+### The service starts, then exits 1 immediately
+
+Almost always the port is already taken by something else on the box. The app
+logs it plainly, but systemd only reports the exit code:
+
+```sh
+sudo journalctl -u rws-api -n 30 --no-pager | grep -i eaddrinuse
+sudo ss -lntp | grep -E ':30[0-9][0-9]'      # what is on the nearby ports
+```
+
+Pick a free port, then **restart** — systemd does not re-read `.env` by itself:
+
+```sh
+sudo sed -i 's/^PORT=.*/PORT=3005/' /home/administrator/rws/.env
+sudo systemctl restart rws-api
+```
+
+When checking whether it came up, avoid `curl -s ... | jq`: on a refused
+connection `-s` prints nothing, which is indistinguishable from an empty reply.
+Use `curl -i` so you can tell "not listening" from "listening but erroring".
+
+Current versions check the port during installation and refuse to continue if it
+is taken, listing what holds it.
+
 ### `Job for rws-api.service failed because the control process exited`
 
 The "control process" is `ExecStartPre`, which runs migrations before the
