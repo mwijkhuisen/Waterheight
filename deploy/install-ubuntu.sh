@@ -133,10 +133,10 @@ if [[ $SKIP_POSTGRES -eq 0 ]]; then
     postgresql-common >/dev/null
 
   # PostgreSQL's own archive (PGDG). Ubuntu ships exactly one major per release
-  # -- 14 on 22.04, 16 on 24.04, 17 on 25.04 -- so installing a specific major
-  # without this fails with "Package 'postgresql-NN' has no installation
-  # candidate" on every release whose archive does not happen to match. PGDG
-  # carries all supported majors for all supported releases.
+  # -- 14 on 22.04, 16 on 24.04, 17 on 25.04, 18 on 26.04 -- so installing a
+  # specific major without this fails with "Package 'postgresql-NN' has no
+  # installation candidate" on every release whose archive does not happen to
+  # match. PGDG carries all supported majors for all supported releases.
   if [[ ! -f /etc/apt/sources.list.d/pgdg.list && ! -f /etc/apt/sources.list.d/pgdg.sources ]]; then
     if [[ -x /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh ]]; then
       /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null

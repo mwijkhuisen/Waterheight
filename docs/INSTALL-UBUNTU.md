@@ -5,8 +5,11 @@ from apt, the app built in place, and systemd keeping it running. No containers
 are involved at any point.
 
 Everything below was run end to end on a clean **Ubuntu 24.04** box. It also
-applies to 22.04; the only version-specific part is the apt repository line,
-which is derived from the release codename automatically.
+applies to 22.04 and 26.04; the only version-specific part is the apt
+repository lines, which are derived from the release codename automatically.
+
+Note that Timescale publishes for LTS releases only — 22.04 `jammy`, 24.04
+`noble`, 26.04 `resolute` — not for the interim releases in between.
 
 - [Before you start](#before-you-start)
 - [The short version](#the-short-version)
@@ -91,8 +94,8 @@ node -v    # v22.x
 ### 2. PostgreSQL and TimescaleDB
 
 Two repositories are needed. Ubuntu's archive carries exactly one PostgreSQL
-major per release — 14 on 22.04, 16 on 24.04, 17 on 25.04 — so asking for a
-specific one without **PGDG** (PostgreSQL's own archive) fails with
+major per release — 14 on 22.04, 16 on 24.04, 17 on 25.04, **18 on 26.04** — so
+asking for a specific one without **PGDG** (PostgreSQL's own archive) fails with
 `Package 'postgresql-16' has no installation candidate`. TimescaleDB is not in
 Ubuntu's archive at all.
 
@@ -117,6 +120,21 @@ is tested against, so both deployment paths stay on one major and a dump from
 either restores into the other. Any major with a matching
 `timescaledb-2-postgresql-NN` works; check with
 `apt-cache search timescaledb-2-postgresql`.
+
+**On Ubuntu 26.04 this is a real choice.** 26.04 ships PostgreSQL 18 in its own
+archive, while Timescale publishes `timescaledb-2-postgresql-16`, `-17` and
+`-18` for it. The installer defaults to 16 from PGDG, because that is the
+combination this project has actually been verified against end to end
+(migrations, hypertable, both continuous aggregates, the compression policy,
+backfill and API). If you would rather run the OS-native major and take
+PostgreSQL updates from Ubuntu, that is well supported:
+
+```sh
+sudo ./deploy/install-ubuntu.sh --pg-major 18
+```
+
+Nothing in the schema is version-specific, so 18 is expected to work — it just
+has not been exercised here, which is the whole of the difference.
 
 If PostgreSQL is already installed, match its major version rather than adding a
 second cluster — `pg_config --version` tells you which. The installer script
