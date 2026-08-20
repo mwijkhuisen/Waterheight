@@ -29,6 +29,12 @@ above. Check with `git log --oneline origin/main | head`.
 Open one PR for this work. Do not touch the basemap, do not add Belgium or France, and do not
 start on river ordering — each is its own phase.
 
+The basemap phase has since shipped, which is what makes this one worth doing: the map is on
+OpenStreetMap tiles now, so a station at Koblenz lands on a real map instead of on blank grey, and
+the map page has a control that frames whatever is loaded. Nothing here needs to touch it. If the
+stations you ingest turn out to need something of the map that it does not do, that is a finding for
+the PR description, not a change in this branch.
+
 ## Read these first
 
 - `packages/server/src/sources/registry.ts` — the source registry and the location-code namespace.
@@ -309,7 +315,8 @@ All three were silent — wrong behaviour, no error anywhere. Assume this servic
 - **Do not invent quality codes** to fill the columns RWS populates.
 - **Do not let the RWS active-window logic reconcile German stations.** Phase 2 scoped
   reconciliation per source; keep it that way, and give this source its own window.
-- **Do not touch `ACTIVE_WINDOW_DAYS`, the basemap, or the frontend map style.** Out of scope.
+- **Do not touch `ACTIVE_WINDOW_DAYS`, the basemap, or the frontend map style.** Out of scope, and
+  the basemap in particular is already done.
 - **Do not extract a `SourceAdapter` interface just because there are now two adapters** unless the
   second one genuinely fits it. If it does, that is the right moment and this is the PR for it —
   but let the code decide, and say in the PR description which way it went and why.
