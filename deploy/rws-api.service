@@ -45,7 +45,10 @@ NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
-ProtectHome=true
+# read-only rather than true when the install lives under /home:
+# ProtectHome=true makes /home appear EMPTY to the service, so a repo
+# there is invisible and even WorkingDirectory cannot be entered.
+ProtectHome=@PROTECT_HOME@
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
