@@ -325,11 +325,18 @@ Three consequences to accept up front:
   for "what is coming down the river" anyway, and it is comparable across all four countries with
   nothing more than a unit conversion.
 
-**The acceptance test writes itself.** Emmerich (DE, Rhine km 851.9) and Lobith (NL, km 862) are
-ten kilometres apart. After conversion their levels must agree to within the river's slope over
-that distance — order of centimetres, not metres. If that check passes, the datum handling is
-right. If it fails, something is wrong and it is better to find out in CI than on the map. Do the
-same for Eijsden against the nearest Walloon gauge on the Meuse.
+**The acceptance test nearly writes itself** — but not in the form I first wrote here. Emmerich
+(DE, Rhine km 851.9) and Lobith (NL, km 862) are ten kilometres apart, and I assumed their
+converted levels should therefore agree to within centimetres. Measured, they are ~1.5 m apart:
+that is the real water-surface slope over that reach at low flow, not a datum error.
+
+The check that does hold is **ordering**. Converted levels must decrease monotonically downstream —
+Wesel 12.106 m, Rees 9.043 m, Emmerich 7.798 m, and Lobith below all three. Water flows downhill,
+and any datum error big enough to matter breaks the sequence. Stronger still, where it is
+available: PEGELONLINE relays Rijkswaterstaat's own Lobith gauge, so the *same instrument* is
+published by two sources in the same units on the same datum, and those two must agree. Look for
+the equivalent on the Meuse — Eijsden against the nearest Walloon gauge — but expect to compare
+profiles rather than single values.
 
 ## History is wildly asymmetric
 
@@ -458,9 +465,17 @@ Sources section of the README. Two things this turned up that the sketch above m
 Deliberately not done here: a `SourceAdapter` interface. Its signatures should be shaped by the
 second implementation rather than guessed from the first.
 
-**3. Germany.** One source, richest metadata, cleanest payload, and it carries `gaugeZero` so the
-datum work gets done properly the first time. Includes the Emmerich/Lobith acceptance test and the
-`historyStartsAt` UI honesty. Deduplicate against Rijkswaterstaat's Lobith.
+**3. Germany. — Briefed, not started:** [`PROMPT-PHASE3-GERMANY.md`](PROMPT-PHASE3-GERMANY.md).
+One source, richest metadata, cleanest payload, and it carries `gaugeZero` so the datum work gets
+done properly the first time. Includes the `historyStartsAt` UI honesty and deduplication against
+Rijkswaterstaat's Lobith.
+
+Writing that brief corrected two things above. German water levels are **not** uniformly "cm above
+gauge zero" — 67 series are `m+NN`, already absolute and carrying no `gaugeZero` at all, so the
+single conversion rule this document assumed would put every canal gauge a gauge-zero's worth out.
+And the Emmerich/Lobith acceptance test proposed below does not work as stated: the two really are
+~1.5 m apart, which is the water-surface slope over 10 km at low flow rather than an error. The
+robust check is that converted levels decrease monotonically downstream.
 
 **4. Belgium, both regions.** One KiWIS adapter, two configurations. Meuse and Scheldt coverage.
 Filter derived statistical series out.

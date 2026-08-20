@@ -17,7 +17,9 @@ through Germany, Belgium and France, by services that are as open as Rijkswaters
 [`docs/INTERNATIONAL-DATA.md`](docs/INTERNATIONAL-DATA.md) works through what it would take to put
 those on the same map — including the OpenStreetMap basemap swap it requires, since the current
 Dutch basemap stops at the border — and is honest about the parts that do not work, chiefly that
-Germany publishes only 31 days of history.
+Germany publishes only 31 days of history. The source abstraction that makes any of it possible is
+in place; Germany is briefed in
+[`docs/PROMPT-PHASE3-GERMANY.md`](docs/PROMPT-PHASE3-GERMANY.md) and not yet built.
 
 ## Deploying
 
