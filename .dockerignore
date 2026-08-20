@@ -11,4 +11,10 @@ fixtures
 # the image tsc then reads that state, concludes everything is up to date, and
 # exits 0 having emitted nothing -- leaving no packages/*/dist for the runtime
 # stage to COPY.
+#
+# Both forms are needed: a .dockerignore pattern without ** matches only at the
+# context root, which is why node_modules is listed twice above. The files that
+# actually matter here are packages/*/tsconfig.tsbuildinfo, and only the second
+# pattern catches those.
 *.tsbuildinfo
+**/*.tsbuildinfo
