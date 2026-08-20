@@ -240,3 +240,141 @@ export async function locationCounts(): Promise<{ total: number; active: number 
   );
   return rows[0] ?? { total: 0, active: 0 };
 }
+
+/** One (location, quantity) pair, as `location_quantities` records it. */
+export interface QuantityPair {
+  locationCode: string;
+  compartiment: string;
+  grootheid: string;
+}
+
+/**
+ * Pairs the latest poll cannot ask for narrowly yet: the WFS layer says the
+ * location published this quantity recently, but no series of ours carries a
+ * point from within the poll's freshness window.
+ *
+ * That covers a system whose observation store is still empty, a station that
+ * has just resumed, and a station that has switched instrument -- in every
+ * case the full metadata that makes a narrow request possible is only
+ * discoverable by fetching actual observations.
+ *
+ * Ordered oldest-probe-first so a bounded number per cycle still gives every
+ * pair its turn.
+ */
+export async function listPairsToDiscover(
+  publishedSince: Date,
+  liveSince: Date,
+  limit: number,
+): Promise<QuantityPair[]> {
+  if (limit <= 0) return [];
+  const { rows } = await getPool().query<{
+    location_code: string; compartiment: string; grootheid: string;
+  }>(
+    `SELECT q.location_code, q.compartiment, q.grootheid
+       FROM location_quantities q
+       JOIN locations l ON l.code = q.location_code AND l.active
+      WHERE q.last_seen_at >= $1
+        AND NOT EXISTS (
+          SELECT 1 FROM series s
+           WHERE s.location_code = q.location_code
+             AND s.compartiment = q.compartiment
+             AND s.grootheid = q.grootheid
+             AND s.last_observed_at >= $2)
+      ORDER BY q.polled_at NULLS FIRST, q.last_seen_at DESC
+      LIMIT $3`,
+    [publishedSince.toISOString(), liveSince.toISOString(), limit],
+  );
+
+  return rows.map((r) => ({
+    locationCode: r.location_code,
+    compartiment: r.compartiment,
+    grootheid: r.grootheid,
+  }));
+}
+
+/**
+ * Record that these pairs have had their turn, whether or not upstream had
+ * anything to say. Marking only the productive ones would leave a pair that
+ * never answers at the head of the queue forever.
+ */
+export async function markPairsPolled(pairs: QuantityPair[]): Promise<void> {
+  if (pairs.length === 0) return;
+  await getPool().query(
+    `UPDATE location_quantities q SET polled_at = now()
+       FROM unnest($1::text[], $2::text[], $3::text[]) AS t(code, compartiment, grootheid)
+      WHERE q.location_code = t.code
+        AND q.compartiment = t.compartiment
+        AND q.grootheid = t.grootheid`,
+    [
+      pairs.map((p) => p.locationCode),
+      pairs.map((p) => p.compartiment),
+      pairs.map((p) => p.grootheid),
+    ],
+  );
+}
+
+export interface FreshnessTouch extends QuantityPair {
+  /** ISO 8601 UTC timestamp of the reading. */
+  observedAt: string;
+  value: number | null;
+}
+
+/**
+ * Carry a freshly polled reading through to the layers the map reads.
+ *
+ * Without this the map's marker colours and the per-quantity latest value
+ * would only move when the daily WFS refresh runs, so a five-minute poll
+ * would be invisible outside the charts. Timestamps only ever move forward:
+ * the poll and the refresh write the same columns and must not undo each
+ * other, whichever ran last.
+ */
+export async function touchFreshness(rows: FreshnessTouch[]): Promise<void> {
+  if (rows.length === 0) return;
+
+  // Newest reading per pair, and per location, so each row is written once.
+  const byPair = new Map<string, FreshnessTouch>();
+  for (const row of rows) {
+    const key = `${row.locationCode}|${row.compartiment}|${row.grootheid}`;
+    const current = byPair.get(key);
+    if (!current || row.observedAt > current.observedAt) byPair.set(key, row);
+  }
+  const pairs = [...byPair.values()];
+
+  const byLocation = new Map<string, string>();
+  for (const row of pairs) {
+    const current = byLocation.get(row.locationCode);
+    if (!current || row.observedAt > current) byLocation.set(row.locationCode, row.observedAt);
+  }
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE location_quantities q SET
+         last_seen_at = GREATEST(q.last_seen_at, t.observed_at),
+         latest_value = CASE WHEN t.observed_at >= q.last_seen_at
+                             THEN t.value ELSE q.latest_value END,
+         polled_at = now(),
+         updated_at = now()
+       FROM unnest($1::text[], $2::text[], $3::text[], $4::timestamptz[], $5::float8[])
+            AS t(code, compartiment, grootheid, observed_at, value)
+      WHERE q.location_code = t.code
+        AND q.compartiment = t.compartiment
+        AND q.grootheid = t.grootheid`,
+      [
+        pairs.map((p) => p.locationCode),
+        pairs.map((p) => p.compartiment),
+        pairs.map((p) => p.grootheid),
+        pairs.map((p) => p.observedAt),
+        pairs.map((p) => p.value),
+      ],
+    );
+
+    await client.query(
+      `UPDATE locations l SET
+         last_seen_at = GREATEST(l.last_seen_at, t.observed_at),
+         updated_at = now()
+       FROM unnest($1::text[], $2::timestamptz[]) AS t(code, observed_at)
+      WHERE l.code = t.code`,
+      [[...byLocation.keys()], [...byLocation.values()]],
+    );
+  });
+}

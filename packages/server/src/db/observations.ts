@@ -235,3 +235,84 @@ export async function readLatestForLocation(locationCode: string): Promise<Lates
     qualityCode: r.quality_code,
   }));
 }
+
+/** One point destined for a series that already has an id. */
+export interface PointForSeries {
+  seriesId: number;
+  point: NormalisedPoint;
+}
+
+/** What a write of freshly polled points changed, per series. */
+export interface AppendResult {
+  /** Rows inserted or overwritten. */
+  written: number;
+  /** Rows that were genuinely new, so `point_count` can be advanced. */
+  inserted: number;
+  /** Oldest and newest timestamp actually written, per series id. */
+  spans: { seriesId: number; from: string; to: string; inserted: number }[];
+}
+
+/**
+ * Write points spanning several series in one statement.
+ *
+ * The poll touches thousands of series but only a point or two of each, which
+ * is the opposite shape to `upsertObservations` (one series, a month of it) --
+ * one round trip per series would dominate a five-minute cycle. `xmax = 0`
+ * distinguishes an insert from an overwrite, which is what lets the caller
+ * advance the denormalised `point_count` by arithmetic instead of recounting
+ * the hypertable: on a backfilled database, recounting every live series every
+ * five minutes would scan hundreds of millions of rows for a handful of new
+ * ones.
+ */
+export async function appendObservations(
+  client: PoolClient,
+  rows: PointForSeries[],
+  fetchedAt = new Date(),
+): Promise<AppendResult> {
+  if (rows.length === 0) return { written: 0, inserted: 0, spans: [] };
+
+  const { rows: returned } = await client.query<{
+    series_id: string | number; ts: Date; inserted: boolean;
+  }>(
+    `INSERT INTO observations (series_id, ts, value_numeric, value_text, quality_code, status, fetched_at)
+     SELECT series_id, ts, value_numeric, value_text, quality_code, status, $7
+       FROM unnest($1::bigint[], $2::timestamptz[], $3::float8[], $4::text[], $5::text[], $6::text[])
+            AS t(series_id, ts, value_numeric, value_text, quality_code, status)
+     ON CONFLICT (series_id, ts) DO UPDATE SET
+       value_numeric = EXCLUDED.value_numeric,
+       value_text    = EXCLUDED.value_text,
+       quality_code  = EXCLUDED.quality_code,
+       status        = EXCLUDED.status,
+       fetched_at    = EXCLUDED.fetched_at
+     RETURNING series_id, ts, (xmax = 0) AS inserted`,
+    [
+      rows.map((r) => r.seriesId),
+      rows.map((r) => r.point.t),
+      rows.map((r) => r.point.value),
+      rows.map((r) => r.point.text),
+      rows.map((r) => r.point.qualityCode),
+      rows.map((r) => r.point.status),
+      fetchedAt.toISOString(),
+    ],
+  );
+
+  const spans = new Map<number, { seriesId: number; from: string; to: string; inserted: number }>();
+  let inserted = 0;
+
+  for (const row of returned) {
+    const seriesId = Number(row.series_id);
+    const ts = row.ts.toISOString();
+    if (row.inserted) inserted += 1;
+
+    const span = spans.get(seriesId);
+    if (!span) {
+      spans.set(seriesId, { seriesId, from: ts, to: ts, inserted: row.inserted ? 1 : 0 });
+      continue;
+    }
+    if (ts < span.from) span.from = ts;
+    if (ts > span.to) span.to = ts;
+    if (row.inserted) span.inserted += 1;
+  }
+
+  return { written: returned.length, inserted, spans: [...spans.values()] };
+}

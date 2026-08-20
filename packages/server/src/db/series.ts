@@ -202,3 +202,98 @@ export async function refreshCoverage(client: PoolClient, seriesIds: number[]): 
     [seriesIds],
   );
 }
+
+/**
+ * One live series, as the latest poll needs to see it.
+ *
+ * The filter dimensions are the ones OphalenLaatsteWaarnemingen accepts; the
+ * rest of a series' identity (sampling height, reference level) lives in the
+ * measurement rather than the AquoMetadata and cannot be asked for, so several
+ * of these can collapse onto one upstream request. The response carries all of
+ * them and `naturalKey` tells them apart again on the way back in -- which is
+ * also what lets the writer skip a series whose newest point it already has.
+ */
+export interface PollTarget {
+  id: number;
+  naturalKey: string;
+  locationCode: string;
+  compartiment: string;
+  grootheid: string;
+  procesType: string;
+  parameter: string | null;
+  meetapparaat: string | null;
+  waardebepalingMethode: string | null;
+  lastObservedAt: string | null;
+}
+
+/**
+ * The series worth polling for a new reading: those at an active location
+ * whose newest stored point is younger than `cutoff`.
+ *
+ * A series quiet for longer than that drops out, and the discovery pass picks
+ * it up again -- which is how a station returning from maintenance, or one
+ * that has swapped instruments, comes back without anyone intervening.
+ */
+export async function listPollTargets(cutoff: Date): Promise<PollTarget[]> {
+  const { rows } = await getPool().query<{
+    id: string | number; natural_key: string; location_code: string;
+    compartiment: string; grootheid: string; proces_type: string;
+    parameter: string | null; meetapparaat: string | null;
+    waardebepaling_methode: string | null; last_observed_at: Date | null;
+  }>(
+    `SELECT s.id, s.natural_key, s.location_code, s.compartiment, s.grootheid,
+            s.proces_type, s.parameter, s.meetapparaat, s.waardebepaling_methode,
+            s.last_observed_at
+       FROM series s
+       JOIN locations l ON l.code = s.location_code AND l.active
+      WHERE s.last_observed_at >= $1
+      ORDER BY s.compartiment, s.grootheid, s.location_code, s.id`,
+    [cutoff.toISOString()],
+  );
+
+  return rows.map((r) => ({
+    id: Number(r.id),
+    naturalKey: r.natural_key,
+    locationCode: r.location_code,
+    compartiment: r.compartiment,
+    grootheid: r.grootheid,
+    procesType: r.proces_type,
+    parameter: r.parameter,
+    meetapparaat: r.meetapparaat,
+    waardebepalingMethode: r.waardebepaling_methode,
+    lastObservedAt: r.last_observed_at?.toISOString() ?? null,
+  }));
+}
+
+/**
+ * Move the denormalised coverage forward after an append, without recounting.
+ *
+ * `refreshCoverage` recomputes from the hypertable, which is right after a
+ * backfill chunk rewrites a month in place but far too heavy for a poll:
+ * every live series, every five minutes, against a table sized in the hundreds
+ * of millions. Here the writer already knows what it added, so the columns can
+ * be advanced arithmetically. Bounds only ever widen, so an out-of-order write
+ * cannot shrink a series' known range.
+ */
+export async function advanceCoverage(
+  client: PoolClient,
+  spans: { seriesId: number; from: string; to: string; inserted: number }[],
+): Promise<void> {
+  if (spans.length === 0) return;
+  await client.query(
+    `UPDATE series s SET
+       first_observed_at = LEAST(COALESCE(s.first_observed_at, t.from_ts), t.from_ts),
+       last_observed_at = GREATEST(COALESCE(s.last_observed_at, t.to_ts), t.to_ts),
+       point_count = s.point_count + t.inserted,
+       updated_at = now()
+     FROM unnest($1::bigint[], $2::timestamptz[], $3::timestamptz[], $4::bigint[])
+          AS t(series_id, from_ts, to_ts, inserted)
+    WHERE s.id = t.series_id`,
+    [
+      spans.map((s) => s.seriesId),
+      spans.map((s) => s.from),
+      spans.map((s) => s.to),
+      spans.map((s) => s.inserted),
+    ],
+  );
+}

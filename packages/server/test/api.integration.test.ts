@@ -502,6 +502,34 @@ suite('API integration', () => {
       }
     }, 30_000);
 
+    it('never calls upstream from a request when told not to', async () => {
+      // What makes "Rijkswaterstaat is only ever called by the scheduler" a
+      // guarantee rather than a hope: with the poll keeping the store current,
+      // an uncovered window answers from what is stored instead of putting
+      // visitor traffic on someone else's rate limit.
+      const { buildServer } = await import('../src/api/server.js');
+      process.env['LIVE_FETCH_ON_REQUEST'] = 'false';
+      vi.resetModules();
+      const offline = await (await import('../src/api/server.js')).buildServer();
+
+      try {
+        fetchMock.mockClear();
+        const res = await offline.inject({
+          method: 'GET',
+          url: '/api/locations/sleepy/observations?grootheid=WATHTE&from=2020-01-01&to=2020-01-02',
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toMatchObject({ points: [], backfillPending: true });
+        expect(fetchMock).not.toHaveBeenCalled();
+      } finally {
+        await offline.close();
+        delete process.env['LIVE_FETCH_ON_REQUEST'];
+        vi.resetModules();
+        expect(buildServer).toBeTypeOf('function');
+      }
+    }, 30_000);
+
     it('keeps the JSON envelope for unknown /api paths', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
       expect(res.statusCode).toBe(404);
@@ -511,6 +539,214 @@ suite('API integration', () => {
     it('sends a CORS header, since RWS itself sends none', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/health' });
       expect(res.headers['access-control-allow-origin']).toBe('*');
+    });
+  });
+
+  describe('latest poll', () => {
+    let pollLatest: typeof import('../src/ingest/latest.js').pollLatest;
+    let query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+
+    /** A live reading, in the shape OphalenLaatsteWaarnemingen returns one. */
+    function reading(overrides: {
+      code?: string; grootheid?: string; instrument?: string; at: string; value: number;
+    }) {
+      return {
+        Locatie: {
+          Code: overrides.code ?? 'polled', Naam: 'Polled Station', Lat: 52.1, Lon: 4.3,
+        },
+        AquoMetadata: {
+          Compartiment: { Code: 'OW', Omschrijving: 'Oppervlaktewater' },
+          Grootheid: { Code: overrides.grootheid ?? 'WATHTE', Omschrijving: 'Waterhoogte' },
+          Eenheid: { Code: 'cm' },
+          ProcesType: 'meting',
+          MeetApparaat: { Code: overrides.instrument ?? '10042' },
+          WaardeBepalingsMethode: { Code: 'other:F007' },
+        },
+        MetingenLijst: [{
+          Tijdstip: overrides.at,
+          Meetwaarde: { Waarde_Numeriek: overrides.value, Waarde_Alfanumeriek: String(overrides.value) },
+          WaarnemingMetadata: {
+            Kwaliteitswaardecode: '00', Bemonsteringshoogte: '0',
+            Referentievlak: 'NAP', OpdrachtgevendeInstantie: 'RIKZMON_WAT',
+            Statuswaarde: 'Ongecontroleerd',
+          },
+        }],
+      };
+    }
+
+    function respond(body: unknown, status = 200) {
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        text: async () => (body === null ? '' : JSON.stringify(body)),
+        json: async () => body,
+        headers: new Headers(),
+      };
+    }
+
+    /** Every upstream call the poll makes, in order, for assertions. */
+    const calls: { path: string; body: Record<string, any> }[] = [];
+
+    /**
+     * Answers as the service does: the observations endpoint only for the
+     * station under test, the latest endpoint from whatever the test queued.
+     */
+    function route(latest: unknown[], discovered: unknown[] = []) {
+      fetchMock.mockReset();
+      calls.length = 0;
+      fetchMock.mockImplementation(async (url: string, init: { body: string }) => {
+        const path = String(url);
+        const body = JSON.parse(init.body);
+        calls.push({ path, body });
+        if (path.endsWith('OphalenLaatsteWaarnemingen')) {
+          return respond(latest.length > 0 ? { WaarnemingenLijst: latest } : null,
+            latest.length > 0 ? 200 : 204);
+        }
+        if (path.endsWith('OphalenWaarnemingen')) {
+          const wanted = body.Locatie?.Code === 'polled' && discovered.length > 0;
+          return respond(wanted ? { WaarnemingenLijst: discovered } : null, wanted ? 200 : 204);
+        }
+        return respond(null, 204);
+      });
+    }
+
+    beforeAll(async () => {
+      ({ pollLatest } = await import('../src/ingest/latest.js'));
+      const pool = await import('../src/db/pool.js');
+      query = (sql, params) => pool.getPool().query(sql, params) as never;
+
+      await query(`
+        INSERT INTO locations (code, name, lat, lon, active, last_seen_at)
+        VALUES ('polled', 'Polled Station', 52.1, 4.3, true, now() - INTERVAL '3 hours')
+      `);
+      await query(`
+        INSERT INTO location_quantities (location_code, compartiment, grootheid, eenheid, last_seen_at)
+        VALUES ('polled', 'OW', 'WATHTE', 'cm', now() - INTERVAL '3 hours')
+      `);
+    });
+
+    afterAll(() => {
+      fetchMock.mockReset();
+    });
+
+    it('discovers a pair with no series of ours, and stores what it finds', async () => {
+      const at = new Date(Date.now() - 10 * 60_000).toISOString();
+      route([], [reading({ at, value: 42 })]);
+
+      const result = await pollLatest({ log: () => {}, discoveryLimit: 10 });
+
+      expect(result.targets).toBe(0);
+      expect(result.discovery.seriesFound).toBe(1);
+      expect(result.pointsInserted).toBe(1);
+
+      const res = await app.inject({ method: 'GET', url: '/api/locations/polled/latest' });
+      expect(res.json()).toMatchObject([{ quantity: 'WATHTE', value: 42 }]);
+
+      // Probed pairs are marked whether or not they answered, so the rotation
+      // moves on rather than asking the same ones for ever.
+      const { rows } = await query(
+        `SELECT polled_at FROM location_quantities WHERE location_code = 'polled'`);
+      expect(rows[0]!['polled_at']).not.toBeNull();
+    });
+
+    it('then asks for that series narrowly, and stores the newer reading', async () => {
+      const at = new Date(Date.now() - 60_000).toISOString();
+      route([reading({ at, value: 51 })]);
+
+      const result = await pollLatest({ log: () => {}, discoveryLimit: 0 });
+
+      expect(result.targets).toBeGreaterThan(0);
+      expect(result.pointsInserted).toBe(1);
+
+      // The instrument and method of the series we already have are part of
+      // the request; without them the answer carries every series the station
+      // ever ran, back to whenever it opened.
+      const latestCall = calls.find((c) => c.path.endsWith('OphalenLaatsteWaarnemingen'));
+      const filters = latestCall!.body.AquoPlusWaarnemingMetadataLijst;
+      expect(filters).toContainEqual({
+        AquoMetadata: expect.objectContaining({
+          Compartiment: { Code: 'OW' },
+          Grootheid: { Code: 'WATHTE' },
+          ProcesType: 'meting',
+          MeetApparaat: { Code: '10042' },
+          WaardeBepalingsMethode: { Code: 'other:F007' },
+        }),
+      });
+
+      const res = await app.inject({ method: 'GET', url: '/api/locations/polled/latest' });
+      expect(res.json()).toMatchObject([{ value: 51 }]);
+    });
+
+    it('does not rewrite a reading it already has', async () => {
+      const { rows: before } = await query(
+        `SELECT point_count, last_observed_at FROM series WHERE location_code = 'polled'`);
+      const at = (before[0]!['last_observed_at'] as Date).toISOString();
+      route([reading({ at, value: 51 })]);
+
+      const result = await pollLatest({ log: () => {}, discoveryLimit: 0 });
+
+      expect(result.unchanged).toBe(1);
+      expect(result.pointsWritten).toBe(0);
+
+      const { rows: after } = await query(
+        `SELECT point_count FROM series WHERE location_code = 'polled'`);
+      expect(after[0]!['point_count']).toBe(before[0]!['point_count']);
+    });
+
+    it('ignores a long-dead series answering alongside a live one', async () => {
+      const at = new Date(Date.now() - 30_000).toISOString();
+      route([
+        reading({ at, value: 60 }),
+        // The same station, a different instrument, last heard from in 1953.
+        reading({ at: '1953-02-05T23:40:00.000+01:00', value: -29, instrument: '10257' }),
+      ]);
+
+      const result = await pollLatest({ log: () => {}, discoveryLimit: 0 });
+
+      expect(result.stale).toBe(1);
+      expect(result.pointsInserted).toBe(1);
+
+      const { rows } = await query(
+        `SELECT min(first_observed_at) AS oldest FROM series WHERE location_code = 'polled'`);
+      expect((rows[0]!['oldest'] as Date).getUTCFullYear()).toBeGreaterThan(2000);
+    });
+
+    it('carries freshness through to what the map reads', async () => {
+      const at = new Date(Date.now() - 30_000).toISOString();
+      route([reading({ at, value: 77 })]);
+
+      await pollLatest({ log: () => {}, discoveryLimit: 0 });
+
+      const { rows } = await query(`
+        SELECT l.last_seen_at AS location_seen, q.last_seen_at AS quantity_seen, q.latest_value
+          FROM locations l
+          JOIN location_quantities q ON q.location_code = l.code
+         WHERE l.code = 'polled'`);
+      expect(rows[0]!['latest_value']).toBe(77);
+      // Both were three hours old when the suite seeded them.
+      expect((rows[0]!['location_seen'] as Date).toISOString()).toBe(at);
+      expect((rows[0]!['quantity_seen'] as Date).toISOString()).toBe(at);
+    });
+
+    it('survives a failing call and reports it rather than losing the cycle', async () => {
+      fetchMock.mockReset();
+      calls.length = 0;
+      fetchMock.mockImplementation(async (url: string) =>
+        (String(url).endsWith('OphalenLaatsteWaarnemingen')
+          ? respond({ message: 'upstream exploded' }, 500)
+          : respond(null, 204)));
+
+      const result = await pollLatest({ log: () => {}, discoveryLimit: 0 });
+
+      expect(result.failures).toBeGreaterThan(0);
+      expect(result.pointsInserted).toBe(0);
+    }, 60_000);
+
+    it('reports the poll on /api/health', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/health' });
+      const body = res.json();
+      expect(body.cache.latestPolledAt).not.toBeNull();
+      expect(body.cache.latestPollAgeSeconds).toBeLessThan(120);
     });
   });
 

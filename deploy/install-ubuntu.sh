@@ -381,9 +381,12 @@ TEST_DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@localhost:5432/postgres
 # Serve the built map client from the API, so the whole app is one origin.
 WEB_ROOT=${REPO_DIR}/packages/web/dist
 
-# The daily location refresh and the weekly correction re-fetch run inside the
-# API process. Exactly one instance should carry them.
+# The daily location refresh, the weekly correction re-fetch and the
+# five-minute latest poll run inside the API process. Exactly one instance
+# should carry them.
 ENABLE_SCHEDULES=true
+ENABLE_LATEST_POLL=true
+LATEST_POLL_INTERVAL_MINUTES=5
 
 CORS_ORIGIN=*
 RATE_LIMIT_MAX=300

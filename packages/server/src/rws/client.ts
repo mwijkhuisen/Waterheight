@@ -208,21 +208,56 @@ export function fetchObservations(
   );
 }
 
+/**
+ * Which series OphalenLaatsteWaarnemingen should answer for.
+ *
+ * Everything past `grootheid` is optional and exists to narrow the answer.
+ * A (compartiment, grootheid) pair alone matches every series a location ever
+ * had for that quantity, live or long dead, and each one comes back with its
+ * full ~5 KiB AquoMetadata block: 18 locations asked for `CONCTTE` returned
+ * 4,622 series and 7.6 MB in 9.2 s, of which 44 series carried a reading from
+ * the last six hours. Adding the parameter, instrument and determination
+ * method the series is already known to use returned the same 44 live series
+ * in 137 KiB and 0.44 s -- 56x less to download for exactly the same data.
+ * Measured live on 2026-08-20; see the poll notes in the README.
+ */
+export interface LatestFilter {
+  compartiment: string;
+  grootheid: string;
+  /** Defaults to 'meting' so archived forecasts stay out. */
+  procesType?: string | undefined;
+  parameter?: string | null | undefined;
+  meetapparaat?: string | null | undefined;
+  waardebepalingMethode?: string | null | undefined;
+}
+
+function latestMetadata(filter: LatestFilter): Record<string, unknown> {
+  return {
+    Compartiment: { Code: filter.compartiment },
+    Grootheid: { Code: filter.grootheid },
+    ProcesType: filter.procesType ?? 'meting',
+    ...(filter.parameter ? { Parameter: { Code: filter.parameter } } : {}),
+    ...(filter.meetapparaat ? { MeetApparaat: { Code: filter.meetapparaat } } : {}),
+    ...(filter.waardebepalingMethode
+      ? { WaardeBepalingsMethode: { Code: filter.waardebepalingMethode } }
+      : {}),
+  };
+}
+
 export function fetchLatest(
   locationCodes: string[],
-  quantities: { compartiment: string; grootheid: string }[],
+  filters: LatestFilter[],
+  options: PostOptions = {},
 ): Promise<RwsResponse<OphalenWaarnemingenResponse>> {
   return rwsPost<OphalenWaarnemingenResponse>(
     '/ONLINEWAARNEMINGENSERVICES/OphalenLaatsteWaarnemingen',
     {
       LocatieLijst: locationCodes.map((Code) => ({ Code })),
-      AquoPlusWaarnemingMetadataLijst: quantities.map((q) => ({
-        AquoMetadata: {
-          Compartiment: { Code: q.compartiment },
-          Grootheid: { Code: q.grootheid },
-        },
+      AquoPlusWaarnemingMetadataLijst: filters.map((filter) => ({
+        AquoMetadata: latestMetadata(filter),
       })),
     },
+    options,
   );
 }
 

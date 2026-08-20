@@ -47,9 +47,12 @@ services:
       RWS_API_KEY: ${RWS_API_KEY:-dummy}
       ACTIVE_WINDOW_DAYS: ${ACTIVE_WINDOW_DAYS:-7}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      # One instance carries the daily refresh and weekly correction re-fetch.
-      # Scale the API beyond one replica and this must move to a single worker.
+      # One instance carries the daily refresh, the weekly correction re-fetch
+      # and the five-minute latest poll. Scale the API beyond one replica and
+      # these must move to a single worker.
       ENABLE_SCHEDULES: ${ENABLE_SCHEDULES:-true}
+      ENABLE_LATEST_POLL: ${ENABLE_LATEST_POLL:-true}
+      LATEST_POLL_INTERVAL_MINUTES: ${LATEST_POLL_INTERVAL_MINUTES:-5}
     ports:
       - '${API_PORT:-3000}:3000'
     depends_on:
