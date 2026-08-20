@@ -57,6 +57,40 @@ cd /opt/rws
 sudo ./deploy/install-ubuntu.sh
 ```
 
+**On where to put it.** `/opt/rws` is the conventional choice, but installing
+under `/home` is fully supported — often it is the larger volume, or simply
+where the box's other web applications live. The installer generates the unit
+with `ProtectHome=read-only` for a `/home` install, so systemd does not hide the
+directory from the service.
+
+The one wrinkle is that Ubuntu creates *user* home directories mode 0750, so
+nothing inside `/home/you/` is readable by a different account — while `/home`
+itself is 0755. If the checkout sits inside a user's home, pick one of:
+
+```sh
+# 1. Run the service as the user that already owns it. Least invasive, and the
+#    natural fit if the box's other apps already run as that user.
+sudo ./deploy/install-ubuntu.sh --app-user administrator
+
+# 2. Move it one level up, out of the user's home but on the same volume.
+sudo mv /home/administrator/rws /home/rws && cd /home/rws
+sudo sed -i 's|^WEB_ROOT=.*|WEB_ROOT=/home/rws/packages/web/dist|' .env
+sudo ./deploy/install-ubuntu.sh
+
+# 3. Keep a dedicated service account and allow traversal of the home directory.
+#    Any local user may then traverse it, though not list its contents.
+sudo chmod o+x /home/administrator
+sudo ./deploy/install-ubuntu.sh
+```
+
+The installer checks this before installing the unit and stops with these
+options, rather than letting it surface later as a bare `systemctl start`
+failure.
+
+Note that the checkout is only a few hundred MB. If capacity is what is driving
+the choice of volume, it is the database that grows — see
+[Putting the database on a bigger volume](#putting-the-database-on-a-bigger-volume).
+
 That script performs every step in the next section and is safe to re-run — each
 step checks for its own result first, so it doubles as the upgrade path. Useful
 flags:
@@ -296,6 +330,58 @@ With `ENABLE_SCHEDULES=true` this then repeats daily on its own.
 See [Loading history](../README.md#loading-history) in the README for the full
 picture, including how to pull only the last few days versus a full year.
 
+## Putting the database on a bigger volume
+
+The application checkout is small — a few hundred MB including `node_modules`.
+The database is what grows: roughly 10–23 GB for a year of history before
+indexes and WAL, and it lives in `/var/lib/postgresql/`, which is usually on the
+root volume. So if one volume is much larger than another, it is the *data
+directory* that wants to be there, not the checkout.
+
+The installer reports free space where the data directory lives and warns below
+30 GB.
+
+To move it — this procedure was run end to end and verified to preserve the
+hypertable, the continuous aggregates and the TimescaleDB extension:
+
+```sh
+# 1. Stop the database.
+sudo systemctl stop postgresql
+
+# 2. Copy the cluster, preserving ownership and permissions. `cp -a` is used
+#    rather than rsync, which is not installed by default on Ubuntu server.
+sudo mkdir -p /home/pgdata/16
+sudo cp -a /var/lib/postgresql/16/main /home/pgdata/16/main
+sudo chown -R postgres:postgres /home/pgdata
+sudo chmod 700 /home/pgdata/16/main          # PostgreSQL refuses a laxer mode
+
+# 3. Point the cluster at the new location.
+sudo sed -i "s|^data_directory = .*|data_directory = '/home/pgdata/16/main'|" \
+  /etc/postgresql/16/main/postgresql.conf
+
+# 4. Start it and confirm.
+sudo systemctl start postgresql
+sudo -u postgres psql -tAc 'SHOW data_directory;'
+```
+
+Then check your data survived before deleting anything:
+
+```sh
+psql "$DATABASE_URL" -tAc 'SELECT count(*) FROM locations;'
+psql "$DATABASE_URL" -tAc "SELECT extversion FROM pg_extension WHERE extname='timescaledb';"
+```
+
+Only once that looks right:
+
+```sh
+sudo rm -rf /var/lib/postgresql/16/main.old   # if you renamed rather than copied
+```
+
+Ubuntu's own `postgresql@.service` sets no `ProtectHome`, so a data directory
+under `/home` works under systemd without further changes.
+
+Adjust `16` to your major version throughout — `pg_lsclusters` shows it.
+
 ## Putting it behind a reverse proxy
 
 The app speaks plain HTTP and trusts `X-Forwarded-*`, so it expects a proxy in
@@ -367,6 +453,48 @@ backfill queue itself is not precious — losing it costs download time, not dat
 
 Ubuntu's archive carries 18.x; this app needs >= 20. Install from NodeSource as
 in [step 1](#1-nodejs).
+
+### `Job for rws-api.service failed because the control process exited`
+
+The "control process" is `ExecStartPre`, which runs migrations before the
+listener opens. The usual cause is that the service cannot read its own
+directory, which happens when the repository lives under `/home`:
+
+- Ubuntu creates home directories **mode 0750**, so no other account —
+  including this service's — can traverse into them.
+- systemd's `ProtectHome=true` makes `/home` appear **empty** to a service, so
+  the directory is invisible even when permissions would allow it.
+
+Check what the service account can actually see:
+
+```sh
+sudo runuser -u rws -- test -r /path/to/rws/package.json && echo readable || echo "NOT readable"
+sudo journalctl -xeu rws-api.service | tail -30
+```
+
+The fix is to install outside `/home`:
+
+```sh
+sudo systemctl stop rws-api
+sudo mv /home/<you>/rws /opt/rws
+cd /opt/rws
+sudo sed -i 's|^WEB_ROOT=.*|WEB_ROOT=/opt/rws/packages/web/dist|' .env
+sudo ./deploy/install-ubuntu.sh
+```
+
+The `WEB_ROOT` line matters: it is an absolute path and the installer never
+rewrites an existing `.env`, so after a move the API would start but serve no
+client. Current versions warn about this.
+
+If the checkout must stay under `/home`, allow traversal of the home directory
+instead — this permits any local user to traverse it, though not to list its
+contents — and re-run the installer so the unit is regenerated with
+`ProtectHome=read-only`:
+
+```sh
+sudo chmod o+x /home/<you>
+sudo ./deploy/install-ubuntu.sh
+```
 
 ### `You need to install postgresql-server-dev-NN ... or libpq-dev`
 

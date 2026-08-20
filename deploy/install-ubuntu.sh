@@ -392,6 +392,16 @@ ENVEOF
   info "wrote ${ENV_FILE}"
 fi
 
+# WEB_ROOT is an absolute path, and an existing .env is never rewritten -- so a
+# repository that has been moved keeps pointing at where it used to be, and the
+# API silently serves no client at all.
+web_root=$(sed -n 's/^WEB_ROOT=\(.*\)$/\1/p' "$ENV_FILE" | tail -1)
+if [[ -n ${web_root:-} && ! -d $web_root ]]; then
+  warn "WEB_ROOT in .env points at ${web_root}, which does not exist."
+  warn "The API would start but serve no client. Fix it with:"
+  warn "  sed -i 's|^WEB_ROOT=.*|WEB_ROOT=${REPO_DIR}/packages/web/dist|' ${ENV_FILE}"
+fi
+
 # The file holds the database password.
 chown "root:${APP_USER}" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
@@ -399,6 +409,57 @@ info "secured ${ENV_FILE} (root:${APP_USER}, 0640)"
 
 # The service account needs to read the tree it runs from.
 chown -R "${APP_USER}:${APP_USER}" "${REPO_DIR}/packages" 2>/dev/null || true
+
+# ...and it needs to be able to reach it at all. Ubuntu creates home directories
+# mode 0750, so a repo under /home/<someone>/ is unreadable to any other user --
+# including this service account. That surfaces only at `systemctl start`, as a
+# bare "control process exited with error code", which is a poor way to find out.
+if ! runuser -u "$APP_USER" -- test -r "${REPO_DIR}/package.json" 2>/dev/null; then
+  home_owner=$(stat -c '%U' "$(dirname "${REPO_DIR}")" 2>/dev/null || echo '<owner>')
+  die "${APP_USER} cannot read ${REPO_DIR}.
+
+    Ubuntu creates *user* home directories mode 0750, so nothing inside one is
+    reachable by another account. /home itself is 0755, so this is only about
+    being nested inside a particular user's home -- keeping the app on the /home
+    volume is entirely fine. Three ways, none of which move it off /home:
+
+      1. Run the service as the user that already owns it. Best if your other
+         web apps on this box run as their own user too:
+
+           sudo ./deploy/install-ubuntu.sh --app-user ${home_owner}
+
+      2. Move it one level up, out of the user's home but on the same volume:
+
+           sudo mv ${REPO_DIR} /home/rws && cd /home/rws
+           sudo sed -i 's|^WEB_ROOT=.*|WEB_ROOT=/home/rws/packages/web/dist|' /home/rws/.env
+           sudo ./deploy/install-ubuntu.sh
+
+      3. Keep both the location and a dedicated service account, and allow
+         traversal of the home directory. This lets any local user traverse it;
+         it does not make its contents listable:
+
+           sudo chmod o+x $(dirname "${REPO_DIR}")
+           sudo ./deploy/install-ubuntu.sh
+
+    1 changes nothing on disk and is the least invasive."
+
+fi
+
+# --- disk ------------------------------------------------------------------
+# The checkout is a few hundred MB; the database is tens of GB once history is
+# loaded. Those are frequently on different volumes, and the one that matters
+# is rarely the one people think of.
+step "disk"
+pgdata=$(su postgres -c "psql -tAc 'SHOW data_directory'" 2>/dev/null || true)
+if [[ -n ${pgdata:-} ]]; then
+  avail_gb=$(df -BG --output=avail "$pgdata" 2>/dev/null | tail -1 | tr -dc '0-9')
+  info "database directory ${pgdata} (${avail_gb:-?} GB free)"
+  if [[ -n ${avail_gb:-} && $avail_gb -lt 30 ]]; then
+    warn "under 30 GB free where the database lives. A year of history is"
+    warn "~10-23 GB before indexes and WAL, so a full backfill may not fit."
+    warn "See 'Putting the database on a bigger volume' in docs/INSTALL-UBUNTU.md."
+  fi
+fi
 
 # --- migrations -------------------------------------------------------------
 step "migrations"
@@ -412,10 +473,21 @@ if [[ $SKIP_SERVICE -eq 0 ]]; then
     warn "not booted under systemd; skipping the unit files"
     warn "run the API yourself with: node packages/server/dist/index.js"
   else
+    # ProtectHome=true hides /home from the service entirely, so an install
+    # that lives there needs read-only instead. Still hardened -- the service
+    # only ever reads its own tree.
+    if [[ $REPO_DIR == /home/* ]]; then
+      PROTECT_HOME=read-only
+      info "install is under /home; using ProtectHome=read-only so the unit can see it"
+    else
+      PROTECT_HOME=true
+    fi
+
     for unit in rws-api.service rws-backfill.service; do
       sed -e "s|@REPO_DIR@|${REPO_DIR}|g" \
           -e "s|@APP_USER@|${APP_USER}|g" \
           -e "s|@NODE@|$(command -v node)|g" \
+          -e "s|@PROTECT_HOME@|${PROTECT_HOME}|g" \
           "${REPO_DIR}/deploy/${unit}" > "/etc/systemd/system/${unit}"
       info "installed /etc/systemd/system/${unit}"
     done
