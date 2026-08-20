@@ -146,6 +146,9 @@ export interface HealthResponse {
     locationsRefreshedAt: string | null;
     catalogueRefreshedAt: string | null;
     ageSeconds: number | null;
+    /** Null where the five-minute latest poll has never run. */
+    latestPolledAt: string | null;
+    latestPollAgeSeconds: number | null;
   };
   locations: { total: number; active: number };
   backfill: BackfillProgress;

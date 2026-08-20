@@ -75,9 +75,10 @@ $EDITOR .env
 docker compose up -d --build          # database, migrations, then the app on :3000
 ```
 
-The API container carries the daily refresh and the weekly correction re-fetch (`ENABLE_SCHEDULES`,
-on by default in compose). If you scale it past one replica, turn that off and run the schedules on a
-single worker instead, or several instances will hit Rijkswaterstaat with the same job.
+The API container carries the daily refresh, the weekly correction re-fetch and the five-minute
+latest poll (`ENABLE_SCHEDULES`, on by default in compose). If you scale it past one replica, turn
+that off and run the schedules on a single worker instead, or several instances will hit
+Rijkswaterstaat with the same job.
 
 ### Either way, the database starts empty
 
@@ -114,6 +115,30 @@ Loads the Aquo catalogue (~1.2 s) and streams the WFS location layer — ~940,00
 periods are fetched from Rijkswaterstaat on demand and cached.
 
 With `ENABLE_SCHEDULES=true` this then repeats daily on its own, so it is a one-off command.
+
+### Live readings — the five-minute poll
+
+The location layer is a daily snapshot; live readings come from the poll. It pulls the newest
+reading of every live series on a fixed cadence, so *now* is already in the store when someone asks
+for it and the only traffic upstream is the poll's own — not one call per visitor.
+
+```sh
+node packages/server/dist/cli/latest.js --dry-run   # the plan and what it costs, fetches nothing
+node packages/server/dist/cli/latest.js             # one cycle
+node packages/server/dist/cli/latest.js --watch     # keep polling on the configured interval
+```
+
+With `ENABLE_SCHEDULES=true` the API runs it every five minutes and on startup, so normally there is
+nothing to run by hand. `--watch` is for a deployment scaled past one instance: turn the schedules
+off there and let one worker poll while every instance serves what it wrote.
+
+A cold store has no series to poll, so the first cycles are mostly discovery — the poll probes 50
+pairs it has no live series for, oldest first, and the polled set grows until the whole active
+network is covered a few hours later. `--discovery 500` hurries that along.
+
+It only ever adds the *newest* reading per series. Full history is still the backfill's job, and a
+series publishing faster than the poll interval will have gaps between poll cycles until the
+[rolling re-fetch](#keeping-history-correct-afterwards) fills them in.
 
 ### Loading history
 
@@ -221,6 +246,14 @@ TimescaleDB — steps 2 and 3 of [`docs/INSTALL-UBUNTU.md`](docs/INSTALL-UBUNTU.
 `npm run` scripts pick up the repository-root `.env` even though npm runs them from
 `packages/server`. `ENV_FILE=/path/to/.env` overrides it; real environment variables beat both.
 
+The latest poll in development:
+
+```sh
+npm run latest -- --dry-run          # calls the cycle would make, fetches nothing
+npm run latest                       # one cycle
+npm run latest -- --discovery 500    # warm a cold store faster than 50 pairs a cycle
+```
+
 The backfill CLI in development:
 
 ```sh
@@ -238,6 +271,7 @@ npm run backfill:status
   WFS locatiesmetlaatstewaarneming ──► ingest/locations   ─┐
   OphalenCatalogus                 ──► ingest/catalogue   ─┤
   OphalenWaarnemingen              ──► ingest/observations ┤
+  OphalenLaatsteWaarnemingen       ──► ingest/latest       ┤
        │                                                   ▼
        └── sources/http: per-source gate, retry, backoff   PostgreSQL + TimescaleDB
                                                             │
@@ -340,14 +374,48 @@ stays out of the UI while the data underneath stays whole.
 ## Caching and freshness
 
 - **Locations and catalogue**: refreshed on a schedule, persisted, never fetched in a request path.
+- **Live readings**: pulled by the five-minute poll, so the newest value of every live series is
+  already stored when a request arrives. Nothing in the read path fetches them.
 - **Observations**: served from the local store. A window not covered locally triggers a live
   upstream fetch, which is then stored — this is what makes the API useful before the Phase 4
   backfill, and the lazy path for quantities that are never eagerly backfilled afterwards. Windows
   longer than 92 days are left to the batch pipeline rather than fetched while a user waits.
+  `LIVE_FETCH_ON_REQUEST=false` closes that path entirely, so every upstream call comes from the
+  scheduler and visitor traffic can never reach Rijkswaterstaat's rate limit.
 - **On upstream failure**: whatever is stored locally is still served, flagged `stale: true` with a
   `fetchedAt`. Only a request with nothing at all to serve becomes a 502.
 - **Outbound calls** are capped at 4 concurrent with exponential backoff and full jitter, so retries
   from separate workers do not synchronise.
+
+### What the poll costs upstream
+
+`OphalenLaatsteWaarnemingen` answers a (compartiment, grootheid) pair with **every** series a
+location ever ran for that quantity — 1900 included — each carrying a full ~1.5 KiB AquoMetadata
+block. Asked bare, 18 locations wanting `CONCTTE` returned 4,622 series and 7.6 MB in 9.2 s, of
+which 44 series carried a reading from the last six hours. Adding the parameter, instrument and
+determination method those series are already known to use returned the same 44 live readings in
+137 KiB and 0.44 s.
+
+So the poll asks narrowly, from what the `series` table already knows, and packs several filters
+into each call. Measured over 1,744 live series on 2026-08-20, against the live service:
+
+| Filters per call | Calls | Downloaded | Live series found |
+| --- | --- | --- | --- |
+| One | 140 | 4.5 MiB | 1,720 |
+| Four | 35 | 5.1 MiB | 1,721 |
+| Sixteen | 9 | 6.7 MiB | 1,734 |
+| Default (`LATEST_POLL_MAX_COMBINATIONS=2000`) | **8** | 6.6 MiB | 1,744 |
+
+Packing costs bytes and saves calls, and finds slightly *more* than one filter per call does: the
+cross product surfaces live series at locations our own metadata had not associated with that
+filter, which is data we wanted anyway. The default trades a third more bandwidth for seventeen
+times fewer calls, on the grounds that a service asking clients to identify themselves for future
+rate limiting will count calls before bytes. Raise the cap for fewer, larger calls; lower it for
+more, leaner ones.
+
+A reading the store already has is recognised from `last_observed_at` and not rewritten, so a
+five-minute poll against a ten-minute publish cadence writes on every other cycle rather than
+churning `fetched_at` on every one.
 
 Quality filtering happens at **read** time. The raw `Kwaliteitswaardecode` is always stored, so
 changing display policy never means re-downloading history. The default view shows the codes
@@ -363,7 +431,7 @@ waterinfo.rws.nl itself displays; `?includeAllQuality=true` opts out.
 | `GET /api/locations/:code/observations` | `grootheid` required; `from`, `to`, `resolution`, `includeAllQuality` |
 | `GET /api/quantities` | Quantities and compartments with active-location counts, for filter UI |
 | `GET /api/sources` | Data sources with their attribution, licence and location counts |
-| `GET /api/health` | Upstream reachability, cache age, location counts, backfill progress |
+| `GET /api/health` | Upstream reachability, cache age, last poll, location counts, backfill progress |
 
 ISO 8601 UTC timestamps throughout. Errors are always `{ error: { code, message } }`. An upstream 204
 becomes `200` with an empty array; an upstream failure becomes `502`.
@@ -561,8 +629,10 @@ thousands of refreshes of the same buckets.
 Progress is observable from both sides: the CLI prints chunks done/total, rows, throughput, ETA and
 failure count, and `/api/health` reports the same figures.
 
-Set `ENABLE_SCHEDULES=true` on exactly one instance to run the daily refresh and weekly correction
-re-fetch in-process.
+Set `ENABLE_SCHEDULES=true` on exactly one instance to run the daily refresh, the weekly correction
+re-fetch and the five-minute latest poll in-process. `/api/health` reports `cache.latestPolledAt`
+and goes `degraded` if the poll has run but not for four intervals, so a poll that has quietly
+stopped shows up as stale live data rather than as nothing at all.
 
 ## Tests
 
@@ -575,8 +645,8 @@ never touch the network. Integration tests exercise the API through Fastify agai
 database and a mocked upstream; they skip themselves with a warning if no database is reachable, so
 the suite stays useful without one.
 
-**A green run with the integration tests skipped is not a green run.** The full suite is 89 tests;
-if you see 60 passing and 29 skipped, no database was reachable. They read `TEST_DATABASE_URL` from
+**A green run with the integration tests skipped is not a green run.** The full suite is 126 tests;
+if you see 80 passing and 46 skipped, no database was reachable. They read `TEST_DATABASE_URL` from
 `.env`, and because each run creates and drops a database of its own, that role needs `CREATEDB`:
 
 ```sh
@@ -595,7 +665,16 @@ active — matching an independent Phase 1 count exactly), the on-demand observa
 backfill (`SIGKILL` mid-run left zero chunks marked done without data, and the resume recovered
 cleanly), an idempotent correction re-fetch (230,503 rows rewritten, row count unchanged), and the
 map and detail panel in a real browser, both from the dev server and from the production
-single-origin build. 89 tests pass.
+single-origin build. 126 tests pass.
+
+**Verified for the latest poll:** run against the live service on a store holding the real location
+layer (2,595 locations, 568 active, 3,406 active location+quantity pairs). Discovery found 1,744
+live series across 750 probed pairs and the poll then kept them current in 8 calls and 6.6 MiB per
+cycle, in 5.6 s, recognising 1,719 of 1,744 readings as ones it already had. The narrowing and
+packing figures in [What the poll costs upstream](#what-the-poll-costs-upstream) are measurements
+from that run, not projections. The remaining ~2,650 pairs were left undiscovered rather than
+rushed upstream, so a cycle covering the *whole* active network is an extrapolation from those
+numbers (~36 calls, ~30 MiB) rather than an observation.
 
 **Verified for the registry-style frontend:** every route rendered in headless Chromium against a
 stubbed API — light and dark schemes, desktop and 390px widths — with no page errors, plus the
@@ -609,6 +688,15 @@ or a real basemap since the refactor.
 Docker daemon available in the environment this was built in. The compose file is validated for
 syntax and the CI workflow builds the image on every push, so the first real `docker compose up`
 should be treated as the smoke test it is.
+
+**Found while building the poll, not fixed:** the WFS layer stamps `TIJDSTIP_LAATSTE_METING` in
+Dutch local time but labels it `Z`, so `locations.last_seen_at` and `location_quantities.last_seen_at`
+sit up to two hours in the future — `aadorp` was stored as `13:30Z` while the observation API's
+newest reading for it was `11:40Z`. The observation path is unaffected (it reads the fixed `+01:00`
+the archive returns and converts correctly). The poll writes true UTC and both columns only ever
+move forward, so its readings simply do not advance freshness until real time passes the layer's
+figure — a couple of hours after each daily refresh. Fixing it means deciding whether the layer
+follows Europe/Amsterdam or the archive's fixed CET, which cannot be settled from summer data alone.
 
 **Not yet run at scale:** the full backfill. The database has been exercised with ~924k rows across a
 handful of locations, not the ~190M across 567 that a year of history for every active location would
