@@ -14,7 +14,12 @@ RUN npm ci
 COPY . .
 # Compiles shared + server, and bundles the map client. The earlier image built
 # only the TypeScript and shipped an API with no frontend.
-RUN npm run build && npm run build:web
+#
+# --force so the build never trusts incremental state it did not create. The
+# .dockerignore above keeps *.tsbuildinfo out of the context, but that is one
+# glob away from silently reverting to a no-op build and an image whose COPY
+# of packages/*/dist fails; this does not depend on getting the glob right.
+RUN npm run build -- --force && npm run build:web
 
 # Drop dev dependencies from the tree we copy into the runtime image.
 RUN npm prune --omit=dev
