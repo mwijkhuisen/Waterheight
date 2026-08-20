@@ -454,6 +454,32 @@ backfill queue itself is not precious — losing it costs download time, not dat
 Ubuntu's archive carries 18.x; this app needs >= 20. Install from NodeSource as
 in [step 1](#1-nodejs).
 
+### `uv_interface_addresses returned Unknown system error 97`
+
+Errno 97 is `EAFNOSUPPORT`, and this is a systemd sandboxing problem, not a
+network one. Fastify logs the bound address on `listen`, which calls
+`os.networkInterfaces()` → `getifaddrs()` → `socket(AF_NETLINK, SOCK_RAW,
+NETLINK_ROUTE)`. If the unit's `RestrictAddressFamilies=` omits `AF_NETLINK`,
+that socket fails, the exception is thrown from the `listening` handler and the
+process exits 1 — *after* binding successfully, which makes it look like a port
+conflict when the port is fine.
+
+```sh
+grep RestrictAddressFamilies /etc/systemd/system/rws-api.service
+systemctl show rws-api -p RestrictAddressFamilies    # what systemd actually applies
+```
+
+The list must include `AF_NETLINK`:
+
+```sh
+sudo sed -i 's/^RestrictAddressFamilies=.*/RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK/' \
+  /etc/systemd/system/rws-api.service
+sudo systemctl daemon-reload && sudo systemctl restart rws-api
+```
+
+`daemon-reload` is required — editing a unit file alone changes nothing until
+systemd re-reads it.
+
 ### The service starts, then exits 1 immediately
 
 Almost always the port is already taken by something else on the box. The app
