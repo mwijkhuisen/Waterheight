@@ -9,3 +9,6 @@ dist-types/
 /fixtures/*
 !/fixtures/trimmed/
 *.tsbuildinfo
+
+# Per-person Claude Code settings. The shared ones are in .claude/settings.json.
+.claude/settings.local.json
