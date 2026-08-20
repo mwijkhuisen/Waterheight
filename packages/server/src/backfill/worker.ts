@@ -14,8 +14,8 @@
 
 import { config } from '../config.js';
 import { refreshAggregates } from '../db/observations.js';
-import { RwsError, fetchCounts, fetchObservations } from '../rws/client.js';
-import { normaliseObservations } from '../rws/normalise.js';
+import { RwsError, fetchCounts, fetchObservations } from '../sources/rws/client.js';
+import { normaliseObservations } from '../sources/rws/normalise.js';
 import { windowFor } from './plan.js';
 import {
   claim,
@@ -115,8 +115,8 @@ async function processJob(
 }
 
 export async function runQueue(options: RunOptions = {}): Promise<RunResult> {
-  const concurrency = options.concurrency ?? config.rws.maxConcurrency;
-  const maxAttempts = options.maxAttempts ?? config.rws.maxRetries;
+  const concurrency = options.concurrency ?? config.sources.rws.http.maxConcurrency;
+  const maxAttempts = options.maxAttempts ?? config.sources.rws.http.maxRetries;
   const started = Date.now();
 
   let processed = 0;

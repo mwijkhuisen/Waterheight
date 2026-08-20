@@ -14,11 +14,14 @@ import {
   type LocationDetail,
   type ObservationsResponse,
   type QuantitiesResponse,
+  type SourceInfo,
 } from '@rws/shared';
 
 import { config } from '../config.js';
 import { getPool } from '../db/pool.js';
 import { getLocation, listLocations, locationCounts } from '../db/locations.js';
+import { listSourceInfo } from '../db/sources.js';
+import { RWS_SOURCE_ID, resolveLocationKey } from '../sources/registry.js';
 import { findSeries, listSeriesForLocation, toMeasurementType } from '../db/series.js';
 import {
   readLatestForLocation,
@@ -55,7 +58,7 @@ async function defaultCompartimentFor(
       WHERE location_code = $1 AND grootheid = $2
       ORDER BY last_seen_at DESC
       LIMIT 1`,
-    [locationCode.toLowerCase(), grootheid],
+    [resolveLocationKey(locationCode), grootheid],
   );
   return rows[0]?.compartiment ?? null;
 }
@@ -65,6 +68,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const q = request.query as Record<string, unknown>;
     return listLocations({
       includeInactive: parseBoolean(q['includeInactive'], 'includeInactive') ?? false,
+      source: parseString(q['source'], 'source', 50),
       grootheid: parseString(q['grootheid'], 'grootheid', 50),
       compartiment: parseString(q['compartiment'], 'compartiment', 50),
       bbox: parseBbox(q['bbox']),
@@ -74,7 +78,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/locations/:code', async (request): Promise<LocationDetail> => {
-    const { code } = request.params as { code: string };
+    // Resolved once here, so everything downstream sees a qualified key. An
+    // unqualified code still addresses the default source, which is what keeps
+    // links minted before sources existed working.
+    const code = resolveLocationKey((request.params as { code: string }).code);
     const location = await getLocation(code);
     if (!location) throw notFound(`No location with code ${code}`);
 
@@ -102,7 +109,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }>(
       `SELECT compartiment, grootheid, eenheid FROM location_quantities
         WHERE location_code = $1 ORDER BY grootheid`,
-      [code.toLowerCase()],
+      [code],
     );
 
     for (const r of publishedRows) {
@@ -127,7 +134,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/locations/:code/latest', async (request): Promise<LatestValue[]> => {
-    const { code } = request.params as { code: string };
+    const code = resolveLocationKey((request.params as { code: string }).code);
     const location = await getLocation(code);
     if (!location) throw notFound(`No location with code ${code}`);
 
@@ -146,7 +153,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/locations/:code/observations', async (request): Promise<ObservationsResponse> => {
-    const { code } = request.params as { code: string };
+    const code = resolveLocationKey((request.params as { code: string }).code);
     const q = request.query as Record<string, unknown>;
 
     const grootheid = parseString(q['grootheid'], 'grootheid', 50);
@@ -306,11 +313,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  app.get('/api/sources', async (): Promise<SourceInfo[]> => listSourceInfo());
+
   app.get('/api/health', async (reply): Promise<HealthResponse> => {
     const [counts, locationsState, catalogueState, backfill] = await Promise.all([
       locationCounts(),
-      getRefreshState('locations'),
-      getRefreshState('catalogue'),
+      getRefreshState(RWS_SOURCE_ID, 'locations'),
+      getRefreshState(RWS_SOURCE_ID, 'catalogue'),
       backfillProgress(),
     ]);
 

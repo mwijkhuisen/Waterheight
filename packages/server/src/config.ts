@@ -35,18 +35,33 @@ export const config = {
   databaseUrl: str('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/rws'),
   dbPoolSize: int('DB_POOL_SIZE', 10),
 
-  rws: {
-    apiBase: str('RWS_API_BASE', 'https://ddapi20-waterwebservices.rijkswaterstaat.nl'),
-    wfsUrl: str('RWS_WFS_URL', 'https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/ows'),
-    /**
-     * Not required today, but Rijkswaterstaat asks clients to send one so that
-     * future key-based rate limiting does not break them.
-     */
-    apiKey: str('RWS_API_KEY', 'dummy'),
-    timeoutMs: int('RWS_TIMEOUT_MS', 120_000),
-    /** Politeness cap on concurrent outbound calls to RWS. */
-    maxConcurrency: int('RWS_MAX_CONCURRENCY', 4),
-    maxRetries: int('RWS_MAX_RETRIES', 5),
+  /**
+   * Upstream configuration, one entry per source.
+   *
+   * Nested rather than flat because the tolerances are genuinely per-service:
+   * the WFS layer needs a 120-second timeout that would be absurd for a 3 KB
+   * JSON station list, and each source's concurrency cap gates only its own
+   * requests. `http` is shaped to be handed straight to `httpClientFor`.
+   *
+   * The environment variable names predate sources and are deliberately left
+   * alone -- renaming them would break every existing `.env` for no gain.
+   */
+  sources: {
+    rws: {
+      apiBase: str('RWS_API_BASE', 'https://ddapi20-waterwebservices.rijkswaterstaat.nl'),
+      wfsUrl: str('RWS_WFS_URL', 'https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/ows'),
+      /**
+       * Not required today, but Rijkswaterstaat asks clients to send one so that
+       * future key-based rate limiting does not break them.
+       */
+      apiKey: str('RWS_API_KEY', 'dummy'),
+      http: {
+        timeoutMs: int('RWS_TIMEOUT_MS', 120_000),
+        /** Politeness cap on concurrent outbound calls to Rijkswaterstaat. */
+        maxConcurrency: int('RWS_MAX_CONCURRENCY', 4),
+        maxRetries: int('RWS_MAX_RETRIES', 5),
+      },
+    },
   },
 
   /** A location counts as active if its latest observation is newer than this. */

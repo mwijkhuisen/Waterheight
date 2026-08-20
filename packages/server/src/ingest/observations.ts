@@ -11,8 +11,8 @@
 import { withTransaction } from '../db/pool.js';
 import { refreshCoverage, upsertSeries } from '../db/series.js';
 import { refreshAggregates, upsertObservations } from '../db/observations.js';
-import { fetchObservations } from '../rws/client.js';
-import { normaliseObservations } from '../rws/normalise.js';
+import { fetchObservations } from '../sources/rws/client.js';
+import { normaliseObservations } from '../sources/rws/normalise.js';
 
 /**
  * Largest window fetched synchronously while a user waits.

@@ -7,15 +7,19 @@ import '../env.js';
 import { closePool } from '../db/pool.js';
 import { refreshCatalogue } from '../ingest/catalogue.js';
 import { recordRefresh, refreshLocations } from '../ingest/locations.js';
+import { RWS_SOURCE_ID } from '../sources/registry.js';
+import { syncSources } from '../db/sources.js';
 
 const only = process.argv[2];
 
 try {
+  await syncSources();
+
   if (!only || only === 'catalogue') {
     try {
       await refreshCatalogue();
     } catch (err) {
-      await recordRefresh('catalogue', { error: String(err) }, false);
+      await recordRefresh(RWS_SOURCE_ID, 'catalogue', { error: String(err) }, false);
       throw err;
     }
   }
@@ -23,7 +27,7 @@ try {
     try {
       await refreshLocations();
     } catch (err) {
-      await recordRefresh('locations', { error: String(err) }, false);
+      await recordRefresh(RWS_SOURCE_ID, 'locations', { error: String(err) }, false);
       throw err;
     }
   }

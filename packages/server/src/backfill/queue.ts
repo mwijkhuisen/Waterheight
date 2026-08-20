@@ -11,7 +11,7 @@ import type { PoolClient } from 'pg';
 import { getPool, withTransaction } from '../db/pool.js';
 import { refreshCoverage, upsertSeries } from '../db/series.js';
 import { upsertObservations } from '../db/observations.js';
-import type { NormalisedSeries } from '../rws/normalise.js';
+import type { NormalisedSeries } from '../sources/rws/normalise.js';
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'empty' | 'failed';
 

@@ -8,9 +8,10 @@
  */
 
 import { getPool } from '../db/pool.js';
-import { fetchCatalogue } from '../rws/client.js';
-import { normaliseCatalogue } from '../rws/normalise.js';
+import { fetchCatalogue } from '../sources/rws/client.js';
+import { normaliseCatalogue } from '../sources/rws/normalise.js';
 import { recordRefresh } from './locations.js';
+import { RWS_SOURCE_ID } from '../sources/registry.js';
 
 export interface RefreshCatalogueResult {
   codes: number;
@@ -45,7 +46,10 @@ export async function refreshCatalogue(
     );
   }
 
-  await recordRefresh('catalogue', { codes: rows.length, latencyMs: response.latencyMs });
+  await recordRefresh(RWS_SOURCE_ID, 'catalogue', {
+    codes: rows.length,
+    latencyMs: response.latencyMs,
+  });
   const durationMs = Date.now() - started;
   log(`[refresh] catalogue: ${rows.length} codes (${durationMs} ms)`);
 

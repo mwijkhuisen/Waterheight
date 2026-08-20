@@ -10,6 +10,7 @@
 import { config } from '../config.js';
 import { refreshCatalogue } from '../ingest/catalogue.js';
 import { recordRefresh, refreshLocations } from '../ingest/locations.js';
+import { RWS_SOURCE_ID } from '../sources/registry.js';
 import { requeueWindow } from './queue.js';
 import { runQueue } from './worker.js';
 
@@ -50,7 +51,7 @@ export async function runRollingRefetch(
   }
 
   log(`[refetch] re-queued ${requeued} chunk(s) from the last ${days} days`);
-  const result = await runQueue({ concurrency: config.rws.maxConcurrency });
+  const result = await runQueue({ concurrency: config.sources.rws.http.maxConcurrency });
   log(`[refetch] rewrote ${result.rowsWritten.toLocaleString('en-GB')} row(s)`);
   return { requeued, rowsWritten: result.rowsWritten };
 }
@@ -71,30 +72,39 @@ export function startSchedules(options: ScheduleOptions = {}): () => void {
   const timers: NodeJS.Timeout[] = [];
   const running = new Set<string>();
 
-  const schedule = (name: string, intervalMs: number, fn: () => Promise<unknown>) => {
+  const schedule = (
+    sourceId: string,
+    name: string,
+    intervalMs: number,
+    fn: () => Promise<unknown>,
+  ) => {
     const timer = setInterval(() => {
-      if (running.has(name)) {
-        log(`[schedule] ${name} still running, skipping this tick`);
+      const key = `${sourceId}:${name}`;
+      if (running.has(key)) {
+        log(`[schedule] ${key} still running, skipping this tick`);
         return;
       }
-      running.add(name);
+      running.add(key);
       void fn()
         .catch((err: unknown) => {
-          log(`[schedule] ${name} failed: ${(err as Error).message}`);
+          log(`[schedule] ${sourceId}:${name} failed: ${(err as Error).message}`);
           // Record the failure so /api/health can report a stale cache rather
           // than silently serving old data as though it were fresh.
-          return recordRefresh(name, { error: String(err) }, false).catch(() => {});
+          return recordRefresh(sourceId, name, { error: String(err) }, false).catch(() => {});
         })
-        .finally(() => running.delete(name));
+        .finally(() => running.delete(key));
     }, intervalMs);
     // Do not hold the process open purely for a timer.
     timer.unref?.();
     timers.push(timer);
   };
 
-  schedule('locations', refreshInterval, () => refreshLocations(log));
-  schedule('catalogue', refreshInterval, () => refreshCatalogue(log));
-  schedule('refetch', refetchInterval, () => runRollingRefetch(refetchDays, log));
+  // All three are Rijkswaterstaat jobs today. A second source brings its own
+  // entries here rather than widening these: the cadences differ per service,
+  // and one source's refresh failing must not stop another's from being tried.
+  schedule(RWS_SOURCE_ID, 'locations', refreshInterval, () => refreshLocations(log));
+  schedule(RWS_SOURCE_ID, 'catalogue', refreshInterval, () => refreshCatalogue(log));
+  schedule(RWS_SOURCE_ID, 'refetch', refetchInterval, () => runRollingRefetch(refetchDays, log));
 
   log(
     `[schedule] locations+catalogue every ${Math.round(refreshInterval / 3_600_000)}h, ` +

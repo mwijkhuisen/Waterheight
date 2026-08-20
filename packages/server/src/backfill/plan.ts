@@ -7,6 +7,7 @@
  */
 
 import { getPool } from '../db/pool.js';
+import { resolveLocationKey } from '../sources/registry.js';
 import {
   ESTIMATED_POINTS_PER_SERIES_MONTH,
   ESTIMATED_SECONDS_PER_REQUEST,
@@ -66,7 +67,7 @@ export async function selectSeriesToBackfill(filters: PlanFilters): Promise<Plan
   if (!filters.includeInactive) conditions.push('l.active');
 
   if (filters.locations && filters.locations.length > 0) {
-    params.push(filters.locations.map((c) => c.toLowerCase()));
+    params.push(filters.locations.map(resolveLocationKey));
     conditions.push(`q.location_code = ANY($${params.length}::text[])`);
   }
 

@@ -7,8 +7,9 @@
 
 import type { PoolClient } from 'pg';
 import type { MeasurementType } from '@rws/shared';
-import type { SeriesIdentity } from '../rws/normalise.js';
+import type { SeriesIdentity } from '../sources/rws/normalise.js';
 import { getPool } from './pool.js';
+import { resolveLocationKey } from '../sources/registry.js';
 
 /**
  * Resolve a series to its id, creating it if new.
@@ -122,7 +123,7 @@ export async function listSeriesForLocation(locationCode: string): Promise<Serie
     `SELECT ${SERIES_COLUMNS} FROM series
       WHERE location_code = $1
       ORDER BY grootheid, id`,
-    [locationCode.toLowerCase()],
+    [resolveLocationKey(locationCode)],
   );
   return rows.map(toSeriesRow);
 }
@@ -138,7 +139,7 @@ export async function findSeries(
   grootheid: string,
   options: { compartiment?: string; procesType?: string } = {},
 ): Promise<SeriesRow | null> {
-  const params: unknown[] = [locationCode.toLowerCase(), grootheid];
+  const params: unknown[] = [resolveLocationKey(locationCode), grootheid];
   let extra = '';
   if (options.compartiment) {
     params.push(options.compartiment);
