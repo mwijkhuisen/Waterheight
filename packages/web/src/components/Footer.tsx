@@ -59,8 +59,11 @@ export function Footer() {
             <a href="https://waterinfo.rws.nl/" target="_blank" rel="noreferrer noopener">
               waterinfo.rws.nl
             </a>
-            <a href="https://www.pdok.nl/" target="_blank" rel="noreferrer noopener">
-              PDOK basemap
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer noopener">
+              OpenStreetMap
+            </a>
+            <a href="https://openfreemap.org/" target="_blank" rel="noreferrer noopener">
+              OpenFreeMap tiles
             </a>
           </div>
         </nav>
@@ -72,8 +75,9 @@ export function Footer() {
       </div>
 
       <p className="footer__legal">
-        Measurement data © Rijkswaterstaat, published as open data. This site is an
-        independent client and is not operated by Rijkswaterstaat.
+        Measurement data © Rijkswaterstaat, published as open data. Basemap ©
+        OpenStreetMap contributors, tiles by OpenFreeMap. This site is an independent
+        client and is not operated by Rijkswaterstaat.
       </p>
     </footer>
   );

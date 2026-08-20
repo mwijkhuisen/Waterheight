@@ -44,6 +44,12 @@ Rijkswaterstaat on demand. History is optional and can be loaded later.
 HTTPS. If your network forces an outbound proxy, see
 [Troubleshooting](#the-app-starts-but-apihealth-reports-upstream-unreachable).
 
+Separately, the *browser* fetches the basemap from `tiles.openfreemap.org`. It
+is decoration -- the markers, the clustering and every page but the map itself
+work without it, and a blocked tile host costs you a grey background and a
+console line. On a network that cannot reach it, build the client with
+`VITE_BASEMAP_STYLE_URL` pointing at a style you host (see `.env.example`).
+
 **Already running MariaDB or MySQL?** That is fine, and it changes nothing about
 the steps below — PostgreSQL listens on 5432, MariaDB on 3306, and they keep
 separate data directories and service units. The one thing to get right is

@@ -15,10 +15,10 @@ What has actually been exercised, and what has not, is listed under
 **Looking further upstream.** The Rhine, the Meuse and the Scheldt are gauged all the way up
 through Germany, Belgium and France, by services that are as open as Rijkswaterstaat's.
 [`docs/INTERNATIONAL-DATA.md`](docs/INTERNATIONAL-DATA.md) works through what it would take to put
-those on the same map — including the OpenStreetMap basemap swap it requires, since the current
-Dutch basemap stops at the border — and is honest about the parts that do not work, chiefly that
-Germany publishes only 31 days of history. The source abstraction that makes any of it possible is
-in place; Germany is briefed in
+those on the same map, and is honest about the parts that do not work, chiefly that Germany
+publishes only 31 days of history. Two of its prerequisites are in place: the source abstraction,
+and the basemap, which was Dutch-only and stopped dead at the border — a station at Koblenz now
+lands on a real map rather than on blank grey. Germany itself is briefed in
 [`docs/PROMPT-PHASE3-GERMANY.md`](docs/PROMPT-PHASE3-GERMANY.md) and not yet built.
 
 ## Deploying
@@ -466,6 +466,32 @@ The layers are added on the style's `style.load`, deliberately **not** on `load`
 the first basemap tiles, so an unreachable or slow tile provider would take the entire data layer
 down with it. The markers are the product; the basemap is decoration.
 
+**The basemap is OpenStreetMap-derived, and is fetched rather than declared.** It is
+[OpenFreeMap](https://openfreemap.org/)'s `positron` — OSM vector tiles, no key, no registration,
+MIT-licensed and self-hostable — whose pale grey is close enough to the Dutch national basemap it
+replaces that the "colour belongs to the data" decision above survives unchanged. It replaces PDOK's
+BRT achtergrondkaart, which is excellent and stops at the Dutch border: every tile outside the
+Netherlands comes back empty, which is invisible while every station is Dutch and is most of the
+screen the moment one is not.
+
+Fetching a style at runtime would normally hand the third party a veto over the data layer — no
+style, no `style.load`, no markers — so the map opens on a flat inline style, adds its data layers
+against that, and swaps the fetched style in *underneath* them via `setStyle`'s `transformStyle`. A
+tile host that is slow, blocked or gone costs the map its background and one console line; it cannot
+cost it the markers. `VITE_BASEMAP_STYLE_URL` (build time, see [`.env.example`](.env.example))
+repoints it at a self-hosted style without a code change.
+
+Three smaller things came with it. The cluster counts now ask for `Noto Sans Bold`, a stack the
+glyph server actually serves: MapLibre requests a font stack as one comma-joined path segment, so
+the previous `Open Sans Bold,Arial Unicode MS Bold` 404'd on every glyph server involved — MapLibre
+drew the numbers anyway, in a font nobody chose, so nothing ever looked wrong. The map opens on the
+Netherlands still, with a **fit-to-data** control for the rest: framing what is loaded rather than a
+fixed wider box means a station upstream of the border is reachable the day it appears, without
+making the Dutch ones unreadable before then. And the selection ring is seeded from the current
+selection when its layer is created rather than only by the effect that maintains it — the effect
+runs before the style has loaded, so on the location page, which mounts with its station already
+selected, the ring never drew at all.
+
 ### The location page
 
 The main column carries the tabs — **Overview** (headline reading, period selector, chart, latest
@@ -600,10 +626,23 @@ single-origin build. 89 tests pass.
 **Verified for the registry-style frontend:** every route rendered in headless Chromium against a
 stubbed API — light and dark schemes, desktop and 390px widths — with no page errors, plus the
 typeahead (arrow keys and Enter into a location page), tab state surviving a reload, the back button,
-and facet clicks rewriting the query string. `service.pdok.nl` and `demotiles.maplibre.org` are
-unreachable from the build environment, so the map's data layer was confirmed with those two hosts
-stubbed: style loaded, source loaded, clusters rendered. It has *not* been run against the live API
-or a real basemap since the refactor.
+and facet clicks rewriting the query string. It has *not* been run against the live API since the
+refactor.
+
+**Verified for the OpenStreetMap basemap:** the map page and the location page's Map tab, in
+headless Chromium against a stubbed API and the real OpenFreeMap tiles, with German stations in the
+stub so the basemap had something to prove past the border. With the tile host reachable: 55
+basemap layers under the 4 data layers in that order, water and place labels drawn, cluster counts
+labelled, attribution reading `Rijkswaterstaat | OpenFreeMap © OpenMapTiles Data from
+OpenStreetMap`, and fit-to-data framing 49.99–53.70 N by 0.10–11.10 E. With the tile host blocked at
+the browser: the flat background, the same 4 data layers, markers and clusters rendered, attribution
+down to `Rijkswaterstaat` alone, one console line. Also measured rather than assumed: `Open Sans
+Bold,Arial Unicode MS Bold` 404s on both OpenFreeMap's and MapLibre's glyph servers, and
+`Noto Sans Bold` is served by both.
+
+**Not verified for the basemap:** any behaviour under a self-hosted `VITE_BASEMAP_STYLE_URL` — the
+knob is exercised only at its default. Nothing has been measured about OpenFreeMap's latency or
+availability from the Netherlands, and it publishes no rate limit to test against.
 
 **Not verified:** the Docker image and `docker compose up` have never actually run — there was no
 Docker daemon available in the environment this was built in. The compose file is validated for
@@ -623,3 +662,9 @@ or HA deployment, and metrics beyond `/api/health`.
 Data is from Rijkswaterstaat and subject to their terms — see
 <https://rijkswaterstaatdata.nl/waterdata/>. This project is not affiliated with or endorsed by
 Rijkswaterstaat.
+
+The basemap is © OpenStreetMap contributors, available under the
+[ODbL](https://www.openstreetmap.org/copyright), rendered from
+[OpenMapTiles](https://www.openmaptiles.org/) schema and served by
+[OpenFreeMap](https://openfreemap.org/). The map credits all three in its attribution control; the
+control is not decoration and should not be removed.

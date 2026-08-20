@@ -75,14 +75,23 @@ self-hosted Protomaps instance later without a code change. The existing `style.
 `MapView.tsx` — which deliberately does not wait for basemap tiles, so a slow provider cannot take
 the data layer down with it — already covers the risk of depending on someone else's tile server.
 
+**That last sentence is wrong**, and building it proved so; see step 1 under
+[Phasing](#phasing). `style.load` protects against slow *tiles*. A style fetched by URL is a
+dependency of a different kind: it has to arrive before there is a style to load layers into at all.
+
 Also needs widening at the same time:
 
 - `INITIAL_BOUNDS` — the Rhine basin reaches Basel, the Meuse rises near Goncourt (48.24 N). A
   basin-wide fit is roughly `[2.5, 47.0, 12.0, 54.0]`. Opening at that zoom makes the Dutch
   stations unreadable, so keep the default view Dutch and add an explicit "whole basin" control.
+  (Built as a fit-to-the-loaded-data control instead — same purpose, nothing to keep in sync.)
 - `maxzoom: 17` and the raster `tileSize: 256` assumptions, which are raster-specific and go away
   with a vector style.
-- The attribution string, which currently credits PDOK and Rijkswaterstaat only.
+- The attribution string, which currently credits PDOK and Rijkswaterstaat only. (In the event
+  there is no string to write: OpenFreeMap's style document carries no `attribution`, but the
+  TileJSON its vector source resolves does, so MapLibre's attribution control picks the credit up
+  by itself — and correctly stops showing it when the tiles do not load. Only the measurement
+  data's own credit has to be passed in.)
 
 ## The four upstream sources
 
@@ -445,8 +454,30 @@ amount of cartography, and needs no new geodata at all.
 
 Each step should be shippable on its own.
 
-**1. Basemap.** OpenFreeMap, style URL in config, widen `INITIAL_BOUNDS`, fix attribution. One
-file, no schema change. Ship together with step 2, not before it.
+**1. Basemap. — Done.** OpenFreeMap's `positron`, the style URL in build-time config
+(`VITE_BASEMAP_STYLE_URL`), and the attribution corrected. Three things this got wrong:
+
+- *"Ship together with step 2, not before it."* Step 2 shipped first and this shipped between step
+  2 and step 3, which is where it belongs: the Germany brief rules the basemap out of scope, so the
+  swap has to land before it rather than alongside it. The reasoning behind the original advice —
+  that the swap alone is a regression, since it trades a sharper Dutch map for a duller one and
+  gains nothing until there is something to plot abroad — still holds, and is the price.
+- *"The existing `style.load` handling already covers the risk of depending on someone else's tile
+  server."* It does not. It covers **tiles**; a style fetched by URL is a different dependency, and
+  `new Map({ style: url })` makes the data layer wait on it — no style, no `style.load`, no markers
+  at all. The map now opens on an inline style, adds its layers, and swaps the fetched style in
+  underneath them with `setStyle`'s `transformStyle`. Verified by blocking the tile host at the
+  browser: flat background, markers intact.
+- *Widen `INITIAL_BOUNDS` to roughly `[2.5, 47.0, 12.0, 54.0]`, plus a "whole basin" control.* The
+  bounds are unchanged and the control fits to the loaded data instead. A fixed basin box is a
+  second thing to keep in sync with which sources exist; fitting to what is plotted is right on the
+  day Germany lands and right again for a filter that leaves four stations.
+
+One more trap, in the same family as phase 2's three: MapLibre requests a font stack as a single
+comma-joined path segment, so `['Open Sans Bold', 'Arial Unicode MS Bold']` is a request for one
+font named `Open Sans Bold,Arial Unicode MS Bold`. It 404s on OpenFreeMap's glyph server and on
+MapLibre's demo one, which the map was already using — and MapLibre draws the labels regardless,
+in something else, so the only evidence was two failed requests per glyph range.
 
 **2. Source abstraction, no new data. — Done.** Introduced `sources`, prefixed location codes,
 moved `rws/` under `sources/rws/` over a shared `sources/http.ts`, split `config.rws` per source,
@@ -506,7 +537,7 @@ Steps 3–5 are independent of each other and can go in any order, or in paralle
 ## Licences and attribution
 
 All four are open, but the terms differ and the map's attribution control has to reflect that. It
-currently credits PDOK and Rijkswaterstaat.
+credits Rijkswaterstaat and, once its tiles load, OpenFreeMap/OpenMapTiles/OpenStreetMap.
 
 - **PEGELONLINE** — DL-DE→Zero-2.0. Redistribution, modification and commercial use permitted;
   no attribution strictly required. Credit it anyway.
@@ -514,7 +545,8 @@ currently credits PDOK and Rijkswaterstaat.
 - **SPW Wallonia** — free, unrestricted purpose, indefinite duration, per the portal's terms.
 - **waterinfo.be** — free; heavy users should request a token, which is a courtesy the app should
   honour rather than route around.
-- **OpenFreeMap** — `OpenFreeMap © OpenMapTiles Data from OpenStreetMap` required.
+- **OpenFreeMap** — `OpenFreeMap © OpenMapTiles Data from OpenStreetMap` required. In place: it
+  arrives with the vector source's TileJSON rather than being written out here.
 - **HydroRIVERS**, if used — free for commercial use with attribution.
 
 The `sources` table above carries `attribution` and `licence` per source so the control can be

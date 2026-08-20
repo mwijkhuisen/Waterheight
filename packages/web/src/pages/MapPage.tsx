@@ -111,6 +111,7 @@ export function MapPage() {
             selectedCode={selectedCode}
             onSelect={setSelectedCode}
             flyTo={null}
+            fitControl
           />
         )}
 

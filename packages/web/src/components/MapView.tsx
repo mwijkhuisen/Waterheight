@@ -1,50 +1,40 @@
 /**
- * The map itself: a clustered point layer over a Dutch basemap.
+ * The map itself: a clustered point layer over an OpenStreetMap basemap.
  *
  * Clustering is done by MapLibre's own GeoJSON source rather than a plugin.
  * The markers are drawn as a single GPU circle layer, so a few thousand points
  * cost one draw call instead of a few thousand DOM nodes.
+ *
+ * Which basemap, and why it is fetched rather than declared, is in
+ * `basemap.ts`.
  */
 
 import { useEffect, useRef } from 'react';
-import maplibregl, { type GeoJSONSource, type StyleSpecification } from 'maplibre-gl';
+import maplibregl, { type GeoJSONSource, type IControl, type LngLatBounds } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { FeatureCollection, Point } from 'geojson';
 import type { Location } from '@rws/shared';
 import { FRESHNESS_COLOR, freshnessOf } from '../freshness.js';
+import {
+  BASEMAP_STYLE_URL,
+  BOOTSTRAP_STYLE,
+  DATA_ATTRIBUTION,
+  LABEL_FONT,
+  fetchBasemapStyle,
+  keepLayersOf,
+} from '../basemap.js';
 
-/** Roughly the Netherlands, including the North Sea measurement platforms. */
+/**
+ * The view the map opens on: roughly the Netherlands, including the North Sea
+ * measurement platforms. It is a starting point and not a limit -- the basemap
+ * covers the world now, so a source upstream of the border plots fine, just
+ * off-screen at this zoom. Fitting the opening view to the data instead would
+ * make the Dutch stations unreadable the day one arrives, so the way to the
+ * rest of it is the explicit control below rather than a wider box here.
+ */
 const INITIAL_BOUNDS: [number, number, number, number] = [3.0, 50.6, 7.3, 53.7];
 
 const SOURCE_ID = 'locations';
-
-/**
- * PDOK's BRT achtergrondkaart: the Dutch national basemap, free and keyless.
- * Deliberately grey so the data layer carries the colour.
- */
-const BASEMAP_STYLE: StyleSpecification = {
-  version: 8,
-  // Required for the cluster-count symbol layer; without a glyph source the
-  // counts silently fail to render.
-  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-  sources: {
-    pdok: {
-      type: 'raster',
-      tiles: [
-        'https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/grijs/EPSG:3857/{z}/{x}/{y}.png',
-      ],
-      tileSize: 256,
-      maxzoom: 17,
-      attribution:
-        '<a href="https://www.pdok.nl/">PDOK</a> / ' +
-        '<a href="https://rijkswaterstaatdata.nl/waterdata/">Rijkswaterstaat</a>',
-    },
-  },
-  layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#eceae5' } },
-    { id: 'pdok', type: 'raster', source: 'pdok' },
-  ],
-};
 
 function toFeatureCollection(locations: Location[]): FeatureCollection {
   const now = Date.now();
@@ -71,9 +61,15 @@ export interface MapViewProps {
   onSelect: (code: string) => void;
   /** Set to fly the map to a location, e.g. from a search result. */
   flyTo: Location | null;
+  /**
+   * Offer a control that frames every plotted location. Worth it where the map
+   * shows a set and pointless where it shows one station, so it is a choice the
+   * page makes. Read once, when the map mounts.
+   */
+  fitControl?: boolean;
 }
 
-export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewProps) {
+export function MapView({ locations, selectedCode, onSelect, flyTo, fitControl }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   // Kept in refs so the map's callbacks never close over stale props, and so
@@ -82,13 +78,16 @@ export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewPro
   onSelectRef.current = onSelect;
   const locationsRef = useRef(locations);
   locationsRef.current = locations;
+  const selectedCodeRef = useRef(selectedCode);
+  selectedCodeRef.current = selectedCode;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    const abort = new AbortController();
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: BASEMAP_STYLE,
+      style: BOOTSTRAP_STYLE,
       bounds: INITIAL_BOUNDS,
       fitBoundsOptions: { padding: 40 },
       attributionControl: false,
@@ -106,8 +105,25 @@ export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewPro
     }
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+    map.addControl(
+      // The basemap credits itself through its source's TileJSON; the
+      // measurement data has nowhere else to be credited from.
+      new maplibregl.AttributionControl({ compact: true, customAttribution: DATA_ATTRIBUTION }),
+      'bottom-right',
+    );
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
+
+    if (fitControl) {
+      map.addControl(
+        new FitToDataControl(() => {
+          const bounds = boundsOf(locationsRef.current);
+          // maxZoom: a filter that leaves one location would otherwise frame
+          // it at street level, which says nothing about where it is.
+          if (bounds) map.fitBounds(bounds, { padding: 60, maxZoom: 11, duration: 700 });
+        }),
+        'top-right',
+      );
+    }
 
     // Deliberately NOT map.on('load'): that waits for the initial basemap
     // tiles, so a slow or unreachable tile provider would take the whole data
@@ -156,7 +172,7 @@ export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewPro
         layout: {
           'text-field': ['get', 'point_count_abbreviated'],
           'text-size': 13,
-          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-font': LABEL_FONT,
           'text-allow-overlap': true,
         },
         paint: { 'text-color': '#ffffff' },
@@ -192,7 +208,10 @@ export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewPro
         id: 'selected',
         type: 'circle',
         source: SOURCE_ID,
-        filter: ['==', ['get', 'code'], ''],
+        // Seeded, not empty: the location page mounts with its station already
+        // selected, and the effect that maintains this filter runs before the
+        // style has loaded and finds no layer to set it on.
+        filter: ['==', ['get', 'code'], selectedCodeRef.current ?? ''],
         paint: {
           'circle-radius': 14,
           'circle-color': 'rgba(0,0,0,0)',
@@ -208,8 +227,45 @@ export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewPro
       source?.setData(toFeatureCollection(locationsRef.current));
     };
 
-    if (map.isStyleLoaded()) addDataLayers();
-    else map.once('style.load', addDataLayers);
+    // The map is usable from here on. This only replaces the flat background
+    // with a real one, so every failure path is a console line and a plain grey
+    // map, never a missing data layer.
+    const swapInBasemap = async () => {
+      const style = await fetchBasemapStyle(BASEMAP_STYLE_URL, abort.signal).catch(
+        (error: unknown) => {
+          if (!abort.signal.aborted) {
+            console.error('[map] basemap unavailable, keeping the flat background', error);
+          }
+          return null;
+        },
+      );
+      if (!style || abort.signal.aborted) return;
+
+      map.setStyle(style, { diff: false, transformStyle: keepLayersOf(SOURCE_ID) });
+      // `transformStyle` carries the source and the layers across as MapLibre
+      // serialised them, which today includes the features and the selection
+      // filter. Reapplying both from the props costs one parse of a collection
+      // the browser already holds, and covers the gap between the swap starting
+      // and the new style committing, during which the effects below find no
+      // layer to write to and give up.
+      map.once('style.load', () => {
+        const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
+        source?.setData(toFeatureCollection(locationsRef.current));
+        map.setFilter('selected', ['==', ['get', 'code'], selectedCodeRef.current ?? '']);
+      });
+    };
+
+    // Adding the layers first, so the swap has something to carry over. The
+    // fetch takes a round trip and the bootstrap style parses synchronously, so
+    // in practice the order is never in doubt -- but "in practice" is how the
+    // layer setup lost its race the first time.
+    const ready = () => {
+      addDataLayers();
+      void swapInBasemap();
+    };
+
+    if (map.isStyleLoaded()) ready();
+    else map.once('style.load', ready);
 
     map.on('click', 'points', (event) => {
       const feature = event.features?.[0];
@@ -235,6 +291,7 @@ export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewPro
     }
 
     return () => {
+      abort.abort();
       map.remove();
       mapRef.current = null;
     };
@@ -261,4 +318,53 @@ export function MapView({ locations, selectedCode, onSelect, flyTo }: MapViewPro
   }, [flyTo]);
 
   return <div className="map" ref={containerRef} data-testid="map" />;
+}
+
+/** The box around everything plottable, or null if nothing is. */
+function boundsOf(locations: Location[]): LngLatBounds | null {
+  let bounds: LngLatBounds | null = null;
+  for (const location of locations) {
+    if (location.lon === null || location.lat === null) continue;
+    const point: [number, number] = [location.lon, location.lat];
+    bounds = bounds ? bounds.extend(point) : new maplibregl.LngLatBounds(point, point);
+  }
+  return bounds;
+}
+
+/**
+ * A "fit to the data" button, under the zoom controls.
+ *
+ * The map opens on the Netherlands and the data does not have to stay there:
+ * once a source upstream of the border is ingested, its stations are plotted
+ * correctly and entirely off-screen. Framing whatever is actually loaded, rather
+ * than a hardcoded basin box, means that day needs no edit here -- and it is the
+ * more useful button in the meantime too, since a filter that leaves four
+ * stations frames those four.
+ */
+class FitToDataControl implements IControl {
+  private container: HTMLElement | null = null;
+
+  constructor(private readonly fit: () => void) {}
+
+  onAdd(): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    // The icon is a background image, which is how MapLibre draws its own.
+    button.className = 'maplibregl-ctrl-icon map-fit';
+    button.title = 'Fit to all locations';
+    button.setAttribute('aria-label', 'Fit to all locations');
+    button.addEventListener('click', this.fit);
+
+    container.append(button);
+    this.container = container;
+    return container;
+  }
+
+  onRemove(): void {
+    this.container?.remove();
+    this.container = null;
+  }
 }

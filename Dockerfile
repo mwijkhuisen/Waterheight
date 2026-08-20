@@ -12,6 +12,12 @@ COPY packages/web/package.json packages/web/
 RUN npm ci
 
 COPY . .
+
+# The basemap style the built client points at. Baked in at build time because
+# the client is a static bundle -- see .env.example.
+ARG BASEMAP_STYLE_URL=""
+ENV VITE_BASEMAP_STYLE_URL=$BASEMAP_STYLE_URL
+
 # Compiles shared + server, and bundles the map client. The earlier image built
 # only the TypeScript and shipped an API with no frontend.
 #
