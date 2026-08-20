@@ -5,8 +5,11 @@ from apt, the app built in place, and systemd keeping it running. No containers
 are involved at any point.
 
 Everything below was run end to end on a clean **Ubuntu 24.04** box. It also
-applies to 22.04; the only version-specific part is the apt repository line,
-which is derived from the release codename automatically.
+applies to 22.04 and 26.04; the only version-specific part is the apt
+repository lines, which are derived from the release codename automatically.
+
+Note that Timescale publishes for LTS releases only — 22.04 `jammy`, 24.04
+`noble`, 26.04 `resolute` — not for the interim releases in between.
 
 - [Before you start](#before-you-start)
 - [The short version](#the-short-version)
@@ -90,21 +93,52 @@ node -v    # v22.x
 
 ### 2. PostgreSQL and TimescaleDB
 
-TimescaleDB is not in Ubuntu's archive; add Timescale's repository:
+Two repositories are needed. Ubuntu's archive carries exactly one PostgreSQL
+major per release — 14 on 22.04, 16 on 24.04, 17 on 25.04, **18 on 26.04** — so
+asking for a specific one without **PGDG** (PostgreSQL's own archive) fails with
+`Package 'postgresql-16' has no installation candidate`. TimescaleDB is not in
+Ubuntu's archive at all.
 
 ```sh
-sudo apt-get install -y gnupg apt-transport-https lsb-release wget
+# PGDG: every supported PostgreSQL major, for every supported Ubuntu release.
+sudo apt-get install -y gnupg apt-transport-https lsb-release wget postgresql-common
+sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+
+# TimescaleDB.
 echo "deb https://packagecloud.io/timescale/timescaledb/ubuntu/ $(lsb_release -cs) main" \
   | sudo tee /etc/apt/sources.list.d/timescaledb.list
 wget --quiet -O - https://packagecloud.io/timescale/timescaledb/gpgkey \
   | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/timescaledb.gpg
+
 sudo apt-get update
 sudo apt-get install -y postgresql-16 postgresql-client-16 \
                         timescaledb-2-postgresql-16 timescaledb-tools
 ```
 
+16 is used here because it is what `docker-compose` pins and what this project
+is tested against, so both deployment paths stay on one major and a dump from
+either restores into the other. Any major with a matching
+`timescaledb-2-postgresql-NN` works; check with
+`apt-cache search timescaledb-2-postgresql`.
+
+**On Ubuntu 26.04 this is a real choice.** 26.04 ships PostgreSQL 18 in its own
+archive, while Timescale publishes `timescaledb-2-postgresql-16`, `-17` and
+`-18` for it. The installer defaults to 16 from PGDG, because that is the
+combination this project has actually been verified against end to end
+(migrations, hypertable, both continuous aggregates, the compression policy,
+backfill and API). If you would rather run the OS-native major and take
+PostgreSQL updates from Ubuntu, that is well supported:
+
+```sh
+sudo ./deploy/install-ubuntu.sh --pg-major 18
+```
+
+Nothing in the schema is version-specific, so 18 is expected to work — it just
+has not been exercised here, which is the whole of the difference.
+
 If PostgreSQL is already installed, match its major version rather than adding a
-second cluster — `pg_config --version` tells you which.
+second cluster — `pg_config --version` tells you which. The installer script
+does all of this for you, including picking the version.
 
 Now tune it. **This is the step that matters if MariaDB is on the same box.**
 `timescaledb-tune` sizes `shared_buffers` and `effective_cache_size` as though
@@ -333,6 +367,26 @@ backfill queue itself is not precious — losing it costs download time, not dat
 
 Ubuntu's archive carries 18.x; this app needs >= 20. Install from NodeSource as
 in [step 1](#1-nodejs).
+
+### `Package 'postgresql-16' has no installation candidate`
+
+Ubuntu's own archive carries only one PostgreSQL major per release, and it is
+not always the one being asked for. Add PGDG, which carries all of them:
+
+```sh
+sudo apt-get install -y postgresql-common
+sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+sudo apt-get update
+```
+
+Then retry. To see what your release can actually install:
+
+```sh
+apt-cache search '^postgresql-[0-9]+$'
+apt-cache search timescaledb-2-postgresql
+```
+
+Pick a major that appears in *both* lists and pass it as `--pg-major`.
 
 ### `could not open extension control file ... timescaledb.control`
 

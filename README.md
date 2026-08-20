@@ -38,6 +38,9 @@ Two things worth knowing before you run it:
 
 - **Ubuntu packages Node 18**, and this needs >= 20, so the script installs from NodeSource. Plain
   `apt install nodejs` produces a build that fails at runtime.
+- **PostgreSQL comes from PGDG**, not Ubuntu's archive, which carries only one major per release
+  (16 on 24.04, 18 on 26.04). The script picks a major both PGDG and Timescale can satisfy,
+  preferring 16 for parity with `docker-compose`; `--pg-major` overrides.
 - **If MariaDB or MySQL is on the same box**, they coexist fine — different ports, data directories
   and units. The one real conflict is memory: `timescaledb-tune` sizes PostgreSQL's caches as though
   it owned all the RAM. The script detects the other engine and budgets half; `--pg-memory 4GB`
