@@ -10,7 +10,7 @@
  * `POINT (lat lon)`.
  */
 
-import { normaliseLocationCode } from './normalise.js';
+import { RWS_SOURCE_ID, locationKey, normaliseSourceCode } from '../registry.js';
 
 /** Columns requested via PROPERTYNAME, in the layer's own naming. */
 export const WFS_LATEST_COLUMNS = [
@@ -25,7 +25,10 @@ export const WFS_LATEST_COLUMNS = [
 ] as const;
 
 export interface WfsLatestRow {
+  /** Qualified location key, e.g. `rws:lobith`. */
   code: string;
+  /** The code as Rijkswaterstaat publishes it, case-folded. */
+  sourceCode: string;
   name: string;
   grootheid: string | null;
   compartiment: string | null;
@@ -88,6 +91,10 @@ export function isPlausibleTimestamp(ms: number, now = Date.now()): boolean {
 }
 
 /**
+ * Applies to the code as Rijkswaterstaat publishes it, not to the qualified
+ * location key -- the key's `source:` prefix is ours and is not what a corrupt
+ * row would damage.
+ *
  * Location codes are lowercase dotted strings; all 2,608 in the live layer
  * match this, none contain whitespace, and the longest is 62 characters.
  *
@@ -118,12 +125,15 @@ export function parseWfsLatestRow(
   if (Number.isNaN(ms) || !isPlausibleTimestamp(ms)) return null;
 
   const { lat, lon } = parsePointLatLon(record['GEOMETRY']);
-  const code = normaliseLocationCode(rawCode);
-  if (!isPlausibleCode(code)) return null;
+  // Validate before qualifying: the shape check exists to catch field-shifted
+  // rows, and it is the upstream code that gets shifted.
+  const sourceCode = normaliseSourceCode(RWS_SOURCE_ID, rawCode);
+  if (!isPlausibleCode(sourceCode)) return null;
 
   return {
-    code,
-    name: record['NAAM']?.trim() || code,
+    code: locationKey(RWS_SOURCE_ID, sourceCode),
+    sourceCode,
+    name: record['NAAM']?.trim() || sourceCode,
     grootheid: record['GROOTHEIDCODE']?.trim() || null,
     compartiment: record['COMPARTIMENTCODE']?.trim() || null,
     eenheid: record['EENHEIDCODE']?.trim() || null,
@@ -206,6 +216,7 @@ export function parseWfsLatestCsv(text: string): WfsLatestRow[] {
  */
 export interface AggregatedLocation {
   code: string;
+  sourceCode: string;
   name: string;
   lat: number | null;
   lon: number | null;
@@ -221,6 +232,7 @@ export function aggregateByLocation(rows: Iterable<WfsLatestRow>): Map<string, A
     if (!entry) {
       entry = {
         code: row.code,
+        sourceCode: row.sourceCode,
         name: row.name,
         lat: row.lat,
         lon: row.lon,

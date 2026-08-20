@@ -17,7 +17,8 @@ import {
   normalisePoint,
   seriesIdentity,
   toUtcIso,
-} from '../src/rws/normalise.js';
+} from '../src/sources/rws/normalise.js';
+import { parseLocationKey, resolveLocationKey } from '../src/sources/registry.js';
 import {
   aggregateByLocation,
   isPlausibleCode,
@@ -27,8 +28,8 @@ import {
   parseWfsLatestRow,
   splitCsvLine,
   toWfsRecord,
-} from '../src/rws/wfs.js';
-import type { OphalenWaarnemingenResponse, OphalenCatalogusResponse } from '../src/rws/types.js';
+} from '../src/sources/rws/wfs.js';
+import type { OphalenWaarnemingenResponse, OphalenCatalogusResponse } from '../src/sources/rws/types.js';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '../../../fixtures/trimmed');
 
@@ -39,8 +40,61 @@ function fixture<T>(name: string): T {
 describe('normaliseLocationCode', () => {
   it('lowercases, since codes were unified into dotted lowercase strings', () => {
     // HOEK, HVH25 and HOEKVHLD all became hoekvanholland upstream.
-    expect(normaliseLocationCode('HOEKVANHOLLAND')).toBe('hoekvanholland');
-    expect(normaliseLocationCode('  Ameland.Nes  ')).toBe('ameland.nes');
+    expect(normaliseLocationCode('HOEKVANHOLLAND')).toBe('rws:hoekvanholland');
+    expect(normaliseLocationCode('  Ameland.Nes  ')).toBe('rws:ameland.nes');
+  });
+
+  it('qualifies the code with its source, so two services cannot collide', () => {
+    // PEGELONLINE publishes a LOBITH of its own; without the prefix the two
+    // would be the same primary key and one would silently overwrite the other.
+    expect(normaliseLocationCode('lobith')).toBe('rws:lobith');
+    expect(parseLocationKey(normaliseLocationCode('lobith'))).toEqual({
+      sourceId: 'rws',
+      sourceCode: 'lobith',
+    });
+  });
+
+  it('is a boundary function: it qualifies upstream codes, it does not re-read keys', () => {
+    // Feeding it a key double-prefixes, which is why it is called only where a
+    // Rijkswaterstaat payload is parsed. Anything taking a code from a caller
+    // uses resolveLocationKey, which accepts both forms.
+    expect(normaliseLocationCode('rws:lobith')).toBe('rws:rws:lobith');
+    expect(resolveLocationKey('rws:lobith')).toBe('rws:lobith');
+  });
+});
+
+describe('the natural key, which migration 012 re-keys by prefix', () => {
+  it('begins with the location code', () => {
+    // Migration 012 rewrites every natural_key by prefixing it, which is only
+    // equivalent to prefixing the location code because the code is the first
+    // segment. If a dimension is ever prepended, that migration -- and any
+    // future re-key -- becomes silently wrong: the next ingest would fail to
+    // match the existing row, insert a duplicate series, and split one
+    // station's history across two ids with nothing raised anywhere.
+    const identity = seriesIdentity('vlissingen', {
+      Compartiment: { Code: 'OW' }, Grootheid: { Code: 'WATHTE' }, ProcesType: 'meting',
+    }, undefined);
+
+    expect(identity.naturalKey.split('|')[0]).toBe(identity.locationCode);
+    expect(identity.naturalKey.startsWith('rws:vlissingen|')).toBe(true);
+  });
+});
+
+describe('resolveLocationKey', () => {
+  it('reads a bare code as belonging to the default source', () => {
+    // Keeps URLs and --locations arguments minted before the source split working.
+    expect(resolveLocationKey('vlissingen')).toBe('rws:vlissingen');
+    expect(resolveLocationKey('VLISSINGEN')).toBe('rws:vlissingen');
+  });
+
+  it('leaves an already-qualified key alone', () => {
+    expect(resolveLocationKey('rws:vlissingen')).toBe('rws:vlissingen');
+  });
+
+  it('treats an unknown prefix as part of a bare code rather than a source', () => {
+    // Otherwise a code that happened to contain a colon would silently address
+    // a source that does not exist and return "no such location".
+    expect(resolveLocationKey('weird:code')).toBe('rws:weird:code');
   });
 });
 
@@ -157,7 +211,7 @@ describe('normaliseObservations against the recorded fixture', () => {
     const series = normaliseObservations(response);
     expect(series.length).toBeGreaterThan(0);
     const first = series[0]!;
-    expect(first.location.code).toBe('a12');
+    expect(first.location.code).toBe('rws:a12');
     expect(first.identity.grootheid).toBe('Fp');
     expect(first.identity.procesType).toBe('meting');
     expect(first.points.length).toBeGreaterThan(0);
@@ -399,7 +453,7 @@ describe('WFS CSV parsing', () => {
       'ok,Fine,not-a-date,POINT (52 4)\n' +
       'good,Good,2026-01-01T00:00:00.000Z,POINT (52 4)\n',
     );
-    expect(rows.map((r) => r.code)).toEqual(['good']);
+    expect(rows.map((r) => r.code)).toEqual(['rws:good']);
   });
 
   it('aggregates per-quantity rows into one record per location', () => {
@@ -491,7 +545,8 @@ describe('toWfsRecord, for the layer\'s unescaped commas', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      code: 'aa.helmond',
+      code: 'rws:aa.helmond',
+      sourceCode: 'aa.helmond',
       name: 'Aa, Helmond',
       lat: 51.48,
       lon: 5.66,
@@ -546,5 +601,13 @@ describe('WFS row guards', () => {
 
   it('rejects codes containing whitespace', () => {
     expect(isPlausibleCode('20 km uit de kust')).toBe(false);
+  });
+
+  it('judges the upstream code, not the qualified key', () => {
+    // The check exists to catch field-shifted rows, and it is the upstream code
+    // that gets shifted. Running it on the key would reject every row, since
+    // the colon we add is not in the pattern.
+    expect(isPlausibleCode('vlissingen')).toBe(true);
+    expect(isPlausibleCode('rws:vlissingen')).toBe(false);
   });
 });

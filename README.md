@@ -231,18 +231,53 @@ npm run backfill:status
 ## Architecture
 
 ```
-WFS locatiesmetlaatstewaarneming ──► ingest/locations  ──┐
-OphalenCatalogus                 ──► ingest/catalogue ──┤
-OphalenWaarnemingen              ──► ingest/observations┤
-                                                        ▼
-                                       PostgreSQL + TimescaleDB
-                                                        │
-                                                   api/routes ──► /api/*
+  sources/rws                          ingest
+  ───────────────────────────────      ──────────────────
+  WFS locatiesmetlaatstewaarneming ──► ingest/locations   ─┐
+  OphalenCatalogus                 ──► ingest/catalogue   ─┤
+  OphalenWaarnemingen              ──► ingest/observations ┤
+       │                                                   ▼
+       └── sources/http: per-source gate, retry, backoff   PostgreSQL + TimescaleDB
+                                                            │
+                                                       api/routes ──► /api/*
 ```
 
 Three packages: `@rws/shared` holds the types both sides of the wire agree on, `@rws/server` is the
 API and ingestion, and `@rws/web` is the map client. The shared package is the contract — a change to
 a server response shape is a compile error in the client rather than a runtime surprise.
+
+### Sources
+
+Everything upstream lives under `src/sources/`. One adapter directory per service — today only
+`rws/` — over a shared `http.ts` that owns concurrency limiting, retry and backoff, and a
+`registry.ts` that names the sources and owns the location-code namespace.
+
+The split is between *pacing* and *classification*. Pacing is the same everywhere and is shared;
+which status means "no data" and which means "try again" is specific to each service and stays in
+its adapter. The concurrency gate is deliberately **per source**: one shared semaphore would let a
+slow service throttle a fast one, and a backfill against one source would stall every other
+source's refresh behind it.
+
+`registry.ts` is the source of truth for which sources exist — the `sources` table is a projection
+of it, written by `npm run migrate`, so adding a source is a code change rather than a code change
+plus a migration. The table exists so location rows can carry a foreign key and so `/api/sources`
+can serve attribution from the database, which is what stops a source shipping without its credit.
+
+Two boundaries are worth knowing about, because both fail silently rather than loudly if crossed:
+
+- **Location codes are qualified going in, and unqualified going out.** `normaliseLocationCode`
+  turns a Rijkswaterstaat code into `rws:lobith` when a payload is parsed; the adapter strips the
+  prefix back off before naming a location upstream. Rijkswaterstaat answers a code it does not
+  recognise with an empty result, not an error, so sending `rws:lobith` would look exactly like a
+  station with no data.
+- **Refresh and active-reconciliation are scoped to one source.** `upsertLocations` reconciles the
+  `active` flag only within the source being refreshed. Reconciling globally would let a
+  Rijkswaterstaat run deactivate another service's stations against a cutoff derived from
+  Rijkswaterstaat's publishing cadence — which says nothing about a gauge that reports once a day.
+
+What is deliberately *not* here yet is a `SourceAdapter` interface. Its method signatures should be
+shaped by the second implementation rather than guessed at from the first;
+[`docs/INTERNATIONAL-DATA.md`](docs/INTERNATIONAL-DATA.md) sketches where it is heading.
 
 ### Why this API exists at all
 
@@ -320,15 +355,22 @@ waterinfo.rws.nl itself displays; `?includeAllQuality=true` opts out.
 
 | Endpoint | Notes |
 | --- | --- |
-| `GET /api/locations` | Active only by default. `includeInactive`, `grootheid`, `compartiment`, `bbox`, `q`, `limit` |
+| `GET /api/locations` | Active only by default. `includeInactive`, `source`, `grootheid`, `compartiment`, `bbox`, `q`, `limit` |
 | `GET /api/locations/:code` | Location plus every published measurement type and its local coverage |
 | `GET /api/locations/:code/latest` | Latest **reading** per series, skipping trailing gaps |
 | `GET /api/locations/:code/observations` | `grootheid` required; `from`, `to`, `resolution`, `includeAllQuality` |
 | `GET /api/quantities` | Quantities and compartments with active-location counts, for filter UI |
+| `GET /api/sources` | Data sources with their attribution, licence and location counts |
 | `GET /api/health` | Upstream reachability, cache age, location counts, backfill progress |
 
 ISO 8601 UTC timestamps throughout. Errors are always `{ error: { code, message } }`. An upstream 204
 becomes `200` with an empty array; an upstream failure becomes `502`.
+
+**Location codes are qualified with their source**: `rws:lobith`, not `lobith`. Two services can and
+do use the same station code for different stations — PEGELONLINE publishes a LOBITH of its own — so
+the source is part of a location's identity rather than metadata about it. An unqualified code is
+still accepted on input and resolves to the default source, which keeps links minted before this
+change working; anything the application mints uses the qualified form.
 
 `observations` picks raw rows for short windows and the hourly or daily aggregate for longer ones,
 capped at `MAX_POINTS_PER_RESPONSE`. The response always states the `resolution` actually served

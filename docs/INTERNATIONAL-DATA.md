@@ -379,17 +379,19 @@ ALTER TABLE observations
 `locations.code` becomes `source_id || ':' || source_code`, generated rather than free-form, so
 collisions are impossible by construction.
 
-`refresh_state` is already keyed by name, so per-source refresh needs no schema change — just
-`refreshLocations('de-wsv')` instead of `refreshLocations()`.
+`refresh_state` gains a `source_id` and is re-keyed on `(source_id, name)`. The first draft of this
+note said it needed no schema change, since a `'de-wsv:locations'` string key would work — but once
+`sources` exists as a table with a foreign key, a composite string is the odd one out, and a real
+column is what makes "everything this source last did" a query rather than a `LIKE`.
 
 The `Location` type in `packages/shared` gains `source`, `country`, `river` and `riverKm`. The rule
 in that file's header — that raw upstream field names must never appear in it — now has to hold
 for four vocabularies instead of one, which is a good argument for the adapter boundary being
 strict about normalising before anything reaches shared types.
 
-**Adapter shape.** The cleanest structure is an interface each source implements, with
-`packages/server/src/rws/` becoming `packages/server/src/sources/rws/` alongside `de-wsv/`,
-`fr-hubeau/` and `kiwis/` — the last parameterised over Wallonia and Flanders:
+**Adapter shape.** `packages/server/src/sources/rws/` is in place; `de-wsv/`, `fr-hubeau/` and
+`kiwis/` — the last parameterised over Wallonia and Flanders — go alongside it. The interface each
+implements is still to be written, and wants a second implementation to shape it:
 
 ```ts
 interface SourceAdapter {
@@ -439,10 +441,22 @@ Each step should be shippable on its own.
 **1. Basemap.** OpenFreeMap, style URL in config, widen `INITIAL_BOUNDS`, fix attribution. One
 file, no schema change. Ship together with step 2, not before it.
 
-**2. Source abstraction, no new data.** Introduce `sources`, prefix location codes, move
-`rws/` under `sources/rws/`, split `config.rws` per source, make `refresh_state` per source.
-Behaviour identical, all tests still green. This is the risky migration and it should land with
-nothing else in it.
+**2. Source abstraction, no new data. — Done.** Introduced `sources`, prefixed location codes,
+moved `rws/` under `sources/rws/` over a shared `sources/http.ts`, split `config.rws` per source,
+made `refresh_state` and active-reconciliation per source. Migration `012_sources.sql`; see the
+Sources section of the README. Two things this turned up that the sketch above missed:
+
+- `series.natural_key` embeds the location code as its first segment, so re-keying locations
+  re-keys it too. Missing that would have been silent — the next ingest would not have matched the
+  existing row, would have inserted a duplicate series, and would have split one station's history
+  across two ids with nothing raised anywhere. The migration asserts the invariant before relying
+  on it, and a unit test now pins it so a future dimension cannot be prepended without noticing.
+- The WFS row parser validates codes against `/^[a-z0-9._-]{1,80}$/` to catch field-shifted rows.
+  Qualifying the code before that check rejects every row, because the colon is ours and is not in
+  the pattern. Validation belongs on the upstream code; qualification happens after.
+
+Deliberately not done here: a `SourceAdapter` interface. Its signatures should be shaped by the
+second implementation rather than guessed from the first.
 
 **3. Germany.** One source, richest metadata, cleanest payload, and it carries `gaugeZero` so the
 datum work gets done properly the first time. Includes the Emmerich/Lobith acceptance test and the

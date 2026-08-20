@@ -9,9 +9,13 @@
 import type { PoolClient } from 'pg';
 import type { Location } from '@rws/shared';
 import { getPool, withTransaction } from './pool.js';
+import { locationKey, resolveLocationKey } from '../sources/registry.js';
 
 export interface LocationUpsert {
-  code: string;
+  /** Which service published this station. */
+  sourceId: string;
+  /** The station's code in that service's own namespace. */
+  sourceCode: string;
   name: string;
   lat: number | null;
   lon: number | null;
@@ -31,8 +35,14 @@ export interface UpsertSummary {
  * `activeCutoff` is the instant before which a location counts as stale. Any
  * stored location not present in `rows` is evaluated too, so a station that
  * disappears from the layer entirely is deactivated rather than left stuck on.
+ *
+ * Scoped to one source. Reconciling every location from one service's refresh
+ * would let a Rijkswaterstaat run deactivate another source's stations --
+ * against a cutoff derived from Rijkswaterstaat's publishing cadence, which
+ * says nothing about a gauge that reports once a day.
  */
 export async function upsertLocations(
+  sourceId: string,
   rows: LocationUpsert[],
   activeCutoff: Date,
 ): Promise<UpsertSummary> {
@@ -40,6 +50,8 @@ export async function upsertLocations(
     await client.query(`
       CREATE TEMP TABLE incoming_locations (
         code text PRIMARY KEY,
+        source_id text NOT NULL,
+        source_code text NOT NULL,
         name text NOT NULL,
         lat double precision,
         lon double precision,
@@ -49,10 +61,14 @@ export async function upsertLocations(
 
     // One round trip for the whole set rather than a statement per location.
     await client.query(
-      `INSERT INTO incoming_locations (code, name, lat, lon, last_seen_at)
-       SELECT * FROM unnest($1::text[], $2::text[], $3::float8[], $4::float8[], $5::timestamptz[])`,
+      `INSERT INTO incoming_locations (code, source_id, source_code, name, lat, lon, last_seen_at)
+       SELECT * FROM unnest(
+         $1::text[], $2::text[], $3::text[], $4::text[], $5::float8[], $6::float8[], $7::timestamptz[]
+       )`,
       [
-        rows.map((r) => r.code),
+        rows.map((r) => locationKey(r.sourceId, r.sourceCode)),
+        rows.map((r) => r.sourceId),
+        rows.map((r) => r.sourceCode),
         rows.map((r) => r.name),
         rows.map((r) => r.lat),
         rows.map((r) => r.lon),
@@ -61,8 +77,9 @@ export async function upsertLocations(
     );
 
     const { rows: createdRows } = await client.query<{ code: string }>(
-      `INSERT INTO locations (code, name, lat, lon, last_seen_at, active)
-       SELECT i.code, i.name, i.lat, i.lon, i.last_seen_at, i.last_seen_at >= $1
+      `INSERT INTO locations (code, source_id, source_code, name, lat, lon, last_seen_at, active)
+       SELECT i.code, i.source_id, i.source_code, i.name, i.lat, i.lon,
+              i.last_seen_at, i.last_seen_at >= $1
        FROM incoming_locations i
        ON CONFLICT (code) DO UPDATE SET
          name = EXCLUDED.name,
@@ -85,9 +102,10 @@ export async function upsertLocations(
       );
     }
 
-    // Reconcile active across every stored location, not just the incoming set.
-    const activated = await flipActive(client, true, activeCutoff);
-    const deactivated = await flipActive(client, false, activeCutoff);
+    // Reconcile active across every stored location of this source, not just
+    // the incoming set.
+    const activated = await flipActive(client, sourceId, true, activeCutoff);
+    const deactivated = await flipActive(client, sourceId, false, activeCutoff);
 
     return {
       total: rows.length,
@@ -100,6 +118,7 @@ export async function upsertLocations(
 
 async function flipActive(
   client: PoolClient,
+  sourceId: string,
   toActive: boolean,
   cutoff: Date,
 ): Promise<string[]> {
@@ -107,9 +126,10 @@ async function flipActive(
     `UPDATE locations
         SET active = $1, updated_at = now()
       WHERE active = $2
+        AND source_id = $4
         AND ${toActive ? 'last_seen_at >= $3' : '(last_seen_at IS NULL OR last_seen_at < $3)'}
       RETURNING code`,
-    [toActive, !toActive, cutoff.toISOString()],
+    [toActive, !toActive, cutoff.toISOString(), sourceId],
   );
 
   for (const row of rows) {
@@ -131,6 +151,8 @@ async function flipActive(
 
 export interface ListLocationsFilter {
   includeInactive?: boolean;
+  /** Restrict to one source, e.g. 'rws'. */
+  source?: string;
   grootheid?: string;
   compartiment?: string;
   /** [west, south, east, north] in WGS84 degrees. */
@@ -144,6 +166,11 @@ export async function listLocations(filter: ListLocationsFilter = {}): Promise<L
   const params: unknown[] = [];
 
   if (!filter.includeInactive) conditions.push('l.active');
+
+  if (filter.source) {
+    params.push(filter.source);
+    conditions.push(`l.source_id = $${params.length}`);
+  }
 
   if (filter.grootheid) {
     params.push(filter.grootheid);
@@ -172,24 +199,17 @@ export async function listLocations(filter: ListLocationsFilter = {}): Promise<L
 
   if (filter.q) {
     params.push(`%${filter.q.toLowerCase()}%`);
-    conditions.push(`(lower(l.name) LIKE $${params.length} OR l.code LIKE $${params.length})`);
+    conditions.push(
+      `(lower(l.name) LIKE $${params.length} OR lower(l.source_code) LIKE $${params.length})`,
+    );
   }
 
   params.push(Math.min(filter.limit ?? 10_000, 25_000));
 
-  const { rows } = await getPool().query<{
-    code: string;
-    name: string;
-    lat: number | null;
-    lon: number | null;
-    active: boolean;
-    last_seen_at: Date | null;
-    quantities: string[] | null;
-  }>(
-    `SELECT l.code, l.name, l.lat, l.lon, l.active, l.last_seen_at,
-            (SELECT array_agg(DISTINCT q.grootheid ORDER BY q.grootheid)
-               FROM location_quantities q WHERE q.location_code = l.code) AS quantities
+  const { rows } = await getPool().query<LocationRow>(
+    `SELECT ${LOCATION_COLUMNS}
        FROM locations l
+       JOIN sources s ON s.id = l.source_id
       ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
       ORDER BY l.name
       LIMIT $${params.length}`,
@@ -200,29 +220,40 @@ export async function listLocations(filter: ListLocationsFilter = {}): Promise<L
 }
 
 export async function getLocation(code: string): Promise<Location | null> {
-  const { rows } = await getPool().query(
-    `SELECT l.code, l.name, l.lat, l.lon, l.active, l.last_seen_at,
-            (SELECT array_agg(DISTINCT q.grootheid ORDER BY q.grootheid)
-               FROM location_quantities q WHERE q.location_code = l.code) AS quantities
+  const { rows } = await getPool().query<LocationRow>(
+    `SELECT ${LOCATION_COLUMNS}
        FROM locations l
+       JOIN sources s ON s.id = l.source_id
       WHERE l.code = $1`,
-    [code.toLowerCase()],
+    [resolveLocationKey(code)],
   );
   const row = rows[0];
   return row ? toLocation(row) : null;
 }
 
-function toLocation(row: {
+const LOCATION_COLUMNS = `
+  l.code, l.source_id, s.country, l.name, l.lat, l.lon, l.active, l.last_seen_at,
+  (SELECT array_agg(DISTINCT q.grootheid ORDER BY q.grootheid)
+     FROM location_quantities q WHERE q.location_code = l.code) AS quantities
+`;
+
+interface LocationRow {
   code: string;
+  source_id: string;
+  country: string;
   name: string;
   lat: number | null;
   lon: number | null;
   active: boolean;
   last_seen_at: Date | null;
   quantities: string[] | null;
-}): Location {
+}
+
+function toLocation(row: LocationRow): Location {
   return {
     code: row.code,
+    source: row.source_id,
+    country: row.country,
     name: row.name,
     lat: row.lat,
     lon: row.lon,

@@ -1,27 +1,39 @@
 /**
  * HTTP client for the Rijkswaterstaat WaterWebservices.
  *
- * Responsibilities beyond plain fetch: a politeness cap on outbound
- * concurrency, retry with exponential backoff and jitter, and mapping the
- * service's status codes onto something callers can branch on without
- * memorising them.
+ * What is left here after the source split is what is actually specific to
+ * this service: its request envelope, its API key header, and its status
+ * semantics. Concurrency, retry and backoff live in ../http.js and are shared
+ * with every other source.
  */
 
-import { config } from '../config.js';
+import { config } from '../../config.js';
+import { SourceError, httpClientFor } from '../http.js';
+import { RWS_SOURCE_ID, parseLocationKey } from '../registry.js';
 import type {
   OphalenCatalogusResponse,
   OphalenWaarnemingenResponse,
   OphalenAantalWaarnemingenResponse,
 } from './types.js';
 
-export class RwsError extends Error {
+const rws = config.sources.rws;
+const http = httpClientFor(RWS_SOURCE_ID, rws.http);
+
+/**
+ * A Rijkswaterstaat failure.
+ *
+ * Kept as its own class rather than folded into `SourceError` so callers can
+ * still branch on "this came from RWS" without inspecting a string; the
+ * retry machinery only cares about the base class.
+ */
+export class RwsError extends SourceError {
   constructor(
     message: string,
-    readonly status: number | null,
-    readonly body?: unknown,
-    readonly retryable = false,
+    status: number | null,
+    body?: unknown,
+    retryable = false,
   ) {
-    super(message);
+    super(RWS_SOURCE_ID, message, status, body, retryable);
     this.name = 'RwsError';
   }
 }
@@ -32,39 +44,6 @@ export interface RwsResponse<T> {
   /** Null when the service returned 204. */
   data: T | null;
   latencyMs: number;
-}
-
-/** Bounded-concurrency gate so we stay a polite API consumer. */
-class Semaphore {
-  private active = 0;
-  private queue: (() => void)[] = [];
-
-  constructor(private readonly limit: number) {}
-
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.active >= this.limit) {
-      await new Promise<void>((resolve) => this.queue.push(resolve));
-    }
-    this.active += 1;
-    try {
-      return await fn();
-    } finally {
-      this.active -= 1;
-      this.queue.shift()?.();
-    }
-  }
-}
-
-const gate = new Semaphore(config.rws.maxConcurrency);
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Exponential backoff with full jitter, so retries do not synchronise. */
-function backoffMs(attempt: number): number {
-  const base = Math.min(30_000, 500 * 2 ** attempt);
-  return Math.random() * base;
 }
 
 export interface PostOptions {
@@ -90,71 +69,55 @@ export async function rwsPost<T>(
   body: unknown,
   options: PostOptions = {},
 ): Promise<RwsResponse<T>> {
-  const maxRetries = options.maxRetries ?? config.rws.maxRetries;
-  const timeoutMs = options.timeoutMs ?? config.rws.timeoutMs;
-  let lastError: RwsError | null = null;
+  return http.request<RwsResponse<T>>(path, async (signal) => {
+    const started = performance.now();
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0) await sleep(backoffMs(attempt - 1));
+    const res = await fetch(rws.apiBase + path, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Not required today, but Rijkswaterstaat asks clients to send one
+        // so future key-based rate limiting does not break them.
+        'X-API-KEY': rws.apiKey,
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
 
-    try {
-      return await gate.run(async () => {
-        const started = performance.now();
-        const timeout = AbortSignal.timeout(timeoutMs);
-        const signal = options.signal
-          ? AbortSignal.any([options.signal, timeout])
-          : timeout;
+    const latencyMs = Math.round(performance.now() - started);
 
-        const res = await fetch(config.rws.apiBase + path, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // Not required today, but Rijkswaterstaat asks clients to send one
-            // so future key-based rate limiting does not break them.
-            'X-API-KEY': config.rws.apiKey,
-          },
-          body: JSON.stringify(body),
-          signal,
-        });
+    if (res.status === 204) return { status: 204, data: null, latencyMs };
 
-        const latencyMs = Math.round(performance.now() - started);
-
-        if (res.status === 204) return { status: 204, data: null, latencyMs };
-
-        const text = await res.text();
-        let parsed: unknown = null;
-        if (text) {
-          try { parsed = JSON.parse(text); } catch { parsed = text; }
-        }
-
-        if (res.ok) return { status: res.status, data: parsed as T, latencyMs };
-
-        // 5xx and 429 are worth another go; 4xx means we sent something wrong.
-        const retryable = res.status >= 500 || res.status === 429;
-        throw new RwsError(
-          `RWS ${path} returned ${res.status}`,
-          res.status,
-          parsed,
-          retryable,
-        );
-      });
-    } catch (err) {
-      if (err instanceof RwsError) {
-        lastError = err;
-        if (!err.retryable) throw err;
-      } else {
-        // Network failures and timeouts are retryable.
-        lastError = new RwsError(
-          `RWS ${path} request failed: ${(err as Error).message}`,
-          null,
-          undefined,
-          true,
-        );
-      }
+    const text = await res.text();
+    let parsed: unknown = null;
+    if (text) {
+      try { parsed = JSON.parse(text); } catch { parsed = text; }
     }
-  }
 
-  throw lastError ?? new RwsError(`RWS ${path} failed`, null);
+    if (res.ok) return { status: res.status, data: parsed as T, latencyMs };
+
+    // 5xx and 429 are worth another go; 4xx means we sent something wrong.
+    const retryable = res.status >= 500 || res.status === 429;
+    throw new RwsError(
+      `RWS ${path} returned ${res.status}`,
+      res.status,
+      parsed,
+      retryable,
+    );
+  }, options);
+}
+
+/**
+ * Strip the source qualifier back off a location key.
+ *
+ * Locations are keyed `rws:lobith` internally, but Rijkswaterstaat has never
+ * heard of that prefix -- sending it yields an empty result rather than an
+ * error, which is the kind of failure that looks like "this station has no
+ * data". Every call that names a location upstream goes through here.
+ */
+function upstreamCode(locationCode: string): string {
+  const parsed = parseLocationKey(locationCode);
+  return parsed?.sourceId === RWS_SOURCE_ID ? parsed.sourceCode : locationCode;
 }
 
 export interface PeriodeRequest {
@@ -193,7 +156,7 @@ export function fetchObservations(
   return rwsPost<OphalenWaarnemingenResponse>(
     '/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen',
     {
-      Locatie: { Code: params.locationCode },
+      Locatie: { Code: upstreamCode(params.locationCode) },
       AquoPlusWaarnemingMetadata: {
         AquoMetadata: {
           Compartiment: { Code: params.compartiment },
@@ -215,7 +178,7 @@ export function fetchLatest(
   return rwsPost<OphalenWaarnemingenResponse>(
     '/ONLINEWAARNEMINGENSERVICES/OphalenLaatsteWaarnemingen',
     {
-      LocatieLijst: locationCodes.map((Code) => ({ Code })),
+      LocatieLijst: locationCodes.map((code) => ({ Code: upstreamCode(code) })),
       AquoPlusWaarnemingMetadataLijst: quantities.map((q) => ({
         AquoMetadata: {
           Compartiment: { Code: q.compartiment },
@@ -248,7 +211,7 @@ export function fetchCounts(
         Grootheid: { Code: q.grootheid },
       })),
       Groeperingsperiode: groeperingsperiode,
-      LocatieLijst: [{ Code: locationCode }],
+      LocatieLijst: [{ Code: upstreamCode(locationCode) }],
       Periode: toPeriode(from, to),
     },
   );
@@ -267,7 +230,7 @@ export function fetchCatalogue(): Promise<RwsResponse<OphalenCatalogusResponse>>
 }
 
 function wfsUrl(params: Record<string, string>): URL {
-  const url = new URL(config.rws.wfsUrl);
+  const url = new URL(rws.wfsUrl);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   return url;
 }
@@ -290,7 +253,7 @@ export async function fetchWfsFeatureCount(
     resultType: 'hits',
   });
 
-  const res = await fetch(url, { signal: signal ?? AbortSignal.timeout(config.rws.timeoutMs) });
+  const res = await fetch(url, { signal: signal ?? http.timeoutSignal() });
   if (!res.ok) {
     throw new RwsError(`WFS hits returned ${res.status}`, res.status, await res.text().catch(() => null));
   }
@@ -329,7 +292,7 @@ export async function fetchWfsLatestPage(
   });
 
   const res = await fetch(url, {
-    signal: options.signal ?? AbortSignal.timeout(config.rws.timeoutMs),
+    signal: options.signal ?? http.timeoutSignal(),
   });
   if (!res.ok) {
     throw new RwsError(`WFS returned ${res.status}`, res.status, await res.text().catch(() => null));
