@@ -129,18 +129,23 @@ fi
 if [[ $SKIP_POSTGRES -eq 0 ]]; then
   step "PostgreSQL + TimescaleDB"
 
-  # Reuse the cluster that is already here rather than installing a second one.
-  if [[ -z $PG_MAJOR ]]; then
-    if command -v pg_config >/dev/null; then
-      PG_MAJOR=$(pg_config --version | sed -E 's/^PostgreSQL ([0-9]+).*/\1/')
-      info "reusing installed PostgreSQL $PG_MAJOR"
+  apt-get install -y -qq gnupg apt-transport-https lsb-release wget ca-certificates \
+    postgresql-common >/dev/null
+
+  # PostgreSQL's own archive (PGDG). Ubuntu ships exactly one major per release
+  # -- 14 on 22.04, 16 on 24.04, 17 on 25.04 -- so installing a specific major
+  # without this fails with "Package 'postgresql-NN' has no installation
+  # candidate" on every release whose archive does not happen to match. PGDG
+  # carries all supported majors for all supported releases.
+  if [[ ! -f /etc/apt/sources.list.d/pgdg.list && ! -f /etc/apt/sources.list.d/pgdg.sources ]]; then
+    if [[ -x /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh ]]; then
+      /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+      info "added the PostgreSQL (PGDG) apt repository"
     else
-      PG_MAJOR=16
-      info "no PostgreSQL found; installing $PG_MAJOR"
+      warn "postgresql-common did not provide apt.postgresql.org.sh;"
+      warn "falling back to whatever PostgreSQL Ubuntu's own archive carries"
     fi
   fi
-
-  apt-get install -y -qq gnupg apt-transport-https lsb-release wget ca-certificates >/dev/null
 
   if [[ ! -f /etc/apt/trusted.gpg.d/timescaledb.gpg ]]; then
     echo "deb https://packagecloud.io/timescale/timescaledb/ubuntu/ ${CODENAME} main" \
@@ -151,6 +156,52 @@ if [[ $SKIP_POSTGRES -eq 0 ]]; then
   fi
 
   apt-get update -qq
+
+  # True if apt can actually install this package right now.
+  #
+  # Deliberately no pipe: `apt-cache policy | grep -q` looks equivalent but
+  # breaks under `set -o pipefail`. grep -q exits the moment it matches, apt-cache
+  # then dies with SIGPIPE, and pipefail reports the pipeline as failed (141) --
+  # so an available package reads as unavailable. Command substitution consumes
+  # all the output, then bash matches the pattern itself.
+  installable() {
+    local policy
+    policy=$(apt-cache policy "$1" 2>/dev/null) || return 1
+    [[ $policy == *"Candidate: "[0-9]* ]]
+  }
+
+  # Reuse the cluster that is already here rather than installing a second one.
+  if [[ -z $PG_MAJOR ]] && command -v pg_config >/dev/null; then
+    PG_MAJOR=$(pg_config --version | sed -E 's/^PostgreSQL ([0-9]+).*/\1/')
+    info "reusing installed PostgreSQL $PG_MAJOR"
+    if ! installable "timescaledb-2-postgresql-${PG_MAJOR}"; then
+      die "PostgreSQL ${PG_MAJOR} is installed but Timescale publishes no
+    timescaledb-2-postgresql-${PG_MAJOR} for ${CODENAME}. Install a major that
+    Timescale supports and pass --pg-major, or upgrade the cluster."
+    fi
+  fi
+
+  # Otherwise take the first major that BOTH archives can satisfy, rather than
+  # a hardcoded guess that only holds on one Ubuntu release.
+  #
+  # 16 leads deliberately: it is what docker-compose pins and what this project
+  # is tested against, so a native box and a compose box stay on one major and
+  # a dump from either restores into the other. Newer majors follow for a
+  # release that no longer carries 16, then older. --pg-major overrides.
+  if [[ -z $PG_MAJOR ]]; then
+    for candidate in 16 17 18 15; do
+      if installable "postgresql-${candidate}" \
+      && installable "timescaledb-2-postgresql-${candidate}"; then
+        PG_MAJOR=$candidate
+        break
+      fi
+    done
+    [[ -n $PG_MAJOR ]] || die "no PostgreSQL major is installable with TimescaleDB on ${CODENAME}.
+    Check that the Timescale repository has packages for this release:
+      apt-cache search timescaledb-2-postgresql"
+    info "no PostgreSQL found; installing ${PG_MAJOR}"
+  fi
+
   apt-get install -y -qq \
     "postgresql-${PG_MAJOR}" "postgresql-client-${PG_MAJOR}" \
     "timescaledb-2-postgresql-${PG_MAJOR}" timescaledb-tools >/dev/null
