@@ -454,6 +454,56 @@ backfill queue itself is not precious — losing it costs download time, not dat
 Ubuntu's archive carries 18.x; this app needs >= 20. Install from NodeSource as
 in [step 1](#1-nodejs).
 
+### `uv_interface_addresses returned Unknown system error 97`
+
+Errno 97 is `EAFNOSUPPORT`, and this is a systemd sandboxing problem, not a
+network one. Fastify logs the bound address on `listen`, which calls
+`os.networkInterfaces()` → `getifaddrs()` → `socket(AF_NETLINK, SOCK_RAW,
+NETLINK_ROUTE)`. If the unit's `RestrictAddressFamilies=` omits `AF_NETLINK`,
+that socket fails, the exception is thrown from the `listening` handler and the
+process exits 1 — *after* binding successfully, which makes it look like a port
+conflict when the port is fine.
+
+```sh
+grep RestrictAddressFamilies /etc/systemd/system/rws-api.service
+systemctl show rws-api -p RestrictAddressFamilies    # what systemd actually applies
+```
+
+The list must include `AF_NETLINK`:
+
+```sh
+sudo sed -i 's/^RestrictAddressFamilies=.*/RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK/' \
+  /etc/systemd/system/rws-api.service
+sudo systemctl daemon-reload && sudo systemctl restart rws-api
+```
+
+`daemon-reload` is required — editing a unit file alone changes nothing until
+systemd re-reads it.
+
+### The service starts, then exits 1 immediately
+
+Almost always the port is already taken by something else on the box. The app
+logs it plainly, but systemd only reports the exit code:
+
+```sh
+sudo journalctl -u rws-api -n 30 --no-pager | grep -i eaddrinuse
+sudo ss -lntp | grep -E ':30[0-9][0-9]'      # what is on the nearby ports
+```
+
+Pick a free port, then **restart** — systemd does not re-read `.env` by itself:
+
+```sh
+sudo sed -i 's/^PORT=.*/PORT=3005/' /home/administrator/rws/.env
+sudo systemctl restart rws-api
+```
+
+When checking whether it came up, avoid `curl -s ... | jq`: on a refused
+connection `-s` prints nothing, which is indistinguishable from an empty reply.
+Use `curl -i` so you can tell "not listening" from "listening but erroring".
+
+Current versions check the port during installation and refuse to continue if it
+is taken, listing what holds it.
+
 ### `Job for rws-api.service failed because the control process exited`
 
 The "control process" is `ExecStartPre`, which runs migrations before the

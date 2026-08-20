@@ -445,6 +445,40 @@ if ! runuser -u "$APP_USER" -- test -r "${REPO_DIR}/package.json" 2>/dev/null; t
 
 fi
 
+# --- port -------------------------------------------------------------------
+# A box running several web applications runs out of free ports quietly. An
+# occupied one surfaces only when the service starts, as EADDRINUSE followed by
+# exit 1 -- which systemd reports as a bare "control process exited".
+step "port ${APP_PORT}"
+port_owner=""
+if command -v ss >/dev/null; then
+  port_owner=$(ss -lntpH "sport = :${APP_PORT}" 2>/dev/null | head -1 || true)
+fi
+if [[ -n ${port_owner:-} ]]; then
+  # Ours already running is fine -- a restart takes the port back.
+  if [[ $port_owner == *"rws"* || $port_owner == *"node"* ]]; then
+    warn "port ${APP_PORT} is in use, seemingly by this app already:"
+    warn "  ${port_owner}"
+    warn "a restart will take it back; if not, another node process holds it"
+  else
+    die "port ${APP_PORT} is already in use by something else:
+
+    ${port_owner}
+
+    Pick a free one and re-run, or set PORT in .env and restart:
+
+      sudo ./deploy/install-ubuntu.sh --port 3005
+      # or, for an install that already exists:
+      sudo sed -i 's/^PORT=.*/PORT=3005/' ${REPO_DIR}/.env
+      sudo systemctl restart rws-api
+
+    Ports currently listening on this machine:
+$(ss -lntpH 2>/dev/null | awk '{print "      " $4}' | sort -u | head -20)"
+  fi
+else
+  info "port ${APP_PORT} is free"
+fi
+
 # --- disk ------------------------------------------------------------------
 # The checkout is a few hundred MB; the database is tens of GB once history is
 # loaded. Those are frequently on different volumes, and the one that matters

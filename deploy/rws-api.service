@@ -52,7 +52,13 @@ ProtectHome=@PROTECT_HOME@
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK is required, not optional. Fastify logs the bound address on
+# listen, which calls os.networkInterfaces() -> getifaddrs() ->
+# socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE). Omit it and that socket fails
+# with EAFNOSUPPORT, so the process throws ERR_SYSTEM_ERROR (errno 97) and
+# exits 1 -- *after* binding successfully, which makes it look like a port
+# problem when it is not.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 RestrictNamespaces=true
 LockPersonality=true
 MemoryDenyWriteExecute=false
