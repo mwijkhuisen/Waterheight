@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env.js';
 import { buildServer } from './api/server.js';
 import { startSchedules } from './backfill/schedule.js';
 import { config } from './config.js';

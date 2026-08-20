@@ -6,9 +6,15 @@
  * is reachable, so `npm test` stays useful without one.
  *
  * Point TEST_DATABASE_URL at a PostgreSQL instance with TimescaleDB available
- * (docker-compose provides one). A uniquely named database is created and
- * dropped around the suite.
+ * -- docker-compose provides one, and so does a native install. A uniquely
+ * named database is created and dropped around the suite, so the role it
+ * connects as needs CREATEDB.
  */
+
+// Loads the repository-root `.env`, so TEST_DATABASE_URL set there is honoured
+// rather than needing to be exported into the shell. Without this the whole
+// suite silently skipped on any machine that was not running docker-compose.
+import '../src/env.js';
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -18,8 +24,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { seriesIdentity } from '../src/rws/normalise.js';
 
+// Falls back to the stock local PostgreSQL port, which is what a native
+// install listens on; .env.example documents the same value.
 const ADMIN_URL = process.env['TEST_DATABASE_URL']
-  ?? 'postgres://postgres@127.0.0.1:5433/postgres';
+  ?? 'postgres://postgres@127.0.0.1:5432/postgres';
 const TEST_DB = `rws_test_${process.pid}`;
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '../../../fixtures/trimmed');
@@ -41,7 +49,8 @@ const suite = dbAvailable ? describe : describe.skip;
 if (!dbAvailable) {
   console.warn(
     `[integration] skipping: no database at ${ADMIN_URL}. ` +
-    'Start one with docker-compose and set TEST_DATABASE_URL.',
+    'Set TEST_DATABASE_URL to a TimescaleDB-enabled instance whose role may ' +
+    'CREATEDB -- see the Testing section of the README.',
   );
 }
 

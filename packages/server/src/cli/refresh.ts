@@ -3,7 +3,7 @@
  * Runs the scheduled refreshes by hand: the location layer and the catalogue.
  * `docker-compose up` leaves an empty system; this is what populates it.
  */
-import 'dotenv/config';
+import '../env.js';
 import { closePool } from '../db/pool.js';
 import { refreshCatalogue } from '../ingest/catalogue.js';
 import { recordRefresh, refreshLocations } from '../ingest/locations.js';

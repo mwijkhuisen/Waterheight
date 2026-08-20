@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import 'dotenv/config';
+import '../env.js';
 import { closePool } from '../db/pool.js';
 import { migrate } from '../db/migrate.js';
 
