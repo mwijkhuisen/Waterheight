@@ -26,6 +26,7 @@ import {
   parseWfsLatestCsv,
   parseWfsLatestRow,
   splitCsvLine,
+  toWfsRecord,
 } from '../src/rws/wfs.js';
 import type { OphalenWaarnemingenResponse, OphalenCatalogusResponse } from '../src/rws/types.js';
 
@@ -419,6 +420,82 @@ describe('WFS CSV parsing', () => {
     const byLocation = aggregateByLocation(parseWfsLatestCsv(csv));
     const withQuantities = [...byLocation.values()].filter((l) => l.quantities.size > 0);
     expect(withQuantities.length).toBeGreaterThan(0);
+  });
+});
+
+describe('toWfsRecord, for the layer\'s unescaped commas', () => {
+  // The live layer's own column order, which is not the order we ask for.
+  const columns = [
+    'FID', 'NAAM', 'CODE', 'WAARDE_LAATSTE_METING', 'TIJDSTIP_LAATSTE_METING',
+    'COMPARTIMENTCODE', 'EENHEIDCODE', 'GROOTHEIDCODE', 'GEOMETRY',
+  ];
+
+  it('maps a well-formed row positionally', () => {
+    const fields = [
+      '1', 'Vlissingen', 'vlissingen', '2.31', '2026-01-01T00:00:00.000Z',
+      'OW', 'cm', 'WATHTE', 'POINT (51.44 3.6)',
+    ];
+    expect(toWfsRecord(columns, fields)).toMatchObject({
+      NAAM: 'Vlissingen',
+      CODE: 'vlissingen',
+      GEOMETRY: 'POINT (51.44 3.6)',
+    });
+  });
+
+  it('reassembles a name that the layer emitted with an unescaped comma', () => {
+    // "Aa, Helmond" arrives raw, so the line splits into 10 fields and every
+    // value after the name lands one column to the right. Before this was
+    // handled, CODE became ' Helmond' and the row was dropped as implausible.
+    const fields = [
+      '2', 'Aa', ' Helmond', 'aa.helmond', '6.52', '2026-01-01T00:00:00.000Z',
+      'OW', 'cm', 'WATHTE', 'POINT (51.48 5.66)',
+    ];
+    expect(toWfsRecord(columns, fields)).toMatchObject({
+      NAAM: 'Aa, Helmond',
+      CODE: 'aa.helmond',
+      WAARDE_LAATSTE_METING: '6.52',
+      TIJDSTIP_LAATSTE_METING: '2026-01-01T00:00:00.000Z',
+      GROOTHEIDCODE: 'WATHTE',
+      GEOMETRY: 'POINT (51.48 5.66)',
+    });
+  });
+
+  it('reassembles a name containing several commas', () => {
+    const fields = [
+      '3', 'Waal', ' de Neswaarden', ' bovenstrooms', 'waal.nes', '1.0',
+      '2026-01-01T00:00:00.000Z', 'OW', 'cm', 'WATHTE', 'POINT (51.8 5.3)',
+    ];
+    const record = toWfsRecord(columns, fields);
+    expect(record['NAAM']).toBe('Waal, de Neswaarden, bovenstrooms');
+    expect(record['CODE']).toBe('waal.nes');
+    expect(record['GEOMETRY']).toBe('POINT (51.8 5.3)');
+  });
+
+  it('leaves a short row alone rather than shifting it', () => {
+    const record = toWfsRecord(columns, ['1', 'Vlissingen', 'vlissingen']);
+    expect(record['NAAM']).toBe('Vlissingen');
+    expect(record['CODE']).toBe('vlissingen');
+    expect(record['GEOMETRY']).toBeUndefined();
+  });
+
+  it('maps positionally when there is no NAAM column to absorb the surplus', () => {
+    const record = toWfsRecord(['CODE', 'GEOMETRY'], ['a', 'POINT (1 2)', 'extra']);
+    expect(record['CODE']).toBe('a');
+    expect(record['GEOMETRY']).toBe('POINT (1 2)');
+  });
+
+  it('recovers the row end to end, through parseWfsLatestCsv', () => {
+    const rows = parseWfsLatestCsv(
+      'FID,NAAM,CODE,WAARDE_LAATSTE_METING,TIJDSTIP_LAATSTE_METING,GEOMETRY\n' +
+      '1,Aa, Helmond,aa.helmond,6.52,2026-01-01T00:00:00.000Z,POINT (51.48 5.66)\n',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      code: 'aa.helmond',
+      name: 'Aa, Helmond',
+      lat: 51.48,
+      lon: 5.66,
+    });
   });
 });
 

@@ -17,6 +17,7 @@ import {
   aggregateByLocation,
   parseWfsLatestRow,
   splitCsvLine,
+  toWfsRecord,
   type WfsLatestRow,
 } from '../rws/wfs.js';
 
@@ -91,8 +92,8 @@ async function readPageWithRetry(
       if (!columns) { columns = fields; continue; }
 
       seen += 1;
-      const record: Record<string, string | undefined> = {};
-      columns.forEach((c, i) => { record[c] = fields[i]; });
+      // Repairs rows the layer over-splits on unescaped commas in NAAM.
+      const record = toWfsRecord(columns, fields);
 
       const row = parseWfsLatestRow(record);
       if (row) rows.push(row);
@@ -117,11 +118,19 @@ async function readPageWithRetry(
 }
 
 export class TruncatedLayerError extends Error {
-  constructor(readonly expected: number, readonly received: number) {
+  constructor(
+    readonly expected: number,
+    readonly received: number,
+    readonly skipped = 0,
+  ) {
     super(
       `WFS layer looks truncated: expected ${expected} features, ` +
-      `parsed ${received} (${((1 - received / expected) * 100).toFixed(1)}% missing). ` +
-      'Refusing to reconcile active flags from a partial download.',
+      `parsed ${received} (${((1 - received / expected) * 100).toFixed(1)}% missing, ` +
+      `${skipped} unparseable). ` +
+      (received + skipped >= expected
+        ? 'Every feature arrived, so this is a parsing failure rather than a ' +
+          'short download -- check the layer\'s column layout.'
+        : 'Refusing to reconcile active flags from a partial download.'),
     );
     this.name = 'TruncatedLayerError';
   }
@@ -154,8 +163,13 @@ export async function refreshLocations(
 
   // A handful of unparseable rows is normal (corrupt timestamps exist in the
   // layer); losing a meaningful fraction means the download itself was bad.
+  //
+  // rowsParsed excludes rows the parser rejected, so a parsing regression shows
+  // up here as a truncated download. rowsSkipped is reported alongside it to
+  // keep the two distinguishable: skipped high with parsed + skipped == the
+  // expected count means everything arrived and the parser is at fault.
   if (rowsParsed < expectedFeatures * (1 - MAX_MISSING_FRACTION)) {
-    throw new TruncatedLayerError(expectedFeatures, rowsParsed);
+    throw new TruncatedLayerError(expectedFeatures, rowsParsed, rowsSkipped);
   }
 
   const byLocation = aggregateByLocation(rows);

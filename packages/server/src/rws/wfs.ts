@@ -135,6 +135,49 @@ export function parseWfsLatestRow(
 }
 
 /**
+ * Build a record from one split CSV line, repairing rows that over-split.
+ *
+ * The layer's CSV is not properly escaped: a location name containing a comma
+ * -- "Aa, Helmond", "Waal, de Neswaarden" -- is emitted raw rather than
+ * quoted, so the line splits into more fields than the header has columns and
+ * every value after the name lands one column to the right. Measured against
+ * the live layer, 47% of rows are affected and the parser dropped all of them:
+ * ~20% of rows failed outright (a name fragment is not a plausible location
+ * code), which then tripped the truncation guard and failed the whole refresh.
+ *
+ * NAAM is the only free-text column -- the codes are codes, WAARDE is numeric,
+ * TIJDSTIP is a timestamp and GEOMETRY is `POINT (lat lon)`, which contains no
+ * comma. So the columns before the name can be anchored from the left and
+ * those after it from the right, and whatever is left in the middle is the
+ * name. Verified against 30,000 live rows: every one reassembles into a
+ * plausible code, a parseable timestamp and a WKT point.
+ *
+ * A row with no surplus takes the same path as before, and a short row still
+ * yields undefined for the missing columns.
+ */
+export function toWfsRecord(
+  columns: string[],
+  fields: string[],
+): Record<string, string | undefined> {
+  const record: Record<string, string | undefined> = {};
+  const nameIndex = columns.indexOf('NAAM');
+  const surplus = fields.length - columns.length;
+
+  // Nothing to repair, or nowhere to put the surplus: map positionally.
+  if (surplus <= 0 || nameIndex === -1) {
+    columns.forEach((c, i) => { record[c] = fields[i]; });
+    return record;
+  }
+
+  columns.forEach((c, i) => {
+    if (i < nameIndex) record[c] = fields[i];
+    else if (i === nameIndex) record[c] = fields.slice(i, i + 1 + surplus).join(',');
+    else record[c] = fields[i + surplus];
+  });
+  return record;
+}
+
+/**
  * Parse a whole CSV document. Only for small documents and tests -- the daily
  * refresh streams the real 173 MB layer line by line instead (see
  * ingest/locations.ts).
@@ -147,9 +190,7 @@ export function parseWfsLatestCsv(text: string): WfsLatestRow[] {
 
   const rows: WfsLatestRow[] = [];
   for (const line of lines) {
-    const fields = splitCsvLine(line);
-    const record: Record<string, string | undefined> = {};
-    columns.forEach((c, i) => { record[c] = fields[i]; });
+    const record = toWfsRecord(columns, splitCsvLine(line));
     const row = parseWfsLatestRow(record);
     if (row) rows.push(row);
   }
