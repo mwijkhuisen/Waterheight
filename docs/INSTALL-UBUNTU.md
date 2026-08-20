@@ -183,6 +183,21 @@ instance.
 `ENABLE_SCHEDULES=true` runs the daily location refresh and the weekly
 correction re-fetch inside the API process. Turn it on for exactly one instance.
 
+**Changing the port.** `PORT` is the only place it is set — the client calls the
+API on relative paths, so it follows the server wherever it listens, and the
+systemd unit reads `.env` rather than hardcoding anything. To run on 3002:
+
+```sh
+sudo sed -i 's/^PORT=.*/PORT=3002/' /opt/rws/.env
+sudo systemctl restart rws-api
+curl -s localhost:3002/api/health | jq -r .status
+```
+
+On a *first* install you can ask for it up front with
+`sudo ./deploy/install-ubuntu.sh --port 3002`. Once `.env` exists the file wins
+and `--port` is ignored — the script says so rather than pretending otherwise.
+If a reverse proxy sits in front, update its `proxy_pass` to match.
+
 The file holds a database password, so lock it down:
 
 ```sh
@@ -258,6 +273,7 @@ server {
     server_name example.org;
 
     location / {
+        # Must match PORT in .env.
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;

@@ -48,6 +48,10 @@ systemctl status rws-api
 journalctl -u rws-api -f
 ```
 
+It listens on 3000 by default. `--port 3002` sets that on a first install, and
+`PORT` in `.env` changes it afterwards — the client uses relative paths, so it follows the server
+wherever it listens.
+
 ### With Docker
 
 ```sh

@@ -23,6 +23,7 @@ DB_USER=rws
 DB_PASSWORD=
 APP_USER=rws
 APP_PORT=3000
+PORT_EXPLICIT=0
 PG_MEMORY=
 PG_MAJOR=
 SKIP_POSTGRES=0
@@ -62,7 +63,7 @@ while [[ $# -gt 0 ]]; do
     --db-user)      DB_USER=$2; shift 2 ;;
     --db-password)  DB_PASSWORD=$2; shift 2 ;;
     --app-user)     APP_USER=$2; shift 2 ;;
-    --port)         APP_PORT=$2; shift 2 ;;
+    --port)         APP_PORT=$2; PORT_EXPLICIT=1; shift 2 ;;
     --pg-memory)    PG_MEMORY=$2; shift 2 ;;
     --pg-major)     PG_MAJOR=$2; shift 2 ;;
     --with-test-db) ALLOW_TESTDB=1; shift ;;
@@ -272,6 +273,19 @@ if [[ -f $ENV_FILE ]]; then
   info ".env already exists; leaving it untouched"
   if [[ -n $DB_PASSWORD ]] && ! grep -q "^DATABASE_URL=" "$ENV_FILE"; then
     warn "no DATABASE_URL in the existing .env -- the app will fall back to defaults"
+  fi
+
+  # The file is authoritative once it exists, so --port would otherwise be
+  # accepted and silently ignored. Report the port actually in effect, and say
+  # plainly when it is not the one that was asked for.
+  existing_port=$(sed -n 's/^PORT=\([0-9]\+\).*/\1/p' "$ENV_FILE" | tail -1)
+  if [[ -n $existing_port ]]; then
+    if [[ $PORT_EXPLICIT -eq 1 && $existing_port != "$APP_PORT" ]]; then
+      warn "--port ${APP_PORT} ignored: .env already sets PORT=${existing_port}"
+      warn "change it there and restart, or delete .env to have this rewrite it:"
+      warn "  sed -i 's/^PORT=.*/PORT=${APP_PORT}/' ${ENV_FILE} && systemctl restart rws-api"
+    fi
+    APP_PORT=$existing_port
   fi
 else
   [[ -n $DB_PASSWORD ]] || die "role ${DB_USER} exists but no password is known; pass --db-password"
