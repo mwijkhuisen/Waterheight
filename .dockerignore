@@ -12,9 +12,9 @@ fixtures
 # exits 0 having emitted nothing -- leaving no packages/*/dist for the runtime
 # stage to COPY.
 #
-# Both forms are needed: a .dockerignore pattern without ** matches only at the
-# context root, which is why node_modules is listed twice above. The files that
-# actually matter here are packages/*/tsconfig.tsbuildinfo, and only the second
-# pattern catches those.
+# Both patterns are needed. A .dockerignore `*` does not cross a `/`, so
+# `*.tsbuildinfo` alone matches only the repository root -- and tsc writes
+# these next to each package's tsconfig, at packages/*/tsconfig.tsbuildinfo.
+# That is why the first attempt at this fix did not take.
 *.tsbuildinfo
 **/*.tsbuildinfo

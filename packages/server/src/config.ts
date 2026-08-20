@@ -3,6 +3,11 @@
  * See .env.example for the documented set.
  */
 
+// Must come first: this populates process.env from the `.env` file, and every
+// value below is read at module evaluation. Importing it here rather than in
+// each entry point means no entry point can get the ordering wrong.
+import './env.js';
+
 function str(name: string, fallback: string): string {
   const v = process.env[name];
   return v === undefined || v === '' ? fallback : v;

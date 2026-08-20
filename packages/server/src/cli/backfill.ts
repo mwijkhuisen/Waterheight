@@ -13,7 +13,7 @@
  * left off. `--resume` is accepted for explicitness.
  */
 
-import 'dotenv/config';
+import '../env.js';
 import { parseArgs } from 'node:util';
 import { config } from '../config.js';
 import { closePool } from '../db/pool.js';

@@ -14,8 +14,45 @@ What has actually been exercised, and what has not, is listed under
 
 ## Deploying
 
-One container serves the whole app: the API and the built map client on the same origin, which also
-means the browser never needs CORS.
+The app is one process: the API also serves the built map client, so the whole thing is one origin
+and the browser never needs CORS. It needs PostgreSQL with TimescaleDB, and nothing else.
+
+Two supported paths. They install the same thing; pick whichever suits the machine.
+
+### On Ubuntu, without Docker
+
+Full walkthrough, including running alongside an existing MariaDB/MySQL, TLS, operations and
+troubleshooting: **[`docs/INSTALL-UBUNTU.md`](docs/INSTALL-UBUNTU.md)**.
+
+```sh
+git clone https://github.com/mwijkhuisen/rws.git /opt/rws
+cd /opt/rws
+sudo ./deploy/install-ubuntu.sh
+```
+
+That installs Node, PostgreSQL and TimescaleDB from apt, creates the role and database, builds the
+server and the client, writes `.env`, applies migrations and installs a systemd unit. It is
+idempotent, so it is also the upgrade path.
+
+Two things worth knowing before you run it:
+
+- **Ubuntu packages Node 18**, and this needs >= 20, so the script installs from NodeSource. Plain
+  `apt install nodejs` produces a build that fails at runtime.
+- **If MariaDB or MySQL is on the same box**, they coexist fine — different ports, data directories
+  and units. The one real conflict is memory: `timescaledb-tune` sizes PostgreSQL's caches as though
+  it owned all the RAM. The script detects the other engine and budgets half; `--pg-memory 4GB`
+  overrides it.
+
+```sh
+systemctl status rws-api
+journalctl -u rws-api -f
+```
+
+It listens on 3000 by default. `--port 3002` sets that on a first install, and
+`PORT` in `.env` changes it afterwards — the client uses relative paths, so it follows the server
+wherever it listens.
+
+### With Docker
 
 ```sh
 cp .env.example .env
@@ -24,25 +61,18 @@ cp .env.example .env
 $EDITOR .env
 
 docker compose up -d --build          # database, migrations, then the app on :3000
-docker compose run --rm migrate node packages/server/dist/cli/refresh.js
 ```
-
-`docker compose up` brings up TimescaleDB, applies migrations and starts the app, but the database is
-**empty** until that `refresh` runs: it loads the catalogue (~1.2 s) and the location layer (~6 min).
-After that the map works immediately — observations for short periods are fetched on demand.
 
 The API container carries the daily refresh and the weekly correction re-fetch (`ENABLE_SCHEDULES`,
 on by default in compose). If you scale it past one replica, turn that off and run the schedules on a
 single worker instead, or several instances will hit Rijkswaterstaat with the same job.
 
-Then load history when you want it, from the host or `docker compose exec api`:
+### Either way, the database starts empty
 
-```sh
-node packages/server/dist/cli/backfill.js --dry-run   # plan and projection only
-node packages/server/dist/cli/backfill.js             # ~2.5 h for the eager tier
-```
+Migrations create the schema; they do not fetch anything. Nothing appears on the map until the
+location layer is loaded — see [Loading data](#loading-data) next.
 
-Health is at `/api/health`; the container healthcheck already uses it. It reports upstream
+Health is at `/api/health`, which the compose healthcheck already uses. It reports upstream
 reachability, cache age, location counts and backfill progress.
 
 ### Before you expose it publicly
@@ -52,6 +82,111 @@ reachability, cache age, location counts and backfill progress.
 - Tune `RATE_LIMIT_MAX` (default 300/min per IP). This protects the upstream budget as much as this
   service: `/observations` can trigger live fetches to Rijkswaterstaat.
 - The database port is not published by default — only the API container reaches it.
+
+## Loading data
+
+Two separate things: the **location layer**, which the map cannot work without, and **history**,
+which is optional and can be loaded whenever.
+
+Commands below are written for a native install from the repository root. Under Docker, prefix them
+with `docker compose exec api` (or `docker compose run --rm migrate` before the API is up).
+
+### The location layer — required, ~6 minutes
+
+```sh
+node packages/server/dist/cli/refresh.js
+```
+
+Loads the Aquo catalogue (~1.2 s) and streams the WFS location layer — ~940,000 features covering
+~2,600 locations, about 173 MB. After it finishes the map works immediately: observations for short
+periods are fetched from Rijkswaterstaat on demand and cached.
+
+With `ENABLE_SCHEDULES=true` this then repeats daily on its own, so it is a one-off command.
+
+### Loading history
+
+Everything past the on-demand window comes from the backfill CLI. **The default window is the last
+365 days**, which is the "one year back" case:
+
+```sh
+node packages/server/dist/cli/backfill.js --dry-run   # plan and projection, downloads nothing
+node packages/server/dist/cli/backfill.js             # the real thing, ~2.5 h for the eager tier
+node packages/server/dist/cli/backfill.js status      # progress, throughput, ETA, failures
+```
+
+Always run `--dry-run` first. It prints the chunk count, the projected row count and disk, and an
+ETA, without touching the network — which is how you find out what a full year costs before you
+start downloading it. The projection scales with how many locations are currently active, so treat
+its output as the number, not the figures quoted here: a run against 568 active locations planned
+43,095 chunks, ~88 M rows and ~10.6 GB at ~3 h, while the Phase 1 projection over the whole network
+was ~190 M rows and ~23 GB.
+
+**Just the last few days**, which is the common catch-up after downtime:
+
+```sh
+node packages/server/dist/cli/backfill.js --from 2026-08-13          # explicit start, to now
+node packages/server/dist/cli/backfill.js --from 2026-08-01 --to 2026-08-14
+```
+
+`--from`/`--to` take any parseable date. Chunks are whole months internally, so a narrow window
+still fetches the months it touches; that is idempotent and cheap to repeat.
+
+**A full year, including the deferred quantities.** Current direction, current speed and echo
+sounding are excluded by default — ~31% of total volume, and rarely what someone opens the map for.
+They arrive lazily on first request. To fetch them up front as well:
+
+```sh
+node packages/server/dist/cli/backfill.js --include-deferred         # ~8 h rather than ~2.5 h
+```
+
+**Prove it on a small slice first**, before letting it run for hours:
+
+```sh
+node packages/server/dist/cli/backfill.js --locations vlissingen --limit 20
+```
+
+Useful flags: `--locations a,b` and `--quantities WATHTE,Q` to narrow, `--concurrency n` to change
+the outbound rate (default 4, deliberately polite), `--tier eager|deferred` to drain one tier,
+`--limit n` to stop early.
+
+#### It is resumable, so a long run is safe
+
+A chunk is marked done in the *same transaction* that writes its rows, so a kill can never leave a
+chunk recorded as complete with its data missing. Re-running the same command continues where it
+stopped rather than starting over — resuming is the default, not a mode.
+
+For a run measured in hours, use the unit rather than an SSH session, so a disconnect does not take
+it down:
+
+```sh
+sudo systemctl start rws-backfill      # logs to the journal, resumable, Ctrl-C-safe
+journalctl -u rws-backfill -f
+sudo systemctl stop rws-backfill       # drains in-flight chunks and exits cleanly
+```
+
+If chunks failed — an upstream blip, usually:
+
+```sh
+node packages/server/dist/cli/backfill.js status         # what failed and why
+node packages/server/dist/cli/backfill.js retry-failed   # return them to the queue
+node packages/server/dist/cli/backfill.js               # drain it again
+```
+
+After a crash that you know killed the only worker, `--reclaim-after 0` returns its abandoned claims
+immediately instead of waiting out the 30-minute threshold that protects a live worker's claims.
+
+#### Keeping history correct afterwards
+
+Rijkswaterstaat publishes early as `ongecontroleerd` and revises in place, so recent history changes
+under you. The rolling re-fetch re-downloads a window through the same idempotent upsert:
+
+```sh
+node packages/server/dist/cli/backfill.js refetch                    # last 60 days
+node packages/server/dist/cli/backfill.js refetch --refetch-days 90
+```
+
+With `ENABLE_SCHEDULES=true` this runs weekly on its own. The 60-day default sits inside the 90-day
+compression delay, so it never has to rewrite a compressed chunk.
 
 ## Development
 
@@ -65,6 +200,14 @@ npm run dev                           # API on :3000
 npm run dev:web                       # map on :5173, proxying /api to :3000
 npm test
 ```
+
+Without Docker, replace the `docker compose up -d db` line with a local PostgreSQL that has
+TimescaleDB — steps 2 and 3 of [`docs/INSTALL-UBUNTU.md`](docs/INSTALL-UBUNTU.md) — and point
+`DATABASE_URL` at it. Everything else is the same.
+
+`.env` is resolved relative to the application rather than the shell's working directory, so the
+`npm run` scripts pick up the repository-root `.env` even though npm runs them from
+`packages/server`. `ENV_FILE=/path/to/.env` overrides it; real environment variables beat both.
 
 The backfill CLI in development:
 
@@ -377,6 +520,14 @@ Unit tests run the normalisers against fixtures recorded from the live service i
 never touch the network. Integration tests exercise the API through Fastify against a throwaway
 database and a mocked upstream; they skip themselves with a warning if no database is reachable, so
 the suite stays useful without one.
+
+**A green run with the integration tests skipped is not a green run.** The full suite is 89 tests;
+if you see 60 passing and 29 skipped, no database was reachable. They read `TEST_DATABASE_URL` from
+`.env`, and because each run creates and drops a database of its own, that role needs `CREATEDB`:
+
+```sh
+sudo -u postgres psql -c "ALTER ROLE rws CREATEDB"
+```
 
 Raw spike dumps are gitignored (the WFS layer alone is 173 MB). The trimmed, shape-preserving subsets
 the tests build on are committed in `fixtures/trimmed/`, regenerable with `node spike/trim-fixtures.mjs`.
