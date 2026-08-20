@@ -7,6 +7,7 @@
  */
 
 import { GAP_QUALITY_CODE } from '@rws/shared';
+import { RWS_SOURCE_ID, locationKey } from '../registry.js';
 import type {
   AquoCode,
   AquoMetadata,
@@ -60,11 +61,15 @@ export interface NormalisedSeries {
 }
 
 /**
- * Location codes were unified upstream (HOEK, HVH25 and HOEKVHLD all became
- * hoekvanholland). Treat them as lowercase dotted strings throughout.
+ * Turn a Rijkswaterstaat station code into a location key.
+ *
+ * Two things happen. The code is folded to lower case, because RWS unified its
+ * codes upstream (HOEK, HVH25 and HOEKVHLD all became hoekvanholland) and they
+ * are case-insensitive dotted strings. And it is qualified with the source, so
+ * `lobith` here cannot collide with the LOBITH that PEGELONLINE also publishes.
  */
 export function normaliseLocationCode(code: string): string {
-  return code.trim().toLowerCase();
+  return locationKey(RWS_SOURCE_ID, code);
 }
 
 /** Convert an RWS timestamp to ISO 8601 in UTC. */

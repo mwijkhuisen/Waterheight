@@ -11,7 +11,7 @@ import { Readable } from 'node:stream';
 import { config } from '../config.js';
 import { getPool, withTransaction } from '../db/pool.js';
 import { upsertLocations, type UpsertSummary } from '../db/locations.js';
-import { fetchWfsFeatureCount, fetchWfsLatestPage } from '../rws/client.js';
+import { fetchWfsFeatureCount, fetchWfsLatestPage } from '../sources/rws/client.js';
 import {
   WFS_LATEST_COLUMNS,
   aggregateByLocation,
@@ -19,7 +19,8 @@ import {
   splitCsvLine,
   toWfsRecord,
   type WfsLatestRow,
-} from '../rws/wfs.js';
+} from '../sources/rws/wfs.js';
+import { RWS_SOURCE_ID } from '../sources/registry.js';
 
 export interface RefreshLocationsResult extends UpsertSummary {
   rowsParsed: number;
@@ -176,8 +177,10 @@ export async function refreshLocations(
   const cutoff = new Date(Date.now() - config.activeWindowDays * 86_400_000);
 
   const summary = await upsertLocations(
+    RWS_SOURCE_ID,
     [...byLocation.values()].map((l) => ({
-      code: l.code,
+      sourceId: RWS_SOURCE_ID,
+      sourceCode: l.sourceCode,
       name: l.name,
       lat: l.lat,
       lon: l.lon,
@@ -188,7 +191,7 @@ export async function refreshLocations(
 
   const quantitiesUpserted = await upsertLocationQuantities(rows);
 
-  await recordRefresh('locations', {
+  await recordRefresh(RWS_SOURCE_ID, 'locations', {
     expectedFeatures,
     rowsParsed,
     rowsSkipped,
@@ -259,29 +262,39 @@ async function upsertLocationQuantities(rows: WfsLatestRow[]): Promise<number> {
   return values.length;
 }
 
+/**
+ * Record the outcome of one source's refresh job.
+ *
+ * Keyed by source as well as job name: `/api/health` reporting "locations
+ * refreshed 3 hours ago" has to mean a particular service's locations once
+ * there is more than one, and a source that has never run must stay
+ * distinguishable from one that failed.
+ */
 export async function recordRefresh(
+  sourceId: string,
   name: string,
   detail: Record<string, unknown>,
   succeeded = true,
 ): Promise<void> {
   await getPool().query(
-    `INSERT INTO refresh_state (name, refreshed_at, succeeded, detail)
-     VALUES ($1, now(), $2, $3)
-     ON CONFLICT (name) DO UPDATE SET
+    `INSERT INTO refresh_state (source_id, name, refreshed_at, succeeded, detail)
+     VALUES ($1, $2, now(), $3, $4)
+     ON CONFLICT (source_id, name) DO UPDATE SET
        refreshed_at = EXCLUDED.refreshed_at,
        succeeded = EXCLUDED.succeeded,
        detail = EXCLUDED.detail,
        updated_at = now()`,
-    [name, succeeded, JSON.stringify(detail)],
+    [sourceId, name, succeeded, JSON.stringify(detail)],
   );
 }
 
 export async function getRefreshState(
+  sourceId: string,
   name: string,
 ): Promise<{ refreshedAt: string | null; succeeded: boolean | null } | null> {
   const { rows } = await getPool().query<{ refreshed_at: Date | null; succeeded: boolean | null }>(
-    'SELECT refreshed_at, succeeded FROM refresh_state WHERE name = $1',
-    [name],
+    'SELECT refreshed_at, succeeded FROM refresh_state WHERE source_id = $1 AND name = $2',
+    [sourceId, name],
   );
   const row = rows[0];
   if (!row) return null;

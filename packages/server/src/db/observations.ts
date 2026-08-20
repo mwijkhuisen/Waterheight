@@ -11,8 +11,9 @@
 import type { PoolClient } from 'pg';
 import type { AggregatePoint, RawPoint, Resolution } from '@rws/shared';
 import { config } from '../config.js';
-import type { NormalisedPoint } from '../rws/normalise.js';
+import type { NormalisedPoint } from '../sources/rws/normalise.js';
 import { getPool } from './pool.js';
+import { resolveLocationKey } from '../sources/registry.js';
 
 /**
  * Insert or update a batch of points for one series.
@@ -221,7 +222,7 @@ export async function readLatestForLocation(locationCode: string): Promise<Lates
        JOIN series s ON s.id = o.series_id
       WHERE s.location_code = $1
       ORDER BY o.series_id, (o.value_numeric IS NOT NULL) DESC, o.ts DESC`,
-    [locationCode.toLowerCase()],
+    [resolveLocationKey(locationCode)],
   );
 
   return rows.map((r) => ({

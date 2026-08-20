@@ -51,13 +51,19 @@ import {
   upsertSeries,
   type PollTarget,
 } from '../db/series.js';
-import { RwsError, fetchLatest, fetchObservations, type LatestFilter } from '../rws/client.js';
+import { RWS_SOURCE_ID } from '../sources/registry.js';
+import {
+  RwsError,
+  fetchLatest,
+  fetchObservations,
+  type LatestFilter,
+} from '../sources/rws/client.js';
 import {
   normaliseLatest,
   normaliseObservations,
   type NormalisedPoint,
   type SeriesIdentity,
-} from '../rws/normalise.js';
+} from '../sources/rws/normalise.js';
 import { recordRefresh } from './locations.js';
 
 /** One upstream call: the filters it carries, and the locations it asks for. */
@@ -67,6 +73,13 @@ export interface LatestBatch {
 }
 
 export interface PollLatestOptions {
+  /**
+   * Which source to poll. Rijkswaterstaat is the only one with a latest
+   * endpoint today; a second source polls with its own adapter rather than
+   * having this one widened, because nothing about the batching survives a
+   * change of protocol.
+   */
+  sourceId?: string;
   /**
    * How far back a reading still counts as live. Doubles as the cut-off for
    * which series are polled and which returned readings are stored, so a
@@ -270,17 +283,18 @@ async function lanes<T>(
 export async function pollLatest(options: PollLatestOptions = {}): Promise<PollLatestResult> {
   const log = options.log ?? console.log;
   const started = Date.now();
+  const sourceId = options.sourceId ?? RWS_SOURCE_ID;
   const maxAgeMs = options.maxAgeMs ?? config.latestPoll.maxAgeMs;
   const batchSize = options.batchSize ?? config.latestPoll.batchSize;
   const maxCombinations = options.maxCombinations ?? config.latestPoll.maxCombinations;
-  const concurrency = options.concurrency ?? config.rws.maxConcurrency;
+  const concurrency = options.concurrency ?? config.sources.rws.http.maxConcurrency;
   const discoveryLimit = options.discoveryLimit ?? config.latestPoll.discoveryLimit;
   const discoveryWindowMs = options.discoveryWindowMs ?? config.latestPoll.discoveryWindowMs;
 
   const cutoff = new Date(started - maxAgeMs);
   const cutoffIso = cutoff.toISOString();
 
-  const targets = await listPollTargets(cutoff);
+  const targets = await listPollTargets(sourceId, cutoff);
   const known = new Map(targets.map((t) => [t.naturalKey, t]));
   const batches = planBatches(targets, batchSize, maxCombinations);
 
@@ -366,6 +380,7 @@ export async function pollLatest(options: PollLatestOptions = {}): Promise<PollL
   const pairs = options.signal?.aborted
     ? []
     : await listPairsToDiscover(
+      sourceId,
       new Date(started - config.activeWindowDays * 86_400_000),
       cutoff,
       discoveryLimit,
@@ -427,7 +442,7 @@ export async function pollLatest(options: PollLatestOptions = {}): Promise<PollL
     `(${(result.durationMs / 1000).toFixed(1)} s)`,
   );
 
-  await recordRefresh('latest', {
+  await recordRefresh(sourceId, 'latest', {
     targets: result.targets,
     requests: result.requests,
     seriesWritten: result.seriesWritten,

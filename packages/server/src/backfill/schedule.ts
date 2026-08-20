@@ -11,6 +11,7 @@ import { config } from '../config.js';
 import { refreshCatalogue } from '../ingest/catalogue.js';
 import { pollLatest } from '../ingest/latest.js';
 import { recordRefresh, refreshLocations } from '../ingest/locations.js';
+import { RWS_SOURCE_ID } from '../sources/registry.js';
 import { requeueWindow } from './queue.js';
 import { runQueue } from './worker.js';
 
@@ -55,7 +56,7 @@ export async function runRollingRefetch(
   }
 
   log(`[refetch] re-queued ${requeued} chunk(s) from the last ${days} days`);
-  const result = await runQueue({ concurrency: config.rws.maxConcurrency });
+  const result = await runQueue({ concurrency: config.sources.rws.http.maxConcurrency });
   log(`[refetch] rewrote ${result.rowsWritten.toLocaleString('en-GB')} row(s)`);
   return { requeued, rowsWritten: result.rowsWritten };
 }
@@ -78,39 +79,48 @@ export function startSchedules(options: ScheduleOptions = {}): () => void {
   const timers: NodeJS.Timeout[] = [];
   const running = new Set<string>();
 
-  const run = (name: string, fn: () => Promise<unknown>): void => {
-    if (running.has(name)) {
-      log(`[schedule] ${name} still running, skipping this tick`);
+  const run = (sourceId: string, name: string, fn: () => Promise<unknown>): void => {
+    const key = `${sourceId}:${name}`;
+    if (running.has(key)) {
+      log(`[schedule] ${key} still running, skipping this tick`);
       return;
     }
-    running.add(name);
+    running.add(key);
     void fn()
       .catch((err: unknown) => {
-        log(`[schedule] ${name} failed: ${(err as Error).message}`);
+        log(`[schedule] ${key} failed: ${(err as Error).message}`);
         // Record the failure so /api/health can report a stale cache rather
         // than silently serving old data as though it were fresh.
-        return recordRefresh(name, { error: String(err) }, false).catch(() => {});
+        return recordRefresh(sourceId, name, { error: String(err) }, false).catch(() => {});
       })
-      .finally(() => running.delete(name));
+      .finally(() => running.delete(key));
   };
 
-  const schedule = (name: string, intervalMs: number, fn: () => Promise<unknown>) => {
-    const timer = setInterval(() => run(name, fn), intervalMs);
+  const schedule = (
+    sourceId: string,
+    name: string,
+    intervalMs: number,
+    fn: () => Promise<unknown>,
+  ) => {
+    const timer = setInterval(() => run(sourceId, name, fn), intervalMs);
     // Do not hold the process open purely for a timer.
     timer.unref?.();
     timers.push(timer);
   };
 
-  schedule('locations', refreshInterval, () => refreshLocations(log));
-  schedule('catalogue', refreshInterval, () => refreshCatalogue(log));
-  schedule('refetch', refetchInterval, () => runRollingRefetch(refetchDays, log));
+  // All four are Rijkswaterstaat jobs today. A second source brings its own
+  // entries here rather than widening these: the cadences differ per service,
+  // and one source's refresh failing must not stop another's from being tried.
+  schedule(RWS_SOURCE_ID, 'locations', refreshInterval, () => refreshLocations(log));
+  schedule(RWS_SOURCE_ID, 'catalogue', refreshInterval, () => refreshCatalogue(log));
+  schedule(RWS_SOURCE_ID, 'refetch', refetchInterval, () => runRollingRefetch(refetchDays, log));
 
   // Runs first rather than waiting out a full interval: on a restart the store
   // is already up to five minutes behind, and this is the job whose whole
   // point is not being behind. The others cost minutes to hours and can wait.
   if (pollingLatest) {
-    schedule('latest', latestInterval, () => pollLatest({ log }));
-    run('latest', () => pollLatest({ log }));
+    schedule(RWS_SOURCE_ID, 'latest', latestInterval, () => pollLatest({ log }));
+    run(RWS_SOURCE_ID, 'latest', () => pollLatest({ log }));
   }
 
   log(

@@ -15,7 +15,19 @@ export const GAP_QUALITY_CODE = '99';
 export type Resolution = 'raw' | 'hourly' | 'daily';
 
 export interface Location {
+  /**
+   * Qualified as `<source>:<upstream code>`, e.g. `rws:lobith`.
+   *
+   * Two services can and do use the same station code for different stations,
+   * so the source is part of a location's identity rather than metadata about
+   * it. Unqualified codes are still accepted on input for links that predate
+   * this, and resolve to the default source.
+   */
   code: string;
+  /** Source id, e.g. `rws`. The prefix of `code`, lifted out for convenience. */
+  source: string;
+  /** ISO 3166-1 alpha-2 of the publishing service. */
+  country: string;
   name: string;
   lat: number | null;
   lon: number | null;
@@ -153,6 +165,18 @@ export interface BackfillProgress {
   /** Jobs finished per minute over the recent window, if running. */
   throughputPerMin: number | null;
   etaSeconds: number | null;
+}
+
+/** A data source, as served by `/api/sources`. */
+export interface SourceInfo {
+  id: string;
+  name: string;
+  country: string;
+  /** Credit line; the map's attribution control is built from these. */
+  attribution: string;
+  licence: string;
+  locations: number;
+  activeLocations: number;
 }
 
 export interface ApiError {

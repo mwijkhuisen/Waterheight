@@ -7,8 +7,9 @@
 
 import type { PoolClient } from 'pg';
 import type { MeasurementType } from '@rws/shared';
-import type { SeriesIdentity } from '../rws/normalise.js';
+import type { SeriesIdentity } from '../sources/rws/normalise.js';
 import { getPool } from './pool.js';
+import { resolveLocationKey } from '../sources/registry.js';
 
 /**
  * Resolve a series to its id, creating it if new.
@@ -122,7 +123,7 @@ export async function listSeriesForLocation(locationCode: string): Promise<Serie
     `SELECT ${SERIES_COLUMNS} FROM series
       WHERE location_code = $1
       ORDER BY grootheid, id`,
-    [locationCode.toLowerCase()],
+    [resolveLocationKey(locationCode)],
   );
   return rows.map(toSeriesRow);
 }
@@ -138,7 +139,7 @@ export async function findSeries(
   grootheid: string,
   options: { compartiment?: string; procesType?: string } = {},
 ): Promise<SeriesRow | null> {
-  const params: unknown[] = [locationCode.toLowerCase(), grootheid];
+  const params: unknown[] = [resolveLocationKey(locationCode), grootheid];
   let extra = '';
   if (options.compartiment) {
     params.push(options.compartiment);
@@ -227,14 +228,21 @@ export interface PollTarget {
 }
 
 /**
- * The series worth polling for a new reading: those at an active location
- * whose newest stored point is younger than `cutoff`.
+ * The series worth polling for a new reading: those at an active location of
+ * one source whose newest stored point is younger than `cutoff`.
  *
- * A series quiet for longer than that drops out, and the discovery pass picks
- * it up again -- which is how a station returning from maintenance, or one
- * that has swapped instruments, comes back without anyone intervening.
+ * Scoped to a source because the poll speaks that source's protocol -- asking
+ * Rijkswaterstaat about a PEGELONLINE station returns an empty answer rather
+ * than an error, which is the kind of failure that looks like a quiet station.
+ *
+ * A series quiet for longer than the cut-off drops out, and the discovery pass
+ * picks it up again -- which is how a station returning from maintenance, or
+ * one that has swapped instruments, comes back without anyone intervening.
  */
-export async function listPollTargets(cutoff: Date): Promise<PollTarget[]> {
+export async function listPollTargets(
+  sourceId: string,
+  cutoff: Date,
+): Promise<PollTarget[]> {
   const { rows } = await getPool().query<{
     id: string | number; natural_key: string; location_code: string;
     compartiment: string; grootheid: string; proces_type: string;
@@ -246,9 +254,9 @@ export async function listPollTargets(cutoff: Date): Promise<PollTarget[]> {
             s.last_observed_at
        FROM series s
        JOIN locations l ON l.code = s.location_code AND l.active
-      WHERE s.last_observed_at >= $1
+      WHERE l.source_id = $1 AND s.last_observed_at >= $2
       ORDER BY s.compartiment, s.grootheid, s.location_code, s.id`,
-    [cutoff.toISOString()],
+    [sourceId, cutoff.toISOString()],
   );
 
   return rows.map((r) => ({

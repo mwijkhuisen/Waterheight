@@ -88,9 +88,10 @@ Commands:
 Options:
   --from <date>            window start (default: 1 year ago)
   --to <date>              window end (default: now)
-  --locations <a,b>        limit to these location codes
+  --locations <a,b>        limit to these location codes: rws:lobith, or just
+                           lobith for the default source
   --quantities <a,b>       limit to these quantity codes
-  --concurrency <n>        parallel outbound requests (default: ${config.rws.maxConcurrency})
+  --concurrency <n>        parallel outbound requests (default: ${config.sources.rws.http.maxConcurrency})
   --limit <n>              stop after n chunks (prove it before letting it loose)
   --tier <eager|deferred>  only drain this tier
   --include-deferred       plan deferred quantities too
@@ -106,7 +107,7 @@ Options:
 async function main(): Promise<void> {
   if (values.help) { console.log(HELP.trim()); return; }
 
-  const concurrency = values.concurrency ? Number(values.concurrency) : config.rws.maxConcurrency;
+  const concurrency = values.concurrency ? Number(values.concurrency) : config.sources.rws.http.maxConcurrency;
   if (!Number.isFinite(concurrency) || concurrency < 1) {
     throw new Error('--concurrency must be a positive number');
   }

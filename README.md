@@ -12,6 +12,15 @@ measurements that shaped these decisions are in
 What has actually been exercised, and what has not, is listed under
 [Verified and unverified](#verified-and-unverified) — worth reading before deploying.
 
+**Looking further upstream.** The Rhine, the Meuse and the Scheldt are gauged all the way up
+through Germany, Belgium and France, by services that are as open as Rijkswaterstaat's.
+[`docs/INTERNATIONAL-DATA.md`](docs/INTERNATIONAL-DATA.md) works through what it would take to put
+those on the same map — including the OpenStreetMap basemap swap it requires, since the current
+Dutch basemap stops at the border — and is honest about the parts that do not work, chiefly that
+Germany publishes only 31 days of history. The source abstraction that makes any of it possible is
+in place; Germany is briefed in
+[`docs/PROMPT-PHASE3-GERMANY.md`](docs/PROMPT-PHASE3-GERMANY.md) and not yet built.
+
 ## Deploying
 
 The app is one process: the API also serves the built map client, so the whole thing is one origin
@@ -257,19 +266,54 @@ npm run backfill:status
 ## Architecture
 
 ```
-WFS locatiesmetlaatstewaarneming ──► ingest/locations  ──┐
-OphalenCatalogus                 ──► ingest/catalogue ──┤
-OphalenWaarnemingen              ──► ingest/observations┤
-OphalenLaatsteWaarnemingen       ──► ingest/latest    ──┤
-                                                        ▼
-                                       PostgreSQL + TimescaleDB
-                                                        │
-                                                   api/routes ──► /api/*
+  sources/rws                          ingest
+  ───────────────────────────────      ──────────────────
+  WFS locatiesmetlaatstewaarneming ──► ingest/locations   ─┐
+  OphalenCatalogus                 ──► ingest/catalogue   ─┤
+  OphalenWaarnemingen              ──► ingest/observations ┤
+  OphalenLaatsteWaarnemingen       ──► ingest/latest       ┤
+       │                                                   ▼
+       └── sources/http: per-source gate, retry, backoff   PostgreSQL + TimescaleDB
+                                                            │
+                                                       api/routes ──► /api/*
 ```
 
 Three packages: `@rws/shared` holds the types both sides of the wire agree on, `@rws/server` is the
 API and ingestion, and `@rws/web` is the map client. The shared package is the contract — a change to
 a server response shape is a compile error in the client rather than a runtime surprise.
+
+### Sources
+
+Everything upstream lives under `src/sources/`. One adapter directory per service — today only
+`rws/` — over a shared `http.ts` that owns concurrency limiting, retry and backoff, and a
+`registry.ts` that names the sources and owns the location-code namespace.
+
+The split is between *pacing* and *classification*. Pacing is the same everywhere and is shared;
+which status means "no data" and which means "try again" is specific to each service and stays in
+its adapter. The concurrency gate is deliberately **per source**: one shared semaphore would let a
+slow service throttle a fast one, and a backfill against one source would stall every other
+source's refresh behind it.
+
+`registry.ts` is the source of truth for which sources exist — the `sources` table is a projection
+of it, written by `npm run migrate`, so adding a source is a code change rather than a code change
+plus a migration. The table exists so location rows can carry a foreign key and so `/api/sources`
+can serve attribution from the database, which is what stops a source shipping without its credit.
+
+Two boundaries are worth knowing about, because both fail silently rather than loudly if crossed:
+
+- **Location codes are qualified going in, and unqualified going out.** `normaliseLocationCode`
+  turns a Rijkswaterstaat code into `rws:lobith` when a payload is parsed; the adapter strips the
+  prefix back off before naming a location upstream. Rijkswaterstaat answers a code it does not
+  recognise with an empty result, not an error, so sending `rws:lobith` would look exactly like a
+  station with no data.
+- **Refresh and active-reconciliation are scoped to one source.** `upsertLocations` reconciles the
+  `active` flag only within the source being refreshed. Reconciling globally would let a
+  Rijkswaterstaat run deactivate another service's stations against a cutoff derived from
+  Rijkswaterstaat's publishing cadence — which says nothing about a gauge that reports once a day.
+
+What is deliberately *not* here yet is a `SourceAdapter` interface. Its method signatures should be
+shaped by the second implementation rather than guessed at from the first;
+[`docs/INTERNATIONAL-DATA.md`](docs/INTERNATIONAL-DATA.md) sketches where it is heading.
 
 ### Why this API exists at all
 
@@ -381,15 +425,22 @@ waterinfo.rws.nl itself displays; `?includeAllQuality=true` opts out.
 
 | Endpoint | Notes |
 | --- | --- |
-| `GET /api/locations` | Active only by default. `includeInactive`, `grootheid`, `compartiment`, `bbox`, `q`, `limit` |
+| `GET /api/locations` | Active only by default. `includeInactive`, `source`, `grootheid`, `compartiment`, `bbox`, `q`, `limit` |
 | `GET /api/locations/:code` | Location plus every published measurement type and its local coverage |
 | `GET /api/locations/:code/latest` | Latest **reading** per series, skipping trailing gaps |
 | `GET /api/locations/:code/observations` | `grootheid` required; `from`, `to`, `resolution`, `includeAllQuality` |
 | `GET /api/quantities` | Quantities and compartments with active-location counts, for filter UI |
+| `GET /api/sources` | Data sources with their attribution, licence and location counts |
 | `GET /api/health` | Upstream reachability, cache age, last poll, location counts, backfill progress |
 
 ISO 8601 UTC timestamps throughout. Errors are always `{ error: { code, message } }`. An upstream 204
 becomes `200` with an empty array; an upstream failure becomes `502`.
+
+**Location codes are qualified with their source**: `rws:lobith`, not `lobith`. Two services can and
+do use the same station code for different stations — PEGELONLINE publishes a LOBITH of its own — so
+the source is part of a location's identity rather than metadata about it. An unqualified code is
+still accepted on input and resolves to the default source, which keeps links minted before this
+change working; anything the application mints uses the qualified form.
 
 `observations` picks raw rows for short windows and the hourly or daily aggregate for longer ones,
 capped at `MAX_POINTS_PER_RESPONSE`. The response always states the `resolution` actually served
@@ -594,8 +645,8 @@ never touch the network. Integration tests exercise the API through Fastify agai
 database and a mocked upstream; they skip themselves with a warning if no database is reachable, so
 the suite stays useful without one.
 
-**A green run with the integration tests skipped is not a green run.** The full suite is 89 tests;
-if you see 60 passing and 29 skipped, no database was reachable. They read `TEST_DATABASE_URL` from
+**A green run with the integration tests skipped is not a green run.** The full suite is 126 tests;
+if you see 80 passing and 46 skipped, no database was reachable. They read `TEST_DATABASE_URL` from
 `.env`, and because each run creates and drops a database of its own, that role needs `CREATEDB`:
 
 ```sh
@@ -614,7 +665,7 @@ active — matching an independent Phase 1 count exactly), the on-demand observa
 backfill (`SIGKILL` mid-run left zero chunks marked done without data, and the resume recovered
 cleanly), an idempotent correction re-fetch (230,503 rows rewritten, row count unchanged), and the
 map and detail panel in a real browser, both from the dev server and from the production
-single-origin build. 110 tests pass.
+single-origin build. 126 tests pass.
 
 **Verified for the latest poll:** run against the live service on a store holding the real location
 layer (2,595 locations, 568 active, 3,406 active location+quantity pairs). Discovery found 1,744

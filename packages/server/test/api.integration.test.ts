@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { seriesIdentity } from '../src/rws/normalise.js';
+import { seriesIdentity } from '../src/sources/rws/normalise.js';
 
 // Falls back to the stock local PostgreSQL port, which is what a native
 // install listens on; .env.example documents the same value.
@@ -82,17 +82,24 @@ suite('API integration', () => {
     const pool = await import('../src/db/pool.js');
     closePool = pool.closePool;
 
-    // Seed one active location with two published quantities.
+    // Locations reference sources by foreign key, so the registry has to be in
+    // the table before anything can be seeded. The migrate CLI does this too.
+    const { syncSources } = await import('../src/db/sources.js');
+    await syncSources();
+
+    // Seed one active location with two published quantities. Codes are
+    // qualified with their source, exactly as the ingester writes them.
     await pool.getPool().query(`
-      INSERT INTO locations (code, name, lat, lon, active, last_seen_at)
-      VALUES ('vlissingen', 'Vlissingen', 51.442, 3.6, true, now()),
-             ('sleepy', 'Sleepy Station', 52.0, 4.0, false, now() - INTERVAL '60 days')
+      INSERT INTO locations (code, source_id, source_code, name, lat, lon, active, last_seen_at)
+      VALUES ('rws:vlissingen', 'rws', 'vlissingen', 'Vlissingen', 51.442, 3.6, true, now()),
+             ('rws:sleepy', 'rws', 'sleepy', 'Sleepy Station', 52.0, 4.0, false,
+              now() - INTERVAL '60 days')
     `);
     await pool.getPool().query(`
       INSERT INTO location_quantities (location_code, compartiment, grootheid, eenheid, last_seen_at)
-      VALUES ('vlissingen', 'OW', 'WATHTE', 'cm', now()),
-             ('vlissingen', 'OW', 'T', 'oC', now()),
-             ('sleepy', 'OW', 'WATHTE', 'cm', now() - INTERVAL '60 days')
+      VALUES ('rws:vlissingen', 'OW', 'WATHTE', 'cm', now()),
+             ('rws:vlissingen', 'OW', 'T', 'oC', now()),
+             ('rws:sleepy', 'OW', 'WATHTE', 'cm', now() - INTERVAL '60 days')
     `);
     await pool.getPool().query(`
       INSERT INTO aquo_codes (domain, code, description)
@@ -130,14 +137,14 @@ suite('API integration', () => {
     const res = await app.inject({ method: 'GET', url: '/api/locations' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.map((l: { code: string }) => l.code)).toEqual(['vlissingen']);
+    expect(body.map((l: { code: string }) => l.code)).toEqual(['rws:vlissingen']);
     expect(body[0].quantities).toEqual(['T', 'WATHTE']);
   });
 
   it('includes inactive locations when asked', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/locations?includeInactive=true' });
     const codes = res.json().map((l: { code: string }) => l.code).sort();
-    expect(codes).toEqual(['sleepy', 'vlissingen']);
+    expect(codes).toEqual(['rws:sleepy', 'rws:vlissingen']);
   });
 
   it('filters by quantity', async () => {
@@ -289,7 +296,7 @@ suite('API integration', () => {
     // The newest stored row for this series is a gap; the latest *reading* is
     // the 120 before it, which is what the panel needs to show.
     expect(body[0]).toMatchObject({
-      code: 'vlissingen', quantity: 'WATHTE', unit: 'cm', value: 120,
+      code: 'rws:vlissingen', quantity: 'WATHTE', unit: 'cm', value: 120,
     });
   });
 
@@ -372,6 +379,93 @@ suite('API integration', () => {
     expect(dimensions.rows[0]?.time_interval).toMatchObject({ days: 7 });
   });
 
+  describe('sources', () => {
+    it('serves the registry, with what each source contributes', async () => {
+      // The map's attribution control is built from this rather than a
+      // hard-coded string, so a source cannot ship without its credit.
+      const res = await app.inject({ method: 'GET', url: '/api/sources' });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body).toHaveLength(1);
+      expect(body[0]).toMatchObject({
+        id: 'rws',
+        country: 'NL',
+        attribution: 'Rijkswaterstaat',
+        locations: 2,
+        activeLocations: 1,
+      });
+      expect(body[0].licence).toBeTruthy();
+    });
+
+    it('reports which source every location came from', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/locations' });
+      expect(res.json()[0]).toMatchObject({ source: 'rws', country: 'NL' });
+    });
+
+    it('filters by source', async () => {
+      const mine = await app.inject({ method: 'GET', url: '/api/locations?source=rws' });
+      expect(mine.json()).toHaveLength(1);
+
+      const theirs = await app.inject({ method: 'GET', url: '/api/locations?source=de-wsv' });
+      expect(theirs.statusCode).toBe(200);
+      expect(theirs.json()).toEqual([]);
+    });
+
+    it('addresses a location by its qualified code', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/locations/rws:vlissingen' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().code).toBe('rws:vlissingen');
+    });
+
+    it('accepts the percent-encoded colon the browser actually sends', async () => {
+      // The client builds URLs with encodeURIComponent, which escapes the
+      // separator. If the param were read before decoding, every location page
+      // would 404 in a browser while passing every test written by hand.
+      const res = await app.inject({
+        method: 'GET', url: `/api/locations/${encodeURIComponent('rws:vlissingen')}`,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().code).toBe('rws:vlissingen');
+    });
+
+    it('still resolves a bare code, so links minted before sources existed work', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/locations/VLISSINGEN' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().code).toBe('rws:vlissingen');
+    });
+
+    it('404s a code qualified with a source that does not exist', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/locations/de-wsv:emmerich' });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error.code).toBe('not_found');
+    });
+
+    it('does not send our source prefix upstream', async () => {
+      // Rijkswaterstaat has never heard of `rws:`, and answers a code it does
+      // not recognise with an empty result rather than an error -- which reads
+      // exactly like "this station has no data". Assert on the outgoing body.
+      mockUpstream(204, null);
+      await app.inject({
+        method: 'GET',
+        url: '/api/locations/rws:vlissingen/observations'
+          + '?grootheid=WATHTE&from=2026-09-01T00:00:00Z&to=2026-09-02T00:00:00Z',
+      });
+
+      const [, init] = fetchMock.mock.calls.at(-1) as [string, { body: string }];
+      expect(JSON.parse(init.body).Locatie).toEqual({ Code: 'vlissingen' });
+    });
+
+    it('searches on the upstream code, not the qualified one', async () => {
+      // Every code now begins with its source id, so matching the whole key
+      // would make ?q=rws return the entire map.
+      const hit = await app.inject({ method: 'GET', url: '/api/locations?q=vlissing' });
+      expect(hit.json()).toHaveLength(1);
+
+      const noise = await app.inject({ method: 'GET', url: '/api/locations?q=rws' });
+      expect(noise.json()).toEqual([]);
+    });
+  });
+
   describe('backfill queue semantics', () => {
     it('marks a chunk done in the same transaction as its rows', async () => {
       // This is the crash-safety property: a chunk can never be recorded as
@@ -381,7 +475,7 @@ suite('API integration', () => {
 
       const month = new Date('2026-04-01T00:00:00Z');
       await enqueue([{
-        locationCode: 'vlissingen', compartiment: 'OW', grootheid: 'WATHTE',
+        locationCode: 'rws:vlissingen', compartiment: 'OW', grootheid: 'WATHTE',
         month, tier: 'eager', priority: 10,
       }]);
 
@@ -413,7 +507,7 @@ suite('API integration', () => {
     it('never re-queues a chunk that already completed, which is what makes resume work', async () => {
       const { enqueue } = await import('../src/backfill/queue.js');
       const job = {
-        locationCode: 'vlissingen', compartiment: 'OW', grootheid: 'WATHTE',
+        locationCode: 'rws:vlissingen', compartiment: 'OW', grootheid: 'WATHTE',
         month: new Date('2026-04-01T00:00:00Z'), tier: 'eager', priority: 10,
       };
       const inserted = await enqueue([job]);
@@ -423,7 +517,7 @@ suite('API integration', () => {
     it('parks a chunk as failed only after the retry limit, so one bad chunk cannot stall the queue', async () => {
       const { enqueue, claim, recordFailure } = await import('../src/backfill/queue.js');
       await enqueue([{
-        locationCode: 'vlissingen', compartiment: 'OW', grootheid: 'T',
+        locationCode: 'rws:vlissingen', compartiment: 'OW', grootheid: 'T',
         month: new Date('2026-04-01T00:00:00Z'), tier: 'eager', priority: 20,
       }]);
 
@@ -616,12 +710,13 @@ suite('API integration', () => {
       query = (sql, params) => pool.getPool().query(sql, params) as never;
 
       await query(`
-        INSERT INTO locations (code, name, lat, lon, active, last_seen_at)
-        VALUES ('polled', 'Polled Station', 52.1, 4.3, true, now() - INTERVAL '3 hours')
+        INSERT INTO locations (code, source_id, source_code, name, lat, lon, active, last_seen_at)
+        VALUES ('rws:polled', 'rws', 'polled', 'Polled Station', 52.1, 4.3, true,
+                now() - INTERVAL '3 hours')
       `);
       await query(`
         INSERT INTO location_quantities (location_code, compartiment, grootheid, eenheid, last_seen_at)
-        VALUES ('polled', 'OW', 'WATHTE', 'cm', now() - INTERVAL '3 hours')
+        VALUES ('rws:polled', 'OW', 'WATHTE', 'cm', now() - INTERVAL '3 hours')
       `);
     });
 
@@ -645,7 +740,7 @@ suite('API integration', () => {
       // Probed pairs are marked whether or not they answered, so the rotation
       // moves on rather than asking the same ones for ever.
       const { rows } = await query(
-        `SELECT polled_at FROM location_quantities WHERE location_code = 'polled'`);
+        `SELECT polled_at FROM location_quantities WHERE location_code = 'rws:polled'`);
       expect(rows[0]!['polled_at']).not.toBeNull();
     });
 
@@ -679,7 +774,7 @@ suite('API integration', () => {
 
     it('does not rewrite a reading it already has', async () => {
       const { rows: before } = await query(
-        `SELECT point_count, last_observed_at FROM series WHERE location_code = 'polled'`);
+        `SELECT point_count, last_observed_at FROM series WHERE location_code = 'rws:polled'`);
       const at = (before[0]!['last_observed_at'] as Date).toISOString();
       route([reading({ at, value: 51 })]);
 
@@ -689,7 +784,7 @@ suite('API integration', () => {
       expect(result.pointsWritten).toBe(0);
 
       const { rows: after } = await query(
-        `SELECT point_count FROM series WHERE location_code = 'polled'`);
+        `SELECT point_count FROM series WHERE location_code = 'rws:polled'`);
       expect(after[0]!['point_count']).toBe(before[0]!['point_count']);
     });
 
@@ -707,7 +802,7 @@ suite('API integration', () => {
       expect(result.pointsInserted).toBe(1);
 
       const { rows } = await query(
-        `SELECT min(first_observed_at) AS oldest FROM series WHERE location_code = 'polled'`);
+        `SELECT min(first_observed_at) AS oldest FROM series WHERE location_code = 'rws:polled'`);
       expect((rows[0]!['oldest'] as Date).getUTCFullYear()).toBeGreaterThan(2000);
     });
 
@@ -721,7 +816,7 @@ suite('API integration', () => {
         SELECT l.last_seen_at AS location_seen, q.last_seen_at AS quantity_seen, q.latest_value
           FROM locations l
           JOIN location_quantities q ON q.location_code = l.code
-         WHERE l.code = 'polled'`);
+         WHERE l.code = 'rws:polled'`);
       expect(rows[0]!['latest_value']).toBe(77);
       // Both were three hours old when the suite seeded them.
       expect((rows[0]!['location_seen'] as Date).toISOString()).toBe(at);

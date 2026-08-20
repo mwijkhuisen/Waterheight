@@ -19,6 +19,7 @@ import { closePool } from '../db/pool.js';
 import { listPollTargets } from '../db/series.js';
 import { listPairsToDiscover } from '../db/locations.js';
 import { planBatches, pollLatest } from '../ingest/latest.js';
+import { RWS_SOURCE_ID } from '../sources/registry.js';
 
 const { values } = parseArgs({
   options: {
@@ -66,9 +67,10 @@ const options = { maxAgeMs, batchSize, discoveryLimit };
 try {
   if (values['dry-run']) {
     const cutoff = new Date(Date.now() - maxAgeMs);
-    const targets = await listPollTargets(cutoff);
+    const targets = await listPollTargets(RWS_SOURCE_ID, cutoff);
     const batches = planBatches(targets, batchSize, config.latestPoll.maxCombinations);
     const pairs = await listPairsToDiscover(
+      RWS_SOURCE_ID,
       new Date(Date.now() - config.activeWindowDays * 86_400_000),
       cutoff,
       discoveryLimit,
