@@ -181,7 +181,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       || Date.parse(series.firstObservedAt) > from.getTime()
       || Date.parse(series.lastObservedAt) < to.getTime();
 
-    if (needsFetch) {
+    // The five-minute poll keeps recent windows covered without anyone asking,
+    // so this is the path for history the store does not have yet. Where every
+    // upstream call is meant to come from the scheduler, LIVE_FETCH_ON_REQUEST
+    // closes it and the request answers from what is stored.
+    if (needsFetch && config.liveFetchOnRequest) {
       const resolvedCompartiment = compartiment ?? series?.compartiment
         ?? await defaultCompartimentFor(code, grootheid);
 
@@ -316,10 +320,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/sources', async (): Promise<SourceInfo[]> => listSourceInfo());
 
   app.get('/api/health', async (reply): Promise<HealthResponse> => {
-    const [counts, locationsState, catalogueState, backfill] = await Promise.all([
+    const [counts, locationsState, catalogueState, latestState, backfill] = await Promise.all([
       locationCounts(),
       getRefreshState(RWS_SOURCE_ID, 'locations'),
       getRefreshState(RWS_SOURCE_ID, 'catalogue'),
+      getRefreshState(RWS_SOURCE_ID, 'latest'),
       backfillProgress(),
     ]);
 
@@ -331,8 +336,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       ? Math.round((now.getTime() - Date.parse(refreshedAt)) / 1000)
       : null;
 
+    const latestPolledAt = latestState?.refreshedAt ?? null;
+    const latestPollAgeSeconds = latestPolledAt
+      ? Math.round((now.getTime() - Date.parse(latestPolledAt)) / 1000)
+      : null;
+
     const stale = ageSeconds === null || ageSeconds > 2 * 86_400;
-    const status: HealthResponse['status'] = stale || counts.active === 0 ? 'degraded' : 'ok';
+    // The poll is only expected to have run where the schedules are enabled,
+    // so a null age is silence rather than a fault. Having run, but not for
+    // four intervals, means live data is quietly going stale.
+    const pollStale = latestPollAgeSeconds !== null
+      && latestPollAgeSeconds > 4 * (config.latestPoll.intervalMs / 1000);
+    const status: HealthResponse['status'] =
+      stale || pollStale || counts.active === 0 ? 'degraded' : 'ok';
 
     return {
       status,
@@ -352,6 +368,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         locationsRefreshedAt: refreshedAt,
         catalogueRefreshedAt: catalogueState?.refreshedAt ?? null,
         ageSeconds,
+        latestPolledAt,
+        latestPollAgeSeconds,
       },
       locations: counts,
       backfill,
