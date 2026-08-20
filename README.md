@@ -12,6 +12,13 @@ measurements that shaped these decisions are in
 What has actually been exercised, and what has not, is listed under
 [Verified and unverified](#verified-and-unverified) — worth reading before deploying.
 
+**Looking further upstream.** The Rhine, the Meuse and the Scheldt are gauged all the way up
+through Germany, Belgium and France, by services that are as open as Rijkswaterstaat's.
+[`docs/INTERNATIONAL-DATA.md`](docs/INTERNATIONAL-DATA.md) works through what it would take to put
+those on the same map — including the OpenStreetMap basemap swap it requires, since the current
+Dutch basemap stops at the border — and is honest about the parts that do not work, chiefly that
+Germany publishes only 31 days of history.
+
 ## Deploying
 
 The app is one process: the API also serves the built map client, so the whole thing is one origin
