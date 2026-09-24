@@ -1,0 +1,1557 @@
+# Phases: implementation plan
+
+**Status:** final plan, 2026-09-23. It goes with `ARCHITECTURE.md`, which is cited as A§x. Catalogue sections are cited as §x.y, and source IDs (NL-1 … CH-11) are the catalogue's. **Amended 2026-09-23 after the catalogue gap check**; §9 lists every change per gap item and the affected phases.
+
+**How the plan is executed:**
+- Each phase becomes **one GitHub issue** containing three Claude Code prompts: Build, Code review and Security review.
+- A **roadmap issue** links all the phase issues.
+- A phase may ship as **2–3 PRs** (a/b/c). Each PR gets its own build → code review → security review cycle.
+- **Cap per PR:** one subsystem, or at most three provider adapters.
+
+**Hard dates:**
+- **Production ingestion live ≤ 2026-10-02 (P1).**
+- **Public launch ≤ 2026-12-04 (P12).**
+
+Every other date is indicative.
+
+---
+
+## 1. Timeline, lanes and dependencies
+
+| # | Phase | Lane | Window (2026) | PRs | Depends on | Build · Code review · Security review |
+|---|---|---|---|---|---|---|
+| P0 | Reset and foundation | – | 09-24 → 09-26 | a reset · b foundation | – | Opus xhigh · Sonnet `high` · **Fable high** |
+| P1 | **Flight recorder in production** | data | 09-26 → **10-02** | a recorder · b platform | P0 | Opus xhigh · **Fable** `high` · **Fable xhigh** |
+| P2 | Data spine | data | 10-03 → 10-16 | a spine + DE-1 · b NL-1/NL-2/NL-4 | P1 | **Fable xhigh** · Opus `max` · Sonnet xhigh |
+| P3 | Map spike and self-hosted basemap | geo | 10-05 → 10-09 | one PR | P0 (P1b for the VPS) | Opus xhigh · Sonnet `high` · Sonnet xhigh |
+| P4 | Walking skeleton (noindex) | web | 10-14 → 10-23 | a API · b web + deploy | P2 (P4a can start on P2a), P3 | Opus xhigh · Sonnet `xhigh` · Opus high |
+| P5 | Open observation adapters | data | 10-17 → 10-30 | a FR + CH · b DE-7 + LU + twins | P2 | Opus xhigh · Sonnet `xhigh` (**Fable** `high` for P5b) · Sonnet xhigh |
+| P6 | River network, snapping, chainage | geo | 10-12 → 11-06 | a graph · b snapping + tiles | P2 (P6b: P5) | Opus xhigh · Sonnet `high` · Sonnet medium |
+| P7 | References, classes, warnings, honest classification | data | 10-31 → 11-09 | a parsers · b engine | P5 | Opus xhigh · **Fable** `xhigh` · Sonnet high |
+| P8 | Official forecasts (bi-temporal) and the future slider | data | 11-06 → 11-13 | a run model + NL/DE · b CH/FR + slider | P5 (P7 for display) | Opus xhigh · **Fable** `high` · Sonnet high |
+| P9 | Static publisher and hardened read API | serve | 11-02 → 11-16 | a publisher · b API hardening | P7 (P8 contracts can be stubbed) | Opus xhigh · Sonnet `xhigh` · **Fable xhigh** |
+| P10 | Web app MVP | web | 11-10 → 11-25 | a UI core · b pages | P9 contracts, P6, P7 | Opus xhigh · Sonnet `xhigh` · Sonnet xhigh |
+| P11 | Follow the water | web | 11-20 → 11-30 | a minimum · b colouring + playback · c Hovmöller | P6, P10, P9 frames | Opus xhigh · Sonnet `xhigh` · Sonnet medium |
+| P12 | Flood hardening, operations, **public launch** | ops | 11-26 → **12-04** | a hardening · b ops + launch | P9, P10, P11a | Opus xhigh · **Fable** `high` · **Fable max** |
+| P13 | Gated sources, one PR per source as each permission arrives | data | on permission | per source | P5/P7/P8 patterns + owner permission | Opus high · Sonnet `xhigh` · Opus xhigh |
+| P14 | **LATER:** historical backfill and climatology | data | 2027 | per provider group | launch + 4 weeks stable | Opus xhigh · **Fable** `high` · Sonnet high |
+
+```mermaid
+gantt
+  dateFormat YYYY-MM-DD
+  axisFormat %d %b
+  section Foundation
+  P0 Reset and foundation          :p0, 2026-09-24, 2026-09-26
+  section Data lane
+  P1 Flight recorder live by 10-02 :crit, p1, 2026-09-26, 2026-10-02
+  P2 Data spine                    :p2, 2026-10-03, 2026-10-16
+  P5 Open adapters                 :p5, 2026-10-17, 2026-10-30
+  P7 References and classification :p7, 2026-10-31, 2026-11-09
+  P8 Forecasts                     :p8, 2026-11-06, 2026-11-13
+  section Geo lane
+  P3 Map spike and basemap         :p3, 2026-10-05, 2026-10-09
+  P6 River network                 :p6, 2026-10-12, 2026-11-06
+  section Web and serve lane
+  P4 Walking skeleton              :p4, 2026-10-14, 2026-10-23
+  P9 Publisher and hardened API    :p9, 2026-11-02, 2026-11-16
+  P10 Web app MVP                  :p10, 2026-11-10, 2026-11-25
+  P11 Follow the water             :p11, 2026-11-20, 2026-11-30
+  section Launch
+  P12 Hardening and launch by 12-04 :crit, p12, 2026-11-26, 2026-12-04
+```
+
+```mermaid
+flowchart LR
+  P0 --> P1 --> P2
+  P0 --> P3
+  P2 --> P4
+  P3 --> P4
+  P2 --> P5 --> P7 --> P9
+  P5 --> P8 --> P9
+  P2 --> P6
+  P5 --> P6
+  P9 --> P10
+  P6 --> P10
+  P7 --> P10
+  P10 --> P11
+  P6 --> P11
+  P9 --> P12
+  P10 --> P12
+  P11 --> P12
+  P7 -.->|"patterns + permission"| P13
+  P12 --> P14
+```
+
+**Dated events:**
+
+| Date | Event | What it means for the plan |
+|---|---|---|
+| 2026-10-02 | Recorder live (hard target) | Every day after this is data lost |
+| 2026-10-25 | DST fall-back; the hour 01:00–02:00Z repeats in local time | Captured raw by P1. Real payloads become regression fixtures in P5. **Every parser of offset-less local times needs synthetic fall-back and spring-forward fixtures before its first production run** (catalogue §0.3; the DST gate of A§7.4) |
+| 2026-10-28 | Node 26 becomes LTS | Bump from 26.10.x to the first LTS patch via Dependabot |
+| 2026-11-05 | RWS documentation moves to the CTD | URLs live in config. Watch the nightly contract check. The NL-4 xlsx path under `rijkswaterstaatdata.nl/publish/…` is at risk (§2.1); API hosts unconfirmed (§10 R4; owner action D6) |
+| December–March | Rhine and Meuse flood season | This is why launch is ≤ 12-04 |
+
+---
+
+## 2. Gates, criterion tags and workflow
+
+### 2.1 Criterion tags
+
+Every acceptance criterion carries exactly one tag.
+
+| Tag | Meaning | Who is accountable |
+|---|---|---|
+| **[CI]** | Provable offline: in GitHub Actions, or reproducibly in the build agent's session (SessionStart hook + native PostgreSQL 18). | Build agent |
+| **[agent-prod]** | Checkable from outside, without SSH, through `scripts/verify-prod.sh <domain>`, `/status/capture.json`, `/data/v1/status.json` or `/api/v1/health*`. If the agent sandbox cannot reach the domain, the owner runs the script and pastes the output. | Build agent |
+| **[owner]** | Needs the owner's access or judgement: VPS console, bucket keys, a phone alert, e-mails, a signed checklist. | Owner (the agent supplies the script or checklist) |
+
+**Soak criteria** (for example "72 h ≥ 99%") are `[agent-prod]` checks made after deploy. They **block closing the issue, not starting the next phase**.
+
+### 2.2 Per-PR workflow
+
+1. **Build.** A fresh session with the phase's build model and effort runs `/plan`. The owner approves the plan. The agent implements it on `claude/p<N><a>-<slug>` and opens the PR with the evidence checklist filled in.
+2. **Code review.** A fresh session with the review model runs `/code-review <level> --comment <PR#>`.
+3. **Security review.** A fresh session with the security model checks out the PR branch and runs `/security-review`.
+4. **Fix.** A fresh session with the build model at the build effort addresses the findings. If a High or Critical finding was fixed, the relevant review re-runs on the fix diff only.
+5. **Gate.**
+   - CI is green.
+   - No High or Critical security finding is open.
+   - Medium findings are fixed or accepted in `docs/risk-register.md`.
+   - Every `[CI]` item is ticked with evidence.
+6. **Merge and deploy.** The owner merges and approves the `production` environment. `rws-update` pulls, verifies and deploys. The agent runs `verify-prod.sh` and ticks the `[agent-prod]` items.
+
+### 2.3 PR evidence checklist (`.github/pull_request_template.md`)
+
+```
+## Evidence
+- [ ] Every [CI] criterion → test name or CI job link
+- [ ] Every [agent-prod] criterion → verify-prod.sh output (after deploy)
+- [ ] [owner] items → script/checklist provided: <path>
+- [ ] CLAUDE.md / runbooks / docs/threat-model.md updated where this PR changes them
+- [ ] New runtime dependencies: ADR-lite lines (why · licence · maintainer health · transitive count) or "none"
+- [ ] Source IDs touched (catalogue): …
+- [ ] [U] items not verified: …
+```
+
+---
+
+## 3. Model and effort rubric
+
+Models: `/model fable` (Fable 5.1, $10/$50 per MTok), `/model opus` (Opus 5.5, $4/$20), `/model sonnet` (Sonnet 5, $2/$10) and `/model haiku` (Haiku 4.5, $1/$5). Effort: `/effort low|medium|high|xhigh|max`.
+
+### 3.1 Always
+
+1. **Set effort explicitly** in every prompt. Opus 5.5 defaults to medium, which is too low for any step here.
+2. **Reviews run in fresh sessions** with a mandate different from the build.
+3. **Code review uses a different model from the build, always.** A security review may reuse the builder's model (P4, P13), because a fresh session with a security-only mandate already gives independence.
+
+### 3.2 Builds
+
+**Default builder: Opus 5.5 at xhigh**, the agentic sweet spot:
+- The work is multi-file and mostly unattended.
+- The provider traps are well documented in the catalogue.
+- Several 2026 majors (MapLibre 6, Vite 8, Vitest 5, the PG18 image layout, Node 26) are newer than most model knowledge.
+
+Exceptions:
+- **Fable 5.1 builds only P2**, the data spine. It fixes the canonical model, the time, unit and datum semantics, idempotency and revisions, and every later adapter copies it. An error there silently corrupts the only copy of the go-live data.
+- **Opus at high builds P13.** By then P5, P7 and P8 have established the adapter template, and each gated source is a small PR.
+- **Sonnet 5 builds nothing before launch.** The volume of patterned work is not large enough to justify the extra review load a cheaper builder needs.
+- **Haiku 4.5 is not used.** Every step either writes code that runs unattended against irreplaceable data or reviews such code. The savings are small next to the cost of one missed bug.
+
+### 3.3 Code reviews
+
+| Model and level | Used for | Phases |
+|---|---|---|
+| **Fable** | A miss would be irreversible, or would mislead the public during a flood | P1 recorder (atomicity, silent gaps); P5b LU DST and offset; P7 classification semantics; P8 forecast bi-temporality; P12 cache and versioning at launch; P14 backfill precedence |
+| **Opus at `max`** | The strongest independent reviewer for the one Fable-built phase; correctness outweighs cost, and the diff is bounded | P2 |
+| **Sonnet at `xhigh`** | Conformance against established patterns and the catalogue pitfall lists | P4, P5a, P9, P10, P11, P13 |
+| **Sonnet at `high`** | Configuration, docs and geo work whose correctness is asserted by strong tests | P0, P3, P6 |
+
+### 3.4 Security reviews
+
+| Model and effort | Used for | Phases |
+|---|---|---|
+| **Fable** | The change is a root of trust or the public attack surface | P0 CI (high: small diff); P1 trust chain and SSRF fetcher (xhigh); P9 public API (xhigh); P12 whole-system launch gate (**max**) |
+| **Opus at high/xhigh** | First exposure of a new kind | P4, the first public endpoint (high); P13, the first third-party credentials (xhigh) |
+| **Sonnet at xhigh** | New untrusted-input parsers or client surface, checked against a checklist | P2, P3, P5, P10 |
+| **Sonnet at high** | Parsers behind established guards | P7, P8, P14 |
+| **Sonnet at medium** | Offline tools or UI-only diffs | P6, P11 |
+
+### 3.5 Effort
+
+- **max** only where correctness beats cost and the diff is bounded: the P2 code review and the P12 security review.
+- **low** is never used.
+
+### 3.6 Totals
+
+- Fable: **11 of 45 steps** (P0 security, P1 review and security, P2 build, P5b review, P7 review, P8 review, P9 security, P12 review and security, P14 review).
+- Opus: 14 builds, 1 review and 2 security reviews.
+- Sonnet: the rest.
+- Haiku: 0.
+
+---
+
+## 4. Issue template: the three prompts
+
+Each phase issue contains this block. The placeholders come from the phase section. `<INVARIANTS>` is the verbatim list in A§12.1 / `CLAUDE.md`.
+
+````markdown
+### 1 · Build — `/model <build-model>` · `/effort <build-effort>`
+```
+/model <build-model>
+/effort <build-effort>
+/plan
+You are implementing Phase <N>, PR <N><x> "<pr-name>" of mwijkhuisen/rws.
+Read first: CLAUDE.md (bill of materials, gotchas, security invariants), docs/plan/ARCHITECTURE.md,
+docs/plan/PHASES.md §P<N>, docs/adr/, docs/threat-model.md, and these catalogue sections:
+<§refs> in docs/sources/SOURCE-CATALOGUE.md. Source IDs in scope: <IDs>.
+Security invariants (must hold for every line you write): <INVARIANTS>
+Plan first: map every [CI] and [agent-prod] acceptance criterion of this PR to a test, command or
+evidence item; list the [owner] items and the script/checklist you will provide; wait for approval.
+Then implement on branch claude/p<N><x>-<slug>, strictly inside "Scope in" for this PR. Tests run
+offline (msw onUnhandledRequest:'error'; fixtures come from the raw archive, never live calls).
+No new runtime dependency without an ADR-lite line. Update CLAUDE.md, runbooks and
+docs/threat-model.md where this PR changes them. Open PR "P<N><x>: <pr-name>" with the evidence
+checklist filled in. Do not merge. List every [U] item you could not verify.
+```
+### 2 · Code review — `/model <review-model>` · `/code-review <level>`
+```
+/model <review-model>
+/code-review <level> --comment <PR#>
+Focus for this phase: <code-review focus bullets>.
+Also check: each [CI] criterion has a test that fails without the change; source IDs and catalogue
+pitfalls (<§refs>) are honoured; scope did not creep beyond "Scope in".
+```
+### 3 · Security review — `/model <sec-model>` · `/effort <sec-effort>`
+```
+/model <sec-model>
+/effort <sec-effort>
+git fetch origin && git checkout claude/p<N><x>-<slug>
+/security-review
+Focus for this phase: <security focus bullets>.
+Verify the CLAUDE.md security invariants hold for this diff: <INVARIANTS>.
+Report any threat-model delta for docs/threat-model.md. Classify findings Critical/High/Medium/Low.
+```
+````
+
+---
+
+## 5. Phases
+
+### P0 · Reset and foundation
+
+**Window:** 09-24 → 09-26 · **Lane:** – · **Depends on:** – · **PRs:** P0a reset, P0b foundation
+
+**Goal.** Archive the legacy code where `main` can no longer reach it. Give every later agent the same guardrails: a buildable monorepo, hardened CI, a supply-chain policy, `CLAUDE.md`, the plan and the catalogue in the repository, and a registry keyed by catalogue source IDs.
+
+**Scope in**
+- **P0a reset**
+  - Create the annotated tag `legacy-v0` on `a4106b8` (current `main`) and push it.
+  - In one commit, `git rm -r` every legacy path: `packages/`, `spike/`, `fixtures/`, `deploy/`, `docs/`, `.github/workflows/ci.yml`, `PROMPT.md`, `README.md`, `Dockerfile`, `docker-compose.yml`, `package.json`, `package-lock.json`, `tsconfig*.json`, `.env.example`, `.dockerignore` and `.gitignore`. Add a new stub `README.md` and a rewritten `.gitignore`.
+  - Write `scripts/verify-fresh-start.sh`. It fails if any blob in `main`'s tree is byte-identical to a blob in `legacy-v0`. The allowlist starts empty.
+- **P0b foundation**
+  - **pnpm workspace** (A§5):
+    - `apps/server` with a Hono `/healthz` and a role dispatcher stub (`capture | load | publish | api | replay | watchdog`);
+    - `apps/web` with Vite + React and a Paraglide "Hallo / Hello" page, NL at `/` and EN at `/en/`;
+    - `packages/core` and `packages/contracts`;
+    - empty `db/migrations/`, plus `registry/`, `tools/geo/`, `deploy/` and `scripts/`.
+  - **TypeScript configuration**: `tsconfig.base.json` with `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `erasableSyntaxOnly` and `verbatimModuleSyntax`, plus project references built with `tsc -b`.
+  - **Tooling**: Biome; Vitest 5 with a global msw setup using `onUnhandledRequest: 'error'`. `pnpm check` runs Biome, `tsc -b` and Vitest.
+  - **pnpm policy**: `minimumReleaseAge: 10080`, `strictDepBuilds`, an explicit `allowBuilds`, `blockExoticSubdeps`, `--frozen-lockfile`. The override procedure for urgent security fixes is documented in `CLAUDE.md`.
+  - **CI workflows**, with every action SHA-pinned, `permissions: {}` at top level and `persist-credentials: false`:
+    - `ci.yml`: install, `pnpm check`, integration tests against a digest-pinned `postgres:18.6` service container, web build, a dbmate up/down/up round trip, `check-bom`, `check-boundaries`, `verify-fresh-start`;
+    - `security.yml`: zizmor, gitleaks over the full history, a grep that every `uses:` has a 40-hex SHA, a grep for top-level `permissions: {}`, and CodeQL if the repository is public (decision D7);
+    - `dependabot.yml`: npm, github-actions and docker; `cooldown` 7 days; grouped; no automerge.
+  - **`CLAUDE.md`**:
+    - the mission and the fresh-start rule (never read or restore `legacy-v0` content);
+    - the bill of materials with exact pins (A§3);
+    - gotchas: MapLibre 6 is ESM-only and WebGL2-only, with `map.transform` removed; the PG18 image moved `PGDATA` to `/var/lib/postgresql/18/docker` and the volume to `/var/lib/postgresql`; TS 7 is forbidden; Vitest 5's `clearMocks` default and failing unawaited assertions; Node 26 Temporal and type-stripping rules; corepack is not bundled; Protomaps builds are kept for 1 week; Hub'Eau v1 returns 403; RWS docs move to the CTD on 2026-11-05;
+    - the security invariants (A§12.1), verbatim;
+    - the adapter contract, and the rule that adapters are keyed by source ID;
+    - criterion tags, the definition of done, and the PR and review workflow (§2);
+    - the ADR-lite rule for new dependencies.
+  - **Agent set-up**:
+    - `.claude/settings.json`: deny reads of `**/.env*` and `deploy/secrets/**`; deny `git push --force*`; allow `pnpm`, `psql` and read-only `git` commands;
+    - `.claude/hooks/session-start.sh`, written with the `session-start-hook` skill. It is idempotent and installs Node 26.10.x, pnpm 12.6.0 and native PostgreSQL 18 (a cluster on port 5433 with the builtin C.UTF-8 locale), then runs `pnpm install --frozen-lockfile`.
+  - **Docs**:
+    - `docs/plan/`: ARCHITECTURE.md, PHASES.md, JUDGEMENT.md and `proposals/` from the planning bundle attached to the P0 issue;
+    - `docs/sources/SOURCE-CATALOGUE.md` and `docs/sources/research/*.md`, copied verbatim;
+    - `docs/adr/0001…0015` (from A§13), `docs/threat-model.md` v1, `SECURITY.md`, `docs/risk-register.md`;
+    - `docs/permissions.md` (tracker) and `docs/legal/requests/*.md`: ready-to-send e-mails for every row in §6.2 C (C1–C13). The tracker records per source: date sent, date answered, conditions, the licence channels granted (`display`, `api`, `bulk_export`, `history_export`; catalogue §0.7) and a **go/no-go date** after which the fallback ships (§0.2). **Every e-mail asks explicitly** whether (a) machine-readable redistribution through our public API and exports is allowed and (b) we may keep and republish a history archive (§0.2, §0.7);
+    - `docs/github-settings.md` and `scripts/gh-settings.sh` (with a `--check` mode).
+  - **Registry**: `registry/providers.yaml` and `registry/sources.yaml`, listing **every catalogue source ID** with its licence, exact attribution text (§1b), `publication` and `capture_enabled`, plus the schema and a validator test. Initial flags:
+    - NL-3, DE-9, BE-1, BE-2, BE-3, LU-2, LU-3 and LU-4 are `off`; **DE-10 (LfU RLP) and DE-12 (LUBW) are `off` until C11/C12 are granted** (their Impressum forbids copying without consent);
+    - DE-2 and DE-3 are `dark`;
+    - the §0.2 "safe" sources are `public`.
+  - **Licence channel flags** (catalogue §0.7) in `registry/sources.yaml` for every source: `display`, `api`, `bulk_export`, `history_export`, `attribution_text`, `attribution_url`, `needs_last_updated`, `needs_retrieval_date`. Defaults: all four channels on for CC0 / DL-DE Zero / Etalab / CC BY / Modellicentie sources (with attribution); `api`, `bulk_export` and `history_export` **off** for any source used under a written permission until its permission record says otherwise. A series may narrow its source's flags, never widen them.
+  - **Station registry schema** (`registry/stations/*.yaml`, one row per physical gauge and quantity; catalogue gap item 17): canonical source and provider IDs, coordinates, datum and gauge zero with validity, river and km system, tidal/weir flags, expected threshold source and forecast source, licence-gate status and `first_release`. The rows are filled from catalogue §3 in P2 and P5; the schema and validator land here.
+  - **GitHub files**: `.github/CODEOWNERS` (the owner on `.github/`, `deploy/`, `db/migrations/` and `registry/`), `.github/ISSUE_TEMPLATE/phase.md` (§4) and `.github/pull_request_template.md` (§2.3).
+
+**Scope out:** product code, service Dockerfiles (P1), the VPS.
+
+**Deliverables:** the tag; a clean `main`; the scaffold, CI and Dependabot configuration; `CLAUDE.md`; the hook; the docs, ADRs, registry and e-mail drafts; the GitHub settings script.
+
+**Acceptance criteria**
+- [ ] [CI] `git rev-parse legacy-v0^{commit}` equals `a4106b8…`, and `git ls-remote --tags origin legacy-v0` returns it.
+- [ ] [CI] `verify-fresh-start.sh` passes: `main` contains 0 legacy blobs and none of the legacy top-level paths.
+- [ ] [CI] On a clean checkout, `pnpm install --frozen-lockfile && pnpm check && pnpm -F web build` is green, and `node apps/server/dist/main.js api` serves `GET /healthz` → 200.
+- [ ] [CI] zizmor reports 0 findings at medium or above. Every `uses:` is pinned to a 40-hex SHA, and every workflow has top-level `permissions: {}`.
+- [ ] [CI] gitleaks passes on the full history of `main`.
+- [ ] [CI] `check-bom` passes: the `CLAUDE.md` bill of materials equals the pins in `package.json` and the lockfile. A deliberately wrong pin makes it fail (test).
+- [ ] [CI] `check-boundaries` fails on committed violation fixtures (web → server, adapter → adapter) and passes on the tree.
+- [ ] [CI] The registry validates. Every source ID from §1a appears exactly once. NL-3, DE-9, BE-1, BE-2, BE-3, LU-2, LU-3 and LU-4 are `off`. DE-10 and DE-12 are `off`.
+- [ ] [CI] Every source carries the four §0.7 channel flags and its attribution fields. A test fails if a source marked as permission-based has `api`, `bulk_export` or `history_export` on, or if a series widens its source's flags.
+- [ ] [CI] The station-registry schema (gap item 17 fields) validates a committed sample of 5 rows, and a row missing `first_release` or the licence-gate status fails.
+- [ ] [CI] The dbmate up/down/up round trip is green on PG 18.6.
+- [ ] [CI] A fresh claude.ai/code session runs the SessionStart hook, then `pnpm check` and `pnpm test:integration` pass with no manual steps. The session log is attached to the PR.
+- [ ] [owner] `scripts/gh-settings.sh` is applied, and `scripts/gh-settings.sh --check` passes (§6.2 B1–B3).
+- [ ] [owner] The permission e-mails C1–C9 and C11–C13 are sent (C10 waits until after launch), and their dates are recorded in `docs/permissions.md`, including C11 LfU RLP, C12 LUBW and C13 BAFU hydrodaten, each with a go/no-go date.
+
+**Providers / rivers:** none for data. The registry covers every source ID.
+
+**Risks**
+- *Losing legacy history.* Tag first, verify the tag on the remote, and only then delete, in a separate PR.
+- *Legacy assumptions creeping back.* The blob check and the fresh-start rule prevent this.
+- *The 7-day release age blocking an urgent fix.* A documented override procedure.
+- *Hook drift.* The hook is idempotent and CI runs the same commands.
+
+**Review focus**
+- *Code review:* hook idempotency; that `check-bom` and `check-boundaries` really fail on violations; the registry against catalogue §1a/§1b (IDs, attribution text, flags) and the §0.7 channel-flag defaults; that every e-mail draft asks the §0.2 redistribution and history-archive questions.
+- *Security review:* `${{ }}` injection in `run:`; token permissions; `pull_request_target` absent; `persist-credentials: false`; the cache-poisoning surface; the Dependabot and pnpm policy; the `.claude/settings.json` deny rules; whether the `CLAUDE.md` invariants are specific enough to enforce; the settings script, which must not weaken anything.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | Patterned scaffolding, but it writes the operating manual and policy every later agent inherits, on 2026-current versions |
+| Code review | `sonnet` | `/code-review high` | Configuration and docs conformance against this plan; mechanical, and a different model |
+| Security review | `fable` | high | The CI root of trust (permissions, pinning, hook, settings). A small diff where a miss becomes a repository-compromise vector |
+
+---
+
+### P1 · Flight recorder in production
+
+**Window:** 09-26 → **live ≤ 10-02** · **Lane:** data + ops · **Depends on:** P0; owner actions A1–A7 · **PRs:** P1a recorder and P1b platform, built in parallel sessions
+
+**Goal.** Stop losing data. Every perishable, legally capturable endpoint is fetched on schedule and archived raw, synced off-site and monitored, before any parser or database exists. The signed pull-based deploy and the Object Lock backups work from day one.
+
+**Scope in**
+- **P1a recorder** (`apps/server`: `http/`, `archive/`, `capture/`, `adapters/<id>/capture.ts`)
+  - **Polite client** (A§7.3, A§12.2):
+    - the allowlist per source ID comes from the registry and is checked in DNS `lookup`, after resolution and on each redirect hop. It includes the gap-check hosts of catalogue §6.7: `pegelonline.wsv.de` (without `www`), `rijkswaterstaatdata.nl` (NL-4 file and page), **`download.data.public.lu`** (the LU-5 CAP files are served there, not from `data.public.lu`) and `vorhersage.bafg.de` (DE-3, captured dark from P1 under D3). The hosts of gated sources (`www.hochwasser.rlp.de`, `www.hvz.baden-wuerttemberg.de`, later `www.hlnug.de`) are added only in the PR that follows a permission (P13, or the backlog for HLNUG);
+    - private, loopback, link-local, CGNAT, ULA and multicast addresses are refused;
+    - same-host redirects only, at most 3. **Canonical URLs** are configured so that no cross-host redirect is needed (§6.7): `hicws.vlaanderen.be` (not the legacy `www.waterinfo.be/tsmhic/…`), `inondations.public.lu`, and each data.public.lu resource's own `url` (not the `latest` redirect link);
+    - timeouts: connect 10 s, total 60 s, metadata 120 s;
+    - body cap 25 MB, decompressed cap 100 MB for HTTP content encoding (ZIP members follow the ZIP rule below);
+    - **per-format input guards** (§6.7; first-release inputs are JSON/GeoJSON, CSV, ZIP of CSV, CAP XML, SPARQL CSV and XLSX, not JSON only): ZIP read from the central directory, ≤ 10 members with allowlisted names (no `/`, `..` or absolute paths), ≤ 200 MB uncompressed in total, ratio ≤ 50:1, streamed, never extracted to disk by name; XML with DTDs, external entities and entity expansion off, any `<!DOCTYPE` rejected, CAP ≤ 1 MB; XLSX gets both the ZIP and XML rules; CSV ≤ 100,000 rows, ≤ 1,000 columns, fields ≤ 1 KB, encoding declared per source;
+    - the User-Agent with the contact address, and the RWS `X-API-KEY`;
+    - at most 2 connections per host;
+    - ETag, `If-None-Match` and `If-Modified-Since`;
+    - backoff and breaker as in A§7.3;
+    - staggered offsets.
+  - **Archive writer**: key layout, tmp + fsync + rename, the daily JSONL manifest, `dup_of`, shape fingerprints (alert on change) and byte counters.
+  - **Capture specs for every row of A§7.2**, in `registry/capture.yaml`, each with:
+    - a validity assertion (the payload parses; required keys are present; count ≥ minimum);
+    - a retention class;
+    - a gap-stretch window rule, so the window covers the time since the last success, up to the provider's maximum.
+  - **The unrecoverable streams come first** (catalogue §0.1, §0.1a). A§7.2 covers every §0.1a row with its change gate: forecast runs (NL-1 `verwachting`, DE-2 `WV` dark, FR-4, CH-4), alert and class states (DE-6 LHP stations of **all 16 states** plus `/data/alerts` with `If-None-Match`; FR-5 `InfoVigiCru` stored only when `DtHrInfoVigiCru` changes; LU-5 CAP; CH-1 `dangerLevel`; CH-5), and threshold versions (NL-4 xlsx plus the rijkswaterstaatdata.nl link list with an alert on a new file name; DE-1 metadata with characteristic values and PNP `validFrom`; CH-2 `wl_1..wl_4`). These specs are enabled first; observation specs follow in the same PR. DE-10 RLP is added only in P13, on the day C11 is granted.
+  - **RWS tiers**: `registry/seed/nl-1.csv` lists about 25 key gauges (10 min) and about 45 others (30 min), taken from §3.1 and §3.3. The forecast locations are listed separately: **all 183 H and 13 Q forecast locations** (§0.1a), about 40 curated ones hourly and the rest every 3 h, inside the ≤ 400 requests/hour budget.
+  - **Ungated Belgium from day one** (catalogue §0.6): the NL-1 specs include the RWS points on Belgian soil (`antwerpen`, `lixhebiefaval`, `maaseik`, `herenlaak`, `lanaken`, `kanne`, `smeermaas.zuidwillemsvaart`), and the FR-1 `code_entite` prefixes must cover the codes of the 18 NL-bound Hub'Eau partner stations (add explicit codes where a prefix misses one).
+  - **Seeds = the day-0 harvest of catalogue §0.1b**: one-off, idempotent, and recorded in `seed-report.json`. DE-1 P31D for about 60 tier-1 series; FR-1 30 days, paced at 1 request per 2 s; FR-3 about 2 months for about 15 key stations; CH-3 40 days for 11 key stations; DE-7 `pegeldaten.zip`; LU-1 (the first CSV holds 5 days); **LU-5 every CAP dump since 2025-06 (833 files, about 30 MB; it contains real AGE flood alerts, §0.4)**. NLWKN is not seeded (off).
+  - **Status and alerts**: `capture-status.json`, written each cycle to `public/status/capture.json`; a healthchecks ping per provider group (start, success and fail; grace 3× cadence); a daily capture report.
+- **P1b platform** (`deploy/`, `.github/workflows/release.yml`, `scripts/verify-prod.sh`)
+  - **`deploy/host/bootstrap.sh`** (Debian 13; idempotent; shellcheck-clean):
+    - the `ops` user; SSH keys only; no root login;
+    - nftables inbound: 22 (rate-limited), 80 and 443/tcp, 443/udp;
+    - nftables egress for the `egress` and `public` subnets: TCP 443 plus DNS only;
+    - unattended-upgrades + needrestart, chrony and a sysctl baseline;
+    - Docker 29.8.1 + Compose v5.5.1 from Docker's signed apt repository;
+    - `daemon.json`: `no-new-privileges`, `live-restore`, the `local` log driver with rotation, `icc: false`;
+    - `/srv/rws/{raw,public,tiles,backup}` and `/etc/rws/secrets` (0700).
+  - **`deploy/compose.yaml`**, with the networks of A§11.1:
+    - services `caddy` (NL/EN placeholder page, `/healthz`, `/status/capture.json`), `capture`, `watchdog` and `backup` (job);
+    - the full hardening flags and Compose secrets.
+  - **Dockerfiles**: server (built on `node:26-trixie-slim`, run on distroless `nodejs26-debian13:nonroot`) and web (`caddy:2.11.4-alpine` plus static files), with digest-pinned bases.
+  - **`release.yml`**: build, SBOM + provenance, push to GHCR by digest, cosign keyless signing and attestation. Then the `promote` job in the `production` environment publishes the Release `prod-<ts>` with a signed `release-manifest.json` (A§11.2).
+  - **Deploy**: `deploy/bin/rws-update` plus a systemd timer (every 5 min), and `rws-deploy <release>`. Both verify the manifest and images with the pinned identity and issuer, then pull, `up -d`, smoke-test and roll back automatically on failure.
+  - **Backups**:
+    - `rws-backup.timer` runs restic of `raw` hourly to the Object Lock bucket;
+    - `rws-restore-drill.timer` runs monthly and can be forced once. It restores a 100-object sample, compares sha256 and writes the result to `/status/ops.json` (coarse values only).
+  - **Watchdog role**: probes `https://<domain>/healthz` and `/status/capture.json` through public DNS and TLS, and checks that the certificate is valid ≥ 14 days, the disk is < 75% full and the last backup is < 2 h old.
+  - **Healthchecks set-up**: `deploy/healthchecks.yaml` and `rws-hc-sync`, which creates the checks using the owner's healthchecks API key.
+  - **`scripts/verify-prod.sh <domain>`**: TLS validity, the exact headers of A§12.2, `/healthz`, capture freshness per spec, and `X-Robots-Tag: noindex`.
+  - **`deploy/bin/rws-reachability`** (catalogue gap item 11, §10 R7): a one-shot owner-run check **on the VPS, over IPv4 and IPv6**, against every §1a endpoint and the sandbox failures to re-test (waterstandlimburg.nl, Saarland, `server.wver.de`, `waterdata.wrij.nl`, `evrs.bkg.bund.de`, Overpass, Geofabrik). It asserts on a **body signature**, not only the HTTP status (e.g. the OSM tile server answers 200 with a "blocked" PNG). The output goes to `docs/reachability-<date>.md`.
+  - **`docs/capacity.md`** (gap item 16): after 48 h of production capture, the compressed bytes per day per spec after sha256 deduplication, the projected year-1 archive (hot obs window plus forever classes) against the disk and the bucket, and the retention class per source derived from it.
+  - **Runbooks**: bootstrap, recorder down, deploy/rollback, restore, disk full, lost SSH access.
+
+**Scope out:** parsing, the database (Compose placeholders only), any public API, the map.
+
+**Deliverables:** the recorder running on the VPS; the off-site archive; the alerts; the seed report; the signed pull-deploy pipeline; the backups and restore drill; `verify-prod.sh`; the runbooks.
+
+**Acceptance criteria**
+- [ ] [CI] Client tests (msw) refuse or abort each of these:
+  - a non-allowlisted host;
+  - DNS answers of `127.0.0.1`, `10.0.0.1`, `169.254.169.254`, `100.64.0.1`, `::1` and `fc00::1`, including on a redirect hop;
+  - a cross-host redirect;
+  - a 30 MB body;
+  - a gzip bomb (1 KB → 1 GB, aborted at 100 MB);
+  - a ZIP with too many entries or `../` paths;
+  - a slowloris upstream.
+- [ ] [CI] Per-format guards (§6.7): a ZIP with a compression ratio > 50:1 or > 200 MB uncompressed is refused, while a synthetic ZIP of 128 MB uncompressed (the real `pegeldaten.zip` size) passes; an XML body with `<!DOCTYPE`, an external entity or entity expansion is refused; a CSV with > 1,000 columns or a field > 1 KB is refused; an XLSX with an XML bomb inside is refused.
+- [ ] [CI] Allowlist and redirects: `download.data.public.lu`, `rijkswaterstaatdata.nl`, `pegelonline.wsv.de` and `vorhersage.bafg.de` are allowlisted for their source IDs, and no host of an `off` source (DE-10, DE-12) is; a `data.public.lu` → `download.data.public.lu` redirect is refused, and the LU-5 spec fetches each resource's own `url` directly.
+- [ ] [CI] A test enumerates catalogue §0.1a: every row (NL-1 forecasts; DE-2; DE-6 all states + alerts with `If-None-Match`; FR-4; FR-5 gated on `DtHrInfoVigiCru`; LU-5; CH-1; CH-2; CH-4; CH-5; NL-4 xlsx + link page; DE-1 metadata; LU-1) has an enabled CaptureSpec with the listed interval and change gate, and a retention class that keeps forecast, class and threshold payloads forever. DE-10 (a note under the table, gated) has no spec until P13. The one deliberate interval deviation is NL-1 forecasts: all 183 H + 13 Q locations, the ~40 curated ones hourly and the rest every 3 h, so that the RWS budget of ≤ 400 requests/hour holds (A§7.2); the test asserts that tiering.
+- [ ] [CI] A registry test shows that the NL-1 specs include the 7 RWS Belgian points and that the FR-1 request covers all 18 NL-bound Belgian partner-station codes of §0.6.
+- [ ] [CI] Backoff and the circuit breaker behave correctly under fake timers, and `Retry-After` is honoured.
+- [ ] [CI] A `kill -9` of a capture child process during a write leaves no object under a final key and no manifest line for it. The next cycle resumes and fills the window.
+- [ ] [CI] The manifest round-trips its Zod schema. An identical body produces `dup_of` and no new object.
+- [ ] [CI] Every CaptureSpec has a validity assertion with one passing fixture and three failing fixtures: empty-but-200, an HTML error page, and truncated JSON.
+- [ ] [CI] The budget config test holds:
+  - `ddapi20-waterwebservices.rijkswaterstaat.nl` ≤ 400 requests/hour;
+  - the CH-1 interval is ≥ 10 min;
+  - the DE-6 interval is ≤ 10 min;
+  - FR-1 seed pages are ≥ 2 s apart;
+  - no spec exists for NL-3, DE-9, DE-10, DE-12, BE-1, BE-2, BE-3, LU-2, LU-3 or LU-4.
+- [ ] [CI] The release workflow produces signed images with an attached SBOM and provenance (run link).
+- [ ] [agent-prod] `verify-prod.sh` passes: valid certificate, headers, `/healthz` 200, noindex.
+- [ ] [agent-prod] In `/status/capture.json`, every enabled spec has a success within 3× its cadence, sampled 3 times over 1 h.
+- [ ] [agent-prod] The seed report shows DE-1 ≥ 28 days, FR-1 ≥ 28 days, CH-3 ≥ 38 days and DE-7 about 60 days for the listed series. It also shows LU-5 with every CAP dump since 2025-06 (≥ 833 files) and LU-1 with ≥ 4 days (the §0.1b day-0 harvest).
+- [ ] [agent-prod, soak 72 h] ≥ 99% of scheduled captures succeed per source ID, with upstream 5xx and timeouts listed separately. The daily byte totals per spec are recorded as the size-budget baseline.
+- [ ] [agent-prod] `docs/capacity.md` is committed from the first 48 h of production capture: compressed bytes/day per spec after deduplication, the projected year-1 raw archive and database size vs the ≥ 200 GB disk and the bucket, and a retention class per source.
+- [ ] [owner] `rws-reachability` ran on the VPS over IPv4 and IPv6; its output is attached. Every first-release endpoint passes its body-signature check, or it is listed in `docs/risk-register.md` with its fallback.
+- [ ] [agent-prod] `/status/ops.json` shows a successful forced restore drill: 100 of 100 sha256 match.
+- [ ] [owner] `deploy/tests/negative-deploy.sh` shows that `rws-update` refuses an unsigned image and an image signed by another identity, and that an injected smoke-test failure rolls back to the previous manifest.
+- [ ] [owner] Stopping `capture` for more than 3× cadence fires the healthchecks alert on the owner's phone (one provider group).
+- [ ] [owner] `restic forget --prune` run with the VPS key fails to remove object versions.
+- [ ] [owner] After a VPS reboot, `/status/capture.json` is fresh again within 20 min with no manual step.
+
+**Providers / rivers:** NL-1, NL-2, NL-4, DE-1, DE-2 (dark), DE-3 (dark), DE-6, DE-7, DE-8, FR-1, FR-3 (seed), FR-4, FR-5, LU-1, LU-5, LU-6, CH-1, CH-2, CH-3 (seed), CH-4 and CH-5. Together they cover:
+- the Alpine Rhine and Bodensee, the High Rhine with the Thur, Aare, Reuss and Limmat, and the Birs;
+- the Upper and Lower Rhine to the NL branches;
+- the Moselle, Saar, Sauer/Sûre, Our and Alzette;
+- the Main, Neckar, Lahn, Sieg, Ruhr, Lippe and Erft;
+- the French Meuse, Chiers, Semoy and Sambre, and the Rur, Niers and Schwalm;
+- the Escaut, Scarpe and Lys (French side);
+- the Ems, Vechte, Dinkel, Berkel, Issel and Bocholter Aa;
+- Belgium without permissions (§0.6): the RWS points on Belgian soil and the NL-bound Hub'Eau partner stations (Semois, Chiers, Viroin, Houille, upper Sambre tributaries, Lys at Menen).
+
+**Risks**
+- *Silent gaps.* Validity assertions, fingerprints, dead-man switches and the daily report.
+- *Missing an unrecoverable stream.* Forecasts, alert/class states and threshold versions cannot be refilled (§0.1); the §0.1a enumeration test and first-enabled order.
+- *Disk filling up.* NRW is captured hourly, the size baseline is measured, and an alert fires at 75%. Raw volume is 0.5–1 GB/day uncompressed before deduplication (gap item 16): body-hash and `DtHrInfoVigiCru` gates, zstd, and `docs/capacity.md` from the first 48 h.
+- *Sandbox ≠ production reachability* (§10 R7). `rws-reachability` from the VPS; datacentre IP blocks (Cloudflare at AGE, Azure APIM at NLWKN, Hub'Eau "usage abusif") show up as body-signature failures, not as silent 200s.
+- *Over-polling.* Budget tests and a contact User-Agent.
+- *Clock skew.* chrony.
+- *The RWS CTD move (11-05).* URLs live in config; the NL-4 file path is the most exposed (link-page watch, local copy, alert on 404).
+- *The owner's VPS steps slipping.* The scripts are idempotent, and each step has a check command.
+- *Seeds stressing providers.* Pacing and off-peak runs.
+
+**Review focus**
+- *Code review:* write atomicity (tmp → fsync → rename, and the manifest line only after rename); scheduler drift and overlap (`protect`); gap-stretch windows; `dup_of` correctness; validity assertions that cannot pass on garbage; seed idempotency; `rws-update` rollback correctness; `set -euo pipefail` and quoting; that the capture set covers every §0.1a stream with its change gate and forever retention, and the §0.1b day-0 harvest.
+- *Security review:* the dialer allowlist per hop and the IP classes; size caps applied before decompression; the §6.7 per-format guards (ZIP, XML/CAP, XLSX, CSV) and the canonical-URL redirect exceptions; redaction of secrets in the manifest and logs; raw-volume permissions; the cosign identity and issuer pinning (exact string, no regex wildcards); secret file modes; the bucket key's scope; nftables default-drop and egress rules; Caddy headers; that `/status/*.json` leaks nothing sensitive.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | Code that runs unattended 24/7, where every bug means unrecoverable data loss, plus the first infrastructure and deploy chain |
+| Code review | `fable` | `/code-review high` | A small diff with the highest cost of failure. The most capable independent model hunts atomicity, scheduling and silent-gap bugs |
+| Security review | `fable` | xhigh | The trust anchor: the SSRF-capable fetcher, the deploy signature chain, backups and the firewall. Everything later relies on it |
+
+---
+
+### P2 · Data spine
+
+**Window:** 10-03 → 10-16 · **Lane:** data · **Depends on:** P1 · **PRs:** P2a spine + DE-1 (10-03 → 10-10); P2b NL-1/NL-2/NL-4 (10-08 → 10-16)
+
+**Goal.** Turn the archive into a correct, provenance-tracked time-series store, and prove the design on two dissimilar providers:
+- **DE-1**: GET with ETag, local offsets, a 31-day window, mixed units and mirrors.
+- **NL-1**: one POST per location, fixed `+01:00` timestamps, and an NL-2 WFS whose local times are labelled `Z`.
+
+**Scope in**
+- **P2a**
+  - **`packages/core`**:
+    - canonical Zod types;
+    - Temporal time-convention parsers for every convention in A§7.4;
+    - the unit table (§4.5);
+    - the datum enum with offsets, sources and uncertainty (§4.1). **IGN69 and NGF-1884 carry no usable NAP offset**: the conversion function returns "not converted" for them (catalogue C40; D16);
+    - the QC bitmask and the sentinel registry.
+  - **`db/migrations`**:
+    - the **complete** schema of A§6, including the forecast, reference, class, warning and health tables, so later phases only add data. This includes the §0.7 licence channel columns on `source` and `series` and the recurring season and `priority` columns on `reference_value` (for NL-4);
+    - `ensure_partitions()` (`SECURITY DEFINER`, fixed `search_path`, 3 months ahead, no default partition), BRIN and `btree_gist`;
+    - the roles and `pg_hba` of A§12.2;
+    - the `pub_*` security-barrier views;
+    - a `db` service initialised with the builtin C.UTF-8 locale.
+  - **Registry sync**: YAML → `provider`, `source`, `attribution`, `station`, `station_alias` and `series`. A drift report compares the registry with the harvested DE-1 `stations.json`.
+  - **`load` role** (A§7.4 steps 1–6):
+    - tails the manifest from `load_cursor`;
+    - QC, the idempotent upsert with `obs_revision`, `obs_latest`, and incremental `obs_1h`/`obs_1d` in the same transaction;
+    - a nightly rollup reconciliation;
+    - `source_health` and quarantine;
+    - the retention pruner, run with `--dry-run` for the first week.
+  - **`replay` CLI** (`--source --spec --from --to`).
+  - **Adapter DE-1**:
+    - W and Q; units `cm`, `m+NN` and `m+PNP`; sentinel `99999`; negative W is valid;
+    - mirrors (RWS, BAFU Basel, RP Freiburg Konstanz, Ruhrverband) get role `mirror`;
+    - 1-minute series are downsampled to 15 min;
+    - station metadata and `gauge_zero` with `validFrom`.
+  - **Tier-1 DE registry** from §3.1 and §3.2, with every station-registry field of P0b (expected threshold and forecast source, licence-gate status, `first_release`), so the P7/P8 coverage metrics have a denominator.
+  - **Minimal `api` role**: only `/api/v1/health` and `/api/v1/health/sources`, reading `rws_api` views. Caddy proxies `/api/v1/health*` only.
+  - **Deploy**: `db`, `migrate`, `load` and `api`, then replay everything since P1.
+- **P2b**
+  - **Adapter NL-1 observations**:
+    - WATHTE/NAP/meting with method F007, and Q with per-station method codes;
+    - `+01:00` timestamps; quality code 99 is a gap;
+    - TAW, MSL and PLAATSLR duplicates are dropped, except the Eijsden-grens TAW series, which is kept as a twin;
+    - a stale-series filter (Arnhem, Driel Q, Westervoort IJsselkop Q, §2.1).
+  - **Adapter NL-2**: discovery and coordinates only; `local-labelled-Z`; REST wins.
+  - **NL-4**: a pinned offline converter (fflate + fast-xml-parser, under the §6.7 XLSX guards) writes `registry/thresholds/nl-4.csv` with the source sha256. The rows load into `reference_value` with semantics `provider_class`; P7 uses them. The converter follows the **catalogue §2.1 parser specification** (NL-4 holds Waterinfo *display* classes, not alert levels):
+    - sheet `ParameterLimits`; `'NULL'` is a string;
+    - the effective legend for a date is the union of the `Gehele jaar` rows and the rows whose `FromMonth/FromDay`–`ToMonth/ToDay` window contains the date (stored as a recurring season, not a date range);
+    - a **lower `Priority` number wins**;
+    - slug variants are deduplicated on (Code, Description, Period, Label, From, To): 6,245 rows → 1,542;
+    - bounds come from `From`/`To`, never from the label text;
+    - the curated series without classes (H: `millingenaanderijn.pannerdensekop`, `holtheme.vecht`, `lith.beneden`, `lixhebiefaval`, `antwerpen`; Q: `millingenaanderijn`, `hagestein.boven`, `maastricht.sintpieter.zuid`, `roermond.hambeek`) stay without NL-4 rows.
+  - **Tier-1 NL registry** from §3.1 and §3.3:
+    - Lobith `tolkamer`, Pannerdense Kop, Nijmegen, Tiel, Zaltbommel, Driel, Amerongen, Hagestein;
+    - Westervoort IJsselkop / `westervoort.1` Q, Doesburg, Zutphen, Deventer, Olst, Zwolle, Kampen;
+    - Eijsden-grens, Sint Pieter, Borgharen, Stevensweert, Roermond, Venlo, Grave, Megen, Lith;
+    - the Vecht stations and Epen (Geul);
+    - tidal stations flagged.
+  - **Eijsden twin**: TAW − NAP.
+  - **`contract-check.yml`** (nightly): live fetch and parse for DE-1, NL-1 and NL-2. It opens or updates a `contract-drift` issue on failure.
+
+**Scope out:** other adapters; parsing references, classes or forecasts (their tables exist but stay empty, except NL-4 rows); the public data API; the UI.
+
+**Deliverables:** core, migrations, registry sync, loader, replay and pruner; adapters DE-1, NL-1, NL-2 and NL-4; a production database filled since P1; the contract check; the runbooks "schema drift", "replay" and "partition maintenance".
+
+**Acceptance criteria**
+- [ ] [CI] Each adapter has ≥ 3 real fixtures from the P1 archive: a normal case, an edge case (sentinel, gap or DST) and an empty or error case. Parse + normalise equals the committed `.golden.json`, with ≥ 90% line coverage of parse and normalise.
+- [ ] [CI] fast-check property tests: time parsers round-trip; the DST gap and overlap are handled explicitly for Europe/Amsterdam, Berlin, Luxembourg and Zurich; unit conversions are invertible.
+- [ ] [CI] At least 30 known-instant cases pass, including:
+  - RWS `2026-09-23T20:50:00.000+01:00` → `19:50Z`;
+  - WFS `…T21:30:00.000Z` (local) → `19:30Z` in summer and `20:30Z` in winter;
+  - PEGELONLINE `+02:00` and `+01:00`;
+  - the repeated local hour on 2026-10-25 (01:00Z–02:00Z).
+- [ ] [CI] Replaying the fixture archive twice gives an identical per-partition `md5(string_agg(…))` checksum, 0 new rows and 0 revisions. A changed value produces exactly one `obs_revision` row.
+- [ ] [CI] A batch crossing a month boundary creates the partition. An insert beyond the partition horizon fails loudly (there is no default partition).
+- [ ] [CI] Incremental `obs_1h`/`obs_1d` equal a from-scratch aggregate over the same data.
+- [ ] [CI] Roles: `rws_api` cannot INSERT, UPDATE or DELETE, cannot SELECT base tables, and sees no row of a seeded `dark` canary series.
+- [ ] [CI] RWS `99`/`0.0` and PEGELONLINE `99999` never appear as values.
+- [ ] [CI] The NL-4 converter on the 15-4-2026 workbook yields 1,542 rows after deduplication (from 6,245), with 237 H and 27 Q location codes. Lobith Q's Normaal/Verlaagd bound is 1,400 m³/s on 15 May and 1,000 m³/s on 15 September, while the `Gehele jaar` bounds (4,450 / 5,400 / 8,100 / 11,800 m³/s) apply on both dates. An overlap fixture resolves to the row with the lower `Priority` number. Coverage of the curated list is reported as 49/54 H and 14/18 Q.
+- [ ] [CI] The datum function returns "not converted" for IGN69 and NGF-1884 series.
+- [ ] [CI] Drift simulation: a mutated payload is quarantined and raises an alert, other payloads still load, and a replay after the fix loads it.
+- [ ] [CI] On the synthetic seed (3,000 series × 60 days), Q1 "all series at T" runs in < 50 ms.
+- [ ] [agent-prod] `/api/v1/health/sources` is green for DE-1 and NL-1. ≥ 95% of tier-1 series have an `obs_latest` age < 45 min (DE-1) or < 60 min (NL-1).
+- [ ] [agent-prod] Loader lag p95 < 2 min, as reported by health.
+- [ ] [agent-prod] The Eijsden-grens twin TAW − NAP = 233 ± 1 cm for every aligned timestamp over 7 days (twin status in health).
+- [ ] [agent-prod] The production replay since P1 is complete: health lists a checksum per partition and 0 unexplained quarantined payloads.
+- [ ] [owner] **Outage drill:** `rws-drill stop-capture 2h`, then restart. Q7 (in health) reports **0 missing buckets** for tier-1 DE-1 and NL-1 series over the window.
+
+**Providers / rivers**
+- DE-1: the Rhine from Rheinweiler/Kehl to Emmerich; the federal Moselle, Saar, Main, Neckar, Lahn and Ruhr; the Ems.
+- NL-1, NL-2 and NL-4: Bovenrijn, Waal, Pannerdensch Kanaal, Nederrijn-Lek and IJssel; the Maas from Eijsden to Lith; the Overijsselse Vecht and Geul; tidal stations (flagged).
+
+**Risks**
+- *Model mistakes propagate everywhere.* Fable builds from `/plan`, Opus reviews at `max`, and replay makes fixes possible.
+- *Late DST coverage.* DST fixtures are synthetic now, and the real 10-25 payloads are added in P5.
+- *NL-1 stalls or limit changes.* Health alerts and the contract check.
+- *Retention pruning deletes too much.* Dry-run for a week, and the "forever" classes are covered by tests.
+
+**Review focus**
+- *Code review:* transaction boundaries; `IS DISTINCT FROM` with the revision CTE; rollup correctness under late revisions; the manifest cursor under a crash; parser disambiguation for the DST hour; the unit and datum declarations for every DE-1 and NL-1 series; mirror handling; the NL-4 converter against the §2.1 specification (season union, priority direction, slug deduplication, bounds from `From`/`To`).
+- *Security review:* parameterised SQL only; the `SECURITY DEFINER` `search_path`; role grants against the views; `pg_hba`; parser resource limits; replay CLI input handling; retention deletion constrained to the `raw/` root.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `fable` (start in `/plan`) | xhigh | The hardest and most consequential design: canonical model, time, unit and datum semantics, idempotency and revisions. Errors silently corrupt the only archive, and every adapter copies the pattern |
+| Code review | `opus` | `/code-review max` | An independent strong model at maximum effort. Correct normalisation outweighs cost, and the diff is bounded |
+| Security review | `sonnet` | xhigh | Mostly internal surface (DB roles, SQL, parser limits) with well-known checks |
+
+---
+
+### P3 · Map spike and self-hosted basemap
+
+**Window:** 10-05 → 10-09 · **Lane:** geo · **Depends on:** P0 (P1b for the VPS job) · **PRs:** one
+
+**Goal.** Settle the unverified map facts before any web phase:
+- the Protomaps style package `@protomaps/basemaps` 5.7.2 with v4 tiles;
+- MapLibre 6 under the strict CSP, after the CSP bundle was removed (§8 C23);
+- WebKit with `temporal-polyfill`.
+
+It also ships the basemap extract job and the style assets.
+
+**Scope in**
+- **`tools/geo/basemap/` and `deploy/bin/rws-basemap-refresh`**: a one-shot `basemap` job on the VPS, with egress to `build.protomaps.com` only. It:
+  - picks the newest build from `builds.json`;
+  - extracts bbox `1.5,45.8,12.5,54.0` at z0–14, plus planet z0–6;
+  - verifies the result and writes its sha256;
+  - writes versioned files `tiles/basemap-<date>.pmtiles` and `tiles/planet-z6-<date>.pmtiles`;
+  - swaps `tiles/manifest.json` atomically and **keeps the previous version**.
+
+  A quarterly timer is installed but disabled until the owner enables it.
+- **Style build** (in `geo.yml`): `@protomaps/basemaps` 5.7.2, muted light flavour, labels from `name:nl`/`name:en`, self-hosted glyphs and sprites under `/assets/map/`.
+- **Map module**: `apps/web/src/features/map/` with the `useMapLibre` hook, the `pmtiles` protocol and the worker URL set-up. A dev-only `/_spike` route renders the basemap with 200 fixture stations as `circle` + `feature-state`.
+- **Fixture**: a committed tile fixture of ≤ 5 MB (a small bbox around Lobith) for agents and CI.
+- **ADR-0016**: the worker set-up (a same-origin worker URL vs `blob:`), the final CSP string, style compatibility, and the fallback if 5.7.2 is incompatible (pin an older compatible style, or our own style JSON).
+- **Caddy**: `/tiles/*` with range requests and immutable caching; `/assets/map/*`.
+
+**Scope out:** stations from the API, the time slider (P4), river lines (P6).
+
+**Acceptance criteria**
+- [ ] [CI] Playwright (Chromium, WebKit, Firefox) on the fixture tiles under the **exact production CSP**: the map renders (the canvas is not blank), there are **0 `securitypolicyviolation` events**, and **every request is same-origin**.
+- [ ] [CI] The style validates against MapLibre 6.11.1's style specification and renders z4–14 of the fixture with no missing-source or missing-layer errors, or ADR-0016 records the alternative that does.
+- [ ] [CI] MapLibre loads as a lazy chunk, and the worker file is served same-origin.
+- [ ] [CI] WebKit with `Temporal` absent loads the polyfill, and a date-formatting smoke test passes.
+- [ ] [agent-prod] `/tiles/basemap-<date>.pmtiles` answers `Range` requests with 206 and `Cache-Control: public, max-age=31536000, immutable`. `tiles/manifest.json` lists the current and previous versions.
+- [ ] [owner] The extract job ran on the VPS; the log is attached and the sha256 matches the manifest.
+
+**Providers / rivers:** OSM via Protomaps (ODbL; credit "© OpenStreetMap contributors · Protomaps").
+
+**Risks**
+- *Style incompatibility.* The ADR fallback.
+- *Protomaps retention (1 week).* We keep our own extract and the previous version.
+- *The 4.3 GB download.* The job resumes and is checksum-verified.
+
+**Review focus**
+- *Code review:* job idempotency and atomic swap; manifest handling; that the hook cleans up the map on unmount; that the Playwright assertions are real (pixel check, request log).
+- *Security review:* whether the CSP is minimal (`worker-src`, `img-src blob:`); no third-party origins anywhere, including glyphs, sprites and fonts; the egress scope of the basemap job; download integrity.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | New major versions (MapLibre 6, the Protomaps v4 schema) where agent knowledge is thin; a decision under uncertainty |
+| Code review | `sonnet` | `/code-review high` | Small, strongly tested diff |
+| Security review | `sonnet` | xhigh | The CSP becomes site-wide policy; a checklist-driven header and origin review |
+
+---
+
+### P4 · Walking skeleton
+
+**Window:** 10-14 → 10-23 · **Lane:** web · **Depends on:** P2 (P4a can start once P2a is merged), P3 · **PRs:** P4a API, P4b web + deploy
+
+**Goal.** A visitor picks a date and time and sees the DE-1 and NL-1 levels at that moment, on the production domain, in NL or EN, behind `noindex`. This brings forward the integration risks: LOCF semantics, cache headers, the CSP, WebKit and URL state. It also gives the owner a product to look at while data accumulates.
+
+**Scope in**
+- **P4a API** (Hono + zod-openapi, `packages/contracts`):
+  - endpoints `/api/v1/meta`, `/api/v1/stations`, `/api/v1/snapshot?t=`, `/api/v1/series/{id}` and `/api/v1/openapi.json`;
+  - the validation and limits of A§9.2: `t` needs an offset, ≤ 32 characters, quantised to 10 min, within [`displayStart`, now]; unknown parameters → 400;
+  - `Cache-Control` per age class;
+  - LOCF within `staleness_limit` (Q1);
+  - the LRU and singleflight;
+  - the `rws_api` role.
+- **P4b web**:
+  - MapLibre on the self-hosted basemap, with stations as `circle` + `feature-state`;
+  - the time selector: a date picker, a time input and a scrubber in 10-min steps with play and step controls, a CET/CEST label and UTC `?t=` in the URL (D11);
+  - `displayStart` from `meta` (D9), with the epoch marker;
+  - a station panel with a lazy ECharts H/Q chart;
+  - NL at `/` and EN at `/en/`;
+  - the table view as the no-WebGL2 fallback;
+  - a beta banner, footer attribution from `meta` sources, and the disclaimer "Geen officiële waarschuwingsdienst / Not an official warning service".
+- **Caddy**: `/api/v1/*` proxy and `X-Robots-Tag: noindex`.
+- `scripts/verify-prod.sh` extended to cover the API and cache headers.
+
+**Scope out:** other providers (P5), classes (P7), forecasts (P8), the static publisher (P9), rivers (P6).
+
+**Acceptance criteria**
+- [ ] [CI] `/snapshot?t=<now−1d>` equals a direct SQL LOCF computation for 50 random series (seeded database).
+- [ ] [CI] Each of these returns **400 without any DB query** (spy): `t` without an offset, longer than 32 characters, before `displayStart`, in the future, or with an unknown parameter.
+- [ ] [CI] `Cache-Control` is asserted for each age class.
+- [ ] [CI] On the synthetic seed, `/snapshot` p95 is < 50 ms warm and < 150 ms cold; `/series` over 14 days raw is < 50 ms.
+- [ ] [CI] Playwright (Chromium, WebKit, Firefox):
+  - NL is the default, and switching to EN keeps `t` and `s`;
+  - the slider updates `?t=` and the marker states;
+  - a deep link restores the view;
+  - the slider is keyboard-operable;
+  - **02:30 CEST and 02:30 CET on 2026-10-25 are distinct selectable instants**;
+  - the table fallback renders with WebGL2 disabled;
+  - 0 CSP violations; only same-origin requests; axe finds 0 serious or critical issues.
+- [ ] [CI] A fixture station named `<img src=x onerror=alert(1)>` renders inert, in the popup, the panel and the chart tooltip.
+- [ ] [CI] Initial JS ≤ 250 KB gzip, excluding the lazy MapLibre and ECharts chunks.
+- [ ] [agent-prod] `verify-prod.sh` passes, with noindex present. `/` shows DE-1 and NL-1 stations whose latest value is ≤ 45 min old. `/api/v1/openapi.json` is served.
+
+**Providers / rivers:** DE-1 and NL-1 (the German Rhine chain, its federal tributaries, the Dutch branches and the Maas).
+
+**Risks**
+- *MapLibre's weekly releases.* Exact pin and WebKit e2e.
+- *LOCF misunderstandings.* SQL-equivalence tests.
+- *The public surface arriving early.* Opus security review, noindex, strict validation.
+
+**Review focus**
+- *Code review:* LOCF and staleness semantics; quantisation and the cache-key space; typed search-parameter validation; DST display; lazy-chunk boundaries.
+- *Security review:* input validation before any DB access; cache-key and poisoning risks; DoS through spans; CSP and header regressions; no HTML sinks; the error bodies leak no stack traces.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | A full-stack slice on new majors (MapLibre 6, Vite 8, TanStack Router) |
+| Code review | `sonnet` | `/code-review xhigh` | Independent. The LOCF, cache-header and URL-state checks are concrete and testable |
+| Security review | `opus` | high | The first public attack surface. A stronger model in a fresh security-only session |
+
+---
+
+### P5 · Open observation adapters
+
+**Window:** 10-17 → 10-30 · **Lane:** data · **Depends on:** P2 · **PRs:** P5a FR-1/FR-3 + CH-1/CH-2/CH-3; P5b DE-7/DE-8 + LU-1/LU-6 + twins, deduplication and the DST regression set
+
+**Goal.** Parse every remaining open observation source from the archive, starting at the seeds, and publish each physical gauge exactly once.
+
+**Scope in**
+- **P5a**
+  - **FR-1**:
+    - H mm → cm and Q l/s → m³/s;
+    - `Link: next` pagination and HTTP 206;
+    - rows with `code_station: null` (site-level Q) are dropped;
+    - foreign-station mirrors become `mirror` **only where the operating agency's own feed is ingested and public**. The Belgian partner stations of §0.6 are `primary` until BE-1/BE-2/BE-3 go public in P13 (their operators are all gated);
+    - negative Q is flagged, not dropped;
+    - gauge-zero metadata is stored but not trusted.
+  - **FR-3**: the ~2-month seed loaded as twin and gap-fill.
+  - **Ungated Belgian set** (catalogue §0.6; registry rows with the P0b fields):
+    - NL-1 (the P2b adapter; registry rows only): `antwerpen` (tidal, H forecast), `lixhebiefaval`, `maaseik` (H, Q F006, H and Q forecasts), `herenlaak`, `lanaken` (H forecast), `kanne` (Q; water body unverified, §10 R9) and `smeermaas.zuidwillemsvaart` (canal intake, H and Q). `sasvangent` is in NL, not Belgium;
+    - FR-1: the **18 NL-bound Hub'Eau partner stations** with commune 99131 (Chiers at Athus and Torgny, Ton at Harnoncourt; Semois at Membre, Tintigny, Chiny, Bouillon, Sainte-Marie, Straimont; Viroin at Treignes, Couvin, Nismes; Houille at Felenne; Thure at Bersillies-l'Abbaye; Hante at Beaumont and Wiheries; Trouille at Givry; Lys at Menen-Ropswalle). Excluded: `E240041201` Escaut at Tournai and `D021000101` Sambre at Solre-Erquelinnes (registered, no data) and the Yser at Roesbrugge (not NL-bound).
+  - **CH-1**:
+    - SPARQL results with fixed `+01:00`;
+    - W in m ü. M. LN02 with `value_kind=level`;
+    - relative gauges flagged;
+    - duplicate observations per station resolved to the latest;
+    - `cube.link/Undefined` means no danger level.
+  - **CH-2**: live values as a twin, with strings like `"2500 m³/s"` parsed.
+  - **CH-3**: the 40-day seed.
+  - **Tier-1 FR and CH registry** from §3.1–§3.4.
+- **P5b**
+  - **DE-7**:
+    - ZIP with count, size and path caps (§6.7: ≤ 10 allowlisted members, ≤ 200 MB uncompressed, ratio ≤ 50:1, streamed; `pegeldaten.zip` is 10.1 MB → 128 MB; UTF-8 for `pegeldaten.zip`, Latin-1 for NRW metadata);
+    - fixed `+01:00`;
+    - placeholder IDs (`1234567`, …) ignored;
+    - WSV duplicates (`site_no` 102) deduplicated against DE-1;
+    - W only;
+    - the cadence rises to 15 min once the pruner is live.
+  - **DE-8**: station master data (PNP, DHHN2016).
+  - **Tier-1 LU registry** from §3.2, and the DE-7 stations not already in the P2 DE registry, with every P0b station-registry field.
+  - **LU-1**:
+    - the wide table with naive `Europe/Luxembourg` times and DST disambiguation by column order;
+    - the **15-minute label offset detected daily against the DE-1 Perl twin**;
+    - Esch-Sûre in m → cm;
+    - stations matched by name to the **LU-6** geometry;
+    - **third-party gauges inside the CSV** (LfU RLP Bollendorf and Gemünd; WSV Perl; Service de la navigation) are narrowed per series: Perl comes from DE-1 (precedence), and the RLP-operated gauges stay `dark` until C4 confirms that the AGE CC0 covers them (§0.2).
+  - **DST gate** (A§7.4; catalogue §0.3): LU-1 is enabled in `load` only after its synthetic fall-back (repeated 02:00–02:59 local) and spring-forward fixtures pass. The same gate applies to every later offset-less parser (DE-6 in P7, DE-3 in P8, DE-10/DE-12/DE-13 in P13).
+  - **Twin-check job**, covering the twins of A§7.4 item 7.
+  - **Precedence rules** of A§7.4 item 6, with a registry test.
+  - **Real 2026-10-25 payloads** from the archive for DE-1, NL-1, NL-2, FR-1, CH-1, DE-7 and LU-1, added as regression fixtures.
+
+**Scope out:** references, classes and warnings (P7); forecasts (P8); gated sources (P13).
+
+**Acceptance criteria**
+- [ ] [CI] Each adapter has ≥ 3 real fixtures with golden outputs and ≥ 90% coverage of parse and normalise.
+- [ ] [CI] FR-1: 491 mm → 49.1 cm and 17,300 l/s → 17.3 m³/s; pagination across 2 pages plus a 206 response works; null-station Q rows are dropped; negative Q gets a flag.
+- [ ] [CI] CH-1: `2026-09-23T20:40:00+01:00` → `19:40Z`; duplicate observations resolved; relative-gauge flag set.
+- [ ] [CI] DE-7 zip-bomb and zip-slip fixtures are rejected, and placeholder IDs are ignored.
+- [ ] [CI] An LU-1 fixture containing the 2026-10-25 repeated hour parses to monotonic UTC with no duplicates, and the offset detector finds +15 min on a fixture.
+- [ ] [CI] Every real 2026-10-25 payload listed above passes as a regression fixture.
+- [ ] [CI] DST gate: a registry test enumerates every adapter whose time convention is `naive-local`, `local-labelled-Z` or `start-of-interval` and fails unless it has both a synthetic fall-back fixture (the repeated local hour) and a spring-forward fixture (the missing hour) with golden output, **before** `load` enables it.
+- [ ] [CI] A registry test shows no physical gauge published twice, and the precedence rules hold: Basel from CH-1; Konstanz and FR-1 foreign copies unpublished where the operator's own feed is public (the §0.6 Belgian partner stations stay published until P13); Perl from DE-1. The RLP gauges inside LU-1 are `dark` until C4 is answered.
+- [ ] [agent-prod] The §0.6 ungated Belgian set is published: the 7 RWS Belgian points and the 18 NL-bound Hub'Eau partner stations appear in `/api/v1/stations` as `primary`, and ≥ 90% of them have a value younger than 3 h.
+- [ ] [agent-prod] Twins in health:
+  - Chooz FR-1 vs FR-3 |ΔH| ≤ 1 cm;
+  - Uckange Q equal after unit conversion;
+  - Basel CH-1 vs the DE-1 mirror (240.00 m + W/100) ≤ 1 cm;
+  - Perl LU-1 (offset-corrected) equals DE-1 for ≥ 99% of timestamps, with the detected offset reported.
+- [ ] [agent-prod] Health is green for FR-1, CH-1, DE-7 and LU-1. Coverage from seed or epoch to now is ≥ 95% of expected buckets on tier-1 series, with provider gaps listed from `ingest_batch`.
+- [ ] [agent-prod] The CH-1 interval is never below 10 min (from manifest timestamps). DE-7 runs at 15 min, and the bytes per day are within budget.
+
+**Providers / rivers**
+- FR-1/FR-3: Rhine and Ill, Moselle, Meurthe, Sarre and Nied, Meuse, Chiers, Semoy, Sambre, Escaut, Scarpe, Lys.
+- CH-1/2/3: Alpine Rhine, Bodensee, High Rhine, Thur, Aare, Reuss, Limmat, Birs; Basel 2289.
+- DE-7/8: Rur, Wurm, Niers, Schwalm, Issel, Bocholter Aa, Berkel, Dinkel, upper Vechte, upper Ems, Lippe, Sieg, Erft.
+- LU-1/6: Moselle, Sûre/Sauer, Our, Alzette.
+- BE without permissions (§0.6), about 25 points: the Zeeschelde at Antwerp, the Meuse at Lixhe, the Grensmaas (Maaseik, Herenlaak, Lanaken), Kanne and the Zuid-Willemsvaart intake (NL-1); the Chiers, Ton, Semois, Viroin, Houille, Thure, Hante, Trouille and the Lys at Menen (FR-1). The Walloon Meuse between Chooz and Lixhe, the Scheldt between Maulde and Antwerp, the Dender and the Kempen rivers stay empty until P13.
+
+**Risks**
+- *Naive local time at DST, and a silent fix to the LU offset.* Daily detection, twins and the DST gate.
+- *Undocumented hydrodaten (CH-2) and the LINDAS "Draft" status.* LINDAS stays primary, CH-2 is a twin, and the contract check watches both. Whether BAFU accepts polling of the hydrodaten files is asked in C13 (§10 R5); if it refuses, CH-2 capture stops and CH-1 alone remains.
+- *ZIP and CSV brittleness.* Fingerprints and quarantine.
+- *Unclear RWS `kanne` series* (Jeker/Geer or canal; §10 R9). Published with its RWS name only, no river assignment until C7 answers; snapped by override in P6.
+
+**Review focus**
+- *Code review:* unit factors per series; DST disambiguation and the DST gate; the offset detector's statistics (window, robustness, alert on change); precedence and alias correctness; mirror exclusion, and the §0.6 exception for Belgian partner stations; pagination termination.
+- *Security review:* ZIP extraction limits; SPARQL response handling, and that no query is built from data; CSV injection that could reach any output; resource exhaustion in wide CSVs.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | Four dissimilar formats (paged JSON, SPARQL, zipped CSV, wide local-time CSV), each with a silent-corruption trap |
+| Code review | `sonnet` for P5a; **`fable` for P5b** | `/code-review xhigh` (P5a); `/code-review high` (P5b) | P5a is conformance against the P2 pattern and the pitfall lists. P5b carries the LU DST and offset logic and deduplication, where a miss silently shifts data |
+| Security review | `sonnet` | xhigh | New untrusted-input parsers (ZIP, SPARQL, CSV), checked against a checklist |
+
+---
+
+### P6 · River network, snapping and chainage
+
+**Window:** 10-12 → 11-06 · **Lane:** geo · **Depends on:** P2 (P6b also needs the P5 station registry) · **PRs:** P6a graph pipeline (10-12 → 10-24); P6b snapping, chainage and tiles (10-26 → 11-06)
+
+**Goal.** A directed river graph with the Rhine-delta bifurcations for every river that feeds the Netherlands, with stations snapped to it and given chainage, and a river overlay tileset. This is the basis for "see the water flow".
+
+**Scope in**
+- **P6a**
+  - `registry/rivers.yaml`: the curated OSM relation IDs from §5.3, including Rhein 123924, Meuse 1075197, Escaut 324288, Moselle 390416, Ems 370068, Main 412876, Neckar 123881, Sambre 1600647, Ourthe 2246211, Rur 384594, Lahn 412935, Saar 390393, Sieg 409090, Ruhr 364754 and Lippe 379691. It adds the Dutch branches, Aare, Reuss, Limmat, Thur, Sauer, Our, Alzette, Leie/Lys, Dender, Niers, Vecht/Vechte, Dinkel and Berkel. The Nahe and Lys are resolved by hand. It also adds the rivers that carry the §0.6 ungated Belgian points (Semois/Semoy, Chiers, Ton, Viroin, Houille, Thure, Hante, Trouille) and, for P13 and D21, the Kempen rivers that enter NL directly (Mark, Dommel, Aa/Weerijs, Warmbeek/Tongelreep, Keersop, Merkske) and the Voer, plus the RLP tributaries (Ahr, Kyll, Prüm).
+  - **River names** (catalogue gap item 19): each river in `rivers.yaml` has a reviewed `name_nl` and `name_en` (Maas/Meuse, Moezel/Moselle, Sûre/Sauer, Schelde/Scheldt, Leie/Lys …), seeded from OSM `name:nl`/`name:en` and Wikidata. Provider-published names stay in `names` as published.
+  - **`geo.yml`** (manual and monthly), because Geofabrik and Overpass are unreachable from agent sandboxes:
+    - download the Geofabrik PBFs (NL, BE, LU, CH, DE states in the basin, FR Grand-Est and Hauts-de-France) and verify their md5;
+    - `osmium tags-filter` → `osmium export -f geojsonseq`;
+    - run the TypeScript graph builder (`tools/geo/rivernet/`).
+  - **Graph builder**:
+    - nodes are shared OSM nodes, and edges are ways as drawn;
+    - keep `main_stream` ways, and empty-role ways that connect;
+    - check for cycles;
+    - allow **several downstream edges** (Pannerdensche Kop, IJsselkop);
+    - EU-Hydro `NEXTDOWNID` QA through its REST API, with a buffer of about 200 m;
+    - write a QA report.
+  - **Outputs**: `river_graph.json`, `reaches.geojson` and the QA report, published as release assets `geo-<date>`. A committed fixture PBF is used for agent and CI tests.
+- **P6b**
+  - **Snapping**: water-body name or Wikidata match plus ≤ 500 m, **never distance alone**, with a manual override table (`registry/snap-overrides.yaml`). The canal points of §0.6 (`smeermaas.zuidwillemsvaart`; `kanne` until §10 R9 is answered) are placed only through the override table and never on the Meuse.
+  - **Chainage**: official km first (DE-1 `km`, RWS rkm); otherwise the graph distance to an NL entry node (Lobith, Eijsden, the Scheldt border, the Dollard, the Vecht border). Stored as `(river_id, km_official, km_system, km_to_nl_entry)`.
+  - **Reaches**: segmented at snapped stations, with `tidal` and `impounded` flags and indicative travel-time ranges from §3.7.
+  - **Tiles and downloads**: `rivers.pmtiles` via tippecanoe (< 30 MB), `/data/v1/rivers/reaches-<ver>.json`, the ODbL download `/downloads/rivers-<ver>.geojson.gz`, and the attribution and licence page text.
+  - **Registry**: river fields synced into `registry/stations/*.yaml`.
+
+**Scope out:** rendering and animation (P11); empirical travel-time calibration (P14).
+
+**Acceptance criteria**
+- [ ] [CI] On the fixture PBF, the graph is acyclic, the Pannerdensche Kop has 2 downstream edges, and two runs on the same input produce byte-identical outputs.
+- [ ] [CI] Canal-trap fixtures (Julianakanaal, Albertkanaal, Bijlandsch Kanaal, Grand Canal d'Alsace) produce 0 name-mismatched snaps. A golden list of 50 hand-checked stations snaps 100% correctly.
+- [ ] [CI] The §0.6 Belgian points snap to their own rivers (Semois, Chiers, Viroin, Lys at Menen, Grensmaas); `smeermaas.zuidwillemsvaart` and `kanne` never snap to the Meuse. Every river in `rivers.yaml` has a non-empty reviewed `name_nl` and `name_en`.
+- [ ] [CI] km values are monotone from upstream to downstream along the Rhine (Basel → Lobith), the Meuse (Chooz → Lith) and the Moselle (Uckange → Koblenz).
+- [ ] [CI] Paths exist from Basel 2289, Trier, Raunheim (Main), Chooz and the Escaut FR-1 gauges to the NL entry nodes, and Basel → Lobith → {Waal, Nederrijn-Lek, IJssel} is traversable.
+- [ ] [agent-prod] A `geo.yml` run on the full PBFs succeeds: ≥ 98% of edge directions agree with EU-Hydro, every disagreement is listed, and `rivers.pmtiles` is < 30 MB.
+- [ ] [agent-prod] `/tiles/rivers-<ver>.pmtiles` and the ODbL download are served, with the attribution text present.
+
+**Providers / rivers:** OSM (ODbL) and EU-Hydro (QA only); official km from DE-1 and NL-1. All rivers in scope.
+
+**Risks**
+- *Inconsistent OSM relation roles* (Moselle, Escaut). Clean-up rules plus overrides.
+- *ODbL share-alike.* The graph is published under ODbL, and station data stays a separate collective database.
+- *PBF size in Actions.* Regional extracts and a cache.
+
+**Review focus**
+- *Code review:* bifurcation handling; snapping rules and overrides; km direction per river; determinism.
+- *Security review:* workflow permissions and download integrity (md5); the tool image's supply chain; ODbL and attribution compliance.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | Subtle topology work: bifurcations and canal-aware snapping |
+| Code review | `sonnet` | `/code-review high` | Golden lists and graph invariants make the review concrete |
+| Security review | `sonnet` | medium | An offline tool with no runtime surface |
+
+---
+
+### P7 · References, classes, warnings and honest classification
+
+**Window:** 10-31 → 11-09 · **Lane:** data · **Depends on:** P5; P7b also on owner decision D18 (crosswalk sign-off) · **PRs:** P7a reference, class and warning parsers; P7b classification engine
+
+**Goal.** Every published value carries an honestly derived state and a visible `basis`. Operational thresholds, statistical references, provider classes and warnings from every open source are stored with validity ranges.
+
+**Scope in**
+- **P7a**
+  - **DE-1** characteristic values (MNW, MW, MHW, NNW, HHW, HSW, GlW, Marke I–III, with periods) and gauge-zero changes. Resolve §8 C22 live before use.
+  - **NL-4** mapping to stations. NL-4 rows are **Waterinfo display classes, not alert levels** (catalogue §2.1, C39): their basis label says so ("RWS Waterinfo-legenda, geen officiële waarschuwing / RWS Waterinfo legend, not an official warning").
+  - **CH-2** `wl_1…wl_4`, which are **discharge-based** (m³/s); **CH-1** `dangerLevel`; **CH-5** warning sections. If BAFU refuses hydrodaten polling (C13), or has not answered by the C13 go/no-go date (10-31) and the owner does not extend it in `docs/permissions.md`, CH-2 and CH-5 are not published, and the fallback is CH-1 `dangerLevel` plus **CH-6**, the open geo.admin.ch class layers and national warning map (opendata.swiss "Open use", no permission needed). CH-6 then gets a capture spec, an adapter and a per-source allowlist entry for `data.geo.admin.ch` (a catalogue §6.7 host) in this phase; it is not a P13 source.
+  - **FR-5** tronçon vigilance, mapped to stations through the **downward link `TronEntVigiCru` `aNMoinsUn`** (catalogue §2.5, C38; the upward `StaEntVigiCru` link is a placeholder, `"A renseigner"`): 56 sections and 331 stations in territories 2, 3 and 29, each station in exactly one section. A spatial join to the `InfoVigiCru` MultiLineStrings is a cross-check only, with a manual override table. The parser accepts both the current lowercase property names and the older casing (`LbEntCru`, `AcroEntCru`, `TypEnSup_1`). No Vigicrues section covers the French Escaut, Scarpe or Deûle, so those stations get no FR-5 class. `CruesHistoriques` are stored as historical references.
+  - **DE-7** `LANUV_MNW/MW/MHW`, `LANUV_Info_1..3` and `alarmlevel`.
+  - **DE-6** LHP classes and alerts: stored on change, refreshed at least every 10 min, with LHP colours kept. Per catalogue §0.4 and §4.9:
+    - the station `lhpClass` is an integer −1…4; **a feature without an `lhpClass` key** (216 live, "Ohne Hochwasser-Einstufung") is `no_ref` (the catalogue writes `no-ref`), not an error;
+    - the **alert** `lhpClass` is a **string** on a different scale (1 Entwarnung, 2 Vorwarnung, 4 Hochwasser, 5 Großes, 6 Sehr großes Hochwasser; no 3); alert geometry is Polygon or LineString; alerts carry no issue or validity time, so validity starts at the collection's `updated`;
+    - **duplicates across states** (Worms, Perl, Kaub, Mainz, Kleinheubach, Obernau, Havelberg): group by the numeric part of the id and position (< 500 m); take the class from the state that operates the gauge (RP for Worms, Mainz, Kaub and Perl); if it reports −1 or nothing, use the worst other class and record its provenance ("class from LHP/HE");
+    - the feature `timestamp` is offset-less local time, so the DST gate of P5 applies.
+  - **LU-5** CAP: filter on `[AGE]`/`FLOOD`; drop `TEST` by `cb-eu-level` and headline, **not** by `<status>` (a TEST message carries `Actual`); resolve `Cancel` messages, which have no `<info>`, through `<references>` (`[AGE],<identifier>,<sent>`); map `ALERT_LVL_1…4` (inverted: 1 is red); keep all three language blocks (fr-FR, de, en-US) and `expires`; parse XML with entities off; store zone polygons.
+  - **Provider label table** (catalogue gap item 19): `registry/labels/<SOURCE-ID>.yaml` maps every provider class and alert label (FR, DE, NL; CH de/en) to a reviewed NL and EN text. The raw label is always stored and shown beside our translation.
+  - **Flood fixtures** (catalogue §0.4) for every class and warning parser: the LHP test server (`…/public/v1/test/data/{stations,alerts}`: the 2024-01-25 flood, station classes 1–3, alert classes 1/2/4/5) plus hand-edited class-4 stations, class-6 alerts and class-less features; the real AGE LU-Alert flood alerts from the archive (red Sud 2025-09-08/09, Moselle 2026-02-13/14) with a Cancel and a TEST; the Wayback `InfoVigiCru` capture of 2023-12-11 (levels 2 and 3, old casing; the capture is truncated at 1 MiB, so the committed fixture keeps only the complete features and closes the collection, a hand edit documented next to the fixture); a hand-built CH-5 flood section (no archived capture, §10 R2).
+  - **Raw retention of mixed payloads**: from this phase the loader promotes every CH-1 and CH-2 payload whose class or threshold fields changed (`dangerLevel`, `wl_1..wl_4`) to the forever class, in addition to the daily copy (A§7.2).
+  - Every row is stored with a validity range (`WITHOUT OVERLAPS`). A change raises an alert.
+- **P7b**
+  - **Pure classifier** in `packages/core` (A ADR-0009):
+    - the ordinal scale plus the flags stale, suspect, tidal and impounded;
+    - priority: operational > statistical > provider class;
+    - **the mapping table is the catalogue §4.9 crosswalk** as signed off by the owner (D18), one row per provider class with its target level and its basis (stage, discharge or area);
+    - **gauge vs area classes** (§4.9): an area class (FR-5 section, LHP alert, RLP region, LU-Alert zone, CH-5 section) colours a station only with an explicit "section" badge; where a station has both, the gauge class wins and the area class is shown alongside;
+    - a `basis_label` on every state;
+    - Δh since the window start, and the trend;
+    - the "≈ m NAP ±" conversion for the detail view, **except for French stations (IGN69/NGF), which get no converted height in the first release**, nor does any station whose gauge zero comes only from Hub'Eau metadata (the §0.6 Belgian partner stations) (D16; catalogue §4.7(5), C40).
+  - **Generated documentation**: the mapping table generates `docs/classification.md`.
+  - **Coverage report** per country: the share of tier-1 stations with a class other than `no_ref`, and separately the share of `first_release` stations that get a non-grey class **from sources that need no permission** (catalogue gap item 17). It is published through `/api/v1/health/sources` until the P9a publisher exists, then in `status.json`, and it drives D10.
+  - **API**: the snapshot gains `state` and `basis`, and the P4 popup shows the basis (the full legend comes in P10).
+
+**Scope out:** percentile climatology (P14); gated thresholds such as HIC, SPW and AGE LU-4, and the DE-10 RLP alert regions (P13).
+
+**Acceptance criteria**
+- [ ] [CI] CI fails if `docs/classification.md` differs from the code's table.
+- [ ] [CI] Boundary tests sit exactly at each threshold per provider. For example, Kaub at 9 cm with MNW 65 → `low`, basis "WSV MNW 2010–2020". A station without references → `no_ref`, never a guess.
+- [ ] [CI] Exceedance (HIC-style) and non-exceedance (SPW-style) percentile conventions are represented and tested with synthetic fixtures.
+- [ ] [CI] A changed threshold or gauge zero creates a new validity range and raises an alert. Nothing is overwritten.
+- [ ] [CI] LU-5 `TEST` fixtures are excluded. XXE and entity-expansion fixtures are refused. A Vigicrues section level reaches every station in that section.
+- [ ] [CI] A golden-state test covers about 30 real stations across providers. Any change needs an explicit golden update.
+- [ ] [CI] Every row of the catalogue §4.9 crosswalk (as signed off in D18) has a boundary test, and `docs/classification.md` lists exactly those rows with their basis (stage, discharge or area).
+- [ ] [CI] Flood fixtures (§0.4) reach the expected §4.9 levels: LHP test-server stations of class 1, 2 and 3 → elevated, high, extreme; a hand-edited class 4 → extreme; alert `"4"` (string) → high, `"5"`/`"6"` → extreme, `"1"` → normal; a feature without an `lhpClass` key → `no_ref`; the Wayback `InfoVigiCru` (old casing) and a current payload with the same levels give identical classes; the real AGE red alert → extreme on zone Sud, its Cancel (no `<info>`) closes it via `<references>`, and a TEST with `<status>Actual</status>` is dropped.
+- [ ] [CI] LHP duplicates: fixtures for Worms (RP 0, HE −1) and Perl (SL 0, RP −1, SL −1) resolve per the §4.9 rule, with provenance recorded.
+- [ ] [CI] The FR-5 station → section table built from `TronEntVigiCru` `aNMoinsUn` has every station in exactly one section; the French Escaut/Scarpe/Deûle stations get no FR-5 class.
+- [ ] [CI] Every provider class or alert label present in the fixtures has an NL and an EN entry in `registry/labels/`; an unmapped label fails CI.
+- [ ] [CI] A French station and a §0.6 Belgian partner station from FR-1 (zero from Hub'Eau metadata) return no converted absolute height; an NL, DE, LU, CH or BE (TAW, fixture until BE-1 arrives in P13) station does.
+- [ ] [CI] The DE-6 parser passes the DST gate of P5 (fall-back and spring-forward fixtures for the offset-less feature `timestamp`).
+- [ ] [agent-prod] The coverage report is published per country (`/api/v1/health/sources`, or `status.json` once P9a is live), and 100% of displayed markers carry a basis or `no_ref`.
+- [ ] [agent-prod] The DE-6 refresh interval is ≤ 10 min (manifest).
+
+**Providers / rivers:** DE-1, NL-4, CH-1, CH-2, CH-5, FR-5, DE-7, DE-6 and LU-5 (plus CH-6 only as the C13 fallback), across every river from P2 and P5.
+
+**Risks**
+- *Semantic misreadings*: percentile direction, "Marke", discharge-based CH thresholds. A Fable review.
+- *An unsigned crosswalk.* Each agent would invent its own mapping; P7b does not start before D18 is answered (the §4.9 proposal is the default).
+- *Flood code paths never seen live* (all research ran at extreme low water; §0.4). Flood fixtures now; the first real NL-bound FR-4 and CH-5 flood payloads become fixtures when they occur (owner action D7; §10 R2).
+- *Marketing display classes as warnings.* NL-4 basis label and the Method page (P10).
+- *NL-4 workbook changes.* Weekly hash watch.
+
+**Review focus**
+- *Code review:* every mapping row against §4.6, §4.7 and the signed-off §4.9 crosswalk; the LHP station vs alert scales (never mixed) and the duplicate rule; gauge vs area precedence; unit and quantity mismatches (a Q threshold applied to H); validity-range logic; the priority order; that `no_ref` is never replaced by a guess; that the generated doc matches the code.
+- *Security review:* XML parsing (XXE, billion laughs, `<!DOCTYPE` rejection per §6.7); GeoJSON size limits; that provider label strings, including the translation table, stay inert downstream.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` (start in `/plan`, write the matrix first) | xhigh | Careful semantic mapping across seven providers |
+| Code review | `fable` | `/code-review xhigh` | Honest cross-country comparison is the product's credibility. The strongest independent model challenges every mapping |
+| Security review | `sonnet` | high | Little new surface: CAP XML and GeoJSON parsing behind the existing guards |
+
+---
+
+### P8 · Official forecasts (bi-temporal) and the future slider
+
+**Window:** 11-06 → 11-13 · **Lane:** data · **Depends on:** P5 (P7 for display) · **PRs:** P8a run model + NL-1 + DE-2; P8b CH-4 + FR-4 + DE-3 (dark) + future snapshot and slider
+
+**Goal.** Every forecast run captured since P1 loads as an immutable bi-temporal run. The slider reaches into the near future using the latest run per series, with an honest horizon per station (decision D8).
+
+**Scope in**
+- **P8a**
+  - **Run identity** of A§7.4 item 9, with `forecast/latest.json` groundwork.
+  - **NL-1 `verwachting`**: no run ID, so the run is (series, first valid time, content hash).
+  - **DE-2 `WV`**: `initialized`; values beyond 48 h are flagged `estimate`; `provider_segment_end` is set. The run-age alert is **schedule-aware**: `WV` runs on working days, and at weekends and on holidays only when Ruhrort is below 4 m [D]. How `WV` behaves above HSW / Marke II is unknown (catalogue §0.4, §10 R1; asked in C6): a missing, capped or stale run is shown as "no forecast", never extended.
+  - **Forecast coverage** (catalogue §0.5; gap item 17): `/api/v1/health/sources` (and `status.json` once the P9a publisher is live) reports, per river reach of the §0.5 matrix and per country, the share of `first_release` stations with a current official forecast from sources that need no permission. First-release forecast sources are NL-1, DE-2 (public after the P12 BfG gate), CH-4 and FR-4 (event-only); RLP (66 gauges), LU-3, HIC and LUBW arrive through P13.
+- **P8b**
+  - **CH-4**: median, 25–75% band, min/max; the run is inferred from the run start and `Last-Modified`. Only the `_de` files are fetched; traces are matched **by position and by name**, because names are language-specific ("Mediana", "Min / Max" vs "Min. / Max."). Flood fixture: the Wayback capture of 2023-11-02 (storm Ciarán; gzip-encoded; median rising to 476 m³/s, max 800 m³/s, threshold bands 700/1100/1450/1800). That capture is the **`_it` file** of station 2020, Ticino at Bellinzona (the only archived flood run; Po basin, not NL-bound), so its trace names are Italian ("Mediana", "Misurato", "Min / Max"): the trace-name table carries the `it` names for this fixture, while production still fetches `_de` only.
+  - **FR-4**:
+    - P10/P50/P90 with `DtProdSimul`;
+    - HTTP 200 bodies that carry an error are detected;
+    - the v1.1 route uses `+02:00` and the legacy route `+00:00`;
+    - the only sample is a Loire station (K490003010): it is a schema fixture only; the first NL-bound forecast is promoted to a fixture when an event occurs (owner action D7; §10 R2).
+  - **DE-3** (dark):
+    - daily-mean quantiles stamped at the start of the interval, "GMT+1";
+    - `---` is censored above 640 cm and stored as censored, not zero;
+    - the "GMT+1" CSV is on the catalogue §0.3 list, so the DST gate of P5 applies.
+  - **Future snapshot**: Q2 for future `t`, and `/api/v1/series/{id}/forecast?asof=`.
+  - **Web**: the slider range extends to now + the station horizon, capped at 48 h. Forecast styling uses hollow markers, labelled with the agency and the issue time (or "opgehaald / fetched" when inferred). "Estimate" styling applies beyond the provider segment, and stations without a forecast show "no forecast".
+  - **Display rules** in `contracts`: providers are never blended; provider display limits are respected.
+
+**Scope out:** forecast verification statistics; our own forecasts (never); DE-2 publication, which stays `dark` until the P12 BfG gate; **EFAS** (real-time restricted to authorised users) and **GloFAS** (open but modelled, not official), neither used in the first release (catalogue §0.5); the gated forecasts of DE-10 RLP, DE-12 LUBW, LU-3 and BE-1 HIC (P13).
+
+**Acceptance criteria**
+- [ ] [CI] Replay rebuilds the run history since P1 without duplicates: the run count equals the number of unique (series, first valid time, content hash) keys.
+- [ ] [CI] DE-2 values beyond 48 h are flagged `estimate`. DE-3 `---` is stored as censored, never as 0. DE-3 start-of-interval GMT+1 stamps convert to UTC correctly.
+- [ ] [CI] FR-4 v1.1 (`+02:00`) and legacy (`+00:00`) payloads of the same run give identical UTC values, and an HTTP-200 error body is quarantined.
+- [ ] [CI] Quantiles must satisfy p10 ≤ p50 ≤ p90, and otherwise get a QC flag.
+- [ ] [CI] "Latest run as of T" (Q2) takes < 50 ms on the synthetic seed.
+- [ ] [CI] API: `t` in (now, now + horizon(station)] returns values from the latest run issued at or before now; `t` beyond 48 h → 400.
+- [ ] [CI] Playwright:
+  - moving past now switches to forecast styling;
+  - the label shows the agency and issue time;
+  - stations without a forecast are greyed;
+  - the slider clamps at each station's horizon;
+  - a `dark` source (DE-2) never appears (canary).
+- [ ] [CI] The CH-4 storm-Ciarán fixture (`_it`) parses to the documented median, max and threshold bands; a `_de` fixture with reordered or renamed traces is quarantined, never mislabelled.
+- [ ] [CI] The DE-2 run-age alert does not fire on a weekend fixture with Ruhrort ≥ 4 m and does fire on a working day without a new `initialized`. A `WV` payload missing or truncated above HSW yields "no forecast", not a held value.
+- [ ] [CI] DE-3 passes the DST gate of P5.
+- [ ] [agent-prod] Health shows the latest run age per forecast source. NL-1 has had a new run within the last 7 h. CH-4 covers 55 stations.
+- [ ] [agent-prod] The forecast coverage per §0.5 reach and per country is published (`/api/v1/health/sources`, or `status.json` once P9a is live); every reach whose first-release column in §0.5 is empty shows "no official forecast" and names the agency that would provide it after a permission, or says that no agency publishes one (e.g. SPW for the Walloon Meuse).
+
+**Providers / rivers**
+- NL-1: Lobith, the NL branches, Eijsden and the Maas, plus the Belgian RWS points `antwerpen`, `maaseik` (H and Q) and `lanaken` (§0.6).
+- DE-2 and DE-3 (dark): 7 Rhine gauges.
+- CH-4: 55 stations on the Rhine and Aare.
+- FR-4: French stations, during events only.
+
+**Risks**
+- *Inferred run identity merging or splitting runs.* Hash plus first-valid key, and fixtures.
+- *Event-only forecasts.* Shown honestly as "no forecast".
+- *Thin upstream coverage* (§0.5): the Meuse above Eijsden and the Moselle, Saar, Main, Neckar, Lahn and Ems have no official forecast outside French events until RLP (C11) and the other P13 permissions arrive. The coverage report makes this visible.
+- *`WV` behaviour in floods unknown* (§10 R1). Treated as "no forecast" when absent; C6 asks BfG.
+- *CH-4 is an undocumented hydrodaten file* (§10 R5; C13). If BAFU refuses, or has not answered by the C13 go/no-go date (11-06) and the owner does not extend it, CH-4 is not published and the Swiss reaches show "no forecast"; on a refusal CH-4 capture also stops.
+- *Unclear NL-1 cadence* ("elke 6 uur", UNVERIFIED). The ~40 curated locations are polled hourly and the rest every 3 h (the RWS budget), with deduplication. If the P1 soak shows runs more often than every 3 h, the tiers are rebalanced within the ≤ 400 requests/hour budget.
+
+**Review focus**
+- *Code review:* bi-temporal semantics (issue vs valid time); the time conventions per route; horizon and estimate boundaries; that no interpolation happens across providers; the `asof` logic; CH-4 trace matching by position and name; the schedule-aware `WV` freshness; the §0.5 coverage report.
+- *Security review:* the added parsers, and error-body handling; the new API parameters (`asof`) and their bounds.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | Four formats with implicit run identity and mixed time conventions |
+| Code review | `fable` | `/code-review high` | A shifted or mislabelled forecast misleads the public exactly during a flood |
+| Security review | `sonnet` | high | New parsers and one parameter behind established guards |
+
+---
+
+### P9 · Static publisher and hardened read API
+
+**Window:** 11-02 → 11-16 · **Lane:** serve · **Depends on:** P7 (P8 contracts may be stubbed) · **PRs:** P9a publisher; P9b API hardening
+
+**Goal.** A flood-time spike costs almost no application CPU. Precomputed static files serve the hot paths, and the API is bounded, sheds load and can never leak dark data.
+
+**Scope in**
+- **P9a**
+  - **`publish` role**:
+    - every file of A§9.1, precompressed (zstd and gzip) and written atomically;
+    - dirty-bucket tracking fed by the loader;
+    - the recent and settled classes, with per-day versions in `meta.dayVersions`;
+    - frames, per-station `recent.json`, `forecast/latest.json`, warnings, `sources.json` with dynamic dates, and `status.json`.
+  - **Caddy**: cache classes per path, and `handle_errors 502 503 504` on `/api/v1/snapshot*` → static `latest.json` with `X-Degraded: 1`.
+  - **Web**: switches to static-first fetching (meta → latest/recent/settled → API fallback) and shows the degraded banner.
+- **P9b**
+  - A global DB-concurrency semaphore returning 503 with `Retry-After`.
+  - `singleflight`, and an LRU of precompressed bodies.
+  - Per-client token buckets for the API only, keyed on the Caddy-set IP header with IPv6 /64. **Static files are never limited.**
+  - Unknown parameters → 400.
+  - `v` handling for immutable responses.
+  - A **dark canary leak test** across every published file and API response.
+  - **Licence channels** (catalogue §0.7; A§9.2): our API and any export are redistribution. Static files and `/snapshot` are the `display` channel; `/series`, `/series/{id}/forecast` and `/frames` are the `api` channel; any CSV or bulk download needs `bulk_export` (the first release has no such route, but the guard and its test exist); values older than the provider's own public window need `history_export`. The filters live in the `pub_*` view layer, not only in route code. A second canary, a **`display`-only series**, proves the channel filter.
+  - **Per-response attribution**: every API response carries an `attribution` array covering exactly the sources in its body, with the text, the link and the date each licence requires (Etalab/Vigicrues last update, LHP "Stand" with a link, HIC retrieval date, BAFU "Bezugsdatum", BfG credit, "LU-Alert"). The same block is in every published data file.
+  - An OpenAPI snapshot test.
+  - `.github/workflows/loadtest.yml`: k6 against the compose stack on a CI runner, with the synthetic seed.
+  - `POST /api/v1/beacon` (≤ 8 KB, rate-limited, logged only).
+
+**Scope out:** the UI beyond the data-layer switch.
+
+**Acceptance criteria**
+- [ ] [CI] Every published file validates against its `contracts` JSON Schema, and the OpenAPI document is snapshot-tested.
+- [ ] [CI] **Dark canary**: a dark series with the value `123456.789` never appears in any file or API response. The test greps every output.
+- [ ] [CI] **Channel canary**: a `display`-only series with the value `654321.987` appears in the static files and `/snapshot` but never in `/series`, `/series/{id}/forecast` or `/frames`; a series without `history_export` is never served older than its provider window on any channel. The test greps every output.
+- [ ] [CI] Every API response and published data file validates an `attribution` array that lists exactly the sources present in the body, including the required date for each source whose licence needs one (fixture: a mixed Vigicrues + LHP + BAFU response).
+- [ ] [CI] Property test: for 200 random values of T, the published snapshot equals the reference SQL (Q1/Q2) result.
+- [ ] [CI] A revision older than 48 h bumps that day's version. The old URL's content is unchanged, the new URL reflects the revision, and `meta.dayVersions` is updated.
+- [ ] [CI] Malformed or oversized input → 400 without a DB query. Over-rate → 429 with `Retry-After`. A saturated semaphore → 503 with `Retry-After`. 50 identical concurrent requests → 1 DB query.
+- [ ] [CI] k6: 300 req/s static + 30 req/s API for 2 min gives p95 < 200 ms and 0 errors.
+- [ ] [CI] Compose e2e: with `api` killed, the map still loads from static files and shows the degraded banner.
+- [ ] [agent-prod] `latest.json` is < 2 min behind the last loader commit (`meta` vs health), and re-rendering one day takes < 60 s (`status.json`).
+- [ ] [agent-prod] `verify-prod.sh` asserts `Cache-Control` for every path class of A§9.1.
+
+**Providers / rivers:** all public sources.
+
+**Risks**
+- *Stale caches after revisions.* Per-day versions.
+- *Cache-key explosion.* Quantisation and unknown-parameter 400s.
+- *Dark leakage.* Views plus the canary.
+- *Breaching a "display only" permission through the API.* Channel flags in the views, plus the channel canary.
+- *Locking out CGNAT crowds.* Static files are never limited.
+
+**Review focus**
+- *Code review:* dirty-bucket completeness (a revision at `ts` affects buckets up to `ts + staleness_limit`); atomic writes; version bumping; the fallback path; the load-test realism.
+- *Security review:* input validation; DoS through expensive queries; cache poisoning; trusting client-IP headers; the canary coverage, including the channel canary and the `history_export` window; header and CSP regressions; the beacon endpoint as an abuse vector.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | Performance-critical publishing with cache semantics and strict contracts |
+| Code review | `sonnet` | `/code-review xhigh` | HTTP and caching patterns are well known, and the tests are concrete |
+| Security review | `fable` | xhigh | The internet-facing surface that takes the flood spike, where leakage or DoS does the most damage |
+
+---
+
+### P10 · Web app MVP
+
+**Window:** 11-10 → 11-25 · **Lane:** web · **Depends on:** P9 contracts, P6 tiles, P7 · **PRs:** P10a UI core; P10b pages
+
+**Goal.** A public-grade, bilingual SPA with a classified map, rivers, warnings, a time selector from `displayStart` to the near future, and a station panel showing thresholds, forecast and provenance.
+
+**Scope in**
+- **P10a**
+  - **Modes**: State, Δh and Q. The default follows D10.
+  - **Legend**, with the honesty note: "Klassen volgen de referenties van elke instantie; niet strikt vergelijkbaar / Classes follow each agency's own references; not strictly equivalent".
+  - **Palette**: BrBG/PuOr, no red–green pairing, with redundant ▲/▼ and size cues.
+  - **Styling** for stale, suspect, tidal (hatched) and impounded stations.
+  - **River lines** from P6 under the stations.
+  - **Warnings layer**, time-aware at `t`. Area classes (§4.9) are drawn as areas or sections; a station coloured by an area class carries a "section" badge.
+  - **Station panel**:
+    - the raw value as published, with unit and datum;
+    - state and basis, Δh and trend;
+    - an ECharts hydrograph with thresholds (`markLine` with basis), alert bands and a forecast band with agency and issue time;
+    - "≈ m NAP ±" in the detail view only (D16). **French stations (and the §0.6 Belgian partner stations, whose zeros also come from Hub'Eau) show no converted height**, only "nulpunt / gauge zero: x m IGN69 (Hub'Eau-metadata, niet geverifieerd / unverified)", with the datum as Hub'Eau publishes it (IGN69, NGF-1884 or TAW).
+  - **Multilingual labels** (catalogue gap item 19): station names as published in the canonical source's primary language; river names from the reviewed `name_nl`/`name_en` in `rivers.yaml` (P6); provider class and alert labels shown raw with our reviewed NL/EN translation from `registry/labels/` (P7).
+  - **Live mode**, refreshing every 60 s.
+  - **Table view** and keyboard operation.
+  - **Map attribution control**.
+- **P10b**
+  - **Bronnen & licenties / Sources & licences**, generated from `sources.json`, with every required attribution string and its dynamic date.
+  - **Over / About**: the disclaimer and links to the official services: waterinfo.rws.nl, vigicrues.gouv.fr, naturgefahren.ch, inondations.lu, hochwasserzentralen.de, waterinfo.be and hydrometrie.wallonie.be.
+  - **Disclaimer — "Geen officiële waarschuwingsdienst / Not an official warning service"** (catalogue gap item 18): one consolidated page, linked from the footer of every page and from the beta banner, naming the official channel per country: NL RWS/WMCN (waterberichtgeving.rws.nl and waterinfo.rws.nl), DE LHP (hochwasserzentralen.de) and the state flood centres, BE waterinfo.be and SPW (hydrometrie.wallonie.be), FR Vigicrues, LU inondations.lu, CH naturgefahren.ch. It states that real-time data are raw and unvalidated (§0.3) and that NL-4 classes are Waterinfo display classes, not warnings.
+  - **Colofon / Colophon (legal)**: operator and contact (D2 mailbox; the owner approves the text, E5), the licence of our own code and of the ODbL river graph, and a link to the sources page.
+  - **Methode / Method**: `docs/classification.md` rendered (the signed-off §4.9 crosswalk), datums (and why French stations have no converted height), indicative travel times, the §0.5 forecast coverage, and the **rivers that are not covered** and why (D21: the Kempen rivers until VMM, the RLP tributaries until RLP, Austria and Liechtenstein, the Dutch water-board stretches).
+  - **Privacy**: no cookies, no trackers, no analytics, no third-party requests; access logs IP-masked (IPv4 /24, IPv6 /48) and kept 14 days; rate-limiter state held in memory only; if the CDN break-glass (D20) is ever armed, the CDN is named here before it goes live.
+  - **Status**: per-source freshness from `status.json`.
+  - An **accessibility statement** and a 404 page, all in NL and EN.
+
+**Scope out:** flow animation, playback and Hovmöller (P11); accounts; notifications.
+
+**Acceptance criteria**
+- [ ] [CI] Playwright (3 browsers):
+  - mode switching works;
+  - forecasts appear only where published and are labelled;
+  - warnings are time-aware;
+  - the legend and honesty note appear in NL and EN;
+  - a deep link reproduces the view.
+- [ ] [CI] A missing `nl` or `en` key, or a hard-coded UI string (`check-i18n`), fails CI.
+- [ ] [CI] axe finds 0 serious or critical issues on every view. The slider, the mode control and station selection work by keyboard alone. A CVD-simulation screenshot set is attached to the PR.
+- [ ] [CI] Initial JS ≤ 250 KB gzip, excluding the lazy chunks. Lighthouse CI on mobile gives performance ≥ 80 and accessibility ≥ 95, with LCP < 2.5 s on throttled 4G.
+- [ ] [CI] The attribution e2e enumerates the public sources and asserts that each required string appears, including the VIGICRUES date, LHP "Stand" and BAFU "Bezugsdatum".
+- [ ] [CI] The XSS fixture stays inert, every request is same-origin, and there are 0 CSP violations.
+- [ ] [CI] The disclaimer, colophon and privacy pages exist in NL and EN and are linked from the footer of every page; the disclaimer links one official service for each of the six countries (Playwright).
+- [ ] [CI] A French fixture station shows the gauge-zero note and no "≈ m NAP" value; a station coloured by an area class shows the "section" badge; a German section name and a French alert label render raw beside their NL/EN translation, and a missing translation fails `check-i18n`.
+- [ ] [agent-prod] Every page is reachable in NL and EN, and `verify-prod.sh` passes.
+
+**Providers / rivers:** all public sources.
+
+**Risks**
+- *New majors.* Pins and gotchas.
+- *Bundle growth.* Lazy chunks and a budget test.
+- *Legend clutter.* The mode-specific legend.
+
+**Review focus**
+- *Code review:* URL state and deep links; i18n completeness, including river names and the provider-label table; that nothing implies precision (units, ≈, basis, no French absolute heights); that NL-4 display classes are never called warnings; accessibility; performance budgets.
+- *Security review:* DOM XSS from provider strings in every sink; URL-parameter injection; that the CSP is intact; no third-party links that auto-load resources.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` (start in `/plan`) | xhigh | The largest UI surface, on new major versions |
+| Code review | `sonnet` | `/code-review xhigh` | React, i18n and accessibility patterns are well known; an independent, cheaper reviewer |
+| Security review | `sonnet` | xhigh | Client-side surface (XSS, URL injection, CSP), checked against a checklist |
+
+---
+
+### P11 · Follow the water
+
+**Window:** 11-20 → 11-30 · **Lane:** web · **Depends on:** P6, P10, P9 frames · **PRs:** P11a minimum; P11b reach colouring + playback; P11c Hovmöller
+
+**Goal.** The visitor **sees** water flowing from the rivers that feed the Netherlands into the country. This is part of the first release.
+
+**Cut list** (applied in this order if 11-30 slips; **P11a is the launch minimum**):
+1. Drop the Hovmöller panel (P11c).
+2. Drop playback (the second half of P11b).
+3. Drop reach colouring (the first half of P11b).
+
+**Scope in**
+- **P11a**
+  - **Animated flow direction** on the river lines (`line-dasharray`, downstream-oriented geometry): 20–30 fps cap; paused when the tab is hidden; off under `prefers-reduced-motion`, with step buttons kept.
+  - **"Stroomopwaarts / Upstream" chain panel** per station: the upstream stations in graph order, each with its state at `t` and a typical travel-time **range** from §3.7, labelled "indicatief / indicative". **There is never a numeric ETA.**
+- **P11b**
+  - **Reach colouring** between snapped stations, by interpolated state or Δh. It may be time-shifted by an indicative travel time, and is then labelled as such. Tidal reaches are hatched and never interpolated. Impounded reaches use Q or state.
+  - **Playback** of hourly frames (`frames/…`, ≤ 1 file per UTC day), with play, pause, step and speed controls, reflected in the URL.
+- **P11c**
+  - **Hovmöller panel** for the Rhine (Basel → Lobith → branches) and the Meuse (Chooz → Lith): x = km to the NL entry, y = time, colour = state or Δh. It is linked both ways with the slider and the station selection.
+
+**Scope out:** deck.gl, WebGL shaders, crest tracking, empirical calibration (P14/backlog).
+
+**Acceptance criteria**
+- [ ] [CI] A text scan finds no numeric ETA anywhere, and every travel-time text contains "indicatief" or "indicative".
+- [ ] [CI] Under reduced motion, the flow animation's `requestAnimationFrame` count is 0. In a hidden tab the animation is paused.
+- [ ] [CI] The upstream chain for Lobith lists Emmerich, Rees, Wesel, Duisburg-Ruhrort, Düsseldorf, Köln… in graph order. For Eijsden it lists the Meuse chain.
+- [ ] [CI] (P11b) Tidal fixtures (Scheldt, Ems) never receive interpolated colours. Playing 7 days back fetches ≤ 1 frames file per UTC day.
+- [ ] [CI] (P11b) Visual regression passes for 3 scenes: the Aug–Sep 2026 low water from the archive, a synthetic flood, and the DST night.
+- [ ] [CI] Performance traces show ≥ 30 fps scrubbing on a desktop profile and ≥ 20 fps on a throttled mobile profile.
+- [ ] [CI] (P11c) The Hovmöller km axis runs from upstream to downstream, as in the registry.
+
+**Providers / rivers:**
+- the Rhine with the Aare, Neckar, Main, Moselle/Saar/Sauer, Lahn, Sieg, Ruhr and Lippe;
+- the NL branches;
+- the Meuse with the Chiers, Semoy, Sambre, Ourthe, Rur and Niers (Belgian reaches drawn, with values only at the §0.6 ungated points (Lixhe, the Grensmaas, the Semois, Chiers and Viroin gauges) until P13; the Walloon Meuse between Chooz and Lixhe has no station values);
+- the Scheldt and Lys (tidal rules);
+- the Ems and Vecht.
+
+**Risks**
+- *Visuals implying precision.* Ranges and "indicatief".
+- *Weir reaches.* Q or state basis.
+- *Mobile battery.* Throttling and pausing.
+
+**Review focus**
+- *Code review:* interpolation against the registry and reaches; performance guards; the honesty labels; URL state.
+- *Security review:* the new endpoint parameters (frames); that the CSP is intact.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | New visual and geo logic on MapLibre 6 under performance constraints |
+| Code review | `sonnet` | `/code-review xhigh` | Concrete performance and honesty criteria |
+| Security review | `sonnet` | medium | Client-side rendering of already-public data; minimal new surface |
+
+---
+
+### P12 · Flood hardening, operations and public launch
+
+**Window:** 11-26 → **12-04** · **Lane:** ops · **Depends on:** P9, P10, P11a · **PRs:** P12a hardening; P12b operations and launch
+
+**Goal.** The site survives a flood-day spike, data keeps flowing under load, failures reach the owner, and the site launches publicly before the flood season.
+
+**Scope in**
+- **P12a**
+  - **k6 scenarios**: normal, flood and abusive client.
+  - **Flood drill** (catalogue §0.4; gap item 2): `scripts/flood-drill` replays the flood fixtures, time-shifted to the drill clock, in the compose e2e stack (never against production data) through replay → load → publish → UI: the LHP test-server stations and alerts, a synthetic class-4 LHP station, the Wayback Vigicrues levels 2–3 plus a synthetic level-4 section, the real AGE red alert with its Cancel, a CAP TEST, and the CH-4 storm-Ciarán run (station 2020, Ticino, is outside the basin, so the drill registry adds it as a test-only station). The k6 flood scenario runs while the drill plays.
+  - **Tuning**: the PostgreSQL pool and memory, the statement timeout, publisher cadence, OS limits (`nofile`, `somaxconn`) and Caddy. **Ingestion keeps priority under a spike** (gap item 9): Compose `cpus` limits per service, a connection limit on `rws_api` below `max_connections` minus the `rws_load`/`rws_publish` reservation, and `capture` and `load` never share a pool with `api`.
+  - **Brownout flag** (A§9.2).
+  - **Chaos tests** in compose e2e.
+  - **Egress budget** (gap item 10): a Playwright session profile measures the bytes per typical map session (tiles, JS/CSS, data, API); `docs/capacity.md` multiplies it by the expected flood-day sessions per hour and compares the peak with the VPS uplink and the month with the traffic quota. The fallback is decided in advance (D20).
+  - **CDN break-glass runbook**: pre-written cache rules for a pull zone in front of the same hostname. It is documented, not enabled, unless D20 arms it for `/tiles/*` and `/assets/*`.
+  - **Final security pass**: headers and CSP; `deploy/tests/hardening.sh` (`docker inspect` assertions); a secrets-rotation drill; `/.well-known/security.txt`; threat model v2; the HSTS preload decision (D17).
+- **P12b**
+  - **Runbooks**: provider outage, schema drift, disk full, **VPS rebuild (RTO ≤ 4 h)**, token rotation, PMTiles refresh, DST check, flood mode.
+  - **Restore drill** extended to include the database dump and a one-day replay-rebuild comparison.
+  - **Launch checklist** (`docs/launch-checklist.md`):
+    - the licence and attribution of each source verified, **including its four §0.7 channel flags against its licence or permission record**;
+    - the permission tracker reviewed: every source past its go/no-go date runs its fallback (§0.2);
+    - **the BfG Belegexemplar sent and recorded in `registry/permissions/DE-2.md`, and then DE-2 flipped to public**;
+    - disclaimers, privacy and accessibility statements; the disclaimer, colophon and privacy texts approved by the owner (E5), and the privacy notice matching the real logging configuration;
+    - the flood drill and the egress budget passed;
+    - providers notified.
+  - **Going public**: remove `noindex`; add `robots.txt`, a sitemap and an OpenGraph image; keep a "beta" label.
+
+**Scope out:** new features.
+
+**Acceptance criteria**
+- [ ] [CI] k6 in CI (API with the synthetic seed): 50 req/s API + 300 req/s static for 15 min gives p95 < 300 ms, errors < 0.1%, loader lag p95 < 2 min, and no OOM or restart.
+- [ ] [owner] k6 static burst against production during a quiet hour (owner triggers `loadtest.yml`): 1,000 req/s including PMTiles range requests for 15 min, p95 < 300 ms, errors < 0.1%, with health staying green throughout.
+- [ ] [CI] An abusive client is throttled with 429 without moving other clients' p95 by more than 10%. Brownout engages within 60 s of the trigger.
+- [ ] [CI] Chaos (compose e2e):
+  - with `api` killed, the map works from static files with the degraded banner;
+  - with the DB stopped for 10 min, capture continues and the backlog loads without loss;
+  - with a provider blackholed (fake upstream), the stale styling and the alert both fire.
+- [ ] [CI] **Flood drill** (compose e2e): every fixture station and area reaches its expected §4.9 level in `latest.json` and `warnings/latest.geojson`; the AGE Cancel closes its alert and the TEST never appears; the CH-4 flood run shows in the forecast band; the Playwright flood scene passes visual regression; and the concurrent k6 flood scenario keeps p95 < 300 ms with loader lag p95 < 2 min.
+- [ ] [CI] The egress session profile is measured and committed to `docs/capacity.md`; CI fails if bytes per session grow by more than 20% without an update.
+- [ ] [owner] `docs/capacity.md` shows the flood-day peak egress ≤ 50% of the VPS uplink and the month ≤ 50% of the traffic quota, or the D20 fallback is armed before launch.
+- [ ] [CI] `security.txt` is present. The CSP has no `'unsafe-inline'`. Grype reports 0 fixable High or Critical findings.
+- [ ] [owner] `deploy/tests/hardening.sh` output shows every container non-root, `ReadonlyRootfs`, `CapDrop: ALL` (Caddy adds only `NET_BIND_SERVICE`), `no-new-privileges`, limits set, and published ports only on Caddy.
+- [ ] [owner] Timed rebuild on a temporary second VPS, from the repository plus backups: ≤ 4 h, with 0 post-restore gaps for sources whose windows are ≥ 7 days.
+- [ ] [owner] Every healthchecks alert is tested end-to-end and reaches the owner.
+- [ ] [owner] The BfG notice is sent, and CI confirms that `registry/permissions/DE-2.md` exists before DE-2 becomes `public`.
+- [ ] [owner] The launch checklist is signed.
+- [ ] [agent-prod] Public by **2026-12-04**: `noindex` removed, `robots.txt` and sitemap served, and `verify-prod.sh` passes the launch profile.
+
+**Providers / rivers:** all public sources, plus any P13 source already permitted.
+
+**Risks**
+- *Bandwidth rather than CPU becomes the flood bottleneck.* A traffic quota of ≥ 20 TB/month, the measured egress budget, and the CDN runbook in reserve (D20). No automatic switch to OpenFreeMap: it would add third-party requests (invariant 7).
+- *A dead VPS during a flood loses the unrecoverable streams* (gap item 9). Hourly off-site raw sync (RPO ≤ 1 h), RTO ≤ 4 h, and the second-collector decision (D19).
+- *Alert fatigue.* Thresholds tuned from the soak data.
+- *A slip past 12-04.* The P11 cut list; launch is not gated on Belgium.
+
+**Review focus**
+- *Code review:* cache and versioning correctness under revisions; brownout toggles; realism of the load model; that the flood drill exercises every flood code path of §0.4; the egress model; ingestion priority under load; that the runbooks can actually be executed.
+- *Security review:* a full end-to-end pass over the threat model; exposed surfaces; logging privacy; the break-glass DNS/CDN takeover risk; secrets inventory and rotation; supply-chain state; the whole CSP and header set.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | Cross-cutting operations work whose mistakes only surface under stress |
+| Code review | `fable` | `/code-review high` | Serving stale or wrong data during a flood through a cache or versioning mistake is the subtle launch failure |
+| Security review | `fable` | max | The whole-system gate before going public, where correctness outweighs cost |
+
+---
+
+### P13 · Gated sources, as permissions arrive
+
+**Window:** on permission (it may land before launch) · **Lane:** data · **Depends on:** the P5/P7/P8 patterns and the owner's permission for each source · **PRs:** one per source
+
+**Goal.** Complete the Scheldt, Belgian Meuse, Kempen, lower Vechte and Luxembourg forecast and threshold coverage, and the **official German state flood forecasts upstream of NL** (catalogue §0.5), from providers that need tokens or written consent.
+
+**Expected order:** BE-2 VMM (token) → BE-1 HIC (TYPE 3 agreement) → LU-2/3/4 AGE → BE-3 SPW → DE-9 NLWKN → DE-3 display. **DE-10 LfU RLP (C11) goes first the day it is granted**: it is the single most valuable forecast permission (66 gauges). DE-12 LUBW (C12) follows if granted and if its forecasts are in the data (UNVERIFIED).
+
+**Scope in** (per source PR)
+- **Shared KiWIS client** `adapters/_shared/kiwis/`, built with the first Belgian PR:
+  - value layers;
+  - `getTimeseriesValues` in batches of ≤ 100 `ts_id`s with `timezone=UTC`;
+  - timeouts of 60–120 s;
+  - metadata daily; no wildcard listing on the hot path; `ts_path` resolved at start-up;
+  - an OAuth2 client-credentials token cached ≤ 24 h and never logged;
+  - a credit budget per run.
+- **BE-1**:
+  - non-tidal layers 156163 (H) and 156170 (Q);
+  - tidal W via `getTimeseriesValues`, because the layer returns null for those series;
+  - thresholds `DrempelPrewaak/Waak/Alarm` (m TAW);
+  - exceedance percentiles;
+  - the compulsory dated attribution.
+- **BE-2**: `Absolute Value`, sentinel `-10000`, Modellicentie attribution. Includes the **Kempen gauges** that are the only coverage of the rivers entering NL directly (§0.6): Mark (Minderhout L11_047, Merksplas L11_048, Hoogstraten/Laermolen, the Meer weirs), Dommel (Neerpelt L11_025, De Wulp L11_026, Overpelt L11_022, Peer L11_023), Warmbeek (Achel L11_024), Kleine Aa/Weerijs (Wuustwezel L11_044, Brecht L11_046) and Noordermark (Baarle-Hertog). Whether they deliver live values is checked first (§10 R8).
+- **BE-3**:
+  - layers 1962373 and 1962340;
+  - QADM;
+  - weir-controlled reaches shown as Q;
+  - non-exceedance percentiles;
+  - "Sources des données : SPW".
+- **LU-2/3/4**:
+  - per-station JSON;
+  - p10–p90 forecasts with a `below_floor` flag at the Moselle floors (250/260/220 cm); the hourly LU-3 cadence is only partly verified (two samples), so poll hourly with content-hash deduplication;
+  - weekly station-page thresholds, scraped under the §6.7 HTML rule (only the `data-to-json` attribute; never execute scripts).
+- **DE-10 LfU RLP** (once C11 is granted; allowlist `www.hochwasser.rlp.de`):
+  - W and Q (48 h index, 5 days per site; the CSV holds 90 days, used for catch-up);
+  - forecasts at **66 gauges** with nine percentiles p10…p90 (Rhine Maxau → Emmerich 20; Mosel 9 incl. Perl, Stadtbredimus, Wasserbillig and Trier; Ahr 3, Nahe 5, Lahn 4, Sauer 2, Our 2, Kyll, Prüm, Saar, Sieg, Wied, Nette), added to the §0.1a raw archiver the same day;
+  - the **46 alert regions** (`alertClassId` 1–7) and the station legend mapped through §4.9;
+  - attribution "LfU Rheinland-Pfalz" with the Bearbeitungsdatum;
+  - no test server: a hand-built flood fixture from the 7 alert classes and the HW2–HW100 legend (§0.4);
+  - the DE-10 CSV is offset-less, so the DST gate of P5 applies.
+- **DE-12 LUBW** (once C12 is granted; allowlist `www.hvz.baden-wuerttemberg.de`): the Upper Rhine tributaries (Murg, Kinzig); forecasts only if they are in the data (UNVERIFIED); "MESZ"/"MEZ" stamps, so the DST gate applies.
+- **DE-9**: `DatumUTC` only; `-888` sentinel; lat/lon swap fix.
+- **DE-3**: display.
+- **For every source**:
+  - the capture spec, adapter, references and forecasts where published;
+  - `registry/permissions/<ID>.md`, which CI requires before `publication: public`. It records the four §0.7 channel flags the permission grants (`display`, `api`, `bulk_export`, `history_export`) and the attribution and date duties; channels the permission does not name stay off;
+  - **catch-up to the data epoch** where the provider keeps history (KiWIS: decades), within the credit budget;
+  - a documented **purge procedure** in case permission is refused or withdrawn;
+  - for BE-1, BE-2 and BE-3: the §0.6 Belgian partner stations that the agency operates switch from the FR-1 copy (`primary` until then) to the agency's own feed, and the FR-1 copy becomes `mirror` (A§7.2 exception).
+
+**Acceptance criteria**
+- [ ] [CI] Every adapter meets the P5 fixture standard.
+- [ ] [CI] Tokens come only from Compose secrets. A canary secret never appears in logs, the manifest, archive metadata or `ingest_batch` (redaction test).
+- [ ] [CI] CI blocks a `publication: public` entry that has no permission record, and blocks `api`, `bulk_export` or `history_export` on a P13 source unless its permission record grants that channel.
+- [ ] [CI] Every offset-less P13 parser (DE-10 CSV, DE-12 "MESZ"/"MEZ", DE-13 HTML if ever added) passes the DST gate of P5.
+- [ ] [CI] (DE-10) The hand-built flood fixture maps all 7 alert classes and the HW2–HW100 legend to the §4.9 levels, and the nine percentiles satisfy p10 ≤ … ≤ p90.
+- [ ] [CI] When a BE source goes public, the registry test shows every §0.6 partner station it operates published exactly once, from the operator's feed, with the FR-1 copy as `mirror`.
+- [ ] [CI] BE-1 tidal IDs are fetched through `getTimeseriesValues`, never the layer. The token is refreshed at most once per 24 h (fake clock).
+- [ ] [CI] BE-1 tidal stations are styled as tidal. BE-3 regulated reaches show Q. The percentile conventions are correct per provider.
+- [ ] [agent-prod] Twins: RWS Maaseik (NAP) vs HIC Maaseik (TAW) = 2.33 m ± 2 cm, and RWS Eijsden is consistent with the nearest HIC and SPW gauges.
+- [ ] [agent-prod] Catch-up to the epoch reaches ≥ 95% of buckets, and health is green for the new source.
+
+**Providers / rivers**
+- BE-1/BE-2 (Flanders): the tidal Zeeschelde, Leie, Bovenschelde, Dender, Demer, Dijle, Nete, Grensmaas.
+- BE-3 (Wallonia): the Meuse from Chooz to Lixhe, Sambre, Ourthe, Vesdre, Amblève, Semois, Escaut.
+- BE-2 (Kempen): Mark, Dommel, Warmbeek, Kleine Aa/Weerijs, Noordermark.
+- DE-9: Vechte and Dinkel.
+- LU-2/3/4: Sûre, Alzette and Moselle forecasts and thresholds.
+- DE-10: Rhine Maxau → Emmerich, Mosel (incl. Perl, Stadtbredimus, Wasserbillig), Saar, Sauer/Sûre, Our, Ahr, Nahe, Lahn, Kyll, Prüm, Sieg, Wied, Nette.
+- DE-12: Upper Rhine tributaries (Murg, Kinzig).
+
+**Risks**
+- *Refusal or conditions.* The `off` default, the go/no-go date in the tracker and the purge procedure.
+- *A "display only" grant.* Channel flags stay off for `api` and exports (P9 enforces them).
+- *KiWIS IDs changing and slow calls.* `ts_path` resolution and long timeouts.
+- *LU-3 and RLP forecast runs before permission are lost.* Accepted and disclosed.
+
+**Review focus**
+- *Code review:* conformance to the adapter template; KiWIS quirks (tidal nulls, TAW, quality codes, daily stamps at UTC+1); credit budgeting; the channel flags against the permission record; RLP percentile and alert-region mapping against §4.9.
+- *Security review:* secret storage and rotation; log redaction; token scope; that credentials never reach the browser or the archive.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | high | The pattern is established; the quirks are catalogued |
+| Code review | `sonnet` | `/code-review xhigh` | Conformance to the template and the pitfall checklist |
+| Security review | `opus` | xhigh | The first real third-party credentials in the system |
+
+---
+
+### P14 · LATER: historical backfill and climatology
+
+**Window:** 2027, starting no earlier than 4 weeks after a stable launch · **Lane:** data · **Depends on:** P12, plus data orders and permissions · **PRs:** per provider group
+
+**Goal.** Extend history backwards for context, for our own day-of-year percentile classes and for travel-time calibration, without ever compromising the data captured since go-live.
+
+**Scope in**
+- **Backfill runner**: a `backfill_job` checkpoint table (no new queue dependency); resumable after `kill -9`; per-provider rate budgets; off-peak; `--dry-run`; yearly partitions before the epoch.
+- **Row rules**:
+  - rows carry QC bit 512 (backfilled) plus the provider's validation bits;
+  - **precedence**: a live-captured row changes only through a provider-validated value, and always via `obs_revision`;
+  - rollups are rebuilt and `dayVersions` bumped.
+- **Sources:**
+
+  | Source | Route and limits |
+  |---|---|
+  | NL-1 REST | ≤ 160k values per request (about 2.5-year chunks), 1 request/s |
+  | DE-8 NRW | opengeodata `hydro` (resample irregular timestamps; `hydro/q` was seen as a listing only, so verify the download first) |
+  | BE-1/2/3 KiWIS | ≤ 250k values per call, with permission |
+  | FR-2 | `obs_elab` daily |
+  | CH-8 | BAFU Datenservice order (**resolve the UTC vs UTC+1 question first**) |
+  | CH-9 | data.bs.ch (2289 since 2020, 2106 since 2022) |
+  | LU-7 | AGE archive 2002–2024 on request |
+  | DE-5 PEGELONLINE history form | **only with ITZBund's written OK** |
+  | DE-11 HLNUG | `year.json` |
+
+- **Analysis**: the day-of-year percentile climatology as a new `statistical` basis (only for stations with ≥ N years). Empirical travel-time calibration per reach and flow class, which enables indicative crest tracking.
+- **Storage review ADR** at about 50 GB: TimescaleDB compression vs a Parquet export of closed partitions.
+
+**Acceptance criteria**
+- [ ] [CI] A test proves that backfill never changes a live row unless the provider-validated flag is set, and every such change is in `obs_revision`.
+- [ ] [CI] Kill and restart resume with no duplicates and no gaps. The per-provider rate budget holds.
+- [ ] [CI] Historical time-zone tests pass: the CH-8 CSV, KiWIS daily stamps, and pre-2007 FR local-time data.
+- [ ] [CI] Percentile classes are enabled only for stations with ≥ N years, and they appear in the generated classification document.
+- [ ] [agent-prod] Live freshness stays within its limits during the backfill (health sampled hourly).
+- [ ] [owner] The restore drill still completes in ≤ 4 h, or the RTO is revised in an ADR. The DB stays within its size budget.
+
+**Review focus**
+- *Code review:* precedence and revision rules; resumability; reconciliation against provider counts.
+- *Security review:* bulk-download credentials and politeness; that data-order files are handled safely.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | Long-running, rate-limited, resumable jobs across many providers |
+| Code review | `fable` | `/code-review high` | Bulk writes land next to the only copy of the go-live data; the strongest independent check guards precedence |
+| Security review | `sonnet` | high | Bulk egress and credentials behind the established guards |
+
+**Backlog (not scheduled):**
+- LfU Bayern, HLNUG live, Saarland, WVER and the Dutch water boards (including the Brabant boards De Dommel, Brabantse Delta and Aa en Maas; §10 R8), all with permission. (LfU RLP and LUBW moved to P13 after the gap check);
+- Austria and Liechtenstein inflows (Ill, Bregenzerach, Bodensee at Bregenz), only if D21 brings them into scope;
+- GloFAS as a clearly labelled "model outlook" layer, never as an official forecast (catalogue §0.5);
+- a hand-curated French gauge-zero table (IGN Circé; §10 R6), after which D16 may allow converted heights for French stations;
+- a second capture-only collector for the §0.1a streams at another provider (D19);
+- deck.gl effects and shader-based flow;
+- flood-crest ETAs, still indicative;
+- a TypeScript 7 migration once 7.1 and the tooling allow it;
+- EU-Hydro 2.0;
+- a VictoriaMetrics/Grafana stack if operations need it.
+
+---
+
+## 6. Owner decisions and owner actions
+
+### 6.1 Decisions
+
+Defaults are recommended. "Needed by" is the phase whose build needs the answer.
+
+| ID | Decision | Recommended default | Needed by |
+|---|---|---|---|
+| D1 | Commercial use (ads, paid tiers)? | **Non-commercial**, stated in every permission request (it helps with HIC, SPW, NLWKN and GKD) | P0 (e-mails) |
+| D2 | Domain and contact mailbox | Register now. `contact@` and `security@` on the domain (used in the User-Agent, `security.txt` and the e-mails) | P1 |
+| D3 | Dark capture before consent | **Revised:** no dark capture of DE-9 NLWKN or BE-3 SPW. LU-2, LU-3 and LU-4 stay off until AGE answers. DE-2 and DE-3 are captured and stored dark (BfG terms restrict publication, not storage). BE-1 and BE-2 stay off until tokens arrive. **DE-10 LfU RLP and DE-12 LUBW stay off until consent** (their Impressum forbids copying without it); RLP forecast runs before consent are lost, which is accepted and disclosed | P1 |
+| D4 | Publish BfG forecasts? | Yes: DE-2 at launch, after the Belegexemplar notice. DE-3 later (P13) | P8/P12 |
+| D5 | Off-site backup target | An EU S3-compatible bucket with versioning + Object Lock (compliance mode, 30-day default retention); restic-encrypted | P1 |
+| D6 | Public API status | Open and rate-limited, "unofficial, no SLA". Documented, not promoted | P9 |
+| D7 | Repository visibility | **Public**: free CodeQL and secret scanning, fits the open-data spirit, and GHCR images need no pull token | P0 |
+| D8 | Forecast horizon | **Per station**, capped at +48 h. "Estimate" styling beyond the provider's own forecast segment | P8 |
+| D9 | Show seeded pre-go-live data? | Yes, labelled with the data epoch and "data since" per station | P4 |
+| D10 | Default map mode | State (class) if the P7 coverage report shows ≥ 60% of tier-1 stations with a class other than `no_ref`; otherwise Δh | P10 |
+| D11 | Slider step | 10 min; 15-min sources are shown by carrying the last observation forward | P4 |
+| D12 | Tidal and impounded reaches | Tidal: hatched, raw level in the detail view, never interpolated, classed only from operational thresholds. Impounded: prefer Q or anomaly vs MW, and label the reach | P7/P11 |
+| D13 | Object Lock bucket provider | The owner's choice. It must offer an EU region, the S3 API, versioning and Object Lock | P1 |
+| D14 | Basemap extent | Full Rhine basin at z0–14 (4.3 GB) plus planet z0–6 | P3 |
+| D15 | Publish the OSM-derived river graph under ODbL | Yes; required once it is served | P6 |
+| D16 | Absolute heights | Detail view only, as "≈ m NAP (±2 cm)" next to the raw value; never on the map scale. **Amended after the gap check:** NL, DE, LU, CH and BE (TAW) only. **French stations get no converted height in the first release**; they show the gauge zero as published (Hub'Eau metadata, unverified), because at the three gauges shared with PEGELONLINE the Hub'Eau zeros sit +0.535, +0.58 and +1.57 m above the NHN zeros instead of the published ≈ +0.48 m, a disagreement of about 5 cm to 1.1 m (catalogue §4.1, §4.7(5), C40, §9 Q8). The same applies to any gauge zero taken only from Hub'Eau metadata, including the §0.6 Belgian partner stations in FR-1 (P5a stores those zeros but does not trust them) | P2/P7/P10 |
+| D17 | HSTS preload | Not at launch; revisit 3 months later | P12 |
+| D18 | **Class crosswalk sign-off** (catalogue §4.9, §9 Q31), including whether RWS NL-4 "Licht verhoogd" counts as `elevated` | Adopt §4.9 as proposed: one row per provider class with target level and basis (stage, discharge or area); gauge class beats area class; LHP duplicates by operating state, else worst class with provenance; "Licht verhoogd" = `elevated`, labelled as a Waterinfo display class and never as a warning | **P7b** (P7a may start without it) |
+| D19 | Second collector for the unrecoverable streams (gap item 9) | Not before launch. The hourly off-site raw sync bounds loss to ≤ 1 h (RPO) and the rebuild RTO is ≤ 4 h. Capture holds no DB credentials, so a capture-only instance at a second provider, writing to its own bucket prefix, is a configuration change; revisit at the P12 retrospective, after checking its IP is not blocked (`rws-reachability`) | P12 |
+| D20 | Flood egress fallback (gap item 10) | Decide in advance from the P12 egress budget: if the flood-day peak exceeds 50% of the uplink or the month 50% of the quota, arm a CDN pull zone for `/tiles/*` and `/assets/*` only (static, licence-neutral) under the same hostname, disclosed on the privacy page. **No automatic switch to OpenFreeMap** (third-party browser requests, CSP change) | P12 |
+| D21 | **Rivers not covered in the first release** (catalogue gap item 14, §9 Q32) | Accept for the first release and list them on the Method page: the Kempen rivers entering NL directly (Mark, Dommel, Aa/Weerijs, Warmbeek, Keersop, Merkske, Voer) until VMM (P13); the RLP tributaries Ahr, Kyll, Prüm and Nahe with LHP classes only until RLP (P13); the NL water-board stretches through German upstream gauges and RWS (backlog, §9 Q10); canal transfers only at the RWS points (`smeermaas.zuidwillemsvaart`, `kanne`). **Austria and Liechtenstein** (Ill, Bregenzerach, Bodensee at Bregenz): out of scope for the first release; the Alpine Rhine and Bodensee come from CH-1 | P6, P10 (Method page), P13 |
+
+### 6.2 Actions
+
+Everything non-code the owner must do, with the phase each item gates. The e-mail drafts are in `docs/legal/requests/` (P0b). Send them from the contact mailbox and record the dates in `docs/permissions.md`.
+
+| # | Action | Details and contacts | Deadline | Gates |
+|---|---|---|---|---|
+| **A — Infrastructure** | | | | |
+| A1 | Answer D1, D2, D5, D7 and D13 | See §6.1 | 09-25 | P0, P1 |
+| A2 | Register the domain; create the mailboxes `contact@` and `security@` | Used in the User-Agent, `security.txt` and the permission e-mails | 09-25 | P1 (User-Agent), all e-mails |
+| A3 | Order the VPS | EU region, 4 vCPU / 8 GB / ≥ 200 GB NVMe, ≥ 1 Gbit/s, ≥ 20 TB/month, IPv4 + IPv6, Debian 13. Enable provider snapshots (weekly) and the provider firewall (22 from your own IPs if static). Test console (break-glass) access. Install your SSH key (FIDO2 `sk-ed25519` recommended) | 09-27 | **P1b** (so the recorder can be live ≤ 10-02) |
+| A4 | DNS | A/AAAA → VPS; CAA `0 issue "letsencrypt.org"`; DNSSEC if the registrar supports it | 09-27 | P1b (TLS) |
+| A5 | Off-site backup bucket | EU S3-compatible provider (D13): a versioned bucket with Object Lock at creation (compliance, 30 days). Two keys: a **VPS key** (put, get, list; **no** `DeleteObjectVersion`, `BypassGovernanceRetention` or `PutObjectRetention`) and a **workstation key** for `restic forget --prune`. Generate the restic repository password and keep it offline (password manager + paper) | 09-28 | P1b (backups) |
+| A6 | healthchecks.io | Create an account and a project. Add e-mail + phone/push integrations. Create a project API key for `rws-hc-sync` | 09-28 | P1b (alerts) |
+| A7 | Put secrets on the VPS | `/etc/rws/secrets/` (0600): restic password, S3 keys, healthchecks API key (plus a GHCR read token if the repo is private). DB role passwords are generated by bootstrap in P2 | as each phase asks (P1b, P2) | P1b, P2 |
+| **B — GitHub** | | | | |
+| B1 | Run `scripts/gh-settings.sh`, then `--check` | Ruleset on `main`: PR required (**0 required approvals**, because the owner is the only merger), required checks `ci` and `security`, linear history, no force push, no deletion. Tag ruleset protecting `legacy-v0`. Require SHA-pinned actions. Allowed-actions list. Default `GITHUB_TOKEN` read-only; Actions may not approve PRs. Secret scanning + push protection. Private vulnerability reporting. Dependabot alerts | right after P0b merges (09-26) | Closing P0; every later PR |
+| B2 | Create the `production` environment | Required reviewer: owner. Deployment branch: `main`. **No environment secrets** | before P1b's first release | P1b onward (every deploy) |
+| B3 | Legacy clean-up | Check repository and Actions secrets, deploy keys and webhooks, and revoke anything legacy (the legacy `ci.yml` used no secrets). Revoke access to the old server that `deploy/install-ubuntu.sh` set up. Label and close legacy issues and PRs, and delete stale branches **after** the tag is verified | 09-26 | P0 |
+| B4 | GHCR visibility | If public (decision D7), set the packages public after the first release. If private, create a fine-grained read-only `read:packages` token and store it on the VPS (A7), not in GitHub | first P1b release | P1b |
+| B5 | GitHub secrets | **None required.** cosign uses GitHub OIDC; GHCR push and issue updates use `GITHUB_TOKEN`. Do not add server credentials to GitHub (ADR-0008) | – | – |
+| **C — Data access and permission requests** (send by 09-28; HIC needs weeks). **Every request also asks** whether (a) machine-readable redistribution through our public API and exports is allowed and (b) we may keep and republish a history archive (catalogue §0.2, §0.7). Record the answer as channel flags and set a go/no-go date per source in `docs/permissions.md`. The requests to SPW, HIC and AGE may cite the EU High-Value Datasets regulation (2023/138) only as a soft argument, because it sets no real-time requirement for hydrometry (catalogue §0.2) | | | | |
+| C1 | **HIC** (BE-1): `hic@vlaanderen.be` | TYPE 3 credentials **and a User Agreement** allowing public, non-commercial display on the website; confirm the attribution wording and the credit allowance | 09-28 | P13 (BE-1); Maaseik twin |
+| C2 | **VMM** (BE-2): `hydrometrie@waterinfo.be` | An API token for automated querying; confirm the Modellicentie attribution. Mention the Kempen gauges (Mark, Dommel, Warmbeek, Kleine Aa/Weerijs, Noordermark), which are the only coverage of those rivers (§0.6) | 09-28 | P13 (BE-2) |
+| C3 | **SPW** (BE-3): `hydrometrie@spw.wallonie.be` | Prior written consent (mentions légales) to show the data on a public website, to poll server-side every 10 min, and later to backfill. Ask for numeric alert thresholds (`NIVCRU`). Ask whether the Metawal clause on "support statique (… pdf ou image sur Internet)" allows an image-only display as an interim route (UNVERIFIED) | 09-28 | P13 (BE-3), P14 |
+| C4 | **AGE Luxembourg** (LU-2/3/4/7): `hydrometrie@eau.etat.lu`, plus the Service de la navigation for the Moselle stations (address not in the research; look it up) | Confirm CC0 or grant written permission for the per-station JSON (LU-2), the forecasts (LU-3) and the station-page thresholds (LU-4). **Ask whether the CC0 of the LU-1 CSV covers its third-party gauges** (LfU RLP Bollendorf and Gemünd, WSV Perl, Service de la navigation). Report the CSV bugs (15-min late labels, `SN_Remich.json` 404, `Water-Levels-Localstation.csv`). Ask about the 2002–2024 archive (LU-7). **Note:** LU-3 forecast runs are lost until permission arrives | 09-28 | P5b (LU-1 third-party gauges stay `dark` until answered), P13 (LU-2/3/4), P14 (LU-7) |
+| C5 | **NLWKN** (DE-9): `HWVZ@nlwkn.niedersachsen.de` | Written clarification (the Impressum conflicts with the manual) permitting **storage and public display** of the Vechte and Dinkel gauges | 09-28 | P13 (DE-9) |
+| C6 | **BfG** (DE-2/DE-3): `vorhersage@bafg.de` | Confirm the credit wording and whether `WV` inside PEGELONLINE falls under BfG terms. Announce that the site URL will be sent as the Belegexemplar. **Ask how `WV` behaves above HSW / Marke II**: capped, stopped in favour of the state flood centres' forecasts, or kept (§0.4, §10 R1). **At launch:** send the URL (with a screenshot) and record it in `registry/permissions/DE-2.md` | now; again at launch | **P12 launch gate** (DE-2 → public); P8 (flood behaviour of DE-2); P13 (DE-3) |
+| C7 | **RWS** (NL-1): the "Servicedesk Data" contact form on rijkswaterstaatdata.nl, optionally also https://github.com/Rijkswaterstaat/WaterWebservices/discussions | Courtesy notice of the load (about 9k requests/day), the `X-API-KEY` value and the contact address. Ask about the forecast cadence ("elke 6 uur"), **whether the API hosts change with the CTD migration on 2026-11-05** (§10 R4; also ask in GitHub Discussions), the meaning of quality code 25, **whether the longer waterinfo fan/ensemble forecasts exist as data, whether the NL-4 classes correspond to the WMCN warning phases and whether those phases exist machine-readably** (§10 R3), where the next NL-4 edition will be published, and **what the `kanne` Q series measures** (§10 R9) | before 10-02 | Courtesy for P1 (not blocking); the answers inform P2b, P5 (`kanne`), P7 (NL-4 labelling) and P8 |
+| C8 | **ITZBund / WSV** (DE-1/DE-5): contact address not in the research; use the contact on pegelonline.wsv.de | Courtesy notice. Ask whether `WV` and the third-party mirrors fall under DL-DE Zero, and ask permission for scripted use of the history form (DE-5) | 09-28 | Courtesy for P1; P14 (DE-5) |
+| C9 | **BAFU** (CH-1…CH-8): `abfragezentrale@bafu.admin.ch` (live data), `hydrologie@bafu.admin.ch` (history orders) | Courtesy notice of 10-min LINDAS/hydrodaten use. Ask what `threshold_customer` means, about the history order (CH-8), and whether the CSV is UTC or UTC+1. (The hydrodaten polling permission is C13; one e-mail may carry both) | 09-28 | Courtesy for P1; P14 (CH-8) |
+| C10 | Backlog providers | HLNUG, LfU Bayern and the Dutch water boards (Vechtstromen, Rijn en IJssel, Waterschap Limburg, and the Brabant boards De Dommel, Brabantse Delta and Aa en Maas, §10 R8): addresses not researched. (LfU RLP and LUBW moved to C11/C12) | after launch | Backlog |
+| C11 | **LfU Rheinland-Pfalz** (DE-10) — **send now**: `poststelle@lfu.rlp.de`; Landesamt für Umwelt Rheinland-Pfalz, Kaiser-Friedrich-Straße 7, 55116 Mainz, tel. 06131 6033-0 | Consent (Impressum: *"nur mit Zustimmung des LfU … vervielfältigt … an Dritte abgegeben … öffentlichen Wiedergaben"*) to capture, store and publicly display the **forecasts at 66 gauges** (p10…p90), the **46 alert regions** and the W/Q values, with the source credit "LfU" and the Bearbeitungsdatum; the §0.2 API/export and history questions. The single most valuable forecast permission (catalogue §0.5): Rhine Maxau → Emmerich, Mosel incl. Perl/Stadtbredimus/Wasserbillig, Ahr, Nahe, Lahn, Sauer, Our, Kyll, Prüm | 09-28 | **P13 (DE-10)**; the P8 coverage matrix row "after a permission" |
+| C12 | **LUBW** (DE-12) — send now: `Pegelinfo@lubw.bwl.de` | Consent under the Impressum for the Upper Rhine tributaries (Murg, Kinzig); ask whether forecasts are published as data (UNVERIFIED); the §0.2 API/export and history questions | 09-28 | P13 (DE-12); not needed for the first release |
+| C13 | **BAFU hydrodaten polling**: `abfragezentrale@bafu.admin.ch` | Ask whether polling the undocumented hydrodaten website files is acceptable, and at what interval: CH-2 `hydro_sensor_pq.geojson` (thresholds `wl_1..wl_4`), CH-4 `q_forecast` (forecasts) and CH-5 `hydro_warn_levels` (warning sections); whether the 10-min rule of the BAFU 2019 conditions applies to them; and whether thresholds and forecasts are, or will be, on LINDAS (§10 R5). Fallback if refused, or if there is no answer by a go/no-go date that the owner does not extend: CH-1 LINDAS `dangerLevel` plus the open CH-6 geo.admin.ch classes and national warning map (no permission needed; added in P7), and no Swiss forecasts | 09-28; go/no-go 10-31 (P7) and 11-06 (P8) | P1 (CH-2/4/5 capture continues as courtesy use until answered), **P7 (CH-2, CH-5 publication)**, **P8 (CH-4 publication)** |
+| **D — During the build** (action IDs D1–D8 are separate from the decision IDs D1–D21 of §6.1; the text says "owner action Dn" for these) | | | | |
+| D1 | Approve each `/plan`, merge PRs and approve `production` deployments | – | continuous | every phase |
+| D2 | Run the `[owner]` acceptance items | The scripts and checklists are supplied in each PR | per phase | closing each issue |
+| D3 | DST weekend | On 2026-10-25 after 03:00 local, check `/status/capture.json`: every spec is fresh, and LU-1 and NL-2 payloads are archived | 10-25 | P5 (DST fixtures) |
+| D4 | Basemap job | Run the first extract (P3). Enable the quarterly timer | 10-09 | P3, P4 |
+| D5 | Monthly and quarterly operations | Check the restore-drill result monthly. Run `restic forget --prune` from the workstation quarterly. Watch the disk trend | from 11-01 | P1 onward |
+| D6 | RWS CTD switch | On 2026-11-05/06 check the nightly contract check and the RWS updates page; if the API hosts or the NL-4 file path moved, update the base URLs in config (§10 R4) | 11-06 | P2b, P8 (NL-1 continuity) |
+| D7 | First flood event | When an NL-bound Vigicrues forecast, a Swiss warning section above level 1, or an LHP class ≥ 2 appears live, tell the agent: the archived payloads become regression fixtures (§10 R2) | when it happens | P7, P8 (fixtures; not blocking) |
+| D8 | Answer the gap-check decisions | D18 (crosswalk) before P7b; D21 (uncovered rivers) before P10b; D19 and D20 before P12 | D18 10-31; D21 11-10; D19/D20 11-26 | P7b, P10b, P12 |
+| **E — Launch** | | | | |
+| E1 | Send the BfG Belegexemplar (C6) and record it | `registry/permissions/DE-2.md` | ≤ 12-03 | P12 (DE-2 publication) |
+| E2 | Tell RWS, ITZBund and BAFU about go-live | Courtesy | 12-04 | – |
+| E3 | Timed rebuild drill on a temporary VPS | Delete the temporary VPS afterwards | ≤ 12-03 | P12 |
+| E4 | Sign the launch checklist | `docs/launch-checklist.md` | 12-04 | **Public launch** |
+| E5 | Approve the legal pages | The disclaimer, colophon (operator name and contact) and privacy notice in NL and EN (catalogue gap item 18); confirm the privacy notice matches the logging configuration | 11-25 | P10b, P12 (launch checklist) |
+
+---
+
+## 7. Roadmap issue (content)
+
+Title: **Roadmap: river levels flowing into NL (fresh start)**.
+
+It contains:
+- the table in §1, with each phase linked to its issue;
+- the Gantt chart and dependency graph from §1;
+- a permission tracker for C1–C13: sent, answered, granted or refused, the channel flags granted, the go/no-go date, and the permission-record link;
+- the owner-decision table (§6.1), with status;
+- the hard dates: **recorder live ≤ 10-02**, **launch ≤ 12-04**;
+- the P11 cut list.
+
+---
+
+## 8. Traceability to the requirements
+
+| Requirement | Covered by |
+|---|---|
+| Public map on a free/open basemap, self-hosted | P3, P4, P10 (Protomaps PMTiles, MapLibre) |
+| NL, DE, BE, FR, LU and CH from the start, including Moselle/Sauer and upper Rhine/Aare | P1 capture (all public IDs), P2, P5, P7, P8; BE, NLWKN, AGE, RLP and LUBW extras in P13 (until then Belgium has the ~25 ungated points of catalogue §0.6, added in P5) |
+| See water flowing into NL | P6 (graph), P11 (flow, upstream chain, reach colouring, playback, Hovmöller) |
+| Date/time selector, including the near future | P4 (past), P8 (future), P10 |
+| Collection from go-live; history later | P1 (live ≤ 10-02, seeds), P14 (LATER) |
+| Water level, discharge, forecasts, thresholds and alert levels, classified honestly | P2, P5 (H/Q), P8 (forecasts, §0.5 coverage), P7 (references, classes, warnings, basis; the §4.9 crosswalk signed off in D18), P12 (flood drill) |
+| Modest traffic with flood spikes | P9 (static-first, load shedding), P12 (load tests, flood drill, egress budget, brownout, CDN runbook) |
+| NL default + EN; names as published | P0 (Paraglide), P4, P10; registry `name`/`water_name` exactly as published |
+| One VPS with Docker Compose, DB + worker + API + TLS proxy | P1b, P2, P9 (A§11) |
+| Fresh start: tag `legacy-v0`, nothing reused | P0a, ADR-0001, blob check |
+| Phase issues with Build, Code review and Security review prompts, and a roadmap issue | §4 template, per-phase model tables, §7 |
+
+---
+
+## 9. Amendments after the catalogue gap check (2026-09-23)
+
+`SOURCE-CATALOGUE.md` was revised by the gap check in `plan/CATALOGUE-GAPS.md` after this plan was written. This section lists, per gap item, what this plan now does about it. Use it to patch phase issues that were drafted before the amendment: "Affected phases" names every phase whose Scope in, Acceptance criteria, Risks or Review focus changed. "Covered" means the plan already handled it before the gap check. "Owner" means a new or amended entry in §6.1 (D) or §6.2 (A–E).
+
+### 9.1 Gap items
+
+| Gap # | Decision | What changed | Affected phases | Affected sections |
+|---|---|---|---|---|
+| 1 | amended | The unrecoverable streams (forecast runs, alert/class states, threshold versions; catalogue §0.1, §0.1a) are enabled first, and a CI test enumerates §0.1a. NL-1 forecasts now cover **all** 183 H + 13 Q locations (40 curated hourly, the rest every 3 h, inside the RWS budget). DE-6 takes all 16 states with `If-None-Match`. FR-5 is stored only when `DtHrInfoVigiCru` changes. NL-4 adds the link-page watch. Seeds = the §0.1b day-0 harvest, now including **LU-5 every CAP dump since 2025-06 (833 files)** and LU-1. CH-1 `dangerLevel` and CH-2 `wl_*` changes are kept forever (loader promotion from P7) | P1, P7 | PHASES P1 (Scope P1a; AC: §0.1a enumeration, seed report; Risks; Review); P7 (Scope P7a raw retention). A§2 principle 3; A§7.2 (priority and retention notes; rows NL-1 forecasts, NL-4, DE-6, FR-5, LU-1, LU-5, CH-1, CH-2); ADR-0003 |
+| 2 | amended + owner | Flood fixtures (§0.4): LHP test server (stations 1–3, string alert classes 1/2/4/5) plus hand-edited class 4 / class 6 / class-less; real AGE LU-Alert flood alerts with Cancel and TEST; Wayback `InfoVigiCru` 2023-12-11 (old casing); hand-built CH-5; CH-4 storm Ciarán (Wayback, gzip); FR-4 Loire payload as a schema-only fixture. `WV` absent or capped above HSW → "no forecast". **Flood drill** before launch in compose e2e with the k6 flood scenario running. Owner: C6 now asks BfG about `WV` above HSW (R1); new owner action D7 in §6.2 (promote the first live flood payloads to fixtures, R2) | P7, P8, P12 | PHASES P7 (Scope P7a flood fixtures; AC flood fixtures; Risks); P8 (Scope P8a DE-2, P8b CH-4 and FR-4; AC; Risks); P12 (Scope P12a flood drill; AC flood drill; Review; launch checklist). §6.2 C6, D7 |
+| 3 | amended + owner | §0.5 coverage matrix: P8 publishes forecast coverage per reach and per country (health endpoint, then `status.json` from P9a); empty reaches say "no official forecast" and name the agency that would supply it. EFAS and GloFAS are not used (P8 scope out, ADR-0010; GloFAS "model outlook" only in the backlog). **LfU RLP permission moved to "send now"** (new C11, `poststelle@lfu.rlp.de`) and LUBW too (new C12); DE-10 (66 forecast gauges p10…p90, 46 alert regions, W/Q) and DE-12 are gated P13 sources; DE-10/DE-12 `off` in the registry and in D3 until consent; RLP and LUBW removed from the backlog and from C10. C7 asks RWS about the longer fan forecasts (R3) | P0, P8, P13, P14 | PHASES P0 (registry flags; AC); P8 (Scope P8a coverage; Scope out; AC; Risks; Providers); P13 (Goal; Expected order; Scope DE-10, DE-12; AC; Providers; Risks; Review); P14 (backlog). §6.1 D3; §6.2 C7, C10, C11, C12; §7; §8. A§7.2 "Not captured"; ADR-0007; ADR-0010 |
+| 4 | amended + owner | P5 adds the **ungated Belgian set** (§0.6): 7 RWS points on Belgian soil (NL-1 registry rows: `antwerpen`, `lixhebiefaval`, `maaseik`, `herenlaak`, `lanaken`, `kanne`, `smeermaas.zuidwillemsvaart`) and the **18 NL-bound Hub'Eau partner stations** as `primary` (exception to the FR-1 mirror rule until BE sources are public); Tournai, Solre-Erquelinnes and Roesbrugge excluded; `sasvangent` is NL. P6 adds the rivers of those points and keeps canal points on overrides. The permission tracker records sent/answered/conditions/channels and a **go/no-go date** per source. C2 names the Kempen gauges; C3 asks about the Metawal static-image route; the EU HVD regulation is cited as a soft argument only (§6.2 C header). P1 captures the whole set from day one (NL-1 specs, FR-1 code coverage test). When a BE source goes public in P13, its partner stations switch to the operator's feed and the FR-1 copy becomes `mirror` | P0, P1, P5, P6, P11, P13 | PHASES P0 (Scope P0b docs); P1 (Scope P1a; AC); P5 (Scope P5a FR-1 and Belgian set; AC precedence and Belgian set; Providers; Risks; Review); P6 (Scope P6a/P6b; AC); P11 (Providers); P13 (Scope "for every source"; AC); §6.2 C2, C3; §8. A§7.2 (Belgian coverage, mirror exception); A§7.4 item 6; ADR-0007 |
+| 5 | amended + owner | **Licence channel flags** (§0.7: `display`, `api`, `bulk_export`, `history_export`, attribution text/URL, last-updated/retrieval-date duties) in `registry/sources.yaml` with defaults (all on for open licences; `api`/exports off for anything under written permission) and a validator; schema columns on `source`/`series` (narrow, never widen); the views enforce the channels and the history window; P9 adds the **display-only canary** and a per-response `attribution` array; invariant 8 now covers channels (goes verbatim into `CLAUDE.md` in P0); P13 permission records state the granted channels; the launch checklist verifies the flags; every permission e-mail asks about API redistribution and history archives | P0, P2, P9, P12, P13 | PHASES P0 (Scope P0b registry and docs; AC; Review); P2 (Scope P2a schema); P9 (Scope P9b; AC channel canary and attribution; Risks; Review); P12 (launch checklist); P13 (Scope "for every source"; AC; Risks; Review); §6.2 C header. A§2 principle 6; A§6 (`source`, `series`, views); A§9.2 rules; A§12.1 invariant 8; ADR-0007 |
+| 6 | amended + owner | P7 uses the **§4.9 crosswalk**, which needs owner sign-off (**new D18**, §9 Q31; P7b waits for it). Gauge class beats area class; area classes colour stations only with a "section" badge (P10). LHP duplicate rule; features **without an `lhpClass` key** (216) → `no_ref`; LHP alert scale (string, 1/2/4/5/6) kept apart from the station scale. **Correction:** FR-5 station → section now comes from `TronEntVigiCru` `aNMoinsUn` (the `StaEntVigiCru` link is a placeholder), captured daily in P1; no section covers the French Escaut/Scarpe/Deûle | P1, P7, P10 | PHASES P1 (capture via A§7.2); P7 (header; Scope P7a FR-5, DE-6; Scope P7b; AC; Risks; Review); P10 (Scope P10a; AC). §6.1 D18; §6.2 D8. A§7.2 rows FR-5, DE-6; A§7.4 items 6 and 10; A§10; ADR-0009 |
+| 7 | amended + owner | **Correction:** NL-4 is Waterinfo display classes, not alert levels. The P2b converter follows the §2.1 specification (union of `Gehele jaar` and seasonal windows, lower `Priority` wins, slug dedup 6,245 → 1,542, bounds from `From`/`To`, `'NULL'` as a string, the list of curated series without classes) with new AC; `reference_value` gets a recurring season and `priority`; P1 watches the link page and alerts on a new file or a 404 (CTD risk); P7 and P10 label NL-4 as "not an official warning". C7 asks about WMCN phases and the next edition (R3) | P1, P2, P7, P10 | PHASES P1 (Scope; Risks); P2 (Scope P2a schema, P2b NL-4; AC; Review); P7 (Scope P7a NL-4; Risks); P10 (Scope P10b disclaimer, Method; Review); §1 dated events; §6.2 C7. A§6 `reference_value`; A§7.2 NL-4 row; ADR-0009 |
+| 8 | amended (decision) | **D16 amended: no converted absolute height for French stations** (nor for any zero taken only from Hub'Eau metadata, such as the §0.6 Belgian partner stations) in the first release; they show the published gauge zero marked unverified. The datum function returns "not converted" for IGN69/NGF-1884 (P2), the classifier skips them (P7), the panel shows the gauge-zero note (P10), each with a [CI] check. The A§6 datum line no longer states IGN69 ≈ NAP + 0.47…0.49 m. A curated French zero table is backlog (R6) | P2, P7, P10, P14 | PHASES P2 (Scope P2a; AC); P7 (Scope P7b; AC); P10 (Scope P10a; AC; Review); P14 (backlog); §6.1 D16. A§6 Datums; A§10; ADR-0009 |
+| 9 | covered + amended + owner | Already covered: hourly restic of `raw` to an Object Lock bucket, monthly and forced restore drill, disk alarm at 75% (P1b); the RTO ≤ 4 h rebuild drill (P12, E3). Added: **RPO ≤ 1 h** stated for the raw archive; Compose `cpus` limits and an `rws_api` connection limit that reserves the ingestion pools (P12a); **new D19** on a second capture-only collector (default: not before launch; backlog) | P12, P14 | PHASES P12 (Scope P12a tuning; Risks; Review); P14 (backlog); §6.1 D19. A§9.2 database session; A§11.1; A§11.3 recovery objectives; ADR-0011 |
+| 10 | amended + owner | **Egress budget** in P12a: a Playwright session profile measures bytes per map session, and `docs/capacity.md` compares the flood-day peak with the uplink and the month with the traffic quota ([CI] + [owner] AC). **New D20**: if either exceeds 50%, arm a CDN pull zone for `/tiles/*` and `/assets/*` only, disclosed on the privacy page; no automatic OpenFreeMap switch | P10, P12 | PHASES P10 (Scope P10b privacy); P12 (Scope P12a; AC; Risks; Review). §6.1 D20; §6.2 D8. A§10 privacy; A§12.2 privacy |
+| 11 | amended | P1b adds `rws-reachability`: an owner-run check on the VPS over IPv4 and IPv6 against every §1a endpoint and the sandbox failures to re-test, asserting on body signatures; [owner] AC and a new risk (R7) | P1 | PHASES P1 (Scope P1b; AC; Risks). A§5 layout; A§12.2 |
+| 12 | amended + owner | **DST gate**: an adapter with an offset-less convention is not enabled in `load` until synthetic fall-back and spring-forward fixtures pass; enforced by a registry test in P5 (LU-1) and applied to DE-6 (P7), DE-3 (P8) and DE-10/DE-12/DE-13 (P13). NL-2 in P2 was already covered by its DST criteria. RWS CTD: C7 asks about the API hosts (R4); **new owner action D6** (§6.2) checks the contract check and updates page on 11-05/06; the NL-4 path is flagged at risk | P5, P7, P8, P13 | PHASES §1 dated events; P5 (Scope P5b DST gate; AC; Risks; Review); P7 (Scope P7a DE-6; AC); P8 (Scope P8b DE-3; AC); P13 (Scope DE-10, DE-12; AC); §6.2 C7, D6. A§7.4 item 2 |
+| 13 | amended | **Per-format guards** (§6.7; not "JSON only"): ZIP ≤ 10 allowlisted members, ≤ 200 MB uncompressed, ratio ≤ 50:1, streamed; XML with DTDs and entities off and `<!DOCTYPE` rejected, CAP ≤ 1 MB; XLSX gets both; CSV row, column and field caps with a declared encoding; HTML only via `data-to-json`. Allowlist adds `download.data.public.lu`, `rijkswaterstaatdata.nl`, `pegelonline.wsv.de` and `vorhersage.bafg.de` (DE-3 is captured dark from P1; gated hosts only on permission); canonical URLs avoid cross-host redirects. [CI] AC in P1 | P1, P2, P5, P7, P13 | PHASES P1 (Scope P1a polite client; AC; Review); P2 (Scope P2b NL-4); P5 (Scope P5b DE-7); P7 (Review); P13 (Scope LU-4, DE-10, DE-12). A§7.1; A§12.2 fetcher |
+| 14 | amended + owner | **New D21** (§9 Q32): the uncovered rivers are accepted for the first release and listed on the Method page (Kempen rivers until VMM, RLP tributaries until RLP, NL water-board stretches via German and RWS gauges, canals only at the RWS points; **Austria and Liechtenstein out of scope**). P6 adds the Kempen rivers, the Voer and Ahr/Kyll/Prüm to `rivers.yaml`; P13 BE-2 includes the Kempen gauges (live check, R8) and DE-10 the RLP tributaries; the Brabant water boards join C10 and the backlog | P6, P10, P13, P14 | PHASES P6 (Scope P6a); P10 (Scope P10b Method); P13 (Scope BE-2, DE-10; Providers); P14 (backlog). §6.1 D21; §6.2 C2, C10, D8 |
+| 15 | owner + amended | **New C13**: ask BAFU (`abfragezentrale@bafu.admin.ch`, send by 09-28, go/no-go 10-31 for P7 and 11-06 for P8) whether polling the undocumented hydrodaten files CH-2, CH-4 and CH-5 is acceptable and at what interval, and whether thresholds and forecasts are or will be on LINDAS (R5). Fallback (on a refusal, or on no answer by a go/no-go date the owner does not extend): CH-1 `dangerLevel` plus the open CH-6 geo.admin.ch classes and warning map (no permission needed, so added in P7, not P13), no Swiss forecasts | P5, P7, P8 | PHASES P5 (Risks); P7 (Scope P7a CH-2/CH-5, CH-6 fallback; Providers); P8 (Risks); §6.2 C9, C13. A§7.2 CH-2 row and "Not captured" (CH-6) |
+| 16 | amended | `docs/capacity.md` from the first 48 h of production capture (after dedup and zstd): bytes/day per spec, year-1 projection vs disk and bucket, retention per source ([agent-prod] AC). Delta-friendly gates (`DtHrInfoVigiCru`, conditional GETs; NRW layer 10 if the zip dominates) | P1 | PHASES P1 (Scope P1b; AC; Risks). A§5 layout; A§7.2 retention; A§7.3 size budget; A§11.4 |
+| 17 | amended | A station-registry schema with the gap-17 fields (canonical and provider IDs, coordinates, datum and zero with validity, river and km system, tidal/weir flags, expected threshold and forecast source, licence-gate status, `first_release`) lands in P0b with a validator, is filled in P2 (DE, NL) and P5 (FR, CH, LU, ungated BE), and feeds two metrics: the share of `first_release` stations with a non-grey class (P7) and with a current forecast (P8), both from sources that need no permission | P0, P2, P5, P7, P8 | PHASES P0 (Scope P0b; AC); P2 (Scope P2a tier-1 DE registry); P5 (Scope P5a Belgian set; Scope P5b tier-1 LU registry); P7 (Scope P7b coverage report); P8 (Scope P8a coverage). A§6 station registry |
+| 18 | amended + owner | P10b adds a consolidated **"Geen officiële waarschuwingsdienst / Not an official warning service"** page with the official channel for each of the six countries (incl. RWS/WMCN), a **colophon** (operator, contact, licences) and an expanded **privacy notice** (masked logs 14 days, limiter state in memory, no analytics, no third parties, CDN disclosure), with [CI] AC. The launch checklist requires owner approval (**new E5**) and a privacy notice that matches the logging configuration | P10, P12 | PHASES P10 (Scope P10b; AC); P12 (launch checklist); §6.2 E5. A§10 routes, privacy, legal pages; A§12.2 privacy |
+| 19 | amended | River names from a reviewed `name_nl`/`name_en` table in `rivers.yaml` (P6); provider class and alert labels mapped to reviewed NL/EN text in `registry/labels/<SOURCE-ID>.yaml`, with an unmapped label failing CI (P7); the UI shows station names as published, river names from the table, and provider labels raw beside our translation (P10) | P6, P7, P10 | PHASES P6 (Scope P6a; AC); P7 (Scope P7a; AC); P10 (Scope P10a; AC; Review). A§5 layout; A§10 |
+| 20 | amended / covered | `pegeldaten.zip` is now [V]: the P1 seed was already planned (covered). DE-8 `hydro/q` is a listing only: the P14 route must be verified. DE-6 alert schema verified via the test server: used in P7. FR-4 Loire-only: schema-only fixture in P8. LU-3 "hourly" partly verified: hourly polling with content-hash dedup in P13. `WV` weekend schedule [D]: schedule-aware run-age alert in P8 with [CI] AC. §6.5 conditional requests: DE-6 `If-None-Match`, FR-5 no ETag (A§7.2). LU-1 third-party gauges: RLP-operated gauges `dark` until C4 answers (P5b); C4 asks. Open owner decisions (R12): see §9.2 | P5, P7, P8, P13, P14 | PHASES P5 (Scope P5b LU-1; AC); P7 (Scope P7a DE-6); P8 (Scope P8a DE-2, P8b FR-4; AC); P13 (Scope LU-2/3/4); P14 (Sources table); §6.2 C4. A§7.2 rows DE-6, FR-5, LU-1; A§7.3 |
+
+### 9.2 Remaining open items R1–R12 (catalogue §10) and what closes them
+
+| R# | Open item | Closed by |
+|---|---|---|
+| R1 | BfG `WV` above HSW / Marke II | Owner action **C6** (asks BfG). Until answered, P8 shows a missing or capped run as "no forecast"; P12 gates DE-2 publication |
+| R2 | Flood fixtures for FR-4 (NL-bound), CH-5, DE-10 | P1 captures them live whenever they occur; hand-built fixtures in **P7** (CH-5), **P8** (FR-4 schema) and **P13** (DE-10); owner action **D7** promotes the first real payloads |
+| R3 | RWS fan forecasts as data; NL-4 ↔ WMCN phases | Owner action **C7**; meanwhile **P7/P10** label NL-4 as display classes, and fan forecasts stay out of scope |
+| R4 | RWS API hosts after the CTD switch on 11-05 | Owner actions **C7** (Servicedesk and GitHub Discussions) and **D6** (11-05/06 check); URLs in config (P1); nightly contract check (**P2b**) |
+| R5 | Permission answers (HIC, VMM, SPW, AGE, NLWKN, BfG, LfU RLP, LUBW, BAFU) | Owner actions **C1–C6, C9, C11–C13** with the tracker and go/no-go dates (**P0b**); each grant becomes a **P13** PR (C13 gates **P7/P8** publication of CH-2/4/5) |
+| R6 | IGN69 offset and French gauge zeros | Decision **D16** (amended): no French converted heights in **P2/P7/P10**; the curated zero table is in the **P14** backlog |
+| R7 | Reachability from the production VPS | **P1** [owner] criterion: `rws-reachability` over IPv4 and IPv6 with body signatures |
+| R8 | VMM Kempen gauges live; Brabant water-board data | **P13** (BE-2 PR checks live delivery after the C2 token); Brabant boards via **C10** and the **P14** backlog |
+| R9 | What RWS `kanne` Q measures | Owner action **C7**; **P5** publishes it without a river assignment, **P6** places it only by override |
+| R10 | Austria and Liechtenstein inflows | Decision **D21** (out of scope for the first release; backlog if that changes) |
+| R11 | Design items: volume, backup/RPO/isolation, bandwidth, DST fixtures, seed list and coverage, privacy/legal, multilingual | Volume: **P1** (`docs/capacity.md`). Backup/RPO: **P1b** (covered) + A§11.3; isolation: **P12a**; second collector: **D19**. Bandwidth: **P12a** + **D20**. DST: **P5** gate, applied in **P7/P8/P13**. Seed list and coverage: **P0b/P2/P5/P7/P8**. Privacy/legal: **P10b/P12b** + **E5**. Multilingual: **P6/P7/P10** |
+| R12 | Owner decisions: go-live date, commercial or not, who sends the e-mails, crosswalk sign-off | Go-live: the hard dates (recorder ≤ 10-02 sets the data epoch; launch ≤ 12-04); `T_MIN` is `displayStart`, decision **D9** (default: seeded data from about 08-24, marked with the epoch). Commercial: decision **D1** (A1 by 09-25). E-mails: the owner sends §6.2 C from the contact mailbox (A2, P0 [owner] criterion). Crosswalk: decision **D18** (owner action D8, by 10-31) |
