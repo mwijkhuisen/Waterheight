@@ -19,4 +19,6 @@ git checkout origin/claude/river-water-level-map-hf7bcz -- docs/plan docs/source
 | [`../sources/CATALOGUE-GAPS.md`](../sources/CATALOGUE-GAPS.md) | The completeness check of the catalogue and how each gap was resolved |
 | [`../sources/research/`](../sources/research/) | The raw research reports, one per provider or topic |
 
-Where the files disagree, `PHASES.md` §9 and the revised catalogue take precedence over earlier text. Facts marked `[U]` or UNVERIFIED must be checked by the phase that first depends on them.
+Where the files disagree, the amendments in `PHASES.md` §9 (catalogue gap check) and §10 (owner audience) and the revised catalogue take precedence over earlier text. Facts marked `[U]` or UNVERIFIED must be checked by the phase that first depends on them.
+
+**Audiences** (PHASES.md §10, ADR-0017): the public site shows only sources whose licences allow public display. A login-only owner view, reachable only over WireGuard and only by the owner, also shows sources whose terms allow personal use. Sources whose terms forbid even storing the data stay off. Catalogue §0.8 gives the verdict and the verbatim clause for each source.
