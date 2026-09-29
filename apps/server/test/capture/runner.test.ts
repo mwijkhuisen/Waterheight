@@ -330,11 +330,11 @@ describe('FR-1 walks (C4, S8)', () => {
     const asked = hubeau({ pages: Number.POSITIVE_INFINITY });
     const s = spec('fr-1-obs');
     const first = await runSpec(s, deps);
-    expect(first).toMatchObject({ requests: 11, capped: true });
+    expect(first).toMatchObject({ requests: 21, capped: true });
     expect(asked[0]).toEqual({ from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z', cursor: null });
     c.advance(15 * 60_000);
     await runSpec(s, deps);
-    expect(asked[11]).toEqual({ from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z', cursor: null });
+    expect(asked[21]).toEqual({ from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z', cursor: null });
     // A walk that completes moves the window to its end; the next run takes the next day.
     const done = hubeau({ pages: 3 });
     c.advance(15 * 60_000);
