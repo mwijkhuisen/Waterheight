@@ -1,0 +1,17 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Supply-chain policy (ADR-0014; CLAUDE.md "Dependency policy"). Every key is
+# asserted by CI (`pnpm config get`), because pnpm ignores a misspelt key.
+# Install only versions published at least 7 days ago (minutes).
+minimumReleaseAge: 10080
+# Fail the install when a dependency wants to run a build script that is not
+# decided in allowBuilds.
+strictDepBuilds: true
+# Every dependency build script needs an explicit decision here.
+allowBuilds:
+  # postinstall only copies the browser worker file; Node tests do not use it.
+  msw: false
+# Transitive dependencies may only come from the registry (no git or tarball URLs).
+blockExoticSubdeps: true
