@@ -208,7 +208,7 @@ jobs:
         run: |
           export CLAUDE_ENV_FILE="$RUNNER_TEMP/claude.env" CLAUDE_PROJECT_DIR="$GITHUB_WORKSPACE"
           .claude/hooks/session-start.sh </dev/null 2>&1 | tee "$RUNNER_TEMP/hook-2.log"
-          if grep -E '^(session-start: (install|creat|start|writ)|install-pnpm: installed)' "$RUNNER_TEMP/hook-2.log"; then
+          if grep -E '^(session-start: (install|creat|start|writ|reload)|install-pnpm: installed)' "$RUNNER_TEMP/hook-2.log"; then
             echo "the second run changed something" >&2
             exit 1
           fi

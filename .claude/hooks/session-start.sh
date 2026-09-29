@@ -8,9 +8,10 @@
 #   SHASUMS256.txt of v26.10.0), pnpm by sha512 (scripts/install-pnpm.sh, no
 #   corepack), PostgreSQL 18 from the signed apt.postgresql.org repository whose
 #   key file is sha256-pinned (fingerprint B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8).
-# - PostgreSQL: cluster 18/rws on localhost:5433 only, builtin C.UTF-8 locale,
-#   trust auth for local TCP (a throwaway sandbox database; no password exists,
-#   so none reaches $CLAUDE_ENV_FILE or the log).
+# - PostgreSQL: cluster 18/rws on localhost:5433 only, builtin C.UTF-8 locale.
+#   Over TCP only role rws may reach database rws (trust: a throwaway sandbox
+#   database, so no password exists to leak into $CLAUDE_ENV_FILE or the log);
+#   every other TCP login, the superuser included, is rejected.
 # - Writes PATH and DATABASE_URL to $CLAUDE_ENV_FILE, then runs
 #   `pnpm install --frozen-lockfile`.
 #
@@ -83,16 +84,33 @@ else
   as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "postgresql-$PG_MAJOR" >/dev/null
 fi
 
-# 4. The cluster: localhost:5433, builtin C.UTF-8, trust for local TCP only.
+# 4. The cluster: localhost:5433, builtin C.UTF-8. Over TCP only the role rws
+#    may connect, to database rws, without a password; everything else is
+#    rejected (the superuser only through the local peer socket).
 if ! pg_lsclusters -h | awk -v v="$PG_MAJOR" -v c="$PG_CLUSTER" '$1 == v && $2 == c { found = 1 } END { exit !found }'; then
   log "creating cluster $PG_MAJOR/$PG_CLUSTER on port $PG_PORT"
   as_root pg_createcluster "$PG_MAJOR" "$PG_CLUSTER" --port "$PG_PORT" --locale C.UTF-8 \
     -o listen_addresses=localhost -- \
-    --locale-provider=builtin --builtin-locale=C.UTF-8 --encoding=UTF8 --auth-host=trust --auth-local=peer >/dev/null
+    --locale-provider=builtin --builtin-locale=C.UTF-8 --encoding=UTF8 --auth-host=reject --auth-local=peer >/dev/null
+fi
+hba=/etc/postgresql/$PG_MAJOR/$PG_CLUSTER/pg_hba.conf
+hba_want="# Managed by .claude/hooks/session-start.sh
+local all all peer
+host $PG_DB $PG_ROLE 127.0.0.1/32 trust
+host $PG_DB $PG_ROLE ::1/128 trust
+host all all all reject"
+hba_changed=0
+if [[ $(as_root cat "$hba") != "$hba_want" ]]; then
+  log "writing $hba"
+  printf '%s\n' "$hba_want" | as_root tee "$hba" >/dev/null
+  hba_changed=1
 fi
 if ! pg_lsclusters -h | awk -v v="$PG_MAJOR" -v c="$PG_CLUSTER" '$1 == v && $2 == c && $4 == "online" { found = 1 } END { exit !found }'; then
   log "starting cluster $PG_MAJOR/$PG_CLUSTER"
   as_root pg_ctlcluster "$PG_MAJOR" "$PG_CLUSTER" start
+elif ((hba_changed)); then
+  log "reloading cluster $PG_MAJOR/$PG_CLUSTER"
+  as_root pg_ctlcluster "$PG_MAJOR" "$PG_CLUSTER" reload
 fi
 psql_admin() { as_postgres psql -X -q -p "$PG_PORT" -v ON_ERROR_STOP=1 -Atc "$1"; }
 if [[ -z $(psql_admin "select 1 from pg_roles where rolname = '$PG_ROLE'") ]]; then
@@ -120,4 +138,6 @@ fi
 # 6. Dependencies, exactly as locked.
 cd "$project"
 pnpm install --frozen-lockfile
-log "ready: node $(node --version), pnpm $(pnpm --version), $(psql -X -p "$PG_PORT" -h localhost -U "$PG_ROLE" -d "$PG_DB" -Atc 'show server_version')"
+# A statement of its own, so a failed connection fails the hook (set -e).
+server_version=$(psql -X -h localhost -p "$PG_PORT" -U "$PG_ROLE" -d "$PG_DB" -Atc 'show server_version')
+log "ready: node $(node --version), pnpm $(pnpm --version), PostgreSQL $server_version"
