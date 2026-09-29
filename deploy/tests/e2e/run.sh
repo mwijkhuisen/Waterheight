@@ -95,8 +95,15 @@ proof "Docker $(docker version --format '{{.Server.Version}}') and Compose $(doc
 
 # ------------------------------------------------------------------ images
 step "Build the server, web and backup images"
+# A container on the default bridge must reach the internet under deploy/host/daemon.json.
+docker run --rm --entrypoint /bin/sh caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b \
+  -c 'cat /etc/resolv.conf; wget -q -T 20 -O /dev/null https://deb.debian.org/ && echo "container egress ok"' ||
+  echo "::warning::a container on the default bridge cannot reach deb.debian.org"
 for image in server web backup; do
-  docker build -q -f "$repo/deploy/$image/Dockerfile" -t "rws-$image:ci" "$repo" >/dev/null
+  if ! docker build --progress=plain -f "$repo/deploy/$image/Dockerfile" -t "rws-$image:ci" "$repo" >"/tmp/build-$image.log" 2>&1; then
+    tail -n 60 "/tmp/build-$image.log"
+    fail "docker build of $image"
+  fi
   echo "rws-$image:ci $(docker image inspect -f '{{.Id}} {{.Size}}' "rws-$image:ci")"
 done
 docker run --rm -e RWS_DOMAIN=$DOMAIN -e RWS_CONTACT_EMAIL=contact@$DOMAIN rws-web:ci \
