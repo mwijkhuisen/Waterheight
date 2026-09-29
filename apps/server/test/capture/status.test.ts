@@ -1,9 +1,9 @@
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Counters } from '../../src/capture/runner.ts';
-import type { SpecState } from '../../src/capture/state.ts';
+import { removeStaleTmp, type SpecState } from '../../src/capture/state.ts';
 import { CaptureStatus, isFresh, writeDailyReport, writeSeedReport, writeStatus } from '../../src/capture/status.ts';
 import { registry, spec } from './helpers.ts';
 
@@ -134,5 +134,26 @@ describe('status files', () => {
     expect(
       isFresh(s, { ...base, enabled_since: '2026-10-01T00:00:00Z', last_success: '2026-10-02T11:29:00Z' }, NOW),
     ).toBe(false);
+  });
+});
+
+describe('stale tmp files (C12)', () => {
+  it('are removed at start: only capture.json tmp files in the served dir, every JSON tmp in our own dirs', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rws-tmp-'));
+    const status = join(root, 'status');
+    const owner = join(root, 'owner');
+    mkdirSync(status);
+    mkdirSync(join(owner, 'reports'), { recursive: true });
+    for (const f of ['capture.json.4711.tmp', 'capture.json', 'ops.json.77.tmp']) writeFileSync(join(status, f), '{}');
+    for (const f of ['capture.json.4711.tmp', 'reports/2026-10-01.json.4711.tmp', 'reports/2026-10-01.json'])
+      writeFileSync(join(owner, f), '{}');
+    expect(await removeStaleTmp(status, /^capture\.json\.\d+\.tmp$/)).toBe(1);
+    expect(await removeStaleTmp(owner)).toBe(2);
+    expect(existsSync(join(status, 'capture.json.4711.tmp'))).toBe(false);
+    expect(existsSync(join(status, 'ops.json.77.tmp'))).toBe(true); // P1b's
+    expect(existsSync(join(status, 'capture.json'))).toBe(true);
+    expect(existsSync(join(owner, 'reports/2026-10-01.json.4711.tmp'))).toBe(false);
+    expect(existsSync(join(owner, 'reports/2026-10-01.json'))).toBe(true);
+    expect(await removeStaleTmp(join(root, 'missing'))).toBe(0);
   });
 });

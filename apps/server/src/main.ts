@@ -9,7 +9,7 @@ import { Counters } from './capture/runner.ts';
 import { startRecorder } from './capture/scheduler.ts';
 import { seedRecords, startSeeds } from './capture/seeds.ts';
 import { loadRegistry } from './capture/specs.ts';
-import { StateStore } from './capture/state.ts';
+import { removeStaleTmp, StateStore } from './capture/state.ts';
 import { healthy, startHeartbeat } from './heartbeat.ts';
 import { Client } from './http/client.ts';
 
@@ -105,6 +105,9 @@ async function capture(
   });
   if (recovered > 0) logger.warn({ recovered }, 'archive objects without a manifest line recorded');
   const paths = { rawDir: cfg.rawDir, statusDir: cfg.statusDir, ownerStatusDir: cfg.ownerStatusDir };
+  // Tmp files of writes a crash cut short; in the served status dir only our own.
+  await removeStaleTmp(cfg.statusDir, /^capture\.json\.\d+\.tmp$/);
+  for (const dir of [cfg.ownerStatusDir, state.dir, `${cfg.rawDir}/_reports`]) await removeStaleTmp(dir);
   let seeds = await seedRecords(registry, deps);
   const stopHeartbeat = startHeartbeat();
   const recorder = await startRecorder({
