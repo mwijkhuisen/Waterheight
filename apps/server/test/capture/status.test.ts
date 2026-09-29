@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -148,12 +148,30 @@ describe('stale tmp files (C12)', () => {
     for (const f of ['capture.json.4711.tmp', 'reports/2026-10-01.json.4711.tmp', 'reports/2026-10-01.json'])
       writeFileSync(join(owner, f), '{}');
     expect(await removeStaleTmp(status, /^capture\.json\.\d+\.tmp$/)).toBe(1);
-    expect(await removeStaleTmp(owner)).toBe(2);
+    expect(await removeStaleTmp(owner)).toBe(1);
+    expect(await removeStaleTmp(join(owner, 'reports'))).toBe(1);
     expect(existsSync(join(status, 'capture.json.4711.tmp'))).toBe(false);
     expect(existsSync(join(status, 'ops.json.77.tmp'))).toBe(true); // P1b's
     expect(existsSync(join(status, 'capture.json'))).toBe(true);
     expect(existsSync(join(owner, 'reports/2026-10-01.json.4711.tmp'))).toBe(false);
     expect(existsSync(join(owner, 'reports/2026-10-01.json'))).toBe(true);
     expect(await removeStaleTmp(join(root, 'missing'))).toBe(0);
+  });
+
+  it('never follow a link, nor descend into a directory (N4)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rws-tmp-'));
+    const outside = join(root, 'outside');
+    const state = join(root, 'state');
+    mkdirSync(outside);
+    mkdirSync(join(state, 'sub'), { recursive: true });
+    for (const f of [join(outside, 'x.json.1.tmp'), join(state, 'a.json.2.tmp'), join(state, 'sub', 'b.json.3.tmp')])
+      writeFileSync(f, '{}');
+    symlinkSync(outside, join(state, 'link'));
+    symlinkSync(join(outside, 'x.json.1.tmp'), join(state, 'c.json.4.tmp'));
+    expect(await removeStaleTmp(state)).toBe(1);
+    expect(existsSync(join(state, 'a.json.2.tmp'))).toBe(false);
+    expect(existsSync(join(outside, 'x.json.1.tmp'))).toBe(true);
+    expect(existsSync(join(state, 'c.json.4.tmp'))).toBe(true); // the link itself stays too
+    expect(existsSync(join(state, 'sub', 'b.json.3.tmp'))).toBe(true);
   });
 });

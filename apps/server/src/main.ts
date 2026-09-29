@@ -110,7 +110,14 @@ async function capture(
   const paths = { rawDir: cfg.rawDir, statusDir: cfg.statusDir, ownerStatusDir: cfg.ownerStatusDir };
   // Tmp files of writes a crash cut short; in the served status dir only our own.
   await removeStaleTmp(cfg.statusDir, /^capture\.json\.\d+\.tmp$/);
-  for (const dir of [cfg.ownerStatusDir, state.dir, `${cfg.rawDir}/_reports`]) await removeStaleTmp(dir);
+  for (const dir of [
+    cfg.ownerStatusDir,
+    `${cfg.ownerStatusDir}/reports`,
+    state.dir,
+    `${state.dir}/seeds`,
+    `${cfg.rawDir}/_reports`,
+  ])
+    await removeStaleTmp(dir);
   let seeds = await seedRecords(registry, deps);
   const stopHeartbeat = startHeartbeat();
   const recorder = await startRecorder({

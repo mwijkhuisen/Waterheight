@@ -1,6 +1,6 @@
 import { constants as fsc } from 'node:fs';
 import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 // Per-spec capture state in $RWS_RAW_DIR/_state/ (the contract): written
 // tmp → fsync → rename → fsync(dir) under a per-file lock, so a crash leaves
@@ -60,13 +60,14 @@ export async function writeFileAtomic(path: string, text: string, mode: number):
 /**
  * Removes the `<file>.<pid>.tmp` files a crash left behind (writeFileAtomic),
  * at start. Only names matching `pattern` go: $RWS_STATUS_DIR is served by
- * Caddy and shared with P1b's ops.json.
+ * Caddy and shared with P1b's ops.json. Only regular files directly in `dir`:
+ * never a link, never a subdirectory (N4), so each directory is named.
  */
 export async function removeStaleTmp(dir: string, pattern = /\.json\.\d+\.tmp$/): Promise<number> {
   let removed = 0;
-  for (const name of await readdir(dir, { recursive: true }).catch(() => [] as string[])) {
-    if (!pattern.test(basename(name))) continue;
-    await rm(join(dir, name), { force: true });
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    if (!entry.isFile() || !pattern.test(entry.name)) continue;
+    await rm(join(dir, entry.name), { force: true });
     removed += 1;
   }
   return removed;
