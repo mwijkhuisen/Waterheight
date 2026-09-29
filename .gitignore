@@ -6,9 +6,19 @@ coverage/
 .env
 .env.*
 !.env.example
+.envrc
 deploy/secrets/
 *.pem
 *.key
+*.crt
+*.p12
+*.pfx
+*.jks
+id_rsa*
+id_ed25519*
+wg*.conf
+# registry auth tokens; pnpm settings belong in pnpm-workspace.yaml
+.npmrc
 
 .claude/settings.local.json
 .DS_Store
