@@ -98,7 +98,9 @@ export function checkSupplyChain(root: string, today = new Date().toISOString().
     for (const entry of Array.isArray(excluded) ? excluded : []) {
       const line = workspace
         .split('\n')
-        .find((l) => new RegExp(`^\\s*-\\s*['"]?${String(entry).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]?\\s*#`).test(l));
+        .find((l) =>
+          new RegExp(`^\\s*-\\s*['"]?${String(entry).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]?\\s*#`).test(l),
+        );
       const expires = /#.*\bexpires (\d{4}-\d{2}-\d{2})\b/.exec(line ?? '')?.[1];
       if (expires === undefined) {
         problems.push(`pnpm-workspace.yaml: minimumReleaseAgeExclude ${entry} needs a "# expires YYYY-MM-DD" comment`);

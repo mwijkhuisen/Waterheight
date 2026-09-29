@@ -135,14 +135,24 @@ describe('supply-chain rules (risk R-008)', () => {
     ['with a passed expiry', '  - "vitest@5.0.2" # GHSA-xxxx; expires 2026-01-01', /expired on 2026-01-01/],
   ])('fail on a minimumReleaseAgeExclude entry %s', (_, line, message) => {
     const dir = scratch();
-    edit(dir, 'pnpm-workspace.yaml', 'minimumReleaseAge: 10080', `minimumReleaseAge: 10080\nminimumReleaseAgeExclude:\n${line}`);
+    edit(
+      dir,
+      'pnpm-workspace.yaml',
+      'minimumReleaseAge: 10080',
+      `minimumReleaseAge: 10080\nminimumReleaseAgeExclude:\n${line}`,
+    );
     expect(checkSupplyChain(dir, '2026-09-29').join('\n')).toMatch(message);
   });
 
   it('accept an entry with an unexpired date', () => {
     const dir = scratch();
     const line = '  - "vitest@5.0.2" # GHSA-xxxx; expires 2026-10-06';
-    edit(dir, 'pnpm-workspace.yaml', 'minimumReleaseAge: 10080', `minimumReleaseAge: 10080\nminimumReleaseAgeExclude:\n${line}`);
+    edit(
+      dir,
+      'pnpm-workspace.yaml',
+      'minimumReleaseAge: 10080',
+      `minimumReleaseAge: 10080\nminimumReleaseAgeExclude:\n${line}`,
+    );
     expect(checkSupplyChain(dir, '2026-09-29')).toEqual([]);
   });
 });
