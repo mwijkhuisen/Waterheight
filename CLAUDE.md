@@ -16,7 +16,12 @@ The legacy code is archived as the annotated tag `legacy-v0` (`a4106b855c782832d
 | `pnpm check` | Paraglide compile, Biome, `tsc -b`, Vitest (unit), `check-bom`, `check-boundaries` |
 | `pnpm test` / `pnpm test:integration` | Vitest unit / integration (needs `DATABASE_URL`: a real PostgreSQL ≥ 18 with the builtin C.UTF-8 locale; fails on zero tests) |
 | `pnpm build`, `pnpm -F web build` | `tsc -b` (server to `apps/server/dist`) and the static web build (`apps/web/dist`) |
-| `node apps/server/dist/main.js api` | The only role that runs in P0 (`GET /healthz`; `HOST`/`PORT` from env); other roles exit 2, unknown ones 64 |
+| `node apps/server/dist/main.js api` | `GET /healthz` (`HOST`/`PORT` from env); touches the heartbeat |
+| `node apps/server/dist/main.js capture` | The P1a recorder (contract env `RWS_*`, file secrets under `/run/secrets`); exits 78 without `RWS_DOMAIN`/`RWS_CONTACT_EMAIL` |
+| `node apps/server/dist/main.js capture --dry-run` | Loads and checks every spec; prints the schedule and the RWS requests/hour (busiest 60 min); no network, no writes |
+| `node apps/server/dist/main.js healthcheck` | Exit 0 iff `/tmp/rws-heartbeat` is < 120 s old; `load`/`publish`/`replay`/`watchdog` exit 2 until their phase, unknown roles 64 |
+| `node scripts/smoke-capture.ts --contact <e-mail> --info-url <url> --spec <id>…` | Opt-in fixture recorder: 1 request per spec, ≤ 30 per run, refuses under `CI`; owner payloads stay in the git-ignored `.smoke/` |
+| `node scripts/synthesize-fixture.ts --spec <owner spec>` | Synthetic owner fixture from `.smoke/<spec>.raw`: real structure, every value generated, `synthetic: true` |
 | `scripts/healthz-smoke.sh`, `scripts/dbmate-roundtrip.sh` | Server smoke test; dbmate up/down/up on a fixture migration |
 | `scripts/check-workflows.sh`, `scripts/gitleaks-planted.sh` | Workflow greps; proof that gitleaks still catches a planted key |
 | `scripts/gh-settings.sh --check` | Read-only drift check of the GitHub settings (B1, B2); applying them is the owner's job |
@@ -71,13 +76,13 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @biomejs/biome | npm | 2.5.14 | installed | – | MIT OR Apache-2.0 | lint + format |
 | vitest | npm | 5.0.1 | installed | – | MIT | |
 | msw | npm | 2.15.0 | installed | – | MIT | `onUnhandledRequest: 'error'`; postinstall denied (`allowBuilds`) |
-| yaml | npm | 2.9.1 | installed | – | ISC | registry and lockfile parsing |
+| yaml | npm | 2.9.1 | installed | – | ISC | registry and lockfile parsing; apps/server reads the registry at runtime (P1) |
 | @types/node | npm | 26.6.2 | installed | – | MIT | |
 | hono | npm | 4.13.8 | installed | – | MIT | apps/server |
 | @hono/node-server | npm | 2.1.1 | installed | – | MIT | apps/server |
 | pg | npm | 8.23.0 | installed | – | MIT | apps/server (dev until P2) |
 | @types/pg | npm | 8.23.1 | installed | – | MIT | |
-| zod | npm | 4.6.5 | installed | – | MIT | packages/contracts |
+| zod | npm | 4.6.5 | installed | – | MIT | packages/contracts; apps/server manifest and spec schemas (P1) |
 | react | npm | 19.3.0 | installed | – | MIT | apps/web |
 | react-dom | npm | 19.3.0 | installed | – | MIT | apps/web |
 | @types/react | npm | 19.3.0 | installed | – | MIT | |
@@ -101,13 +106,13 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | distroless nodejs26 | image | nonroot | planned | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89 | Apache-2.0 | P1b runtime |
 | caddy | image | 2.11.4-alpine | planned | caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b | Apache-2.0 | P1b/P4 |
 | dbmate (image) | image | 2.36.0 | planned | ghcr.io/amacneil/dbmate:2.36.0@sha256:520c740c6e0ad73fde2cd1ea7e2b779aaf789d22aca8858f87a478e7094535fb | MIT | P2 `migrate` |
-| croner | npm | 10.0.1 | planned | – | MIT | P1 |
-| undici | npm | 8.11.0 | planned | – | MIT | P1 |
-| fast-xml-parser | npm | 5.11.1 | planned | – | MIT | P1/P5 |
+| croner | npm | 10.0.1 | installed | – | MIT | apps/server: capture scheduler (P1) |
+| undici | npm | 8.11.0 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
+| fast-xml-parser | npm | 5.11.1 | installed | – | MIT | apps/server: CAP/XLSX validity, entities off (P1; P5 parsers) |
 | csv-parse | npm | 7.0.2 | planned | – | MIT | P2/P5 |
-| fflate | npm | 0.8.3 | planned | – | MIT | P1/P5 |
+| fflate | npm | 0.8.3 | installed | – | MIT | apps/server: streamed ZIP guard (P1; P5 parsers) |
 | proj4 | npm | 2.22.0 | planned | – | MIT | P5 |
-| pino | npm | 10.3.1 | planned | – | MIT | P1 |
+| pino | npm | 10.3.1 | installed | – | MIT | apps/server: JSON logs (P1) |
 | kysely | npm | 0.29.6 | planned | – | MIT | P2 |
 | kysely-codegen | npm | 0.20.0 | planned | – | MIT | P2 |
 | @hono/zod-openapi | npm | 1.6.3 | planned | – | MIT | P9 |
@@ -164,6 +169,6 @@ Deviations from A§3, decided in P0b: pnpm **12.5.1** instead of 12.6.0 (12.6.0 
 
 - **[CI]**: provable offline (GitHub Actions, or the agent session with the hook's PostgreSQL). **[agent-prod]**: checkable from outside without SSH (`scripts/verify-prod.sh`, `/status/capture.json`, `/data/v1/status.json`, `/api/v1/health*`). **[owner]**: needs the owner's access or judgement; the agent supplies the script or checklist.
 - **Per PR:** build (fresh session, `/plan`, owner approves) → code review (fresh session, a different model) → security review (fresh session) → fix → gate. Branch `claude/p<N><x>-<slug>`; small conventional commits; the PR uses `.github/pull_request_template.md`; agents never merge.
-- **Gate / definition of done:** CI green (`ci` and `security`); no open High or Critical security finding; Medium findings fixed or accepted in `docs/risk-register.md`; every [CI] criterion ticked with evidence; every [U] item listed; CLAUDE.md, runbooks and `docs/threat-model.md` updated where the PR changes them.
+- **Gate / definition of done:** CI green (`ci` and `security`); no open High or Critical security finding; Medium findings fixed or accepted in `docs/risk-register.md`; every [CI] criterion ticked with evidence; every [U] item listed, in the PR and in `docs/known-gaps.md`; CLAUDE.md, runbooks and `docs/threat-model.md` updated where the PR changes them.
 - **Agent environment:** `.claude/settings.json` denies the Read tool on `.env*` (`.env.example` included), `deploy/secrets/**`, key and certificate files, `~/.ssh` and the `gh` config; it denies the common force-push, mirror and delete-push forms, `git --no-index`, `git grep -O`, `pnpm dlx`/`exec` and `npx`. Without asking it allows only the named pnpm scripts and read-only git subcommands. `psql` and `git grep` always ask (`psql`'s `\!` and `git grep -O` run shell commands; use the Grep tool and `pnpm test:integration`). These rules are defence in depth: a Bash command can read a file without naming it, so the real controls are that no secret ever lives in the repository or the sandbox, and the B1 ruleset on `main`. The SessionStart hook installs Node, pnpm and PostgreSQL 18 in claude.ai/code sessions (`CLAUDE_CODE_REMOTE=true`). Agents have no production access; the owner merges every PR and approves every deployment.
 - **Never start a session on an untrusted PR branch.** The branch's own `.claude/settings.json`, hooks, `.mcp.json` and pnpm scripts run in that session. Review an outside PR from `main` with `gh pr diff <n>` and `gh pr view <n>`, and read every change under `.claude/`, `scripts/`, `.github/` and `package.json` before checking it out.

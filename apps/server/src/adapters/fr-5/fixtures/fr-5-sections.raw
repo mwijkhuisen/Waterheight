@@ -1,0 +1,131 @@
+{
+    "Scenario": {
+        "Flux": {
+            "Version": "1",
+            "DateRevision": "2019-07-02T11:00:00"
+        },
+        "CodeScenario": "VIC",
+        "VersionScenario": "1.1",
+        "NomScenario": "Référentiels et données de la vigilance crues métropolitaine",
+        "DateHeureCreationFichier": "2026-09-29T13:43:38+00:00",
+        "Emetteur": "1524"
+    },
+    "ListEntVigiCru": [
+        {
+            "CdEntVigiCru": "2",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Meuse-Moselle",
+            "CdDistrictEntVigiCru_1": "A renseigner obligatoirement",
+            "CdDistrictEntVigiCru_2": "A renseigner obligatoirement",
+            "DtHrCreatEntVigiCru": "A renseigner obligatoirement",
+            "DtHrMajEntVigiCru": "A renseigner obligatoirement",
+            "StEntVigiCru": "Validé",
+            "CdTCC": "A renseigner obligatoirement",
+            "CdInt": "A renseigner obligatoirement",
+            "aNMoinsUn": [
+                {
+                    "CdEntVigiCruInferieur": "LO12",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Nieds",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO12\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO17",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Meuse plaine ardennaise",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO17\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO18",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Meuse frontalière - Semoy",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO18\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO10",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Moselle aval",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO10\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO13",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Orne",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO13\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO14",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Seille",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO14\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO16",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Meuse couloir meusien",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO16\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO15",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Meuse amont et sammielloise",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO15\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO19",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Chiers amont",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO19\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO20",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Chiers aval",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO20\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO21",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Meurthe amont",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO21\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO22",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Vezouze",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO22\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO23",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Mortagne",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO23\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO24",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Moselle amont",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO24\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO25",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Moselle médiane",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO25\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO26",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Madon",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO26\u0026TypEntVigiCru=8"
+                },
+                {
+                    "CdEntVigiCruInferieur": "LO4",
+                    "TypEntVigiCruInferieur": "8",
+                    "LbEntVigiCruInferieur": "Meurthe aval",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=LO4\u0026TypEntVigiCru=8"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,123 @@
+{
+    "Scenario": {
+        "Flux": {
+            "Version": "1",
+            "DateRevision": "2019-07-02T10:00:00"
+        },
+        "CodeScenario": "VIC",
+        "VersionScenario": "1.1",
+        "NomScenario": "Référentiels et données de la vigilance crues métropolitaine",
+        "DateHeureCreationFichier": "2026-09-29T14:05:59+00:00",
+        "Emetteur": "1524"
+    },
+    "ListEntVigiCru": [
+        {
+            "CdEntVigiCru": "LO18",
+            "TypEntVigiCru": "8",
+            "LbEntVigiCru": "Meuse frontalière - Semoy",
+            "CdDistrictEntVigiCru_1": "A renseigner obligatoirement",
+            "DtHrCreatEntVigiCru": "A renseigner obligatoirement",
+            "DtHrMajEntVigiCru": "A renseigner obligatoirement",
+            "StEntVigiCru": "Validé",
+            "CdTCC": "A renseigner obligatoirement",
+            "CdInt": "A renseigner obligatoirement",
+            "aNPlusUn": {
+                "CdEntVigiCruSuperieur": "2",
+                "TypEntVigiCruSuperieur": "5",
+                "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=2\u0026TypEntVigiCru=5"
+            },
+            "aNMoinsUn": [
+                {
+                    "CdEntVigiCruInferieur": "B611101001",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Haulmé",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B611101001\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B732201001",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Landrichamps",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B732201001\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B720000002",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Chooz [Ile Graviat]",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B720000002\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B720000001",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Chooz [Trou du Diable]",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B720000001\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B732201101",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Felenne",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B732201101\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B610000601",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Bouillon",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B610000601\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B610000301",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Tintigny",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B610000301\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B610000201",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Membre",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B610000201\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B610000401",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Chiny",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B610000401\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B713000101",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Treignes",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B713000101\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B610000801",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Straimont",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B610000801\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B610000701",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Ste-Marie",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B610000701\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B713000301",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Nismes",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B713000301\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B713000201",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Couvin",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B713000201\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "B700001002",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Monthermé [Limnimètre]",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=B700001002\u0026TypEntVigiCru=7"
+                }
+            ]
+        }
+    ]
+}

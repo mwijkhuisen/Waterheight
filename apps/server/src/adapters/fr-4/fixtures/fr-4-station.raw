@@ -1,0 +1,42 @@
+{
+    "Scenario": {
+        "Flux": {
+            "Version": "1beta",
+            "DateRevision": "2019-07-08T10:00:00"
+        },
+        "CodeScenario": "VIC",
+        "VersionScenario": "1.1",
+        "NomScenario": "Référentiels et données de la vigilance crues métropolitaine",
+        "DateHeureCreationFichier": "2026-09-29T14:05:58+00:00",
+        "Emetteur": "1524"
+    },
+    "Simul": {
+        "CdEntVigiCru": "Q836001001",
+        "TypEntVigiCru": "7",
+        "LbEntVigiCru": "St-Laurent-de-Gosse [Urt]",
+        "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=Q836001001\u0026TypEntVigiCru=7",
+        "GrdSimul": "H",
+        "DtProdSimul": "2026-09-29T10:56:14+02:00",
+        "CommentSimul": "",
+        "Prevs": [
+            {
+                "DtPrev": "2026-09-29T20:00:00+02:00",
+                "ResMinPrev": 4.24,
+                "ResMoyPrev": 4.34,
+                "ResMaxPrev": 4.46
+            },
+            {
+                "DtPrev": "2026-09-30T08:20:00+02:00",
+                "ResMinPrev": 4.09,
+                "ResMoyPrev": 4.22,
+                "ResMaxPrev": 4.35
+            },
+            {
+                "DtPrev": "2026-09-30T20:50:00+02:00",
+                "ResMinPrev": 3.97,
+                "ResMoyPrev": 4.16,
+                "ResMaxPrev": 4.31
+            }
+        ]
+    }
+}

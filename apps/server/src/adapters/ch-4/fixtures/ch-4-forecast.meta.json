@@ -1,0 +1,11 @@
+{
+  "spec": "ch-4-forecast",
+  "source": "CH-4",
+  "synthetic": false,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://www.hydrodaten.admin.ch/plots/q_forecast/2091_q_forecast_de.json",
+  "bytes": 29253,
+  "trimmed": false
+}

@@ -6,6 +6,8 @@
 
 **Revision, 2026-09-24:** new **§0.8 Private (owner-only) use**, the per-source verdict behind the plan's hybrid audience (decision D22), with short owner-audience notes in §0.1a, §0.1b, §0.2 and §0.5. The AGE, SPW, BAFU, BfG, VMM and HIC clauses come from the research reports; the NLWKN, LfU RLP and LUBW Impressum pages were re-fetched on 2026-09-24.
 
+**Revision, 2026-09-29 (P1a build check):** DE-7 `…/data/internet/layers/10/index.json` answers 404 (the thresholds are in `pegeldaten.zip` → `pegel_stationen.txt`); the BfG 14-day index is `https://vorhersage.bafg.de/14-Tage-Vorhersage/index.html` (the directory URL answers 404); BAFU's `hydro_sensor_pq_forecast.geojson` lists 54 forecast stations; the LU-1 CSV has one row with one more value column than its header; the NL-4 xlsx has 14 members. See `plan/PHASES.md` §11.
+
 **Inputs** (in `scratchpad/research/`): `nl-rws.md`, `de-pegelonline.md`, `de-states.md`, `be-flanders.md`, `be-wallonia-lu.md`, `lu.md`, `fr-hubeau-vigicrues.md`, `ch-bafu.md`, `datum-arch.md`, `map-rivers.md`, `stack-landscape.md`. Raw responses from the live calls are in `scratchpad/` (file names are listed at the end of each report).
 
 **Legend**

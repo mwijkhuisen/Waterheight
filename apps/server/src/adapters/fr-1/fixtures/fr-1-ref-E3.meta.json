@@ -1,0 +1,8 @@
+{
+  "spec": "fr-1-ref-E3",
+  "source": "FR-1",
+  "synthetic": false,
+  "recorded_at": "2026-09-29T13:45:00Z",
+  "status": 200,
+  "note": "recorded by scripts/smoke-capture.ts --discover (a stage-2 or reference document)"
+}

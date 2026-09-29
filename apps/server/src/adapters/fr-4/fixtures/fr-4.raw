@@ -1,0 +1,206 @@
+{
+    "Scenario": {
+        "Flux": {
+            "Version": "1beta",
+            "DateRevision": "2019-07-08T10:00:00"
+        },
+        "CodeScenario": "VIC",
+        "VersionScenario": "1.1",
+        "NomScenario": "Référentiels et données de la vigilance crues métropolitaine",
+        "DateHeureCreationFichier": "2026-09-29T13:43:35+00:00",
+        "Emetteur": "1524"
+    },
+    "GrdSimul": "H",
+    "count": 27,
+    "ListEntVigiCru": [
+        {
+            "DtProdSimul": "2026-09-29T10:56:14+02:00",
+            "CdEntVigiCru": "Q836001001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "St-Laurent-de-Gosse [Urt]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=Q836001001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T10:50:05+02:00",
+            "CdEntVigiCru": "L800001020",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Saumur",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=L800001020\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T13:00:24+02:00",
+            "CdEntVigiCru": "R730001001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Rochefort",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=R730001001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K435001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Orléans [Pont Royal]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K435001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K490003010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Tours [Pont Mirabeau]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K490003010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T15:17:13+02:00",
+            "CdEntVigiCru": "S100001001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Le Verdon",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=S100001001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K683002001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Langeais",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K683002001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T10:56:14+02:00",
+            "CdEntVigiCru": "Q935251001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Bayonne [Pont-Blanc]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=Q935251001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T15:17:13+02:00",
+            "CdEntVigiCru": "S110000201",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Pauillac",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=S110000201\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K144001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Gilly-sur-Loire",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K144001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T15:17:13+02:00",
+            "CdEntVigiCru": "O972001001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Bordeaux",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=O972001001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K190001001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Imphy [Pont d\u0027Imphy]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K190001001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T10:46:29+02:00",
+            "CdEntVigiCru": "L870001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Ponts-de-Cé",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=L870001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T10:52:58+02:00",
+            "CdEntVigiCru": "M530001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Montjean-sur-Loire",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=M530001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K303081001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "St-Yorre",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K303081001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T11:14:55+02:00",
+            "CdEntVigiCru": "M800001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Nantes [Pont Anne de Bretagne]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=M800001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T10:56:14+02:00",
+            "CdEntVigiCru": "Q935002001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Bayonne [Lesseps]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=Q935002001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T15:17:13+02:00",
+            "CdEntVigiCru": "P577001001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Libourne",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=P577001001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K193001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Nevers",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K193001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K671091001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Tours [Pont St-Sauveur]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K671091001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K118001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Digoin [Pont canal]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K118001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K345081001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Moulins",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K345081001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T11:08:11+02:00",
+            "CdEntVigiCru": "M612001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Ancenis",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=M612001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K340081001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Châtel-de-Neuvre",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K340081001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K400001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Cours-les-Barres [Givry]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K400001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T10:56:14+02:00",
+            "CdEntVigiCru": "Q745101001",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Peyrehorade",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=Q745101001\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        },
+        {
+            "DtProdSimul": "2026-09-29T14:03:48+02:00",
+            "CdEntVigiCru": "K418001010",
+            "TypEntVigiCru": "7",
+            "LbEntVigiCru": "Gien [Vieux Pont]",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=K418001010\u0026TypEntVigiCru=7\u0026FormatDate=iso\u0026GrdSimul=H"
+        }
+    ]
+}

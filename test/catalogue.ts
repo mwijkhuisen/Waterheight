@@ -88,3 +88,10 @@ export function readPermissionRecords(parse: (text: string) => unknown): Map<str
   }
   return records;
 }
+
+/** §0.1a "First production slice": [stream, endpoint, interval, change gate] per row (13 rows). */
+export const table01a = (() => {
+  const rows = tableRows(section('#### 0.1a First production slice', '#### 0.1b')).slice(1);
+  if (rows.length !== 13) throw new Error(`catalogue §0.1a: expected 13 rows, parsed ${rows.length}`);
+  return rows;
+})();

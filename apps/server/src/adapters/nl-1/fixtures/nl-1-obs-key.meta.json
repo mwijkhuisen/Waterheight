@@ -1,0 +1,11 @@
+{
+  "spec": "nl-1-obs-key",
+  "source": "NL-1",
+  "synthetic": false,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 6017,
+  "trimmed": false
+}
