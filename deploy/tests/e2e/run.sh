@@ -227,8 +227,10 @@ mkdir -p "$REL"
 printf 'RWS_SERVER_IMAGE=rws-server:ci\nRWS_WEB_IMAGE=rws-web:ci\nRWS_BACKUP_IMAGE=rws-backup:ci\n' >"$REL/images.env"
 docker compose -p rws -f "$repo/deploy/compose.yaml" --env-file /etc/rws/rws.env --env-file "$REL/images.env" config -q
 proof "docker compose config -q: deploy/compose.yaml valid with the host settings and image digests"
+# --profile jobs: `config` leaves out services of inactive profiles (the backup job) otherwise.
 docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$e2e/compose.ci.yaml" \
-  --env-file /etc/rws/rws.env --env-file "$REL/images.env" config >"$REL/compose.yaml"
+  --env-file /etc/rws/rws.env --env-file "$REL/images.env" --profile jobs config >"$REL/compose.yaml"
+grep -q '^  backup:' "$REL/compose.yaml" || fail "the merged compose file has no backup service"
 set_active prod-ci
 rws_compose up -d --remove-orphans --quiet-pull
 healthy() { [[ $(docker inspect -f '{{.State.Health.Status}}' "rws-$1-1") == healthy ]]; }
