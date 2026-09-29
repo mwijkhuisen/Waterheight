@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Smoke test of the built server (issue #15 P0b): the api role serves
-# GET /healthz -> 200 without any version, and every other role exits non-zero.
+# Smoke test of the built server (issue #15 P0b; #16 P1a): the api role serves
+# GET /healthz -> 200 without any version; `capture --dry-run` loads every spec
+# offline and exits 0; every other role exits non-zero here (capture without
+# RWS_DOMAIN/RWS_CONTACT_EMAIL exits 78, healthcheck without a heartbeat 1).
 # Usage: scripts/healthz-smoke.sh   (after `pnpm build`; uses a free local port)
 set -euo pipefail
 
@@ -27,6 +29,10 @@ if grep -qiE 'server:|x-powered-by|version' <<<"$headers"; then
   echo "$headers" >&2
   exit 1
 fi
+
+dry=$(env -u RWS_DOMAIN -u RWS_CONTACT_EMAIL node "$main" capture --dry-run)
+grep -q 'RWS requests/hour' <<<"$dry" || { echo "healthz-smoke: capture --dry-run printed no budget" >&2; exit 1; }
+echo "capture --dry-run -> exit 0 ($(tail -n 1 <<<"$dry"))"
 
 for role in capture load publish replay watchdog nope; do
   code=0

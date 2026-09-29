@@ -16,7 +16,12 @@ The legacy code is archived as the annotated tag `legacy-v0` (`a4106b855c782832d
 | `pnpm check` | Paraglide compile, Biome, `tsc -b`, Vitest (unit), `check-bom`, `check-boundaries` |
 | `pnpm test` / `pnpm test:integration` | Vitest unit / integration (needs `DATABASE_URL`: a real PostgreSQL ≥ 18 with the builtin C.UTF-8 locale; fails on zero tests) |
 | `pnpm build`, `pnpm -F web build` | `tsc -b` (server to `apps/server/dist`) and the static web build (`apps/web/dist`) |
-| `node apps/server/dist/main.js api` | The only role that runs in P0 (`GET /healthz`; `HOST`/`PORT` from env); other roles exit 2, unknown ones 64 |
+| `node apps/server/dist/main.js api` | `GET /healthz` (`HOST`/`PORT` from env); touches the heartbeat |
+| `node apps/server/dist/main.js capture` | The P1a recorder (contract env `RWS_*`, file secrets under `/run/secrets`); exits 78 without `RWS_DOMAIN`/`RWS_CONTACT_EMAIL` |
+| `node apps/server/dist/main.js capture --dry-run` | Loads and checks every spec; prints the schedule and the RWS requests/hour (busiest 60 min); no network, no writes |
+| `node apps/server/dist/main.js healthcheck` | Exit 0 iff `/tmp/rws-heartbeat` is < 120 s old; `load`/`publish`/`replay`/`watchdog` exit 2 until their phase, unknown roles 64 |
+| `node scripts/smoke-capture.ts --contact <e-mail> --info-url <url> --spec <id>…` | Opt-in fixture recorder: 1 request per spec, ≤ 30 per run, refuses under `CI`; owner payloads stay in the git-ignored `.smoke/` |
+| `node scripts/synthesize-fixture.ts --spec <owner spec>` | Synthetic owner fixture from `.smoke/<spec>.raw`: real structure, every value generated, `synthetic: true` |
 | `scripts/healthz-smoke.sh`, `scripts/dbmate-roundtrip.sh` | Server smoke test; dbmate up/down/up on a fixture migration |
 | `scripts/check-workflows.sh`, `scripts/gitleaks-planted.sh` | Workflow greps; proof that gitleaks still catches a planted key |
 | `scripts/gh-settings.sh --check` | Read-only drift check of the GitHub settings (B1, B2); applying them is the owner's job |
