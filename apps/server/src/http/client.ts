@@ -248,9 +248,11 @@ export class Client {
     const maxWire = Math.min(opts.maxBytes ?? MAX_WIRE_BYTES, MAX_WIRE_BYTES);
     const maxDecoded = Math.min(MAX_DECODED_BYTES, 4 * maxWire);
     const timeoutMs = opts.timeoutMs ?? TOTAL_TIMEOUT_MS;
+    /** Wire time left for this request: its transfers share twice the timeout, however many hops (N6). */
+    let wire = 2 * timeoutMs;
     // A deadline starts after every wait before it, so a wait never turns into a timeout.
-    const deadline = () => {
-      const timeout = AbortSignal.timeout(timeoutMs);
+    const deadline = (ms = timeoutMs) => {
+      const timeout = AbortSignal.timeout(ms);
       return opts.signal ? AbortSignal.any([timeout, opts.signal]) : timeout;
     };
     const headers: Record<string, string> = {
@@ -263,6 +265,8 @@ export class Client {
     const host = first.hostname.toLowerCase();
     const gate = this.politeness.gate(host, this.now());
     if ('skip' in gate) return { ok: false, error: gate.skip };
+    /** When the gate lets this request go: a backoff that ends later began after it. */
+    const cleared = this.now() + gate.wait;
     try {
       if (gate.wait > 0) {
         if (opts.deadline !== undefined && this.now() + gate.wait > opts.deadline)
@@ -281,8 +285,12 @@ export class Client {
         // Memory is reserved for the transfer only: never across a wait, a DNS lookup or another host's backoff.
         const release = await this.budget.acquire(maxDecoded);
         try {
+          // Another request put the host into backoff while this one waited: nothing is sent, and it is no
+          // new failure of the host (N6).
+          if (this.politeness.until(host) > Math.max(cleared, this.now())) return { ok: false, error: 'backoff' };
           // The total deadline of this hop (headers and body) starts here, after the waits.
-          const signal = deadline();
+          const sent = performance.now();
+          const signal = deadline(Math.max(0, Math.floor(Math.min(timeoutMs, wire))));
           // Only the caller can have aborted it: nothing was sent, so it is no failure of the host.
           if (signal.aborted) return { ok: false, error: 'backoff' };
           const pending = this.transport({ url, method, headers, ...(body === undefined ? {} : { body }), signal });
@@ -307,6 +315,7 @@ export class Client {
           const location = header(res.headers, 'location');
           if (REDIRECTS.has(res.status) && location !== undefined) {
             discard(res.body);
+            wire -= performance.now() - sent;
             if (hop >= MAX_REDIRECTS) return { ok: false, error: 'redirect_limit' };
             let next: URL;
             try {

@@ -2,10 +2,10 @@ import { Readable } from 'node:stream';
 import { createGzip, gzipSync } from 'node:zlib';
 import { zipSync } from 'fflate';
 import { delay, HttpResponse, http } from 'msw';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { server } from '../../../../test/msw.setup.ts';
 import { checkZip, flatNames, GuardFailure } from '../../src/http/guards.ts';
-import { BREAKER_PROBE_MS, Politeness } from '../../src/http/politeness.ts';
+import { BREAKER_PROBE_MS, ByteBudget, Politeness } from '../../src/http/politeness.ts';
 import type { Req } from '../../src/http/types.ts';
 import { fakeResolver, testClient } from '../helpers.ts';
 
@@ -251,6 +251,47 @@ describe('WAF answers (S9)', () => {
     expect(await c.fetch('NL-1', get(`${A}/limited`))).toMatchObject({ ok: true, res: { status } });
     now += 60_000;
     expect(await c.fetch('NL-1', get(`${A}/ok`), { deadline: now + 30_000 })).toEqual({ ok: false, error: 'backoff' });
+  });
+});
+
+describe('one bound per request (N6)', () => {
+  it('the hops of a redirect chain share twice the timeout', async () => {
+    server.use(
+      http.get(`${A}/hop/:n`, async ({ params }) => {
+        await delay(250);
+        const n = Number(params.n);
+        return n < 3
+          ? new HttpResponse(null, { status: 307, headers: { location: `/hop/${n + 1}` } })
+          : HttpResponse.text('end');
+      }),
+    );
+    // Four hops of 250 ms: each within the 400 ms timeout, together past 800 ms.
+    expect(await testClient(HOSTS).fetch('NL-1', get(`${A}/hop/0`), { timeoutMs: 400 })).toEqual({
+      ok: false,
+      error: 'timeout',
+    });
+  });
+
+  it('a request that waited for memory while its host went into backoff is not sent, and is no failure', async () => {
+    const c = testClient(HOSTS, { budget: new ByteBudget(1) });
+    const failure = vi.spyOn(c.politeness, 'failure');
+    let asked = 0;
+    server.use(
+      http.get(`${A}/busy`, async () => {
+        await delay(100);
+        return new HttpResponse('busy', { status: 503, headers: { 'retry-after': '60' } });
+      }),
+      http.get(`${A}/ok`, () => {
+        asked += 1;
+        return HttpResponse.text('ok');
+      }),
+    );
+    const busy = c.fetch('NL-1', get(`${A}/busy`));
+    const waiting = c.fetch('NL-1', get(`${A}/ok`)); // queued behind /busy for the whole budget
+    expect(await busy).toMatchObject({ ok: true, res: { status: 503 } });
+    expect(await waiting).toEqual({ ok: false, error: 'backoff' });
+    expect(asked).toBe(0);
+    expect(failure).toHaveBeenCalledTimes(1); // the 503 only
   });
 });
 

@@ -82,6 +82,12 @@ export class Politeness {
     if (this.hosts.get(host)?.probing) this.failure(host, now);
   }
 
+  /** Epoch ms before which `host` takes no request (its backoff or open breaker); unlike `gate`, no side effects. */
+  until(host: string): number {
+    const s = this.hosts.get(host);
+    return s === undefined ? 0 : Math.max(s.notBefore, s.openUntil ?? 0);
+  }
+
   isOpen(host: string): boolean {
     return this.hosts.get(host)?.openUntil != null;
   }
