@@ -184,9 +184,10 @@ specs:
       url: https://rijkswaterstaatdata.nl/waterdata/
     conditional: last-modified
     alert: { kind: nl4_new_file, page: true }
-    max_bytes: 4194304
+    # The page is 68 KB; the bounded pattern cannot turn a crafted page into minutes of regex work.
+    max_bytes: 524288
     retention: forever
-    validity: { format: html, pattern: 'grenswaarden-en-legendakleuren[^"<>]*\.xlsx' }
+    validity: { format: html, pattern: 'grenswaarden-en-legendakleuren[^"''<>\s]{0,200}\.xlsx' }
   - id: nl-4-xlsx
     source: NL-4
     version: 1

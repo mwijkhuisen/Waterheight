@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { adapter as nl4 } from '../../src/adapters/nl-4/capture.ts';
 import { validate } from '../../src/archive/validity.ts';
 import { fixture, fixtureFor, registry, STAGE2 } from './helpers.ts';
 
@@ -83,5 +84,26 @@ describe('Vigicrues errors in HTTP 200', () => {
         expect(meta.synthetic).toBe(true);
       }
     }
+  });
+});
+
+describe('NL-4 patterns (S5)', () => {
+  const page = registry.specs.find((x) => x.id === 'nl-4-page');
+
+  it('stay linear on a crafted page that repeats the file-name prefix, capped at 512 KB', async () => {
+    expect(page?.max_bytes).toBeLessThanOrEqual(512 * 1024);
+    const crafted = Buffer.from(`${'grenswaarden-en-legendakleuren'.repeat(17_000)}\n</html>\n`);
+    let t = performance.now();
+    expect((await validate(page?.validity ?? ({ format: 'html' } as never), 200, crafted)).reason).toBe('pattern');
+    expect(performance.now() - t).toBeLessThan(500);
+    t = performance.now();
+    expect(nl4.alertKey?.(crafted.toString())).toBeNull();
+    expect(performance.now() - t).toBeLessThan(500);
+  });
+
+  it('still find the recorded workbook link', async () => {
+    const f = fixture('NL-4', 'nl-4-page');
+    expect((await validate(page?.validity ?? ({ format: 'html' } as never), 200, f.body)).ok).toBe(true);
+    expect(nl4.alertKey?.(f.body.toString())).toMatch(/grenswaarden-en-legendakleuren.*\.xlsx/);
   });
 });

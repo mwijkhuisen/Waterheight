@@ -7,7 +7,8 @@ import type { Adapter } from '../../http/types.ts';
 export const adapter: Adapter = {
   alertKey(doc) {
     if (typeof doc !== 'string') return null;
-    const names = new Set(doc.match(/grenswaarden-en-legendakleuren[^"'<>\s]*\.xlsx/g) ?? []);
+    // Bounded: an unbounded run here is quadratic on a page that repeats the prefix.
+    const names = new Set(doc.match(/grenswaarden-en-legendakleuren[^"'<>\s]{0,200}\.xlsx/g) ?? []);
     return [...names].sort().join(',') || null;
   },
 };
