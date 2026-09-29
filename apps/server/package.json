@@ -2,6 +2,9 @@
   "name": "@rws/server",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "start": "node dist/main.js api"
   },
