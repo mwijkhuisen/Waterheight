@@ -355,6 +355,40 @@ describe('stage-2 requests', () => {
     ).toBe(true);
   });
 
+  it('LU-5 follows the list while a page still holds an unseen dump (C6)', async () => {
+    const base = 'https://data.public.lu/api/2/datasets/67aca67bcaea3ae62308114f/resources/';
+    const dump = (i: number) => ({
+      id: `0ebe38da-f4fa-4132-8fc0-47074d9186d${i}`,
+      title: `dump-alert.179068836${i}.xml`,
+      url: `https://download.data.public.lu/resources/alertes-du-systeme-lu-alert/20260929-13300${i}/dump-alert.179068836${i}.xml`,
+    });
+    const got: string[] = [];
+    server.use(
+      http.get(base, ({ request }) => {
+        const second = new URL(request.url).searchParams.get('page') === '2';
+        return HttpResponse.json(
+          second
+            ? { data: [dump(2)], next_page: null }
+            : { data: [dump(0), dump(1)], next_page: `${base}?page=2&page_size=20` },
+        );
+      }),
+      http.get('https://download.data.public.lu/resources/*', ({ request }) => {
+        got.push(request.url);
+        return new HttpResponse(fixture('LU-5', 'lu-5-file').body);
+      }),
+    );
+    const deps = runDeps();
+    // dump 0 was fetched before; dump 2 failed then and has moved to page 2 since.
+    await deps.state.update<SpecState>('lu-5-cap', () => ({
+      enabled_since: '2026-10-01T00:00:00.000Z',
+      variants: {},
+      seen: [dump(0).id],
+      pending_page: [],
+    }));
+    await runSpec(spec('lu-5-cap'), deps);
+    expect(got.sort()).toEqual([dump(1).url, dump(2).url]);
+  });
+
   it('LU-5 fetches only new dumps, marks an id seen only after its file arrived, and remembers across runs', async () => {
     const deps = runDeps();
     const page = JSON.parse(fixture('LU-5', 'lu-5-cap').body.toString()) as { data: { id: string; url: string }[] };

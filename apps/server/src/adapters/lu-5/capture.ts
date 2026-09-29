@@ -29,9 +29,10 @@ export const adapter: Adapter = {
       fresh += 1;
       reqs.push({ url, method: 'GET' as const, variant: `file/${r.id}`, seen_id: r.id });
     }
-    // Follow the list only in the seed, or when a whole page was new (after an outage).
+    // Follow the list in the seed, and while a page still holds an unseen dump (a failed fetch that moved
+    // down the list, an outage); the runner's max_expand bounds the walk.
     const next = typeof page?.next_page === 'string' ? checkUrl(page.next_page) : null;
-    if (next !== null && LIST_PATH.test(new URL(next).pathname) && (seed || (fresh > 0 && fresh === data.length))) {
+    if (next !== null && LIST_PATH.test(new URL(next).pathname) && (seed || fresh > 0)) {
       reqs.push({ url: next, method: 'GET' as const, variant: 'list' });
     }
     return { reqs };
