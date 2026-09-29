@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { zstdDecompressSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { keptHeaders, ManifestLine, redactUrl } from '../../src/archive/manifest.ts';
@@ -141,5 +141,35 @@ describe('start-up recovery', () => {
     expect(existsSync(join(root, '.tmp'))).toBe(false);
     // Idempotent: a second recovery finds nothing new.
     expect(await a.recover(() => ({ retention: 'obs', version: 3 }), new Date('2026-10-02T13:00:00Z'))).toBe(0);
+  });
+
+  it('scans every object day since the newest manifest, and skips an unreadable object (C13)', async () => {
+    const root = tmp();
+    const a = new Archive(root);
+    const body = Buffer.from('payload');
+    const kept = await a.put('NL-1', 'nl-1-obs-key', at, body, sha256(body));
+    await a.append(line({ key: kept.key }));
+    // Written just after midnight, then the process was down for days.
+    const orphanBody = Buffer.from('orphan');
+    const orphan = await a.put(
+      'NL-1',
+      'nl-1-obs-key',
+      new Date('2026-10-03T00:00:02Z'),
+      orphanBody,
+      sha256(orphanBody),
+    );
+    const damaged = 'raw/NL-1/nl-1-obs-key/2026/10/06/070000Z-0123456789abcdef.zst';
+    mkdirSync(dirname(a.path(damaged)), { recursive: true });
+    writeFileSync(a.path(damaged), 'not zstd');
+    const skipped: string[] = [];
+    const n = await a.recover(
+      () => ({ retention: 'obs', version: 1 }),
+      new Date('2026-10-06T08:00:00Z'),
+      (key) => skipped.push(key),
+    );
+    expect(n).toBe(1);
+    expect(skipped).toEqual([damaged]);
+    const recovered = readFileSync(join(root, '_manifest', '2026-10-03.jsonl'), 'utf8');
+    expect(ManifestLine.parse(JSON.parse(recovered))).toMatchObject({ recovered: true, key: orphan.key });
   });
 });

@@ -141,11 +141,14 @@ export class Archive {
   /**
    * Start-up recovery: removes tmp files, truncates a torn last line of the
    * newest two manifests, and appends a `recovered: true` line for every final
-   * object of those days (and today) that has no line. Returns that count.
+   * object without a line from the day of the newest manifest through today
+   * (however long the process was down). An unreadable object is reported to
+   * `skipped` and left alone. Returns the count of recovered lines.
    */
   async recover(
     retentionOf: (source: string, spec: string) => { retention: 'obs' | 'forever'; version: number } | undefined,
     now: Date = new Date(),
+    skipped: (key: string) => void = () => {},
   ): Promise<number> {
     await rm(join(this.root, '.tmp'), { recursive: true, force: true });
     const dir = join(this.root, '_manifest');
@@ -179,6 +182,12 @@ export class Archive {
       }
     }
     const days = new Set([...manifests.map((f) => f.slice(0, 10)), utcDay(now)]);
+    const newest = manifests.at(-1);
+    if (newest !== undefined) {
+      for (let t = Date.parse(`${newest.slice(0, 10)}T00:00:00Z`); t < now.getTime(); t += 86_400_000) {
+        days.add(utcDay(new Date(t)));
+      }
+    }
     let recovered = 0;
     for (const source of (await readdir(this.root).catch(() => [] as string[])).filter((s) => SOURCE_RE.test(s))) {
       for (const spec of (await readdir(join(this.root, source)).catch(() => [] as string[])).filter((s) =>
@@ -192,8 +201,16 @@ export class Archive {
             const key = `raw/${source}/${spec}/${y}/${m}/${d}/${name}`;
             if (!match || keys.has(key)) continue;
             const info = retentionOf(source, spec);
-            const stored = await readFile(join(folder, name));
-            const body = zstdDecompressSync(stored);
+            let stored: Buffer;
+            let body: Buffer;
+            try {
+              stored = await readFile(join(folder, name));
+              body = zstdDecompressSync(stored);
+            } catch {
+              // A damaged object must not stop the recorder from starting.
+              skipped(key);
+              continue;
+            }
             await this.append({
               v: 1,
               source,

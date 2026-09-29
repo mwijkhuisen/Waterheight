@@ -99,10 +99,14 @@ async function capture(
     now: () => new Date(),
     sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
   };
-  const recovered = await deps.archive.recover((source, spec) => {
-    const s = registry.specs.find((x) => x.source === source && x.id === spec);
-    return s && { retention: s.retention, version: s.version };
-  });
+  const recovered = await deps.archive.recover(
+    (source, spec) => {
+      const s = registry.specs.find((x) => x.source === source && x.id === spec);
+      return s && { retention: s.retention, version: s.version };
+    },
+    new Date(),
+    (key) => logger.warn({ key }, 'unreadable archive object skipped by the recovery'),
+  );
   if (recovered > 0) logger.warn({ recovered }, 'archive objects without a manifest line recorded');
   const paths = { rawDir: cfg.rawDir, statusDir: cfg.statusDir, ownerStatusDir: cfg.ownerStatusDir };
   // Tmp files of writes a crash cut short; in the served status dir only our own.
