@@ -1,0 +1,234 @@
+import { createGzip, gzipSync } from 'node:zlib';
+import { zipSync } from 'fflate';
+import { delay, HttpResponse, http } from 'msw';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { server } from '../../../../test/msw.setup.ts';
+import { checkZip, flatNames, GuardFailure } from '../../src/http/guards.ts';
+import type { Req } from '../../src/http/types.ts';
+import { fakeResolver, testClient } from '../helpers.ts';
+
+// Criterion "[CI] Client tests (msw) refuse or abort each of these" (issue #16).
+
+const HOSTS = {
+  'NL-1': ['ddapi20-waterwebservices.rijkswaterstaat.nl'],
+  'LU-5': ['data.public.lu', 'download.data.public.lu'],
+  'DE-7': ['www.hochwasserportal.nrw'],
+};
+const get = (url: string): Req => ({ url, method: 'GET', variant: 'v' });
+const A = 'https://ddapi20-waterwebservices.rijkswaterstaat.nl';
+
+describe('allowlist and URL checks', () => {
+  it('refuses a host that is not allowlisted for the source, without sending anything', async () => {
+    const c = testClient(HOSTS);
+    expect(await c.fetch('NL-1', get('https://example.com/x'))).toEqual({ ok: false, error: 'not_allowlisted' });
+    // Allowlisted for another source only: still refused.
+    expect(await c.fetch('NL-1', get('https://data.public.lu/x'))).toEqual({ ok: false, error: 'not_allowlisted' });
+  });
+
+  it.each([
+    'http://ddapi20-waterwebservices.rijkswaterstaat.nl/x',
+    'https://user:pw@ddapi20-waterwebservices.rijkswaterstaat.nl/x',
+    'https://ddapi20-waterwebservices.rijkswaterstaat.nl:8443/x',
+    'https://127.0.0.1/x',
+    'https://[::1]/x',
+    'https://2130706433/x',
+    'not a url',
+  ])('refuses %s', async (url) => {
+    const c = testClient({ ...HOSTS, 'NL-1': [...HOSTS['NL-1'], '127.0.0.1', '2130706433'] });
+    expect(await c.fetch('NL-1', get(url))).toMatchObject({ ok: false });
+  });
+});
+
+describe('DNS answers', () => {
+  const bad = ['127.0.0.1', '10.0.0.1', '169.254.169.254', '100.64.0.1', '::1', 'fc00::1', '::ffff:127.0.0.1'];
+
+  it.each(bad)('refuses a host that resolves to %s', async (ip) => {
+    const c = testClient(HOSTS, { resolver: fakeResolver({ 'ddapi20-waterwebservices.rijkswaterstaat.nl': [ip] }) });
+    expect(await c.fetch('NL-1', get(`${A}/x`))).toEqual({ ok: false, error: 'private_address' });
+  });
+
+  it('refuses when any one answer is private', async () => {
+    const c = testClient(HOSTS, {
+      resolver: fakeResolver({ 'ddapi20-waterwebservices.rijkswaterstaat.nl': ['93.184.215.14', '10.0.0.1'] }),
+    });
+    expect(await c.fetch('NL-1', get(`${A}/x`))).toEqual({ ok: false, error: 'private_address' });
+  });
+
+  it.each(bad)('re-checks on a redirect hop: refuses %s there', async (ip) => {
+    let calls = 0;
+    const c = testClient(HOSTS, {
+      resolver: async () => (calls++ === 0 ? ['93.184.215.14'] : [ip]),
+    });
+    server.use(http.get(`${A}/a`, () => new HttpResponse(null, { status: 302, headers: { location: '/b' } })));
+    expect(await c.fetch('NL-1', get(`${A}/a`))).toEqual({ ok: false, error: 'private_address' });
+    expect(calls).toBe(2);
+  });
+});
+
+describe('redirects', () => {
+  it('follows a same-host redirect', async () => {
+    server.use(
+      http.get(`${A}/a`, () => new HttpResponse(null, { status: 301, headers: { location: `${A}/b` } })),
+      http.get(`${A}/b`, () => HttpResponse.json({ ok: 1 })),
+    );
+    const r = await testClient(HOSTS).fetch('NL-1', get(`${A}/a`));
+    expect(r.ok && r.res.url).toBe(`${A}/b`);
+  });
+
+  it('refuses a cross-host redirect, even between two hosts of the same source (data.public.lu → download)', async () => {
+    server.use(
+      http.get(
+        'https://data.public.lu/r/latest',
+        () => new HttpResponse(null, { status: 302, headers: { location: 'https://download.data.public.lu/r/x.xml' } }),
+      ),
+    );
+    expect(await testClient(HOSTS).fetch('LU-5', get('https://data.public.lu/r/latest'))).toEqual({
+      ok: false,
+      error: 'redirect_cross_host',
+    });
+  });
+
+  it('refuses a redirect to http', async () => {
+    server.use(
+      http.get(
+        `${A}/a`,
+        () =>
+          new HttpResponse(null, {
+            status: 302,
+            headers: { location: 'http://ddapi20-waterwebservices.rijkswaterstaat.nl/b' },
+          }),
+      ),
+    );
+    expect(await testClient(HOSTS).fetch('NL-1', get(`${A}/a`))).toEqual({ ok: false, error: 'redirect_insecure' });
+  });
+
+  it('follows at most 3 hops', async () => {
+    server.use(
+      http.get(`${A}/:n`, ({ params }) => {
+        const n = Number(params.n);
+        return n < 9
+          ? new HttpResponse(null, { status: 307, headers: { location: `/${n + 1}` } })
+          : HttpResponse.text('end');
+      }),
+    );
+    const c = testClient(HOSTS);
+    expect((await c.fetch('NL-1', get(`${A}/6`))).ok).toBe(true); // 6→7→8→9: three hops
+    expect(await c.fetch('NL-1', get(`${A}/5`))).toEqual({ ok: false, error: 'redirect_limit' });
+  });
+});
+
+describe('size and time caps', () => {
+  let bomb: Buffer;
+  beforeAll(async () => {
+    // 1 GB of zeros, gzipped as a stream (about 1 MB on the wire).
+    const gz = createGzip({ level: 9 });
+    const parts: Buffer[] = [];
+    gz.on('data', (c: Buffer) => parts.push(c));
+    const done = new Promise((r) => gz.on('end', r));
+    const zeros = Buffer.alloc(1024 * 1024);
+    for (let i = 0; i < 1024; i += 1) if (!gz.write(zeros)) await new Promise((r) => gz.once('drain', r));
+    gz.end();
+    await done;
+    bomb = Buffer.concat(parts);
+  }, 60_000);
+
+  it('aborts a 30 MB body at 25 MB', async () => {
+    server.use(http.get(`${A}/big`, () => new HttpResponse(Buffer.alloc(30 * 1024 * 1024, 0x61))));
+    expect(await testClient(HOSTS).fetch('NL-1', get(`${A}/big`))).toEqual({ ok: false, error: 'too_large' });
+  });
+
+  it('aborts a gzip bomb (1 GB) at 100 MB decoded', async () => {
+    expect(bomb.length).toBeLessThan(2 * 1024 * 1024);
+    server.use(http.get(`${A}/bomb`, () => new HttpResponse(bomb, { headers: { 'content-encoding': 'gzip' } })));
+    expect(await testClient(HOSTS).fetch('NL-1', get(`${A}/bomb`))).toEqual({ ok: false, error: 'too_large_decoded' });
+  }, 30_000);
+
+  it('refuses stacked and unknown content encodings', async () => {
+    const twice = gzipSync(gzipSync(Buffer.from('x'.repeat(1000))));
+    server.use(
+      http.get(`${A}/twice`, () => new HttpResponse(twice, { headers: { 'content-encoding': 'gzip, gzip' } })),
+      http.get(`${A}/zstd`, () => new HttpResponse('x', { headers: { 'content-encoding': 'compress' } })),
+    );
+    const c = testClient(HOSTS);
+    expect(await c.fetch('NL-1', get(`${A}/twice`))).toEqual({ ok: false, error: 'bad_encoding' });
+    expect(await c.fetch('NL-1', get(`${A}/zstd`))).toEqual({ ok: false, error: 'bad_encoding' });
+  });
+
+  it('decodes one gzip layer and reports raw and decoded sizes', async () => {
+    const text = JSON.stringify({ v: 'y'.repeat(5000) });
+    server.use(
+      http.get(`${A}/gz`, () => new HttpResponse(gzipSync(text), { headers: { 'content-encoding': 'gzip' } })),
+    );
+    const r = await testClient(HOSTS).fetch('NL-1', get(`${A}/gz`));
+    expect(r.ok && r.res.body.toString()).toBe(text);
+    expect(r.ok && r.res.wireBytes).toBeLessThan(text.length);
+  });
+
+  it('aborts a slowloris upstream at the total deadline', async () => {
+    server.use(
+      http.get(`${A}/slow`, () => {
+        const stream = new ReadableStream({
+          async pull(ctl) {
+            await delay(50);
+            ctl.enqueue(new Uint8Array([0x20]));
+          },
+        });
+        return new HttpResponse(stream);
+      }),
+      http.get(`${A}/hang`, async () => {
+        await delay('infinite');
+        return HttpResponse.text('never');
+      }),
+    );
+    // A fresh client each: a timeout puts the host into backoff (tested below).
+    const hang = await testClient(HOSTS).fetch('NL-1', get(`${A}/hang`), { timeoutMs: 400 });
+    expect(hang).toEqual({ ok: false, error: 'timeout' });
+    const slow = testClient(HOSTS);
+    expect(await slow.fetch('NL-1', get(`${A}/slow`), { timeoutMs: 400 })).toEqual({ ok: false, error: 'timeout' });
+    expect(slow.politeness.gate('ddapi20-waterwebservices.rijkswaterstaat.nl', Date.now())).not.toEqual({ wait: 0 });
+  });
+});
+
+describe('ZIP payloads read through the client', () => {
+  const names = flatNames(['messwerte.txt']);
+  const fetchZip = async (zip: Uint8Array) => {
+    server.use(http.get('https://www.hochwasserportal.nrw/data/downloads/messwerte.zip', () => new HttpResponse(zip)));
+    const r = await testClient(HOSTS).fetch(
+      'DE-7',
+      get('https://www.hochwasserportal.nrw/data/downloads/messwerte.zip'),
+    );
+    if (!r.ok) throw new Error(r.error);
+    return checkZip(r.res.body, { names });
+  };
+
+  it('refuses a ZIP with too many entries', async () => {
+    const files = Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`f${i}.txt`, new Uint8Array([1])]));
+    await expect(fetchZip(zipSync(files))).rejects.toMatchObject({ reason: 'zip_members' });
+  });
+
+  it('refuses a ZIP with a ../ path', async () => {
+    await expect(fetchZip(zipSync({ '../evil.txt': new Uint8Array([1]) }))).rejects.toBeInstanceOf(GuardFailure);
+  });
+});
+
+describe('Retry-After and backoff', () => {
+  it('records a 503 with Retry-After and then waits for it, or skips when it does not fit', async () => {
+    let now = 1_000_000;
+    const slept: number[] = [];
+    const c = testClient(HOSTS, {
+      now: () => now,
+      sleep: async (ms) => {
+        slept.push(ms);
+        now += ms;
+      },
+    });
+    server.use(
+      http.get(`${A}/busy`, () => new HttpResponse('busy', { status: 503, headers: { 'retry-after': '120' } })),
+      http.get(`${A}/ok`, () => HttpResponse.text('ok')),
+    );
+    expect(await c.fetch('NL-1', get(`${A}/busy`))).toMatchObject({ ok: true, res: { status: 503 } });
+    expect(await c.fetch('NL-1', get(`${A}/ok`), { deadline: now + 60_000 })).toEqual({ ok: false, error: 'backoff' });
+    expect(await c.fetch('NL-1', get(`${A}/ok`), { deadline: now + 600_000 })).toMatchObject({ ok: true });
+    expect(slept).toEqual([120_000]);
+  });
+});
