@@ -450,7 +450,8 @@ specs:
     timeout: metadata
     max_bytes: 16777216
     retention: forever
-    validity: { format: json, reject: [error_msg], min: 0 }
+    # Both files are EntVigiCru lists (TerEntVigiCru recorded; StaEntVigiCru shares the family's root key).
+    validity: { format: json, required: [ListEntVigiCru], reject: [error_msg], count: ListEntVigiCru, min: 1 }
   - id: fr-5-sections
     source: FR-5
     version: 1
@@ -596,7 +597,7 @@ specs:
     variants: { seed: ch-3, key: [id] }
     max_bytes: 8388608
     retention: obs
-    validity: { format: json, min: 0 }
+    validity: { format: json, required: [plot.data], count: plot.data, min: 1 }
     seed: { kind: once, pace_ms: 2000 }
   - id: ch-4-forecast
     source: CH-4
@@ -610,7 +611,7 @@ specs:
     gate: { kind: lastmod-runstart }
     max_bytes: 2097152
     retention: forever
-    validity: { format: json, min: 0 }
+    validity: { format: json, required: [plot.data], count: plot.data, min: 1 }
   - id: ch-4-stations
     source: CH-4
     version: 1

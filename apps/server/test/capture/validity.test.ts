@@ -55,6 +55,21 @@ describe.each(registry.specs.map((s) => [s.id, s] as const))('%s', (_, s) => {
   }
 });
 
+describe('an empty JSON document served with 200 (C8)', () => {
+  const json = registry.specs.flatMap((s) =>
+    [
+      [s.id, s.validity],
+      [`${s.id} stage 2`, s.request.expand_validity],
+    ].filter(([, v]) => (v as { format?: string } | undefined)?.format === 'json'),
+  );
+
+  it.each(json)('%s refuses {}, [] and null', async (_, v) => {
+    for (const body of ['{}', '[]', 'null']) {
+      expect((await validate(v as never, 200, Buffer.from(body))).ok, body).toBe(false);
+    }
+  });
+});
+
 describe('Vigicrues errors in HTTP 200', () => {
   it('rejects error_msg bodies for FR-3, FR-4 and FR-5', async () => {
     const err = Buffer.from('{"error_msg":"Cette station n\'est pas une station de prévisions","code":400}');
