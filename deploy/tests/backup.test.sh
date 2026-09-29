@@ -51,8 +51,13 @@ esac
 STUB
 cat >"$T/stubs/nft" <<'STUB'
 #!/usr/bin/env bash
+# `nft -f -` batches go to $FIX/nft; table inet rws exists unless $FIX/no-table does.
 printf 'nft %s\n' "$*" >>"$FIX/calls"
-cat >>"$FIX/nft"
+case $* in
+  '-f -') cat >>"$FIX/nft" ;;
+  'list table inet rws') [[ ! -e $FIX/no-table ]] ;;
+  '-f '*) rm -f "$FIX/no-table" ;;
+esac
 STUB
 cat >"$T/stubs/systemctl" <<'STUB'
 #!/usr/bin/env bash
@@ -305,6 +310,20 @@ expect_grep "^systemctl start rws-status-copy.path$" "$FIX/calls"
 expect_grep "rws-status-copy.path is not active: re-arming it" "$C/out"
 run rws-tick
 expect_eq "$(grep -c '^systemctl start' "$FIX/calls")" 1
+expect_no_grep "^nft -f $RWS_ETC/nftables.conf$" "$FIX/calls"
+
+case_ "tick: a missing firewall table is restored, loudly, before the resolvers fill its sets (R2-S4)"
+setup
+touch "$FIX/no-table"
+run rws-tick
+expect_rc 0
+expect_grep "the host firewall \(table inet rws\) is missing: loading $RWS_ETC/nftables.conf" "$C/out"
+expect_eq "$(grep -m 1 '^nft -f ' "$FIX/calls")" "nft -f $RWS_ETC/nftables.conf"
+expect_grep "^nft -f -$" "$FIX/calls"
+touch "$FIX/no-table"
+run rws-tick --dry-run
+expect_grep "dry-run: table inet rws is missing" "$C/out"
+expect_eq "$(grep -c "^nft -f $RWS_ETC/nftables.conf$" "$FIX/calls")" 1
 
 case_ "status copy: capture.json published 0644; a symlink, a non-contract and an oversize file refused; a copy past the cap cut off"
 setup

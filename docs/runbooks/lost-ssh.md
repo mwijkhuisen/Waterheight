@@ -20,7 +20,7 @@ journalctl -u ssh -n 50
 |---|---|
 | Key lost or rotated | Add the new public key to `/home/ops/.ssh/authorized_keys` (`0600`, owned by `ops`) |
 | sshd config broken | `rm /etc/ssh/sshd_config.d/10-rws.conf && systemctl restart ssh`, get in, then re-run `bootstrap.sh` from the current release directory |
-| Firewall | `nft delete table inet rws` (removes only our table; Docker and its rules stay), get in, then `systemctl reload rws-firewall`. Not `systemctl stop rws-firewall`: Docker `Requires=` it and would stop too |
+| Firewall | Break-glass: `systemctl stop rws-tick.timer` first (it restores a missing table within 10 minutes), then `nft delete table inet rws` (removes only our table; Docker and its rules stay, and the running containers lose their egress limits until it is back). Get in, fix, then `systemctl reload rws-firewall` and `systemctl start rws-tick.timer`. `systemctl stop rws-firewall` does not help: it keeps the table, and Docker `Requires=` it and would stop too |
 
 ## 3. If the console is gone too
 

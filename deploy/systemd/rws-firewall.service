@@ -1,6 +1,9 @@
 # The host firewall (deploy/host/nftables.conf, installed as /etc/rws/nftables.conf).
 # Replaces Debian's nftables.service, whose ExecStop flushes the whole ruleset
-# (Docker's tables included); this unit only ever touches table inet rws.
+# (Docker's tables included); this unit only ever touches table inet rws, and
+# stopping it keeps the table (no ExecStop): Docker's live-restore keeps the
+# containers running, so a stop must never open them. rws-tick restores a
+# table deleted by hand (docs/runbooks/lost-ssh.md) within 10 minutes.
 [Unit]
 Description=rws host firewall (nftables table inet rws)
 DefaultDependencies=no
@@ -17,7 +20,6 @@ ExecStart=/usr/sbin/nft -f /etc/rws/nftables.conf
 ExecStartPost=-/usr/local/bin/rws-resolvers
 ExecReload=/usr/sbin/nft -f /etc/rws/nftables.conf
 ExecReload=-/usr/local/bin/rws-resolvers
-ExecStop=/usr/sbin/nft delete table inet rws
 
 [Install]
 WantedBy=sysinit.target

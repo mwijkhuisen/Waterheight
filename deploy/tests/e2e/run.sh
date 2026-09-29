@@ -6,8 +6,9 @@
 # CI overlay (Pebble for ACME, MinIO with Object Lock, capture cut off from the
 # internet) and proves, printing one PROOF line each:
 #   - Docker-published ports cannot bypass the firewall (an "outside" network
-#     namespace reaches 80/443 but not another published port), and container
-#     egress is TCP 443 plus DNS to the host's resolvers only;
+#     namespace reaches 80/443 but not another published port), container
+#     egress is TCP 443 plus DNS to the host's resolvers only, and rws-tick
+#     restores a deleted firewall table;
 #   - Caddy runs as uid 65533 with no capability, binds 80/443 and gets an
 #     ACME certificate through HTTP-01 on the published port;
 #   - file secrets keep their host owner, so only the service with the gid
@@ -228,6 +229,7 @@ step "Host firewall: deploy/host/nftables.conf next to Docker's own tables"
 nft -c -f "$repo/deploy/host/nftables.conf"
 nft -f "$repo/deploy/host/nftables.conf"
 nft -f "$repo/deploy/host/nftables.conf"
+install -m 0644 "$repo/deploy/host/nftables.conf" /etc/rws/nftables.conf
 "$repo/deploy/bin/rws-resolvers"
 proof "nft -c and a double load of deploy/host/nftables.conf succeed (idempotent); rws-resolvers filled the DNS allowlist: $(nft list set inet rws resolvers4 | grep -o 'elements = {[^}]*}' || echo none)"
 
@@ -448,10 +450,15 @@ echo "$prune"
 proof "object-lock-prune.sh with the VPS key: the bucket's default retention is COMPLIANCE >= 30 days and a new version is retained >= 29 days; restic forget --prune removed no object version, a versioned DELETE and a shorter retention were refused (5 PASS)"
 
 # ------------------------------------------------------------------ watchdog
-step "Watchdog: one cycle through DNS and TLS against the stack"
+step "rws-tick restores a deleted firewall table (R2-S4); the watchdog: one cycle through DNS and TLS"
+resolvers=$(nft list set inet rws resolvers4 | grep -o 'elements = {[^}]*}' || true)
+nft delete table inet rws
 "$repo/deploy/bin/rws-tick"
+nft list table inet rws >/dev/null || fail "rws-tick did not restore table inet rws"
+[[ $(nft list set inet rws resolvers4 | grep -o 'elements = {[^}]*}' || true) == "$resolvers" ]] ||
+  fail "the restored table lost its resolvers"
 jq -e '.disk_pct | type == "number"' /srv/rws/public/ops/ops.json >/dev/null || fail "disk_pct"
 rws_compose run --rm --no-deps -T watchdog watchdog --once
-proof "rws-tick wrote disk_pct; watchdog --once (the real role, from the egress network to the public address, TLS verified) found /healthz, capture.json, ops.json, the backup, the certificate and the disk green"
+proof "rws-tick restored a deleted table inet rws from /etc/rws/nftables.conf with its resolvers (${resolvers:-none}) and wrote disk_pct; watchdog --once (the real role, from the egress network to the public address, TLS verified) found /healthz, capture.json, ops.json, the backup, the certificate and the disk green"
 jq . /srv/rws/public/ops/ops.json
 [[ $ipv6_result == ok ]] || fail "https over IPv6 from outside failed (diagnostics in the 'From outside' group)"

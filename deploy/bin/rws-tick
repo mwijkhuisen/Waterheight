@@ -5,7 +5,12 @@
 # 2. Restarts any container of the rws project that Docker reports unhealthy
 #    (a wedged recorder whose heartbeat stopped): Docker itself never restarts
 #    an unhealthy container, only one that exited.
-# 3. Backstops: reloads the container DNS allowlist (rws-resolvers), re-arms
+# 3. Restores the host firewall (table inet rws from $RWS_ETC/nftables.conf)
+#    when it is missing: stopping rws-firewall keeps it, but a break-glass
+#    `nft delete table inet rws` (docs/runbooks/lost-ssh.md) removes it while
+#    live-restore keeps the containers running. Stop rws-tick.timer to hold
+#    this off.
+# 4. Backstops: reloads the container DNS allowlist (rws-resolvers), re-arms
 #    rws-status-copy.path if it is not active (a unit that hit a start or
 #    trigger limit stops watching for good) and publishes capture.json
 #    (rws-status-copy), in case an event was missed.
@@ -44,6 +49,15 @@ for name in "${sick[@]}"; do
     docker restart "$name" >/dev/null || log "restart of $name failed"
   fi
 done
+
+if ! nft list table inet rws >/dev/null 2>&1; then
+  if ((DRY_RUN)); then
+    log "dry-run: table inet rws is missing: would load $RWS_ETC/nftables.conf"
+  else
+    log "warning: the host firewall (table inet rws) is missing: loading $RWS_ETC/nftables.conf (stop rws-tick.timer to hold this off)"
+    nft -f "$RWS_ETC/nftables.conf" || log "error: loading $RWS_ETC/nftables.conf failed: the host runs without its firewall"
+  fi
+fi
 
 here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 dry=()
