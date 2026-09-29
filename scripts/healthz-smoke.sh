@@ -34,9 +34,10 @@ dry=$(env -u RWS_DOMAIN -u RWS_CONTACT_EMAIL node "$main" capture --dry-run)
 grep -q 'RWS requests/hour' <<<"$dry" || { echo "healthz-smoke: capture --dry-run printed no budget" >&2; exit 1; }
 echo "capture --dry-run -> exit 0 ($(tail -n 1 <<<"$dry"))"
 
+# Never the live recorder: without the contact variables capture exits 78; the timeout is a backstop.
 for role in capture load publish replay watchdog nope; do
   code=0
-  node "$main" "$role" >/dev/null 2>&1 || code=$?
+  env -u RWS_DOMAIN -u RWS_CONTACT_EMAIL timeout 10 node "$main" "$role" >/dev/null 2>&1 || code=$?
   [[ $code -ne 0 ]] || { echo "healthz-smoke: role $role exited 0" >&2; exit 1; }
   echo "role $role -> exit $code"
 done
