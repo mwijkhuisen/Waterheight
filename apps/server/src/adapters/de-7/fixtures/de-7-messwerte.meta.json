@@ -1,0 +1,11 @@
+{
+  "spec": "de-7-messwerte",
+  "source": "DE-7",
+  "synthetic": false,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/zip",
+  "url": "https://www.hochwasserportal.nrw/data/downloads/messwerte.zip",
+  "bytes": 881400,
+  "trimmed": false
+}

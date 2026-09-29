@@ -1,0 +1,8 @@
+{
+  "spec": "de-2-wv",
+  "source": "DE-2",
+  "synthetic": true,
+  "derived_from": "the structure of a live payload recorded 2026-09-29 (owner audience: not committed)",
+  "values": "every value, name, id and timestamp generated (scripts/synthesize-fixture.ts)",
+  "status": 200
+}

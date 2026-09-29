@@ -61,3 +61,46 @@ describe('kill -9 during a capture write', () => {
     expect(recovered.key?.startsWith(KEY)).toBe(true);
   });
 });
+
+describe('after the kill, the next cycle resumes and fills the window', () => {
+  it('asks RWS from the last success − 1 h, so the missed interval is refilled', async () => {
+    const { HttpResponse, http } = await import('msw');
+    const { server } = await import('../../../../test/msw.setup.ts');
+    const { runSpec } = await import('../../src/capture/runner.ts');
+    const { StateStore } = await import('../../src/capture/state.ts');
+    const { runDeps, spec, fixture } = await import('../capture/helpers.ts');
+    const root = await killAt('tmp'); // killed during the 12:01 write
+    const archive = new Archive(root);
+    await archive.recover(() => ({ retention: 'obs', version: 1 }), new Date('2026-10-02T12:05:00Z'));
+    // The last cycle that completed before the crash succeeded at 11:51.
+    const state = new StateStore(root);
+    const s = spec('nl-1-obs-key');
+    const row = s.rows[0] as Record<string, string>;
+    const variant = `${row.code}/${row.quantity}`;
+    await state.update('nl-1-obs-key', () => ({
+      enabled_since: '2026-10-01T00:00:00.000Z',
+      last_success: '2026-10-02T11:51:05.000Z',
+      variants: { [variant]: { last_success: '2026-10-02T11:51:05.000Z' } },
+      seen: [],
+      pending_page: [],
+    }));
+    const bodies: string[] = [];
+    server.use(
+      http.post(
+        'https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen',
+        async ({ request }) => {
+          bodies.push(await request.text());
+          return new HttpResponse(fixture('NL-1', 'nl-1-obs-key').body);
+        },
+      ),
+    );
+    const deps = { ...runDeps({ now: () => new Date('2026-10-02T15:31:00Z') }), archive, state };
+    await runSpec(s, deps, { rows: [row] });
+    expect(JSON.parse(bodies[0] as string).Periode.Begindatumtijd).toBe('2026-10-02T10:51:00Z');
+    const lines = readFileSync(join(root, '_manifest', '2026-10-02.jsonl'), 'utf8')
+      .trim()
+      .split('\n');
+    expect(lines).toHaveLength(1);
+    expect(ManifestLine.parse(JSON.parse(lines[0] as string)).key).not.toBeNull();
+  });
+});

@@ -1,0 +1,11 @@
+{
+  "spec": "de-1-series",
+  "source": "DE-1",
+  "synthetic": false,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/9598e4cb-0849-401e-bba0-689234b27644/W/measurements.json?start=PT6H",
+  "bytes": 1778,
+  "trimmed": false
+}

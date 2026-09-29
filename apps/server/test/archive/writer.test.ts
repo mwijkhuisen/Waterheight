@@ -60,7 +60,7 @@ describe('object keys and objects', () => {
     expect(statSync(a.path(key)).mode & 0o777).toBe(0o640);
     expect(readdirSync(join(root, '.tmp'))).toEqual([]);
     // The same content in the same second is not rewritten.
-    expect(await a.put('NL-1', 'nl-1-obs-key', at, body, sha256(body))).toEqual({ key, stored });
+    expect(await a.put('NL-1', 'nl-1-obs-key', at, body, sha256(body))).toEqual({ key, stored, created: false });
   });
 });
 

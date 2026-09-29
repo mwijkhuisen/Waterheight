@@ -1,0 +1,11 @@
+{
+  "spec": "lu-6-geo",
+  "source": "LU-6",
+  "synthetic": false,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://features.geoportail.lu/collections/655/items?f=json&limit=100",
+  "bytes": 22909,
+  "trimmed": false
+}

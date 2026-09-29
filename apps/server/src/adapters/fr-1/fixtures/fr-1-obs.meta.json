@@ -1,0 +1,11 @@
+{
+  "spec": "fr-1-obs",
+  "source": "FR-1",
+  "synthetic": false,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=A*%2CB*%2CD*%2CE1*%2CE2*%2CE3*&size=20000&fields=code_site%2Ccode_station%2Cgrandeur_hydro%2Cdate_obs%2Cresultat_obs%2Ccode_qualification_obs%2Ccode_statut&date_debut_obs=2026-09-29T12%3A28%3A26Z",
+  "bytes": 966140,
+  "trimmed": false
+}

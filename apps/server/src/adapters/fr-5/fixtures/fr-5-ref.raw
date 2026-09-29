@@ -1,0 +1,136 @@
+{
+    "Scenario": {
+        "Flux": {
+            "Version": "1",
+            "DateRevision": "2019-07-02T11:00:00"
+        },
+        "CodeScenario": "VIC",
+        "VersionScenario": "1.1",
+        "NomScenario": "Référentiels et données de la vigilance crues métropolitaine",
+        "DateHeureCreationFichier": "2026-09-29T13:43:38+00:00",
+        "Emetteur": "1524"
+    },
+    "count": 20,
+    "ListEntVigiCru": [
+        {
+            "CdEntVigiCru": "2",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Meuse-Moselle",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=2\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "3",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Rhin-Sarre",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=3\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "4",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Seine aval-Côtiers Normands",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=4\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "6",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Seine amont-Marne amont",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=6\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "7",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Seine moyenne-Yonne-Loing",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=7\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "8",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Vilaine-Côtiers Bretons",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=8\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "9",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Maine-Loire aval",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=9\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "18",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Rhône amont-Saône",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=18\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "19",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Alpes du Nord",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=19\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "20",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Grand Delta",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=20\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "21",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Méditerranée Ouest",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=21\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "22",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Méditerranée Est (bassin continental)",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=22\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "25",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Garonne-Tarn-Lot",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=25\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "26",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Méditerranée Est (bassin Corse)",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=26\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "29",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Bassins du Nord",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=29\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "30",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Loire-Allier-Cher-Indre",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=30\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "31",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Vienne-Charente-Atlantique",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=31\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "32",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Gironde-Adour-Dordogne",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=32\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "973",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "Guyane",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=973\u0026TypEntVigiCru=5"
+        },
+        {
+            "CdEntVigiCru": "999",
+            "TypEntVigiCru": "5",
+            "LbEntVigiCru": "National",
+            "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=999\u0026TypEntVigiCru=5"
+        }
+    ]
+}

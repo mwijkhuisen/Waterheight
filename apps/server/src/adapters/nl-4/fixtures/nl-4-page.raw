@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head prefix="og: http://ogp.me/ns# dcterms: http://purl.org/dc/terms/ overheid: http://standaarden.overheid.nl/owms/">
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1">
+    <title>Waterdata | Data Rijkswaterstaat</title>
+    <link rel="apple-touch-icon" href="https://rijkswaterstaatdata.nl/apple-touch-icon.png">
+    <link rel="icon" href="https://rijkswaterstaatdata.nl/favicon.png"><!--[if IE]>
+          <link rel="shortcut icon" href="https://rijkswaterstaatdata.nl/favicon.ico" />
+          <![endif]-->
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="/publish/varianten/190/favicons/256x256_favicon.png">
+    <link rel="canonical" href="https://rijkswaterstaatdata.nl/waterdata/">
+    <meta name="generator" content="iprox.">
+    <link rel="author" href="mailto:teamwebsite@rws.nl">
+    <meta name="description" content="User notes voor Waterinfo, Download historische Data en WaterWebservices"><!--OWMS-Kern-->
+    <meta property="dcterms:identifier" content="https://rijkswaterstaatdata.nl/waterdata/" datatype="dcterms:URI">
+    <meta property="dcterms:title" content="Waterdata">
+    <meta property="dcterms:language" content="nl" datatype="dcterms:RFC4646">
+    <meta property="overheid:authority" content="Rijkswaterstaat">
+    <meta property="dcterms:creator" content="Rijkswaterstaat">
+    <meta property="dcterms:modified" content="2026-08-20" datatype="dcterms:W3CDTF">
+    <meta property="dcterms:available" content="start=2022-04-13;" datatype="dcterms:Period"><!--OWMS-Mantel-->
+    <meta property="dcterms:description" content="User notes voor Waterinfo, Download historische Data en WaterWebservices">
+    <meta property="dcterms:publisher" content="Rijkswaterstaat">
+    <meta property="og:locale" content="nl_NL">
+    <meta property="og:title" content="Waterdata">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="Data Rijkswaterstaat">
+    <meta property="og:url" content="https://rijkswaterstaatdata.nl/waterdata/">
+    <meta property="og:description" content="User notes voor Waterinfo, Download historische Data en WaterWebservices">
+    <link media="all" rel="stylesheet" href="/views/css/feb934bb960a1cf946c27d2cc6728d16.css">
+    <link media="all" rel="stylesheet" href="/views/css/fdba0747925a4f67a9235f58a5c219d8.css" class="id normalize">
+    <link media="all" rel="stylesheet" href="/views/css/1b4492433007fc9bb34d86b29f9be765.css" class="id data-rijkswaterstaat-190dot32009">
+    <link media="screen" rel="stylesheet" href="/views/css/55cf46b1b32c2cfc2ae67a70766b05bf.css" class="id data-rijkswaterstaat-190dot32009">
+    <link media="screen" rel="stylesheet" href="/views/css/f374ff1518a56cd21d227668901a0735.css">
+    <link rel="stylesheet" href="/aspx/read.aspx?AppIdt=globalcss&amp;ItmIdts=0,258042,303379,205600,205606,300331,165343,165342,191430&amp;VldIdts=0,205581&amp;VarIdt=190">
+    <script src="/views/js/3db63487c1598951ffc152ea3dc02adb.js"></script>
+    <script><!--
+window.piwikProTagmanagerId="ebdc9269-b6b7-45f2-b93b-7aab50ed708d";window.piwikProTagmanagerAddress="https://statistiek.rijksoverheid.nl/containers/";
+//--></script>
+    <script src="/views/js/cf1af0c2a4769187d1e923df69f7fa41.js"></script>
+    <script><!--
+var requiredFields=requiredFields||[],requiredLabels=requiredLabels||[];
+//--></script>
+  <body class="vew-rhs var-datamanagement_center ipx-baseline rol-body main-has-layout-contentbreednav header-has-layout-header footer-has-layout-rijkshuisstijl-footer-afvalcirculair right-aligned-list-images lazy-loading-images" data-breakpoints="[{&quot;className&quot;:&quot;large&quot;,&quot;minSize&quot;:1200,&quot;maxSize&quot;:99999},{&quot;className&quot;:&quot;medium&quot;,&quot;minSize&quot;:610,&quot;maxSize&quot;:1200},{&quot;className&quot;:&quot;small&quot;,&quot;minSize&quot;:0,&quot;maxSize&quot;:610}]" data-elt-breakpoints="[{ &quot;sizes&quot;:[444, 888], &quot;classNames&quot;:[&quot;elt-small&quot;, &quot;elt-medium&quot;, &quot;elt-large&quot;], &quot;selector&quot;: &quot;.grid-blok&quot; }]"><!--Google Tag Manager disabled: no id defined--><!--Start Piwik pro tag manager-->
+    <script src="/views/js/a55facba6744e910aec9c28f2fae9de4.js"></script><!--End Piwik pro tag manager--><!--Google analytics 4 disabled: no id defined-->
+    <div id="canvas" class="canvas artikel" data-ipx-pagetype="{&quot;alias&quot;:&quot;artikel&quot;}">
+      <header data-ipx-pagetype="{&quot;alias&quot;:&quot;header&quot;}"><!--googleoff: all-->
+        <div class="skiplink-wrapper skiplink-forward"><a class="skiplink visuallyhidden focusable" id="content-start_back" href="#content-start">Ga naar de inhoud</a></div>
+        <div class="header rol-sectie-header grid-wrapper wrapper_12">
+          <div class="grid-container container_12 grid-header" data-layout="{&quot;columns&quot;:12,&quot;block-columns&quot;:1,&quot;gutter&quot;:0,&quot;padding&quot;:10,&quot;grid-column-width&quot;:100,&quot;DimSiz&quot;:1200,&quot;MinSiz&quot;:100,&quot;MaxSiz&quot;:1500}">
+            <div id="zone_205600_logo" class="grid-zone grid_12 z-logo z-rol-logo is-fullwidth-zone" data-layout="{&quot;columns&quot;:12,&quot;DimSiz&quot;:1200}">
+              <div class="grid-row single-elt-row has-fullwidth-elt is-fullwidth-row rol-rij-logo rol-rij-logo">
+                <div class="grid-blok grid_12 rol-logo type-logo full-width" id="Block_1608104" data-layout="{&quot;id&quot;:1608104,&quot;columns&quot;:12,&quot;DimSiz&quot;:1200,&quot;padding&quot;:30}">
+                  <div class="grid-element">
+                    <div class="grid-edge">
+                      <div class="iprox-content no-icons image has-logo-with-text"><a href="https://rijkswaterstaatdata.nl/"><span class="svg-with-text"><img data-sources="[{&quot;width&quot;:50,&quot;height&quot;:125,&quot;src&quot;:&quot;/publish/library/319/beeldmerk-rijksoverheid.svg&quot;}]" alt="beeldmerk Rijksoverheid" class="img-vector img_pagvld_2474089_0" width="50" height="125" src="/publish/library/319/beeldmerk-rijksoverheid.svg"><span class="logo-text"><span class="dienst">Rijkswaterstaat</span><span class="ministerie-bij-dienst">Ministerie van Infrastructuur en Waterstaat</span></span></span></a></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="zone-clear-logo"></div>
+            <div class="inner-header">
+              <div id="zone_205600_afzender" class="grid-zone grid_12 z-afzender z-rol-afzender is-fullwidth-zone" data-layout="{&quot;columns&quot;:12,&quot;DimSiz&quot;:1200}">
+                <div class="grid-row single-elt-row has-fullwidth-elt is-fullwidth-row rol-rij-informatief">
+                  <div class="grid-blok grid_12 rol-informatief type-tekst" id="Block_1608113" data-layout="{&quot;id&quot;:1608113,&quot;columns&quot;:12,&quot;DimSiz&quot;:1200,&quot;padding&quot;:30}">
+                    <div class="grid-element">
+                      <div class="grid-edge">
+                        <div class="grid-title">
+                          <div class="heading-elt heading-elt-tekst h2">Data Rijkswaterstaat</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="zone-clear-afzender"></div>
+              <div id="zone_205600_navigatie" class="grid-zone grid_12 z-navigatie z-rol-navigatie is-fullwidth-zone" data-layout="{&quot;columns&quot;:12,&quot;DimSiz&quot;:1200}">
+                <div class="grid-blok grid_9 rol-primaire-navigatie type-primaire-navigatie" id="Block_1608102" data-layout="{&quot;id&quot;:1608102,&quot;columns&quot;:9,&quot;DimSiz&quot;:900,&quot;padding&quot;:30}">
+                  <div class="grid-element">
+                    <div class="grid-edge">
+                      <nav id="nav-1608102" class="bl-navbar bl-navbar-static navexpand-small navexpand-medium" data-nav-expanding="small medium">
+                        <div class="grid-title elt-visible-small elt-visible-medium elt-hidden-large">
+                          <div class="heading-elt heading-elt-nav"><button type="button" class="ipx-btn-link primaire-navigatie" aria-controls="openprimnav"><span id="nav-title-1608102">Menu</span></button></div>
+                        </div>
+                        <div class="grid-inside menu-container">
+                          <ul id="openprimnav" class="nav-eenvoudig">
+                            <li class="bl-navitem"><span class="menu-text"><a id="navitem-6968198" class="primaire-navigatie-item" href="https://rijkswaterstaatdata.nl/">Home</a></span>
+                            <li class="bl-navitem"><span class="menu-text"><a id="navitem-6968202" class="primaire-navigatie-item" href="https://rijkswaterstaatdata.nl/data-zoeken/">Data zoeken</a></span>
+                            <li class="bl-navitem"><span class="menu-text"><a id="navitem-6968206" class="primaire-navigatie-item" href="https://rijkswaterstaatdata.nl/data-gebruiken/">Data gebruiken</a></span>
+                            <li class="bl-navitem active selected"><span class="menu-text"><a id="navitem-6968208" class="primaire-navigatie-item" aria-current="page" href="https://rijkswaterstaatdata.nl/waterdata/">Waterdata</a></span>
+                            <li class="bl-navitem"><span class="menu-text"><a id="navitem-6968211" class="primaire-navigatie-item" href="https://rijkswaterstaatdata.nl/preview-dataportaal/">Preview dataportaal</a></span>
+                            <li class="bl-navitem"><span class="menu-text"><a id="navitem-6968201" class="primaire-navigatie-item" href="https://rijkswaterstaatdata.nl/dienstverlening/">Dienstverlening en contact</a></span>
+                          </ul>
+                        </div>
+                      </nav>
+                    </div>
+                  </div>
+                </div>
+                <div class="grid-blok grid_3 rol-servicebalk type-servicebalk has-button-icons full-width" id="Block_1608107" data-layout="{&quot;id&quot;:1608107,&quot;columns&quot;:3,&quot;DimSiz&quot;:300,&quot;padding&quot;:30}">
+                  <div class="grid-element">
+                    <div class="grid-edge">
+                      <div class="grid-inside"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="zone-clear-navigatie"></div>
+              <div class="zone-clear-sitepad"></div>
+            </div>
+          </div>
+          <div class="layout-clear clear"></div>
+        </div><!--googleon: all-->
+      </header>
+      <main data-pagetitle="Waterdata" data-ipx-pagetype="{&quot;alias&quot;:&quot;artikel&quot;}">
+        <div id="content-start" tabindex="-1"></div>
+        <div id="content" class="main rol-sectie-main grid-wrapper wrapper_12 expand-to-page">
+          <div class="grid-container container_12 grid-contentbreednav has-link-icons has-list-icons" data-layout="{&quot;columns&quot;:12,&quot;block-columns&quot;:1,&quot;gutter&quot;:0,&quot;padding&quot;:10,&quot;grid-column-width&quot;:100,&quot;DimSiz&quot;:1200,&quot;MinSiz&quot;:100,&quot;MaxSiz&quot;:1500}">
+            <div id="zone_258042_content" class="grid-zone grid_9 push_3 z-content z-rol-content" data-layout="{&quot;columns&quot;:9,&quot;DimSiz&quot;:900,&quot;push&quot;:3}">
+              <div class="grid-blok grid_9 rol-paginatitel type-titel" data-layout="{&quot;columns&quot;:9,&quot;DimSiz&quot;:900}">
+                <div class="grid-element">
+                  <div class="grid-edge">
+                    <h1 class="grid-title">Waterdata<span class="submode"></span></h1>
+                  </div>
+                </div>
+              </div>
+              <div class="grid-blok grid_9 rol-inleiding type-inhoud" data-layout="{&quot;columns&quot;:9,&quot;DimSiz&quot;:900}">
+                <div class="grid-element">
+                  <div class="grid-edge" data-id="PagVld_2252508">
+                    <div class="grid-inside">
+                      <div class="iprox-rich-content iprox-content">
+                        <p>Rijkswaterstaat wint 'natte' meetgegevens in voor dagelijks beheer en/of wettelijke verplichtingen. Deze meetgegevens kunnen ook erg waardevol zijn voor gebruikers buiten Rijkswaterstaat. Er worden een drietal methodes toegelicht om deze gegevens te ontsluiten. Onder Updates worden wijzigingen en storingen bekend gemaakt. Voor inhoudelijke achtergrondinformatie, zie <a href="https://waterinfo-extra.rws.nl/" target="_blank" class="externLink extern">waterinfo-extra.rws.nl</a>.</p>
+                        <p>Heeft u vragen over het gebruik van de Waterwebservices, of wilt u in contact komen met onze specialisten en andere gebruikers? Bezoek dan ons <a href="https://github.com/Rijkswaterstaat/WaterWebservices/discussions" target="_blank" class="externLink extern">discussieplatform op GitHub</a>.</p>
+                        <p><span class="notranslate">Also available in <a href="https://rijkswaterstaatdata-nl.translate.goog/waterdata/?_x_tr_sl=nl&amp;_x_tr_tl=en" target="_blank" class="externLink extern">English</a>, <a href="https://rijkswaterstaatdata-nl.translate.goog/waterdata/?_x_tr_sl=auto&amp;_x_tr_tl=de" target="_blank" class="externLink extern">German</a> and <a href="https://rijkswaterstaatdata-nl.translate.goog/waterdata/?_x_tr_sl=auto&amp;_x_tr_tl=fr" target="_blank" class="externLink extern">French</a></span></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="grid-blok grid_9 rol-inhoud type-inhoud" data-layout="{&quot;columns&quot;:9,&quot;DimSiz&quot;:900}">
+                <div class="grid-element">
+                  <div class="grid-edge" data-id="PagVld_2252507">
+                    <div class="grid-inside">
+                      <div class="iprox-rich-content iprox-content">
+                        <h2 id="h1702ccca-31dc-4dd9-89f7-743471b55af8">Waterinfo</h2>
+                        <p>Op <span class="notranslate"><a href="https://waterinfo.rws.nl/publiek/waterhoogte" class="externLink">Waterinfo.rws.nl</a></span> vindt u actuele, verwachte én historische meetgegevens over de rijkswateren. Deze watergegevens kunt u bekijken op een kaart en vervolgens weergeven in een tabel of een grafiek. U kunt de gegevens daarna ook exporteren.</p>
+                        <h3 id="h0042e645-74e0-010f-e906-b9b8d3e16569">Basiskaarten</h3>
+                        <p>De basiskaarten hebben over het algemeen een kleurcode met extra duiding. Deze publieksgegevens gaan maximaal 28 dagen terug en 2 dagen vooruit.</p>
+                        <h3 id="hc9c6c921-ab1c-8503-cc2d-0d1691c7a0d8">Kaarten voor Experts</h3>
+                        <p>De gegevens voor de experts op de kaart zijn zonder kleurcodering en de grafieken worden zonder grenswaarden weergegeven. Het is mogelijk om maximaal 5 willekeurige parameters op 1 kaart te tonen. Voor de chemische gegevens zijn lange tijdshorizonnen op te vragen.</p>
+                        <h3 id="h6d909c58-d8ad-48c6-9081-06b52f61d3d9">Embedden</h3>
+                        <p>Voor het embedden van de kaart op uw eigen site kunnen UI-componenten uitgezet worden. Zie '<img data-sources="[{&quot;width&quot;:19,&quot;height&quot;:20,&quot;src&quot;:&quot;/publish/pages/223004/waterinfo-delen.jpg&quot;}]" data-id="223004" alt="" id="img_pagvld_2252507_0" class="img_pagvld_2252507_0" width="19" height="20" src="/publish/pages/223004/waterinfo-delen.jpg">'.</p>
+                        <h2 id="h972760ae-15ca-496d-b4c7-b5bbeb90dff3">Download historische data</h2>
+                        <p>Naast de presentatie van meetgegevens op <span class="notranslate"><a href="https://waterinfo.rws.nl/publiek/waterhoogte" class="externLink">waterinfo.rws.nl</a></span> kunt u deze en meer gegevens opvragen via <span class="notranslate">'<a href="https://waterinfo.rws.nl/#/nav/bulkdownload" class="externLink">Download historische Data</a>'</span>. U geeft uw gewenste gegevens op, waarna deze geautomatiseerd per e-mail naar u toegezonden worden.</p>
+                        <h3 id="hfd164755-a725-3594-71a6-43b6b15fbb0c">Hoe gebruik ik 'Download historische Data'?</h3>
+                        <ol>
+                          <li><span class="li-content">Ga naar <span class="notranslate"><a href="https://waterinfo.rws.nl/publiek/waterhoogte" class="externLink">Waterinfo.rws.nl</a></span>  en kies voor <span class="notranslate">‘<a href="https://waterinfo.rws.nl/#/nav/bulkdownload" class="externLink">Download historische data’</a></span>.</span>
+                          <li><span class="li-content">Vink hier de gewenste periode en parameter(s) aan. <br> Tip; Door ★ te selecteren kunt u uw favoriete parameters opslaan.</span>
+                          <li><span class="li-content">Er worden nu locaties gezocht die aan uw criteria voldoen. Vink de gewenste locaties aan en klik op <span class="notranslate">‘verder’</span>.</span>
+                          <li><span class="li-content">Vul onderaan de pagina uw e-mailadres in en klik op <span class="notranslate">‘aanvragen’</span>.</span>
+                        </ol>
+                        <p>Het CSV-bestand met uw aangevraagde gegevens is te openen met bijvoorbeeld Excel. <a class="siteLink ptartikel" href="https://rijkswaterstaatdata.nl/waterdata/#h35556cad-3751-4b9f-86d1-dca7c94cc9de">Onderaan deze pagina</a> vindt u een uitleg van de attributen van dit bestand.</p>
+                        <h3 id="h250beb29-cee9-4d5c-8894-c31cc42f4e89"></h3>
+                        <h3 id="h0fb5530c-8664-4c66-96ae-85bdcf9c2383">Fair use</h3>
+                        <p>Bij onredelijk gebruik van deze service kan Rijkswaterstaat genoodzaakt zijn het aantal aanvragen te limiteren. Op deze manier houden we de service en zijn resources voor iedereen beschikbaar. De <a href="https://www.rijkswaterstaat.nl/formulieren/contactformulier-servicedesk-data" class="externLink">Servicedesk Data</a> helpt u graag met een passende ontsluitingsmethode.</p>
+                        <h2 id="h7b0fe129-3b57-4c01-bcba-e3c96a1496d4">WaterWebservices</h2>
+                        <p>Naast de presentatie van meetgegevens op <span class="notranslate">Waterinfo</span> kunt u deze en meer gegevens geautomatiseerd opvragen via de <span class="notranslate">WaterWebservices</span>. Door het achterliggende <a href="https://www.aquo.nl/index.php/Wat_is_Aquo%3F" class="externLink"><span class="notranslate">AQUO</span> informatiemodel</a> zijn er tientallen filtermogelijkheden waardoor u direct de data ophaalt die u nodig heeft. De WaterWebservices bestaan uit:</p>
+                        <ul>
+                          <li><span class="li-content"><span class="notranslate"><a href="#hf7562c68-ee9f-4842-8139-0209d2930718" data-intern="#hf7562c68-ee9f-4842-8139-0209d2930718" class="internLink">MetadataService</a></span>; Ophalen van een catalogus van beschikbare waarnemingen</span>
+                          <li><span class="li-content"><span class="notranslate"><a href="#hf1666c4e-b766-49e0-af37-c1b95f8f56e1" data-intern="#hf1666c4e-b766-49e0-af37-c1b95f8f56e1" class="internLink">OnlineWaarnemingenService</a></span>; Ophalen van historische en actuele waarnemingen</span>
+                          <li><span class="li-content"><span class="notranslate"><a href="https://www.nationaalgeoregister.nl/geonetwork/srv/api/records/68ebd5c9-0ea1-4f22-9907-ec4c06mcd3e2" class="externLink">Geoservices</a></span>; WMS en WFS kaartdata met actuele waarnemingen</span>
+                        </ul>
+                        <h3 id="h3c86d49e-bf65-4ae5-9c69-fe886b1d9c64">Werkwijze ophalen gegevens</h3>
+                        <p>De volgende werkwijze vormt de basis voor het ophalen van waarnemingen. U kunt deze stappen uitvoeren in een <a href="#h4e3f1b2a-d35d-47af-84e9-d4f69fc67c4f" data-intern="#h4e3f1b2a-d35d-47af-84e9-d4f69fc67c4f" class="internLink">REST-client</a>. Een hands-on toepassing in Python is terug te vinden op onze <a href="https://rijkswaterstaat.github.io/wm-ws-dl/?python#introduction" class="externLink">Github</a> pagina.</p>
+                        <h4 id="hf7562c68-ee9f-4842-8139-0209d2930718">1. Haal de catalogus met beschikbare gegevens op</h4>
+                        <p>Deze functie werkt door een aanvraag in te dienen naar de POST-url. Met de body geeft u aan welke meta-informatie u ontvangen wil. Filtering op <span class="notranslate"><a href="https://www.aquo.nl/index.php/Id-6134f3bb-6048-431d-a130-01290d84172c" class="externLink">compartiment</a> (bodem, water, lucht, ..)</span> en <span class="notranslate"><a href="https://www.aquo.nl/index.php/Id-0eafa483-2875-4c94-890d-66258a6b4d88?title=Id-0eafa483-2875-4c94-890d-66258a6b4d88&amp;pfRunQueryFormName=Zoek+parameter&amp;parameter_query=Freetexttitle%3D%26Code%3D%26CAS%3D%26Groep%3Dgrootheid%26Id%3D%26Vervallen%255Bis_list%255D%3D1&amp;pf_free_text=&amp;wpRunQuery=Zoekopdracht+uitvoeren&amp;parameter+query%5BFreetexttitle%5D=&amp;parameter+query%5BCode%5D=&amp;parameter+query%5BCAS%5D=&amp;parameter+query%5BGroep%5D=Grootheid&amp;parameter+query%5BId%5D=&amp;parameter+query%5BVervallen%5D%5Bis_list%5D=1&amp;pf_free_text=&amp;wpRunQuery=Zoekopdracht+uitvoeren" class="externLink">grootheid</a> (waterhoogte, temperatuur, ..)</span> is een goede basis.</p>
+                        <p><em>Body voor </em><em><span class="notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus</span></em><span class="accent attentie-licht notranslate"><em>{"CatalogusFilter": {"Compartimenten":true, "Grootheden":true}}</em></span></p>
+                        <p>Dit resulteert in een JSON respons met de volgende structuur;</p>
+                        <ul>
+                          <li><span class="li-content"><span class="notranslate">AquoMetadataLijst</span>; Metadata van metingen</span>
+                          <li><span class="li-content"><span class="notranslate">LocatieLijst</span>; Locaties waar metingen uitgevoerd zijn</span>
+                          <li><span class="li-content"><span class="notranslate">AquoMetadataLocatieLijst</span>; Koppeltabel tussen metadata en locaties</span>
+                        </ul>
+                        <p>Koppel de eerste drie lijsten aan elkaar met behulp van de <span class="notranslate">MessageID</span>. U heeft nu een overzicht van wat waar gemeten wordt.</p>
+                        <p><span class="cursief">*Als het voor uw toepassing niet nodig is om deze stap te automatiseren, kunt u ook de <a href="#h35556cad-3751-4b9f-86d1-dca7c94cc9de" data-intern="#h35556cad-3751-4b9f-86d1-dca7c94cc9de" class="internLink"><span class="notranslate">OphalenCatalogus</span> Excel (zie Downloads)</a> gebruiken.</span></p>
+                        <h4 id="hecea68f9-f6fb-4b51-9cbe-e0a007552135">2. Kies de gewenste gegevens</h4>
+                        <p>Koppel de eerste drie lijsten aan elkaar met behulp van de <span class="notranslate">MessageID</span>. U heeft nu een overzicht van wat waar gemeten wordt. Kies een combinatie van locatie, <span class="notranslate">compartiment</span> en <span class="notranslate">grootheid</span>. Voor dit voorbeeld wordt voor de locatie Nes op Ameland in het <span class="notranslate">compartiment oppervlaktewater</span> de <span class="notranslate">grootheid waterhoogte</span> opgevraagd.</p>
+                        <p><span class="cursief">*De coördinaten worden teruggegeven in ETRS89 lat/lon (EPSG:4258). Voor weergave-doeleinden is dit gelijk aan de vaker gebruikte WGS84 lat/lon.</span></p>
+                        <h4 id="haa9197cf-c569-4b1b-8c2f-12f7cefbbc3d">3. Check of er waarnemingen tijdens de gewenste periode zijn (optioneel);</h4>
+                        <p>Op basis van een gekozen locatie, <span class="notranslate">compartiment, grootheid</span> en periode kan bekeken worden of er op te halen waarnemingen bestaan. De periode kan opgegeven worden in elke ISO 8601 notatie. De respons ‘+01:00’ duidt onze tijdzone aan, waarmee dit de Nederlandse wintertijd is.</p>
+                        <p><span class="cursief">Body voor </span><span class="cursief notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/CheckWaarnemingenAanwezig</span><span class="notranslate"><em><span class="attentie-licht">{"LocatieLijst": [{<br>  "Code":"ameland.nes"}],<br> "AquoMetadataLijst": [{<br>  "Compartiment":{"Code":"OW"}, <br>  "Grootheid":{"Code":"WATHTE"}}],<br>"Periode":{<br>  "Begindatumtijd":"2024-06-01T00:00:00.000+01:00",<br>  "Einddatumtijd":"2025-01-01T00:00:00.000+01:00"}}</span></em></span></p>
+                        <h4 id="hf1666c4e-b766-49e0-af37-c1b95f8f56e1">4. Haal gekozen waarnemingen op</h4>
+                        <p>Op basis van de gekozen locatie,<span class="notranslate"> compartiment, grootheid</span> en periode kunnen nu de waarnemingen opgehaald worden.</p>
+                        <p><span class="cursief">Body voor </span><span class="cursief notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen</span><em><span class="attentie-licht notranslate">{"Locatie":{<br>  "Code":"ameland.nes"},  <br>"AquoPlusWaarnemingMetadata":{<br>  "AquoMetadata":{<br>    "Compartiment":{"Code":"OW"}, <br>    "Grootheid":{"Code":"WATHTE"}}},  <br>"Periode":{<br>  "Begindatumtijd":"2024-06-01T00:00:00.000+01:00",<br>  "Einddatumtijd":"2025-01-01T00:00:00.000+01:00"}}</span></em></p>
+                        <p>Er worden één of meerdere <span class="notranslate">WaarnemingenLijsten</span> geretourneerd met de gevraagde gegevens.</p>
+                        <p><span class="cursief">*De meeste <span class="notranslate">WaarnemingenLijsten</span> kennen een interval van 10 minuten. Net zoals <span class="notranslate">‘Download historische Data’</span> kent de API een maximum van 160.000 waarnemingen per request. Dit staat gelijk aan ca. 3 jaar aan 10-minuut gegevens. Daarnaast is er een maximum van 100.000 reeksen per request.</span></p>
+                        <p><strong>Foutafhandeling ongeldige datum/tijd</strong></p>
+                        <p>In de WaterWebservices is de foutafhandeling voor datum/tijd-parameters verbeterd. Wanneer een opgegeven datum/tijd niet kan worden geparst, wordt niet langer een generieke HTTP 500-fout geretourneerd. In plaats daarvan ontvangt de gebruiker een duidelijke foutmelding die aangeeft welke parameter ongeldig is en welk formaat verwacht wordt.</p>
+                        <p>Voorbeeld van de foutmelding:</p>
+                        Het parsen van 'Begindatumtijd' is mislukt. Lever geldige waarden aan in het formaat 'yyyy-MM-dd'T'HH:mm:ss+01:00'
+                        <h4 id="hef1055c5-ba3b-4658-aed0-111af96f0ca3">5. Scherp zoekopdracht aan</h4>
+                        <p>Omdat het archief verder opengesteld is, kan het zijn dat er veel meer data terug komt dan voorheen. Door na een eerste aanroep je vraag aan te scherpen voorkom je dat data vertroebelt voor je toepassing. Een aantal goed toepasbare filteringen zijn;</p>
+                        <ul>
+                          <li><span class="li-content">Filter op procestype. Zoals meting, astronomisch of verwacht; Als je bij het opvragen van gegevens enkel metingen wil (en geen modelverwachtingen) kun je het volgende filter aan je request toevoegen;<br><span class="cursief">"AquoMetadata": {…,"ProcesType":"meting"}</span><br>Als je noujuist enkel verwachtingen wil ontvangen, voeg het volgende toe;<br><span class="cursief">"AquoMetadata": {…,"ProcesType":"verwachting"}</span></span>
+                          <li><span class="li-content">Filter op bemonsteringshoogte; Bij verschillende grootheden wordt op verschillende hoogten bemonsterd. Bijvoorbeeld het zoutgehalte van water, dat over de diepte door verschillende dichtheden erg kan verschillen. Voorheen werd de bemonsteringshoogte gezien als onderdeel van de locatiecode. Bijvoorbeeld HVH25. Om deze specifieke bemonsteringshoogte op te vragen;<br><span class="cursief">"AquoPlusWaarnemingMetadata": {</span><br><span class="cursief">    "AquoMetadata": {...}, </span><span class="cursief">"WaarnemingMetadata": {</span><span class="cursief"><strong>"BemonsteringshoogteLijst":["-250"]</strong>}  }</span></span>
+                          <li><span class="li-content">Filter op <a href="https://wrd.rwskennisbron.nl/index.php/Opdrachtgevende_instanties" class="externLink">opdrachtgevende instantie</a>. In het doel meer transparant te zijn worden er geen opdrachtgevende-instantie groepen meer gebruikt. Bij de Downloads kun je een was-wordt lijst vinden, en een lijst met omschrijvingen behorend bij de codes. Bijvoorbeeld waar u voorheen data ontving onder LMW_ZOUT;<br><span class="cursief">"AquoPlusWaarnemingMetadata": {<br>    "AquoMetadata": {...}, </span><span class="cursief">"WaarnemingMetadata": {<strong>"OpdrachtgevendeInstantieLijst":["RIKZ_GOLVEN"]</strong>}  }</span></span>
+                        </ul>
+                        <p><span class="accent">Voor het eerdere voorbeeld waren we op zoek naar de gemeten waterstanden bij ameland.nes. Om te voorkomen dat we ook de voorspellingen terug krijgen, specificeren we "ProcesType": "meting". Om te voorkomen dat we ook data terug krijgen van andere aanbieders die eventueel in deze periode metingen hebben verricht, specificeren we "OpdrachtgevendeInstantieLijst": ["RIKZ_GOLVEN"].</span></p>
+                        <p><span class="cursief">Body voor <span class="notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen</span></span><span class="cursief attentie-licht"><span class="notranslate">{"Locatie":{"Code":"ameland.nes"},<br>  "AquoPlusWaarnemingMetadata":{<br>    "AquoMetadata":{<br>      "Grootheid":{"Code":"WATHTE"},<br>      <strong>"ProcesType": "meting"</strong>},<br>  "WaarnemingMetadata":{<strong>"OpdrachtgevendeInstantieLijst": ["RIKZ_GOLVEN"]</strong>}},<br>  "Periode":{<br>    "Begindatumtijd":"2025-12-01T00:00:00.000+01:00",<br>    "Einddatumtijd":"2026-01-01T00:00:00.000+01:00"}}</span></span></p>
+                        <h3 id="hea8be9ec-801c-00e1-f00e-b52fe6b65a12">Voorbeelden</h3>
+                        <h4 id="hcd5f3dca-5c27-4341-bab0-d1a2ed0db586">Verwachte waterstand over een uur</h4>
+                        <p>Elke 6 uur worden er voor een groot aantal locaties waterstanden <a href="https://www.rijkswaterstaat.nl/water/waterdata-en-waterberichtgeving/waterbericht" class="externLink">voorspeld</a> op basis van het weer. Deze en andere verwachtingen zijn te vinden met het procestype <span class="notranslate">"verwachting"</span>. Bereid de catalogusvraag eerst uit met verwachtingen;</p>
+                        <p><em>Body voor <span class="notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus</span></em><span class="attentie-licht"><em>{"CatalogusFilter": {"Compartimenten":true, "Grootheden":true, <strong>"ProcesTypes": true</strong>}}</em></span></p>
+                        <p><span class="cursief">Body voor<span class="notranslate"> https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen</span></span><em><span class="attentie-licht notranslate">{"Locatie":{"Code":"ameland.nes"},<br> "AquoPlusWaarnemingMetadata":{<br>  "AquoMetadata":{<br>    "Grootheid":{"Code":"WATHTE"}, <br>    "ProcesType":"verwachting"}},<br> "Periode":{<br>  "Begindatumtijd":"2025-12-01T00:00:00.000+01:00",<br>  "Einddatumtijd":"2026-01-01T00:00:00.000+01:00"} }</span></em></p>
+                        <p><em><span class="cursief">*Het <span class="notranslate">"ProcesType":"verwachting"</span> is een veld dat niet in de AQUO-standaard voor komt. Daarom is dit gegeven ook opgenomen in de waardebepalingsmethode. </span></em><br><em><span class="cursief">*Ook historische verwachtingen worden gearchiveerd. Daarom het advies om metingen op te halen in de periode tussen T-10min en T+2 dagen.</span></em></p>
+                        <h4 id="h6c4c8b48-5a6b-4216-889a-19c3d230102b">Getij waterstand over een maand</h4>
+                        <p>Naast voorspelde waterstanden door het weer kunnen er ook waterstanden berekend worden op basis van zon en maan; <a href="https://www.rijkswaterstaat.nl/water/waterdata-en-waterberichtgeving/waterdata/getij" class="externLink">het getij</a>. Deze gegevens zijn te vinden onder het procestype <span class="notranslate">"astronomisch"</span>.</p>
+                        <p><span class="cursief">Body voor <span class="notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen</span></span><em><span class="attentie-licht notranslate">{"Locatie":{"Code":"ameland.nes"},<br> "AquoPlusWaarnemingMetadata":{<br>  "AquoMetadata":{<br>    "Grootheid":{"Code":"WATHTE"}, <br>    <strong>"ProcesType":"astronomisch"</strong>}},<br> "Periode":{<br>  "Begindatumtijd":"2026-06-01T00:00:00.000+01:00",<br>  "Einddatumtijd":"2026-07-01T00:00:00.000+01:00"} }</span></em></p>
+                        <h4 id="h627724ac-13cb-4f8d-83c9-51a5e80d576d">Wanneer keert het tij?</h4>
+                        <p>Naast waterstanden per 10 minuten zijn ook de hoog- en laag water extremen per dag op te vragen. Breid hiervoor het catalogusfilter uit met <span class="notranslate">‘Groeperingen’</span>, en gebruik de groeperingscode voor het gebruikte referentievlak op die locatie (<span class="notranslate">GETETBRKD2</span> of <span class="notranslate">GETETBRKDMSL2</span>). Met deze groepering ontvangt u zowel de waterstand als het bijbehorende getijextreemtype (hoogwater of laagwater).</p>
+                        <p><span class="cursief">Body voor <span class="notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus</span></span></p>
+                        <p><span class="attentie-licht cursief notranslate">{"CatalogusFilter": {"Compartimenten":true, "Grootheden":true, <strong>"Groeperingen":true</strong>}}</span></p>
+                        <p><span class="cursief">Body voor<span class="notranslate"> https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen</span></span></p>
+                        <p><span class="attentie-licht cursief notranslate">{"Locatie":{"Code":"ameland.nes"},<br> "AquoPlusWaarnemingMetadata":{<br>  "AquoMetadata":{"Groepering":{"Code":"GETETBRKD2"}}},<br> "Periode":{<br>  "Begindatumtijd":"2026-06-01T00:00:00.000+01:00",<br>  "Einddatumtijd":"2026-07-01T00:00:00.000+01:00"}}</span></p>
+                        <p><span class="cursief">*Historische gemeten extremen kunnen gevonden worden met <span class="notranslate">GETETM2</span> en <span class="notranslate">GETETMSL2</span>. <br>*In de toekomst zullen er meer muxen gedeeld worden onder andere groeperingscodes.<br>*Omdat losse kanalen van een groepering verkeerd geïnterpreteerd kunnen worden, ontvang je enkel gegroepeerde data als je dit definieert. Je krijgt dus geen gegroepeerde data terug als je geen "Groepering":{*} in je body gebruikt. Het is daarbij wel mogelijk om een specifiek deel binnen een groepering op te vragen.</span></p>
+                        <h4 id="hf148666e-0066-4455-bbc6-be774cdd18f3">Actuele lucht- en watertemperatuur van Vlissingen en Hoek van Holland</h4>
+                        <p>Per AquoMetadata/locatie/kwaliteitswaardecode combinatie wordt de laatste meting beschikbaar gesteld de OphalenLaatsteWaarnemingen service. Met deze service is het mogelijk om een lijst met Locaties en een lijst met AquoMetadata op te geven. Onderstaand vraagt de temperatuur (T) van zowel het Oppervlaktewater (OW) als de lucht (LT) op. Om te specificeren dat we actuele data op willen halen, specificeren we die betreffende opdrachtgevende instanties.</p>
+                        <p><span class="cursief">Body voor <span class="notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenLaatsteWaarnemingen</span></span></p>
+                        <p><span class="attentie-licht cursief notranslate">{"LocatieLijst":[<br>  {"Code":"vlissingen"},<br>  {"Code":"hoekvanholland"}],<br>"AquoPlusWaarnemingMetadataLijst":[<br>  {"AquoMetadata":{"Compartiment":{"Code":"OW"}, "Grootheid":{"Code":"T"}},<br>    "WaarnemingMetadata": {"OpdrachtgevendeInstantieLijst":["RIKZMON_TEMP"]} },<br>  {"AquoMetadata":{"Compartiment":{"Code":"LT"},"Grootheid":{"Code":"T"}},<br>    "WaarnemingMetadata": {"OpdrachtgevendeInstantieLijst":["RIKZ_METEO"]} }]}</span></p>
+                        <h4 id="h9490c927-e4c6-433a-af77-cc75f297947a">Historische concentraties Cadmium in de Maas</h4>
+                        <p>Naast <a href="https://waterinfo-extra.rws.nl/monitoring/waterkwantiteit/" class="externLink">fysische metingen</a> (waterhoogte, golfhoogte) bieden de WaterWebservices ook een grote hoeveelheid <a href="https://waterinfo-extra.rws.nl/monitoring/chemie/" class="externLink">chemische metingen</a> aan. Belangrijke locaties zijn de <a href="https://www.youtube.com/watch?v=SgxYwnCZMxI" class="externLink">meetpontons</a> bij Eijsden (eijsden / eijsden.ponton) en Lobith (lobith.ponton). Omdat veel chemische metingen de <a href="https://www.aquo.nl/index.php/Id-471174de-c041-2d35-103a-1e0f6f55bd87" class="externLink">grootheid</a> 'MASSFTE' (massafractie) of 'CONCTTE' (concentratie) hebben, is het nuttig om het catalogusfilter uit te breiden met de <a href="https://www.aquo.nl/index.php/Id-0eafa483-2875-4c94-890d-66258a6b4d88" class="externLink">Parameters</a>;</p>
+                        <p><span class="cursief">Body voor <em><span class="notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus</span></em></span></p>
+                        <p><span class="accent attentie-licht notranslate"><em>{"CatalogusFilter": {"Compartimenten":true, "Grootheden":true, <strong>"Parameters":true</strong>}}</em></span></p>
+                        <p><span class="cursief">Body voor <span class="notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen</span></span></p>
+                        <p><span class="attentie-licht cursief notranslate">{"Locatie":{"Code":"lobith.ponton"},<br> "AquoPlusWaarnemingMetadata":{<br>  "AquoMetadata":{<br>    "Compartiment":{"Code":"OW"}, "Grootheid":{"Code":"CONCTTE"}, <strong>"Parameter":{"Code":"Cd"}</strong>}},<br> "Periode":{<br>  "Begindatumtijd":"2023-01-01T00:00:00.000+01:00",<br>  "Einddatumtijd":"2024-01-01T00:00:00.000+01:00"}}</span></p>
+                        <p><span class="cursief">*Chemische parameters kennen een <a href="https://www.aquo.nl/index.php/Id-736ed719-e3e1-29aa-1ba1-34c57dbc29fa" class="externLink">bepalingsgrenswaarde</a>; Concentraties onder deze waarde kunnen niet gemeten worden. Dit wordt aangegeven door een <em><span class="notranslate">"Waarde_Limietsymbool"</span>: "&lt;"</em>. Houdt hier rekening mee met bijvoorbeeld het bepalen van gemiddelden. <br>*Naast het Oppervlaktewater (OW) zijn er ook veel metingen verricht in de <a href="https://www.aquo.nl/index.php/Id-6134f3bb-6048-431d-a130-01290d84172c" class="externLink">compartimenten</a> Zwevende Stof (ZS) en Bodem/Sediment (BS).<br>*Zie ‘Scherp zoekopdracht aan’ voor het verkleinen van de respons. In geval van chemische metingen kan een filtering op opdrachtgevende instantie van toepassing zijn. Langdurige meetreeksen worden bijvoorbeeld uitgegeven door RIZAMON_LAN en RIKZMON_CHEMIE, die meten voor <a href="https://waterinfo-extra.rws.nl/monitoring/" target="_blank" class="externLink extern">het MWTL-programma(opent in nieuw venster) (verwijst naar een andere website)</a>.<br>*Door een brede opvraag met bijvoorbeeld enkel "AquoMetadata":{"Compartiment":{"Code":"OW"}} over een korte periode, kun je een snel overzicht creëren van de beschikbare gegevens op een specifieke locatie.<br></span></p>
+                        <h4 id="h0aefd5bc-9a26-48c7-846f-3bc34e63a96b">Filteren op kwaliteitswaarde</h4>
+                        <p>Elke individuele meting kent een kwaliteitswaardecode die aangeeft hoe betrouwbaar een waarde is. <a href="https://www.aquo.nl/index.php/Id-1e17d9e6-4e0e-4f88-8fe5-c71f6a7931db" class="externLink">Zie Aquo voor de betekenis.</a> Op waterinfo.rws.nl wordt enkel data getoond die kwaliteitswaardecode heeft in de lijst <em>["00","10","20","25","30","40"]</em>. De code <em>"99"</em> wordt gebruikt om een hiaatwaarde aan te geven. Met de volgende body kun je de specifiek de data opvragen die hieraan voldoet;</p>
+                        <p><span class="cursief">Body voor <span class="notranslate">https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen</span></span><em><span class="attentie-licht notranslate">{"Locatie":{"Code":"ameland.nes"},<br>  "AquoPlusWaarnemingMetadata":{<br>    "AquoMetadata":{"Compartiment":{"Code":"OW"},"Grootheid":{"Code":"WATHTE"}},<br>    "WaarnemingMetadata": {"KwaliteitswaardecodeLijst":["00","10","20","25","30","40"]}},<br> "Periode":{<br>  "Begindatumtijd":"2024-06-01T00:00:00.000+01:00",<br>  "Einddatumtijd":"2025-01-01T00:00:00.000+01:00"}}</span></em></p>
+                        <p><span class="cursief">*Voor onderzoekstoepassingen adviseren we niet te filteren op kwaliteitswaardecodes maar dit in je eigen omgeving te doen. Dit versnelt het ophalen van langere tijdreeksen, en geeft een betere indruk over de gehele meetreeks. <br></span><span class="cursief">*De kwaliteitswaardecode 31 (normale waarde, alternatief bepaald) wordt niet meer gegeven. Dit wordt voortaan uitgegeven als 25 (in de ruimte en in de tijd geinterpoleerde waarde).</span></p>
+                        <h4 id="hc8914af8-7201-ae7c-7893-aaa266541138">Een uitgebreide catalogus met leesbare omschrijvingen</h4>
+                        <p>In voorgaande voorbeelden zag u een compacte versie van de OphalenCatalogus functie waarin slechts enkele eigenschappen opgevraagd werden (compartiment, grootheid en parameter). Deze eigenschappen samen beschrijven 'wat' er gemeten is. De geretourneerde parameter_wat_omschrijving is een voorbeeld van een meetreeks dat hieraan voldoet. Voor de meeste toepassingen is dit voldoende.</p>
+                        <p>Voor toepassingen waarin het daarnaast van belang is om te onderscheiden 'hoe' er gemeten wordt, kunt u een uitgebreidere catalogus opvragen. De volledige parameter_wat_omschrijving is gebaseerd op de onderstaande 10 aquometadata-velden, en wordt onder andere gebruikt in Waterinfo.</p>
+                        <p><span class="cursief">Body voor<span class="notranslate"> https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus</span></span><span class="cursief attentie-licht notranslate">{"CatalogusFilter":{<br>  "Compartimenten":true, "Grootheden":true, "Parameters":true, "Eenheden":true,<br>  "Hoedanigheden":true, "Typeringen":true, "WaardeBewerkingsMethoden":true,<br>  "BioTaxon":true, "Organen":true,<br>  "ProcesTypes": true} }</span></p>
+                        <p><span class="cursief">* De<span class="notranslate"> parameter_wat_omschrijving</span> wordt opgebouwd door middel van;<br>[WaardeBewerkingsMethode] [Typering] [Grootheid] [Parameter] [ProcesType als geen meting] ‘in’ [Compartiment] [Hoedanigheid] ‘in’ [Orgaan] [BioTaxon] [Eenheid]<br></span><span class="cursief"><span class="notranslate">Compartimenten, grootheden, parameters</span> en <span class="notranslate">eenheden</span> geven vooral aan 'wat' er gemeten is. <br>Waar <span class="notranslate">hoedanigheden, typeringen</span> en <span class="notranslate">waardebewerkingsmethoden</span> vooral aangeven 'hoe' er gemeten is. <br><span class="notranslate">Biotaxon, BioTaxon_Compartimenten</span> en <span class="notranslate">Organen</span> worden gebruikt om biologische metingen te onderscheiden.</span></p>
+                        <h4 id="hd3f482fe-b5fe-4607-b678-ff761d5810d9">Shapefile met laatst gemeten waterstanden</h4>
+                        <p>Om de mogelijkheden van deze OGC service op te vragen;<br><span class="attentie-licht cursief notranslate">https://geo.rijkswaterstaat.nl/services/ogc/hws/<em>DDAPI20</em>/ows?SERVICE=WFS&amp;VERSION=1.1.0&amp;REQUEST=GetCapabilities</span></p>
+                        <p>Deze service is te bevragen op een export van alle locaties in alle watermeetnetten;<br><a href="https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/ows?SERVICE=WFS&amp;VERSION=1.1.0&amp;REQUEST=GetFeature&amp;TYPENAME=locaties&amp;outputFormat=SHAPE-ZIP" class="externLink"><span class="attentie-licht cursief notranslate">https://geo.rijkswaterstaat.nl/services/ogc/hws/<em>DDAPI20</em>/ows?SERVICE=WFS&amp;VERSION=1.1.0&amp;REQUEST=GetFeature&amp;TYPENAME=locaties&amp;outputFormat=SHAPE-ZIP</span></a></p>
+                        <p><em>*zie ook <a href="https://geoweb.rijkswaterstaat.nl/ModuleViewer/?app=bf61d5bcb9bb49c19198e310a1cbc213" class="externLink">de viewer voor deze fenomeenlocaties</a>.</em></p>
+                        <p>Met de laag ‘locatiesmetlaatstewaarneming’ vindt u alle actuele waarnemingen. Het kan nuttig zijn om een filter toe te passen op de 'parameter_wat_omschrijving', bijvoorbeeld op waterhoogten;<br><a href="https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/ows?SERVICE=WFS&amp;VERSION=1.1.0&amp;REQUEST=GetFeature&amp;TYPENAME=locatiesmetlaatstewaarneming&amp;FILTER=%20&lt;Filter&gt; &lt;PropertyIsLike escape=&quot;!&quot; singleChar=&quot;.&quot; wildCard=&quot;*&quot;&gt; &lt;PropertyName&gt;PARAMETER_WAT_OMSCHRIJVING&lt;/PropertyName&gt; &lt;Literal&gt;*Waterhoogte*&lt;/Literal&gt; &lt;/PropertyIsLike&gt; &lt;/Filter&gt; &amp;outputFormat=SHAPE-ZIP" class="externLink"><span class="notranslate"><span class="cursief"><span class="attentie-licht">https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/ows?SERVICE=WFS&amp;VERSION=1.1.0&amp;REQUEST=GetFeature&amp;TYPENAME=locatiesmetlaatstewaarneming&amp;FILTER=<br>&lt;Filter&gt;<br>  &lt;PropertyIsLike escape="!" singleChar="." wildCard="*"&gt;<br>  &lt;PropertyName&gt;PARAMETER_WAT_OMSCHRIJVING&lt;/PropertyName&gt;<br>&lt;Literal&gt;*Waterhoogte*&lt;/Literal&gt;<br>  &lt;/PropertyIsLike&gt;<br>  &lt;/Filter&gt;<br>&amp;outputFormat=SHAPE-ZIP</span></span></span></a></p>
+                        <h4 id="hf6fef89a-51ff-4b29-bc38-7ab5d4df98cf">CSV-bestand met laatste waarnemingen</h4>
+                        <p>Via de OGC-service is het ook mogelijk om voor elke locatie de laatst gemeten waarneming op te halen als csv-bestand. Dit kan hiermee een handig alternatief zijn op de OphalenCatalogus.</p>
+                        <p><span class="notranslate attentie-licht"><a href="https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/ows?SERVICE=WFS&amp;VERSION=1.1.0&amp;REQUEST=GetFeature&amp;TYPENAME=locatiesmetlaatstewaarneming&amp;outputFormat=csv&amp;format_options=csvseparator:semicolon" class="externLink">https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/ows?SERVICE=WFS&amp;VERSION=1.1.0&amp;REQUEST=GetFeature&amp;TYPENAME=locatiesmetlaatstewaarneming&amp;outputFormat=csv&amp;format_options=csvseparator:semicolon</a></span></p>
+                        <p id="hb16d259f-9b5c-d651-da42-7eae4a729bb3"><em>*Ja, dit is een flink bestand. Gebruik een filter vergelijkbaar met het voorbeeld hiervoor om een filtering toe te passen.</em></p>
+                        <h3 id="he72bf19c-64f7-4c20-9334-67db72f7bd06">Swagger</h3>
+                        <p>De Swagger-documentatie is beschikbaar via de volgende link: <a href="https://ddapi20-waterwebservices.rijkswaterstaat.nl/swagger-ui/index.html" class="externLink">Swagger UI</a></p>
+                        <h3 id="he72bf19c-64f7-4c20-9334-67db72f7bd06_1" data-id="he72bf19c-64f7-4c20-9334-67db72f7bd06">Software</h3>
+                        <p>De volgende softwaretoepassingen kunnen worden aanbevolen.</p>
+                        <ul>
+                          <li><span class="li-content"><a href="https://addons.mozilla.org/en-US/firefox/addon/restclient/" class="externLink">RESTClient</a> of <a href="https://www.postman.com/" class="externLink">Postman</a>; REST-clients om requests in te dienen, handig voor debugging.</span>
+                          <li><span class="li-content"><a href="https://github.com/Deltares/ddlpy" class="externLink">Deltares ddlpy package</a> of <a href="https://pypi.org/project/rws-waterinfo/" class="externLink">Datalab rws-waterinfo</a>; Python packages om de API makkelijker te kunnen bevragen.</span>
+                          <li><span class="li-content"><a href="https://github.com/wstolte/rwsapi" class="externLink">wstolte rwsapi</a>; Een R package om de API makkelijker te kunnen bevragen</span>
+                          <li><span class="li-content"><a href="https://www.qgis.org" class="externLink">Qgis</a>; Kaartprogramma om WebMappingServices en Shape-bestanden te weergeven</span>
+                        </ul>
+                        <p>We bedanken de open-source communities voor het beschikbaar stellen van deze software. Verdere gebruikersondersteuning van deze software valt helaas buiten de dienstverlening van de <a href="https://www.rijkswaterstaat.nl/formulieren/contactformulier-servicedesk-data" class="externLink">ServiceDesk Data</a>.</p>
+                        <h3 id="h87bbc5ae-4ddf-4b53-987d-880b76a9d0b4">Uptime, Fair use en Copyright</h3>
+                        <p>De WaterWebservices kennen geen garanties voor uptime, en zijn daarmee niet geschikt voor kritieke toepassingen. Overheidsinstellingen kunnen voor missie-kritische toepassingen <a href="https://www.rijkswaterstaat.nl/formulieren/contactformulier-servicedesk-data" class="externLink">contact opnemen</a>. <br> Het is aan de eindgebruiker om de data juist te interpreteren, bij inhoudelijke vragen kunt u bij de <a href="https://www.rijkswaterstaat.nl/formulieren/contactformulier-servicedesk-data" class="externLink">Servicedesk Data</a> terecht. We streven ernaar uw vraag binnen een week te beantwoorden.</p>
+                        <p>Bij onredelijk gebruik van deze service kan Rijkswaterstaat genoodzaakt zijn uw toegang (tijdelijk) te beperken. Op deze manier houden we de service en zijn resources voor iedereen beschikbaar.</p>
+                        <p>Op de inhoud van de WaterWebservices is de Creative Commons zero verklaring (CC0) van toepassing. Dit houdt in dat hergebruik van de inhoud van deze service is toegestaan, tenzij bij een bepaald onderdeel staat aangegeven dat een auteursrechtelijke uitzondering van toepassing is.</p>
+                        <h2 id="hfd2f5e23-5092-4169-9f36-41e9734e7d87">Updates</h2>
+                        <h3 id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0">24 augustus - Gepland onderhoud WADAR</h3>
+                        <p>Op maandagochtend wordt een nieuwe versie van WADAR uitgerold naar de productieomgeving. Hierdoor zijn WaterInfo en de WaterWebServices tijdelijk niet beschikbaar.</p>
+                        <p>De verwachting is dat WADAR vanaf <strong>10:00 uur</strong> weer volledig operationeel is.</p>
+                        <h2 id="h435dfec0-06c4-43b8-ae3e-951b05706c33">Update 22 juli – mogelijke hinder WaterWebServices</h2>
+                        <p>Op 22 juli wordt in de ochtend een nieuwe versie van WADAR uitgerold. Tijdens deze uitrol kunnen de WaterWebServices tijdelijk hinder ondervinden.</p>
+                        <p><em><strong>Bewerkt: </strong></em><em>De nieuwe versie van WADAR wordt teruggedraaid. </em><em>Een kleine wijziging heeft ertoe geleid dat sommige requests die voorheen correct werkten, nu resulteren in een bad request. Er wordt momenteel gewerkt aan een oplossing.</em></p>
+                        <p><em><strong>Bewerkt: </strong>De WADAR versie is succesvol teruggedraaid. De badrequests die ontstonden als gevolg van de nieuwe versie zijn inmiddels hersteld.</em></p>
+                        <h3 id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0_1" data-id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0">7 juli - Aanpassing limiet OphalenLaatsteWaarnemingen</h3>
+                        <p>De maximale hoeveelheid wordt verlaagd van <strong>100.000 naar 50.000 reeksen</strong>. Voor de meeste gebruikers heeft deze wijziging naar verwachting geen gevolgen. Alleen bij zeer brede aanvragen, waarbij in één keer een groot aantal reeksen wordt opgehaald, kan de nieuwe limiet eerder worden bereikt. Wij adviseren om aanvragen zo gericht mogelijk te doen. Zo blijven de webservices goed en stabiel beschikbaar.</p>
+                        <h3 id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0_2" data-id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0">12 juni - Update WaterWebServices – limiet op aantal op te vragen reeksen</h3>
+                        Om de WaterWebServices goed te laten blijven werken, is er een limiet ingesteld op het aantal tijdreeksen per aanvraag. Vraag je meer dan <strong>100.000 reeksen</strong> tegelijk op, dan kan je verzoek mislukken of een foutmelding geven.<br> Tip: splits grote aanvragen op in kleinere delen. Vragen? Neem gerust contact op met de servicedesk Data.
+                        <h3 id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0_3" data-id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0">4 juni - Verstoring Waterinfo en WaterWebServices</h3>
+                        <p>Door drukte in het synchronisatieproces tussen de interne en publieke omgeving van ons archief komen er geen nieuwe metingen door naar de WaterWebservices.</p>
+                        <p>Hierdoor zijn er sinds 4:50 deze ochtend geen nieuwe metingen beschikbaar in de WaterWebservices, en daardoor staat Waterinfo momenteel op grijs.</p>
+                        <p><em>Bewerkt</em>: <em>Tot en met vandaag, 11 juni zijn er nog steeds verstoringen zichtbaar. We werken er hard aan om dit zo spoedig mogelijk op te lossen.</em></p>
+                        <h3 id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0_4" data-id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0"></h3>
+                        <h3 id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0_5" data-id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0">30 april - Oude webservices worden definitief uitgezet</h3>
+                        <p>Hierdoor zullen de oude (klassieke) WaterWebservices niet meer bruikbaar zijn.<br> Gebruikers die hier nog afhankelijk van zijn, zullen geen data meer ontvangen.</p>
+                        <p>Wij adviseren u tijdig over te stappen naar de nieuwe WaterWebservices. Deze zijn toekomstbestendig en worden actief ondersteund. De documentatie voor de overstap is beschikbaar op deze pagina.</p>
+                        <h3 id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0_6" data-id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0"></h3>
+                        <h3 id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0_7" data-id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0">25 februari - Waterinfo stapt over naar WADAR</h3>
+                        <p>Op 5 december 2025 zijn de nieuwe Waterwebservices live gegaan. Waterinfo stapt momenteel over op deze nieuwe services en zal zijn data voortaan hieruit ophalen en tonen. De datum waarop deze overgang plaatsvindt, volgt nog.</p>
+                        <p>Tijdens de overgangsperiode kan het voorkomen dat bepaalde data tijdelijk ontbreekt of onvolledig is. Wij doen ons best om jullie hierover te blijven informeren en de overgang zo snel mogelijk volledig en stabiel te laten verlopen.</p>
+                        <h3 id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0_8" data-id="h80550c87-86bd-40aa-8bc8-cef6266cc9f0">Downloads</h3>
+                        <ul>
+                          <li><span class="li-content"><a href="/publish/pages/223004/uitleg-attributen-bij-bulkwaarnemingenservice-dd-06-11-2023-.pdf" data-id="223004" class="importLink pdf" data-size="296 kB">Uitleg attributen bij BulkWaarnemingenService<span class="download-info"> (pdf, 296 kB)</span></a></span>
+                          <li><span class="li-content"><a href="https://github.com/Rijkswaterstaat/wm-ws-dl" class="externLink">GitHub-documentatie van JSON-webservices Rijkswaterstaat waterdata (verouderd)</a></span>
+                          <li><span class="li-content"><a href="/publish/pages/223004/distributielaagwebservices-sum-2v7-1-.pdf" data-id="223004" class="importLink pdf" data-size="191 kB">Software User Manual Rijkswaterstaat waterwebservices (verouderd)<span class="download-info"> (pdf, 191 kB)</span></a></span>
+                          <li><span class="li-content"><a href="/publish/pages/223004/grenswaarden-en-legendakleuren-zoals-gebruikt-op-waterinfo-15-4-2026-.xlsx" data-id="223004" class="importLink xlsx" data-size="483 kB">Grenswaarden en legendakleuren zoals gebruikt op Waterinfo (15-4-2026)<span class="download-info"> (xlsx, 483 kB)</span></a></span>
+                          <li><span class="li-content">WaterWebservices_OphalenCatalogus (nog niet beschikbaar)</span>
+                          <li><span class="li-content"><a href="/publish/pages/223004/aquo_kwaliteitsoordeelcodes.xlsx" data-id="223004" class="importLink xlsx" data-size="9.9 kB">Omschrijving van gebruikte Kwaliteitswaardecodes<span class="download-info"> (xlsx, 9.9 kB)</span></a></span>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div><br class="end-of-zone">
+            </div>
+            <div class="zone-clear-content"></div>
+            <div id="zone_258042_nav" class="grid-zone grid_3 pull_9 z-nav z-rol-nav" data-layout="{&quot;columns&quot;:3,&quot;DimSiz&quot;:300,&quot;pull&quot;:9}">
+              <div class="grid-row single-elt-row has-fullwidth-elt rol-rij-tekst">
+                <div class="grid-blok grid_3 rol-tekst type-tekst" id="Block_2654544" data-layout="{&quot;id&quot;:2654544,&quot;columns&quot;:3,&quot;DimSiz&quot;:300,&quot;padding&quot;:30}">
+                  <div class="grid-element">
+                    <div class="grid-edge" data-id="PagCls_2654544">
+                      <div class="grid-title">
+                        <h2>Inhoud</h2>
+                      </div>
+                      <div class="grid-inside description-inside">
+                        <div class="iprox-content iprox-rich-content description">
+                          <ul>
+                            <li><span class="li-content"><a class="siteLink ptartikel" href="https://rijkswaterstaatdata.nl/waterdata/#h1702ccca-31dc-4dd9-89f7-743471b55af8">Waterinfo</a></span>
+                            <li><span class="li-content"><a href="#h972760ae-15ca-496d-b4c7-b5bbeb90dff3" data-intern="#h972760ae-15ca-496d-b4c7-b5bbeb90dff3" class="internLink">Download historische data</a></span>
+                            <li><span class="li-content"><a class="siteLink ptartikel" href="https://rijkswaterstaatdata.nl/waterdata/#h7b0fe129-3b57-4c01-bcba-e3c96a1496d4">WaterWebservices</a></span>
+                            <li><span class="li-content"><a class="siteLink ptartikel" href="https://rijkswaterstaatdata.nl/waterdata/#hfd2f5e23-5092-4169-9f36-41e9734e7d87">Updates</a></span>
+                            <li><span class="li-content"><a class="siteLink ptartikel" href="https://rijkswaterstaatdata.nl/waterdata/#h35556cad-3751-4b9f-86d1-dca7c94cc9de">Downloads</a></span>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="zone-clear-nav"></div>
+          </div>
+          <div class="layout-clear clear"></div>
+        </div>
+      </main>
+      <footer data-ipx-pagetype="{&quot;alias&quot;:&quot;footer&quot;}"><!--googleoff: all-->
+        <div class="footer rol-sectie-footer grid-wrapper wrapper_12">
+          <div class="grid-container container_12 grid-rijkshuisstijl-footer-afvalcirculair has-list-icons" data-layout="{&quot;columns&quot;:12,&quot;block-columns&quot;:1,&quot;gutter&quot;:0,&quot;padding&quot;:10,&quot;grid-column-width&quot;:100,&quot;DimSiz&quot;:1200,&quot;MinSiz&quot;:100,&quot;MaxSiz&quot;:1500}">
+            <div id="zone_303379_share" class="grid-zone grid_12 z-share z-rol-share is-fullwidth-zone" data-layout="{&quot;columns&quot;:12,&quot;DimSiz&quot;:1200}">
+              <div class="grid-blok grid_12 rol-knoppen-specials type-linkslist has-list-icons" data-layout="{&quot;columns&quot;:12,&quot;DimSiz&quot;:1200}">
+                <div class="grid-element">
+                  <div class="grid-edge">
+                    <div class="grid-title visuallyhidden">
+                      <div class="heading-elt heading-elt-social">Delen</div>
+                    </div>
+                    <div class="grid-inside">
+                      <ul class="iprox-content button-specials horizontal">
+                        <li><span class="li-content"><a class="externLink facebook focusable" href="https://www.facebook.com/sharer.php?u=https%3a%2f%2frijkswaterstaatdata.nl%2fwaterdata%2f&amp;t=User%20notes%20voor%20Waterinfo%2c%20Download%c2%a0historische%20Data%20en%20WaterWebservices"><span class="special-btn-text share-text">Delen op Facebook</span></a></span>
+                        <li><span class="li-content"><a class="externLink linkedin focusable" href="https://www.linkedin.com/shareArticle?mini=true&amp;url=https%3a%2f%2frijkswaterstaatdata.nl%2fwaterdata%2f&amp;title=Waterdata&amp;ro=false&amp;summary=User%20notes%20voor%20Waterinfo%2c%20Download%c2%a0historische%20Data%20en%20WaterWebservices"><span class="special-btn-text share-text">Delen op LinkedIn</span></a></span>
+                        <li><span class="li-content"><a class="externLink x-social focusable" href="https://x.com/intent/tweet?text=Waterdata&amp;url=https%3a%2f%2frijkswaterstaatdata.nl%2fwaterdata%2f"><span class="special-btn-text share-text">Delen op X</span></a></span>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div><br class="end-of-zone">
+            </div>
+            <div class="zone-clear-share"></div>
+            <div id="zone_303379_footer-contact" class="grid-zone grid_12 z-footer-contact z-rol-footer-contact is-fullwidth-zone" data-layout="{&quot;columns&quot;:12,&quot;DimSiz&quot;:1200}">
+              <div class="grid-row single-elt-row rol-rij-achtergrondlicht">
+                <div class="grid-blok grid_6 prefix_3 suffix_3 rol-achtergrondlicht type-tekst has-bgcolor has-bright-bgcolor" id="Block_2943027" data-layout="{&quot;id&quot;:2943027,&quot;columns&quot;:6,&quot;DimSiz&quot;:600,&quot;prefix&quot;:3,&quot;suffix&quot;:3,&quot;padding&quot;:30}">
+                  <div class="grid-element">
+                    <div class="grid-edge">
+                      <div class="grid-title">
+                        <h2>Vraag het onze experts!</h2>
+                      </div>
+                      <div class="iprox-content image stretch"><img data-sources="[{&quot;width&quot;:162,&quot;height&quot;:179,&quot;src&quot;:&quot;/publish/library/318/vraag-groen.svg&quot;}]" alt="vraag-groen" class="img_pagvld_2474553_0" width="162" height="179" src="/publish/library/318/vraag-groen.svg"></div>
+                      <div class="grid-inside description-inside">
+                        <div class="iprox-content iprox-rich-content description">
+                          <p>Met vragen en opmerkingen kunt u contact met ons opnemen via het <a href="https://www.rijkswaterstaat.nl/formulieren/contactformulier-servicedesk-data" class="externLink">Contactformulier Servicedesk Data</a>.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="zone-clear-footer-contact"></div>
+            <div id="zone_303379_footer-inhoud" class="grid-zone grid_12 z-footer-inhoud z-rol-footer-inhoud is-fullwidth-zone" data-layout="{&quot;columns&quot;:12,&quot;DimSiz&quot;:1200}">
+              <div class="grid-blok grid_6 rol-tekst type-tekst" id="Block_2943082" data-layout="{&quot;id&quot;:2943082,&quot;columns&quot;:6,&quot;DimSiz&quot;:600,&quot;padding&quot;:30}">
+                <div class="grid-element">
+                  <div class="grid-edge">
+                    <div class="grid-title">
+                      <h2>Data Rijkswaterstaat</h2>
+                    </div>
+                    <div class="grid-inside description-inside">
+                      <div class="iprox-content iprox-rich-content description">
+                        <p>Rijkswaterstaat wint data in voor de uitvoering van haar taken. Een groot deel hiervan wordt ontsloten via het internet. Deze website is bedoeld om u inzicht te geven in de data van Rijkswaterstaat die online beschikbaar is.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="grid-blok grid_3 prefix_3 rol-achtergronddonker type-lijst has-bgcolor has-bright-bgcolor" id="Block_2943033" data-layout="{&quot;id&quot;:2943033,&quot;columns&quot;:3,&quot;DimSiz&quot;:300,&quot;prefix&quot;:3,&quot;padding&quot;:30}">
+                <div class="grid-element">
+                  <div class="grid-edge">
+                    <div class="grid-title">
+                      <h2>Service</h2>
+                    </div>
+                    <div class="grid-inside">
+                      <ul class="iprox-content list">
+                        <li data-ipx-id="205606" class="entry ipx-pt-artikel"><span class="li-content"><a class="siteLink" href="https://rijkswaterstaatdata.nl/vaste-onderdelen/cookies/">Cookies</a></span>
+                        <li class="entry"><span class="li-content"><a class="externLink" href="https://rijkswaterstaat.sitearchief.nl/?subsite=rijkswaterstaatdata#archive">Archief</a></span>
+                        <li data-ipx-id="300331" class="entry ipx-pt-artikel"><span class="li-content"><a class="siteLink" href="https://rijkswaterstaatdata.nl/vaste-onderdelen/toegankelijkheid/">Toegankelijkheid</a></span>
+                        <li class="entry"><span class="li-content"><a class="siteLink" href="https://www.rijkswaterstaat.nl/privacy">Persoonsgegevens</a></span>
+                        <li data-ipx-id="165342" class="entry ipx-pt-artikel"><span class="li-content"><a class="siteLink" href="https://rijkswaterstaatdata.nl/vaste-onderdelen/verantwoording/">Verantwoording</a></span>
+                        <li data-ipx-id="191430" class="entry ipx-pt-artikel"><span class="li-content"><a class="siteLink" href="https://rijkswaterstaatdata.nl/vaste-onderdelen/cookies/">Cookies</a></span>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="zone-clear-footer-inhoud"></div>
+          </div>
+          <div class="layout-clear clear"></div>
+        </div><!--googleon: all-->
+      </footer>
+    </div>
+    <script><!--
+var itmIdt="258042",envIdt="2",varIdt="190";
+//--></script>
+    <script src="/views/js/b11754f1d329785b462be1d10f80365e.js"></script>
+    <script src="/aspx/read.aspx?AppIdt=reference-lists&amp;SitIdt=231"></script>
+    <script src="/views/js/6098b7c423022c7a48e0168ebbf18ab4.js"></script>
+    <script src="/views/js/b6ae54285ebef26add97ae0f10b82c99.js" class="id data-rijkswaterstaat"></script>
+    <script src="/views/js/37304c50e0c2ebd7273772b4b73358e7.js"></script>
