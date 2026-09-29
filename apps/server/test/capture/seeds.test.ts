@@ -134,10 +134,12 @@ describe('seed completeness (C5, S8)', () => {
     vi.useFakeTimers({ now: new Date('2026-10-02T06:00:00Z') });
     let failures = 1;
     let requests = 0;
+    const roots: string[] = [];
     server.use(
       http.get(OBS, ({ request }) => {
         requests += 1;
         const cursor = new URL(request.url).searchParams.get('cursor');
+        if (cursor === null) roots.push(new URL(request.url).searchParams.get('date_debut_obs') as string);
         if (cursor !== null && failures > 0) {
           failures -= 1;
           return new HttpResponse('busy', { status: 503 });
@@ -161,6 +163,7 @@ describe('seed completeness (C5, S8)', () => {
     await vi.advanceTimersByTimeAsync(SEED_RETRY_MS);
     await vi.waitFor(() => expect(rounds).toHaveLength(2));
     expect(rounds[1] as number).toBe((rounds[0] as number) + 2); // only day 0 again, both pages
+    expect(roots.at(-1)).toBe(roots[0]); // the same window as in the first round, an hour earlier
     expect((await deps.state.read<SeedState>('seeds/fr-1-obs'))?.done_at).toBeDefined();
     await vi.advanceTimersByTimeAsync(3 * SEED_RETRY_MS);
     expect(rounds).toHaveLength(2); // done: no more rounds

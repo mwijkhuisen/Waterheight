@@ -19,6 +19,8 @@ export type SeedState = {
   coverage: { from: string; to: string } | null;
   /** Requests of a `days` seed so far: its page_cap bounds the whole seed, retries included. */
   requests?: number;
+  /** When the first round started: the windows of every round are computed from it. */
+  started?: string;
   done_at?: string;
 };
 
@@ -61,7 +63,9 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
     st = { ...st, ...patch };
     await deps.state.update<SeedState>(name, () => st);
   };
-  const now = deps.now();
+  // Every round uses the first round's clock, so a retried day or row asks for the same window (no hole).
+  const now = new Date(st.started ?? deps.now().toISOString());
+  if (st.started === undefined) await save({ started: now.toISOString() });
   const add = async (key: string, s: Awaited<ReturnType<typeof runSpec>>) => {
     // Done when nothing failed transiently and no cap cut it short; a 404 or an invalid body will not
     // heal by retrying, a failed page or a cut walk may.
