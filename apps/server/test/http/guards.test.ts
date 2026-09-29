@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import {
@@ -178,6 +179,26 @@ describe('XLSX', () => {
   it('refuses a traversal member name', async () => {
     const z = Buffer.from(zipSync({ 'xl/../../evil.xml': strToU8('<a/>') }));
     expect(await reason(checkXlsx(z, 20))).toBe('zip_name');
+  });
+
+  /** Well-formed sheet XML of about `mb` MB that deflates at far less than 50:1 (random hex values). */
+  const sheet = (mb: number) => {
+    const hex = randomBytes(mb * 512 * 1024).toString('hex');
+    const cells = hex.replace(/.{32}/g, (v) => `<c><v>${v}</v></c>`);
+    return `<?xml version="1.0"?><worksheet><sheetData><row>${cells}</row></sheetData></worksheet>`;
+  };
+
+  it('refuses one large XML member (S3: ratio under 50:1, within the ZIP total)', async () => {
+    const z = zipSync({ 'xl/workbook.xml': strToU8('<workbook/>'), 'xl/worksheets/sheet1.xml': strToU8(sheet(12)) });
+    const ratio = (12 * 1024 * 1024) / z.length;
+    expect(ratio).toBeLessThan(50);
+    expect(await reason(checkXlsx(Buffer.from(z), 20))).toBe('xlsx_xml_member');
+  });
+
+  it('refuses XML members whose sum exceeds the total cap', async () => {
+    const part = strToU8(sheet(5)); // about 7 MB each
+    const z = zipSync({ 'xl/a.xml': part, 'xl/b.xml': part, 'xl/c.xml': part });
+    expect(await reason(checkXlsx(Buffer.from(z), 20))).toBe('xlsx_xml_total');
   });
 });
 

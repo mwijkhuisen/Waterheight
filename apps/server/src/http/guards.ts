@@ -299,17 +299,35 @@ export function parseXml(bytes: Uint8Array, maxBytes = XML_MAX_BYTES): unknown {
   return new XMLParser({ processEntities: false, htmlEntities: false, ignoreAttributes: true }).parse(text);
 }
 
-/** XLSX: the ZIP rules with OOXML names, plus the XML rule on every .xml/.rels member. */
+/** XML held from one workbook: the NL-4 file's largest member is 3.8 MB and all its XML 4 MB (2026-09-29). */
+export const XLSX_XML_MEMBER_MAX = 8 * 1024 * 1024;
+export const XLSX_XML_TOTAL_MAX = 16 * 1024 * 1024;
+
+/**
+ * XLSX: the ZIP rules with OOXML names, plus the XML rule on every .xml/.rels
+ * member, whose text is capped per member and in total while it is inflated.
+ */
 export async function checkXlsx(buf: Buffer, maxMembers: number): Promise<string[]> {
   const texts = new Map<string, Buffer[]>();
+  let total = 0;
   const members = await checkZip(buf, {
     names: ooxmlNames,
     maxMembers,
     onMember: (name) => {
       if (!/\.(?:xml|rels)$/.test(name)) return undefined;
       const parts: Buffer[] = [];
+      let size = 0;
       texts.set(name, parts);
-      return { data: (c) => parts.push(Buffer.from(c)), end: () => {} };
+      return {
+        data: (c) => {
+          size += c.length;
+          total += c.length;
+          if (size > XLSX_XML_MEMBER_MAX) fail('xlsx_xml_member');
+          if (total > XLSX_XML_TOTAL_MAX) fail('xlsx_xml_total');
+          parts.push(Buffer.from(c));
+        },
+        end: () => {},
+      };
     },
   });
   for (const parts of texts.values()) checkXmlText(Buffer.concat(parts).toString('utf8'));
