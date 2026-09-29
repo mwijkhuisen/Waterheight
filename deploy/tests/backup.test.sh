@@ -54,6 +54,15 @@ cat >"$T/stubs/nft" <<'STUB'
 printf 'nft %s\n' "$*" >>"$FIX/calls"
 cat >>"$FIX/nft"
 STUB
+cat >"$T/stubs/systemctl" <<'STUB'
+#!/usr/bin/env bash
+# rws-status-copy.path is active unless $FIX/path-down exists; start re-arms it.
+printf 'systemctl %s\n' "$*" >>"$FIX/calls"
+case $1 in
+  is-active) [[ ! -e $FIX/path-down ]] ;;
+  start) rm -f "$FIX/path-down" ;;
+esac
+STUB
 cat >"$T/stubs/getent" <<'STUB'
 #!/usr/bin/env bash
 case $1 in
@@ -276,11 +285,12 @@ expect_rc 0
 expect_grep "next one due later" "$C/out"
 expect_no_grep "^docker" "$FIX/calls"
 
-case_ "tick: disk_pct written, unhealthy containers restarted, other keys kept"
+case_ "tick: disk_pct written, unhealthy containers restarted, other keys kept, a dead path unit re-armed"
 setup
 printf '{"generated_at":"x","last_backup":"2026-09-01T00:00:00Z","drill":null,"disk_pct":null,"extra":"dropped"}\n' \
   >"$RWS_SRV/public/ops/ops.json"
 echo rws-capture-1 >"$FIX/unhealthy"
+touch "$FIX/path-down"
 run rws-tick
 expect_rc 0
 [[ $(ops '.disk_pct') =~ ^[0-9]+$ ]] || fail "disk_pct not a number"
@@ -290,6 +300,11 @@ expect_grep "docker restart rws-capture-1" "$FIX/calls"
 expect_grep "^nft -f -$" "$FIX/calls"
 expect_grep "flush set inet rws resolvers4" "$FIX/nft"
 expect_grep "rws-status-copy failed" "$C/out"
+expect_grep "^systemctl reset-failed rws-status-copy.path rws-status-copy.service$" "$FIX/calls"
+expect_grep "^systemctl start rws-status-copy.path$" "$FIX/calls"
+expect_grep "rws-status-copy.path is not active: re-arming it" "$C/out"
+run rws-tick
+expect_eq "$(grep -c '^systemctl start' "$FIX/calls")" 1
 
 case_ "status copy: capture.json published 0644; a symlink, a non-contract and an oversize file refused"
 setup

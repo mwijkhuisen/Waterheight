@@ -18,6 +18,7 @@ RWS_ETC=${RWS_ETC:-/etc/rws}
 RWS_SRV=${RWS_SRV:-/srv/rws}
 RWS_LOCK_DIR=${RWS_LOCK_DIR:-/run/rws}
 RWS_RELEASES_URL=${RWS_RELEASES_URL:-https://github.com/mwijkhuisen/Waterheight/releases}
+RWS_STATUS_COPY=${RWS_STATUS_COPY:-$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-status-copy}
 export TUF_ROOT=${TUF_ROOT:-$RWS_STATE_DIR/sigstore}
 DRY_RUN=${DRY_RUN:-0}
 
@@ -258,6 +259,8 @@ stage_release() {
 
 # smoke <epoch>: /healthz answers 200 over real TLS and capture.json was written
 # after <epoch> (taken once `up -d` returned), within RWS_SMOKE_TIMEOUT seconds.
+# It publishes capture's newest file itself (rws-status-copy) before each try,
+# so a deploy never depends on rws-status-copy.path.
 smoke() {
   local t0=$1 deadline gen epoch resolve
   if ((${RWS_INJECT_SMOKE_FAILURE:-0})); then
@@ -267,6 +270,7 @@ smoke() {
   resolve=$RWS_DOMAIN:443:$RWS_PUBLIC_IPV4
   deadline=$((SECONDS + ${RWS_SMOKE_TIMEOUT:-300}))
   while ((SECONDS < deadline)); do
+    "$RWS_STATUS_COPY" >/dev/null || true
     if curl -fsS -o /dev/null --max-time 10 --resolve "$resolve" "https://$RWS_DOMAIN/healthz" 2>/dev/null &&
       gen=$(curl -fsS --max-time 10 --resolve "$resolve" "https://$RWS_DOMAIN/status/capture.json" 2>/dev/null |
         jq -r '.generated_at | strings') &&

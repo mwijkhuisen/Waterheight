@@ -15,7 +15,8 @@
 #   - capture in distroless is healthy, writes the contract files with the
 #     contract modes, and generated_at advances; the real rws-status-copy.path
 #     unit publishes a checked copy that Caddy serves, a symlink planted as
-#     capture's file is refused and never served; the rws-deploy smoke test passes;
+#     capture's file is refused and never served, a burst of writes does not
+#     disarm the path unit and rws-tick re-arms it; the rws-deploy smoke test passes;
 #   - restic reads its keys from AWS_SHARED_CREDENTIALS_FILE and writes to an
 #     Object Lock bucket; the restore drill matches 100 of 100; the VPS key
 #     cannot remove a version (object-lock-prune.sh);
@@ -373,6 +374,28 @@ jq -e '.generated_at | strings' <<<"$body" >/dev/null || fail "no served capture
 rm -f /srv/rws/public/status/capture.json "$canary"
 rws_compose unpause capture
 proof "a symlink planted as capture's capture.json (to a contract-shaped canary readable by root and by Caddy) is refused by rws-status-copy; neither the served copy nor https://$DOMAIN/status/capture.json ever carries the canary"
+
+step "rws-status-copy.path outlives a burst of writes, and rws-tick re-arms it (R2-S2)"
+put_status() {
+  jq -c --arg g "$1" '.generated_at = $g' /srv/rws/public/ops/capture.json >/srv/rws/public/status/.e2e.tmp
+  mv -f /srv/rws/public/status/.e2e.tmp /srv/rws/public/status/capture.json
+}
+rws_compose pause capture
+# 12 renames in about 6 s: with the default start limit (5 in 10 s) the path unit failed for good.
+for i in $(seq 1 12); do
+  put_status "burst-$i"
+  sleep 0.5
+done
+sleep 2
+[[ $(systemctl is-active rws-status-copy.path) == active ]] ||
+  fail "rws-status-copy.path died in a burst: $(systemctl show -p Result --value rws-status-copy.path)"
+put_status burst-after
+wait_for "the copy of a write after the burst" 30 grep -q burst-after /srv/rws/public/ops/capture.json
+systemctl stop rws-status-copy.path
+"$repo/deploy/bin/rws-tick"
+[[ $(systemctl is-active rws-status-copy.path) == active ]] || fail "rws-tick did not re-arm rws-status-copy.path"
+rws_compose unpause capture
+proof "12 capture.json renames in about 6 s leave rws-status-copy.path active (its service has no start limit), a later write is still published, and rws-tick re-arms a stopped path unit"
 CURL_CA_BUNDLE=/ci/pki/pebble-root.pem RWS_SMOKE_TIMEOUT=150 RWS_SMOKE_INTERVAL=5 smoke $(($(date -u +%s) - 1))
 proof "the rws-deploy smoke test passes against the stack (/healthz 200 over real TLS, a capture.json newer than the deploy)"
 docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.CPUPerc}}' | grep '^rws-'

@@ -102,6 +102,10 @@ case $sub in
     ;;
 esac
 STUB
+cat >"$T/stubs/rws-status-copy" <<'STUB'
+#!/usr/bin/env bash
+echo status-copy >>"$FIX/calls"
+STUB
 chmod +x "$T/stubs"/*
 
 # ---------------------------------------------------------------- fixtures
@@ -140,6 +144,7 @@ setup() {
   mkdir -p "$C"/{state,etc/secrets,srv/public/ops,lock,fix/rel}
   export FIX=$C/fix RWS_STATE_DIR=$C/state RWS_ETC=$C/etc RWS_SRV=$C/srv RWS_LOCK_DIR=$C/lock
   export RWS_RELEASES_URL=https://releases.test/r RWS_SMOKE_TIMEOUT=2 RWS_SMOKE_INTERVAL=0.2
+  export RWS_STATUS_COPY=$T/stubs/rws-status-copy
   export PATH=$T/stubs:$ORIG_PATH
   cat >"$C/etc/rws.env" <<EOF
 RWS_DOMAIN=rivierstanden.example
@@ -192,7 +197,7 @@ T1=prod-20260901T100000Z
 T2=prod-20260902T100000Z
 
 # ---------------------------------------------------------------- cases
-case_ "first deploy: verify, pull, up, smoke, current set, update pinged"
+case_ "first deploy: verify, pull, up, smoke (which publishes capture.json itself), current set, update pinged"
 setup
 mkrel $T1
 latest $T1
@@ -204,6 +209,7 @@ expect_grep "cosign verify-blob --bundle" "$FIX/calls"
 expect_count "cosign verify .*@sha256:" "$FIX/calls" 3
 expect_grep "compose .* --profile jobs pull" "$FIX/calls"
 expect_grep "compose .* up -d --remove-orphans" "$FIX/calls"
+[[ $(grep -A 1 -E 'compose .* up -d' "$FIX/calls" | tail -n 1) == status-copy ]] || fail "smoke did not run rws-status-copy after up"
 expect_grep "^https://hc-ping.com/$KEY/update$" "$FIX/pings"
 expect_no_grep "/fail$" "$FIX/pings"
 [[ $(stat -c %a "$RWS_STATE_DIR/current") == 600 ]] || fail "current is not mode 0600"

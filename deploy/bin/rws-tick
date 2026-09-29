@@ -5,8 +5,10 @@
 # 2. Restarts any container of the rws project that Docker reports unhealthy
 #    (a wedged recorder whose heartbeat stopped): Docker itself never restarts
 #    an unhealthy container, only one that exited.
-# 3. Backstops: reloads the container DNS allowlist (rws-resolvers) and
-#    publishes capture.json (rws-status-copy), in case an event was missed.
+# 3. Backstops: reloads the container DNS allowlist (rws-resolvers), re-arms
+#    rws-status-copy.path if it is not active (a unit that hit a start or
+#    trigger limit stops watching for good) and publishes capture.json
+#    (rws-status-copy), in case an event was missed.
 #
 # Usage: rws-tick [--dry-run]
 set -euo pipefail
@@ -47,4 +49,13 @@ here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 dry=()
 ((!DRY_RUN)) || dry=(--dry-run)
 "$here/rws-resolvers" "${dry[@]}" || log "rws-resolvers failed"
+if ! systemctl is-active --quiet rws-status-copy.path; then
+  if ((DRY_RUN)); then
+    log "dry-run: would re-arm rws-status-copy.path"
+  else
+    log "warning: rws-status-copy.path is not active: re-arming it"
+    systemctl reset-failed rws-status-copy.path rws-status-copy.service 2>/dev/null || true
+    systemctl start rws-status-copy.path || log "re-arming rws-status-copy.path failed"
+  fi
+fi
 "$here/rws-status-copy" "${dry[@]}" || log "rws-status-copy failed"

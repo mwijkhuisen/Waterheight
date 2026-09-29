@@ -31,7 +31,7 @@ sudo systemctl status rws-tick.timer docker        # rws-tick restarts an unheal
 | `ENOSPC` | The disk is full: `docs/runbooks/disk-full.md` |
 | `unhealthy` for > 10 min | `sudo docker restart rws-capture-1`; if it recurs, capture the logs and open an issue (T-CAP-8) |
 | Container missing | `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"` recreates the stack from the current verified release |
-| Healthy, `/srv/rws/public/status/capture.json` fresh, but the site's copy old | The copy job: `systemctl status rws-status-copy.path rws-status-copy.service` and `sudo journalctl -u rws-status-copy -n 20`. `refused: … not a regular file` or `not the … contract document` means capture wrote something it never should: treat it as a compromise (T-WEB-1), do not copy it by hand. Otherwise `sudo rws-status-copy`; `rws-tick` also runs it every 10 min |
+| Healthy, `/srv/rws/public/status/capture.json` fresh, but the site's copy old | The copy job: `systemctl status rws-status-copy.path rws-status-copy.service` and `sudo journalctl -u rws-status-copy -n 20`. `refused: … not a regular file` or `not the … contract document` means capture wrote something it never should: treat it as a compromise (T-WEB-1), do not copy it by hand. If the path unit is `failed` or `inactive`, `sudo systemctl restart rws-status-copy.path` (`rws-tick` re-arms it within 10 min). Otherwise `sudo rws-status-copy`; `rws-tick` also runs it every 10 min |
 
 ## 3. The host
 
