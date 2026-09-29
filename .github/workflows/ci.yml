@@ -129,6 +129,12 @@ jobs:
           echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
       - name: dbmate up/down/up on a fixture migration (outside db/migrations)
         run: scripts/dbmate-roundtrip.sh
+      - name: A broken migration fails the round trip
+        run: |
+          if scripts/dbmate-roundtrip.sh scripts/fixtures/dbmate-broken; then
+            echo "the round trip passed on a migration that cannot apply" >&2
+            exit 1
+          fi
 
   shellcheck:
     name: shellcheck
