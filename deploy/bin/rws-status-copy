@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# rws-status-copy (rws-status-copy.path on every write, rws-tick as a backstop;
+# A§11.3; issue #16 P1b). Caddy serves /status/capture.json from a copy in the
+# root-owned /srv/rws/public/ops/, never from the capture-writable
+# /srv/rws/public/status/: Caddy follows symlinks, so a compromised capture
+# could otherwise publish any file Caddy can read (its TLS keys included).
+#
+# The copy never dereferences the source (cp -P into a fresh name in the
+# target directory) and is published only as a regular file of at most 1 MiB
+# that parses as the contract document; then 0644 and an atomic rename.
+#
+# Usage: rws-status-copy [--dry-run]
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+case ${1:-} in
+  --dry-run) DRY_RUN=1 ;;
+  '') ;;
+  *)
+    echo "usage: rws-status-copy [--dry-run]" >&2
+    exit 64
+    ;;
+esac
+
+readonly MAX_BYTES=1048576
+src=$RWS_SRV/public/status/capture.json
+dest=$RWS_SRV/public/ops/capture.json
+tmp=$(mktemp -u "${dest%/*}/.capture.json.XXXXXX")
+trap 'rm -f -- "$tmp"' EXIT
+
+# A FIFO would block cp; a directory is refused by cp without -r.
+timeout 10 cp -P -- "$src" "$tmp" || die "cannot copy $src"
+[[ -f $tmp && ! -L $tmp ]] || die "refused: $src is not a regular file"
+(($(stat -c %s -- "$tmp") <= MAX_BYTES)) || die "refused: $src is larger than $MAX_BYTES bytes"
+jq -e 'type == "object" and (keys - ["days", "generated_at", "owner_specs", "seeds", "specs"] == [])
+  and (.generated_at | type == "string") and (.specs | type == "array")
+  and (.days | type == "array") and (.seeds | type == "array")' "$tmp" >/dev/null 2>&1 ||
+  die "refused: $src is not the capture.json contract document"
+if ((DRY_RUN)); then
+  log "dry-run: would publish $src as $dest"
+  exit 0
+fi
+chmod 0644 "$tmp"
+mv -f -- "$tmp" "$dest"

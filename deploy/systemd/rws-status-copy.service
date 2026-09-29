@@ -1,0 +1,13 @@
+# Copies capture.json, checked, into the root-owned directory Caddy serves (issue #16 P1b). Runs as root: the target is root-owned.
+[Unit]
+Description=rws: publish a checked copy of capture.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rws-status-copy
+TimeoutStartSec=1min
+UMask=0077
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=full
+NoNewPrivileges=yes

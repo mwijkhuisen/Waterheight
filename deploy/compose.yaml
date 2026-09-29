@@ -49,8 +49,10 @@ services:
     environment:
       RWS_DOMAIN: ${RWS_DOMAIN:?}
       RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+    # Only the root-owned status directory: never capture's public/status,
+    # where a planted symlink would make Caddy serve any file it can read.
     volumes:
-      - /srv/rws/public:/srv/rws/public:ro
+      - /srv/rws/public/ops:/srv/rws/public/ops:ro
       - caddy_data:/data
       - caddy_config:/config
     networks: [public, edge]

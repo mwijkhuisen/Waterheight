@@ -376,7 +376,7 @@ if [[ -s /srv/rws/public/ops/ops.json ]]; then
 else
   fix "/srv/rws/public/ops/ops.json" ops_update '.'
 fi
-for unit in rws-update.timer rws-backup.timer rws-restore-drill.timer rws-tick.timer; do
+for unit in rws-status-copy.path rws-update.timer rws-backup.timer rws-restore-drill.timer rws-tick.timer; do
   enable_now "$unit"
 done
 

@@ -41,12 +41,13 @@
 		respond 200
 	}
 
-	# Status files: public, coarse, never cached. capture.json is written by the
-	# capture role, ops.json by the root-owned backup, drill and disk jobs.
+	# Status files: public, coarse, never cached, both from the root-owned
+	# ops directory: capture.json as rws-status-copy checked and copied it from
+	# capture's own directory, ops.json from the backup, drill and disk jobs.
 	handle /status/capture.json {
 		header Cache-Control "no-store"
 		rewrite * /capture.json
-		root * /srv/rws/public/status
+		root * /srv/rws/public/ops
 		file_server
 	}
 	handle /status/ops.json {

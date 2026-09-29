@@ -5,6 +5,8 @@
 # 2. Restarts any container of the rws project that Docker reports unhealthy
 #    (a wedged recorder whose heartbeat stopped): Docker itself never restarts
 #    an unhealthy container, only one that exited.
+# 3. Backstops: reloads the container DNS allowlist (rws-resolvers) and
+#    publishes capture.json (rws-status-copy), in case an event was missed.
 #
 # Usage: rws-tick [--dry-run]
 set -euo pipefail
@@ -40,3 +42,9 @@ for name in "${sick[@]}"; do
     docker restart "$name" >/dev/null || log "restart of $name failed"
   fi
 done
+
+here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+dry=()
+((!DRY_RUN)) || dry=(--dry-run)
+"$here/rws-resolvers" "${dry[@]}" || log "rws-resolvers failed"
+"$here/rws-status-copy" "${dry[@]}" || log "rws-status-copy failed"

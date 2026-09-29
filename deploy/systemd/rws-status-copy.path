@@ -1,0 +1,10 @@
+# Publishes each capture.json that capture writes (rws-status-copy; issue #16 P1b).
+[Unit]
+Description=rws: watch capture's public status file
+
+[Path]
+PathChanged=/srv/rws/public/status/capture.json
+Unit=rws-status-copy.service
+
+[Install]
+WantedBy=paths.target
