@@ -416,10 +416,11 @@ sleep 2
   fail "rws-status-copy.path died in a burst: $(systemctl show -p Result --value rws-status-copy.path)"
 put_status burst-after
 wait_for "the copy of a write after the burst" 30 grep -q burst-after /srv/rws/public/ops/capture.json
+# Unpause first: a paused capture turns unhealthy, and rws-tick rightly restarts it.
+rws_compose unpause capture
 systemctl stop rws-status-copy.path
 "$repo/deploy/bin/rws-tick"
 [[ $(systemctl is-active rws-status-copy.path) == active ]] || fail "rws-tick did not re-arm rws-status-copy.path"
-rws_compose unpause capture
 proof "12 capture.json renames in about 6 s leave rws-status-copy.path active (its service has no start limit), a later write is still published, and rws-tick re-arms a stopped path unit"
 CURL_CA_BUNDLE=/ci/pki/pebble-root.pem RWS_SMOKE_TIMEOUT=150 RWS_SMOKE_INTERVAL=5 smoke $(($(date -u +%s) - 1))
 proof "the rws-deploy smoke test passes against the stack (/healthz 200 over real TLS, a capture.json newer than the deploy)"
