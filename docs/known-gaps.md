@@ -13,7 +13,7 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 | KG-036 | release | `release.yml` has never pushed, signed or promoted: the first run happens on `main` after the merge. The exact certificate identity (including the repository name's capitals) and cosign 3's GHCR referrer fallback are proven only then. | The first release run: its signing step verifies with the VPS's exact identity; link it in #16 | open |
 | KG-037 | deploy | `bootstrap.sh` has not run on a Debian 13 host; the CI end-to-end test proves the same Docker 29.8.1, Compose 5.5.1, firewall and stack on Ubuntu 24.04 (R-034). | The owner's first run and a second run that reports 0 changes (`docs/runbooks/bootstrap.md`) | open |
 | KG-038 | deploy | Let's Encrypt itself: CI gets its certificate from Pebble over the same HTTP-01 path. | The first deploy; `verify-prod.sh <domain>` shows the certificate | open |
-| KG-039 | backup | Object Lock on the real bucket (D13) is untested: CI proves restic, `AWS_SHARED_CREDENTIALS_FILE` and the VPS-key policy on MinIO with COMPLIANCE. | The owner's first backup and `deploy/tests/object-lock-prune.sh` on the VPS | open |
+| KG-039 | backup | Object Lock on the real bucket (D13) is untested: CI proves restic, `AWS_SHARED_CREDENTIALS_FILE` and the VPS-key policy on MinIO with a 30-day COMPLIANCE default. | The owner's first backup and `deploy/tests/object-lock-prune.sh` on the VPS (five PASS lines: it now also checks the bucket's lock configuration and a new version's retention) | open |
 | KG-040 | deploy | `negative-deploy.sh` needs two real releases on the VPS. | The owner, after the second release (`docs/runbooks/owner-checks.md` §2) | open |
 | KG-041 | ops | The [owner] items: reachability over IPv4 and IPv6, the phone alert, the reboot check, the forced drill on the real bucket. | The owner (`docs/runbooks/owner-checks.md`) | open |
 | KG-042 | capacity | `docs/capacity.md` needs 48 h of production capture. | `verify-prod.sh <domain> --capacity` and a docs PR | open |
@@ -22,9 +22,10 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-043 | deploy | `rws-update` never replaces host scripts, units or the firewall; a release that changes them needs the owner to run its bootstrap (the log says so). | By design (T-DEP-1: no self-updating updater) | accepted |
+| KG-043 | deploy | `rws-update` never replaces host scripts, units, the firewall or any other file of `deploy/` but `compose.yaml`; a release that changes them needs the owner to run its bootstrap. Since the P1b reviews (S8) every run pings `update` `/fail` `host_files_changed` until then, besides the journal line. | By design (T-DEP-1: no self-updating updater) | accepted |
 | KG-044 | monitoring | The watchdog runs on the VPS it watches: when the VPS dies, the alert is healthchecks.io's missing pings, not the watchdog. | By design (ADR-0013) | accepted |
 | KG-045 | security | No Grype gate in P1b (owner decision). | P12 (R-029) | accepted |
+| KG-046 | reachability | Two §1a endpoints are not in `deploy/reachability.yaml`: DE-9 (NLWKN's key is part of every URL, and keyless it answers the Azure APIM 401 that no signature may accept) and the CH-6 fallback (the catalogue elides its file names). | DE-9 once permission C5 brings the key into a spec; CH-6 when it gets a capture spec (P7, only on a C13 objection) | open |
 
 ## P1a Recorder (PR #34, issue #16)
 

@@ -645,7 +645,7 @@ apps/web/src/
 - with `mem_limit`, `cpus`, `pids_limit`, a healthcheck and `restart: unless-stopped` (the `cpus` limits keep `api` and `caddy` from starving `capture` and `load` during a spike; catalogue gap item 9, tuned in P12);
 - with Compose file secrets.
 
-P1b deviations: `backup` is a job (`profiles: [jobs]`, `restart: "no"`, no healthcheck); caddy's healthcheck is a loopback-only listener; `rws-tick` restarts a container Docker reports unhealthy (Docker never does).
+P1b deviations: `backup` is a job (`profiles: [jobs]`, `restart: "no"`, no healthcheck); caddy's healthcheck is a loopback-only listener; `rws-tick` restarts a container Docker reports unhealthy (Docker never does). Caddy mounts only the root-owned `public/ops` (ro), never a directory a role can write: its `file_server` follows symlinks, so capture's own `public/status` is served through a checked root copy (§11.3; threat model T-WEB-1).
 
 ### 11.2 Deploy flow (pull-based, human-approved)
 
@@ -664,8 +664,9 @@ P1b deviations: `backup` is a job (`profiles: [jobs]`, `restart: "no"`, no healt
      - The newest manifest is `releases/latest/download/release-manifest.json`, verified before it is read. Its tag (`^prod-[0-9]{8}T[0-9]{6}Z$`, not in the future) must be newer than the current release and than `skip_upto`.
      - The bundle must match the signed sha256. `compose.yaml` comes only from it, and the images only by their signed digests.
      - "The previous manifest" is the last release that passed its smoke test (`/var/lib/rws/current`).
-     - A failed release is recorded in `skip_upto` and never retried automatically. A failed first deploy leaves the containers running and fails loudly.
-     - Host scripts, units and the firewall change only when the owner runs `bootstrap.sh` from a verified release.
+     - A failed release is recorded in `skip_upto` and never retried automatically. A failed first deploy leaves the containers running and fails loudly. A manual `rws-deploy` of an older release raises `skip_upto` to the newer of the release that ran before and the latest, and a "latest" older than the current release pings `/fail` (`latest_older`).
+     - Host scripts, units and the firewall change only when the owner runs `bootstrap.sh` from a verified release; while the running release brings other files of `deploy/` (all but `compose.yaml`), every run pings `/fail` (`host_files_changed`).
+     - `promote` releases only while its commit is still the head of `main`, and writes the manifest as compact JSON (the first-install runbook reads it with grep).
 4. The agent then runs `scripts/verify-prod.sh <domain>` from outside. It checks TLS, headers, health, freshness and cache headers.
 
 GitHub holds **no** credential for the server. If the repository is private, the VPS uses a fine-grained, read-only GHCR token stored in `/etc/rws/secrets`.
@@ -679,7 +680,7 @@ GitHub holds **no** credential for the server. If the repository is private, the
 - **Restore drill** (`rws-restore-drill.timer`, monthly): restore the latest dump into a throwaway container, run sanity queries (row counts per partition, newest timestamps), restore a 100-object raw sample and compare sha256, then replay one day and compare checksums. The result goes to healthchecks and to `status.json` (coarse values only).
 - **Recovery objectives** (catalogue gap item 9). **RPO ≤ 1 h for the raw archive** (hourly restic; the watchdog alerts when the last backup is > 2 h old) and ≤ 24 h for the database dump, whose gap replay closes from the raw archive. Forecast, class and alert payloads fetched between the last sync and a VPS loss, and those due while the VPS is down, are lost for good; a second capture-only collector is owner decision D19.
 - **Rebuild.** Runbook target RTO ≤ 4 h. After a restore, the provider windows (5–40 days) and replay refill the gap.
-- **Status files.** Until the publisher exists (P9), `capture` writes `/status/capture.json` and the backup, drill and tick jobs write `/status/ops.json` (P1b: in the root-owned `/srv/rws/public/ops/`, so capture cannot rewrite it). From P9 onward, both are merged into `/data/v1/status.json`.
+- **Status files.** Until the publisher exists (P9), `capture` writes `/status/capture.json` and the backup, drill and tick jobs write `/status/ops.json`. P1b serves both from the root-owned `/srv/rws/public/ops/`, which capture cannot write: ops.json is written there, and `rws-status-copy` (root; a systemd path unit on every write, and `rws-tick` every 10 min) publishes a copy of capture's `public/status/capture.json` only as a regular file (never a link) of at most 1 MiB that parses as the contract document. From P9 onward, both are merged into `/data/v1/status.json`.
 - **healthchecks.io** (at most 20 checks):
   - 9 provider groups: NL, DE-federal, DE-6, DE-7/8, FR, LU, CH, BfG, and **owner** (BE-3, LU-2/3/4; the check name carries no source IDs);
   - loader lag, publisher, owner publisher, backup, restore drill, update timer, watchdog public-URL probe, certificate ≥ 14 days, disk < 75% (18 checks in total).
