@@ -129,7 +129,7 @@ done <<<"$list"
 report=$(
   echo "# Reachability from the production VPS ($(date -u +%Y-%m-%d))"
   echo
-  echo "\`deploy/bin/rws-reachability\` on $(hostname -s 2>/dev/null || echo the VPS), $(date -u +%Y-%m-%dT%H:%M:%SZ): one request per target and family, verified TLS, no redirect, the capture User-Agent, no key. PASS means the body carried the target's signature (deploy/reachability.yaml)."
+  echo "\`deploy/bin/rws-reachability\` on the production VPS, $(date -u +%Y-%m-%dT%H:%M:%SZ): one request per target and family, verified TLS, no redirect, the capture User-Agent, no key. PASS means the body carried the target's signature (deploy/reachability.yaml)."
   echo
   echo "| Target | Source | Family | Status | Bytes | Result |"
   echo "|---|---|---|---:|---:|---|"

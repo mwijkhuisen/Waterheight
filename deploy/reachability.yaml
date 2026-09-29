@@ -10,10 +10,14 @@
 # `required: true` marks the first-release endpoints (every host of
 # registry/capture.yaml, owner hosts included) and what the deploy itself needs;
 # a failure there exits non-zero and belongs in docs/risk-register.md with its
-# fallback. `required: false` marks the sandbox failures to re-test (R7), which
-# are only reported. `fixture` names the committed payload the signature is
-# tested against (test/reachability.test.ts). One request per target and
-# family, never a key: NL-1 is sent without X-API-KEY.
+# fallback. `required: false` marks the sandbox failures to re-test (R7) and the
+# later §1a endpoints that answer without a key (BE-1, BE-2, DE-10, DE-12,
+# NL-5), which are only reported; their signatures are data (a JSON key, a
+# station code, a file or field name from catalogue §1a/§2), never a generic
+# word a block or error page could carry. `fixture` names the committed payload
+# the signature is tested against (test/reachability.test.ts). One request per
+# target and family, never a key: NL-1 is sent without X-API-KEY, and DE-9
+# (NLWKN, a key in every URL) is left out.
 #
 # JSON syntax (valid YAML), so the host reads it with jq.
 {
@@ -103,27 +107,43 @@
 
     { "id": "waterstandlimburg", "source": "R7", "required": false, "method": "GET",
       "url": "https://www.waterstandlimburg.nl/Home/Waterstanden",
-      "sig": "[Ww]aterstand" },
+      "sig": "/LocatieInfo/[A-Z0-9_]+" },
     { "id": "saarland", "source": "R7", "required": false, "method": "GET",
       "url": "https://www.saarland.de/mukmav/DE/portale/wasser/informationen/hochwassermeldedienst/wasserstaende_warnlage",
-      "sig": "Wasserst" },
+      "sig": "Reinheim" },
     { "id": "wver-pegel", "source": "R7", "required": false, "method": "GET",
       "url": "https://server.wver.de/pegeldaten/",
-      "sig": "[Pp]egel" },
+      "sig": "WasserstandBasis|Rimburg" },
     { "id": "wrij-waterdata", "source": "R7", "required": false, "method": "GET",
       "url": "https://waterdata.wrij.nl/index-data.html",
-      "sig": "[Ww]ater" },
+      "sig": "Haarlo|Lochem|[0-9]+_BOV" },
     { "id": "bkg-evrs", "source": "R7", "required": false, "method": "GET",
       "url": "https://evrs.bkg.bund.de/Subsites/EVRS/EN/RealizationofEVRS/EVRF2019/evrf2019.html",
       "sig": "EVRF2019" },
     { "id": "overpass", "source": "R7", "required": false, "method": "GET",
       "url": "https://overpass-api.de/api/status",
-      "sig": "Connected as" },
+      "sig": "Connected as: [0-9]+" },
     { "id": "geofabrik", "source": "R7", "required": false, "method": "GET",
       "url": "https://download.geofabrik.de/europe/germany.html",
       "sig": "germany-latest\\.osm\\.pbf" },
     { "id": "protomaps", "source": "R7", "required": false, "method": "GET",
       "url": "https://build.protomaps.com/",
-      "sig": "pmtiles" }
+      "sig": "[0-9]{8}\\.pmtiles" },
+
+    { "id": "be-1-hic", "source": "BE-1", "required": false, "method": "GET",
+      "url": "https://hicws.vlaanderen.be/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=4&request=getTimeseriesValueLayer&timeseriesgroup_id=156163&format=json&metadata=true&md_returnfields=ts_id,station_no&timezone=UTC",
+      "sig": "\"ts_id\":[0-9]+" },
+    { "id": "be-2-vmm", "source": "BE-2", "required": false, "method": "GET",
+      "url": "https://download.waterinfo.be/tsmdownload/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=1&request=getTimeseriesValues&ts_id=3880042&period=PT1H&format=json&metadata=true&md_returnfields=ts_id,station_no&returnfields=Timestamp,Value",
+      "sig": "\"station_no\":\"L08_098\"" },
+    { "id": "de-10-rlp", "source": "DE-10", "required": false, "method": "GET",
+      "url": "https://www.hochwasser.rlp.de/api/v1/measurement-site/25400750",
+      "sig": "\"xLast\"" },
+    { "id": "de-12-hvz", "source": "DE-12", "required": false, "method": "GET",
+      "url": "https://www.hvz.baden-wuerttemberg.de/js/jf-data-db-peg.js",
+      "sig": "'[0-9]{5}','[0-9]{2}\\.[0-9]{2}\\.[0-9]{4} [0-9]{2}:[0-9]{2}" },
+    { "id": "nl-5-nexus", "source": "NL-5", "required": false, "method": "GET",
+      "url": "https://opengeo.wrij.nl/arcgis/rest/services/WaterData/Nexus_P/FeatureServer/0/query?where=1%3D1&outFields=WS_THEME,EVENT_VALUE,EVENT_TIMESTAMP&resultRecordCount=1&f=json",
+      "sig": "\"EVENT_TIMESTAMP\"" }
   ]
 }

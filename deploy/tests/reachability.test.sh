@@ -105,6 +105,8 @@ expect_grep '^\| zip-file \| DE-7 \| IPv4 \| 200 \| [0-9]+ \| PASS \|$' "$C/out"
 expect_grep '^\| zip-file \| DE-7 \| IPv6 \| – \| – \| n/a \(no AAAA\) \|$' "$C/out"
 expect_grep 'Required targets failing: 0\.' "$C/out"
 expect_no_grep 'secret-body-marker|Succesvol' "$C/out"
+# The report goes into the public repository: no host name.
+expect_grep '^.deploy/bin/rws-reachability. on the production VPS, [0-9]{4}-' "$C/out"
 
 case_ "each request: -4 or -6 forced, https only, verified TLS, no redirect, the contact User-Agent, no key"
 expect_grep '^curl -4 --proto =https --tlsv1\.2 .* -A rivierstanden/0\.1\.0 \(\+https://rivierstanden\.example/over; contact@rivierstanden\.example\) -X GET ' "$FIX/calls"
