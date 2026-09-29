@@ -5,11 +5,12 @@
 //     each pinned to an exact version; TypeScript must stay on major 6;
 //   - node <-> .node-version; pnpm <-> packageManager and the lockfile's own pin;
 //   - action, image and binary rows (installed) <-> the pins in the workflows,
-//     the hook and scripts/*.sh, and every action or image used there has a row.
+//     the hook, scripts/*.sh and every file under deploy/ (bootstrap, Dockerfiles,
+//     compose files), and every action, CI image or Dockerfile base has a row.
 //   - supply chain: every locked package resolves by registry integrity, and
 //     every minimumReleaseAgeExclude entry carries an unexpired "# expires" date.
 // "planned" rows are skipped. Usage: node scripts/check-bom.ts [repo-root]
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parse, parseAllDocuments } from 'yaml';
 
@@ -72,6 +73,21 @@ function filesOf(root: string, dirs: string[]): string[] {
     }
   }
   return texts;
+}
+
+/** Every regular file under deploy/ (host scripts have no extension), with its path. */
+function deployFiles(root: string): { path: string; text: string }[] {
+  const out: { path: string; text: string }[] = [];
+  const walk = (dir: string) => {
+    if (!existsSync(dir)) return;
+    for (const name of readdirSync(dir).sort()) {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) walk(path);
+      else out.push({ path: path.slice(root.length + 1), text: readFileSync(path, 'utf8') });
+    }
+  };
+  walk(join(root, 'deploy'));
+  return out;
 }
 
 /**
@@ -175,7 +191,8 @@ export function checkBom(root: string): string[] {
 
   // Actions, images, binaries and the pinned tool downloads.
   const workflows = filesOf(root, ['.github/workflows']).join('\n');
-  const pinnedFiles = filesOf(root, ['.github/workflows', '.claude/hooks', 'scripts']);
+  const deploy = deployFiles(root);
+  const pinnedFiles = [...filesOf(root, ['.github/workflows', '.claude/hooks', 'scripts']), ...deploy.map((f) => f.text)];
   const re = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const r of installed.filter((r) => ['action', 'image', 'binary', 'runtime', 'tool'].includes(r.kind))) {
     if (r.pin === '' || r.pin === '–') {
@@ -191,7 +208,7 @@ export function checkBom(root: string): string[] {
       r.kind === 'action'
         ? new RegExp(`uses:\\s*${re(r.name)}(?:/[^@\\s]+)?@${re(r.pin)} # v${re(r.version)}$`, 'm').test(workflows)
         : r.kind === 'image'
-          ? workflows.includes(r.pin)
+          ? pinnedFiles.some((text) => text.includes(r.pin))
           : pinnedFiles.some((text) => text.includes(r.pin) && assigned.test(text));
     if (!found) {
       problems.push(
@@ -208,6 +225,12 @@ export function checkBom(root: string): string[] {
   const imageRows = new Set(installed.filter((r) => r.kind === 'image').map((r) => r.pin));
   for (const [, image = ''] of workflows.matchAll(/^\s*image:\s*(\S+)/gm)) {
     if (!imageRows.has(image)) problems.push(`workflow image ${image}: no installed image row with that pin`);
+  }
+  for (const { path, text } of deploy) {
+    if (!/(?:^|\/)Dockerfile$/.test(path)) continue;
+    for (const [, image = ''] of text.matchAll(/^FROM\s+(\S+)/gm)) {
+      if (!imageRows.has(image)) problems.push(`${path}: base image ${image} has no installed image row with that pin`);
+    }
   }
   return [...problems, ...checkSupplyChain(root)];
 }

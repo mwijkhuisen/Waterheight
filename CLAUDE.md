@@ -102,9 +102,12 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | shellcheck | binary | 0.11.0 | installed | b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6 | GPL-3.0 | ci.yml (tool only) |
 | Docker Engine | tool | 29.8.1 | planned | – | Apache-2.0 | P1b host (Docker's signed apt repository) |
 | Docker Compose | tool | 5.5.1 | planned | – | Apache-2.0 | P1b host |
-| node (build image) | image | 26.10.0-trixie-slim | planned | node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 | MIT | P1b build stage |
-| distroless nodejs26 | image | nonroot | planned | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89 | Apache-2.0 | P1b runtime |
-| caddy | image | 2.11.4-alpine | planned | caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b | Apache-2.0 | P1b/P4 |
+| node (build image) | image | 26.10.0-trixie-slim | installed | node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 | MIT | P1b build stage |
+| distroless nodejs26 | image | nonroot | installed | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89 | Apache-2.0 | P1b runtime |
+| caddy | image | 2.11.4-alpine | installed | caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b | Apache-2.0 | P1b web image (file capability stripped; runs with none) |
+| distroless static | image | nonroot | installed | gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 | Apache-2.0 | P1b backup image runtime |
+| buildkit | image | v0.33.0 | installed | moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 | Apache-2.0 | release.yml builder (setup-buildx driver) |
+| buildkit-syft-scanner | image | 1.12.0 | installed | docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 | Apache-2.0 | release.yml SBOM generator (Syft) |
 | dbmate (image) | image | 2.36.0 | planned | ghcr.io/amacneil/dbmate:2.36.0@sha256:520c740c6e0ad73fde2cd1ea7e2b779aaf789d22aca8858f87a478e7094535fb | MIT | P2 `migrate` |
 | croner | npm | 10.0.1 | installed | – | MIT | apps/server: capture scheduler (P1) |
 | undici | npm | 8.11.0 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
@@ -126,15 +129,15 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | fast-check | npm | 4.10.2 | planned | – | MIT | P2 |
 | @playwright/test | npm | 1.63.0 | planned | – | Apache-2.0 | P4 |
 | @axe-core/playwright | npm | 4.13.0 | planned | – | MPL-2.0 | P10 |
-| docker/build-push-action | action | 7.4.0 | planned | – | Apache-2.0 | P1b |
-| docker/login-action | action | 4.6.0 | planned | – | Apache-2.0 | P1b |
-| docker/setup-buildx-action | action | 4.4.1 | planned | – | Apache-2.0 | P1b |
-| docker/metadata-action | action | 6.2.0 | planned | – | Apache-2.0 | P1b |
-| sigstore/cosign-installer | action | 4.1.2 | planned | – | Apache-2.0 | P1b |
-| actions/attest-build-provenance | action | 4.2.2 | planned | – | MIT | P1b |
-| syft | binary | 1.52.0 | planned | – | Apache-2.0 | P1b |
-| grype | binary | 0.119.0 | planned | – | Apache-2.0 | P1b |
-| restic | binary | 0.19.1 | planned | – | BSD-2-Clause | P1b |
+| docker/build-push-action | action | 7.4.0 | installed | c3c9e263c25d99ce0380d002d59b67737d91b0dc | Apache-2.0 | P1b |
+| docker/login-action | action | 4.6.0 | installed | dbcb813823bdd20940b903addbd779551569679f | Apache-2.0 | P1b |
+| docker/setup-buildx-action | action | 4.4.1 | installed | f87e5991a6d7451dcb8d9637bfbc97413f497069 | Apache-2.0 | P1b |
+| docker/metadata-action | action | 6.2.0 | planned | – | Apache-2.0 | not needed in P1b (images are addressed by digest) |
+| sigstore/cosign-installer | action | 4.1.2 | installed | 6f9f17788090df1f26f669e9d70d6ae9567deba6 | Apache-2.0 | release.yml, with `cosign-release: v3.1.3` |
+| actions/attest-build-provenance | action | 4.2.2 | installed | 4d101475d8b20a2381f78447822ac1eab6504dd8 | MIT | release.yml |
+| syft | binary | 1.52.0 | planned | – | Apache-2.0 | P12 (P1b SBOMs come from buildkit-syft-scanner) |
+| grype | binary | 0.119.0 | planned | – | Apache-2.0 | P12 gate, deferred by the owner in P1b (risk register) |
+| restic | binary | 0.19.1 | installed | f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c | BSD-2-Clause | backup image (`restic_0.19.1_linux_amd64.bz2` sha256) |
 | go-pmtiles | binary | 1.31.2 | planned | – | BSD-3-Clause | P3 |
 | osmium-tool | binary | 1.19.1 | planned | – | GPL-3.0 | P6 (CI only) |
 | tippecanoe | binary | 2.79.0 | planned | – | BSD-2-Clause | P6 (CI only) |
