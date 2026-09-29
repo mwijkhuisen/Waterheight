@@ -292,11 +292,14 @@ proof "Docker's own tables ($(nft list tables | grep -v 'inet rws' | awk '{print
 
 # ------------------------------------------------------------------ egress
 step "Container egress: TCP 443 and DNS to the host's resolvers only; backup to the bucket only"
+# --init: busybox timeout signals the program it ran, which as PID 1 would ignore it.
 probe_on() {
   local net=$1
   shift
-  docker run --rm --network "$net" --entrypoint timeout rws-web:ci 15 "$@"
+  docker run --rm --init --network "$net" --entrypoint timeout rws-web:ci 15 "$@"
 }
+# The backup network exists once a backup job was created (profile "jobs").
+rws_compose --profile jobs create backup >/dev/null 2>&1
 probe_on rws_egress wget -q -O /dev/null https://www.example.com || fail "egress: https blocked"
 if probe_on rws_egress wget -q -O /dev/null http://www.example.com; then fail "egress: port 80 open"; fi
 if probe_on rws_egress nslookup www.example.com 9.9.9.9; then fail "egress: DNS to a foreign resolver open"; fi
