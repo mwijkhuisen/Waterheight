@@ -1,7 +1,8 @@
 // Politeness per host (A§7.3): after a 5xx, 429, 403, 451, a status outside
-// 100–599, a timeout or a network error, a full-jitter backoff from 30 s to 30 min that honours Retry-After,
-// and a circuit breaker that opens after 5 consecutive failures and lets one
-// probe through every 30 min. State lives in the process.
+// 100–599, a timeout or a network error, a full-jitter backoff from 30 s to
+// 30 min that honours Retry-After, and a circuit breaker that opens after 5
+// consecutive failures and lets one probe through every 30 min. State lives
+// in the process.
 
 export const BACKOFF_BASE_MS = 30_000;
 export const BACKOFF_CAP_MS = 30 * 60_000;
