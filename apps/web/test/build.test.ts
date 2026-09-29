@@ -31,10 +31,14 @@ describe('web build', () => {
 
   it.each(['index.html', 'en/index.html'])('%s has no inline script, style or handler', (file) => {
     const html = page(file);
-    const scripts = html.match(/<script\b[^>]*>/g) ?? [];
+    // Every <script> (any case) is an external file with an empty body.
+    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)];
     expect(scripts.length).toBeGreaterThan(0);
-    for (const tag of scripts) expect(tag).toMatch(/\ssrc="\/assets\/[^"]+\.js"/);
-    expect(html).not.toMatch(/<script\b[^>]*>[^<]+<\/script>/);
+    expect(html.match(/<script\b/gi)).toHaveLength(scripts.length);
+    for (const [, attrs = '', body = ''] of scripts) {
+      expect(attrs).toMatch(/\ssrc="\/assets\/[^"]+\.js"/);
+      expect(body.trim()).toBe('');
+    }
     expect(html).not.toMatch(/<style\b|\sstyle=|\son[a-z]+=/i);
   });
 });

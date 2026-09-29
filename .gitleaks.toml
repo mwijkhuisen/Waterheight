@@ -16,6 +16,14 @@ regexes = ['''^20260923\.pmtiles$''']
 paths = ['''^docs/sources/SOURCE-CATALOGUE\.md$''', '''^docs/sources/research/map-rivers\.md$''']
 
 [[allowlists]]
+description = "Public sha256 of the apt.postgresql.org signing-key file (ACCC4CF8.asc) pinned in the SessionStart hook, not a key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76$''']
+paths = ['''^\.claude/hooks/session-start\.sh$''']
+
+[[allowlists]]
 description = "Prose in the secure-ops proposal ('temporal-key edge cases, forecast/observation joins'), not a key"
 targetRules = ["generic-api-key"]
 condition = "AND"
