@@ -170,6 +170,18 @@ describe('seed completeness (C5, S8)', () => {
     harvest.stop();
   });
 
+  it.each([403, 451])('a row a WAF answers with %i is not done, and gets another round (N5)', async (status) => {
+    server.use(
+      http.get('https://www.hydrodaten.admin.ch/plots/p_q_40days/:file', () => new HttpResponse('no', { status })),
+    );
+    const s = spec('ch-3-40d');
+    const deps = runDeps();
+    expect(await runSeeds({ ...registry, specs: [{ ...s, rows: s.rows.slice(0, 1) }] }, deps, paths(deps.root))).toBe(
+      false,
+    );
+    expect(await deps.state.read<SeedState>('seeds/ch-3-40d')).toMatchObject({ done: [] });
+  });
+
   it('sends no conditional header, so a 304 cannot mark a row done without data', async () => {
     const s = spec('de-1-series');
     const conditional: string[] = [];

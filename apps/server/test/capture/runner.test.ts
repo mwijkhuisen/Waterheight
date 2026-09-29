@@ -137,6 +137,18 @@ describe('one manifest line per request, whatever the provider does (S7)', () =>
     ]);
   });
 
+  it.each([403, 451])('a %i is transient like a 429, and still counts as other (N5)', async (status) => {
+    const deps = runDeps();
+    server.use(
+      http.get(
+        'https://api.hochwasserzentralen.de/public/v1/data/stations',
+        () => new HttpResponse('blocked', { status }),
+      ),
+    );
+    expect(await runSpec(spec('de-6-stations'), deps)).toMatchObject({ ok: 0, transient: true, firstFailure: status });
+    expect(Object.values(deps.counters.days)[0]?.['DE-6']).toMatchObject({ scheduled: 1, other: 1 });
+  });
+
   it('a failed manifest append skips that request and still persists the rest of the run', async () => {
     const deps = runDeps();
     let appends = 0;

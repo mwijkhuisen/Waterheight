@@ -2,7 +2,7 @@ import type { Logger } from 'pino';
 import { keptHeaders, type ManifestLine, redactUrl } from '../archive/manifest.ts';
 import { at, type Validity, type ValiditySpec, validate } from '../archive/validity.ts';
 import { type Archive, sha256, utcDay } from '../archive/writer.ts';
-import { type Client, METADATA_TIMEOUT_MS, TOTAL_TIMEOUT_MS } from '../http/client.ts';
+import { BACK_OFF, type Client, METADATA_TIMEOUT_MS, TOTAL_TIMEOUT_MS } from '../http/client.ts';
 import type { Adapter, ErrorCode, Req, Row } from '../http/types.ts';
 import { ADAPTERS } from './adapters.ts';
 import { baseRequest, type LoadedSpec, type Window, windowFor } from './specs.ts';
@@ -372,7 +372,9 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
       }
     } else {
       if (status !== null && status >= 500) summary.transient = true;
-      if (status === 429 || (line.error !== null && TRANSIENT.has(line.error))) summary.transient = true;
+      // Throttling and a WAF block (403, 451) may lift: a seed item stays open, a daily spec retries (N5).
+      if ((status !== null && BACK_OFF.has(status)) || (line.error !== null && TRANSIENT.has(line.error)))
+        summary.transient = true;
       summary.firstFailure ??= line.error ?? (v !== null && !v.ok ? 'invalid' : status);
     }
     st.variants[req.variant] = vs;

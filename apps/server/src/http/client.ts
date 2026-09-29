@@ -27,7 +27,7 @@ export const MAX_REDIRECTS = 3;
 export const IN_FLIGHT_BYTES = 128 * 1024 * 1024;
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 /** Besides 5xx: throttling, and a WAF that blocks us (403, 451), back off like 429 (catalogue §10 R7). */
-const BACK_OFF = new Set([403, 429, 451]);
+export const BACK_OFF = new Set([403, 429, 451]);
 
 /**
  * The production transport: one undici Agent for every source, at most two
