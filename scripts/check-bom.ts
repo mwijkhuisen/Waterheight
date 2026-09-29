@@ -192,7 +192,10 @@ export function checkBom(root: string): string[] {
   // Actions, images, binaries and the pinned tool downloads.
   const workflows = filesOf(root, ['.github/workflows']).join('\n');
   const deploy = deployFiles(root);
-  const pinnedFiles = [...filesOf(root, ['.github/workflows', '.claude/hooks', 'scripts']), ...deploy.map((f) => f.text)];
+  const pinnedFiles = [
+    ...filesOf(root, ['.github/workflows', '.claude/hooks', 'scripts']),
+    ...deploy.map((f) => f.text),
+  ];
   const re = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const r of installed.filter((r) => ['action', 'image', 'binary', 'runtime', 'tool'].includes(r.kind))) {
     if (r.pin === '' || r.pin === '–') {

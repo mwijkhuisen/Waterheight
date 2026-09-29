@@ -115,7 +115,9 @@ describe('check-bom', () => {
   it('fails on a Dockerfile base image without an installed row', () => {
     const dir = scratch();
     edit(dir, 'deploy/web/Dockerfile', /^FROM caddy:2\.11\.4-alpine@sha256:[0-9a-f]{64}/m, 'FROM caddy:2.11.4-alpine');
-    expect(checkBom(dir).join('\n')).toMatch(/deploy\/web\/Dockerfile: base image caddy:2\.11\.4-alpine has no installed image row/);
+    expect(checkBom(dir).join('\n')).toMatch(
+      /deploy\/web\/Dockerfile: base image caddy:2\.11\.4-alpine has no installed image row/,
+    );
   });
 
   it('fails when a Dockerfile pins a different binary than the BOM', () => {
