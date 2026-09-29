@@ -182,6 +182,45 @@ describe('seed completeness (C5, S8)', () => {
     expect(await deps.state.read<SeedState>('seeds/ch-3-40d')).toMatchObject({ done: [] });
   });
 
+  it('ends its rounds 31 days after the first one, and reports the seed as incomplete (N3)', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-02T06:00:00Z') });
+    let requests = 0;
+    server.use(
+      http.get(OBS, () => {
+        requests += 1;
+        return new HttpResponse('busy', { status: 503 });
+      }),
+    );
+    const warnings: string[] = [];
+    const deps = runDeps({
+      now: () => new Date(),
+      log: { info: () => {}, warn: (_o: unknown, m?: string) => void warnings.push(String(m)), error: () => {} },
+    });
+    // The first round began 31 days less one hour ago; every round since failed.
+    await deps.state.update<SeedState>('seeds/fr-1-obs', () => ({
+      done: [],
+      files: 0,
+      series: 1,
+      coverage: null,
+      started: '2026-09-01T07:00:00.000Z',
+    }));
+    const rounds: number[] = [];
+    const harvest = startSeeds(only('fr-1-obs'), deps, paths(deps.root), async () => {
+      rounds.push(requests);
+    });
+    await vi.waitFor(() => expect(rounds).toHaveLength(1), { timeout: 15_000 });
+    expect(rounds[0]).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(SEED_RETRY_MS);
+    await vi.waitFor(() => expect(rounds).toHaveLength(2), { timeout: 15_000 });
+    expect(rounds[1]).toBe(rounds[0]); // 31 days are up: nothing is asked any more
+    expect(warnings).toContain('seed incomplete after 31 days: no more rounds');
+    expect(deps.counters.alerts['2026-10-02']).toMatchObject([{ spec: 'fr-1-obs', kind: 'seed_incomplete' }]);
+    await vi.advanceTimersByTimeAsync(3 * SEED_RETRY_MS);
+    expect(rounds).toHaveLength(2);
+    expect(await seedRecords(only('fr-1-obs'), deps)).toEqual([]);
+    harvest.stop();
+  });
+
   it('sends no conditional header, so a 304 cannot mark a row done without data', async () => {
     const s = spec('de-1-series');
     const conditional: string[] = [];

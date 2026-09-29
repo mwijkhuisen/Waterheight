@@ -4,13 +4,16 @@ import { type SeedRecord, type StatusPaths, writeSeedReport } from './status.ts'
 
 // The §0.1b day-0 harvest: one-off, idempotent (a finished seed is never run
 // again, and says so), paced (FR-1 ≥ 2 s between requests), resumable per
-// item (its progress is in _state/seeds/<spec>.json) and retried hourly until
-// done (DE-1 and FR-1 history expires upstream), and off the main queue:
-// seeds run one request at a time, so a host's second connection always stays
-// free for the scheduled captures. Public seeds go to seed-report.json and the
-// public seeds[]; the LU-2 first capture only to the owner status.
+// item (its progress is in _state/seeds/<spec>.json), retried hourly until
+// done (DE-1 and FR-1 history expires upstream) for at most 31 days, and off
+// the main queue: seeds run one request at a time, so a host's second
+// connection always stays free for the scheduled captures. Public seeds go to
+// seed-report.json and the public seeds[]; the LU-2 first capture only to the
+// owner status.
 
 const DAY = 86_400_000;
+/** Rounds end this long after the first one: the history a seed exists for has expired upstream by then. */
+const SEED_MAX_MS = 31 * DAY;
 
 export type SeedState = {
   done: string[];
@@ -57,6 +60,12 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
   let st: SeedState = (await deps.state.read<SeedState>(name)) ?? { done: [], files: 0, series: 0, coverage: null };
   if (st.done_at !== undefined) {
     deps.log.info({ spec: spec.id }, 'seed already done');
+    return true;
+  }
+  if (st.started !== undefined && deps.now().getTime() - Date.parse(st.started) >= SEED_MAX_MS) {
+    // Not silent (N3): the log, and the daily report of the seed's audience.
+    deps.log.warn({ spec: spec.id, done: st.done.length }, 'seed incomplete after 31 days: no more rounds');
+    deps.counters.alert({ spec: spec.id, kind: 'seed_incomplete', at: deps.now().toISOString() });
     return true;
   }
   const save = async (patch: Partial<SeedState>) => {
@@ -154,9 +163,9 @@ export const SEED_RETRY_MS = 3_600_000;
 
 /**
  * The harvest: every unfinished seed now, then another round every hour until
- * each is done, because a restart may be weeks away while DE-1 and FR-1
- * history expires upstream. `onRound` runs after each round; `stop` cancels
- * the next one.
+ * each is done or 31 days old, because a restart may be weeks away while DE-1
+ * and FR-1 history expires upstream. `onRound` runs after each round; `stop`
+ * cancels the next one.
  */
 export function startSeeds(
   registry: Registry,
