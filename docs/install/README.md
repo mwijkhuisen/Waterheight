@@ -115,15 +115,98 @@ After cloning into a new repository, the owner applies the settings of `docs/git
 
 Expected use in year 1 is about 60 GB of disk; an alert fires at 75%.
 
-### 2.2 Owner preparation (§6.2 A1–A7)
+### 2.2 Owner preparation, step by step (§6.2 A1–A7, B2, B4)
 
-1. **A1** Answer the open decisions D1, D2, D5, D7 and D13 (`docs/plan/PHASES.md` §6.1).
-2. **A2** Register the domain; create `contact@` and `security@` (used in the User-Agent, `security.txt` and the permission e-mails).
-3. **A3** Order the VPS (2.1). Install your SSH key (FIDO2 `sk-ed25519` recommended) and test the console.
-4. **A4** Set the DNS records.
-5. **A5** Create the bucket and two keys: a **VPS key** (put, get, list; **no** `DeleteObjectVersion`, `BypassGovernanceRetention` or `PutObjectRetention`) and a **workstation key** for `restic forget --prune`. Generate the restic repository password and keep it offline (password manager + paper).
-6. **A6** Create the healthchecks.io project and a project API key for `rws-hc-sync`.
-7. **A7** Put the secrets on the VPS in `/etc/rws/secrets/` (directory 0700, files 0600): restic password, S3 keys, healthchecks API key, and a GHCR read token only if the repository is private. Never put them in the repository or in GitHub.
+None of these steps depends on P1 code, so they can be done now. Tick each box and keep the notes (provider, region, key IDs, never the secrets themselves) in your password manager. Deadlines are from PHASES §6.2; the recorder is meant to be live by **10-02**.
+
+#### Step 1 · Decisions (A1, by 09-25)
+
+Record your answers in the issue for P1 (defaults from PHASES §6.1):
+
+- [ ] **D1** commercial use: default *non-commercial* (it is stated in every permission e-mail).
+- [ ] **D2** domain name and contact mailboxes (step 2).
+- [ ] **D5** off-site backup: an EU S3-compatible bucket with versioning and Object Lock (compliance, 30 days), restic-encrypted.
+- [ ] **D7** repository visibility: default *public* (free CodeQL, secret scanning and Actions minutes; GHCR images need no pull token).
+- [ ] **D13** the bucket provider: your choice, as long as it offers an EU region, the S3 API, versioning and Object Lock.
+
+#### Step 2 · Domain and mailboxes (A2, by 09-25)
+
+- [ ] Register the domain at a registrar that supports DNSSEC and CAA records.
+- [ ] Enable two-factor authentication on the registrar account and lock the domain against transfer.
+- [ ] Create the mailboxes (or aliases to your inbox) `contact@<domain>` and `security@<domain>`.
+- [ ] Send a test mail to each and confirm it arrives.
+- [ ] Check: `dig +short MX <domain>` returns your mail provider.
+
+#### Step 3 · SSH key (before ordering the VPS)
+
+- [ ] On your workstation, create a hardware-backed key if you have a FIDO2 security key:
+  ```bash
+  ssh-keygen -t ed25519-sk -O resident -C "rws-ops" -f ~/.ssh/rws_ops
+  ```
+  Without one: `ssh-keygen -t ed25519 -C "rws-ops" -f ~/.ssh/rws_ops` with a strong passphrase.
+- [ ] Keep a second (backup) key or security key in a safe place; losing the only key locks you out (the console in step 4 is the break-glass).
+- [ ] Copy only the `.pub` file anywhere. The private key never leaves your device.
+
+#### Step 4 · Order the VPS (A3, by 09-27)
+
+- [ ] Order: **EU region, 4 vCPU, 8 GB RAM, ≥ 200 GB NVMe, ≥ 1 Gbit/s, ≥ 20 TB/month traffic, IPv4 + IPv6, Debian 13 "trixie"**.
+- [ ] Add your SSH public key from step 3 during ordering.
+- [ ] Enable **weekly provider snapshots**.
+- [ ] Enable the **provider firewall**: inbound 22/tcp (only from your own IPs if they are static), 80/tcp, 443/tcp and 443/udp; everything else dropped.
+- [ ] Open the provider's web/VNC **console** once and confirm you can reach a login prompt (break-glass access).
+- [ ] Write down the IPv4 and IPv6 addresses.
+- [ ] Check from your workstation:
+  ```bash
+  ssh -i ~/.ssh/rws_ops root@<ipv4> 'cat /etc/debian_version; nproc; free -g; df -h /'
+  ```
+  Expect `13.x`, 4 CPUs, ~8 GB and ≥ 200 GB. Do nothing else on the host: `bootstrap.sh` (P1b) sets up users, firewall and Docker.
+
+#### Step 5 · DNS (A4, by 09-27)
+
+- [ ] `A <domain> → <ipv4>` and `AAAA <domain> → <ipv6>` (and the same for `www` if you want it).
+- [ ] `CAA <domain> 0 issue "letsencrypt.org"`.
+- [ ] Enable DNSSEC at the registrar, if supported.
+- [ ] Check:
+  ```bash
+  dig +short A <domain>; dig +short AAAA <domain>; dig +short CAA <domain>
+  dig +dnssec +short <domain> | grep -q RRSIG && echo "DNSSEC ok"
+  ```
+
+#### Step 6 · Off-site backup bucket (A5, by 09-28)
+
+- [ ] At your D13 provider, create a bucket in an EU region with **versioning and Object Lock enabled at creation** (it cannot be added later), default retention **compliance mode, 30 days**.
+- [ ] Create the **VPS key**, scoped to this bucket only, with *put, get, list* and **without** `DeleteObjectVersion`, `BypassGovernanceRetention` and `PutObjectRetention`.
+- [ ] Create the **workstation key** (used only from your own machine, for `restic forget --prune`). It never goes on the VPS.
+- [ ] Generate the restic repository password: `openssl rand -base64 48`. Store it in your password manager **and** on paper; without it the backups cannot be read.
+- [ ] Write down the endpoint URL, region and bucket name (not secret) for P1b.
+- [ ] Check with the VPS key (any S3 client, e.g. `aws s3api` with `--endpoint-url`): uploading an object works, and deleting a specific object version is **refused**.
+
+#### Step 7 · healthchecks.io (A6, by 09-28)
+
+- [ ] Create an account (free tier, 20 checks) with two-factor authentication.
+- [ ] Create a project, e.g. `rws`.
+- [ ] Add integrations: **e-mail** and **phone/push** (the mobile app, Pushover, Signal or similar); send a test notification to each.
+- [ ] Create a **project API key** (read-write) for `rws-hc-sync`. Do not create the checks by hand: `rws-hc-sync` does that in P1b from `deploy/healthchecks.yaml`.
+
+#### Step 8 · GitHub (B2, B4, before the first P1b release)
+
+- [ ] Confirm `scripts/gh-settings.sh --check` passes (B1).
+- [ ] Create the **`production`** environment: required reviewer = you; deployment branch = `main`; **no environment secrets**.
+- [ ] Add **no repository secrets** (B5): cosign uses GitHub OIDC, and GHCR pushes use `GITHUB_TOKEN`.
+- [ ] If the repository is **private** (D7), create a fine-grained token with only `read:packages` for the VPS (step 9). If it is public, set the GHCR packages public after the first release instead.
+
+#### Step 9 · Put the secrets on the VPS (A7)
+
+Do this after `bootstrap.sh` has created `/etc/rws/secrets/` in P1b; prepare the values now. The exact file names come with P1b's `deploy/compose.yaml` and runbooks.
+
+- [ ] Restic repository password (step 6).
+- [ ] The **VPS** S3 access key ID and secret (step 6), never the workstation key.
+- [ ] The healthchecks.io project API key (step 7).
+- [ ] The GHCR read token, only if the repository is private (step 8).
+- [ ] Write each value without a trailing newline or shell history, e.g. `sudo install -m 0600 /dev/stdin /etc/rws/secrets/<name>` and paste, then Ctrl-D. The directory is 0700, files 0600.
+- [ ] Never put these values in the repository, GitHub, an issue, a chat or a log. Database role passwords are generated by bootstrap in P2; you do not create them.
+
+When steps 1–8 are done, tell the P1b session the non-secret values (domain, IPs, bucket endpoint/region/name, healthchecks project name) so it can fill in the config.
 
 ### 2.3 Install (P1b)
 
