@@ -1,6 +1,6 @@
 # Runbook: SSH access lost
 
-SSH is keys-only, `AllowUsers ops` and no root login (`/etc/ssh/sshd_config.d/10-rws.conf`), and nftables allows at most 6 new connections a minute per IPv4 address or IPv6 /64. The **provider console** is the break-glass path (A3). Test it before you need it.
+SSH is keys-only, `AllowUsers ops` and no root login (`/etc/ssh/sshd_config.d/10-rws.conf`), and nftables allows at most 6 new connections a minute per IPv4 address or IPv6 /64, and 60 a minute from everyone together (so during a flood from many addresses you may be refused too). The **provider console** is the break-glass path (A3). Test it before you need it.
 
 ## 1. Rule out the rate limit
 
