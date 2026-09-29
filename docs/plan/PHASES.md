@@ -203,7 +203,7 @@ Each phase issue contains this block. The placeholders come from the phase secti
 /model <build-model>
 /effort <build-effort>
 /plan
-You are implementing Phase <N>, PR <N><x> "<pr-name>" of mwijkhuisen/rws.
+You are implementing Phase <N>, PR <N><x> "<pr-name>" of mwijkhuisen/Waterheight.
 Read first: CLAUDE.md (bill of materials, gotchas, security invariants), docs/plan/ARCHITECTURE.md,
 docs/plan/PHASES.md §P<N>, docs/adr/, docs/threat-model.md, and these catalogue sections:
 <§refs> in docs/sources/SOURCE-CATALOGUE.md. Source IDs in scope: <IDs>.
@@ -298,7 +298,7 @@ Report any threat-model delta for docs/threat-model.md. Classify findings Critic
 **Deliverables:** the tag; a clean `main`; the scaffold, CI and Dependabot configuration; `CLAUDE.md`; the hook; the docs, ADRs, registry and e-mail drafts; the GitHub settings script.
 
 **Acceptance criteria**
-- [ ] [CI] `git rev-parse legacy-v0^{commit}` equals `a4106b8…`, and `git ls-remote --tags origin legacy-v0` returns it.
+- [ ] [CI] `git rev-parse legacy-v0^{commit}` equals `a4106b8…`, and `git ls-remote --tags origin 'legacy-v0*'` returns it on the peeled `refs/tags/legacy-v0^{}` line.
 - [ ] [CI] `verify-fresh-start.sh` passes: `main` contains 0 legacy blobs and none of the legacy top-level paths.
 - [ ] [CI] After the P0a removal commit, the tree holds only `README.md`, `.gitignore`, `scripts/*` and, only if PR #30 was merged first, `docs/plan/**` and `docs/sources/**`.
 - [ ] [CI] P0b: `docs/plan/` and `docs/sources/` equal the planning bundle (branch `claude/river-water-level-map-hf7bcz`, or the PR #30 merge commit if the branch is gone); the PR body says whether they were imported or already on `main`.
