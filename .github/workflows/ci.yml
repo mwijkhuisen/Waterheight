@@ -1,0 +1,235 @@
+# CI (issue #15; PHASES §5 P0; A§12.2 supply chain). The required check is the
+# aggregate job `ci`. Hardening: top-level permissions {}, contents: read per
+# job, harden-runner first, persist-credentials: false, no caches, no
+# expressions inside run: (values come in through env:), actions pinned to
+# full SHAs and downloaded binaries checked against pinned sha256 sums.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - name: pnpm policy is in effect (pnpm ignores a misspelt key)
+        run: |
+          test "$(pnpm config get minimumReleaseAge)" = 10080
+          test "$(pnpm config get strictDepBuilds)" = true
+          test "$(pnpm config get blockExoticSubdeps)" = true
+          pnpm config get allowBuilds | grep -q '"msw": false'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm -F web build
+      - name: Server smoke test (GET /healthz, role exit codes)
+        run: scripts/healthz-smoke.sh
+
+  integration:
+    name: integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          # Throwaway CI-only credential for an ephemeral service container.
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rws
+          POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/rws?sslmode=disable
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:integration
+
+  dbmate:
+    name: dbmate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rws
+          POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/rws?sslmode=disable
+      DBMATE_VERSION: v2.36.0
+      DBMATE_SHA256: 47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install dbmate (pinned, sha256-checked)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl --proto '=https' -fsSL -o "$RUNNER_TEMP/bin/dbmate" \
+            "https://github.com/amacneil/dbmate/releases/download/$DBMATE_VERSION/dbmate-linux-amd64"
+          echo "$DBMATE_SHA256  $RUNNER_TEMP/bin/dbmate" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/dbmate"
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+      - name: dbmate up/down/up on a fixture migration (outside db/migrations)
+        run: scripts/dbmate-roundtrip.sh
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      SHELLCHECK_VERSION: v0.11.0
+      SHELLCHECK_SHA256: b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install shellcheck (pinned, sha256-checked)
+        run: |
+          tarball="shellcheck-$SHELLCHECK_VERSION.linux.x86_64.tar.gz"
+          curl --proto '=https' -fsSL -o "$RUNNER_TEMP/$tarball" \
+            "https://github.com/koalaman/shellcheck/releases/download/$SHELLCHECK_VERSION/$tarball"
+          echo "$SHELLCHECK_SHA256  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP"
+      - name: shellcheck every shell script
+        run: |
+          mapfile -t files < <(git ls-files '*.sh')
+          "$RUNNER_TEMP/shellcheck-$SHELLCHECK_VERSION/shellcheck" --version
+          "$RUNNER_TEMP/shellcheck-$SHELLCHECK_VERSION/shellcheck" "${files[@]}"
+
+  fresh-start:
+    name: fresh-start
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The guard needs the whole history and the legacy-v0 tag.
+          fetch-depth: 0
+          fetch-tags: true
+      - run: scripts/verify-fresh-start.sh
+      - name: The legacy-only list still matches legacy-v0's paths
+        run: scripts/check-legacy-only.sh
+
+  hook:
+    name: hook
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      CLAUDE_CODE_REMOTE: 'true'
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: SessionStart hook, first run (installs)
+        run: |
+          export CLAUDE_ENV_FILE="$RUNNER_TEMP/claude.env" CLAUDE_PROJECT_DIR="$GITHUB_WORKSPACE"
+          .claude/hooks/session-start.sh </dev/null 2>&1 | tee "$RUNNER_TEMP/hook-1.log"
+      - name: SessionStart hook, second run (must change nothing)
+        run: |
+          export CLAUDE_ENV_FILE="$RUNNER_TEMP/claude.env" CLAUDE_PROJECT_DIR="$GITHUB_WORKSPACE"
+          .claude/hooks/session-start.sh </dev/null 2>&1 | tee "$RUNNER_TEMP/hook-2.log"
+          if grep -E '^(session-start: (install|creat|start|writ)|install-pnpm: installed)' "$RUNNER_TEMP/hook-2.log"; then
+            echo "the second run changed something" >&2
+            exit 1
+          fi
+          grep -c . "$CLAUDE_ENV_FILE"
+      - name: pnpm check and test:integration in the hook's environment
+        run: |
+          # shellcheck disable=SC1091
+          source "$RUNNER_TEMP/claude.env"
+          node --version
+          pnpm --version
+          pnpm check
+          pnpm test:integration
+
+  ci:
+    name: ci
+    if: always()
+    needs: [check, integration, dbmate, shellcheck, fresh-start, hook]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Every job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' >/dev/null

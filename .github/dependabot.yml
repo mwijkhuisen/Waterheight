@@ -1,0 +1,38 @@
+# Dependabot (ADR-0014): weekly, grouped, 7-day cooldown against fast worms,
+# no automerge (no workflow merges anything; the owner merges every PR).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      npm:
+        patterns: ['*']
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
+    open-pull-requests-limit: 5
+
+  # Dockerfiles and Compose arrive with P1b in deploy/; until then this entry has
+  # nothing to update.
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      images:
+        patterns: ['*']
+    open-pull-requests-limit: 5

@@ -13,5 +13,7 @@ strictDepBuilds: true
 allowBuilds:
   # postinstall only copies the browser worker file; Node tests do not use it.
   msw: false
-# Transitive dependencies may only come from the registry (no git or tarball URLs).
+# Transitive dependencies may not come from git (ERR_PNPM_EXOTIC_SUBDEP). pnpm
+# 12.5.1 still lets a transitive plain https tarball URL through; the lockfile
+# review and CODEOWNERS cover that gap (docs/risk-register.md).
 blockExoticSubdeps: true
