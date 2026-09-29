@@ -1,0 +1,25 @@
+# healthchecks.io checks (issue #16 "P1a ↔ P1b contract"; A§11.3): 15 of the 20
+# free checks. timeout = the check's cadence (a capture group's shortest
+# cadence), grace = 2 × timeout, so an alert fires after 3 × cadence without a
+# ping. The check name is the slug and carries no source ID. Synced by
+# deploy/bin/rws-hc-sync; test/healthchecks.test.ts ties the cap-* timeouts to
+# registry/capture.yaml. JSON syntax (valid YAML), so the host reads it with jq.
+{
+  "checks": [
+    { "slug": "cap-nl", "timeout": 600, "grace": 1200 },
+    { "slug": "cap-de-fed", "timeout": 900, "grace": 1800 },
+    { "slug": "cap-de6", "timeout": 600, "grace": 1200 },
+    { "slug": "cap-de78", "timeout": 3600, "grace": 7200 },
+    { "slug": "cap-fr", "timeout": 900, "grace": 1800 },
+    { "slug": "cap-lu", "timeout": 300, "grace": 600 },
+    { "slug": "cap-ch", "timeout": 600, "grace": 1200 },
+    { "slug": "cap-bfg", "timeout": 3600, "grace": 7200 },
+    { "slug": "cap-owner", "timeout": 600, "grace": 1200 },
+    { "slug": "backup", "timeout": 3600, "grace": 7200 },
+    { "slug": "restore-drill", "timeout": 2678400, "grace": 5356800 },
+    { "slug": "update", "timeout": 300, "grace": 600 },
+    { "slug": "watchdog", "timeout": 300, "grace": 600 },
+    { "slug": "cert", "timeout": 300, "grace": 600 },
+    { "slug": "disk", "timeout": 300, "grace": 600 }
+  ]
+}
