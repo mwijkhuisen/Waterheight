@@ -15,8 +15,9 @@
 #   - capture in distroless is healthy, writes the contract files with the
 #     contract modes, and generated_at advances; the real rws-status-copy.path
 #     unit publishes a checked copy that Caddy serves, a symlink planted as
-#     capture's file is refused and never served, a burst of writes does not
-#     disarm the path unit and rws-tick re-arms it; the rws-deploy smoke test passes;
+#     capture's file and a file naming an owner source are refused and never
+#     served, a burst of writes does not disarm the path unit and rws-tick
+#     re-arms it; the rws-deploy smoke test passes;
 #   - restic reads its keys from AWS_SHARED_CREDENTIALS_FILE and writes to an
 #     Object Lock bucket; the restore drill matches 100 of 100; the VPS key
 #     cannot remove a version (object-lock-prune.sh);
@@ -372,8 +373,17 @@ body=$(served)
 jq -e '.generated_at | strings' <<<"$body" >/dev/null || fail "no served capture.json while the symlink is planted"
 ! grep -q s1-symlink-canary <<<"$body" || fail "the symlink's target was served"
 rm -f /srv/rws/public/status/capture.json "$canary"
+# A contract-shaped document that names an owner source (R2-S7).
+jq -c '.days = [{"source": "LU-2"}]' /srv/rws/public/ops/capture.json >/srv/rws/public/status/capture.json
+rc=0
+out=$("$repo/deploy/bin/rws-status-copy" 2>&1) || rc=$?
+echo "$out"
+if ((rc == 0)) || ! grep -q 'invariant 11 tripwire' <<<"$out"; then fail "rws-status-copy did not refuse an owner source"; fi
+! grep -q LU-2 /srv/rws/public/ops/capture.json || fail "an owner source reached the served copy"
+! served | grep -q LU-2 || fail "an owner source was served"
+rm -f /srv/rws/public/status/capture.json
 rws_compose unpause capture
-proof "a symlink planted as capture's capture.json (to a contract-shaped canary readable by root and by Caddy) is refused by rws-status-copy; neither the served copy nor https://$DOMAIN/status/capture.json ever carries the canary"
+proof "a symlink planted as capture's capture.json (to a contract-shaped canary readable by root and by Caddy) is refused by rws-status-copy; neither the served copy nor https://$DOMAIN/status/capture.json ever carries the canary; a contract-shaped capture.json naming an owner source is refused by the invariant-11 tripwire and never served"
 
 step "rws-status-copy.path outlives a burst of writes, and rws-tick re-arms it (R2-S2)"
 put_status() {

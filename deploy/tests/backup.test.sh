@@ -336,6 +336,32 @@ expect_rc 1
 expect_grep "cannot copy" "$C/out"
 [[ -z $(find "$RWS_SRV/public/ops" -name '.capture.json.*') ]] || fail "a temporary copy was left behind"
 
+case_ "status copy: one JSON text only; an owner term or the canary is refused, never logged; no term list, no copy (R2-S7)"
+setup
+mkdir -p "$RWS_SRV/public/status"
+src=$RWS_SRV/public/status/capture.json
+good='{"days":[],"generated_at":"2026-09-02T00:00:00.000Z","owner_specs":{"fresh":0,"total":0},"seeds":[],"specs":[]}'
+printf '"<script>alert(1)</script>"\n%s\n' "$good" >"$src"
+run rws-status-copy
+expect_rc 1
+expect_grep "not the capture.json contract document" "$C/out"
+for owner in '"days":[{"source":"LU-2"}]' '"days":[{"bytes":{"x":777777.777}}]' '"days":[{"source":"BE-3"}]'; do
+  printf '{%s,"generated_at":"x","owner_specs":{"fresh":0,"total":0},"seeds":[],"specs":[]}\n' "$owner" >"$src"
+  run rws-status-copy
+  expect_rc 1
+  expect_grep "names an owner-audience term \(invariant 11 tripwire\)" "$C/out"
+  expect_no_grep "LU-2|777777\.777|BE-3|u002d" "$C/out"
+done
+[[ ! -e $RWS_SRV/public/ops/capture.json ]] || fail "a refused document was published"
+mkdir "$C/bin" && cp "$bin/rws-status-copy" "$bin/rws-lib.sh" "$C/bin/"
+printf '%s\n' "$good" >"$src"
+rc=0
+"$C/bin/rws-status-copy" >"$C/out" 2>&1 || rc=$?
+expect_rc 1
+expect_grep "no usable owner-term list" "$C/out"
+run rws-status-copy
+expect_rc 0
+
 case_ "ops.json writer: a corrupt file is replaced, never kept"
 setup
 echo 'not json' >"$RWS_SRV/public/ops/ops.json"

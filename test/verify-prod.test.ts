@@ -111,6 +111,12 @@ describe('owner isolation in /status/*', () => {
     for (const t of ['NL-1', 'CH-1', 'lu-1-csv']) expect(terms).not.toContain(t);
   });
 
+  it('deploy/owner-terms.json, the status copy tripwire on the VPS, holds exactly these terms', () => {
+    const file = JSON.parse(readFileSync(join(repoRoot, 'deploy/owner-terms.json'), 'utf8')) as { terms: string[] };
+    expect(file.terms).toEqual(ownerTerms(registry));
+    for (const t of file.terms) expect(t).toMatch(/^[A-Za-z0-9.-]{1,253}$/);
+  });
+
   it('finds nothing in a real public capture.json, and every owner source in the owner one', () => {
     const { pub, owner } = statusCycle();
     expect(leaks(JSON.stringify(pub), ownerTerms(registry))).toEqual([]);

@@ -7,8 +7,10 @@
 #
 # The copy never dereferences the source (GNU cp -P into a fresh name in the
 # target directory: it opens the source with O_NOFOLLOW), stops just past
-# 1 MiB, and is published only as a regular file of at most 1 MiB that parses
-# as the contract document; then 0644 and an atomic rename.
+# 1 MiB, and is published only as a regular file of at most 1 MiB that is a
+# single JSON text of the contract's shape and names no owner-audience term
+# (the invariant-11 tripwire, deploy/owner-terms.json); then 0644 and an
+# atomic rename. A refusal is logged with a fixed message, never the content.
 #
 # Usage: rws-status-copy [--dry-run]
 set -euo pipefail
@@ -25,6 +27,7 @@ case ${1:-} in
 esac
 
 readonly MAX_BYTES=1048576
+terms=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../owner-terms.json
 src=$RWS_SRV/public/status/capture.json
 dest=$RWS_SRV/public/ops/capture.json
 tmp=$(mktemp -u "${dest%/*}/.capture.json.XXXXXX")
@@ -36,10 +39,19 @@ trap 'rm -f -- "$tmp"' EXIT
 (ulimit -f $((MAX_BYTES / 1024 + 1)) && exec timeout 10 cp -P -- "$src" "$tmp") || die "cannot copy $src"
 [[ -f $tmp && ! -L $tmp ]] || die "refused: $src is not a regular file"
 (($(stat -c %s -- "$tmp") <= MAX_BYTES)) || die "refused: $src is larger than $MAX_BYTES bytes"
-jq -e 'type == "object" and (keys - ["days", "generated_at", "owner_specs", "seeds", "specs"] == [])
+# One JSON text only: jq -e alone judges just the last of several.
+jq -s -e 'length == 1 and (.[0] | type == "object"
+  and (keys - ["days", "generated_at", "owner_specs", "seeds", "specs"] == [])
   and (.generated_at | type == "string") and (.specs | type == "array")
-  and (.days | type == "array") and (.seeds | type == "array")' "$tmp" >/dev/null 2>&1 ||
+  and (.days | type == "array") and (.seeds | type == "array"))' "$tmp" >/dev/null 2>&1 ||
   die "refused: $src is not the capture.json contract document"
+# No owner source, spec or host, nor the owner canary, as a whole identifier
+# (verify-prod.sh's rule) anywhere in the document, \u escapes decoded.
+jq -e '.terms | type == "array" and length > 0 and all(type == "string" and test("^[A-Za-z0-9.-]{1,253}$"))' \
+  "$terms" >/dev/null 2>&1 || die "refused: no usable owner-term list at $terms"
+jq -e --slurpfile t "$terms" 'tojson as $s | all($t[0].terms[]; . as $w
+  | $s | test("(?<![A-Za-z0-9.-])" + ($w | gsub("\\."; "\\.")) + "(?![A-Za-z0-9-])") | not)' "$tmp" >/dev/null 2>&1 ||
+  die "refused: $src names an owner-audience term (invariant 11 tripwire)"
 if ((DRY_RUN)); then
   log "dry-run: would publish $src as $dest"
   exit 0
