@@ -6,7 +6,7 @@ The `[owner]` acceptance items of P1b, and the ones P1a and P1b share, each with
 
 ```bash
 ssh ops@<domain>
-rws-reachability --out /tmp/reachability.md    # as ops, not root; about 30 targets × 2 families
+rws-reachability --out /tmp/reachability.md    # as ops, not root; about 40 targets × 2 families
 cat /tmp/reachability.md
 ```
 
@@ -39,8 +39,10 @@ Capture restarts three times, a few minutes in all.
 sudo /usr/local/lib/rws/deploy/tests/object-lock-prune.sh
 ```
 
-It runs `restic forget --prune` with the VPS key on a throwaway prefix (`lockcheck-<time>/`). Then, over the S3 API, it expects three PASS lines:
+It runs `restic forget --prune` with the VPS key on a throwaway prefix (`lockcheck-<time>/`). Then, over the S3 API, it expects five PASS lines:
 
+- the bucket's default retention is COMPLIANCE for at least 30 days;
+- a new object version is retained in COMPLIANCE for at least 29 more days;
 - every object version is still listed;
 - a versioned DELETE is refused;
 - shortening a retention is refused.
@@ -78,7 +80,7 @@ Checklist:
 - [ ] `ssh ops@<domain> systemctl list-timers 'rws-*'` shows the timers scheduled;
 - [ ] the `update`, `watchdog` and `backup` checks are green again.
 
-The chain: `rws-firewall` loads before Docker. Docker restarts the `unless-stopped` containers (non-local bind covers the IPv6 address that is still tentative at boot). Capture writes `capture.json` within a minute. The `Persistent=true` timers catch up.
+The chain: `rws-firewall` loads before Docker, which `Requires=` it. Docker restarts the `unless-stopped` containers (non-local bind covers the IPv6 address that is still tentative at boot). `rws-resolvers` refills the container DNS allowlist once the network is online. Capture writes `capture.json` within a minute, and `rws-status-copy.path` publishes it. The `Persistent=true` timers catch up.
 
 ## 6. The forced restore drill
 

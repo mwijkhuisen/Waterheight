@@ -1,6 +1,6 @@
 # Runbook: SSH access lost
 
-SSH is keys-only, `AllowUsers ops` and no root login (`/etc/ssh/sshd_config.d/10-rws.conf`), and nftables allows at most 6 new connections a minute per source address. The **provider console** is the break-glass path (A3). Test it before you need it.
+SSH is keys-only, `AllowUsers ops` and no root login (`/etc/ssh/sshd_config.d/10-rws.conf`), and nftables allows at most 6 new connections a minute per IPv4 address or IPv6 /64. The **provider console** is the break-glass path (A3). Test it before you need it.
 
 ## 1. Rule out the rate limit
 
@@ -20,7 +20,7 @@ journalctl -u ssh -n 50
 |---|---|
 | Key lost or rotated | Add the new public key to `/home/ops/.ssh/authorized_keys` (`0600`, owned by `ops`) |
 | sshd config broken | `rm /etc/ssh/sshd_config.d/10-rws.conf && systemctl restart ssh`, get in, then re-run `bootstrap.sh` from the current release directory |
-| Firewall | `systemctl stop rws-firewall` (removes only `table inet rws`), get in, then `systemctl start rws-firewall` |
+| Firewall | `nft delete table inet rws` (removes only our table; Docker and its rules stay), get in, then `systemctl reload rws-firewall`. Not `systemctl stop rws-firewall`: Docker `Requires=` it and would stop too |
 
 ## 3. If the console is gone too
 

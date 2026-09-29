@@ -10,7 +10,7 @@ The order that gets capture live fastest:
 4. B4;
 5. fetch and verify the release;
 6. `bootstrap.sh`;
-7. fill `rws.env` and the secrets;
+7. the secrets, then `rws.env` (a complete `rws.env` starts the deploys);
 8. the first deploy;
 9. backups;
 10. `rws-hc-sync`;
@@ -23,9 +23,9 @@ The order that gets capture live fastest:
 | **A2** | The domain, plus the `contact@` and `security@` mailboxes | `dig +short MX <domain>`; send a test mail to `contact@<domain>` |
 | **A3** | The VPS: EU, 4 vCPU, 8 GB, ≥ 200 GB NVMe, IPv4 + IPv6, **Debian 13 amd64**. Provider snapshots weekly, provider firewall 22 from your IPs if static, console access tested, your SSH key installed (FIDO2 `sk-ed25519` recommended) | `ssh root@<ip> 'grep VERSION_CODENAME /etc/os-release; dpkg --print-architecture; nproc; free -g; df -h /; ip -br a'` shows trixie, amd64, 4, ~8, ≥ 200G and a global IPv4 and IPv6 |
 | **A4** | DNS: `A` and `AAAA` → the VPS; `CAA 0 issue "letsencrypt.org"`; DNSSEC if offered | `dig +short A <domain>`; `dig +short AAAA <domain>`; `dig +short CAA <domain>` |
-| **A5** | The EU S3 bucket, created **with Object Lock** (COMPLIANCE, 30 days), versioning on. Two keys: the **VPS key** with `deploy/host/s3-vps-key-policy.json` (replace `RWS_BUCKET`), and a **workstation key** for `restic forget --prune`. The restic repository password is generated and kept offline (password manager + paper) | The provider console shows versioning and the default retention. After step 5: `sudo /usr/local/lib/rws/deploy/tests/object-lock-prune.sh` prints three PASS lines |
+| **A5** | The EU S3 bucket, created **with Object Lock** (COMPLIANCE, 30 days), versioning on, reachable on port 443. Two keys: the **VPS key** with `deploy/host/s3-vps-key-policy.json` (replace `RWS_BUCKET`), and a **workstation key** for `restic forget --prune`. The restic repository password is generated and kept offline (password manager + paper) | The provider console shows versioning and the default retention. After step 6: `sudo /usr/local/lib/rws/deploy/tests/object-lock-prune.sh` prints five PASS lines |
 | **A6** | healthchecks.io: an account, a project with e-mail and phone/push integrations, and the project's **ping key** and an **API key** (read-write) | Step 7 creates the 15 checks; the project page lists them |
-| **A7** | The secrets on the VPS (step 4) | `sudo ls -l /etc/rws/secrets` |
+| **A7** | The secrets on the VPS (step 3) | `sudo ls -l /etc/rws/secrets` |
 | **B2** | GitHub environment `production`: required reviewer = you, deployment branch = `main`, **no secrets** | `scripts/gh-settings.sh --check` (from a checkout) |
 | **B4** | After the first release: set the three GHCR packages `waterheight/server`, `web` and `backup` to **public** (Package settings → Change visibility) | `curl -s 'https://ghcr.io/token?scope=repository:mwijkhuisen/waterheight/server:pull' \| grep -q '"token"' && echo public` |
 
@@ -35,39 +35,41 @@ The VPS key may put, get, list and **delete objects**: restic deletes its own lo
 
 Nothing on the VPS runs unless it came out of a release that `cosign` verified against the release workflow's identity. On the first run cosign itself is pinned by sha256; it is the same pin as in `bootstrap.sh`.
 
+Run it as **root** (`ssh root@<ip>`, or `sudo -i` from the image's default user), in an interactive shell. The block never exits your shell: every check that fails sets `ok=no`, and only a fully verified release is unpacked. `deploy/tests/runbook.test.sh` runs its `sha=` and `tag=` lines against `release.yml`'s own manifest.
+
 ```bash
-set -euo pipefail
-work=$(mktemp -d) && cd "$work"
+work=/root/rws-release; rm -rf "$work"; mkdir -p "$work" && cd "$work" && ok=yes || ok=no
 curl --proto '=https' -fsSLo cosign https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64
-echo "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71  cosign" | sha256sum -c -
-chmod +x cosign
+echo "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71  cosign" | sha256sum -c - && chmod +x cosign || ok=no
 base=https://github.com/mwijkhuisen/Waterheight/releases/latest/download
 for f in release-manifest.json release-manifest.sigstore.json deploy-bundle.tar.gz; do
-  curl --proto '=https' -fsSLO "$base/$f"
+  curl --proto '=https' -fsSLO "$base/$f" || ok=no
 done
 ./cosign verify-blob --bundle release-manifest.sigstore.json \
   --certificate-identity https://github.com/mwijkhuisen/Waterheight/.github/workflows/release.yml@refs/heads/main \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com release-manifest.json
-sha=$(grep -o '"sha256":"[0-9a-f]\{64\}"' release-manifest.json | cut -d'"' -f4)
-echo "$sha  deploy-bundle.tar.gz" | sha256sum -c -
-mkdir bundle && tar -xzf deploy-bundle.tar.gz -C bundle
-grep -o '"tag":"[^"]*"' release-manifest.json      # the release you will deploy
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com release-manifest.json || ok=no
+sha=$(grep -o '"sha256": *"[0-9a-f]\{64\}"' release-manifest.json | grep -o '[0-9a-f]\{64\}')
+tag=$(grep -o '"tag": *"prod-[0-9]\{8\}T[0-9]\{6\}Z"' release-manifest.json | grep -o 'prod-[0-9]\{8\}T[0-9]\{6\}Z')
+echo "$sha  deploy-bundle.tar.gz" | sha256sum -c - || ok=no
+if [ "$ok" = yes ] && [ "${#sha}" -eq 64 ] && [ -n "$tag" ] && mkdir bundle && tar -xzf deploy-bundle.tar.gz -C bundle; then echo "VERIFIED: release $tag in $work/bundle"; else echo "STOP: not verified; run nothing from $work"; fi
 ```
 
-**Check:** `Verified OK`, then `deploy-bundle.tar.gz: OK`.
+**Check:** `Verified OK`, `deploy-bundle.tar.gz: OK`, and the last line says `VERIFIED: release prod-…`. On `STOP`, run nothing and find out why (a download, the signature or the bundle hash).
 
 ## 2. Run bootstrap
 
+From `/root/rws-release`, as root:
+
 ```bash
-sudo bundle/deploy/host/bootstrap.sh --dry-run   # what it would change
-sudo bundle/deploy/host/bootstrap.sh             # do it
-sudo bundle/deploy/host/bootstrap.sh             # again: must report "0 change(s)"
+bundle/deploy/host/bootstrap.sh --dry-run   # what it would change
+bundle/deploy/host/bootstrap.sh             # do it
+bundle/deploy/host/bootstrap.sh             # again: must report "0 change(s)"
 ```
 
 What it does:
 
 - **Access:**
-  - it creates `ops` with NOPASSWD sudo, copying root's `authorized_keys` if `ops` has none; it stops rather than lock you out;
+  - it creates `ops` with NOPASSWD sudo. If `ops` has no key, it copies the `authorized_keys` of the user who ran `sudo` (else root's), without any `command="…"` key (cloud images use one to say "log in as …"); it stops rather than lock you out;
   - SSH becomes keys-only, `PermitRootLogin no`, `AllowUsers ops`.
 - **System:**
   - UTC, chrony, AppArmor required;
@@ -85,27 +87,14 @@ What it does:
 - log in again **in a second terminal** as `ops` before closing the first;
 - `sudo systemctl is-active rws-firewall docker chrony`;
 - `sudo nft list table inet rws | head`;
-- `docker version --format '{{.Server.Version}}'` (29.8.1);
+- `sudo docker version --format '{{.Server.Version}}'` (29.8.1);
 - `systemctl list-timers 'rws-*'`.
 
-## 3. Fill `/etc/rws/rws.env`
+## 3. Put the secrets in place (A7)
 
-`sudoedit /etc/rws/rws.env`. These are plain `KEY=VALUE` lines, without quotes:
+The secrets come **before** `rws.env` is complete: from then on `rws-update.timer` deploys within 5 minutes. (Capture and the watchdog read the ping key before every ping, so a key filled in later still takes effect.)
 
-| Key | Value |
-|---|---|
-| `RWS_DOMAIN` | the domain of A2/A4, e.g. `rivierstanden.nl` |
-| `RWS_CONTACT_EMAIL` | `contact@<domain>` (in every provider request's User-Agent) |
-| `RWS_PUBLIC_IPV4`, `RWS_PUBLIC_IPV6` | detected by bootstrap. Check them against A4's DNS records: the site is published **only** on these addresses |
-| `RWS_RESTIC_REPOSITORY` | `s3:https://<endpoint>/<bucket>/restic` |
-| `RWS_S3_REGION` | the provider's region (e.g. `fr-par`, `eu-central-1`) |
-| `RWS_BACKUP` | leave `off` until step 6 |
-
-**Check:** `sudo rws-update --dry-run` no longer says "rws.env is not complete".
-
-## 4. Put the secrets in place (A7)
-
-Use `sudoedit /etc/rws/secrets/<name>` for each file, then **run `bootstrap.sh` again**: it resets every secret to `root:<gid> 0440`.
+Use `sudoedit /etc/rws/secrets/<name>` for each file, then **run `bootstrap.sh` again** (`sudo /usr/local/lib/rws/deploy/host/bootstrap.sh`): it resets every secret to `root:<gid> 0440`.
 
 | File | Content | Read by |
 |---|---|---|
@@ -119,12 +108,28 @@ Compose mounts a file secret with its **host** owner and mode (it ignores `uid`,
 
 **Check:** `sudo stat -c '%n %a %U:%G' /etc/rws/secrets/*` shows every file `440 root:rws-*`.
 
+## 4. Fill `/etc/rws/rws.env`
+
+`sudoedit /etc/rws/rws.env`. These are plain `KEY=VALUE` lines, without quotes:
+
+| Key | Value |
+|---|---|
+| `RWS_DOMAIN` | the domain of A2/A4, e.g. `rivierstanden.nl` |
+| `RWS_CONTACT_EMAIL` | `contact@<domain>` (in every provider request's User-Agent) |
+| `RWS_PUBLIC_IPV4`, `RWS_PUBLIC_IPV6` | detected by bootstrap. Check them against A4's DNS records: the site is published **only** on these addresses |
+| `RWS_RESTIC_REPOSITORY` | `s3:https://<endpoint>/<bucket>/restic` (port 443 only: the firewall allows no other) |
+| `RWS_S3_REGION` | the provider's region (e.g. `fr-par`, `eu-central-1`) |
+| `RWS_BACKUP` | leave `off` until step 6 |
+
+**Check:** `sudo rws-update --dry-run` no longer says "rws.env is not complete".
+
 ## 5. The first deploy
 
-Either wait up to 5 minutes for `rws-update.timer`, or run it now:
+Either wait up to 5 minutes for `rws-update.timer`, or run it now, as `ops`, with the tag that step 1 verified:
 
 ```bash
-sudo rws-deploy "$(grep -o '"tag":"[^"]*"' "$work/release-manifest.json" | cut -d'"' -f4)"
+tag=$(sudo grep -o '"tag": *"prod-[0-9]\{8\}T[0-9]\{6\}Z"' /root/rws-release/release-manifest.json | grep -o 'prod-[0-9]\{8\}T[0-9]\{6\}Z')
+sudo rws-deploy "$tag"
 ```
 
 It verifies the manifest and all three images, pulls by digest, runs `up -d`, and smoke-tests: `/healthz` 200 over real TLS and a fresh `capture.json`. Caddy gets its Let's Encrypt certificate in the first minute, so A4 must be in place. If the first deploy fails, it says why and leaves the containers running. Fix the cause (DNS, B4, `rws.env`), then run `rws-deploy <tag>` again.
@@ -133,7 +138,7 @@ It verifies the manifest and all three images, pulls by digest, runs `up -d`, an
 
 - `sudo docker compose -p rws ps`: caddy, capture and watchdog show `healthy`;
 - `curl -s https://<domain>/status/capture.json | head -c 300`;
-- `cat /var/lib/rws/current`.
+- `sudo cat /var/lib/rws/current`.
 
 ## 6. Backups (A5)
 
@@ -148,7 +153,7 @@ sudo /usr/local/lib/rws/deploy/tests/object-lock-prune.sh   # the VPS key cannot
 **Check:**
 
 - `curl -s https://<domain>/status/ops.json` shows `last_backup` and `"drill":{"…","sampled":100,"matched":100}`;
-- `object-lock-prune.sh` prints three PASS lines.
+- `object-lock-prune.sh` prints five PASS lines.
 
 ## 7. Healthchecks (A6), from your workstation
 
@@ -171,7 +176,7 @@ Every line must be PASS. IPv6 is N/A only if your own machine has no IPv6. Then 
 
 ## Later: a new release with changed host files
 
-`rws-update` deploys new images and `compose.yaml` by itself, but it never replaces the host scripts, units or firewall. When a release changes them, its log says `release … brings changed host files: run …/bootstrap.sh`. Run that bootstrap (it sits inside the verified release directory):
+`rws-update` deploys new images and `compose.yaml` by itself, but it never replaces the host scripts, units, firewall or any other file of `deploy/`. When the running release brings different ones, every `rws-update` run pings `update` `/fail` with `host_files_changed`, and its log says `release … brings changed host files: run …/bootstrap.sh`. Run that bootstrap (it sits inside the verified release directory); the next run is green again:
 
 ```bash
 sudo /var/lib/rws/releases/<tag>/deploy/host/bootstrap.sh --dry-run
