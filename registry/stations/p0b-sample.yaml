@@ -1,0 +1,105 @@
+# Station registry: the P0b sample of 5 rows (schema: packages/contracts/src/stations.ts).
+# Taken from catalogue §3; a field the catalogue does not state is null, never guessed.
+# P2 (DE, NL) and P5 (FR, CH, LU, BE) replace these rows with the full sets and the names
+# exactly as each agency publishes them. Owner-audience rows identify the gauge only
+# (invariant 11): no datum, gauge zero, value, threshold or forecast.
+stations:
+  - id: nl.rws.lobith.bovenrijn.tolkamer
+    source: NL-1
+    provider_code: lobith.bovenrijn.tolkamer
+    name: Lobith
+    water_name: null
+    country: NL
+    lon: 6.1024
+    lat: 51.8495
+    quantity: H
+    river: rhine
+    km: { system: Rhein-km (PEGELONLINE), value: 862.0 }
+    flags: { tidal: null, impounded: null }
+    expected_threshold_source: NL-4
+    expected_forecast_source: NL-1
+    licence_gate: open
+    first_release: true
+    audience: public
+    datum: NAP
+    gauge_zero: []
+
+  - id: de.wsv.25700100
+    source: DE-1
+    provider_code: "25700100"
+    name: Kaub
+    water_name: RHEIN
+    country: DE
+    lon: null
+    lat: null
+    quantity: H
+    river: rhine
+    km: { system: Rhein-km (PEGELONLINE), value: 546.23 }
+    flags: { tidal: null, impounded: null }
+    expected_threshold_source: DE-1
+    expected_forecast_source: DE-2
+    licence_gate: open
+    first_release: true
+    audience: public
+    datum: NHN
+    gauge_zero:
+      - { value_m: 67.669, datum: NHN, valid_from: null, valid_to: null }
+
+  - id: ch.bafu.2289
+    source: CH-1
+    provider_code: "2289"
+    name: Basel, Rheinhalle
+    water_name: Rhein
+    country: CH
+    lon: 7.61668
+    lat: 47.55943
+    quantity: Q
+    river: rhine
+    km: { system: Rhein-km (PEGELONLINE), value: 164.3 }
+    flags: { tidal: null, impounded: null }
+    expected_threshold_source: CH-2
+    expected_forecast_source: CH-4
+    licence_gate: open
+    first_release: true
+    audience: public
+    datum: null
+    gauge_zero: []
+
+  - id: fr.sandre.B720000001
+    source: FR-1
+    provider_code: B720000001
+    name: Chooz Trou du Diable
+    water_name: null
+    country: FR
+    lon: null
+    lat: null
+    quantity: H
+    river: meuse
+    km: null
+    flags: { tidal: null, impounded: null }
+    expected_threshold_source: FR-5
+    expected_forecast_source: FR-4
+    licence_gate: open
+    first_release: true
+    audience: public
+    datum: IGN69
+    gauge_zero:
+      - { value_m: 101.34, datum: IGN69, valid_from: null, valid_to: null }
+
+  - id: be.spw.7102
+    source: BE-3
+    provider_code: "7102"
+    name: Liège
+    water_name: null
+    country: BE
+    lon: 5.5772
+    lat: 50.6126
+    quantity: H
+    river: meuse
+    km: null
+    flags: { tidal: null, impounded: null }
+    expected_threshold_source: BE-3
+    expected_forecast_source: null
+    licence_gate: owner-only
+    first_release: false
+    audience: owner

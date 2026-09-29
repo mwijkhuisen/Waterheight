@@ -1,0 +1,1310 @@
+# Sources: every §1a ID once, plus the owner canary. Audience per catalogue §0.8 and ADR-0017.
+# Keyed by the source catalogue (docs/sources/SOURCE-CATALOGUE.md). Changes need owner review
+# (CODEOWNERS); an audience or channel change also needs registry/permissions/<ID>.md (invariant 8).
+# Validated by packages/contracts (schema) and packages/contracts/test/registry.test.ts.
+
+sources:
+  - id: NL-1
+    provider: rws
+    name: Rijkswaterstaat – WaterWebservices REST (WADAR, "DDAPI20")
+    country: NL
+    licence_text: 'CC0: "Op de inhoud van de WaterWebservices is de Creative Commons zero verklaring (CC0) van toepassing…"'
+    licence_kind: cc0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Waterstanden en afvoeren: Rijkswaterstaat – WaterWebservices (CC0), https://rijkswaterstaatdata.nl/waterdata/"
+    attribution_lang: nl
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series:
+      - key: canary-withheld
+        canary: true
+        audience: "off"
+        reason: "Withheld canary (PHASES P2, P9): a synthetic series with the constant 123456.789 on a public source. It must appear in no output, public or owner, and is hidden from every UI."
+  - id: NL-2
+    provider: rws
+    name: RWS – DDAPI20 OGC WFS/WMS (GeoServer)
+    country: NL
+    licence_text: CC0; WFS Fees NONE, AccessConstraints NONE; NGR "Geen beperkingen", HVD dataset
+    licence_kind: cc0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Waterstanden en afvoeren: Rijkswaterstaat – WaterWebservices (CC0), https://rijkswaterstaatdata.nl/waterdata/"
+    attribution_lang: nl
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-3
+    provider: rws
+    name: waterinfo.rws.nl internal JSON
+    country: NL
+    licence_text: Undocumented, no terms
+    licence_kind: unlicensed
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-4
+    provider: rws
+    name: RWS Waterinfo legend-class spreadsheet (display classes, not alert levels)
+    country: NL
+    licence_text: As NL-1; the file itself says "hier kunnen geen rechten aan worden ontleend"
+    licence_kind: cc0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Waterstanden en afvoeren: Rijkswaterstaat – WaterWebservices (CC0), https://rijkswaterstaatdata.nl/waterdata/"
+    attribution_lang: nl
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-5
+    provider: wrij
+    name: Waterschap Rijn en IJssel – Nexus ArcGIS FeatureServer
+    country: NL
+    licence_text: None stated; described as an internal dashboard layer
+    licence_kind: unlicensed
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-6
+    provider: nl-waterboards
+    name: "Water boards: Vechtstromen, Waterschap Limburg (waterstandlimburg.nl returned 403), WRIJ portal (waterdata.wrij.nl unreachable)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-1
+    provider: wsv
+    name: WSV/ITZBund – PEGELONLINE REST API v2
+    country: DE (federal waterways)
+    licence_text: 'DL-DE→Zero-2.0 (terms "Stand: 21.05.2024"): "Jede Nutzung ist ohne Einschränkungen oder Bedingungen zulässig."'
+    licence_kind: dl-de-zero-2.0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Pegeldaten: WSV/GDWS via PEGELONLINE (pegelonline.wsv.de), Datenlizenz Deutschland – Zero – Version 2.0 (https://www.govdata.de/dl-de/zero-2-0). Ungeprüfte Rohdaten."
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-2
+    provider: bfg
+    name: BfG forecasts inside PEGELONLINE (WV)
+    country: DE (Rhine)
+    licence_text: "Ambiguous: DL-DE Zero (PEGELONLINE) or BfG terms. Treat it as BfG."
+    licence_kind: bfg-terms
+    audience: owner
+    capture_enabled: true
+    permission_required: false
+    private_basis:
+      clause: '"Der Nutzer / die Nutzerin verpflichtet sich, in Veröffentlichungen, die auf der Grundlage der bereitgestellten Daten entstanden sind, die BfG als Datenquelle zu nennen und der BfG ein entsprechendes Belegexemplar unentgeltlich zur Verfügung zu stellen."'
+      url: https://6wochenvorhersage.bafg.de/
+      retrieved: "2026-09-23"
+    display: true
+    api: true
+    bulk_export: false
+    history_export: true
+    attribution_text: "Wasserstandsvorhersage: Bundesanstalt für Gewässerkunde (BfG)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-3
+    provider: bfg
+    name: BfG CSV forecasts
+    country: DE (Rhine)
+    licence_text: BfG terms (credit plus free copy)
+    licence_kind: bfg-terms
+    audience: owner
+    capture_enabled: true
+    permission_required: false
+    private_basis:
+      clause: '"Der Nutzer / die Nutzerin verpflichtet sich, in Veröffentlichungen, die auf der Grundlage der bereitgestellten Daten entstanden sind, die BfG als Datenquelle zu nennen und der BfG ein entsprechendes Belegexemplar unentgeltlich zur Verfügung zu stellen."'
+      url: https://6wochenvorhersage.bafg.de/
+      retrieved: "2026-09-23"
+    display: true
+    api: true
+    bulk_export: false
+    history_export: true
+    attribution_text: "Wasserstandsvorhersage: Bundesanstalt für Gewässerkunde (BfG)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-4
+    provider: wsv
+    name: PEGELONLINE HyDAS API (beta)
+    country: DE
+    licence_text: DL-DE→Zero-2.0 (in the meta block)
+    licence_kind: dl-de-zero-2.0
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Pegeldaten: WSV/GDWS via PEGELONLINE (pegelonline.wsv.de), Datenlizenz Deutschland – Zero – Version 2.0 (https://www.govdata.de/dl-de/zero-2-0). Ungeprüfte Rohdaten."
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-5
+    provider: wsv
+    name: PEGELONLINE long-term raw download (web form)
+    country: DE
+    licence_text: DL-DE→Zero-2.0 (the zip includes nutzungsbedingungen.txt)
+    licence_kind: dl-de-zero-2.0
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Pegeldaten: WSV/GDWS via PEGELONLINE (pegelonline.wsv.de), Datenlizenz Deutschland – Zero – Version 2.0 (https://www.govdata.de/dl-de/zero-2-0). Ungeprüfte Rohdaten."
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-6
+    provider: lhp
+    name: Länderübergreifendes Hochwasserportal – LHP PublicAPI
+    country: DE (all states)
+    licence_text: CC BY 4.0
+    licence_kind: cc-by
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Datenquelle: www.hochwasserzentralen.de"
+    attribution_lang: de
+    attribution_url: https://www.hochwasserzentralen.de
+    attribution_required: true
+    attribution_variants:
+      - lang: de
+        text: "Quelle: Länderübergreifendes Hochwasserportal (LHP)"
+    needs_last_updated: true
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-7
+    provider: lanuk
+    name: LANUK (formerly LANUV) – Hochwasserportal.NRW official downloads plus WISKI-Web JSON
+    country: DE-NW
+    licence_text: DL-DE→Zero-2.0 (portal Downloads page and GovData dl-zero-de/2.0). An older "kommerzielle Nutzung … Nutzungsvereinbarung" paragraph also appears on the page.
+    licence_kind: dl-de-zero-2.0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Datenquelle: LANUK NRW, Hochwasserportal.NRW"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-8
+    provider: lanuk
+    name: opengeodata.nrw.de – hygon (daily mirror) and hydro (verified archive)
+    country: DE-NW
+    licence_text: DL-DE→Zero-2.0
+    licence_kind: dl-de-zero-2.0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Datenquelle: LANUK NRW, Hochwasserportal.NRW"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-9
+    provider: nlwkn
+    name: NLWKN Pegelonline public REST (Azure API Management)
+    country: DE-NI
+    licence_text: 'Conflict. Manual: "Die Quelle www.pegelonline.nlwkn.niedersachsen.de muss bei Verwendung der Services immer angegeben werden." Impressum: "Es ist weder gestattet, die bereitgestellten Daten … zu kommerziellen Zwecken zu nutzen, … an Dritte weiterzugeben oder sie in elektronische Systeme einzuspeichern." Footer: "Vervielfältigung nur mit unserer Genehmigung".'
+    licence_kind: provider-terms
+    audience: "off"
+    capture_enabled: false
+    permission_required: true
+    private_basis: null
+    display: true
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: www.pegelonline.nlwkn.niedersachsen.de
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-10
+    provider: lfu-rlp
+    name: LfU Rheinland-Pfalz – hochwasser.rlp.de SPA API
+    country: DE-RP
+    licence_text: 'Impressum: "…dürfen nur mit Zustimmung des LfU verändert, vervielfältigt … Als Quelle ist das LfU zu nennen, soweit möglich mit Angabe des Bearbeitungsdatums."'
+    licence_kind: provider-terms
+    audience: "off"
+    capture_enabled: false
+    permission_required: true
+    private_basis: null
+    display: true
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: LfU
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: true
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-11
+    provider: hlnug
+    name: HLNUG – WISKI-Web JSON
+    country: DE-HE
+    licence_text: 'Download area CC BY 4.0: „Hessisches Landesamt für Naturschutz, Umwelt und Geologie (HLNUG)", plus a licence link and a note of changes'
+    licence_kind: cc-by
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: Hessisches Landesamt für Naturschutz, Umwelt und Geologie (HLNUG)
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-12
+    provider: lubw
+    name: LUBW HVZ – JavaScript data arrays
+    country: DE-BW
+    licence_text: 'Impressum: consent required; "Als Quelle ist die LUBW zu nennen."'
+    licence_kind: provider-terms
+    audience: "off"
+    capture_enabled: false
+    permission_required: true
+    private_basis: null
+    display: true
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: LUBW
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-13
+    provider: lfu-bayern
+    name: LfU Bayern – GKD / HND
+    country: DE-BY
+    licence_text: 'GKD download: CC BY 4.0, contradicted by the Impressum ("Veröffentlichung nur mit unserer Einwilligung"). LfU WMS: "CC BY-SA 4.0; Datenquelle: Bayerisches Landesamt für Umwelt, www.lfu.bayern.de"'
+    licence_kind: provider-terms
+    audience: "off"
+    capture_enabled: false
+    permission_required: true
+    private_basis: null
+    display: true
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: "CC BY-SA 4.0; Datenquelle: Bayerisches Landesamt für Umwelt, www.lfu.bayern.de"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-14
+    provider: lua-saarland
+    name: LUA Saarland
+    country: DE-SL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-15
+    provider: wver
+    name: Wasserverband Eifel-Rur (WVER)
+    country: DE-NW (Rur)
+    licence_text: '"Ungeprüfte Rohdaten | Lizenzhinweis: CC BY-SA 4.0 | Längere Zeiträume auf Anfrage"'
+    licence_kind: cc-by-sa-4.0
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-16
+    provider: nrw-wasserverbaende
+    name: Niersverband (PDF charts only); Ruhrverband (HTML only)
+    country: DE-NW
+    licence_text: Not stated
+    licence_kind: unlicensed
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: DE-17
+    provider: elwis
+    name: ELWIS
+    country: DE
+    licence_text: '"…solange der Inhalt unverändert bleibt und als Quelle www.elwis.de angegeben wird."'
+    licence_kind: provider-terms
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: www.elwis.de
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: BE-1
+    provider: hic
+    name: Waterbouwkundig Laboratorium – HIC KiWIS (navigable rivers, tidal Zeeschelde, Grensmaas)
+    country: BE-Flanders
+    licence_text: 'Not an open licence. English disclaimer: "intended for information and non-commercial purposes"; download "for personal use"; "The HIC reserve all intellectual property rights". The Dutch version says only "informatieve doeleinden".'
+    licence_kind: provider-terms
+    audience: "off"
+    capture_enabled: false
+    permission_required: true
+    private_basis: null
+    display: true
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: "Flanders Hydraulics Research. Measurements and forecasts from the database of the Hydrological Information Centre [DATA]. [date of retrieval: dd/mm/jjjj]."
+    attribution_lang: en
+    attribution_url: null
+    attribution_required: true
+    attribution_variants:
+      - lang: nl
+        text: "Waterbouwkundig Laboratorium. Metingen en voorspellingen afkomstig uit de databank van het Hydrologisch InformatieCentrum [DATA]. [datum van bevraging: dd/mm/jjjj]."
+    needs_last_updated: false
+    needs_retrieval_date: true
+    logo_allowed: null
+    series: []
+  - id: BE-2
+    provider: vmm
+    name: VMM KiWIS (non-navigable rivers)
+    country: BE-Flanders
+    licence_text: Modellicentie Gratis Hergebruik v1.0 (commercial reuse allowed, unlimited period)
+    licence_kind: modellicentie-1.0
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Bron: VMM – waterinfo.vlaanderen.be (Modellicentie Gratis Hergebruik v1.0)"
+    attribution_lang: nl
+    attribution_url: null
+    attribution_required: true
+    attribution_variants:
+      - lang: nl
+        text: bevat overheidsinformatie, verkregen onder de modellicentie voor gratis hergebruik Vlaanderen v1.0
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: BE-3
+    provider: spw
+    name: SPW – hydrometrie.wallonie.be KiWIS (DGH "WACONDAH" + DCENN "AQUALIM")
+    country: BE-Wallonia
+    licence_text: 'Redistribution to the public forbidden without written consent (quoted in §0.2). Metawal: "ne peut pas… publier les données sur Internet via un service web". Third-party claims of "CC BY 4.0" are UNVERIFIED and contradicted.'
+    licence_kind: provider-terms
+    audience: owner
+    capture_enabled: true
+    permission_required: false
+    private_basis:
+      clause: "\"La reproduction des données figurant sur le site… est autorisée sans accord préalable. L'utilisateur indique la mention « Sources des données : Service public de Wallonie »… Le SPW est seul habilité à distribuer les données. Sauf accord préalable et écrit du SPW, il est interdit à l'utilisateur de fournir les données à un tiers sous quelque forme que ce soit - fichiers, site web, webservice, etc - ou de diffuser celles-ci au public.\" Metawal: \"L'Utilisateur ne peut pas redistribuer les données à un tiers ni publier les données sur Internet via un service web.\""
+      url: https://hydrometrie.wallonie.be/mentions-legales.html
+      retrieved: "2026-09-23"
+    display: true
+    api: true
+    bulk_export: false
+    history_export: true
+    attribution_text: "Sources des données : Service public de Wallonie (SPW)"
+    attribution_lang: fr
+    attribution_url: https://hydrometrie.wallonie.be
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: BE-4
+    provider: spw
+    name: SPW INSPIRE OGC API Features (station locations)
+    country: BE-Wallonia
+    licence_text: CC-BY 4.0
+    licence_kind: cc-by
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: BE-5
+    provider: hydria
+    name: hydria.be (flowbru.be redirects to it)
+    country: BE-Brussels
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: FR-1
+    provider: hubeau
+    name: Hub'Eau Hydrométrie API v2 (from PHyC / SCV)
+    country: FR
+    licence_text: "Licence Ouverte / Etalab 2.0 (CGU: \"…L'utilisateur de ces données doit néanmoins veiller à citer l'auteur des Jeux de données\")"
+    licence_kind: etalab-2.0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Données hydrométriques : Hub'Eau / SCV – réseau Vigicrues (PHyC), Licence Ouverte Etalab 2.0 – https://hubeau.eaufrance.fr/page/api-hydrometrie"
+    attribution_lang: fr
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: true
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: FR-2
+    provider: hubeau
+    name: Hub'Eau obs_elab (daily and monthly aggregates)
+    country: FR
+    licence_text: As FR-1
+    licence_kind: etalab-2.0
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Données hydrométriques : Hub'Eau / SCV – réseau Vigicrues (PHyC), Licence Ouverte Etalab 2.0 – https://hubeau.eaufrance.fr/page/api-hydrometrie"
+    attribution_lang: fr
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: true
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: FR-3
+    provider: vigicrues
+    name: Vigicrues observations.json
+    country: FR
+    licence_text: Etalab 2.0 plus "…que leurs sources (© VIGICRUES) et la date de leur dernière mise à jour soient mentionnées"
+    licence_kind: etalab-2.0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Source : © VIGICRUES – www.vigicrues.gouv.fr, [date de mise à jour], Licence Ouverte Etalab 2.0"
+    attribution_lang: fr
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: true
+    needs_retrieval_date: false
+    logo_allowed: false
+    series: []
+  - id: FR-4
+    provider: vigicrues
+    name: Vigicrues forecasts
+    country: FR
+    licence_text: As FR-3
+    licence_kind: etalab-2.0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Source : © VIGICRUES – www.vigicrues.gouv.fr, [date de mise à jour], Licence Ouverte Etalab 2.0"
+    attribution_lang: fr
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: true
+    needs_retrieval_date: false
+    logo_allowed: false
+    series: []
+  - id: FR-5
+    provider: vigicrues
+    name: Vigicrues vigilance and reference data
+    country: FR
+    licence_text: As FR-3
+    licence_kind: etalab-2.0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Source : © VIGICRUES – www.vigicrues.gouv.fr, [date de mise à jour], Licence Ouverte Etalab 2.0"
+    attribution_lang: fr
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: true
+    needs_retrieval_date: false
+    logo_allowed: false
+    series: []
+  - id: FR-6
+    provider: hydroportail
+    name: HydroPortail
+    country: FR
+    licence_text: UNVERIFIED
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: LU-1
+    provider: age
+    name: AGE – Water-Levels-LocalTime.csv (listed on data.public.lu)
+    country: LU
+    licence_text: CC0 (data.public.lu "Niveau d'eau", cc-zero)
+    licence_kind: cc0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Source: Administration de la gestion de l'eau (AGE), Luxembourg – inondations.lu; Moselle stations: Service de la navigation"
+    attribution_lang: en
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series:
+      - key: bollendorf
+        audience: "off"
+        reason: "LfU RLP-operated gauge inside the CC0 file: withheld in both audiences until C4 or C11 (catalogue §0.8 notes)."
+      - key: gemuend
+        audience: "off"
+        reason: "LfU RLP-operated gauge (Gemünd) inside the CC0 file: withheld in both audiences until C4 or C11 (catalogue §0.8 notes)."
+  - id: LU-2
+    provider: age
+    name: AGE per-station JSON
+    country: LU
+    licence_text: "Website CGU (Aspects légaux, 05.08.2026): \"Sauf indication contraire… aucune reproduction… n'est permise sans l'autorisation écrite préalable\""
+    licence_kind: provider-terms
+    audience: owner
+    capture_enabled: true
+    permission_required: false
+    private_basis:
+      clause: "\"aucune reproduction des informations ou Services, totale ou partielle, sous quelque forme que ce soit et par quelque moyen que ce soit, n'est permise sans l'autorisation écrite préalable de la Bibliothèque nationale du Luxembourg. Sauf indication contraire, l'usager est autorisé à consulter, télécharger et imprimer les documents et informations disponibles aux conditions suivantes : Les documents ne peuvent être utilisés qu'à titre personnel, pour information et dans un cadre strictement privé ; Les documents et informations ne peuvent être modifiés de quelque manière que ce soit ; Les documents et informations ne peuvent être diffusés en dehors du site.\""
+      url: https://inondations.public.lu/fr/support/aspects-legaux.html
+      retrieved: "2026-09-23"
+    display: true
+    api: true
+    bulk_export: false
+    history_export: true
+    attribution_text: "Source: Administration de la gestion de l'eau (AGE), Luxembourg – inondations.lu; Moselle stations: Service de la navigation"
+    attribution_lang: en
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series:
+      - key: bollendorf
+        audience: "off"
+        reason: "LfU RLP-origin file Bollendorf.json on the AGE site: not fetched until C4 or C11 (catalogue §0.8 notes)."
+      - key: gemuend-our
+        audience: "off"
+        reason: "LfU RLP-origin file Gemünd_Our.json on the AGE site: not fetched until C4 or C11 (catalogue §0.8 notes)."
+  - id: LU-3
+    provider: age
+    name: AGE forecasts
+    country: LU
+    licence_text: As LU-2
+    licence_kind: provider-terms
+    audience: owner
+    capture_enabled: true
+    permission_required: false
+    private_basis:
+      clause: "\"aucune reproduction des informations ou Services, totale ou partielle, sous quelque forme que ce soit et par quelque moyen que ce soit, n'est permise sans l'autorisation écrite préalable de la Bibliothèque nationale du Luxembourg. Sauf indication contraire, l'usager est autorisé à consulter, télécharger et imprimer les documents et informations disponibles aux conditions suivantes : Les documents ne peuvent être utilisés qu'à titre personnel, pour information et dans un cadre strictement privé ; Les documents et informations ne peuvent être modifiés de quelque manière que ce soit ; Les documents et informations ne peuvent être diffusés en dehors du site.\""
+      url: https://inondations.public.lu/fr/support/aspects-legaux.html
+      retrieved: "2026-09-23"
+    display: true
+    api: true
+    bulk_export: false
+    history_export: true
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series:
+      - key: perl
+        audience: "off"
+        reason: "Moselle forecast computed by LfU RLP: not fetched until C4 or C11 (catalogue §0.8 notes)."
+      - key: stadtbredimus
+        audience: "off"
+        reason: "Moselle forecast computed by LfU RLP: not fetched until C4 or C11 (catalogue §0.8 notes)."
+      - key: wasserbillig
+        audience: "off"
+        reason: "Moselle forecast computed by LfU RLP: not fetched until C4 or C11 (catalogue §0.8 notes)."
+  - id: LU-4
+    provider: age
+    name: AGE station pages (data-to-json)
+    country: LU
+    licence_text: As LU-2
+    licence_kind: provider-terms
+    audience: owner
+    capture_enabled: true
+    permission_required: false
+    private_basis:
+      clause: "\"aucune reproduction des informations ou Services, totale ou partielle, sous quelque forme que ce soit et par quelque moyen que ce soit, n'est permise sans l'autorisation écrite préalable de la Bibliothèque nationale du Luxembourg. Sauf indication contraire, l'usager est autorisé à consulter, télécharger et imprimer les documents et informations disponibles aux conditions suivantes : Les documents ne peuvent être utilisés qu'à titre personnel, pour information et dans un cadre strictement privé ; Les documents et informations ne peuvent être modifiés de quelque manière que ce soit ; Les documents et informations ne peuvent être diffusés en dehors du site.\""
+      url: https://inondations.public.lu/fr/support/aspects-legaux.html
+      retrieved: "2026-09-23"
+    display: true
+    api: true
+    bulk_export: false
+    history_export: true
+    attribution_text: "Source: Administration de la gestion de l'eau (AGE), Luxembourg – inondations.lu; Moselle stations: Service de la navigation"
+    attribution_lang: en
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: LU-5
+    provider: lualert
+    name: LU-Alert CAP-LU dumps on data.public.lu
+    country: LU
+    licence_text: "CC BY: \"obligation d'indiquer la source de l'alerte, à savoir LU-Alert\""
+    licence_kind: cc-by
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: LU-Alert
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: true
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: LU-6
+    provider: geoportail-lu
+    name: geoportail.lu station geometry and river network
+    country: LU
+    licence_text: CC0
+    licence_kind: cc0
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Source: Administration de la gestion de l'eau (AGE), Luxembourg – inondations.lu; Moselle stations: Service de la navigation"
+    attribution_lang: en
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: LU-7
+    provider: age
+    name: AGE validated archive
+    country: LU
+    licence_text: UNVERIFIED
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: CH-1
+    provider: bafu
+    name: BAFU – LINDAS SPARQL cubes river and lake
+    country: CH
+    licence_text: 'BAFU 2020 conditions: "Freie Nutzung"; "Die Angabe der Quelle wird empfohlen". 2019 conditions §6: download "nicht häufiger als alle 10 Minuten".'
+    licence_kind: ch-open-use
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants:
+      - lang: en
+        text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
+      - lang: nl
+        text: "Zwitserse riviergegevens: Bundesamt für Umwelt BAFU, afdeling Hydrologie (ruwe, ongecontroleerde gegevens; opgehaald <datum>)"
+    needs_last_updated: false
+    needs_retrieval_date: true
+    logo_allowed: null
+    series: []
+  - id: CH-2
+    provider: bafu
+    name: hydrodaten.admin.ch live GeoJSON
+    country: CH
+    licence_text: BAFU terms
+    licence_kind: ch-open-use
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants:
+      - lang: en
+        text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
+      - lang: nl
+        text: "Zwitserse riviergegevens: Bundesamt für Umwelt BAFU, afdeling Hydrologie (ruwe, ongecontroleerde gegevens; opgehaald <datum>)"
+    needs_last_updated: false
+    needs_retrieval_date: true
+    logo_allowed: null
+    series: []
+  - id: CH-3
+    provider: bafu
+    name: hydrodaten plot JSON (7 and 40 days)
+    country: CH
+    licence_text: BAFU terms
+    licence_kind: ch-open-use
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants:
+      - lang: en
+        text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
+      - lang: nl
+        text: "Zwitserse riviergegevens: Bundesamt für Umwelt BAFU, afdeling Hydrologie (ruwe, ongecontroleerde gegevens; opgehaald <datum>)"
+    needs_last_updated: false
+    needs_retrieval_date: true
+    logo_allowed: null
+    series: []
+  - id: CH-4
+    provider: bafu
+    name: hydrodaten forecast JSON
+    country: CH
+    licence_text: "2019 §8: forecasts \"dürfen frei verwendet werden\". Explaining how to read them is recommended. Warnings on small and medium rivers are the cantons' responsibility."
+    licence_kind: ch-open-use
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants:
+      - lang: en
+        text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
+      - lang: nl
+        text: "Zwitserse riviergegevens: Bundesamt für Umwelt BAFU, afdeling Hydrologie (ruwe, ongecontroleerde gegevens; opgehaald <datum>)"
+    needs_last_updated: false
+    needs_retrieval_date: true
+    logo_allowed: null
+    series: []
+  - id: CH-5
+    provider: bafu
+    name: hydrodaten warning sections
+    country: CH
+    licence_text: BAFU terms
+    licence_kind: ch-open-use
+    audience: public
+    capture_enabled: true
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants:
+      - lang: en
+        text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
+      - lang: nl
+        text: "Zwitserse riviergegevens: Bundesamt für Umwelt BAFU, afdeling Hydrologie (ruwe, ongecontroleerde gegevens; opgehaald <datum>)"
+    needs_last_updated: false
+    needs_retrieval_date: true
+    logo_allowed: null
+    series: []
+  - id: CH-6
+    provider: bafu
+    name: geo.admin.ch open-data GeoJSON (classes only)
+    country: CH
+    licence_text: opendata.swiss "Open use" (source recommended)
+    licence_kind: ch-open-use
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants:
+      - lang: en
+        text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
+      - lang: nl
+        text: "Zwitserse riviergegevens: Bundesamt für Umwelt BAFU, afdeling Hydrologie (ruwe, ongecontroleerde gegevens; opgehaald <datum>)"
+    needs_last_updated: false
+    needs_retrieval_date: true
+    logo_allowed: null
+    series: []
+  - id: CH-7
+    provider: bafu
+    name: STAC station and catchment metadata
+    country: CH
+    licence_text: 'STAC license: proprietary, linked to opendata.swiss "terms_by" (source required)'
+    licence_kind: ch-open-use
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: true
+    attribution_variants:
+      - lang: en
+        text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
+      - lang: nl
+        text: "Zwitserse riviergegevens: Bundesamt für Umwelt BAFU, afdeling Hydrologie (ruwe, ongecontroleerde gegevens; opgehaald <datum>)"
+    needs_last_updated: false
+    needs_retrieval_date: true
+    logo_allowed: null
+    series: []
+  - id: CH-8
+    provider: bafu
+    name: BAFU Datenservice Hydrologie (orders)
+    country: CH
+    licence_text: Free since 2020
+    licence_kind: ch-open-use
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
+    attribution_lang: de
+    attribution_url: null
+    attribution_required: false
+    attribution_variants:
+      - lang: en
+        text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
+      - lang: nl
+        text: "Zwitserse riviergegevens: Bundesamt für Umwelt BAFU, afdeling Hydrologie (ruwe, ongecontroleerde gegevens; opgehaald <datum>)"
+    needs_last_updated: false
+    needs_retrieval_date: true
+    logo_allowed: null
+    series: []
+  - id: CH-9
+    provider: basel-stadt
+    name: Kanton Basel-Stadt – data.bs.ch
+    country: CH
+    licence_text: opendata.swiss "Open use"
+    licence_kind: ch-open-use
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: true
+    api: true
+    bulk_export: true
+    history_export: true
+    attribution_text: Kanton Basel-Stadt, data.bs.ch
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: CH-10
+    provider: existenz
+    name: existenz.ch (third-party mirror)
+    country: CH
+    licence_text: Not official
+    licence_kind: unlicensed
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: CH-11
+    provider: opendata-swiss
+    name: opendata.swiss CKAN (metadata)
+    country: CH
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: CANARY-OWNER
+    provider: canary
+    name: Owner canary (synthetic test source, A§9.3)
+    country: none
+    canary: true
+    licence_text: null
+    licence_kind: null
+    audience: owner
+    capture_enabled: true
+    permission_required: false
+    private_basis:
+      clause: Synthetic canary source. It holds one station and one series with the constant 777777.777, one reference and one forecast run, and no provider data. It must appear in the owner channel and in no public output (invariant 11); every UI hides it.
+      url: https://github.com/mwijkhuisen/Waterheight/blob/main/docs/plan/ARCHITECTURE.md
+      retrieved: "2026-09-29"
+    display: true
+    api: true
+    bulk_export: false
+    history_export: true
+    attribution_text: "Owner canary: synthetic test data"
+    attribution_lang: en
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
