@@ -83,12 +83,28 @@ fpr=$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | awk -F: '/^fp
 rm -f /etc/apt/sources.list.d/docker*.list /etc/apt/sources.list.d/docker*.sources
 printf 'Types: deb\nURIs: https://download.docker.com/linux/ubuntu\nSuites: noble\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n' \
   >/etc/apt/sources.list.d/docker.sources
+# The runner's own Docker leaves its daemon.json and netfilter rules behind (a VPS starts
+# clean): show them, then start from an empty ruleset, as a fresh Debian host does.
+echo "runner daemon.json: $(cat /etc/docker/daemon.json 2>/dev/null || echo none)"
+echo "iptables: $(readlink -f "$(command -v iptables)"); legacy FORWARD: $(iptables-legacy -S FORWARD 2>/dev/null | head -n 3 | tr '\n' ' ')"
+systemctl stop docker.service docker.socket 2>/dev/null || true
+for t in filter nat mangle raw; do
+  iptables-legacy -t "$t" -F 2>/dev/null || true
+  iptables-legacy -t "$t" -X 2>/dev/null || true
+  ip6tables-legacy -t "$t" -F 2>/dev/null || true
+  ip6tables-legacy -t "$t" -X 2>/dev/null || true
+done
+iptables-legacy -P FORWARD ACCEPT 2>/dev/null || true
+nft flush ruleset 2>/dev/null || true
+ip link delete docker0 2>/dev/null || true
 install -m 0644 "$repo/deploy/host/daemon.json" /etc/docker/daemon.json
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --allow-downgrades --allow-change-held-packages \
   "docker-ce=$DOCKER_APT" "docker-ce-cli=$DOCKER_APT" "containerd.io=$CONTAINERD_APT" \
   "docker-compose-plugin=$COMPOSE_APT" docker-buildx-plugin nftables zstd >/dev/null
 systemctl restart docker
+nft list tables | tr '\n' ' '
+echo
 [[ $(docker version --format '{{.Server.Version}}') == 29.8.1 ]] || fail "Docker $(docker version --format '{{.Server.Version}}')"
 [[ $(docker compose version --short) == 5.5.1 ]] || fail "Compose $(docker compose version --short)"
 proof "Docker $(docker version --format '{{.Server.Version}}') and Compose $(docker compose version --short) from Docker's repository (key fingerprint 9DC8…CD88); deploy/host/daemon.json accepted: $(docker info --format 'live-restore={{.LiveRestoreEnabled}} logging={{.LoggingDriver}} firewall={{.FirewallBackend.Driver}}')"
