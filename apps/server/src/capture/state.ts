@@ -15,6 +15,8 @@ export type VariantState = {
   alert_key?: string;
   shape?: string;
   last_success?: string;
+  /** A capped walk (FR-1): the next window ends at `to`, the oldest time fetched; once it completes, last_success is `end`. */
+  walk?: { to: string; end: string };
 };
 
 export type SpecState = {

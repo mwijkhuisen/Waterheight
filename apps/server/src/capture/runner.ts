@@ -15,6 +15,8 @@ import { newSpecState, type SpecState, type StateStore, type VariantState } from
 
 export type Outcome = 'ok' | 'upstream_5xx' | 'timeouts' | 'other';
 const TRANSIENT = new Set<string>(['network', 'timeout', 'backoff', 'breaker_open', 'dns']);
+/** A capped walk goes on this far above the oldest time it fetched: one timestamp may span two pages. */
+const WALK_OVERLAP_MS = 60_000;
 
 export type Day = {
   scheduled: number;
@@ -167,23 +169,52 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
   const spaceMs = opts.spaceMs ?? spec.variants?.space_ms ?? 0;
   const maxExpand = opts.maxExpand ?? spec.request.max_expand;
 
-  /** `window` only on a root request (a registry row); stage-2 requests have none. */
-  type Item = { req: Req; validity: ValiditySpec; expandable: boolean; root: boolean; window: Window | null };
+  /** `window` only on a root request (a registry row); stage-2 requests have none. `walk`: the root's variant. */
+  type Item = {
+    req: Req;
+    validity: ValiditySpec;
+    expandable: boolean;
+    root: boolean;
+    window: Window | null;
+    walk: string;
+  };
   const queue: Item[] = [];
+  /** The capped walks this run goes on with, per root variant (N2). */
+  const rests = new Map<string, { to: string; end: string }>();
   for (const row of opts.rows ?? spec.rows) {
     let req = baseRequest(spec, row);
     if (opts.skip?.has(req.variant)) continue;
-    const window = opts.window ?? windowFor(spec, started, st.variants[req.variant]?.last_success ?? st.last_success);
+    const prev = st.variants[req.variant];
+    let window = opts.window ?? windowFor(spec, started, prev?.last_success ?? st.last_success);
+    // The rest of a capped walk: results come newest first, so it ends where the last run stopped. A rest
+    // the window has moved past (its history expired upstream) is dropped.
+    const rest = prev?.walk;
+    if (!opts.seed && window !== null && rest !== undefined && Date.parse(rest.to) >= window.from.getTime()) {
+      const to = Math.min(window.to.getTime(), Date.parse(rest.to) + WALK_OVERLAP_MS);
+      window = { from: window.from, to: new Date(to) };
+      rests.set(req.variant, rest);
+    }
     if (spec.request.build && adapter?.build) {
       req = adapter.build({ req, row, now: started, window, params: spec.params });
     }
-    queue.push({ req, validity: spec.validity, expandable: spec.request.expand, root: true, window });
+    queue.push({
+      req,
+      validity: spec.validity,
+      expandable: spec.request.expand,
+      root: true,
+      window,
+      walk: req.variant,
+    });
   }
   let expanded = 0;
   /** Every URL this run has queued: a provider link that repeats one (a `next` loop) is not fetched again. */
   const queued = new Set(queue.map((q) => q.req.url));
-  /** Roots of a walk (a spec that expands): their window moves only if the whole walk completed. */
-  const walks = new Map<string, string>();
+  /** Roots of a walk (a spec that expands): their window moves to `at` only if the whole walk completed. */
+  const walks = new Map<string, { at: string; window: Window | null }>();
+  /** The oldest time each walk fetched (epoch ms). */
+  const oldest = new Map<string, number>();
+  /** A capped walk got no older: this run is no success (N2). */
+  let stalled = false;
   const day = utcDay(started);
 
   /** Writes the variants, seen ids and new page alerts; `done` also sets last success/failure. */
@@ -196,13 +227,13 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
         variants: { ...base.variants, ...touched },
         seen: [...new Set([...(base.seen ?? []), ...seen])].slice(-5000),
         pending_page: [...new Set([...(base.pending_page ?? []), ...pages])],
-        ...(done && summary.ok > 0 && !summary.transient ? { last_success: finished.toISOString() } : {}),
+        ...(done && summary.ok > 0 && !summary.transient && !stalled ? { last_success: finished.toISOString() } : {}),
         ...(done && summary.firstFailure !== null ? { last_failure_status: summary.firstFailure } : {}),
       };
     });
 
   for (let i = 0; i < queue.length; i += 1) {
-    const { req, validity: vspec, expandable, root, window } = queue[i] as Item;
+    const { req, validity: vspec, expandable, root, window, walk } = queue[i] as Item;
     if (i > 0 && spaceMs > 0) await deps.sleep(spaceMs);
     if (opts.deadline !== undefined && deps.now().getTime() > opts.deadline) {
       // Out of time: the remaining requests of this run are skipped, not queued.
@@ -347,15 +378,20 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     if (v?.shape) vs.shape = v.shape;
     if (outcome === 'ok') {
       summary.ok += 1;
-      // The window anchor belongs to the schedule: a seed never moves it, and a walk moves it at its end.
-      if (!opts.seed && root && spec.request.expand) walks.set(req.variant, (window?.to ?? end).toISOString());
-      else if (!opts.seed) vs.last_success = end.toISOString();
+      // The window anchor belongs to the schedule: a seed never moves it, and a walk moves it at its end
+      // (the end of its first window, when a capped walk went on).
+      if (!opts.seed && root && spec.request.expand) {
+        walks.set(req.variant, { at: rests.get(req.variant)?.end ?? (window?.to ?? end).toISOString(), window });
+      } else if (!opts.seed) vs.last_success = end.toISOString();
       summary.doneVariants.push(req.variant);
       if (req.seen_id !== undefined) seen.add(req.seen_id);
       if (v?.ok) {
         const utc = (t: string) => new Date(t).toISOString();
         const times = v.times === undefined ? null : { from: utc(v.times.min), to: utc(v.times.max) };
-        summary.coverage = mergeCoverage(summary.coverage, adapter?.coverage?.(v.doc) ?? times);
+        const got = adapter?.coverage?.(v.doc) ?? times;
+        summary.coverage = mergeCoverage(summary.coverage, got);
+        if (got !== null)
+          oldest.set(walk, Math.min(oldest.get(walk) ?? Number.POSITIVE_INFINITY, Date.parse(got.from)));
       }
       // Watched values (LU-4 thresholds, NL-4 file names): a change is an alert.
       if (v?.ok && spec.alert !== undefined) {
@@ -411,17 +447,34 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
           expandable: list,
           root: false,
           window: null,
+          walk,
         });
       }
     }
   }
 
-  // A capped, cut or transiently failed walk asks again from the same point next time (C4).
-  if (!summary.capped && !summary.transient) {
-    for (const [variant, at] of walks) {
-      const vs: VariantState = { ...st.variants[variant], last_success: at };
-      st.variants[variant] = vs;
-      touched[variant] = vs;
+  // A completed walk moves its window (C4). A capped windowed walk (FR-1) goes on next run below the oldest
+  // time it fetched (N2); one that got no older (a `next` that never ends, a window ignored upstream) keeps
+  // its point and is no success, so its group goes stale and pages. A cut or failed walk asks again.
+  if (!summary.transient) {
+    for (const [variant, { at, window }] of walks) {
+      const { walk: _, ...vs } = st.variants[variant] ?? {};
+      let next: VariantState | undefined;
+      if (!summary.capped) next = { ...vs, last_success: at };
+      else if (window !== null) {
+        const got = oldest.get(variant) ?? Number.NaN;
+        const rest = rests.get(variant);
+        if (got >= window.from.getTime() && got < (rest ? Date.parse(rest.to) : window.to.getTime())) {
+          next = { ...vs, walk: { to: new Date(got).toISOString(), end: rest?.end ?? window.to.toISOString() } };
+        } else {
+          stalled = true;
+          deps.log.warn({ spec: spec.id, variant }, 'capped walk made no progress');
+        }
+      }
+      if (next !== undefined) {
+        st.variants[variant] = next;
+        touched[variant] = next;
+      }
     }
   }
   await persist(true);

@@ -8,6 +8,7 @@ import { ManifestLine } from '../../src/archive/manifest.ts';
 import { Archive } from '../../src/archive/writer.ts';
 import { runSpec } from '../../src/capture/runner.ts';
 import type { SpecState } from '../../src/capture/state.ts';
+import { isFresh } from '../../src/capture/status.ts';
 import type { Transport } from '../../src/http/types.ts';
 import { fixture, runDeps, spec } from './helpers.ts';
 
@@ -309,7 +310,7 @@ describe('gap-stretch windows', () => {
   });
 });
 
-describe('FR-1 walks (C4, S8)', () => {
+describe('FR-1 walks (C4, S8, N2)', () => {
   const OBS = 'https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr';
   const page = JSON.parse(fixture('FR-1', 'fr-1-obs').body.toString()) as { next: string | null };
   /** Pages with a `next` up to `pages` per walk (cursor 1, 2, …), or a fixed `loop` URL. */
@@ -335,25 +336,96 @@ describe('FR-1 walks (C4, S8)', () => {
       pending_page: [],
     }));
 
-  it('a 3-day gap is walked a day at a time; a walk the cap stops keeps its window', async () => {
+  it('a 3-day gap is walked a day at a time; a completed walk moves the window to its end', async () => {
     const c = clock('2026-10-10T12:01:00Z');
     const deps = runDeps({ now: c.now });
     await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
-    const asked = hubeau({ pages: Number.POSITIVE_INFINITY });
+    const asked = hubeau({ pages: 3 });
     const s = spec('fr-1-obs');
-    const first = await runSpec(s, deps);
-    expect(first).toMatchObject({ requests: 21, capped: true });
+    expect(await runSpec(s, deps)).toMatchObject({ requests: 3, capped: false });
     expect(asked[0]).toEqual({ from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z', cursor: null });
     c.advance(15 * 60_000);
     await runSpec(s, deps);
-    expect(asked[21]).toEqual({ from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z', cursor: null });
-    // A walk that completes moves the window to its end; the next run takes the next day.
-    const done = hubeau({ pages: 3 });
-    c.advance(15 * 60_000);
-    expect(await runSpec(s, deps)).toMatchObject({ requests: 3, capped: false });
-    c.advance(15 * 60_000);
-    await runSpec(s, deps);
-    expect(done[3]).toEqual({ from: '2026-10-08T10:00:00Z', to: '2026-10-09T10:00:00Z', cursor: null });
+    expect(asked[3]).toEqual({ from: '2026-10-08T10:00:00Z', to: '2026-10-09T10:00:00Z', cursor: null });
+  });
+
+  /**
+   * Hub'Eau over a window, newest first: page n holds two observations 30 min apart, n × 30 min below the
+   * window's end, down to its start; `stuck` pages hold the same two times and never end.
+   */
+  function slices(stuck?: string[]) {
+    const roots: { from: string | null; to: string | null }[] = [];
+    server.use(
+      http.get(OBS, ({ request }) => {
+        const u = new URL(request.url);
+        const from = u.searchParams.get('date_debut_obs') as string;
+        const to = u.searchParams.get('date_fin_obs') as string;
+        const n = Number(u.searchParams.get('cursor') ?? 0);
+        if (n === 0) roots.push({ from, to });
+        const newest = Date.parse(to) - n * 1_800_000;
+        const oldest = Math.max(Date.parse(from), newest - 1_800_000);
+        const times = stuck ?? [newest, oldest].map((t) => new Date(t).toISOString());
+        const next =
+          stuck !== undefined || oldest > Date.parse(from)
+            ? `${OBS}?date_debut_obs=${from}&date_fin_obs=${to}&cursor=${n + 1}`
+            : null;
+        return HttpResponse.json(
+          { count: times.length, data: times.map((date_obs) => ({ date_obs })), next },
+          { status: next === null ? 200 : 206 },
+        );
+      }),
+    );
+    return roots;
+  }
+
+  it('a flood day of 48 pages goes on below the oldest time fetched, and completes (N2)', async () => {
+    const c = clock('2026-10-10T12:01:00Z');
+    const deps = runDeps({ now: c.now });
+    await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
+    const roots = slices();
+    const s = spec('fr-1-obs');
+    const runs = [];
+    for (let i = 0; i < 4; i += 1) {
+      runs.push(await runSpec(s, deps));
+      // Every run made progress, so the spec stays fresh.
+      expect((await deps.state.read<SpecState>('fr-1-obs'))?.last_success).toBe(c.now().toISOString());
+      c.advance(15 * 60_000);
+    }
+    expect(runs.map((r) => [r.requests, r.capped])).toEqual([
+      [21, true],
+      [21, true],
+      [7, false],
+      [21, true], // the next day: a flood too
+    ]);
+    expect(roots).toEqual([
+      { from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z' },
+      { from: '2026-10-07T11:00:00Z', to: '2026-10-08T00:31:00Z' }, // 21 pages lower, plus one minute
+      { from: '2026-10-07T11:00:00Z', to: '2026-10-07T14:02:00Z' },
+      // The walk completed: the window moves to the end of the whole day, not of its last part.
+      { from: '2026-10-08T10:00:00Z', to: '2026-10-09T10:00:00Z' },
+    ]);
+  });
+
+  it('a capped walk that gets no older is no success, so the spec goes stale and pages (N2)', async () => {
+    const c = clock('2026-10-10T12:01:00Z');
+    const deps = runDeps({ now: c.now });
+    await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
+    const roots = slices(['2026-10-08T10:00:00Z', '2026-10-08T09:00:00Z']);
+    const s = spec('fr-1-obs');
+    const first = c.now().toISOString();
+    for (let i = 0; i < 4; i += 1) {
+      expect(await runSpec(s, deps)).toMatchObject({ requests: 21, capped: true });
+      c.advance(15 * 60_000);
+    }
+    expect(roots.map((r) => r.to)).toEqual([
+      '2026-10-08T11:00:00Z',
+      '2026-10-08T09:01:00Z', // the first run got down to 09:00; no run after it got older
+      '2026-10-08T09:01:00Z',
+      '2026-10-08T09:01:00Z',
+    ]);
+    const st = await deps.state.read<SpecState>('fr-1-obs');
+    expect(st?.last_success).toBe(first);
+    expect(isFresh(s, st, new Date(Date.parse(first) + 46 * 60_000))).toBe(false);
   });
 
   it('a `next` that repeats a URL is fetched once, and ends the walk', async () => {
