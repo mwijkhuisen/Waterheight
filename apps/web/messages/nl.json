@@ -1,5 +1,7 @@
 {
   "site_title": "Rivierstanden",
-  "hello": "Hallo",
+  "heading": "Rivierstanden",
+  "intro": "Deze site verzamelt de waterstanden, afvoer, verwachtingen en alarmniveaus van de rivieren die Nederland binnenstromen, uit open bronnen in Nederland, Duitsland, België, Frankrijk, Luxemburg en Zwitserland. De kaart volgt later.",
+  "not_official": "Dit is geen officiële waarschuwingsdienst. Volg bij hoogwater de berichten van Rijkswaterstaat en je gemeente.",
   "other_language": "English"
 }

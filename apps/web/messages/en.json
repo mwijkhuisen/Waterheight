@@ -1,5 +1,7 @@
 {
   "site_title": "River levels",
-  "hello": "Hello",
+  "heading": "River levels",
+  "intro": "This site collects water levels, discharge, forecasts and alert levels for the rivers that flow into the Netherlands, from open sources in the Netherlands, Germany, Belgium, France, Luxembourg and Switzerland. The map will follow.",
+  "not_official": "This is not an official warning service. During high water, follow Rijkswaterstaat and your local authorities.",
   "other_language": "Nederlands"
 }

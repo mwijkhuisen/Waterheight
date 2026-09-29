@@ -19,14 +19,22 @@ describe('web build', () => {
   }, 60_000);
 
   it.each([
-    ['index.html', 'nl', 'Rivierstanden', 'Hallo'],
-    ['en/index.html', 'en', 'River levels', 'Hello'],
-  ])('%s is static %s with its title and <main>', (file, lang, title, hello) => {
+    ['index.html', 'nl', 'Rivierstanden', 'geen officiële waarschuwingsdienst'],
+    ['en/index.html', 'en', 'River levels', 'not an official warning service'],
+  ])('%s is the static %s placeholder with its title and <main>', (file, lang, title, notice) => {
     const html = page(file);
     expect(html).toMatch(new RegExp(`<html lang="${lang}">`));
     expect(html).toContain(`<title>${title}</title>`);
-    expect(html).toMatch(new RegExp(`<main id="app">\\s*<h1>${hello}</h1>`));
+    expect(html).toMatch(new RegExp(`<main id="app">\\s*<h1>${title}</h1>\\s*<p>`));
+    expect(html).toContain(notice);
     expect(html).not.toMatch(/%m:/);
+  });
+
+  it.each(['index.html', 'en/index.html'])('%s makes no third-party request (invariant 7)', (file) => {
+    // Every src/href is a same-origin path; no scheme, no protocol-relative URL.
+    const refs = [...page(file).matchAll(/\s(?:src|href)="([^"]*)"/g)].map(([, v]) => v);
+    expect(refs.length).toBeGreaterThan(0);
+    for (const ref of refs) expect(ref).toMatch(/^\/(?!\/)/);
   });
 
   it.each(['index.html', 'en/index.html'])('%s has no inline script, style or handler', (file) => {
