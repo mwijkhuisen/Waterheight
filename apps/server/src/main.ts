@@ -125,7 +125,7 @@ async function capture(
     ...deps,
     registry,
     paths,
-    pinger: new Pinger(readSecret('hc_ping_key'), userAgent, logger),
+    pinger: new Pinger(() => readSecret('hc_ping_key'), userAgent, logger),
     seeds: () => seeds,
   });
   await recorder.writeStatusNow();

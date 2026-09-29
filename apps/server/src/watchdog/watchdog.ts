@@ -173,7 +173,7 @@ export async function runWatchdog(
   const logger: Logger = pino({ base: { role: 'watchdog' } });
   const userAgent = captureUserAgent(cfg);
   const probe = liveProbe(cfg.domain, userAgent);
-  const pinger = new Pinger(readSecret('hc_ping_key'), userAgent, logger);
+  const pinger = new Pinger(() => readSecret('hc_ping_key'), userAgent, logger);
   const cycle = async (): Promise<Verdicts> => {
     const v = await check(probe, new Date());
     await report(v, pinger);

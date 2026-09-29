@@ -1,9 +1,11 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Cron } from 'croner';
 import { HttpResponse, http } from 'msw';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../../../../test/msw.setup.ts';
+import { readSecret } from '../../src/capture/env.ts';
 import { Pinger } from '../../src/capture/pings.ts';
 import { guarded, startRecorder } from '../../src/capture/scheduler.ts';
 import { GROUP_SLUGS, type Registry } from '../../src/capture/specs.ts';
@@ -332,5 +334,34 @@ describe('healthchecks groups', () => {
     await p.ping('cap-nl', 'fail', 'stale x');
     expect(JSON.stringify(warnings)).not.toContain(key);
     expect(warnings.length).toBeGreaterThan(2);
+  });
+
+  it('read the key file before every ping: a key filled in or rotated later is used, an emptied one stops the pings', async () => {
+    const seen: string[] = [];
+    server.use(
+      http.all('https://hc-ping.com/*', ({ request }) => {
+        seen.push(new URL(request.url).pathname);
+        return new HttpResponse('OK');
+      }),
+    );
+    const dir = mkdtempSync(join(tmpdir(), 'rws-key-'));
+    const file = join(dir, 'hc_ping_key');
+    writeFileSync(file, '');
+    const warnings: unknown[] = [];
+    const log = { warn: (...a: unknown[]) => warnings.push(a) };
+    const p = new Pinger(() => readSecret('hc_ping_key', dir), 'ua', log, testClient({ hc: ['hc-ping.com'] }));
+    await p.ping('cap-nl', 'success');
+    const key = 'k'.repeat(22);
+    writeFileSync(file, `${key}\n`);
+    await p.ping('cap-nl', 'success');
+    const rotated = 'r'.repeat(22);
+    writeFileSync(file, rotated);
+    await p.ping('cap-nl', 'fail', 'stale x');
+    writeFileSync(file, '');
+    await p.ping('cap-nl', 'success');
+    await p.ping('cap-nl', 'success');
+    expect(seen).toEqual([`/${key}/cap-nl`, `/${rotated}/cap-nl/fail`]);
+    // "pings are off" once when the key is missing at the start, once when it is emptied again.
+    expect(warnings).toHaveLength(2);
   });
 });
