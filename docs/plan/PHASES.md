@@ -275,7 +275,7 @@ Report any threat-model delta for docs/threat-model.md. Classify findings Critic
     - the ADR-lite rule for new dependencies.
   - **Agent set-up**:
     - `.claude/settings.json`: deny reads of `**/.env*` and `deploy/secrets/**`; deny `git push --force*`; allow `pnpm`, `psql` and read-only `git` commands;
-    - `.claude/hooks/session-start.sh`, written with the `session-start-hook` skill. It is idempotent and installs Node 26.10.x, pnpm 12.6.0 and native PostgreSQL 18 (a cluster on port 5433 with the builtin C.UTF-8 locale), then runs `pnpm install --frozen-lockfile`.
+    - `.claude/hooks/session-start.sh`, written with the `session-start-hook` skill. It is idempotent and installs Node 26.10.x, pnpm 12.6.0 (P0b pinned 12.5.1: 12.6.0 was under the 7-day release age) and native PostgreSQL 18 (a cluster on port 5433 with the builtin C.UTF-8 locale), then runs `pnpm install --frozen-lockfile`.
   - **Docs**:
     - `docs/plan/`: ARCHITECTURE.md, PHASES.md, JUDGEMENT.md and `proposals/` from the planning bundle (branch `claude/river-water-level-map-hf7bcz`, PR #30);
     - `docs/sources/SOURCE-CATALOGUE.md` and `docs/sources/research/*.md`, copied verbatim;
