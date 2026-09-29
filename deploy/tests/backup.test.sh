@@ -216,14 +216,14 @@ expect_grep "/backup ok$" "$FIX/pings"
 expect_no_grep "$KEY" "$FIX/calls"
 [[ $(stat -c %a "$RWS_SRV/public/ops/ops.json") == 644 ]] || fail "ops.json is not 0644"
 
-case_ "restic exit 3 (some files unreadable, snapshot saved): last_backup set, success ping with a fixed code"
+case_ "restic exit 3 (some files unreadable, snapshot saved): last_backup set, /fail files_unreadable (R2-C4)"
 setup
 touch "$FIX/backup-unreadable"
 run rws-backup
 expect_rc 0
 [[ $(ops '.last_backup') =~ ^\"20[0-9]{2}- ]] || fail "last_backup not set"
-expect_grep "/backup files_unreadable$" "$FIX/pings"
-expect_no_grep "/backup/fail" "$FIX/pings"
+expect_grep "/backup/fail files_unreadable$" "$FIX/pings"
+expect_no_grep "/backup ok$" "$FIX/pings"
 expect_grep "could not read some files" "$C/out"
 
 case_ "backup failure: /fail with a fixed code, last_backup untouched"

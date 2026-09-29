@@ -62,9 +62,11 @@ case $rc in
       ping backup
       log "backup done"
     else
-      # restic exit 3: some source files could not be read, the snapshot was saved.
-      ping backup '' files_unreadable
-      log "warning: backup done, but restic could not read some files (exit 3)"
+      # restic exit 3: the snapshot was saved without some files it could not
+      # read (with the excludes, a real read error): the check fails until a
+      # run reads everything.
+      ping backup fail files_unreadable
+      log "warning: backup saved, but restic could not read some files (exit 3): /fail files_unreadable"
     fi
     ;;
   *)
