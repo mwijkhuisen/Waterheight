@@ -2,9 +2,10 @@
 # rws-restore-drill (rws-restore-drill.timer, monthly; A§11.3; issue #16 P1b).
 # Restores a random sample of 100 raw objects from the latest snapshot into a
 # scratch directory and checks that sha256(zstd -dc object) equals the sha256 in
-# the manifest line that recorded it. Only lines older than the snapshot (minus
-# 10 min) are sampled, so an object written during the backup cannot count as
-# missing. The result goes to /status/ops.json as counts only
+# the manifest line that recorded it. The lines come from the newest manifest
+# day and up to 2 random older ones, so the sample spans the archive while the
+# restore stays small. Only lines older than the snapshot (minus 10 min) are
+# sampled, so an object written during the backup cannot count as missing. The result goes to /status/ops.json as counts only
 # (drill {at, sampled, matched}); the scratch directory, which may hold
 # owner-audience payloads, never leaves the VPS and is always emptied.
 #
@@ -66,7 +67,18 @@ time=$(jq -r '.[-1].time // empty' <<<"$snapshot")
 [[ $id =~ ^[0-9a-f]{64}$ && -n $time ]] || fail no_snapshot
 cutoff=$(($(date -u -d "$time" +%s) - 600))
 
-rws_compose run --rm --no-deps -T backup restore "$id" --target /restore --include /data/raw/_manifest >/dev/null ||
+# The manifest days in the snapshot: the newest plus up to 2 random older ones.
+days=$(rws_compose run --rm --no-deps -T backup ls --json "$id" /data/raw/_manifest |
+  jq -r 'select(.type == "file") | .path | select(test("^/data/raw/_manifest/[0-9]{4}-[0-9]{2}-[0-9]{2}\\.jsonl$"))' |
+  sort) || fail list_manifest
+[[ -n $days ]] || fail no_manifest
+include=$scratch/.include
+{
+  tail -n 1 <<<"$days"
+  head -n -1 <<<"$days" | shuf -n 2
+} >"$include"
+chmod 0644 "$include"
+rws_compose run --rm --no-deps -T backup restore "$id" --target /restore --include-file /restore/.include >/dev/null ||
   fail restore_manifest
 
 # key and sha256 of stored objects recorded before the cutoff, sampled at random.
@@ -81,7 +93,6 @@ find "$scratch/data/raw/_manifest" -name '*.jsonl' -type f -print0 2>/dev/null |
 sampled=$(wc -l <"$sample")
 ((sampled == SAMPLE)) || fail too_few_objects
 
-include=$scratch/.include
 while read -r key _; do
   [[ $key =~ $KEY_RE ]] || fail bad_key
   printf '/data/raw/%s\n' "${key#raw/}"

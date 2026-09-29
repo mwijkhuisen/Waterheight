@@ -371,12 +371,13 @@ deploy_release() {
 
 # The backup settings (owner action A5): false while RWS_BACKUP is not "on";
 # dies on a malformed repository; sets BUCKET_HOST from RWS_RESTIC_REPOSITORY
-# (s3:https://<host>[:port]/<bucket>[/<prefix>]). Never call it in $(...).
+# (s3:https://<host>[:443]/<bucket>[/<prefix>]; the firewall lets the backup
+# network reach port 443 only). Never call it in $(...).
 backup_ready() {
   load_env || return 1
   [[ ${RWS_BACKUP:-off} == on ]] || return 1
-  [[ ${RWS_RESTIC_REPOSITORY:-} =~ ^s3:https://([a-z0-9.-]+)(:[0-9]{1,5})?/[a-z0-9._-]+(/[A-Za-z0-9._/-]*)?$ ]] ||
-    die "RWS_RESTIC_REPOSITORY must look like s3:https://<host>/<bucket>[/<prefix>]"
+  [[ ${RWS_RESTIC_REPOSITORY:-} =~ ^s3:https://([a-z0-9.-]+)(:443)?/[a-z0-9._-]+(/[A-Za-z0-9._/-]*)?$ ]] ||
+    die "RWS_RESTIC_REPOSITORY must look like s3:https://<host>/<bucket>[/<prefix>] (port 443 only)"
   # shellcheck disable=SC2034 # read by the scripts that source this file
   BUCKET_HOST=${BASH_REMATCH[1]}
 }

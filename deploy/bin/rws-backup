@@ -49,12 +49,26 @@ if ((init)); then
 fi
 
 ping backup start
-if rws_compose run --rm --no-deps -T backup backup --host rws --exclude /data/raw/.tmp /data/raw; then
-  # shellcheck disable=SC2016 # a jq filter, not shell
-  ops_update --arg t "$(now_iso)" '.last_backup = $t'
-  ping backup
-  log "backup done"
-else
-  ping backup fail backup_failed
-  die "restic backup failed"
-fi
+# Capture's temporary files (the archive's .tmp/ and the <file>.json.<pid>.tmp
+# of its atomic state, report and status writes) may vanish mid-run.
+rc=0
+rws_compose run --rm --no-deps -T backup backup --host rws \
+  --exclude /data/raw/.tmp --exclude '*.json.[0-9]*.tmp' /data/raw || rc=$?
+case $rc in
+  0 | 3)
+    # shellcheck disable=SC2016 # a jq filter, not shell
+    ops_update --arg t "$(now_iso)" '.last_backup = $t'
+    if ((rc == 0)); then
+      ping backup
+      log "backup done"
+    else
+      # restic exit 3: some source files could not be read, the snapshot was saved.
+      ping backup '' files_unreadable
+      log "warning: backup done, but restic could not read some files (exit 3)"
+    fi
+    ;;
+  *)
+    ping backup fail backup_failed
+    die "restic backup failed (exit $rc)"
+    ;;
+esac

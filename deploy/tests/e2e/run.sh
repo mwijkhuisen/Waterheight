@@ -171,7 +171,7 @@ RWS_DOMAIN=$DOMAIN
 RWS_CONTACT_EMAIL=contact@$DOMAIN
 RWS_PUBLIC_IPV4=$IP4
 RWS_PUBLIC_IPV6=$IP6
-RWS_RESTIC_REPOSITORY=s3:https://minio:9000/rws-raw/restic
+RWS_RESTIC_REPOSITORY=s3:https://minio/rws-raw/restic
 RWS_S3_REGION=us-east-1
 RWS_BACKUP=on
 EOF
@@ -346,12 +346,12 @@ docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.CPUPerc}}' | grep 
 
 # ------------------------------------------------------------------ backups
 step "restic to MinIO with Object Lock (COMPLIANCE), the VPS key's policy, the drill"
-wait_for "minio" 60 curl -fsS --cacert /ci/pki/ca.pem https://minio:9000/minio/health/live
+wait_for "minio" 60 curl -fsS --cacert /ci/pki/ca.pem https://minio/minio/health/live
 sed 's/RWS_BUCKET/rws-raw/g' "$repo/deploy/host/s3-vps-key-policy.json" >/ci/vps-policy.json
 # CI-only administration of the throwaway MinIO (its own TLS, from our CI CA).
 mc() {
   docker run --rm --network rws_ci-minio -e MC_CONFIG_DIR=/tmp/mc \
-    -e MC_HOST_m=https://ci-root:ci-root-password-not-a-secret@minio:9000 \
+    -e MC_HOST_m=https://ci-root:ci-root-password-not-a-secret@minio \
     -v /ci/vps-policy.json:/policy.json:ro "$MC_IMAGE" --insecure "$@"
 }
 root_s3() {
@@ -359,11 +359,11 @@ root_s3() {
     curl -K - -fsS --cacert /ci/pki/ca.pem "$@"
 }
 mc mb --with-lock m/rws-raw
-lock='<ObjectLockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><ObjectLockEnabled>Enabled</ObjectLockEnabled><Rule><DefaultRetention><Mode>COMPLIANCE</Mode><Days>1</Days></DefaultRetention></Rule></ObjectLockConfiguration>'
+lock='<ObjectLockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><ObjectLockEnabled>Enabled</ObjectLockEnabled><Rule><DefaultRetention><Mode>COMPLIANCE</Mode><Days>30</Days></DefaultRetention></Rule></ObjectLockConfiguration>'
 root_s3 -X PUT -H "Content-MD5: $(printf '%s' "$lock" | openssl dgst -md5 -binary | base64)" \
-  -H 'Content-Type: application/xml' --data-raw "$lock" 'https://minio:9000/rws-raw?object-lock'
-root_s3 'https://minio:9000/rws-raw?object-lock' | grep -q '<Mode>COMPLIANCE</Mode>' || fail "no COMPLIANCE default retention"
-root_s3 'https://minio:9000/rws-raw?versioning' | grep -q '<Status>Enabled</Status>' || fail "versioning is off"
+  -H 'Content-Type: application/xml' --data-raw "$lock" 'https://minio/rws-raw?object-lock'
+root_s3 'https://minio/rws-raw?object-lock' | grep -q '<Mode>COMPLIANCE</Mode><Days>30</Days>' || fail "no COMPLIANCE default retention of 30 days"
+root_s3 'https://minio/rws-raw?versioning' | grep -q '<Status>Enabled</Status>' || fail "versioning is off"
 mc admin user add m rws-vps "$vps_secret"
 mc admin policy create m rws-vps /policy.json
 mc admin policy attach m rws-vps --user rws-vps
@@ -376,8 +376,10 @@ drill=$("$repo/deploy/bin/rws-restore-drill" --force | tail -n 1)
 jq -e '.drill.sampled == 100 and .drill.matched == 100' /srv/rws/public/ops/ops.json >/dev/null || fail "ops.json drill"
 [[ -z $(find /srv/rws/backup/drill -mindepth 1) ]] || fail "the drill left files behind"
 proof "forced restore drill: $drill (sha256 of zstd -dc against the manifest), written to ops.json, scratch emptied"
-CURL_CA_BUNDLE=/ci/pki/ca.pem "$repo/deploy/tests/object-lock-prune.sh"
-proof "object-lock-prune.sh with the VPS key: restic forget --prune removed no object version, a versioned DELETE and a shorter retention were refused"
+prune=$(CURL_CA_BUNDLE=/ci/pki/ca.pem "$repo/deploy/tests/object-lock-prune.sh")
+echo "$prune"
+[[ $(grep -c '^PASS ' <<<"$prune") == 5 ]] || fail "object-lock-prune.sh: not 5 PASS lines"
+proof "object-lock-prune.sh with the VPS key: the bucket's default retention is COMPLIANCE >= 30 days and a new version is retained >= 29 days; restic forget --prune removed no object version, a versioned DELETE and a shorter retention were refused (5 PASS)"
 
 # ------------------------------------------------------------------ watchdog
 step "Watchdog: one cycle through DNS and TLS against the stack"

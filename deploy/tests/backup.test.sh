@@ -53,24 +53,28 @@ shift
 drill=$RWS_SRV/backup/drill
 case $1 in
   init) ;;
-  backup) [[ ! -e $FIX/backup-fails ]] ;;
+  backup)
+    [[ ! -e $FIX/backup-fails ]] || exit 1
+    [[ ! -e $FIX/backup-unreadable ]] || exit 3
+    ;;
   snapshots) printf '[{"id":"%s","time":"2026-09-02T00:00:00.123456789Z"}]\n' "$(printf 'a%.0s' {1..64})" ;;
+  ls)
+    # restic ls --json: the snapshot, then one node per entry.
+    printf '{"struct_type":"snapshot","id":"x"}\n{"name":"_manifest","type":"dir","path":"/data/raw/_manifest"}\n'
+    for f in "$FIX/raw/_manifest"/*; do
+      printf '{"name":"%s","type":"file","path":"/data/raw/_manifest/%s"}\n' "${f##*/}" "${f##*/}"
+    done
+    ;;
   restore)
-    if [[ " $* " == *" --include /data/raw/_manifest "* ]]; then
-      mkdir -p "$drill/data/raw"
-      cp -r "$FIX/raw/_manifest" "$drill/data/raw/"
-    else
-      while IFS= read -r path; do
-        src=$FIX/raw/${path#/data/raw/}
-        [[ -f $src ]] || continue
-        mkdir -p "$(dirname "$drill$path")"
-        cp "$src" "$drill$path"
-      done <"$drill/.include"
-      if [[ -e $FIX/corrupt ]]; then
-        victim=$(find "$drill/data/raw" -name '*.zst' -print -quit)
-        printf 'x' | zstd -q -c >"$victim"
-      fi
-    fi
+    grep '/_manifest/' "$drill/.include" >>"$FIX/restored-manifests" || true
+    while IFS= read -r path; do
+      src=$FIX/raw/${path#/data/raw/}
+      [[ -f $src ]] || continue
+      mkdir -p "$(dirname "$drill$path")"
+      cp "$src" "$drill$path"
+    done <"$drill/.include"
+    victim=$(find "$drill/data/raw" -name '*.zst' -print -quit)
+    if [[ -e $FIX/corrupt && -n $victim ]]; then printf 'x' | zstd -q -c >"$victim"; fi
     ;;
   *) exit 2 ;;
 esac
@@ -79,26 +83,33 @@ chmod +x "$T/stubs"/*
 
 # ---------------------------------------------------------------- fixtures
 # A synthetic archive: 120 objects recorded before the snapshot (2026-09-02T00:00Z),
-# and 5 lines recorded after it whose objects the snapshot does not have.
+# and 5 lines recorded after it whose objects the snapshot does not have, in the
+# newest manifest day; and 3 older days of 10 objects each.
+mkobject() {
+  local dir=$1 day=$2 i=$3 start=$4 store=$5 body sha key
+  body="synthetic object $day $i $RANDOM$RANDOM"
+  sha=$(printf '%s' "$body" | sha256sum | cut -d' ' -f1)
+  key=$(printf 'raw/NL-1/nl-1-obs-key/%s/%06dZ-%s.zst' "${day//-//}" "$i" "${sha:0:16}")
+  if ((store)); then
+    mkdir -p "$(dirname "$dir/${key#raw/}")"
+    printf '%s' "$body" | zstd -q -c >"$dir/${key#raw/}"
+  fi
+  jq -cn --arg key "$key" --arg sha "$sha" --arg start "$start" \
+    '{v: 1, source: "NL-1", spec: "nl-1-obs-key", key: $key, sha256: $sha, fetched_at: {start: $start, end: $start}}'
+  # a dup line (no object) must never be sampled
+  jq -cn --arg sha "$sha" '{v: 1, key: null, dup_of: "x", sha256: $sha, fetched_at: {start: "2026-09-01T00:00:00Z"}}'
+}
 mkarchive() {
-  local dir=$1 i body sha key
+  local dir=$1 i day
   mkdir -p "$dir/_manifest"
   for i in $(seq 1 125); do
-    body="synthetic object $i $RANDOM$RANDOM"
-    sha=$(printf '%s' "$body" | sha256sum | cut -d' ' -f1)
-    key=$(printf 'raw/NL-1/nl-1-obs-key/2026/09/01/%06dZ-%s.zst' "$i" "${sha:0:16}")
-    if ((i <= 120)); then
-      mkdir -p "$(dirname "$dir/${key#raw/}")"
-      printf '%s' "$body" | zstd -q -c >"$dir/${key#raw/}"
-      start=2026-09-01T12:00:00.000Z
-    else
-      start=2026-09-02T00:05:00.000Z
+    if ((i <= 120)); then mkobject "$dir" 2026-09-01 "$i" 2026-09-01T12:00:00.000Z 1; else
+      mkobject "$dir" 2026-09-01 "$i" 2026-09-02T00:05:00.000Z 0
     fi
-    jq -cn --arg key "$key" --arg sha "$sha" --arg start "$start" \
-      '{v: 1, source: "NL-1", spec: "nl-1-obs-key", key: $key, sha256: $sha, fetched_at: {start: $start, end: $start}}'
-    # a dup line (no object) must never be sampled
-    jq -cn --arg sha "$sha" '{v: 1, key: null, dup_of: "x", sha256: $sha, fetched_at: {start: "2026-09-01T00:00:00Z"}}'
   done >"$dir/_manifest/2026-09-01.jsonl"
+  for day in 2026-08-29 2026-08-30 2026-08-31; do
+    for i in $(seq 1 10); do mkobject "$dir" "$day" "$i" "${day}T12:00:00.000Z" 1; done >"$dir/_manifest/$day.jsonl"
+  done
 }
 
 setup() {
@@ -159,13 +170,23 @@ expect_rc 0
 expect_grep "add element inet rws backup4 \{ 192\.0\.2\.10,192\.0\.2\.11 \}" "$FIX/nft"
 expect_grep "add element inet rws backup6 \{ 2001:db8::10 \}" "$FIX/nft"
 expect_no_grep "::ffff:" "$FIX/nft"
-expect_grep "compose .* run --rm --no-deps -T backup backup --host rws --exclude /data/raw/\.tmp /data/raw" "$FIX/calls"
+expect_grep "compose .* run --rm --no-deps -T backup backup --host rws --exclude /data/raw/\.tmp --exclude \*\.json\.\[0-9\]\*\.tmp /data/raw$" "$FIX/calls"
 expect_eq "$(ops 'keys')" '["disk_pct","drill","generated_at","last_backup"]'
 [[ $(ops '.last_backup') =~ ^\"20[0-9]{2}- ]] || fail "last_backup not set"
 expect_grep "/backup/start " "$FIX/pings"
 expect_grep "/backup ok$" "$FIX/pings"
 expect_no_grep "$KEY" "$FIX/calls"
 [[ $(stat -c %a "$RWS_SRV/public/ops/ops.json") == 644 ]] || fail "ops.json is not 0644"
+
+case_ "restic exit 3 (some files unreadable, snapshot saved): last_backup set, success ping with a fixed code"
+setup
+touch "$FIX/backup-unreadable"
+run rws-backup
+expect_rc 0
+[[ $(ops '.last_backup') =~ ^\"20[0-9]{2}- ]] || fail "last_backup not set"
+expect_grep "/backup files_unreadable$" "$FIX/pings"
+expect_no_grep "/backup/fail" "$FIX/pings"
+expect_grep "could not read some files" "$C/out"
 
 case_ "backup failure: /fail with a fixed code, last_backup untouched"
 setup
@@ -179,6 +200,9 @@ case_ "restore drill: 100 of 100, counts only, lines newer than the snapshot nev
 setup
 run rws-restore-drill --force
 expect_rc 0
+expect_eq "$(wc -l <"$FIX/restored-manifests")" 3
+expect_grep "^/data/raw/_manifest/2026-09-01\.jsonl$" "$FIX/restored-manifests"
+expect_grep "backup ls --json a{64} /data/raw/_manifest$" "$FIX/calls"
 expect_eq "$(tail -n 1 "$C/out")" "restore drill: sampled 100, matched 100"
 expect_eq "$(ops '.drill | [.sampled, .matched]')" '[100,100]'
 expect_grep "/restore-drill ok$" "$FIX/pings"
@@ -199,6 +223,7 @@ expect_grep "/restore-drill/fail mismatch$" "$FIX/pings"
 case_ "restore drill: too few objects before the snapshot"
 setup
 head -n 100 "$FIX/raw/_manifest/2026-09-01.jsonl" >"$FIX/m" && mv "$FIX/m" "$FIX/raw/_manifest/2026-09-01.jsonl"
+rm "$FIX/raw/_manifest/2026-08-29.jsonl"
 run rws-restore-drill --force
 expect_rc 1
 expect_grep "/restore-drill/fail too_few_objects$" "$FIX/pings"

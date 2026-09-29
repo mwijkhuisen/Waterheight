@@ -8,10 +8,12 @@
 #   1. restic init, two backups of a tiny generated file, then
 #      `restic forget --keep-last 1 --prune` (restic "deletes" packs);
 #   2. over the S3 API (curl --aws-sigv4, the key on stdin, never argv):
+#      the bucket's default retention is COMPLIANCE for at least 30 days;
+#      a version written in step 1 is retained in COMPLIANCE for >= 29 more days;
 #      every object version written in step 1 is still listed;
 #      a DELETE of one version (by versionId) is refused;
 #      shortening that version's retention is refused.
-# Exit 0 only when all three hold. Output: counts and PASS/FAIL, no key.
+# Exit 0 only when all five hold. Output: counts and PASS/FAIL, no key.
 #
 # Usage (root, on the VPS, once the bucket and keys exist; owner action A5):
 #   deploy/tests/object-lock-prune.sh [--dry-run]
@@ -29,8 +31,8 @@ case ${1:-} in
 esac
 
 load_env || die "no $RWS_ETC/rws.env"
-[[ ${RWS_RESTIC_REPOSITORY:-} =~ ^s3:https://([a-z0-9.-]+(:[0-9]{1,5})?)/([a-z0-9._-]+)(/.*)?$ ]] ||
-  die "RWS_RESTIC_REPOSITORY must look like s3:https://<host>/<bucket>[/<prefix>]"
+[[ ${RWS_RESTIC_REPOSITORY:-} =~ ^s3:https://([a-z0-9.-]+(:443)?)/([a-z0-9._-]+)(/.*)?$ ]] ||
+  die "RWS_RESTIC_REPOSITORY must look like s3:https://<host>/<bucket>[/<prefix>] (port 443 only)"
 endpoint=${BASH_REMATCH[1]} bucket=${BASH_REMATCH[3]}
 host=${endpoint%%:*}
 region=${RWS_S3_REGION:-us-east-1}
@@ -87,6 +89,15 @@ one=$(head -n 1 <<<"$list")
 okey=$(grep -o '<Key>[^<]*' <<<"$one" | cut -d'>' -f2)
 ovid=$(grep -o '<VersionId>[^<]*' <<<"$one" | cut -d'>' -f2)
 [[ $okey == "$prefix/"* && $ovid =~ ^[A-Za-z0-9._-]+$ ]] || die "unexpected object listing"
+# xml_value <tag> <xml>: the first value of <tag>, or nothing.
+xml_value() { grep -o "<$1>[^<]*" <<<"$2" | head -n 1 | cut -d'>' -f2 || true; }
+lock=$(s3 GET "?object-lock")
+lmode=$(xml_value Mode "$lock")
+ldays=$(xml_value Days "$lock")
+lyears=$(xml_value Years "$lock")
+held=$(s3 GET "/$okey?retention&versionId=$ovid")
+hmode=$(xml_value Mode "$held")
+huntil=$(date -u -d "$(xml_value RetainUntilDate "$held")" +%s 2>/dev/null || echo 0)
 del=$(s3 DELETE "/$okey?versionId=$ovid" -o /dev/null -w '%{http_code}')
 retention='<Retention><Mode>COMPLIANCE</Mode><RetainUntilDate>'$(date -u -d '+1 day' +%Y-%m-%dT%H:%M:%SZ)'</RetainUntilDate></Retention>'
 md5=$(printf '%s' "$retention" | openssl dgst -md5 -binary | base64)
@@ -94,6 +105,18 @@ ret=$(s3 PUT "/$okey?retention&versionId=$ovid" -H "Content-MD5: $md5" -H 'Conte
   --data-raw "$retention" -o /dev/null -w '%{http_code}')
 
 fails=0
+if [[ $lmode == COMPLIANCE ]] && ((${ldays:-0} >= 30 || ${lyears:-0} >= 1)); then
+  echo "PASS the bucket's default retention is COMPLIANCE, ${ldays:+$ldays days}${lyears:+$lyears years}"
+else
+  echo "FAIL the bucket's default retention is ${lmode:-missing}, ${ldays:-0} days ${lyears:-0} years (needs COMPLIANCE, >= 30 days)"
+  fails=1
+fi
+if [[ $hmode == COMPLIANCE ]] && ((huntil >= $(date -u +%s) + 29 * 86400)); then
+  echo "PASS a new object version is retained in COMPLIANCE until $(date -u -d "@$huntil" +%Y-%m-%d)"
+else
+  echo "FAIL a new object version is retained ${hmode:-without a mode} until $(date -u -d "@$huntil" +%Y-%m-%d) (needs COMPLIANCE, >= 29 days)"
+  fails=1
+fi
 if ((missing == 0)); then echo "PASS all $before object versions survive restic forget --prune"; else
   echo "FAIL $missing of $before object versions were removed"
   fails=1
