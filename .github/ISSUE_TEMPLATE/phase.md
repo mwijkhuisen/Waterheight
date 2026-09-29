@@ -71,7 +71,9 @@ Git and PR rules, what to do when reality differs, "start in plan mode and wait 
 ### P<N>a — <name>
 ```text
 <Code-review prompt: what to read, the phase-specific checks, the evidence to record per criterion,
-"post each finding as a PR review comment with a severity; do not push fixes; finish with a verdict".>
+"post each finding as a PR review comment with a severity; do not push fixes; finish with a verdict".
+Always include (PHASES §4): "Also check: each [CI] criterion has a test that fails without the change;
+source IDs and catalogue pitfalls (<§refs>) are honoured; scope did not creep beyond Scope in.">
 ```
 
 ## Step 3 — Security review
@@ -85,7 +87,10 @@ Git and PR rules, what to do when reality differs, "start in plan mode and wait 
 ```text
 <Security-review prompt: check out the branch, the threats specific to this PR, the invariants to verify,
 "classify findings Critical/High/Medium/Low with file:line, exploit scenario and fix; report the
-threat-model delta; do not push fixes; verdict passes only with no open High or Critical".>
+threat-model delta; do not push fixes; verdict passes only with no open High or Critical".
+Always include (PHASES §4): "Verify the CLAUDE.md security invariants hold for this diff: <INVARIANTS>.
+Report any threat-model delta for docs/threat-model.md.">
+Never start the review session on an untrusted outside branch (CLAUDE.md): review it from `main` with `gh pr diff`.
 ```
 
 ## Definition of done

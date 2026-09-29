@@ -6,6 +6,7 @@ Please report security problems **privately**, never in a public issue, pull req
 
 - Use GitHub's private vulnerability reporting: the **Security** tab of this repository → **Report a vulnerability** (`https://github.com/mwijkhuisen/Waterheight/security/advisories/new`).
 - Once the project's domain exists (decision D2), `security@<domain>` and a `security.txt` (P12) are a second channel. `<domain>` is a placeholder until then.
+- If the **Report a vulnerability** button is not available yet (it is switched on with the repository settings, owner action B1), open an issue titled "Security contact request" **with no details at all**; the owner will reply with a private channel.
 
 Include what you found, where (file and line, URL or workflow), how to reproduce it and the impact you expect. Do not include real personal data or secrets; describe them instead.
 

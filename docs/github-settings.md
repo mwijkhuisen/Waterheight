@@ -15,11 +15,14 @@ scripts/gh-settings.sh --check     # read-only; exit 1 on any drift
 | Branch ruleset `main` | Active, no bypass actors; PR required with **0 approvals**; code-owner review **off**; required checks `ci` and `security` (from GitHub Actions, app 15368); linear history (squash or rebase merges); no force push; no deletion | The owner is the only reviewer and merger: a required approval or code-owner review would deadlock every PR. CODEOWNERS still requests the owner's review on sensitive paths |
 | Tag ruleset `legacy-v0` | Active, no bypass actors; no deletion, no update (move), no non-fast-forward | Protects the fresh-start archive (ADR-0001; closes R-001) |
 | Actions permissions | Enabled; allowed actions **selected**: GitHub-owned (`actions/*`, `github/*`) plus `step-security/harden-runner@*`; SHA pinning **required** | Every `uses:` in the workflows is covered (the `--check` verifies it) |
+| Fork pull requests | Workflows of every outside contributor wait for approval (`all_external_contributors`) | A public repository: no stranger's PR runs CI unreviewed |
 | Default `GITHUB_TOKEN` | Read-only; Actions may not approve PRs | Least privilege |
 | Secret scanning | Enabled, with push protection | Free on public repositories |
 | Private vulnerability reporting | Enabled | The channel `SECURITY.md` points to |
 | Dependabot alerts | Enabled | Version updates come from `.github/dependabot.yml` |
 | Environment `production` (B2) | Required reviewer: the owner; deployments from `main` only; **no environment secrets** | P1b's release flow waits on it (ADR-0008) |
+
+Rulesets are written with `PUT`, which replaces a ruleset whole. If a live ruleset holds a rule type the script does not set (say, a stricter rule you added by hand), the script stops instead of dropping it: add that rule to the script, then run it again. `--check` compares the target, enforcement, bypass actors, include and exclude patterns, every rule type, the PR parameters, the allowed merge methods, the strict status-check policy and the required checks.
 
 ## What `--check` also verifies (B3, B5)
 

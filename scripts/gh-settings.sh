@@ -8,6 +8,9 @@
 #                                     any Actions/Dependabot/environment secret, deploy
 #                                     key or webhook (B3, B5)
 #
+# A ruleset is written with PUT, which replaces it whole; so the script refuses
+# to touch a live ruleset that holds a rule type it does not set (merge that rule
+# into this script first) rather than drop a stricter manual rule.
 # It only tightens: no bypass actors, no protection turned off. Code-owner review
 # stays off on purpose: the owner is the only reviewer and merger, so requiring
 # a code-owner approval would deadlock every PR (0 required approvals, B1).
@@ -90,17 +93,32 @@ q() {
   if out=$(gh api "$1" --jq "$2" 2>/dev/null); then printf '%s\n' "$out"; else echo "<unavailable>"; fi
 }
 ruleset_id() { gh api "repos/$REPO/rulesets" --jq ".[] | select(.name == \"$1\") | .id" | head -n1; }
+# put_ruleset <name> <json body> <the rule types the body sets…>
 put_ruleset() {
-  local name=$1 body=$2 id
+  local name=$1 body=$2 id live t
+  shift 2
   id=$(ruleset_id "$name")
-  if [[ -n $id ]]; then call PUT "repos/$REPO/rulesets/$id" "$body"; else call POST "repos/$REPO/rulesets" "$body"; fi
+  if [[ -z $id ]]; then
+    call POST "repos/$REPO/rulesets" "$body"
+    return
+  fi
+  live=$(gh api "repos/$REPO/rulesets/$id" --jq '.rules[].type')
+  for t in $live; do
+    if [[ " $* " != *" $t "* ]]; then
+      echo "gh-settings: ruleset $name has a rule '$t' this script does not set; PUT would drop it." >&2
+      echo "gh-settings: add it to the script (or remove it on GitHub on purpose), then run again." >&2
+      exit 1
+    fi
+  done
+  call PUT "repos/$REPO/rulesets/$id" "$body"
 }
 
 # ---- apply ----------------------------------------------------------------------
 apply() {
-  put_ruleset main "$main_ruleset"
-  put_ruleset legacy-v0 "$tag_ruleset"
+  put_ruleset main "$main_ruleset" deletion non_fast_forward required_linear_history pull_request required_status_checks
+  put_ruleset legacy-v0 "$tag_ruleset" deletion update non_fast_forward
   call PUT "repos/$REPO/actions/permissions" '{"enabled":true,"allowed_actions":"selected","sha_pinning_required":true}'
+  call PUT "repos/$REPO/actions/permissions/fork-pr-contributor-approval" '{"approval_policy":"all_external_contributors"}'
   call PUT "repos/$REPO/actions/permissions/selected-actions" \
     "{\"github_owned_allowed\":true,\"verified_allowed\":false,\"patterns_allowed\":$patterns_json}"
   call PUT "repos/$REPO/actions/permissions/workflow" '{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}'
@@ -130,18 +148,23 @@ check() {
   id=$(ruleset_id main)
   if [[ -z $id ]]; then drift "branch ruleset main is missing"; else
     expect "ruleset main" \
-      "{\"bypass\":0,\"checks\":[\"ci@$ACTIONS_APP_ID\",\"security@$ACTIONS_APP_ID\"],\"enforcement\":\"active\",\"include\":[\"~DEFAULT_BRANCH\"],\"pr\":{\"require_code_owner_review\":false,\"required_approving_review_count\":0},\"rules\":[\"deletion\",\"non_fast_forward\",\"pull_request\",\"required_linear_history\",\"required_status_checks\"]}" \
-      "$(q "repos/$REPO/rulesets/$id" '{enforcement, bypass: (.bypass_actors | length), include: .conditions.ref_name.include,
+      "{\"bypass\":0,\"checks\":[\"ci@$ACTIONS_APP_ID\",\"security@$ACTIONS_APP_ID\"],\"enforcement\":\"active\",\"exclude\":[],\"include\":[\"~DEFAULT_BRANCH\"],\"merge\":[\"rebase\",\"squash\"],\"pr\":{\"require_code_owner_review\":false,\"required_approving_review_count\":0},\"rules\":[\"deletion\",\"non_fast_forward\",\"pull_request\",\"required_linear_history\",\"required_status_checks\"],\"strict\":false,\"target\":\"branch\"}" \
+      "$(q "repos/$REPO/rulesets/$id" '{target, enforcement, bypass: (.bypass_actors | length),
+          include: .conditions.ref_name.include, exclude: .conditions.ref_name.exclude,
           rules: ([.rules[] | .type] | sort),
           pr: ([.rules[] | select(.type == "pull_request") | .parameters | {required_approving_review_count, require_code_owner_review}] | first),
+          merge: ([.rules[] | select(.type == "pull_request") | .parameters.allowed_merge_methods[]] | sort),
+          strict: ([.rules[] | select(.type == "required_status_checks") | .parameters.strict_required_status_checks_policy] | first),
           checks: ([.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[] | "\(.context)@\(.integration_id)"] | sort)} | tojson')"
   fi
   id=$(ruleset_id legacy-v0)
   if [[ -z $id ]]; then drift "tag ruleset legacy-v0 is missing"; else
     expect "ruleset legacy-v0" \
-      '{"bypass":0,"enforcement":"active","include":["refs/tags/legacy-v0"],"rules":["deletion","non_fast_forward","update"]}' \
-      "$(q "repos/$REPO/rulesets/$id" '{enforcement, bypass: (.bypass_actors | length), include: .conditions.ref_name.include, rules: ([.rules[] | .type] | sort)} | tojson')"
+      '{"bypass":0,"enforcement":"active","exclude":[],"include":["refs/tags/legacy-v0"],"rules":["deletion","non_fast_forward","update"],"target":"tag"}' \
+      "$(q "repos/$REPO/rulesets/$id" '{target, enforcement, bypass: (.bypass_actors | length), include: .conditions.ref_name.include, exclude: .conditions.ref_name.exclude, rules: ([.rules[] | .type] | sort)} | tojson')"
   fi
+  expect "fork PRs need approval to run workflows" all_external_contributors \
+    "$(q "repos/$REPO/actions/permissions/fork-pr-contributor-approval" .approval_policy)"
 
   expect "actions permissions" '{"allowed_actions":"selected","enabled":true,"sha_pinning_required":true}' \
     "$(q "repos/$REPO/actions/permissions" '{enabled, allowed_actions, sha_pinning_required} | tojson')"
