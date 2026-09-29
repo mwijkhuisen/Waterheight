@@ -430,6 +430,23 @@ expect_rc 1
 run rws-deploy --verify-image "docker.io/library/alpine:latest"
 expect_rc 1
 
+case_ "negative-deploy.sh ([owner]): four PASS lines; the rollback is proven by current, active and rws-deploy's report (R2-C6)"
+setup
+mkrel $T1
+mkrel $T2
+latest $T1
+run rws-update
+latest $T2
+run rws-update
+sed -n 's/^readonly \(UNSIGNED\|OTHER_IDENTITY\)=//p' "$here/negative-deploy.sh" >"$FIX/bad-images"
+[[ $(wc -l <"$FIX/bad-images") == 2 ]] || fail "the two refused images of negative-deploy.sh not found"
+RWS_DEPLOY=$bin/rws-deploy run ../tests/negative-deploy.sh
+expect_rc 0
+expect_count "^PASS " "$C/out" 4
+expect_grep "^PASS an injected smoke failure of $T2 rolled back to $T1 \(current, active and rws-deploy's own report\)$" "$C/out"
+expect_state current $T2
+expect_active $T2
+
 case_ "changed host files: /update/fail host_files_changed on every run until bootstrap.sh has run"
 setup
 mkrel $T1 host=one

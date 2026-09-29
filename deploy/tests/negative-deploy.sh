@@ -7,8 +7,9 @@
 #   3. an image of our current release verifies (the control);
 #   4. an injected smoke-test failure rolls back to the release that was
 #      running: rws-deploy <older> makes it current, then
-#      rws-deploy --inject-smoke-failure <newer> fails and leaves <older>
-#      current and active, then rws-deploy <newer> restores the newest.
+#      rws-deploy --inject-smoke-failure <newer> fails, leaves <older>
+#      current and active and reports "rolled back to <older>", then
+#      rws-deploy <newer> restores the newest.
 # Step 4 restarts the stack three times (a few minutes of capture at most).
 #
 # Usage: deploy/tests/negative-deploy.sh [--dry-run] [--skip-rollback]
@@ -62,13 +63,17 @@ elif [[ -z $older ]]; then
   fails=$((fails + 1))
 else
   "$deploy" "$older" || die "could not deploy the older release $older"
-  if "$deploy" --inject-smoke-failure "$newer"; then
+  rc=0
+  out=$("$deploy" --inject-smoke-failure "$newer" 2>&1) || rc=$?
+  if ((rc == 0)); then
     echo "FAIL the injected smoke failure did not fail the deploy"
     fails=$((fails + 1))
-  elif [[ $(state_get current) == "$older" && $(readlink "$RWS_STATE_DIR/active") == "releases/$older" ]]; then
-    echo "PASS an injected smoke failure of $newer rolled back to $older (current and active)"
+  elif [[ $(state_get current) == "$older" && $(readlink "$RWS_STATE_DIR/active") == "releases/$older" ]] &&
+    grep -qF "rolled back to $older" <<<"$out"; then
+    echo "PASS an injected smoke failure of $newer rolled back to $older (current, active and rws-deploy's own report)"
   else
-    echo "FAIL after the injected failure: current $(state_get current), active $(readlink "$RWS_STATE_DIR/active")"
+    echo "FAIL after the injected failure: current $(state_get current), active $(readlink "$RWS_STATE_DIR/active"); rws-deploy said:"
+    printf '%s\n' "$out" | tail -n 5
     fails=$((fails + 1))
   fi
   "$deploy" "$newer" || die "could not restore $newer: run rws-deploy $newer"
