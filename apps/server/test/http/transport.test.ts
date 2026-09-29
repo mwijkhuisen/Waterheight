@@ -1,8 +1,12 @@
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
-import { errorCode, readBody, undiciTransport } from '../../src/http/client.ts';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Pinger } from '../../src/capture/pings.ts';
+import { Client, errorCode, readBody, undiciTransport } from '../../src/http/client.ts';
+import { Politeness } from '../../src/http/politeness.ts';
+import type { Transport } from '../../src/http/types.ts';
+import { fakeResolver } from '../helpers.ts';
 
 // The production undici transport, against a local plain-HTTP server (no TLS
 // key is committed). msw never sees undici; nothing here leaves the machine:
@@ -95,5 +99,75 @@ describe('undici transport', () => {
     const signal = AbortSignal.timeout(300);
     const err = await call(transport, `http://provider.test:${s.port}/`, signal).catch((e: unknown) => e);
     expect(errorCode(err, signal)).toBe('timeout');
+  });
+});
+
+describe('the client over the undici transport (S1: no unhandled rejection)', () => {
+  // The real undici transport; only the scheme and port are rewritten, because the client
+  // accepts https on 443 only and no TLS key is committed.
+  const local =
+    (port: number): Transport =>
+    (req) =>
+      undiciTransport(new Set(['provider.test']), onlyLoopback, loopbackDns).transport({
+        ...req,
+        url: new URL(`http://provider.test:${port}${req.url.pathname}${req.url.search}`),
+      });
+  const unhandled: unknown[] = [];
+  const record = (e: unknown) => unhandled.push(e);
+  beforeEach(() => {
+    unhandled.length = 0;
+    process.on('unhandledRejection', record);
+  });
+  afterEach(() => {
+    process.off('unhandledRejection', record);
+  });
+  const settle = () => new Promise((r) => setTimeout(r, 100));
+
+  it('waits out a Retry-After longer than the request timeout, then fetches', async () => {
+    let n = 0;
+    const s = await listen((_q, r) => {
+      n += 1;
+      if (n === 1) {
+        r.writeHead(429, { 'retry-after': '1' });
+        r.end('slow down');
+      } else r.end('ok');
+    });
+    const c = new Client({
+      hosts: new Map([['NL-1', ['provider.test']]]),
+      userAgent: 'ua',
+      transport: local(s.port),
+      resolver: fakeResolver(),
+    });
+    const get = { url: 'https://provider.test/a', method: 'GET' as const, variant: 'v' };
+    expect(await c.fetch('NL-1', get, { timeoutMs: 300 })).toMatchObject({ ok: true, res: { status: 429 } });
+    // The 1 s wait is longer than the 300 ms timeout, which starts only after it.
+    expect(await c.fetch('NL-1', get, { timeoutMs: 300 })).toMatchObject({ ok: true, res: { status: 200 } });
+    await settle();
+    expect(unhandled).toEqual([]);
+  });
+
+  it('sends a ping after a failed ping, once the backoff has passed', async () => {
+    let n = 0;
+    const s = await listen((q, r) => {
+      n += 1;
+      if (n === 1) q.socket.destroy();
+      else r.end('OK');
+    });
+    // Full jitter after one failure: 600 ms, twice the ping timeout below.
+    const client = new Client({
+      hosts: new Map([['hc', ['hc-ping.com']]]),
+      userAgent: 'ua',
+      transport: local(s.port),
+      resolver: fakeResolver(),
+      politeness: new Politeness(() => 0.02),
+    });
+    const warnings: unknown[] = [];
+    const pinger = new Pinger('k'.repeat(22), 'ua', { warn: (...a: unknown[]) => warnings.push(a) }, client, 300);
+    await pinger.ping('cap-nl', 'start');
+    await pinger.ping('cap-nl', 'success');
+    await settle();
+    expect(n).toBe(2);
+    expect(warnings).toHaveLength(1); // the reset connection only
+    expect(unhandled).toEqual([]);
   });
 });

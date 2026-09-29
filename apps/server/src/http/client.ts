@@ -135,8 +135,13 @@ export async function readBody(
   return { body: Buffer.concat(chunks), wire };
 }
 
-/** Rejects when the signal aborts, even if the wrapped promise never settles. */
+/**
+ * Rejects when the signal aborts, even if the wrapped promise never settles.
+ * The wrapped promise is always observed, so its late rejection is never an
+ * unhandled rejection (which would end the process).
+ */
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  promise.catch(() => {});
   if (signal.aborted) return Promise.reject(signal.reason);
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(signal.reason);
@@ -234,8 +239,12 @@ export class Client {
     if (typeof first === 'string') return { ok: false, error: first };
     const maxWire = Math.min(opts.maxBytes ?? MAX_WIRE_BYTES, MAX_WIRE_BYTES);
     const maxDecoded = Math.min(MAX_DECODED_BYTES, 4 * maxWire);
-    const timeout = AbortSignal.timeout(opts.timeoutMs ?? TOTAL_TIMEOUT_MS);
-    const signal = opts.signal ? AbortSignal.any([timeout, opts.signal]) : timeout;
+    const timeoutMs = opts.timeoutMs ?? TOTAL_TIMEOUT_MS;
+    // A deadline starts after every wait before it, so a wait never turns into a timeout.
+    const deadline = () => {
+      const timeout = AbortSignal.timeout(timeoutMs);
+      return opts.signal ? AbortSignal.any([timeout, opts.signal]) : timeout;
+    };
     const headers: Record<string, string> = {
       ...this.options.sourceHeaders?.get(sourceId),
       ...req.headers,
@@ -257,18 +266,25 @@ export class Client {
           await this.sleep(gate.wait);
         }
         try {
-          await resolveChecked(host, this.resolver);
+          await abortable(resolveChecked(host, this.resolver), deadline());
         } catch (e) {
-          return { ok: false, error: errorCode(e, signal) };
+          return { ok: false, error: e instanceof GuardError ? e.code : 'dns' };
         }
+        // The total deadline of this hop (headers and body) starts here, after the waits.
+        const signal = deadline();
+        // Only the caller can have aborted it: nothing was sent, so it is no failure of the host.
+        if (signal.aborted) return { ok: false, error: 'backoff' };
+        const pending = this.transport({ url, method, headers, ...(body === undefined ? {} : { body }), signal });
         let res: TransportResponse;
         try {
           // Raced against the deadline: the total timeout holds even if a transport ignores the signal.
-          res = await abortable(
-            this.transport({ url, method, headers, ...(body === undefined ? {} : { body }), signal }),
-            signal,
-          );
+          res = await abortable(pending, signal);
         } catch (e) {
+          // Such a transport's late answer must not keep its socket open.
+          pending.then(
+            (r) => r.body.destroy(),
+            () => {},
+          );
           return this.failed(host, errorCode(e, signal));
         }
         const location = header(res.headers, 'location');

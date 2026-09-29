@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,6 +42,23 @@ describe('role dispatcher', () => {
 
   it('refuses to serve on a malformed PORT', async () => {
     expect(await run(['api'], { PORT: '80a' }, quiet)).toBe(EXIT_USAGE);
+  });
+});
+
+describe('capture keeps running after an unexpected error (T-CAP-8)', () => {
+  it('logs fixed fields only, never a message, and does not exit', () => {
+    const child = new URL('./keep-alive-child.ts', import.meta.url).pathname;
+    const out = execFileSync(process.execPath, ['--no-experimental-webstorage', child], {
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    const lines = out.trim().split('\n');
+    expect(lines.at(-1)).toBe('alive');
+    expect(lines.slice(0, -1).map((l) => JSON.parse(l).o)).toEqual([
+      { event: 'unhandledRejection', name: 'Error', code: 'other' },
+      { event: 'uncaughtException', name: 'Error', code: 'ECONNRESET' },
+    ]);
+    expect(out).not.toContain('DUMMYKEY');
   });
 });
 

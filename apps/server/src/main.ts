@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { pino } from 'pino';
+import { type Logger, pino } from 'pino';
 import { createApp } from './app.ts';
 import { Archive } from './archive/writer.ts';
 import { budgets, schedule } from './capture/budget.ts';
@@ -47,6 +47,23 @@ export function dryRun(log: (line: string) => void): number {
   return rws <= RWS_LIMIT ? 0 : 1;
 }
 
+/** An error name or code if it is a plain identifier; never a message, which may carry a URL with a key. */
+const tag = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9_]{1,64}$/.test(v) ? v : 'other');
+
+/**
+ * Keeps the capture role alive after an unexpected error (T-CAP-8). One
+ * process records every provider, so an exit would lose every run in flight
+ * and could crash-loop. Only fixed fields are logged.
+ */
+export function keepAlive(log: Pick<Logger, 'error'>): void {
+  for (const event of ['unhandledRejection', 'uncaughtException'] as const) {
+    process.on(event, (err: unknown) => {
+      const e = err as { name?: unknown; code?: unknown } | null | undefined;
+      log.error({ event, name: tag(e?.name), code: tag(e?.code) }, 'unexpected error: capture continues');
+    });
+  }
+}
+
 async function capture(
   env: Readonly<Record<string, string | undefined>>,
   log: (line: string) => void,
@@ -59,6 +76,7 @@ async function capture(
   process.umask(0o027);
   const registry = loadRegistry();
   const logger = pino({ base: { role: 'capture' } });
+  keepAlive(logger);
   const userAgent = captureUserAgent(cfg);
   const sourceHeaders = new Map<string, Record<string, string>>();
   for (const [source, headers] of registry.secretHeaders) {
