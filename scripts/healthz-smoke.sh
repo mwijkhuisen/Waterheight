@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Smoke test of the built server (issue #15 P0b; #16 P1a): the api role serves
 # GET /healthz -> 200 without any version; `capture --dry-run` loads every spec
-# offline and exits 0; every other role exits non-zero here (capture without
-# RWS_DOMAIN/RWS_CONTACT_EMAIL exactly 78, healthcheck without a heartbeat 1).
+# offline and exits 0, and so does `watchdog --dry-run`; every other role exits
+# non-zero here (capture and watchdog without RWS_DOMAIN/RWS_CONTACT_EMAIL
+# exactly 78, healthcheck without a heartbeat 1).
 # Usage: scripts/healthz-smoke.sh   (after `pnpm build`; uses a free local port)
 set -euo pipefail
 
@@ -34,12 +35,19 @@ dry=$(env -u RWS_DOMAIN -u RWS_CONTACT_EMAIL node "$main" capture --dry-run)
 grep -q 'RWS requests/hour' <<<"$dry" || { echo "healthz-smoke: capture --dry-run printed no budget" >&2; exit 1; }
 echo "capture --dry-run -> exit 0 ($(tail -n 1 <<<"$dry"))"
 
-# Never the live recorder: without the contact variables capture exits 78; the timeout is a backstop.
+checks=$(env -u RWS_DOMAIN -u RWS_CONTACT_EMAIL node "$main" watchdog --dry-run 2>&1)
+grep -q '^cert: ' <<<"$checks" || { echo "healthz-smoke: watchdog --dry-run listed no checks" >&2; exit 1; }
+echo "watchdog --dry-run -> exit 0 ($(wc -l <<<"$checks") checks)"
+
+# Never a live recorder or watchdog: without the contact variables both exit 78; the timeout is a backstop.
 for role in capture load publish replay watchdog nope; do
   code=0
   env -u RWS_DOMAIN -u RWS_CONTACT_EMAIL timeout 10 node "$main" "$role" >/dev/null 2>&1 || code=$?
   [[ $code -ne 0 ]] || { echo "healthz-smoke: role $role exited 0" >&2; exit 1; }
-  # capture must refuse to start (78): any other code, the timeout's 124 included, may be a live recorder.
-  [[ $role != capture || $code -eq 78 ]] || { echo "healthz-smoke: role capture exited $code, not 78" >&2; exit 1; }
+  # capture and watchdog must refuse to start (78): any other code, the timeout's 124 included, may be a live role.
+  if [[ $role == capture || $role == watchdog ]] && [[ $code -ne 78 ]]; then
+    echo "healthz-smoke: role $role exited $code, not 78" >&2
+    exit 1
+  fi
   echo "role $role -> exit $code"
 done

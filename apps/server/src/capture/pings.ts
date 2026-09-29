@@ -2,11 +2,14 @@ import type { Logger } from 'pino';
 import { Client } from '../http/client.ts';
 
 // healthchecks.io dead-man switches per provider group (A§11.3; the 9 contract
-// slugs). The ping key is a file secret: it is part of the URL, so no URL is
-// ever logged. Owner groups send no body (no source ID leaves the VPS there).
+// slugs), also used by the watchdog role for its three checks. The ping key is
+// a file secret: it is part of the URL, so no URL is ever logged. Owner groups
+// send no body (no source ID leaves the VPS there).
 
 export const PING_HOST = 'hc-ping.com';
 const KEY = /^[A-Za-z0-9_-]{16,64}$/;
+/** The capture group slugs and the watchdog's three checks (P1b); nothing else is ever pinged from here. */
+const SLUG = /^(?:cap-[a-z0-9-]+|watchdog|cert|disk)$/;
 
 export type PingKind = 'start' | 'success' | 'fail';
 
@@ -43,7 +46,7 @@ export class Pinger {
 
   /** Never throws; a failed ping is logged by slug only. */
   async ping(slug: string, kind: PingKind, body?: string): Promise<void> {
-    if (this.client === null || this.key === undefined || !/^cap-[a-z0-9-]+$/.test(slug)) return;
+    if (this.client === null || this.key === undefined || !SLUG.test(slug)) return;
     const suffix = kind === 'start' ? '/start' : kind === 'fail' ? '/fail' : '';
     const url = `https://${PING_HOST}/${this.key}/${slug}${suffix}`;
     const r = await this.client.fetch(

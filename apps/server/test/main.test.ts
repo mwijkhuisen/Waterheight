@@ -10,7 +10,7 @@ import { dryRun, EXIT_CONFIG, EXIT_NOT_IMPLEMENTED, EXIT_USAGE, parseListen, ROL
 const quiet = () => {};
 
 describe('role dispatcher', () => {
-  it.each(['load', 'publish', 'replay', 'watchdog'])('stub role %s exits non-zero', async (role) => {
+  it.each(['load', 'publish', 'replay'])('stub role %s exits non-zero', async (role) => {
     expect(await run([role], {}, quiet)).toBe(EXIT_NOT_IMPLEMENTED);
   });
 
@@ -33,12 +33,18 @@ describe('role dispatcher', () => {
     expect(text).toContain('ddapi20-waterwebservices.rijkswaterstaat.nl');
   });
 
-  it.each([[[]], [['nope']], [['api', 'extra']], [['API']], [['capture', '--now']], [['healthcheck', 'x']]])(
-    'rejects %j with a usage error',
-    async (argv) => {
-      expect(await run(argv, {}, quiet)).toBe(EXIT_USAGE);
-    },
-  );
+  it.each([
+    [[]],
+    [['nope']],
+    [['api', 'extra']],
+    [['API']],
+    [['capture', '--now']],
+    [['healthcheck', 'x']],
+    [['watchdog', '--now']],
+    [['api', '--once']],
+  ])('rejects %j with a usage error', async (argv) => {
+    expect(await run(argv, {}, quiet)).toBe(EXIT_USAGE);
+  });
 
   it('refuses to serve on a malformed PORT', async () => {
     expect(await run(['api'], { PORT: '80a' }, quiet)).toBe(EXIT_USAGE);
