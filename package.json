@@ -9,7 +9,7 @@
   "scripts": {
     "i18n": "pnpm -F web i18n",
     "check": "pnpm i18n && biome check && tsc -b && vitest run --project unit && node scripts/check-bom.ts && node scripts/check-boundaries.ts",
-    "test": "vitest run --project unit",
+    "test": "pnpm i18n && vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "build": "pnpm i18n && tsc -b && pnpm -F web build",
     "check:bom": "node scripts/check-bom.ts",

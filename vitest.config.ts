@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
+// Anchored to the workspace, so nested checkouts (.claude/worktrees/*) are never picked up.
 const testFiles = ['test/**/*.test.ts', 'apps/*/test/**/*.test.ts', 'packages/*/test/**/*.test.ts'];
+const integrationFiles = testFiles.map((glob) => glob.replace(/\.test\.ts$/, '.int.test.ts'));
 
 export default defineConfig({
   test: {
@@ -15,7 +17,7 @@ export default defineConfig({
         extends: true,
         test: { name: 'unit', include: testFiles, exclude: ['**/*.int.test.ts', '**/node_modules/**'] },
       },
-      { extends: true, test: { name: 'integration', include: ['**/*.int.test.ts'], exclude: ['**/node_modules/**'] } },
+      { extends: true, test: { name: 'integration', include: integrationFiles, exclude: ['**/node_modules/**'] } },
     ],
   },
 });

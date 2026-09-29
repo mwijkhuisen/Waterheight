@@ -15,16 +15,22 @@ function between(text: string, start: string, end: string): string {
 const architectureInvariants = (architecture: string) =>
   between(architecture, '### 12.1 Invariants (verbatim in `CLAUDE.md`, quoted in every prompt)\n', '\n### 12.2');
 const claudeInvariants = (claude: string) => between(claude, '<!-- invariants:start -->', '<!-- invariants:end -->');
+/** The check itself: CLAUDE.md quotes A§12.1 byte for byte. */
+const quotesInvariants = (claude: string, architecture: string) =>
+  Buffer.from(claudeInvariants(claude)).equals(Buffer.from(architectureInvariants(architecture)));
 
 describe('CLAUDE.md', () => {
-  const expected = architectureInvariants(read('docs/plan/ARCHITECTURE.md'));
-  const actual = claudeInvariants(read('CLAUDE.md'));
+  const architecture = read('docs/plan/ARCHITECTURE.md');
+  const claude = read('CLAUDE.md');
+  const expected = architectureInvariants(architecture);
+  const actual = claudeInvariants(claude);
 
   it('quotes invariants 1–11 of ARCHITECTURE §12.1 byte for byte', () => {
     expect(expected.split('\n').map((l) => l.split('.')[0])).toEqual(
       Array.from({ length: 11 }, (_, i) => String(i + 1)),
     );
-    expect(Buffer.from(actual)).toEqual(Buffer.from(expected));
+    expect(quotesInvariants(claude, architecture)).toBe(true);
+    expect(actual).toBe(expected);
   });
 
   it('includes invariant 11 with the owner canary', () => {
@@ -32,11 +38,15 @@ describe('CLAUDE.md', () => {
     expect(actual).toContain('`777777.777`');
   });
 
-  it('fails the comparison when one character changes', () => {
-    const at = expected.indexOf('never shared');
-    const mutated = `${expected.slice(0, at)}N${expected.slice(at + 1)}`;
-    expect(Buffer.from(mutated)).not.toEqual(Buffer.from(expected));
-    expect(mutated.length).toBe(expected.length);
+  it.each([
+    ['one changed character', (s: string) => s.replace('never shared', 'Never shared')],
+    ['one dropped character', (s: string) => s.replace('`777777.777`', '`77777.777`')],
+    ['a trailing space', (s: string) => s.replace('never shared.', 'never shared. ')],
+  ])('fails on a CLAUDE.md with %s in the invariants', (_, mutate) => {
+    const inside = claude.indexOf('<!-- invariants:start -->');
+    const mutated = claude.slice(0, inside) + mutate(claude.slice(inside));
+    expect(mutated).not.toBe(claude);
+    expect(quotesInvariants(mutated, architecture)).toBe(false);
   });
 
   it.each([
