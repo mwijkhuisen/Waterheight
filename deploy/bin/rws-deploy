@@ -46,7 +46,7 @@ done
 [[ $tag =~ $RWS_TAG_RE ]] || usage
 export RWS_INJECT_SMOKE_FAILURE=$inject
 
-exec 9>"$RWS_LOCK_DIR/rws-deploy.lock"
+exec 9>"$(lockfile rws-deploy)"
 flock -w 1800 9 || die "another deploy is still running"
 env_ready || die "rws.env is not complete (owner steps A2-A4 in docs/runbooks/bootstrap.md)"
 

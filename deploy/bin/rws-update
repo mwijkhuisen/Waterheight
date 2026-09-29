@@ -23,7 +23,7 @@ case ${1:-} in
 esac
 unset RWS_INJECT_SMOKE_FAILURE
 
-exec 9>"$RWS_LOCK_DIR/rws-deploy.lock"
+exec 9>"$(lockfile rws-deploy)"
 if ! flock -n 9; then
   log "another deploy is running"
   exit 0

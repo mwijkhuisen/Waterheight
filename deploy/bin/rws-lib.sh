@@ -16,7 +16,7 @@ readonly RWS_PING_SLUGS='^(backup|restore-drill|update|watchdog|cert|disk)$'
 RWS_STATE_DIR=${RWS_STATE_DIR:-/var/lib/rws}
 RWS_ETC=${RWS_ETC:-/etc/rws}
 RWS_SRV=${RWS_SRV:-/srv/rws}
-RWS_LOCK_DIR=${RWS_LOCK_DIR:-/run/lock}
+RWS_LOCK_DIR=${RWS_LOCK_DIR:-/run/rws}
 RWS_RELEASES_URL=${RWS_RELEASES_URL:-https://github.com/mwijkhuisen/Waterheight/releases}
 export TUF_ROOT=${TUF_ROOT:-$RWS_STATE_DIR/sigstore}
 DRY_RUN=${DRY_RUN:-0}
@@ -27,6 +27,12 @@ die() {
   exit 1
 }
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+# lockfile <name>: a lock in the root-only lock directory, never a shared 1777
+# one such as /run/lock, where another user could pre-create the file.
+lockfile() {
+  mkdir -m 0700 -- "$RWS_LOCK_DIR" 2>/dev/null || [[ -d $RWS_LOCK_DIR ]]
+  printf '%s/%s.lock' "$RWS_LOCK_DIR" "$1"
+}
 
 # stdin -> a temporary file in the destination's directory -> rename (atomic).
 write_atomic() {
@@ -206,7 +212,7 @@ ops_update() {
         and (.drill.matched | type == "number")))
     ' <<<"$next" >/dev/null || die "ops.json: refusing an unexpected document"
     printf '%s\n' "$next" | write_atomic "$file" 0644
-  ) 9>"$RWS_LOCK_DIR/rws-ops.lock"
+  ) 9>"$(lockfile rws-ops)"
 }
 
 # stage_release <dir> <tag>: with the manifest in <dir> already verified, fetch

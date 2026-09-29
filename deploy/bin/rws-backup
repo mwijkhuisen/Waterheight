@@ -38,7 +38,7 @@ if ((DRY_RUN)); then
   exit 0
 fi
 
-exec 9>"$RWS_LOCK_DIR/rws-backup.lock"
+exec 9>"$(lockfile rws-backup)"
 flock -w 3000 9 || die "another backup or drill is still running"
 allow_bucket "$BUCKET_HOST"
 
