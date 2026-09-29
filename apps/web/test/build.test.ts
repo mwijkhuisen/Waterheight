@@ -32,7 +32,7 @@ describe('web build', () => {
   it.each(['index.html', 'en/index.html'])('%s has no inline script, style or handler', (file) => {
     const html = page(file);
     // Every <script> (any case) is an external file with an empty body.
-    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)];
+    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)];
     expect(scripts.length).toBeGreaterThan(0);
     expect(html.match(/<script\b/gi)).toHaveLength(scripts.length);
     for (const [, attrs = '', body = ''] of scripts) {
