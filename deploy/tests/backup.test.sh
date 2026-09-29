@@ -306,7 +306,7 @@ expect_grep "rws-status-copy.path is not active: re-arming it" "$C/out"
 run rws-tick
 expect_eq "$(grep -c '^systemctl start' "$FIX/calls")" 1
 
-case_ "status copy: capture.json published 0644; a symlink, a non-contract and an oversize file refused"
+case_ "status copy: capture.json published 0644; a symlink, a non-contract and an oversize file refused; a copy past the cap cut off"
 setup
 mkdir -p "$RWS_SRV/public/status"
 src=$RWS_SRV/public/status/capture.json
@@ -329,6 +329,11 @@ head -c 1048577 /dev/zero >"$src"
 run rws-status-copy
 expect_rc 1
 expect_grep "larger than" "$C/out"
+# Far past the cap (sparse, so the test itself writes nothing): the copy is killed, not completed and then refused.
+rm "$src" && truncate -s 100G "$src"
+run rws-status-copy
+expect_rc 1
+expect_grep "cannot copy" "$C/out"
 [[ -z $(find "$RWS_SRV/public/ops" -name '.capture.json.*') ]] || fail "a temporary copy was left behind"
 
 case_ "ops.json writer: a corrupt file is replaced, never kept"

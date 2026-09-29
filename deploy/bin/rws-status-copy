@@ -5,9 +5,10 @@
 # /srv/rws/public/status/: Caddy follows symlinks, so a compromised capture
 # could otherwise publish any file Caddy can read (its TLS keys included).
 #
-# The copy never dereferences the source (cp -P into a fresh name in the
-# target directory) and is published only as a regular file of at most 1 MiB
-# that parses as the contract document; then 0644 and an atomic rename.
+# The copy never dereferences the source (GNU cp -P into a fresh name in the
+# target directory: it opens the source with O_NOFOLLOW), stops just past
+# 1 MiB, and is published only as a regular file of at most 1 MiB that parses
+# as the contract document; then 0644 and an atomic rename.
 #
 # Usage: rws-status-copy [--dry-run]
 set -euo pipefail
@@ -29,8 +30,10 @@ dest=$RWS_SRV/public/ops/capture.json
 tmp=$(mktemp -u "${dest%/*}/.capture.json.XXXXXX")
 trap 'rm -f -- "$tmp"' EXIT
 
-# A FIFO would block cp; a directory is refused by cp without -r.
-timeout 10 cp -P -- "$src" "$tmp" || die "cannot copy $src"
+# A FIFO would block cp (the timeout cuts it off); a directory is refused by cp
+# without -r; the file size limit (bash counts it in KiB) kills a copy just past
+# the cap, so a huge, sparse or endless source never fills the disk.
+(ulimit -f $((MAX_BYTES / 1024 + 1)) && exec timeout 10 cp -P -- "$src" "$tmp") || die "cannot copy $src"
 [[ -f $tmp && ! -L $tmp ]] || die "refused: $src is not a regular file"
 (($(stat -c %s -- "$tmp") <= MAX_BYTES)) || die "refused: $src is larger than $MAX_BYTES bytes"
 jq -e 'type == "object" and (keys - ["days", "generated_at", "owner_specs", "seeds", "specs"] == [])

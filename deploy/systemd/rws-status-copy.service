@@ -9,6 +9,8 @@ StartLimitIntervalSec=0
 Type=oneshot
 ExecStart=/usr/local/bin/rws-status-copy
 TimeoutStartSec=1min
+# The script caps its copy at just over 1 MiB (ulimit -f); this bounds the unit too.
+LimitFSIZE=2M
 UMask=0077
 PrivateTmp=yes
 ProtectHome=read-only
