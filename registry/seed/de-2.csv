@@ -1,0 +1,9 @@
+# The 7 PEGELONLINE stations with a BfG WV forecast series in the recorded stations.json metadata (catalogue §2.2).
+uuid,number,name
+665be0fe-5e38-43f6-8b04-02a93bdbeeb4,25100300,OESTRICH
+1d26e504-7f9e-480a-b52c-5932be6549ab,25700100,KAUB
+4c7d796a-39f2-4f26-97a9-3aad01713e29,25900700,KOBLENZ
+a6ee8177-107b-47dd-bcfd-30960ccc6e9c,2730010,KÖLN
+8f7e5f92-1153-4f93-acba-ca48670c8ca9,2750010,DÜSSELDORF
+c0f51e35-d0e8-4318-afaf-c5fcbc29f4c1,2770010,DUISBURG-RUHRORT
+9598e4cb-0849-401e-bba0-689234b27644,2790020,EMMERICH

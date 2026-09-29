@@ -100,7 +100,11 @@ export function scanCsv(bytes: Uint8Array, opts: CsvOptions): { header: string[]
   if (field !== '' || row.length > 0) endRow();
   const [header, ...rows] = records;
   if (header === undefined) return fail('csv_empty');
-  for (const r of rows) if (r.length !== header.length) fail('csv_width');
+  // A data row may carry one trailing empty field the header lacks (LU-1); any other width fails.
+  for (const r of rows) {
+    if (r.length === header.length + 1 && r[r.length - 1] === '') r.pop();
+    else if (r.length !== header.length) fail('csv_width');
+  }
   return { header, rows };
 }
 
@@ -269,9 +273,12 @@ export const flatNames =
   (name: string): boolean =>
     !name.includes('/') && allowed.includes(name);
 
+/** The NL-4 workbook has 14 members (2026-09-29); OOXML allows more than the flat ZIP cap of 10. */
+export const XLSX_MAX_MEMBERS = 20;
+
 /** OOXML member names (XLSX): a fixed set of top folders, safe path segments only. */
 export const ooxmlNames = (name: string): boolean =>
-  /^(?:\[Content_Types\]\.xml|(?:_rels|docProps|xl|customXml)(?:\/[A-Za-z0-9_.[\] -]+)+)$/.test(name) &&
+  /^(?:\[Content_Types\]\.xml|(?:_rels|docProps|docMetadata|xl|customXml)(?:\/[A-Za-z0-9_.[\] -]+)+)$/.test(name) &&
   !name.split('/').some((s) => s === '' || s === '.' || s === '..');
 
 // ---------------------------------------------------------------- XML

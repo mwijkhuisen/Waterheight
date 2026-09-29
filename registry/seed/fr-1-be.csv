@@ -1,0 +1,22 @@
+# The 18 NL-bound Hub'Eau partner stations on Belgian soil (catalogue §0.6): code_commune_station 99131 in the
+# recorded referentiel/stations payloads (2026-09-29), without D021000101 (Solre-Erquelinnes) and E240041201 (Tournai),
+# which deliver no data; the Yser at Roesbrugge does not drain to NL. explicit=yes where no code_entite prefix covers a code.
+code_station,name,explicit
+B400101101,"La Chiers [La Messancy] en Belgique [Athus]",no
+B422431101,"La Chiers en Belgique [Torgny]",no
+B423000102,"Le Ton en Belgique [Harnoncourt]",no
+B610000201,"La Semoy en Belgique [Membre]",no
+B610000301,"La Semoy en Belgique [Tintigny]",no
+B610000401,"La Semoy en Belgique [Chiny]",no
+B610000601,"La Semoy en Belgique [Bouillon]",no
+B610000701,"La Semoy en Belgique [Sainte-Marie]",no
+B610000801,"La Semoy en Belgique [Straimont]",no
+B713000101,"[Le Viroin] en Belgique [Treignes]",no
+B713000201,"[Le Viroin] en Belgique [Couvin]",no
+B713000301,"[Le Viroin] en Belgique [Nismes]",no
+B732201101,"La Houille en Belgique [Felenne]",no
+D022000101,"La Thure en Belgique [Bersillies-L'Abbaye]",no
+D022000201,"Hante en Belgique [Beaumont]",no
+D022000301,"Hante en Belgique [Wiheries]",no
+E182702501,"Trouille en Belgique [Givry]",no
+E381126601,"La Lys [Lys] en Belgique [Menen - Menin] - Ropswalle",no

@@ -12,6 +12,8 @@ export type Req = {
   body?: string;
   /** Stable request-variant key: dup_of and per-variant state are kept per variant. */
   variant: string;
+  /** A provider resource id recorded as seen once this request succeeds (LU-5). */
+  seen_id?: string;
 };
 
 /** A final (non-redirect) response with its decoded body. */
@@ -62,3 +64,46 @@ export type TransportResponse = {
 
 /** The only layer that touches the network; every policy check sits above it. */
 export type Transport = (req: TransportRequest) => Promise<TransportResponse>;
+
+// ---------------------------------------------------------------- adapters
+
+/** One row of a registry/seed CSV, or one inline variant of a spec. */
+export type Row = Readonly<Record<string, string>>;
+
+/** What an adapter gets to build one request: the rendered registry template plus its window. */
+export type BuildContext = {
+  req: Req;
+  row: Row;
+  now: Date;
+  /** The gap-stretched window of a windowed spec, else null. */
+  window: { from: Date; to: Date } | null;
+  /** Explicit extra values from the spec (e.g. the FR-1 Belgian codes). */
+  params: Readonly<Record<string, string>>;
+};
+
+/** Stage-2 requests from a stage-1 document (FR-4 stations, FR-5 sections, LU-5 new files, Hub'Eau next). */
+export type ExpandContext = {
+  req: Req;
+  doc: unknown;
+  now: Date;
+  /** Ids already fetched (LU-5), from the spec state. */
+  seen: ReadonlySet<string>;
+  /** The client's static URL check for this source: the checked href, or null (refused). */
+  checkUrl: (raw: string) => string | null;
+  /** True during the §0.1b harvest (follow every page). */
+  seed: boolean;
+};
+
+export type Expansion = { reqs: Req[]; seen?: string[] };
+
+/** Pure per-source hooks; the runner does everything else from the registry. */
+export type Adapter = {
+  build?: (ctx: BuildContext) => Req;
+  expand?: (ctx: ExpandContext) => Expansion;
+  /** Change-gate key (`lastmod-runstart`, `field` beyond a plain path); null = unreadable, so the body is stored. */
+  gateKey?: (doc: unknown, headers: Readonly<Record<string, string>>) => string | null;
+  /** A value whose change raises an alert (LU-4 thresholds, NL-4 file names). */
+  alertKey?: (doc: unknown) => string | null;
+  /** First and last timestamps of a payload, for the seed report. */
+  coverage?: (doc: unknown) => { from: string; to: string } | null;
+};

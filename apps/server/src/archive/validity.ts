@@ -11,6 +11,7 @@ import {
   parseJson,
   parseXml,
   scanCsv,
+  XLSX_MAX_MEMBERS,
 } from '../http/guards.ts';
 
 // Validity assertions (A§7.1): the payload parses under the §6.7 guard of its
@@ -20,7 +21,7 @@ import {
 // the CSV header) raises an alert when it changes.
 
 export const ValiditySpec = z.strictObject({
-  format: z.enum(['json', 'csv', 'zip', 'xml', 'xlsx', 'html-attr', 'html']),
+  format: z.enum(['json', 'csv', 'zip', 'xml', 'xlsx', 'html-attr', 'html', 'text']),
   /** JSON/HTML-attribute/XML: dot paths (a numeric segment indexes an array); CSV: header columns; ZIP/XLSX: members. */
   required: z.array(z.string()).default([]),
   /** Top-level keys whose presence makes a 200 invalid (Vigicrues `error_msg`). */
@@ -48,7 +49,7 @@ export const ValiditySpec = z.strictObject({
       max_members: z.number().int().positive().optional(),
     })
     .optional(),
-  /** HTML pages: a pattern the page must contain (bounded regex on ≤ 5 MB). */
+  /** HTML/text: a pattern the body must contain (bounded regex on ≤ 5 MB). */
   pattern: z.string().optional(),
 });
 export type ValiditySpec = z.infer<typeof ValiditySpec>;
@@ -137,7 +138,7 @@ export async function validate(spec: ValiditySpec, status: number, body: Buffer)
         });
         for (const col of spec.required) if (!header.includes(col)) return invalid('required');
         if (rows.length < spec.min) return invalid('count', rows.length);
-        return { ok: true, reason: null, count: rows.length, shape: csvShape(header) };
+        return { ok: true, reason: null, count: rows.length, shape: csvShape(header), doc: { header } };
       }
       case 'zip': {
         const z = spec.zip;
@@ -185,14 +186,17 @@ export async function validate(spec: ValiditySpec, status: number, body: Buffer)
         };
       }
       case 'xlsx': {
-        const names = await checkXlsx(body, spec.zip?.max_members ?? 40);
+        const names = await checkXlsx(body, spec.zip?.max_members ?? XLSX_MAX_MEMBERS);
         for (const m of spec.required) if (!names.includes(m)) return invalid('required');
         return { ok: true, reason: null, count: names.length, shape: null };
       }
-      case 'html': {
+      case 'html':
+      case 'text': {
         if (body.length > 5 * 1024 * 1024) return invalid('size');
         const text = decode(body);
         if (spec.pattern !== undefined && !new RegExp(spec.pattern).test(text)) return invalid('pattern');
+        // A truncated page lacks its closing tag; a truncated text file its final newline.
+        if (spec.format === 'html' ? !/<\/html>\s*$/i.test(text) : !text.endsWith('\n')) return invalid('truncated');
         return { ok: true, reason: null, count: null, shape: null, doc: text };
       }
     }

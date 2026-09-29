@@ -1,0 +1,631 @@
+# Capture specs (ARCHITECTURE §7.1–7.3; catalogue §0.1a, §0.1b, §0.6, §0.8, §2, §6.5, §6.7; issue #16
+# "P1a capture checklist"). One spec per A§7.2 row, more where a row needs tiers. Each spec's audience
+# is read from registry/sources.yaml; an `off` source has no host and no spec. Changes need owner
+# review (CODEOWNERS). Validated by apps/server/src/capture/specs.ts and apps/server/test/capture/*.
+# Crons are UTC with staggered offsets. `first: true` = the first-enabled group (§0.1a streams and
+# the owner-audience LU-3/LU-4 runs and thresholds nobody can refill).
+version: 1
+
+# healthchecks.io slugs (issue #16 contract; A§11.3). No source ID in a slug.
+groups:
+  cap-nl: [NL-1, NL-2, NL-4]
+  cap-de-fed: [DE-1]
+  cap-de6: [DE-6]
+  cap-de78: [DE-7, DE-8]
+  cap-fr: [FR-1, FR-3, FR-4, FR-5]
+  cap-lu: [LU-1, LU-5, LU-6]
+  cap-ch: [CH-1, CH-2, CH-3, CH-4, CH-5]
+  cap-bfg: [DE-2, DE-3]
+  cap-owner: [BE-3, LU-2, LU-3, LU-4]
+
+# The fetch allowlist per source ID (A§12.2; catalogue §6.7). Canonical hosts only, so no
+# cross-host redirect is ever needed: inondations.public.lu (not inondations.lu); LU-5 files by
+# their own resource url on download.data.public.lu (never `latest`). pegelonline.wsv.de (no www)
+# is the WSV HyDAS/DE-5 host of §6.7, listed under DE-1 because DE-4/DE-5 are `off`; no spec uses
+# it yet. Gated hosts (hochwasser.rlp.de, hvz.baden-wuerttemberg.de, hlnug.de, NLWKN, HIC, VMM)
+# arrive only with a permission (P13).
+hosts:
+  NL-1: [ddapi20-waterwebservices.rijkswaterstaat.nl]
+  NL-2: [geo.rijkswaterstaat.nl]
+  NL-4: [rijkswaterstaatdata.nl]
+  DE-1: [www.pegelonline.wsv.de, pegelonline.wsv.de]
+  DE-2: [www.pegelonline.wsv.de]
+  DE-3: [vorhersage.bafg.de]
+  DE-6: [api.hochwasserzentralen.de]
+  DE-7: [www.hochwasserportal.nrw]
+  DE-8: [www.opengeodata.nrw.de]
+  BE-3: [hydrometrie.wallonie.be]
+  FR-1: [hubeau.eaufrance.fr]
+  FR-3: [www.vigicrues.gouv.fr]
+  FR-4: [www.vigicrues.gouv.fr]
+  FR-5: [www.vigicrues.gouv.fr]
+  LU-1: [inondations.public.lu]
+  LU-2: [inondations.public.lu]
+  LU-3: [inondations.public.lu]
+  LU-4: [inondations.public.lu]
+  LU-5: [data.public.lu, download.data.public.lu]
+  LU-6: [features.geoportail.lu]
+  CH-1: [ld.admin.ch]
+  CH-2: [www.hydrodaten.admin.ch]
+  CH-3: [www.hydrodaten.admin.ch]
+  CH-4: [www.hydrodaten.admin.ch]
+  CH-5: [www.hydrodaten.admin.ch]
+
+# Header → file under /run/secrets (never in git, logs or the manifest).
+secret_headers:
+  NL-1: { x-api-key: rws_x_api_key }
+
+specs:
+  # ------------------------------------------------------------------ NL: Rijkswaterstaat
+  - id: nl-1-fc-1h
+    source: NL-1
+    version: 1
+    first: true
+    cron: "25 * * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1-forecast, where: { tier: 1h }, key: [code, quantity] }
+    params: { proces: verwachting }
+    gate: { kind: hash }
+    max_bytes: 1048576
+    retention: forever
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  - id: nl-1-fc-3h-0
+    source: NL-1
+    version: 1
+    first: true
+    cron: "45 0-21/3 * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1-forecast, where: { tier: 3h-0 }, key: [code, quantity] }
+    params: { proces: verwachting }
+    max_bytes: 1048576
+    retention: forever
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  - id: nl-1-fc-3h-1
+    source: NL-1
+    version: 1
+    first: true
+    cron: "45 1-22/3 * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1-forecast, where: { tier: 3h-1 }, key: [code, quantity] }
+    params: { proces: verwachting }
+    max_bytes: 1048576
+    retention: forever
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  - id: nl-1-fc-3h-2
+    source: NL-1
+    version: 1
+    first: true
+    cron: "45 2-23/3 * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1-forecast, where: { tier: 3h-2 }, key: [code, quantity] }
+    params: { proces: verwachting }
+    max_bytes: 1048576
+    retention: forever
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  - id: nl-1-obs-key
+    source: NL-1
+    version: 1
+    cron: "1-59/10 * * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1, where: { tier: key }, key: [code, quantity] }
+    params: { proces: meting }
+    window: { default: PT3H, max: P31D, overlap: PT1H }
+    max_bytes: 2097152
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  - id: nl-1-obs-other
+    source: NL-1
+    version: 1
+    cron: "3-59/30 * * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1, where: { tier: other }, key: [code, quantity] }
+    params: { proces: meting }
+    window: { default: PT6H, max: P31D, overlap: PT1H }
+    max_bytes: 2097152
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  - id: nl-1-catalogue
+    source: NL-1
+    version: 1
+    cron: "10 3 * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus
+      headers: { content-type: application/json, accept: application/json }
+      body: '{"CatalogusFilter":{"Compartimenten":true,"Grootheden":true,"Hoedanigheden":true,"Eenheden":true,"Groeperingen":true,"ProcesTypes":true,"WaardeBepalingsmethoden":true}}'
+    timeout: metadata
+    max_bytes: 26214400
+    retention: forever
+    validity:
+      format: json
+      required: [Succesvol, AquoMetadataLijst, LocatieLijst, AquoMetadataLocatieLijst]
+      count: LocatieLijst
+      min: 1000
+  - id: nl-2-wfs
+    source: NL-2
+    version: 1
+    cron: "5-59/10 * * * *"
+    request:
+      url: https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=DDAPI20:locatiesmetlaatstewaarneming&outputFormat=application/json&PROPERTYNAME=CODE,NAAM,GROOTHEIDCODE,HOEDANIGHEIDCODE,EENHEIDCODE,WAARDEBEPALINGSMETHODECODE,WAARDE_LAATSTE_METING,TIJDSTIP_LAATSTE_METING,BEMONSTERINGSHOOGTE,OPDRACHTGEVENDE_INSTANTIE,KWALITEITSWAARDE_CODE,GEOMETRY
+      build: true
+    max_bytes: 4194304
+    retention: obs
+    validity: { format: json, required: [type, features], count: features, min: 100 }
+  - id: nl-4-page
+    source: NL-4
+    version: 1
+    first: true
+    cron: "5 4 * * 1"
+    request:
+      url: https://rijkswaterstaatdata.nl/waterdata/
+    conditional: last-modified
+    alert: { kind: nl4_new_file, page: true }
+    max_bytes: 4194304
+    retention: forever
+    validity: { format: html, pattern: 'grenswaarden-en-legendakleuren[^"<>]*\.xlsx' }
+  - id: nl-4-xlsx
+    source: NL-4
+    version: 1
+    first: true
+    cron: "7 4 * * 1"
+    request:
+      url: https://rijkswaterstaatdata.nl/publish/pages/223004/grenswaarden-en-legendakleuren-zoals-gebruikt-op-waterinfo-15-4-2026-.xlsx
+    conditional: last-modified
+    # A 404 pages: the path is at risk from the CTD switch on 2026-11-05.
+    alert: { kind: nl4_file, page: true }
+    max_bytes: 5242880
+    retention: forever
+    validity: { format: xlsx, required: ['xl/workbook.xml'] }
+
+  # ------------------------------------------------------------------ DE: PEGELONLINE, BfG
+  - id: de-1-basin
+    source: DE-1
+    version: 1
+    cron: "2-59/15 * * * *"
+    request:
+      url: https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json?waters=RHEIN,MOSEL,SAAR,MAIN,NECKAR,LAHN,RUHR,EMS,DEK&includeTimeseries=true&includeCurrentMeasurement=true&timeseries=W,Q&prettyprint=false
+    conditional: etag
+    max_bytes: 4194304
+    retention: obs
+    validity: { format: json, required: ['0.uuid', '0.timeseries'], count: '', min: 100 }
+  - id: de-1-series
+    source: DE-1
+    version: 1
+    cron: "40 * * * *"
+    request:
+      url: https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/{uuid}/{ts}/measurements.json?start=PT6H
+      build: true
+    variants: { seed: de-1, key: [uuid, ts] }
+    window: { default: PT6H, max: P30D, overlap: PT1H }
+    conditional: etag
+    max_bytes: 1048576
+    retention: obs
+    validity: { format: json, required: ['0.timestamp', '0.value'], count: '', min: 1 }
+    seed: { kind: window, window: P31D, pace_ms: 1000 }
+  - id: de-1-meta
+    source: DE-1
+    version: 1
+    first: true
+    cron: "20 4 * * *"
+    request:
+      url: https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json?includeTimeseries=true&includeCharacteristicValues=true&prettyprint=false
+    timeout: metadata
+    max_bytes: 16777216
+    retention: forever
+    validity: { format: json, required: ['0.uuid', '0.timeseries'], count: '', min: 500 }
+  - id: de-2-wv
+    source: DE-2
+    version: 1
+    first: true
+    cron: "12 * * * *"
+    request:
+      url: https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/{uuid}/WV/measurements.json
+    variants: { seed: de-2, key: [uuid] }
+    gate: { kind: field, paths: ['0.initialized'] }
+    max_bytes: 1048576
+    retention: forever
+    validity: { format: json, required: ['0.initialized', '0.timestamp', '0.value'], count: '', min: 1 }
+  - id: de-3-index
+    source: DE-3
+    version: 1
+    cron: "13 10 * * *"
+    request:
+      url: https://vorhersage.bafg.de/{!path}
+    variants: { values: [{ path: 14-Tage-Vorhersage/index.html }, { path: 6-Wochen-Vorhersage/index.html }] }
+    conditional: last-modified
+    max_bytes: 2097152
+    retention: forever
+    validity: { format: html, pattern: '\.csv' }
+  - id: de-3-files
+    source: DE-3
+    version: 1
+    cron: "15 10 * * *"
+    request:
+      url: https://vorhersage.bafg.de/{!path}
+    variants: { seed: de-3, key: [path], space_ms: 2000 }
+    conditional: last-modified
+    max_bytes: 1048576
+    retention: forever
+    # BfG files are semi-structured text (comment lines, a station line, then `Datum;…`).
+    validity: { format: text, pattern: 'Bundesanstalt fuer Gewaesserkunde' }
+  - id: de-6-stations
+    source: DE-6
+    version: 1
+    first: true
+    cron: "8-59/10 * * * *"
+    request:
+      url: https://api.hochwasserzentralen.de/public/v1/data/stations?format=json
+    conditional: etag
+    max_bytes: 8388608
+    retention: forever
+    validity: { format: json, required: [status, updated, features], count: features, min: 1000 }
+  - id: de-6-alerts
+    source: DE-6
+    version: 1
+    first: true
+    cron: "8-59/10 * * * *"
+    request:
+      url: https://api.hochwasserzentralen.de/public/v1/data/alerts
+    conditional: etag
+    max_bytes: 8388608
+    retention: forever
+    # No active alert is the normal state (deviation: min 0 besides the FR-4 list).
+    validity: { format: json, required: [status, features], count: features, min: 0 }
+  - id: de-7-messwerte
+    source: DE-7
+    version: 1
+    cron: "50 * * * *"
+    request:
+      url: https://www.hochwasserportal.nrw/data/downloads/messwerte.zip
+    max_bytes: 5242880
+    retention: obs
+    validity:
+      format: zip
+      required: [messwerte.txt]
+      count: messwerte.txt
+      min: 10000
+      zip: { members: [messwerte.txt], header: { messwerte.txt: 'station_no;time;value(cm)' }, time_column: 1 }
+  # pegeldaten.zip: the §0.1b seed (2 months of 15-min W, 2 years of daily values) and, weekly, the
+  # DE-7 threshold versions (LANUV_MNW/MW/MHW, LANUV_Info_1..3 in pegel_stationen.txt). The A§7.2
+  # "layers/10/index.json" path answered 404 on 2026-09-29 (deviation, see PR).
+  - id: de-7-pegeldaten
+    source: DE-7
+    version: 1
+    cron: "30 4 * * 1"
+    request:
+      url: https://www.hochwasserportal.nrw/data/downloads/pegeldaten.zip
+    timeout: metadata
+    max_bytes: 26214400
+    retention: forever
+    validity:
+      format: zip
+      required: [pegel_messwerte.txt, pegel_stationen.txt]
+      count: pegel_messwerte.txt
+      min: 100000
+      zip:
+        members: [pegel_messwerte.txt, pegel_tagesmittelwerte.txt, pegel_tagesmaxima.txt, pegel_stationen.txt]
+        header: { pegel_messwerte.txt: 'station_no;time;value(cm)' }
+        time_column: 1
+    seed: { kind: once, pace_ms: 0 }
+  - id: de-8-stations
+    source: DE-8
+    version: 1
+    cron: "30 5 * * *"
+    request:
+      url: https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hygon/OpenHygon-Pegel-Stationen_EPSG4326.txt
+    max_bytes: 10485760
+    retention: forever
+    validity: { format: csv, csv: { delimiter: ';', encoding: latin1 }, min: 100 }
+
+  # ------------------------------------------------------------------ BE-3 SPW (owner audience)
+  - id: be-3-values
+    source: BE-3
+    version: 1
+    cron: "3-59/10 * * * *"
+    request:
+      url: https://hydrometrie.wallonie.be/services/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&format=json&request=getTimeseriesValueLayer&timeseriesgroup_id={group}&timezone=UTC&metadata=true&md_returnfields=station_no,station_name,ts_id,stationparameter_no,ts_unitsymbol
+    variants: { values: [{ group: '1962373' }, { group: '1962340' }] }
+    max_bytes: 2097152
+    retention: obs
+    validity: { format: json, required: ['0.ts_id', '0.timestamp'], count: '', min: 100 }
+  - id: be-3-meta
+    source: BE-3
+    version: 1
+    cron: "50 4 * * *"
+    request:
+      url: https://hydrometrie.wallonie.be/services/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&format=json&{!query}
+    variants:
+      key: [what]
+      values:
+        - what: stations
+          query: request=getStationList&returnfields=station_no,station_name,station_carteasting,station_cartnorthing,station_georefsystem,station_timezone,station_utcoffset,river_name,ca_sta
+        - what: timeseries-1962373
+          query: request=getTimeseriesList&timeseriesgroup_id=1962373&returnfields=station_no,station_name,station_id,ts_id,ts_name,ts_shortname,ts_path,stationparameter_no,ts_unitsymbol,station_latitude,station_longitude,site_no,coverage
+        - what: timeseries-1962340
+          query: request=getTimeseriesList&timeseriesgroup_id=1962340&returnfields=station_no,station_name,station_id,ts_id,ts_name,ts_shortname,ts_path,stationparameter_no,ts_unitsymbol,station_latitude,station_longitude,site_no,coverage
+      space_ms: 5000
+    timeout: metadata
+    max_bytes: 16777216
+    retention: forever
+    validity: { format: json, count: '', min: 100 }
+
+  # ------------------------------------------------------------------ FR: Hub'Eau, Vigicrues
+  - id: fr-1-obs
+    source: FR-1
+    version: 1
+    cron: "1-59/15 * * * *"
+    request:
+      url: https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=A*,B*,D*,E1*,E2*,E3*&size=20000&fields=code_site,code_station,grandeur_hydro,date_obs,resultat_obs,code_qualification_obs,code_statut
+      build: true
+      expand: true
+      max_expand: 10
+    params: { explicit_codes: '' }
+    window: { default: PT75M, max: P29DT23H, overlap: PT60M, min: PT75M }
+    max_bytes: 16777216
+    retention: obs
+    validity: { format: json, required: [count, data], count: data, min: 1 }
+    seed: { kind: days, days: 30, pace_ms: 2000, page_cap: 400 }
+  - id: fr-1-ref
+    source: FR-1
+    version: 1
+    cron: "40 3 * * *"
+    request:
+      url: https://hubeau.eaufrance.fr/api/v2/hydrometrie/referentiel/stations?code_station={prefix}*&size=10000&format=json
+    variants: { values: [{ prefix: A }, { prefix: B }, { prefix: D }, { prefix: E1 }, { prefix: E2 }, { prefix: E3 }], space_ms: 2000 }
+    timeout: metadata
+    max_bytes: 8388608
+    retention: forever
+    validity: { format: json, required: [data], count: data, min: 1 }
+  - id: fr-3-obs
+    source: FR-3
+    version: 1
+    cron: null
+    request:
+      url: https://www.vigicrues.gouv.fr/services/observations.json/index.php?CdStationHydro={code}&GrdSerie={grd}&FormatSortie=simple
+    variants: { seed: fr-3, each: { grd: [H, Q] }, key: [code, grd] }
+    max_bytes: 4194304
+    retention: obs
+    validity: { format: json, required: [Serie], reject: [error_msg], count: Serie.ObssHydro, min: 1 }
+    seed: { kind: once, pace_ms: 2000 }
+  - id: fr-4
+    source: FR-4
+    version: 1
+    first: true
+    cron: "20,50 * * * *"
+    request:
+      url: https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?FormatDate=iso&GrdSimul={grd}
+      expand: true
+      max_expand: 200
+      expand_validity: { format: json, required: [Simul], reject: [error_msg], min: 0 }
+    variants: { values: [{ grd: H }, { grd: Q }] }
+    max_bytes: 4194304
+    retention: forever
+    # Outside events the list is empty: the one empty-list allowance of the checklist.
+    validity: { format: json, required: [ListEntVigiCru], reject: [error_msg], count: ListEntVigiCru, min: 0 }
+  - id: fr-5-vigilance
+    source: FR-5
+    version: 1
+    first: true
+    cron: "2-59/15 * * * *"
+    request:
+      url: https://www.vigicrues.gouv.fr/services/InfoVigiCru.geojson
+    gate: { kind: field, paths: [DtHrInfoVigiCru, dthrinfovigicru] }
+    max_bytes: 16777216
+    retention: forever
+    validity: { format: json, required: [features], count: features, min: 100 }
+  - id: fr-5-ref
+    source: FR-5
+    version: 1
+    cron: "20 2 * * *"
+    request:
+      url: https://www.vigicrues.gouv.fr/services/{file}
+    variants: { values: [{ file: TerEntVigiCru.json }, { file: StaEntVigiCru.json }], space_ms: 2000 }
+    timeout: metadata
+    max_bytes: 16777216
+    retention: forever
+    validity: { format: json, reject: [error_msg], min: 0 }
+  - id: fr-5-sections
+    source: FR-5
+    version: 1
+    cron: "25 2 * * *"
+    request:
+      url: https://www.vigicrues.gouv.fr/services/TerEntVigiCru.json?CdEntVigiCru={territory}&TypEntVigiCru=5
+      expand: true
+      max_expand: 80
+      expand_validity: { format: json, required: [ListEntVigiCru], reject: [error_msg], min: 0 }
+    variants: { values: [{ territory: '2' }, { territory: '3' }, { territory: '29' }], space_ms: 2000 }
+    max_bytes: 4194304
+    retention: forever
+    validity: { format: json, required: [ListEntVigiCru], reject: [error_msg], count: ListEntVigiCru, min: 1 }
+  - id: fr-5-stations
+    source: FR-5
+    version: 1
+    cron: "40 2 * * 0"
+    request:
+      url: https://www.vigicrues.gouv.fr/services/station.json/index.php?CdStationHydro={code}
+    variants: { seed: fr-3, key: [code], space_ms: 2000 }
+    max_bytes: 4194304
+    retention: forever
+    validity: { format: json, required: [CdStationHydro], reject: [error_msg] }
+
+  # ------------------------------------------------------------------ LU: AGE (LU-1, LU-5, LU-6 public; LU-2/3/4 owner)
+  - id: lu-1-csv
+    source: LU-1
+    version: 1
+    first: true
+    cron: "7-59/15 * * * *"
+    request:
+      url: https://inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv
+    max_bytes: 2097152
+    retention: obs
+    validity: { format: csv, csv: { delimiter: ',', encoding: utf-8 }, required: [Name, Number, Unit], min: 30 }
+    seed: { kind: once, pace_ms: 0 }
+  - id: lu-2-json
+    source: LU-2
+    version: 1
+    cron: "27 * * * *"
+    request:
+      url: https://inondations.public.lu/content/dam/inondations/ctie/datas/{file}.json
+    variants: { seed: lu-2, key: [file], space_ms: 5000 }
+    max_bytes: 1048576
+    retention: obs
+    validity: { format: json, required: ['0.data'], count: '0.data', min: 1 }
+    seed: { kind: once, pace_ms: 5000 }
+  - id: lu-3-percentile
+    source: LU-3
+    version: 1
+    first: true
+    cron: "45 * * * *"
+    request:
+      url: https://inondations.public.lu/percentile/{slug}-p{p}.json
+    variants: { seed: lu-3, each: { p: ['10', '30', '50', '70', '90'] }, key: [slug, p], space_ms: 1000 }
+    max_bytes: 1048576
+    retention: forever
+    validity: { format: json, required: [data], count: data, min: 1 }
+  - id: lu-4-pages
+    source: LU-4
+    version: 1
+    first: true
+    cron: "40 3 * * 3"
+    request:
+      url: https://inondations.public.lu/fr/{!path}.html
+    variants: { seed: lu-4, key: [path], space_ms: 5000 }
+    alert: { paths: [levelsMax, newVigilanceList], kind: lu4_threshold_changed }
+    max_bytes: 4194304
+    retention: forever
+    validity: { format: html-attr, required: [id, jsonFile, levelsMax] }
+  - id: lu-5-cap
+    source: LU-5
+    version: 1
+    first: true
+    cron: "*/5 * * * *"
+    request:
+      url: https://data.public.lu/api/2/datasets/67aca67bcaea3ae62308114f/resources/?page_size=20
+      expand: true
+      max_expand: 40
+      expand_validity: { format: xml, required: [alert.identifier, alert.sender, alert.sent] }
+    gate: { kind: new-resource }
+    max_bytes: 2097152
+    retention: forever
+    validity: { format: json, required: [data], count: data, min: 1 }
+    seed: { kind: all-resources, pace_ms: 2000, page_cap: 100 }
+  - id: lu-6-geo
+    source: LU-6
+    version: 1
+    cron: "10 5 * * *"
+    request:
+      url: https://features.geoportail.lu/collections/655/items?f=json&limit=100
+    max_bytes: 2097152
+    retention: forever
+    validity: { format: json, required: [features], count: features, min: 40 }
+
+  # ------------------------------------------------------------------ CH: BAFU (LINDAS, hydrodaten)
+  - id: ch-1-lindas
+    source: CH-1
+    version: 1
+    first: true
+    cron: "4-59/10 * * * *"
+    request:
+      method: POST
+      url: https://ld.admin.ch/query
+      headers: { accept: text/csv, content-type: application/x-www-form-urlencoded }
+      body_encoding: form-query
+      body: >-
+        PREFIX h: <https://environment.ld.admin.ch/foen/hydro/dimension/>
+        PREFIX schema: <http://schema.org/>
+        PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+        PREFIX cube: <https://cube.link/>
+        SELECT ?id ?name ?water ?time ?q ?w ?t ?dl ?wkt WHERE {
+        <https://environment.ld.admin.ch/foen/hydro/{cube}> cube:observationSet ?set .
+        ?set cube:observation ?obs .
+        ?obs h:station ?st ; h:measurementTime ?time .
+        ?st schema:identifier ?id ; schema:name ?name .
+        OPTIONAL { ?st schema:containedInPlace ?water }
+        OPTIONAL { ?st geo:hasGeometry/geo:asWKT ?wkt }
+        OPTIONAL { ?obs h:discharge ?q } OPTIONAL { ?obs h:waterLevel ?w }
+        OPTIONAL { ?obs h:waterTemperature ?t } OPTIONAL { ?obs h:dangerLevel ?dl }
+        }
+    variants: { values: [{ cube: river }, { cube: lake }] }
+    max_bytes: 4194304
+    retention: forever
+    validity: { format: csv, csv: { delimiter: ',', encoding: utf-8 }, required: [id, name, time, dl], min: 20 }
+  - id: ch-2-pq
+    source: CH-2
+    version: 1
+    first: true
+    cron: "6-59/10 * * * *"
+    request:
+      url: https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson
+    conditional: last-modified
+    max_bytes: 4194304
+    retention: forever
+    validity: { format: json, required: [features], count: features, min: 150 }
+  - id: ch-3-40d
+    source: CH-3
+    version: 1
+    cron: null
+    request:
+      url: https://www.hydrodaten.admin.ch/plots/p_q_40days/{id}_p_q_40days_de.json
+    variants: { seed: ch-3, key: [id] }
+    max_bytes: 8388608
+    retention: obs
+    validity: { format: json, min: 0 }
+    seed: { kind: once, pace_ms: 2000 }
+  - id: ch-4-forecast
+    source: CH-4
+    version: 1
+    first: true
+    cron: "35 * * * *"
+    request:
+      url: https://www.hydrodaten.admin.ch/plots/q_forecast/{id}_q_forecast_de.json
+    variants: { seed: ch-4, key: [id], space_ms: 500 }
+    conditional: last-modified
+    gate: { kind: lastmod-runstart }
+    max_bytes: 2097152
+    retention: forever
+    validity: { format: json, min: 0 }
+  - id: ch-4-stations
+    source: CH-4
+    version: 1
+    cron: "40 5 * * *"
+    request:
+      url: https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq_forecast.geojson
+    alert: { kind: ch4_station_list, page: false }
+    max_bytes: 1048576
+    retention: forever
+    validity: { format: json, required: [features], count: features, min: 30 }
+  - id: ch-5-warn
+    source: CH-5
+    version: 1
+    first: true
+    cron: "9-59/30 * * * *"
+    request:
+      url: https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_warn_levels_{lang}.geojson
+    variants: { values: [{ lang: de }, { lang: en }] }
+    max_bytes: 8388608
+    retention: forever
+    validity: { format: json, required: [features], count: features, min: 1 }

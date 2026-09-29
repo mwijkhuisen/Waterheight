@@ -27,3 +27,4 @@ apps/web/src/paraglide/
 .DS_Store
 playwright-report/
 test-results/
+.smoke/

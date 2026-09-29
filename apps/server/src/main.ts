@@ -1,14 +1,29 @@
 import { serve } from '@hono/node-server';
+import { pino } from 'pino';
 import { createApp } from './app.ts';
+import { Archive } from './archive/writer.ts';
+import { budgets, schedule } from './capture/budget.ts';
+import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from './capture/env.ts';
+import { Pinger } from './capture/pings.ts';
+import { Counters } from './capture/runner.ts';
+import { startRecorder } from './capture/scheduler.ts';
+import { runSeeds, seedRecords } from './capture/seeds.ts';
+import { loadRegistry } from './capture/specs.ts';
+import { StateStore } from './capture/state.ts';
+import { healthy, startHeartbeat } from './heartbeat.ts';
+import { Client } from './http/client.ts';
 
 /** Roles of the single server image (A§4); the command picks one. */
-export const ROLES = ['capture', 'load', 'publish', 'api', 'replay', 'watchdog'] as const;
+export const ROLES = ['capture', 'load', 'publish', 'api', 'replay', 'watchdog', 'healthcheck'] as const;
 export type Role = (typeof ROLES)[number];
 
 export const EXIT_NOT_IMPLEMENTED = 2;
 export const EXIT_USAGE = 64;
+export { EXIT_CONFIG };
 
-const USAGE = `usage: main.js <${ROLES.join('|')}>`;
+const USAGE = `usage: main.js <${ROLES.join('|')}> (capture also takes --dry-run)`;
+const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
+const RWS_LIMIT = 400;
 
 export type Listen = { hostname: string; port: number };
 
@@ -22,9 +37,92 @@ export function parseListen(env: Readonly<Record<string, string | undefined>>): 
   return { hostname, port };
 }
 
+/** Loads and checks every spec and prints the schedule and budgets: no network, no writes. */
+export function dryRun(log: (line: string) => void): number {
+  const registry = loadRegistry();
+  log(schedule(registry));
+  const rws = budgets(registry).find((b) => b.host === RWS_HOST)?.peakPerHour ?? 0;
+  log('');
+  log(`${registry.specs.length} specs loaded; RWS requests/hour (busiest 60 min): ${rws} (limit ${RWS_LIMIT})`);
+  return rws <= RWS_LIMIT ? 0 : 1;
+}
+
+async function capture(
+  env: Readonly<Record<string, string | undefined>>,
+  log: (line: string) => void,
+): Promise<number> {
+  const cfg = captureEnv(env);
+  if (typeof cfg === 'string') {
+    log(`capture: ${cfg}`);
+    return EXIT_CONFIG;
+  }
+  process.umask(0o027);
+  const registry = loadRegistry();
+  const logger = pino({ base: { role: 'capture' } });
+  const userAgent = captureUserAgent(cfg);
+  const sourceHeaders = new Map<string, Record<string, string>>();
+  for (const [source, headers] of registry.secretHeaders) {
+    const set: Record<string, string> = {};
+    for (const [header, secret] of Object.entries(headers)) {
+      const value = readSecret(secret);
+      if (value === undefined) logger.warn({ source, header }, 'secret file missing: header not sent');
+      else set[header] = value;
+    }
+    sourceHeaders.set(source, set);
+  }
+  const client = new Client({ hosts: registry.hosts, userAgent, sourceHeaders });
+  const state = new StateStore(cfg.rawDir);
+  const deps = {
+    client,
+    archive: new Archive(cfg.rawDir),
+    state,
+    counters: Counters.from(await state.read('counters')),
+    log: logger,
+    now: () => new Date(),
+    sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
+  };
+  const recovered = await deps.archive.recover((source, spec) => {
+    const s = registry.specs.find((x) => x.source === source && x.id === spec);
+    return s && { retention: s.retention, version: s.version };
+  });
+  if (recovered > 0) logger.warn({ recovered }, 'archive objects without a manifest line recorded');
+  const paths = { rawDir: cfg.rawDir, statusDir: cfg.statusDir, ownerStatusDir: cfg.ownerStatusDir };
+  let seeds = await seedRecords(registry, deps);
+  const stopHeartbeat = startHeartbeat();
+  const recorder = await startRecorder({
+    ...deps,
+    registry,
+    paths,
+    pinger: new Pinger(readSecret('hc_ping_key'), userAgent, logger),
+    seeds: () => seeds,
+  });
+  await recorder.writeStatusNow();
+  logger.info({ specs: registry.specs.length }, 'capture started');
+  const harvest = runSeeds(registry, deps, paths)
+    .then(async () => {
+      seeds = await seedRecords(registry, deps);
+    })
+    .catch((err: unknown) => logger.error({ err: String(err) }, 'seeds failed'));
+  return new Promise((resolve) => {
+    const stop = () => {
+      logger.info('capture stopping');
+      void recorder
+        .stop()
+        .then(() => Promise.race([harvest, new Promise((r) => setTimeout(r, 1000))]))
+        .then(() => {
+          stopHeartbeat();
+          resolve(0);
+        });
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+  });
+}
+
 /**
- * Resolves with an exit code, except for `api`, which keeps serving until
- * SIGINT or SIGTERM. Every role but `api` is a stub until its phase (P1+).
+ * Resolves with an exit code; `api` and `capture` keep running until SIGINT
+ * or SIGTERM. `load`, `publish`, `replay` and `watchdog` are stubs until
+ * their phase (P1b owns `watchdog`).
  */
 export function run(
   argv: readonly string[],
@@ -32,9 +130,22 @@ export function run(
   log: (line: string) => void = (line) => console.error(line),
 ): Promise<number> {
   const [role, ...rest] = argv;
-  if (role === undefined || rest.length > 0 || !(ROLES as readonly string[]).includes(role)) {
+  const dry = role === 'capture' && rest.length === 1 && rest[0] === '--dry-run';
+  if (role === undefined || (rest.length > 0 && !dry) || !(ROLES as readonly string[]).includes(role)) {
     log(USAGE);
     return Promise.resolve(EXIT_USAGE);
+  }
+  if (role === 'healthcheck') return Promise.resolve(healthy() ? 0 : 1);
+  if (role === 'capture') {
+    if (dry) {
+      try {
+        return Promise.resolve(dryRun((line) => console.log(line)));
+      } catch (err) {
+        log(String(err instanceof Error ? err.message : err));
+        return Promise.resolve(EXIT_CONFIG);
+      }
+    }
+    return capture(env, log);
   }
   if (role !== 'api') {
     log(`role ${role} is not implemented yet`);
@@ -46,10 +157,15 @@ export function run(
     return Promise.resolve(EXIT_USAGE);
   }
   return new Promise((resolve) => {
+    const stopHeartbeat = startHeartbeat();
     const server = serve({ fetch: createApp().fetch, ...listen }, (info) => {
       log(`api listening on ${info.address}:${info.port}`);
     });
-    const stop = () => server.close(() => resolve(0));
+    const stop = () =>
+      server.close(() => {
+        stopHeartbeat();
+        resolve(0);
+      });
     process.once('SIGINT', stop);
     process.once('SIGTERM', stop);
   });
