@@ -1,0 +1,129 @@
+# Reachability targets of deploy/bin/rws-reachability (issue #16 P1b; A§12.2;
+# catalogue §10 R7). The owner runs it once on the VPS, as ops, over IPv4 and
+# IPv6 (docs/runbooks/owner-checks.md).
+#
+# A target passes only when the body carries its signature: `sig` is an
+# extended regex over the first 64 KB, or `magic:<hex>` for the first bytes. A
+# status alone never passes, so a 200 "blocked" PNG, a Cloudflare challenge, an
+# Azure APIM error or Hub'Eau's "usage abusif" page fail.
+#
+# `required: true` marks the first-release endpoints (every host of
+# registry/capture.yaml, owner hosts included) and what the deploy itself needs;
+# a failure there exits non-zero and belongs in docs/risk-register.md with its
+# fallback. `required: false` marks the sandbox failures to re-test (R7), which
+# are only reported. `fixture` names the committed payload the signature is
+# tested against (test/reachability.test.ts). One request per target and
+# family, never a key: NL-1 is sent without X-API-KEY.
+#
+# JSON syntax (valid YAML), so the host reads it with jq.
+{
+  "targets": [
+    { "id": "nl-1-api", "source": "NL-1", "required": true, "method": "POST",
+      "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus",
+      "headers": ["Content-Type: application/json", "Accept: application/json"],
+      "body": "{\"CatalogusFilter\":{\"Compartimenten\":true,\"Grootheden\":true,\"Hoedanigheden\":true,\"Eenheden\":true,\"Groeperingen\":true,\"ProcesTypes\":true,\"WaardeBepalingsmethoden\":true}}",
+      "sig": "\"Succesvol\":true", "fixture": "apps/server/src/adapters/nl-1/fixtures/nl-1-catalogue.raw" },
+    { "id": "nl-2-wfs", "source": "NL-2", "required": true, "method": "GET",
+      "url": "https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=DDAPI20:locatiesmetlaatstewaarneming&outputFormat=application/json&COUNT=1&PROPERTYNAME=CODE,GEOMETRY&CQL_FILTER=COMPARTIMENTCODE%3D%27OW%27%20AND%20GROOTHEIDCODE%3D%27Q%27",
+      "sig": "\"FeatureCollection\"", "fixture": "apps/server/src/adapters/nl-2/fixtures/nl-2-wfs.raw" },
+    { "id": "nl-4-page", "source": "NL-4", "required": true, "method": "GET",
+      "url": "https://rijkswaterstaatdata.nl/waterdata/",
+      "sig": "grenswaarden-en-legendakleuren", "fixture": "apps/server/src/adapters/nl-4/fixtures/nl-4-page.raw" },
+    { "id": "nl-4-xlsx", "source": "NL-4", "required": true, "method": "GET",
+      "url": "https://rijkswaterstaatdata.nl/publish/pages/223004/grenswaarden-en-legendakleuren-zoals-gebruikt-op-waterinfo-15-4-2026-.xlsx",
+      "sig": "magic:504b0304", "fixture": "apps/server/src/adapters/nl-4/fixtures/nl-4-xlsx.raw" },
+    { "id": "de-1-series", "source": "DE-1", "required": true, "method": "GET",
+      "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/9598e4cb-0849-401e-bba0-689234b27644/W/measurements.json?start=PT6H",
+      "sig": "\"timestamp\"", "fixture": "apps/server/src/adapters/de-1/fixtures/de-1-series.raw" },
+    { "id": "de-2-wv", "source": "DE-2", "required": true, "method": "GET",
+      "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/1d26e504-7f9e-480a-b52c-5932be6549ab/WV/measurements.json",
+      "sig": "^\\[", "fixture": "apps/server/src/adapters/de-2/fixtures/de-2-wv.synthetic.raw" },
+    { "id": "de-3-index", "source": "DE-3", "required": true, "method": "GET",
+      "url": "https://vorhersage.bafg.de/14-Tage-Vorhersage/index.html",
+      "sig": "\\.csv", "fixture": "apps/server/src/adapters/de-3/fixtures/de-3-index.synthetic.raw" },
+    { "id": "de-6-alerts", "source": "DE-6", "required": true, "method": "GET",
+      "url": "https://api.hochwasserzentralen.de/public/v1/data/alerts",
+      "sig": "\"status\":\"success\"", "fixture": "apps/server/src/adapters/de-6/fixtures/de-6-alerts.raw" },
+    { "id": "de-7-messwerte", "source": "DE-7", "required": true, "method": "GET",
+      "url": "https://www.hochwasserportal.nrw/data/downloads/messwerte.zip",
+      "sig": "magic:504b0304", "fixture": "apps/server/src/adapters/de-7/fixtures/de-7-messwerte.raw" },
+    { "id": "de-8-stations", "source": "DE-8", "required": true, "method": "GET",
+      "url": "https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hygon/OpenHygon-Pegel-Stationen_EPSG4326.txt",
+      "sig": "^station_latitude;station_longitude", "fixture": "apps/server/src/adapters/de-8/fixtures/de-8-stations.raw" },
+    { "id": "be-3-values", "source": "BE-3", "required": true, "method": "GET",
+      "url": "https://hydrometrie.wallonie.be/services/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&format=json&request=getTimeseriesValueLayer&timeseriesgroup_id=1962373&timezone=UTC&metadata=true&md_returnfields=station_no,ts_id",
+      "sig": "\"ts_id\"", "fixture": "apps/server/src/adapters/be-3/fixtures/be-3-values.synthetic.raw" },
+    { "id": "fr-1-obs", "source": "FR-1", "required": true, "method": "GET",
+      "url": "https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=B720000001&size=5",
+      "sig": "\"code_station\"", "fixture": "apps/server/src/adapters/fr-1/fixtures/fr-1-obs.raw" },
+    { "id": "fr-5-ref", "source": "FR-5", "required": true, "method": "GET",
+      "url": "https://www.vigicrues.gouv.fr/services/TerEntVigiCru.json",
+      "sig": "\"CodeScenario\"", "fixture": "apps/server/src/adapters/fr-5/fixtures/fr-5-ref.raw" },
+    { "id": "lu-1-csv", "source": "LU-1", "required": true, "method": "GET",
+      "url": "https://inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv",
+      "sig": "^\"Name\",\"Number\",\"Unit\"", "fixture": "apps/server/src/adapters/lu-1/fixtures/lu-1-csv.raw" },
+    { "id": "lu-2-json", "source": "LU-2", "required": true, "method": "GET",
+      "url": "https://inondations.public.lu/content/dam/inondations/ctie/datas/Bissen.json",
+      "sig": "\"ts_path\"", "fixture": "apps/server/src/adapters/lu-2/fixtures/lu-2-json.synthetic.raw" },
+    { "id": "lu-3-percentile", "source": "LU-3", "required": true, "method": "GET",
+      "url": "https://inondations.public.lu/percentile/bissen-p50.json",
+      "sig": "\"data\":\\[\\[", "fixture": "apps/server/src/adapters/lu-3/fixtures/lu-3-percentile.synthetic.raw" },
+    { "id": "lu-4-page", "source": "LU-4", "required": true, "method": "GET",
+      "url": "https://inondations.public.lu/fr/alzette/alzette/ettelbruck-alzette.html",
+      "sig": "data-to-json", "fixture": "apps/server/src/adapters/lu-4/fixtures/lu-4-pages.synthetic.raw" },
+    { "id": "lu-5-list", "source": "LU-5", "required": true, "method": "GET",
+      "url": "https://data.public.lu/api/2/datasets/67aca67bcaea3ae62308114f/resources/?page_size=20",
+      "sig": "\"data\": \\[", "fixture": "apps/server/src/adapters/lu-5/fixtures/lu-5-cap.raw" },
+    { "id": "lu-5-file", "source": "LU-5", "required": true, "method": "GET",
+      "url": "https://download.data.public.lu/resources/alertes-du-systeme-lu-alert/20260929-133006/dump-alert.1790688368.xml",
+      "sig": "<alert", "fixture": "apps/server/src/adapters/lu-5/fixtures/lu-5-file.raw" },
+    { "id": "lu-6-geo", "source": "LU-6", "required": true, "method": "GET",
+      "url": "https://features.geoportail.lu/collections/655/items?f=json&limit=1",
+      "sig": "\"FeatureCollection\"", "fixture": "apps/server/src/adapters/lu-6/fixtures/lu-6-geo.raw" },
+    { "id": "ch-1-lindas", "source": "CH-1", "required": true, "method": "GET",
+      "url": "https://ld.admin.ch/query?query=ASK%20%7B%20%3Fs%20%3Fp%20%3Fo%20%7D",
+      "headers": ["Accept: application/sparql-results+json"],
+      "sig": "\"boolean\"" },
+    { "id": "ch-2-pq", "source": "CH-2", "required": true, "method": "GET",
+      "url": "https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson",
+      "sig": "\"features\"", "fixture": "apps/server/src/adapters/ch-2/fixtures/ch-2-pq.raw" },
+
+    { "id": "github-releases", "source": "deploy", "required": true, "method": "GET",
+      "url": "https://github.com/mwijkhuisen/Waterheight/releases",
+      "sig": "Waterheight" },
+    { "id": "ghcr", "source": "deploy", "required": true, "method": "GET",
+      "url": "https://ghcr.io/v2/",
+      "sig": "\"errors\"" },
+    { "id": "sigstore-tuf", "source": "deploy", "required": true, "method": "GET",
+      "url": "https://tuf-repo-cdn.sigstore.dev/timestamp.json",
+      "sig": "\"signed\"" },
+    { "id": "docker-apt", "source": "deploy", "required": true, "method": "GET",
+      "url": "https://download.docker.com/linux/debian/dists/trixie/Release",
+      "sig": "^Origin: Docker" },
+
+    { "id": "waterstandlimburg", "source": "R7", "required": false, "method": "GET",
+      "url": "https://www.waterstandlimburg.nl/Home/Waterstanden",
+      "sig": "[Ww]aterstand" },
+    { "id": "saarland", "source": "R7", "required": false, "method": "GET",
+      "url": "https://www.saarland.de/mukmav/DE/portale/wasser/informationen/hochwassermeldedienst/wasserstaende_warnlage",
+      "sig": "Wasserst" },
+    { "id": "wver-pegel", "source": "R7", "required": false, "method": "GET",
+      "url": "https://server.wver.de/pegeldaten/",
+      "sig": "[Pp]egel" },
+    { "id": "wrij-waterdata", "source": "R7", "required": false, "method": "GET",
+      "url": "https://waterdata.wrij.nl/index-data.html",
+      "sig": "[Ww]ater" },
+    { "id": "bkg-evrs", "source": "R7", "required": false, "method": "GET",
+      "url": "https://evrs.bkg.bund.de/Subsites/EVRS/EN/RealizationofEVRS/EVRF2019/evrf2019.html",
+      "sig": "EVRF2019" },
+    { "id": "overpass", "source": "R7", "required": false, "method": "GET",
+      "url": "https://overpass-api.de/api/status",
+      "sig": "Connected as" },
+    { "id": "geofabrik", "source": "R7", "required": false, "method": "GET",
+      "url": "https://download.geofabrik.de/europe/germany.html",
+      "sig": "germany-latest\\.osm\\.pbf" },
+    { "id": "protomaps", "source": "R7", "required": false, "method": "GET",
+      "url": "https://build.protomaps.com/",
+      "sig": "pmtiles" }
+  ]
+}
