@@ -298,8 +298,8 @@ probe_on() {
   shift
   docker run --rm --init --network "$net" --entrypoint timeout rws-web:ci 15 "$@"
 }
-# The backup network exists once a backup job was created (profile "jobs").
-rws_compose --profile jobs create backup >/dev/null 2>&1
+# The backup network exists once the backup job has run (profile "jobs"): restic version is offline.
+rws_compose run --rm --no-deps -T backup version
 probe_on rws_egress wget -q -O /dev/null https://www.example.com || fail "egress: https blocked"
 if probe_on rws_egress wget -q -O /dev/null http://www.example.com; then fail "egress: port 80 open"; fi
 if probe_on rws_egress nslookup www.example.com 9.9.9.9; then fail "egress: DNS to a foreign resolver open"; fi
