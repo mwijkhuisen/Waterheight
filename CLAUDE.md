@@ -25,6 +25,11 @@ The legacy code is archived as the annotated tag `legacy-v0` (`a4106b855c782832d
 | `scripts/healthz-smoke.sh`, `scripts/dbmate-roundtrip.sh` | Server smoke test; dbmate up/down/up on a fixture migration |
 | `scripts/check-workflows.sh`, `scripts/gitleaks-planted.sh` | Workflow greps; proof that gitleaks still catches a planted key |
 | `scripts/gh-settings.sh --check` | Read-only drift check of the GitHub settings (B1, B2); applying them is the owner's job |
+| `node apps/server/dist/main.js watchdog [--once\|--dry-run]` | The P1b watchdog: probes `https://$RWS_DOMAIN` (`/healthz`, both status files, the certificate) through DNS and TLS every 5 min and pings `watchdog`, `cert`, `disk`; exits 78 without `RWS_DOMAIN`/`RWS_CONTACT_EMAIL` |
+| `scripts/verify-prod.sh <domain> [--soak\|--capacity]` | Outside-in production check, no SSH (checks in `scripts/verify-prod.ts`); `--dry-run` lists the checks |
+| `deploy/tests/*.test.sh` | Offline tests of the host scripts (rws-update/rws-deploy, backups, drill, tick, reachability): stubs for curl, cosign, docker; needs jq and zstd |
+| `deploy/tests/e2e/run.sh` | CI only, as root: Docker 29.8.1, the real firewall, compose, Pebble and MinIO; proves the P1b `[U]` items (`ci.yml` job `deploy`) |
+| `deploy/host/bootstrap.sh [--dry-run]`, `rws-update`, `rws-deploy <tag>`, `rws-backup`, `rws-restore-drill`, `rws-hc-sync`, `rws-reachability` | On the VPS only (owner; `docs/runbooks/`); every one has `--dry-run` |
 
 ## Security invariants (A§12.1, verbatim; quoted in every build and review prompt)
 
@@ -172,6 +177,14 @@ Deviations from A§3, decided in P0b: pnpm **12.5.1** instead of 12.6.0 (12.6.0 
 - **YAML:** quote `"off"` and dates in registry files; YAML 1.1 parsers read `off` as `false`.
 - **Claude Code deny rules match the whole command line**, a commit message included: `git commit -m "… git push --mirror …"` is refused. Write the message to a file and use `git commit -F <file>`.
 - **setup-node v7** caches automatically when `packageManager` names npm; every job sets `package-manager-cache: false` (no caches in CI).
+- **Docker 29 / Compose 5 (P1b):**
+  - Compose bind-mounts a **file** secret with its host owner and mode (`uid`/`gid`/`mode` are ignored), so our secrets are `root:<gid> 0440` plus `group_add`.
+  - Published ports are DNATed in `nat PREROUTING` and never reach INPUT: filter them on the forward hook (`deploy/host/nftables.conf`), and never `flush ruleset` (it deletes Docker's tables).
+  - Debian's `nftables.service` flushes everything on stop; it is masked in favour of `rws-firewall.service`.
+  - Docker never restarts an *unhealthy* container (only an exited one), so `rws-tick` does.
+  - The stock caddy image's file capability breaks exec under `cap_drop: ALL`: our web image strips it.
+- **cosign 3:** image signatures are OCI-referrer bundles (GHCR through the `sha256-<digest>` tag fallback), `sign-blob`/`verify-blob` need `--bundle`, and verification fetches the TUF trusted root. The VPS keeps it in `/var/lib/rws/sigstore`.
+- **MinIO** stopped publishing images in 2025; CI uses Chainguard's source-built `cgr.dev/chainguard/minio` by digest.
 - **Protomaps** builds are kept for one week only; **Hub'Eau v1** answers 403 (use v2); **RWS documentation moves to the CTD on 2026-11-05** (URLs live in config; the NL-4 file path is at risk).
 
 ## Criterion tags, definition of done and workflow (PHASES §2)

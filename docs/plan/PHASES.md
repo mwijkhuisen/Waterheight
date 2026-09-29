@@ -1704,3 +1704,29 @@ What the P1a build found when it recorded every endpoint live (issue #16), and w
 | croner `protect` | croner re-fires a blocked tick as soon as the busy run ends (a late, queued run) | The scheduler keeps its own busy flag per job: a blocked tick is counted and dropped |
 | NL-1 observations | – | The gap-stretch window is capped at P31D (RWS keeps decades; longer gaps are a P14 backfill) |
 | FR-1 gap walks | Hub'Eau answers newest first, so a walk from the last success − 60 min that stops at its page cap leaves the oldest part of a gap unfetched | A gap over one day is fetched one closed day window per run, oldest first (`window.step: P1D`), and the window moves only when its whole walk completed. A walk that hits `max_expand` (20 pages after the first; a normal day is ~6) goes on next run below the oldest observation it fetched, so a flood day of any size completes and the window then moves to the end of the whole day; a capped run that got no older (a `next` that never ends) is no success, so the group goes stale and pages. The seed's `page_cap` (400) bounds the whole 30-day seed, and an unfinished seed gets another round every hour for at most 31 days, then is reported incomplete in the log and the daily report |
+
+---
+
+## 12. Amendment: P1b build (2026-09-29)
+
+What the P1b build (issue #16, PR #35) changed or settled against the plan, and why. The owner decided the first five on 2026-09-29, when the plan was approved.
+
+| Item | Plan | What P1b does |
+|---|---|---|
+| pnpm in the server build image | 12.6.0 | 12.5.1 through `scripts/install-pnpm.sh`: the `packageManager`, lockfile and BOM pin. Bumping to 12.6.0 is its own BOM change (owner decision) |
+| `ops` and sudo | – | NOPASSWD sudo, like Debian's cloud user; the SSH key (FIDO2 recommended) is the only secret (owner decision; risk register) |
+| Kernel updates | unattended-upgrades | They also reboot at 03:40 UTC when an update needs it (owner decision); the reboot path is an [owner] criterion |
+| Grype gate (A§12.2) | P1b | Deferred to P12 (owner decision): Go standard-library findings in the pinned caddy and restic binaries would block the first release. buildx still attaches an SBOM (Syft) to every image |
+| VPS architecture | – | amd64 only (owner confirmed) |
+| Caddy capability | `NET_BIND_SERVICE` only | None at all. The stock binary's `cap_net_bind_service+ep` file capability makes exec fail under `cap_drop: ALL` (caddy-docker#396), so the web image copies the binary and drops it. Non-root Caddy (uid 65533) binds 80/443 through the namespaced `net.ipv4.ip_unprivileged_port_start` (set explicitly; it covers IPv6). Tighter than planned |
+| Secret file modes (A7: 0600) | root 0600 | `root:<per-secret gid>` 0440 in a `root 0700` directory. Compose ignores `uid`/`gid`/`mode` for file secrets and bind-mounts them with their host owner, so a root 0600 file is unreadable to uid 65532. Only the consuming service has the gid in `group_add`, and only it mounts the file |
+| Firewall hook | "hook the chain Docker uses" | Docker 29.8.1 still uses the iptables-nft backend: published ports are DNATed in `nat PREROUTING` and accepted in `filter FORWARD → DOCKER-FORWARD`, never INPUT. `nftables.conf` keeps its own `table inet rws` with a forward base chain at priority `filter - 5` (a drop is final in any base chain; it also holds with Docker's experimental nftables backend). It never flushes the ruleset, and `rws-firewall.service` replaces Debian's `nftables.service`, whose `ExecStop` flushes every table (Docker's included) |
+| `backup` service | on `db`, `egress` | Its own `backup` network, allowed only TCP 443 to the bucket's addresses (an nftables set that `rws-backup` fills before each run). It is a job (`profiles: [jobs]`, `restart: "no"`, no healthcheck), started by the timers with `compose run` |
+| Backup image | restic 0.19.1 + pg client | Our own image: the sha256-pinned restic binary on distroless static. `restic/restic` is `FROM alpine:latest` and is not signed by our release identity. P2 adds the pg client |
+| `/status/ops.json` | written by the backup and drill jobs | Also by `rws-tick` (disk %, every 10 min), which also restarts a container Docker reports unhealthy. It lives in the root-owned `/srv/rws/public/ops/` so capture (uid 65532, owner of `public/status`) cannot rewrite it; the URL is unchanged |
+| The "previous manifest" to roll back to | – | The last release that passed its smoke test (`/var/lib/rws/current`). A failed release goes into `skip_upto` and is never retried automatically; a failed first deploy leaves the containers running and fails loudly; a manual `rws-deploy` of an older release holds automatic updates until the next new one |
+| Host files | from the verified bundle | `rws-update` takes only `compose.yaml` from each verified bundle. Host scripts, units and the firewall are installed by `bootstrap.sh`, run by the owner from a verified release. There is no self-updating updater |
+| Release manifest | the image digests | Also the sha256 of `deploy-bundle.tar.gz` (the tar of `deploy/`). The release is created as a draft and published once its assets are uploaded. The VPS reads `releases/latest/download/…`, so it parses no GitHub API data at all |
+| `verify-prod.sh` | a shell script | A wrapper around `scripts/verify-prod.ts`, which reuses the contract schemas (`CaptureStatus`, `OpsStatus`) and the registry for the owner-leak grep |
+| `rws-reachability` | "one GET each" | One request each; the RWS API accepts only POST, so NL-1 is a POST (still without a key). Targets that are not first-release endpoints (the R7 re-tests) are reported but do not fail the run |
+| Reboot at boot | – | `net.ipv{4,6}.ip_nonlocal_bind = 1`: docker-proxy binds the explicit IPv6 address, which is still tentative (duplicate address detection) when Docker starts, and would otherwise fail, leaving Caddy down after a reboot |

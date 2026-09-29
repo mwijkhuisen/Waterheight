@@ -24,10 +24,9 @@ updates:
         patterns: ['*']
     open-pull-requests-limit: 5
 
-  # Dockerfiles and Compose arrive with P1b in deploy/; until then this entry has
-  # nothing to update.
+  # The image bases of deploy/{server,web,backup}/Dockerfile (pinned by digest).
   - package-ecosystem: docker
-    directory: /deploy
+    directories: [/deploy/server, /deploy/web, /deploy/backup]
     schedule:
       interval: weekly
     cooldown:

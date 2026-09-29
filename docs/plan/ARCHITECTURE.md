@@ -73,7 +73,7 @@ The versions below were checked live on 2026-09-23, in the catalogue's §7 or by
 | Supply chain | Dependabot (npm, github-actions, docker), 7-day cooldown, grouped weekly, no automerge. zizmor, gitleaks (CLI), Syft + Grype (CLI), CodeQL if the repository is public. An "ADR-lite" line is required for every new runtime dependency | zizmor 1.30.1; gitleaks 8.30.1; Syft 1.52.0; Grype 0.119.0; CodeQL action 4.38.1 | MIT / Apache-2.0 | Cooldowns defeat fast worms (ChainDrop, 2026-08). SHA pins defeat tag hijacks (Trivy, 2026-03) | Renovate app (a third-party app with write access); `trivy-action` (compromised 2026-03) |
 | Observability | pino JSON logs with Docker `local` log rotation. Domain health lives in the database (`source_health`) and is exposed at `/api/v1/health/sources` and a public status page. healthchecks.io dead-man switches per provider group plus ops checks. A `watchdog` role probes our own public URL through real DNS and TLS | pino 10.3.1; healthchecks.io hosted free tier (20 checks) | MIT / BSD-3 | The signal that matters is per-source freshness, and alerts must fire from outside the VPS | Prometheus, Grafana or VictoriaMetrics before launch (RAM and operations cost); Sentry self-hosted (16 GB RAM); Uptime Kuma on the same VPS (dies with it) |
 | Backups | restic to an **EU S3-compatible bucket with versioning and Object Lock**: the raw archive hourly and `pg_dump -Fc` nightly. The VPS key cannot delete object versions; pruning runs from the owner's workstation. A restore drill runs automatically every month | restic 0.19.1 | BSD-2 | Immutable off-site copies that survive ransomware. Replay rebuilds the database from the archive. Provider windows refill short gaps | WAL-G or pgBackRest point-in-time recovery (unnecessary; pgBackRest's status was in flux in 2026) |
-| Secrets | Compose file secrets from `/etc/rws/secrets/*` (root-owned, mode 0600), never environment variables. None in git (gitleaks and push protection) | – | – | Minimal moving parts on one host | Vault, SOPS |
+| Secrets | Compose file secrets from `/etc/rws/secrets/*` (directory root 0700; **P1b:** each file `root:<per-secret gid>` 0440, and only its consumer has that gid, because Compose keeps a file secret's host owner and mode inside the container), never environment variables. None in git (gitleaks and push protection) | – | – | Minimal moving parts on one host | Vault, SOPS |
 | VPS | 4 vCPU, 8 GB RAM, **≥ 200 GB NVMe**, EU region, ≥ 1 Gbit/s, ≥ 20 TB/month traffic, IPv4 + IPv6, provider snapshots and firewall | – | – | About 60 GB used in year 1 (§11.4). The traffic quota covers flood spikes of PMTiles range requests | A 16 GB tier (only needed if a metrics stack is added) |
 
 ---
@@ -619,7 +619,7 @@ apps/web/src/
 
 | Service | Image | Networks | Internet egress | DB role | Volumes | Memory |
 |---|---|---|---|---|---|---|
-| `caddy` | web image (`caddy:2.11.4-alpine` + SPA), `NET_BIND_SERVICE` only | `public`, `edge` | ACME only (TCP 443 + DNS via nftables) | – | `public` (ro), `owner` (ro), `tiles` (ro), `caddy_data` | 256 MB |
+| `caddy` | web image (`caddy:2.11.4-alpine` + SPA), uid 65533 with **no capability** (P1b: the image strips caddy's file capability; the non-root process binds 80/443 through the namespaced `net.ipv4.ip_unprivileged_port_start`) | `public`, `edge` | ACME only (TCP 443 + DNS via nftables) | – | `public` (ro), `owner` (ro, from P9), `tiles` (ro), `caddy_data` | 256 MB |
 | `api` | server image, role `api` | `edge`, `db` (both internal) | **none** | `rws_api` | – | 512 MB |
 | `api-owner` | server image, role `api --audience owner` | `edge`, `db` (both internal) | **none** | `rws_owner_api` | – | 256 MB |
 | `capture` | server image, role `capture` | `egress` | allowlisted provider hosts + `hc-ping.com` | **none** | `raw` (rw), `public/status` (rw), `owner/status` (rw) | 384 MB |
@@ -629,13 +629,15 @@ apps/web/src/
 | `watchdog` | server image, role `watchdog` | `egress` | `hc-ping.com` + own domain | – | – | 64 MB |
 | `db` | `postgres:18.6-trixie` (uid 999) | `db` | **none** | – | `pgdata` (`/var/lib/postgresql`) | 3 GB |
 | `migrate` (one-shot) | dbmate 2.36.0 | `db` | none | `rws_migrator` | – | – |
-| `backup` (timer job) | restic 0.19.1 + pg client | `db`, `egress` | the bucket host only | `rws_backup` | `raw` (ro) | 512 MB |
+| `backup` (timer job) | backup image: restic 0.19.1 on distroless static (P1b; + pg client in P2) | `backup` (P1b; + `db` in P2) | the bucket host only (nftables set filled per run) | `rws_backup` | `raw` (ro) | 512 MB |
 | `basemap` (manual/quarterly job) | small job image with go-pmtiles 1.31.2 (built in CI, digest-pinned, signed) | `egress` | `build.protomaps.com` only | – | `tiles` (rw) | 512 MB |
 
 **Networks:**
 - `public` is the only network with published ports: 80/tcp, 443/tcp and 443/udp on the VPS's public IPv4 and IPv6 addresses, each named explicitly (set by bootstrap; never the wildcard `0.0.0.0` or `::`, which would also claim `10.66.0.1:443`), plus the owner site's TCP port published **only on the WireGuard address** (§11.5).
 - `edge` and `db` are `internal: true`.
 - `egress` is a bridge network. nftables limits it, and `public`, to **TCP 443 plus DNS to the resolver**. The dialer allowlist is the second layer.
+- `backup` (P1b) is a bridge network that nftables limits to TCP 443 to the bucket's addresses, which `rws-backup` loads into a set before each run.
+- P1b implements this in `deploy/host/nftables.conf`: its own `table inet rws` with a base chain on the forward hook at priority `filter - 5`, ahead of Docker's `filter FORWARD` (Docker DNATs published ports in `nat PREROUTING`, so INPUT never sees them). It never flushes the ruleset, and it is loaded by `rws-firewall.service`, because Debian's `nftables.service` flushes every table on stop.
 
 **Every service** runs:
 - as non-root with `read_only: true` and a `tmpfs` for `/tmp`;
@@ -643,19 +645,27 @@ apps/web/src/
 - with `mem_limit`, `cpus`, `pids_limit`, a healthcheck and `restart: unless-stopped` (the `cpus` limits keep `api` and `caddy` from starving `capture` and `load` during a spike; catalogue gap item 9, tuned in P12);
 - with Compose file secrets.
 
+P1b deviations: `backup` is a job (`profiles: [jobs]`, `restart: "no"`, no healthcheck); caddy's healthcheck is a loopback-only listener; `rws-tick` restarts a container Docker reports unhealthy (Docker never does).
+
 ### 11.2 Deploy flow (pull-based, human-approved)
 
 1. A push to `main` runs `release.yml`:
    - build `server` and `web` images with an SBOM and provenance;
    - push them to GHCR by digest;
    - `cosign sign` (keyless) and `attest-build-provenance`.
-2. The `promote` job waits on the **`production` environment**, which requires the owner's approval. It then publishes a GitHub Release `prod-<UTC timestamp>` carrying `release-manifest.json` (the image digests), signed with `cosign sign-blob`.
+2. The `promote` job waits on the **`production` environment**, which requires the owner's approval. It then publishes a GitHub Release `prod-<UTC timestamp>` carrying `release-manifest.json` (the image digests and the sha256 of `deploy-bundle.tar.gz`, the tar of `deploy/`), signed with `cosign sign-blob`. It is created as a draft and published only when all its assets are uploaded.
 3. `rws-update.timer` on the VPS runs every 5 min:
    - fetch the newest `prod-*` manifest;
    - **verify** the manifest bundle and every image with `--certificate-identity https://github.com/mwijkhuisen/Waterheight/.github/workflows/release.yml@refs/heads/main --certificate-oidc-issuer https://token.actions.githubusercontent.com`;
    - `compose pull` by digest → `migrate` → `up -d` → smoke test (`/healthz`, `/api/v1/health`, capture freshness);
    - **roll back automatically** to the previous manifest on failure and ping healthchecks `/fail`.
    - `rws-deploy <release>` does the same on demand.
+   - **P1b implementation** (`deploy/bin/rws-update`, `rws-deploy`, `rws-lib.sh`):
+     - The newest manifest is `releases/latest/download/release-manifest.json`, verified before it is read. Its tag (`^prod-[0-9]{8}T[0-9]{6}Z$`, not in the future) must be newer than the current release and than `skip_upto`.
+     - The bundle must match the signed sha256. `compose.yaml` comes only from it, and the images only by their signed digests.
+     - "The previous manifest" is the last release that passed its smoke test (`/var/lib/rws/current`).
+     - A failed release is recorded in `skip_upto` and never retried automatically. A failed first deploy leaves the containers running and fails loudly.
+     - Host scripts, units and the firewall change only when the owner runs `bootstrap.sh` from a verified release.
 4. The agent then runs `scripts/verify-prod.sh <domain>` from outside. It checks TLS, headers, health, freshness and cache headers.
 
 GitHub holds **no** credential for the server. If the repository is private, the VPS uses a fine-grained, read-only GHCR token stored in `/etc/rws/secrets`.
@@ -669,7 +679,7 @@ GitHub holds **no** credential for the server. If the repository is private, the
 - **Restore drill** (`rws-restore-drill.timer`, monthly): restore the latest dump into a throwaway container, run sanity queries (row counts per partition, newest timestamps), restore a 100-object raw sample and compare sha256, then replay one day and compare checksums. The result goes to healthchecks and to `status.json` (coarse values only).
 - **Recovery objectives** (catalogue gap item 9). **RPO ≤ 1 h for the raw archive** (hourly restic; the watchdog alerts when the last backup is > 2 h old) and ≤ 24 h for the database dump, whose gap replay closes from the raw archive. Forecast, class and alert payloads fetched between the last sync and a VPS loss, and those due while the VPS is down, are lost for good; a second capture-only collector is owner decision D19.
 - **Rebuild.** Runbook target RTO ≤ 4 h. After a restore, the provider windows (5–40 days) and replay refill the gap.
-- **Status files.** Until the publisher exists (P9), `capture` writes `/status/capture.json` and the backup and drill jobs write `/status/ops.json`. From P9 onward, both are merged into `/data/v1/status.json`.
+- **Status files.** Until the publisher exists (P9), `capture` writes `/status/capture.json` and the backup, drill and tick jobs write `/status/ops.json` (P1b: in the root-owned `/srv/rws/public/ops/`, so capture cannot rewrite it). From P9 onward, both are merged into `/data/v1/status.json`.
 - **healthchecks.io** (at most 20 checks):
   - 9 provider groups: NL, DE-federal, DE-6, DE-7/8, FR, LU, CH, BfG, and **owner** (BE-3, LU-2/3/4; the check name carries no source IDs);
   - loader lag, publisher, owner publisher, backup, restore drill, update timer, watchdog public-URL probe, certificate ≥ 14 days, disk < 75% (18 checks in total).
