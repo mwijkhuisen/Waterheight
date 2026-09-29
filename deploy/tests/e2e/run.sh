@@ -12,7 +12,8 @@
 #   - Caddy runs as uid 65533 with no capability, binds 80/443 and gets an
 #     ACME certificate through HTTP-01 on the published port;
 #   - file secrets keep their host owner, so only the service with the gid
-#     can read them;
+#     can read them; a file replaced by a rename reaches a running container
+#     only after a restart, an in-place write at once;
 #   - capture in distroless is healthy, writes the contract files with the
 #     contract modes, and generated_at advances; the real rws-status-copy.path
 #     unit publishes a checked copy that Caddy serves, a symlink planted as
@@ -335,6 +336,18 @@ if docker run --rm --user 65532:65532 -v /etc/rws/secrets/rws_x_api_key:/s:ro --
   fail "a uid-65532 container without the gid read a secret"
 fi
 proof "secrets are root:<gid> 0440 on the host and stay so in the container: capture (gids 61001, 61002) reads its two, watchdog mounts only hc_ping_key, and uid 65532 without the gid gets EACCES"
+# How a changed secret reaches a running container (bootstrap.md §3), on a throwaway file bind mount.
+printf 'one\n' >/ci/bind-probe
+docker run -d --name rws-bind-probe --network none -v /ci/bind-probe:/probe:ro --entrypoint sleep rws-web:ci 300 >/dev/null
+printf 'two\n' >/ci/bind-probe
+[[ $(docker exec rws-bind-probe cat /probe) == two ]] || fail "an in-place write is not seen in a running container"
+printf 'three\n' >/ci/bind-probe.new
+mv -f /ci/bind-probe.new /ci/bind-probe
+[[ $(docker exec rws-bind-probe cat /probe) == two ]] || fail "a file replaced by a rename reached a running container"
+docker restart rws-bind-probe >/dev/null
+[[ $(docker exec rws-bind-probe cat /probe) == three ]] || fail "docker restart did not mount the replaced file"
+docker rm -f rws-bind-probe >/dev/null
+proof "a file bind mount (as Compose mounts file secrets): an in-place write (sudoedit) is seen at once, a file replaced by a rename stays the old one in a running container, and docker restart mounts the new one"
 
 # ------------------------------------------------------------------ capture
 step "Capture in distroless: contract files, modes, generated_at advances"

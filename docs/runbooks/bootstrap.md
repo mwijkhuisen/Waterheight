@@ -108,6 +108,8 @@ Compose mounts a file secret with its **host** owner and mode (it ignores `uid`,
 
 **Check:** `sudo stat -c '%n %a %U:%G' /etc/rws/secrets/*` shows every file `440 root:rws-*`.
 
+**Changing a secret later** (a new ping key, a rotated S3 key): edit it in place with `sudoedit`, never by replacing the file (`mv`, `install`, or an editor that renames). Compose bind-mounts each file secret by its inode, so a running container keeps reading a replaced file's old content. An in-place edit of `hc_ping_key` takes effect at the next ping; `rws_x_api_key` is read when capture starts, so run `sudo docker restart rws-capture-1` after changing it. If a file was replaced, `sudo docker restart rws-capture-1 rws-watchdog-1` mounts the new one. The backup job reads `restic_password` and `s3_credentials` in a fresh container on every run. Redeploying the current release (`rws-deploy`) does not help here: `up -d` recreates a container only when its configuration changes.
+
 ## 4. Fill `/etc/rws/rws.env`
 
 `sudoedit /etc/rws/rws.env`. These are plain `KEY=VALUE` lines, without quotes:
