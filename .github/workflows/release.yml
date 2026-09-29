@@ -1,0 +1,220 @@
+# Release (A§11.2, ADR-0008; issue #16 P1b). Pull requests build the three
+# images without pushing. On main: build and push by digest to GHCR with an SBOM
+# and max provenance, cosign keyless signing and a provenance attestation; then
+# `promote` waits for the owner's approval (environment production) and
+# publishes prod-<UTC yyyymmddTHHMMSSZ> with a signed release-manifest.json and
+# the deploy bundle. GitHub holds no server credential: the VPS pulls and
+# verifies (deploy/bin/rws-update). Same hardening as ci.yml.
+name: release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  # Only the newest commit is released: a newer push cancels a run that is
+  # still building or waiting for approval.
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-pr:
+    name: build (${{ matrix.target }}, no push)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [server, web, backup]
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/${{ matrix.target }}/Dockerfile
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          sbom: false
+
+  build:
+    name: build, push and sign
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write # push the images to GHCR
+      id-token: write # keyless cosign signatures and attestations
+      attestations: write # build provenance attestations
+      artifact-metadata: write # attestation storage records
+    outputs:
+      server: ${{ steps.server.outputs.digest }}
+      web: ${{ steps.web.outputs.digest }}
+      backup: ${{ steps.backup.outputs.digest }}
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: server
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/server/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/mwijkhuisen/waterheight/server:sha-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/mwijkhuisen/Waterheight
+          provenance: mode=max
+          sbom: generator=docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9
+      - id: web
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/mwijkhuisen/waterheight/web:sha-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/mwijkhuisen/Waterheight
+          provenance: mode=max
+          sbom: generator=docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9
+      - id: backup
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/backup/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/mwijkhuisen/waterheight/backup:sha-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/mwijkhuisen/Waterheight
+          provenance: mode=max
+          sbom: generator=docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: Sign every image by digest (keyless), then verify with the VPS's exact identity
+        env:
+          SERVER: ${{ steps.server.outputs.digest }}
+          WEB: ${{ steps.web.outputs.digest }}
+          BACKUP: ${{ steps.backup.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for pair in "server=$SERVER" "web=$WEB" "backup=$BACKUP"; do
+            name=${pair%%=*} digest=${pair#*=}
+            [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "unexpected digest for $name" >&2; exit 1; }
+            cosign sign --yes "ghcr.io/mwijkhuisen/waterheight/$name@$digest"
+            cosign verify \
+              --certificate-identity https://github.com/mwijkhuisen/Waterheight/.github/workflows/release.yml@refs/heads/main \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              "ghcr.io/mwijkhuisen/waterheight/$name@$digest" >/dev/null
+            echo "$name@$digest signed and verified"
+          done
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/mwijkhuisen/waterheight/server
+          subject-digest: ${{ steps.server.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/mwijkhuisen/waterheight/web
+          subject-digest: ${{ steps.web.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/mwijkhuisen/waterheight/backup
+          subject-digest: ${{ steps.backup.outputs.digest }}
+          push-to-registry: true
+
+  promote:
+    name: promote to production
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: write # create the release
+      id-token: write # keyless cosign signature of the manifest
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: Deploy bundle, release manifest and its signature
+        id: manifest
+        env:
+          SERVER: ${{ needs.build.outputs.server }}
+          WEB: ${{ needs.build.outputs.web }}
+          BACKUP: ${{ needs.build.outputs.backup }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for digest in "$SERVER" "$WEB" "$BACKUP"; do
+            [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "unexpected image digest" >&2; exit 1; }
+          done
+          [[ $COMMIT =~ ^[0-9a-f]{40}$ ]]
+          out=$RUNNER_TEMP/release
+          mkdir -p "$out"
+          tag=prod-$(date -u +%Y%m%dT%H%M%SZ)
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -cf - deploy | gzip -n >"$out/deploy-bundle.tar.gz"
+          jq -n --arg tag "$tag" --arg commit "$COMMIT" --arg img ghcr.io/mwijkhuisen/waterheight \
+            --arg s "$SERVER" --arg w "$WEB" --arg b "$BACKUP" \
+            --arg sha "$(sha256sum "$out/deploy-bundle.tar.gz" | cut -d' ' -f1)" \
+            '{version: 1, tag: $tag, commit: $commit,
+              images: {server: "\($img)/server@\($s)", web: "\($img)/web@\($w)", backup: "\($img)/backup@\($b)"},
+              bundle: {name: "deploy-bundle.tar.gz", sha256: $sha}}' >"$out/release-manifest.json"
+          cosign sign-blob --yes --bundle "$out/release-manifest.sigstore.json" "$out/release-manifest.json"
+          cosign verify-blob --bundle "$out/release-manifest.sigstore.json" \
+            --certificate-identity https://github.com/mwijkhuisen/Waterheight/.github/workflows/release.yml@refs/heads/main \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$out/release-manifest.json"
+          cat "$out/release-manifest.json"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+      - name: Publish the release (a draft first, so a half-uploaded release is never the latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.manifest.outputs.tag }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ $TAG =~ ^prod-[0-9]{8}T[0-9]{6}Z$ ]]
+          out=$RUNNER_TEMP/release
+          gh release create "$TAG" --draft --target "$COMMIT" --title "$TAG" \
+            --notes "Signed production release of $COMMIT. The VPS deploys it after verifying the manifest and every image (deploy/bin/rws-update)." \
+            "$out/release-manifest.json" "$out/release-manifest.sigstore.json" "$out/deploy-bundle.tar.gz"
+          gh release edit "$TAG" --draft=false --latest
