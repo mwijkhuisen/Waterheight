@@ -72,8 +72,13 @@ export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
       const st = await deps.state.read<SpecState>(s.id);
       if (!isFresh(s, st, now)) stale.push(s.id);
       if (st !== undefined && st.pending_page.length > 0) {
-        pages.push(...st.pending_page.map((p) => `${s.id}:${p}`));
-        await deps.state.update<SpecState>(s.id, (cur) => ({ ...(cur ?? st), pending_page: [] }));
+        const reported = new Set(st.pending_page);
+        pages.push(...[...reported].map((p) => `${s.id}:${p}`));
+        // Clears only what this ping reports: an alert a run adds meanwhile waits for the next ping.
+        await deps.state.update<SpecState>(s.id, (cur) => {
+          const base = cur ?? st;
+          return { ...base, pending_page: base.pending_page.filter((p) => !reported.has(p)) };
+        });
       }
     }
     if (stale.length === 0 && pages.length === 0) return deps.pinger.ping(group.slug, 'success');

@@ -7,7 +7,7 @@ import { server } from '../../../../test/msw.setup.ts';
 import { Pinger } from '../../src/capture/pings.ts';
 import { guarded, startRecorder } from '../../src/capture/scheduler.ts';
 import { GROUP_SLUGS, type Registry } from '../../src/capture/specs.ts';
-import type { SpecState } from '../../src/capture/state.ts';
+import type { SpecState, StateStore } from '../../src/capture/state.ts';
 import { testClient } from '../helpers.ts';
 import { fixture, quiet, registry, runDeps, spec } from './helpers.ts';
 
@@ -113,6 +113,60 @@ describe('recorder', () => {
       vi.useRealTimers();
       expect(calls, lastAttempt).toBe(expected);
     }
+  });
+
+  it('clears only the page alerts its ping reported (C11)', async () => {
+    const pings: { path: string; body: string }[] = [];
+    server.use(
+      http.all('https://hc-ping.com/*', async ({ request }) => {
+        pings.push({ path: new URL(request.url).pathname.replace(/^\/[^/]+\//, '/KEY/'), body: await request.text() });
+        return HttpResponse.text('OK');
+      }),
+      http.get(
+        'https://api.hochwasserzentralen.de/public/v1/data/alerts',
+        () => new HttpResponse(fixture('DE-6', 'de-6-alerts').body),
+      ),
+    );
+    const id = 'de-6-alerts';
+    const deps = runDeps();
+    const store = deps.state;
+    await store.update<SpecState>(id, () => ({
+      enabled_since: '2026-01-01T00:00:00.000Z',
+      variants: {},
+      seen: [],
+      pending_page: ['x'],
+    }));
+    // A run raises another page alert right after the ping has read the state.
+    let armed = false;
+    const racing = {
+      dir: store.dir,
+      update: store.update.bind(store),
+      read: async <T>(name: string) => {
+        const r = await store.read<T>(name);
+        if (armed && name === id) {
+          armed = false;
+          void store.update<SpecState>(name, (cur) => ({
+            ...(cur as SpecState),
+            pending_page: [...(cur as SpecState).pending_page, 'late'],
+          }));
+        }
+        return r;
+      },
+    } as unknown as StateStore;
+    const group = registry.groups.find((g) => g.slug === 'cap-de6') as Registry['groups'][number];
+    const rec = await startRecorder({
+      ...deps,
+      state: racing,
+      registry: { ...oneSpec(id), groups: [{ ...group, anchor: id }] },
+      pinger: new Pinger('k'.repeat(22), 'ua', quiet, testClient({ hc: ['hc-ping.com'] })),
+      paths: { rawDir: deps.root, statusDir: `${deps.root}/s`, ownerStatusDir: `${deps.root}/o` },
+      seeds: () => [],
+    });
+    armed = true;
+    await rec.run(spec(id));
+    await rec.stop();
+    expect(pings.at(-1)).toEqual({ path: '/KEY/cap-de6/fail', body: 'de-6-alerts:x' });
+    expect((await store.read<SpecState>(id))?.pending_page).toEqual(['late']);
   });
 
   it('pings the group: /start, then success when fresh, /fail with no body for an owner group', async () => {
