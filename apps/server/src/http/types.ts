@@ -60,7 +60,10 @@ export type TransportResponse = {
   status: number;
   headers: Record<string, string | string[] | undefined>;
   /** Raw bytes as they came off the socket: never decoded by the transport. */
-  body: AsyncIterable<Uint8Array> & { destroy(error?: Error): unknown };
+  body: AsyncIterable<Uint8Array> & {
+    destroy(error?: Error): unknown;
+    on(event: 'error', listener: () => void): unknown;
+  };
 };
 
 /** The only layer that touches the network; every policy check sits above it. */

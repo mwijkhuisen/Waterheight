@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Pinger } from '../../src/capture/pings.ts';
@@ -117,11 +117,44 @@ describe('the client over the undici transport (S1: no unhandled rejection)', ()
   beforeEach(() => {
     unhandled.length = 0;
     process.on('unhandledRejection', record);
+    process.on('uncaughtException', record);
   });
   afterEach(() => {
     process.off('unhandledRejection', record);
+    process.off('uncaughtException', record);
   });
   const settle = () => new Promise((r) => setTimeout(r, 100));
+
+  // An undici body destroyed before its end emits 'error' (N1): each answer the client drops unread.
+  it.each([
+    ['a 304', (r: ServerResponse) => r.writeHead(304).end(), { ok: true, res: { status: 304 } }],
+    ['a 204', (r: ServerResponse) => r.writeHead(204).end(), { ok: true, res: { status: 204 } }],
+    ['a 799', (r: ServerResponse) => r.writeHead(799).end('odd'), { ok: false, error: 'bad_status' }],
+    [
+      'a zstd body',
+      (r: ServerResponse) => r.writeHead(200, { 'content-encoding': 'zstd' }).end('x'),
+      { ok: false, error: 'bad_encoding' },
+    ],
+    [
+      'a same-host 302, then a 200',
+      (r: ServerResponse, path?: string) =>
+        path === '/b' ? r.end('ok') : r.writeHead(302, { location: '/b' }).end('moved'),
+      { ok: true, res: { status: 200, url: 'https://provider.test/b' } },
+    ],
+  ])('drops %s unread without an uncaught error', async (_, answer, expected) => {
+    const s = await listen((q, r) => answer(r, q.url));
+    const c = new Client({
+      hosts: new Map([['NL-1', ['provider.test']]]),
+      userAgent: 'ua',
+      transport: local(s.port),
+      resolver: fakeResolver(),
+    });
+    expect(await c.fetch('NL-1', { url: 'https://provider.test/a', method: 'GET', variant: 'v' })).toMatchObject(
+      expected,
+    );
+    await settle();
+    expect(unhandled).toEqual([]);
+  });
 
   it('waits out a Retry-After longer than the request timeout, then fetches', async () => {
     let n = 0;

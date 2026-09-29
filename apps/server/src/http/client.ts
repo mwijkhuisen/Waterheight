@@ -90,6 +90,12 @@ function flatHeaders(headers: TransportResponse['headers']): Record<string, stri
   return out;
 }
 
+/** Drops a body unread. An undici body destroyed before its end emits 'error', which needs a listener (N1). */
+function discard(body: TransportResponse['body']): void {
+  body.on('error', () => {});
+  body.destroy();
+}
+
 /**
  * Reads the body while counting raw bytes (never trusting Content-Length) and
  * decodes one layer of gzip or br (what we advertise) with a decoded cap.
@@ -105,7 +111,7 @@ export async function readBody(
   const decoder =
     encoding === 'gzip' || encoding === 'x-gzip' ? createGunzip() : encoding === 'br' ? createBrotliDecompress() : null;
   if (decoder === null && encoding !== '' && encoding !== 'identity') {
-    res.body.destroy();
+    discard(res.body);
     throw new CapError('bad_encoding');
   }
   let wire = 0;
@@ -131,7 +137,7 @@ export async function readBody(
   try {
     await abortable(run, signal);
   } catch (e) {
-    res.body.destroy();
+    discard(res.body);
     throw e;
   }
   return { body: Buffer.concat(chunks), wire };
@@ -287,18 +293,18 @@ export class Client {
           } catch (e) {
             // Such a transport's late answer must not keep its socket open.
             pending.then(
-              (r) => r.body.destroy(),
+              (r) => discard(r.body),
               () => {},
             );
             return this.failed(host, errorCode(e, signal));
           }
           if (res.status < 100 || res.status > 599) {
-            res.body.destroy();
+            discard(res.body);
             return { ok: false, error: 'bad_status' };
           }
           const location = header(res.headers, 'location');
           if (REDIRECTS.has(res.status) && location !== undefined) {
-            res.body.destroy();
+            discard(res.body);
             if (hop >= MAX_REDIRECTS) return { ok: false, error: 'redirect_limit' };
             let next: URL;
             try {
@@ -322,7 +328,7 @@ export class Client {
           let read: { body: Buffer; wire: number };
           try {
             if (res.status === 204 || res.status === 304) {
-              res.body.destroy();
+              discard(res.body);
               read = { body: Buffer.alloc(0), wire: 0 };
             } else {
               read = await readBody(res, maxWire, maxDecoded, signal);
