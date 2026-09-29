@@ -149,7 +149,7 @@ describe('freshness, soak and capacity', () => {
     expect(staleSpecs(status, NOW)).toEqual(['y', 'z']);
   });
 
-  it('a spec that has not run yet is n/a, not stale, unless it is overdue by more than 3 × cadence_s', () => {
+  it('a spec that has not run yet is n/a, not stale, unless it is overdue by more than 3 × cadence_s or never scheduled', () => {
     const { pub } = statusCycle();
     const never = (spec: string, next_due: string | null) =>
       ({
@@ -166,9 +166,10 @@ describe('freshness, soak and capacity', () => {
         pub.specs[0] as CaptureStatus['specs'][number],
         never('daily', '2026-10-03T03:00:00Z'),
         never('overdue', '2026-09-28T03:00:00Z'),
+        never('unscheduled', null),
       ],
     };
-    expect(staleSpecs(status, NOW)).toEqual(['overdue']);
+    expect(staleSpecs(status, NOW)).toEqual(['overdue', 'unscheduled']);
     const results = checkCapture({ ...status, specs: status.specs.slice(0, 2) }, NOW);
     expect(results.map((r) => [r.check, r.ok])).toEqual([
       ['freshness', true],

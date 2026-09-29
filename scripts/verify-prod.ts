@@ -94,14 +94,16 @@ export function checkHeaders(
 
 type StatusSpec = CaptureStatus['specs'][number];
 /**
- * A spec with no success and no failure yet that is not overdue by more than
- * 3 × cadence_s: nothing to judge (after go-live, or a new spec), as the
- * contract's own freshness counts it from when it was enabled.
+ * A spec with no success and no failure yet whose next run is scheduled and
+ * not overdue by more than 3 × cadence_s: nothing to judge (after go-live, or
+ * a new spec), as the contract's own freshness counts it from when it was
+ * enabled. A spec with no next run (next_due null) is never scheduled, so stale.
  */
 const notRunYet = (s: StatusSpec, now: Date) =>
   s.last_success === null &&
   s.last_failure_status === null &&
-  (s.next_due === null || now.getTime() - Date.parse(s.next_due) <= 3 * s.cadence_s * 1000);
+  s.next_due !== null &&
+  now.getTime() - Date.parse(s.next_due) <= 3 * s.cadence_s * 1000;
 
 /** Specs of capture.json without a success within 3 × cadence_s (a spec that has not run yet is not stale). */
 export function staleSpecs(status: CaptureStatus, now: Date): string[] {
