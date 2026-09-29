@@ -1,0 +1,161 @@
+# Providers.
+# Keyed by the source catalogue (docs/sources/SOURCE-CATALOGUE.md). Changes need owner review
+# (CODEOWNERS); an audience or channel change also needs registry/permissions/<ID>.md (invariant 8).
+# Validated by packages/contracts (schema) and packages/contracts/test/registry.test.ts.
+
+providers:
+  - id: rws
+    name: Rijkswaterstaat (RWS)
+    country: NL
+    contact: '"Servicedesk Data" contact form on rijkswaterstaatdata.nl; https://github.com/Rijkswaterstaat/WaterWebservices/discussions'
+    terms_url: null
+  - id: wrij
+    name: Waterschap Rijn en IJssel
+    country: NL
+    contact: null
+    terms_url: null
+  - id: nl-waterboards
+    name: Dutch water boards (Vechtstromen, Waterschap Limburg, Rijn en IJssel)
+    country: NL
+    contact: null
+    terms_url: null
+  - id: wsv
+    name: WSV/ITZBund – PEGELONLINE
+    country: DE
+    contact: null
+    terms_url: null
+  - id: bfg
+    name: Bundesanstalt für Gewässerkunde (BfG)
+    country: DE
+    contact: vorhersage@bafg.de
+    terms_url: https://6wochenvorhersage.bafg.de/
+  - id: lhp
+    name: Länderübergreifendes Hochwasserportal (LHP)
+    country: DE
+    contact: null
+    terms_url: null
+  - id: lanuk
+    name: LANUK NRW (formerly LANUV) – Hochwasserportal.NRW
+    country: DE-NW
+    contact: null
+    terms_url: null
+  - id: nlwkn
+    name: NLWKN (Niedersachsen)
+    country: DE-NI
+    contact: HWVZ@nlwkn.niedersachsen.de
+    terms_url: https://www.pegelonline.nlwkn.niedersachsen.de/Impressum
+  - id: lfu-rlp
+    name: Landesamt für Umwelt Rheinland-Pfalz (LfU)
+    country: DE-RP
+    contact: poststelle@lfu.rlp.de; Kaiser-Friedrich-Straße 7, 55116 Mainz; 06131 6033-0
+    terms_url: https://www.hochwasser.rlp.de/
+  - id: hlnug
+    name: Hessisches Landesamt für Naturschutz, Umwelt und Geologie (HLNUG)
+    country: DE-HE
+    contact: null
+    terms_url: null
+  - id: lubw
+    name: LUBW Baden-Württemberg (HVZ)
+    country: DE-BW
+    contact: Pegelinfo@lubw.bwl.de
+    terms_url: https://www.hvz.baden-wuerttemberg.de/
+  - id: lfu-bayern
+    name: Bayerisches Landesamt für Umwelt (LfU Bayern)
+    country: DE-BY
+    contact: null
+    terms_url: null
+  - id: lua-saarland
+    name: LUA Saarland
+    country: DE-SL
+    contact: null
+    terms_url: null
+  - id: wver
+    name: Wasserverband Eifel-Rur (WVER)
+    country: DE-NW
+    contact: null
+    terms_url: null
+  - id: nrw-wasserverbaende
+    name: Niersverband and Ruhrverband
+    country: DE-NW
+    contact: null
+    terms_url: null
+  - id: elwis
+    name: ELWIS
+    country: DE
+    contact: null
+    terms_url: null
+  - id: hic
+    name: Waterbouwkundig Laboratorium – Hydrologisch InformatieCentrum (HIC)
+    country: BE-Flanders
+    contact: hic@vlaanderen.be
+    terms_url: https://hicws.vlaanderen.be/
+  - id: vmm
+    name: Vlaamse Milieumaatschappij (VMM)
+    country: BE-Flanders
+    contact: hydrometrie@waterinfo.be
+    terms_url: https://vmm.vlaanderen.be/disclaimer
+  - id: spw
+    name: Service public de Wallonie (SPW)
+    country: BE-Wallonia
+    contact: hydrometrie@spw.wallonie.be
+    terms_url: https://hydrometrie.wallonie.be/mentions-legales.html
+  - id: hydria
+    name: hydria.be
+    country: BE-Brussels
+    contact: null
+    terms_url: null
+  - id: hubeau
+    name: Hub'Eau (PHyC / SCV)
+    country: FR
+    contact: null
+    terms_url: null
+  - id: vigicrues
+    name: Vigicrues
+    country: FR
+    contact: null
+    terms_url: null
+  - id: hydroportail
+    name: HydroPortail
+    country: FR
+    contact: null
+    terms_url: null
+  - id: age
+    name: Administration de la gestion de l'eau (AGE)
+    country: LU
+    contact: hydrometrie@eau.etat.lu
+    terms_url: https://inondations.public.lu/fr/support/aspects-legaux.html
+  - id: lualert
+    name: LU-Alert
+    country: LU
+    contact: null
+    terms_url: null
+  - id: geoportail-lu
+    name: geoportail.lu
+    country: LU
+    contact: null
+    terms_url: null
+  - id: bafu
+    name: Bundesamt für Umwelt (BAFU)
+    country: CH
+    contact: abfragezentrale@bafu.admin.ch (live data); hydrologie@bafu.admin.ch (history orders)
+    terms_url: https://www.bafu.admin.ch/dam/de/sd-web/g7vjiKP5LJ11/liefer-nutzungsbedingungen-hydrologische-daten.pdf
+  - id: basel-stadt
+    name: Kanton Basel-Stadt (data.bs.ch)
+    country: CH
+    contact: null
+    terms_url: null
+  - id: existenz
+    name: existenz.ch (third-party mirror)
+    country: CH
+    contact: null
+    terms_url: null
+  - id: opendata-swiss
+    name: opendata.swiss
+    country: CH
+    contact: null
+    terms_url: null
+  - id: canary
+    name: Synthetic test provider (canaries only)
+    country: none
+    contact: null
+    terms_url: null

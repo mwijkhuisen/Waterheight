@@ -1,0 +1,32 @@
+# The owner is requested on every change. The main ruleset does not *require*
+# code-owner review: the owner is the only reviewer and merger
+# (docs/github-settings.md), so the owner's merge decision is the gate (R-003).
+*                     @mwijkhuisen
+
+# Named so their weight is visible: the CI root of trust, deployment, migrations,
+# the registry (audiences, channels, private_basis) and its validator and
+# baseline, the agent set-up, the supply chain, and the sources of the
+# invariants and of catalogue §0.7/§0.8 (PHASES §5 P0; security review S8/S9).
+/.github/             @mwijkhuisen
+/deploy/              @mwijkhuisen
+/db/migrations/       @mwijkhuisen
+/registry/            @mwijkhuisen
+/packages/contracts/  @mwijkhuisen
+/packages/core/       @mwijkhuisen
+/test/                @mwijkhuisen
+/.claude/             @mwijkhuisen
+/.mcp.json            @mwijkhuisen
+/AGENTS.md            @mwijkhuisen
+/CLAUDE.md            @mwijkhuisen
+/pnpm-workspace.yaml  @mwijkhuisen
+/pnpm-lock.yaml       @mwijkhuisen
+package.json          @mwijkhuisen
+/.node-version        @mwijkhuisen
+/.gitignore           @mwijkhuisen
+/.gitleaks.toml       @mwijkhuisen
+/scripts/             @mwijkhuisen
+/docs/plan/           @mwijkhuisen
+/docs/sources/        @mwijkhuisen
+/docs/threat-model.md @mwijkhuisen
+/docs/risk-register.md @mwijkhuisen
+/SECURITY.md          @mwijkhuisen

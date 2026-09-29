@@ -203,7 +203,7 @@ Each phase issue contains this block. The placeholders come from the phase secti
 /model <build-model>
 /effort <build-effort>
 /plan
-You are implementing Phase <N>, PR <N><x> "<pr-name>" of mwijkhuisen/rws.
+You are implementing Phase <N>, PR <N><x> "<pr-name>" of mwijkhuisen/Waterheight.
 Read first: CLAUDE.md (bill of materials, gotchas, security invariants), docs/plan/ARCHITECTURE.md,
 docs/plan/PHASES.md §P<N>, docs/adr/, docs/threat-model.md, and these catalogue sections:
 <§refs> in docs/sources/SOURCE-CATALOGUE.md. Source IDs in scope: <IDs>.
@@ -275,7 +275,7 @@ Report any threat-model delta for docs/threat-model.md. Classify findings Critic
     - the ADR-lite rule for new dependencies.
   - **Agent set-up**:
     - `.claude/settings.json`: deny reads of `**/.env*` and `deploy/secrets/**`; deny `git push --force*`; allow `pnpm`, `psql` and read-only `git` commands;
-    - `.claude/hooks/session-start.sh`, written with the `session-start-hook` skill. It is idempotent and installs Node 26.10.x, pnpm 12.6.0 and native PostgreSQL 18 (a cluster on port 5433 with the builtin C.UTF-8 locale), then runs `pnpm install --frozen-lockfile`.
+    - `.claude/hooks/session-start.sh`, written with the `session-start-hook` skill. It is idempotent and installs Node 26.10.x, pnpm 12.6.0 (P0b pinned 12.5.1: 12.6.0 was under the 7-day release age) and native PostgreSQL 18 (a cluster on port 5433 with the builtin C.UTF-8 locale), then runs `pnpm install --frozen-lockfile`.
   - **Docs**:
     - `docs/plan/`: ARCHITECTURE.md, PHASES.md, JUDGEMENT.md and `proposals/` from the planning bundle (branch `claude/river-water-level-map-hf7bcz`, PR #30);
     - `docs/sources/SOURCE-CATALOGUE.md` and `docs/sources/research/*.md`, copied verbatim;
@@ -298,7 +298,7 @@ Report any threat-model delta for docs/threat-model.md. Classify findings Critic
 **Deliverables:** the tag; a clean `main`; the scaffold, CI and Dependabot configuration; `CLAUDE.md`; the hook; the docs, ADRs, registry and e-mail drafts; the GitHub settings script.
 
 **Acceptance criteria**
-- [ ] [CI] `git rev-parse legacy-v0^{commit}` equals `a4106b8…`, and `git ls-remote --tags origin legacy-v0` returns it.
+- [ ] [CI] `git rev-parse legacy-v0^{commit}` equals `a4106b8…`, and `git ls-remote --tags origin 'legacy-v0*'` returns it on the peeled `refs/tags/legacy-v0^{}` line.
 - [ ] [CI] `verify-fresh-start.sh` passes: `main` contains 0 legacy blobs and none of the legacy top-level paths.
 - [ ] [CI] After the P0a removal commit, the tree holds only `README.md`, `.gitignore`, `scripts/*` and, only if PR #30 was merged first, `docs/plan/**` and `docs/sources/**`.
 - [ ] [CI] P0b: `docs/plan/` and `docs/sources/` equal the planning bundle (branch `claude/river-water-level-map-hf7bcz`, or the PR #30 merge commit if the branch is gone); the PR body says whether they were imported or already on `main`.

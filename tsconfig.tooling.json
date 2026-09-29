@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": false,
+    "types": ["node"],
+    "tsBuildInfoFile": "node_modules/.cache/tsc/tooling.tsbuildinfo"
+  },
+  "include": [
+    "vitest.config.ts",
+    "scripts/*.ts",
+    "test/**/*.ts",
+    "apps/*/test/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "apps/web/vite.config.ts",
+    "apps/web/i18n-html.ts"
+  ],
+  "references": [{ "path": "packages/contracts" }, { "path": "packages/core" }, { "path": "apps/server" }]
+}

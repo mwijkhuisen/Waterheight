@@ -1,0 +1,32 @@
+# gitleaks 8.30.1: the default rules plus a narrow allowlist of the public
+# false positives in the verbatim planning bundle (issue #15; listed in
+# docs/risk-register.md). Each entry needs the exact secret AND the exact file
+# AND the rule to match: never a whole path, a disabled rule or a commit
+# fingerprint (those break on squash or rebase merges). A planted key still
+# fails the scan: scripts/gitleaks-planted.sh.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Protomaps build file name quoted as format evidence (catalogue §5.1; research/map-rivers.md), not a key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^20260923\.pmtiles$''']
+paths = ['''^docs/sources/SOURCE-CATALOGUE\.md$''', '''^docs/sources/research/map-rivers\.md$''']
+
+[[allowlists]]
+description = "Public sha256 of the apt.postgresql.org signing-key file (ACCC4CF8.asc) pinned in the SessionStart hook, not a key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76$''']
+paths = ['''^\.claude/hooks/session-start\.sh$''']
+
+[[allowlists]]
+description = "Prose in the secure-ops proposal ('temporal-key edge cases, forecast/observation joins'), not a key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^forecast/observation$''']
+paths = ['''^docs/plan/proposals/secure-ops\.md$''']

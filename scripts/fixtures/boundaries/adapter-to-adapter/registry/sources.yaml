@@ -1,0 +1,5 @@
+sources:
+  - id: NL-1
+    provider: rws
+  - id: DE-1
+    provider: wsv

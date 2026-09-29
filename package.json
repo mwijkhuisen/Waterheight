@@ -1,0 +1,26 @@
+{
+  "name": "rws",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.5.1+sha512.e3f305bc784a2bc89f5ad3b6138889470fae8d2af5f36b61216ec91c2c3d64089775f9de38aac331044ea40f245cb0d5666392dfdf65824e1907ef6a2c62de5f",
+  "engines": {
+    "node": ">=26.10.0 <27"
+  },
+  "scripts": {
+    "i18n": "pnpm -F web i18n",
+    "check": "pnpm i18n && biome check && tsc -b && vitest run --project unit && node scripts/check-bom.ts && node scripts/check-boundaries.ts",
+    "test": "pnpm i18n && vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "build": "pnpm i18n && tsc -b && pnpm -F web build",
+    "check:bom": "node scripts/check-bom.ts",
+    "check:boundaries": "node scripts/check-boundaries.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/node": "26.6.2",
+    "msw": "2.15.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.1",
+    "yaml": "2.9.1"
+  }
+}
