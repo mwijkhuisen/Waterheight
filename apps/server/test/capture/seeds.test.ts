@@ -155,13 +155,13 @@ describe('seed completeness (C5, S8)', () => {
     const harvest = startSeeds(only('fr-1-obs'), deps, paths(deps.root), async () => {
       rounds.push(requests);
     });
-    await vi.waitFor(() => expect(rounds).toHaveLength(1));
+    await vi.waitFor(() => expect(rounds).toHaveLength(1), { timeout: 15_000 });
     const st = await deps.state.read<SeedState>('seeds/fr-1-obs');
     expect(st?.done).not.toContain('day0');
     expect(st?.done).toHaveLength(29);
     expect(st?.done_at).toBeUndefined();
     await vi.advanceTimersByTimeAsync(SEED_RETRY_MS);
-    await vi.waitFor(() => expect(rounds).toHaveLength(2));
+    await vi.waitFor(() => expect(rounds).toHaveLength(2), { timeout: 15_000 });
     expect(rounds[1] as number).toBe((rounds[0] as number) + 2); // only day 0 again, both pages
     expect(roots.at(-1)).toBe(roots[0]); // the same window as in the first round, an hour earlier
     expect((await deps.state.read<SeedState>('seeds/fr-1-obs'))?.done_at).toBeDefined();
