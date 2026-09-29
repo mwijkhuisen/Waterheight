@@ -85,7 +85,7 @@ describe('per-host circuit breaker under fake timers', () => {
 });
 
 describe('ByteBudget', () => {
-  it('holds requests until bytes are released, in order', async () => {
+  it('holds a request until its bytes are free, and lets a request that fits pass a larger waiter', async () => {
     const b = new ByteBudget(100);
     const r1 = await b.acquire(60);
     const order: string[] = [];
@@ -98,11 +98,11 @@ describe('ByteBudget', () => {
       return r;
     });
     await Promise.resolve();
-    expect(order).toEqual([]);
+    expect(order).toEqual(['3']);
     r1();
     (await p2)();
     (await p3)();
-    expect(order).toEqual(['2', '3']);
+    expect(order).toEqual(['3', '2']);
     // An oversized request is clamped to the total instead of waiting forever.
     (await b.acquire(1000))();
   });

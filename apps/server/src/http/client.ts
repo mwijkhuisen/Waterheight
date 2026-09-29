@@ -255,7 +255,6 @@ export class Client {
     const host = first.hostname.toLowerCase();
     const gate = this.politeness.gate(host, this.now());
     if ('skip' in gate) return { ok: false, error: gate.skip };
-    const release = await this.budget.acquire(maxDecoded);
     try {
       if (gate.wait > 0) {
         if (opts.deadline !== undefined && this.now() + gate.wait > opts.deadline)
@@ -271,77 +270,82 @@ export class Client {
         } catch (e) {
           return { ok: false, error: e instanceof GuardError ? e.code : 'dns' };
         }
-        // The total deadline of this hop (headers and body) starts here, after the waits.
-        const signal = deadline();
-        // Only the caller can have aborted it: nothing was sent, so it is no failure of the host.
-        if (signal.aborted) return { ok: false, error: 'backoff' };
-        const pending = this.transport({ url, method, headers, ...(body === undefined ? {} : { body }), signal });
-        let res: TransportResponse;
+        // Memory is reserved for the transfer only: never across a wait, a DNS lookup or another host's backoff.
+        const release = await this.budget.acquire(maxDecoded);
         try {
-          // Raced against the deadline: the total timeout holds even if a transport ignores the signal.
-          res = await abortable(pending, signal);
-        } catch (e) {
-          // Such a transport's late answer must not keep its socket open.
-          pending.then(
-            (r) => r.body.destroy(),
-            () => {},
-          );
-          return this.failed(host, errorCode(e, signal));
-        }
-        const location = header(res.headers, 'location');
-        if (REDIRECTS.has(res.status) && location !== undefined) {
-          res.body.destroy();
-          if (hop >= MAX_REDIRECTS) return { ok: false, error: 'redirect_limit' };
-          let next: URL;
+          // The total deadline of this hop (headers and body) starts here, after the waits.
+          const signal = deadline();
+          // Only the caller can have aborted it: nothing was sent, so it is no failure of the host.
+          if (signal.aborted) return { ok: false, error: 'backoff' };
+          const pending = this.transport({ url, method, headers, ...(body === undefined ? {} : { body }), signal });
+          let res: TransportResponse;
           try {
-            next = new URL(location, url);
-          } catch {
-            return { ok: false, error: 'bad_url' };
+            // Raced against the deadline: the total timeout holds even if a transport ignores the signal.
+            res = await abortable(pending, signal);
+          } catch (e) {
+            // Such a transport's late answer must not keep its socket open.
+            pending.then(
+              (r) => r.body.destroy(),
+              () => {},
+            );
+            return this.failed(host, errorCode(e, signal));
           }
-          if (next.protocol !== 'https:') return { ok: false, error: 'redirect_insecure' };
-          if (next.hostname.toLowerCase() !== host) {
-            return { ok: false, error: 'redirect_cross_host' };
-          }
-          const checked = this.checkUrl(sourceId, next.href);
-          if (typeof checked === 'string') return { ok: false, error: checked };
-          url = checked;
-          if (res.status === 303) {
-            method = 'GET';
-            body = undefined;
-          }
-          continue;
-        }
-        let read: { body: Buffer; wire: number };
-        try {
-          if (res.status === 204 || res.status === 304) {
+          const location = header(res.headers, 'location');
+          if (REDIRECTS.has(res.status) && location !== undefined) {
             res.body.destroy();
-            read = { body: Buffer.alloc(0), wire: 0 };
-          } else {
-            read = await readBody(res, maxWire, maxDecoded, signal);
+            if (hop >= MAX_REDIRECTS) return { ok: false, error: 'redirect_limit' };
+            let next: URL;
+            try {
+              next = new URL(location, url);
+            } catch {
+              return { ok: false, error: 'bad_url' };
+            }
+            if (next.protocol !== 'https:') return { ok: false, error: 'redirect_insecure' };
+            if (next.hostname.toLowerCase() !== host) {
+              return { ok: false, error: 'redirect_cross_host' };
+            }
+            const checked = this.checkUrl(sourceId, next.href);
+            if (typeof checked === 'string') return { ok: false, error: checked };
+            url = checked;
+            if (res.status === 303) {
+              method = 'GET';
+              body = undefined;
+            }
+            continue;
           }
-        } catch (e) {
-          const code = errorCode(e, signal);
-          return code === 'timeout' || code === 'network' ? this.failed(host, code) : { ok: false, error: code };
+          let read: { body: Buffer; wire: number };
+          try {
+            if (res.status === 204 || res.status === 304) {
+              res.body.destroy();
+              read = { body: Buffer.alloc(0), wire: 0 };
+            } else {
+              read = await readBody(res, maxWire, maxDecoded, signal);
+            }
+          } catch (e) {
+            const code = errorCode(e, signal);
+            return code === 'timeout' || code === 'network' ? this.failed(host, code) : { ok: false, error: code };
+          }
+          const now = this.now();
+          if (res.status >= 500 || res.status === 429) {
+            this.politeness.failure(host, now, parseRetryAfter(header(res.headers, 'retry-after'), now));
+          } else {
+            this.politeness.success(host);
+          }
+          return {
+            ok: true,
+            res: {
+              status: res.status,
+              headers: flatHeaders(res.headers),
+              body: read.body,
+              wireBytes: read.wire,
+              url: url.href,
+            },
+          };
+        } finally {
+          release();
         }
-        const now = this.now();
-        if (res.status >= 500 || res.status === 429) {
-          this.politeness.failure(host, now, parseRetryAfter(header(res.headers, 'retry-after'), now));
-        } else {
-          this.politeness.success(host);
-        }
-        return {
-          ok: true,
-          res: {
-            status: res.status,
-            headers: flatHeaders(res.headers),
-            body: read.body,
-            wireBytes: read.wire,
-            url: url.href,
-          },
-        };
       }
     } finally {
-      release();
       // A probe released on every exit path: one without a success or a failure re-arms the breaker.
       if (gate.probe) this.politeness.release(host, this.now());
     }

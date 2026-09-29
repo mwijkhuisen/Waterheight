@@ -277,3 +277,30 @@ describe('the half-open probe (C1, S2)', () => {
     expect(c.politeness.isOpen(H)).toBe(false);
   });
 });
+
+describe('the byte budget (C2, S4)', () => {
+  it('a host in backoff holds no memory: a request to another host is not delayed behind it', async () => {
+    const sleepers: (() => void)[] = [];
+    const c = testClient(HOSTS, { sleep: () => new Promise<void>((r) => sleepers.push(r)) });
+    server.use(
+      http.get(`${A}/busy`, () => new HttpResponse('busy', { status: 503, headers: { 'retry-after': '90' } })),
+      http.get(`${A}/big`, () => HttpResponse.text('ok')),
+      http.get('https://www.hochwasserportal.nrw/data/downloads/messwerte.zip', () => HttpResponse.text('b')),
+    );
+    await c.fetch('NL-1', get(`${A}/busy`));
+    // Two 25 MB requests to the host in backoff; each would reserve 100 MB of the 128 MB budget.
+    const big = { maxBytes: 25 * 1024 * 1024 };
+    const a1 = c.fetch('NL-1', get(`${A}/big`), big);
+    const a2 = c.fetch('NL-1', get(`${A}/big`), big);
+    await new Promise((r) => setTimeout(r, 20));
+    const b = await Promise.race([
+      c.fetch('DE-7', get('https://www.hochwasserportal.nrw/data/downloads/messwerte.zip')),
+      new Promise((r) => setTimeout(() => r('blocked'), 2000)),
+    ]);
+    expect(b).toMatchObject({ ok: true, res: { status: 200 } });
+    expect(sleepers).toHaveLength(2);
+    for (const wake of sleepers) wake();
+    expect(await a1).toMatchObject({ ok: true });
+    expect(await a2).toMatchObject({ ok: true });
+  });
+});

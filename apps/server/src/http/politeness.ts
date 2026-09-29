@@ -88,7 +88,8 @@ export class Politeness {
 
 /**
  * A weighted semaphore over bytes in flight: each request reserves its decoded
- * cap, so several large bodies cannot exceed the capture container's memory.
+ * cap for its transfer, so several large bodies cannot exceed the capture
+ * container's memory.
  */
 export class ByteBudget {
   private used = 0;
@@ -100,22 +101,23 @@ export class ByteBudget {
 
   async acquire(bytes: number): Promise<() => void> {
     const n = Math.min(bytes, this.total);
-    if (this.used + n > this.total || this.waiters.length > 0) {
-      await new Promise<void>((resolve) => this.waiters.push({ n, resolve }));
-    } else {
-      this.used += n;
-    }
+    // A request that fits goes now, even past a larger waiter: no head-of-line blocking across hosts.
+    if (this.used + n <= this.total) this.used += n;
+    else await new Promise<void>((resolve) => this.waiters.push({ n, resolve }));
     let released = false;
     return () => {
       if (released) return;
       released = true;
       this.used -= n;
-      while (this.waiters.length > 0) {
-        const next = this.waiters[0] as { n: number; resolve: () => void };
-        if (this.used + next.n > this.total) break;
-        this.waiters.shift();
-        this.used += next.n;
-        next.resolve();
+      // ponytail: small requests can keep passing a large waiter; each holds its bytes for one transfer only.
+      for (let i = 0; i < this.waiters.length; ) {
+        const w = this.waiters[i] as { n: number; resolve: () => void };
+        if (this.used + w.n > this.total) i += 1;
+        else {
+          this.waiters.splice(i, 1);
+          this.used += w.n;
+          w.resolve();
+        }
       }
     };
   }
