@@ -34,16 +34,9 @@ export function importsOf(file: string, text: string): Import[] {
   const found: Import[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-      const clause = node.importClause;
-      const typeOnly =
-        clause !== undefined &&
-        (clause.isTypeOnly ||
-          (clause.name === undefined &&
-            clause.namedBindings !== undefined &&
-            ts.isNamedImports(clause.namedBindings) &&
-            clause.namedBindings.elements.length > 0 &&
-            clause.namedBindings.elements.every((e) => e.isTypeOnly)));
-      found.push({ spec: node.moduleSpecifier.text, typeOnly });
+      // Only `import type …` is erased. Under verbatimModuleSyntax, `import { type X }`
+      // still emits `import {} from '…'`: a runtime import that runs the module.
+      found.push({ spec: node.moduleSpecifier.text, typeOnly: node.importClause?.isTypeOnly === true });
     } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
       found.push({ spec: node.moduleSpecifier.text, typeOnly: node.isTypeOnly });
     } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {

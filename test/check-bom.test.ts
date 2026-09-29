@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkBom } from '../scripts/check-bom.ts';
+import { checkBom, checkSupplyChain } from '../scripts/check-bom.ts';
 import { repoRoot } from './catalogue.ts';
 
 const copies: string[] = [];
@@ -14,7 +14,7 @@ afterEach(() => {
 function scratch(): string {
   const dir = mkdtempSync(join(tmpdir(), 'rws-bom-'));
   copies.push(dir);
-  const files = ['CLAUDE.md', 'package.json', 'pnpm-lock.yaml', '.node-version'];
+  const files = ['CLAUDE.md', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.node-version'];
   const dirs = [
     '.github/workflows',
     '.claude/hooks',
@@ -97,5 +97,52 @@ describe('check-bom', () => {
     const dir = scratch();
     writeFileSync(join(dir, '.node-version'), '26.9.0\n');
     expect(checkBom(dir).join('\n')).toMatch(/node: \.node-version is 26\.9\.0/);
+  });
+
+  it('fails when a binary version drifts from its pinned download', () => {
+    const dir = scratch();
+    edit(dir, 'CLAUDE.md', '| zizmor | binary | 1.30.1 |', '| zizmor | binary | 9.9.9 |');
+    expect(checkBom(dir).join('\n')).toMatch(/zizmor: pin \S+ with version 9\.9\.9 not found together/);
+  });
+
+  it('fails when the hook pins a different Node version than the BOM', () => {
+    const dir = scratch();
+    edit(dir, '.claude/hooks/session-start.sh', 'NODE_VERSION=26.10.0', 'NODE_VERSION=26.10.9');
+    expect(checkBom(dir).join('\n')).toMatch(/node: pin \S+ with version 26\.10\.0 not found together/);
+  });
+
+  it('fails on a duplicate row', () => {
+    const dir = scratch();
+    edit(dir, 'CLAUDE.md', /^(\| zod \| npm .*\n)/m, '$1$1');
+    expect(checkBom(dir).join('\n')).toMatch(/BOM row zod: duplicate/);
+  });
+});
+
+describe('supply-chain rules (risk R-008)', () => {
+  it('fail on a locked package that resolves by tarball URL', () => {
+    const dir = scratch();
+    edit(
+      dir,
+      'pnpm-lock.yaml',
+      /(\n {2}hono@4\.13\.8:\n {4}resolution: )\{integrity: [^}]+\}/,
+      '$1{tarball: https://example.com/hono-4.13.8.tgz}',
+    );
+    expect(checkSupplyChain(dir).join('\n')).toMatch(/hono@4\.13\.8: resolves by tarball, not by registry integrity/);
+  });
+
+  it.each([
+    ['without an expiry', '  - "vitest@5.0.2"', /needs a "# expires YYYY-MM-DD" comment/],
+    ['with a passed expiry', '  - "vitest@5.0.2" # GHSA-xxxx; expires 2026-01-01', /expired on 2026-01-01/],
+  ])('fail on a minimumReleaseAgeExclude entry %s', (_, line, message) => {
+    const dir = scratch();
+    edit(dir, 'pnpm-workspace.yaml', 'minimumReleaseAge: 10080', `minimumReleaseAge: 10080\nminimumReleaseAgeExclude:\n${line}`);
+    expect(checkSupplyChain(dir, '2026-09-29').join('\n')).toMatch(message);
+  });
+
+  it('accept an entry with an unexpired date', () => {
+    const dir = scratch();
+    const line = '  - "vitest@5.0.2" # GHSA-xxxx; expires 2026-10-06';
+    edit(dir, 'pnpm-workspace.yaml', 'minimumReleaseAge: 10080', `minimumReleaseAge: 10080\nminimumReleaseAgeExclude:\n${line}`);
+    expect(checkSupplyChain(dir, '2026-09-29')).toEqual([]);
   });
 });

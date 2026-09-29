@@ -30,7 +30,9 @@ describe('check-boundaries', () => {
     const problems = fixture('adapter-to-adapter').join('\n');
     expect(problems).toMatch(/imports \.\.\/de-1\/parse\.ts/);
     expect(problems).toMatch(/imports \.\.\/_shared\/wsv\/helper\.ts/);
-    expect(problems).toMatch(/imports \.\.\/\.\.\/http\/client\.ts/);
+    expect(problems).toMatch(/parse\.ts: imports \.\.\/\.\.\/http\/client\.ts/);
+    // `import { type X }` is still a runtime import (verbatimModuleSyntax).
+    expect(problems).toMatch(/normalise\.ts: imports \.\.\/\.\.\/http\/client\.ts/);
   });
 
   it('fails when a view name appears outside audience.ts', () => {

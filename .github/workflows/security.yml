@@ -15,7 +15,8 @@ permissions: {}
 
 concurrency:
   group: security-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on PRs only; every commit on main is checked to the end.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -80,7 +81,8 @@ jobs:
       - name: gitleaks over the full history (values redacted)
         run: |
           gitleaks version
-          gitleaks git --no-banner --redact --verbose --config .gitleaks.toml .
+          # -m: also scan what merge commits introduce (conflict resolutions).
+          gitleaks git --no-banner --redact --verbose --config .gitleaks.toml --log-opts=-m .
       - name: A planted fake key still fails the scan
         run: scripts/gitleaks-planted.sh
 
@@ -124,6 +126,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: none
+          # No caches in CI (a PR run must never seed a main run).
+          trap-caching: false
+          dependency-caching: false
       - uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
         with:
           category: /language:${{ matrix.language }}
