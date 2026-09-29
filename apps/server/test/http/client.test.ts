@@ -234,6 +234,25 @@ describe('Retry-After and backoff', () => {
   });
 });
 
+describe('WAF answers (S9)', () => {
+  it.each([403, 451])('a %i backs the host off like a 429, honouring Retry-After', async (status) => {
+    let now = 1_000_000;
+    const c = testClient(HOSTS, { now: () => now, politeness: new Politeness(() => 0.5) });
+    server.use(
+      http.get(`${A}/waf`, () => new HttpResponse('blocked', { status })),
+      http.get(`${A}/limited`, () => new HttpResponse('blocked', { status, headers: { 'retry-after': '120' } })),
+      http.get(`${A}/ok`, () => HttpResponse.text('ok')),
+    );
+    expect(await c.fetch('NL-1', get(`${A}/waf`))).toMatchObject({ ok: true, res: { status } });
+    // Full jitter after one failure: 15 s here.
+    expect(await c.fetch('NL-1', get(`${A}/ok`), { deadline: now + 10_000 })).toEqual({ ok: false, error: 'backoff' });
+    now += 15_000;
+    expect(await c.fetch('NL-1', get(`${A}/limited`))).toMatchObject({ ok: true, res: { status } });
+    now += 60_000;
+    expect(await c.fetch('NL-1', get(`${A}/ok`), { deadline: now + 30_000 })).toEqual({ ok: false, error: 'backoff' });
+  });
+});
+
 describe('the half-open probe (C1, S2)', () => {
   const H = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
   /** A client whose breaker for H is open (5 × 503, no jitter), on a clock the test moves. */

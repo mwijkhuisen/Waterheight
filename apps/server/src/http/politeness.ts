@@ -1,6 +1,7 @@
-// Politeness per host (A§7.3): full-jitter backoff from 30 s to 30 min that
-// honours Retry-After, and a circuit breaker that opens after 5 consecutive
-// failures and lets one probe through every 30 min. State lives in the process.
+// Politeness per host (A§7.3): after a 5xx, 429, 403, 451, timeout or network
+// error, a full-jitter backoff from 30 s to 30 min that honours Retry-After,
+// and a circuit breaker that opens after 5 consecutive failures and lets one
+// probe through every 30 min. State lives in the process.
 
 export const BACKOFF_BASE_MS = 30_000;
 export const BACKOFF_CAP_MS = 30 * 60_000;
@@ -63,7 +64,7 @@ export class Politeness {
     this.hosts.set(host, { failures: 0, notBefore: 0, openUntil: null, probing: false });
   }
 
-  /** A 5xx, 429, timeout or network error. */
+  /** A 5xx, 429, 403 or 451 (a WAF), timeout or network error. */
   failure(host: string, now: number, retryAfterMs: number | null = null): void {
     const s = this.state(host);
     s.failures += 1;
