@@ -4,7 +4,8 @@
 # Usage: scripts/verify-fresh-start.sh [tree-ish]   (default: HEAD)
 #
 # Checks, in order. Each one fails closed, so the script never passes vacuously:
-#   1. The repository is not shallow: a cut history hides legacy blobs.
+#   1. The repository is not shallow and holds every legacy object locally:
+#      a cut history or a partial clone (--filter) hides legacy blobs.
 #   2. refs/tags/legacy-v0 exists and peels to LEGACY_COMMIT. Until the tag
 #      ruleset exists, anyone with write access can move the tag, and a moved
 #      tag must fail instead of turning the blob check into a no-op.
@@ -22,6 +23,8 @@
 # Allowlist: one "<40-hex blob sha> <path> # <reason>" per line; the path has
 # no whitespace. Blank lines and lines starting with "#" are ignored. There are
 # no globs, a malformed line is fatal, and a missing file allows nothing.
+# Check 3 covers the whole legacy history, so a tiny new file (a one-line
+# placeholder) can match an old blob by chance; allowlist it with a reason.
 #
 # Exit codes:
 #   0   clean
@@ -32,6 +35,7 @@
 #   6   the argument is not a tree-ish
 #   7   malformed allowlist line
 #   8   no blobs found under legacy-v0
+#   9   legacy objects missing locally (partial clone)
 #   10  legacy blob(s) in the tree
 #   11  legacy-only path(s) in the tree
 #   12  both 10 and 11
@@ -72,8 +76,11 @@ tree=$(git rev-parse --verify --quiet "$target^{tree}") || die 6 "not a tree-ish
 
 declare -A legacy_blob=() allowed=()
 
-blobs=$(git rev-list --objects --no-object-names refs/tags/legacy-v0 |
-  git cat-file --batch-check='%(objecttype) %(objectname)' |
+# --missing=print marks absent objects with "?" instead of fetching them.
+objects=$(git rev-list --objects --no-object-names --missing=print refs/tags/legacy-v0)
+[[ $objects != *'?'* ]] ||
+  die 9 "legacy objects missing locally (partial clone?); use a full clone"
+blobs=$(git cat-file --batch-check='%(objecttype) %(objectname)' <<<"$objects" |
   awk '$2 == "missing" { exit 1 } $1 == "blob" { print $2 }')
 [[ -n $blobs ]] || die 8 "no blobs found under legacy-v0"
 while read -r sha; do legacy_blob[$sha]=1; done <<<"$blobs"
