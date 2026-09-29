@@ -1,6 +1,6 @@
 # ADR-0007: Licence gating in data
 
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-09-24 (decision D22: `audience` replaces `publication`, `dark` retired)
 - **Date:** 2026-09-23
 - **Source:** `docs/plan/ARCHITECTURE.md` §13 (recorded as a file in P0b; the plan is the source of truth)
 

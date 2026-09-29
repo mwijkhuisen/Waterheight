@@ -95,6 +95,8 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | gitleaks | binary | 8.30.1 | installed | 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb | MIT | security.yml |
 | dbmate | binary | 2.36.0 | installed | 47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce | MIT | ci.yml round trip |
 | shellcheck | binary | 0.11.0 | installed | b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6 | GPL-3.0 | ci.yml (tool only) |
+| Docker Engine | tool | 29.8.1 | planned | – | Apache-2.0 | P1b host (Docker's signed apt repository) |
+| Docker Compose | tool | 5.5.1 | planned | – | Apache-2.0 | P1b host |
 | node (build image) | image | 26.10.0-trixie-slim | planned | node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 | MIT | P1b build stage |
 | distroless nodejs26 | image | nonroot | planned | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89 | Apache-2.0 | P1b runtime |
 | caddy | image | 2.11.4-alpine | planned | caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b | Apache-2.0 | P1b/P4 |
@@ -154,6 +156,7 @@ Deviations from A§3, decided in P0b: pnpm **12.5.1** instead of 12.6.0 (12.6.0 
 - **Vite 8** (Rolldown) treats `<link href>` in HTML as an asset reference; `build.rolldownOptions` replaces `rollupOptions`.
 - **Biome 2.5:** `biome migrate` rewrote `"recommended": true` to `"preset": "none"` (all rules off); the right value is `"preset": "recommended"`.
 - **YAML:** quote `"off"` and dates in registry files; YAML 1.1 parsers read `off` as `false`.
+- **Claude Code deny rules match the whole command line**, a commit message included: `git commit -m "… git push --mirror …"` is refused. Write the message to a file and use `git commit -F <file>`.
 - **setup-node v7** caches automatically when `packageManager` names npm; every job sets `package-manager-cache: false` (no caches in CI).
 - **Protomaps** builds are kept for one week only; **Hub'Eau v1** answers 403 (use v2); **RWS documentation moves to the CTD on 2026-11-05** (URLs live in config; the NL-4 file path is at risk).
 

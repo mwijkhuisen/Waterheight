@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node dist/main.js"
+    "start": "node dist/main.js api"
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",

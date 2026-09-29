@@ -10,7 +10,7 @@ The 2026 npm worm and the action-tag hijack.
 
 ## Decision
 
-Pnpm `minimumReleaseAge` of 7 days, `allowBuilds`, a frozen lockfile, Dependabot with a 7-day cooldown and no automerge, SHA pins, and an ADR-lite for each new dependency. The override procedure for urgent security fixes is documented in `CLAUDE.md`.
+pnpm `minimumReleaseAge` of 7 days, `allowBuilds`, a frozen lockfile, Dependabot with a 7-day cooldown and no automerge, SHA pins, and an ADR-lite for each new dependency. The override procedure for urgent security fixes is documented in `CLAUDE.md`.
 
 ## Consequences
 
