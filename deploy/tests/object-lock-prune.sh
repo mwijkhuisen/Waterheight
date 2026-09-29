@@ -95,6 +95,10 @@ lock=$(s3 GET "?object-lock")
 lmode=$(xml_value Mode "$lock")
 ldays=$(xml_value Days "$lock")
 lyears=$(xml_value Years "$lock")
+# The bucket's answers are untrusted input to a root script, and bash arithmetic
+# runs command substitutions in array subscripts: digits only, read as base 10.
+[[ $ldays =~ ^[0-9]{1,6}$ ]] || ldays=''
+[[ $lyears =~ ^[0-9]{1,6}$ ]] || lyears=''
 held=$(s3 GET "/$okey?retention&versionId=$ovid")
 hmode=$(xml_value Mode "$held")
 huntil=$(date -u -d "$(xml_value RetainUntilDate "$held")" +%s 2>/dev/null || echo 0)
@@ -105,7 +109,7 @@ ret=$(s3 PUT "/$okey?retention&versionId=$ovid" -H "Content-MD5: $md5" -H 'Conte
   --data-raw "$retention" -o /dev/null -w '%{http_code}')
 
 fails=0
-if [[ $lmode == COMPLIANCE ]] && ((${ldays:-0} >= 30 || ${lyears:-0} >= 1)); then
+if [[ $lmode == COMPLIANCE ]] && ((10#${ldays:-0} >= 30 || 10#${lyears:-0} >= 1)); then
   echo "PASS the bucket's default retention is COMPLIANCE, ${ldays:+$ldays days}${lyears:+$lyears years}"
 else
   echo "FAIL the bucket's default retention is ${lmode:-missing}, ${ldays:-0} days ${lyears:-0} years (needs COMPLIANCE, >= 30 days)"
