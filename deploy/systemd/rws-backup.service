@@ -1,0 +1,16 @@
+# restic backup of the raw archive (issue #16 P1b). Runs as root: it drives docker and reads /etc/rws/secrets.
+[Unit]
+Description=rws: restic backup of the raw archive
+Wants=network-online.target
+After=network-online.target docker.service rws-firewall.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rws-backup
+TimeoutStartSec=55min
+UMask=0077
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=full
+NoNewPrivileges=yes

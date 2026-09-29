@@ -1,0 +1,9 @@
+# Loads the host's DNS resolvers into the sets the container egress rules allow DNS to.
+[Unit]
+Description=rws: container DNS allowlist from resolv.conf
+After=rws-firewall.service
+Requisite=rws-firewall.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rws-resolvers
