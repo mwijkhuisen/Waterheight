@@ -51,6 +51,8 @@ export const ValiditySpec = z.strictObject({
     .optional(),
   /** HTML/text: a pattern the body must contain (bounded regex on ≤ 5 MB). */
   pattern: z.string().optional(),
+  /** HTML pages that end with </html> (a cut page does not); NL-4's page has no closing tag. */
+  end_html: z.boolean().default(false),
 });
 export type ValiditySpec = z.infer<typeof ValiditySpec>;
 
@@ -114,6 +116,8 @@ export async function validate(spec: ValiditySpec, status: number, body: Buffer)
       case 'json':
       case 'html-attr':
       case 'xml': {
+        // A page cut short can still hold the whole attribute: require its end.
+        if (spec.end_html && !/<\/html>\s*$/i.test(decode(body.subarray(-64)))) return invalid('truncated');
         const doc =
           spec.format === 'json' ? parseJson(body) : spec.format === 'xml' ? parseXml(body) : extractDataToJson(body);
         if (doc !== null && typeof doc === 'object' && !Array.isArray(doc)) {
@@ -196,7 +200,9 @@ export async function validate(spec: ValiditySpec, status: number, body: Buffer)
         const text = decode(body);
         if (spec.pattern !== undefined && !new RegExp(spec.pattern).test(text)) return invalid('pattern');
         // A truncated page lacks its closing tag; a truncated text file its final newline.
-        if (spec.format === 'html' ? !/<\/html>\s*$/i.test(text) : !text.endsWith('\n')) return invalid('truncated');
+        if (spec.format === 'html' ? spec.end_html && !/<\/html>\s*$/i.test(text) : !text.endsWith('\n')) {
+          return invalid('truncated');
+        }
         return { ok: true, reason: null, count: null, shape: null, doc: text };
       }
     }

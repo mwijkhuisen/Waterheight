@@ -105,6 +105,8 @@ export type RunSummary = {
   firstFailure: number | string | null;
   coverage: { from: string; to: string } | null;
   doneVariants: string[];
+  /** The stage-2 cap cut the run short (a seed then resumes next time). */
+  capped: boolean;
 };
 
 const isoNoMs = (d: Date) => d.toISOString();
@@ -158,6 +160,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     firstFailure: null,
     coverage: null,
     doneVariants: [],
+    capped: false,
   };
   const timeoutMs = spec.timeout === 'metadata' ? METADATA_TIMEOUT_MS : TOTAL_TIMEOUT_MS;
   const spaceMs = opts.spaceMs ?? spec.variants?.space_ms ?? 0;
@@ -248,6 +251,8 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     };
     let v: Validity | null = null;
     let status: number | null = null;
+    /** A new object on disk (the same content in the same second is one object). */
+    let created = false;
     if (!result.ok) {
       line.error = result.error;
     } else {
@@ -281,6 +286,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
           const put = await deps.archive.put(spec.source, spec.id, end, res.body, hash);
           line.key = put.key;
           line.stored_bytes = put.stored;
+          created = put.created;
         }
         if (!v.ok) {
           deps.counters.alert({ spec: spec.id, kind: 'invalid', at: end.toISOString() });
@@ -299,7 +305,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     // State, counters and alerts change only after the manifest line.
     const outcome = outcomeOf(status, line.error, v?.ok ?? true);
     if (!opts.seed) deps.counters.record(day, spec.source, outcome);
-    if (line.key !== null) {
+    if (created) {
       summary.stored += 1;
       summary.storedBytes += line.stored_bytes ?? 0;
       if (!opts.seed) deps.counters.addBytes(day, spec.source, spec.id, line.stored_bytes ?? 0);
@@ -363,6 +369,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
       });
       for (const r of more.reqs) {
         if (expanded >= maxExpand) {
+          summary.capped = true;
           deps.log.warn({ spec: spec.id, cap: maxExpand }, 'expansion cap reached');
           break;
         }

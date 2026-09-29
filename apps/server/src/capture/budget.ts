@@ -1,4 +1,4 @@
-import { Cron } from 'croner';
+import { Cron, CronPattern } from 'croner';
 import type { Registry } from './specs.ts';
 
 // Request budgets (A§7.3), computed from registry/capture.yaml × the seed CSVs:
@@ -18,6 +18,19 @@ export function requestsPerMinute(registry: Registry): Map<string, Uint32Array> 
     const host = new URL(spec.request.url.replace(/\{!?[a-z_]+\}/g, 'x')).hostname;
     const minutes = byHost.get(host) ?? new Uint32Array(WEEK_MIN);
     byHost.set(host, minutes);
+    const p = new CronPattern(spec.cron, 'UTC');
+    const simple =
+      p.second[0] === 1 && p.second.indexOf(1, 1) < 0 && p.day.every((d) => d === 1) && p.month.every((m) => m === 1);
+    if (simple) {
+      // Minute, hour and weekday fields only (all of capture.yaml): read croner's parsed flags per minute.
+      for (let m = 0; m < WEEK_MIN; m += 1) {
+        const dow = (1 + Math.floor(m / 1440)) % 7; // START is a Monday
+        if (p.minute[m % 60] && p.hour[Math.floor(m / 60) % 24] && p.dayOfWeek[dow]) {
+          minutes[m] = (minutes[m] as number) + spec.rows.length;
+        }
+      }
+      continue;
+    }
     const job = new Cron(spec.cron, { timezone: 'UTC', paused: true });
     let t: Date | null = new Date(START - 1000);
     for (;;) {

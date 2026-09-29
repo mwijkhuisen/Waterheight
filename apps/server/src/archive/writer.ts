@@ -92,11 +92,11 @@ export class Archive {
     at: Date,
     body: Uint8Array,
     hash: string,
-  ): Promise<{ key: string; stored: number }> {
+  ): Promise<{ key: string; stored: number; created: boolean }> {
     const key = objectKey(source, spec, at, hash);
     const final = this.path(key);
     const existing = await stat(final).catch(() => null);
-    if (existing) return { key, stored: existing.size };
+    if (existing) return { key, stored: existing.size, created: false };
     const compressed = zstdCompressSync(body, { params: { [zc.ZSTD_c_compressionLevel]: 9 } });
     await mkdirDurable(join(this.root, '.tmp'));
     const tmp = join(this.root, '.tmp', `${randomBytes(12).toString('hex')}.tmp`);
@@ -112,7 +112,7 @@ export class Archive {
     await rename(tmp, final);
     await fsyncPath(dirname(final));
     await this.hooks.afterRename?.();
-    return { key, stored: compressed.length };
+    return { key, stored: compressed.length, created: true };
   }
 
   /** Appends one validated line with a single write + fsync; appends are serialised. */

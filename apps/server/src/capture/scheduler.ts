@@ -6,7 +6,7 @@ import type { Group, LoadedSpec, Registry } from './specs.ts';
 import type { SpecState } from './state.ts';
 import { isFresh, type SeedRecord, type StatusPaths, writeDailyReport, writeStatus } from './status.ts';
 
-// The scheduler (A§7.2, A§7.3): croner in UTC with `protect` (a run that is
+// The scheduler (A§7.2, A§7.3): croner in UTC with protection (a run that is
 // still busy blocks the next tick, which is counted, never queued), staggered
 // crons from capture.yaml, the first-enabled group registered first. No run
 // on start (a redeploy must not burst the RWS budget); a tick missed while the
@@ -21,6 +21,25 @@ export type RecorderDeps = RunDeps & {
   paths: StatusPaths;
   seeds: () => (SeedRecord & { audience: 'public' | 'owner' })[];
 };
+
+/**
+ * Protection per job. croner's own `protect` option re-fires a blocked tick
+ * as soon as the busy run ends (a late, queued run), so the scheduler keeps
+ * its own busy flag: a tick that finds the job busy is reported and dropped.
+ */
+export function guarded(run: () => Promise<void>, onBlocked: () => void): () => Promise<void> | undefined {
+  let busy = false;
+  return () => {
+    if (busy) {
+      onBlocked();
+      return undefined;
+    }
+    busy = true;
+    return run().finally(() => {
+      busy = false;
+    });
+  };
+}
 
 export type Recorder = {
   jobs: Map<string, Cron>;
@@ -70,7 +89,7 @@ export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
       if (next - deps.now().getTime() > HOUR && !retries.has(spec.id)) {
         const t = setTimeout(() => {
           retries.delete(spec.id);
-          track(runScheduled(spec));
+          void fire.get(spec.id)?.();
         }, HOUR);
         t.unref();
         retries.set(spec.id, t);
@@ -87,20 +106,25 @@ export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
   }
 
   const scheduled = registry.specs.filter((s) => s.cron !== null).sort((a, b) => Number(b.first) - Number(a.first));
+  const fire = new Map<string, () => Promise<void> | undefined>();
   for (const spec of scheduled) {
+    const tick = guarded(
+      () => track(runScheduled(spec)),
+      () => {
+        const day = utcDay(deps.now());
+        for (let i = 0; i < spec.rows.length; i += 1) deps.counters.record(day, spec.source, 'other');
+        log.warn({ spec: spec.id }, 'previous run still busy: tick skipped');
+      },
+    );
+    fire.set(spec.id, tick);
     const job = new Cron(
       spec.cron as string,
       {
         name: spec.id,
         timezone: 'UTC',
-        protect: () => {
-          const day = utcDay(deps.now());
-          for (let i = 0; i < spec.rows.length; i += 1) deps.counters.record(day, spec.source, 'other');
-          log.warn({ spec: spec.id }, 'previous run still busy: tick skipped');
-        },
         catch: (err: unknown) => log.error({ spec: spec.id, err: String(err) }, 'run threw'),
       },
-      () => track(runScheduled(spec)),
+      tick,
     );
     jobs.set(spec.id, job);
   }
@@ -118,7 +142,7 @@ export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
       now.getTime() - prev.getTime() < (spec.cadence_s as number) * 1000
     ) {
       stagger += 1;
-      const t = setTimeout(() => track(runScheduled(spec)), 15_000 * stagger);
+      const t = setTimeout(() => fire.get(spec.id)?.(), 15_000 * stagger);
       t.unref();
       timers.push(t);
       log.info({ spec: spec.id }, 'catch-up of a missed tick scheduled');
@@ -155,7 +179,7 @@ export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
 
   return {
     jobs,
-    run: (spec) => track(runScheduled(spec)),
+    run: (spec) => fire.get(spec.id)?.() ?? Promise.resolve(),
     writeStatusNow,
     stop: async () => {
       for (const j of [...jobs.values(), statusJob, reportJob]) j.stop();

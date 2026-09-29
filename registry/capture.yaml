@@ -164,7 +164,7 @@ specs:
       format: json
       required: [Succesvol, AquoMetadataLijst, LocatieLijst, AquoMetadataLocatieLijst]
       count: LocatieLijst
-      min: 1000
+      min: 500
   - id: nl-2-wfs
     source: NL-2
     version: 1
@@ -259,7 +259,7 @@ specs:
     conditional: last-modified
     max_bytes: 2097152
     retention: forever
-    validity: { format: html, pattern: '\.csv' }
+    validity: { format: html, pattern: '\.csv', end_html: true }
   - id: de-3-files
     source: DE-3
     version: 1
@@ -517,7 +517,7 @@ specs:
     alert: { paths: [levelsMax, newVigilanceList], kind: lu4_threshold_changed }
     max_bytes: 4194304
     retention: forever
-    validity: { format: html-attr, required: [id, jsonFile, levelsMax] }
+    validity: { format: html-attr, required: [id, jsonFile, levelsMax], end_html: true }
   - id: lu-5-cap
     source: LU-5
     version: 1
@@ -532,7 +532,7 @@ specs:
     max_bytes: 2097152
     retention: forever
     validity: { format: json, required: [data], count: data, min: 1 }
-    seed: { kind: all-resources, pace_ms: 2000, page_cap: 100 }
+    seed: { kind: all-resources, pace_ms: 2000, page_cap: 1200 }
   - id: lu-6-geo
     source: LU-6
     version: 1

@@ -100,9 +100,10 @@ export function scanCsv(bytes: Uint8Array, opts: CsvOptions): { header: string[]
   if (field !== '' || row.length > 0) endRow();
   const [header, ...rows] = records;
   if (header === undefined) return fail('csv_empty');
-  // A data row may carry one trailing empty field the header lacks (LU-1); any other width fails.
+  // A data row may be one field wider than the header (LU-1: a trailing empty field, and one row with one more
+  // value column); any other width fails, which catches a truncated last row.
   for (const r of rows) {
-    if (r.length === header.length + 1 && r[r.length - 1] === '') r.pop();
+    if (r.length === header.length + 1) r.pop();
     else if (r.length !== header.length) fail('csv_width');
   }
   return { header, rows };

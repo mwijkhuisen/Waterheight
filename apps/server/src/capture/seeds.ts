@@ -104,13 +104,13 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<void> {
     // all-resources (LU-5): walk every list page and fetch each dump not seen yet, by its own url.
     const s = await runSpec(spec, deps, { seed: true, spaceMs: seed.pace_ms, maxExpand: seed.page_cap });
     const seen = (await deps.state.read<{ seen: string[] }>(spec.id))?.seen.length ?? 0;
-    await save({
-      series: 1,
-      files: seen,
-      coverage: mergeCoverage(st.coverage, s.coverage),
-      done: s.ok > 0 ? ['all'] : [],
-    });
-    if (s.ok === 0) return; // not done: the next start resumes (the seen set persisted)
+    await save({ series: 1, files: seen, coverage: mergeCoverage(st.coverage, s.coverage) });
+    // Done only when nothing failed transiently: older dumps are not in the 5-min list, so the seed must get them.
+    if (s.ok === 0 || s.transient || s.capped) {
+      deps.log.warn({ spec: spec.id, files: seen }, 'seed incomplete; resumes at the next start');
+      return;
+    }
+    await save({ done: ['all'] });
   }
   const complete =
     seed.kind === 'all-resources' || st.done.length >= (seed.kind === 'days' ? (seed.days ?? 30) : spec.rows.length);
