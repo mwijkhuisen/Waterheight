@@ -3,14 +3,16 @@ import { utcDay } from '../archive/writer.ts';
 import type { Pinger } from './pings.ts';
 import { type RunDeps, runSpec } from './runner.ts';
 import type { Group, LoadedSpec, Registry } from './specs.ts';
-import type { SpecState } from './state.ts';
+import { newSpecState, type SpecState } from './state.ts';
 import { isFresh, type SeedRecord, type StatusPaths, writeDailyReport, writeStatus } from './status.ts';
 
 // The scheduler (A§7.2, A§7.3): croner in UTC with protection (a run that is
 // still busy blocks the next tick, which is counted, never queued), staggered
 // crons from capture.yaml, the first-enabled group registered first. No run
 // on start (a redeploy must not burst the RWS budget); a tick missed while the
-// process was down runs once, staggered. A failed daily/weekly run retries
+// process was down runs once, staggered. A spec seen for the first time counts
+// as fresh until its first attempt, and a daily or weekly one runs once,
+// staggered (A§7.2 "once at first start"). A failed daily/weekly run retries
 // hourly until its next tick. The group's shortest-cadence spec drives the
 // healthchecks ping: /start, then success when every spec of the group is
 // fresh and no page alert is pending, else /fail.
@@ -51,6 +53,7 @@ export type Recorder = {
 
 const OWNER_GROUPS = new Set(['cap-owner', 'cap-bfg']);
 const HOUR = 3_600_000;
+const DAY_S = 86_400;
 
 export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
   const { registry, log } = deps;
@@ -129,23 +132,33 @@ export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
     jobs.set(spec.id, job);
   }
 
-  // A tick missed while the process was down runs once (it never ran, so no extra load).
   let stagger = 0;
+  const later = (spec: LoadedSpec, why: string) => {
+    stagger += 1;
+    const t = setTimeout(() => fire.get(spec.id)?.(), 15_000 * stagger);
+    t.unref();
+    timers.push(t);
+    log.info({ spec: spec.id }, why);
+  };
   for (const spec of scheduled) {
-    const st = await deps.state.read<SpecState>(spec.id);
-    const job = jobs.get(spec.id) as Cron;
     const now = deps.now();
-    const prev = job.previousRuns(1, now)[0];
-    if (st?.last_attempt === undefined || prev === undefined) continue;
+    const st = await deps.state.read<SpecState>(spec.id);
+    if (st === undefined) {
+      // Fresh until its first attempt (the #16 contract). A daily or weekly spec would wait up to a
+      // week for its first tick, so it runs once now; a spec with its own seed gets that run from the seed.
+      await deps.state.update<SpecState>(spec.id, (cur) => cur ?? newSpecState(now));
+      if ((spec.cadence_s as number) >= DAY_S && spec.seed === undefined)
+        later(spec, 'first run of a new spec scheduled');
+      continue;
+    }
+    // A tick missed while the process was down runs once (it never ran, so no extra load).
+    const prev = (jobs.get(spec.id) as Cron).previousRuns(1, now)[0];
+    if (st.last_attempt === undefined || prev === undefined) continue;
     if (
       prev.getTime() > Date.parse(st.last_attempt) &&
       now.getTime() - prev.getTime() < (spec.cadence_s as number) * 1000
     ) {
-      stagger += 1;
-      const t = setTimeout(() => fire.get(spec.id)?.(), 15_000 * stagger);
-      t.unref();
-      timers.push(t);
-      log.info({ spec: spec.id }, 'catch-up of a missed tick scheduled');
+      later(spec, 'catch-up of a missed tick scheduled');
     }
   }
 

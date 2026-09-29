@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Cron } from 'croner';
 import { HttpResponse, http } from 'msw';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -162,6 +164,70 @@ describe('recorder', () => {
       { path: '/KEY/cap-owner/start', body: '' },
       { path: '/KEY/cap-owner/fail', body: '' },
     ]);
+  });
+});
+
+describe('first start on an empty _state (C3)', () => {
+  const key = 'k'.repeat(22); // a dummy of the right shape
+  const paths = (root: string) => ({ rawDir: root, statusDir: `${root}/s`, ownerStatusDir: `${root}/o` });
+
+  it('counts a spec that has not run as fresh, and runs a weekly spec once, staggered', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-02T08:00:00Z') });
+    const pings: string[] = [];
+    let nl4 = 0;
+    server.use(
+      http.all('https://hc-ping.com/*', ({ request }) => {
+        pings.push(new URL(request.url).pathname.replace(/^\/[^/]+\//, '/KEY/'));
+        return HttpResponse.text('OK');
+      }),
+      http.get(
+        'https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs',
+        () => new HttpResponse(fixture('NL-2', 'nl-2-wfs').body),
+      ),
+      http.get('https://rijkswaterstaatdata.nl/waterdata/', () => {
+        nl4 += 1;
+        return new HttpResponse(fixture('NL-4', 'nl-4-page').body);
+      }),
+    );
+    const deps = runDeps({ now: () => new Date() });
+    const group = registry.groups.find((g) => g.slug === 'cap-nl') as Registry['groups'][number];
+    const rec = await startRecorder({
+      ...deps,
+      registry: {
+        ...registry,
+        specs: [spec('nl-2-wfs'), spec('nl-4-page')],
+        groups: [{ ...group, anchor: 'nl-2-wfs', cadence_s: 600 }],
+      },
+      pinger: new Pinger(key, 'ua', quiet, testClient({ hc: ['hc-ping.com'] })),
+      paths: paths(deps.root),
+      seeds: () => [],
+    });
+    await rec.run(spec('nl-2-wfs'));
+    // nl-4-page (weekly) has not been attempted yet: fresh, so the group pings success.
+    expect(pings).toEqual(['/KEY/cap-nl/start', '/KEY/cap-nl']);
+    expect(nl4).toBe(0);
+    await vi.advanceTimersByTimeAsync(20_000);
+    await rec.stop();
+    expect(nl4).toBe(1);
+  });
+
+  it('reports owner_specs.fresh = total before any spec has run', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-02T08:00:00Z') });
+    const deps = runDeps({ now: () => new Date() });
+    const rec = await startRecorder({
+      ...deps,
+      registry,
+      pinger: new Pinger(undefined, 'ua', quiet),
+      paths: paths(deps.root),
+      seeds: () => [],
+    });
+    await rec.writeStatusNow();
+    await rec.stop();
+    const status = JSON.parse(readFileSync(join(deps.root, 's', 'capture.json'), 'utf8')) as {
+      owner_specs: { fresh: number; total: number };
+    };
+    expect(status.owner_specs.total).toBeGreaterThan(0);
+    expect(status.owner_specs.fresh).toBe(status.owner_specs.total);
   });
 });
 
