@@ -71,13 +71,13 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @biomejs/biome | npm | 2.5.14 | installed | – | MIT OR Apache-2.0 | lint + format |
 | vitest | npm | 5.0.1 | installed | – | MIT | |
 | msw | npm | 2.15.0 | installed | – | MIT | `onUnhandledRequest: 'error'`; postinstall denied (`allowBuilds`) |
-| yaml | npm | 2.9.1 | installed | – | ISC | registry and lockfile parsing |
+| yaml | npm | 2.9.1 | installed | – | ISC | registry and lockfile parsing; apps/server reads the registry at runtime (P1) |
 | @types/node | npm | 26.6.2 | installed | – | MIT | |
 | hono | npm | 4.13.8 | installed | – | MIT | apps/server |
 | @hono/node-server | npm | 2.1.1 | installed | – | MIT | apps/server |
 | pg | npm | 8.23.0 | installed | – | MIT | apps/server (dev until P2) |
 | @types/pg | npm | 8.23.1 | installed | – | MIT | |
-| zod | npm | 4.6.5 | installed | – | MIT | packages/contracts |
+| zod | npm | 4.6.5 | installed | – | MIT | packages/contracts; apps/server manifest and spec schemas (P1) |
 | react | npm | 19.3.0 | installed | – | MIT | apps/web |
 | react-dom | npm | 19.3.0 | installed | – | MIT | apps/web |
 | @types/react | npm | 19.3.0 | installed | – | MIT | |
@@ -101,13 +101,13 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | distroless nodejs26 | image | nonroot | planned | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89 | Apache-2.0 | P1b runtime |
 | caddy | image | 2.11.4-alpine | planned | caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b | Apache-2.0 | P1b/P4 |
 | dbmate (image) | image | 2.36.0 | planned | ghcr.io/amacneil/dbmate:2.36.0@sha256:520c740c6e0ad73fde2cd1ea7e2b779aaf789d22aca8858f87a478e7094535fb | MIT | P2 `migrate` |
-| croner | npm | 10.0.1 | planned | – | MIT | P1 |
-| undici | npm | 8.11.0 | planned | – | MIT | P1 |
-| fast-xml-parser | npm | 5.11.1 | planned | – | MIT | P1/P5 |
+| croner | npm | 10.0.1 | installed | – | MIT | apps/server: capture scheduler (P1) |
+| undici | npm | 8.11.0 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
+| fast-xml-parser | npm | 5.11.1 | installed | – | MIT | apps/server: CAP/XLSX validity, entities off (P1; P5 parsers) |
 | csv-parse | npm | 7.0.2 | planned | – | MIT | P2/P5 |
-| fflate | npm | 0.8.3 | planned | – | MIT | P1/P5 |
+| fflate | npm | 0.8.3 | installed | – | MIT | apps/server: streamed ZIP guard (P1; P5 parsers) |
 | proj4 | npm | 2.22.0 | planned | – | MIT | P5 |
-| pino | npm | 10.3.1 | planned | – | MIT | P1 |
+| pino | npm | 10.3.1 | installed | – | MIT | apps/server: JSON logs (P1) |
 | kysely | npm | 0.29.6 | planned | – | MIT | P2 |
 | kysely-codegen | npm | 0.20.0 | planned | – | MIT | P2 |
 | @hono/zod-openapi | npm | 1.6.3 | planned | – | MIT | P9 |
