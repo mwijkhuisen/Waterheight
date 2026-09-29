@@ -100,8 +100,10 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | gitleaks | binary | 8.30.1 | installed | 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb | MIT | security.yml |
 | dbmate | binary | 2.36.0 | installed | 47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce | MIT | ci.yml round trip |
 | shellcheck | binary | 0.11.0 | installed | b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6 | GPL-3.0 | ci.yml (tool only) |
-| Docker Engine | tool | 29.8.1 | planned | – | Apache-2.0 | P1b host (Docker's signed apt repository) |
-| Docker Compose | tool | 5.5.1 | planned | – | Apache-2.0 | P1b host |
+| Docker Engine | tool | 29.8.1 | installed | 5:29.8.1-1~debian.13~trixie | Apache-2.0 | P1b host, `deploy/host/bootstrap.sh`: Docker's apt repository, key file sha256-pinned, packages held |
+| containerd.io | tool | 2.3.5 | installed | 2.3.5-1~debian.13~trixie | Apache-2.0 | P1b host (2.3.6 was under 7 days old at pin time) |
+| Docker Compose | tool | 5.5.1 | installed | 5.5.1-1~debian.13~trixie | Apache-2.0 | P1b host (`docker-compose-plugin`) |
+| cosign | binary | 3.1.3 | installed | 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71 | Apache-2.0 | P1b host (`cosign-linux-amd64` sha256); verifies every release on the VPS |
 | node (build image) | image | 26.10.0-trixie-slim | installed | node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 | MIT | P1b build stage |
 | distroless nodejs26 | image | nonroot | installed | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89 | Apache-2.0 | P1b runtime |
 | caddy | image | 2.11.4-alpine | installed | caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b | Apache-2.0 | P1b web image (file capability stripped; runs with none) |
