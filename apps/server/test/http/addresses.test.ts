@@ -43,6 +43,15 @@ describe('isPublicAddress', () => {
     'fe80::1',
     'fe80::1%eth0',
     'ff02::1',
+    '::ffff:0:a9fe:a9fe', // SIIT IPv4-translated 169.254.169.254
+    'fec0::1', // site-local
+    '::1:0:0:0', // the rest of ::/8
+    '3fff::1', // documentation (RFC 9637)
+    '2001:2::1', // benchmarking
+    '2001:10::1', // ORCHID
+    '2001:20::1', // ORCHIDv2
+    '5f00::1', // SRv6 SIDs
+    '4000::1', // outside 2000::/3
     'not-an-ip',
     '',
   ])('refuses %s', (ip) => {

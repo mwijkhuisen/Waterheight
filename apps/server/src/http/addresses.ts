@@ -23,54 +23,32 @@ const V4: [string, number][] = [
   ['224.0.0.0', 4], // multicast
   ['240.0.0.0', 4], // reserved, incl. broadcast
 ];
+/** IPv6 is an allowlist: global unicast 2000::/3 only (RFC 4291), minus the special blocks inside it. */
+const GLOBAL_V6 = new BlockList();
+GLOBAL_V6.addSubnet('2000::', 3, 'ipv6');
 const V6: [string, number][] = [
-  ['64:ff9b::', 96], // NAT64
-  ['64:ff9b:1::', 48], // local-use NAT64
-  ['100::', 64], // discard
-  ['2001::', 32], // Teredo
+  ['2001::', 23], // IETF protocol assignments: Teredo, benchmarking, ORCHID
   ['2001:db8::', 32], // documentation
   ['2002::', 16], // 6to4
-  ['fc00::', 7], // ULA
-  ['fe80::', 10], // link-local
-  ['ff00::', 8], // multicast
+  ['3fff::', 20], // documentation (RFC 9637)
 ];
 
 const blocked = new BlockList();
 for (const [a, p] of V4) blocked.addSubnet(a, p, 'ipv4');
 for (const [a, p] of V6) blocked.addSubnet(a, p, 'ipv6');
 
-/** The eight 16-bit groups of an IPv6 address (an embedded dotted quad included), or null. */
-function hextets(address: string): number[] | null {
-  let text = address.toLowerCase();
-  const quad = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);
-  if (quad) {
-    const [a, b, c, d] = quad.slice(1).map(Number) as [number, number, number, number];
-    text = `${text.slice(0, quad.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
-  }
-  const halves = text.split('::');
-  if (halves.length > 2) return null;
-  const head = halves[0] ? halves[0].split(':') : [];
-  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
-  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
-  const groups = [...head, ...Array<string>(Math.max(fill, 0)).fill('0'), ...tail].map((g) => Number.parseInt(g, 16));
-  return groups.length === 8 && groups.every((g) => g >= 0 && g <= 0xffff) ? groups : null;
-}
-
 /**
- * True only for a globally routable unicast address. Refused: every range
- * above, ::/96 (unspecified, loopback, IPv4-compatible), IPv4-mapped
- * ::ffff:0:0/96 whatever it wraps, zone-scoped and malformed addresses.
+ * True only for a globally routable unicast address. Refused: every IPv4
+ * range above; every IPv6 address outside 2000::/3 (unspecified, loopback,
+ * IPv4-mapped or -translated whatever it wraps, NAT64, ULA, link- and
+ * site-local, multicast, the rest of ::/8) and the blocks above inside it;
+ * zone-scoped and malformed addresses.
  */
 export function isPublicAddress(address: string): boolean {
   if (address.includes('%')) return false;
   const family = isIP(address);
   if (family === 0) return false;
-  if (family === 6) {
-    const h = hextets(address);
-    if (h === null) return false;
-    // BlockList maps IPv4 into ::ffff:0:0/96, so these two are refused here, not by a rule.
-    if (h.slice(0, 5).every((g) => g === 0) && (h[5] === 0 || h[5] === 0xffff)) return false;
-  }
+  if (family === 6 && !GLOBAL_V6.check(address, 'ipv6')) return false;
   return !blocked.check(address, family === 4 ? 'ipv4' : 'ipv6');
 }
 
