@@ -384,7 +384,9 @@ specs:
       expand: true
       max_expand: 10
     params: { explicit_codes: '' }
-    window: { default: PT75M, max: P29DT23H, overlap: PT60M, min: PT75M }
+    # Results come newest first, so a gap over a day is walked one closed day window per run, oldest
+    # first; the window moves only when its whole walk completed (the cap keeps it where it was).
+    window: { default: PT75M, max: P29DT23H, overlap: PT60M, min: PT75M, step: P1D }
     max_bytes: 16777216
     retention: obs
     validity: { format: json, required: [count, data], count: data, min: 1 }

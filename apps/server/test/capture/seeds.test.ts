@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HttpResponse, http } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../../../../test/msw.setup.ts';
-import { runSeeds, type SeedState, seedRecords } from '../../src/capture/seeds.ts';
-import type { Registry } from '../../src/capture/specs.ts';
+import { runSeeds, SEED_RETRY_MS, type SeedState, seedRecords, startSeeds } from '../../src/capture/seeds.ts';
+import type { LoadedSpec, Registry } from '../../src/capture/specs.ts';
+import type { SpecState } from '../../src/capture/state.ts';
 import { fixture, registry, runDeps, spec } from './helpers.ts';
 
 // The §0.1b day-0 harvest (code-review item 8): idempotent, paced, resumable,
@@ -12,6 +13,10 @@ import { fixture, registry, runDeps, spec } from './helpers.ts';
 
 const only = (...ids: string[]): Registry => ({ ...registry, specs: ids.map(spec) });
 const paths = (root: string) => ({ rawDir: root, statusDir: `${root}/s`, ownerStatusDir: `${root}/o` });
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('seeds', () => {
   it('run once: a second start does nothing and says so', async () => {
@@ -118,5 +123,95 @@ describe('seeds', () => {
     const recs = await seedRecords(only('lu-1-csv', 'lu-2-json'), deps);
     expect(recs.find((r) => r.spec === 'lu-2-json')).toMatchObject({ audience: 'owner', series: 39 });
     expect(recs.find((r) => r.spec === 'lu-1-csv')?.days_covered).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('seed completeness (C5, S8)', () => {
+  const OBS = 'https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr';
+  const page = JSON.parse(fixture('FR-1', 'fr-1-obs').body.toString()) as { next: string | null };
+
+  it('a day whose second page failed is not done, and the next round, an hour later, completes it', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-02T06:00:00Z') });
+    let failures = 1;
+    let requests = 0;
+    server.use(
+      http.get(OBS, ({ request }) => {
+        requests += 1;
+        const cursor = new URL(request.url).searchParams.get('cursor');
+        if (cursor !== null && failures > 0) {
+          failures -= 1;
+          return new HttpResponse('busy', { status: 503 });
+        }
+        return HttpResponse.json({
+          ...page,
+          next: cursor === null ? `${OBS}?code_entite=A*&cursor=1&size=20000` : null,
+        });
+      }),
+    );
+    const deps = runDeps({ now: () => new Date() });
+    const rounds: number[] = [];
+    const harvest = startSeeds(only('fr-1-obs'), deps, paths(deps.root), async () => {
+      rounds.push(requests);
+    });
+    await vi.waitFor(() => expect(rounds).toHaveLength(1));
+    const st = await deps.state.read<SeedState>('seeds/fr-1-obs');
+    expect(st?.done).not.toContain('day0');
+    expect(st?.done).toHaveLength(29);
+    expect(st?.done_at).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(SEED_RETRY_MS);
+    await vi.waitFor(() => expect(rounds).toHaveLength(2));
+    expect(rounds[1] as number).toBe((rounds[0] as number) + 2); // only day 0 again, both pages
+    expect((await deps.state.read<SeedState>('seeds/fr-1-obs'))?.done_at).toBeDefined();
+    await vi.advanceTimersByTimeAsync(3 * SEED_RETRY_MS);
+    expect(rounds).toHaveLength(2); // done: no more rounds
+    harvest.stop();
+  });
+
+  it('sends no conditional header, so a 304 cannot mark a row done without data', async () => {
+    const s = spec('de-1-series');
+    const conditional: string[] = [];
+    server.use(
+      http.get(
+        'https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/:uuid/:ts/measurements.json',
+        ({ request }) => {
+          const tag = request.headers.get('if-none-match');
+          if (tag !== null) {
+            conditional.push(tag);
+            return new HttpResponse(null, { status: 304 });
+          }
+          return new HttpResponse(fixture('DE-1', 'de-1-series').body, { headers: { etag: '"v2"' } });
+        },
+      ),
+    );
+    const deps = runDeps();
+    const variant = `${s.rows[0]?.uuid}/${s.rows[0]?.ts}`;
+    await deps.state.update<SpecState>(s.id, () => ({
+      enabled_since: '2026-10-01T00:00:00.000Z',
+      variants: { [variant]: { etag: '"v1"' } },
+      seen: [],
+      pending_page: [],
+    }));
+    const one: LoadedSpec = { ...s, rows: s.rows.slice(0, 1) };
+    await runSeeds({ ...registry, specs: [one] }, deps, paths(deps.root));
+    expect(conditional).toEqual([]);
+    expect(await deps.state.read<SeedState>('seeds/de-1-series')).toMatchObject({ files: 1 });
+  });
+
+  it('caps the FR-1 pages for the whole seed, not per day window, and does not retry past the cap', async () => {
+    let requests = 0;
+    server.use(
+      http.get(OBS, ({ request }) => {
+        requests += 1;
+        const n = Number(new URL(request.url).searchParams.get('cursor') ?? 0) + 1;
+        return HttpResponse.json({ ...page, next: `${OBS}?code_entite=A*&cursor=${n}&size=20000` });
+      }),
+    );
+    const s = spec('fr-1-obs');
+    const capped: LoadedSpec = { ...s, seed: { ...(s.seed as NonNullable<LoadedSpec['seed']>), page_cap: 12 } };
+    const deps = runDeps();
+    expect(await runSeeds({ ...registry, specs: [capped] }, deps, paths(deps.root))).toBe(true);
+    expect(requests).toBe(12);
+    // The scheduled window anchor is not moved by a seed.
+    expect((await deps.state.read<SpecState>('fr-1-obs'))?.variants.default?.last_success).toBeUndefined();
   });
 });

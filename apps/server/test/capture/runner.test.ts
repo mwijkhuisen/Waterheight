@@ -234,6 +234,61 @@ describe('gap-stretch windows', () => {
   });
 });
 
+describe('FR-1 walks (C4, S8)', () => {
+  const OBS = 'https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr';
+  const page = JSON.parse(fixture('FR-1', 'fr-1-obs').body.toString()) as { next: string | null };
+  /** Pages with a `next` up to `pages` per walk (cursor 1, 2, …), or a fixed `loop` URL. */
+  function hubeau(opts: { pages: number; loop?: string }) {
+    const asked: { from: string | null; to: string | null; cursor: string | null }[] = [];
+    server.use(
+      http.get(OBS, ({ request }) => {
+        const u = new URL(request.url);
+        const cursor = u.searchParams.get('cursor');
+        asked.push({ from: u.searchParams.get('date_debut_obs'), to: u.searchParams.get('date_fin_obs'), cursor });
+        const n = Number(cursor ?? 0) + 1;
+        const next = opts.loop ?? (n < opts.pages ? `${OBS}?code_entite=A*&cursor=${n}&size=20000` : null);
+        return HttpResponse.json({ ...page, next }, { status: next === null ? 200 : 206 });
+      }),
+    );
+    return asked;
+  }
+  const lastSuccess = async (deps: ReturnType<typeof runDeps>, at: string) =>
+    deps.state.update<SpecState>('fr-1-obs', () => ({
+      enabled_since: '2026-10-01T00:00:00.000Z',
+      variants: { default: { last_success: at } },
+      seen: [],
+      pending_page: [],
+    }));
+
+  it('a 3-day gap is walked a day at a time; a walk the cap stops keeps its window', async () => {
+    const c = clock('2026-10-10T12:01:00Z');
+    const deps = runDeps({ now: c.now });
+    await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
+    const asked = hubeau({ pages: Number.POSITIVE_INFINITY });
+    const s = spec('fr-1-obs');
+    const first = await runSpec(s, deps);
+    expect(first).toMatchObject({ requests: 11, capped: true });
+    expect(asked[0]).toEqual({ from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z', cursor: null });
+    c.advance(15 * 60_000);
+    await runSpec(s, deps);
+    expect(asked[11]).toEqual({ from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z', cursor: null });
+    // A walk that completes moves the window to its end; the next run takes the next day.
+    const done = hubeau({ pages: 3 });
+    c.advance(15 * 60_000);
+    expect(await runSpec(s, deps)).toMatchObject({ requests: 3, capped: false });
+    c.advance(15 * 60_000);
+    await runSpec(s, deps);
+    expect(done[3]).toEqual({ from: '2026-10-08T10:00:00Z', to: '2026-10-09T10:00:00Z', cursor: null });
+  });
+
+  it('a `next` that repeats a URL is fetched once, and ends the walk', async () => {
+    const deps = runDeps({ now: () => new Date('2026-10-10T12:01:00Z') });
+    const asked = hubeau({ pages: 0, loop: `${OBS}?code_entite=A*&cursor=same&size=20000` });
+    expect(await runSpec(spec('fr-1-obs'), deps)).toMatchObject({ requests: 2, capped: false });
+    expect(asked.map((a) => a.cursor)).toEqual([null, 'same']);
+  });
+});
+
 describe('stage-2 requests', () => {
   it('FR-4 fetches each listed station (codes checked, the list Link never followed)', async () => {
     const deps = runDeps();

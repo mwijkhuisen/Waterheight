@@ -64,9 +64,18 @@ export const Spec = z.strictObject({
     })
     .optional(),
   params: z.record(z.string(), z.string()).default({}),
-  /** Gap-stretch window: from = max(now − max, min(now − default, last success − overlap)), at least `min` back. */
+  /**
+   * Gap-stretch window: from = max(now − max, min(now − default, last success − overlap)), at least `min`
+   * back; a longer gap than `step` is fetched `step` at a time (a closed window per run).
+   */
   window: z
-    .strictObject({ default: Duration, max: Duration, overlap: Duration.default('PT0M'), min: Duration.optional() })
+    .strictObject({
+      default: Duration,
+      max: Duration,
+      overlap: Duration.default('PT0M'),
+      min: Duration.optional(),
+      step: Duration.optional(),
+    })
     .optional(),
   conditional: z.enum(['none', 'etag', 'last-modified', 'both']).default('none'),
   gate: z
@@ -307,12 +316,15 @@ export function baseRequest(spec: Spec, row: Row): Req {
   };
 }
 
+export type Window = { from: Date; to: Date };
+
 /**
  * The gap-stretched window: normally `default` back from now; after an outage
  * back to the last success minus the overlap; never further than `max`, and
- * never less than `min` back.
+ * never less than `min` back. With a `step`, a longer gap ends `step` after
+ * its start: the next runs take the rest, oldest first.
  */
-export function windowFor(spec: Spec, now: Date, lastSuccess: string | undefined): { from: Date; to: Date } | null {
+export function windowFor(spec: Spec, now: Date, lastSuccess: string | undefined): Window | null {
   const w = spec.window;
   if (w === undefined) return null;
   const t = now.getTime();
@@ -320,5 +332,6 @@ export function windowFor(spec: Spec, now: Date, lastSuccess: string | undefined
   if (lastSuccess !== undefined) from = Math.min(from, Date.parse(lastSuccess) - durationMs(w.overlap));
   if (w.min !== undefined) from = Math.min(from, t - durationMs(w.min));
   from = Math.max(from, t - durationMs(w.max));
-  return { from: new Date(from), to: now };
+  const to = w.step === undefined ? t : Math.min(t, from + durationMs(w.step));
+  return { from: new Date(from), to: new Date(to) };
 }

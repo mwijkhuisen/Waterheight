@@ -7,7 +7,7 @@ import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from './capture
 import { Pinger } from './capture/pings.ts';
 import { Counters } from './capture/runner.ts';
 import { startRecorder } from './capture/scheduler.ts';
-import { runSeeds, seedRecords } from './capture/seeds.ts';
+import { seedRecords, startSeeds } from './capture/seeds.ts';
 import { loadRegistry } from './capture/specs.ts';
 import { StateStore } from './capture/state.ts';
 import { healthy, startHeartbeat } from './heartbeat.ts';
@@ -116,17 +116,16 @@ async function capture(
   });
   await recorder.writeStatusNow();
   logger.info({ specs: registry.specs.length }, 'capture started');
-  const harvest = runSeeds(registry, deps, paths)
-    .then(async () => {
-      seeds = await seedRecords(registry, deps);
-    })
-    .catch((err: unknown) => logger.error({ err: String(err) }, 'seeds failed'));
+  const harvest = startSeeds(registry, deps, paths, async () => {
+    seeds = await seedRecords(registry, deps);
+  });
   return new Promise((resolve) => {
     const stop = () => {
       logger.info('capture stopping');
+      harvest.stop();
       void recorder
         .stop()
-        .then(() => Promise.race([harvest, new Promise((r) => setTimeout(r, 1000))]))
+        .then(() => Promise.race([harvest.current(), new Promise((r) => setTimeout(r, 1000))]))
         .then(() => {
           stopHeartbeat();
           resolve(0);

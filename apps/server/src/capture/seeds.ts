@@ -4,7 +4,8 @@ import { type SeedRecord, type StatusPaths, writeSeedReport } from './status.ts'
 
 // The §0.1b day-0 harvest: one-off, idempotent (a finished seed is never run
 // again, and says so), paced (FR-1 ≥ 2 s between requests), resumable per
-// item (its progress is in _state/seeds/<spec>.json), and off the main queue:
+// item (its progress is in _state/seeds/<spec>.json) and retried hourly until
+// done (DE-1 and FR-1 history expires upstream), and off the main queue:
 // seeds run one request at a time, so a host's second connection always stays
 // free for the scheduled captures. Public seeds go to seed-report.json and the
 // public seeds[]; the LU-2 first capture only to the owner status.
@@ -16,6 +17,8 @@ export type SeedState = {
   files: number;
   series: number;
   coverage: { from: string; to: string } | null;
+  /** Requests of a `days` seed so far: its page_cap bounds the whole seed, retries included. */
+  requests?: number;
   done_at?: string;
 };
 
@@ -44,14 +47,15 @@ export async function seedRecords(registry: Registry, deps: Pick<RunDeps, 'state
   return out;
 }
 
-async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<void> {
+/** Runs one seed; false when it is unfinished and worth another round. */
+async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
   const seed = spec.seed;
-  if (seed === undefined) return;
+  if (seed === undefined) return true;
   const name = `seeds/${spec.id}`;
   let st: SeedState = (await deps.state.read<SeedState>(name)) ?? { done: [], files: 0, series: 0, coverage: null };
   if (st.done_at !== undefined) {
     deps.log.info({ spec: spec.id }, 'seed already done');
-    return;
+    return true;
   }
   const save = async (patch: Partial<SeedState>) => {
     st = { ...st, ...patch };
@@ -59,11 +63,13 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<void> {
   };
   const now = deps.now();
   const add = async (key: string, s: Awaited<ReturnType<typeof runSpec>>) => {
-    // Done unless only transient failures happened (a 404 or an invalid body will not heal by retrying).
+    // Done when nothing failed transiently and no cap cut it short; a 404 or an invalid body will not
+    // heal by retrying, a failed page or a cut walk may.
     await save({
-      done: s.ok > 0 || !s.transient ? [...st.done, key] : st.done,
+      done: !s.transient && !s.capped ? [...st.done, key] : st.done,
       files: st.files + s.stored,
       coverage: mergeCoverage(st.coverage, s.coverage),
+      requests: (st.requests ?? 0) + s.requests,
     });
   };
 
@@ -87,16 +93,18 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<void> {
     for (let d = 0; d < days; d += 1) {
       const key = `day${d}`;
       if (st.done.includes(key)) continue;
+      // page_cap bounds the whole seed (every day window and every round), so a looping `next` cannot run up
+      // 30 × page_cap requests.
+      const left = seed.page_cap - (st.requests ?? 0);
+      if (left <= 0) {
+        deps.log.warn({ spec: spec.id, cap: seed.page_cap }, 'seed page cap reached: not retried');
+        return true;
+      }
       const from = new Date(start + d * DAY);
       const to = new Date(Math.min(start + (d + 1) * DAY, now.getTime()));
       await add(
         key,
-        await runSpec(spec, deps, {
-          seed: true,
-          window: { from, to },
-          spaceMs: seed.pace_ms,
-          maxExpand: seed.page_cap,
-        }),
+        await runSpec(spec, deps, { seed: true, window: { from, to }, spaceMs: seed.pace_ms, maxExpand: left - 1 }),
       );
       await deps.sleep(seed.pace_ms);
     }
@@ -107,8 +115,8 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<void> {
     await save({ series: 1, files: seen, coverage: mergeCoverage(st.coverage, s.coverage) });
     // Done only when nothing failed transiently: older dumps are not in the 5-min list, so the seed must get them.
     if (s.ok === 0 || s.transient || s.capped) {
-      deps.log.warn({ spec: spec.id, files: seen }, 'seed incomplete; resumes at the next start');
-      return;
+      deps.log.warn({ spec: spec.id, files: seen }, 'seed incomplete: next round within the hour');
+      return false;
     }
     await save({ done: ['all'] });
   }
@@ -117,19 +125,62 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<void> {
   if (complete) {
     await save({ done_at: deps.now().toISOString() });
     deps.log.info({ spec: spec.id, files: st.files }, 'seed done');
-  } else {
-    deps.log.warn({ spec: spec.id, done: st.done.length }, 'seed incomplete; resumes at the next start');
+    return true;
   }
+  deps.log.warn({ spec: spec.id, done: st.done.length }, 'seed incomplete: next round within the hour');
+  return false;
 }
 
-/** Runs every unfinished seed once, one after the other. */
-export async function runSeeds(registry: Registry, deps: RunDeps, paths: StatusPaths): Promise<void> {
+/** Runs every unfinished seed once, one after the other; false when one is worth another round. */
+export async function runSeeds(registry: Registry, deps: RunDeps, paths: StatusPaths): Promise<boolean> {
+  let finished = true;
   for (const spec of registry.specs.filter((s) => s.seed)) {
     try {
-      await seedOne(spec, deps);
+      if (!(await seedOne(spec, deps))) finished = false;
     } catch (err) {
-      deps.log.error({ spec: spec.id, err: String(err) }, 'seed failed; resumes at the next start');
+      deps.log.error({ spec: spec.id, err: String(err) }, 'seed failed: next round within the hour');
+      finished = false;
     }
   }
   await writeSeedReport(paths, await seedRecords(registry, deps));
+  return finished;
+}
+
+export const SEED_RETRY_MS = 3_600_000;
+
+/**
+ * The harvest: every unfinished seed now, then another round every hour until
+ * each is done, because a restart may be weeks away while DE-1 and FR-1
+ * history expires upstream. `onRound` runs after each round; `stop` cancels
+ * the next one.
+ */
+export function startSeeds(
+  registry: Registry,
+  deps: RunDeps,
+  paths: StatusPaths,
+  onRound: () => Promise<void>,
+): { stop: () => void; current: () => Promise<void> } {
+  let timer: NodeJS.Timeout | undefined;
+  let stopped = false;
+  let current: Promise<void> = Promise.resolve();
+  const round = () => {
+    current = (async () => {
+      let finished = false;
+      try {
+        finished = await runSeeds(registry, deps, paths);
+        await onRound();
+      } catch (err) {
+        deps.log.error({ err: String(err) }, 'seeds failed');
+      }
+      if (!finished && !stopped) timer = setTimeout(round, SEED_RETRY_MS);
+    })();
+  };
+  round();
+  return {
+    stop: () => {
+      stopped = true;
+      clearTimeout(timer);
+    },
+    current: () => current,
+  };
 }

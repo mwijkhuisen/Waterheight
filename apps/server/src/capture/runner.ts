@@ -5,7 +5,7 @@ import { type Archive, sha256, utcDay } from '../archive/writer.ts';
 import { type Client, METADATA_TIMEOUT_MS, TOTAL_TIMEOUT_MS } from '../http/client.ts';
 import type { Adapter, ErrorCode, Req, Row } from '../http/types.ts';
 import { ADAPTERS } from './adapters.ts';
-import { baseRequest, type LoadedSpec, windowFor } from './specs.ts';
+import { baseRequest, type LoadedSpec, type Window, windowFor } from './specs.ts';
 import { newSpecState, type SpecState, type StateStore, type VariantState } from './state.ts';
 
 // One capture run of one spec (A§7.1): build the requests from the registry,
@@ -166,7 +166,8 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
   const spaceMs = opts.spaceMs ?? spec.variants?.space_ms ?? 0;
   const maxExpand = opts.maxExpand ?? spec.request.max_expand;
 
-  type Item = { req: Req; validity: ValiditySpec; expandable: boolean };
+  /** `window` only on a root request (a registry row); stage-2 requests have none. */
+  type Item = { req: Req; validity: ValiditySpec; expandable: boolean; root: boolean; window: Window | null };
   const queue: Item[] = [];
   for (const row of opts.rows ?? spec.rows) {
     let req = baseRequest(spec, row);
@@ -175,9 +176,13 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     if (spec.request.build && adapter?.build) {
       req = adapter.build({ req, row, now: started, window, params: spec.params });
     }
-    queue.push({ req, validity: spec.validity, expandable: spec.request.expand });
+    queue.push({ req, validity: spec.validity, expandable: spec.request.expand, root: true, window });
   }
   let expanded = 0;
+  /** Every URL this run has queued: a provider link that repeats one (a `next` loop) is not fetched again. */
+  const queued = new Set(queue.map((q) => q.req.url));
+  /** Roots of a walk (a spec that expands): their window moves only if the whole walk completed. */
+  const walks = new Map<string, string>();
   const day = utcDay(started);
 
   /** Writes the variants, seen ids and new page alerts; `done` also sets last success/failure. */
@@ -196,7 +201,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     });
 
   for (let i = 0; i < queue.length; i += 1) {
-    const { req, validity: vspec, expandable } = queue[i] as Item;
+    const { req, validity: vspec, expandable, root, window } = queue[i] as Item;
     if (i > 0 && spaceMs > 0) await deps.sleep(spaceMs);
     if (opts.deadline !== undefined && deps.now().getTime() > opts.deadline) {
       // Out of time: the remaining requests of this run are skipped, not queued.
@@ -207,8 +212,10 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     summary.requests += 1;
     const vs: VariantState = { ...(st.variants[req.variant] ?? {}) };
     const headers = { ...req.headers };
-    if ((spec.conditional === 'etag' || spec.conditional === 'both') && vs.etag) headers['if-none-match'] = vs.etag;
-    if ((spec.conditional === 'last-modified' || spec.conditional === 'both') && vs.last_modified) {
+    // A seed sends no conditional header: a 304 would count its item as done without any data.
+    const conditional = opts.seed ? 'none' : spec.conditional;
+    if ((conditional === 'etag' || conditional === 'both') && vs.etag) headers['if-none-match'] = vs.etag;
+    if ((conditional === 'last-modified' || conditional === 'both') && vs.last_modified) {
       headers['if-modified-since'] = vs.last_modified;
     }
     const start = deps.now();
@@ -323,7 +330,9 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     if (v?.shape) vs.shape = v.shape;
     if (outcome === 'ok') {
       summary.ok += 1;
-      vs.last_success = end.toISOString();
+      // The window anchor belongs to the schedule: a seed never moves it, and a walk moves it at its end.
+      if (!opts.seed && root && spec.request.expand) walks.set(req.variant, (window?.to ?? end).toISOString());
+      else if (!opts.seed) vs.last_success = end.toISOString();
       summary.doneVariants.push(req.variant);
       if (req.seen_id !== undefined) seen.add(req.seen_id);
       if (v?.ok) {
@@ -355,7 +364,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     if (summary.requests % 20 === 0) await persist(false);
 
     // Stage-2 requests: FR-4 stations, FR-5 sections, LU-5 new files, Hub'Eau pages.
-    if (expandable && v?.ok && adapter?.expand && expanded < maxExpand) {
+    if (expandable && v?.ok && adapter?.expand) {
       const more = adapter.expand({
         req,
         doc: v.doc,
@@ -368,23 +377,34 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
         },
       });
       for (const r of more.reqs) {
+        if (queued.has(r.url)) continue;
         if (expanded >= maxExpand) {
           summary.capped = true;
           deps.log.warn({ spec: spec.id, cap: maxExpand }, 'expansion cap reached');
           break;
         }
-        if (queue.some((q) => q.req.variant === r.variant && q.req.url === r.url)) continue;
         expanded += 1;
+        queued.add(r.url);
         const list = r.variant === 'list' || /#\d+$/.test(r.variant);
         queue.push({
           req: r,
           validity: list ? spec.validity : (spec.request.expand_validity ?? spec.validity),
           expandable: list,
+          root: false,
+          window: null,
         });
       }
     }
   }
 
+  // A capped, cut or transiently failed walk asks again from the same point next time (C4).
+  if (!summary.capped && !summary.transient) {
+    for (const [variant, at] of walks) {
+      const vs: VariantState = { ...st.variants[variant], last_success: at };
+      st.variants[variant] = vs;
+      touched[variant] = vs;
+    }
+  }
   await persist(true);
   deps.log.info(
     { spec: spec.id, seed: opts.seed === true, requests: summary.requests, ok: summary.ok, stored: summary.stored },
