@@ -9,9 +9,11 @@ import { buildStatus, type CaptureStatus } from '../apps/server/src/capture/stat
 import type { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
 import {
   capacity,
+  checkCapture,
   checkHeaders,
   expectedHeaders,
   leaks,
+  noIpv6Here,
   OWNER_CANARY,
   ownerTerms,
   soak,
@@ -132,9 +134,49 @@ describe('freshness, soak and capacity', () => {
       ({ ...pub.specs[0], spec: 'x', cadence_s: 600, last_success: s }) as CaptureStatus['specs'][number];
     const status = {
       ...pub,
-      specs: [at('2026-10-02T11:30:00Z'), { ...at('2026-10-02T11:29:59Z'), spec: 'y' }, { ...at(null), spec: 'z' }],
+      specs: [
+        at('2026-10-02T11:30:00Z'),
+        { ...at('2026-10-02T11:29:59Z'), spec: 'y' },
+        { ...at(null), spec: 'z', last_failure_status: 'dns' },
+      ],
     };
     expect(staleSpecs(status, NOW)).toEqual(['y', 'z']);
+  });
+
+  it('a spec that has not run yet is n/a, not stale, unless it is overdue by more than 3 × cadence_s', () => {
+    const { pub } = statusCycle();
+    const never = (spec: string, next_due: string | null) =>
+      ({
+        ...pub.specs[0],
+        spec,
+        cadence_s: 86_400,
+        last_success: null,
+        last_failure_status: null,
+        next_due,
+      }) as CaptureStatus['specs'][number];
+    const status = {
+      ...pub,
+      specs: [
+        pub.specs[0] as CaptureStatus['specs'][number],
+        never('daily', '2026-10-03T03:00:00Z'),
+        never('overdue', '2026-09-28T03:00:00Z'),
+      ],
+    };
+    expect(staleSpecs(status, NOW)).toEqual(['overdue']);
+    const results = checkCapture({ ...status, specs: status.specs.slice(0, 2) }, NOW);
+    expect(results.map((r) => [r.check, r.ok])).toEqual([
+      ['freshness', true],
+      ['freshness not run yet', 'n/a'],
+      ['owner_specs', true],
+    ]);
+    expect(results[1]?.detail).toBe('due later: daily');
+  });
+
+  it('IPv6 is n/a only without a local route: EHOSTUNREACH (a server-side break) fails', () => {
+    expect(noIpv6Here('ENETUNREACH')).toBe(true);
+    expect(noIpv6Here('EADDRNOTAVAIL')).toBe(true);
+    expect(noIpv6Here('EHOSTUNREACH')).toBe(false);
+    expect(noIpv6Here('ECONNREFUSED')).toBe(false);
   });
 
   const day = (

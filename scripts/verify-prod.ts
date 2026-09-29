@@ -92,12 +92,27 @@ export function checkHeaders(
     : miss(`headers ${path}`, problems.join('; '));
 }
 
-/** Specs of capture.json without a success within 3 × cadence_s. */
+type StatusSpec = CaptureStatus['specs'][number];
+/**
+ * A spec with no success and no failure yet that is not overdue by more than
+ * 3 × cadence_s: nothing to judge (after go-live, or a new spec), as the
+ * contract's own freshness counts it from when it was enabled.
+ */
+const notRunYet = (s: StatusSpec, now: Date) =>
+  s.last_success === null &&
+  s.last_failure_status === null &&
+  (s.next_due === null || now.getTime() - Date.parse(s.next_due) <= 3 * s.cadence_s * 1000);
+
+/** Specs of capture.json without a success within 3 × cadence_s (a spec that has not run yet is not stale). */
 export function staleSpecs(status: CaptureStatus, now: Date): string[] {
   return status.specs
+    .filter((s) => !notRunYet(s, now))
     .filter((s) => s.last_success === null || now.getTime() - Date.parse(s.last_success) > 3 * s.cadence_s * 1000)
     .map((s) => s.spec);
 }
+
+/** IPv6 is n/a only when this machine has no IPv6 route; EHOSTUNREACH is the server's side, so a failure. */
+export const noIpv6Here = (code: string) => code === 'ENETUNREACH' || code === 'EADDRNOTAVAIL';
 
 /** Everything that identifies owner-audience data: source IDs, spec IDs, hosts, the canary. */
 export function ownerTerms(registry: Registry): string[] {
@@ -114,11 +129,15 @@ export function leaks(body: string, terms: readonly string[]): string[] {
 
 export function checkCapture(status: CaptureStatus, now: Date): Result[] {
   const stale = staleSpecs(status, now);
+  const waiting = status.specs.filter((s) => notRunYet(s, now)).map((s) => s.spec);
   const owner = status.owner_specs;
   return [
     stale.length === 0
-      ? pass('freshness', `${status.specs.length} public specs each succeeded within 3 × cadence_s`)
+      ? pass('freshness', `${status.specs.length - waiting.length} public specs each succeeded within 3 × cadence_s`)
       : miss('freshness', `no success within 3 × cadence_s: ${stale.join(', ')}`),
+    ...(waiting.length === 0
+      ? []
+      : [{ check: 'freshness not run yet', ok: 'n/a' as const, detail: `due later: ${waiting.join(', ')}` }]),
     owner !== undefined && owner.fresh === owner.total
       ? pass('owner_specs', `fresh ${owner.fresh} = total ${owner.total}`)
       : miss('owner_specs', owner === undefined ? 'missing' : `fresh ${owner.fresh} of ${owner.total}`),
@@ -329,7 +348,7 @@ async function tlsChecks(domain: string, net: Net): Promise<Result[]> {
     }
     for (const address of addrs) {
       const r = await tlsOn(domain, address, net);
-      if ('error' in r && check === 'tls ipv6' && /^(ENETUNREACH|EHOSTUNREACH|EADDRNOTAVAIL)$/.test(r.error)) {
+      if ('error' in r && check === 'tls ipv6' && noIpv6Here(r.error)) {
         out.push({ check: `${check} ${address}`, ok: 'n/a', detail: `no IPv6 route from here (${r.error})` });
       } else if ('error' in r) {
         out.push(miss(`${check} ${address}`, r.error));
