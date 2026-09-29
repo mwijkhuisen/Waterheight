@@ -76,7 +76,6 @@ async function capture(
   process.umask(0o027);
   const registry = loadRegistry();
   const logger = pino({ base: { role: 'capture' } });
-  keepAlive(logger);
   const userAgent = captureUserAgent(cfg);
   const sourceHeaders = new Map<string, Record<string, string>>();
   for (const [source, headers] of registry.secretHeaders) {
@@ -123,6 +122,8 @@ async function capture(
   });
   await recorder.writeStatusNow();
   logger.info({ specs: registry.specs.length }, 'capture started');
+  // From here on an unexpected error must not end the recorder; a start-up failure above still exits non-zero.
+  keepAlive(logger);
   const harvest = startSeeds(registry, deps, paths, async () => {
     seeds = await seedRecords(registry, deps);
   });
