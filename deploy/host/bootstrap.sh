@@ -85,6 +85,10 @@ enable_now() {
     fix "$unit enabled and started" systemctl enable --now --quiet "$unit"
   fi
 }
+# A oneshot that runs at boot: enabled, never "active" afterwards.
+enable_only() {
+  if systemctl is-enabled --quiet "$1" 2>/dev/null; then ok "$1 enabled"; else fix "$1 enabled" systemctl enable --quiet "$1"; fi
+}
 
 # ------------------------------------------------------------------ preflight
 ((EUID == 0)) || die "run as root (sudo)"
@@ -121,11 +125,28 @@ fi
 keys=/home/ops/.ssh/authorized_keys
 if [[ -s $keys ]]; then
   ok "$keys"
-elif [[ -s /root/.ssh/authorized_keys ]]; then
-  copy_keys() { install -d -m 0700 -o ops -g ops /home/ops/.ssh && install -m 0600 -o ops -g ops /root/.ssh/authorized_keys "$keys"; }
-  fix "$keys (root's keys copied)" copy_keys
-elif ((!DRY_RUN)); then
-  die "ops has no SSH key and root has none to copy: add one to $keys first (bootstrap refuses to lock SSH)"
+else
+  # The keys of the user who ran sudo, else root's; a command="…" key (cloud
+  # images: "Please login as the user …") would only run that command.
+  from=/root/.ssh/authorized_keys
+  if [[ -n ${SUDO_USER:-} && $SUDO_USER != root ]]; then
+    home=$(getent passwd "$SUDO_USER" | cut -d: -f6 || true)
+    [[ -z $home || ! -s $home/.ssh/authorized_keys ]] || from=$home/.ssh/authorized_keys
+  fi
+  usable=$(grep -Ev '^[[:space:]]*(#|$)' "$from" 2>/dev/null | grep -v 'command=' || true)
+  if [[ -z $usable ]]; then
+    msg="ops has no SSH key and $from holds no usable one (command= keys left out): add one to $keys first (bootstrap refuses to lock SSH)"
+    if ((DRY_RUN)); then printf 'would    stop: %s\n' "$msg"; else die "$msg"; fi
+  else
+    copy_keys() {
+      local tmp
+      tmp=$(mktemp)
+      printf '%s\n' "$usable" >"$tmp"
+      install -d -m 0700 -o ops -g ops /home/ops/.ssh && install -m 0600 -o ops -g ops "$tmp" "$keys"
+      rm -f -- "$tmp"
+    }
+    fix "$keys (the keys of $from without command= keys)" copy_keys
+  fi
 fi
 T_SUDO=$(mktemp)
 printf '# rws host (issue #16 P1b; owner decision 2026-09-29): ops administers the VPS with sudo.\nops ALL=(ALL) NOPASSWD: ALL\n' >"$T_SUDO"
@@ -277,6 +298,10 @@ else
   }
   fix "nftables.service masked (rws-firewall.service replaces it)" mask_nftables
 fi
+# Never install a ruleset that does not load: docker.service Requires= the firewall.
+if ((!DRY_RUN)) || command -v nft >/dev/null 2>&1; then
+  nft -c -f "$bundle/deploy/host/nftables.conf" || die "deploy/host/nftables.conf does not pass nft -c: nothing installed"
+fi
 fw_changed=0
 install_file "$bundle/deploy/host/nftables.conf" /etc/rws/nftables.conf 0644 && fw_changed=1
 units_changed=0
@@ -288,6 +313,7 @@ if ((units_changed && !DRY_RUN)); then systemctl daemon-reload; fi
 enable_now rws-firewall.service
 if ((fw_changed && !DRY_RUN)); then systemctl reload rws-firewall.service; fi
 enable_now rws-resolvers.path
+enable_only rws-resolvers.service
 
 # ------------------------------------------------------------------ Docker, Compose, cosign
 ensure_dir /etc/docker 0755 0 0
