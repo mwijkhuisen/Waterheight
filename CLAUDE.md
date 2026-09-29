@@ -27,7 +27,7 @@ The legacy code is archived as the annotated tag `legacy-v0` (`a4106b855c782832d
 | `scripts/gh-settings.sh --check` | Read-only drift check of the GitHub settings (B1, B2); applying them is the owner's job |
 | `node apps/server/dist/main.js watchdog [--once\|--dry-run]` | The P1b watchdog: probes `https://$RWS_DOMAIN` (`/healthz`, both status files, the certificate) through DNS and TLS every 5 min and pings `watchdog`, `cert`, `disk`; exits 78 without `RWS_DOMAIN`/`RWS_CONTACT_EMAIL` |
 | `scripts/verify-prod.sh <domain> [--soak\|--capacity]` | Outside-in production check, no SSH (checks in `scripts/verify-prod.ts`); `--dry-run` lists the checks |
-| `deploy/tests/*.test.sh` | Offline tests of the host scripts (rws-update/rws-deploy, backups, drill, tick, status copy, reachability, the runbook's release checks): stubs for curl, cosign, docker; needs jq and zstd |
+| `deploy/tests/*.test.sh` | Offline tests of the host scripts (rws-update/rws-deploy, negative-deploy, backups, drill, tick, status copy, object-lock-prune, reachability, the runbook's release checks): stubs for curl, cosign, docker; needs jq and zstd |
 | `deploy/tests/e2e/run.sh` | CI only, as root: Docker 29.8.1, the real firewall, compose, Pebble and MinIO; proves the P1b `[U]` items (`ci.yml` job `deploy`) |
 | `deploy/host/bootstrap.sh [--dry-run]`, `rws-update`, `rws-deploy <tag>`, `rws-backup`, `rws-restore-drill`, `rws-hc-sync`, `rws-reachability` | On the VPS only (owner; `docs/runbooks/`); every one has `--dry-run` |
 
