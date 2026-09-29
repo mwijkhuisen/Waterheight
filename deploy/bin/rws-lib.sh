@@ -280,13 +280,26 @@ smoke() {
   return 1
 }
 
-# Host files are installed only by bootstrap.sh (from a verified bundle); this
-# only says when a release brings different ones.
-host_files_note() {
-  local dir=$RWS_STATE_DIR/releases/$1 list=$RWS_STATE_DIR/host-files.sha256
-  [[ -f $list ]] || return 0
-  (cd "$dir" && sha256sum --quiet -c "$list" >/dev/null 2>&1) ||
-    log "release $1 brings changed host files: run $dir/deploy/host/bootstrap.sh"
+# host_files <dir>: the sha256 and path of every file under <dir>/deploy but
+# compose.yaml, sorted, so a changed, added or removed file changes the list.
+# bootstrap.sh records it for the files it installed (host-files.sha256).
+host_files() {
+  (cd "$1" && find deploy -type f ! -path deploy/compose.yaml -print0 | sort -z | xargs -0 -r sha256sum)
+}
+
+# The update check's success ping. Host files are installed only by bootstrap.sh
+# (from a verified bundle), so while the active release brings others it pings
+# /fail host_files_changed instead, on every run, until the owner re-runs it.
+update_ok() {
+  local act list=$RWS_STATE_DIR/host-files.sha256
+  act=$(readlink "$RWS_STATE_DIR/active" 2>/dev/null || true)
+  if [[ -f $list && -n $act && -d $RWS_STATE_DIR/$act/deploy ]] &&
+    ! host_files "$RWS_STATE_DIR/$act" | cmp -s - "$list"; then
+    log "release ${act#releases/} brings changed host files: run $RWS_STATE_DIR/$act/deploy/host/bootstrap.sh"
+    ping update fail host_files_changed
+  else
+    ping update
+  fi
 }
 
 # Keeps the 5 newest release directories (and current and active) and removes
@@ -312,6 +325,8 @@ cleanup_releases() {
 # rollback <failed tag> <current tag or empty>: never returns.
 rollback() {
   local tag=$1 cur=$2 skip t0
+  # An injected failure (rws-deploy --inject-smoke-failure) is for the new release only.
+  unset RWS_INJECT_SMOKE_FAILURE
   skip=$(state_get skip_upto)
   state_set skip_upto "$(max_tag "$tag" "$skip")"
   if [[ -z $cur || ! -d $RWS_STATE_DIR/releases/$cur ]]; then
@@ -347,9 +362,8 @@ deploy_release() {
   if rws_compose up -d --remove-orphans && t0=$(date -u +%s) && smoke "$t0"; then
     state_set current "$tag"
     log "deployed $tag"
-    host_files_note "$tag"
     cleanup_releases
-    ping update
+    update_ok
     return 0
   fi
   rollback "$tag" "$cur"

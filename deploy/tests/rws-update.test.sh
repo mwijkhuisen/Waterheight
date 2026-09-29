@@ -18,15 +18,17 @@ failures=0 cases=0 labels=0
 mkdir -p "$T/stubs"
 cat >"$T/stubs/curl" <<'STUB'
 #!/usr/bin/env bash
-# Serves $FIX files; records argv in $FIX/calls and ping configs in $FIX/pings.
+# Serves $FIX files; records argv in $FIX/calls, ping URLs in $FIX/pings and
+# "<check path> <body code>" in $FIX/codes.
 set -euo pipefail
 printf 'curl %s\n' "$*" >>"$FIX/calls"
-out='' url='' cfg=0
+out='' url='' cfg=0 body=''
 while (($#)); do
   case $1 in
     -o) out=$2; shift ;;
     -K) cfg=1; shift ;;
-    --resolve | --max-time | --max-filesize | --retry | --proto | --proto-redir | --data-raw) shift ;;
+    --data-raw) body=$2; shift ;;
+    --resolve | --max-time | --max-filesize | --retry | --proto | --proto-redir) shift ;;
     https://*) url=$1 ;;
   esac
   shift
@@ -35,6 +37,7 @@ if ((cfg)); then
   IFS= read -r line
   line=${line#url = \"}; line=${line%\"}
   printf '%s\n' "$line" >>"$FIX/pings"
+  printf '%s %s\n' "${line#https://hc-ping.com/*/}" "$body" >>"$FIX/codes"
   exit 0
 fi
 case $url in
@@ -69,7 +72,8 @@ STUB
 cat >"$T/stubs/docker" <<'STUB'
 #!/usr/bin/env bash
 # compose pull/up are recorded; `up` with a compose file whose first line says
-# "broken" makes capture.json stale, so the smoke test fails.
+# "broken" makes capture.json stale, so the smoke test fails; $FIX/up-fails
+# makes the next `up` fail (once).
 set -euo pipefail
 printf 'docker %s\n' "$*" >>"$FIX/calls"
 [[ $1 == compose ]] || exit 0
@@ -85,6 +89,10 @@ case $sub in
   pull) [[ ! -e $FIX/pull-fails ]] ;;
   up)
     head -n 1 "$file" >>"$FIX/ups"
+    if [[ -e $FIX/up-fails ]]; then
+      rm "$FIX/up-fails"
+      exit 1
+    fi
     # A healthy release's capture writes right after it starts; a broken one never does.
     if head -n 1 "$file" | grep -q broken; then
       echo '{"generated_at":"2020-01-01T00:00:00.000Z"}' >"$FIX/capture.json"
@@ -97,12 +105,14 @@ STUB
 chmod +x "$T/stubs"/*
 
 # ---------------------------------------------------------------- fixtures
-# mkrel <tag> [flags]: a release on the fake GitHub; flags: broken badsig badsha badtag.
+# mkrel <tag> [flags]: a release on the fake GitHub; flags: broken badsig badsha
+# badtag, host=<text> (the content of a host file, deploy/host/x.conf).
 mkrel() {
   local tag=$1 flags=${2:-} d sha mtag
   d=$FIX/rel/$tag
-  mkdir -p "$d" "$C/bundles/$tag/deploy"
+  mkdir -p "$d" "$C/bundles/$tag/deploy/host"
   printf '# release %s %s\nservices: {}\n' "$tag" "$flags" >"$C/bundles/$tag/deploy/compose.yaml"
+  [[ $flags != *host=* ]] || printf '%s\n' "${flags#*host=}" >"$C/bundles/$tag/deploy/host/x.conf"
   tar -czf "$d/deploy-bundle.tar.gz" -C "$C/bundles/$tag" deploy
   sha=$(sha256sum "$d/deploy-bundle.tar.gz" | cut -d' ' -f1)
   [[ $flags != *badsha* ]] || sha=$(printf '0%.0s' {1..64})
@@ -118,6 +128,10 @@ mkrel() {
   if [[ $flags == *badsig* ]]; then echo bad; else echo good; fi >"$d/release-manifest.sigstore.json"
 }
 latest() { ln -sfn "$1" "$FIX/rel/latest"; }
+# bootstrapped <tag>: bootstrap.sh of that release has run (its host-file list is recorded).
+bootstrapped() {
+  bash -c '. "$1" && host_files "$2"' _ "$bin/rws-lib.sh" "$RWS_STATE_DIR/releases/$1" >"$RWS_STATE_DIR/host-files.sha256"
+}
 server_ref() { jq -r .images.server "$FIX/rel/$1/release-manifest.json"; }
 
 setup() {
@@ -135,7 +149,7 @@ RWS_PUBLIC_IPV6=2001:db8::7
 EOF
   printf '%s\n' "$KEY" >"$C/etc/secrets/hc_ping_key"
   echo '{"generated_at":"2020-01-01T00:00:00.000Z"}' >"$FIX/capture.json"
-  touch "$FIX/healthz" "$FIX/calls" "$FIX/pings" "$FIX/ups"
+  touch "$FIX/healthz" "$FIX/calls" "$FIX/pings" "$FIX/codes" "$FIX/ups"
 }
 
 # run <script> [args]: sets $rc; output in $C/out.
@@ -283,6 +297,7 @@ expect_rc 0
 expect_state current $T2
 expect_grep "refused: release $T1 is older than the current $T2" "$C/out"
 expect_count "^# release" "$FIX/ups" 1
+expect_grep "^update/fail latest_older$" "$FIX/codes"
 
 case_ "smoke failure rolls back to the current release, /fail, never retried"
 setup
@@ -298,10 +313,26 @@ expect_state skip_upto $T2
 expect_active $T1
 expect_grep "rolled back to $T1" "$C/out"
 [[ $(tail -n 2 "$FIX/ups" | tr '\n' ' ') == "# release $T2 broken # release $T1  " ]] || fail "up order: $(tr '\n' '|' <"$FIX/ups")"
-expect_grep "/update/fail$" "$FIX/pings"
+expect_grep "^update/fail rolled_back$" "$FIX/codes"
 run rws-update
 expect_rc 0
 expect_count "^# release" "$FIX/ups" 3
+
+case_ "up fails: rolled back to the current release, active restored, /fail, never retried"
+setup
+mkrel $T1
+latest $T1
+run rws-update
+mkrel $T2
+latest $T2
+touch "$FIX/up-fails"
+run rws-update
+expect_rc 1
+expect_state current $T1
+expect_state skip_upto $T2
+expect_active $T1
+expect_grep "rolled back to $T1" "$C/out"
+expect_grep "^update/fail rolled_back$" "$FIX/codes"
 
 case_ "first deploy with a failing smoke test: loud, containers left, never retried"
 setup
@@ -335,12 +366,34 @@ expect_rc 0
 expect_state current $T1
 expect_grep "marked to skip" "$C/out"
 
-case_ "rws-deploy --inject-smoke-failure rolls back to the release before it"
+case_ "rws-deploy --inject-smoke-failure rolls back to the release before it, whose smoke test passes"
 run rws-deploy --inject-smoke-failure $T2
 expect_rc 1
 expect_state current $T1
 expect_active $T1
 expect_grep "failure injected" "$C/out"
+expect_count "failure injected" "$C/out" 1
+expect_grep "rolled back to $T1" "$C/out"
+[[ $(tail -n 1 "$FIX/codes") == "update/fail rolled_back" ]] || fail "last ping: $(tail -n 1 "$FIX/codes")"
+
+case_ "rws-deploy of an older release holds automatic updates even when the latest manifest is unreachable"
+setup
+mkrel $T1
+mkrel $T2
+latest $T1
+run rws-update
+latest $T2
+run rws-update
+rm "$FIX/rel/latest"
+run rws-deploy $T1
+expect_rc 0
+expect_state current $T1
+expect_state skip_upto $T2
+latest $T2
+run rws-update
+expect_rc 0
+expect_state current $T1
+expect_grep "marked to skip" "$C/out"
 
 case_ "rws-deploy: bad tag argument, manifest tag mismatch"
 run rws-deploy 'prod-2026;rm'
@@ -358,6 +411,32 @@ run rws-deploy --verify-image "$(server_ref $T2)"
 expect_rc 1
 run rws-deploy --verify-image "docker.io/library/alpine:latest"
 expect_rc 1
+
+case_ "changed host files: /update/fail host_files_changed on every run until bootstrap.sh has run"
+setup
+mkrel $T1 host=one
+latest $T1
+run rws-update
+bootstrapped $T1
+run rws-update
+expect_rc 0
+expect_grep "^update ok$" "$FIX/codes"
+expect_no_grep "host_files_changed" "$FIX/codes"
+mkrel $T2 host=two
+latest $T2
+run rws-update
+expect_rc 0
+expect_state current $T2
+expect_grep "release $T2 brings changed host files: run .*/releases/$T2/deploy/host/bootstrap\.sh" "$C/out"
+[[ $(tail -n 1 "$FIX/codes") == "update/fail host_files_changed" ]] || fail "after the deploy: $(tail -n 1 "$FIX/codes")"
+run rws-update
+[[ $(tail -n 1 "$FIX/codes") == "update/fail host_files_changed" ]] || fail "a no-op run: $(tail -n 1 "$FIX/codes")"
+bootstrapped $T2
+run rws-update
+[[ $(tail -n 1 "$FIX/codes") == "update ok" ]] || fail "after bootstrap: $(tail -n 1 "$FIX/codes")"
+echo new >"$RWS_STATE_DIR/releases/$T2/deploy/bin-added"
+run rws-update
+[[ $(tail -n 1 "$FIX/codes") == "update/fail host_files_changed" ]] || fail "an added file: $(tail -n 1 "$FIX/codes")"
 
 case_ "a held lock: rws-update exits quietly"
 setup

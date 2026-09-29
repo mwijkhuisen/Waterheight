@@ -5,7 +5,9 @@
 # release, verify it (cosign, pinned identity and issuer) before reading it,
 # refuse a tag that is not newer than the current release or that a failed or
 # manual deploy marked to skip, then stage, pull by digest, up, smoke-test, and
-# roll back to the current release on failure. Pings the `update` check.
+# roll back to the current release on failure. Pings the `update` check: /fail
+# with a fixed code on a failure, on a "latest" older than the current release,
+# and while the active release's host files are not installed (bootstrap.sh).
 #
 # Usage: rws-update [--dry-run]
 #   --dry-run  verify and report what would be deployed; no docker, state or ping
@@ -51,14 +53,19 @@ fi
 
 cur=$(state_get current)
 skip=$(state_get skip_upto)
+if [[ -n $cur && $tag == "$cur" ]]; then
+  ((DRY_RUN)) || update_ok
+  exit 0
+fi
+# A "latest" older than the current release would freeze deploys without a word.
 if [[ -n $cur ]] && ! tag_newer "$tag" "$cur"; then
-  [[ $tag == "$cur" ]] || log "refused: release $tag is older than the current $cur (rws-deploy $tag deploys it on purpose)"
-  ((DRY_RUN)) || ping update
+  log "refused: release $tag is older than the current $cur (rws-deploy $tag deploys it on purpose)"
+  ((DRY_RUN)) || ping update fail latest_older
   exit 0
 fi
 if [[ -n $skip ]] && ! tag_newer "$tag" "$skip"; then
   log "release $tag is marked to skip (failed or rolled back; rws-deploy $tag deploys it on purpose)"
-  ((DRY_RUN)) || ping update
+  ((DRY_RUN)) || update_ok
   exit 0
 fi
 if ((DRY_RUN)); then

@@ -257,8 +257,9 @@ for script in "$bundle"/deploy/bin/rws-*; do
     fix "/usr/local/bin/$name" ln -sfn "$LIB/deploy/bin/$name" "/usr/local/bin/$name"
   fi
 done
+# What rws-update compares each release with (update_ok in rws-lib.sh).
 sums=$(mktemp)
-(cd "$bundle" && find deploy/bin deploy/systemd deploy/host -type f -print0 | sort -z | xargs -0 sha256sum) >"$sums"
+host_files "$bundle" >"$sums"
 install_file "$sums" /var/lib/rws/host-files.sha256 0600 || true
 rm -f -- "$sums"
 
