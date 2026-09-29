@@ -181,17 +181,24 @@ jobs:
           WEB: ${{ needs.build.outputs.web }}
           BACKUP: ${{ needs.build.outputs.backup }}
           COMMIT: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           for digest in "$SERVER" "$WEB" "$BACKUP"; do
             [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "unexpected image digest" >&2; exit 1; }
           done
           [[ $COMMIT =~ ^[0-9a-f]{40}$ ]]
+          # A re-run of an old promote would give old images a newer tag, and the
+          # VPS would deploy them as an upgrade: only the head of main is released.
+          head=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
+          [[ $head == "$COMMIT" ]] || { echo "::error::main is at $head, not $COMMIT: not released" >&2; exit 1; }
           out=$RUNNER_TEMP/release
           mkdir -p "$out"
           tag=prod-$(date -u +%Y%m%dT%H%M%SZ)
           tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -cf - deploy | gzip -n >"$out/deploy-bundle.tar.gz"
-          jq -n --arg tag "$tag" --arg commit "$COMMIT" --arg img ghcr.io/mwijkhuisen/waterheight \
+          # Compact JSON: docs/runbooks/bootstrap.md reads it with grep (deploy/tests/runbook.test.sh).
+          jq -cn --arg tag "$tag" --arg commit "$COMMIT" --arg img ghcr.io/mwijkhuisen/waterheight \
             --arg s "$SERVER" --arg w "$WEB" --arg b "$BACKUP" \
             --arg sha "$(sha256sum "$out/deploy-bundle.tar.gz" | cut -d' ' -f1)" \
             '{version: 1, tag: $tag, commit: $commit,
