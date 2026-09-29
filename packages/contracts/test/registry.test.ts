@@ -1,34 +1,61 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { attributionRowText, repoRoot, strip, table1a, table1b, table08 } from '../../../test/catalogue.ts';
+import {
+  attributionCellText,
+  readPermissionRecords,
+  repoRoot,
+  strip,
+  table1a,
+  table1b,
+  table08,
+} from '../../../test/catalogue.ts';
+import { BASELINE } from '../src/baseline.ts';
 import { CHANNELS, defaultChannels, type Source, validateRegistry } from '../src/registry.ts';
 
 const read = (file: string) => readFileSync(`${repoRoot}registry/${file}`, 'utf8');
-const permissionsDir = `${repoRoot}registry/permissions`;
-const permissionRecords = new Set(
-  existsSync(permissionsDir)
-    ? readdirSync(permissionsDir)
-        .filter((f) => f.endsWith('.md'))
-        .map((f) => f.slice(0, -3))
-    : [],
-);
+const permissionRecords = readPermissionRecords(parse);
+const today = new Date().toISOString().slice(0, 10);
 const rawSources = read('sources.yaml');
 const providersInput = parse(read('providers.yaml'));
 const sourcesInput = parse(rawSources) as { sources: Record<string, unknown>[] };
-const registry = validateRegistry(providersInput, sourcesInput, { permissionRecords });
+const registry = validateRegistry(providersInput, sourcesInput, { permissionRecords, today });
 const sources = registry.sources;
 const byId = new Map(sources.map((s) => [s.id, s]));
 const real = sources.filter((s) => s.canary !== true);
 
 /** Validate a copy of sources.yaml with one source changed. */
-function problemsWith(id: string, change: (s: Record<string, unknown>) => void, records = permissionRecords) {
+function problemsWith(
+  id: string,
+  change: (s: Record<string, unknown>) => void,
+  records: ReadonlyMap<string, unknown> = permissionRecords,
+) {
   const copy = structuredClone(sourcesInput);
   const target = copy.sources.find((s) => s.id === id);
   if (target === undefined) throw new Error(`no source ${id}`);
   change(target);
-  return validateRegistry(providersInput, copy, { permissionRecords: records }).problems.join('\n');
+  return validateRegistry(providersInput, copy, { permissionRecords: records, today }).problems.join('\n');
 }
+
+/** A well-formed permission record (front matter of registry/permissions/<ID>.md). */
+const grant = (source: string, over: Record<string, unknown> = {}) =>
+  new Map<string, unknown>([
+    [
+      source,
+      {
+        source,
+        granted_by: 'Test provider',
+        granted_on: '2026-09-01',
+        evidence: "e-mail of 2026-09-01, owner's mail archive",
+        audience: 'public',
+        display: true,
+        api: false,
+        bulk_export: false,
+        history_export: false,
+        ...over,
+      },
+    ],
+  ]);
 
 // Initial audiences (catalogue §0.8; ADR-0017; issue #15). A change needs a
 // registry/permissions/<ID>.md record (invariant 8).
@@ -90,9 +117,9 @@ describe('registry', () => {
 });
 
 describe('attribution and licence text (catalogue §1b)', () => {
-  it('copies every attribution text verbatim from its §1b row', () => {
+  it('copies every attribution text verbatim from its §1b attribution cell', () => {
     for (const s of real) {
-      const row = attributionRowText(s.id);
+      const row = attributionCellText(s.id);
       for (const text of [s.attribution_text, ...s.attribution_variants.map((v) => v.text)]) {
         if (text !== null) expect([s.id, row.includes(text)]).toEqual([s.id, true]);
       }
@@ -231,16 +258,78 @@ describe('licence channels (catalogue §0.7)', () => {
     expect(problemsWith('DE-9', (s) => (s[channel] = true))).toMatch(/permission-based source/);
   });
 
-  it('allows it once registry/permissions/<ID>.md exists', () => {
-    expect(problemsWith('DE-9', (s) => (s.api = true), new Set(['DE-9']))).toBe('');
+  it('allows a channel that registry/permissions/<ID>.md grants', () => {
+    expect(problemsWith('DE-9', (s) => (s.api = true), grant('DE-9', { audience: 'off', api: true }))).toBe('');
+  });
+
+  it('fails when the permission record does not grant the channel', () => {
+    expect(problemsWith('DE-9', (s) => (s.api = true), grant('DE-9', { audience: 'off' }))).toMatch(
+      /api is on, but its permission record does not grant it/,
+    );
   });
 
   it('fails when an owner source has bulk_export on, even with a record', () => {
-    expect(problemsWith('LU-3', (s) => (s.bulk_export = true), new Set(['LU-3']))).toMatch(/bulk_export off/);
+    expect(
+      problemsWith('LU-3', (s) => (s.bulk_export = true), grant('LU-3', { audience: 'owner', bulk_export: true })),
+    ).toMatch(/bulk_export off/);
   });
 
   it('fails closed on a missing channel flag', () => {
     expect(problemsWith('NL-1', (s) => delete s.display)).toMatch(/display/);
+  });
+});
+
+describe('permission records and the baseline (invariant 8)', () => {
+  it('fail when an audience widens without a record (DE-12 terms forbid even storage)', () => {
+    expect(problemsWith('DE-12', (s) => Object.assign(s, { audience: 'public', capture_enabled: true }))).toMatch(
+      /audience public differs from off without registry\/permissions\/DE-12\.md/,
+    );
+  });
+
+  it('accept an audience a well-formed record grants', () => {
+    const flip = (s: Record<string, unknown>) => Object.assign(s, { audience: 'public', capture_enabled: true });
+    expect(problemsWith('DE-12', flip, grant('DE-12'))).toBe('');
+  });
+
+  it('fail when the source goes beyond the audience the record grants', () => {
+    const flip = (s: Record<string, unknown>) => Object.assign(s, { audience: 'public', capture_enabled: true });
+    expect(problemsWith('DE-12', flip, grant('DE-12', { audience: 'owner' }))).toMatch(
+      /audience public exceeds the owner its permission record grants/,
+    );
+  });
+
+  it.each([
+    ['an empty record file', null, /not a valid permission record/],
+    ['a record without evidence', { source: 'DE-12', granted_by: 'x', granted_on: '2026-09-01' }, /evidence/],
+    ['a record for another source', grant('DE-9').get('DE-9'), /source is DE-9, expected DE-12/],
+    ['a record dated in the future', grant('DE-12', { granted_on: '2999-01-01' }).get('DE-12'), /in the future/],
+  ])('reject %s', (_, record, message) => {
+    const flip = (s: Record<string, unknown>) => Object.assign(s, { audience: 'public', capture_enabled: true });
+    const problems = problemsWith('DE-12', flip, new Map([['DE-12', record]]));
+    expect(problems).toMatch(message);
+    expect(problems).toMatch(/differs from off without/);
+  });
+
+  it('never accept a different licence kind, record or not', () => {
+    const relabel = (s: Record<string, unknown>) => Object.assign(s, { licence_kind: 'cc0' });
+    expect(problemsWith('NL-3', relabel, grant('NL-3', { audience: 'off' }))).toMatch(
+      /licence_kind cc0 differs from the baseline unlicensed/,
+    );
+  });
+
+  it('reject a source that is not in the baseline', () => {
+    const copy = structuredClone(sourcesInput);
+    copy.sources.push({ ...structuredClone(copy.sources[0]), id: 'NL-99' } as Record<string, unknown>);
+    const { problems } = validateRegistry(providersInput, copy, { permissionRecords, today });
+    expect(problems.join('\n')).toMatch(/NL-99: not in the approved baseline/);
+  });
+
+  it('holds exactly the initial audiences of issue #15', () => {
+    for (const s of real) {
+      const expected = OWNER.includes(s.id) ? 'owner' : PUBLIC.includes(s.id) ? 'public' : 'off';
+      expect([s.id, BASELINE[s.id]?.audience]).toEqual([s.id, expected]);
+    }
+    expect(Object.keys(BASELINE).sort()).toEqual(sources.map((s) => s.id).sort());
   });
 });
 

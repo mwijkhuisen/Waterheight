@@ -1013,7 +1013,7 @@ sources:
     attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
     attribution_lang: de
     attribution_url: null
-    attribution_required: false
+    attribution_required: true
     attribution_variants:
       - lang: en
         text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
@@ -1040,7 +1040,7 @@ sources:
     attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
     attribution_lang: de
     attribution_url: null
-    attribution_required: false
+    attribution_required: true
     attribution_variants:
       - lang: en
         text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
@@ -1067,7 +1067,7 @@ sources:
     attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
     attribution_lang: de
     attribution_url: null
-    attribution_required: false
+    attribution_required: true
     attribution_variants:
       - lang: en
         text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
@@ -1094,7 +1094,7 @@ sources:
     attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
     attribution_lang: de
     attribution_url: null
-    attribution_required: false
+    attribution_required: true
     attribution_variants:
       - lang: en
         text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
@@ -1121,7 +1121,7 @@ sources:
     attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
     attribution_lang: de
     attribution_url: null
-    attribution_required: false
+    attribution_required: true
     attribution_variants:
       - lang: en
         text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
@@ -1148,7 +1148,7 @@ sources:
     attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
     attribution_lang: de
     attribution_url: null
-    attribution_required: false
+    attribution_required: true
     attribution_variants:
       - lang: en
         text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"
@@ -1202,7 +1202,7 @@ sources:
     attribution_text: "Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"
     attribution_lang: de
     attribution_url: null
-    attribution_required: false
+    attribution_required: true
     attribution_variants:
       - lang: en
         text: "Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"

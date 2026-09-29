@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BASELINE } from './baseline.ts';
 
 // Registry schemas (A§6; catalogue §0.7, §0.8; ADR-0007, ADR-0017). Every
 // object is strict: an unknown or misspelt key is an error, never ignored.
@@ -134,9 +135,36 @@ export function defaultChannels(source: Pick<Source, 'audience' | 'permission_re
   return { display: open, api: open, bulk_export: open, history_export: open };
 }
 
+/**
+ * A permission record: the YAML front matter of registry/permissions/<ID>.md
+ * (P13 adds them as grants arrive). It states what the provider granted; the
+ * registry may use no more. The original e-mail stays in the owner's archive,
+ * never in this public repository, and no person is named.
+ */
+export const PermissionRecord = z.strictObject({
+  source: SourceId,
+  /** The granting organisation, e.g. "LfU Rheinland-Pfalz". */
+  granted_by: z.string().min(1),
+  granted_on: IsoDate,
+  /** Where the original lives, e.g. "e-mail of 2026-10-07, owner's mail archive". */
+  evidence: z.string().min(1),
+  /** The widest audience the permission allows. */
+  audience: Audience,
+  display: z.boolean(),
+  api: z.boolean(),
+  bulk_export: z.boolean(),
+  history_export: z.boolean(),
+});
+export type PermissionRecord = z.infer<typeof PermissionRecord>;
+
 export type RegistryOptions = {
-  /** Source IDs with a registry/permissions/<ID>.md record. */
-  permissionRecords: ReadonlySet<string>;
+  /**
+   * The parsed front matter of every registry/permissions/<ID>.md, keyed by the
+   * file's ID (a file without valid front matter maps to null and fails).
+   */
+  permissionRecords: ReadonlyMap<string, unknown>;
+  /** Today as YYYY-MM-DD: a record may not be dated in the future. */
+  today: string;
 };
 
 /**
@@ -164,6 +192,24 @@ export function validateRegistry(
     providerIds.add(p.id);
   }
 
+  // Permission records: valid front matter, named after their source, not dated in the future.
+  const records = new Map<string, PermissionRecord>();
+  for (const [id, raw] of options.permissionRecords) {
+    const parsed = PermissionRecord.safeParse(raw);
+    if (!parsed.success) {
+      problems.push(`registry/permissions/${id}.md: not a valid permission record: ${z.prettifyError(parsed.error)}`);
+    } else if (parsed.data.source !== id) {
+      problems.push(`registry/permissions/${id}.md: source is ${parsed.data.source}, expected ${id}`);
+    } else if (parsed.data.granted_on > options.today) {
+      problems.push(`registry/permissions/${id}.md: granted_on ${parsed.data.granted_on} is in the future`);
+    } else {
+      records.set(id, parsed.data);
+    }
+  }
+  for (const id of options.permissionRecords.keys()) {
+    if (!sources.some((s) => s.id === id)) problems.push(`registry/permissions/${id}.md: no such source`);
+  }
+
   const seen = new Set<string>();
   for (const s of sources) {
     const at = `source ${s.id}`;
@@ -173,6 +219,25 @@ export function validateRegistry(
     if ((s.canary === true) !== s.id.startsWith('CANARY-'))
       problems.push(`${at}: canary flag and CANARY- id must agree`);
 
+    // The reviewed baseline: licence kind always, audience unless a record grants it.
+    const baseline = BASELINE[s.id];
+    const record = records.get(s.id);
+    if (baseline === undefined) {
+      problems.push(`${at}: not in the approved baseline (packages/contracts/src/baseline.ts)`);
+    } else {
+      if (s.licence_kind !== baseline.licence_kind) {
+        problems.push(`${at}: licence_kind ${s.licence_kind} differs from the baseline ${baseline.licence_kind}`);
+      }
+      if (s.audience !== baseline.audience && record === undefined) {
+        problems.push(
+          `${at}: audience ${s.audience} differs from ${baseline.audience} without registry/permissions/${s.id}.md`,
+        );
+      }
+    }
+    if (record !== undefined && !audienceWithin(s.audience, record.audience)) {
+      problems.push(`${at}: audience ${s.audience} exceeds the ${record.audience} its permission record grants`);
+    }
+
     // Audience (invariants 8 and 11; ADR-0017).
     if (s.capture_enabled !== (s.audience !== 'off'))
       problems.push(`${at}: capture_enabled must equal audience != off`);
@@ -181,19 +246,20 @@ export function validateRegistry(
     if (s.audience !== 'owner' && s.private_basis !== null)
       problems.push(`${at}: private_basis is only for the owner audience`);
 
-    // Channels (§0.7). Owner sources never export in bulk.
+    // Channels (§0.7): the default for the source, or what its record grants. Owner sources never export in bulk.
     if (s.audience === 'owner' && s.bulk_export) problems.push(`${at}: an owner source must have bulk_export off`);
-    const record = options.permissionRecords.has(s.id);
-    if (s.permission_required && !record && (s.api || s.bulk_export || s.history_export)) {
+    const defaults = defaultChannels(s);
+    for (const c of CHANNELS) {
+      if (s[c] === defaults[c]) continue;
+      if (record === undefined) {
+        problems.push(`${at}: ${c} differs from the §0.7 default without registry/permissions/${s.id}.md`);
+      } else if (s[c] && !record[c]) {
+        problems.push(`${at}: ${c} is on, but its permission record does not grant it`);
+      }
+    }
+    if (s.permission_required && record === undefined && (s.api || s.bulk_export || s.history_export)) {
       problems.push(
         `${at}: permission-based source has api/bulk_export/history_export on without registry/permissions/${s.id}.md`,
-      );
-    }
-    const defaults = defaultChannels(s);
-    const changed = CHANNELS.filter((c) => s[c] !== defaults[c]);
-    if (changed.length > 0 && !record) {
-      problems.push(
-        `${at}: ${changed.join(', ')} differ(s) from the §0.7 default without registry/permissions/${s.id}.md`,
       );
     }
 

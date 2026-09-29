@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { repoRoot } from '../../../test/catalogue.ts';
-import { audienceWithin, SourcesFile } from '../src/registry.ts';
-import { StationsFile } from '../src/stations.ts';
+import { SourcesFile } from '../src/registry.ts';
+import { StationsFile, validateStations } from '../src/stations.ts';
 
 const dir = `${repoRoot}registry/stations/`;
 const files = readdirSync(dir).filter((f) => f.endsWith('.yaml'));
@@ -30,14 +30,26 @@ describe('station registry', () => {
     expect(ownerIndex).toBeGreaterThanOrEqual(0);
   });
 
-  it('names registered sources and never widens their audience', () => {
-    for (const f of files) {
-      for (const row of StationsFile.parse(load(f)).stations) {
-        const source = sources.find((s) => s.id === row.source);
-        expect([row.id, source?.id]).toEqual([row.id, row.source]);
-        if (source) expect([row.id, audienceWithin(row.audience, source.audience)]).toEqual([row.id, true]);
-      }
-    }
+  it.each(files)('%s names registered sources and never widens an audience', (f) => {
+    expect(validateStations(load(f), sources).problems).toEqual([]);
+  });
+
+  it('fails when a public row names an owner source as its forecast source (invariant 11)', () => {
+    const copy = structuredClone(sample);
+    const kaub = copy.stations.find((r) => r.id === 'de.wsv.25700100');
+    if (kaub === undefined) throw new Error('no Kaub row');
+    kaub.expected_forecast_source = 'DE-2';
+    expect(validateStations(copy, sources).problems.join('\n')).toMatch(
+      /a public row may not name the owner source DE-2 as expected_forecast_source/,
+    );
+  });
+
+  it('fails when a row widens its source (a public row of an owner source)', () => {
+    const copy = structuredClone(sample);
+    const owner = copy.stations[ownerIndex];
+    if (owner === undefined) throw new Error('no owner row');
+    Object.assign(owner, { audience: 'public', datum: null, gauge_zero: [] });
+    expect(validateStations(copy, sources).problems.join('\n')).toMatch(/audience public widens its source BE-3/);
   });
 
   it.each(['first_release', 'licence_gate', 'audience', 'provider_code'])('fails without %s', (key) => {

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // Parses tables of the committed source catalogue for the registry tests.
@@ -61,10 +61,30 @@ export const table08 = (() => {
   return byId;
 })();
 
-/** The §1b row text for an ID, following "As X" references in its attribution cell. */
-export function attributionRowText(id: string, depth = 0): string {
+/**
+ * The §1b attribution cell for an ID, following "As X" references; for
+ * "As quoted" it adds the licence cell, which holds the quote. Nothing else of
+ * the row counts, so a text found only in another column fails.
+ */
+export function attributionCellText(id: string, depth = 0): string {
   const cells = table1b.get(id);
   if (cells === undefined || depth > 3) throw new Error(`catalogue §1b: no row for ${id}`);
-  const ref = /^As ((?:NL|DE|BE|FR|LU|CH)-\d+)/.exec(strip(cells[2] ?? ''))?.[1];
-  return strip(cells.join(' | ')) + (ref === undefined ? '' : ` | ${attributionRowText(ref, depth + 1)}`);
+  const cell = strip(cells[2] ?? '');
+  const ref = /^As ((?:NL|DE|BE|FR|LU|CH)-\d+)/.exec(cell)?.[1];
+  if (ref !== undefined) return `${cell} | ${attributionCellText(ref, depth + 1)}`;
+  if (cell.startsWith('As quoted')) return `${cell} | ${strip(cells[1] ?? '')}`;
+  return cell;
+}
+
+/** The YAML front matter of each registry/permissions/<ID>.md (null when a file has none). */
+export function readPermissionRecords(parse: (text: string) => unknown): Map<string, unknown> {
+  const dir = `${repoRoot}registry/permissions`;
+  const records = new Map<string, unknown>();
+  if (!existsSync(dir)) return records;
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.md'))) {
+    const text = readFileSync(`${dir}/${file}`, 'utf8');
+    const front = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(text)?.[1];
+    records.set(file.slice(0, -3), front === undefined ? null : parse(front));
+  }
+  return records;
 }

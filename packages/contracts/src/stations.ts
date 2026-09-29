@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SourceId } from './registry.ts';
+import { audienceWithin, type Source, SourceId } from './registry.ts';
 
 // Station registry (registry/stations/*.yaml; A§6 "Station registry";
 // catalogue gap item 17): one row per physical gauge and quantity.
@@ -64,3 +64,41 @@ export const Station = z.discriminatedUnion('audience', [PublicStation, OwnerSta
 export type Station = z.infer<typeof Station>;
 
 export const StationsFile = z.strictObject({ stations: z.array(Station).min(1) });
+
+/**
+ * Cross-file rules: a row's source exists and allows the row's audience, and a
+ * row never names a threshold or forecast source narrower than itself (a public
+ * row that pointed at an owner source would reveal that owner data exists
+ * there; invariant 11). Returns every problem found.
+ */
+export function validateStations(
+  stationsInput: unknown,
+  sources: readonly Pick<Source, 'id' | 'audience'>[],
+): { problems: string[]; stations: Station[] } {
+  const parsed = StationsFile.safeParse(stationsInput);
+  if (!parsed.success) return { problems: [z.prettifyError(parsed.error)], stations: [] };
+  const byId = new Map(sources.map((s) => [s.id, s]));
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  for (const row of parsed.data.stations) {
+    const at = `station ${row.id} (${row.quantity})`;
+    const key = `${row.id}/${row.quantity}`;
+    if (seen.has(key)) problems.push(`${at}: duplicate`);
+    seen.add(key);
+    const source = byId.get(row.source);
+    if (source === undefined) problems.push(`${at}: unknown source ${row.source}`);
+    else if (!audienceWithin(row.audience, source.audience)) {
+      problems.push(`${at}: audience ${row.audience} widens its source ${row.source} (${source.audience})`);
+    }
+    for (const field of ['expected_threshold_source', 'expected_forecast_source'] as const) {
+      const ref = row[field];
+      if (ref === null) continue;
+      const target = byId.get(ref);
+      if (target === undefined) problems.push(`${at}: ${field} ${ref} is not a registered source`);
+      else if (!audienceWithin(row.audience, target.audience)) {
+        problems.push(`${at}: a ${row.audience} row may not name the ${target.audience} source ${ref} as ${field}`);
+      }
+    }
+  }
+  return { problems, stations: parsed.data.stations };
+}

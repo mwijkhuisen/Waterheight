@@ -37,7 +37,9 @@ stations:
     km: { system: Rhein-km (PEGELONLINE), value: 546.23 }
     flags: { tidal: null, impounded: null }
     expected_threshold_source: DE-1
-    expected_forecast_source: DE-2
+    # DE-2 (BfG WV) forecasts Kaub, but DE-2 is owner-audience until the Belegexemplar
+    # (P12): a public row may not name it (validateStations; invariant 11).
+    expected_forecast_source: null
     licence_gate: open
     first_release: true
     audience: public
@@ -78,7 +80,7 @@ stations:
     km: null
     flags: { tidal: null, impounded: null }
     expected_threshold_source: FR-5
-    expected_forecast_source: FR-4
+    expected_forecast_source: null
     licence_gate: open
     first_release: true
     audience: public
@@ -98,6 +100,8 @@ stations:
     river: meuse
     km: null
     flags: { tidal: null, impounded: null }
+    # SPW publishes no numeric alert thresholds, but its long-term percentiles are
+    # the owner view's reference (D18 addendum; catalogue §1a BE-3 "statistics and percentiles").
     expected_threshold_source: BE-3
     expected_forecast_source: null
     licence_gate: owner-only
