@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(**/.env*)",
+      "Read(deploy/secrets/**)",
+      "Bash(git push -*f*)",
+      "Bash(git push * -*f*)",
+      "Bash(git push +*)",
+      "Bash(git push * +*)",
+      "Bash(git push * --mirror*)",
+      "Bash(git * push -*f*)",
+      "Bash(git * push * -*f*)",
+      "Bash(git * push +*)",
+      "Bash(git * push * +*)",
+      "Bash(git * --output*)",
+      "Bash(pnpm dlx*)",
+      "Bash(pnpm exec*)",
+      "Bash(pnpm * dlx*)",
+      "Bash(pnpm * exec*)",
+      "Bash(pnpx*)",
+      "Bash(npx*)"
+    ],
+    "allow": [
+      "Bash(pnpm install --frozen-lockfile)",
+      "Bash(pnpm check)",
+      "Bash(pnpm test)",
+      "Bash(pnpm test:integration)",
+      "Bash(pnpm build)",
+      "Bash(pnpm i18n)",
+      "Bash(pnpm check:bom)",
+      "Bash(pnpm check:boundaries)",
+      "Bash(pnpm -F web build)",
+      "Bash(pnpm -F web i18n)",
+      "Bash(psql)",
+      "Bash(psql *)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git ls-files *)",
+      "Bash(git ls-tree *)",
+      "Bash(git rev-parse *)",
+      "Bash(git cat-file *)",
+      "Bash(git blame *)",
+      "Bash(git grep *)",
+      "Bash(git branch --list*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh",
+            "timeout": 900
+          }
+        ]
+      }
+    ]
+  }
+}
