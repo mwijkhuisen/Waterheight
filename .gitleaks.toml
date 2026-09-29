@@ -30,3 +30,19 @@ condition = "AND"
 regexTarget = "secret"
 regexes = ['''^forecast/observation$''']
 paths = ['''^docs/plan/proposals/secure-ops\.md$''']
+
+[[allowlists]]
+description = "Public sha256 of Docker's apt signing-key file (download.docker.com/linux/debian/gpg) pinned in bootstrap.sh, not a key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570$''']
+paths = ['''^deploy/host/bootstrap\.sh$''']
+
+[[allowlists]]
+description = "Dummy healthchecks ping key of the offline host-script tests (stubbed curl, never sent), not a key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^testPingKey_0123456789ab$''']
+paths = ['''^deploy/tests/rws-update\.test\.sh$''', '''^deploy/tests/backup\.test\.sh$''']

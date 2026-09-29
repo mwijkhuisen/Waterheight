@@ -67,7 +67,7 @@ case $1 in
         cp "$src" "$drill$path"
       done <"$drill/.include"
       if [[ -e $FIX/corrupt ]]; then
-        victim=$(find "$drill/data/raw" -name '*.zst' | head -n 1)
+        victim=$(find "$drill/data/raw" -name '*.zst' -print -quit)
         printf 'x' | zstd -q -c >"$victim"
       fi
     fi
