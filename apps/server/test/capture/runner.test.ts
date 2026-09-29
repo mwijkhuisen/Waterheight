@@ -1,11 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { server } from '../../../../test/msw.setup.ts';
 import { ManifestLine } from '../../src/archive/manifest.ts';
+import { Archive } from '../../src/archive/writer.ts';
 import { runSpec } from '../../src/capture/runner.ts';
 import type { SpecState } from '../../src/capture/state.ts';
+import type { Transport } from '../../src/http/types.ts';
 import { fixture, runDeps, spec } from './helpers.ts';
 
 // dup_of, 204/304, gates and windows (issue #16 criteria "The manifest
@@ -89,6 +92,41 @@ describe('dup_of and line-only captures', () => {
     expect(l).toHaveLength(2);
     expect(l.map((x) => x.variant)).toEqual(['1962373', '1962340']);
     expect(l.every((x) => x.dup_of === null && x.key !== null)).toBe(true);
+  });
+});
+
+describe('one manifest line per request, whatever the provider does (S7)', () => {
+  const body = fixture('BE-3', 'be-3-values').body;
+
+  it('a status outside 100–599 gets a line with status null and bad_status, and the run goes on', async () => {
+    let n = 0;
+    const transport: Transport = async () => {
+      n += 1;
+      return { status: n === 1 ? 799 : 200, headers: {}, body: Readable.from(n === 1 ? [] : [body]) };
+    };
+    const deps = runDeps({ client: { transport } });
+    await runSpec(spec('be-3-values'), deps);
+    expect(lines(deps.root).map((l) => [l.status, l.error, l.key !== null])).toEqual([
+      [null, 'bad_status', false],
+      [200, null, true],
+    ]);
+  });
+
+  it('a failed manifest append skips that request and still persists the rest of the run', async () => {
+    const deps = runDeps();
+    let appends = 0;
+    deps.archive = new (class extends Archive {
+      override append(line: ManifestLine): Promise<void> {
+        appends += 1;
+        return appends === 1 ? Promise.reject(new Error('disk full')) : super.append(line);
+      }
+    })(deps.root);
+    server.use(http.get('https://hydrometrie.wallonie.be/services/KiWIS/KiWIS', () => new HttpResponse(body)));
+    const summary = await runSpec(spec('be-3-values'), deps);
+    expect(summary).toMatchObject({ requests: 2, ok: 1, transient: true, firstFailure: 'manifest' });
+    expect(lines(deps.root).map((l) => l.variant)).toEqual(['1962340']);
+    const st = await deps.state.read<SpecState>('be-3-values');
+    expect(Object.keys(st?.variants ?? {})).toEqual(['1962340']);
   });
 });
 

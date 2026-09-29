@@ -43,7 +43,8 @@ export type ErrorCode =
   | 'timeout'
   | 'network'
   | 'backoff'
-  | 'breaker_open';
+  | 'breaker_open'
+  | 'bad_status';
 
 export type FetchResult = { ok: true; res: Res } | { ok: false; error: ErrorCode };
 

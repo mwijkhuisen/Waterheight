@@ -290,6 +290,10 @@ export class Client {
             );
             return this.failed(host, errorCode(e, signal));
           }
+          if (res.status < 100 || res.status > 599) {
+            res.body.destroy();
+            return { ok: false, error: 'bad_status' };
+          }
           const location = header(res.headers, 'location');
           if (REDIRECTS.has(res.status) && location !== undefined) {
             res.body.destroy();

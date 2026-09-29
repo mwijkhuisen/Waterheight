@@ -35,6 +35,8 @@ export const ERROR_CODES = [
   'network',
   'backoff',
   'breaker_open',
+  /** A status outside 100–599 (undici passes them through): the line records it with status null. */
+  'bad_status',
 ] as const;
 
 const iso = z.iso.datetime();

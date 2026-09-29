@@ -307,7 +307,17 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
         deps.log.warn({ spec: spec.id, variant: req.variant, alert: `${spec.alert.kind}:404` }, 'page alert');
       }
     }
-    await deps.archive.append(line);
+    try {
+      await deps.archive.append(line);
+    } catch {
+      // No line, so no state change for this request, but the run goes on; an object stored above is
+      // recorded by the start-up recovery.
+      deps.log.error({ spec: spec.id, variant: req.variant, alert: 'manifest' }, 'manifest append failed');
+      if (!opts.seed) deps.counters.record(day, spec.source, 'other');
+      summary.transient = true;
+      summary.firstFailure ??= 'manifest';
+      continue;
+    }
 
     // State, counters and alerts change only after the manifest line.
     const outcome = outcomeOf(status, line.error, v?.ok ?? true);

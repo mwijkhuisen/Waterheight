@@ -74,7 +74,7 @@ export function pegeldatenZip(rows = 120_000): Buffer {
 export const quiet = { info: () => {}, warn: () => {}, error: () => {} };
 
 export function runDeps(
-  over: Partial<RunDeps> & { now?: () => Date; client?: Partial<ClientOptions> } = {},
+  over: Partial<Omit<RunDeps, 'client'>> & { client?: Partial<ClientOptions> } = {},
 ): RunDeps & { root: string } {
   const root = mkdtempSync(join(tmpdir(), 'rws-capture-'));
   const { client, ...rest } = over;
