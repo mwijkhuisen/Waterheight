@@ -6,19 +6,23 @@
 # systemd-resolved stub, Docker forwards to resolved's upstream servers, so
 # those are the ones allowed.
 #
-# Usage: rws-resolvers [--dry-run]
+# Usage: rws-resolvers [--dry-run] [--quiet]
+#   --quiet  log only a missing resolver (rws-tick, every 10 minutes)
 set -euo pipefail
 # shellcheck source=deploy/bin/rws-lib.sh
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
 
-case ${1:-} in
-  --dry-run) DRY_RUN=1 ;;
-  '') ;;
-  *)
-    echo "usage: rws-resolvers [--dry-run]" >&2
-    exit 64
-    ;;
-esac
+quiet=0
+for arg in "$@"; do
+  case $arg in
+    --dry-run) DRY_RUN=1 ;;
+    --quiet) quiet=1 ;;
+    *)
+      echo "usage: rws-resolvers [--dry-run] [--quiet]" >&2
+      exit 64
+      ;;
+  esac
+done
 
 # nameserver lines of a resolv.conf, without zone ids.
 servers() { awk '$1 == "nameserver" { sub(/%.*/, "", $2); print $2 }' "$1" 2>/dev/null || true; }
@@ -44,6 +48,6 @@ if ((DRY_RUN)); then
   exit 0
 fi
 printf '%s' "$batch" | nft -f -
-log "container DNS allowed to ${#v4[@]} IPv4 and ${#v6[@]} IPv6 resolvers (from $conf)"
+((quiet)) || log "container DNS allowed to ${#v4[@]} IPv4 and ${#v6[@]} IPv6 resolvers (from $conf)"
 # No resolver yet (early boot): rws-resolvers.path runs this again when resolv.conf is written.
 ((${#v4[@]} + ${#v6[@]} > 0)) || log "warning: no resolver found; containers have no DNS until resolv.conf changes or the next rws-tick"

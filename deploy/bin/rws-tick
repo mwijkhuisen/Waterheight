@@ -62,7 +62,7 @@ fi
 here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 dry=()
 ((!DRY_RUN)) || dry=(--dry-run)
-"$here/rws-resolvers" "${dry[@]}" || log "rws-resolvers failed"
+"$here/rws-resolvers" --quiet "${dry[@]}" || log "rws-resolvers failed"
 if ! systemctl is-active --quiet rws-status-copy.path; then
   if ((DRY_RUN)); then
     log "dry-run: would re-arm rws-status-copy.path"

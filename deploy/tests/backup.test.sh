@@ -388,7 +388,7 @@ run rws-tick
 expect_rc 0
 expect_eq "$(ops 'keys')" '["disk_pct","drill","generated_at","last_backup"]'
 
-case_ "resolvers: servers from resolv.conf, the systemd stub skipped"
+case_ "resolvers: servers from resolv.conf, the systemd stub skipped; --quiet drops the routine log line (R2-C8)"
 setup
 printf 'nameserver 127.0.0.53\noptions edns0\n' >"$C/stub.conf"
 printf 'nameserver 192.0.2.53\nnameserver 2001:db8::53%%eth0\nnameserver 127.0.0.1\n' >"$C/real.conf"
@@ -397,6 +397,11 @@ expect_rc 0
 expect_grep "add element inet rws resolvers4 \{ 192\.0\.2\.53 \}" "$C/out"
 expect_grep "add element inet rws resolvers6 \{ 2001:db8::53 \}" "$C/out"
 expect_no_grep "127\.0\.0" "$C/out"
+RWS_RESOLV_CONF=$C/real.conf run rws-resolvers
+expect_grep "container DNS allowed to 1 IPv4 and 1 IPv6 resolvers" "$C/out"
+RWS_RESOLV_CONF=$C/real.conf run rws-resolvers --quiet
+expect_rc 0
+expect_no_grep "." "$C/out"
 
 echo "$labels cases, $failures failures"
 ((failures == 0))
