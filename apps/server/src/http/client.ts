@@ -251,20 +251,21 @@ export class Client {
       'user-agent': this.options.userAgent,
       'accept-encoding': 'gzip, br',
     };
+    // Redirects stay on this host. One gate per request: a redirect hop is part of the same request (and probe).
+    const host = first.hostname.toLowerCase();
+    const gate = this.politeness.gate(host, this.now());
+    if ('skip' in gate) return { ok: false, error: gate.skip };
     const release = await this.budget.acquire(maxDecoded);
     try {
+      if (gate.wait > 0) {
+        if (opts.deadline !== undefined && this.now() + gate.wait > opts.deadline)
+          return { ok: false, error: 'backoff' };
+        await this.sleep(gate.wait);
+      }
       let url = first;
       let method = req.method;
       let body = req.body;
       for (let hop = 0; ; hop += 1) {
-        const host = url.hostname.toLowerCase();
-        const gate = this.politeness.gate(host, this.now());
-        if ('skip' in gate) return { ok: false, error: gate.skip };
-        if (gate.wait > 0) {
-          if (opts.deadline !== undefined && this.now() + gate.wait > opts.deadline)
-            return { ok: false, error: 'backoff' };
-          await this.sleep(gate.wait);
-        }
         try {
           await abortable(resolveChecked(host, this.resolver), deadline());
         } catch (e) {
@@ -298,7 +299,7 @@ export class Client {
             return { ok: false, error: 'bad_url' };
           }
           if (next.protocol !== 'https:') return { ok: false, error: 'redirect_insecure' };
-          if (next.hostname.toLowerCase() !== first.hostname.toLowerCase()) {
+          if (next.hostname.toLowerCase() !== host) {
             return { ok: false, error: 'redirect_cross_host' };
           }
           const checked = this.checkUrl(sourceId, next.href);
@@ -341,6 +342,8 @@ export class Client {
       }
     } finally {
       release();
+      // A probe released on every exit path: one without a success or a failure re-arms the breaker.
+      if (gate.probe) this.politeness.release(host, this.now());
     }
   }
 

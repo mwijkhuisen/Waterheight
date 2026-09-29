@@ -63,13 +63,13 @@ describe('per-host circuit breaker under fake timers', () => {
     vi.advanceTimersByTime(BREAKER_PROBE_MS - 1);
     expect(p.gate(host, Date.now())).toEqual({ skip: 'breaker_open' });
     vi.advanceTimersByTime(1);
-    expect(p.gate(host, Date.now())).toEqual({ wait: 0 }); // the half-open probe
+    expect(p.gate(host, Date.now())).toEqual({ wait: 0, probe: true }); // the half-open probe
     expect(p.gate(host, Date.now())).toEqual({ skip: 'breaker_open' }); // only one at a time
     p.failure(host, Date.now()); // the probe fails: open for another 30 min
     vi.advanceTimersByTime(BREAKER_PROBE_MS - 1);
     expect(p.gate(host, Date.now())).toEqual({ skip: 'breaker_open' });
     vi.advanceTimersByTime(1);
-    expect(p.gate(host, Date.now())).toEqual({ wait: 0 });
+    expect(p.gate(host, Date.now())).toEqual({ wait: 0, probe: true });
     p.success(host);
     expect(p.isOpen(host)).toBe(false);
     expect(p.gate(host, Date.now())).toEqual({ wait: 0 });

@@ -29,7 +29,8 @@ export function parseRetryAfter(value: string | undefined, now: number): number 
 
 type HostState = { failures: number; notBefore: number; openUntil: number | null; probing: boolean };
 
-export type Gate = { wait: number } | { skip: 'breaker_open' };
+/** `probe`: this request is the one half-open probe; it must end in success, failure or release. */
+export type Gate = { wait: number; probe?: true } | { skip: 'breaker_open' };
 
 export class Politeness {
   private readonly hosts = new Map<string, HostState>();
@@ -53,7 +54,7 @@ export class Politeness {
     if (s.openUntil !== null) {
       if (now < s.openUntil || s.probing) return { skip: 'breaker_open' };
       s.probing = true;
-      return { wait: 0 };
+      return { wait: 0, probe: true };
     }
     return { wait: Math.max(0, s.notBefore - now) };
   }
@@ -69,6 +70,15 @@ export class Politeness {
     s.notBefore = now + (retryAfterMs ?? fullJitter(s.failures, this.random));
     if (s.probing || s.failures >= BREAKER_THRESHOLD) s.openUntil = now + BREAKER_PROBE_MS;
     s.probing = false;
+  }
+
+  /**
+   * Ends a probe that got neither a success nor a failure (a DNS, redirect or
+   * cap error): it counts as a failed probe, so the breaker re-arms instead of
+   * staying half-open for good.
+   */
+  release(host: string, now: number): void {
+    if (this.hosts.get(host)?.probing) this.failure(host, now);
   }
 
   isOpen(host: string): boolean {

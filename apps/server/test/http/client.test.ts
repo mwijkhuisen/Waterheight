@@ -4,6 +4,7 @@ import { delay, HttpResponse, http } from 'msw';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { server } from '../../../../test/msw.setup.ts';
 import { checkZip, flatNames, GuardFailure } from '../../src/http/guards.ts';
+import { BREAKER_PROBE_MS, Politeness } from '../../src/http/politeness.ts';
 import type { Req } from '../../src/http/types.ts';
 import { fakeResolver, testClient } from '../helpers.ts';
 
@@ -230,5 +231,49 @@ describe('Retry-After and backoff', () => {
     expect(await c.fetch('NL-1', get(`${A}/ok`), { deadline: now + 60_000 })).toEqual({ ok: false, error: 'backoff' });
     expect(await c.fetch('NL-1', get(`${A}/ok`), { deadline: now + 600_000 })).toMatchObject({ ok: true });
     expect(slept).toEqual([120_000]);
+  });
+});
+
+describe('the half-open probe (C1, S2)', () => {
+  const H = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
+  /** A client whose breaker for H is open (5 × 503, no jitter), on a clock the test moves. */
+  async function opened(resolver?: (host: string) => Promise<string[]>) {
+    const clock = { now: 1_000_000 };
+    const c = testClient(HOSTS, {
+      now: () => clock.now,
+      politeness: new Politeness(() => 0),
+      ...(resolver ? { resolver } : {}),
+    });
+    server.use(
+      http.get(`${A}/down`, () => new HttpResponse('down', { status: 503 })),
+      http.get(`${A}/ok`, () => HttpResponse.text('ok')),
+      http.get(`${A}/moved`, () => new HttpResponse(null, { status: 302, headers: { location: '/ok' } })),
+    );
+    for (let i = 0; i < 5; i += 1) await c.fetch('NL-1', get(`${A}/down`));
+    expect(c.politeness.isOpen(H)).toBe(true);
+    clock.now += BREAKER_PROBE_MS;
+    return { c, clock };
+  }
+
+  it('a probe that ends on a DNS error re-arms the breaker; the next probe 30 min later is admitted', async () => {
+    let dnsDown = false;
+    const { c, clock } = await opened(async () => {
+      if (dnsDown) throw new Error('EAI_AGAIN');
+      return ['93.184.215.14'];
+    });
+    dnsDown = true;
+    expect(await c.fetch('NL-1', get(`${A}/ok`))).toEqual({ ok: false, error: 'dns' });
+    dnsDown = false;
+    clock.now += 60_000;
+    expect(await c.fetch('NL-1', get(`${A}/ok`))).toEqual({ ok: false, error: 'breaker_open' });
+    clock.now += BREAKER_PROBE_MS;
+    expect(await c.fetch('NL-1', get(`${A}/ok`))).toMatchObject({ ok: true, res: { status: 200 } });
+    expect(c.politeness.isOpen(H)).toBe(false);
+  });
+
+  it('a same-host redirect hop belongs to the probe, and its success closes the breaker', async () => {
+    const { c } = await opened();
+    expect(await c.fetch('NL-1', get(`${A}/moved`))).toMatchObject({ ok: true, res: { status: 200, url: `${A}/ok` } });
+    expect(c.politeness.isOpen(H)).toBe(false);
   });
 });
