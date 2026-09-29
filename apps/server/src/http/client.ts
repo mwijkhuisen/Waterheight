@@ -300,6 +300,8 @@ export class Client {
           }
           if (res.status < 100 || res.status > 599) {
             discard(res.body);
+            // A broken answer is a failure of the host, so it backs off (N7).
+            this.politeness.failure(host, this.now());
             return { ok: false, error: 'bad_status' };
           }
           const location = header(res.headers, 'location');

@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { createGzip, gzipSync } from 'node:zlib';
 import { zipSync } from 'fflate';
 import { delay, HttpResponse, http } from 'msw';
@@ -250,6 +251,17 @@ describe('WAF answers (S9)', () => {
     expect(await c.fetch('NL-1', get(`${A}/limited`))).toMatchObject({ ok: true, res: { status } });
     now += 60_000;
     expect(await c.fetch('NL-1', get(`${A}/ok`), { deadline: now + 30_000 })).toEqual({ ok: false, error: 'backoff' });
+  });
+});
+
+describe('a status outside 100–599 (N7)', () => {
+  it('counts as a failure of the host, so it is not polled at the full rate', async () => {
+    const c = testClient(HOSTS, {
+      transport: async () => ({ status: 799, headers: {}, body: Readable.from([]) }),
+      politeness: new Politeness(() => 0.5),
+    });
+    expect(await c.fetch('NL-1', get(`${A}/odd`))).toEqual({ ok: false, error: 'bad_status' });
+    expect(c.politeness.gate('ddapi20-waterwebservices.rijkswaterstaat.nl', Date.now())).not.toEqual({ wait: 0 });
   });
 });
 
