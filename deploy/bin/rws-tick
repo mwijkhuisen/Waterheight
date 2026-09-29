@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# rws-tick (rws-tick.timer, every 10 min; A§11.3; issue #16 P1b).
+# 1. Writes the disk use of /srv/rws into /status/ops.json (disk_pct); the
+#    watchdog judges it from outside (< 75%).
+# 2. Restarts any container of the rws project that Docker reports unhealthy
+#    (a wedged recorder whose heartbeat stopped): Docker itself never restarts
+#    an unhealthy container, only one that exited.
+#
+# Usage: rws-tick [--dry-run]
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+case ${1:-} in
+  --dry-run) DRY_RUN=1 ;;
+  '') ;;
+  *)
+    echo "usage: rws-tick [--dry-run]" >&2
+    exit 64
+    ;;
+esac
+
+pct=$(df --output=pcent "$RWS_SRV" | tail -n 1 | tr -dc '0-9')
+[[ $pct =~ ^[0-9]{1,3}$ ]] || die "cannot read the disk use of $RWS_SRV"
+if ((DRY_RUN)); then
+  log "dry-run: disk_pct $pct"
+else
+  # shellcheck disable=SC2016 # a jq filter, not shell
+  ops_update --argjson p "$pct" '.disk_pct = $p'
+fi
+
+mapfile -t sick < <(docker ps --filter label=com.docker.compose.project=rws --filter health=unhealthy \
+  --format '{{.Names}}' 2>/dev/null || true)
+for name in "${sick[@]}"; do
+  [[ $name =~ ^[a-zA-Z0-9_.-]+$ ]] || continue
+  if ((DRY_RUN)); then
+    log "dry-run: would restart unhealthy container $name"
+  else
+    log "restarting unhealthy container $name"
+    docker restart "$name" >/dev/null || log "restart of $name failed"
+  fi
+done

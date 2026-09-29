@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# rws-backup (rws-backup.timer, hourly at :17; A§11.3, ADR-0011; issue #16 P1b).
+# restic backup of the raw archive (read-only mount) to the EU Object Lock
+# bucket, run in the `backup` job container. The repository password and the S3
+# keys reach restic only as files (RESTIC_PASSWORD_FILE,
+# AWS_SHARED_CREDENTIALS_FILE), never through argv or the environment; the
+# owner-audience payloads leave the VPS only inside this encrypted repository.
+# Sets last_backup in /status/ops.json and pings the `backup` check.
+#
+# Off until the owner turns it on (RWS_BACKUP=on in /etc/rws/rws.env, owner
+# action A5; docs/runbooks/bootstrap.md).
+#
+# Usage: rws-backup [--init | --dry-run]
+#   --init     create the restic repository once (owner, after A5)
+#   --dry-run  report what would run
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+init=0
+case ${1:-} in
+  --init) init=1 ;;
+  --dry-run) DRY_RUN=1 ;;
+  '') ;;
+  *)
+    echo "usage: rws-backup [--init | --dry-run]" >&2
+    exit 64
+    ;;
+esac
+
+if ! backup_ready; then
+  log "backups are off: set RWS_BACKUP=on in $RWS_ETC/rws.env once the bucket and its keys exist (owner action A5)"
+  exit 0
+fi
+[[ -e $RWS_STATE_DIR/active ]] || die "no release is deployed yet"
+if ((DRY_RUN)); then
+  log "dry-run: would back up /srv/rws/raw to the bucket at $BUCKET_HOST"
+  exit 0
+fi
+
+exec 9>"$RWS_LOCK_DIR/rws-backup.lock"
+flock -w 3000 9 || die "another backup or drill is still running"
+allow_bucket "$BUCKET_HOST"
+
+if ((init)); then
+  rws_compose run --rm --no-deps -T backup init
+  log "restic repository created"
+  exit 0
+fi
+
+ping backup start
+if rws_compose run --rm --no-deps -T backup backup --host rws --exclude /data/raw/.tmp /data/raw; then
+  # shellcheck disable=SC2016 # a jq filter, not shell
+  ops_update --arg t "$(now_iso)" '.last_backup = $t'
+  ping backup
+  log "backup done"
+else
+  ping backup fail backup_failed
+  die "restic backup failed"
+fi

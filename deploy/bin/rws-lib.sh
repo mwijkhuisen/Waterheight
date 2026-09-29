@@ -348,3 +348,29 @@ deploy_release() {
   fi
   rollback "$tag" "$cur"
 }
+
+# The backup settings (owner action A5): false while RWS_BACKUP is not "on";
+# dies on a malformed repository; sets BUCKET_HOST from RWS_RESTIC_REPOSITORY
+# (s3:https://<host>[:port]/<bucket>[/<prefix>]). Never call it in $(...).
+backup_ready() {
+  load_env || return 1
+  [[ ${RWS_BACKUP:-off} == on ]] || return 1
+  [[ ${RWS_RESTIC_REPOSITORY:-} =~ ^s3:https://([a-z0-9.-]+)(:[0-9]{1,5})?/[a-z0-9._-]+(/[A-Za-z0-9._/-]*)?$ ]] ||
+    die "RWS_RESTIC_REPOSITORY must look like s3:https://<host>/<bucket>[/<prefix>]"
+  # shellcheck disable=SC2034 # read by the scripts that source this file
+  BUCKET_HOST=${BASH_REMATCH[1]}
+}
+
+# allow_bucket <host>: the backup network may reach only these addresses (tcp/443).
+# ponytail: the set holds what the host resolves now; a CDN that answers the
+# container differently fails the run, which pings /fail (risk register).
+allow_bucket() {
+  local host=$1 batch v4 v6
+  mapfile -t v4 < <(getent ahostsv4 "$host" | awk '{ print $1 }' | sort -u)
+  mapfile -t v6 < <(getent ahostsv6 "$host" | awk '$1 !~ /^::ffff:/ { print $1 }' | sort -u)
+  ((${#v4[@]} + ${#v6[@]} > 0)) || die "cannot resolve the bucket host"
+  batch='flush set inet rws backup4'$'\n''flush set inet rws backup6'$'\n'
+  ((${#v4[@]} == 0)) || batch+="add element inet rws backup4 { $(IFS=,; echo "${v4[*]}") }"$'\n'
+  ((${#v6[@]} == 0)) || batch+="add element inet rws backup6 { $(IFS=,; echo "${v6[*]}") }"$'\n'
+  printf '%s' "$batch" | nft -f -
+}
