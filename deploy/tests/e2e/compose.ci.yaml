@@ -1,0 +1,77 @@
+# CI only: the overlay deploy/tests/e2e/run.sh merges onto deploy/compose.yaml
+# for the end-to-end proof on a GitHub runner. Never part of a deployment.
+# - caddy gets its certificate from Pebble (real HTTP-01 through the published port);
+# - capture runs for real but on an internal network: every fetch fails on DNS,
+#   so no provider sees a request, while it still writes its status and state;
+# - backup reaches a local MinIO bucket with Object Lock (COMPLIANCE);
+# - probe publishes a port the firewall must not let through from outside.
+services:
+  caddy:
+    volumes:
+      - /ci/Caddyfile.ci:/etc/caddy/Caddyfile:ro
+      - /ci/pki/ca.pem:/etc/caddy/ci-ca.pem:ro
+    networks: [public, edge, ci-acme]
+
+  capture:
+    networks: !override [ci-internal]
+
+  watchdog:
+    extra_hosts:
+      - "rivierstanden.example:203.0.114.10"
+    environment:
+      NODE_EXTRA_CA_CERTS: /ci/pki/pebble-root.pem
+    volumes:
+      - /ci/pki:/ci/pki:ro
+
+  backup:
+    networks: [backup, ci-minio]
+    environment:
+      SSL_CERT_FILE: /ci/pki/ca.pem
+    volumes:
+      - /ci/pki/ca.pem:/ci/pki/ca.pem:ro
+
+  probe:
+    image: ${RWS_WEB_IMAGE:?}
+    user: "65533:65533"
+    command: ["caddy", "respond", "--listen", ":8081", "probe"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ports:
+      - "203.0.114.10:8081:8081/tcp"
+    networks: [public]
+
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199
+    command: ["-config", "/ci/pebble.json", "-dnsserver", "challtestsrv:8053"]
+    volumes:
+      - /ci/pebble.json:/ci/pebble.json:ro
+      - /ci/pki:/ci/pki:ro
+    networks: [ci-acme]
+
+  challtestsrv:
+    image: ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b
+    command: ["-defaultIPv4", "203.0.114.10", "-defaultIPv6", ""]
+    networks: [ci-acme]
+
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:71674988a1c7ddd5724928633199152b11e4ddefd6c6ce2d60772ff4a8f22ca9
+    command: ["server", "/data", "--address", ":9000", "--certs-dir", "/certs"]
+    environment:
+      MINIO_ROOT_USER: ci-root
+      MINIO_ROOT_PASSWORD: ci-root-password-not-a-secret
+    tmpfs: [/data]
+    volumes:
+      - /ci/pki/minio:/certs:ro
+    networks:
+      ci-minio:
+        ipv4_address: 172.30.99.10
+
+networks:
+  ci-internal:
+    internal: true
+  ci-acme: {}
+  ci-minio:
+    ipam:
+      config:
+        - subnet: 172.30.99.0/24

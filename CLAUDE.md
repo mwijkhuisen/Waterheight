@@ -96,6 +96,10 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | step-security/harden-runner | action | 2.21.1 | installed | e14015d583714f6e62063499dc959a02595150a1 | Apache-2.0 | audit mode |
 | github/codeql-action | action | 4.38.1 | installed | 1c5b675653bb5c22dbe9b12b556ec555138e09fd | MIT | public repository (D7) |
 | postgres | image | 18.6-trixie | installed | postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 | PostgreSQL | CI service; P2 compose `db` |
+| pebble | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199 | MPL-2.0 | CI only: the ACME server of the deploy end-to-end test |
+| pebble-challtestsrv | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b | MPL-2.0 | CI only: DNS for Pebble |
+| minio (Chainguard) | image | latest | installed | cgr.dev/chainguard/minio@sha256:71674988a1c7ddd5724928633199152b11e4ddefd6c6ce2d60772ff4a8f22ca9 | AGPL-3.0 | CI only: S3 with Object Lock for restic (built from source by Chainguard; MinIO stopped publishing images in 2025) |
+| minio-client (Chainguard) | image | latest | installed | cgr.dev/chainguard/minio-client@sha256:be51ef820151a708a8e140037e3746862a8c1dd5e624f84b404a1d71bcefb167 | AGPL-3.0 | CI only: creates the Object Lock bucket and the VPS-key user |
 | zizmor | binary | 1.30.1 | installed | e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a | MIT | security.yml |
 | gitleaks | binary | 8.30.1 | installed | 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb | MIT | security.yml |
 | dbmate | binary | 2.36.0 | installed | 47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce | MIT | ci.yml round trip |
