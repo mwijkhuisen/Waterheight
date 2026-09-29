@@ -106,7 +106,8 @@ export const csvShape = (header: string[]) => short(header.map((h) => h.replace(
 const invalid = (reason: string, count: number | null = null): Validity => ({ ok: false, reason, count, shape: null });
 
 export async function validate(spec: ValiditySpec, status: number, body: Buffer): Promise<Validity> {
-  if (status === 304 || status === 204 || (spec.allow_status.includes(status) && body.length === 0)) {
+  // A 204 is valid only where allow_status lists it (RWS: no data); elsewhere it is an empty body.
+  if (status === 304 || (spec.allow_status.includes(status) && body.length === 0)) {
     return { ok: true, reason: null, count: 0, shape: null };
   }
   if (status < 200 || status > 299) return invalid('status');

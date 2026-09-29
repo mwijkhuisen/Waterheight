@@ -83,6 +83,31 @@ describe('dup_of and line-only captures', () => {
     expect(st?.last_success).toBeDefined();
   });
 
+  it('a 204 is a success only where allow_status has it (C7)', async () => {
+    const deps = runDeps();
+    server.use(
+      http.get(
+        'https://api.hochwasserzentralen.de/public/v1/data/stations',
+        () => new HttpResponse(null, { status: 204 }),
+      ),
+    );
+    expect(await runSpec(spec('de-6-stations'), deps)).toMatchObject({ ok: 0, firstFailure: 'invalid' });
+    expect(lines(deps.root)[0]).toMatchObject({ status: 204, key: null, validity: { ok: false, reason: 'empty' } });
+    expect(Object.values(deps.counters.days)[0]?.['DE-6']).toMatchObject({ ok: 0, other: 1 });
+    expect((await deps.state.read<SpecState>('de-6-stations'))?.last_success).toBeUndefined();
+  });
+
+  it('a page-alert spec pages on an invalid body too (C9)', async () => {
+    const deps = runDeps();
+    server.use(
+      http.get('https://rijkswaterstaatdata.nl/waterdata/', () =>
+        HttpResponse.html('<html><body>Deze pagina is verhuisd.</body></html>\n'),
+      ),
+    );
+    await runSpec(spec('nl-4-page'), deps);
+    expect((await deps.state.read<SpecState>('nl-4-page'))?.pending_page).toEqual(['nl4_new_file:invalid']);
+  });
+
   it('never treats the same body of another variant as a duplicate', async () => {
     const deps = runDeps();
     const body = fixture('BE-3', 'be-3-values').body;

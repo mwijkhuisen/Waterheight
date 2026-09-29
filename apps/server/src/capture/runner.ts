@@ -115,7 +115,8 @@ function outcomeOf(status: number | null, error: ErrorCode | null, valid: boolea
   if (error === 'timeout') return 'timeouts';
   if (error !== null) return 'other';
   if (status !== null && status >= 500) return 'upstream_5xx';
-  if (status === 204 || status === 304) return 'ok';
+  if (status === 304) return 'ok';
+  // A 204 is valid only where the spec allows it (`valid` then comes from its validity check).
   if (status !== null && status >= 200 && status < 300 && valid) return 'ok';
   return 'other';
 }
@@ -295,16 +296,22 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
           line.stored_bytes = put.stored;
           created = put.created;
         }
-        if (!v.ok) {
-          deps.counters.alert({ spec: spec.id, kind: 'invalid', at: end.toISOString() });
-          deps.log.warn(
-            { spec: spec.id, variant: req.variant, alert: 'invalid', reason: v.reason },
-            'invalid payload archived',
-          );
-        }
+      } else if (res.status === 204) {
+        // Valid only where allow_status has it (RWS: no data); anywhere else it is an empty body.
+        v = await validate(vspec, 204, res.body);
+        if (!v.ok) line.validity = { ok: false, reason: v.reason, count: v.count };
       } else if (res.status === 404 && spec.alert?.page) {
         pages.add(`${spec.alert.kind}:404`);
         deps.log.warn({ spec: spec.id, variant: req.variant, alert: `${spec.alert.kind}:404` }, 'page alert');
+      }
+      if (v !== null && !v.ok) {
+        deps.counters.alert({ spec: spec.id, kind: 'invalid', at: end.toISOString() });
+        deps.log.warn(
+          { spec: spec.id, variant: req.variant, alert: 'invalid', reason: v.reason },
+          'invalid payload archived',
+        );
+        // A spec that pages on a change pages on an invalid body too (NL-4: a page that lost its link).
+        if (spec.alert?.page) pages.add(`${spec.alert.kind}:invalid`);
       }
     }
     try {
