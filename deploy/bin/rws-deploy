@@ -2,9 +2,10 @@
 # rws-deploy (owner-run; A§11.2; issue #16 P1b): deploys one named signed
 # release through the same verify, pull, up, smoke and rollback path as
 # rws-update. It may deploy an older release or one that failed before; when
-# the named release is older than the one running before or the latest,
-# automatic updates then skip everything up to the newer of the two, so the
-# rollback sticks until the next new release (also when GitHub is unreachable).
+# the named release is older than the one running before (a rollback),
+# automatic updates then skip everything up to the newer of that release and
+# the latest, so the rollback sticks until the next new release (also when
+# GitHub is unreachable). Redeploying the current release holds nothing back.
 #
 # Usage: rws-deploy [--dry-run] [--inject-smoke-failure] <prod-YYYYMMDDTHHMMSSZ>
 #        rws-deploy --verify-image <image@sha256:digest>
@@ -65,8 +66,9 @@ if ((DRY_RUN)); then
 fi
 before=$(state_get current)
 deploy_release "$work/want" "$tag"
-hold=$(max_tag "$before" "$latest")
-if [[ -n $hold ]] && tag_newer "$hold" "$tag"; then
+if [[ -n $before ]] && tag_newer "$before" "$tag"; then
+  hold=$(max_tag "$before" "$latest")
   state_set skip_upto "$(max_tag "$hold" "$(state_get skip_upto)")"
-  log "$tag is older than $hold: automatic updates skip up to $hold"
+  log "$tag is older than $before: automatic updates skip up to $hold"
 fi
+update_ok

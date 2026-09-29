@@ -284,20 +284,32 @@ smoke() {
   return 1
 }
 
-# host_files <dir>: the sha256 and path of every file under <dir>/deploy but
-# compose.yaml, sorted, so a changed, added or removed file changes the list.
-# bootstrap.sh records it for the files it installed (host-files.sha256).
+# host_files <dir>: the sha256 and path of every host file under <dir>/deploy,
+# sorted, so a changed, added or removed one changes the list. Host files are
+# the ones bootstrap.sh installs or the host runs from /usr/local/lib/rws/deploy:
+# bin/, host/, systemd/, the healthchecks, reachability and owner-term lists
+# and the two [owner] tests. Not compose.yaml (every deploy takes it), the
+# image build inputs (they arrive as signed images) or the CI-only tests.
+# bootstrap.sh records the list of the files it installed (host-files.sha256).
 host_files() {
-  (cd "$1" && find deploy -type f ! -path deploy/compose.yaml -print0 | sort -z | xargs -0 -r sha256sum)
+  (cd "$1" && find deploy -type f \( -path 'deploy/bin/*' -o -path 'deploy/host/*' -o -path 'deploy/systemd/*' \
+    -o -path deploy/healthchecks.yaml -o -path deploy/reachability.yaml -o -path deploy/owner-terms.json \
+    -o -path deploy/tests/negative-deploy.sh -o -path deploy/tests/object-lock-prune.sh \) -print0 |
+    sort -z | xargs -0 -r sha256sum)
 }
 
 # The update check's success ping. Host files are installed only by bootstrap.sh
 # (from a verified bundle), so while the active release brings others it pings
 # /fail host_files_changed instead, on every run, until the owner re-runs it.
+# Not during a rollback hold (skip_upto newer than current): the release that
+# runs then is older than one deployed or tried before, the installed host
+# files may be newer than its own, and an older release's bootstrap is never run.
 update_ok() {
-  local act list=$RWS_STATE_DIR/host-files.sha256
+  local act skip cur list=$RWS_STATE_DIR/host-files.sha256
   act=$(readlink "$RWS_STATE_DIR/active" 2>/dev/null || true)
-  if [[ -f $list && -n $act && -d $RWS_STATE_DIR/$act/deploy ]] &&
+  skip=$(state_get skip_upto)
+  cur=$(state_get current)
+  if [[ -f $list && -n $act && -d $RWS_STATE_DIR/$act/deploy ]] && ! tag_newer "$skip" "$cur" &&
     ! host_files "$RWS_STATE_DIR/$act" | cmp -s - "$list"; then
     log "release ${act#releases/} brings changed host files: run $RWS_STATE_DIR/$act/deploy/host/bootstrap.sh"
     ping update fail host_files_changed
@@ -348,7 +360,8 @@ rollback() {
 }
 
 # deploy_release <dir with the verified manifest> <tag>: stage, pull by digest,
-# up, smoke; the current pointer moves only after a green smoke test.
+# up, smoke; the current pointer moves only after a green smoke test. Returns
+# only on success; the caller then pings update_ok.
 deploy_release() {
   local src=$1 tag=$2 cur t0
   if ! stage_release "$src" "$tag"; then
@@ -367,7 +380,6 @@ deploy_release() {
     state_set current "$tag"
     log "deployed $tag"
     cleanup_releases
-    update_ok
     return 0
   fi
   rollback "$tag" "$cur"

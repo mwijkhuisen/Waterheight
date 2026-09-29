@@ -176,7 +176,7 @@ Every line must be PASS. IPv6 is N/A only if your own machine has no IPv6. Then 
 
 ## Later: a new release with changed host files
 
-`rws-update` deploys new images and `compose.yaml` by itself, but it never replaces the host scripts, units, firewall or any other file of `deploy/`. When the running release brings different ones, every `rws-update` run pings `update` `/fail` with `host_files_changed`, and its log says `release … brings changed host files: run …/bootstrap.sh`. Run that bootstrap (it sits inside the verified release directory); the next run is green again:
+`rws-update` deploys new images and `compose.yaml` by itself, but it never replaces the host scripts, units, firewall or any other host file of `deploy/`. When the running release brings different ones, every `rws-update` run pings `update` `/fail` with `host_files_changed`, and its log says `release … brings changed host files: run …/bootstrap.sh`. Run that bootstrap (it sits inside the verified release directory); the next run is green again. Never run the bootstrap of a release older than the one you bootstrapped last, for instance after a rollback (`docs/runbooks/deploy-rollback.md`): it would downgrade the host files.
 
 ```bash
 sudo /var/lib/rws/releases/<tag>/deploy/host/bootstrap.sh --dry-run

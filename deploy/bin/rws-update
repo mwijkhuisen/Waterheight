@@ -73,3 +73,4 @@ if ((DRY_RUN)); then
   exit 0
 fi
 deploy_release "$work" "$tag"
+update_ok

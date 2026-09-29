@@ -110,13 +110,25 @@ chmod +x "$T/stubs"/*
 
 # ---------------------------------------------------------------- fixtures
 # mkrel <tag> [flags]: a release on the fake GitHub; flags: broken badsig badsha
-# badtag, host=<text> (the content of a host file, deploy/host/x.conf).
+# badtag, host=<word> (the content of a host file, deploy/host/x.conf),
+# build=<word> (the content of files that are not host files: image build
+# inputs and CI-only tests).
 mkrel() {
-  local tag=$1 flags=${2:-} d sha mtag
+  local tag=$1 flags=${2:-} d sha mtag word f
   d=$FIX/rel/$tag
   mkdir -p "$d" "$C/bundles/$tag/deploy/host"
   printf '# release %s %s\nservices: {}\n' "$tag" "$flags" >"$C/bundles/$tag/deploy/compose.yaml"
-  [[ $flags != *host=* ]] || printf '%s\n' "${flags#*host=}" >"$C/bundles/$tag/deploy/host/x.conf"
+  if [[ $flags == *host=* ]]; then
+    word=${flags#*host=}
+    printf '%s\n' "${word%% *}" >"$C/bundles/$tag/deploy/host/x.conf"
+  fi
+  if [[ $flags == *build=* ]]; then
+    word=${flags#*build=}
+    for f in server/Dockerfile web/Caddyfile backup/Dockerfile tests/e2e/run.sh tests/x.test.sh; do
+      mkdir -p "$(dirname "$C/bundles/$tag/deploy/$f")"
+      printf '%s\n' "${word%% *}" >"$C/bundles/$tag/deploy/$f"
+    done
+  fi
   tar -czf "$d/deploy-bundle.tar.gz" -C "$C/bundles/$tag" deploy
   sha=$(sha256sum "$d/deploy-bundle.tar.gz" | cut -d' ' -f1)
   [[ $flags != *badsha* ]] || sha=$(printf '0%.0s' {1..64})
@@ -440,9 +452,65 @@ run rws-update
 bootstrapped $T2
 run rws-update
 [[ $(tail -n 1 "$FIX/codes") == "update ok" ]] || fail "after bootstrap: $(tail -n 1 "$FIX/codes")"
-echo new >"$RWS_STATE_DIR/releases/$T2/deploy/bin-added"
+mkdir -p "$RWS_STATE_DIR/releases/$T2/deploy/bin"
+echo new >"$RWS_STATE_DIR/releases/$T2/deploy/bin/rws-added"
 run rws-update
 [[ $(tail -n 1 "$FIX/codes") == "update/fail host_files_changed" ]] || fail "an added file: $(tail -n 1 "$FIX/codes")"
+
+case_ "a release that changes only image build inputs, compose.yaml and CI-only tests: no host-file page (R2-C2)"
+setup
+mkrel $T1 "host=one build=a"
+latest $T1
+run rws-update
+bootstrapped $T1
+mkrel $T2 "host=one build=b"
+latest $T2
+run rws-update
+expect_rc 0
+expect_state current $T2
+[[ $(tail -n 1 "$FIX/codes") == "update ok" ]] || fail "after the deploy: $(tail -n 1 "$FIX/codes")"
+expect_no_grep "host_files_changed" "$FIX/codes"
+
+case_ "a rollback to an older release with other host files never pages, nor advises its bootstrap (R2-S5, R2-C3)"
+setup
+mkrel $T1 host=one
+mkrel $T2 host=two
+latest $T1
+run rws-update
+bootstrapped $T1
+latest $T2
+run rws-update
+bootstrapped $T2
+run rws-update
+[[ $(tail -n 1 "$FIX/codes") == "update ok" ]] || fail "after bootstrap: $(tail -n 1 "$FIX/codes")"
+run rws-deploy $T1
+expect_rc 0
+expect_state current $T1
+expect_state skip_upto $T2
+[[ $(tail -n 1 "$FIX/codes") == "update ok" ]] || fail "after the rollback: $(tail -n 1 "$FIX/codes")"
+expect_no_grep "brings changed host files" "$C/out"
+run rws-update
+expect_grep "marked to skip" "$C/out"
+[[ $(tail -n 1 "$FIX/codes") == "update ok" ]] || fail "the next run: $(tail -n 1 "$FIX/codes")"
+expect_count "host_files_changed" "$FIX/codes" 1
+run rws-deploy $T2
+[[ $(tail -n 1 "$FIX/codes") == "update ok" ]] || fail "back on the newest: $(tail -n 1 "$FIX/codes")"
+
+case_ "redeploying the current release holds back no newer release (R2-S6)"
+setup
+mkrel $T1
+mkrel $T2
+latest $T1
+run rws-update
+latest $T2
+run rws-deploy $T1
+expect_rc 0
+expect_state current $T1
+expect_state skip_upto ''
+expect_no_grep "automatic updates skip" "$C/out"
+run rws-update
+expect_rc 0
+expect_state current $T2
 
 case_ "a held lock: rws-update exits quietly"
 setup

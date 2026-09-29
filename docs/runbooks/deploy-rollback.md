@@ -39,7 +39,7 @@ sudo docker compose -p rws ps; sudo docker logs --tail 80 rws-caddy-1
 | `smoke test failed` | `/healthz` or a fresh `capture.json` missing after `up` | It rolled back. Fix the release in a new PR |
 | `no previous release` | The first deploy failed | The containers were left as they are (capture may be recording). Fix the cause, then `sudo rws-deploy <tag>` |
 | `latest_older` (`refused: release … is older than the current …`) | GitHub's "latest" release is older than the one running | Nothing deploys until a newer release is the latest again. Check the Releases page: was the newest release deleted or un-marked as latest? |
-| `host_files_changed` (`brings changed host files`) | The running release brings host files that `bootstrap.sh` has not installed | The release runs; run its bootstrap (below, "Host files"). Every run pages until then |
+| `host_files_changed` (`brings changed host files`) | The running release brings host files that `bootstrap.sh` has not installed | The release runs; run its bootstrap (below, "Host files"). Every run pages until then (never during a rollback hold) |
 
 ## Roll back on purpose
 
@@ -48,8 +48,10 @@ sudo ls /var/lib/rws/releases            # the kept releases
 sudo rws-deploy prod-20261001T120000Z    # any signed release, older ones included
 ```
 
-This deploys the named release through the same checks. If it is older than the release that ran before it or the latest release, automatic updates skip everything up to the newer of the two, so the rollback sticks until the next new release, also when GitHub cannot be reached at that moment. To undo that, deploy the newest release on purpose.
+This deploys the named release through the same checks. If it is older than the release that ran before it (a rollback), automatic updates skip everything up to the newer of that release and the latest one, so the rollback sticks until the next new release, also when GitHub cannot be reached at that moment. Redeploying the current release holds nothing back. To undo a hold, deploy the newest release on purpose.
+
+A rollback changes only images and `compose.yaml`: the host files stay those of the newer release you bootstrapped. **Never run an older release's bootstrap**: it would install its older host scripts, units and firewall. While the hold lasts (`skip_upto` newer than `current`), the host-file check pauses, and it resumes once a newer release runs.
 
 ## Host files
 
-`rws-update` changes only images and `compose.yaml`. When the running release brings other files of `deploy/` (host scripts, units, the firewall, settings, tests), every run pings `update` `/fail` with `host_files_changed` and logs `brings changed host files`, until you run the bootstrap inside that verified release directory (`docs/runbooks/bootstrap.md`, last section).
+`rws-update` changes only images and `compose.yaml`. When the running release brings other host files (`deploy/bin`, `deploy/host`, `deploy/systemd`, the healthchecks, reachability and owner-term lists, and the two `[owner]` tests; not the image build inputs, which arrive as signed images), every run pings `update` `/fail` with `host_files_changed` and logs `brings changed host files`, until you run the bootstrap inside that verified release directory (`docs/runbooks/bootstrap.md`, last section). Not during a rollback hold: see above, and never run an older release's bootstrap.

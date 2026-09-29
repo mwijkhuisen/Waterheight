@@ -278,12 +278,6 @@ for script in "$bundle"/deploy/bin/rws-*; do
     fix "/usr/local/bin/$name" ln -sfn "$LIB/deploy/bin/$name" "/usr/local/bin/$name"
   fi
 done
-# What rws-update compares each release with (update_ok in rws-lib.sh).
-sums=$(mktemp)
-host_files "$bundle" >"$sums"
-install_file "$sums" /var/lib/rws/host-files.sha256 0600 || true
-rm -f -- "$sums"
-
 # ------------------------------------------------------------------ firewall
 if [[ $(systemctl is-enabled nftables.service 2>/dev/null || true) == masked ]]; then
   ok "nftables.service masked"
@@ -379,5 +373,14 @@ fi
 for unit in rws-status-copy.path rws-update.timer rws-backup.timer rws-restore-drill.timer rws-tick.timer; do
   enable_now "$unit"
 done
+
+# ------------------------------------------------------------------ last: the installed host files
+# What rws-update compares each release with (update_ok in rws-lib.sh). Only
+# after every step above succeeded, so a bootstrap that stopped halfway never
+# clears the drift signal.
+sums=$(mktemp)
+host_files "$bundle" >"$sums"
+install_file "$sums" /var/lib/rws/host-files.sha256 0600 || true
+rm -f -- "$sums"
 
 echo "bootstrap: $changes change(s)$( ((DRY_RUN)) && echo ' would be made')"
