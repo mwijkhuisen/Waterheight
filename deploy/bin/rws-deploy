@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# rws-deploy (owner-run; A§11.2; issue #16 P1b): deploys one named signed
+# release through the same verify, pull, up, smoke and rollback path as
+# rws-update. It may deploy an older release or one that failed before; when
+# the named release is older than the latest, automatic updates then skip
+# everything up to that latest release, so the rollback sticks until the next
+# new release.
+#
+# Usage: rws-deploy [--dry-run] [--inject-smoke-failure] <prod-YYYYMMDDTHHMMSSZ>
+#        rws-deploy --verify-image <image@sha256:digest>
+#   --dry-run               verify and report only
+#   --inject-smoke-failure  fail the smoke test on purpose (deploy/tests/negative-deploy.sh)
+#   --verify-image          only check an image's signature against the release identity
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+usage() {
+  echo "usage: rws-deploy [--dry-run] [--inject-smoke-failure] <prod-YYYYMMDDTHHMMSSZ>" >&2
+  echo "       rws-deploy --verify-image <image@sha256:digest>" >&2
+  exit 64
+}
+
+tag='' inject=0
+while (($#)); do
+  case $1 in
+    --dry-run) DRY_RUN=1 ;;
+    --inject-smoke-failure) inject=1 ;;
+    --verify-image)
+      (($# == 2)) || usage
+      if verify_image "$2"; then
+        echo "verified: $2"
+        exit 0
+      fi
+      echo "refused: $2"
+      exit 1
+      ;;
+    -*) usage ;;
+    *)
+      [[ -z $tag ]] || usage
+      tag=$1
+      ;;
+  esac
+  shift
+done
+[[ $tag =~ $RWS_TAG_RE ]] || usage
+export RWS_INJECT_SMOKE_FAILURE=$inject
+
+exec 9>"$RWS_LOCK_DIR/rws-deploy.lock"
+flock -w 1800 9 || die "another deploy is still running"
+env_ready || die "rws.env is not complete (owner steps A2-A4 in docs/runbooks/bootstrap.md)"
+
+work=$(mktemp -d)
+trap 'rm -rf -- "$work"' EXIT
+mkdir "$work/want" "$work/latest"
+fetch_manifest "$tag" "$work/want" || die "release $tag: manifest not found"
+verify_manifest "$work/want" "$tag" >/dev/null || die "release $tag: manifest did not verify"
+
+latest=''
+if fetch_manifest latest "$work/latest" && latest=$(verify_manifest "$work/latest"); then :; else latest=''; fi
+
+if ((DRY_RUN)); then
+  log "dry-run: would deploy $tag (current $(state_get current || true), latest ${latest:-unknown})"
+  exit 0
+fi
+deploy_release "$work/want" "$tag"
+if [[ -n $latest ]] && tag_newer "$latest" "$tag"; then
+  state_set skip_upto "$(max_tag "$latest" "$(state_get skip_upto)")"
+  log "$tag is older than the latest release $latest: automatic updates skip up to $latest"
+fi
