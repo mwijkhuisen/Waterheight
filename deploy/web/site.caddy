@@ -1,0 +1,72 @@
+# The public site (A§12.2; issue #16 P1b). Every A§12.2 header, noindex until
+# the public launch (P12), /healthz and the two coarse status files. No CORS
+# headers, no owner site (P9; WireGuard-only from P12a). scripts/verify-prod.ts
+# compares these headers with A§12.2 byte for byte.
+{$RWS_DOMAIN} {
+	header {
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), camera=(), microphone=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		X-Robots-Tag "noindex"
+		-Server
+	}
+
+	# Access log with masked addresses (IPv4 /24, IPv6 /48), one file a day, kept 14 days (A§12.2 privacy).
+	log {
+		output file /data/access/access.log {
+			roll_interval 24h
+			roll_keep 15
+			roll_keep_for 336h
+		}
+		format filter {
+			request>remote_ip ip_mask 24 48
+			request>client_ip ip_mask 24 48
+			request>headers>X-Forwarded-For ip_mask 24 48
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+			wrap json
+		}
+	}
+
+	encode zstd gzip
+
+	# The User-Agent of every capture request names https://<domain>/over.
+	redir /over / 308
+
+	handle /healthz {
+		respond 200
+	}
+
+	# Status files: public, coarse, never cached. capture.json is written by the
+	# capture role, ops.json by the root-owned backup, drill and disk jobs.
+	handle /status/capture.json {
+		header Cache-Control "no-store"
+		rewrite * /capture.json
+		root * /srv/rws/status
+		file_server
+	}
+	handle /status/ops.json {
+		header Cache-Control "no-store"
+		rewrite * /ops.json
+		root * /srv/rws/ops
+		file_server
+	}
+	handle /status/* {
+		respond 404
+	}
+
+	handle {
+		root * /srv/www
+		file_server
+	}
+}
+
+# Container healthcheck only: loopback inside the container, never published.
+http://127.0.0.1:8081 {
+	bind 127.0.0.1
+	respond /healthz 200
+}

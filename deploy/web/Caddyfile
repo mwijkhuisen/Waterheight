@@ -1,0 +1,10 @@
+# Global options (A§12.2; issue #16 P1b). The site is in site.caddy, so the CI
+# end-to-end test can swap only these globals for its test ACME server.
+{
+	admin off
+	email {$RWS_CONTACT_EMAIL}
+	# Let's Encrypt only: the CAA record allows no other CA (owner action A4).
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
+import /etc/caddy/site.caddy
