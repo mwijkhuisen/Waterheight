@@ -56,7 +56,7 @@ load_env() {
 
 # True when the settings a deploy needs are present and well-formed (owner actions A2-A4).
 env_ready() {
-  load_env 2>/dev/null || return 1
+  load_env || return 1
   [[ ${RWS_DOMAIN:-} =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] &&
     [[ ${RWS_CONTACT_EMAIL:-} =~ ^[A-Za-z0-9._%+-]{1,64}@([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] &&
     [[ ${RWS_PUBLIC_IPV4:-} =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] &&
