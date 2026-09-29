@@ -259,13 +259,32 @@ proof "caddy runs as uid 65533 with CapEff=CapPrm=0 (cap_drop ALL, nothing added
 # ------------------------------------------------------------------ firewall from outside
 step "From outside: 80/443 on IPv4 and IPv6 pass, another published port does not"
 [[ $(outside -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/") == 200 ]] || fail "https IPv4"
-[[ $(outside -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:443:[$IP6]" "https://$DOMAIN/healthz") == 200 ]] || fail "https IPv6"
+ipv6_result=failed
+if [[ $(outside -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:443:[$IP6]" "https://$DOMAIN/healthz") == 200 ]]; then
+  ipv6_result=ok
+else
+  echo "::warning::https over IPv6 from outside failed; diagnostics follow"
+  ip -n ext -6 addr
+  ip -n ext -6 route
+  ip -6 addr show dev rwsext0
+  ip -6 route get "$IP6" from fd99::2 iif vext0 || true
+  sysctl net.ipv6.conf.all.forwarding net.ipv6.conf.vext0.forwarding
+  ip6tables -t nat -S 2>/dev/null | grep -Ei 'dnat|docker' | head -n 20 || true
+  ip6tables -S 2>/dev/null | grep -Ei 'rws-public|docker-forward|drop|reject' | head -n 20 || true
+  docker exec rws-caddy-1 ip -6 addr 2>/dev/null || true
+  docker exec rws-caddy-1 ip -6 route 2>/dev/null || true
+  curl -sS -o /dev/null -w 'from the host: %{http_code}\n' --max-time 10 --cacert /ci/pki/pebble-root.pem \
+    --resolve "$DOMAIN:443:[$IP6]" "https://$DOMAIN/healthz" || true
+  ip netns exec ext curl -v --max-time 10 --cacert /ci/pki/pebble-root.pem --resolve "$DOMAIN:443:[$IP6]" \
+    "https://$DOMAIN/healthz" 2>&1 | tail -n 15 || true
+  ss -ltnp | grep -E ':(80|443) ' || true
+fi
 [[ $(ip netns exec ext curl -sS -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:80:$IP4" "http://$DOMAIN/") == 308 ]] || fail "http redirect"
 [[ $(curl -fsS --max-time 5 "http://$IP4:8081/") == probe ]] || fail "the probe port is not published on the host"
 if ip netns exec ext curl -sS --max-time 5 -o /dev/null "http://$IP4:8081/" 2>/dev/null; then
   fail "a published port other than 80/443 is reachable from outside"
 fi
-proof "from an outside namespace: https on $IP4 and [$IP6] answers 200 and http redirects (308); port 8081, published by Docker on the same address and reachable from the host itself, is dropped by table inet rws (DNAT happens in nat PREROUTING, so INPUT never sees it; our forward chain does)"
+proof "from an outside namespace: https on $IP4 answers 200 (IPv6 [$IP6]: $ipv6_result) and http redirects (308); port 8081, published by Docker on the same address and reachable from the host itself, is dropped by table inet rws (DNAT happens in nat PREROUTING, so INPUT never sees it; our forward chain does)"
 nft list tables | tr '\n' ' '
 echo
 iptables -S FORWARD 2>/dev/null | head -n 5 || true
@@ -362,3 +381,4 @@ jq -e '.disk_pct | type == "number"' /srv/rws/public/ops/ops.json >/dev/null || 
 rws_compose run --rm --no-deps -T watchdog watchdog --once
 proof "rws-tick wrote disk_pct; watchdog --once (the real role, from the egress network to the public address, TLS verified) found /healthz, capture.json, ops.json, the backup, the certificate and the disk green"
 jq . /srv/rws/public/ops/ops.json
+[[ $ipv6_result == ok ]] || fail "https over IPv6 from outside failed (diagnostics in the 'From outside' group)"
