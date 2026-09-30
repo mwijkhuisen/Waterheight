@@ -30,7 +30,7 @@ sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -Atc "SELECT pg_size_pre
 
 ## 4. The retention pruner (`load`, from P2a)
 
-It frees space in the raw archive by deleting parsed observation objects that have left the 90-day hot window. It runs inside the nightly job of `load` (once a UTC day after 02:00).
+It frees space in the raw archive by deleting parsed observation objects that have left the 90-day hot window. It runs inside the nightly job of `load` (once a UTC day after 02:00; the day is kept in the database, so a restart does not run it again), and reads the manifest one day at a time.
 
 **A dry run is the default: it only counts.** It deletes nothing unless the `load` container has `RWS_PRUNE_APPLY=1`. That is a change to the `load` service's `environment` in `deploy/compose.yaml`, made through a PR and a release after you have read about a week of dry-run output. `/etc/rws/rws.env` does not reach the container, so setting it there does nothing (`.env.example` lists the name for reference).
 
@@ -49,12 +49,13 @@ sudo docker logs rws-load-1 2>&1 | grep -E 'load started|retention pruner'
 | `deleted` | objects actually unlinked (always 0 in a dry run) |
 | `refused` | candidates whose path is not a regular file inside `raw/` (a link out of it, or not a file). It should be 0: investigate any other value, and never delete such a path by hand |
 
-An object is a candidate only if **all** of this holds: its manifest line says retention `obs`; the loader parsed it successfully (its batch is `ok`); its own line and every `dup_of` line that points at it are older than 90 days; its source is not CH-1 or CH-2 (kept whole until P7 parses their class and threshold fields); it is not the first object of its spec and UTC day for a mixed source; its key matches the archive key pattern and resolves to a regular file inside `raw/`.
+An object is a candidate only if **all** of this holds: its manifest line says retention `obs`; the loader parsed it successfully and stored everything a registry change could still add (its batch is `ok` with `n_skipped` 0); its own line and every `dup_of` line that points at it are older than 90 days; its source is not CH-1 or CH-2 (kept whole until P7 parses their class and threshold fields); it is not the first object of its spec and UTC day for a mixed source; its key matches the archive key pattern and resolves to a regular file inside `raw/`.
 
 It **never** deletes:
 
 - a `forever` class (thresholds, forecasts, alert states, station lists, the DE-1 metadata `de-1-meta`);
 - an object that was quarantined, skipped or never parsed;
+- an object whose load left values a registry fix and a replay can still store (`n_skipped` > 0: a series the registry does not know, a unit mismatch, an unknown gauge-zero unit);
 - anything newer than the hot window, or still referenced by a recent `dup_of` line;
 - CH-1 and CH-2 payloads before P7;
 - manifest files, state, reports, or anything outside `raw/`.

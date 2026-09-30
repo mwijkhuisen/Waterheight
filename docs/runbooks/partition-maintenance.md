@@ -1,7 +1,7 @@
 # Runbook: partition maintenance
 
 **Trigger:**
-- `load` logs `load pass failed; retrying` with `"code":"23514"` (a row has no partition), `"22023"` (`ensure_partitions` refused its range) or `"42501"` (no permission on it);
+- `load` logs the alert `load_stalled` or `load pass failed; retrying` with `"code":"23514"` (a row has no partition), `"22023"` (`ensure_partitions` refused its range) or `"42501"` (no permission on it; a stall, and the watchdog's `load_backlog` after 15 minutes);
 - a payload is quarantined as `load_error` (`docs/runbooks/schema-drift.md`);
 - a month boundary is close and you want to check the next partitions exist;
 - you need older months for a backfill (P14).
@@ -33,7 +33,7 @@ sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c "
 Expected: every month from `2026_08` to three months ahead for both parents, all owned by `rws_owner`. `/api/v1/health/sources` `partitions[]` lists the months that hold observations, with their checksums; it does not list empty ones.
 
 ```bash
-sudo docker logs --since 24h rws-load-1 2>&1 | grep -E '"code":"(23514|22023|42501)"|retention pruner'
+sudo docker logs --since 24h rws-load-1 2>&1 | grep -E '"code":"(23514|22023|42501)"|load_stalled|retention pruner'
 ```
 
 The nightly job logs `retention pruner` once it has run. No such line after 02:00 UTC means it did not run or failed (see §4).
@@ -60,13 +60,14 @@ If it answers `22023`, the range is outside the bounds above. If `load` had quar
 
 `load` runs, once per UTC day after 02:00 and only when it has no manifest backlog: partitions three months ahead, the rollup reconciliation of the last 40 days (repairs `obs_1h`/`obs_1d` and logs `rollup_mismatch` if it had to), the per-source per-partition checksums, and the retention pruner (a dry run unless `RWS_PRUNE_APPLY=1`).
 
-The day is marked done when the job starts. If a step fails, the rest of that day's job does not run again by itself. To run it again, restart the loader after 02:00 UTC:
+The day is marked done when the job starts, in the database (`app_meta` key `nightly`), so a restart does not run it again. If a step fails, the rest of that day's job waits for the next day. To run it again today, clear the mark (as the superuser; the loader itself cannot delete) and restart the loader after 02:00 UTC:
 
 ```bash
+sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c "DELETE FROM app_meta WHERE key = 'nightly' RETURNING value"
 sudo docker restart rws-load-1
 ```
 
-A restart recomputes the checksums as soon as the loader has caught up with the manifest, and runs the whole nightly job at once when it is past 02:00 UTC.
+A restart recomputes the checksums as soon as the loader has caught up with the manifest; with the mark cleared, it runs the whole nightly job at once when it is past 02:00 UTC. Never delete the row `loader_lock`: without it the loader refuses to write (`load_stalled`, code `loader_lock_missing`).
 
 ## 5. Verify
 

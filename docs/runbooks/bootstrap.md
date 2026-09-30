@@ -76,7 +76,7 @@ What it does:
   - unattended-upgrades with a reboot at 03:40 UTC when needed, needrestart, and the sysctl baseline.
 - **Firewall:** `rws-firewall.service`, which replaces the masked `nftables.service`.
 - **Docker:** Docker 29.8.1, Compose 5.5.1 and containerd 2.3.5, pinned and held; cosign 3.1.3.
-- **Files:** `/srv/rws` and `/etc/rws/secrets` with the contract owners and modes; from P2a also `/srv/rws/backup/db` (`root:61003` 0750, the nightly dump) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf` (world-readable, no secret in them; a running `db` re-reads them on SIGHUP).
+- **Files:** `/srv/rws` and `/etc/rws/secrets` with the contract owners and modes; from P2a also `/srv/rws/backup/db` (`root:61003` 0750, the nightly dump; its parent `/srv/rws/backup` is `root:root` 0700 since review round 1: the backup job mounts only the subdirectories) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf` (world-readable, no secret in them; a running `db` re-reads them on SIGHUP).
 - **Settings:**
   - a generated `rws_x_api_key`, and a template `/etc/rws/rws.env`;
   - from P2a, the six database passwords (`db_*`, step 3), generated once and never overwritten;
@@ -225,7 +225,7 @@ Do this on the VPS that already runs a P1b release. The installed P1b `rws-updat
    bundle/deploy/host/bootstrap.sh          # again: "0 change(s)"
    ```
 
-   It generates the six `db_*` secrets (`root:<gid> 0440`, gids 61004–61009), creates `/srv/rws/backup/db` (`root:61003` 0750) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf`, installs the new host scripts (`rws-lib.sh` with the database steps, `rws-backup` with the nightly dump) and records the host files.
+   It generates the six `db_*` secrets (`root:<gid> 0440`, gids 61004–61009), creates `/srv/rws/backup/db` (`root:61003` 0750; it makes `/srv/rws/backup` itself `root:root` 0700) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf`, installs the new host scripts (`rws-lib.sh` with the database steps, `rws-backup` with the nightly dump) and records the host files.
 
    **Check:** `sudo stat -c '%n %a %U:%G' /etc/rws/secrets/db_*` shows six files, each `440 root:rws-db…`; `ls -l /etc/rws/postgres`.
 
@@ -238,7 +238,7 @@ Do this on the VPS that already runs a P1b release. The installed P1b `rws-updat
    curl -s https://<domain>/api/v1/health | jq .                      # a JSON document; status may be down for the first minute
    ```
 
-   `load` now replays everything since P1 by itself: its cursor starts at the first manifest day. Watch `loader.backlog_bytes` fall to 0 (`/api/v1/health`); while it is above 0, `verify-prod.sh` fails `replay DE-1`.
+   `load` now replays everything since P1 by itself: its cursor starts at the first manifest day. Watch `loader.backlog_bytes` fall to 0 (`/api/v1/health`); while it is above 0, `verify-prod.sh` fails `replay DE-1`. During this first catch-up the oldest unconsumed line is older than 15 minutes, so the healthchecks `load` check fails with `load_backlog`, `verify-prod.sh` fails `loader lag` and `/api/v1/health` is `degraded`: expected, and it clears once the backlog is 0 (KG-069). If `loader.backlog_age_s` stops falling while `backlog_bytes` stays above 0, the loader is stalled: `docs/runbooks/schema-drift.md` §6.
 
 6. Create the `load` check on healthchecks.io, from your workstation: `deploy/bin/rws-hc-sync --key-file ~/secure/hc_api_key` (16 checks; step 7 above).
 7. Start the timer again:
