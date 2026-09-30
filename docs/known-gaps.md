@@ -4,6 +4,36 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P2a Data spine + DE-1 (PR pending, issue #17)
+
+### Needs the owner, the VPS or the first release
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-047 | fixtures | The DE-1 fixtures were recorded live with `scripts/smoke-capture.ts` (2026-09-29: the basin call with a `99999` on Pannerdense Kop and 7 negative W, the metadata call, Emmerich W; 2026-09-30: Kaub W `P31D`, Ruhrwehr OW 1-minute W, Maxau Q, an empty `[]`, a 404 body), not copied from the P1 archive. The goldens are of these bytes. | The owner copies these objects, with their manifest lines, into `apps/server/src/adapters/de-1/fixtures/` when production has them: one `de-1-basin` object; two consecutive hourly `de-1-series` objects of one series and its `P31D` seed object; one 1-minute series object; one `de-1-meta` object; and the manifest lines of a 304, a `dup_of`, a failed validity, a fetch error and any 4xx | open |
+| KG-048 | fixtures | Two fixtures are hand-made and marked `synthetic: true`: `de-1-series-dst.synthetic` (the fall-back night of 2026-10-25: `+02:00` then `+01:00`, a `99999`, a repeated and a future timestamp) and `de-1-basin-drift.synthetic` (two basin stations, one with an extra key). | The real payloads of the night of 2026-10-25 replace the first (P5); the drift fixture stays synthetic by nature | open [U] |
+| KG-049 | deploy | The server image build (the sha256-pinned dbmate 2.36.0 binary, the `pnpm deploy` layout, `NODE_OPTIONS=--conditions=rws-dist`) and `deploy/tests/e2e/run.sh` (db, `db_up` twice, `pg_hba`, load, api through Caddy, hardening, secrets, the nightly dump) were not run on the build machine, which has no Docker daemon. The `pnpm deploy` layout was proven without Docker. | CI: the `deploy` job of `ci.yml` and, on `main`, `release.yml`; link the runs in #17 | open |
+| KG-050 | ops | The [agent-prod] criteria have no production output: `/api/v1/health/sources` green for DE-1, ≥ 95% of tier-1 series fresh, loader lag p95 < 2 min, the replay since P1 complete (a checksum per partition, 0 unexplained quarantined payloads). The [owner] outage drill (stop capture for 2 h; Q7 reports 0 missing buckets) has not run; it covers DE-1 now and NL-1 after P2b. | `scripts/verify-prod.sh <domain>` after the first P2a deploy; the owner runs the drill | open |
+| KG-051 | deploy | The first P2a deploy is an owner procedure with a strict order (stop `rws-update.timer`, approve `production`, verify and unpack, run the new `bootstrap.sh`, `rws-deploy`, `rws-hc-sync`, start the timer): the installed P1b `rws-update` would otherwise deploy the release without the database secrets, fail and roll back. It has never run on the VPS. | The owner (`docs/runbooks/bootstrap.md`, "the first release with the database") | open |
+| KG-052 | ops | Five of the 29 tier-1 discharge series were provider-stale on 2026-09-29 (Köln, Düsseldorf, Wesel, Rees, Emmerich: the rating curve is cut off at low water): 64 of 69 tier-1 series fresh = 92.8%, below 95% by the letter. `verify-prod.sh` prints FAIL with the provider-stale count. | The owner judges the criterion at low water (R-041) | open |
+| KG-053 | licence | Station 27100370 NEUWIED STADT belongs to a third-party agency inside PEGELONLINE. It stays tier 2, and the licence of that agency's data is unverified. | The owner checks it (catalogue §0.7); until then it is not a tier-1 or first-release station | open [U] |
+
+### Known limits
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-054 | backup | The monthly restore drill does not restore the database dump: it restores 100 raw objects only. The restore steps for the dump (`docs/runbooks/restore.md` §3) were exercised on a throw-away PostgreSQL 18.6 cluster, not on a VPS. | A dump restore in the drill (A§11.3; P12) | open |
+| KG-055 | backup | The Caddy ACME state is not part of the nightly dump step (A§11.3 lists it). After a rebuild Caddy asks Let's Encrypt again. | Decide in P12 whether it is worth backing up | open |
+| KG-056 | capture | 1-minute series (20 of the 238 DE-1 series) cannot be seeded with `P31D`: their 31 days are about 3 MB pretty-printed, over the spec's 1 MiB `max_bytes`. They heal at most the recent window (hourly `PT6H` with 1 h overlap). Capture is unchanged. | Raise `max_bytes` for those variants if a longer seed is wanted (a capture change, P1) | accepted |
+| KG-057 | QC | The spike (32) and frozen (64) QC bits are defined but not evaluated (R-039). | Spike in P5, frozen in P6 | open |
+| KG-058 | registry | The series override keys of `sources.yaml` (the withheld canary series on NL-1 and the LU-1 RLP-operated gauges) are not mapped to series rows: nothing in the registry uses them before P5 and P9. The tests seed the canaries by SQL. | P5 (LU-1) and P9 (canary sweep of every public output) | open |
+| KG-059 | registry | `registry/permissions/<ID>.md` records are refused by the registry sync (`migrate` fails) until P13 can apply them. | P13 | open |
+| KG-060 | health | `source_health.circuit_state` stays NULL: nothing writes it yet. | A later phase, if the state is wanted in health | open |
+| KG-061 | data | No registered DE-1 series uses the unit `m+PNP` (the units table and its tests cover it; the basin call has 9 `m+NN` series and none with `m+PNP`). | A real payload, if one turns up | accepted |
+| KG-062 | ops | The retention pruner is a dry run. Nothing is old enough to be a candidate until 90 days after the first capture. Switching it on (`RWS_PRUNE_APPLY=1` in `deploy/compose.yaml`) is the owner's decision after a week of dry-run output; once it runs, an archive rebuild cannot bring back deleted objects (`docs/runbooks/disk-full.md` §4). | The owner | open |
+| KG-063 | registry | 29 of the 199 DE-1 stations have no coordinates in PEGELONLINE. The catalogue's 211 stations and 35 without coordinates counted the Dutch-side waters, which the basin call does not request. | Decide when P6 snaps stations to the river graph | accepted |
+| KG-064 | health | A `skipped` batch (`object_missing`, `failed_validity`) is silent: it is not counted, alerted or paged. `loader.bad_manifest_lines` counts since the loader started. The partition checksums refresh once at first catch-up and then nightly. | R-042; look at `ingest_batch` (`docs/runbooks/schema-drift.md` §2) | accepted |
+
 ## P1b Platform (PR #35, issue #16)
 
 ### Needs the owner, the VPS or the first release
@@ -80,7 +110,7 @@ These come from the PR's "[U] items not verified" list.
 | KG-023 | CI | Dependabot support for the pnpm 12 lockfile, and its first run (R-010). | #33 (2026-09-29): Dependabot updated `pnpm-lock.yaml`, the install worked and `integration` passed | closed in #33 |
 | KG-024 | CI | TypeScript 7 cannot be adopted: `check-boundaries` uses the compiler API (`createSourceFile`), which TS 7 lacks, so `tsc -b` failed on #33. The owner told Dependabot to ignore 7.x. | Move `check-boundaries` off the TS compiler API before any TS 7 upgrade | open |
 | KG-025 | security | The applied GitHub settings (rulesets B1/B2) are unverified. | The owner runs `scripts/gh-settings.sh` and checks | open |
-| KG-026 | data | The station names in the sample are not confirmed to match exactly how each agency publishes them (R-014). | The owner checks against the agencies' catalogues | open |
+| KG-026 | data | The station names in the sample are not confirmed to match exactly how each agency publishes them (R-014). | Closed for DE in #17: `registry/stations/de-1.yaml` is generated from the recorded PEGELONLINE payloads. The sample file is gone; the other providers' rows arrive with their adapters (P2b, P5) | closed for DE in #17 |
 | KG-027 | build | Arm64: the hook and `install-pnpm.sh` pin arm64 checksums, but only x64 was exercised. | A run on an arm64 machine or runner | open |
 
 ## Planning docs (PR #30)

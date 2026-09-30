@@ -14,19 +14,28 @@ The legacy code is archived as the annotated tag `legacy-v0` (`a4106b855c782832d
 |---|---|
 | `pnpm install --frozen-lockfile` | The only way to install; the lockfile is never rewritten by CI or the hook |
 | `pnpm check` | Paraglide compile, Biome, `tsc -b`, Vitest (unit), `check-bom`, `check-boundaries` |
-| `pnpm test` / `pnpm test:integration` | Vitest unit / integration (needs `DATABASE_URL`: a real PostgreSQL ≥ 18 with the builtin C.UTF-8 locale; fails on zero tests) |
+| `pnpm test` / `pnpm test:integration` | Vitest unit / integration. The integration tests need `DATABASE_URL` naming a **superuser** of a throw-away PostgreSQL 18 (builtin C.UTF-8 locale, scram-sha-256 logins on loopback): each file creates the seven roles and its own database. The hook's sandbox cluster is one. Fails on zero tests |
+| `pnpm test:coverage` | Unit tests with v8 coverage: at least 90% of the lines of every adapter's `parse.ts` and `normalise.ts`, file by file |
+| `pnpm db:views` / `pnpm db:types` | `node scripts/gen-views.ts` rewrites the views migration (`--check` diffs it); `pnpm db:types` runs kysely-codegen into `apps/server/src/db/generated.ts` (base tables only; needs `DATABASE_URL` of a migrated database, as the superuser) |
+| `scripts/db-check.sh [--write]` | dbmate migrate → roll back every migration → migrate as `rws_migrator`, then compares `db/schema.sql`, the views migration and `generated.ts` with what the migrations produce (`--write` rewrites them). Needs dbmate, `pg_dump` 18 and a local superuser `DATABASE_URL` |
+| `node scripts/bench-q1.ts` | The Q1 benchmark (3,000 series × 60 days) as `rws_api` through `pub_obs_at`; asserts the backward index scan and a median under 50 ms; needs a superuser `DATABASE_URL` (CI job `bench`) |
+| `node scripts/gen-de1-stations.ts` | Regenerates `registry/stations/de-1.yaml` byte for byte from the recorded DE-1 basin and metadata fixtures; fails on anything it does not know |
+| `node scripts/fixture-archive.ts <dir>` | Writes a small raw archive (real zstd objects, manifest lines) from the recorded DE-1 fixtures, for the loader tests and the CI end-to-end run; no network |
 | `pnpm build`, `pnpm -F web build` | `tsc -b` (server to `apps/server/dist`) and the static web build (`apps/web/dist`) |
-| `node apps/server/dist/main.js api` | `GET /healthz` (`HOST`/`PORT` from env); touches the heartbeat |
+| `node apps/server/dist/main.js api` | `GET /healthz`, `GET /api/v1/health` and `GET /api/v1/health/sources` (`HOST`/`PORT` from env; any query parameter is a 400; a 30 s cache) as `rws_api`, with `RWS_DB_HOST`, `RWS_DB_PORT`, `RWS_DB_NAME` and the file secret `db_rws_api` (`DATABASE_URL` is the dev and test switch only). Without database settings `/healthz` still answers and the health routes answer 503; touches the heartbeat |
+| `node apps/server/dist/main.js migrate` | One-shot: dbmate 2.36.0 (`/app/bin/dbmate`) on `db/migrations`, then `ensure_partitions` from 2026-08-01 to three months ahead, then the registry sync, as `rws_migrator` (acts as `rws_owner`; file secret `db_rws_migrator`). Exit 0, 1 or 78 |
+| `node apps/server/dist/main.js load` | The loader daemon (`rws_load`, no egress): tails every manifest file with unread bytes every 10 s, one payload = one transaction; health precompute every minute; nightly after 02:00 UTC partitions three months ahead, the rollup reconciliation of 40 days, per-source per-partition checksums and the retention pruner (a dry run unless `RWS_PRUNE_APPLY=1`) |
+| `node apps/server/dist/main.js replay --source <ID> [--spec <id>] --from YYYY-MM-DD --to YYYY-MM-DD [--dry-run]` | Re-parses archived payloads through the loader's code path; never fetches, never moves the cursor; a no-op replay writes nothing; a quarantined payload that now parses becomes `ok` (`docs/runbooks/replay.md`) |
 | `node apps/server/dist/main.js capture` | The P1a recorder (contract env `RWS_*`, file secrets under `/run/secrets`); exits 78 without `RWS_DOMAIN`/`RWS_CONTACT_EMAIL` |
 | `node apps/server/dist/main.js capture --dry-run` | Loads and checks every spec; prints the schedule and the RWS requests/hour (busiest 60 min); no network, no writes |
-| `node apps/server/dist/main.js healthcheck` | Exit 0 iff `/tmp/rws-heartbeat` is < 120 s old; `load`/`publish`/`replay`/`watchdog` exit 2 until their phase, unknown roles 64 |
+| `node apps/server/dist/main.js healthcheck` | Exit 0 iff `/tmp/rws-heartbeat` is < 120 s old; only `publish` exits 2 until its phase (P9), unknown roles 64 |
 | `node scripts/smoke-capture.ts --contact <e-mail> --info-url <url> --spec <id>…` | Opt-in fixture recorder: 1 request per spec, ≤ 30 per run, refuses under `CI`; owner payloads stay in the git-ignored `.smoke/` |
 | `node scripts/synthesize-fixture.ts --spec <owner spec>` | Synthetic owner fixture from `.smoke/<spec>.raw`: real structure, every value generated, `synthetic: true` |
 | `scripts/healthz-smoke.sh`, `scripts/dbmate-roundtrip.sh` | Server smoke test; dbmate up/down/up on a fixture migration |
 | `scripts/check-workflows.sh`, `scripts/gitleaks-planted.sh` | Workflow greps; proof that gitleaks still catches a planted key |
 | `scripts/gh-settings.sh --check` | Read-only drift check of the GitHub settings (B1, B2); applying them is the owner's job |
 | `node apps/server/dist/main.js watchdog [--once\|--dry-run]` | The P1b watchdog: probes `https://$RWS_DOMAIN` (`/healthz`, both status files, the certificate) through DNS and TLS every 5 min and pings `watchdog`, `cert`, `disk`; exits 78 without `RWS_DOMAIN`/`RWS_CONTACT_EMAIL` |
-| `scripts/verify-prod.sh <domain> [--soak\|--capacity]` | Outside-in production check, no SSH (checks in `scripts/verify-prod.ts`); `--dry-run` lists the checks |
+| `scripts/verify-prod.sh <domain> [--soak\|--capacity]` | Outside-in production check, no SSH (checks in `scripts/verify-prod.ts`; from P2a also the health API, tier-1 freshness, loader lag, replay and the owner-leak grep over `/api/v1/health*`); `--dry-run` lists the checks |
 | `deploy/tests/*.test.sh` | Offline tests of the host scripts (rws-update/rws-deploy, negative-deploy, backups, drill, tick, status copy, object-lock-prune, reachability, the runbook's release checks): stubs for curl, cosign, docker; needs jq and zstd |
 | `deploy/tests/e2e/run.sh` | CI only, as root: Docker 29.8.1, the real firewall, compose, Pebble and MinIO; proves the P1b `[U]` items (`ci.yml` job `deploy`) |
 | `deploy/host/bootstrap.sh [--dry-run]`, `rws-update`, `rws-deploy <tag>`, `rws-backup`, `rws-restore-drill`, `rws-hc-sync`, `rws-reachability` | On the VPS only (owner; `docs/runbooks/`); every one has `--dry-run` |
@@ -85,7 +94,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @types/node | npm | 26.6.2 | installed | – | MIT | |
 | hono | npm | 4.13.8 | installed | – | MIT | apps/server |
 | @hono/node-server | npm | 2.1.1 | installed | – | MIT | apps/server |
-| pg | npm | 8.23.0 | installed | – | MIT | apps/server (dev until P2) |
+| pg | npm | 8.23.0 | installed | – | MIT | apps/server: PostgreSQL driver of migrate, load and api (P2a) |
 | @types/pg | npm | 8.23.1 | installed | – | MIT | |
 | zod | npm | 4.6.5 | installed | – | MIT | packages/contracts; apps/server manifest and spec schemas (P1) |
 | react | npm | 19.3.0 | installed | – | MIT | apps/web |
@@ -107,7 +116,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | minio-client (Chainguard) | image | latest | installed | cgr.dev/chainguard/minio-client@sha256:be51ef820151a708a8e140037e3746862a8c1dd5e624f84b404a1d71bcefb167 | AGPL-3.0 | CI only: creates the Object Lock bucket and the VPS-key user |
 | zizmor | binary | 1.30.1 | installed | e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a | MIT | security.yml |
 | gitleaks | binary | 8.30.1 | installed | 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb | MIT | security.yml |
-| dbmate | binary | 2.36.0 | installed | 47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce | MIT | ci.yml round trip |
+| dbmate | binary | 2.36.0 | installed | 47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce | MIT | ci.yml round trip; the server image's `migrate` role (`deploy/server/Dockerfile`; statically linked) |
 | shellcheck | binary | 0.11.0 | installed | b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6 | GPL-3.0 | ci.yml (tool only) |
 | Docker Engine | tool | 29.8.1 | installed | 5:29.8.1-1~debian.13~trixie | Apache-2.0 | P1b host, `deploy/host/bootstrap.sh`: Docker's apt repository, key file sha256-pinned, packages held |
 | containerd.io | tool | 2.3.5 | installed | 2.3.5-1~debian.13~trixie | Apache-2.0 | P1b host (2.3.6 was under 7 days old at pin time) |
@@ -119,7 +128,6 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | distroless static | image | nonroot | installed | gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 | Apache-2.0 | P1b backup image runtime |
 | buildkit | image | v0.33.0 | installed | moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 | Apache-2.0 | release.yml builder (setup-buildx driver) |
 | buildkit-syft-scanner | image | 1.12.0 | installed | docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 | Apache-2.0 | release.yml SBOM generator (Syft) |
-| dbmate (image) | image | 2.36.0 | planned | ghcr.io/amacneil/dbmate:2.36.0@sha256:520c740c6e0ad73fde2cd1ea7e2b779aaf789d22aca8858f87a478e7094535fb | MIT | P2 `migrate` |
 | croner | npm | 10.0.1 | installed | – | MIT | apps/server: capture scheduler (P1) |
 | undici | npm | 8.11.0 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
 | fast-xml-parser | npm | 5.11.1 | installed | – | MIT | apps/server: CAP/XLSX validity, entities off (P1; P5 parsers) |
@@ -127,8 +135,8 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | fflate | npm | 0.8.3 | installed | – | MIT | apps/server: streamed ZIP guard (P1; P5 parsers) |
 | proj4 | npm | 2.22.0 | planned | – | MIT | P5 |
 | pino | npm | 10.3.1 | installed | – | MIT | apps/server: JSON logs (P1) |
-| kysely | npm | 0.29.6 | planned | – | MIT | P2 |
-| kysely-codegen | npm | 0.20.0 | planned | – | MIT | P2 |
+| kysely | npm | 0.29.6 | installed | – | MIT | apps/server: typed, parameterised SQL (`sql` templates; P2a) |
+| kysely-codegen | npm | 0.20.0 | installed | – | MIT | dev only: `pnpm db:types` writes `apps/server/src/db/generated.ts` (base tables; P2a) |
 | @hono/zod-openapi | npm | 1.6.3 | planned | – | MIT | P9 |
 | maplibre-gl | npm | 6.11.1 | planned | – | BSD-3-Clause | P3 |
 | pmtiles | npm | 4.5.0 | planned | – | BSD-3-Clause | P3 |
@@ -137,7 +145,8 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @tanstack/react-query | npm | 5.103.2 | planned | – | MIT | P4 |
 | echarts | npm | 6.1.0 | planned | – | Apache-2.0 | P10 |
 | temporal-polyfill | npm | 1.0.5 | planned | – | MIT | P4 |
-| fast-check | npm | 4.10.2 | planned | – | MIT | P2 |
+| fast-check | npm | 4.10.2 | installed | – | MIT | dev only: property and fuzz tests (P2a) |
+| @vitest/coverage-v8 | npm | 5.0.1 | installed | – | MIT | dev only: `pnpm test:coverage` (≥ 90% lines of every adapter's parse and normalise; P2a) |
 | @playwright/test | npm | 1.63.0 | planned | – | Apache-2.0 | P4 |
 | @axe-core/playwright | npm | 4.13.0 | planned | – | MPL-2.0 | P10 |
 | docker/build-push-action | action | 7.4.0 | installed | c3c9e263c25d99ce0380d002d59b67737d91b0dc | Apache-2.0 | P1b |
@@ -168,6 +177,17 @@ Deviations from A§3, decided in P0b: pnpm **12.5.1** instead of 12.6.0 (12.6.0 
 - **TypeScript 7 is forbidden** (no stable API; tooling caps TS below 6.1). TS 6: a project that another project references may not use `noEmit` (use `emitDeclarationOnly`); `types` defaults to `[]`.
 - **Node 26:** native `Temporal`; `.ts` runs through type stripping, so only erasable syntax (`erasableSyntaxOnly`: no enums, namespaces or parameter properties), relative imports with the `.ts` extension, and no type stripping inside `node_modules`. Web Storage is on by default (the Vitest config turns it off). **corepack is not bundled**: never rely on it.
 - **pnpm 12** is a native executable; its npm package is a wrapper that may download the binary at run time. Install it with `scripts/install-pnpm.sh`. The lockfile is multi-document YAML (pnpm's own pin comes first). `blockExoticSubdeps` blocks git-hosted subdependencies but, in 12.5.1, not a plain https tarball URL.
+- **PostgreSQL 18 (P2a):**
+  - `NaN = NaN` is true in PostgreSQL: reject NaN with `<> 'NaN'` (the `obs.value` CHECK).
+  - A `LIMIT` is not pushed into a `security_barrier` view, so "every series at T" (Q1) reads whole staleness windows through it: use the per-family `SECURITY DEFINER` functions `pub_obs_at` and `own_obs_at`.
+  - A NOINHERIT role does not inherit `pg_read_all_data` unless the grant says `WITH INHERIT TRUE` (`rws_backup`).
+  - `pg_dump` 17.6+ and 18 write a random `\restrict` line: `scripts/db-check.sh` strips it before comparing `db/schema.sql`.
+  - dbmate `up` tries to create the database through the `postgres` maintenance database, which `rws_migrator` may not use: run `migrate`.
+  - `INSERT … ON CONFLICT … RETURNING old.*, new.*` exists in PostgreSQL 18 (the loader's upsert feeds `obs_revision` from it).
+  - A `real` prints 777777.777 as 777777.75: canary greps need both renderings.
+  - kysely-codegen opens several connections at once, and `rws_migrator` has `CONNECTION LIMIT 3`: generate the types as the superuser.
+- **Workspace packages** run from `src` in development and tests and from `dist` in the image, through the `rws-dist` export condition (`NODE_OPTIONS=--conditions=rws-dist`), because Node does not strip types inside `node_modules`.
+- **`check-boundaries` scans test titles and SQL too:** a test name, a comment or a `.sql` file under `apps/` or `packages/` that contains a `pub_*` or `own_*` view name fails it (only `apps/server/src/db/audience.ts` may name one).
 - **Vitest 5:** `clearMocks` defaults to true, and an unawaited async assertion fails the test.
 - **MapLibre GL JS 6** is ESM-only and WebGL2-only, and `map.transform` is removed (P3 sets the CSP worker set-up, ADR-0016).
 - **PostgreSQL 18 image:** `PGDATA` moved to `/var/lib/postgresql/18/docker` and the volume to `/var/lib/postgresql`. Clusters use `--locale-provider=builtin --builtin-locale=C.UTF-8`. dbmate needs `?sslmode=disable` against a local server without TLS.
@@ -186,6 +206,17 @@ Deviations from A§3, decided in P0b: pnpm **12.5.1** instead of 12.6.0 (12.6.0 
 - **cosign 3:** image signatures are OCI-referrer bundles (GHCR through the `sha256-<digest>` tag fallback), `sign-blob`/`verify-blob` need `--bundle`, and verification fetches the TUF trusted root. The VPS keeps it in `/var/lib/rws/sigstore`.
 - **MinIO** stopped publishing images in 2025; CI uses Chainguard's source-built `cgr.dev/chainguard/minio` by digest.
 - **Protomaps** builds are kept for one week only; **Hub'Eau v1** answers 403 (use v2); **RWS documentation moves to the CTD on 2026-11-05** (URLs live in config; the NL-4 file path is at risk).
+
+## Database and loader (P2a)
+
+- **Roles:** `rws_owner` (NOLOGIN) owns every object; `rws_migrator` logs in and acts as it; `rws_load` reads the registry tables, writes its own data tables (no DELETE anywhere, INSERT-only on `obs_revision`) and calls `ensure_partitions`; `rws_api` and `rws_publish` read the public view family only, `rws_owner_api` the owner family only (read-only sessions, 2 s; `rws_owner_api` has 4 connections); `rws_backup` has `pg_read_all_data` and **no password** (peer on the `db` container's socket). The superuser exists only on that socket.
+- **View names** live only in `apps/server/src/db/audience.ts`; every query takes them from there. Mirrors and twins are in neither family.
+- **Never hand-edit** `db/migrations/20261003000006_views.sql` (`pnpm db:views`), `db/schema.sql` and `apps/server/src/db/generated.ts` (`scripts/db-check.sh --write`) or `registry/stations/de-1.yaml` (`node scripts/gen-de1-stations.ts`): each has a generator, and CI regenerates and diffs them.
+- **The loader per manifest line:** a payload is parsed, normalised and upserted in one transaction with the cursor (newest fetch wins; a changed value writes one `obs_revision`). `dup_of`, 304 and a closed gate: fetch ok, no rows. Failed validity or an unattributable `recovered` series payload: batch `skipped`. A fetch error: a failure count. No adapter: cursor and fetch health only. `SchemaDrift`, an unreadable or oversized object or a sha256 mismatch: batch `quarantined` with a fixed code, an `alert` log line, and the cursor moves on. A deterministic database error three passes in a row: `quarantined` as `load_error`; a connection error is retried for ever. An unparsable line is counted and alerted.
+- **The registry sync runs in `migrate`**, never in `load`: `rws_load` cannot change an audience or a channel flag.
+- **Provider text never reaches** `ingest_batch.error`, an alert or a health document: fixed codes only.
+- **The retention pruner is a dry run** unless the `load` container has `RWS_PRUNE_APPLY=1`; enabling it is a `compose.yaml` change through a PR, never an environment edit on the VPS.
+- Runbooks: `docs/runbooks/schema-drift.md`, `replay.md`, `partition-maintenance.md`.
 
 ## Criterion tags, definition of done and workflow (PHASES §2)
 
