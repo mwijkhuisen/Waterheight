@@ -1,0 +1,217 @@
+{
+ "obs": [
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T09:50:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T10:00:00.000Z",
+   "value": 536.22,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T10:10:00.000Z",
+   "value": 538.65,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T10:20:00.000Z",
+   "value": 541.08,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T10:30:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T10:40:00.000Z",
+   "value": 552.48,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T10:50:00.000Z",
+   "value": 541.87,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T11:00:00.000Z",
+   "value": 545.1,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T11:10:00.000Z",
+   "value": 546.76,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T11:20:00.000Z",
+   "value": 536.22,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T11:30:00.000Z",
+   "value": 538.65,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T11:40:00.000Z",
+   "value": 538.65,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T11:50:00.000Z",
+   "value": 546.76,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T12:00:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T12:10:00.000Z",
+   "value": 550.02,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T12:20:00.000Z",
+   "value": 538.65,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T12:30:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T12:40:00.000Z",
+   "value": 550.02,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T12:50:00.000Z",
+   "value": 547.55,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T13:00:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T13:10:00.000Z",
+   "value": 538.65,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T13:20:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T13:30:00.000Z",
+   "value": 546.76,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T13:40:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T13:50:00.000Z",
+   "value": 538.65,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T14:00:00.000Z",
+   "value": 546.76,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T14:10:00.000Z",
+   "value": 552.48,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T14:20:00.000Z",
+   "value": 558.22,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T14:30:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T14:40:00.000Z",
+   "value": 541.87,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T14:50:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T15:00:00.000Z",
+   "value": 541.87,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T15:10:00.000Z",
+   "value": 544.32,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T15:20:00.000Z",
+   "value": 552.48,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-09-30T15:30:00.000Z",
+   "value": 552.48,
+   "qc": 1
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0
+}
