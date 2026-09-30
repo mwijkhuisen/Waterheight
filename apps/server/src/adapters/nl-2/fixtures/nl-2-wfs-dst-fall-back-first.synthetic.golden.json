@@ -1,0 +1,37 @@
+{
+ "series": [
+  {
+   "key": "driel.boven/WATHTE/NAP/other:F007",
+   "ts": "2026-10-25T00:55:00.000Z",
+   "lon": 5.810635,
+   "lat": 51.96584
+  },
+  {
+   "key": "eijsden.grens/Q/NVT/other:F216",
+   "ts": "2026-10-25T00:45:00.000Z",
+   "lon": 5.682,
+   "lat": 50.758
+  },
+  {
+   "key": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-10-25T00:30:00.000Z",
+   "lon": 5.682,
+   "lat": 50.758
+  },
+  {
+   "key": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2026-10-25T00:00:00.000Z",
+   "lon": 6.1024,
+   "lat": 51.8495
+  },
+  {
+   "key": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-10-24T23:40:00.000Z",
+   "lon": 6.1024,
+   "lat": 51.8495
+  }
+ ],
+ "dropped": {
+  "future": 1
+ }
+}

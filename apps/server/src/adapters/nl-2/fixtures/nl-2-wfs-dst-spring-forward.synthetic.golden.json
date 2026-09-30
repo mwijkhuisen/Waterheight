@@ -1,0 +1,37 @@
+{
+ "series": [
+  {
+   "key": "aadorp/WATHTE/NAP/other:F155",
+   "ts": "2027-03-28T01:40:00.000Z",
+   "lon": 6.6333,
+   "lat": 52.3726
+  },
+  {
+   "key": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2027-03-28T00:59:00.000Z",
+   "lon": 5.682,
+   "lat": 50.758
+  },
+  {
+   "key": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+   "ts": "2027-03-28T00:50:00.000Z",
+   "lon": 6.1024,
+   "lat": 51.8495
+  },
+  {
+   "key": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2027-03-27T20:30:00.000Z",
+   "lon": 6.1024,
+   "lat": 51.8495
+  },
+  {
+   "key": "nieuwegein.doorslag/Q/NVT/other:F103",
+   "ts": "2027-03-28T01:00:00.000Z",
+   "lon": 5.089851,
+   "lat": 52.0323
+  }
+ ],
+ "dropped": {
+  "dst_gap": 2
+ }
+}

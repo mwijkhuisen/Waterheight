@@ -1,0 +1,2502 @@
+{
+ "discovered": {
+  "series": [
+   {
+    "key": "aa.helmond/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.682549,
+    "lat": 51.488763
+   },
+   {
+    "key": "aadorp/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.6333,
+    "lat": 52.3726
+   },
+   {
+    "key": "aarlerixtel.goorloop.wilhelminakanaal/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.612911,
+    "lat": 51.513289
+   },
+   {
+    "key": "aarlerixtel.schabbert.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.6534,
+    "lat": 51.5212
+   },
+   {
+    "key": "aarlerixtel.schabbert.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.6542,
+    "lat": 51.5205
+   },
+   {
+    "key": "aarlerixtel.schabbert.inlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.653569,
+    "lat": 51.521269
+   },
+   {
+    "key": "aarlerixtel.schabbert.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.653569,
+    "lat": 51.521264
+   },
+   {
+    "key": "almen/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.28472,
+    "lat": 52.165824
+   },
+   {
+    "key": "almen/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.28472,
+    "lat": 52.165824
+   },
+   {
+    "key": "almere.hollandsebrug/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.1376,
+    "lat": 52.3265
+   },
+   {
+    "key": "ameland.nes/WATHTE/NAP/other:F046",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.759448,
+    "lat": 53.429766
+   },
+   {
+    "key": "amerongen.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.404,
+    "lat": 51.974
+   },
+   {
+    "key": "amerongen.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.4125,
+    "lat": 51.9753
+   },
+   {
+    "key": "amsterdam.schellingwouderbrug/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.967545,
+    "lat": 52.378673
+   },
+   {
+    "key": "amsterdam.surinamekade/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.949568,
+    "lat": 52.37726
+   },
+   {
+    "key": "antwerpen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.397,
+    "lat": 51.228
+   },
+   {
+    "key": "arnemuiden.oranjeplaat/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.70014,
+    "lat": 51.51661
+   },
+   {
+    "key": "beekendonk.biezenloop/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.606078,
+    "lat": 51.559923
+   },
+   {
+    "key": "beekendonk.sluis6.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.633,
+    "lat": 51.538
+   },
+   {
+    "key": "beekendonk.sluis6.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.6343,
+    "lat": 51.5369
+   },
+   {
+    "key": "beekendonk.sluis6.inlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.630658,
+    "lat": 51.539903
+   },
+   {
+    "key": "beekendonk.sluis6.kolk/Q/NVT/other:F058",
+    "ts": "2026-09-29T11:50:00.000Z",
+    "lon": 5.63065851,
+    "lat": 51.53989386
+   },
+   {
+    "key": "beekendonk.sluis6.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.630658,
+    "lat": 51.539894
+   },
+   {
+    "key": "belfeld.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.1123,
+    "lat": 51.3189
+   },
+   {
+    "key": "berlicum.schijndelseloop/Q/NVT/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.40411,
+    "lat": 51.65749
+   },
+   {
+    "key": "blaarthem.dommel/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.445428,
+    "lat": 51.421797
+   },
+   {
+    "key": "bommenede/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.974298,
+    "lat": 51.738709
+   },
+   {
+    "key": "borssele/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.735446,
+    "lat": 51.410924
+   },
+   {
+    "key": "botlek.geulhaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.312531,
+    "lat": 51.891814
+   },
+   {
+    "key": "breda/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 4.77129,
+    "lat": 51.59401
+   },
+   {
+    "key": "breskens.handelshaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.565798,
+    "lat": 51.396709
+   },
+   {
+    "key": "brouwersdam.spui.binnen.schuif6/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.827374,
+    "lat": 51.748217
+   },
+   {
+    "key": "brouwersdam.spui.buiten.schuif2/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.82584,
+    "lat": 51.748584
+   },
+   {
+    "key": "brouwershavensche.gat.08/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.81148391,
+    "lat": 51.75075645
+   },
+   {
+    "key": "bruinisse.krammersluis.oosterschelde.2/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.14228,
+    "lat": 51.65922
+   },
+   {
+    "key": "buggenum/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.99556,
+    "lat": 51.22999
+   },
+   {
+    "key": "buitenhuizen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.722711,
+    "lat": 52.433277
+   },
+   {
+    "key": "bunde.kanaal/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7247,
+    "lat": 50.906308
+   },
+   {
+    "key": "bunde.kanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7247,
+    "lat": 50.906308
+   },
+   {
+    "key": "burgum.burgumerdaam.boezem/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 6.00312,
+    "lat": 53.18486
+   },
+   {
+    "key": "cadzand.1/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.368697,
+    "lat": 51.390145
+   },
+   {
+    "key": "culemborg/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.214,
+    "lat": 51.961
+   },
+   {
+    "key": "dalem/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.016527,
+    "lat": 51.822
+   },
+   {
+    "key": "dalfsen.vechterweerd/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.211651,
+    "lat": 52.518103
+   },
+   {
+    "key": "dantziggat.pietscheveplaat.zuid/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.79487,
+    "lat": 53.37974
+   },
+   {
+    "key": "delden.sluis.beneden/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.6754,
+    "lat": 52.2457
+   },
+   {
+    "key": "delden.sluis.boven/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.6793,
+    "lat": 52.2472
+   },
+   {
+    "key": "delfzijl/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.931,
+    "lat": 53.328
+   },
+   {
+    "key": "denhelder.marsdiep/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.74499,
+    "lat": 52.964359
+   },
+   {
+    "key": "denhelder.veersteiger/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.778047,
+    "lat": 52.963274
+   },
+   {
+    "key": "denoever.ijsselmeer.binnenhaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.047539,
+    "lat": 52.930195
+   },
+   {
+    "key": "denoever.waddenzee.voorhaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.045596,
+    "lat": 52.931538
+   },
+   {
+    "key": "desteeg/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.062269,
+    "lat": 52.017067
+   },
+   {
+    "key": "deventer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.153247,
+    "lat": 52.251194
+   },
+   {
+    "key": "dinteloord.volkerak/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.316483,
+    "lat": 51.65291
+   },
+   {
+    "key": "dodewaard/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.630518,
+    "lat": 51.900512
+   },
+   {
+    "key": "doesburg.ijssel/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.130488,
+    "lat": 52.019532
+   },
+   {
+    "key": "dongen.kanaal/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 4.92728,
+    "lat": 51.62126
+   },
+   {
+    "key": "dordrecht.oudemaas.benedenmerwede/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.671,
+    "lat": 51.82
+   },
+   {
+    "key": "driel.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.802606,
+    "lat": 51.962992
+   },
+   {
+    "key": "driel.boven/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.810635,
+    "lat": 51.96584
+   },
+   {
+    "key": "driel.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.810635,
+    "lat": 51.96584
+   },
+   {
+    "key": "dronten.reevesluis.drontermeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.8575,
+    "lat": 52.5181
+   },
+   {
+    "key": "dronten.reevesluis.vossemeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.8575,
+    "lat": 52.5198
+   },
+   {
+    "key": "echt.kanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.849302,
+    "lat": 51.106626
+   },
+   {
+    "key": "edam/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.06988,
+    "lat": 52.516051
+   },
+   {
+    "key": "eefde.sluis.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.22836,
+    "lat": 52.159061
+   },
+   {
+    "key": "eefde.sluis.boven/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.238,
+    "lat": 52.161
+   },
+   {
+    "key": "eemdijk/Q/NVT/other:F103",
+    "ts": "2026-09-29T10:10:00.000Z",
+    "lon": 5.32236,
+    "lat": 52.261221
+   },
+   {
+    "key": "eemdijk/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T10:10:00.000Z",
+    "lon": 5.32236,
+    "lat": 52.261221
+   },
+   {
+    "key": "eemshaven.waddenzee/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.821731,
+    "lat": 53.474392
+   },
+   {
+    "key": "eibersburen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 6.252968,
+    "lat": 53.24225
+   },
+   {
+    "key": "eijsden.grens/Q/NVT/other:F216",
+    "ts": "2026-09-29T12:30:00.000Z",
+    "lon": 5.682,
+    "lat": 50.758
+   },
+   {
+    "key": "eijsden.grens/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.682,
+    "lat": 50.758
+   },
+   {
+    "key": "eindhoven.blaarthem.kanaal/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.44542,
+    "lat": 51.42181
+   },
+   {
+    "key": "eindhoven.gender/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.446147,
+    "lat": 51.422695
+   },
+   {
+    "key": "eindhoven.gender/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.446147,
+    "lat": 51.422695
+   },
+   {
+    "key": "eisdenmazenhove.maas/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.735972,
+    "lat": 50.977611
+   },
+   {
+    "key": "eisdenmazenhove.maesbempdergreend/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.735139,
+    "lat": 50.978472
+   },
+   {
+    "key": "elburg.elburgerbrug/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.817102,
+    "lat": 52.457466
+   },
+   {
+    "key": "elsloo.maas/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.755318,
+    "lat": 50.957736
+   },
+   {
+    "key": "epen.geul.cottessen/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.93430378,
+    "lat": 50.75815138
+   },
+   {
+    "key": "epen.geul.cottessen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.93430378,
+    "lat": 50.75815138
+   },
+   {
+    "key": "erp.sluis5.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.586153,
+    "lat": 51.577442
+   },
+   {
+    "key": "erp.sluis5.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.587317,
+    "lat": 51.576461
+   },
+   {
+    "key": "erp.sluis5.inlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.58585,
+    "lat": 51.577511
+   },
+   {
+    "key": "erp.sluis5.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.58585,
+    "lat": 51.577506
+   },
+   {
+    "key": "europoort.harmsenbrug/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.210879,
+    "lat": 51.901771
+   },
+   {
+    "key": "europoort.hartelbrug/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.307781,
+    "lat": 51.86635
+   },
+   {
+    "key": "genemuiden/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.033154,
+    "lat": 52.633395
+   },
+   {
+    "key": "genemuiden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.033154,
+    "lat": 52.633395
+   },
+   {
+    "key": "gennep/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.9574,
+    "lat": 51.697
+   },
+   {
+    "key": "gouda.hollandscheijssel/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.71972,
+    "lat": 52.00658
+   },
+   {
+    "key": "grave.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.72,
+    "lat": 51.775
+   },
+   {
+    "key": "grave.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.743,
+    "lat": 51.761
+   },
+   {
+    "key": "grijpskerk.gaarkeuken.oost/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:40:00.000Z",
+    "lon": 6.317575,
+    "lat": 53.24909
+   },
+   {
+    "key": "grijpskerk.gaarkeuken.west/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:40:00.000Z",
+    "lon": 6.305834,
+    "lat": 53.247767
+   },
+   {
+    "key": "groningen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:40:00.000Z",
+    "lon": 6.591879,
+    "lat": 53.228119
+   },
+   {
+    "key": "hagestein.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.1315,
+    "lat": 51.993
+   },
+   {
+    "key": "hagestein.boven/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.1352,
+    "lat": 51.9895
+   },
+   {
+    "key": "hagestein.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.1352,
+    "lat": 51.9895
+   },
+   {
+    "key": "haghorst.sluis4.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.206136,
+    "lat": 51.498158
+   },
+   {
+    "key": "haghorst.sluis4.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.207719,
+    "lat": 51.498219
+   },
+   {
+    "key": "haghorst.sluis4.kolk/Q/NVT/other:F058",
+    "ts": "2026-09-29T12:40:00.000Z",
+    "lon": 5.20772101,
+    "lat": 51.49823098
+   },
+   {
+    "key": "haghorst.sluis4.schuif/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.20772101,
+    "lat": 51.49823098
+   },
+   {
+    "key": "haghorst.sluis4.schuif1/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.207447,
+    "lat": 51.497942
+   },
+   {
+    "key": "haghorst.sluis4.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.207722,
+    "lat": 51.498231
+   },
+   {
+    "key": "hank.bergschemaas/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.894,
+    "lat": 51.7191
+   },
+   {
+    "key": "hansweert/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.99744,
+    "lat": 51.44567
+   },
+   {
+    "key": "haringvliet.10/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.860561,
+    "lat": 51.862779
+   },
+   {
+    "key": "harlingen.waddenzee/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.409342,
+    "lat": 53.175634
+   },
+   {
+    "key": "hasselt.zwartewater/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.101306,
+    "lat": 52.564026
+   },
+   {
+    "key": "heel.kanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.918,
+    "lat": 51.1743
+   },
+   {
+    "key": "heel.maas/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.9195,
+    "lat": 51.1765
+   },
+   {
+    "key": "heesbeen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.124738,
+    "lat": 51.735848
+   },
+   {
+    "key": "heinenoord.goidschalxoord/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.451622,
+    "lat": 51.830298
+   },
+   {
+    "key": "hellevoetsluis/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.128239,
+    "lat": 51.819724
+   },
+   {
+    "key": "helmond.aflaat.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.673257,
+    "lat": 51.499374
+   },
+   {
+    "key": "helmond.aflaat/Q/NVT/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.674439,
+    "lat": 51.499525
+   },
+   {
+    "key": "helmond.devries/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.652061,
+    "lat": 51.487541
+   },
+   {
+    "key": "helmond.guldenaa.a/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.652203,
+    "lat": 51.490731
+   },
+   {
+    "key": "helmond.guldenaa.b/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.652206,
+    "lat": 51.490731
+   },
+   {
+    "key": "helmond.guldenaa/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.6522,
+    "lat": 51.490731
+   },
+   {
+    "key": "helmond.scheepstal/Q/NVT/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.684486,
+    "lat": 51.498736
+   },
+   {
+    "key": "helmond.schotenseloop/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.607669,
+    "lat": 51.448431
+   },
+   {
+    "key": "helmond.sluis.aflaat1/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.69194,
+    "lat": 51.46883
+   },
+   {
+    "key": "helmond.sluis.aflaat1/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.69194,
+    "lat": 51.46883
+   },
+   {
+    "key": "helmond.sluis.boven/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.693609,
+    "lat": 51.44851
+   },
+   {
+    "key": "helmond.sluis.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.693609,
+    "lat": 51.44851
+   },
+   {
+    "key": "helmond.sluis7/Q/NVT/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.652271,
+    "lat": 51.496306
+   },
+   {
+    "key": "helmond.sluis9.inlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T11:40:00.000Z",
+    "lon": 5.684497,
+    "lat": 51.447633
+   },
+   {
+    "key": "helmond.sluis9.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T11:40:00.000Z",
+    "lon": 5.684497,
+    "lat": 51.447636
+   },
+   {
+    "key": "helmond.spaarpand/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.661485,
+    "lat": 51.512634
+   },
+   {
+    "key": "helmond.zuidwillemsvaart.inlaatnieuweaa/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.693592,
+    "lat": 51.465297
+   },
+   {
+    "key": "hengelo.koppelleiding/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.801732,
+    "lat": 52.246826
+   },
+   {
+    "key": "hengelo.sluis.beneden/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.802,
+    "lat": 52.2464
+   },
+   {
+    "key": "hengelo.sluis.boven/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.8064,
+    "lat": 52.2459
+   },
+   {
+    "key": "herenlaak/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.81875,
+    "lat": 51.101167
+   },
+   {
+    "key": "hoekvanholland/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.119827,
+    "lat": 51.976899
+   },
+   {
+    "key": "holtheme.vecht/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.698485,
+    "lat": 52.620833
+   },
+   {
+    "key": "holwerd.vaargeul/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.8823891,
+    "lat": 53.39828062
+   },
+   {
+    "key": "huibertgat/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.398433,
+    "lat": 53.57375
+   },
+   {
+    "key": "huissen.nederrijn/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.962108,
+    "lat": 51.933324
+   },
+   {
+    "key": "ijgeul.1/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.517596,
+    "lat": 52.463943
+   },
+   {
+    "key": "ijmuiden.buitenhaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.555,
+    "lat": 52.463
+   },
+   {
+    "key": "ijmuiden.noordersluis.oost/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.614,
+    "lat": 52.4672
+   },
+   {
+    "key": "ijmuiden.noordersluis.west/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.604,
+    "lat": 52.4678
+   },
+   {
+    "key": "kadoelen.zwanediep/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.981641,
+    "lat": 52.658243
+   },
+   {
+    "key": "kampen.ijssel/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.9264,
+    "lat": 52.552
+   },
+   {
+    "key": "kampen.keteldiep/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.8467,
+    "lat": 52.5816
+   },
+   {
+    "key": "kampen.scheeresluis.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.94723,
+    "lat": 52.5308
+   },
+   {
+    "key": "kamperland.schotsman/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.643279,
+    "lat": 51.581616
+   },
+   {
+    "key": "kanne/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.671551,
+    "lat": 50.814742
+   },
+   {
+    "key": "kats.zandkreekdam/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.865703,
+    "lat": 51.541981
+   },
+   {
+    "key": "kats.zandkreeksluis.kolk1/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.862662,
+    "lat": 51.543685
+   },
+   {
+    "key": "ketelhaven.ketelmeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7627,
+    "lat": 52.5825
+   },
+   {
+    "key": "kloosterzande.baalhoek/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.10258,
+    "lat": 51.366086
+   },
+   {
+    "key": "kornwerderzand.ijsselmeer.binnenhaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.337321,
+    "lat": 53.06835
+   },
+   {
+    "key": "kornwerderzand.waddenzee.buitenhaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.334757,
+    "lat": 53.07459
+   },
+   {
+    "key": "krabbersgat.ijsselmeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.284,
+    "lat": 52.694
+   },
+   {
+    "key": "krabbersgat.markermeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.279974,
+    "lat": 52.691226
+   },
+   {
+    "key": "krimpenaandeijssel.hollandscheijssel/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.579,
+    "lat": 51.9165
+   },
+   {
+    "key": "krimpenaandelek.lek/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.628906,
+    "lat": 51.890722
+   },
+   {
+    "key": "lanaken/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.683083,
+    "lat": 50.889528
+   },
+   {
+    "key": "lauwersoog.waddenzee/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.196046,
+    "lat": 53.408334
+   },
+   {
+    "key": "lelystad.houtribsluis.noord/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.435,
+    "lat": 52.531
+   },
+   {
+    "key": "lelystad.houtribsluis.zuid/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.433916,
+    "lat": 52.526351
+   },
+   {
+    "key": "lemmer.ijsselmeer.woudagemaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.67997,
+    "lat": 52.8461
+   },
+   {
+    "key": "lemmer.ijsselmeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.71,
+    "lat": 52.838
+   },
+   {
+    "key": "lemmer.stroomkanaal.teroelsterkolk/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.6835,
+    "lat": 52.84515
+   },
+   {
+    "key": "lemmer.woudagemaal.stroomkanaal/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.6802,
+    "lat": 52.84705
+   },
+   {
+    "key": "lemmer.woudagemaal.stroomkanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.6802,
+    "lat": 52.84705
+   },
+   {
+    "key": "lierop.sluis10.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.701031,
+    "lat": 51.416914
+   },
+   {
+    "key": "lierop.sluis10.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.713889,
+    "lat": 51.415639
+   },
+   {
+    "key": "lierop.sluis9.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.684527,
+    "lat": 51.447698
+   },
+   {
+    "key": "lierop.sluis9/Q/NVT/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.685737,
+    "lat": 51.447855
+   },
+   {
+    "key": "lieshout.donkersvoortseloop/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.562284,
+    "lat": 51.511872
+   },
+   {
+    "key": "linne.stuw.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.942617,
+    "lat": 51.160525
+   },
+   {
+    "key": "lith.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.432911,
+    "lat": 51.810386
+   },
+   {
+    "key": "lith.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.455,
+    "lat": 51.81
+   },
+   {
+    "key": "lith.sluis/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.452453,
+    "lat": 51.80911
+   },
+   {
+    "key": "lixhebiefaval/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.680889,
+    "lat": 50.759639
+   },
+   {
+    "key": "lobith.bovenrijn.haven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.083651,
+    "lat": 51.857505
+   },
+   {
+    "key": "lobith.bovenrijn.tolkamer/Q/NVT/other:F230",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.1024,
+    "lat": 51.8495
+   },
+   {
+    "key": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.1024,
+    "lat": 51.8495
+   },
+   {
+    "key": "maarssen.kanaal/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.039151,
+    "lat": 52.133807
+   },
+   {
+    "key": "maarssen.kanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.039151,
+    "lat": 52.133807
+   },
+   {
+    "key": "maaseik/Q/NVT/other:F006",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.801669,
+    "lat": 51.094527
+   },
+   {
+    "key": "maaseik/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.801669,
+    "lat": 51.094527
+   },
+   {
+    "key": "maassluis/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.249788,
+    "lat": 51.917507
+   },
+   {
+    "key": "maastricht.borgharen.julianakanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.6995,
+    "lat": 50.869
+   },
+   {
+    "key": "maastricht.borgharen.maas.beneden/Q/NVT/other:F006",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.691,
+    "lat": 50.8724
+   },
+   {
+    "key": "maastricht.borgharen.maas.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.691,
+    "lat": 50.8724
+   },
+   {
+    "key": "maastricht.bosscherveld/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.687038,
+    "lat": 50.869849
+   },
+   {
+    "key": "maastricht.sintpieter.zuid/Q/NVT/other:F128",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.6977,
+    "lat": 50.8279
+   },
+   {
+    "key": "maastricht.sintpieter.zuid/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.6977,
+    "lat": 50.8279
+   },
+   {
+    "key": "maastricht.sintpieter/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.69732,
+    "lat": 50.830294
+   },
+   {
+    "key": "maastricht.sintpieter/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.69732,
+    "lat": 50.830294
+   },
+   {
+    "key": "maasvlakte.amaliahaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.99496,
+    "lat": 51.96219
+   },
+   {
+    "key": "maasvlakte.europahaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.029139,
+    "lat": 51.962167
+   },
+   {
+    "key": "maasvlakte.hartelhaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.042464,
+    "lat": 51.929692
+   },
+   {
+    "key": "malden.maaswaalkanaal.inlaatteersesluispolder/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.83495,
+    "lat": 51.78926
+   },
+   {
+    "key": "markelo/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.511601,
+    "lat": 52.198063
+   },
+   {
+    "key": "markelo/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.511601,
+    "lat": 52.198063
+   },
+   {
+    "key": "markermeer.midden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.23124,
+    "lat": 52.5317
+   },
+   {
+    "key": "markermeer.trintelzand/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.37297,
+    "lat": 52.62412
+   },
+   {
+    "key": "marollegat/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.191958,
+    "lat": 51.479747
+   },
+   {
+    "key": "maurik.mauriksewetering/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.38961,
+    "lat": 51.94173
+   },
+   {
+    "key": "meeswijk/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.766474,
+    "lat": 51.006474
+   },
+   {
+    "key": "megen.maas/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.563091,
+    "lat": 51.827827
+   },
+   {
+    "key": "megen.maas/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.563091,
+    "lat": 51.827827
+   },
+   {
+    "key": "meijel.kanaal.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.902689,
+    "lat": 51.326559
+   },
+   {
+    "key": "meijel.kanaal.boven/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.9024,
+    "lat": 51.3262
+   },
+   {
+    "key": "meijel.kanaal.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.9024,
+    "lat": 51.3262
+   },
+   {
+    "key": "meppel.hoofdvaart/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.185111,
+    "lat": 52.702059
+   },
+   {
+    "key": "mierlo.goorloop.gemaal/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.656469,
+    "lat": 51.456467
+   },
+   {
+    "key": "mierlo.goorloop.inlaat1/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.65654,
+    "lat": 51.45647
+   },
+   {
+    "key": "millingenaanderijn.pannerdensekop/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T06:40:00.000Z",
+    "lon": 6.0417,
+    "lat": 51.872
+   },
+   {
+    "key": "millingenaanderijn/Q/NVT/other:F230",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.034838,
+    "lat": 51.872957
+   },
+   {
+    "key": "moerdijk/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.615,
+    "lat": 51.712
+   },
+   {
+    "key": "mook/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.8645,
+    "lat": 51.758
+   },
+   {
+    "key": "nederweert.sluis15.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7497,
+    "lat": 51.2728
+   },
+   {
+    "key": "nederweert.sluis15.voedingskanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7516,
+    "lat": 51.27268
+   },
+   {
+    "key": "nederweerteind.noordervaart/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.77045,
+    "lat": 51.28051
+   },
+   {
+    "key": "nederweerteind.noordervaart/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.77045,
+    "lat": 51.28051
+   },
+   {
+    "key": "neer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.0055,
+    "lat": 51.2604
+   },
+   {
+    "key": "negenoord.oost/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.759722,
+    "lat": 51.030139
+   },
+   {
+    "key": "negenoord.west/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.759194,
+    "lat": 51.029639
+   },
+   {
+    "key": "nieuwegein.doorslag/Q/NVT/other:F103",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.089851,
+    "lat": 52.0323
+   },
+   {
+    "key": "nieuwegein.doorslag/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.089851,
+    "lat": 52.0323
+   },
+   {
+    "key": "nieuwegein.lekkanaal/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.113007,
+    "lat": 52.022729
+   },
+   {
+    "key": "nieuwegein.lekkanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.113007,
+    "lat": 52.022729
+   },
+   {
+    "key": "nieuwestatenzijl.dollard/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 7.207423,
+    "lat": 53.231562
+   },
+   {
+    "key": "nieuwvossemeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.201577,
+    "lat": 51.584608
+   },
+   {
+    "key": "nijkerk.nijkerkernauw/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.470182,
+    "lat": 52.261739
+   },
+   {
+    "key": "nijkerk.nuldernauw/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.475311,
+    "lat": 52.262814
+   },
+   {
+    "key": "nijmegen.maaswaalkanaal.inlaatlandsweijer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.80625,
+    "lat": 51.82919
+   },
+   {
+    "key": "nijmegen.maaswaalkanaal.inlaatweurt/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.81146,
+    "lat": 51.84111
+   },
+   {
+    "key": "nijmegen.waal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.854,
+    "lat": 51.853
+   },
+   {
+    "key": "olst/Q/NVT/other:F006",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.10448,
+    "lat": 52.34201
+   },
+   {
+    "key": "olst/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.10448,
+    "lat": 52.34201
+   },
+   {
+    "key": "ommen.ommerkanaal/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.402053,
+    "lat": 52.523367
+   },
+   {
+    "key": "ommen.ommerkanaal/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.402053,
+    "lat": 52.523367
+   },
+   {
+    "key": "ommen.vecht/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.421919,
+    "lat": 52.517096
+   },
+   {
+    "key": "ommen.vecht/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.421919,
+    "lat": 52.517096
+   },
+   {
+    "key": "oosterhout.marksluis.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.830861,
+    "lat": 51.647889
+   },
+   {
+    "key": "oosterhout.marksluis.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.833494,
+    "lat": 51.648139
+   },
+   {
+    "key": "oosterhout.marksluis.inlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T12:00:00.000Z",
+    "lon": 4.833494,
+    "lat": 51.648139
+   },
+   {
+    "key": "oosterhout.marksluis.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T12:00:00.000Z",
+    "lon": 4.833494,
+    "lat": 51.648142
+   },
+   {
+    "key": "oosterhout.sluis1.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.83975,
+    "lat": 51.643
+   },
+   {
+    "key": "oosterhout.sluis1.gemaal/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.839742,
+    "lat": 51.643014
+   },
+   {
+    "key": "oosterhout.sluis1.inlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.839742,
+    "lat": 51.643008
+   },
+   {
+    "key": "oosterhout.sluis1.kolk/Q/NVT/other:F058",
+    "ts": "2026-09-29T12:00:00.000Z",
+    "lon": 4.839742,
+    "lat": 51.643017
+   },
+   {
+    "key": "oosterhout.sluis1.spui/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.839742,
+    "lat": 51.643
+   },
+   {
+    "key": "oosterhout.sluis1.spuikanaal.kleprechts/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.839742,
+    "lat": 51.643003
+   },
+   {
+    "key": "oosterhout.sluis1.spuikanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.8393,
+    "lat": 51.644
+   },
+   {
+    "key": "oosterhout.sluis1.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.839742,
+    "lat": 51.643008
+   },
+   {
+    "key": "oosterschelde.4/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.69342,
+    "lat": 51.65514
+   },
+   {
+    "key": "oosterschelde.roompotsluis.binnen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.688,
+    "lat": 51.618
+   },
+   {
+    "key": "oosterschelde.roompotsluis.buiten/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.68,
+    "lat": 51.619
+   },
+   {
+    "key": "ossenisse/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.966769,
+    "lat": 51.407884
+   },
+   {
+    "key": "panheel.gemaal/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.8563,
+    "lat": 51.176547
+   },
+   {
+    "key": "panheel.sluis.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.856013,
+    "lat": 51.176126
+   },
+   {
+    "key": "panheel.sluis.inlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.8563,
+    "lat": 51.176542
+   },
+   {
+    "key": "panheel.sluis.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.8563,
+    "lat": 51.176542
+   },
+   {
+    "key": "pannerden.pannerdenschkanaal/Q/NVT/other:F230",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.03778,
+    "lat": 51.87475
+   },
+   {
+    "key": "pannerden.regelwerk.beneden/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.029691,
+    "lat": 51.888635
+   },
+   {
+    "key": "pannerden.regelwerk.boven/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.030013,
+    "lat": 51.888013
+   },
+   {
+    "key": "parksluis/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.464452,
+    "lat": 51.906535
+   },
+   {
+    "key": "poeldonk.aa.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T11:30:00.000Z",
+    "lon": 5.353944,
+    "lat": 51.683644
+   },
+   {
+    "key": "ramspolbrug.ramsdiep/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.841944,
+    "lat": 52.612666
+   },
+   {
+    "key": "ramspolkering.ketelmeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:10:00.000Z",
+    "lon": 5.84081401,
+    "lat": 52.610468
+   },
+   {
+    "key": "rhenen.grebbeberg/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.589806,
+    "lat": 51.949389
+   },
+   {
+    "key": "rijswijk.betuwepand/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T08:10:00.000Z",
+    "lon": 5.368877,
+    "lat": 51.950645
+   },
+   {
+    "key": "rijswijk.drielandenpunt/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.35958,
+    "lat": 51.95187
+   },
+   {
+    "key": "rilland.antwerpskanaalpand/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.237887,
+    "lat": 51.405709
+   },
+   {
+    "key": "rilland.bath/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.21014,
+    "lat": 51.39878
+   },
+   {
+    "key": "rilland.bathsebrug/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.231181,
+    "lat": 51.42503
+   },
+   {
+    "key": "rilland.bathsespuisluis.binnen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.235008,
+    "lat": 51.393198
+   },
+   {
+    "key": "rilland.bathsespuisluis.buiten/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.234155,
+    "lat": 51.39283
+   },
+   {
+    "key": "rilland.bathsespuisluis/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.23458,
+    "lat": 51.3931
+   },
+   {
+    "key": "roermond.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.9815,
+    "lat": 51.2005
+   },
+   {
+    "key": "roermond.hambeek/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.982192,
+    "lat": 51.184693
+   },
+   {
+    "key": "rosmalen.hintham.beneden/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.358111,
+    "lat": 51.700278
+   },
+   {
+    "key": "rosmalen.hinthamsluis.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.358111,
+    "lat": 51.700277
+   },
+   {
+    "key": "rosmalen.hinthamsluis.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.359194,
+    "lat": 51.697111
+   },
+   {
+    "key": "rotem/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.771,
+    "lat": 51.0506
+   },
+   {
+    "key": "rotterdam.ijzerwerkerkade/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.51838,
+    "lat": 51.89947
+   },
+   {
+    "key": "rotterdam.nieuwemaas.boerengat/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.5003,
+    "lat": 51.9184
+   },
+   {
+    "key": "rotterdamsehoek.ijsselmeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.552,
+    "lat": 52.748722
+   },
+   {
+    "key": "rozenburgsesluis.noordzijde/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.228892,
+    "lat": 51.895774
+   },
+   {
+    "key": "rozenburgsesluis.zuidzijde/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.229823,
+    "lat": 51.891244
+   },
+   {
+    "key": "sambeek.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.972,
+    "lat": 51.6458
+   },
+   {
+    "key": "sambeek.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.0036,
+    "lat": 51.63225
+   },
+   {
+    "key": "sasvangent/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.807499,
+    "lat": 51.230267
+   },
+   {
+    "key": "schaarvandenoord/WATHTE/NAP/RWSM-F232",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.164992,
+    "lat": 51.377868
+   },
+   {
+    "key": "scheveningen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.263563,
+    "lat": 52.099035
+   },
+   {
+    "key": "schiermonnikoog.waddenzee/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.202908,
+    "lat": 53.468937
+   },
+   {
+    "key": "schijndel.sluis.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.442469,
+    "lat": 51.648831
+   },
+   {
+    "key": "schijndel.sluis.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.445819,
+    "lat": 51.648347
+   },
+   {
+    "key": "schijndel.sluis.inlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.443467,
+    "lat": 51.648317
+   },
+   {
+    "key": "schijndel.sluis.kolk/Q/NVT/other:F058",
+    "ts": "2026-09-29T12:00:00.000Z",
+    "lon": 5.44582047,
+    "lat": 51.64834651
+   },
+   {
+    "key": "schijndel.sluis.spuikanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.443464,
+    "lat": 51.648311
+   },
+   {
+    "key": "schijndel/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.443422,
+    "lat": 51.648769
+   },
+   {
+    "key": "schoonhoven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.85,
+    "lat": 51.942
+   },
+   {
+    "key": "shertogenbosch.crevecoeur/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.271539,
+    "lat": 51.733524
+   },
+   {
+    "key": "shertogenbosch.empel.kanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.333972,
+    "lat": 51.738528
+   },
+   {
+    "key": "shertogenbosch.empel.maas/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.332889,
+    "lat": 51.740083
+   },
+   {
+    "key": "shertogenbosch.engelen.dieze/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.27297,
+    "lat": 51.73361
+   },
+   {
+    "key": "shertogenbosch.engelen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.273041,
+    "lat": 51.73365
+   },
+   {
+    "key": "shertogenbosch.poeldonk.aa/Q/NVT/other:F058",
+    "ts": "2026-09-29T11:30:00.000Z",
+    "lon": 5.353944,
+    "lat": 51.683645
+   },
+   {
+    "key": "shertogenbosch.poeldonk.aa/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:40:00.000Z",
+    "lon": 5.353944,
+    "lat": 51.683645
+   },
+   {
+    "key": "shertogenbosch.poeldonk.zuidwillemsvaart/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:40:00.000Z",
+    "lon": 5.3537,
+    "lat": 51.683
+   },
+   {
+    "key": "sintannaland.oosterschelde/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.1096,
+    "lat": 51.6036
+   },
+   {
+    "key": "smeermaas.zuidwillemsvaart/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.678438,
+    "lat": 50.874748
+   },
+   {
+    "key": "smeermaas.zuidwillemsvaart/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.678438,
+    "lat": 50.874748
+   },
+   {
+    "key": "someren.sluis11.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7264,
+    "lat": 51.39615
+   },
+   {
+    "key": "someren.sluis11.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7277,
+    "lat": 51.3953
+   },
+   {
+    "key": "someren.sluis12.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.74324,
+    "lat": 51.3507
+   },
+   {
+    "key": "someren.sluis12.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.74345,
+    "lat": 51.34945
+   },
+   {
+    "key": "someren.sluis13.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7466,
+    "lat": 51.3309
+   },
+   {
+    "key": "someren.sluis13.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7468,
+    "lat": 51.3296
+   },
+   {
+    "key": "someren.sluis13/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7467,
+    "lat": 51.3302
+   },
+   {
+    "key": "someren.sluis13/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7467,
+    "lat": 51.3302
+   },
+   {
+    "key": "sonenbreugel.beeksewaterloop/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.55148,
+    "lat": 51.51377
+   },
+   {
+    "key": "sonenbreugel.wilhelminakanaal/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.47228,
+    "lat": 51.50504
+   },
+   {
+    "key": "sonenbreugel.wilhelminakanaal/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.47228,
+    "lat": 51.50504
+   },
+   {
+    "key": "spaanjerd/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.823639,
+    "lat": 51.129778
+   },
+   {
+    "key": "spijkenisse.oudemaas/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.333954,
+    "lat": 51.861661
+   },
+   {
+    "key": "stavenisse/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.004,
+    "lat": 51.598
+   },
+   {
+    "key": "stavoren.gemaalhoogland.buiten/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.36396,
+    "lat": 52.87793
+   },
+   {
+    "key": "stavoren.gemaalhoogland.buiten/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.36396,
+    "lat": 52.87793
+   },
+   {
+    "key": "stavoren.johanfrisokanaal/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.364415,
+    "lat": 52.87805
+   },
+   {
+    "key": "stellendam.buitenhaven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.033445,
+    "lat": 51.827028
+   },
+   {
+    "key": "stevensweert/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.841665,
+    "lat": 51.131088
+   },
+   {
+    "key": "steyl/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.116676,
+    "lat": 51.33536
+   },
+   {
+    "key": "suurhofbrug.noordzijde/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.107234,
+    "lat": 51.937687
+   },
+   {
+    "key": "swifterbant.ketelmeer/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.6455,
+    "lat": 52.6055
+   },
+   {
+    "key": "terherne.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.76625,
+    "lat": 53.04323
+   },
+   {
+    "key": "terherne.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 5.7706,
+    "lat": 53.04488
+   },
+   {
+    "key": "terneuzen.sluiskilbrug/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.8354,
+    "lat": 51.294
+   },
+   {
+    "key": "terneuzen.westsluis.buiten/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.812564,
+    "lat": 51.337472
+   },
+   {
+    "key": "terneuzen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.819812,
+    "lat": 51.336212
+   },
+   {
+    "key": "terschelling.noordzee/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.333033,
+    "lat": 53.442486
+   },
+   {
+    "key": "terschelling.west/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.220026,
+    "lat": 53.363045
+   },
+   {
+    "key": "texel.noordzee/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.733193,
+    "lat": 53.120612
+   },
+   {
+    "key": "texel.oudeschild/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.850192,
+    "lat": 53.038835
+   },
+   {
+    "key": "tholen.bergsediepsluis.buiten/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.165743,
+    "lat": 51.511335
+   },
+   {
+    "key": "tiel.sluis.kanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.452592,
+    "lat": 51.904386
+   },
+   {
+    "key": "tiel.waal/Q/NVT/other:F006",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.440687,
+    "lat": 51.882384
+   },
+   {
+    "key": "tiel.waal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.440687,
+    "lat": 51.882384
+   },
+   {
+    "key": "tilburg.sluis2.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.9908,
+    "lat": 51.59716
+   },
+   {
+    "key": "tilburg.sluis2.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.9924,
+    "lat": 51.59645
+   },
+   {
+    "key": "tilburg.sluis3.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.0324,
+    "lat": 51.582
+   },
+   {
+    "key": "tilburg.sluis3.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.036,
+    "lat": 51.5816
+   },
+   {
+    "key": "tilburg.sluis3.kolk/Q/NVT/other:F058",
+    "ts": "2026-09-29T12:40:00.000Z",
+    "lon": 5.03554064,
+    "lat": 51.58214439
+   },
+   {
+    "key": "tilburg.sluis3/Q/NVT/other:F058",
+    "ts": "2026-09-29T12:40:00.000Z",
+    "lon": 5.03554064,
+    "lat": 51.58214439
+   },
+   {
+    "key": "uikhoven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.7321,
+    "lat": 50.928834
+   },
+   {
+    "key": "veessen/WATHTE/NAP/other:F053",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.077656,
+    "lat": 52.368033
+   },
+   {
+    "key": "veghel.sluis4.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.5306,
+    "lat": 51.60915
+   },
+   {
+    "key": "veghel.sluis4.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.5323,
+    "lat": 51.60825
+   },
+   {
+    "key": "veghel.sluis4.inlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.531564,
+    "lat": 51.608558
+   },
+   {
+    "key": "veghel.sluis4.uitlaat/Q/NVT/other:F058",
+    "ts": "2026-09-29T13:00:00.000Z",
+    "lon": 5.531564,
+    "lat": 51.608553
+   },
+   {
+    "key": "velsenzuid.velsertunnel/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.655179,
+    "lat": 52.461534
+   },
+   {
+    "key": "venlo/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.159406,
+    "lat": 51.367387
+   },
+   {
+    "key": "venlo/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.159406,
+    "lat": 51.367387
+   },
+   {
+    "key": "vlaardingen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.349048,
+    "lat": 51.899639
+   },
+   {
+    "key": "vlaktevanderaan/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T10:30:00.000Z",
+    "lon": 3.242164,
+    "lat": 51.503721
+   },
+   {
+    "key": "vlieland.haven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.091456,
+    "lat": 53.296127
+   },
+   {
+    "key": "vlissingen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.6,
+    "lat": 51.442
+   },
+   {
+    "key": "waalwijk/Q/NVT/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.07488,
+    "lat": 51.71243
+   },
+   {
+    "key": "waalwijk/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T12:50:00.000Z",
+    "lon": 5.07488,
+    "lat": 51.71243
+   },
+   {
+    "key": "walsoorden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.026206,
+    "lat": 51.398427
+   },
+   {
+    "key": "weert.lozen/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.602491,
+    "lat": 51.223141
+   },
+   {
+    "key": "weert.lozen/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.602491,
+    "lat": 51.223141
+   },
+   {
+    "key": "weert.sluis16.beneden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.669381,
+    "lat": 51.245947
+   },
+   {
+    "key": "weert.sluis16.boven/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.666583,
+    "lat": 51.245056
+   },
+   {
+    "key": "weesp.amsterdamrijnkanaal/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.018799,
+    "lat": 52.316829
+   },
+   {
+    "key": "weesp.amsterdamrijnkanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.018799,
+    "lat": 52.316829
+   },
+   {
+    "key": "well/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.09245,
+    "lat": 51.54744
+   },
+   {
+    "key": "werkendam.binnenkievitswaard/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.830278,
+    "lat": 51.792222
+   },
+   {
+    "key": "werkendam.happenhennip/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.795944,
+    "lat": 51.780722
+   },
+   {
+    "key": "werkendam.kleinezalm/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.821139,
+    "lat": 51.761722
+   },
+   {
+    "key": "werkendam.kooike/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.862972,
+    "lat": 51.783139
+   },
+   {
+    "key": "werkendam.middelstekievitswaard/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.807028,
+    "lat": 51.784694
+   },
+   {
+    "key": "werkendam.nieuwemerwede/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.876824,
+    "lat": 51.806041
+   },
+   {
+    "key": "werkendam.steenenmuur/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.839778,
+    "lat": 51.765278
+   },
+   {
+    "key": "werkendam.steurgat/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.871389,
+    "lat": 51.799139
+   },
+   {
+    "key": "werkendam.vogelenzang/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 4.836139,
+    "lat": 51.769167
+   },
+   {
+    "key": "westervoort.1/Q/NVT/other:F006",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.962,
+    "lat": 51.9705
+   },
+   {
+    "key": "westervoort.2/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.962,
+    "lat": 51.9705
+   },
+   {
+    "key": "westervoort.hondsbroekschepleij.ijssel/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.950239,
+    "lat": 51.959933
+   },
+   {
+    "key": "westervoort.ijsselkop/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.953,
+    "lat": 51.9507
+   },
+   {
+    "key": "westkapelle/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 3.440031,
+    "lat": 51.521448
+   },
+   {
+    "key": "wierumergronden/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.958261,
+    "lat": 53.515827
+   },
+   {
+    "key": "wijhe/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.126917,
+    "lat": 52.387
+   },
+   {
+    "key": "wijkbijduurstede.amsterdamrijnkanaal/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.293258,
+    "lat": 51.97479
+   },
+   {
+    "key": "wijkbijduurstede.amsterdamrijnkanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.293258,
+    "lat": 51.97479
+   },
+   {
+    "key": "willemstad.hollandschdiep/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.40689,
+    "lat": 51.696401
+   },
+   {
+    "key": "willemstad.volkerak/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.397417,
+    "lat": 51.682434
+   },
+   {
+    "key": "willemstad.volkeraksluizen.schuif2/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.401538,
+    "lat": 51.692446
+   },
+   {
+    "key": "willemstad.volkeraksluizen.schuif3/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.402275,
+    "lat": 51.691823
+   },
+   {
+    "key": "yerseke/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.07513,
+    "lat": 51.506154
+   },
+   {
+    "key": "zaltbommel/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 5.244645,
+    "lat": 51.815154
+   },
+   {
+    "key": "zuidland.spui/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 4.282919,
+    "lat": 51.80555
+   },
+   {
+    "key": "zutphen.ijssel/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.182,
+    "lat": 52.154
+   },
+   {
+    "key": "zwartsluis.gemaal.pomp1/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 6.079753,
+    "lat": 52.637761
+   },
+   {
+    "key": "zwartsluis.gemaal.pomp2/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 6.079606,
+    "lat": 52.637807
+   },
+   {
+    "key": "zwartsluis.gemaal.pomp3/Q/NVT/other:F007",
+    "ts": "2026-09-29T13:10:00.000Z",
+    "lon": 6.079459,
+    "lat": 52.637852
+   },
+   {
+    "key": "zwartsluis.meppelerdiep/Q/NVT/other:F103",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.092924,
+    "lat": 52.652215
+   },
+   {
+    "key": "zwartsluis.meppelerdiep/WATHTE/NAP/other:F155",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.092924,
+    "lat": 52.652215
+   },
+   {
+    "key": "zwartsluis.zwartewater/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.076,
+    "lat": 52.6357
+   },
+   {
+    "key": "zwolle.ijssel/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.053,
+    "lat": 52.5086
+   },
+   {
+    "key": "zwolle.zwartewater.kanaal/WATHTE/NAP/other:F007",
+    "ts": "2026-09-29T13:20:00.000Z",
+    "lon": 6.054957,
+    "lat": 52.509831
+   }
+  ],
+  "dropped": {
+   "datum": 17,
+   "duplicate": 3
+  }
+ },
+ "drift": {
+  "unregistered": [
+   "driel.boven/Q/NVT/other:F103",
+   "epen.geul.cottessen/Q/NVT/other:F007"
+  ],
+  "vanished": [],
+  "changed": []
+ }
+}

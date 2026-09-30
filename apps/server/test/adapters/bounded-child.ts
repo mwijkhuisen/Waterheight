@@ -1,9 +1,11 @@
-// Child process of de-1.test.ts (review S1): builds one hostile body by name
+// Child process of bounded.int.test.ts (review S1): builds one hostile body by name
 // and parses it under the heap the test gives it (--max-old-space-size). It
 // prints the SchemaDrift message and exits 0; anything else exits 1, and running
 // out of memory kills it.
 import { SchemaDrift } from '@rws/core';
 import { JSON_CAPS, parseMeasurements, parseStations } from '../../src/adapters/de-1/parse.ts';
+import { JSON_CAPS as NL1_CAPS, parseWaarnemingen } from '../../src/adapters/nl-1/parse.ts';
+import { JSON_CAPS as NL2_CAPS, parseCollection } from '../../src/adapters/nl-2/parse.ts';
 
 const MIB = 1024 * 1024;
 const station = (timeseries: string) =>
@@ -12,6 +14,37 @@ const station = (timeseries: string) =>
 const list = (n: number, item: string) => Array(n).fill(item).join(',');
 /** One empty object per three bytes: the shape that costs JSON.parse the most per byte. */
 const objects = (bytes: number) => `[${list(Math.floor(bytes / 3) - 1, '{}')}]`;
+/** An `OphalenWaarnemingen` response with one well-formed list header and the given values. */
+const coded = '{"Code":"x","Omschrijving":"x"}';
+const aquo = [
+  'BemonsteringsApparaat',
+  'BemonsteringsMethode',
+  'BemonsteringsSoort',
+  'BioTaxon',
+  'BioTaxonType',
+  'Compartiment',
+  'Eenheid',
+  'Groepering',
+  'Grootheid',
+  'Hoedanigheid',
+  'MeetApparaat',
+  'Orgaan',
+  'Parameter',
+  'Typering',
+  'WaardeBepalingsMethode',
+  'WaardeBepalingsTechniek',
+  'WaardeBewerkingsMethode',
+]
+  .map((k) => `"${k}":${coded}`)
+  .join(',');
+const waarnemingen = (values: string) =>
+  `{"Succesvol":true,"WaarnemingenLijst":[{"AquoMetadata":{${aquo},"Parameter_Wat_Omschrijving":"x","ProcesType":"meting"},` +
+  `"Locatie":{"Code":"x","Coordinatenstelsel":"x","Lat":1,"Lon":1,"Naam":"x","Omschrijving":"x"},"MetingenLijst":[${values}]}]}`;
+/** A complete NL-2 FeatureCollection of `n` features (its three counts say `n`). */
+const collection = (n: number, feature: string) =>
+  `{"type":"FeatureCollection","features":[${list(n, feature)}],"totalFeatures":${n},"numberMatched":${n},` +
+  `"numberReturned":${n},"timeStamp":"2026-09-29T13:43:29.024Z",` +
+  `"crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:EPSG::4258"}}}`;
 const basin = (b: Uint8Array) => parseStations(b, JSON_CAPS.basin);
 const meta = (b: Uint8Array) => parseStations(b, JSON_CAPS.meta);
 
@@ -36,6 +69,20 @@ export const BODIES: Record<string, [() => string, (b: Uint8Array) => unknown]> 
     meta,
   ],
   'series-issues': [() => `[${list(60_000, '{}')}]`, parseMeasurements],
+  // NL-1 at its loader byte cap (4 MiB); a response whose list array, and one whose value array, is as long as
+  // the node cap allows; and a full-length value list in which every value has the wrong shape.
+  'nl1-bytes': [() => objects(4 * MIB), parseWaarnemingen],
+  'nl1-lists': [
+    () => `{"Succesvol":true,"WaarnemingenLijst":[${list(NL1_CAPS.maxNodes - 10, '0')}]}`,
+    parseWaarnemingen,
+  ],
+  'nl1-values': [() => waarnemingen(list(NL1_CAPS.maxNodes - 100, '0')), parseWaarnemingen],
+  'nl1-issues': [() => waarnemingen(list(NL1_CAPS.maxValues, '{}')), parseWaarnemingen],
+  // NL-2 at its loader byte cap (8 MiB); a collection whose feature array is as long as the node cap allows; and a
+  // full-length feature array in which every feature has the wrong shape.
+  'nl2-bytes': [() => objects(8 * MIB), parseCollection],
+  'nl2-features': [() => collection(NL2_CAPS.maxNodes - 20, '0'), parseCollection],
+  'nl2-issues': [() => collection(NL2_CAPS.maxFeatures, '{}'), parseCollection],
 };
 
 if (import.meta.main) {

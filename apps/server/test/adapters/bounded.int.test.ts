@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { BODIES } from './bounded-child.ts';
 
-// Review S1: no DE-1 payload inside the byte caps can run the loader out of
+// Review S1: no DE-1, NL-1 or NL-2 payload inside the byte caps can run the loader out of
 // memory on its way to a SchemaDrift. Each hostile body is parsed in its own
 // process with a 256 MiB heap (the load container has 768 MiB). In the
 // integration project, which runs one file at a time: these children are heavy,
@@ -19,6 +19,13 @@ const expected: Record<keyof typeof BODIES, string> = {
   'basin-issues': 'invalid_type at 0.timeseries.0.shortname',
   'meta-issues': 'invalid_type at 0.timeseries.0.shortname',
   'series-issues': 'invalid_type at 0.timestamp',
+  'nl1-bytes': 'json_too_many_nodes',
+  'nl1-lists': 'too_big at WaarnemingenLijst',
+  'nl1-values': 'too_big at WaarnemingenLijst.0.MetingenLijst',
+  'nl1-issues': 'invalid_type at WaarnemingenLijst.0.MetingenLijst.0.Meetwaarde',
+  'nl2-bytes': 'json_too_many_nodes',
+  'nl2-features': 'too_big at features',
+  'nl2-issues': 'invalid_value at features.0.type',
 };
 
 describe('bounded parsing: every hostile body ends in a SchemaDrift, not a crash', () => {
