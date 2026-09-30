@@ -100,6 +100,11 @@ export const Source = z.strictObject({
   api: z.boolean(),
   bulk_export: z.boolean(),
   history_export: z.boolean(),
+  /**
+   * The provider's own public history window (ISO 8601 duration, e.g. "P31D"). Older values need
+   * history_export, so a source without it must declare the window it may still serve.
+   */
+  history_window: z.iso.duration().optional(),
   /** Exact text from §1b, markdown stripped and untranslated; null where §1b gives none. */
   attribution_text: z.string().min(1).nullable(),
   attribution_lang: Lang.nullable(),
@@ -256,6 +261,9 @@ export function validateRegistry(
       } else if (s[c] && !record[c]) {
         problems.push(`${at}: ${c} is on, but its permission record does not grant it`);
       }
+    }
+    if (s.audience !== 'off' && !s.history_export && s.history_window === undefined) {
+      problems.push(`${at}: history_export is off, so the source must declare its provider's history_window`);
     }
     if (s.permission_required && record === undefined && (s.api || s.bulk_export || s.history_export)) {
       problems.push(

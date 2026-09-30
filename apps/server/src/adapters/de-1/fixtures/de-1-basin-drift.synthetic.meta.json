@@ -1,0 +1,12 @@
+{
+  "spec": "de-1-basin",
+  "source": "DE-1",
+  "synthetic": true,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json?waters=RHEIN,MOSEL,SAAR,MAIN,NECKAR,LAHN,RUHR,EMS,DEK&includeTimeseries=true&includeCurrentMeasurement=true&timeseries=W,Q&prettyprint=false",
+  "bytes": 1115,
+  "trimmed": false,
+  "note": "[U] Hand-made drift simulation: two stations of the recorded basin payload, the first with an extra key \"trend\" in currentMeasurement."
+}

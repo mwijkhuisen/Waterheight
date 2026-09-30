@@ -2,7 +2,7 @@ import type { Logger } from 'pino';
 import { Client } from '../http/client.ts';
 
 // healthchecks.io dead-man switches per provider group (A§11.3; the 9 contract
-// slugs), also used by the watchdog role for its three checks. The ping key is
+// slugs), also used by the watchdog role for its four checks. The ping key is
 // a file secret, read again before every ping, so a key the owner fills in or
 // rotates after the container started takes effect without a restart; a missing
 // or malformed key means no ping. It is part of the URL, so no URL is ever
@@ -10,8 +10,8 @@ import { Client } from '../http/client.ts';
 
 export const PING_HOST = 'hc-ping.com';
 const KEY = /^[A-Za-z0-9_-]{16,64}$/;
-/** The capture group slugs and the watchdog's three checks (P1b); nothing else is ever pinged from here. */
-const SLUG = /^(?:cap-[a-z0-9-]+|watchdog|cert|disk)$/;
+/** The capture group slugs and the watchdog's four checks (P1b; `load` from P2a); nothing else is ever pinged from here. */
+const SLUG = /^(?:cap-[a-z0-9-]+|watchdog|cert|disk|load)$/;
 
 export type PingKind = 'start' | 'success' | 'fail';
 /** The key itself (tests) or a reader of the key file, called before every ping. */

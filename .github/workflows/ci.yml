@@ -52,6 +52,8 @@ jobs:
           pnpm config get allowBuilds | grep -q '"msw": false'
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - name: Parse and normalise coverage of every adapter (at least 90% lines)
+        run: pnpm test:coverage
       - run: pnpm -F web build
       - name: Server smoke test (GET /healthz, role exit codes)
         run: scripts/healthz-smoke.sh
@@ -136,6 +138,58 @@ jobs:
             echo "the round trip passed on a migration that cannot apply" >&2
             exit 1
           fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: db/migrations as rws_migrator (migrate, roll back, migrate); schema.sql, views and Kysely types are current
+        env:
+          # pg_dump must match the server's major version: the one inside the service container does.
+          DB_CHECK_PG_DUMP: docker exec -i ${{ job.services.postgres.id }} pg_dump
+        run: scripts/db-check.sh
+
+  bench:
+    name: bench
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rws
+          POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8
+        ports: ['5432:5432']
+        options: >-
+          --shm-size=256m
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/rws?sslmode=disable
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Q1 "all series at T" on 3,000 series × 60 days, as rws_api (under 50 ms)
+        run: node scripts/bench-q1.ts
 
   shellcheck:
     name: shellcheck
@@ -262,18 +316,23 @@ jobs:
         run: |
           node scripts/verify-prod.ts rivierstanden.example --resolve 203.0.114.10 --ca /ci/pki/pebble-root.pem \
             | tee "$RUNNER_TEMP/verify-prod.txt" || true
-          # capture cannot succeed without internet in CI, so only freshness and owner_specs may fail.
-          if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" | grep -vE '^FAIL (freshness|owner_specs) '; then
-            echo "verify-prod failed a check other than the expected CI freshness" >&2
+          # capture cannot succeed without internet in CI and the loaded data is a recorded fixture, so
+          # only the checks that need fresh production data may fail.
+          if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" |
+            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1) '; then
+            echo "verify-prod failed a check other than the ones that need live data" >&2
             exit 1
           fi
           grep -qE '^PASS headers / ' "$RUNNER_TEMP/verify-prod.txt"
           grep -qE '^PASS owner leak ' "$RUNNER_TEMP/verify-prod.txt"
+          # "health" itself (the next word is the separator, not "params" or "DE-1").
+          grep -qE '^PASS health [^A-Za-z]' "$RUNNER_TEMP/verify-prod.txt"
+          grep -qE '^PASS health params ' "$RUNNER_TEMP/verify-prod.txt"
 
   ci:
     name: ci
     if: always()
-    needs: [check, integration, dbmate, shellcheck, fresh-start, hook, deploy]
+    needs: [check, integration, dbmate, bench, shellcheck, fresh-start, hook, deploy]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

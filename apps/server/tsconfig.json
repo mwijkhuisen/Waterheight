@@ -3,7 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
+    "lib": ["es2024", "esnext.temporal"],
     "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [{ "path": "../../packages/contracts" }, { "path": "../../packages/core" }]
 }

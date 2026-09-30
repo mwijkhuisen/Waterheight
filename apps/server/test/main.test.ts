@@ -10,8 +10,53 @@ import { dryRun, EXIT_CONFIG, EXIT_NOT_IMPLEMENTED, EXIT_USAGE, parseListen, ROL
 const quiet = () => {};
 
 describe('role dispatcher', () => {
-  it.each(['load', 'publish', 'replay'])('stub role %s exits non-zero', async (role) => {
-    expect(await run([role], {}, quiet)).toBe(EXIT_NOT_IMPLEMENTED);
+  it('the publish role is a stub until P9', async () => {
+    expect(await run(['publish'], {}, quiet)).toBe(EXIT_NOT_IMPLEMENTED);
+  });
+
+  it.each(['load', 'migrate'])('%s refuses to start without database settings: exit 78', async (role) => {
+    expect(await run([role], {}, quiet)).toBe(EXIT_CONFIG);
+    // A host without the role's file secret is not enough.
+    expect(await run([role], { RWS_DB_HOST: 'db' }, quiet)).toBe(EXIT_CONFIG);
+    expect(await run([role], { RWS_DB_HOST: 'db; drop' }, quiet)).toBe(EXIT_CONFIG);
+  });
+
+  it.each([
+    [['replay']],
+    [['replay', '--source', 'DE-1']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01']],
+    [['replay', '--source', 'NL-1', '--from', '2026-10-01', '--to', '2026-10-02']],
+    [['replay', '--source', "DE-1'; --", '--from', '2026-10-01', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--spec', 'nl-1-obs', '--from', '2026-10-01', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--spec', '../x', '--from', '2026-10-01', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-02', '--to', '2026-10-01']],
+    [['replay', '--source', 'DE-1', '--from', '2026-02-30', '--to', '2026-03-01']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01T00:00', '--to', '2026-10-02']],
+    // An instant is to the second, in UTC (`Z`), and real; --to stays a day (review R3-1).
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01T07:10:00+02:00', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01T07:10:00.000Z', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01 07:10:00Z', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01t07:10:00z', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01T24:00:00Z', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01T23:59:60Z', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--from', '2026-02-30T07:10:00Z', '--to', '2026-03-01']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-03T07:10:00Z', '--to', '2026-10-02']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01', '--to', '2026-10-02T07:10:00Z']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01', '--to', '2026-10-02', '--force']],
+    [['replay', '--source', 'DE-1', '--from', '2026-10-01', '--to']],
+  ])('replay rejects %j with a usage error before it touches anything', async (argv) => {
+    expect(await run(argv, { DATABASE_URL: 'postgres://nobody@127.0.0.1:1/none' }, quiet)).toBe(EXIT_USAGE);
+  });
+
+  it('replay with valid arguments needs database settings: exit 78', async () => {
+    const argv = ['replay', '--source', 'DE-1', '--spec', 'de-1-series', '--from', '2026-10-01', '--to', '2026-10-02'];
+    expect(await run(argv, {}, quiet)).toBe(EXIT_CONFIG);
+    expect(await run([...argv, '--dry-run'], {}, quiet)).toBe(EXIT_CONFIG);
+    // --from may be a UTC instant, on the day of --to at the latest.
+    for (const from of ['2026-10-01T07:10:00Z', '2026-10-02T23:59:59Z'])
+      expect(await run(['replay', '--source', 'DE-1', '--from', from, '--to', '2026-10-02'], {}, quiet)).toBe(
+        EXIT_CONFIG,
+      );
   });
 
   it('knows the contract roles capture, watchdog and healthcheck', () => {
@@ -42,6 +87,8 @@ describe('role dispatcher', () => {
     [['healthcheck', 'x']],
     [['watchdog', '--now']],
     [['api', '--once']],
+    [['load', '--dry-run']],
+    [['migrate', 'up']],
   ])('rejects %j with a usage error', async (argv) => {
     expect(await run(argv, {}, quiet)).toBe(EXIT_USAGE);
   });

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# rws-hc-sync (owner-run; A§11.3; issue #16 P1b): creates or updates the 15
+# rws-hc-sync (owner-run; A§11.3; issue #16 P1b): creates or updates the 16
 # healthchecks.io checks of deploy/healthchecks.yaml through the Management API
 # (POST /api/v3/checks/ with unique ["slug"], all integrations attached).
 #
@@ -37,12 +37,12 @@ done
 # Comment lines out, the JSON body stays; every check is validated before use.
 bodies=$(grep -v '^[[:space:]]*#' "$list" | jq -ce '
   .checks
-  | if length == 15 and all(.[];
+  | if length == 16 and all(.[];
         (keys == ["grace", "slug", "timeout"]) and (.slug | test("^[a-z0-9-]{1,40}$"))
         and (.timeout | type == "number" and . >= 60 and . <= 31536000)
         and .grace == 2 * .timeout and .grace <= 31536000)
     then .[] | {name: .slug, slug, timeout, grace, channels: "*", tags: "rws", unique: ["slug"]}
-    else error("deploy/healthchecks.yaml: expected 15 valid checks") end') ||
+    else error("deploy/healthchecks.yaml: expected 16 valid checks") end') ||
   die "deploy/healthchecks.yaml does not validate"
 
 if ((DRY_RUN)); then

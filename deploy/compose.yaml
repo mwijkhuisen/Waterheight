@@ -9,6 +9,10 @@
 #     that group (docs/runbooks/bootstrap.md, "Secrets").
 # The owner channel in P1 is only /srv/rws/owner/status, mounted into capture.
 # No owner site, port or Caddy mount before P9 (WireGuard-only from P12a).
+# The database (P2a): db publishes no port and sits only on the internal network
+# "db"; rws-lib.sh starts it, sets the roles and passwords through its local
+# socket and runs `migrate` before `up` starts load and api (deploy_release).
+# Bind sources are absolute host paths, never paths inside a release directory.
 name: rws
 
 x-hardening: &hardening
@@ -124,6 +128,9 @@ services:
     secrets: [restic_password, s3_credentials]
     volumes:
       - /srv/rws/raw:/data/raw:ro
+      # The nightly dump (rws-backup writes it on the host from `exec db pg_dump`,
+      # root:61003 0440): the backup job never joins the db network.
+      - /srv/rws/backup/db:/data/db:ro
       - /srv/rws/backup/cache:/cache
       - /srv/rws/backup/drill:/restore
     networks: [backup]
@@ -133,18 +140,148 @@ services:
     healthcheck:
       disable: true
 
-  # P2 (#17) adds these; placeholders only in P1.
-  # db:
-  #   <<: *hardening
-  #   image: postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
-  #   user: "999:999"
-  #   volumes: [pgdata:/var/lib/postgresql]   # the PG18 image's VOLUME (PGDATA is /var/lib/postgresql/18/docker)
-  #   networks: [db]
-  #   mem_limit: 3g
-  # migrate:  dbmate 2.36.0, one-shot, network db, role rws_migrator
-  # load:     server image [load],    networks [db],        /srv/rws/raw rw (retention pruning), role rws_load
-  # publish:  server image [publish], networks [db],        /srv/rws/public rw, role rws_publish
-  # api:      server image [api],     networks [edge, db],  role rws_api
+  # PostgreSQL 18 as uid 999 (the image's postgres user) on a read-only root:
+  # the data in the named volume, the socket and /tmp on tmpfs. The superuser
+  # and rws_backup log in only through the local socket (peer); every other
+  # role only from the db network with scram-sha-256 (deploy/postgres/pg_hba.conf,
+  # installed by bootstrap.sh to /etc/rws/postgres).
+  db:
+    <<: *hardening
+    image: postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    user: "999:999"
+    group_add: ["61004"]
+    environment:
+      POSTGRES_DB: rws
+      # Read by initdb only; pg_hba.conf never lets the superuser in over TCP.
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_postgres
+      POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C.UTF-8 --encoding=UTF8 --auth-local=peer --auth-host=scram-sha-256
+    # Memory for a 3 GB container on the 8 GB VPS: 40 connections (the role
+    # limits add up to 33), 768 MB shared buffers, 16 MB per sort or hash.
+    command:
+      - postgres
+      - -c
+      - hba_file=/etc/rws-postgres/pg_hba.conf
+      - -c
+      - ident_file=/etc/rws-postgres/pg_ident.conf
+      - -c
+      - listen_addresses=*
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - log_statement=none
+      - -c
+      - max_connections=40
+      - -c
+      - shared_buffers=768MB
+      - -c
+      - effective_cache_size=2GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=128MB
+      # 512 kB of LISTEN/NOTIFY queue instead of 8 GB on the data volume:
+      # nothing of ours uses it, and a reader session could fill it.
+      - -c
+      - max_notify_queue_pages=64
+    secrets: [db_postgres]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /var/run/postgresql:size=1m,uid=999,gid=999,mode=0775
+    shm_size: 256m
+    volumes:
+      # The PG18 image's VOLUME: PGDATA is /var/lib/postgresql/18/docker.
+      - pgdata:/var/lib/postgresql
+      - /etc/rws/postgres:/etc/rws-postgres:ro
+    networks: [db]
+    mem_limit: 3g
+    cpus: 2.0
+    # 40 backends, the parallel, autovacuum and I/O workers, and the exec'd
+    # psql, pg_dump and pg_isready.
+    pids_limit: 128
+    stop_grace_period: 60s
+    healthcheck:
+      # PID 1 is postgres only once the image's entrypoint has finished its
+      # first-run set-up; its temporary socket-only server must not count.
+      test: ["CMD-SHELL", "grep -qx postgres /proc/1/comm && pg_isready -q"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+      start_interval: 2s
+
+  # A job: rws-lib.sh (deploy_release) runs it with `compose run` after the
+  # roles and passwords are set. dbmate 2.36.0 in the server image, as rws_migrator.
+  migrate:
+    <<: *hardening
+    image: ${RWS_SERVER_IMAGE:?}
+    command: [migrate]
+    profiles: [jobs]
+    restart: "no"
+    user: "65532:65532"
+    group_add: ["61005"]
+    environment:
+      RWS_DB_HOST: db
+      RWS_DB_PORT: "5432"
+      RWS_DB_NAME: rws
+    secrets: [db_rws_migrator]
+    networks: [db]
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 64
+    healthcheck:
+      disable: true
+
+  # Parses the raw archive into the database; the retention pruner (dry run
+  # unless RWS_PRUNE_APPLY=1, which is never set here) needs raw read-write.
+  load:
+    <<: *hardening
+    image: ${RWS_SERVER_IMAGE:?}
+    command: [load]
+    user: "65532:65532"
+    group_add: ["61006"]
+    environment:
+      RWS_RAW_DIR: /data/raw
+      RWS_DB_HOST: db
+      RWS_DB_PORT: "5432"
+      RWS_DB_NAME: rws
+    secrets: [db_rws_load]
+    volumes:
+      - /srv/rws/raw:/data/raw
+    networks: [db]
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 64
+    healthcheck: *node-healthcheck
+
+  # The public API; Caddy proxies only /api/v1/health and /api/v1/health/sources.
+  api:
+    <<: *hardening
+    image: ${RWS_SERVER_IMAGE:?}
+    command: [api]
+    user: "65532:65532"
+    group_add: ["61008"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+      RWS_DB_HOST: db
+      RWS_DB_PORT: "5432"
+      RWS_DB_NAME: rws
+    secrets: [db_rws_api]
+    networks: [edge, db]
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    healthcheck: *node-healthcheck
+
+  # P9 adds publish (server image [publish], networks [db], /srv/rws/public rw,
+  # role rws_publish, secret db_rws_publish, gid 61007) and the owner services
+  # (role rws_owner_api, secret db_rws_owner_api, gid 61009).
 
 networks:
   public:
@@ -194,7 +331,16 @@ secrets:
     file: /etc/rws/secrets/restic_password
   s3_credentials:
     file: /etc/rws/secrets/s3_credentials
+  db_postgres:
+    file: /etc/rws/secrets/db_postgres
+  db_rws_migrator:
+    file: /etc/rws/secrets/db_rws_migrator
+  db_rws_load:
+    file: /etc/rws/secrets/db_rws_load
+  db_rws_api:
+    file: /etc/rws/secrets/db_rws_api
 
 volumes:
   caddy_data:
   caddy_config:
+  pgdata:

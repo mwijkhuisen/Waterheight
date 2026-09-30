@@ -25,7 +25,7 @@ sudo rws-update --dry-run          # what the next run would do
 
 ## A deploy failed
 
-`rws-update` has already rolled back to `current` (if there was one) and pinged `update` `/fail` with a fixed code: `verify_failed`, `pull_failed`, `rolled_back`, `rollback_failed` or `first_deploy_failed`. It will not retry a release that failed after `up`: its tag is now in `skip_upto`. Find out why:
+`rws-update` has already rolled back to `current` (if there was one) and pinged `update` `/fail` with a fixed code: `verify_failed`, `pull_failed`, `rolled_back`, `rollback_failed` or `first_deploy_failed`. A release with a database (P2a on) can also fail before `up`, with `db_start_failed`, `db_prepare_failed` or `migrate_failed`; that ping is followed by the rollback's own (`rolled_back`, `rollback_failed` or `first_deploy_failed`). It will not retry a release that failed after `up`: its tag is now in `skip_upto`. Find out why:
 
 ```bash
 sudo journalctl -u rws-update -n 50          # verify, pull or smoke?
@@ -39,7 +39,22 @@ sudo docker compose -p rws ps; sudo docker logs --tail 80 rws-caddy-1
 | `smoke test failed` | `/healthz` or a fresh `capture.json` missing after `up` | It rolled back. Fix the release in a new PR |
 | `no previous release` | The first deploy failed | The containers were left as they are (capture may be recording). Fix the cause, then `sudo rws-deploy <tag>` |
 | `latest_older` (`refused: release … is older than the current …`) | GitHub's "latest" release is older than the one running | Nothing deploys until a newer release is the latest again. Check the Releases page: was the newest release deleted or un-marked as latest? |
+| `db_start_failed` | `up -d --wait db` did not get `db` healthy within 180 s | `sudo docker logs --tail 80 rws-db-1`; the disk (`docs/runbooks/disk-full.md`); the `db_postgres` secret readable by gid 61004. Nothing was migrated |
+| `db_prepare_failed` | The roles and passwords were not set. The journal names the cause: `no installed roles.sql` (run the release's `bootstrap.sh`), `the secret db_<role> is missing or not 64 lowercase hex characters` (bootstrap generates them: empty the file and run it again), or `psql in the db container failed` (psql's output is discarded on purpose: it can quote a statement; look at `docker logs rws-db-1`) | Fix the cause, then `sudo rws-deploy <tag>` |
+| `migrate_failed` | The `migrate` job exited non-zero. Its lines start with `migrate:` in the journal (the database URL and the password are scrubbed): dbmate's error, or, after dbmate, a partition or registry-sync error (a registry problem names the registry rows; a database error shows only its code) | The failed migration is not undone. Fix it forward in a new release (§ Migrations) |
 | `host_files_changed` (`brings changed host files`) | The running release brings host files that `bootstrap.sh` has not installed | The release runs; run its bootstrap (below, "Host files"). Every run pages until then (never during a rollback hold) |
+
+## Migrations: expand, then contract; never an automatic down
+
+`migrate` (dbmate 2.36.0 in the server image, as `rws_migrator` acting as `rws_owner`) runs at every deploy, after `db` is healthy and its roles and passwords are set, and before `load` and `api` start. Then it creates the partitions and syncs the registry.
+
+- **No automatic `dbmate down`.** A failed deploy rolls the images back, never the schema. The `-- migrate:down` blocks exist for development and for CI, which migrates, rolls back every migration and migrates again (`scripts/db-check.sh`). They are not a production procedure.
+- **A migration must be expand-only for one release**: add a table, column or view, never drop or rename what the previous release still reads. The old image then keeps working on the new schema, and that is exactly what a rollback runs. The contract step (drop, rename, tighten) goes into a later release, once no release you could roll back to needs the old shape.
+- A migration that failed half-way is not retried by hand: dbmate runs each file in a transaction, so a failed file leaves nothing behind. Fix it forward in a new release.
+- A rollback to a P1b release (before the database) removes `db`, `load` and `api` (`up -d --remove-orphans`) and **keeps the `pgdata` volume**. Redeploying a P2a release later finds the data and applies only migrations that are newer.
+- While no release with an `api` runs, `/api/v1/health` is a 404: the watchdog sends no `load` ping, and healthchecks.io alerts on the `load` check after about 15 minutes. Pause that check during a deliberate rollback.
+- The first release with the database needs a different order (stop the timer, bootstrap, deploy on purpose): `docs/runbooks/bootstrap.md`, "the first release with the database".
+- The nightly database dump and a deploy take turns on the deploy lock: the dump waits up to 25 minutes for a running deploy, `rws-update` skips a run while a dump holds the lock, and `rws-deploy` waits for it.
 
 ## Roll back on purpose
 
@@ -54,4 +69,4 @@ A rollback changes only images and `compose.yaml`: the host files stay those of 
 
 ## Host files
 
-`rws-update` changes only images and `compose.yaml`. When the running release brings other host files (`deploy/bin`, `deploy/host`, `deploy/systemd`, the healthchecks, reachability and owner-term lists, and the two `[owner]` tests; not the image build inputs, which arrive as signed images), every run pings `update` `/fail` with `host_files_changed` and logs `brings changed host files`, until you run the bootstrap inside that verified release directory (`docs/runbooks/bootstrap.md`, last section). Not during a rollback hold: see above, and never run an older release's bootstrap.
+`rws-update` changes only images and `compose.yaml`. When the running release brings other host files (`deploy/bin`, `deploy/host`, `deploy/systemd`, `deploy/postgres`, the healthchecks, reachability and owner-term lists, and the two `[owner]` tests; not the image build inputs, which arrive as signed images), every run pings `update` `/fail` with `host_files_changed` and logs `brings changed host files`, until you run the bootstrap inside that verified release directory (`docs/runbooks/bootstrap.md`, last section). Not during a rollback hold: see above, and never run an older release's bootstrap.

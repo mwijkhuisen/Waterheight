@@ -1,0 +1,12 @@
+{
+  "spec": "de-1-series",
+  "source": "DE-1",
+  "synthetic": false,
+  "recorded_at": "2026-09-30T07:17:52Z",
+  "status": 404,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/a37a9aa3-45e9-4d90-9df6-109f3a28a5af/WV/measurements.json",
+  "bytes": 53,
+  "trimmed": false,
+  "note": "The error case: the JSON body of a 404 (MAINZ has no WV timeseries)."
+}

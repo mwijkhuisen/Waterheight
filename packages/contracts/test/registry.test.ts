@@ -287,7 +287,9 @@ describe('permission records and the baseline (invariant 8)', () => {
   });
 
   it('accept an audience a well-formed record grants', () => {
-    const flip = (s: Record<string, unknown>) => Object.assign(s, { audience: 'public', capture_enabled: true });
+    // A permission-based source has history_export off, so a captured one declares its provider's window.
+    const flip = (s: Record<string, unknown>) =>
+      Object.assign(s, { audience: 'public', capture_enabled: true, history_window: 'P31D' });
     expect(problemsWith('DE-12', flip, grant('DE-12'))).toBe('');
   });
 
@@ -330,6 +332,35 @@ describe('permission records and the baseline (invariant 8)', () => {
       expect([s.id, BASELINE[s.id]?.audience]).toEqual([s.id, expected]);
     }
     expect(Object.keys(BASELINE).sort()).toEqual(sources.map((s) => s.id).sort());
+  });
+});
+
+describe('history_window', () => {
+  const missing = /history_export is off, so the source must declare its provider's history_window/;
+  const withoutHistory = (s: Record<string, unknown>) => (s.history_export = false);
+
+  it('is declared on no source today, because every captured source exports its history', () => {
+    for (const s of sources) expect([s.id, s.history_window]).toEqual([s.id, undefined]);
+    expect(sources.filter((s) => s.audience !== 'off').every((s) => s.history_export)).toBe(true);
+  });
+
+  it('is required on a captured source whose history_export is off', () => {
+    expect(problemsWith('NL-1', withoutHistory)).toMatch(missing);
+    expect(problemsWith('BE-3', withoutHistory)).toMatch(missing);
+  });
+
+  it('is satisfied by an ISO 8601 duration', () => {
+    expect(
+      problemsWith('NL-1', (s) => Object.assign(s, { history_export: false, history_window: 'P31D' })),
+    ).not.toMatch(missing);
+  });
+
+  it('is not needed on a source that is not captured', () => {
+    expect(problemsWith('DE-9', (s) => Object.assign(s, { history_export: false }))).not.toMatch(missing);
+  });
+
+  it.each(['31 days', '31D', 'P', '', 31])('rejects %j', (value) => {
+    expect(problemsWith('NL-1', (s) => (s.history_window = value))).toMatch(/history_window/);
   });
 });
 

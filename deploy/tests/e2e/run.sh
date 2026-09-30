@@ -23,7 +23,18 @@
 #   - restic reads its keys from AWS_SHARED_CREDENTIALS_FILE and writes to an
 #     Object Lock bucket; the restore drill matches 100 of 100; the VPS key
 #     cannot remove a version (object-lock-prune.sh);
-#   - the watchdog's probe through DNS and TLS passes.
+#   - the watchdog's probe through DNS and TLS passes;
+#   - (P2a) the database path of rws-lib.sh (db_up: db healthy, roles and
+#     passwords over its socket, migrate) runs twice without a change; db
+#     publishes no port and sits only on the internal db network; pg_hba lets
+#     rws_api in with its password and refuses a wrong one and the superuser
+#     over TCP; rws_api can neither read a base table nor insert; load turns
+#     the DE-1 fixture archive into observations; /api/v1/health and
+#     /health/sources answer through Caddy over TLS, any other /api/ path is a
+#     404 and an unknown parameter a 400; load and api have no route out; db,
+#     load and api keep the hardening flags; each sees only its own secret;
+#     the nightly dump is a valid custom-format dump readable only by root and
+#     gid 61003, and restic backs it up.
 # The stack keeps running afterwards for scripts/verify-prod.ts.
 # Usage: sudo deploy/tests/e2e/run.sh
 set -euo pipefail
@@ -38,6 +49,8 @@ readonly DOMAIN=rivierstanden.example IP4=203.0.114.10 IP6=2a0a:e5c0:ffff::10
 readonly DOCKER_APT=5:29.8.1-1~ubuntu.24.04~noble CONTAINERD_APT=2.3.5-1~ubuntu.24.04~noble
 readonly COMPOSE_APT=5.5.1-1~ubuntu.24.04~noble
 readonly MC_IMAGE=cgr.dev/chainguard/minio-client@sha256:be51ef820151a708a8e140037e3746862a8c1dd5e624f84b404a1d71bcefb167
+# The build image's Node (the job's own node is not on sudo's PATH): runs scripts/fixture-archive.ts.
+readonly NODE_IMAGE=node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1
 readonly REL=$RWS_STATE_DIR/releases/prod-ci
 
 proofs=()
@@ -70,7 +83,7 @@ on_exit() {
   if ((rc != 0)); then
     echo "::group::diagnostics"
     docker compose -p rws ps -a 2>/dev/null || true
-    for s in caddy capture watchdog pebble minio; do docker logs --tail 60 "rws-$s-1" 2>&1 | sed "s/^/$s| /" || true; done
+    for s in caddy capture watchdog db load api pebble minio; do docker logs --tail 60 "rws-$s-1" 2>&1 | sed "s/^/$s| /" || true; done
     systemctl status --no-pager rws-status-copy.path rws-status-copy.service 2>&1 | tail -n 20 || true
     nft list ruleset 2>/dev/null | head -n 200 || true
     echo "::endgroup::"
@@ -153,7 +166,8 @@ chmod 0644 /ci/pki/*.key /ci/pki/minio/private.key
 
 # ------------------------------------------------------------------ host layout
 step "Host layout, groups and secrets as bootstrap.sh makes them"
-for g in rws-hc:61001 rws-rwskey:61002 rws-backup:61003; do
+for g in rws-hc:61001 rws-rwskey:61002 rws-backup:61003 rws-dbpostgres:61004 rws-dbmigrator:61005 rws-dbload:61006 \
+  rws-dbpublish:61007 rws-dbapi:61008 rws-dbownerapi:61009; do
   getent group "${g%%:*}" >/dev/null || groupadd --system --gid "${g#*:}" "${g%%:*}"
 done
 # The runner's own disk is often over 75% full: a tmpfs keeps the watchdog's disk check about our layout.
@@ -163,7 +177,12 @@ install -d -m 0755 /srv/rws/public /srv/rws/public/ops /srv/rws/tiles /etc/rws
 install -d -m 0700 /etc/rws/secrets "$RWS_STATE_DIR" "$RWS_STATE_DIR/releases"
 install -d -m 0750 -o 65532 -g 65532 /srv/rws/raw /srv/rws/owner /srv/rws/owner/status
 install -d -m 0755 -o 65532 -g 65532 /srv/rws/public/status
-install -d -m 0700 -o 65532 -g 65532 /srv/rws/backup /srv/rws/backup/cache /srv/rws/backup/drill
+# The parent is root's: its subdirectories are bind-mounted one by one, and a uid-65532 owner could swap db/ for a link.
+install -d -m 0700 -o 0 -g 0 /srv/rws/backup
+install -d -m 0700 -o 65532 -g 65532 /srv/rws/backup/cache /srv/rws/backup/drill
+install -d -m 0750 -o 0 -g 61003 /srv/rws/backup/db
+install -d -m 0755 /etc/rws/postgres
+install -m 0644 "$repo/deploy/postgres/pg_hba.conf" "$repo/deploy/postgres/pg_ident.conf" /etc/rws/postgres/
 put_secret() {
   install -m 0440 -o 0 -g "$2" /dev/null "/etc/rws/secrets/$1"
   printf '%b' "$3" >"/etc/rws/secrets/$1"
@@ -173,6 +192,12 @@ put_secret hc_ping_key 61001 ''
 put_secret rws_x_api_key 61002 "$(cat /proc/sys/kernel/random/uuid)\n"
 put_secret restic_password 61003 "ci-$(openssl rand -hex 16)\n"
 put_secret s3_credentials 61003 "[default]\naws_access_key_id = rws-vps\naws_secret_access_key = $vps_secret\n"
+# The database passwords: 64 hex characters, as bootstrap.sh generates them.
+gid=61004
+for name in db_postgres db_rws_migrator db_rws_load db_rws_publish db_rws_api db_rws_owner_api; do
+  put_secret "$name" "$gid" "$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')\n"
+  gid=$((gid + 1))
+done
 cat >/etc/rws/rws.env <<EOF
 RWS_DOMAIN=$DOMAIN
 RWS_CONTACT_EMAIL=contact@$DOMAIN
@@ -202,6 +227,11 @@ for i in $(seq 1 120); do
   jq -cn --arg key "$key" --arg sha "$sha" \
     '{v: 1, source: "NL-1", spec: "nl-1-obs-key", key: $key, sha256: $sha, fetched_at: {start: "2026-09-01T12:00:00.000Z", end: "2026-09-01T12:00:01.000Z"}}'
 done >"$manifest_dir/2026-09-01.jsonl"
+# The DE-1 fixture archive (recorded public payloads as zstd objects with their
+# manifest lines) that load turns into observations; no network, root in the
+# container, owner and modes set below as capture writes them.
+docker run --rm --network none -v "$repo:$repo:ro" -v /srv/rws/raw:/srv/rws/raw -w "$repo" --entrypoint node \
+  "$NODE_IMAGE" scripts/fixture-archive.ts /srv/rws/raw
 chown -R 65532:65532 /srv/rws/raw
 find /srv/rws/raw -type d -exec chmod 0750 {} +
 find /srv/rws/raw -type f -exec chmod 0640 {} +
@@ -244,13 +274,28 @@ proof "docker compose config -q: deploy/compose.yaml valid with the host setting
 docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$e2e/compose.ci.yaml" \
   --env-file /etc/rws/rws.env --env-file "$REL/images.env" --profile jobs config >"$REL/compose.yaml"
 grep -q '^  backup:' "$REL/compose.yaml" || fail "the merged compose file has no backup service"
+grep -q '^  migrate:' "$REL/compose.yaml" || fail "the merged compose file has no migrate job"
 set_active prod-ci
+# The production path (deploy_release): db healthy, roles and passwords through
+# its socket (db_prepare), the migrate job; then up. Twice: a redeploy changes nothing.
+db_up || fail "db_up (db start, db_prepare or migrate) failed"
+db_up || fail "a second db_up failed"
+psql_su() { rws_compose exec -T db psql -XAtq -v ON_ERROR_STOP=1 -U postgres -d rws -c "$1"; }
+applied=$(psql_su 'select count(*) from schema_migrations')
+files=$(find "$repo/db/migrations" -maxdepth 1 -name '*.sql' | wc -l)
+[[ $applied == "$files" ]] || fail "schema_migrations has $applied rows, db/migrations $files files"
+owner=$(psql_su "select string_agg(distinct tableowner, ',') from pg_tables where schemaname = 'public'")
+[[ $owner == rws_owner ]] || fail "public tables owned by $owner"
+# Review N2: a reader session cannot fill the data volume through the NOTIFY queue.
+notify=$(psql_su 'show max_notify_queue_pages')
+[[ $notify == 64 ]] || fail "max_notify_queue_pages is $notify, not 64"
+proof "db_up of rws-lib.sh ran twice: db healthy, deploy/postgres/roles.sql and the five passwords over the local socket, the migrate job (dbmate 2.36.0 in the server image, as rws_migrator): $applied of $files migrations applied, every public table owned by rws_owner, max_notify_queue_pages $notify"
 rws_compose up -d --remove-orphans --quiet-pull
 healthy() { [[ $(docker inspect -f '{{.State.Health.Status}}' "rws-$1-1") == healthy ]]; }
-for s in caddy capture watchdog; do wait_for "$s healthy" 240 healthy "$s"; done
-proof "caddy, capture and watchdog healthy; the capture and watchdog healthchecks run node in distroless (no shell): $(docker inspect -f '{{json .Config.Healthcheck.Test}}' rws-capture-1)"
+for s in caddy capture watchdog db load api; do wait_for "$s healthy" 240 healthy "$s"; done
+proof "caddy, capture, watchdog, db, load and api healthy; the node healthchecks run in distroless (no shell): $(docker inspect -f '{{json .Config.Healthcheck.Test}}' rws-capture-1)"
 docker ps -a --filter label=com.docker.compose.project=rws --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
-for s in caddy capture watchdog; do
+for s in caddy capture watchdog db load api; do
   docker inspect -f '{{.Name}} user={{.Config.User}} readonly={{.HostConfig.ReadonlyRootfs}} capdrop={{.HostConfig.CapDrop}} capadd={{.HostConfig.CapAdd}} secopt={{.HostConfig.SecurityOpt}} mem={{.HostConfig.Memory}} cpus={{.HostConfig.NanoCpus}} pids={{.HostConfig.PidsLimit}} restart={{.HostConfig.RestartPolicy.Name}}' "rws-$s-1"
 done
 
@@ -349,6 +394,89 @@ docker restart rws-bind-probe >/dev/null
 docker rm -f rws-bind-probe >/dev/null
 proof "a file bind mount (as Compose mounts file secrets): an in-place write (sudoedit) is seen at once, a file replaced by a rename stays the old one in a running container, and docker restart mounts the new one"
 
+# ------------------------------------------------------------------ database, load, api (P2a)
+step "db: no port, internal network only; pg_hba and the rws_api grants from inside the api container"
+[[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-db-1) =~ ^(\{\}|null)$ ]] || fail "db publishes a port"
+nets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' rws-db-1)
+[[ $nets == 'rws_db ' ]] || fail "db networks: $nets"
+[[ $(docker network inspect -f '{{.Internal}}' rws_db) == true ]] || fail "network rws_db is not internal"
+# node-postgres from the api image itself; the password comes from the container's
+# own secret file, never from this script's argv. Prints the SQLSTATE of each try.
+pg_try='
+const { Client } = require("/app/apps/server/node_modules/pg");
+const pw = require("fs").readFileSync("/run/secrets/db_rws_api", "utf8").trim();
+const tryq = async (user, password, sql) => {
+  const c = new Client({ host: "db", port: 5432, database: "rws", user, password, connectionTimeoutMillis: 5000 });
+  try { await c.connect(); } catch (e) { return "login:" + (e.code || "error"); }
+  try { await c.query(sql); return "ok"; } catch (e) { return "sql:" + (e.code || "error"); } finally { await c.end(); }
+};
+(async () => console.log([
+  await tryq("rws_api", pw, "select 1"),
+  await tryq("rws_api", "wrong-" + pw, "select 1"),
+  await tryq("postgres", pw, "select 1"),
+  await tryq("rws_api", pw, "select * from obs limit 1"),
+  await tryq("rws_api", pw, "insert into obs default values"),
+  await tryq("rws_api", pw, "begin read write; insert into obs default values"),
+].join(" ")))();'
+got=$(docker exec rws-api-1 /nodejs/bin/node -e "$pg_try")
+[[ $got == 'ok login:28P01 login:28000 sql:42501 sql:25006 sql:42501' ]] || fail "pg_hba and grants: $got"
+proof "db publishes no port (PortBindings empty) and sits only on rws_db (internal); from the api container: rws_api logs in with its secret, a wrong password is refused (28P01), postgres over TCP is rejected by pg_hba (28000); rws_api cannot read the base table obs (42501), its session is read-only (25006) and even a read-write transaction cannot insert (42501)"
+
+step "load turns the DE-1 fixture archive into observations; the api answers through Caddy"
+obs_loaded() { [[ $(psql_su 'select count(*) from obs') =~ ^[1-9][0-9]*$ ]]; }
+wait_for "observations from the DE-1 fixture archive" 300 obs_loaded
+api_url() { printf 'https://%s%s' "$DOMAIN" "$1"; }
+api_code() {
+  ip netns exec ext curl -sS -o /dev/null -w '%{http_code}' --max-time 10 --cacert /ci/pki/pebble-root.pem \
+    --resolve "$DOMAIN:443:$IP4" "$(api_url "$1")"
+}
+wait_for "/api/v1/health through Caddy" 120 outside --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health)"
+health=$(outside --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health)")
+jq -e '.status | type == "string"' <<<"$health" >/dev/null || fail "/api/v1/health: no status"
+sources=$(outside --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health/sources)")
+grep -q '"DE-1"' <<<"$sources" || fail "/api/v1/health/sources does not list DE-1"
+[[ $(api_code /api/v1/x) == 404 && $(api_code /api/v1/health/x) == 404 && $(api_code /API/v1/health) == 404 ]] ||
+  fail "a non-health /api/ path is not a 404"
+[[ $(api_code '/api/v1/health?rws-e2e-unknown=1') == 400 ]] || fail "an unknown parameter is not a 400"
+headers=$(ip netns exec ext curl -sS -D - -o /dev/null --max-time 10 --cacert /ci/pki/pebble-root.pem \
+  --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health)" | tr -d '\r')
+grep -qi '^content-security-policy: default-src' <<<"$headers" || fail "the api response lacks the site headers"
+! grep -qiE '^(server|via|access-control-[a-z-]+):' <<<"$headers" || fail "the api response names its software or sends CORS"
+proof "load wrote $(psql_su 'select count(*) from obs') observations from the fixture archive; over TLS through Caddy /api/v1/health answers $(jq -c '{status}' <<<"$health") and /api/v1/health/sources lists DE-1, with the site headers and no Server, Via or CORS header; /api/v1/x, /api/v1/health/x and /API/v1/health are 404s from Caddy, an unknown parameter a 400"
+
+step "load and api: no route out, the hardening flags, only their own secret"
+no_route='const s = require("net").connect({ host: "1.1.1.1", port: 443, timeout: 5000 });
+s.on("connect", () => { console.log("connected"); process.exit(1); });
+s.on("timeout", () => { console.log("timeout"); process.exit(0); });
+s.on("error", (e) => { console.log(e.code); process.exit(0); });'
+routes=''
+for s in load api; do
+  r=$(docker exec "rws-$s-1" /nodejs/bin/node -e "$no_route") || fail "$s reached 1.1.1.1:443"
+  routes+="$s $r; "
+done
+read_status='process.stdout.write(require("fs").readFileSync("/proc/1/status", "utf8"))'
+for s in db load api; do
+  if [[ $s == db ]]; then st=$(docker exec rws-db-1 cat /proc/1/status); uid=999; else
+    st=$(docker exec "rws-$s-1" /nodejs/bin/node -e "$read_status")
+    uid=65532
+  fi
+  grep -qP "^Uid:\t$uid\t" <<<"$st" || fail "$s does not run as uid $uid"
+  grep -qP '^CapEff:\t0000000000000000$' <<<"$st" || fail "$s has an effective capability"
+  grep -qP '^NoNewPrivs:\t1$' <<<"$st" || fail "$s may gain privileges"
+  [[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}}' "rws-$s-1") == 'true [ALL]' ]] ||
+    fail "$s: root file system writable or capabilities kept"
+done
+list_secrets="console.log(require('fs').readdirSync('/run/secrets').join(','))"
+[[ $(docker exec rws-load-1 /nodejs/bin/node -e "$list_secrets") == db_rws_load ]] || fail "load sees other secrets"
+[[ $(docker exec rws-api-1 /nodejs/bin/node -e "$list_secrets") == db_rws_api ]] || fail "api sees other secrets"
+[[ $(docker exec rws-db-1 ls /run/secrets) == db_postgres ]] || fail "db sees other secrets"
+if docker run --rm --network none --user 65532:65532 -v /etc/rws/secrets/db_rws_api:/s:ro \
+  --entrypoint /nodejs/bin/node rws-server:ci -e "require('fs').readFileSync('/s')" 2>/dev/null; then
+  fail "a uid-65532 container without gid 61008 read db_rws_api"
+fi
+proof "load and api have no route out (1.1.1.1:443: ${routes% })"
+proof "db (uid 999), load and api (uid 65532): read-only root, cap_drop ALL, CapEff 0, NoNewPrivs 1; each mounts only its own secret (db_postgres, db_rws_load, db_rws_api), and uid 65532 without gid 61008 cannot read db_rws_api"
+
 # ------------------------------------------------------------------ capture
 step "Capture in distroless: contract files, modes, generated_at advances"
 wait_for "capture.json" 120 test -s /srv/rws/public/status/capture.json
@@ -423,7 +551,7 @@ systemctl stop rws-status-copy.path
 [[ $(systemctl is-active rws-status-copy.path) == active ]] || fail "rws-tick did not re-arm rws-status-copy.path"
 proof "12 capture.json renames in about 6 s leave rws-status-copy.path active (its service has no start limit), a later write is still published, and rws-tick re-arms a stopped path unit"
 CURL_CA_BUNDLE=/ci/pki/pebble-root.pem RWS_SMOKE_TIMEOUT=150 RWS_SMOKE_INTERVAL=5 smoke $(($(date -u +%s) - 1))
-proof "the rws-deploy smoke test passes against the stack (/healthz 200 over real TLS, a capture.json newer than the deploy)"
+proof "the rws-deploy smoke test passes against the stack (/healthz 200 over real TLS, a capture.json newer than the deploy, and, as the release has an api, /api/v1/health with a JSON status)"
 docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.CPUPerc}}' | grep '^rws-'
 
 # ------------------------------------------------------------------ backups
@@ -453,6 +581,26 @@ mc admin policy attach m rws-vps --user rws-vps
 "$repo/deploy/bin/rws-backup"
 jq -e '.last_backup != null' /srv/rws/public/ops/ops.json >/dev/null || fail "last_backup not set"
 proof "restic 0.19.1 in the backup job read its S3 keys from AWS_SHARED_CREDENTIALS_FILE (/run/secrets/s3_credentials, key rws-vps with deploy/host/s3-vps-key-policy.json) and its password from RESTIC_PASSWORD_FILE, and wrote the raw archive to a bucket with Object Lock COMPLIANCE; ops.json last_backup set"
+# The nightly dump of that run (the first run of a release with db always dumps).
+dumps=/srv/rws/backup/db
+[[ $(stat -c '%a %u %g' "$dumps/rws.dump" "$dumps/globals.sql" | sort -u) == '440 0 61003' ]] ||
+  fail "dump files: $(stat -c '%n %a %u %g' "$dumps"/* | tr '\n' ' ')"
+[[ $(head -c 5 "$dumps/rws.dump") == PGDMP ]] || fail "rws.dump is not a custom-format dump"
+tables=$(rws_compose exec -T db pg_restore -l <"$dumps/rws.dump" | grep -c ' TABLE DATA ' || true)
+((tables > 0)) || fail "pg_restore -l lists no table data in rws.dump"
+grep -q '^CREATE ROLE rws_api;' "$dumps/globals.sql" || fail "globals.sql lacks the roles"
+! grep -q 'SCRAM-SHA-256' "$dumps/globals.sql" || fail "globals.sql carries a password hash"
+read_dump() {
+  docker run --rm --network none --user 65532:65532 "$@" -v "$dumps:/d:ro" --entrypoint /nodejs/bin/node rws-server:ci \
+    -e "require('fs').readFileSync('/d/rws.dump')" 2>/dev/null
+}
+if read_dump; then fail "uid 65532 without gid 61003 read the dump"; fi
+read_dump --group-add 61003 || fail "gid 61003 (the backup job's) cannot read the dump"
+snapshot=$(rws_compose run --rm --no-deps -T backup ls latest /data/db)
+for f in rws.dump globals.sql; do
+  grep -qx "/data/db/$f" <<<"$snapshot" || fail "the latest snapshot has no /data/db/$f"
+done
+proof "the nightly dump: pg_dump -Fc --no-large-objects and pg_dumpall --globals-only --no-role-passwords as rws_backup (peer, no password) wrote rws.dump (custom format, $tables TABLE DATA entries by pg_restore -l) and globals.sql (the roles, no password hash), root:61003 0440 in root's /srv/rws/backup: uid 65532 cannot read them, the backup job's gid can, and restic's latest snapshot holds /data/db"
 drill=$("$repo/deploy/bin/rws-restore-drill" --force | tail -n 1)
 [[ $drill == 'restore drill: sampled 100, matched 100' ]] || fail "drill: $drill"
 jq -e '.drill.sampled == 100 and .drill.matched == 100' /srv/rws/public/ops/ops.json >/dev/null || fail "ops.json drill"

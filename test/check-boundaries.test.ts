@@ -35,7 +35,16 @@ describe('check-boundaries', () => {
     expect(problems).toMatch(/normalise\.ts: imports \.\.\/\.\.\/http\/client\.ts/);
   });
 
-  it('fails when a view name appears outside audience.ts', () => {
-    expect(fixture('view-name')).toEqual([expect.stringMatching(/view name pub_obs_latest outside/)]);
+  it('fails when a view name appears outside audience.ts: TypeScript, tests, scripts and SQL, in any case', () => {
+    // The names are assembled here: this file is scanned by the same rule.
+    const view = (family: string, name: string) => `view name ${family}_${name} outside`;
+    expect(fixture('view-name').sort()).toEqual([
+      expect.stringContaining(`apps/server/src/load/q.sql: ${view('pub', 'forecast_run')}`),
+      // Code under a directory named fixtures is still code; only this checker's own test trees are skipped.
+      expect.stringContaining(`apps/server/test/fixtures/build.ts: ${view('PUB', 'STATION')}`),
+      expect.stringContaining(`packages/core/src/sql.ts: ${view('pub', 'obs_latest')}`),
+      expect.stringContaining(`scripts/report.ts: ${view('own', 'obs')}`),
+      expect.stringContaining(`test/x.test.ts: ${view('pub', 'series')}`),
+    ]);
   });
 });

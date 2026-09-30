@@ -1,21 +1,29 @@
-# Station registry: the P0b sample of 5 rows (schema: packages/contracts/src/stations.ts).
-# Taken from catalogue §3; a field the catalogue does not state is null, never guessed.
-# P2 (DE, NL) and P5 (FR, CH, LU, BE) replace these rows with the full sets and the names
-# exactly as each agency publishes them. Owner-audience rows identify the gauge only
-# (invariant 11): no datum, gauge zero, value, threshold or forecast.
+# Schema fixture for stations.test.ts: 5 rows across the audiences (schema: packages/contracts/src/stations.ts).
+# Taken from catalogue §3; a field the catalogue does not state is null, never guessed. The real,
+# synced station files live in registry/stations/ and hold no sample rows. Owner-audience rows
+# identify the gauge only (invariant 11): no datum, gauge zero, value, threshold or forecast.
 stations:
   - id: nl.rws.lobith.bovenrijn.tolkamer
     source: NL-1
     provider_code: lobith.bovenrijn.tolkamer
+    provider_key: lobith.bovenrijn.tolkamer/WATHTE
     name: Lobith
     water_name: null
     country: NL
     lon: 6.1024
     lat: 51.8495
     quantity: H
+    tier: 1
+    role: primary
     river: rhine
     km: { system: Rhein-km (PEGELONLINE), value: 862.0 }
     flags: { tidal: null, impounded: null }
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT45M
     expected_threshold_source: NL-4
     expected_forecast_source: NL-1
     licence_gate: open
@@ -27,15 +35,24 @@ stations:
   - id: de.wsv.25700100
     source: DE-1
     provider_code: "25700100"
+    provider_key: 1d26e504-7f9e-480a-b52c-5932be6549ab/W
     name: Kaub
     water_name: RHEIN
     country: DE
     lon: null
     lat: null
     quantity: H
+    tier: 1
+    role: primary
     river: rhine
     km: { system: Rhein-km (PEGELONLINE), value: 546.23 }
     flags: { tidal: null, impounded: null }
+    native_unit: cm
+    to_canonical: 1
+    value_kind: stage
+    native_step: PT15M
+    expected_step: PT15M
+    staleness_limit: PT45M
     expected_threshold_source: DE-1
     # DE-2 (BfG WV) forecasts Kaub, but DE-2 is owner-audience until the Belegexemplar
     # (P12): a public row may not name it (validateStations; invariant 11).
@@ -50,15 +67,24 @@ stations:
   - id: ch.bafu.2289
     source: CH-1
     provider_code: "2289"
+    provider_key: 2289/Q
     name: Basel, Rheinhalle
     water_name: Rhein
     country: CH
     lon: 7.61668
     lat: 47.55943
     quantity: Q
+    tier: 1
+    role: primary
     river: rhine
     km: { system: Rhein-km (PEGELONLINE), value: 164.3 }
     flags: { tidal: null, impounded: null }
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT45M
     expected_threshold_source: CH-2
     expected_forecast_source: CH-4
     licence_gate: open
@@ -70,15 +96,24 @@ stations:
   - id: fr.sandre.B720000001
     source: FR-1
     provider_code: B720000001
+    provider_key: B720000001/H
     name: Chooz Trou du Diable
     water_name: null
     country: FR
     lon: null
     lat: null
     quantity: H
+    tier: 1
+    role: primary
     river: meuse
     km: null
     flags: { tidal: null, impounded: null }
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT45M
     expected_threshold_source: FR-5
     expected_forecast_source: null
     licence_gate: open
@@ -91,15 +126,24 @@ stations:
   - id: be.spw.7102
     source: BE-3
     provider_code: "7102"
+    provider_key: 7102/H
     name: Liège
     water_name: null
     country: BE
     lon: 5.5772
     lat: 50.6126
     quantity: H
+    tier: 2
+    role: primary
     river: meuse
     km: null
     flags: { tidal: null, impounded: null }
+    native_unit: m
+    to_canonical: 100
+    value_kind: stage
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT45M
     # SPW publishes no numeric alert thresholds, but its long-term percentiles are
     # the owner view's reference (D18 addendum; catalogue §1a BE-3 "statistics and percentiles").
     expected_threshold_source: BE-3

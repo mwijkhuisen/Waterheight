@@ -1,0 +1,575 @@
+import { createHash } from 'node:crypto';
+import { type Normalised, SchemaDrift } from '@rws/core';
+import type { Kysely } from 'kysely';
+import { ManifestLine } from '../archive/manifest.ts';
+import { ArchiveError, type ArchiveReader, type RawLine } from '../archive/reader.ts';
+import type { DB } from '../db/generated.ts';
+import { errorCode } from '../db/pool.ts';
+import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
+import {
+  type Attempt,
+  advanceCursor,
+  applyFetchHealth,
+  applyGaugeZeros,
+  type BatchInput,
+  clearAttempt,
+  closeBatch,
+  cursors,
+  emptyFold,
+  type FetchFold,
+  lock,
+  openBatch,
+  readAttempt,
+  type SeriesRow,
+  seriesOf,
+  setBatchAside,
+  storeUnitMismatch,
+  type Tx,
+  unitMismatchOf,
+  upsertObs,
+  writeAttempt,
+  writeMeta,
+} from './store.ts';
+
+// The loader (A§7.4 steps 1–5): it tails the manifest from load_cursor and
+// turns each archived payload into rows. One payload is one transaction:
+// observations, revisions, latest values, rollups, the batch row, the source's
+// health and the cursor commit together or not at all, so a kill -9 anywhere
+// neither loses, skips nor double-applies a manifest line.
+//
+// The tail never stalls silently. A payload that fails for a reason of its own
+// (a constraint, a bug in its parser, an unreadable object) is tried at most
+// twice and then quarantined; the attempt is recorded before the payload is
+// touched, so a payload that kills the process is quarantined too, untouched,
+// on the pass after its second attempt. Anything else (the database, the
+// deployment, the archive) stalls the tail, which alerts `load_stalled` when
+// the stall starts and every 15 minutes while it lasts, and the health pass
+// publishes the age of the oldest unconsumed line.
+
+export type Alert = (code: string, fields?: Record<string, string | number>) => void;
+
+export type LoadDeps = {
+  db: Kysely<DB>;
+  reader: ArchiveReader;
+  /** A condition the owner must hear about: fixed codes and our own identifiers only, never provider text. */
+  alert: Alert;
+  info?: (msg: string, fields?: Record<string, string | number>) => void;
+  now: () => Date;
+  /** One sample per consumed manifest line: how long after its fetch it was loaded. */
+  onLag?: (source: string, fetchedAt: Date, lagMs: number) => void;
+  /** A constructor argument for tests (a fixed parser, a broken one); never set from env or config. */
+  adapters?: Readonly<Record<string, LoadAdapter>>;
+};
+
+export type Outcome =
+  | { kind: 'loaded'; n_rows: number; n_new: number; n_changed: number }
+  | { kind: 'quarantined'; code: string }
+  | { kind: 'skipped'; code: string }
+  | { kind: 'no_adapter' };
+
+/** `more`: the tick stopped between lines (its time budget, or a stop) and there is more to read now. */
+export type TickResult = { lines: number; loaded: number; more?: true };
+export type TickOptions = {
+  /** Stop between lines once `now()` reaches this instant (epoch ms). */
+  until?: number;
+  /** Checked between lines: stop as soon as it says so. */
+  stop?: () => boolean;
+};
+
+/**
+ * Manifest bytes not consumed yet, and how old the oldest whole unconsumed
+ * manifest line is. A damaged line is skipped (the next tick steps over it),
+ * and a torn last line is not whole: `age_s` is null when no whole line is
+ * left to load, whatever `bytes` still reports.
+ */
+export type Backlog = { files: number; bytes: number; age_s: number | null };
+
+/** Nothing left to load: the gate of the checksums and the nightly jobs (a torn last line never blocks them). */
+export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
+
+/** A payload is tried at most this often; the next pass quarantines it without reading it. */
+export const MAX_TRIES = 2;
+/** While the tail is stalled for the same reason, its alert repeats at most this often. */
+export const STALL_ALERT_MS = 15 * 60_000;
+
+export class Loader {
+  private readonly deps: LoadDeps;
+  private readonly series = new Map<string, Map<string, SeriesRow>>();
+  private readonly units = new Map<string, Set<string>>();
+  /** What app_meta `load_attempt` says, once read (null: no line in flight). */
+  private attempt: Attempt | undefined | null;
+  /** An attempt record the database did not take (it was down): the next pass writes it first. */
+  private owed: Attempt | undefined;
+  /** The UTC day of the last registry drift report per source and spec. */
+  private readonly driftDay = new Map<string, string>();
+  /** The highest end offset of a damaged line counted per file: a line re-read after a stall is not counted again. */
+  private readonly badSeen = new Map<string, number>();
+  private stalled: { id: string; since: number; alerted: number } | undefined;
+  private readonly adapters: Readonly<Record<string, LoadAdapter>>;
+  badLines = 0;
+
+  constructor(deps: LoadDeps) {
+    this.deps = deps;
+    this.adapters = deps.adapters ?? LOAD_ADAPTERS;
+  }
+
+  /** The loader of a payload line, if its source and spec have one. */
+  specOf(source: string, spec: string): { spec: SpecLoader; adapterVersion: number } | undefined {
+    const adapter = Object.hasOwn(this.adapters, source) ? this.adapters[source] : undefined;
+    const loader = adapter !== undefined && Object.hasOwn(adapter.specs, spec) ? adapter.specs[spec] : undefined;
+    return adapter === undefined || loader === undefined
+      ? undefined
+      : { spec: loader, adapterVersion: adapter.version };
+  }
+
+  private async registry(source: string): Promise<Map<string, SeriesRow>> {
+    let known = this.series.get(source);
+    if (known === undefined) {
+      known = await seriesOf(this.deps.db, source);
+      this.series.set(source, known);
+    }
+    return known;
+  }
+
+  private async unitMismatch(source: string): Promise<Set<string>> {
+    let keys = this.units.get(source);
+    if (keys === undefined) {
+      keys = await unitMismatchOf(this.deps.db, source);
+      this.units.set(source, keys);
+    }
+    return keys;
+  }
+
+  /**
+   * One pass over every manifest file that has unread bytes. Late lines land
+   * in older files (a line is filed under the day its fetch STARTED, and the
+   * recorder's recovery appends to past days), so no file is ever "done".
+   * Every failure ends in a stall that is alerted, never in an exception.
+   */
+  async tick(opts: TickOptions = {}): Promise<TickResult> {
+    let lines = 0;
+    let loaded = 0;
+    const cut = () => opts.stop?.() === true || (opts.until !== undefined && this.deps.now().getTime() >= opts.until);
+    try {
+      if (this.owed !== undefined) {
+        await writeAttempt(this.deps.db, this.owed);
+        this.owed = undefined;
+      }
+      const done = await cursors(this.deps.db);
+      for (const { file, size } of await this.deps.reader.manifests()) {
+        let offset = done.get(file) ?? 0;
+        while (offset < size) {
+          if (lines > 0 && cut()) return { lines, loaded, more: true };
+          const chunk = await this.deps.reader.lines(file, offset);
+          if (chunk.length === 0) break;
+          const result = await this.consume(file, offset, chunk, cut);
+          lines += result.lines;
+          loaded += result.loaded;
+          if (result.stalled) return { lines, loaded };
+          if (result.cut) return this.resumed({ lines, loaded, more: true });
+          offset = result.offset;
+        }
+      }
+    } catch (err) {
+      // Nothing of the failed step was committed: the next tick starts again from the cursor.
+      this.stall(errorCode(err), {});
+      return { lines, loaded };
+    }
+    return this.resumed({ lines, loaded });
+  }
+
+  private resumed(result: TickResult): TickResult {
+    if (this.stalled !== undefined) this.deps.info?.('load resumed', { stalled_s: this.stalledFor() });
+    this.stalled = undefined;
+    return result;
+  }
+
+  /** Manifest bytes not consumed yet, over all files, and the age of the oldest unconsumed line. */
+  async backlog(now: Date = this.deps.now()): Promise<Backlog> {
+    const done = await cursors(this.deps.db);
+    let files = 0;
+    let bytes = 0;
+    let oldest: number | null = null;
+    for (const { file, size } of await this.deps.reader.manifests()) {
+      const offset = done.get(file) ?? 0;
+      if (size <= offset) continue;
+      files += 1;
+      bytes += size - offset;
+      const at = await this.firstLineAt(file, offset);
+      if (at !== null && (oldest === null || at < oldest)) oldest = at;
+    }
+    return { files, bytes, age_s: oldest === null ? null : Math.max(0, Math.round((now.getTime() - oldest) / 1000)) };
+  }
+
+  /**
+   * When the first whole unconsumed manifest line of a file was fetched: a
+   * damaged line is skipped, and null means no whole line is left (only an
+   * unfinished last line, which the recorder is still writing, or tore). A
+   * file that cannot be read counts from its day.
+   */
+  private async firstLineAt(file: string, offset: number): Promise<number | null> {
+    try {
+      for (let at = offset; ; ) {
+        const chunk = await this.deps.reader.lines(file, at, 64 * 1024);
+        if (chunk.length === 0) return null;
+        for (const raw of chunk) {
+          const line = parseLine(raw.text);
+          if (line !== null) return Date.parse(line.fetched_at.end ?? line.fetched_at.start);
+        }
+        at = (chunk.at(-1) as RawLine).end;
+      }
+    } catch {
+      return Date.parse(`${file.slice(0, 10)}T00:00:00Z`);
+    }
+  }
+
+  private stalledFor(): number {
+    return this.stalled === undefined ? 0 : Math.round((this.deps.now().getTime() - this.stalled.since) / 1000);
+  }
+
+  /** A stall is alerted when it starts (or its cause changes), then at most every STALL_ALERT_MS while it lasts. */
+  private stall(code: string, fields: Record<string, string>): void {
+    const now = this.deps.now().getTime();
+    const id = [code, fields.source ?? '', fields.spec ?? ''].join(' ');
+    if (this.stalled?.id !== id) this.stalled = { id, since: now, alerted: Number.NEGATIVE_INFINITY };
+    if (now - this.stalled.alerted < STALL_ALERT_MS) return;
+    this.stalled.alerted = now;
+    this.deps.alert('load_stalled', { ...fields, code, stalled_s: this.stalledFor() });
+  }
+
+  private async attemptOf(file: string, end: number): Promise<Attempt> {
+    if (this.attempt === undefined) this.attempt = (await readAttempt(this.deps.db)) ?? null;
+    return this.attempt?.file === file && this.attempt.end === end
+      ? this.attempt
+      : { file, end, n: 0, code: 'load_crashed' };
+  }
+
+  /**
+   * Records how a pass that committed nothing ended. When the database does
+   * not take it (it is down), this process still knows, and the next pass
+   * writes it first (R2-4; KG-073 is the process dying in that window).
+   */
+  private async settle(attempt: Attempt): Promise<void> {
+    this.attempt = attempt;
+    try {
+      await writeAttempt(this.deps.db, attempt);
+      this.owed = undefined;
+    } catch {
+      this.owed = attempt;
+    }
+  }
+
+  /**
+   * Consumes whole lines in file order, starting at byte `start`. Lines without
+   * a payload (304, dup_of, a closed gate, a fetch error, a source without an
+   * adapter) only touch the fetch health; they are folded and committed
+   * together with the next payload line or at the end of the chunk. Returns
+   * the committed offset; `stalled` means a line could not be committed now
+   * and the next tick starts again from that offset; `cut` means `cut()` asked
+   * to stop between lines.
+   */
+  private async consume(
+    file: string,
+    start: number,
+    chunk: readonly RawLine[],
+    cut: () => boolean,
+  ): Promise<{ offset: number; lines: number; loaded: number; stalled: boolean; cut: boolean }> {
+    const pending = new Map<string, FetchFold>();
+    const fold = (source: string) => {
+      let f = pending.get(source);
+      if (f === undefined) {
+        f = emptyFold();
+        pending.set(source, f);
+      }
+      return f;
+    };
+    let committed = start;
+    let folded = start;
+    let lines = 0;
+    let loaded = 0;
+    let stopped = false;
+    const flush = async (end: number, work?: (tx: Tx) => Promise<void>) => {
+      await this.deps.db.transaction().execute(async (tx) => {
+        await lock(tx);
+        if (work) {
+          await work(tx);
+          // The payload line's pass ended (loaded or set aside): its attempt ends with it.
+          await clearAttempt(tx);
+        }
+        for (const [source, f] of pending) await applyFetchHealth(tx, source, f);
+        await advanceCursor(tx, file, end);
+      });
+      if (work) this.attempt = null;
+      pending.clear();
+      committed = end;
+      folded = end;
+    };
+
+    for (const raw of chunk) {
+      if (lines > 0 && cut()) {
+        stopped = true;
+        break;
+      }
+      const line = parseLine(raw.text);
+      if (line === null) {
+        if (raw.end > (this.badSeen.get(file) ?? 0)) {
+          this.badSeen.set(file, raw.end);
+          this.badLines += 1;
+          this.deps.alert('manifest_bad_line', { file });
+        }
+        folded = raw.end;
+        lines += 1;
+        continue;
+      }
+      const fetchedAt = new Date(line.fetched_at.end ?? line.fetched_at.start);
+      const lag = () => this.deps.onLag?.(line.source, fetchedAt, this.deps.now().getTime() - fetchedAt.getTime());
+      const plan = this.classify(line);
+      if (plan.kind !== 'payload') {
+        const f = fold(line.source);
+        if (plan.kind === 'fetch_failed') f.failures += 1;
+        else markFetchOk(f, fetchedAt);
+        folded = raw.end;
+        lines += 1;
+        lag();
+        continue;
+      }
+      // A payload line: its own transaction, which also commits everything folded before it.
+      const ids = { source: line.source, spec: line.spec };
+      const prior = await this.attemptOf(file, raw.end);
+      if (prior.n >= MAX_TRIES) {
+        // Two attempts failed or died: quarantine it without reading or parsing it, and move on.
+        const batch = batchInput(line, plan.adapterVersion, fetchedAt);
+        await flush(raw.end, (tx) => setBatchAside(tx, batch, 'quarantined', prior.code));
+        this.deps.alert('quarantined', { ...ids, code: prior.code });
+      } else {
+        const next = { ...prior, n: prior.n + 1, code: 'load_crashed' };
+        await writeAttempt(this.deps.db, next);
+        this.attempt = next;
+        try {
+          const outcome = await this.payload(line, plan, fetchedAt, (work) => flush(raw.end, work), fold(line.source));
+          if (outcome.kind === 'loaded') loaded += 1;
+        } catch (err) {
+          // Nothing of this line was committed.
+          const failure = failureOf(err);
+          await this.settle(failure.kind === 'payload' ? { ...next, code: failure.code } : prior);
+          this.stall(failure.code, ids);
+          return { offset: committed, lines, loaded, stalled: true, cut: false };
+        }
+      }
+      lines += 1;
+      lag();
+    }
+    if (folded > committed) await flush(folded);
+    return { offset: committed, lines, loaded, stalled: false, cut: stopped };
+  }
+
+  private classify(
+    line: ManifestLine,
+  ):
+    | { kind: 'fetch_ok' | 'fetch_failed' | 'no_adapter' }
+    | { kind: 'payload'; spec: SpecLoader; adapterVersion: number } {
+    if (line.error !== null) return { kind: 'fetch_failed' };
+    if (line.status !== null && line.status >= 400) return { kind: 'fetch_failed' };
+    // 304, an identical body (dup_of), a closed gate, 204: the fetch worked and there is nothing new to parse.
+    if (line.key === null) return { kind: 'fetch_ok' };
+    const found = this.specOf(line.source, line.spec);
+    return found === undefined ? { kind: 'no_adapter' } : { kind: 'payload', ...found };
+  }
+
+  /**
+   * Loads one archived payload. `commit` runs the given work in one
+   * transaction, exactly once (the tail adds the cursor and the folded fetch
+   * health to it; a replay adds nothing). Returns what happened; a SchemaDrift
+   * or a damaged object quarantines that payload only and raises an alert. An
+   * object that cannot be read now (`unreadable`) and every database failure
+   * are thrown: the tail decides whether to try again.
+   */
+  async payload(
+    line: ManifestLine,
+    { spec, adapterVersion }: { spec: SpecLoader; adapterVersion: number },
+    fetchedAt: Date,
+    commit: (work: (tx: Tx) => Promise<void>) => Promise<void>,
+    health?: FetchFold,
+  ): Promise<Outcome> {
+    if (line.key === null) return { kind: 'no_adapter' };
+    const batch = batchInput(line, adapterVersion, fetchedAt);
+    const ids = { source: line.source, spec: line.spec };
+
+    const setAside = async (status: 'quarantined' | 'skipped', code: string, path = ''): Promise<Outcome> => {
+      await commit((tx) => setBatchAside(tx, batch, status, path === '' ? code : `${code} at ${path}`));
+      if (status === 'quarantined') this.deps.alert('quarantined', { ...ids, code });
+      return { kind: status, code };
+    };
+
+    // The fetch itself worked, whatever the payload turns out to be.
+    if (health) markFetchOk(health, fetchedAt);
+    if (line.validity !== null && !line.validity.ok) return setAside('skipped', 'failed_validity');
+    if (spec.needsVariant && line.variant === '') return setAside('skipped', 'recovered_unattributed');
+
+    let body: Buffer;
+    try {
+      body = await this.deps.reader.readObject(line.key, spec.maxBytes);
+    } catch (err) {
+      if (!(err instanceof ArchiveError) || err.code === 'unreadable') throw err;
+      if (err.code === 'missing') {
+        const skipped = await setAside('skipped', 'object_missing');
+        // The recorder writes an object before its line: in the tail, a missing object is news.
+        if (health) this.deps.alert('object_missing', ids);
+        return skipped;
+      }
+      return setAside('quarantined', `archive_${err.code}`);
+    }
+    if (line.sha256 !== null && createHash('sha256').update(body).digest('hex') !== line.sha256) {
+      return setAside('quarantined', 'sha256_mismatch');
+    }
+
+    const registry = await this.registry(line.source);
+    const unitMismatch = await this.unitMismatch(line.source);
+    let result: Normalised;
+    try {
+      result = spec.run(body, { registry, fetchedAt: fetchedAt.getTime(), variant: line.variant, unitMismatch });
+    } catch (err) {
+      if (err instanceof SchemaDrift) return setAside('quarantined', err.code, err.path);
+      // A parser bug must not stall the loader either; the payload stays in the archive for a replay.
+      return setAside('quarantined', 'adapter_error');
+    }
+
+    // Only the series that share their source's audience count in its numbers (public health, batch counters).
+    const counted = (key: string) => registry.get(key)?.sameAudience === true;
+    const n_rows =
+      result.obs.filter((r) => counted(r.series)).length + result.gaugeZeros.filter((z) => counted(z.series)).length;
+    // Values a registry change could still load: the pruner keeps this object until a replay stores them.
+    const n_skipped = result.unknown + (result.dropped.unit_mismatch ?? 0) + (result.dropped.unknown_zero_unit ?? 0);
+    let outcome: Outcome = { kind: 'loaded', n_rows, n_new: 0, n_changed: 0 };
+    let zeroChanges: Awaited<ReturnType<typeof applyGaugeZeros>> = {};
+    let units: Set<string> | undefined;
+    const before = health && { newestTs: health.newestTs, lastNewData: health.lastNewData };
+    await commit(async (tx) => {
+      const state = await openBatch(tx, batch, 'ok');
+      const written = await upsertObs(tx, result.obs, registry, state.id, fetchedAt);
+      zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, registry, state.id, fetchedAt);
+      if (result.unitMismatch !== undefined) {
+        units = await storeUnitMismatch(tx, line.source, fetchedAt, result.unitMismatch);
+      }
+      const zeroWrites = (zeroChanges.new ?? 0) + (zeroChanges.corrected ?? 0) + (zeroChanges.superseded ?? 0);
+      const n_new = written.n_new + (zeroChanges.new ?? 0) + (zeroChanges.superseded ?? 0);
+      const n_changed = written.n_changed + (zeroChanges.corrected ?? 0);
+      outcome = { kind: 'loaded', n_rows, n_new, n_changed };
+      // A replay that changes nothing leaves the batch exactly as the first load wrote it.
+      const changed = written.writes + zeroWrites > 0 || state.skipped !== n_skipped;
+      if (!state.existed || changed || state.previous !== 'ok') {
+        await closeBatch(tx, state.id, batch, { status: 'ok', n_rows, n_new, n_changed, n_skipped, error: null });
+      }
+      if (health && written.newest !== null) {
+        if (health.newestTs === null || written.newest > health.newestTs) health.newestTs = written.newest;
+        if (written.n_new > 0 && (health.lastNewData === null || fetchedAt > health.lastNewData)) {
+          health.lastNewData = fetchedAt;
+        }
+      }
+    }).catch((err: unknown) => {
+      // Nothing was committed: the fold must not remember rows that were rolled back.
+      if (health && before) Object.assign(health, before);
+      throw err;
+    });
+    if (units !== undefined) this.units.set(line.source, units);
+
+    // Tail only (a replay reports nothing new), once per UTC day.
+    if (health && spec.drift) await this.reportDrift(line, spec.drift, body, registry, fetchedAt);
+    if ((result.dropped.unit_mismatch ?? 0) > 0)
+      this.deps.alert('unit_mismatch', { ...ids, n: result.dropped.unit_mismatch ?? 0 });
+    if ((result.dropped.unknown_zero_unit ?? 0) > 0)
+      this.deps.alert('unknown_zero_unit', { ...ids, n: result.dropped.unknown_zero_unit ?? 0 });
+    for (const change of ['corrected', 'superseded', 'older_ignored'] as const) {
+      const n = zeroChanges[change] ?? 0;
+      if (n > 0) this.deps.alert(`gauge_zero_${change}`, { ...ids, n });
+    }
+    if (result.unknown > 0) this.deps.info?.('series not in the registry', { ...ids, n: result.unknown });
+    return outcome;
+  }
+
+  /**
+   * The registry drift report (issue #17): stored in app_meta for the owner
+   * and the runbook, alerted when a registered series vanished or changed its
+   * unit or step. It never changes the registry and never fails a load.
+   */
+  private async reportDrift(
+    line: ManifestLine,
+    drift: NonNullable<SpecLoader['drift']>,
+    body: Uint8Array,
+    registry: Map<string, SeriesRow>,
+    fetchedAt: Date,
+  ): Promise<void> {
+    const day = fetchedAt.toISOString().slice(0, 10);
+    const slot = `${line.source}/${line.spec}`;
+    if (this.driftDay.get(slot) === day) return;
+    this.driftDay.set(slot, day);
+    try {
+      const report = drift(body, registry);
+      await writeMeta(this.deps.db, `registry_drift:${line.source}`, {
+        at: fetchedAt.toISOString(),
+        spec: line.spec,
+        ...report,
+      });
+      const counts = {
+        unregistered: report.unregistered.length,
+        vanished: report.vanished.length,
+        changed: report.changed.length,
+      };
+      if (counts.vanished + counts.changed > 0) this.deps.alert('registry_drift', { source: line.source, ...counts });
+      else if (counts.unregistered > 0) this.deps.info?.('registry drift', { source: line.source, ...counts });
+    } catch {
+      // A report, not a load: try again tomorrow.
+    }
+  }
+}
+
+/** A manifest line, or null when it is not one (damage, or a version this loader does not know). */
+export function parseLine(text: string): ManifestLine | null {
+  if (text === '') return null;
+  try {
+    const parsed = ManifestLine.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function markFetchOk(f: FetchFold, at: Date): void {
+  if (f.lastOk === null || at > f.lastOk) f.lastOk = at;
+  f.failures = 0;
+  f.reset = true;
+}
+
+/**
+ * What a failed payload means. `payload`: the failure belongs to this payload
+ * (a constraint, a bad value, a bug that its data triggers: SQLSTATE classes
+ * 21, 22, 23 and P0; an object that cannot be read) and counts towards its
+ * quarantine, with the code the batch gets then. `stall`: the database, the
+ * deployment or the archive is at fault (a connection, a lock timeout, anything
+ * we cannot name, and every class 42 and 0A error: with bound parameters a
+ * payload's values cannot cause a syntax or access-rule error, so our SQL or
+ * schema did), so the tail waits and tries again for as long as it takes;
+ * `code` is what the alert names.
+ */
+export function failureOf(err: unknown): { kind: 'payload' | 'stall'; code: string } {
+  if (err instanceof ArchiveError) return { kind: 'payload', code: `archive_${err.code}` };
+  const code = errorCode(err);
+  if (/^[0-9A-Z]{5}$/.test(code)) {
+    return /^(?:21|22|23|P0)/.test(code) ? { kind: 'payload', code: 'load_error' } : { kind: 'stall', code };
+  }
+  if (err instanceof TypeError || err instanceof RangeError) return { kind: 'payload', code: 'load_error' };
+  return { kind: 'stall', code };
+}
+
+function batchInput(line: ManifestLine, adapterVersion: number, fetchedAt: Date): BatchInput {
+  return {
+    source: line.source,
+    spec: line.spec,
+    key: line.key as string,
+    sha256: line.sha256,
+    fetchedAt,
+    status: line.status,
+    bytes: line.bytes,
+    adapterVersion,
+  };
+}

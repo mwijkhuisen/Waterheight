@@ -7,6 +7,20 @@
 # owner-audience payloads leave the VPS only inside this encrypted repository.
 # Sets last_backup in /status/ops.json and pings the `backup` check.
 #
+# The nightly database dump (P2a, plan D3), while the active release has a db
+# service: once a UTC day, on the first run at or after 02:00 UTC or whenever
+# the last good dump is older than 24 h. pg_dumpall --globals-only
+# --no-role-passwords and pg_dump -Fc --no-large-objects (nothing of ours is a
+# large object, so a stray one can never fail the dump) run inside the db
+# container as rws_backup (peer-mapped on the local socket, so no password
+# exists for it; read-only sessions; the data through its pg_read_all_data
+# membership). Their stdout is
+# streamed to a temporary file in /srv/rws/backup/db, fsynced and renamed to
+# globals.sql and rws.dump, root:61003 0440 (the backup job's group; the backup
+# job never joins the db network), and restic backs up /data/db with the raw
+# archive. A failed or empty dump keeps the previous files, restic still runs,
+# and the run ends with /fail dump_failed.
+#
 # Off until the owner turns it on (RWS_BACKUP=on in /etc/rws/rws.env, owner
 # action A5; docs/runbooks/bootstrap.md).
 #
@@ -34,7 +48,7 @@ if ! backup_ready; then
 fi
 [[ -e $RWS_STATE_DIR/active ]] || die "no release is deployed yet"
 if ((DRY_RUN)); then
-  log "dry-run: would back up /srv/rws/raw to the bucket at $BUCKET_HOST"
+  log "dry-run: would back up /srv/rws/raw (and the database dump, when the release has a db) to the bucket at $BUCKET_HOST"
   exit 0
 fi
 
@@ -48,17 +62,73 @@ if ((init)); then
   exit 0
 fi
 
+readonly DUMP_DIR=$RWS_SRV/backup/db BACKUP_GID=61003
+# dump_to <file> <prefix> <command...>: the command's stdout becomes <file>
+# (root:61003 0440) only when it exits 0 and its output starts with <prefix>;
+# otherwise <file> stays as it was. Its stderr is discarded (never logged).
+dump_to() {
+  local dest=$1 prefix=$2 tmp
+  shift 2
+  tmp=$(mktemp "$DUMP_DIR/.${dest##*/}.XXXXXX") || return 1
+  if "$@" >"$tmp" 2>/dev/null && [[ $(head -c "${#prefix}" -- "$tmp") == "$prefix" ]] &&
+    chown "0:$BACKUP_GID" -- "$tmp" && chmod 0440 -- "$tmp" && sync -- "$tmp" && mv -f -- "$tmp" "$dest"; then
+    return 0
+  fi
+  rm -f -- "$tmp"
+  return 1
+}
+# db_dump: writes the dump when it is due; fails only when a due dump failed.
+db_dump() {
+  local now last at0200
+  # Leftovers of a run that was killed mid-dump (0600 root: restic could not read them).
+  rm -f -- "$DUMP_DIR"/.rws.dump.* "$DUMP_DIR"/.globals.sql.*
+  now=$(date -u +%s)
+  last=$(stat -c %Y -- "$DUMP_DIR/rws.dump" 2>/dev/null || echo 0)
+  at0200=$((now - now % 86400 + 7200))
+  if ((now - last < 86400)) && ! ((last < at0200 && now >= at0200)); then
+    return 0
+  fi
+  # Never beside a deploy: a migration queued behind the dump's locks would
+  # block every query on its table until the dump ends. rws-update skips a run
+  # while this lock is held; rws-deploy waits.
+  exec 8>"$(lockfile rws-deploy)"
+  if ! flock -w 1500 8; then
+    log "a deploy is still running: no database dump this run"
+    return 1
+  fi
+  # A stopped db fails the exec, so it fails the dump too.
+  dump_to "$DUMP_DIR/globals.sql" '--' \
+    rws_compose exec -T db pg_dumpall --globals-only --no-role-passwords -w -U rws_backup -l rws &&
+    dump_to "$DUMP_DIR/rws.dump" PGDMP \
+      rws_compose exec -T db pg_dump -Fc --no-large-objects -w -U rws_backup -d rws &&
+    sync -- "$DUMP_DIR" &&
+    log "database dump written"
+  local rc=$?
+  exec 8>&-
+  return "$rc"
+}
+
 ping backup start
+paths=(/data/raw)
+dump=ok
+if has_service db; then
+  paths+=(/data/db)
+  db_dump || dump=failed
+fi
+[[ $dump == ok ]] || log "warning: the database dump failed; the previous one is kept"
 # Capture's temporary files (the archive's .tmp/ and the <file>.json.<pid>.tmp
 # of its atomic state, report and status writes) may vanish mid-run.
 rc=0
 rws_compose run --rm --no-deps -T backup backup --host rws \
-  --exclude /data/raw/.tmp --exclude '*.json.[0-9]*.tmp' /data/raw || rc=$?
+  --exclude /data/raw/.tmp --exclude '*.json.[0-9]*.tmp' "${paths[@]}" || rc=$?
 case $rc in
   0 | 3)
     # shellcheck disable=SC2016 # a jq filter, not shell
     ops_update --arg t "$(now_iso)" '.last_backup = $t'
-    if ((rc == 0)); then
+    if [[ $dump != ok ]]; then
+      ping backup fail dump_failed
+      log "warning: backup saved (restic exit $rc), but the database dump failed: /fail dump_failed"
+    elif ((rc == 0)); then
       ping backup
       log "backup done"
     else

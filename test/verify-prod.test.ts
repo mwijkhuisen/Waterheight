@@ -7,15 +7,28 @@ import { loadRegistry } from '../apps/server/src/capture/specs.ts';
 import type { SpecState } from '../apps/server/src/capture/state.ts';
 import { buildStatus, type CaptureStatus } from '../apps/server/src/capture/status.ts';
 import type { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
+import { Health, HealthSources } from '../packages/contracts/src/index.ts';
 import {
   capacity,
   checkCapture,
   checkHeaders,
+  checkHealth,
+  checkHealthParams,
+  checkLoaderLag,
+  checkOwnerLeak,
+  checkReplay,
+  checkSourceHealth,
+  checkTier1,
   expectedHeaders,
   leaks,
+  leakTerms,
   noIpv6Here,
   OWNER_CANARY,
+  ownerKeys,
   ownerTerms,
+  PARAM_CASES,
+  type Page,
+  readApi,
   soak,
   staleSpecs,
 } from '../scripts/verify-prod.ts';
@@ -256,5 +269,304 @@ describe('freshness, soak and capacity', () => {
     const r = spawnSync(join(repoRoot, 'scripts/verify-prod.sh'), ['--dry-run', 'x'], { encoding: 'utf8' });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/^headers \/ and \/en\/:/m);
+    for (const name of ['health', 'health params', 'health DE-1', 'tier-1 DE-1', 'loader lag', 'replay DE-1'])
+      expect(r.stdout, name).toMatch(new RegExp(`^${name}:`, 'm'));
+  });
+});
+
+// The P2a health checks (issue P2a [agent-prod] criteria): pure, on contract documents.
+
+const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
+const health = (over: Partial<Health> = {}): Health => ({
+  status: 'ok',
+  generated_at: ago(60_000),
+  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
+  sources: { ok: 10, degraded: 0, down: 0, unknown: 2, total: 12 },
+  owner_sources: { healthy: 5, total: 6 },
+  quarantined: 0,
+  twins: { ok: 0, failing: 0 },
+  ...over,
+});
+type SourceRow = HealthSources['sources'][number];
+const de1 = (over: Partial<SourceRow> = {}): SourceRow => ({
+  id: 'DE-1',
+  status: 'ok',
+  last_fetch_ok: ago(60_000),
+  last_new_data: ago(60_000),
+  newest_ts: ago(120_000),
+  consecutive_failures: 0,
+  quarantined: 0,
+  lag_p95_s: 34,
+  tier1: { total: 69, fresh: 69, provider_stale: 0 },
+  missing_buckets_24h: 3,
+  partitions: [{ partition: '2026-10', md5: 'a'.repeat(32), rows: 9000 }],
+  partitions_at: ago(60_000),
+  ...over,
+});
+const sourcesDoc = (over: Partial<HealthSources> = {}): HealthSources => ({
+  generated_at: ago(60_000),
+  sources: [de1()],
+  quarantined_batches: [],
+  twins: [],
+  owner_sources: { healthy: 5, total: 6 },
+  ...over,
+});
+const page = (doc: unknown, over: Partial<Page> = {}): Page => ({
+  status: 200,
+  headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=30' },
+  body: typeof doc === 'string' ? doc : JSON.stringify(doc),
+  ...over,
+});
+const h = (doc: Health = health(), over: Partial<Page> = {}) => readApi(page(doc, over), Health);
+const s = (doc: HealthSources = sourcesDoc(), over: Partial<Page> = {}) => readApi(page(doc, over), HealthSources);
+
+describe('the health API answers', () => {
+  it('readApi: the contract document with 200, JSON and max-age=30', () => {
+    expect(h()).toMatchObject({ data: { status: 'ok' }, problems: [] });
+    expect(
+      readApi(
+        page(health(), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=30' } }),
+        Health,
+      ).problems,
+    ).toEqual([]);
+  });
+
+  it('readApi: names every difference and still returns the document when only a header is off', () => {
+    const wrongCache = h(health(), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=300' },
+    });
+    expect(wrongCache.problems).toEqual(['cache-control "public, max-age=300"']);
+    expect(wrongCache.data).toBeDefined();
+    expect(h(health(), { status: 503 }).problems).toContain('status 503');
+    expect(h(health(), { headers: {} }).problems).toHaveLength(2);
+    expect(readApi(page('<html>'), Health)).toEqual({ problems: ['not the contract document'] });
+    expect(readApi(page({ ...health(), version: '1' }), Health).data).toBeUndefined();
+    expect(readApi('ECONNRESET', Health)).toEqual({ problems: ['ECONNRESET'] });
+  });
+
+  it('health: passes for a computing loader, fails for down, off-contract or unreachable', () => {
+    expect(checkHealth(h())).toMatchObject({ check: 'health', ok: true });
+    expect(checkHealth(h(health({ status: 'degraded', quarantined: 2 })))).toMatchObject({ ok: true });
+    const down = checkHealth(h(health({ status: 'down', generated_at: null })));
+    expect(down).toMatchObject({ ok: false, detail: /status down \(generated_at never\)/ });
+    expect(checkHealth(readApi(page('{}'), Health))).toMatchObject({ ok: false, detail: /contract/ });
+    expect(checkHealth(readApi('timeout', Health))).toMatchObject({ ok: false, detail: 'timeout' });
+    expect(checkHealth(h(health(), { status: 404 })).ok).toBe(false);
+  });
+
+  it('health params: a parameter is the fixed 400 and the rest of /api/ is 404', () => {
+    const good: Record<string, Page | string> = Object.fromEntries(
+      PARAM_CASES.map(([path, status]) => [
+        path,
+        page(status === 400 ? '{"error":"unknown_parameter"}' : 'Not Found', { status }),
+      ]),
+    );
+    expect(checkHealthParams(good)).toMatchObject({ check: 'health params', ok: true });
+    const bad = checkHealthParams({
+      ...good,
+      '/api/v1/health?x=1': page('{"health":1}', { status: 200 }),
+      '/api/v1/health/sources?x=1': page('{"error":"unknown_parameter","x":"1"}', { status: 400 }),
+      '/api/v1/stations': page('[]', { status: 200 }),
+      '/api/v1/': 'ECONNRESET',
+    });
+    expect(bad.ok).toBe(false);
+    expect(bad.detail).toMatch(/health\?x=1: status 200, want 400/);
+    expect(bad.detail).toMatch(/sources\?x=1: the body is not the fixed 400 body/);
+    expect(bad.detail).toMatch(/\/api\/v1\/stations: status 200, want 404/);
+    expect(bad.detail).toMatch(/\/api\/v1\/: ECONNRESET/);
+    expect(checkHealthParams({}).ok).toBe(false);
+  });
+
+  it('health DE-1: listed with status ok', () => {
+    expect(checkSourceHealth(s())).toMatchObject({ check: 'health DE-1', ok: true });
+    expect(checkSourceHealth(s(sourcesDoc({ sources: [de1({ status: 'degraded', quarantined: 1 })] })))).toMatchObject({
+      ok: false,
+      detail: /status degraded \(0 failed fetches in a row, 1 quarantined\)/,
+    });
+    expect(checkSourceHealth(s(sourcesDoc({ sources: [de1({ id: 'DE-4' })] })))).toMatchObject({
+      ok: false,
+      detail: /not listed/,
+    });
+    expect(checkSourceHealth(readApi('timeout', HealthSources))).toMatchObject({ ok: false, detail: /timeout/ });
+  });
+
+  const tier1 = (total: number, fresh: number, provider_stale: number) =>
+    sourcesDoc({ sources: [de1({ tier1: { total, fresh, provider_stale } })] });
+
+  it('tier-1 DE-1: PASS at 95% fresh; FAIL below it, naming exactly how many are provider-stale', () => {
+    expect(checkTier1(tier1(69, 66, 0))).toMatchObject({ check: 'tier-1 DE-1', ok: true, detail: /66 of 69/ });
+    expect(checkTier1(tier1(20, 19, 0)).ok).toBe(true);
+    // 64 of 69 fresh is 92.8%: the five provider-stale series make 100%, which the owner judges; never a PASS.
+    const low = checkTier1(tier1(69, 64, 5));
+    expect(low.ok).toBe(false);
+    expect(low.detail).toContain('64 of 69 tier-1 series fresh (92.8%)');
+    expect(low.detail).toContain('5 are provider-stale');
+    expect(low.detail).toContain('with them 69 of 69');
+    // Stale for another reason than the provider: plain FAIL, no such hint.
+    const bad = checkTier1(tier1(69, 30, 0));
+    expect(bad.ok).toBe(false);
+    expect(bad.detail).toContain('0 are provider-stale');
+    expect(bad.detail).not.toContain('for the owner to judge');
+    expect(checkTier1(sourcesDoc({ sources: [de1({ tier1: null })] }))).toMatchObject({
+      ok: false,
+      detail: /no tier-1 numbers/,
+    });
+    expect(checkTier1(tier1(0, 0, 0)).ok).toBe(false);
+    expect(checkTier1(undefined)).toMatchObject({ ok: false, detail: /no valid health\/sources document/ });
+  });
+
+  it('loader lag: a sample, and under 120 s', () => {
+    const lag = (lag_p95_s: number | null) => checkLoaderLag(health({ loader: { ...health().loader, lag_p95_s } }));
+    expect(lag(34)).toMatchObject({ check: 'loader lag', ok: true });
+    expect(lag(119.9).ok).toBe(true);
+    expect(lag(120).ok).toBe(false);
+    expect(lag(null)).toMatchObject({ ok: false, detail: /no lag sample/ });
+    expect(checkLoaderLag(undefined).ok).toBe(false);
+  });
+
+  it('loader lag fails on a stall: a manifest line unconsumed for 15 minutes, even with a good lag sample', () => {
+    const age = (backlog_age_s: number | null) =>
+      checkLoaderLag(health({ loader: { ...health().loader, backlog_files: 1, backlog_bytes: 812, backlog_age_s } }));
+    expect(age(899).ok).toBe(true);
+    expect(age(900)).toMatchObject({ ok: false, detail: /stalled: the oldest unconsumed manifest line is 900 s old/ });
+    expect(age(null).ok).toBe(true);
+  });
+
+  it('replay DE-1: no backlog, a partition checksum, nothing quarantined; lists the quarantined batches', () => {
+    expect(checkReplay(health(), sourcesDoc())).toMatchObject({
+      check: 'replay DE-1',
+      ok: true,
+      detail: /1 partition checksums \(2026-10\)/,
+    });
+    const backlog = health({ loader: { ...health().loader, backlog_files: 2, backlog_bytes: 4096 } });
+    expect(checkReplay(backlog, sourcesDoc()).detail).toBe('loader backlog 4096 bytes in 2 files');
+    expect(checkReplay(health(), sourcesDoc({ sources: [de1({ partitions: [] })] })).detail).toBe(
+      'no partition checksum',
+    );
+    const quarantined = sourcesDoc({
+      sources: [de1({ quarantined: 2 })],
+      quarantined_batches: [
+        { id: '41', source: 'DE-1', spec: 'de-1-basin', fetched_at: ago(1000), error: 'unrecognized_keys' },
+        { id: '40', source: 'NL-1', spec: 'nl-1-obs-key', fetched_at: ago(2000), error: 'other_source' },
+        { id: '39', source: 'DE-1', spec: 'de-1-series', fetched_at: ago(3000), error: null },
+      ],
+    });
+    const r = checkReplay(health(), quarantined);
+    expect(r.ok).toBe(false);
+    expect(r.detail).toBe('2 quarantined (newest: 41 unrecognized_keys, 39 no code)');
+    expect(checkReplay(undefined, sourcesDoc()).ok).toBe(false);
+    expect(checkReplay(health(), undefined).ok).toBe(false);
+  });
+});
+
+describe('owner isolation in the health API', () => {
+  const terms = leakTerms(registry);
+
+  it('knows the owner sources, specs and hosts, both renderings of both canaries', () => {
+    expect(terms).toEqual(
+      expect.arrayContaining([...ownerTerms(registry), '777777.777', '777777.75', '123456.789', '123456.79']),
+    );
+    // The VPS tripwire list (deploy/owner-terms.json) stays the owner terms only.
+    expect(ownerTerms(registry)).not.toContain('123456.79');
+  });
+
+  it('finds nothing in real health documents', () => {
+    const body = { '/api/v1/health': JSON.stringify(health()), '/api/v1/health/sources': JSON.stringify(sourcesDoc()) };
+    expect(checkOwnerLeak(body, terms)).toMatchObject({ check: 'owner leak', ok: true });
+  });
+
+  it.each([
+    ['an owner source id', { sources: [de1({ id: 'BE-3' })] }, /BE-3/],
+    [
+      'the owner canary as typed',
+      {
+        twins: [
+          {
+            id: 'x',
+            window_end: ago(1),
+            n_aligned: 1,
+            median_delta: 777777.777,
+            max_delta: 1,
+            lag_min: null,
+            ok: true,
+          },
+        ],
+      },
+      /777777\.777/,
+    ],
+    [
+      'the owner canary as real prints it',
+      {
+        twins: [
+          { id: 'x', window_end: ago(1), n_aligned: 1, median_delta: 777777.75, max_delta: 1, lag_min: null, ok: true },
+        ],
+      },
+      /777777\.75/,
+    ],
+    [
+      'the withheld canary',
+      {
+        twins: [
+          {
+            id: 'x',
+            window_end: ago(1),
+            n_aligned: 1,
+            median_delta: 123456.789,
+            max_delta: 1,
+            lag_min: null,
+            ok: true,
+          },
+        ],
+      },
+      /123456\.789/,
+    ],
+    [
+      'the withheld canary as real prints it',
+      {
+        twins: [
+          { id: 'x', window_end: ago(1), n_aligned: 1, median_delta: 123456.79, max_delta: 1, lag_min: null, ok: true },
+        ],
+      },
+      /123456\.79/,
+    ],
+    [
+      'an owner host',
+      {
+        quarantined_batches: [
+          { id: '1', source: 'DE-1', spec: 'x', fetched_at: ago(1), error: 'hydrometrie.wallonie.be' },
+        ],
+      },
+      /hydrometrie\.wallonie\.be/,
+    ],
+    [
+      'an owner spec',
+      { quarantined_batches: [{ id: '1', source: 'DE-1', spec: 'lu-3-percentile', fetched_at: ago(1), error: null }] },
+      /lu-3-percentile/,
+    ],
+  ])('fails on %s', (_, over, detail) => {
+    const result = checkOwnerLeak(
+      { '/api/v1/health/sources': JSON.stringify(sourcesDoc(over as Partial<HealthSources>)) },
+      terms,
+    );
+    expect(result).toMatchObject({ ok: false, detail: expect.stringMatching(detail) });
+  });
+
+  it('fails on a private_basis key at any depth, whatever its value', () => {
+    expect(ownerKeys({ a: [{ b: { private_basis: 1 } }], Private_Basis: 2 })).toEqual([
+      'private_basis',
+      'Private_Basis',
+    ]);
+    expect(ownerKeys({ clause: 'x', url: 'y' })).toEqual([]);
+    const withKey = JSON.stringify({ ...health(), owner_sources: { healthy: 1, total: 2, private_basis: null } });
+    expect(checkOwnerLeak({ '/api/v1/health': withKey }, terms)).toMatchObject({
+      ok: false,
+      detail: /key private_basis/,
+    });
+    expect(checkOwnerLeak({ '/api/v1/health': '' }, terms).ok).toBe(true);
+  });
+
+  it('a value that only contains a canary as a prefix is not a leak', () => {
+    expect(checkOwnerLeak({ x: '{"v":777777.7771}' }, terms).ok).toBe(true);
+    expect(checkOwnerLeak({ x: '{"v":7777777.75}' }, terms).ok).toBe(true);
   });
 });
