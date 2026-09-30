@@ -1,0 +1,342 @@
+{
+  "relations": {
+    "app_meta": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "attribution": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "class_obs": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "forecast_run": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "forecast_run_id_seq": {
+      "rws_load": "USAGE"
+    },
+    "forecast_value": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "gauge_zero": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "ingest_batch": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "ingest_batch_id_seq": {
+      "rws_load": "USAGE"
+    },
+    "load_cursor": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "obs": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "obs_1d": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "obs_1h": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "obs_latest": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "obs_revision": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT"
+    },
+    "own_api_forecast_run": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_api_forecast_value": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_api_obs": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_api_obs_1d": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_api_obs_1h": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_api_series": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_attribution": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_class": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_forecast_run": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_forecast_value": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_ingest_batch": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_obs": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_obs_1d": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_obs_1h": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_obs_latest": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_private_basis": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_reference": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_series": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_source_health": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_station": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_twin_check": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_warning": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "provider": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "pub_api_forecast_run": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_api_forecast_value": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_api_obs": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_api_obs_1d": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_api_obs_1h": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_api_series": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_attribution": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_class": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_forecast_run": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_forecast_value": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_ingest_batch": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_loader": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_obs": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_obs_1d": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_obs_1h": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_obs_latest": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_owner_health": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_reference": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_series": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_source_health": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_station": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_twin_check": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_warning": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "reach": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "reach_id_seq": {},
+    "reference_value": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "river": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "series": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "series_eff": {
+      "rws_backup": "SELECT"
+    },
+    "series_id_seq": {},
+    "source": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "source_health": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "station": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "station_alias": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "twin": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "twin_check": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "warning_area": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "warning_area_id_seq": {
+      "rws_load": "USAGE"
+    }
+  },
+  "functions": {
+    "ensure_partitions(timestamp with time zone,timestamp with time zone)": [
+      "rws_load",
+      "rws_migrator"
+    ],
+    "own_obs_at(timestamp with time zone)": [
+      "rws_owner_api"
+    ],
+    "pub_obs_at(timestamp with time zone)": [
+      "rws_api",
+      "rws_publish"
+    ]
+  },
+  "schema_public": {
+    "rws_api": "USAGE",
+    "rws_backup": "USAGE",
+    "rws_load": "USAGE",
+    "rws_migrator": "",
+    "rws_owner_api": "USAGE",
+    "rws_publish": "USAGE"
+  }
+}

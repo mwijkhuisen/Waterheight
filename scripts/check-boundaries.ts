@@ -5,7 +5,9 @@
 //     apps/server/src/http, its own folder and adapters/_shared/<its provider>
 //     (provider from registry/sources.yaml); npm packages and node: builtins
 //     are outside this rule;
-//   - the view names pub_* and own_* appear only in apps/server/src/db/audience.ts.
+//   - the view names pub_* and own_* appear only in apps/server/src/db/audience.ts:
+//     no other TypeScript file under apps/, packages/, scripts/ or test/, and no
+//     .sql file under apps/ or packages/ (db/migrations is where they are created).
 // Usage: node scripts/check-boundaries.ts [repo-root]   (exit 1 on a violation)
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -17,13 +19,16 @@ type Import = { spec: string; typeOnly: boolean };
 const AUDIENCE_MODULE = 'apps/server/src/db/audience.ts';
 const VIEW_NAME = /\b(?:pub|own)_[a-z][a-z0-9_]*\b/;
 
-function walk(dir: string, out: string[] = []): string[] {
+const isTypeScript = (name: string) => /\.(?:ts|tsx|mts|cts)$/.test(name) && !name.endsWith('.d.ts');
+
+function walk(dir: string, out: string[] = [], wanted: (name: string) => boolean = isTypeScript): string[] {
   if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'dist' || name.startsWith('.')) continue;
+    // scripts/fixtures holds the deliberately wrong trees this checker is tested on.
+    if (name === 'node_modules' || name === 'dist' || name === 'fixtures' || name.startsWith('.')) continue;
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) walk(path, out);
-    else if (/\.(?:ts|tsx|mts|cts)$/.test(name) && !name.endsWith('.d.ts')) out.push(path);
+    if (statSync(path).isDirectory()) walk(path, out, wanted);
+    else if (wanted(name)) out.push(path);
   }
   return out;
 }
@@ -106,15 +111,24 @@ export function checkBoundaries(root: string): string[] {
   const packages = workspacePackages(root);
   const providers = adapterProviders(root);
   const files = [...walk(join(root, 'apps')), ...walk(join(root, 'packages'))];
+  const isSql = (name: string) => name.endsWith('.sql');
+  const viewNameFiles = [
+    ...files,
+    ...walk(join(root, 'scripts')),
+    ...walk(join(root, 'test')),
+    ...walk(join(root, 'apps'), [], isSql),
+    ...walk(join(root, 'packages'), [], isSql),
+  ];
+  for (const file of viewNameFiles) {
+    const from = relative(root, file).split(sep).join('/');
+    if (from === AUDIENCE_MODULE) continue;
+    const view = VIEW_NAME.exec(readFileSync(file, 'utf8'))?.[0];
+    if (view) problems.push(`${from}: view name ${view} outside ${AUDIENCE_MODULE}`);
+  }
 
   for (const file of files) {
     const from = relative(root, file).split(sep).join('/');
     const text = readFileSync(file, 'utf8');
-
-    if (from !== AUDIENCE_MODULE) {
-      const view = VIEW_NAME.exec(text)?.[0];
-      if (view) problems.push(`${from}: view name ${view} outside ${AUDIENCE_MODULE}`);
-    }
 
     const adapter = /^apps\/server\/src\/adapters\/([^/]+)(?:\/([^/]+))?\//.exec(from);
     let own: string | null = null;
