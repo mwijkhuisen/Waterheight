@@ -5,9 +5,11 @@
 //     apps/server/src/http, its own folder and adapters/_shared/<its provider>
 //     (provider from registry/sources.yaml); npm packages and node: builtins
 //     are outside this rule;
-//   - the view names pub_* and own_* appear only in apps/server/src/db/audience.ts:
-//     no other TypeScript file under apps/, packages/, scripts/ or test/, and no
-//     .sql file under apps/ or packages/ (db/migrations is where they are created).
+//   - the view names pub_* and own_* (in any case) appear only in
+//     apps/server/src/db/audience.ts: no other TypeScript file under apps/,
+//     packages/, scripts/ or test/ (fixture directories included, except this
+//     checker's own test trees), and no .sql file under apps/ or packages/
+//     (db/migrations is where they are created).
 // Usage: node scripts/check-boundaries.ts [repo-root]   (exit 1 on a violation)
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -17,15 +19,17 @@ import { parse } from 'yaml';
 type Import = { spec: string; typeOnly: boolean };
 
 const AUDIENCE_MODULE = 'apps/server/src/db/audience.ts';
-const VIEW_NAME = /\b(?:pub|own)_[a-z][a-z0-9_]*\b/;
+/** SQL folds unquoted names to lower case: an upper-case spelling names the same view. */
+const VIEW_NAME = /\b(?:pub|own)_[a-z][a-z0-9_]*\b/i;
+/** The deliberately wrong trees this checker is tested on (test/check-boundaries.test.ts): data, not code. */
+const CHECKER_FIXTURES = 'scripts/fixtures/boundaries';
 
 const isTypeScript = (name: string) => /\.(?:ts|tsx|mts|cts)$/.test(name) && !name.endsWith('.d.ts');
 
 function walk(dir: string, out: string[] = [], wanted: (name: string) => boolean = isTypeScript): string[] {
   if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
-    // scripts/fixtures holds the deliberately wrong trees this checker is tested on.
-    if (name === 'node_modules' || name === 'dist' || name === 'fixtures' || name.startsWith('.')) continue;
+    if (name === 'node_modules' || name === 'dist' || name.startsWith('.')) continue;
     const path = join(dir, name);
     if (statSync(path).isDirectory()) walk(path, out, wanted);
     else if (wanted(name)) out.push(path);
@@ -112,9 +116,10 @@ export function checkBoundaries(root: string): string[] {
   const providers = adapterProviders(root);
   const files = [...walk(join(root, 'apps')), ...walk(join(root, 'packages'))];
   const isSql = (name: string) => name.endsWith('.sql');
+  const fixtureTrees = join(root, CHECKER_FIXTURES) + sep;
   const viewNameFiles = [
     ...files,
-    ...walk(join(root, 'scripts')),
+    ...walk(join(root, 'scripts')).filter((f) => !f.startsWith(fixtureTrees)),
     ...walk(join(root, 'test')),
     ...walk(join(root, 'apps'), [], isSql),
     ...walk(join(root, 'packages'), [], isSql),
