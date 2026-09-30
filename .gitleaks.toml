@@ -46,3 +46,11 @@ condition = "AND"
 regexTarget = "secret"
 regexes = ['''^testPingKey_0123456789ab$''']
 paths = ['''^deploy/tests/rws-update\.test\.sh$''', '''^deploy/tests/backup\.test\.sh$''']
+
+[[allowlists]]
+description = "Names of two NL-1 fixture files, passed right after the capture spec id 'nl-1-obs-key' in the loader test, not keys"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^nl-1-obs-key-eijsden-grens-h$''', '''^nl-1-obs-split\.synthetic$''']
+paths = ['''^apps/server/test/load/nl\.int\.test\.ts$''']
