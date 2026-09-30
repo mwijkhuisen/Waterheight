@@ -4,6 +4,9 @@
 -- while connected to the application database (psql -f, or one simple query).
 -- Grants on tables, views and functions live in db/migrations.
 
+-- A login role may change its own defaults (ALTER ROLE <self> [IN DATABASE ...]
+-- SET), and they would outlive a redeploy: every role-wide and per-database
+-- setting of every application role is cleared here and set again below.
 DO $$
 DECLARE
   r text;
@@ -13,6 +16,8 @@ BEGIN
     IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = r) THEN
       EXECUTE pg_catalog.format('CREATE ROLE %I', r);
     END IF;
+    EXECUTE pg_catalog.format('ALTER ROLE %I RESET ALL', r);
+    EXECUTE pg_catalog.format('ALTER ROLE %I IN DATABASE %I RESET ALL', r, pg_catalog.current_database());
   END LOOP;
 END
 $$;
@@ -33,8 +38,8 @@ ALTER ROLE rws_migrator SET role = 'rws_owner';
 
 -- The readers: read-only sessions, 2 s per statement (A§6, A§9.2). Both are
 -- session defaults, which a session can change: the grants (views only), the
--- connection limits, the revoked large-object functions below and
--- temp_file_limit are what hold against a hostile reader session.
+-- connection limits, the revoked large-object and WAL-message functions below
+-- and temp_file_limit are what hold against a hostile reader session.
 ALTER ROLE rws_publish   SET default_transaction_read_only = on;
 ALTER ROLE rws_publish   SET statement_timeout = '2s';
 ALTER ROLE rws_api       SET default_transaction_read_only = on;
@@ -56,6 +61,13 @@ REVOKE EXECUTE ON FUNCTION
   pg_catalog.lo_put(oid, bigint, bytea), pg_catalog.lo_open(oid, integer), pg_catalog.lowrite(integer, bytea),
   pg_catalog.lo_truncate(integer, integer), pg_catalog.lo_truncate64(integer, bigint), pg_catalog.lo_unlink(oid),
   pg_catalog.lo_import(text), pg_catalog.lo_import(text, oid)
+  FROM PUBLIC;
+-- Nor may one write WAL through a logical-decoding message (a read-only
+-- session still could). NOTIFY is bounded by the server's max_notify_queue_pages
+-- (deploy/compose.yaml).
+REVOKE EXECUTE ON FUNCTION
+  pg_catalog.pg_logical_emit_message(boolean, text, text, boolean),
+  pg_catalog.pg_logical_emit_message(boolean, text, bytea, boolean)
   FROM PUBLIC;
 
 -- pg_dump: reads everything, writes nothing.

@@ -115,7 +115,7 @@ CREATE FUNCTION public.own_obs_at(p_t timestamp with time zone) RETURNS TABLE(se
     SELECT o.ts, o.value, o.qc
     FROM public.obs o
     WHERE o.series_id = e.series_id AND o.ts <= p_t AND o.ts > p_t - s.staleness_limit
-      AND (e.lic_history_export OR o.ts >= now() - e.history_window)
+      AND (e.lic_history_export OR o.ts >= statement_timestamp() - e.history_window)
     ORDER BY o.ts DESC
     LIMIT 1) o
   WHERE s.active AND e.audience IN ('public', 'owner') AND e.role = 'primary' AND e.lic_display
@@ -138,7 +138,7 @@ CREATE FUNCTION public.pub_obs_at(p_t timestamp with time zone) RETURNS TABLE(se
     SELECT o.ts, o.value, o.qc
     FROM public.obs o
     WHERE o.series_id = e.series_id AND o.ts <= p_t AND o.ts > p_t - s.staleness_limit
-      AND (e.lic_history_export OR o.ts >= now() - e.history_window)
+      AND (e.lic_history_export OR o.ts >= statement_timestamp() - e.history_window)
     ORDER BY o.ts DESC
     LIMIT 1) o
   WHERE s.active AND e.audience IN ('public') AND e.role = 'primary' AND e.lic_display
@@ -551,7 +551,7 @@ CREATE VIEW public.own_api_obs WITH (security_barrier='true') AS
     o.qc
    FROM (public.obs o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.ts >= (now() - e.history_window))));
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.ts >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -569,7 +569,7 @@ CREATE VIEW public.own_api_obs_1d WITH (security_barrier='true') AS
     o.qc_or
    FROM (public.obs_1d o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.bucket >= (now() - e.history_window))));
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.bucket >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -587,7 +587,7 @@ CREATE VIEW public.own_api_obs_1h WITH (security_barrier='true') AS
     o.qc_or
    FROM (public.obs_1h o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.bucket >= (now() - e.history_window))));
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.bucket >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -729,7 +729,7 @@ CREATE VIEW public.own_obs WITH (security_barrier='true') AS
     o.qc
    FROM (public.obs o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.ts >= (now() - e.history_window))));
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.ts >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -747,7 +747,7 @@ CREATE VIEW public.own_obs_1d WITH (security_barrier='true') AS
     o.qc_or
    FROM (public.obs_1d o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.bucket >= (now() - e.history_window))));
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.bucket >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -765,7 +765,7 @@ CREATE VIEW public.own_obs_1h WITH (security_barrier='true') AS
     o.qc_or
    FROM (public.obs_1h o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.bucket >= (now() - e.history_window))));
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.bucket >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -779,7 +779,7 @@ CREATE VIEW public.own_obs_latest WITH (security_barrier='true') AS
     o.qc
    FROM (public.obs_latest o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.ts >= (now() - e.history_window))));
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.ts >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -1133,7 +1133,7 @@ CREATE VIEW public.pub_api_obs WITH (security_barrier='true') AS
     o.qc
    FROM (public.obs o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.ts >= (now() - e.history_window))));
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.ts >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -1151,7 +1151,7 @@ CREATE VIEW public.pub_api_obs_1d WITH (security_barrier='true') AS
     o.qc_or
    FROM (public.obs_1d o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.bucket >= (now() - e.history_window))));
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.bucket >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -1169,7 +1169,7 @@ CREATE VIEW public.pub_api_obs_1h WITH (security_barrier='true') AS
     o.qc_or
    FROM (public.obs_1h o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.bucket >= (now() - e.history_window))));
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (o.bucket >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -1325,7 +1325,7 @@ CREATE VIEW public.pub_obs WITH (security_barrier='true') AS
     o.qc
    FROM (public.obs o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.ts >= (now() - e.history_window))));
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.ts >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -1343,7 +1343,7 @@ CREATE VIEW public.pub_obs_1d WITH (security_barrier='true') AS
     o.qc_or
    FROM (public.obs_1d o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.bucket >= (now() - e.history_window))));
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.bucket >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -1361,7 +1361,7 @@ CREATE VIEW public.pub_obs_1h WITH (security_barrier='true') AS
     o.qc_or
    FROM (public.obs_1h o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.bucket >= (now() - e.history_window))));
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.bucket >= (statement_timestamp() - e.history_window))));
 
 
 --
@@ -1375,7 +1375,7 @@ CREATE VIEW public.pub_obs_latest WITH (security_barrier='true') AS
     o.qc
    FROM (public.obs_latest o
      JOIN public.series_eff e ON ((e.series_id = o.series_id)))
-  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.ts >= (now() - e.history_window))));
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (o.ts >= (statement_timestamp() - e.history_window))));
 
 
 --

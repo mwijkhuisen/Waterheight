@@ -286,7 +286,10 @@ files=$(find "$repo/db/migrations" -maxdepth 1 -name '*.sql' | wc -l)
 [[ $applied == "$files" ]] || fail "schema_migrations has $applied rows, db/migrations $files files"
 owner=$(psql_su "select string_agg(distinct tableowner, ',') from pg_tables where schemaname = 'public'")
 [[ $owner == rws_owner ]] || fail "public tables owned by $owner"
-proof "db_up of rws-lib.sh ran twice: db healthy, deploy/postgres/roles.sql and the five passwords over the local socket, the migrate job (dbmate 2.36.0 in the server image, as rws_migrator): $applied of $files migrations applied, every public table owned by rws_owner"
+# Review N2: a reader session cannot fill the data volume through the NOTIFY queue.
+notify=$(psql_su 'show max_notify_queue_pages')
+[[ $notify == 64 ]] || fail "max_notify_queue_pages is $notify, not 64"
+proof "db_up of rws-lib.sh ran twice: db healthy, deploy/postgres/roles.sql and the five passwords over the local socket, the migrate job (dbmate 2.36.0 in the server image, as rws_migrator): $applied of $files migrations applied, every public table owned by rws_owner, max_notify_queue_pages $notify"
 rws_compose up -d --remove-orphans --quiet-pull
 healthy() { [[ $(docker inspect -f '{{.State.Health.Status}}' "rws-$1-1") == healthy ]]; }
 for s in caddy capture watchdog db load api; do wait_for "$s healthy" 240 healthy "$s"; done

@@ -150,6 +150,14 @@ describe.each([
     for (const set of ['SET temp_file_limit = -1', "SET temp_file_limit = '1TB'", 'RESET temp_file_limit'])
       expect(await sqlState(client(), set), set).toBe('42501');
   });
+
+  it('cannot write WAL through a logical-decoding message (review N2)', async () => {
+    for (const call of [
+      "SELECT pg_logical_emit_message(false, 'x', 'y')",
+      "SELECT pg_logical_emit_message(false, 'x', '\\x00'::bytea, true)",
+    ])
+      expect(await sqlState(client(), call), call).toBe('42501');
+  });
 });
 
 describe('rws_owner_api (owner reader)', () => {
@@ -430,6 +438,60 @@ describe('the database itself', () => {
     const golden = new URL('./privileges.golden.json', import.meta.url);
     if (process.env.UPDATE_GOLDEN === '1') writeFileSync(golden, `${JSON.stringify(actual, null, 2)}\n`);
     expect(actual).toEqual(JSON.parse(readFileSync(golden, 'utf8')));
+  });
+
+  it('roles.sql clears the defaults a role gave itself, role-wide and in this database (review N1)', async () => {
+    const settings = async () =>
+      (
+        await t.admin.query<{ role: string; db: string; config: string[] }>(
+          `SELECT r.rolname AS role, COALESCE(d.datname, '') AS db, s.setconfig AS config
+           FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole
+           LEFT JOIN pg_database d ON d.oid = s.setdatabase
+           WHERE r.rolname LIKE 'rws\\_%' AND (s.setdatabase = 0 OR d.datname = current_database())
+           ORDER BY 1, 2`,
+        )
+      ).rows.map((r) => ({ ...r, config: [...r.config].sort() }));
+    // A hostile session in `api` and one in `load` change their own defaults (the readers switch read-only off first).
+    const hostile = [
+      ['rws_api', 'ALTER ROLE rws_api SET extra_float_digits = -15'],
+      ['rws_api', `ALTER ROLE rws_api IN DATABASE ${t.name} SET "DateStyle" = 'SQL, DMY'`],
+      ['rws_load', `ALTER ROLE rws_load IN DATABASE ${t.name} SET statement_timeout = '1ms'`],
+    ] as const;
+    try {
+      for (const [role, statement] of hostile) {
+        const session = await t.connectAs(role);
+        await session.query('SET default_transaction_read_only = off');
+        await session.query(statement);
+        await session.end();
+      }
+      expect((await settings()).filter((s) => s.db !== '' || s.config.includes('extra_float_digits=-15'))).toHaveLength(
+        3,
+      );
+      // The next deploy (db_prepare) applies roles.sql again: exactly the settings it sets are left, for every role.
+      await t.admin.query(readFileSync(new URL('../../../../deploy/postgres/roles.sql', import.meta.url), 'utf8'));
+      const reader = ['default_transaction_read_only=on', 'statement_timeout=2s', 'temp_file_limit=256MB'];
+      expect(await settings()).toEqual([
+        { role: 'rws_api', db: '', config: reader },
+        { role: 'rws_backup', db: '', config: ['default_transaction_read_only=on'] },
+        { role: 'rws_migrator', db: '', config: ['role=rws_owner'] },
+        { role: 'rws_owner_api', db: '', config: reader },
+        { role: 'rws_publish', db: '', config: reader },
+      ]);
+      // New logins get the server's defaults again, and their own.
+      const shown = "SELECT current_setting('extra_float_digits') AS f, current_setting('DateStyle') AS d";
+      const server = (await t.admin.query(shown)).rows[0];
+      const api2 = await t.connectAs('rws_api');
+      expect((await api2.query(`${shown}, current_setting('statement_timeout') AS st`)).rows).toEqual([
+        { ...server, st: '2s' },
+      ]);
+      await api2.end();
+      const load2 = await t.connectAs('rws_load');
+      expect((await load2.query("SELECT current_setting('statement_timeout') AS st")).rows).toEqual([{ st: '0' }]);
+      await load2.end();
+    } finally {
+      // Role-wide settings are cluster-wide: never leave one behind for the next test file.
+      await t.admin.query('ALTER ROLE rws_api RESET extra_float_digits');
+    }
   });
 
   it('ensure_partitions is a locked-down SECURITY DEFINER function', async () => {

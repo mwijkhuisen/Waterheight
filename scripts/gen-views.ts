@@ -37,8 +37,13 @@ const seriesVisible = (e: string, p: Params) =>
 const sourceVisible = (s: string, p: Params) =>
   `${audienceIn(`${s}.audience`, p.audience)} AND ${s}.lic_display${p.api ? ` AND ${s}.lic_api` : ''}`;
 
-/** Rows older than the source's own public window need the history_export channel (A§6, A§9.2). */
-const historyAllowed = (e: string, ts: string) => `(${e}.lic_history_export OR ${ts} >= now() - ${e}.history_window)`;
+/**
+ * Rows older than the source's own public window need the history_export
+ * channel (A§6, A§9.2). The cutoff moves with each statement: `now()` is the
+ * transaction start, which a reader holding a transaction open would keep.
+ */
+const historyAllowed = (e: string, ts: string) =>
+  `(${e}.lic_history_export OR ${ts} >= statement_timestamp() - ${e}.history_window)`;
 
 const obsLike = (table: string, ts: string, columns: string) => (p: Params) =>
   `

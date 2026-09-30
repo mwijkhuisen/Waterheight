@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { VIEWS } from '../../src/db/audience.ts';
+import { OBS_AT, VIEWS } from '../../src/db/audience.ts';
 import { seedAudienceFixture } from './seed.ts';
 import { createTestDb, sqlState, type TestDb } from './testdb.ts';
 
@@ -149,6 +149,40 @@ describe('the history window does not depend on the session time zone (review S3
       expect(await visible()).toEqual(utc);
     } finally {
       for (const client of [api, owner]) await client.query("SET TIME ZONE 'UTC'");
+    }
+  });
+
+  it('a reader that holds a transaction open sees a row leave the window between two statements (review N3)', async () => {
+    // A row two seconds inside the 720-hour window of CH-3, relative to the start of the reader's transaction.
+    await api.query('BEGIN');
+    try {
+      const began = (await api.query<{ t: Date }>('SELECT now() AS t')).rows[0]?.t as Date;
+      const ts = new Date(began.getTime() - 720 * 3_600_000 + 2000);
+      await t.admin.query('INSERT INTO obs (series_id, ts, value, qc, batch_id) VALUES ($1, $2, 100, 1, 1)', [
+        ids.window,
+        ts,
+      ]);
+      const seen = async () => [
+        (
+          await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.obs} WHERE series_id = $1 AND ts = $2`, [
+            ids.window,
+            ts,
+          ])
+        ).rows[0]?.n,
+        (
+          await api.query(`SELECT count(*)::int AS n FROM ${OBS_AT.public}($1) WHERE series_id = $2 AND ts = $3`, [
+            new Date(ts.getTime() + 60_000),
+            ids.window,
+            ts,
+          ])
+        ).rows[0]?.n,
+      ];
+      expect(await seen()).toEqual([1, 1]);
+      // Two and a half seconds on, in the same transaction: the cutoff moved with the statement, not the transaction.
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      expect(await seen()).toEqual([0, 0]);
+    } finally {
+      await api.query('ROLLBACK');
     }
   });
 });

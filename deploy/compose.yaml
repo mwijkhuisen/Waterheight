@@ -179,6 +179,10 @@ services:
       - work_mem=16MB
       - -c
       - maintenance_work_mem=128MB
+      # 512 kB of LISTEN/NOTIFY queue instead of 8 GB on the data volume:
+      # nothing of ours uses it, and a reader session could fill it.
+      - -c
+      - max_notify_queue_pages=64
     secrets: [db_postgres]
     tmpfs:
       - /tmp:size=16m,mode=1777

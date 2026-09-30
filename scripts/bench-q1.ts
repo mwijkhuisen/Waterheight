@@ -64,7 +64,7 @@ try {
     CROSS JOIN LATERAL (
       SELECT o.ts, o.value, o.qc FROM obs o
       WHERE o.series_id = e.series_id AND o.ts <= $1::timestamptz AND o.ts > $1::timestamptz - s.staleness_limit
-        AND (e.lic_history_export OR o.ts >= now() - e.history_window)
+        AND (e.lic_history_export OR o.ts >= statement_timestamp() - e.history_window)
       ORDER BY o.ts DESC LIMIT 1) o
     WHERE s.active AND e.audience IN ('public') AND e.role = 'primary' AND e.lic_display`;
   const plan = (
