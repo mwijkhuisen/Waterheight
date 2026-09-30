@@ -18,6 +18,10 @@ CREATE TABLE ingest_batch (
   n_rows          int NOT NULL DEFAULT 0,
   n_new           int NOT NULL DEFAULT 0,
   n_changed       int NOT NULL DEFAULT 0,
+  -- Values the payload carried that a registry change could still load (a series
+  -- the registry does not know, a unit mismatch, an unknown gauge-zero unit): the
+  -- retention pruner keeps the object while this is not 0; a replay recounts it.
+  n_skipped       int NOT NULL DEFAULT 0 CHECK (n_skipped >= 0),
   -- One of our own fixed codes, optionally with a schema path: never provider
   -- text, a URL, a secret or a database message (invariant 6).
   error           text CHECK (error ~ '^[a-z0-9_]{1,40}( at [A-Za-z0-9_.?\[\]-]{1,120})?$'),
@@ -67,6 +71,9 @@ CREATE TABLE app_meta (
   value      jsonb NOT NULL,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+-- The loader lock: load, replay, the health pass and the nightly jobs hold this
+-- row FOR UPDATE, which no reader role can (they have no privilege on app_meta).
+INSERT INTO app_meta (key, value) VALUES ('loader_lock', '{}');
 
 -- migrate:down
 

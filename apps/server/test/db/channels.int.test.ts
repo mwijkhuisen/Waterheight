@@ -2,7 +2,7 @@ import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VIEWS } from '../../src/db/audience.ts';
 import { seedAudienceFixture } from './seed.ts';
-import { createTestDb, type TestDb } from './testdb.ts';
+import { createTestDb, sqlState, type TestDb } from './testdb.ts';
 
 // Licence channels inside each audience (issue #17 †; A§6, A§9.2; catalogue §0.7).
 
@@ -99,7 +99,56 @@ describe('narrowing only', () => {
       expect(await count(api, VIEWS.public.obs, ids.window)).toBe(0);
       expect(await count(owner, VIEWS.owner.obs, ids.window)).toBe(0);
     } finally {
-      await t.admin.query("UPDATE source SET history_window = '30 days' WHERE id = 'CH-3'");
+      await t.admin.query("UPDATE source SET history_window = '720 hours' WHERE id = 'CH-3'");
+    }
+  });
+});
+
+describe('the history window does not depend on the session time zone (review S3)', () => {
+  it('holds hours and smaller only: a day or month part is refused', async () => {
+    const set = (w: string) =>
+      sqlState(t.admin, `UPDATE source SET history_window = $1::interval WHERE id = 'CH-3'`, [w]);
+    try {
+      for (const bad of ['30 days', '1 mon', '1 year', '29 days 24 hours', '-1 hour'])
+        expect(await set(bad), bad).toBe('23514');
+      for (const good of ['0', '720 hours', '90 minutes']) expect(await set(good), good).toBe('ok');
+    } finally {
+      await t.admin.query("UPDATE source SET history_window = '720 hours' WHERE id = 'CH-3'");
+    }
+  });
+
+  it('a reader session in a hostile time zone sees exactly the rows it sees in UTC', async () => {
+    // Rows an hour inside and an hour outside the 720-hour window of CH-3 (no history export).
+    await t.admin.query(
+      `INSERT INTO obs (series_id, ts, value, qc, batch_id)
+       SELECT $1, now() - interval '720 hours' + d * interval '1 hour', 100, 1, 1 FROM unnest(ARRAY[-1, 1]) d`,
+      [ids.window],
+    );
+    // A zone whose summer time (UTC-10) began ten days ago, after 14 hours ahead of UTC: 30 days back crosses
+    // its switch, so `now() - interval '30 days'` would move by 24 hours here. Hours never do.
+    const doy = (daysFromNow: number) => {
+      const d = new Date(Date.now() + daysFromNow * 86_400_000);
+      const day = Math.floor((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86_400_000) + 1;
+      // Julian day n (1–365) never counts 29 February.
+      return Math.min(365, day);
+    };
+    const hostile = `XXX-14YYY+10,J${doy(-10)},J${doy(10)}`;
+    const visible = async () => [
+      await count(api, VIEWS.public.obs, ids.window),
+      (await api.query(`SELECT ts FROM ${VIEWS.public.obs} WHERE series_id = $1 ORDER BY ts`, [ids.window])).rows,
+      await count(owner, VIEWS.owner.obs, ids.window),
+    ];
+    const utc = await visible();
+    expect(utc[0]).toBe(3);
+    for (const client of [api, owner]) await client.query(`SET TIME ZONE '${hostile}'`);
+    try {
+      const shift = await api.query(
+        "SELECT extract(epoch FROM (now() - interval '720 hours') - (now() - interval '30 days'))::int AS s",
+      );
+      expect(shift.rows).toEqual([{ s: 86_400 }]);
+      expect(await visible()).toEqual(utc);
+    } finally {
+      for (const client of [api, owner]) await client.query("SET TIME ZONE 'UTC'");
     }
   });
 });

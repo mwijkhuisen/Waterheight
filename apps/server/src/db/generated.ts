@@ -108,6 +108,7 @@ export interface IngestBatch {
   n_changed: Generated<number>;
   n_new: Generated<number>;
   n_rows: Generated<number>;
+  n_skipped: Generated<number>;
   parse_status: string;
   sha256: string | null;
   source_id: string;

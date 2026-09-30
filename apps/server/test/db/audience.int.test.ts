@@ -1,3 +1,4 @@
+import { CANARIES } from '@rws/contracts';
 import { effective } from '@rws/core';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -195,7 +196,8 @@ describe('the value of every series at T (A§8 Q1)', () => {
     );
     const common = {
       prosecdef: true,
-      proconfig: ['search_path=pg_catalog, pg_temp'],
+      // The caller's time zone never reaches the body (review S3).
+      proconfig: ['search_path=pg_catalog, pg_temp', 'TimeZone=UTC'],
       provolatile: 's',
       owner: 'rws_owner',
     };
@@ -269,7 +271,12 @@ describe('dependent rows are filtered by their own source AND their parent', () 
     for (const view of [PUB.forecastValue, PUB.api.forecastValue]) {
       expect(await column(api, `SELECT value FROM ${view}`), view).toEqual([200]);
     }
-    expect(await column(owner, `SELECT value FROM ${OWN.forecastValue}`)).toEqual([200, 201, 202, 777777.75]);
+    expect(await column(owner, `SELECT value FROM ${OWN.forecastValue}`)).toEqual([
+      200,
+      201,
+      202,
+      Number(CANARIES.owner.real),
+    ]);
   });
 
   it('warnings, classes and attribution follow their own source', async () => {
@@ -325,6 +332,20 @@ describe('dependent rows are filtered by their own source AND their parent', () 
   });
 });
 
+describe('the canaries', () => {
+  it('are grepped in the spelling PostgreSQL prints for a stored `real`, and in their decimal spelling', async () => {
+    for (const canary of Object.values(CANARIES)) {
+      expect(String(canary.value)).toBe(canary.text);
+      const { rows } = await t.admin.query('SELECT $1::real::text AS real, $2::numeric::text AS text', [
+        canary.value,
+        canary.value,
+      ]);
+      expect(rows).toEqual([{ real: canary.real, text: canary.text }]);
+    }
+    expect(NEVER_PUBLIC).toEqual(expect.arrayContaining([CANARIES.owner.real, CANARIES.withheld.real]));
+  });
+});
+
 describe('sweeps over whole families', () => {
   it('no public view shows an owner, off, withheld, mirror or canary row in any column', async () => {
     const text = (await sweep(api, familyViews('public'))) + (await sweepAt(api, OBS_AT.public));
@@ -351,8 +372,8 @@ describe('sweeps over whole families', () => {
       CREATE VIEW mutant.station_without_filter AS SELECT id FROM station;`);
     try {
       expect(found(await sweep(t.admin, ['mutant.obs_without_filter']), NEVER_PUBLIC)).toEqual([
-        '777777.75',
-        '123456.79',
+        CANARIES.owner.real,
+        CANARIES.withheld.real,
       ]);
       expect(found(await sweep(t.admin, ['mutant.reference_without_source_filter']), NEVER_PUBLIC)).toEqual([
         'LU-4',

@@ -168,13 +168,15 @@ const view = (name: string, body: string) => `CREATE VIEW ${name} WITH (security
 /**
  * A§8 Q1 as a function (see OBS_AT in audience.ts). SECURITY DEFINER, because
  * the readers have no grant on the tables: a plain SQL body without dynamic
- * SQL, a fixed search_path with pg_temp last, every relation schema-qualified,
+ * SQL, a fixed search_path with pg_temp last, the time zone fixed to UTC (the
+ * caller's session setting never reaches it), every relation schema-qualified,
  * and EXECUTE for the family's roles only.
  */
 const obsAt = (name: string, p: Params) => `CREATE FUNCTION ${name}(p_t timestamptz)
 RETURNS TABLE (series_id int, ts timestamptz, value real, qc int2)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
+SET TimeZone = 'UTC'
 ROWS 3000
 AS $$
   SELECT e.series_id, o.ts, o.value, o.qc
@@ -235,7 +237,8 @@ FROM source s
 WHERE s.audience = 'owner'`,
     ),
   );
-  // The loader's own state (written by the health pass into app_meta): no source, no value.
+  // The loader's own state (written by the health pass into app_meta): no source, no value. backlog_age_s
+  // is the age of the oldest manifest line the loader has not consumed (null when there is none).
   up.push(
     view(
       PUBLIC_ONLY_VIEWS.loader,
@@ -243,6 +246,7 @@ WHERE s.audience = 'owner'`,
 SELECT (m.value ->> 'computed_at')::timestamptz AS computed_at,
        (m.value ->> 'backlog_files')::int AS backlog_files,
        (m.value ->> 'backlog_bytes')::bigint AS backlog_bytes,
+       (m.value ->> 'backlog_age_s')::double precision AS backlog_age_s,
        (m.value ->> 'bad_manifest_lines')::int AS bad_manifest_lines
 FROM app_meta m
 WHERE m.key = 'loader'`,

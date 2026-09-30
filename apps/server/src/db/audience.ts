@@ -164,12 +164,14 @@ export type LoaderRow = {
   computed_at: Date | null;
   backlog_files: number;
   backlog_bytes: string;
+  backlog_age_s: number | null;
   bad_manifest_lines: number;
 };
 export const LOADER_COLUMNS = [
   'computed_at',
   'backlog_files',
   'backlog_bytes',
+  'backlog_age_s',
   'bad_manifest_lines',
 ] as const satisfies readonly (keyof LoaderRow)[];
 

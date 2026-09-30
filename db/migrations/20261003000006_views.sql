@@ -362,6 +362,7 @@ CREATE VIEW pub_loader WITH (security_barrier = true) AS
 SELECT (m.value ->> 'computed_at')::timestamptz AS computed_at,
        (m.value ->> 'backlog_files')::int AS backlog_files,
        (m.value ->> 'backlog_bytes')::bigint AS backlog_bytes,
+       (m.value ->> 'backlog_age_s')::double precision AS backlog_age_s,
        (m.value ->> 'bad_manifest_lines')::int AS bad_manifest_lines
 FROM app_meta m
 WHERE m.key = 'loader';
@@ -370,6 +371,7 @@ CREATE FUNCTION pub_obs_at(p_t timestamptz)
 RETURNS TABLE (series_id int, ts timestamptz, value real, qc int2)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
+SET TimeZone = 'UTC'
 ROWS 3000
 AS $$
   SELECT e.series_id, o.ts, o.value, o.qc
@@ -391,6 +393,7 @@ CREATE FUNCTION own_obs_at(p_t timestamptz)
 RETURNS TABLE (series_id int, ts timestamptz, value real, qc int2)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
+SET TimeZone = 'UTC'
 ROWS 3000
 AS $$
   SELECT e.series_id, o.ts, o.value, o.qc

@@ -106,6 +106,7 @@ $$;
 CREATE FUNCTION public.own_obs_at(p_t timestamp with time zone) RETURNS TABLE(series_id integer, ts timestamp with time zone, value real, qc smallint)
     LANGUAGE sql STABLE SECURITY DEFINER ROWS 3000
     SET search_path TO 'pg_catalog', 'pg_temp'
+    SET "TimeZone" TO 'UTC'
     AS $$
   SELECT e.series_id, o.ts, o.value, o.qc
   FROM public.series_eff e
@@ -128,6 +129,7 @@ $$;
 CREATE FUNCTION public.pub_obs_at(p_t timestamp with time zone) RETURNS TABLE(series_id integer, ts timestamp with time zone, value real, qc smallint)
     LANGUAGE sql STABLE SECURITY DEFINER ROWS 3000
     SET search_path TO 'pg_catalog', 'pg_temp'
+    SET "TimeZone" TO 'UTC'
     AS $$
   SELECT e.series_id, o.ts, o.value, o.qc
   FROM public.series_eff e
@@ -288,9 +290,11 @@ CREATE TABLE public.ingest_batch (
     n_rows integer DEFAULT 0 NOT NULL,
     n_new integer DEFAULT 0 NOT NULL,
     n_changed integer DEFAULT 0 NOT NULL,
+    n_skipped integer DEFAULT 0 NOT NULL,
     error text,
     loaded_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT ingest_batch_error_check CHECK ((error ~ '^[a-z0-9_]{1,40}( at [A-Za-z0-9_.?\[\]-]{1,120})?$'::text)),
+    CONSTRAINT ingest_batch_n_skipped_check CHECK ((n_skipped >= 0)),
     CONSTRAINT ingest_batch_parse_status_check CHECK ((parse_status = ANY (ARRAY['ok'::text, 'quarantined'::text, 'skipped'::text]))),
     CONSTRAINT ingest_batch_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT ingest_batch_spec_id_check CHECK ((spec_id ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text))
@@ -461,7 +465,7 @@ CREATE TABLE public.source (
     capture_enabled boolean NOT NULL,
     canary boolean DEFAULT false NOT NULL,
     notes text,
-    CONSTRAINT source_history_window_check CHECK ((history_window >= '00:00:00'::interval)),
+    CONSTRAINT source_history_window_check CHECK (((history_window >= '00:00:00'::interval) AND (EXTRACT(year FROM history_window) = (0)::numeric) AND (EXTRACT(month FROM history_window) = (0)::numeric) AND (EXTRACT(day FROM history_window) = (0)::numeric))),
     CONSTRAINT source_id_check CHECK ((id ~ '^((NL|DE|BE|FR|LU|CH)-[1-9][0-9]?|CANARY-[A-Z]+)$'::text)),
     CONSTRAINT source_owner_has_private_basis CHECK (((audience <> 'owner'::public.audience) OR ((private_basis IS NOT NULL) AND (jsonb_typeof(private_basis) = 'object'::text) AND (private_basis ?& ARRAY['clause'::text, 'url'::text, 'retrieved'::text])))),
     CONSTRAINT source_owner_no_bulk_export CHECK (((audience <> 'owner'::public.audience) OR (NOT lic_bulk_export))),
@@ -1304,6 +1308,7 @@ CREATE VIEW public.pub_loader WITH (security_barrier='true') AS
  SELECT ((value ->> 'computed_at'::text))::timestamp with time zone AS computed_at,
     ((value ->> 'backlog_files'::text))::integer AS backlog_files,
     ((value ->> 'backlog_bytes'::text))::bigint AS backlog_bytes,
+    ((value ->> 'backlog_age_s'::text))::double precision AS backlog_age_s,
     ((value ->> 'bad_manifest_lines'::text))::integer AS bad_manifest_lines
    FROM public.app_meta m
   WHERE (key = 'loader'::text);

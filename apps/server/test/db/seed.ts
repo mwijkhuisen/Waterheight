@@ -1,14 +1,15 @@
+import { CANARIES } from '@rws/contracts';
 import type pg from 'pg';
 
 // The audience fixture of the database tests: public, owner and off sources,
 // both canaries, narrowed series, a mirror, and owner-audience rows hanging on
 // public series. Every id below is synthetic (no provider data).
 
-export const WITHHELD_CANARY = 123456.789;
-export const OWNER_CANARY = 777777.777;
+export const WITHHELD_CANARY = CANARIES.withheld.value;
+export const OWNER_CANARY = CANARIES.owner.value;
 /** How PostgreSQL prints the canaries once they are stored as `real`. */
-export const WITHHELD_CANARY_REAL = '123456.79';
-export const OWNER_CANARY_REAL = '777777.75';
+export const WITHHELD_CANARY_REAL = CANARIES.withheld.real;
+export const OWNER_CANARY_REAL = CANARIES.owner.real;
 
 const BASIS = `'{"clause": "SECRET-CLAUSE personal use only", "url": "https://example.org/terms", "retrieved": "2026-09-24"}'::jsonb`;
 
@@ -67,8 +68,8 @@ export async function seedAudienceFixture(admin: pg.Client): Promise<Record<stri
       ('DE-9', 'nlwkn', 'off', 'off', NULL, false, false, false, false, '0', false, false),
       ('CH-1', 'bafu', 'display only', 'public', NULL, true, false, false, true, '0', true, false),
       ('CH-2', 'bafu', 'no display', 'public', NULL, false, false, false, false, '0', true, false),
-      ('CH-3', 'bafu', '30-day window, no history export', 'public', NULL, true, true, false, false, '30 days', true, false),
-      ('CH-4', 'bafu', '30-day window, history export', 'public', NULL, true, true, true, true, '30 days', true, false);
+      ('CH-3', 'bafu', '30-day window, no history export', 'public', NULL, true, true, false, false, '720 hours', true, false),
+      ('CH-4', 'bafu', '30-day window, history export', 'public', NULL, true, true, true, true, '720 hours', true, false);
 
     INSERT INTO attribution (source_id, ord, lang, text, needs_date, required) VALUES
       ('NL-1', 0, 'nl', 'PUBLIC-ATTRIBUTION', false, false),
