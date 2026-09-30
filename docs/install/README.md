@@ -98,7 +98,7 @@ After cloning into a new repository, the owner applies the settings of `docs/git
 
 ## 2. Production host (P1)
 
-> **Status:** this section follows the P1b platform PR (branch `claude/p1b-platform`, draft, under review). The authoritative, tested commands are in its runbooks, `docs/runbooks/bootstrap.md` and `docs/runbooks/owner-checks.md`; if a step here and a runbook disagree, the runbook wins. Other runbooks: `deploy-rollback.md`, `recorder-down.md`, `restore.md`, `disk-full.md`, `lost-ssh.md`.
+> **Status:** this section follows P1a and P1b as merged into `main` ([mwijkhuisen/Waterheight#35](https://github.com/mwijkhuisen/Waterheight/pull/35)). The authoritative, tested commands are in its runbooks, `docs/runbooks/bootstrap.md` and `docs/runbooks/owner-checks.md`; if a step here and a runbook disagree, the runbook wins. Other runbooks: `deploy-rollback.md`, `recorder-down.md`, `restore.md`, `disk-full.md`, `lost-ssh.md`.
 
 ### 2.1 System requirements (A§3, §6.2 A3)
 
@@ -191,7 +191,7 @@ The order below is the fastest way to live capture (`docs/runbooks/bootstrap.md`
 
 #### Step 9 · Merge and promote the release
 
-- [ ] Merge the P1a and P1b PRs into `main`. `release.yml` builds, signs and attests the three images (`server`, `web`, `backup`).
+- [ ] P1a and P1b are merged into `main`, so `release.yml` has built, signed and attested the three images (`server`, `web`, `backup`).
 - [ ] In GitHub → Actions, **approve the `promote` job** (environment `production`). It publishes the release `prod-<UTC timestamp>` with `release-manifest.json`, its sigstore bundle and `deploy-bundle.tar.gz`.
 - [ ] **B4:** set the three GHCR packages `waterheight/server`, `web` and `backup` to **public** (package settings → Change visibility). Check:
   ```bash
