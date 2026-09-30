@@ -2,7 +2,7 @@
 
 **Trigger:**
 - after a fix, to load payloads that were quarantined (`docs/runbooks/schema-drift.md`);
-- after a parse or normalise change that alters what is stored (values dropped by a wrong unit, a new rule);
+- after a parse, normalise or registry change that alters what is stored (values dropped by a wrong unit or stored with a wrong factor, a new rule; §3 after a provider's unit change);
 - after a restore of the raw archive when a payload was skipped as `object_missing` (`docs/runbooks/restore.md`);
 - to prove that the archive still reproduces the database (a second replay must change nothing).
 
@@ -13,7 +13,9 @@
 | Rule | Consequence |
 |---|---|
 | Same code path as `load` (`Loader.payload`): one payload = one transaction, under the loader lock (a row lock on `app_meta` `loader_lock`) that `load`, the nightly reconciliation and the health pass share | It is safe to run while `load` runs; they take turns per payload (a wait over 30 s fails that payload's transaction: `replay: failed (55P03)`; run it again) |
-| Newest fetch wins: the stored row of a point is what the newest fetch (`fetched_at`, then batch id) that stated it says; a newer fetch that states the same value takes the row over (a confirmation) | Replaying an old range never reverts a newer value, in whatever order the payloads are replayed |
+| Newest fetch wins: the stored row of a point is what the newest fetch (`fetched_at`, then batch id) that stated it says; a newer fetch that states the same value takes the row over (a confirmation). Gauge zeros follow the same rule | Replaying an old range never reverts a newer value, in whatever order the payloads are replayed |
+| The payload that holds a row (the newest that stated it) rewrites it when it now yields another value or qc | A replay after a fix of the parser, the normaliser or a registry factor corrects what that payload stored (one `obs_revision` per changed row); with an unchanged parser it writes nothing |
+| It re-parses with **today's** registry: units, factors and datums are not versioned in time | After a provider's unit or factor change, replay only the payloads fetched since the change (§3); never an older day |
 | A changed value writes exactly one `obs_revision` row; an identical row, or one a newer fetch holds, writes nothing | A no-op replay writes no row, no revision, no new batch id |
 | One batch row per archive key (`ingest_batch.archive_key` is unique) | A replay updates the batch, it never adds a second one |
 | A quarantined or skipped payload that now loads becomes `ok` | This is how a fixed drift is cleared |
@@ -65,7 +67,18 @@ Exit codes: 0 done, 64 bad arguments (the usage line says which), 78 no database
 
 A large range is one transaction per payload; it can be stopped and started again, because each payload is all or nothing and a finished one changes nothing the second time.
 
-## 3. Verify
+## 3. After a provider's unit or factor change
+
+The registry fix is deployed first (`docs/runbooks/schema-drift.md` §4), and the first basin payload after it clears the mismatch list. Then replay from the **UTC day of the change**, the day of the last basin payload that still showed the old unit: normally the day of the first `unit_mismatch` alert, or the day before when that alert came in the first 15 minutes of a day (the basin call runs every 15 minutes; after an outage of the basin call, look up its last good fetch before the alert). Never start earlier: every payload replayed is read with today's factor, and a series payload fetched before the change carries the old unit (`measurements.json` states none).
+
+```bash
+rwsc run --rm --no-deps -T load replay --source DE-1 --from 2026-10-05 --to 2026-10-06 --dry-run
+rwsc run --rm --no-deps -T load replay --source DE-1 --from 2026-10-05 --to 2026-10-06
+```
+
+It stores the values that were dropped as `unit_mismatch` while the list named the series, and rewrites the rows that were stored mis-scaled between the change and its detection (the payload that holds such a row rewrites it). The range is whole days, so on the first day the series payloads fetched before the change are read with the new factor too: the points that only they hold come out mis-scaled (KG-074). Check that day's values of the series by hand.
+
+## 4. Verify
 
 ```bash
 curl -s https://<domain>/api/v1/health/sources | jq '.sources[] | select(.id == "DE-1") | {status, quarantined, partitions_at}, .quarantined_batches'
@@ -78,6 +91,7 @@ curl -s https://<domain>/api/v1/health/sources | jq '.sources[] | select(.id == 
 ## What not to do
 
 - Do not replay to "fix" a value the provider itself corrected: a newer payload already wins, and the older revision is in `obs_revision`.
+- Do not replay days before a unit or factor change once the registry has the new one: their payloads would be read with the new factor (§3).
 - Do not replay a range you have not counted with `--dry-run` first when it is large: every payload in it is read and decompressed.
 - Do not run it against the raw archive while a restore is still copying files in: the loader would set an object that has not arrived yet to `skipped` (`object_missing`). Stop `load` first (`docs/runbooks/restore.md`).
 - Do not move or edit `load_cursor`. Replay never needs to; `load` moves it by itself.
