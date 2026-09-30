@@ -5,12 +5,13 @@ import { loadRegistry } from '../capture/specs.ts';
 import type { DB } from '../db/generated.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { startHeartbeat } from '../heartbeat.ts';
-import { computeHealth, LagWindow, storeChecksums } from './health.ts';
+import { computeHealth, findOutages, LagWindow, type Outage, storeChecksums } from './health.ts';
 import { type Backlog, Loader, nothingToLoad } from './pipeline.ts';
 import { parsedOkIn, prune } from './prune.ts';
 import { reconcileRollups } from './reconcile.ts';
 import { parseReplayArgs, replay } from './replay.ts';
 import { readMeta, writeMeta } from './store.ts';
+import { checkTwins } from './twins.ts';
 
 // The `load` and `replay` roles (A§4). `load` has no egress and no registry
 // write access: it reads the raw archive, writes its own tables, and leaves
@@ -24,6 +25,8 @@ const TICK_MS = 10_000;
  */
 const TICK_BUDGET_MS = 20_000;
 const HEALTH_MS = 60_000;
+/** The outage scan reads a week of batches: not on every health pass. */
+const OUTAGE_MS = 600_000;
 /** The nightly jobs run once per UTC day, after this hour. */
 const NIGHTLY_HOUR = 2;
 
@@ -43,15 +46,17 @@ export async function claimNightly(db: Kysely<DB>, now: Date, backlog: Backlog):
 
 const rawDirOf = (env: Readonly<Record<string, string | undefined>>) => env.RWS_RAW_DIR || '/data/raw';
 
-/** The shortest capture cadence per source: what "fresh" means for its fetches. */
-function cadences(): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const spec of loadRegistry().specs) {
-    const known = out.get(spec.source);
-    if (spec.cadence_s === null || spec.cadence_s <= 0) continue;
-    if (known === undefined || spec.cadence_s < known) out.set(spec.source, spec.cadence_s);
+/** The shortest capture cadence per source (what "fresh" means for its fetches), and the cadence of every spec. */
+function cadences(): { source: Map<string, number>; spec: Map<string, number> } {
+  const source = new Map<string, number>();
+  const spec = new Map<string, number>();
+  for (const s of loadRegistry().specs) {
+    if (s.cadence_s === null || s.cadence_s <= 0) continue;
+    spec.set(s.id, s.cadence_s);
+    const known = source.get(s.source);
+    if (known === undefined || s.cadence_s < known) source.set(s.source, s.cadence_s);
   }
-  return out;
+  return { source, spec };
 }
 
 export async function runLoad(
@@ -75,7 +80,7 @@ export async function runLoad(
     now: () => new Date(),
     onLag: (source, fetchedAt, lagMs) => lag.add(source, fetchedAt, lagMs, new Date()),
   });
-  const cadenceS = cadences();
+  const { source: cadenceS, spec: specCadenceS } = cadences();
   const apply = env.RWS_PRUNE_APPLY === '1';
   const stopHeartbeat = startHeartbeat();
   logger.info({ prune: apply ? 'apply' : 'dry-run' }, 'load started');
@@ -90,6 +95,8 @@ export async function runLoad(
   process.once('SIGTERM', stop);
 
   let lastHealth = 0;
+  let lastOutages = 0;
+  let outages: Map<string, Outage> = new Map();
   let caughtUp = false;
   while (!stopped) {
     // The tick alerts its own stalls and never throws.
@@ -106,7 +113,20 @@ export async function runLoad(
         logger.info('caught up with the manifest: partition checksums stored');
       }
       if (now.getTime() - lastHealth >= HEALTH_MS) {
-        await computeHealth(db, { cadenceS, lagP95Ms: lag.p95(now), backlog, badLines: loader.badLines, now });
+        if (now.getTime() - lastOutages >= OUTAGE_MS) {
+          outages = await findOutages(db, cadenceS, now);
+          lastOutages = now.getTime();
+        }
+        await computeHealth(db, {
+          cadenceS,
+          specCadenceS,
+          lagP95Ms: lag.p95(now),
+          backlog,
+          badLines: loader.badLines,
+          now,
+          outages,
+        });
+        for (const twin of await checkTwins(db, now)) logger.error({ alert: 'twin_breach', twin }, 'alert');
         lastHealth = now.getTime();
       }
       if (await claimNightly(db, now, backlog)) {

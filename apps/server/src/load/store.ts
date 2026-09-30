@@ -91,6 +91,9 @@ export type SeriesRow = SeriesDecl & {
   off: boolean;
   /** It shares its source's audience: only such series count in the source's health and batch numbers. */
   sameAudience: boolean;
+  /** Its station's registered position (a drift report compares it with what a payload states). */
+  lon: number | null;
+  lat: number | null;
 };
 
 /** The registered series of a source by provider key. Read once per process: the registry changes only at a deploy. */
@@ -107,12 +110,14 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
     tier: number;
     off: boolean;
     same_audience: boolean;
+    lon: number | null;
+    lat: number | null;
   }>`
     SELECT s.id, s.provider_key AS key, s.quantity, s.native_unit, s.to_canonical, s.value_kind,
            (EXTRACT(EPOCH FROM s.native_step) * 1000)::double precision AS native_step_ms,
            (EXTRACT(EPOCH FROM s.expected_step) * 1000)::double precision AS expected_step_ms, st.tier,
            LEAST(src.audience, COALESCE(s.audience, src.audience)) = 'off' AS off,
-           COALESCE(s.audience, src.audience) = src.audience AS same_audience
+           COALESCE(s.audience, src.audience) = src.audience AS same_audience, st.lon, st.lat
     FROM series s JOIN station st ON st.id = s.station_id JOIN source src ON src.id = s.source_id
     WHERE s.source_id = ${source} AND s.active`.execute(db);
   return new Map(
@@ -130,6 +135,8 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
         tier: r.tier,
         off: r.off,
         sameAudience: r.same_audience,
+        lon: r.lon,
+        lat: r.lat,
       },
     ]),
   );

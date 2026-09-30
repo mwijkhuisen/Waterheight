@@ -77,12 +77,16 @@ const quarantinedBatches = (tx: Tx) =>
     .execute(tx)
     .then((r) => r.rows);
 
-/** The latest check of each twin. */
+/** The latest check of each twin, with how many of its hourly checks of the last week there are and how many failed. */
 // ponytail: more than MAX_TWINS twins would drop some; the registry has a handful (P2b).
-const latestTwinChecks = (tx: Tx) =>
-  sql<TwinCheckRow>`
-    SELECT DISTINCT ON (twin_id) twin_id, window_end, n_aligned, median_delta, max_delta, lag_min, ok
-    FROM ${sql.table(VIEWS.public.twinCheck)} ORDER BY twin_id, window_end DESC LIMIT ${MAX_TWINS}`
+const latestTwinChecks = (tx: Tx, now: Date) =>
+  sql<TwinCheckRow & { checks_7d: number; failed_7d: number }>`
+    SELECT DISTINCT ON (twin_id) twin_id, window_end, n_aligned, median_delta, max_delta, lag_min, ok,
+           (count(*) OVER week)::int AS checks_7d, (count(*) FILTER (WHERE NOT ok) OVER week)::int AS failed_7d
+    FROM ${sql.table(VIEWS.public.twinCheck)}
+    WHERE window_end > ${now}::timestamptz - interval '168 hours'
+    WINDOW week AS (PARTITION BY twin_id)
+    ORDER BY twin_id, window_end DESC LIMIT ${MAX_TWINS}`
     .execute(tx)
     .then((r) => r.rows);
 
@@ -109,6 +113,7 @@ const iso = (d: Date | null): string | null => d?.toISOString() ?? null;
 const Detail = z.object({
   tier1: z.object({ total: z.number(), fresh: z.number(), provider_stale: z.number() }).optional(),
   missing_buckets_24h: z.number().optional(),
+  outage: z.object({ from: z.string(), to: z.string(), missing_buckets: z.number() }).optional(),
   partitions: z.record(z.string(), z.object({ md5: z.string(), rows: z.number() })).optional(),
   partitions_at: z.string().optional(),
 });
@@ -118,7 +123,7 @@ export async function readHealth(db: Kysely<DB>, now: Date): Promise<Health> {
     rows: await sources(tx),
     owner: await ownerCounts(tx),
     l: await loader(tx),
-    twins: await latestTwinChecks(tx),
+    twins: await latestTwinChecks(tx, now),
   }));
   const of = (status: SourceRow['status']) => rows.filter((r) => r.status === status).length;
   const lags = rows.flatMap((r) => (r.lag_p95_s === null ? [] : [r.lag_p95_s]));
@@ -140,11 +145,11 @@ export async function readHealth(db: Kysely<DB>, now: Date): Promise<Health> {
   return validated(Health, { status: overallStatus(body, now), ...body });
 }
 
-export async function readSources(db: Kysely<DB>): Promise<HealthSources> {
+export async function readSources(db: Kysely<DB>, now: Date): Promise<HealthSources> {
   const { rows, batches, twins, owner, l } = await snapshot(db, async (tx) => ({
     rows: await sources(tx),
     batches: await quarantinedBatches(tx),
-    twins: await latestTwinChecks(tx),
+    twins: await latestTwinChecks(tx, now),
     owner: await ownerCounts(tx),
     l: await loader(tx),
   }));
@@ -163,6 +168,7 @@ export async function readSources(db: Kysely<DB>): Promise<HealthSources> {
         lag_p95_s: r.lag_p95_s,
         tier1: detail.tier1 ?? null,
         missing_buckets_24h: detail.missing_buckets_24h ?? null,
+        outage: detail.outage ?? null,
         partitions: Object.entries(detail.partitions ?? {})
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([partition, p]) => ({ partition, md5: p.md5, rows: p.rows })),
@@ -184,6 +190,8 @@ export async function readSources(db: Kysely<DB>): Promise<HealthSources> {
       max_delta: t.max_delta,
       lag_min: t.lag_min,
       ok: t.ok,
+      checks_7d: t.checks_7d,
+      failed_7d: t.failed_7d,
     })),
     owner_sources: { healthy: owner.healthy, total: owner.total },
   });
@@ -231,5 +239,5 @@ export function registerHealth(app: Hono, deps: HealthDeps): void {
     });
   };
   route('/api/v1/health', readHealth);
-  route('/api/v1/health/sources', (db) => readSources(db));
+  route('/api/v1/health/sources', readSources);
 }

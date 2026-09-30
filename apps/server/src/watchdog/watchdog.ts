@@ -59,7 +59,7 @@ export const CHECKS = [
   `watchdog: the last backup finished < ${BACKUP_MAX_AGE_MS / 3_600_000} h ago`,
   `cert: the certificate is valid and expires in >= ${CERT_MIN_DAYS} days`,
   `disk: /srv/rws is < ${DISK_MAX_PCT}% full (disk_pct of a fresh ops.json)`,
-  `load: /api/v1/health is the contract document, not down, generated < ${HEALTH_MAX_AGE_MS / 60_000} min ago, no quarantined payload, loader lag p95 < ${LAG_DEGRADED_S} s, no manifest line unconsumed for ${BACKLOG_MAX_AGE_S / 60} min (404 = not deployed yet: no load ping)`,
+  `load: /api/v1/health is the contract document, not down, generated < ${HEALTH_MAX_AGE_MS / 60_000} min ago, no quarantined payload, loader lag p95 < ${LAG_DEGRADED_S} s, no manifest line unconsumed for ${BACKLOG_MAX_AGE_S / 60} min, no failing twin check (404 = not deployed yet: no load ping)`,
 ];
 
 const ageMs = (at: string, now: Date) => now.getTime() - Date.parse(at);
@@ -95,6 +95,8 @@ function loadCodes(got: Got, now: Date): string[] | null {
   // A stall: the loader computes health but has left a line unconsumed for too long.
   if (health.loader.backlog_age_s !== null && health.loader.backlog_age_s >= BACKLOG_MAX_AGE_S)
     codes.push('load_backlog');
+  // A twin pair whose difference left its tolerance (Eijsden TAW − NAP): one side is wrong.
+  if (health.twins.failing > 0) codes.push('load_twin');
   return codes;
 }
 
