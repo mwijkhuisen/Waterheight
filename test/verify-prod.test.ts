@@ -280,7 +280,7 @@ const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
 const health = (over: Partial<Health> = {}): Health => ({
   status: 'ok',
   generated_at: ago(60_000),
-  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, bad_manifest_lines: 0 },
+  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
   sources: { ok: 10, degraded: 0, down: 0, unknown: 2, total: 12 },
   owner_sources: { healthy: 5, total: 6 },
   quarantined: 0,
@@ -422,6 +422,14 @@ describe('the health API answers', () => {
     expect(lag(120).ok).toBe(false);
     expect(lag(null)).toMatchObject({ ok: false, detail: /no lag sample/ });
     expect(checkLoaderLag(undefined).ok).toBe(false);
+  });
+
+  it('loader lag fails on a stall: a manifest line unconsumed for 15 minutes, even with a good lag sample', () => {
+    const age = (backlog_age_s: number | null) =>
+      checkLoaderLag(health({ loader: { ...health().loader, backlog_files: 1, backlog_bytes: 812, backlog_age_s } }));
+    expect(age(899).ok).toBe(true);
+    expect(age(900)).toMatchObject({ ok: false, detail: /stalled: the oldest unconsumed manifest line is 900 s old/ });
+    expect(age(null).ok).toBe(true);
   });
 
   it('replay DE-1: no backlog, a partition checksum, nothing quarantined; lists the quarantined batches', () => {

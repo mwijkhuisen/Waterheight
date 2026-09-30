@@ -13,6 +13,16 @@ const count = z.number().int().nonnegative();
 export const HEALTH_MAX_AGE_MS = 5 * 60_000;
 /** A loader whose p95 lag (fetched → loaded) reaches this many seconds degrades the overall status. */
 export const LAG_DEGRADED_S = 120;
+/**
+ * A manifest line still unconsumed after this many seconds means the loader is
+ * stalled (the watchdog's `load_backlog`, and a degraded status). A healthy
+ * loader consumes a line within one 10 s tick; health is recomputed every
+ * minute and the watchdog looks every 5 minutes, so 15 minutes is three
+ * watchdog cycles: a deploy or a slow tick never reaches it, a stall pages
+ * within about 20 minutes. The first catch-up after a long outage reaches it
+ * too, on purpose: the loader is behind.
+ */
+export const BACKLOG_MAX_AGE_S = 900;
 
 export const HealthStatus = z.enum(['ok', 'degraded', 'down']);
 export type HealthStatus = z.infer<typeof HealthStatus>;
@@ -32,6 +42,8 @@ export const Health = z.strictObject({
     lag_p95_s: z.number().nonnegative().nullable(),
     backlog_files: count,
     backlog_bytes: count,
+    /** How old the oldest manifest line the loader has not consumed is (seconds); null when there is none. */
+    backlog_age_s: z.number().nonnegative().nullable(),
     bad_manifest_lines: count,
   }),
   /** Public sources only. */
@@ -116,14 +128,15 @@ export type HealthSources = z.infer<typeof HealthSources>;
 /**
  * The overall status of a health document (without its `status`). `down`: the
  * loader is not computing (no health yet, or none within 5 minutes); `degraded`:
- * a public source is degraded or down, the loader lags, a payload is
- * quarantined or a twin check fails; otherwise `ok`.
+ * a public source is degraded or down, the loader lags or is stalled, a payload
+ * is quarantined or a twin check fails; otherwise `ok`.
  */
 export function overallStatus(h: Omit<Health, 'status'>, now: Date): HealthStatus {
   if (h.generated_at === null || now.getTime() - Date.parse(h.generated_at) > HEALTH_MAX_AGE_MS) return 'down';
   if (
     h.sources.degraded + h.sources.down > 0 ||
     (h.loader.lag_p95_s ?? 0) >= LAG_DEGRADED_S ||
+    (h.loader.backlog_age_s ?? 0) >= BACKLOG_MAX_AGE_S ||
     h.quarantined > 0 ||
     h.twins.failing > 0
   )

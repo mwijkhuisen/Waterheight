@@ -64,7 +64,7 @@ const ownerCounts = (tx: Tx) =>
 /** Absent until the loader has computed once. */
 const loader = (tx: Tx) =>
   sql<LoaderRow>`
-    SELECT computed_at, backlog_files, backlog_bytes, bad_manifest_lines
+    SELECT computed_at, backlog_files, backlog_bytes, backlog_age_s, bad_manifest_lines
     FROM ${sql.table(PUBLIC_ONLY_VIEWS.loader)} LIMIT 1`
     .execute(tx)
     .then((r) => r.rows[0]);
@@ -129,6 +129,7 @@ export async function readHealth(db: Kysely<DB>, now: Date): Promise<Health> {
       backlog_files: l?.backlog_files ?? 0,
       // bigint arrives as a string; a value beyond 2^53 fails the contract.
       backlog_bytes: Number(l?.backlog_bytes ?? 0),
+      backlog_age_s: l?.backlog_age_s ?? null,
       bad_manifest_lines: l?.bad_manifest_lines ?? 0,
     },
     sources: { ok: of('ok'), degraded: of('degraded'), down: of('down'), unknown: of('unknown'), total: rows.length },

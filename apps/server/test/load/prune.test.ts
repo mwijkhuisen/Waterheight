@@ -5,11 +5,20 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareLine, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { ArchiveReader } from '../../src/archive/reader.ts';
 import { Archive } from '../../src/archive/writer.ts';
-import { HOT_WINDOW_DAYS, KEEP_UNTIL_PARSED, MIXED_SOURCES, prune, prunePlan } from '../../src/load/prune.ts';
+import {
+  HOT_WINDOW_DAYS,
+  KEEP_UNTIL_PARSED,
+  MIXED_SOURCES,
+  type ParsedOk,
+  type PruneOptions,
+  prune,
+  prunePlan,
+} from '../../src/load/prune.ts';
 
 // The retention pruner (issue #17 †): dry-run by default; forever classes, the
 // daily promoted copy of a mixed payload, CH-1/CH-2 payloads, unparsed objects
-// and anything outside raw/ are never deleted.
+// and anything outside raw/ are never deleted. The database side of "parsed
+// ok" (status ok and n_skipped 0) is tested in prune.int.test.ts.
 
 const NOW = new Date('2027-03-01T00:00:00Z');
 const daysAgo = (n: number, second = 0) => new Date(NOW.getTime() - n * 86_400_000 + second * 1000);
@@ -42,6 +51,17 @@ async function put(
 }
 
 const exists = (name: string) => existsSync(archive.path(key[name] as string));
+/** The ok lookup as the database answers it, recording every call. */
+const lookups: string[][] = [];
+const parsedOk: ParsedOk = async (keys) => {
+  lookups.push([...keys]);
+  return new Set(keys.filter((k) => parsed.has(k)));
+};
+const planOf = async (opts: PruneOptions) => {
+  const all: string[] = [];
+  for await (const keys of prunePlan(reader, parsedOk, opts)) all.push(...keys);
+  return all.sort();
+};
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), 'rws-prune-'));
@@ -93,46 +113,61 @@ afterAll(() => {
 describe('plan', () => {
   it('lists only parsed obs objects past the hot window that nothing still refers to', async () => {
     expect(HOT_WINDOW_DAYS).toBe(90);
-    const plan = await prunePlan(reader, parsed, { now: NOW });
+    const plan = await planOf({ now: NOW });
     expect(plan).toEqual([key['old-obs'], key['old-obs-2'], key['old-linked-out']].sort());
   });
 
   it('keeps CH-1 and CH-2 payloads whole until the phase that parses their class and threshold fields', async () => {
     expect([...KEEP_UNTIL_PARSED]).toEqual(['CH-1', 'CH-2']);
     expect([...MIXED_SOURCES]).toEqual(['CH-1', 'CH-2']);
-    const plan = await prunePlan(reader, parsed, { now: NOW });
+    const plan = await planOf({ now: NOW });
     for (const name of ['ch1-first-of-day', 'ch1-later-that-day', 'ch2-old']) expect(plan).not.toContain(key[name]);
   });
 
   it('even then, the first copy of each spec and UTC day of a mixed payload is promoted to forever', async () => {
-    const plan = await prunePlan(reader, parsed, { now: NOW, keepWhole: new Set() });
+    const plan = await planOf({ now: NOW, keepWhole: new Set() });
     expect(plan).toContain(key['ch1-later-that-day']);
     expect(plan).not.toContain(key['ch1-first-of-day']);
     expect(plan).not.toContain(key['ch2-old']);
   });
 
   it('never lists a forever class, an unparsed object, a recent one, or one a dup_of line still points at', async () => {
-    const plan = await prunePlan(reader, parsed, { now: NOW, keepWhole: new Set() });
+    const plan = await planOf({ now: NOW, keepWhole: new Set() });
     for (const name of ['old-forever', 'old-unparsed', 'owner-unparsed', 'recent-obs', 'old-still-referenced']) {
       expect(plan, name).not.toContain(key[name]);
     }
     expect(plan.every((k) => k.startsWith('raw/') && !k.includes('..'))).toBe(true);
     // Once the last reference is older than the hot window too, the object may go.
-    const later = await prunePlan(reader, parsed, { now: new Date(NOW.getTime() + 100 * 86_400_000) });
+    const later = await planOf({ now: new Date(NOW.getTime() + 100 * 86_400_000) });
     expect(later).toContain(key['old-still-referenced']);
+  });
+
+  it('bounded passes: candidates only from manifest files older than the window, looked up one file at a time', async () => {
+    lookups.length = 0;
+    const byFile = [];
+    for await (const keys of prunePlan(reader, parsedOk, { now: NOW })) byFile.push(keys);
+    // Each lookup and each batch of candidates holds the keys of one manifest day, and only past the window.
+    const dayOf = (k: string) => k.split('/').slice(3, 6).join('-');
+    const cutoff = new Date(NOW.getTime() - HOT_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
+    for (const keys of [...lookups, ...byFile]) {
+      expect(new Set(keys.map(dayOf)).size).toBe(1);
+      expect(keys.every((k) => dayOf(k) < cutoff)).toBe(true);
+    }
+    expect(lookups.length).toBeGreaterThan(1);
+    // The object named by a dup_of line inside the window was never even looked up.
+    expect(lookups.flat()).not.toContain(key['old-still-referenced']);
   });
 });
 
 describe('prune', () => {
   it('is a dry run by default: it reports and deletes nothing', async () => {
-    const report = await prune(reader, parsed, { now: NOW });
-    expect(report).toMatchObject({ applied: false, deleted: 0, refused: 1 });
-    expect(report.candidates).toHaveLength(3);
+    const report = await prune(reader, parsedOk, { now: NOW });
+    expect(report).toEqual({ applied: false, candidates: 3, deleted: 0, refused: 1 });
     for (const name of Object.keys(key)) if (name !== 'old-linked-out') expect(exists(name), name).toBe(true);
   });
 
   it('with apply, deletes exactly the planned objects and refuses a link that points out of raw/', async () => {
-    const report = await prune(reader, parsed, { now: NOW, apply: true });
+    const report = await prune(reader, parsedOk, { now: NOW, apply: true });
     expect(report).toMatchObject({ applied: true, deleted: 2, refused: 1 });
     expect(exists('old-obs')).toBe(false);
     expect(exists('old-obs-2')).toBe(false);
@@ -153,6 +188,6 @@ describe('prune', () => {
     // The manifest itself is never pruned.
     expect(readdirSync(join(raw, '_manifest')).length).toBeGreaterThan(5);
     // Already gone is not an error the second time.
-    expect(await prune(reader, parsed, { now: NOW, apply: true })).toMatchObject({ deleted: 0, refused: 1 });
+    expect(await prune(reader, parsedOk, { now: NOW, apply: true })).toMatchObject({ deleted: 0, refused: 1 });
   });
 });

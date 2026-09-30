@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zstdCompressSync } from 'node:zlib';
@@ -86,6 +86,31 @@ describe('objects', () => {
     );
     expect(await codeOf(reader.readObject('raw/DE-1/de-1-series/2026/10/09/100000Z-0123456789abcdef.zst'))).toBe(
       'missing',
+    );
+  });
+
+  // Review C4: only "no such file" is `missing` (which the loader skips); any other error is `unreadable` (tried
+  // again, then quarantined with an alert). Root can read anything, so this cannot be shown as root.
+  it.skipIf(process.getuid?.() === 0)('an object it may not read is unreadable, not missing', async () => {
+    const dir = join(raw, 'DE-1', 'de-1-series', '2026', '10', '04');
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, '100000Z-0123456789abcdef.zst');
+    writeFileSync(file, zstdCompressSync(Buffer.from('[]')));
+    const key = 'raw/DE-1/de-1-series/2026/10/04/100000Z-0123456789abcdef.zst';
+    chmodSync(file, 0o000);
+    expect(await codeOf(reader.readObject(key))).toBe('unreadable');
+    chmodSync(file, 0o640);
+    // A directory on the way that cannot be searched: before, every lstat error counted as missing.
+    chmodSync(dir, 0o000);
+    try {
+      expect(await codeOf(reader.readObject(key))).toBe('unreadable');
+    } finally {
+      chmodSync(dir, 0o750);
+    }
+    expect((await reader.readObject(key)).toString()).toBe('[]');
+    // The archive root itself missing is not one object's problem: it is thrown as it is.
+    await expect(new ArchiveReader(join(base, 'no-such-root')).readObject(key)).rejects.not.toBeInstanceOf(
+      ArchiveError,
     );
   });
 

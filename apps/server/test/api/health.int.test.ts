@@ -1,4 +1,4 @@
-import { Health, HealthSources } from '@rws/contracts';
+import { CANARIES, CANARY_RENDERINGS, Health, HealthSources } from '@rws/contracts';
 import { Kysely, PostgresDialect } from 'kysely';
 import { pino } from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -25,10 +25,11 @@ const cadenceS = new Map([
   ['BE-3', 600],
   ['LU-4', 604800],
 ]);
+// Every recompute keeps the lag the beforeAll load measured (34 s): a pass without samples would show none.
 const inputs = {
   cadenceS,
-  lagP95Ms: new Map<string, number>(),
-  backlog: { files: 0, bytes: 0 },
+  lagP95Ms: new Map([['DE-1', 34_000]]),
+  backlog: { files: 0, bytes: 0, age_s: null },
   badLines: 0,
   now: NOW,
 };
@@ -72,10 +73,7 @@ const NEVER = [
   'wallonie',
   'inondations.public.lu',
   'vorhersage.bafg.de',
-  '777777.75',
-  '777777.777',
-  '123456.79',
-  '123456.789',
+  ...CANARY_RENDERINGS,
 ];
 
 beforeAll(async () => {
@@ -131,7 +129,7 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
       status: 'ok',
       generated_at: NOW.toISOString(),
       // The three DE-1 lines were loaded 34 s after their fetch; no other source has a lag sample.
-      loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, bad_manifest_lines: 0 },
+      loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
       sources: expect.objectContaining({ ok: 1, degraded: 0, down: 0 }),
       // Six captured owner sources: BE-3 answered, LU-4 only ever failed, the others were not fetched.
       owner_sources: { healthy: 1, total: 6 },
@@ -238,8 +236,8 @@ describe('owner isolation (invariant 11) and the withheld canary', () => {
         ('nl.canary.owner', 'owner canary', 'NL', 1), ('nl.canary.withheld', 'withheld canary', 'NL', 1),
         ('be.spw.test', 'owner gauge', 'BE', 1)`);
     const seeded: [string, string, string, string | null, number][] = [
-      ['nl.canary.owner', 'CANARY-OWNER', 'canary-owner', null, 777777.777],
-      ['nl.canary.withheld', 'NL-1', 'canary-withheld', 'off', 123456.789],
+      ['nl.canary.owner', 'CANARY-OWNER', 'canary-owner', null, CANARIES.owner.value],
+      ['nl.canary.withheld', 'NL-1', 'canary-withheld', 'off', CANARIES.withheld.value],
       ['be.spw.test', 'BE-3', 'be-3-test', null, 5000.5],
     ];
     for (const [station, source, key, audience, value] of seeded) {
@@ -366,10 +364,20 @@ describe('caching and load', () => {
     await computeHealth(h.load.db, inputs);
   });
 
-  it('the loader backlog and damaged manifest lines are shown as numbers', async () => {
-    await computeHealth(h.load.db, { ...inputs, backlog: { files: 2, bytes: 4096 }, badLines: 3 });
+  it('the loader backlog, its age and damaged manifest lines are shown as numbers', async () => {
+    await computeHealth(h.load.db, { ...inputs, backlog: { files: 2, bytes: 4096, age_s: 30 }, badLines: 3 });
     const doc = Health.parse(await json(await appAt().app.request('/api/v1/health')));
-    expect(doc.loader).toMatchObject({ backlog_files: 2, backlog_bytes: 4096, bad_manifest_lines: 3 });
+    expect(doc).toMatchObject({
+      status: 'ok',
+      loader: { backlog_files: 2, backlog_bytes: 4096, backlog_age_s: 30, bad_manifest_lines: 3 },
+    });
+    await computeHealth(h.load.db, inputs);
+  });
+
+  it('a stalled loader (a line unconsumed for 15 minutes) makes the document degraded, though health is fresh', async () => {
+    await computeHealth(h.load.db, { ...inputs, backlog: { files: 1, bytes: 812, age_s: 900 } });
+    const doc = Health.parse(await json(await appAt().app.request('/api/v1/health')));
+    expect(doc).toMatchObject({ status: 'degraded', generated_at: NOW.toISOString(), loader: { backlog_age_s: 900 } });
     await computeHealth(h.load.db, inputs);
   });
 });

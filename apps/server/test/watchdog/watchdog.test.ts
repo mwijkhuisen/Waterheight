@@ -52,7 +52,7 @@ const ok = (doc: unknown): Got => ({ status: 200, body: Buffer.from(JSON.stringi
 const health = (over: Record<string, unknown> = {}) => ({
   status: 'ok',
   generated_at: ago(MIN),
-  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, bad_manifest_lines: 0 },
+  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
   sources: { ok: 10, degraded: 0, down: 0, unknown: 2, total: 12 },
   owner_sources: { healthy: 5, total: 6 },
   quarantined: 0,
@@ -271,6 +271,12 @@ describe('the load check (P2a)', () => {
     expect(await load(ok(health({ generated_at: ago(5 * MIN) })))).toEqual([]);
     expect(await load(ok(health({ loader: { ...health().loader, lag_p95_s: 119.9 } })))).toEqual([]);
     expect(await load(ok(health({ loader: { ...health().loader, lag_p95_s: null } })))).toEqual([]);
+    // A backlog that is younger than 15 minutes is a loader catching up, not a stall.
+    expect(
+      await load(
+        ok(health({ loader: { ...health().loader, backlog_files: 3, backlog_bytes: 1e6, backlog_age_s: 899 } })),
+      ),
+    ).toEqual([]);
   });
 
   it('is not deployed yet on a 404: no verdict, and the other checks are untouched', async () => {
@@ -295,6 +301,11 @@ describe('the load check (P2a)', () => {
     ['stale by the watchdog clock', ok(health({ generated_at: ago(5 * MIN + 1000) })), ['load_stale']],
     ['a quarantined payload', ok(health({ status: 'degraded', quarantined: 2 })), ['load_quarantined']],
     ['lag of 2 minutes', ok(health({ loader: { ...health().loader, lag_p95_s: 120 } })), ['load_lag']],
+    [
+      'a stall: a manifest line unconsumed for 15 minutes',
+      ok(health({ loader: { ...health().loader, backlog_files: 1, backlog_bytes: 812, backlog_age_s: 900 } })),
+      ['load_backlog'],
+    ],
     [
       'several at once',
       ok(health({ generated_at: ago(6 * MIN), quarantined: 1, loader: { ...health().loader, lag_p95_s: 500 } })),

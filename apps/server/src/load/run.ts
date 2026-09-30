@@ -1,23 +1,44 @@
-import { sql } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { pino } from 'pino';
 import { ArchiveReader } from '../archive/reader.ts';
 import { loadRegistry } from '../capture/specs.ts';
+import type { DB } from '../db/generated.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { startHeartbeat } from '../heartbeat.ts';
 import { computeHealth, LagWindow, storeChecksums } from './health.ts';
 import { Loader } from './pipeline.ts';
-import { parsedOkKeys, prune } from './prune.ts';
+import { parsedOkIn, prune } from './prune.ts';
 import { reconcileRollups } from './reconcile.ts';
 import { parseReplayArgs, replay } from './replay.ts';
+import { readMeta, writeMeta } from './store.ts';
 
 // The `load` and `replay` roles (A§4). `load` has no egress and no registry
 // write access: it reads the raw archive, writes its own tables, and leaves
 // health for the API to read.
 
 const TICK_MS = 10_000;
+/**
+ * One tick reads for at most this long, then the health pass and the nightly
+ * jobs get their turn and the next tick goes on at once: a catch-up never
+ * leaves health stale, and a stop is honoured between lines.
+ */
+const TICK_BUDGET_MS = 20_000;
 const HEALTH_MS = 60_000;
 /** The nightly jobs run once per UTC day, after this hour. */
 const NIGHTLY_HOUR = 2;
+
+/**
+ * Whether the nightly jobs are due at `now`: once per UTC day, after 02:00.
+ * The day is marked in app_meta when they start, so a restart does not run them
+ * again, and a failing step waits for the next day (partition-maintenance.md §4).
+ */
+export async function claimNightly(db: Kysely<DB>, now: Date): Promise<boolean> {
+  if (now.getUTCHours() < NIGHTLY_HOUR) return false;
+  const day = now.toISOString().slice(0, 10);
+  if ((await readMeta<{ day: string }>(db, 'nightly'))?.day === day) return false;
+  await writeMeta(db, 'nightly', { day });
+  return true;
+}
 
 const rawDirOf = (env: Readonly<Record<string, string | undefined>>) => env.RWS_RAW_DIR || '/data/raw';
 
@@ -68,14 +89,14 @@ export async function runLoad(
   process.once('SIGTERM', stop);
 
   let lastHealth = 0;
-  let nightlyDay = '';
   let caughtUp = false;
   while (!stopped) {
+    // The tick alerts its own stalls and never throws.
+    const { lines, loaded, more } = await loader.tick({ until: Date.now() + TICK_BUDGET_MS, stop: () => stopped });
+    if (lines > 0) logger.info({ lines, loaded }, 'manifest lines consumed');
     const now = new Date();
     try {
-      const { lines, loaded } = await loader.tick();
-      if (lines > 0) logger.info({ lines, loaded }, 'manifest lines consumed');
-      const backlog = await loader.backlog();
+      const backlog = await loader.backlog(now);
       // Checksums once the first replay is complete, then nightly.
       if (!caughtUp && backlog.bytes === 0) {
         caughtUp = true;
@@ -86,23 +107,13 @@ export async function runLoad(
         await computeHealth(db, { cadenceS, lagP95Ms: lag.p95(now), backlog, badLines: loader.badLines, now });
         lastHealth = now.getTime();
       }
-      const day = now.toISOString().slice(0, 10);
-      if (day !== nightlyDay && now.getUTCHours() >= NIGHTLY_HOUR && backlog.bytes === 0) {
-        nightlyDay = day;
+      if (backlog.bytes === 0 && (await claimNightly(db, now))) {
         await sql`SELECT ensure_partitions(now(), now() + interval '3 months')`.execute(db);
         const { repaired } = await reconcileRollups(db, now);
         if (repaired > 0) logger.error({ alert: 'rollup_mismatch', repaired }, 'alert');
         await storeChecksums(db, now);
-        const report = await prune(reader, await parsedOkKeys(db), { apply, now });
-        logger.info(
-          {
-            applied: report.applied,
-            candidates: report.candidates.length,
-            deleted: report.deleted,
-            refused: report.refused,
-          },
-          'retention pruner',
-        );
+        const report = await prune(reader, parsedOkIn(db), { apply, now });
+        logger.info(report, 'retention pruner');
       }
     } catch (err) {
       // Only a code: a driver message can quote SQL, a host or a path.
@@ -112,6 +123,7 @@ export async function runLoad(
       );
     }
     if (stopped) break;
+    if (more) continue;
     await new Promise<void>((resolve) => {
       wake = resolve;
       setTimeout(resolve, TICK_MS);

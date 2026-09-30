@@ -90,8 +90,11 @@ describe('registry sync', () => {
        FROM series WHERE source_id = 'DE-1'`,
     );
     expect(rows).toEqual([
-      { series: 238, stations: 199, m_nn: 9, m_nn_all: 9, cm: 189, q: 40, one_minute: 20, stale45: 238, narrowed: 0 },
+      { series: 238, stations: 199, m_nn: 9, m_nn_all: 9, cm: 189, q: 40, one_minute: 20, stale45: 238, narrowed: 1 },
     ]);
+    // The one narrowed series: NEUWIED STADT, off until the owner has verified its licence (review C12).
+    const off = (await h.t.admin.query('SELECT station_id, audience FROM series WHERE audience IS NOT NULL')).rows;
+    expect(off).toEqual([{ station_id: 'de.wsv.27100370', audience: 'off' }]);
     expect(await h.count('series')).toBe(238);
     // A cm series without a published gauge zero has a local datum.
     const local = (
@@ -134,8 +137,9 @@ describe('registry sync', () => {
         .rows;
       expect(seen, view).toEqual([]);
     }
-    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.station}`)).rows).toEqual([{ n: 194 }]);
-    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.series}`)).rows).toEqual([{ n: 232 }]);
+    // 199 stations less the five mirrors and NEUWIED STADT (off); 238 series less six mirror series and one off.
+    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.station}`)).rows).toEqual([{ n: 193 }]);
+    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.series}`)).rows).toEqual([{ n: 231 }]);
   });
 
   it('is idempotent: a second sync keeps every series id and changes nothing', async () => {
@@ -164,6 +168,24 @@ describe('registry sync', () => {
     await syncRegistry(owner.db, input);
     await owner.close();
     expect((await h.t.admin.query('SELECT count(*)::int AS n FROM series WHERE NOT active')).rows).toEqual([{ n: 0 }]);
+  });
+
+  it('writes a history window as hours, so it never depends on the session time zone (review S3)', async () => {
+    const input = readRegistry();
+    const owner = h.dbAs('rws_migrator', 1);
+    const windowed = (history_window: string) =>
+      input.sources.map((s) => (s.id === 'CH-4' ? { ...s, history_window } : s));
+    await syncRegistry(owner.db, { ...input, sources: windowed('P30D') });
+    expect((await h.t.admin.query("SELECT history_window::text AS w FROM source WHERE id = 'CH-4'")).rows).toEqual([
+      { w: '720:00:00' },
+    ]);
+    // A month is no fixed number of hours: the sync refuses it, and the previous registry stays.
+    await expect(syncRegistry(owner.db, { ...input, sources: windowed('P1M') })).rejects.toThrow();
+    await syncRegistry(owner.db, input);
+    await owner.close();
+    expect((await h.t.admin.query("SELECT history_window::text AS w FROM source WHERE id = 'CH-4'")).rows).toEqual([
+      { w: '00:00:00' },
+    ]);
   });
 
   it('the loader role cannot sync the registry', async () => {

@@ -27,15 +27,18 @@ import { connect as tlsConnect } from 'node:tls';
 import { loadRegistry, type Registry } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
-import { Health, HealthSources, LAG_DEGRADED_S } from '../packages/contracts/src/index.ts';
+import {
+  BACKLOG_MAX_AGE_S,
+  CANARIES,
+  CANARY_RENDERINGS,
+  Health,
+  HealthSources,
+  LAG_DEGRADED_S,
+} from '../packages/contracts/src/index.ts';
 
 const root = join(import.meta.dirname, '..');
 export const CERT_MIN_DAYS = 14;
-export const OWNER_CANARY = '777777.777';
-/** The canaries as PostgreSQL prints them once stored as `real`, and the withheld canary (on NL-1; it appears nowhere). */
-export const OWNER_CANARY_REAL = '777777.75';
-export const WITHHELD_CANARY = '123456.789';
-export const WITHHELD_CANARY_REAL = '123456.79';
+export const OWNER_CANARY = CANARIES.owner.text;
 /** The public API's only two routes (A§9.2 health). */
 export const HEALTH_PATHS = ['/api/v1/health', '/api/v1/health/sources'] as const;
 /** P2a criterion: at least this share of a source's tier-1 series is fresh. */
@@ -380,13 +383,21 @@ export function checkTier1(doc: HealthSources | undefined, id = 'DE-1'): Result 
   );
 }
 
+/** The loader keeps up: a fresh lag sample under 2 minutes, and no manifest line waiting 15 minutes or more (a stall). */
 export function checkLoaderLag(doc: Health | undefined): Result {
   if (doc === undefined) return noDocument('loader lag', 'health');
   const lag = doc.loader.lag_p95_s;
-  if (lag === null) return miss('loader lag', 'no lag sample yet (no fresh payload was loaded in the last hour)');
-  return lag < LAG_DEGRADED_S
-    ? pass('loader lag', `p95 ${lag.toFixed(1)} s < ${LAG_DEGRADED_S} s`)
-    : miss('loader lag', `p95 ${lag.toFixed(1)} s, not under ${LAG_DEGRADED_S} s`);
+  const age = doc.loader.backlog_age_s;
+  const problems: string[] = [];
+  if (lag === null) problems.push('no lag sample yet (no fresh payload was loaded in the last hour)');
+  else if (lag >= LAG_DEGRADED_S) problems.push(`p95 ${lag.toFixed(1)} s, not under ${LAG_DEGRADED_S} s`);
+  if (age !== null && age >= BACKLOG_MAX_AGE_S)
+    problems.push(
+      `stalled: the oldest unconsumed manifest line is ${Math.round(age)} s old (limit ${BACKLOG_MAX_AGE_S} s)`,
+    );
+  return problems.length === 0 && lag !== null
+    ? pass('loader lag', `p95 ${lag.toFixed(1)} s < ${LAG_DEGRADED_S} s, oldest unconsumed line ${age ?? 0} s old`)
+    : miss('loader lag', problems.join('; '));
 }
 
 /** The loader has caught up (no backlog), DE-1 has partition checksums and nothing of DE-1 is quarantined. */
@@ -418,7 +429,7 @@ export function checkReplay(health: Health | undefined, doc: HealthSources | und
 
 /** Every term that must not appear in a public body: owner sources, specs, hosts and both canaries in both renderings. */
 export function leakTerms(registry: Registry): string[] {
-  return [...new Set([...ownerTerms(registry), OWNER_CANARY_REAL, WITHHELD_CANARY, WITHHELD_CANARY_REAL])].sort();
+  return [...new Set([...ownerTerms(registry), ...CANARY_RENDERINGS])].sort();
 }
 
 /** The keys of a JSON document (at any depth) that name an owner-only field. */
@@ -579,9 +590,9 @@ export const CHECKS = [
   'health params: ?x=1 on /api/v1/health and /api/v1/health/sources is 400 {"error":"unknown_parameter"}; /api/v1/ and /api/v1/stations are 404',
   'health DE-1: /api/v1/health/sources is the contract document and lists DE-1 with status ok',
   'tier-1 DE-1: >= 95% of the tier-1 series are fresh (provider-stale ones are named and never make it a PASS)',
-  'loader lag: loader.lag_p95_s is not null and < 120 s',
+  `loader lag: loader.lag_p95_s is not null and < ${LAG_DEGRADED_S} s, and loader.backlog_age_s < ${BACKLOG_MAX_AGE_S} s (a stall fails it)`,
   'replay DE-1: no loader backlog, a partition checksum for DE-1 and no quarantined DE-1 payload',
-  'owner leak: no owner source ID, spec ID, host, canary (777777.777, 777777.75, 123456.789, 123456.79) or private_basis key in any /status/* or /api/v1/health* body',
+  `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* or /api/v1/health* body`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
   '--capacity: bytes/day per spec over >= 2 complete days, the year-1 projection vs the disk and the bucket',
 ];

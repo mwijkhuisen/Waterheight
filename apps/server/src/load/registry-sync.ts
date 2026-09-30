@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { type Source, type Station, validateRegistry, validateStations } from '@rws/contracts';
+import { durationMs } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { parse } from 'yaml';
 import { REGISTRY_DIR } from '../capture/specs.ts';
@@ -56,6 +57,14 @@ export function readRegistry(
 
 const ROLE_PRECEDENCE = { primary: 0, twin: 1, mirror: 2 } as const;
 
+/**
+ * The window as hours and smaller only (source.history_window has a CHECK):
+ * `now() - '30 days'` depends on the session's time zone, `now() - '720 hours'`
+ * does not. A month or year cannot be written as hours and fails the sync.
+ */
+const historyWindow = (s: Source) =>
+  s.history_window === undefined ? '0' : `${durationMs(s.history_window)} milliseconds`;
+
 function one<T>(values: readonly T[], what: string, id: string): T {
   const distinct = [...new Set(values.map((v) => JSON.stringify(v)))];
   if (distinct.length !== 1) throw new RegistryError(`station ${id}: its rows disagree on ${what}`);
@@ -85,7 +94,7 @@ export async function syncRegistry(db: Kysely<DB>, input: RegistryInput): Promis
         VALUES (${s.id}, ${s.provider}, ${s.name}, ${s.licence_text}, ${s.licence_kind}, ${s.audience}::audience,
                 ${s.permission_required ? `registry/permissions/${s.id}.md` : null}, ${basis}::jsonb,
                 ${s.display}, ${s.api}, ${s.bulk_export}, ${s.history_export},
-                ${s.history_window ?? 'PT0S'}::interval, ${s.capture_enabled}, ${s.canary === true})
+                ${historyWindow(s)}::interval, ${s.capture_enabled}, ${s.canary === true})
         ON CONFLICT (id) DO UPDATE SET
           provider_id = EXCLUDED.provider_id, name = EXCLUDED.name, licence = EXCLUDED.licence,
           licence_kind = EXCLUDED.licence_kind, audience = EXCLUDED.audience, permission_ref = EXCLUDED.permission_ref,

@@ -22,13 +22,20 @@ export const MAX_OBJECT_BYTES = 100 * 1024 * 1024;
 export const MAX_LINE_BYTES = 64 * 1024;
 
 export class ArchiveError extends Error {
-  readonly code: 'bad_key' | 'outside_root' | 'missing' | 'not_a_file' | 'too_large' | 'corrupt';
+  /** `missing`: the object is not there (ENOENT); `unreadable`: it may be, but reading it failed (EACCES, EIO, …). */
+  readonly code: 'bad_key' | 'outside_root' | 'missing' | 'unreadable' | 'not_a_file' | 'too_large' | 'corrupt';
 
   constructor(code: ArchiveError['code']) {
     super(code);
     this.name = 'ArchiveError';
     this.code = code;
   }
+}
+
+/** A file-system error on one object: only a missing file is `missing`; anything else may pass and is `unreadable`. */
+function fileError(err: unknown): ArchiveError {
+  if (err instanceof ArchiveError) return err;
+  return new ArchiveError((err as NodeJS.ErrnoException | null)?.code === 'ENOENT' ? 'missing' : 'unreadable');
 }
 
 export type RawLine = {
@@ -53,16 +60,15 @@ export class ArchiveReader {
   async resolve(key: string): Promise<string> {
     if (!KEY_RE.test(key)) throw new ArchiveError('bad_key');
     const path = join(this.root, key.slice(4));
+    // The root itself is not an object: if it cannot be resolved, the whole archive is unavailable (thrown as is).
+    const root = await realpath(this.root);
     let real: string;
-    let root: string;
     try {
-      root = await realpath(this.root);
       const info = await lstat(path);
       if (!info.isFile()) throw new ArchiveError('not_a_file');
       real = await realpath(path);
     } catch (err) {
-      if (err instanceof ArchiveError) throw err;
-      throw new ArchiveError('missing');
+      throw fileError(err);
     }
     if (!real.startsWith(root + sep)) throw new ArchiveError('outside_root');
     return real;
@@ -71,27 +77,40 @@ export class ArchiveReader {
   /** The decoded body of an archived object, at most `maxBytes` (both the stored file and the output are capped). */
   async readObject(key: string, maxBytes: number = MAX_OBJECT_BYTES): Promise<Buffer> {
     const path = await this.resolve(key);
-    const h = await open(path, fsc.O_RDONLY | fsc.O_NOFOLLOW);
+    let stored: Buffer;
     try {
-      const { size } = await h.stat();
-      // zstd never expands by more than a few bytes per block: a stored file over the cap cannot be a valid object.
-      if (size > maxBytes + 1024 * 1024) throw new ArchiveError('too_large');
-      const stored = await h.readFile();
+      const h = await open(path, fsc.O_RDONLY | fsc.O_NOFOLLOW);
       try {
-        return await inflate(stored, { maxOutputLength: maxBytes });
-      } catch (err) {
-        const code = (err as NodeJS.ErrnoException).code;
-        throw new ArchiveError(code === 'ERR_BUFFER_TOO_LARGE' ? 'too_large' : 'corrupt');
+        const { size } = await h.stat();
+        // zstd never expands by more than a few bytes per block: a stored file over the cap cannot be a valid object.
+        if (size > maxBytes + 1024 * 1024) throw new ArchiveError('too_large');
+        stored = await h.readFile();
+      } finally {
+        await h.close();
       }
-    } finally {
-      await h.close();
+    } catch (err) {
+      throw fileError(err);
+    }
+    try {
+      return await inflate(stored, { maxOutputLength: maxBytes });
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      throw new ArchiveError(code === 'ERR_BUFFER_TOO_LARGE' ? 'too_large' : 'corrupt');
     }
   }
 
-  /** Daily manifest files and their sizes, oldest first. */
+  /** Daily manifest files and their sizes, oldest first; none before the recorder wrote its first line. */
   async manifests(): Promise<{ file: string; size: number }[]> {
     const dir = join(this.root, '_manifest');
-    const names = (await readdir(dir).catch(() => [] as string[])).filter((f) => MANIFEST_FILE_RE.test(f)).sort();
+    // Only "not there yet" is empty: a directory that cannot be read must stall the loader, not look idle.
+    const names = (
+      await readdir(dir).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === 'ENOENT') return [] as string[];
+        throw err;
+      })
+    )
+      .filter((f) => MANIFEST_FILE_RE.test(f))
+      .sort();
     const out: { file: string; size: number }[] = [];
     for (const file of names) {
       const info = await lstat(join(dir, file)).catch(() => null);

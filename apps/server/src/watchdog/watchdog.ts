@@ -1,6 +1,6 @@
 import type { LookupFunction } from 'node:net';
 import { connect as tlsConnect } from 'node:tls';
-import { HEALTH_MAX_AGE_MS, Health, LAG_DEGRADED_S } from '@rws/contracts';
+import { BACKLOG_MAX_AGE_S, HEALTH_MAX_AGE_MS, Health, LAG_DEGRADED_S } from '@rws/contracts';
 import { type Logger, pino } from 'pino';
 import { z } from 'zod';
 import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from '../capture/env.ts';
@@ -16,8 +16,9 @@ import { Client } from '../http/client.ts';
 // its four healthchecks: `watchdog` (site up, capture.json and ops.json fresh,
 // last backup < 2 h), `cert` (certificate valid for >= 14 days), `disk`
 // (disk < 75%) and, from P2a, `load` (the loader computes: /api/v1/health is the
-// contract document, not down, fresh, no quarantine, lag < 2 min). A failure
-// ping carries fixed codes only.
+// contract document, not down, fresh, no quarantine, lag < 2 min, no manifest
+// line left unconsumed for 15 min). A provider that is down is not the loader's
+// failure: that is capture's freshness. A failure ping carries fixed codes only.
 
 export const CYCLE_MS = 5 * 60_000;
 export const CAPTURE_MAX_AGE_MS = 5 * 60_000;
@@ -58,7 +59,7 @@ export const CHECKS = [
   `watchdog: the last backup finished < ${BACKUP_MAX_AGE_MS / 3_600_000} h ago`,
   `cert: the certificate is valid and expires in >= ${CERT_MIN_DAYS} days`,
   `disk: /srv/rws is < ${DISK_MAX_PCT}% full (disk_pct of a fresh ops.json)`,
-  `load: /api/v1/health is the contract document, not down, generated < ${HEALTH_MAX_AGE_MS / 60_000} min ago, no quarantined payload, loader lag p95 < ${LAG_DEGRADED_S} s (404 = not deployed yet: no load ping)`,
+  `load: /api/v1/health is the contract document, not down, generated < ${HEALTH_MAX_AGE_MS / 60_000} min ago, no quarantined payload, loader lag p95 < ${LAG_DEGRADED_S} s, no manifest line unconsumed for ${BACKLOG_MAX_AGE_S / 60} min (404 = not deployed yet: no load ping)`,
 ];
 
 const ageMs = (at: string, now: Date) => now.getTime() - Date.parse(at);
@@ -91,6 +92,9 @@ function loadCodes(got: Got, now: Date): string[] | null {
   if (health.generated_at === null || ageMs(health.generated_at, now) > HEALTH_MAX_AGE_MS) codes.push('load_stale');
   if (health.quarantined > 0) codes.push('load_quarantined');
   if (health.loader.lag_p95_s !== null && health.loader.lag_p95_s >= LAG_DEGRADED_S) codes.push('load_lag');
+  // A stall: the loader computes health but has left a line unconsumed for too long.
+  if (health.loader.backlog_age_s !== null && health.loader.backlog_age_s >= BACKLOG_MAX_AGE_S)
+    codes.push('load_backlog');
   return codes;
 }
 

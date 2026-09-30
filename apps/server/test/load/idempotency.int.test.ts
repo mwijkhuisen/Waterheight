@@ -1,15 +1,18 @@
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { SchemaDrift } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareLine, buildFixtureArchive, writePayload } from '../../../../scripts/fixture-archive.ts';
+import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from '../../src/load/adapters.ts';
 import { replay } from '../../src/load/replay.ts';
-import { EMMERICH_W, type Harness, harness, KAUB_W, measurements, RUHRWEHR_W, SERIES_URL } from './harness.ts';
+import { EMMERICH_W, type Harness, harness, measurements, RUHRWEHR_W, SERIES_URL } from './harness.ts';
 
 // The loader on the recorded DE-1 archive (issue #17): replaying it gives the
 // identical checksum, no new row and no revision; one changed value gives
 // exactly one revision; nothing is lost, skipped or applied twice.
 
 let h: Harness;
+const MAXAU_Q = 'b6c6d5c8-e2d5-4469-8dd8-fa972ef7eaea/Q';
 
 beforeAll(async () => {
   h = await harness();
@@ -62,9 +65,15 @@ describe('load and replay of the fixture archive', () => {
       'SELECT tableoid::regclass::text AS p, count(*)::int AS n FROM obs GROUP BY 1 ORDER BY 1',
     );
     expect(parts.rows.map((r) => r.p)).toEqual(['obs_2026_08', 'obs_2026_09']);
-    expect(await h.count('gauge_zero')).toBe(181);
+    // 181 gauge zeros in the metadata call, less NEUWIED STADT's.
+    expect(await h.count('gauge_zero')).toBe(180);
     expect(await h.count('obs_revision')).toBe(0);
-    expect(await h.count('obs_latest')).toBe(237);
+    // 237 basin values, less NEUWIED STADT: audience off (its licence is unverified), so nothing of it is stored.
+    expect(await h.count('obs_latest')).toBe(236);
+    const neuwied = await h.seriesId('dc407f1e-e25f-4995-9feb-5bacc8658149/W');
+    expect((await h.t.admin.query('SELECT count(*)::int AS n FROM obs WHERE series_id = $1', [neuwied])).rows).toEqual([
+      { n: 0 },
+    ]);
     expect((await batches()).map((b) => [b.parse_status, b.n_changed])).toEqual(Array(6).fill(['ok', 0]));
     // The sentinel of the recorded payload is nowhere.
     const { rows } = await h.t.admin.query('SELECT count(*)::int AS n FROM obs WHERE value >= 99999');
@@ -166,21 +175,27 @@ describe('load and replay of the fixture archive', () => {
     expect(await h.count('obs_revision')).toBe(1);
   });
 
-  it("a late line appended to an older day's manifest file is still consumed", async () => {
+  it("a late line appended to an older day's manifest file is still consumed, and its value lands", async () => {
     const before = await h.count('obs');
     // Day 2026-09-30 is already consumed; this line is filed under 2026-09-29.
+    // Maxau Q: no payload loaded so far states this point (the Kaub seed would, and is newer).
     await writePayload(h.archive, {
       source: 'DE-1',
       spec: 'de-1-series',
-      variant: KAUB_W,
+      variant: MAXAU_Q,
       at: new Date('2026-09-29T23:59:59Z'),
-      body: measurements(['2026-09-30T09:30:00+02:00', 2]),
-      url: SERIES_URL(KAUB_W),
+      body: measurements(['2026-09-30T01:45:00+02:00', 2]),
+      url: SERIES_URL(MAXAU_Q),
     });
     expect((await h.reader.manifests()).map((m) => m.file)).toEqual(['2026-09-29.jsonl', '2026-09-30.jsonl']);
-    // Within 15 minutes of the fetch? No: 07:30Z is hours after 23:59Z the day before, so it is rejected as future.
     expect(await h.loader().tick()).toEqual({ lines: 1, loaded: 1 });
-    expect(await h.count('obs')).toBe(before);
+    expect(await h.count('obs')).toBe(before + 1);
+    const id = await h.seriesId(MAXAU_Q);
+    const { rows } = await h.t.admin.query('SELECT value FROM obs WHERE series_id = $1 AND ts = $2', [
+      id,
+      '2026-09-29T23:45:00Z',
+    ]);
+    expect(rows).toEqual([{ value: 2 }]);
     expect(await cursor()).toEqual(await manifestSizes());
   });
 
@@ -266,7 +281,8 @@ describe('load and replay of the fixture archive', () => {
     const sizes = await manifestSizes();
     const torn = '{"v":1,"source":"DE-1","spec":"de-1-basin","torn'.length;
     expect((await cursor())['2026-09-30.jsonl']).toBe((sizes['2026-09-30.jsonl'] as number) - torn);
-    expect(await loader.backlog()).toEqual({ files: 1, bytes: torn });
+    // A torn last line is still being written: backlog bytes, but no unconsumed line to age.
+    expect(await loader.backlog()).toEqual({ files: 1, bytes: torn, age_s: null });
   });
 });
 
@@ -359,5 +375,205 @@ describe('atomicity: a payload is one transaction', () => {
     } finally {
       await h2.close();
     }
+  });
+});
+
+describe('newest fetch wins, whatever order the payloads arrive in (review C2, C3)', () => {
+  let n: Harness;
+  let keys: string[];
+  beforeAll(async () => {
+    n = await harness();
+    // Series of 15-minute steps (no thinning) that share their source's audience.
+    keys = (
+      await n.t.admin.query(
+        `SELECT provider_key FROM series WHERE source_id = 'DE-1' AND quantity = 'H' AND native_step = '15 minutes'
+           AND audience IS NULL AND active ORDER BY provider_key LIMIT 10`,
+      )
+    ).rows.map((r) => r.provider_key);
+  });
+  afterAll(async () => {
+    await n.close();
+  });
+
+  const fetched = (hhmm: string) => new Date(`2026-09-30T${hhmm}:00Z`);
+  // One point, 09:45Z, in every payload.
+  const put = (variant: string, hhmm: string, value: number) =>
+    writePayload(n.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant,
+      at: fetched(hhmm),
+      body: measurements(['2026-09-30T11:45:00+02:00', value]),
+      url: SERIES_URL(variant),
+    });
+  const stored = async (variant: string) =>
+    (
+      await n.t.admin.query(
+        `SELECT o.value, o.qc, b.fetched_at, l.value AS latest, lb.fetched_at AS latest_fetched, r.vlast
+         FROM obs o JOIN ingest_batch b ON b.id = o.batch_id
+         JOIN obs_latest l ON l.series_id = o.series_id JOIN ingest_batch lb ON lb.id = l.batch_id
+         JOIN obs_1h r ON r.series_id = o.series_id AND r.bucket = '2026-09-30T09:00:00Z'
+         WHERE o.series_id = $1 AND o.ts = '2026-09-30T09:45:00Z'`,
+        [await n.seriesId(variant)],
+      )
+    ).rows;
+  const revisions = async (variant: string) =>
+    (
+      await n.t.admin.query('SELECT count(*)::int AS n FROM obs_revision WHERE series_id = $1', [
+        await n.seriesId(variant),
+      ])
+    ).rows[0].n as number;
+  const replayDay = (adapters?: Record<string, LoadAdapter>) =>
+    replay(
+      { db: n.load.db, reader: n.reader, alert: () => {}, now: () => new Date(), ...(adapters ? { adapters } : {}) },
+      { source: 'DE-1', spec: 'de-1-series', from: '2026-09-30', to: '2026-09-30', dryRun: false },
+    );
+
+  it('E1: A 10:00 = 100, B 12:00 = 100, a late D 11:00 = 200: 100 held by B for every order; replaying writes nothing', async () => {
+    const payloads = { A: ['10:00', 100], B: ['12:00', 100], D: ['11:00', 200] } as const;
+    const orders = ['ABD', 'ADB', 'BAD', 'BDA', 'DAB', 'DBA'] as const;
+    const loader = n.loader();
+    for (const [i, order] of orders.entries()) {
+      for (const name of order) {
+        const [hhmm, value] = payloads[name as keyof typeof payloads];
+        await put(keys[i] as string, hhmm, value);
+        // One arrival at a time.
+        expect(await loader.tick()).toEqual({ lines: 1, loaded: 1 });
+      }
+    }
+    const final = {
+      value: 100,
+      qc: 1,
+      fetched_at: fetched('12:00'),
+      latest: 100,
+      latest_fetched: fetched('12:00'),
+      vlast: 100,
+    };
+    for (const [i, order] of orders.entries())
+      expect([order, await stored(keys[i] as string)]).toEqual([order, [final]]);
+    // The revision log records each change of the stored value in the order it was stored: the one thing that
+    // depends on arrival order. The reviewer's order (A, B, then the late D) changes nothing.
+    const log = Object.fromEntries(
+      await Promise.all(orders.map(async (o, i) => [o, await revisions(keys[i] as string)])),
+    );
+    expect(log).toEqual({ ABD: 0, ADB: 2, BAD: 0, BDA: 0, DAB: 1, DBA: 1 });
+
+    const sums = await n.checksums();
+    const rows = await n.count('obs');
+    const logged = await n.count('obs_revision');
+    for (let pass = 0; pass < 2; pass++) {
+      expect(await replayDay()).toMatchObject({ lines: 18, loaded: 18, n_new: 0, n_changed: 0 });
+      expect(await n.checksums()).toEqual(sums);
+      expect(await n.count('obs')).toBe(rows);
+      expect(await n.count('obs_revision')).toBe(logged);
+    }
+  });
+
+  it('E2: two payloads fetched at the same instant: the greater batch id wins; a replay writes nothing', async () => {
+    const [x, y] = [keys[6] as string, keys[7] as string];
+    const loader = n.loader();
+    // x: 1 arrives first, then 2; y: 4, then 3. Same fetch time: the batch that arrived later has the greater id.
+    // (The bodies differ: an identical body at the same second would be the same archived object.)
+    for (const [variant, first, second] of [
+      [x, 1, 2],
+      [y, 4, 3],
+    ] as const) {
+      await put(variant, '13:00', first);
+      await loader.tick();
+      await put(variant, '13:00', second);
+      await loader.tick();
+    }
+    expect((await stored(x))[0]?.value).toBe(2);
+    expect((await stored(y))[0]?.value).toBe(3);
+    expect([await revisions(x), await revisions(y)]).toEqual([1, 1]);
+    const sums = await n.checksums();
+    await replayDay();
+    await replayDay();
+    expect(await n.checksums()).toEqual(sums);
+    expect([await revisions(x), await revisions(y)]).toEqual([1, 1]);
+  });
+
+  it('a payload quarantined between a load and its confirmation, fixed and replayed, reverts nothing', async () => {
+    const z = keys[8] as string;
+    const real = (LOAD_ADAPTERS['DE-1'] as LoadAdapter).specs['de-1-series'] as SpecLoader;
+    // The "bug": a parser that refuses the value 200.
+    const refuses200: Record<string, LoadAdapter> = {
+      'DE-1': {
+        version: 1,
+        specs: {
+          'de-1-series': {
+            ...real,
+            run: (body, ctx) => {
+              if (JSON.parse(Buffer.from(body).toString('utf8'))[0]?.value === 200)
+                throw new SchemaDrift('invalid_value');
+              return real.run(body, ctx);
+            },
+          },
+        },
+      },
+    };
+    const loader = n.loader({ adapters: refuses200 });
+    for (const [hhmm, value] of [
+      ['14:00', 100],
+      ['15:00', 200],
+      ['16:00', 100],
+    ] as const) {
+      await put(z, hhmm, value);
+      await loader.tick();
+    }
+    const q = await n.t.admin.query("SELECT parse_status FROM ingest_batch WHERE fetched_at = '2026-09-30T15:00:00Z'");
+    expect(q.rows).toEqual([{ parse_status: 'quarantined' }]);
+    // The fix: the real parser. The quarantined payload now loads, and it is older than the confirmation.
+    expect(await replayDay()).toMatchObject({ quarantined: 0 });
+    expect(
+      (await n.t.admin.query("SELECT parse_status FROM ingest_batch WHERE fetched_at = '2026-09-30T15:00:00Z'")).rows,
+    ).toEqual([{ parse_status: 'ok' }]);
+    expect(await stored(z)).toEqual([
+      { value: 100, qc: 1, fetched_at: fetched('16:00'), latest: 100, latest_fetched: fetched('16:00'), vlast: 100 },
+    ]);
+    expect(await revisions(z)).toBe(0);
+  });
+
+  it('a timestamp twice in one payload keeps its last value in SQL too (DISTINCT ON over the input order)', async () => {
+    const w = keys[9] as string;
+    const row = (value: number, ts = '2026-09-30T08:00:00.000Z') => ({ series: w, ts, value, qc: 1 });
+    // A parser that yields the same timestamp twice (DE-1's own normalise never does: it keeps the last already).
+    const twice: Record<string, LoadAdapter> = {
+      'DE-1': {
+        version: 1,
+        specs: {
+          'de-1-series': {
+            maxBytes: 1024,
+            needsVariant: true,
+            run: () => ({
+              obs: [row(1), row(3, '2026-09-30T08:15:00.000Z'), row(2)],
+              gaugeZeros: [],
+              dropped: {},
+              unknown: 0,
+            }),
+          },
+        },
+      },
+    };
+    await writePayload(n.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: w,
+      at: fetched('17:00'),
+      body: Buffer.from('[]'),
+      url: SERIES_URL(w),
+    });
+    expect(await n.loader({ adapters: twice }).tick()).toEqual({ lines: 1, loaded: 1 });
+    const { rows } = await n.t.admin.query('SELECT ts, value FROM obs WHERE series_id = $1 ORDER BY ts', [
+      await n.seriesId(w),
+    ]);
+    expect(rows).toEqual([
+      { ts: new Date('2026-09-30T08:00:00Z'), value: 2 },
+      { ts: new Date('2026-09-30T08:15:00Z'), value: 3 },
+    ]);
+    const batch = (
+      await n.t.admin.query("SELECT n_rows, n_new FROM ingest_batch WHERE fetched_at = '2026-09-30T17:00:00Z'")
+    ).rows;
+    expect(batch).toEqual([{ n_rows: 3, n_new: 2 }]);
   });
 });

@@ -6,6 +6,9 @@ import { lock } from './store.ts';
 // gap scan per request). Everything is per source, over the series that share
 // their source's audience, so a public source's numbers never include a series
 // it withholds, and an owner source's numbers exist only in the owner views.
+// The loader keeps the same rule for what it writes as it loads: newest_ts,
+// last_new_data and the batch counters (n_rows, n_new, n_changed) count only
+// those series too (store.ts `sameAudience`).
 
 /** A series that the source narrows (withheld, or owner inside a public source) is not part of its numbers. */
 const SAME_AUDIENCE = sql`COALESCE(s.audience, src.audience) = src.audience`;
@@ -15,7 +18,8 @@ export type HealthInputs = {
   cadenceS: ReadonlyMap<string, number>;
   /** p95 of "loaded at − fetched at" over the manifest lines fetched in the last hour, per source (ms). */
   lagP95Ms: ReadonlyMap<string, number>;
-  backlog: { files: number; bytes: number };
+  /** Unconsumed manifest bytes and the age of the oldest unconsumed line (Loader.backlog). */
+  backlog: { files: number; bytes: number; age_s: number | null };
   badLines: number;
   now: Date;
 };
@@ -28,15 +32,16 @@ type Tier1 = { total: number; fresh: number; provider_stale: number };
  * (index probes on tier-1 series only); runs every minute.
  */
 export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promise<void> {
-  const tier1 = await sql<{ source_id: string; total: number; fresh: number }>`
-    SELECT s.source_id, count(*)::int AS total,
-           (count(*) FILTER (WHERE l.ts > ${inputs.now}::timestamptz - s.staleness_limit))::int AS fresh
+  // Each tier-1 series: is its latest value fresh, and when was the payload fetched that last stated it.
+  const tier1 = await sql<{ source_id: string; fresh: boolean; stated_at: Date | null }>`
+    SELECT s.source_id, COALESCE(l.ts > ${inputs.now}::timestamptz - s.staleness_limit, false) AS fresh,
+           b.fetched_at AS stated_at
     FROM series s
     JOIN source src ON src.id = s.source_id
     JOIN station st ON st.id = s.station_id AND st.tier = 1
     LEFT JOIN obs_latest l ON l.series_id = s.id
-    WHERE s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}
-    GROUP BY s.source_id`.execute(db);
+    LEFT JOIN ingest_batch b ON b.id = l.batch_id
+    WHERE s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}`.execute(db);
 
   // Q7 (A§8): expected buckets without data over the last 24 h, up to the point where a value may still be on its way.
   const gaps = await sql<{ source_id: string; missing: number }>`
@@ -65,7 +70,14 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
     FROM source src LEFT JOIN source_health h ON h.source_id = src.id
     WHERE src.capture_enabled AND NOT src.canary`.execute(db);
 
-  const tierOf = new Map(tier1.rows.map((r) => [r.source_id, r]));
+  const tierOf = new Map<string, { total: number; fresh: number; stale: (Date | null)[] }>();
+  for (const r of tier1.rows) {
+    const t = tierOf.get(r.source_id) ?? { total: 0, fresh: 0, stale: [] };
+    t.total += 1;
+    if (r.fresh) t.fresh += 1;
+    else t.stale.push(r.stated_at);
+    tierOf.set(r.source_id, t);
+  }
   const gapOf = new Map(gaps.rows.map((r) => [r.source_id, r.missing]));
   const batchOf = new Map(batches.rows.map((r) => [r.source_id, r]));
   const nowMs = inputs.now.getTime();
@@ -76,13 +88,13 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
       const cadenceMs = (inputs.cadenceS.get(src.id) ?? 3600) * 1000;
       const batch = batchOf.get(src.id);
       const t = tierOf.get(src.id);
-      // A stale series is the provider's (it publishes nothing newer) when a payload of the
-      // source loaded fine within two cadences: then obs_latest IS the provider's newest value.
-      const payloadFresh = batch?.last_ok != null && nowMs - batch.last_ok.getTime() <= 2 * cadenceMs;
+      const recent = (at: Date | null) => at !== null && nowMs - at.getTime() <= 2 * cadenceMs;
+      const payloadFresh = recent(batch?.last_ok ?? null);
+      // A stale series is the provider's (it publishes nothing newer) only when a payload fetched within two
+      // cadences itself stated its latest value (obs_latest.batch_id follows every confirmation). A series we
+      // stopped storing (a unit mismatch, a 404, a changed key) is plain stale.
       const tier: Tier1 | null =
-        t === undefined
-          ? null
-          : { total: t.total, fresh: t.fresh, provider_stale: payloadFresh ? t.total - t.fresh : 0 };
+        t === undefined ? null : { total: t.total, fresh: t.fresh, provider_stale: t.stale.filter(recent).length };
       const quarantined = batch?.quarantined ?? 0;
       const fetchAgeMs = src.last_fetch_ok === null ? Number.POSITIVE_INFINITY : nowMs - src.last_fetch_ok.getTime();
       const lag = inputs.lagP95Ms.get(src.id);
@@ -107,7 +119,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
                 ${status}, ${JSON.stringify(detail)}::jsonb, ${inputs.now})
         ON CONFLICT (source_id) DO UPDATE SET
           quarantine_count = EXCLUDED.quarantine_count,
-          lag_p95 = COALESCE(EXCLUDED.lag_p95, h.lag_p95),
+          lag_p95 = EXCLUDED.lag_p95,
           status = EXCLUDED.status,
           detail = (h.detail - 'tier1' - 'missing_buckets_24h') || EXCLUDED.detail,
           updated_at = EXCLUDED.updated_at`.execute(tx);
@@ -116,6 +128,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
       computed_at: inputs.now.toISOString(),
       backlog_files: inputs.backlog.files,
       backlog_bytes: inputs.backlog.bytes,
+      backlog_age_s: inputs.backlog.age_s,
       bad_manifest_lines: inputs.badLines,
     };
     await sql`
@@ -168,14 +181,14 @@ export async function storeChecksums(db: Kysely<DB>, now: Date): Promise<void> {
   });
 }
 
-/** p95 of the lag samples of the last hour, per source. */
+/** p95 of the lag samples of the last hour, per source: none (null) when no line of the source was loaded then. */
 export class LagWindow {
   private readonly samples = new Map<string, { at: number; lag: number }[]>();
 
   /**
    * Only lines fetched within the last hour count: replaying a backlog is not
-   * lag. (A loader that falls further behind shows in the backlog and in the
-   * age of the precomputed health, which the watchdog alerts on.)
+   * lag. (A loader that falls further behind or stalls shows in the age of the
+   * oldest unconsumed line, which the watchdog alerts on.)
    */
   add(source: string, fetchedAt: Date, lagMs: number, now: Date): void {
     if (now.getTime() - fetchedAt.getTime() > 3_600_000) return;

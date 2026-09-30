@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Health, HealthSources, LAG_DEGRADED_S, overallStatus } from '../src/health.ts';
+import { BACKLOG_MAX_AGE_S, Health, HealthSources, LAG_DEGRADED_S, overallStatus } from '../src/health.ts';
 
 // The public health contract (A§9.2): strict schemas and the overall status.
 
@@ -8,7 +8,7 @@ const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
 
 const base = (over: Partial<Omit<Health, 'status'>> = {}): Omit<Health, 'status'> => ({
   generated_at: ago(60_000),
-  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, bad_manifest_lines: 0 },
+  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
   sources: { ok: 10, degraded: 0, down: 0, unknown: 2, total: 12 },
   owner_sources: { healthy: 5, total: 6 },
   quarantined: 0,
@@ -65,6 +65,18 @@ describe('overallStatus', () => {
     expect(lag(LAG_DEGRADED_S - 0.1)).toBe('ok');
     expect(lag(LAG_DEGRADED_S)).toBe('degraded');
     expect(lag(null)).toBe('ok');
+  });
+
+  it('degraded for a stalled loader: a manifest line left unconsumed for 15 minutes', () => {
+    expect(BACKLOG_MAX_AGE_S).toBe(900);
+    const age = (backlog_age_s: number | null) =>
+      overallStatus(base({ loader: { ...base().loader, backlog_files: 1, backlog_bytes: 900, backlog_age_s } }), NOW);
+    expect(age(null)).toBe('ok');
+    expect(age(BACKLOG_MAX_AGE_S - 1)).toBe('ok');
+    expect(age(BACKLOG_MAX_AGE_S)).toBe('degraded');
+    expect(
+      Health.safeParse({ status: 'ok', ...base({ loader: { ...base().loader, backlog_age_s: -1 } }) }).success,
+    ).toBe(false);
   });
 
   it('a source that was never fetched (unknown) does not degrade', () => {

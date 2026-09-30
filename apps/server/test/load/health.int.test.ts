@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareLine, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { PUBLIC_ONLY_VIEWS, VIEWS } from '../../src/db/audience.ts';
 import { computeHealth, LagWindow, storeChecksums } from '../../src/load/health.ts';
-import { type Harness, harness } from './harness.ts';
+import { claimNightly } from '../../src/load/run.ts';
+import { type Harness, harness, measurements } from './harness.ts';
 
 // Health is precomputed by the loader and read by the API as rws_api through
 // the public health views: public sources only, owner sources as two counts.
@@ -20,7 +21,7 @@ const cadenceS = new Map([
 const inputs = (over: Partial<Parameters<typeof computeHealth>[1]> = {}) => ({
   cadenceS,
   lagP95Ms: new Map<string, number>(),
-  backlog: { files: 0, bytes: 0 },
+  backlog: { files: 0, bytes: 0, age_s: null as number | null },
   badLines: 0,
   now: NOW,
   ...over,
@@ -76,7 +77,9 @@ describe('source health', () => {
     });
     // 69 tier-1 series; five Q series were stale at the provider that day (low-water rating cut-off).
     expect(row.detail.tier1).toEqual({ total: 69, fresh: 64, provider_stale: 5 });
-    expect(row.detail.missing_buckets_24h).toBeGreaterThan(0);
+    // Q7, recounted here bucket by bucket from the rows (an independent count of the same rule).
+    expect(row.detail.missing_buckets_24h).toBe(await missingBuckets(NOW));
+    expect(row.detail.missing_buckets_24h).toBe(6397);
     expect(row.newest_ts).toEqual(new Date('2026-09-29T13:41:00Z'));
     // The three lines were loaded 34 s after their fetch.
     expect(row.lag_p95_s).toBe(34);
@@ -115,8 +118,9 @@ describe('source health', () => {
     const again = (await de1()).detail;
     expect(again.partitions).toEqual(parts);
     expect(again.tier1).toEqual({ total: 69, fresh: 64, provider_stale: 5 });
-    // A pass without new lag samples keeps the last known lag.
-    expect((await de1()).lag_p95_s).toBe(34);
+    // A pass without a lag sample of the last hour shows none: a stalled loader never keeps an old, good lag.
+    expect((await de1()).lag_p95_s).toBeNull();
+    await computeHealth(h.load.db, inputs({ lagP95Ms: new Map([['DE-1', 34_000]]) }));
   });
 
   it('a quarantined payload degrades the source; five failed fetches or a silent source take it down', async () => {
@@ -145,10 +149,132 @@ describe('source health', () => {
     expect(stale.detail.tier1).toEqual({ total: 69, fresh: 0, provider_stale: 0 });
   });
 
-  it('the loader records its own state: when it last computed, its backlog and damaged lines', async () => {
-    await computeHealth(h.load.db, inputs({ backlog: { files: 2, bytes: 4096 }, badLines: 3 }));
+  it('the loader records its own state: when it last computed, its backlog, its age and damaged lines', async () => {
+    await computeHealth(h.load.db, inputs({ backlog: { files: 2, bytes: 4096, age_s: 1200 }, badLines: 3 }));
     const { rows } = await api.query(`SELECT * FROM ${PUBLIC_ONLY_VIEWS.loader}`);
-    expect(rows).toEqual([{ computed_at: NOW, backlog_files: 2, backlog_bytes: '4096', bad_manifest_lines: 3 }]);
+    expect(rows).toEqual([
+      { computed_at: NOW, backlog_files: 2, backlog_bytes: '4096', backlog_age_s: 1200, bad_manifest_lines: 3 },
+    ]);
+    await computeHealth(h.load.db, inputs());
+    expect((await api.query(`SELECT backlog_age_s FROM ${PUBLIC_ONLY_VIEWS.loader}`)).rows).toEqual([
+      { backlog_age_s: null },
+    ]);
+  });
+
+  it('a stale series is provider-stale only if a recent payload itself stated its latest value (review C9)', async () => {
+    // Half an hour later the basin call answers again with the same values, but five discharge series are gone
+    // from it (a key change, a unit change, a 404: we stopped storing them). Their latest value is not
+    // restated, so they are plain stale; every other stale series was confirmed by the new payload.
+    const stale = ['9598e4cb-0849-401e-bba0-689234b27644/Q'];
+    const basin = recorded('de-1-basin');
+    const doc = JSON.parse(basin.body.toString('utf8')) as { uuid: string; timeseries: { shortname: string }[] }[];
+    const before = (await de1()).detail.tier1 as { fresh: number; provider_stale: number };
+    const staleKeys = (
+      await h.t.admin.query(
+        `SELECT s.provider_key FROM series s JOIN station st ON st.id = s.station_id AND st.tier = 1
+         JOIN obs_latest l ON l.series_id = s.id
+         WHERE s.source_id = 'DE-1' AND s.role = 'primary' AND l.ts <= $1::timestamptz - s.staleness_limit`,
+        [NOW],
+      )
+    ).rows.map((r) => r.provider_key as string);
+    expect(staleKeys).toHaveLength(before.provider_stale);
+    expect(staleKeys).toEqual(expect.arrayContaining(stale));
+    const dropped = new Set(staleKeys);
+    for (const station of doc)
+      station.timeseries = station.timeseries.filter((t) => !dropped.has(`${station.uuid}/${t.shortname}`));
+    const later = new Date('2026-09-29T14:13:26Z');
+    await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-basin',
+      variant: '',
+      at: later,
+      body: Buffer.from(JSON.stringify(doc)),
+      url: basin.url,
+    });
+    const { Loader } = await import('../../src/load/pipeline.ts');
+    await new Loader({ db: h.load.db, reader: h.reader, alert: () => {}, now: () => later }).tick();
+    // 14:20: past two cadences (30 min) since 13:43, within them since 14:13.
+    const at = new Date('2026-09-29T14:20:00Z');
+    await computeHealth(h.load.db, inputs({ now: at }));
+    const row = await de1();
+    const t1 = row.detail.tier1 as { total: number; fresh: number; provider_stale: number };
+    expect(t1.total).toBe(69);
+    // Before this change the five would still count as provider-stale (the source's newest payload loaded fine).
+    expect(t1.fresh + t1.provider_stale).toBe(69 - staleKeys.length);
+    expect(row.status).toBe('degraded');
+    await computeHealth(h.load.db, inputs());
+  });
+
+  it("a series narrowed below its source's audience never moves the source's public numbers (review S6/C5)", async () => {
+    const narrowed = '1d26e504-7f9e-480a-b52c-5932be6549ab/W';
+    await h.t.admin.query("UPDATE series SET audience = 'owner' WHERE provider_key = $1", [narrowed]);
+    const health = async () =>
+      (await h.t.admin.query("SELECT newest_ts, last_new_data FROM source_health WHERE source_id = 'DE-1'")).rows[0];
+    const before = await health();
+    const fetched = new Date('2026-09-29T14:30:00Z');
+    const line = await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: narrowed,
+      at: fetched,
+      body: measurements(['2026-09-29T16:15:00+02:00', 150], ['2026-09-29T16:30:00+02:00', 151]),
+      url: 'https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/x/W/measurements.json',
+    });
+    const { Loader } = await import('../../src/load/pipeline.ts');
+    await new Loader({ db: h.load.db, reader: h.reader, alert: () => {}, now: () => fetched }).tick();
+    // The rows are stored (for the owner channel) …
+    expect(
+      (
+        await h.t.admin.query(
+          'SELECT count(*)::int AS n FROM obs o JOIN series s ON s.id = o.series_id WHERE s.provider_key = $1 AND o.ts >= $2',
+          [narrowed, '2026-09-29T14:15:00Z'],
+        )
+      ).rows,
+    ).toEqual([{ n: 2 }]);
+    // … but the public health and the public batch counters do not see them.
+    expect(await health()).toEqual(before);
+    expect(
+      (
+        await h.t.admin.query(
+          'SELECT parse_status, n_rows, n_new, n_changed FROM ingest_batch WHERE archive_key = $1',
+          [line.key],
+        )
+      ).rows,
+    ).toEqual([{ parse_status: 'ok', n_rows: 0, n_new: 0, n_changed: 0 }]);
+    await h.t.admin.query('UPDATE series SET audience = NULL WHERE provider_key = $1', [narrowed]);
+  });
+});
+
+/** Q7 counted in TypeScript: expected buckets of the last 24 h (up to now − staleness − step) without a row. */
+async function missingBuckets(now: Date): Promise<number> {
+  const { rows } = await h.t.admin.query<{ id: number; step: number; stale: number; ts: Date[] | null }>(
+    `SELECT s.id, extract(epoch FROM s.expected_step)::int * 1000 AS step,
+            extract(epoch FROM s.staleness_limit)::int * 1000 AS stale,
+            (SELECT array_agg(o.ts) FROM obs o WHERE o.series_id = s.id) AS ts
+     FROM series s JOIN station st ON st.id = s.station_id AND st.tier = 1
+     WHERE s.source_id = 'DE-1' AND s.active AND s.role = 'primary' AND s.audience IS NULL`,
+  );
+  let missing = 0;
+  for (const s of rows) {
+    const times = (s.ts ?? []).map((t) => t.getTime());
+    const first = Math.floor((now.getTime() - 86_400_000) / s.step) * s.step;
+    for (let b = first; b <= now.getTime() - s.stale - s.step; b += s.step) {
+      if (!times.some((t) => t >= b && t < b + s.step)) missing += 1;
+    }
+  }
+  return missing;
+}
+
+describe('the nightly jobs', () => {
+  it('run once per UTC day after 02:00, and a restart does not run them again (the day is kept in app_meta)', async () => {
+    const at = (iso: string) => new Date(iso);
+    expect(await claimNightly(h.load.db, at('2026-10-05T01:59:59Z'))).toBe(false);
+    expect(await claimNightly(h.load.db, at('2026-10-05T02:00:00Z'))).toBe(true);
+    expect(await claimNightly(h.load.db, at('2026-10-05T02:10:00Z'))).toBe(false);
+    // Another process (a restart): nothing in memory, the database remembers.
+    const again = h.dbAs('rws_load', 1);
+    expect(await claimNightly(again.db, at('2026-10-05T23:59:00Z'))).toBe(false);
+    expect(await claimNightly(again.db, at('2026-10-06T02:00:00Z'))).toBe(true);
   });
 });
 
