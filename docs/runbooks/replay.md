@@ -4,6 +4,7 @@
 - after a fix, to load payloads that were quarantined (`docs/runbooks/schema-drift.md`);
 - after a parse, normalise or registry change that alters what is stored (values dropped by a wrong unit or stored with a wrong factor, a new rule; §3 after a provider's unit change), except over a range that reaches back before a unit or factor change of a series: it rescales that series' older rows (check `docs/known-gaps.md` KG-074 for the recorded changes first);
 - after a restore of the raw archive when a payload was skipped as `object_missing` (`docs/runbooks/restore.md`);
+- after the release that first brings an adapter (NL-1 in P2b, §5): the loader without it moved its cursor past those lines and stored nothing;
 - to prove that the archive still reproduces the database (a second replay must change nothing), with the same exception: a range that reaches back before a unit or factor change of a series rescales that series' older rows (KG-074 first).
 
 `replay` re-parses archived objects through the loader's own code path. It **never fetches**, never moves the load cursor and never touches the fetch health. The raw archive is the source of truth; the database can be rebuilt from it, as far as the retention pruner has not deleted objects (`docs/runbooks/disk-full.md` §4) and except across a unit or factor change of a series, which the registry does not date (KG-074).
@@ -26,7 +27,7 @@
 | The range is in **manifest days**: the UTC day of the file `raw/_manifest/<day>.jsonl` the line is filed under (the day its fetch started; the recorder's recovery appends to past days). `--from` may instead be a UTC **instant** (`2026-10-05T07:10:00Z`): a line whose fetch ended before it (the batch's `fetched_at`) is skipped, not counted and never read | Use a range that includes the day of the payload, `--to` inclusive; an instant after a unit change (§3) |
 | Arguments are checked against fixed patterns **and** the adapter table: `--source` must have a load adapter, `--spec` must be one of its specs, `--from` a real UTC day or a real UTC instant to the second with `Z`, `--to` a real UTC day, not before the day of `--from` | No identifier reaches SQL from the command line |
 
-Adapter table today: `DE-1` with the specs `de-1-basin`, `de-1-series` and `de-1-meta`.
+Adapter table today: `DE-1` with the specs `de-1-basin`, `de-1-series` and `de-1-meta`; `NL-1` with `nl-1-obs-key`, `nl-1-obs-other` and `nl-1-obs-twin`; `NL-2` with `nl-2-wfs` (NL-2 stores no observation, so a replay of it never writes a row). NL-4 has no adapter: `--source NL-4` is refused. The NL-1 forecast and catalogue specs have no loader entry yet (P8), so their lines are not counted.
 
 ## 2. Run it
 
@@ -120,6 +121,28 @@ curl -s https://<domain>/api/v1/health/sources | jq '.sources[] | select(.id == 
 - `quarantined` falls by the number of payloads that loaded (the count is recomputed every minute, the answer cached for 30 s);
 - for a **no-op proof**, run the same replay twice: the second run must print `"n_new":0,"n_changed":0`;
 - the per-partition checksums in `sources[].partitions` (md5 over series key, timestamp, value and qc) are recomputed nightly (after 02:00 UTC) and once when the loader first catches up with the manifest. After a replay that changed data, compare them after the next nightly run, or restart `load` (`sudo docker restart rws-load-1`): it recomputes them as soon as it has caught up with the manifest (`docs/runbooks/partition-maintenance.md` §4).
+
+## 5. After the P2b deploy: load the NL payloads since P1
+
+The loader of the P2a release had no NL-1 adapter, so it moved its cursor past every NL-1 line since P1 and stored nothing (fetch health only). After the release with P2b is deployed and `migrate` has synced the NL registry (`docs/runbooks/bootstrap.md`, the P2b release steps), load them once. The recorded lines are all still in the archive (the pruner is a dry run). NL-2 needs no replay (it stores nothing) and NL-4 is never replayed.
+
+1. Find the first day of the archive: `sudo ls /srv/rws/raw/_manifest | head -n 1` (the file name is `<day>.jsonl`). Use that day as `<first day>` and today's UTC day as `<today>`.
+2. Count first, with the `rwsc` function of §2. It reads the manifest and writes nothing:
+
+   ```bash
+   rwsc run --rm --no-deps -T load replay --source NL-1 --from <first day> --to <today> --dry-run
+   ```
+
+   `lines` counts the NL-1 lines of the three observation specs that have an object. A line without an object (the 204 "no data" answers), with a fetch error or with a status of 400 or more is not counted.
+3. Run it, without `--spec`, so that all three specs load:
+
+   ```bash
+   rwsc run --rm --no-deps -T load replay --source NL-1 --from <first day> --to <today>
+   ```
+
+   It is one transaction per payload and can be stopped and started again (§2). NL-1 states its unit in every payload, so a range that starts on a day is safe across a unit change: a difference from the registry is dropped as `unit_mismatch`, never rescaled (§3 and KG-074 do not apply to NL-1).
+4. Expect `"n_new"` greater than 0 the first time and `"quarantined":0`. Run the same command a second time: it must print `"n_new":0,"n_changed":0`.
+5. Check `scripts/verify-prod.sh <domain>`: the checks `health NL-1`, `tier-1 NL-1` and `replay NL-1` pass once the loader has caught up (`.loader.backlog_age_s` small). A payload that quarantines is handled by `docs/runbooks/schema-drift.md`; the codes `unregistered_method`, `unknown_quality`, `conflict` and `unit_mismatch` are alerts, and the values they withheld load in a replay after the fix (`n_skipped` of those batches is above 0 until then).
 
 ## What not to do
 
