@@ -38,7 +38,7 @@ Keep the scratch directory until §4: from P2a the same restore also brings back
 
 ## 3. The database (from P2a)
 
-The archive is the source of truth, and the database can always be rebuilt from it, as far as the archive still holds the objects. Pick a route.
+The archive is the source of truth, and the database can be rebuilt from it, as far as the archive still holds the objects and except across a unit or factor change of a series: the registry holds only today's unit and factor, so a rebuild reads that series' older payloads with the new factor and rescales their rows (KG-074 in `docs/known-gaps.md` records the changes; none so far). Pick a route.
 
 **Route A: rebuild by replay (the default).** `rws-deploy` left an empty database with the migrations and the registry in place, and `load` is stopped. With the raw archive restored (§2), start it:
 
@@ -46,7 +46,7 @@ The archive is the source of truth, and the database can always be rebuilt from 
 sudo docker compose -p rws start load
 ```
 
-The loader's cursor starts at the first manifest day, so it reads every manifest file and parses every payload, as it did at the first P2a deploy. Watch `loader.backlog_bytes` in `curl -s https://<domain>/api/v1/health` fall to 0, then check `docs/runbooks/schema-drift.md` for anything quarantined. Once `RWS_PRUNE_APPLY=1` is on, the archive no longer holds the observation objects older than the 90-day hot window (`docs/runbooks/disk-full.md` §4), so this route brings back only what the archive still has: use route B.
+The loader's cursor starts at the first manifest day, so it reads every manifest file and parses every payload, as it did at the first P2a deploy. Watch `loader.backlog_bytes` in `curl -s https://<domain>/api/v1/health` fall to 0, then check `docs/runbooks/schema-drift.md` for anything quarantined. Once `RWS_PRUNE_APPLY=1` is on, the archive no longer holds the observation objects older than the 90-day hot window (`docs/runbooks/disk-full.md` §4), so this route brings back only what the archive still has: use route B. Use route B as well once KG-074 records a unit or factor change: this route would rescale that series' rows from before the change.
 
 **Route B: restore the dump.** The snapshot you restored holds the nightly dump as `data/db/rws.dump` (a `pg_dump -Fc` of the whole database, taken as `rws_backup`) and `data/db/globals.sql` (the roles without passwords: a record only, `rws-deploy` recreates the roles from `deploy/postgres/roles.sql`). Restore it into an **empty** database, then deploy the current release again so that the roles' passwords, the database settings and any newer migration are applied:
 
