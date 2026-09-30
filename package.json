@@ -16,7 +16,7 @@
     "check:boundaries": "node scripts/check-boundaries.ts",
     "db:views": "node scripts/gen-views.ts",
     "db:types": "apps/server/node_modules/.bin/kysely-codegen --dialect postgres --log-level error --type-mapping '{\"interval\":\"string\"}' --exclude-pattern '{pub_*,own_*,series_eff,schema_migrations}' --out-file apps/server/src/db/generated.ts",
-    "test:coverage": "vitest run --project unit --coverage"
+    "test:coverage": "vitest run --project unit --coverage apps/server/test/adapters"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

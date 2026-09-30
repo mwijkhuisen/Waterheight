@@ -43,9 +43,10 @@ dbm --no-dump-schema migrate >/dev/null
 dbm --no-dump-schema status --exit-code >/dev/null
 echo "db-check: migrate → $count × rollback → migrate: OK"
 
-# pg_dump 17.6+ writes a random \restrict key: drop both lines so the file is reproducible.
+# pg_dump 17.6+ writes a random \restrict key, and every build names itself ("Dumped by pg_dump
+# version 18.6 (Debian …)"): drop those lines so the file is the same wherever it is generated.
 dbm --schema-file "$work/schema.sql" dump >/dev/null
-grep -v -E '^\\(un)?restrict ' "$work/schema.sql" >"$work/schema.clean.sql"
+grep -v -E '^(\\(un)?restrict |-- Dumped (from database|by pg_dump) version )' "$work/schema.sql" >"$work/schema.clean.sql"
 
 node scripts/gen-views.ts --check
 checked_url=$(sed -E 's#/[^/?]+(\?|$)#/rws_check\1#' <<<"$admin_url")

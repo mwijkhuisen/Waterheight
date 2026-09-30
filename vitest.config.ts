@@ -13,6 +13,7 @@ export default defineConfig({
     // Node 26 enables Web Storage by default and warns in every worker; tests never use it.
     execArgv: ['--no-experimental-webstorage'],
     // `pnpm test:coverage` (issue #17: at least 90% line coverage of every adapter's parse and normalise).
+    // It runs the adapter tests only: under instrumentation the timing tests of the recorder are too slow.
     coverage: {
       provider: 'v8',
       include: ['apps/server/src/adapters/*/parse.ts', 'apps/server/src/adapters/*/normalise.ts'],

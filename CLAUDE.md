@@ -15,7 +15,7 @@ The legacy code is archived as the annotated tag `legacy-v0` (`a4106b855c782832d
 | `pnpm install --frozen-lockfile` | The only way to install; the lockfile is never rewritten by CI or the hook |
 | `pnpm check` | Paraglide compile, Biome, `tsc -b`, Vitest (unit), `check-bom`, `check-boundaries` |
 | `pnpm test` / `pnpm test:integration` | Vitest unit / integration. The integration tests need `DATABASE_URL` naming a **superuser** of a throw-away PostgreSQL 18 (builtin C.UTF-8 locale, scram-sha-256 logins on loopback): each file creates the seven roles and its own database. The hook's sandbox cluster is one. Fails on zero tests |
-| `pnpm test:coverage` | Unit tests with v8 coverage: at least 90% of the lines of every adapter's `parse.ts` and `normalise.ts`, file by file |
+| `pnpm test:coverage` | The adapter tests (`apps/server/test/adapters`) with v8 coverage: at least 90% of the lines of every adapter's `parse.ts` and `normalise.ts`, file by file |
 | `pnpm db:views` / `pnpm db:types` | `node scripts/gen-views.ts` rewrites the views migration (`--check` diffs it); `pnpm db:types` runs kysely-codegen into `apps/server/src/db/generated.ts` (base tables only; needs `DATABASE_URL` of a migrated database, as the superuser) |
 | `scripts/db-check.sh [--write]` | dbmate migrate → roll back every migration → migrate as `rws_migrator`, then compares `db/schema.sql`, the views migration and `generated.ts` with what the migrations produce (`--write` rewrites them). Needs dbmate, `pg_dump` 18 and a local superuser `DATABASE_URL` |
 | `node scripts/bench-q1.ts` | The Q1 benchmark (3,000 series × 60 days) as `rws_api` through `pub_obs_at`; asserts the backward index scan and a median under 50 ms; needs a superuser `DATABASE_URL` (CI job `bench`) |
