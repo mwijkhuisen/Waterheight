@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# rws-drill (owner-run; issue #17 P2b; docs/runbooks/outage-drill.md): the outage
+# drill. `stop-capture` stops the capture container for the given time, then
+# starts it again. The recorder then stretches its fetch windows and refills the
+# gap, the loader loads the refill, and /api/v1/health/sources reports the gap of
+# DE-1 and NL-1 as `outage` (Q7: buckets still without data). It prints the
+# outage window (UTC) and the command that checks it.
+# It can only stop and start the `capture` service, never recreate it or touch
+# another one. It holds the rws-deploy lock the whole time, so rws-update and
+# rws-deploy cannot replace capture mid-drill (rws-update then exits 0 without
+# its `update` ping); it refuses to start while a deploy or update holds it.
+# Every way out (the end, an error, INT, TERM, HUP) starts capture again, and
+# fails loudly when that does not work.
+#
+# Usage: rws-drill stop-capture <Nm|Nh, 1m to 6h> [--dry-run]
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+DRY_RUN=0 # only --dry-run turns it on, never the environment
+# The jq program of the check; deploy/tests/rws-drill.test.sh keeps it in step with the runbook.
+# shellcheck disable=SC2016 # a jq program, not shell
+readonly CHECK_JQ='.sources[] | select(.id == "DE-1" or .id == "NL-1") | .outage as $o | {id, outage: $o, pass: ($o != null and ($o.from | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) <= ($from | fromdateiso8601) and ($o.to | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) >= ($to | fromdateiso8601) and $o.missing_buckets == 0)}'
+
+usage() {
+  echo "usage: rws-drill stop-capture <Nm|Nh, 1m to 6h> [--dry-run]" >&2
+  exit 64
+}
+
+[[ ${1:-} == stop-capture ]] || usage
+shift
+dur=''
+for arg; do
+  case $arg in
+    --dry-run) DRY_RUN=1 ;;
+    -*) usage ;;
+    *)
+      [[ -z $dur ]] || usage
+      dur=$arg
+      ;;
+  esac
+done
+# The pattern first: only validated digits ever reach the arithmetic.
+[[ $dur =~ ^[1-9][0-9]{0,2}[mh]$ ]] || usage
+n=${dur%[mh]}
+secs=$((n * 60))
+if [[ $dur == *h ]]; then secs=$((secs * 60)); fi
+((secs >= 60 && secs <= 21600)) || usage
+
+stopped=0 from='' sleeper=''
+# Runs on every exit. Signals are ignored while it works: nothing may cut the restart short.
+finish() {
+  local rc=$? to
+  trap '' INT TERM HUP
+  trap - EXIT
+  if [[ -n $sleeper ]]; then kill "$sleeper" 2>/dev/null || true; fi
+  ((stopped)) || exit "$rc"
+  to=$(now_iso) # taken before the start: the first refill fetch is later
+  # `start`, not `up -d`: it starts exactly the stopped container, and recreates and touches nothing else.
+  if ! rws_compose start capture >/dev/null; then
+    log "error: CAPTURE IS STILL STOPPED and the drill could not start it: run 'sudo docker start rws-capture-1' now (docs/runbooks/recorder-down.md)"
+    exit 1
+  fi
+  if [[ -n $from ]]; then
+    log "outage ends $to: capture started"
+    printf 'outage window (UTC): %s to %s\n' "$from" "$to"
+    printf 'check it once the refill has loaded (at least 1 hour from now), both lines must say "pass": true:\n'
+    printf "  curl -fsS https://%s/api/v1/health/sources | jq --arg from '%s' --arg to '%s' '%s'\n" \
+      "$RWS_DOMAIN" "$from" "$to" "$CHECK_JQ"
+  else
+    log "capture started again after a failed stop: no outage window"
+  fi
+  exit "$rc"
+}
+trap finish EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+exec 9>"$(lockfile rws-deploy)"
+flock -n 9 || die "a deploy or update is running (rws-deploy lock): try again when it has finished"
+env_ready || die "rws.env is not complete (owner steps A2-A4 in docs/runbooks/bootstrap.md)"
+[[ -e $RWS_STATE_DIR/active ]] || die "no release is deployed yet"
+
+if ((DRY_RUN)); then
+  log "dry-run: would stop capture for $dur ($secs s), start it again and print the outage window and its check"
+  exit 0
+fi
+
+running=$(rws_compose ps -q --status running capture) || die "cannot ask docker whether capture is running"
+[[ -n $running ]] || die "capture is not running: nothing to drill (docs/runbooks/recorder-down.md)"
+
+log "stopping capture for $dur ($secs s); the deploy lock is held until it runs again"
+stopped=1
+rws_compose stop capture >/dev/null
+from=$(now_iso)
+log "outage starts $from"
+# In the background and waited for: a trapped signal ends `wait` at once, a foreground
+# sleep would delay it for hours. fd 9 is closed for it so it never keeps the lock.
+sleep "$secs" 9>&- &
+sleeper=$!
+wait "$sleeper"
+sleeper=''
