@@ -2,10 +2,17 @@
   "name": "@rws/core",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "rws-dist": "./dist/index.js",
+      "default": "./src/index.ts"
+    }
   },
   "dependencies": {
-    "@rws/contracts": "workspace:*"
+    "@rws/contracts": "workspace:*",
+    "zod": "4.6.5"
   }
 }

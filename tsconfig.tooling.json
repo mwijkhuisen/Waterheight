@@ -4,6 +4,7 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": false,
+    "lib": ["es2024", "esnext.temporal"],
     "types": ["node"],
     "tsBuildInfoFile": "node_modules/.cache/tsc/tooling.tsbuildinfo"
   },

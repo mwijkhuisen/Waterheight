@@ -12,12 +12,29 @@ export default defineConfig({
     passWithNoTests: false,
     // Node 26 enables Web Storage by default and warns in every worker; tests never use it.
     execArgv: ['--no-experimental-webstorage'],
+    // `pnpm test:coverage` (issue #17: at least 90% line coverage of every adapter's parse and normalise).
+    coverage: {
+      provider: 'v8',
+      include: ['apps/server/src/adapters/*/parse.ts', 'apps/server/src/adapters/*/normalise.ts'],
+      reporter: ['text'],
+      thresholds: { lines: 90, perFile: true },
+    },
     projects: [
       {
         extends: true,
         test: { name: 'unit', include: testFiles, exclude: ['**/*.int.test.ts', '**/node_modules/**'] },
       },
-      { extends: true, test: { name: 'integration', include: integrationFiles, exclude: ['**/node_modules/**'] } },
+      {
+        extends: true,
+        // One file at a time: the database roles are cluster-wide, and every file creates its own database.
+        test: {
+          name: 'integration',
+          include: integrationFiles,
+          exclude: ['**/node_modules/**'],
+          fileParallelism: false,
+          hookTimeout: 60_000,
+        },
+      },
     ],
   },
 });

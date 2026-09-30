@@ -2,8 +2,14 @@
   "name": "@rws/contracts",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "rws-dist": "./dist/index.js",
+      "default": "./src/index.ts"
+    }
   },
   "dependencies": {
     "zod": "4.6.5"

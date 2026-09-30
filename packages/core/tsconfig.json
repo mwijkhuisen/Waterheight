@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "emitDeclarationOnly": true
+    "lib": ["es2024", "esnext.temporal"]
   },
   "include": ["src"],
   "references": [{ "path": "../contracts" }]

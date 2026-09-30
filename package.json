@@ -13,11 +13,16 @@
     "test:integration": "vitest run --project integration",
     "build": "pnpm i18n && tsc -b && pnpm -F web build",
     "check:bom": "node scripts/check-bom.ts",
-    "check:boundaries": "node scripts/check-boundaries.ts"
+    "check:boundaries": "node scripts/check-boundaries.ts",
+    "db:views": "node scripts/gen-views.ts",
+    "db:types": "apps/server/node_modules/.bin/kysely-codegen --dialect postgres --log-level error --type-mapping '{\"interval\":\"string\"}' --exclude-pattern '{pub_*,own_*,series_eff,schema_migrations}' --out-file apps/server/src/db/generated.ts",
+    "test:coverage": "vitest run --project unit --coverage"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@types/node": "26.6.2",
+    "@vitest/coverage-v8": "5.0.1",
+    "fast-check": "4.10.2",
     "msw": "2.15.0",
     "typescript": "6.0.3",
     "vitest": "5.0.1",
