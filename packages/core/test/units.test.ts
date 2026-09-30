@@ -115,14 +115,14 @@ describe('thin (1-minute series → 15 minutes)', () => {
     expect(minutes(thin(dense, STEP))).toEqual([0, 15, 30, 45, 60]);
   });
 
-  it('drops a leading partial bucket, so overlapping windows agree', () => {
+  it('a window that starts inside a bucket keeps only its on-grid samples', () => {
     const window = Array.from({ length: 40 }, (_, i) => at(i + 7));
     expect(minutes(thin(window, STEP))).toEqual([15, 30, 45]);
   });
 
-  it('falls back to the next sample when the grid minute is missing', () => {
+  it('a missing grid minute is a gap, never filled with a neighbour', () => {
     const gap = [0, 1, 14, 16, 17, 30].map(at);
-    expect(minutes(thin(gap, STEP))).toEqual([0, 16, 30]);
+    expect(minutes(thin(gap, STEP))).toEqual([0, 30]);
   });
 
   it('leaves a native 15-minute series unchanged and copes with an empty one', () => {
@@ -131,18 +131,38 @@ describe('thin (1-minute series → 15 minutes)', () => {
     expect(thin([], STEP)).toEqual([]);
   });
 
+  const series = fc
+    .uniqueArray(fc.integer({ min: 0, max: 600 }), { maxLength: 200 })
+    .map((ms) => ms.sort((a, b) => a - b).map(at));
+
   it('is idempotent and only ever removes samples (property)', () => {
-    const series = fc
-      .uniqueArray(fc.integer({ min: 0, max: 600 }), { maxLength: 200 })
-      .map((ms) => ms.sort((a, b) => a - b).map(at));
     fc.assert(
       fc.property(series, (rows) => {
         const once = thin(rows, STEP);
-        expect(thin(once, STEP).length).toBeLessThanOrEqual(once.length);
+        expect(thin(once, STEP)).toEqual(once);
         for (const r of once) expect(rows).toContain(r);
         const buckets = once.map((r) => Math.floor(r.ts / STEP));
         expect(new Set(buckets).size).toBe(buckets.length);
       }),
+    );
+  });
+
+  it('two overlapping windows, thinned in either order, store what thinning their union stores (property)', () => {
+    // The stored rows of a series: a timestamp keeps the last value written for it.
+    const store = (...windows: ReturnType<typeof at>[][]) => {
+      const rows = new Map<number, number>();
+      for (const w of windows) for (const s of thin(w, STEP)) rows.set(s.ts, s.v);
+      return [...rows].sort(([a], [b]) => a - b);
+    };
+    fc.assert(
+      fc.property(series, fc.nat(200), fc.nat(200), fc.nat(200), fc.nat(200), (rows, a, b, c, d) => {
+        const first = rows.slice(Math.min(a, b), Math.max(a, b));
+        const second = rows.slice(Math.min(c, d), Math.max(c, d));
+        const union = [...new Map([...first, ...second].map((r) => [r.ts, r])).values()].sort((x, y) => x.ts - y.ts);
+        expect(store(first, second)).toEqual(store(second, first));
+        expect(store(first, second)).toEqual(store(union));
+      }),
+      { numRuns: 300 },
     );
   });
 });

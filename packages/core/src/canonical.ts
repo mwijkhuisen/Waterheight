@@ -21,8 +21,8 @@ export const GaugeZeroRow = z.strictObject({
   series: z.string().min(1).max(120),
   value_m: z.number(),
   datum: z.enum(DATUMS),
-  /** Start of validity (UTC date); null when the provider gives none. */
-  valid_from: z.iso.date().nullable(),
+  /** Start of validity (an instant: the provider's date at local midnight); null when the provider gives none. */
+  valid_from: Instant.nullable(),
 });
 export type GaugeZeroRow = z.infer<typeof GaugeZeroRow>;
 
@@ -46,6 +46,13 @@ export type Normalised = {
   dropped: Record<string, number>;
   /** Series in the payload that the registry does not know (never registered from a payload). */
   unknown: number;
+  /**
+   * Set only by a payload that states the unit of every series it carries: the
+   * keys whose unit differs from the registry's. The loader keeps the newest such
+   * list per source and passes it to payloads that carry no unit (`unitMismatch`
+   * of the context), so a unit switch never stores mis-scaled values.
+   */
+  unitMismatch?: string[];
 };
 
 export const emptyNormalised = (): Normalised => ({ obs: [], gaugeZeros: [], dropped: {}, unknown: 0 });

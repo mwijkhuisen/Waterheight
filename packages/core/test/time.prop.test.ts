@@ -11,6 +11,17 @@ const instant = fc
   .map((m) => m * MINUTE);
 const zone = fc.constantFrom(...ZONES);
 
+/** EU rule, the same in all four zones: the last Sunday of March (month 2) and October (9), at 01:00 UTC. */
+const lastSunday = (year: number, month: number) => {
+  const d = new Date(Date.UTC(year, month + 1, 0));
+  return Date.UTC(year, month, d.getUTCDate() - d.getUTCDay(), 1);
+};
+/** Half of the runs within two hours of a transition, so the repeated and the missing hour come up often. */
+const nearTransition = fc
+  .tuple(fc.integer({ min: 2020, max: 2034 }), fc.constantFrom(2, 9), fc.integer({ min: -120, max: 120 }))
+  .map(([year, month, minutes]) => lastSunday(year, month) + minutes * MINUTE);
+const dstInstant = fc.oneof(instant, nearTransition);
+
 const wallClock = (ms: number, z: string) => Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(z);
 const pad = (n: number, width = 2) => String(n).padStart(width, '0');
 const naiveIso = (z: Temporal.ZonedDateTime) =>
@@ -78,8 +89,9 @@ describe('DST is handled explicitly in Amsterdam, Berlin, Luxembourg and Zurich'
   const render = (c: TimeConvention, text: string) => (c.kind === 'local-labelled-z' ? `${text}Z` : text);
 
   it('every real instant is recovered from its wall-clock time once the overlap rule names the occurrence', () => {
+    let repeated = 0;
     fc.assert(
-      fc.property(instant, zone, (ms, z) => {
+      fc.property(dstInstant, zone, (ms, z) => {
         const local = wallClock(ms, z);
         // The same wall-clock time one hour later/earlier tells which occurrence this is.
         const twin = [ms - 3_600_000, ms + 3_600_000].find(
@@ -90,6 +102,7 @@ describe('DST is handled explicitly in Amsterdam, Berlin, Luxembourg and Zurich'
           expect(parseInstant(c, render(c, naiveIso(local)))).toBe(ms);
         }
         if (twin !== undefined) {
+          repeated += 1;
           for (const c of conventions(z, { gap: 'reject', overlap: 'reject' })) {
             expect(codeOf(() => parseInstant(c, render(c, naiveIso(local))))).toBe('dst_overlap');
           }
@@ -101,17 +114,14 @@ describe('DST is handled explicitly in Amsterdam, Berlin, Luxembourg and Zurich'
       }),
       { numRuns: 300 },
     );
+    // About one run in eight lands in a repeated hour (a plain uniform instant: one in 700).
+    expect(repeated).toBeGreaterThan(10);
   });
 
   it.each(ZONES)('%s: the repeated hour of every autumn and the missing hour of every spring', (z) => {
     for (let year = 2024; year <= 2032; year++) {
-      // EU rule: the last Sunday of March and of October, at 01:00 UTC.
-      const lastSunday = (month: number) => {
-        const d = new Date(Date.UTC(year, month + 1, 0));
-        return Date.UTC(year, month, d.getUTCDate() - d.getUTCDay(), 1);
-      };
-      const back = lastSunday(9);
-      const forward = lastSunday(2);
+      const back = lastSunday(year, 9);
+      const forward = lastSunday(year, 2);
       for (const minute of [0, 15, 59]) {
         const text = `${year}-10-${pad(new Date(back).getUTCDate())}T02:${pad(minute)}:00`;
         const at = (overlap: 'earlier' | 'later' | 'reject') =>

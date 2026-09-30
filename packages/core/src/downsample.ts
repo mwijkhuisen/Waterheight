@@ -1,25 +1,15 @@
 // A dense series whose provider step is shorter than the step we store
 // (PEGELONLINE 1-minute gauges → 15 minutes). The rule is declared per series
-// in the registry (native_step, expected_step) and is a pure function of the
-// payload, so overlapping windows and replays give the same rows.
+// in the registry (native_step, expected_step) and is a pure function of each
+// sample, so overlapping windows, in any order, and replays give the same rows.
 
 /**
- * Keeps the earliest sample of every UTC bucket of `stepMs`. That is the
- * on-grid sample whenever the provider has it; a missing grid minute falls
- * back to the next sample instead of opening a false gap. A leading bucket
- * whose first sample is off the grid is dropped: the window started inside
- * it, so its earliest sample is not the bucket's. No timestamp or value is
- * ever changed. `samples` must be sorted by `ts` ascending.
+ * Keeps the on-grid samples only: those whose timestamp is a whole multiple of
+ * `stepMs` (UTC epoch). A grid minute the provider did not publish is a gap,
+ * which the coverage number shows; it is never filled with a neighbour, because
+ * which neighbour a window holds depends on the window. No timestamp or value is
+ * ever changed.
  */
 export function thin<T extends { ts: number }>(samples: readonly T[], stepMs: number): T[] {
-  const kept: T[] = [];
-  let bucket = Number.NaN;
-  for (const [i, s] of samples.entries()) {
-    const b = Math.floor(s.ts / stepMs);
-    if (b === bucket) continue;
-    bucket = b;
-    if (i === 0 && s.ts % stepMs !== 0) continue;
-    kept.push(s);
-  }
-  return kept;
+  return samples.filter((s) => s.ts % stepMs === 0);
 }

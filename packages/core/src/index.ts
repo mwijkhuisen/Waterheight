@@ -3,6 +3,7 @@ export * from './canonical.ts';
 export * from './datums.ts';
 export * from './downsample.ts';
 export * from './errors.ts';
+export * from './json.ts';
 export * from './qc.ts';
 export * from './sentinels.ts';
 export * from './time.ts';
