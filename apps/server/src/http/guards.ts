@@ -1,5 +1,6 @@
 import { setImmediate as yieldToLoop } from 'node:timers/promises';
 import { crc32 } from 'node:zlib';
+import { xmlOverCaps } from '@rws/core';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { Inflate } from 'fflate';
 
@@ -155,9 +156,10 @@ const UNSAFE_NAME = /(^[/\\])|\\|(^|\/)\.\.(\/|$)|\0|^[A-Za-z]:/;
 
 /**
  * ZIP guard: reads the end record and the central directory first, checks
- * member count, names, sizes and ratios there, then inflates each member in
- * small pushes and counts the real output against the declared size, the
- * 200 MB total and 50:1 (a lying central directory fails), and checks CRC-32.
+ * member count, names, sizes and ratios there (a symbolic link fails), then
+ * inflates each member in small pushes and counts the real output against the
+ * declared size, the 200 MB total and 50:1 (a lying central directory fails),
+ * and checks CRC-32.
  */
 export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember[]> {
   const maxMembers = opts.maxMembers ?? ZIP_MAX_MEMBERS;
@@ -188,6 +190,7 @@ export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember
   let compressedTotal = 0;
   for (let n = 0; n < count; n += 1) {
     if (p + 46 > cdOffset + cdSize || buf.readUInt32LE(p) !== 0x02014b50) fail('zip_cd');
+    const madeBy = buf.readUInt16LE(p + 4);
     const flags = buf.readUInt16LE(p + 8);
     const method = buf.readUInt16LE(p + 10);
     const crc = buf.readUInt32LE(p + 16);
@@ -196,6 +199,7 @@ export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember
     const nameLen = buf.readUInt16LE(p + 28);
     const extraLen = buf.readUInt16LE(p + 30);
     const commentLen = buf.readUInt16LE(p + 32);
+    const external = buf.readUInt32LE(p + 38);
     const local = buf.readUInt32LE(p + 42);
     const raw = buf.subarray(p + 46, p + 46 + nameLen);
     const name = raw.toString(flags & 0x800 ? 'utf8' : 'latin1');
@@ -203,6 +207,9 @@ export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember
     if (p > cdOffset + cdSize) fail('zip_cd');
     if (flags & 0x1) fail('zip_encrypted');
     if (method !== 0 && method !== 8) fail('zip_method');
+    // A Unix symbolic link: made on host 3 (Unix) with S_IFLNK in the mode, the high half of the external
+    // attributes. Nothing is ever extracted, but no member of ours is a link.
+    if (madeBy >>> 8 === 3 && ((external >>> 16) & 0o170000) === 0o120000) fail('zip_symlink');
     if (compressed === 0xffffffff || size === 0xffffffff || local === 0xffffffff) fail('zip64');
     if (UNSAFE_NAME.test(name) || !opts.names(name)) fail('zip_name');
     if (entries.some((e) => e.name === name)) fail('zip_name');
@@ -285,10 +292,26 @@ export const ooxmlNames = (name: string): boolean =>
 // ---------------------------------------------------------------- XML
 
 export const XML_MAX_BYTES = 1024 * 1024;
+/**
+ * Bounds of one XML text before the validator reads it (review S1 of P2b): the
+ * validator holds the attributes of one tag at a time, which maxTag bounds.
+ * Measured on every real text we read (2026-09-30): the longest tag has 643
+ * characters (the root of the NL-4 xl/workbook.xml with its namespaces; the
+ * LU-5 CAP file 71), so 16 KiB leaves room for other producers' roots; the most
+ * tags plus attributes are 669,675 (the NL-4 sheet of 3.8 MB; LU-5 CAP 218), and
+ * 1.5 M is about twice that.
+ */
+export const XML_CAPS = { maxTag: 16 * 1024, maxItems: 1_500_000 } as const;
 
-/** DTDs and entities off: any DOCTYPE or ENTITY declaration is refused before parsing. */
+/**
+ * DTDs and entities off: any DOCTYPE or ENTITY declaration is refused before
+ * parsing; a tag over XML_CAPS.maxTag characters or more tags plus attributes
+ * than XML_CAPS.maxItems are refused before the validator runs.
+ */
 export function checkXmlText(text: string): void {
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) fail('xml_dtd');
+  const over = xmlOverCaps(text, XML_CAPS);
+  if (over !== null) fail(over);
   if (XMLValidator.validate(text) !== true) fail('xml_invalid');
 }
 

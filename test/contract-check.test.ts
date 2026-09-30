@@ -148,11 +148,23 @@ describe('what a drifted provider turns into', () => {
     expect(codes['nl-1-obs-key']).toBe('unknown_series');
   });
 
-  it('a payload that parses but yields no row is no_rows', async () => {
+  it('a registered series under another ProcesType is registered_dropped (review F3)', async () => {
     const { codes } = await run({
       'nl-1-obs-key': nl1((doc) => {
         for (const list of doc.WaarnemingenLijst)
           (list.AquoMetadata as { ProcesType: string }).ProcesType = 'verwachting';
+      }),
+    });
+    expect(codes['nl-1-obs-key']).toBe('registered_dropped');
+  });
+
+  it('a payload that parses but yields no row is no_rows', async () => {
+    const { codes } = await run({
+      'nl-1-obs-key': nl1((doc) => {
+        // Every value a gap (quality code 99): dropped one by one, none withheld.
+        for (const list of doc.WaarnemingenLijst)
+          for (const m of list.MetingenLijst as { WaarnemingMetadata: { Kwaliteitswaardecode: string } }[])
+            m.WaarnemingMetadata.Kwaliteitswaardecode = '99';
       }),
     });
     expect(codes['nl-1-obs-key']).toBe('no_rows');

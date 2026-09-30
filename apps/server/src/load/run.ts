@@ -114,8 +114,13 @@ export async function runLoad(
       }
       if (now.getTime() - lastHealth >= HEALTH_MS) {
         if (now.getTime() - lastOutages >= OUTAGE_MS) {
-          outages = await findOutages(db, cadenceS, now);
+          // A failed scan keeps the last result and waits for its next slot, not the next 10-second tick, and the
+          // health pass still runs (review of P2b). The loop has no test harness: this stays inline.
           lastOutages = now.getTime();
+          outages = await findOutages(db, cadenceS, now).catch((err: unknown) => {
+            logger.error({ code: errorCode(err) }, 'outage scan failed; the last result stands');
+            return outages;
+          });
         }
         await computeHealth(db, {
           cadenceS,

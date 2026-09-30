@@ -45,9 +45,11 @@ const OUTAGE_MIN_S = 1800;
  * batch keeps the time its payload was fetched. `from` and `to` are the fetch
  * times of the last payload before the gap and the first one after it.
  */
-// ponytail: reads a week of ingest_batch per call (no index on fetched_at); the loader calls it every 10
-// minutes, not every pass. When the table passes a few million rows, give it a partial index on
-// (source_id, fetched_at) WHERE parse_status = 'ok' (the per-source scan in computeHealth needs the same).
+// ponytail: each call reads a week of batches through the fetched_at index (ingest_batch_fetched) and buckets
+// them; the loader calls it every 10 minutes, not every pass. The cost grows with the batches of a week (NL-1's
+// observation specs alone fetch about 280 an hour at P2b, some 47,000 a week); if P5 multiplies that, keep a
+// per-source gap summary as batches are written. computeHealth's per-source batch counts read the whole table
+// every minute: the same limit.
 export async function findOutages(
   db: Kysely<DB>,
   cadenceS: ReadonlyMap<string, number>,

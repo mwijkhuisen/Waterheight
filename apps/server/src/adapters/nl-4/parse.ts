@@ -1,4 +1,4 @@
-import { SchemaDrift } from '@rws/core';
+import { SchemaDrift, xmlOverCaps } from '@rws/core';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { z } from 'zod';
 
@@ -8,9 +8,10 @@ import { z } from 'zod';
 // member texts come from the XLSX guard (http/guards.ts readXlsx); this module
 // is pure and checks the XML again, because it is never told where its input
 // came from. Anything it does not know is a SchemaDrift with a fixed code.
-// Workbook text is data: codes, labels and periods are kept verbatim, entity
-// references are decoded by hand (fast-xml-parser runs with entities, trimming
-// and number coercion off), and nothing is interpreted here.
+// Workbook text is data: codes, labels and periods are kept verbatim (a text
+// with a control, bidi or format character is drift), entity references are
+// decoded by hand (fast-xml-parser runs with entities, trimming and number
+// coercion off), and nothing is interpreted here.
 
 export const WORKBOOK = 'xl/workbook.xml';
 export const WORKBOOK_RELS = 'xl/_rels/workbook.xml.rels';
@@ -51,9 +52,25 @@ export const MAX_ROWS = 20_000;
 export const MAX_SHARED_STRINGS = 10_000;
 /** Characters of one shared string (241, an Uitleg note; the longest ParameterLimits cell has 109). Under the CSV field cap of 1 KB. */
 export const MAX_TEXT = 512;
-/** Tags of one member before it is parsed (437,000 in the sheet): bounds the tree fast-xml-parser builds. */
-export const MAX_TAGS = 1_500_000;
+/**
+ * Tags plus attributes of one member before it is parsed (669,675 in the sheet: 437,247 tags and 232,428
+ * attributes), counted as the XML guard counts them (xmlOverCaps): they bound the nodes of the tree
+ * fast-xml-parser builds, a count of tags alone does not. About 2×, not 3×: an attribute flood of 1.5 M items
+ * still parsed inside a 256 MB heap, one of 2 M did not (measured, review S1 of P2b). It binds before
+ * MAX_ROWS: about 14,000 rows of today's shape.
+ */
+export const MAX_ITEMS = 1_500_000;
+/** Characters of one tag, from `<` to `>` (643: the workbook's root with its namespaces); the guard's cap too. */
+export const MAX_TAG = 16 * 1024;
 // Columns: exactly the 17 of the header; a cell right of column Q is drift.
+
+/**
+ * A character no text of ours may hold (review S2 of P2b), decoded or raw: one XML 1.0 does not allow (a
+ * lone surrogate, U+FFFE, U+FFFF), a C0 or C1 control or DEL other than tab and line feed, and the
+ * bidirectional and format controls that reorder or hide text (U+200E, U+200F, U+202A–U+202E, U+2066–U+2069,
+ * U+FEFF). Workbook text reaches a public reference view.
+ */
+export const FORBIDDEN_TEXT = /[[\p{Cc}--[\t\n]]\p{Cs}\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF\uFFFE\uFFFF]/v;
 
 const WORKSHEET_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
 const SHARED_STRINGS_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings';
@@ -78,7 +95,10 @@ const drift = (code: string, path = ''): never => {
   throw new SchemaDrift(code, path);
 };
 
-/** One member as a tree: refused before parsing when it declares a DTD, holds CDATA, is too large or not well-formed. */
+/**
+ * One member as a tree: refused before parsing when it declares a DTD, holds CDATA, has a tag over MAX_TAG
+ * characters or more tags plus attributes than MAX_ITEMS, or is not well-formed.
+ */
 function tree(members: ReadonlyMap<string, string>, path: string): Node {
   const raw = members.get(path);
   if (raw === undefined) return drift('member_missing', path);
@@ -86,10 +106,8 @@ function tree(members: ReadonlyMap<string, string>, path: string): Node {
   const text = raw.replace(/\r\n?/g, '\n');
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) drift('xml_dtd', path);
   if (text.includes('<![CDATA[')) drift('xml_cdata', path);
-  let tags = 0;
-  for (let i = text.indexOf('<'); i >= 0; i = text.indexOf('<', i + 1)) {
-    if (++tags > MAX_TAGS) drift('xml_too_many_tags', path);
-  }
+  const over = xmlOverCaps(text, { maxTag: MAX_TAG, maxItems: MAX_ITEMS });
+  if (over !== null) drift(over, path);
   try {
     if (XMLValidator.validate(text) !== true) throw new Error();
     return PARSER.parse(text) as Node;
@@ -137,14 +155,18 @@ const isXmlChar = (cp: number) =>
   (cp >= 0xe000 && cp <= 0xfffd) ||
   (cp >= 0x10000 && cp <= 0x10ffff);
 
-/** Character data with its references decoded: the five predefined entities and numeric references, nothing else. */
+/**
+ * Character data with its references decoded: the five predefined entities and numeric references, nothing
+ * else. The result holds no FORBIDDEN_TEXT character, whether it came raw or as a reference.
+ */
 function decode(raw: string): string {
-  return raw.replace(REFERENCE, (_, name?: string, dec?: string, hex?: string) => {
+  const text = raw.replace(REFERENCE, (_, name?: string, dec?: string, hex?: string) => {
     if (name !== undefined) return PREDEFINED.get(name) as string;
     const cp = dec !== undefined ? Number(dec) : hex !== undefined ? Number.parseInt(hex, 16) : -1;
     if (!isXmlChar(cp)) drift('xml_reference');
     return String.fromCodePoint(cp);
   });
+  return FORBIDDEN_TEXT.test(text) ? drift('text_char') : text;
 }
 
 /** An attribute's decoded value, or undefined. */

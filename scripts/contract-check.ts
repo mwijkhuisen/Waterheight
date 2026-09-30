@@ -88,8 +88,8 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
     if (withheld !== undefined) return withheld;
     // NL-1's first row (Lobith) is registered: an unknown series means the payload names it otherwise.
     if (spec.source === 'NL-1' && out.unknown > 0) return 'unknown_series';
-    // Parsed, yet nothing came out of a source with registered series (a renamed process type or
-    // compartment drops every value). NL-2 has none: it stores no observation.
+    // Parsed, yet nothing came out of a source with registered series (every value a gap, stale or too old;
+    // a renamed process type or compartment is registered_dropped above). NL-2 has none: it stores no observation.
     return registry.size > 0 && out.obs.length + out.gaugeZeros.length === 0 ? 'no_rows' : 'ok';
   } catch (err) {
     // SchemaDrift.message is `<code>` or `<code> at <sanitised path>`; the wire check below has the last word.

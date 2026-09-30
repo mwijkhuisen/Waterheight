@@ -21,6 +21,8 @@ Only the owner runs it, on the VPS, as root through `sudo` (`rws-drill` is one o
 
 `SIGKILL` and a reboot skip the restart. The container was stopped on purpose, so Docker keeps it stopped (§6).
 
+**What the 2-hour drill does not prove.** After a gap the recorder asks from its last successful fetch minus the 1-hour overlap, where that starts earlier than its default window (`windowFor` in `apps/server/src/capture/specs.ts`). A 2-hour drill shows that the recorder and the loader recover and leave no gap. It cannot show that the stretch works, because the default windows already hold every value of a 2-hour gap: 3 hours for `nl-1-obs-key` and `nl-1-obs-twin`, 6 hours for `nl-1-obs-other` and `de-1-series` (`registry/capture.yaml`). Q7 reads 0 with or without the stretch. To exercise it, the time from the last fetch before the stop to the first after the restart must be longer than the default window: `rws-drill stop-capture 4h` does that for the 3-hour specs; `6h`, the longest the script allows, does it for all four, but for the 6-hour specs only by the minutes from their last fetch to the stop and from the restart to their next fetch, plus the values a provider published up to an hour late (the overlap). KG-091 tracks this.
+
 ## 2. Before you start
 
 1. `rws-drill` is installed: `command -v rws-drill`. The release that brings it also brings changed host files, so `rws-update` pings `update` `/fail` with `host_files_changed` until you run that release's bootstrap, which links it into `/usr/local/bin` (`docs/runbooks/bootstrap.md`, last section).
@@ -106,13 +108,18 @@ It prints one object each for `DE-1` and `NL-1`. The drill **passes** when both 
 
 ### A non-zero count
 
-List the empty buckets of the source inside the window (Q7 of `docs/plan/ARCHITECTURE.md` §8, limited to one source; `<from>` and `<to>` are `outage.from` and `outage.to`). It lists every tier-1 series of the source, also one that had no data at all, which health does not count:
+List the empty buckets of the source inside the window (Q7 of `docs/plan/ARCHITECTURE.md` §8, limited to one source; `<from>` and `<to>` are `outage.from` and `outage.to`). It is the query of `computeHealth` (`apps/server/src/load/health.ts`) with the buckets listed instead of counted: active tier-1 series with role `primary` that share their source's audience, buckets from `from − staleness_limit` to the earlier of `to` and `now − staleness_limit − expected_step` (`now()` stands in for the time of the health pass), and only series that had data in the 24 hours before `from − staleness_limit`:
 
 ```bash
 sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
-  "SET TimeZone = 'UTC'; SELECT s.id, s.provider_key, g.b FROM series s JOIN station st ON st.id = s.station_id AND st.tier = 1
-   CROSS JOIN generate_series(date_bin(s.expected_step, '<from>'::timestamptz, '2000-01-01T00:00:00Z'::timestamptz), '<to>'::timestamptz, s.expected_step) g(b)
-   WHERE s.source_id = 'NL-1' AND NOT EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id AND o.ts >= g.b AND o.ts < g.b + s.expected_step)
+  "SET TimeZone = 'UTC'; SELECT s.id, s.provider_key, g.b FROM series s
+   JOIN source src ON src.id = s.source_id JOIN station st ON st.id = s.station_id AND st.tier = 1
+   CROSS JOIN generate_series(date_bin(s.expected_step, '<from>'::timestamptz - s.staleness_limit, '2000-01-01T00:00:00Z'::timestamptz),
+     LEAST('<to>'::timestamptz, now() - s.staleness_limit - s.expected_step), s.expected_step) g(b)
+   WHERE s.source_id = 'NL-1' AND s.active AND s.role = 'primary' AND COALESCE(s.audience, src.audience) = src.audience
+     AND EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id AND o.ts >= '<from>'::timestamptz - s.staleness_limit - interval '24 hours'
+                   AND o.ts < '<from>'::timestamptz - s.staleness_limit)
+     AND NOT EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id AND o.ts >= g.b AND o.ts < g.b + s.expected_step)
    ORDER BY s.id, g.b"
 ```
 

@@ -243,6 +243,43 @@ for sig in TERM:143 INT:130 HUP:129; do
   ((gone)) || fail "${sig%:*}: the background sleep is still running"
 done
 
+case_ "each signal handler ignores INT, TERM and HUP before it exits, so a second signal cannot skip the restart (review S7)"
+# The window it closes (between a handler's exit and the first line of finish) is too short to hit on purpose:
+# the handlers are checked as written, then two signals at once are sent below.
+for sig in HUP:129 INT:130 TERM:143; do
+  grep -qxF -- "trap 'trap \"\" INT TERM HUP; exit ${sig#*:}' ${sig%:*}" "$bin/rws-drill" ||
+    fail "the ${sig%:*} handler does not ignore INT, TERM and HUP before exit ${sig#*:}"
+done
+[[ $(grep -cE '^trap .*(INT|TERM|HUP)$' "$bin/rws-drill") == 3 ]] || fail "a signal handler other than the three checked"
+
+case_ "two signals at once during the sleep: capture is still started exactly once and the window is printed (review S7)"
+for pair in TERM:INT INT:TERM HUP:INT TERM:HUP; do
+  setup
+  touch "$FIX/sleep-block"
+  set -m
+  "$bin/rws-drill" stop-capture 2h >"$C/out" 2>&1 &
+  pid=$!
+  set +m
+  for _ in $(seq 1 100); do
+    [[ -e $FIX/sleeping ]] && break
+    "$REAL_SLEEP" 0.1
+  done
+  [[ -e $FIX/sleeping ]] || fail "$pair: the drill never reached its sleep"
+  kill -"${pair%:*}" "$pid"
+  kill -"${pair#*:}" "$pid" 2>/dev/null || true
+  for _ in $(seq 1 50); do
+    kill -0 "$pid" 2>/dev/null || break
+    "$REAL_SLEEP" 0.1
+  done
+  kill -0 "$pid" 2>/dev/null && { fail "$pair: the drill is still running 5 s after the signals"; kill -KILL "$pid"; }
+  rc=0
+  { wait "$pid" || rc=$?; } 2>/dev/null
+  [[ $rc == 129 || $rc == 130 || $rc == 143 ]] || fail "$pair: exit $rc, expected 128 + one of the signals"
+  expect_count "^docker compose .* start capture$" "$FIX/calls" 1
+  expect_grep "^outage window \(UTC\):" "$C/out"
+  kill "$(<"$FIX/sleeping")" 2>/dev/null || true
+done
+
 case_ "the lock is held (a deploy or update): refuses with exit 1, no docker call, no sleep, no start"
 setup
 flock "$RWS_LOCK_DIR/rws-deploy.lock" "$REAL_SLEEP" 3 &

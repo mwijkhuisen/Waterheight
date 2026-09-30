@@ -16,7 +16,7 @@ import {
   type ThresholdRow,
   toCsv,
 } from '../../src/adapters/nl-4/normalise.ts';
-import { HEADER, MAX_ROWS, MAX_TAGS, parse, READ } from '../../src/adapters/nl-4/parse.ts';
+import { HEADER, MAX_ITEMS, MAX_ROWS, MAX_TAG, parse, READ } from '../../src/adapters/nl-4/parse.ts';
 import { REGISTRY_DIR, readSeed } from '../../src/capture/specs.ts';
 import { readXlsx, scanCsv } from '../../src/http/guards.ts';
 import { readThresholds } from '../../src/load/thresholds.ts';
@@ -556,11 +556,55 @@ describe('drift: anything unknown is a SchemaDrift with a fixed code', () => {
     ['a text node inside sheetData', () => at(base, SHEET, '</sheetData>', 'text</sheetData>'), 'sheet_data'],
     [
       'too many tags',
-      () => at(base, SHEET, '</sheetData>', `${'<a/>'.repeat(MAX_TAGS)}</sheetData>`),
-      'xml_too_many_tags',
+      () => at(base, SHEET, '</sheetData>', `${'<a/>'.repeat(MAX_ITEMS)}</sheetData>`),
+      'xml_too_many_items',
+    ],
+    [
+      'too many attributes, spread over small tags (review S1)',
+      () => at(base, SHEET, '</sheetData>', `${'<a b="" c="" d=""/>'.repeat(MAX_ITEMS / 4)}</sheetData>`),
+      'xml_too_many_items',
+    ],
+    [
+      'a tag over the length cap (review S1)',
+      () => at(base, SHEET, '<sheetData>', `<sheetData x="${'x'.repeat(MAX_TAG)}">`),
+      'xml_tag_too_long',
+    ],
+    [
+      'a bidi control in an attribute (review S2)',
+      () => at(base, SHEET, '<c r="M2">', '<c r="M2&#x202E;">'),
+      'text_char',
     ],
   ])('%s', (_, members, expected) => {
     expect(code(both(members()))).toBe(expected);
+  });
+
+  // Review S2: each kind of character no text may hold, raw and as a numeric reference. A reference to a
+  // character XML 1.0 does not allow is a bad reference; a raw CR is read as LF (XML 1.0 §2.11).
+  it.each<[string, string | null, string, string]>([
+    ['a C0 control', '\u0001', '&#1;', 'xml_reference'],
+    ['a carriage return', null, '&#13;', 'text_char'],
+    ['DEL', '\u007f', '&#127;', 'text_char'],
+    ['a C1 control (NEL)', '\u0085', '&#x85;', 'text_char'],
+    ['a directional mark (U+200E)', '\u200e', '&#x200E;', 'text_char'],
+    ['a directional mark (U+200F)', '\u200f', '&#8207;', 'text_char'],
+    ['a bidi embedding or override (U+202A)', '\u202a', '&#x202a;', 'text_char'],
+    ['a bidi embedding or override (U+202E)', '\u202e', '&#x202E;', 'text_char'],
+    ['a bidi isolate (U+2066)', '\u2066', '&#8294;', 'text_char'],
+    ['a bidi isolate (U+2069)', '\u2069', '&#x2069;', 'text_char'],
+    ['a byte order mark inside a text', '\ufeff', '&#xFEFF;', 'text_char'],
+    ['a lone surrogate', '\ud800', '&#xD800;', 'xml_reference'],
+    ['U+FFFE', '\ufffe', '&#xFFFE;', 'xml_reference'],
+    ['U+FFFF', '\uffff', '&#65535;', 'xml_reference'],
+  ])('%s in a text is drift, raw and as a reference', (_, raw, ref, refCode) => {
+    const edit = (s: string) => both(at(base, SST, '<t>Groen</t>', `<t>Gr${s}oen</t>`));
+    if (raw !== null) expect(code(edit(raw))).toBe('text_char');
+    expect(code(edit(ref))).toBe(refCode);
+  });
+
+  it('keeps a tab and a line feed, raw or as a reference', () => {
+    for (const s of ['\t', '\n', '&#9;', '&#10;', '&#xA;']) {
+      expect([s, code(both(at(base, SST, '<t>Groen</t>', `<t>Gr${s}oen</t>`)))]).toEqual([s, 'passed']);
+    }
   });
 
   it('a mutated member is either still a workbook or a SchemaDrift, never another error', () => {
@@ -613,13 +657,28 @@ describe('drift: anything unknown is a SchemaDrift with a fixed code', () => {
 
 // ---------------------------------------------------------------- CSV round trip
 
+/**
+ * What a text cell may hold (review S2), stated here on its own: no C0 control but tab and line feed, no DEL
+ * or C1 control, no surrogate half, no U+FFFE or U+FFFF, and none of the bidi and format controls.
+ */
+const allowed = (s: string) =>
+  [...s].every((c) => {
+    const cp = c.codePointAt(0) as number;
+    return (
+      (cp >= 0x20 || cp === 0x9 || cp === 0xa) &&
+      !(cp >= 0x7f && cp <= 0x9f) &&
+      !(cp >= 0xd800 && cp <= 0xdfff) &&
+      !(cp >= 0x202a && cp <= 0x202e) &&
+      !(cp >= 0x2066 && cp <= 0x2069) &&
+      ![0x200e, 0x200f, 0xfeff, 0xfffe, 0xffff].includes(cp)
+    );
+  });
+
 describe('CSV round trip (property)', () => {
   const unit = fc.constantFrom(
     ',',
     '"',
     '\n',
-    '\r',
-    '\r\n',
     '\t',
     '=',
     '+',
@@ -636,9 +695,10 @@ describe('CSV round trip (property)', () => {
     '😀',
     ' ',
   );
+  // Only text a row may hold: the refusal of everything else is its own property below.
   const text = fc.oneof(
     fc.string({ unit, minLength: 1, maxLength: 24 }),
-    fc.string({ unit: 'grapheme', minLength: 1, maxLength: 24 }),
+    fc.string({ unit: 'grapheme', minLength: 1, maxLength: 24 }).filter(allowed),
   );
   const monthDay = fc
     .integer({ min: 1, max: 12 })
@@ -690,6 +750,63 @@ describe('CSV round trip (property)', () => {
       }),
       { numRuns: 300 },
     );
+  });
+
+  it('a text with a control, bidi or format character is refused, written or read back (review S2)', () => {
+    const risky = fc.constantFrom(
+      '\u0001',
+      '\r',
+      '\u001f',
+      '\u007f',
+      '\u0085',
+      '\u009f',
+      '\u200e',
+      '\u200f',
+      '\u202a',
+      '\u202e',
+      '\u2066',
+      '\u2069',
+      '\ufeff',
+      '\ud800',
+      '\udfff',
+      '\ufffe',
+      '\uffff',
+      '\t',
+      '\n',
+      'a',
+      '≥',
+      '\u200b',
+    );
+    const cell = fc.string({
+      unit: fc.oneof(risky, fc.string({ unit: 'binary', minLength: 1, maxLength: 1 })),
+      minLength: 1,
+      maxLength: 8,
+    });
+    const row: ThresholdRow = { ...(rows[0] as ThresholdRow), label: 'L' };
+    fc.assert(
+      fc.property(cell, fc.constantFrom('code', 'description', 'period', 'label'), (s, field) => {
+        let result = 'written';
+        try {
+          toCsv([{ ...row, [field]: s }], header);
+        } catch (err) {
+          expect(err).toBeInstanceOf(SchemaDrift);
+          result = (err as SchemaDrift).message;
+        }
+        expect([s, result]).toEqual([s, allowed(s) ? 'written' : `custom at ${field}`]);
+      }),
+      { numRuns: 500 },
+    );
+    // A hand-edited CSV: the character in the label cell of a written file.
+    const good = toCsv([row], header);
+    expect(readThresholds(good).rows).toEqual([row]);
+    for (const c of ['\u0001', '\u007f', '\u0085', '\u200f', '\u202e', '\u2066', '\ufeff', '\ufffe']) {
+      const edited = good.replace(/,L,/, `,L${c},`);
+      expect(edited).not.toBe(good);
+      expect(() => readThresholds(edited)).toThrow(SchemaDrift);
+      expect(() => fromCsvCells(['c', H, 'Gehele jaar', '101', '1231', `L${c}`, '1', '2', '1', '0'])).toThrow(
+        'custom at label',
+      );
+    }
   });
 
   it('fromCsvCells on arbitrary cells is a row or a SchemaDrift', () => {

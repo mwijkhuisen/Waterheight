@@ -19,7 +19,11 @@ import type { Waarnemingen } from './parse.ts';
 //  - series: `<Locatie.Code>/<Grootheid>/<Hoedanigheid>/<WaardeBepalingsMethode>`,
 //    all four verbatim from the list's own metadata. The registry row is the one
 //    declaration of a series' method (F007, F155 on the Vecht; per station for
-//    Q): a list with another method is a different, unregistered series;
+//    Q): a list with another method is a different, unregistered series. The
+//    key leaves out the instrument (MeetApparaat), the sampling height and the
+//    commissioning body (OpdrachtgevendeInstantie): two sensors under one
+//    method would merge into one series, and an instant they state with
+//    different values is withheld as `conflict` (review N5 of P2b);
 //  - time: ISO 8601 with a fixed +01:00 all year (no DST); any other offset is
 //    drift;
 //  - units: `cm` and `m3/s` (the registry's `m³/s`); factor from the registry;
@@ -32,9 +36,11 @@ import type { Waarnemingen } from './parse.ts';
 //  - status: Ongecontroleerd → qc bit "raw"; Gecontroleerd and Definitief →
 //    "validated";
 //  - only ProcesType `meting`, compartment OW, no Groepering (no high/low-water
-//    extremes), quantities WATHTE and Q. WATHTE in a datum other than NAP (TAW,
-//    MSL, PLAATSLR) is a duplicate and dropped, unless the registry declares
-//    that very series (the Eijsden-grens TAW twin);
+//    extremes), quantities WATHTE and Q. A list that fails one of the first
+//    three under a registered key is withheld as `registered_dropped` (RWS
+//    changed a series we store), any other is only counted. WATHTE in a datum
+//    other than NAP (TAW, MSL, PLAATSLR) is a duplicate and dropped, unless the
+//    registry declares that very series (the Eijsden-grens TAW twin);
 //  - series RWS publishes but that are stale or wrong are dropped by an
 //    explicit list (catalogue §1b, §2.1 pitfall 5, §3.1).
 // A value list is split whenever its metadata changes: the lists of one series
@@ -125,7 +131,12 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
                     ? 'stale_series'
                     : null;
     if (reason !== null) {
-      count(out, reason, n);
+      // A series we store that now arrives under another ProcesType, compartment or grouping is withheld and
+      // reported (review F3 of P2b). Forecasts, tides and HW/LW extremes come under methods of their own
+      // (RWSM-F232, F012, F009, F010, F029), never a registered key, and stay a plain count.
+      const registered =
+        decl !== undefined && (reason === 'process' || reason === 'compartment' || reason === 'grouping');
+      count(out, registered ? 'registered_dropped' : reason, n);
       continue;
     }
     if (decl === undefined) {

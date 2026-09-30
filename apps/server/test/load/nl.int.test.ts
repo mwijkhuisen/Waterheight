@@ -101,7 +101,7 @@ describe('NL-1 observations', () => {
     expect(driel.rows).toEqual([{ n: 0 }]);
   });
 
-  it('the twin is not checked before both sides have data', async () => {
+  it('the twin is not checked before both sides have data: a pair never checked gets no row', async () => {
     expect(await checkTwins(h.load.db, AFTER)).toEqual([]);
     expect(await check()).toEqual([]);
   });
@@ -199,14 +199,17 @@ describe('NL-1 observations', () => {
     await put('nl-1-obs-key', 'nl-1-obs-split.synthetic', 'eijsden.grens/H');
     await tick();
     const { rows } = await h.t.admin.query('SELECT parse_status, n_skipped FROM ingest_batch ORDER BY id DESC LIMIT 1');
-    // One unregistered series (maaseik Q) and the values withheld: unit 2, method 2, quality code 1, conflict 3.
-    expect(rows).toEqual([{ parse_status: 'ok', n_skipped: 9 }]);
+    // One unregistered series (maaseik Q) and the values withheld: unit 2, method 2, quality code 1, conflict 3,
+    // and registered_dropped 4 (the lists under the registered Eijsden NAP key with ProcesType verwachting (2
+    // values), Groepering GETETM2 (1) and compartment BS (1)): 1 + 2 + 2 + 1 + 3 + 4 = 13.
+    expect(rows).toEqual([{ parse_status: 'ok', n_skipped: 13 }]);
     const ids = { source: 'NL-1', spec: 'nl-1-obs-key' };
     expect(h.alerts).toEqual([
       { code: 'unit_mismatch', fields: { ...ids, n: 2 } },
       { code: 'unregistered_method', fields: { ...ids, n: 2 } },
       { code: 'unknown_quality', fields: { ...ids, n: 1 } },
       { code: 'conflict', fields: { ...ids, n: 3 } },
+      { code: 'registered_dropped', fields: { ...ids, n: 4 } },
     ]);
     // The gap, the unreadable code and the conflicting instant did not overwrite what was stored.
     const nap = await h.t.admin.query(
@@ -269,5 +272,55 @@ describe('NL-1 observations', () => {
       ['nl-1-obs-twin', 600],
     ]);
     expect(await tier1(specs)).toEqual({ total: 41, fresh: 0, provider_stale: 1 });
+  });
+
+  // Last, because it loads a day later: the tests above count fresh series at 2026-09-30T17:15Z.
+  it('a checked pair whose values stop aligning fails with 0 aligned, once per hour, and is ok when they align again', async () => {
+    // A day on, nothing either side stated falls in the window that ends at 2026-10-01T16:00Z.
+    const LATER = new Date('2026-10-01T16:10:00Z');
+    expect(await checkTwins(h.load.db, LATER)).toEqual([TWIN]);
+    expect(await checkTwins(h.load.db, LATER)).toEqual([]);
+    const failing = {
+      window_end: new Date('2026-10-01T16:00:00Z'),
+      n_aligned: 0,
+      median_delta: null,
+      max_delta: null,
+      lag_min: null,
+      ok: false,
+    };
+    expect((await check()).at(-1)).toEqual(failing);
+    // The public reader sees it failing, not the last ok check.
+    const api = await h.t.connectAs('rws_api');
+    const latest = await api.query(
+      `SELECT n_aligned, ok FROM ${VIEWS.public.twinCheck} WHERE twin_id = $1 ORDER BY window_end DESC LIMIT 1`,
+      [TWIN],
+    );
+    expect(latest.rows).toEqual([{ n_aligned: 0, ok: false }]);
+    // A pair whose relation the registry sync cleared gets no row, checked before or not.
+    const owner = h.dbAs('rws_migrator', 1);
+    const input = readRegistry();
+    await syncRegistry(owner.db, { ...input, twins: [] });
+    const checks = (await check()).length;
+    expect(await checkTwins(h.load.db, new Date('2026-10-01T17:10:00Z'))).toEqual([]);
+    expect(await check()).toHaveLength(checks);
+    await syncRegistry(owner.db, input);
+    // Both sides again, recorded a day later: the same hour's check turns ok, and that is no breach.
+    const dayLater = (name: string) =>
+      Buffer.from(rawFixture('NL-1', name).body.toString('utf8').replaceAll('2026-09-30T', '2026-10-01T'));
+    const at = new Date('2026-10-01T15:49:46Z');
+    await put('nl-1-obs-key', 'nl-1-obs-key-eijsden-grens-h', 'eijsden.grens/H', {
+      at,
+      body: dayLater('nl-1-obs-key-eijsden-grens-h'),
+    });
+    await put('nl-1-obs-twin', 'nl-1-obs-twin', 'eijsden.grens/H', { at, body: dayLater('nl-1-obs-twin') });
+    expect(await h.loader({ now: LATER }).tick()).toEqual({ lines: 2, loaded: 2 });
+    expect(await checkTwins(h.load.db, LATER)).toEqual([]);
+    expect((await check()).at(-1)).toEqual({
+      ...failing,
+      n_aligned: 17,
+      median_delta: 233,
+      max_delta: 233,
+      ok: true,
+    });
   });
 });

@@ -1,6 +1,6 @@
 import { SchemaDrift } from '@rws/core';
 import { z } from 'zod';
-import { MAX_TEXT, type SheetRow } from './parse.ts';
+import { FORBIDDEN_TEXT, MAX_TEXT, type SheetRow } from './parse.ts';
 
 // NL-4 sheet rows → Waterinfo display classes (catalogue §2.1): one row per
 // class band. These are the legend classes waterinfo.rws.nl colours values
@@ -32,12 +32,15 @@ export const isMonthDay = (md: number): boolean =>
 const DECIMAL = /^-?\d+(?:\.\d+)?$/;
 const canonical = (s: string): boolean => DECIMAL.test(s) && String(Number(s)) === s;
 
-/** Well-formed UTF-16 only, so the text survives the UTF-8 file unchanged. */
+/**
+ * No lone surrogate, so the text survives the UTF-8 file unchanged, and no control, bidi or format character
+ * (FORBIDDEN_TEXT, as the parser), so a hand-edited CSV cannot carry one either.
+ */
 const text = z
   .string()
   .min(1)
   .max(MAX_TEXT)
-  .refine((s) => s.isWellFormed());
+  .refine((s) => !FORBIDDEN_TEXT.test(s));
 const monthDay = z.number().refine(isMonthDay);
 const bound = z.number().refine((n) => !Object.is(n, -0) && canonical(String(n)));
 const rank = z.number().int().min(0).max(32_767);

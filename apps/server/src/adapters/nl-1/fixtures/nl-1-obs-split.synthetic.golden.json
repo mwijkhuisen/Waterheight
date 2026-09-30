@@ -107,12 +107,10 @@
   "too_old": 1,
   "unregistered_method": 2,
   "datum": 2,
-  "process": 2,
+  "registered_dropped": 4,
   "sommatie": 1,
   "excluded": 2,
   "stale_series": 2,
-  "grouping": 1,
-  "compartment": 1,
   "unit_mismatch": 2,
   "quantity": 1
  },

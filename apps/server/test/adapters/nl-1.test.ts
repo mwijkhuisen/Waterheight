@@ -155,12 +155,11 @@ describe('synthetic payloads [U]', () => {
       too_old: 1,
       unregistered_method: 2,
       datum: 2,
-      process: 2,
+      // The verwachting (2 values), GETETM2 (1) and BS (1) lists are under the registered Eijsden NAP key.
+      registered_dropped: 4,
       sommatie: 1,
       excluded: 2,
       stale_series: 2,
-      grouping: 1,
-      compartment: 1,
       unit_mismatch: 2,
       quantity: 1,
     });
@@ -260,15 +259,35 @@ describe('rules', () => {
   });
 
   it('only measurements: a forecast, an astronomical tide, another compartment and a grouped extreme are dropped', () => {
+    // Under a key the registry does not hold (RWS publishes forecasts, tides and extremes under methods of
+    // their own): only counted.
+    const other = (code: string, aquo: Record<string, string>) => normalise(recode(eijsden, code, aquo), base);
     for (const ProcesType of ['verwachting', 'astronomisch']) {
-      expect(normalise(recode(eijsden, 'eijsden.grens', { ProcesType }), base).dropped).toEqual({ process: 17 });
+      expect(other('eijsden.grens', { ProcesType, WaardeBepalingsMethode: 'RWSM-F232' })).toEqual({
+        obs: [],
+        gaugeZeros: [],
+        dropped: { process: 17 },
+        unknown: 0,
+      });
     }
-    expect(normalise(recode(eijsden, 'eijsden.grens', { Compartiment: 'BS' }), base).dropped).toEqual({
-      compartment: 17,
-    });
-    expect(normalise(recode(eijsden, 'eijsden.grens', { Groepering: 'GETETM2' }), base).dropped).toEqual({
+    expect(other('nowhere', { Compartiment: 'BS' }).dropped).toEqual({ compartment: 17 });
+    expect(other('eijsden.grens', { Groepering: 'GETETM2', WaardeBepalingsMethode: 'other:F009' }).dropped).toEqual({
       grouping: 17,
     });
+    // Under a registered key (review F3): a series we store changed its ProcesType, compartment or grouping.
+    // Withheld under registered_dropped, which the loader retains for a replay and alerts on.
+    expect(registry.has(EIJSDEN_NAP)).toBe(true);
+    for (const aquo of [
+      { ProcesType: 'verwachting' },
+      { ProcesType: 'astronomisch' },
+      { Compartiment: 'BS' },
+      { Groepering: 'GETETM2' },
+    ]) {
+      expect([aquo, other('eijsden.grens', aquo)]).toEqual([
+        aquo,
+        { obs: [], gaugeZeros: [], dropped: { registered_dropped: 17 }, unknown: 0 },
+      ]);
+    }
   });
 
   it('a registered series under another method is withheld and reported, never stored under the old key', () => {

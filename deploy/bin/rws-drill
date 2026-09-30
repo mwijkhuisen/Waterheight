@@ -73,9 +73,11 @@ finish() {
   exit "$rc"
 }
 trap finish EXIT
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
+# Each handler ignores further signals before it exits: a second signal in the moment before finish
+# ignores them itself would end the script without the restart (review S7).
+trap 'trap "" INT TERM HUP; exit 129' HUP
+trap 'trap "" INT TERM HUP; exit 130' INT
+trap 'trap "" INT TERM HUP; exit 143' TERM
 
 exec 9>"$(lockfile rws-deploy)"
 flock -n 9 || die "a deploy or update is running (rws-deploy lock): try again when it has finished"

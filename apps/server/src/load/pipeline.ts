@@ -90,10 +90,13 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
 /**
  * The `dropped` codes of values that were withheld, not discarded: we do not
  * store them as they stand, and a registry or parser change could. They count
- * in the batch's n_skipped (so the pruner keeps the object for a replay) and
- * each raises an alert under its own code. `unregistered_method`: a registered
+ * in the batch's n_skipped (so the pruner keeps the object for a replay; the
+ * lists or series the registry does not know add one each) and each raises an
+ * alert under its own code, in a replay too. `unregistered_method`: a registered
  * RWS series arrived under another method code; `unknown_quality`: a quality
- * code we cannot read; `conflict`: two values for one instant.
+ * code we cannot read; `conflict`: two values for one instant;
+ * `registered_dropped`: a registered RWS series arrived under another
+ * ProcesType, compartment or grouping.
  */
 export const RETAINED = [
   'unit_mismatch',
@@ -101,6 +104,7 @@ export const RETAINED = [
   'unregistered_method',
   'unknown_quality',
   'conflict',
+  'registered_dropped',
 ] as const;
 
 /** A payload is tried at most this often; the next pass quarantines it without reading it. */
