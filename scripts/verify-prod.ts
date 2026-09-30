@@ -5,7 +5,11 @@
 //   scripts/verify-prod.sh <domain>              TLS (IPv4 and IPv6), the exact A§12.2
 //                                                headers, noindex, /healthz, both status
 //                                                files, per-spec freshness, owner_specs,
-//                                                and no owner source, spec or host in /status/*
+//                                                the P2a health API (contract, closed
+//                                                parameters, DE-1 tier-1 freshness, loader
+//                                                lag, replay), and no owner source, spec,
+//                                                host, canary or private_basis in /status/*
+//                                                or /api/v1/health*
 //   scripts/verify-prod.sh <domain> --soak       + the 72 h soak: >= 99% per source, the
 //                                                seed coverage, the byte baseline, the drill
 //   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--out FILE]
@@ -23,10 +27,19 @@ import { connect as tlsConnect } from 'node:tls';
 import { loadRegistry, type Registry } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
+import { Health, HealthSources, LAG_DEGRADED_S } from '../packages/contracts/src/index.ts';
 
 const root = join(import.meta.dirname, '..');
 export const CERT_MIN_DAYS = 14;
 export const OWNER_CANARY = '777777.777';
+/** The canaries as PostgreSQL prints them once stored as `real`, and the withheld canary (on NL-1; it appears nowhere). */
+export const OWNER_CANARY_REAL = '777777.75';
+export const WITHHELD_CANARY = '123456.789';
+export const WITHHELD_CANARY_REAL = '123456.79';
+/** The public API's only two routes (A§9.2 health). */
+export const HEALTH_PATHS = ['/api/v1/health', '/api/v1/health/sources'] as const;
+/** P2a criterion: at least this share of a source's tier-1 series is fresh. */
+export const TIER1_MIN = 0.95;
 /** The A§12.2 headers, compared byte for byte; values are read from ARCHITECTURE.md. */
 export const HEADER_NAMES = [
   'Content-Security-Policy',
@@ -263,10 +276,179 @@ export function capacity(
   return { ok: true, markdown: md };
 }
 
+const parseJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
+// ---------------------------------------------------------------- health API (P2a)
+
+type Contract<T> = { safeParse(input: unknown): { success: true; data: T } | { success: false } };
+type ApiRead<T> = { data?: T; problems: string[] };
+
+/**
+ * One answer of a health route: 200, JSON, `Cache-Control: max-age=30` and the
+ * contract. `data` is set whenever the body is the contract document, whatever
+ * else is wrong; a string is a network error.
+ */
+export function readApi<T>(page: Page | string, schema: Contract<T>): ApiRead<T> {
+  if (typeof page === 'string') return { problems: [page] };
+  const problems: string[] = [];
+  if (page.status !== 200) problems.push(`status ${page.status}`);
+  const type = page.headers['content-type'] ?? '';
+  if (!/^application\/json(?:;|$)/.test(type)) problems.push(`content-type ${JSON.stringify(type)}`);
+  const cache = page.headers['cache-control'] ?? '';
+  if (!/(?:^|,\s*)max-age=30(?:\s*,|$)/.test(cache)) problems.push(`cache-control ${JSON.stringify(cache)}`);
+  const parsed = schema.safeParse(parseJson(page.body));
+  if (!parsed.success) problems.push('not the contract document');
+  return parsed.success ? { data: parsed.data, problems } : { problems };
+}
+
+const noDocument = (check: string, what: string, r?: ApiRead<unknown>) =>
+  miss(
+    check,
+    `no valid ${what} document${r === undefined || r.problems.length === 0 ? '' : `: ${r.problems.join('; ')}`}`,
+  );
+
+export function checkHealth(r: ApiRead<Health>): Result {
+  const problems = [...r.problems];
+  if (r.data?.status === 'down')
+    problems.push(`status down (generated_at ${r.data.generated_at ?? 'never'}): the loader is not computing`);
+  return r.data !== undefined && problems.length === 0
+    ? pass('health', `200, the Health contract, max-age=30, status ${r.data.status}`)
+    : miss('health', problems.join('; '));
+}
+
+/** What the api must answer for the routes it does not serve: 400 for a parameter, 404 for the rest of /api/. */
+export const PARAM_CASES: readonly (readonly [string, number])[] = [
+  ['/api/v1/health?x=1', 400],
+  ['/api/v1/health/sources?x=1', 400],
+  ['/api/v1/', 404],
+  ['/api/v1/stations', 404],
+];
+
+export function checkHealthParams(got: Readonly<Record<string, Page | string>>): Result {
+  const problems = PARAM_CASES.flatMap(([path, want]) => {
+    const page = got[path];
+    if (page === undefined || typeof page === 'string') return [`${path}: ${page ?? 'not asked'}`];
+    const bad: string[] = [];
+    if (page.status !== want) bad.push(`status ${page.status}, want ${want}`);
+    else if (want === 400 && page.body !== '{"error":"unknown_parameter"}')
+      bad.push('the body is not the fixed 400 body');
+    return bad.map((b) => `${path}: ${b}`);
+  });
+  return problems.length === 0
+    ? pass('health params', 'a query parameter is 400 on both health paths; /api/v1/ and /api/v1/stations are 404')
+    : miss('health params', problems.join('; '));
+}
+
+const sourceOf = (doc: HealthSources | undefined, id: string) => doc?.sources.find((s) => s.id === id);
+
+export function checkSourceHealth(r: ApiRead<HealthSources>, id = 'DE-1'): Result {
+  const check = `health ${id}`;
+  if (r.data === undefined || r.problems.length > 0) return noDocument(check, 'health/sources', r);
+  const s = sourceOf(r.data, id);
+  if (s === undefined) return miss(check, 'not listed in /api/v1/health/sources');
+  return s.status === 'ok'
+    ? pass(check, `status ok, last fetch ${s.last_fetch_ok ?? 'never'}`)
+    : miss(
+        check,
+        `status ${s.status} (${s.consecutive_failures} failed fetches in a row, ${s.quarantined} quarantined)`,
+      );
+}
+
+/**
+ * P2a: >= 95% of the source's tier-1 series fresh. Series the provider itself
+ * publishes nothing newer for (`provider_stale`, low water) are named, and
+ * never turn a FAIL into a PASS: the owner judges the criterion then.
+ */
+export function checkTier1(doc: HealthSources | undefined, id = 'DE-1'): Result {
+  const check = `tier-1 ${id}`;
+  if (doc === undefined) return noDocument(check, 'health/sources');
+  const t = sourceOf(doc, id)?.tier1;
+  if (t === undefined || t === null || t.total === 0) return miss(check, 'no tier-1 numbers yet');
+  const share = `${t.fresh} of ${t.total} tier-1 series fresh (${((100 * t.fresh) / t.total).toFixed(1)}%)`;
+  if (t.fresh / t.total >= TIER1_MIN) return pass(check, share);
+  const withStale = (t.fresh + t.provider_stale) / t.total >= TIER1_MIN;
+  return miss(
+    check,
+    `${share}, below ${TIER1_MIN * 100}%; ${t.provider_stale} are provider-stale (the provider publishes nothing newer)` +
+      (withStale ? `: with them ${t.fresh + t.provider_stale} of ${t.total}, for the owner to judge at low water` : ''),
+  );
+}
+
+export function checkLoaderLag(doc: Health | undefined): Result {
+  if (doc === undefined) return noDocument('loader lag', 'health');
+  const lag = doc.loader.lag_p95_s;
+  if (lag === null) return miss('loader lag', 'no lag sample yet (no fresh payload was loaded in the last hour)');
+  return lag < LAG_DEGRADED_S
+    ? pass('loader lag', `p95 ${lag.toFixed(1)} s < ${LAG_DEGRADED_S} s`)
+    : miss('loader lag', `p95 ${lag.toFixed(1)} s, not under ${LAG_DEGRADED_S} s`);
+}
+
+/** The loader has caught up (no backlog), DE-1 has partition checksums and nothing of DE-1 is quarantined. */
+export function checkReplay(health: Health | undefined, doc: HealthSources | undefined, id = 'DE-1'): Result {
+  const check = `replay ${id}`;
+  if (health === undefined) return noDocument(check, 'health');
+  if (doc === undefined) return noDocument(check, 'health/sources');
+  const s = sourceOf(doc, id);
+  if (s === undefined) return miss(check, 'not listed in /api/v1/health/sources');
+  const problems: string[] = [];
+  if (health.loader.backlog_bytes > 0)
+    problems.push(`loader backlog ${health.loader.backlog_bytes} bytes in ${health.loader.backlog_files} files`);
+  if (s.partitions.length === 0) problems.push('no partition checksum');
+  if (s.quarantined > 0) {
+    const batches = doc.quarantined_batches
+      .filter((b) => b.source === id)
+      .map((b) => `${b.id} ${b.error ?? 'no code'}`);
+    problems.push(
+      `${s.quarantined} quarantined (newest: ${batches.length === 0 ? 'none listed' : batches.join(', ')})`,
+    );
+  }
+  return problems.length === 0
+    ? pass(
+        check,
+        `no backlog, ${s.partitions.length} partition checksums (${s.partitions.map((p) => p.partition).join(', ')}), none quarantined`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/** Every term that must not appear in a public body: owner sources, specs, hosts and both canaries in both renderings. */
+export function leakTerms(registry: Registry): string[] {
+  return [...new Set([...ownerTerms(registry), OWNER_CANARY_REAL, WITHHELD_CANARY, WITHHELD_CANARY_REAL])].sort();
+}
+
+/** The keys of a JSON document (at any depth) that name an owner-only field. */
+export function ownerKeys(doc: unknown): string[] {
+  if (Array.isArray(doc)) return doc.flatMap(ownerKeys);
+  if (typeof doc !== 'object' || doc === null) return [];
+  return Object.entries(doc).flatMap(([key, value]) => [
+    ...(/private_basis/i.test(key) ? [key] : []),
+    ...ownerKeys(value),
+  ]);
+}
+
+/** No owner term and no owner-only key in any public body (`bodies`: label to text). */
+export function checkOwnerLeak(bodies: Readonly<Record<string, string>>, terms: readonly string[]): Result {
+  const found = Object.entries(bodies).flatMap(([label, body]) => {
+    const hits = [...leaks(body, terms), ...ownerKeys(parseJson(body)).map((k) => `key ${k}`)];
+    return hits.length === 0 ? [] : [`${label}: ${hits.join(', ')}`];
+  });
+  return found.length === 0
+    ? pass(
+        'owner leak',
+        `none of ${terms.length} owner terms and no private_basis key in ${Object.keys(bodies).join(', ')}`,
+      )
+    : miss('owner leak', `found in ${found.join('; ')}`);
+}
+
 // ---------------------------------------------------------------- network
 
 type Net = { resolve?: string; ca?: Buffer };
-type Page = { status: number; headers: Record<string, string | undefined>; body: string };
+export type Page = { status: number; headers: Record<string, string | undefined>; body: string };
 
 function lookupFor(net: Net): LookupFunction | undefined {
   if (net.resolve === undefined) return undefined;
@@ -310,6 +492,10 @@ function get(url: string, net: Net): Promise<Page> {
     req.end();
   });
 }
+
+/** A page, or the error text when the request itself failed: the checks report it instead of crashing. */
+const tryGet = (url: string, net: Net): Promise<Page | string> =>
+  get(url, net).catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
 
 /** TLS on one address: a certificate valid for the domain, days left. */
 function tlsOn(domain: string, address: string, net: Net): Promise<{ days: number } | { error: string }> {
@@ -381,14 +567,6 @@ async function statusFile(domain: string, name: string, net: Net): Promise<{ res
 
 // ---------------------------------------------------------------- main
 
-const parseJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-};
-
 export const CHECKS = [
   'tls ipv4 / tls ipv6: a valid certificate for the domain on every A and AAAA address, >= 14 days left (IPv6 n/a without AAAA or route)',
   'headers / and /en/: 200 and every A§12.2 header byte for byte (CSP from ARCHITECTURE.md), X-Robots-Tag: noindex, no CORS, no Server',
@@ -397,7 +575,13 @@ export const CHECKS = [
   'status capture.json / ops.json: 200, Cache-Control: no-store, the exact contract fields',
   'freshness: every public spec succeeded within 3 × cadence_s',
   'owner_specs: fresh = total',
-  'owner leak: no owner source ID, spec ID, host or the owner canary in any /status/* body',
+  'health: GET /api/v1/health is 200 JSON with Cache-Control max-age=30, the Health contract document, status not down',
+  'health params: ?x=1 on /api/v1/health and /api/v1/health/sources is 400 {"error":"unknown_parameter"}; /api/v1/ and /api/v1/stations are 404',
+  'health DE-1: /api/v1/health/sources is the contract document and lists DE-1 with status ok',
+  'tier-1 DE-1: >= 95% of the tier-1 series are fresh (provider-stale ones are named and never make it a PASS)',
+  'loader lag: loader.lag_p95_s is not null and < 120 s',
+  'replay DE-1: no loader backlog, a partition checksum for DE-1 and no quarantined DE-1 payload',
+  'owner leak: no owner source ID, spec ID, host, canary (777777.777, 777777.75, 123456.789, 123456.79) or private_basis key in any /status/* or /api/v1/health* body',
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
   '--capacity: bytes/day per spec over >= 2 complete days, the year-1 projection vs the disk and the bucket',
 ];
@@ -477,11 +661,33 @@ async function main(argv: string[]): Promise<number> {
       results.push(miss('http', (e as Error).message));
     }
     if (cap?.success) results.push(...checkCapture(cap.data, now));
-    const found = leaks(`${capture.page?.body ?? ''}\n${ops.page?.body ?? ''}`, ownerTerms(registry));
+
+    // The P2a health API (A§9.2). Every request has a fixed path; a network error is a FAIL, never a crash.
+    const api = (path: string) => tryGet(`https://${domain}${path}`, net);
+    const [healthPage, sourcesPage] = [await api(HEALTH_PATHS[0]), await api(HEALTH_PATHS[1])];
+    const health = readApi(healthPage, Health);
+    const sources = readApi(sourcesPage, HealthSources);
+    const probes: Record<string, Page | string> = {};
+    for (const [path] of PARAM_CASES) probes[path] = await api(path);
     results.push(
-      found.length === 0
-        ? pass('owner leak', `none of ${ownerTerms(registry).length} owner terms in /status/*`)
-        : miss('owner leak', `found in /status/*: ${found.join(', ')}`),
+      checkHealth(health),
+      checkHealthParams(probes),
+      checkSourceHealth(sources),
+      checkTier1(sources.data),
+      checkLoaderLag(health.data),
+      checkReplay(health.data, sources.data),
+    );
+
+    const body = (page: Page | string | undefined) => (typeof page === 'object' ? page.body : '');
+    results.push(
+      checkOwnerLeak(
+        {
+          '/status/*': `${capture.page?.body ?? ''}\n${ops.page?.body ?? ''}`,
+          [HEALTH_PATHS[0]]: body(healthPage),
+          [HEALTH_PATHS[1]]: body(sourcesPage),
+        },
+        leakTerms(registry),
+      ),
     );
   } else if (mode === 'soak') {
     if (cap?.success && opsDoc?.success) {

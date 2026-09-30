@@ -10,19 +10,23 @@ import { startRecorder } from './capture/scheduler.ts';
 import { seedRecords, startSeeds } from './capture/seeds.ts';
 import { loadRegistry } from './capture/specs.ts';
 import { removeStaleTmp, StateStore } from './capture/state.ts';
+import { dbConfig, openDb } from './db/pool.ts';
 import { healthy, startHeartbeat } from './heartbeat.ts';
 import { Client } from './http/client.ts';
+import { runMigrate } from './load/migrate.ts';
+import { runLoad, runReplay } from './load/run.ts';
 import { runWatchdog } from './watchdog/watchdog.ts';
 
 /** Roles of the single server image (A§4); the command picks one. */
-export const ROLES = ['capture', 'load', 'publish', 'api', 'replay', 'watchdog', 'healthcheck'] as const;
+export const ROLES = ['capture', 'load', 'publish', 'api', 'replay', 'migrate', 'watchdog', 'healthcheck'] as const;
 export type Role = (typeof ROLES)[number];
 
 export const EXIT_NOT_IMPLEMENTED = 2;
 export const EXIT_USAGE = 64;
 export { EXIT_CONFIG };
 
-const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; watchdog takes --once or --dry-run)`;
+const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; watchdog takes --once or --dry-run;
+  replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--dry-run])`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
 const RWS_LIMIT = 400;
 
@@ -153,9 +157,40 @@ async function capture(
 }
 
 /**
- * Resolves with an exit code; `api`, `capture` and `watchdog` keep running
- * until SIGINT or SIGTERM. `load`, `publish` and `replay` are stubs until
- * their phase.
+ * The api role: `/healthz` and the two health routes. It logs in as `rws_api`
+ * with a pool of 4; without database settings it still starts (`/healthz` must
+ * answer, and the health routes answer 503).
+ */
+function api(env: Readonly<Record<string, string | undefined>>, listen: Listen, log: (line: string) => void) {
+  const logger = pino({ base: { role: 'api' } });
+  const cfg = dbConfig(env, 'rws_api');
+  if (typeof cfg === 'string') log(`api: no database (${cfg}): the health routes answer 503`);
+  const pool =
+    typeof cfg === 'string'
+      ? undefined
+      : openDb(cfg, { max: 4, onError: (code) => logger.error({ code }, 'pool error') });
+  return new Promise<number>((resolve) => {
+    const stopHeartbeat = startHeartbeat();
+    const app = createApp({ log: logger, ...(pool === undefined ? {} : { db: pool.db }) });
+    const server = serve({ fetch: app.fetch, ...listen }, (info) => {
+      log(`api listening on ${info.address}:${info.port}`);
+    });
+    const stop = () =>
+      server.close(() => {
+        stopHeartbeat();
+        const done = () => resolve(0);
+        if (pool === undefined) done();
+        else void pool.close().then(done, done);
+      });
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+  });
+}
+
+/**
+ * Resolves with an exit code; `api`, `capture`, `load` and `watchdog` keep
+ * running until SIGINT or SIGTERM; `migrate` and `replay` are one-shot.
+ * `publish` is a stub until its phase (P9).
  */
 export function run(
   argv: readonly string[],
@@ -166,11 +201,15 @@ export function run(
   const flag = rest.length === 1 ? rest[0] : undefined;
   const dry = (role === 'capture' || role === 'watchdog') && flag === '--dry-run';
   const once = role === 'watchdog' && flag === '--once';
-  if (role === undefined || (rest.length > 0 && !dry && !once) || !(ROLES as readonly string[]).includes(role)) {
+  const takesArgs = dry || once || role === 'replay';
+  if (role === undefined || (rest.length > 0 && !takesArgs) || !(ROLES as readonly string[]).includes(role)) {
     log(USAGE);
     return Promise.resolve(EXIT_USAGE);
   }
   if (role === 'healthcheck') return Promise.resolve(healthy() ? 0 : 1);
+  if (role === 'migrate') return runMigrate(env, log);
+  if (role === 'load') return runLoad(env, log);
+  if (role === 'replay') return runReplay(rest, env, log);
   if (role === 'watchdog') return runWatchdog(env, dry ? 'dry-run' : once ? 'once' : 'loop', log);
   if (role === 'capture') {
     if (dry) {
@@ -192,19 +231,7 @@ export function run(
     log(listen);
     return Promise.resolve(EXIT_USAGE);
   }
-  return new Promise((resolve) => {
-    const stopHeartbeat = startHeartbeat();
-    const server = serve({ fetch: createApp().fetch, ...listen }, (info) => {
-      log(`api listening on ${info.address}:${info.port}`);
-    });
-    const stop = () =>
-      server.close(() => {
-        stopHeartbeat();
-        resolve(0);
-      });
-    process.once('SIGINT', stop);
-    process.once('SIGTERM', stop);
-  });
+  return api(env, listen, log);
 }
 
 if (import.meta.main) {

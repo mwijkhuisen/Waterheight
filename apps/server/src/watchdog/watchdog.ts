@@ -1,5 +1,6 @@
 import type { LookupFunction } from 'node:net';
 import { connect as tlsConnect } from 'node:tls';
+import { HEALTH_MAX_AGE_MS, Health, LAG_DEGRADED_S } from '@rws/contracts';
 import { type Logger, pino } from 'pino';
 import { z } from 'zod';
 import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from '../capture/env.ts';
@@ -12,9 +13,11 @@ import { Client } from '../http/client.ts';
 // The watchdog role (A§4, A§11.3; issue #16 P1b). Every 5 minutes it probes our
 // own public site the way a visitor reaches it (public DNS, verified TLS,
 // the SSRF-guarded client; egress only to our domain and hc-ping.com) and pings
-// its three healthchecks: `watchdog` (site up, capture.json and ops.json fresh,
-// last backup < 2 h), `cert` (certificate valid for >= 14 days) and `disk`
-// (disk < 75%). A failure ping carries fixed codes only.
+// its four healthchecks: `watchdog` (site up, capture.json and ops.json fresh,
+// last backup < 2 h), `cert` (certificate valid for >= 14 days), `disk`
+// (disk < 75%) and, from P2a, `load` (the loader computes: /api/v1/health is the
+// contract document, not down, fresh, no quarantine, lag < 2 min). A failure
+// ping carries fixed codes only.
 
 export const CYCLE_MS = 5 * 60_000;
 export const CAPTURE_MAX_AGE_MS = 5 * 60_000;
@@ -41,8 +44,12 @@ export type Probe = {
   /** Whole days until the served certificate expires, or 'tls' when no valid certificate was served. */
   certDaysLeft(): Promise<number | 'tls'>;
 };
-/** Failure codes per check; an empty list is a success. */
-export type Verdicts = { watchdog: string[]; cert: string[]; disk: string[] };
+/**
+ * Failure codes per check; an empty list is a success. `load` is null while the
+ * release with /api/v1/health is not deployed (the site answers 404): that check
+ * is not pinged at all.
+ */
+export type Verdicts = { watchdog: string[]; cert: string[]; disk: string[]; load: string[] | null };
 
 export const CHECKS = [
   'watchdog: GET /healthz answers 200',
@@ -51,6 +58,7 @@ export const CHECKS = [
   `watchdog: the last backup finished < ${BACKUP_MAX_AGE_MS / 3_600_000} h ago`,
   `cert: the certificate is valid and expires in >= ${CERT_MIN_DAYS} days`,
   `disk: /srv/rws is < ${DISK_MAX_PCT}% full (disk_pct of a fresh ops.json)`,
+  `load: /api/v1/health is the contract document, not down, generated < ${HEALTH_MAX_AGE_MS / 60_000} min ago, no quarantined payload, loader lag p95 < ${LAG_DEGRADED_S} s (404 = not deployed yet: no load ping)`,
 ];
 
 const ageMs = (at: string, now: Date) => now.getTime() - Date.parse(at);
@@ -66,15 +74,37 @@ function json<T>(got: Got, schema: z.ZodType<T>): T | string {
   }
 }
 
+/**
+ * The `load` check (P2a): the loader's state as /api/v1/health reports it. A 404
+ * means the release that serves the endpoint is not deployed yet: null, no ping
+ * and no failure of `watchdog`, so P1b production keeps working until then.
+ * Every other miss is a fixed code, never the response text.
+ */
+function loadCodes(got: Got, now: Date): string[] | null {
+  if ('error' in got) return ['load_unreachable'];
+  if (got.status === 404) return null;
+  if (got.status !== 200) return ['load_unreachable'];
+  const health = json(got, Health);
+  if (typeof health === 'string') return ['load_contract'];
+  const codes: string[] = [];
+  if (health.status === 'down') codes.push('load_down');
+  if (health.generated_at === null || ageMs(health.generated_at, now) > HEALTH_MAX_AGE_MS) codes.push('load_stale');
+  if (health.quarantined > 0) codes.push('load_quarantined');
+  if (health.loader.lag_p95_s !== null && health.loader.lag_p95_s >= LAG_DEGRADED_S) codes.push('load_lag');
+  return codes;
+}
+
 /** One watchdog cycle: pure given the probe and the clock. */
 export async function check(probe: Probe, now: Date): Promise<Verdicts> {
-  const v: Verdicts = { watchdog: [], cert: [], disk: [] };
-  const [healthz, capture, ops, days] = await Promise.all([
+  const v: Verdicts = { watchdog: [], cert: [], disk: [], load: null };
+  const [healthz, capture, ops, days, health] = await Promise.all([
     probe.get('/healthz'),
     probe.get('/status/capture.json'),
     probe.get('/status/ops.json'),
     probe.certDaysLeft(),
+    probe.get('/api/v1/health'),
   ]);
+  v.load = loadCodes(health, now);
   if ('error' in healthz) v.watchdog.push(`healthz_${healthz.error}`);
   else if (healthz.status !== 200) v.watchdog.push(`healthz_${healthz.status}`);
 
@@ -142,10 +172,11 @@ export function liveProbe(
   };
 }
 
-/** Pings each check: success, or /fail with its failure codes. */
+/** Pings each check: success, or /fail with its failure codes; a check that does not apply yet (null) is skipped. */
 export async function report(v: Verdicts, pinger: Pick<Pinger, 'ping'>): Promise<void> {
-  for (const slug of ['watchdog', 'cert', 'disk'] as const) {
+  for (const slug of ['watchdog', 'cert', 'disk', 'load'] as const) {
     const codes = v[slug];
+    if (codes === null) continue;
     await (codes.length === 0 ? pinger.ping(slug, 'success') : pinger.ping(slug, 'fail', codes.join(' ')));
   }
 }
@@ -177,12 +208,12 @@ export async function runWatchdog(
   const cycle = async (): Promise<Verdicts> => {
     const v = await check(probe, new Date());
     await report(v, pinger);
-    logger.info({ watchdog: v.watchdog, cert: v.cert, disk: v.disk }, 'watchdog cycle');
+    logger.info({ watchdog: v.watchdog, cert: v.cert, disk: v.disk, load: v.load }, 'watchdog cycle');
     return v;
   };
   if (mode === 'once') {
     const v = await cycle();
-    return v.watchdog.length + v.cert.length + v.disk.length === 0 ? 0 : 1;
+    return v.watchdog.length + v.cert.length + v.disk.length + (v.load?.length ?? 0) === 0 ? 0 : 1;
   }
   // A cycle never rejects: an unexpected error is logged by name only and the next cycle runs.
   const safeCycle = () =>
