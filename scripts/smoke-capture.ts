@@ -1,12 +1,14 @@
 // Opt-in fixture recorder (issue #16, P1a constraints). One request per spec
-// (its first variant), at most 30 per run, through the real SSRF-guarded
-// client with a polite contact User-Agent. It refuses to run under CI.
+// (its first variant, or the registry row that `--row <variant>` names), at
+// most 30 per run, through the real SSRF-guarded client with a polite contact
+// User-Agent. It refuses to run under CI.
 //
-//   node scripts/smoke-capture.ts --contact <e-mail> --info-url <https url> --spec <id> [--spec <id> …]
+//   node scripts/smoke-capture.ts --contact <e-mail> --info-url <https url> --spec <id> [--row <variant>] [--spec <id> …]
 //   node scripts/smoke-capture.ts --contact … --info-url … --discover <SOURCE-ID> <allowlisted https url>
 //
 // Every payload goes to the git-ignored .smoke/ first. A public spec's payload
-// is also written to apps/server/src/adapters/<id>/fixtures/<spec>.raw (JSON
+// is also written to apps/server/src/adapters/<id>/fixtures/<spec>.raw (with
+// --row: <spec>-<variant as a slug>.raw, so it never replaces the spec's own; JSON
 // and CSV over 1 MB trimmed, keeping their structure) with a .meta.json. An
 // owner-audience payload never leaves .smoke/: only a synthetic copy is
 // committed (invariant 11). --discover writes to .smoke/ only.
@@ -14,25 +16,28 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { redactUrl } from '../apps/server/src/archive/manifest.ts';
 import { validate } from '../apps/server/src/archive/validity.ts';
-import { ADAPTERS } from '../apps/server/src/capture/adapters.ts';
+import { requestFor } from '../apps/server/src/capture/adapters.ts';
 import { userAgent } from '../apps/server/src/capture/env.ts';
-import { baseRequest, loadRegistry, windowFor } from '../apps/server/src/capture/specs.ts';
+import { loadRegistry, variantKey } from '../apps/server/src/capture/specs.ts';
 import { Client, METADATA_TIMEOUT_MS, TOTAL_TIMEOUT_MS } from '../apps/server/src/http/client.ts';
-import type { Req } from '../apps/server/src/http/types.ts';
 
 const MAX_REQUESTS = 30;
 const TRIM_BYTES = 1024 * 1024;
 const root = join(import.meta.dirname, '..');
 
 function args(argv: string[]) {
-  const specs: string[] = [];
+  const specs: { id: string; row?: string }[] = [];
   let contact = '';
   let infoUrl = '';
   let discover: [string, string] | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
-    if (a === '--spec') specs.push(argv[++i] ?? '');
-    else if (a === '--contact') contact = argv[++i] ?? '';
+    if (a === '--spec') specs.push({ id: argv[++i] ?? '' });
+    else if (a === '--row') {
+      const last = specs.at(-1);
+      if (last === undefined) throw new Error('--row follows the --spec it belongs to');
+      last.row = argv[++i] ?? '';
+    } else if (a === '--contact') contact = argv[++i] ?? '';
     else if (a === '--info-url') infoUrl = argv[++i] ?? '';
     else if (a === '--discover') discover = [argv[++i] ?? '', argv[++i] ?? ''];
     else throw new Error(`unknown argument ${a}`);
@@ -106,20 +111,27 @@ async function main(): Promise<number> {
     return 64;
   }
   let failed = 0;
-  for (const id of specs) {
-    const spec = registry.specs.find((s) => s.id === id);
+  for (const { id: specId, row: want } of specs) {
+    const spec = registry.specs.find((s) => s.id === specId);
     if (spec === undefined) {
-      console.error(`${id}: no such spec`);
+      console.error(`${specId}: no such spec`);
       failed += 1;
       continue;
     }
-    const row = spec.rows[0] ?? {};
-    let req: Req = baseRequest(spec, row);
-    const adapter = ADAPTERS[spec.source];
-    if (spec.request.build && adapter?.build) {
-      req = adapter.build({ req, row, now, window: windowFor(spec, now, undefined), params: spec.params });
+    // Only ever one of the registry's own rows (invariant 1): --row picks it by its variant key.
+    const row =
+      want === undefined ? (spec.rows[0] ?? {}) : spec.rows.find((r) => variantKey(r, spec.variants?.key) === want);
+    if (row === undefined) {
+      console.error(`${specId}: no registry row ${want}`);
+      failed += 1;
+      continue;
     }
-    const r = await client.fetch(spec.source, req, {
+    const slug = (want ?? '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const id = want === undefined ? specId : `${specId}-${slug}`;
+    const r = await client.fetch(spec.source, requestFor(spec, row, now), {
       maxBytes: spec.max_bytes,
       timeoutMs: spec.timeout === 'metadata' ? METADATA_TIMEOUT_MS : TOTAL_TIMEOUT_MS,
     });
@@ -132,7 +144,8 @@ async function main(): Promise<number> {
     const v = await validate(spec.validity, res.status, res.body);
     writeFileSync(join(root, '.smoke', `${id}.raw`), res.body);
     const meta = {
-      spec: id,
+      spec: specId,
+      ...(want === undefined ? {} : { variant: want }),
       source: spec.source,
       synthetic: false,
       recorded_at: now.toISOString().replace(/\.\d{3}Z$/, 'Z'),

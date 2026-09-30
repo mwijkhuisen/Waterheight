@@ -11,7 +11,8 @@ import { adapter as lu5 } from '../adapters/lu-5/capture.ts';
 import { adapter as nl1 } from '../adapters/nl-1/capture.ts';
 import { adapter as nl2 } from '../adapters/nl-2/capture.ts';
 import { adapter as nl4 } from '../adapters/nl-4/capture.ts';
-import type { Adapter } from '../http/types.ts';
+import type { Adapter, Req, Row } from '../http/types.ts';
+import { baseRequest, type LoadedSpec, windowFor } from './specs.ts';
 
 // Static map from source ID to its capture adapter (no computed imports:
 // scripts/check-boundaries.ts). Sources without code are fully declarative.
@@ -30,3 +31,14 @@ export const ADAPTERS: Readonly<Record<string, Adapter>> = {
   'CH-3': ch3,
   'CH-4': ch4,
 };
+
+/**
+ * The request of one registry row as a first run builds it (no capture state,
+ * so the default window): what the smoke recorder and the contract check send.
+ */
+export function requestFor(spec: LoadedSpec, row: Row, now: Date): Req {
+  const req = baseRequest(spec, row);
+  const adapter = ADAPTERS[spec.source];
+  if (!spec.request.build || adapter?.build === undefined) return req;
+  return adapter.build({ req, row, now, window: windowFor(spec, now, undefined), params: spec.params });
+}
