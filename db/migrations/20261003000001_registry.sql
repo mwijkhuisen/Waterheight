@@ -33,10 +33,11 @@ CREATE TABLE source (
   lic_api            boolean NOT NULL,
   lic_bulk_export    boolean NOT NULL,
   lic_history_export boolean NOT NULL,
-  -- The provider's own public window. Rows older than now() - history_window
-  -- need lic_history_export; '0' with the flag off hides everything (fail closed).
-  -- Hours and smaller only (the registry sync writes hours): a day or month part
-  -- would make now() - history_window depend on the session's time zone.
+  -- The provider's own public window. Rows older than statement_timestamp() -
+  -- history_window need lic_history_export; '0' with the flag off hides
+  -- everything (fail closed). Hours and smaller only (the registry sync writes
+  -- hours): a day or month part would make the cutoff depend on the session's
+  -- time zone.
   history_window     interval NOT NULL DEFAULT '0'
                      CHECK (history_window >= '0' AND EXTRACT(YEAR FROM history_window) = 0
                             AND EXTRACT(MONTH FROM history_window) = 0 AND EXTRACT(DAY FROM history_window) = 0),

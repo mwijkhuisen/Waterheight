@@ -160,6 +160,26 @@ describe.each([
   });
 });
 
+// Review R3-3: a DO block is one statement whose inner statements each take a new snapshot while
+// statement_timestamp() stands still (a sleep, then a read past the history cutoff); it cannot run at all.
+// Review R3-4: a session could fill the shared lock table with advisory locks. Every signature is revoked.
+describe.each([
+  ['rws_api', () => api],
+  ['rws_publish', () => publish],
+  ['rws_owner_api', () => owner],
+  ['rws_load', () => load],
+] as const)('%s runs no procedural code and takes no advisory lock', (_role, client) => {
+  it('a DO block and every advisory-lock function are refused (review R3-3, R3-4)', async () => {
+    expect(await sqlState(client(), 'DO $$ BEGIN PERFORM 1; END $$')).toBe('42501');
+    for (const call of [
+      'SELECT pg_advisory_lock(1)',
+      'SELECT pg_try_advisory_lock(1)',
+      'SELECT pg_advisory_xact_lock_shared(1, 2)',
+    ])
+      expect(await sqlState(client(), call), call).toBe('42501');
+  });
+});
+
 describe('rws_owner_api (owner reader)', () => {
   it('is read-only with a 2 s statement timeout and is not the object owner', async () => {
     const { rows } = await owner.query(
@@ -217,7 +237,7 @@ describe('rws_owner_api (owner reader)', () => {
 });
 
 describe('rws_load (the loader)', () => {
-  it('writes its own tables and creates partitions only through the function', async () => {
+  it('writes its own tables and creates partitions only through the function (plpgsql, which it may not use itself)', async () => {
     expect(await sqlState(load, "SELECT ensure_partitions(now(), now() + interval '1 day')")).toBe('ok');
     expect(await sqlState(load, 'CREATE TABLE x (i int)')).toBe('42501');
     expect(

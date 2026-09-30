@@ -38,8 +38,9 @@ ALTER ROLE rws_migrator SET role = 'rws_owner';
 
 -- The readers: read-only sessions, 2 s per statement (A§6, A§9.2). Both are
 -- session defaults, which a session can change: the grants (views only), the
--- connection limits, the revoked large-object and WAL-message functions below
--- and temp_file_limit are what hold against a hostile reader session.
+-- connection limits, the revoked large-object, WAL-message and advisory-lock
+-- functions and plpgsql below and temp_file_limit are what hold against a
+-- hostile reader session.
 ALTER ROLE rws_publish   SET default_transaction_read_only = on;
 ALTER ROLE rws_publish   SET statement_timeout = '2s';
 ALTER ROLE rws_api       SET default_transaction_read_only = on;
@@ -69,6 +70,25 @@ REVOKE EXECUTE ON FUNCTION
   pg_catalog.pg_logical_emit_message(boolean, text, text, boolean),
   pg_catalog.pg_logical_emit_message(boolean, text, bytea, boolean)
   FROM PUBLIC;
+-- No DO block (review R3-3): one statement whose inner statements each take a
+-- new snapshot while statement_timestamp() stands still. The migrations create
+-- ensure_partitions as rws_owner; calling a function needs no language privilege.
+REVOKE USAGE ON LANGUAGE plpgsql FROM PUBLIC;
+GRANT USAGE ON LANGUAGE plpgsql TO rws_owner;
+-- Nor an advisory lock, of which nothing of ours takes any (review R3-4): a
+-- session could fill the shared lock table. Every signature this server has.
+DO $$
+DECLARE
+  f pg_catalog.regprocedure;
+BEGIN
+  FOR f IN SELECT p.oid FROM pg_catalog.pg_proc p
+           WHERE p.pronamespace = 'pg_catalog'::pg_catalog.regnamespace
+             AND (p.proname LIKE 'pg\_advisory\_%' OR p.proname LIKE 'pg\_try\_advisory\_%')
+  LOOP
+    EXECUTE pg_catalog.format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC', f);
+  END LOOP;
+END
+$$;
 
 -- pg_dump: reads everything, writes nothing.
 -- rws_backup is NOINHERIT like every role here; this one membership is inherited on purpose.
