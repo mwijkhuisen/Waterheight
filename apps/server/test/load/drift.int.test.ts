@@ -872,6 +872,124 @@ describe('a unit switch (review C7) and what the pruner keeps (review C10)', () 
     );
   });
 
+  it('after the registry fix, a replay from an instant corrects what was fetched since the switch and leaves the older payloads of that day alone (review R3-1)', async () => {
+    const h2 = await harness();
+    try {
+      const basin = recorded('de-1-basin');
+      const withUnit = (unit: string) => {
+        const doc = JSON.parse(basin.body.toString('utf8')) as {
+          uuid: string;
+          timeseries: { shortname: string; unit: string }[];
+        }[];
+        for (const station of doc)
+          for (const t of station.timeseries) if (`${station.uuid}/${t.shortname}` === EMMERICH_W) t.unit = unit;
+        return Buffer.from(JSON.stringify(doc));
+      };
+      const put = (spec: 'de-1-basin' | 'de-1-series', at: string, body: Buffer) =>
+        writePayload(h2.archive, {
+          source: 'DE-1',
+          spec,
+          variant: spec === 'de-1-series' ? EMMERICH_W : '',
+          at: new Date(at),
+          body,
+          url: spec === 'de-1-series' ? SERIES_URL(EMMERICH_W) : basin.url,
+        });
+      // Emmerich W is in cm until the provider switches it to m+NN at 07:00 (the basin calls at 05:00 and 07:15
+      // show it). The series payload of 06:00 is in cm; the one of 07:10 in metres, stored as centimetres.
+      const pre = [
+        await put('de-1-basin', '2026-09-29T05:00:00Z', withUnit('cm')),
+        await put(
+          'de-1-series',
+          '2026-09-29T06:00:00Z',
+          measurements(
+            ['2026-09-29T02:15:00+02:00', 500],
+            ['2026-09-29T05:00:00+02:00', 505],
+            ['2026-09-29T08:00:00+02:00', 510],
+          ),
+        ),
+      ];
+      await put(
+        'de-1-series',
+        '2026-09-29T07:10:00Z',
+        measurements(['2026-09-29T08:00:00+02:00', 5.1], ['2026-09-29T09:10:00+02:00', 7.6]),
+      );
+      await put('de-1-basin', '2026-09-29T07:15:00Z', withUnit('m+NN'));
+      await put('de-1-series', '2026-09-29T08:10:00Z', measurements(['2026-09-29T10:10:00+02:00', 7.7]));
+      await h2.loader({ now: new Date('2026-09-29T12:00:00Z') }).tick();
+      // The registry fix, deployed (here by hand); the next basin call clears the mismatch list.
+      const id = await h2.seriesId(EMMERICH_W);
+      await h2.t.admin.query(
+        "UPDATE series SET native_unit = 'm+NN', to_canonical = 100, value_kind = 'level', datum = 'NN' WHERE id = $1",
+        [id],
+      );
+      await put('de-1-basin', '2026-09-29T09:00:00Z', withUnit('m+NN'));
+      await h2.loader({ now: new Date('2026-09-29T12:00:00Z') }).tick();
+      const stored = async () =>
+        (
+          await h2.t.admin.query(
+            "SELECT to_char(ts, 'HH24:MI') AS ts, value FROM obs WHERE series_id = $1 ORDER BY ts",
+            [id],
+          )
+        ).rows;
+      expect(await stored()).toEqual([
+        { ts: '00:15', value: 500 },
+        { ts: '03:00', value: 505 },
+        { ts: '06:00', value: 5.1 },
+        { ts: '07:10', value: 7.6 },
+      ]);
+      const preBatches = () =>
+        h2.t.admin.query('SELECT * FROM ingest_batch WHERE archive_key = ANY($1) ORDER BY id', [pre.map((l) => l.key)]);
+      const before = (await preBatches()).rows;
+      expect(before.map((b) => b.n_skipped)).toEqual([0, 0]);
+
+      // replay.md §3: the last basin call with the old unit was 05:00; of the series payloads after it, the one of
+      // 06:00 still shows centimetres and the one of 07:10 metres: replay from 07:10.
+      const alerts: string[] = [];
+      const result = await replay(
+        { db: h2.load.db, reader: h2.reader, alert: (code) => alerts.push(code), now: () => new Date() },
+        { source: 'DE-1', spec: null, from: '2026-09-29T07:10:00Z', to: '2026-09-29', dryRun: false },
+      );
+      expect(result).toEqual({ lines: 4, loaded: 4, quarantined: 0, skipped: 0, n_new: 1, n_changed: 2 });
+      expect(alerts).toEqual([]);
+      expect(await stored()).toEqual([
+        { ts: '00:15', value: 500 },
+        { ts: '03:00', value: 505 },
+        { ts: '06:00', value: 510 },
+        { ts: '07:10', value: 760 },
+        { ts: '08:10', value: 770 },
+      ]);
+      // The payloads fetched before the instant were not read at all: their batches are as the tail left them.
+      expect((await preBatches()).rows).toEqual(before);
+
+      // A replay that starts too early reads the 06:00 payload with the new factor; the right values are the
+      // old_value of its revisions (replay.md §3).
+      const early = new Date();
+      await replay(
+        { db: h2.load.db, reader: h2.reader, alert: () => {}, now: () => new Date() },
+        { source: 'DE-1', spec: 'de-1-series', from: '2026-09-29T06:00:00Z', to: '2026-09-29', dryRun: false },
+      );
+      expect(await stored()).toMatchObject([{ value: 50000 }, { value: 50500 }, { value: 510 }, {}, {}]);
+      const revisions = await h2.t.admin.query(
+        "SELECT to_char(ts, 'HH24:MI') AS ts, old_value FROM obs_revision WHERE series_id = $1 AND changed_at >= $2 ORDER BY ts",
+        [id, early],
+      );
+      expect(revisions.rows).toEqual([
+        { ts: '00:15', old_value: 500 },
+        { ts: '03:00', old_value: 505 },
+      ]);
+
+      // A fetch that ended at midnight is filed under the day it started, and still counts from the instant.
+      await put('de-1-series', '2026-09-30T00:00:00Z', measurements(['2026-09-30T01:45:00+02:00', 7.8]));
+      const count = await replay(
+        { db: h2.load.db, reader: h2.reader, alert: () => {}, now: () => new Date() },
+        { source: 'DE-1', spec: null, from: '2026-09-30T00:00:00Z', to: '2026-09-30', dryRun: true },
+      );
+      expect(count.lines).toBe(1);
+    } finally {
+      await h2.close();
+    }
+  });
+
   it('a payload with a series the registry does not know keeps its object until a replay after the registry gains it (review R2-8)', async () => {
     const unknown = '00000000-0000-4000-8000-000000000001/W';
     // Its own day, so that the replay below reads nothing else.

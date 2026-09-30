@@ -188,6 +188,7 @@ describe('registry sync', () => {
       ['PT90M', '01:30:00'],
       ['PT1.5S', '00:00:01.5'],
       ['PT0S', '00:00:00'],
+      ['P366D', '8784:00:00'],
       ['P0D', '00:00:00'],
     ] as const) {
       await syncRegistry(owner.db, { ...input, sources: windowed(window) });
@@ -198,6 +199,11 @@ describe('registry sync', () => {
     for (const window of ['P1M', 'P1Y', 'P1Y2D'])
       await expect(syncRegistry(owner.db, { ...input, sources: windowed(window) })).rejects.toThrow(
         /CH-4: history_window .* no fixed length/,
+      );
+    // Nor is a window over 366 days: it would pass the CHECK and make every reader query on the source fail (R3-5).
+    for (const window of ['P367D', 'P53W', 'PT8784H1S', 'PT31622401S', 'P2500000D', 'PT99999999999999999999S'])
+      await expect(syncRegistry(owner.db, { ...input, sources: windowed(window) })).rejects.toThrow(
+        /CH-4: history_window .* longer than 366 days/,
       );
     expect(await stored()).toBe('00:00:00');
     await syncRegistry(owner.db, input);

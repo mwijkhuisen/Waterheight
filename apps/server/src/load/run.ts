@@ -6,7 +6,7 @@ import type { DB } from '../db/generated.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { startHeartbeat } from '../heartbeat.ts';
 import { computeHealth, LagWindow, storeChecksums } from './health.ts';
-import { Loader, nothingToLoad } from './pipeline.ts';
+import { type Backlog, Loader, nothingToLoad } from './pipeline.ts';
 import { parsedOkIn, prune } from './prune.ts';
 import { reconcileRollups } from './reconcile.ts';
 import { parseReplayArgs, replay } from './replay.ts';
@@ -28,12 +28,13 @@ const HEALTH_MS = 60_000;
 const NIGHTLY_HOUR = 2;
 
 /**
- * Whether the nightly jobs are due at `now`: once per UTC day, after 02:00.
+ * Whether the nightly jobs are due at `now`: once per UTC day, after 02:00,
+ * with nothing left to load (a torn last line does not count, review N7).
  * The day is marked in app_meta when they start, so a restart does not run them
  * again, and a failing step waits for the next day (partition-maintenance.md §4).
  */
-export async function claimNightly(db: Kysely<DB>, now: Date): Promise<boolean> {
-  if (now.getUTCHours() < NIGHTLY_HOUR) return false;
+export async function claimNightly(db: Kysely<DB>, now: Date, backlog: Backlog): Promise<boolean> {
+  if (!nothingToLoad(backlog) || now.getUTCHours() < NIGHTLY_HOUR) return false;
   const day = now.toISOString().slice(0, 10);
   if ((await readMeta<{ day: string }>(db, 'nightly'))?.day === day) return false;
   await writeMeta(db, 'nightly', { day });
@@ -108,7 +109,7 @@ export async function runLoad(
         await computeHealth(db, { cadenceS, lagP95Ms: lag.p95(now), backlog, badLines: loader.badLines, now });
         lastHealth = now.getTime();
       }
-      if (idle && (await claimNightly(db, now))) {
+      if (await claimNightly(db, now, backlog)) {
         await sql`SELECT ensure_partitions(now(), now() + interval '3 months')`.execute(db);
         const { repaired } = await reconcileRollups(db, now);
         if (repaired > 0) logger.error({ alert: 'rollup_mismatch', repaired }, 'alert');

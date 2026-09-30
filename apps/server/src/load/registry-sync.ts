@@ -60,7 +60,9 @@ const ROLE_PRECEDENCE = { primary: 0, twin: 1, mirror: 2 } as const;
  * The window as hours and smaller only (source.history_window has a CHECK):
  * `now() - '30 days'` depends on the session's time zone, `now() - '720 hours'`
  * does not. A week is 168 hours and a zero duration is '0'; a month or year
- * cannot be written as hours and fails the sync.
+ * cannot be written as hours and fails the sync, and so does a window over 366
+ * days (a huge one would pass the CHECK and make every reader query on the
+ * source fail, review R3-5).
  */
 function historyWindow(s: Source): string {
   const w = s.history_window;
@@ -73,6 +75,9 @@ function historyWindow(s: Source): string {
   }
   const [, weeks = '0', days = '0', hours = '0', minutes = '0', seconds = '0'] = m;
   const h = Number(weeks) * 168 + Number(days) * 24 + Number(hours);
+  if (h * 3600 + Number(minutes) * 60 + Number(seconds.replace(',', '.')) > 366 * 86_400) {
+    throw new RegistryError(`${s.id}: history_window ${w} is longer than 366 days`);
+  }
   return `${h} hours ${minutes} minutes ${seconds.replace(',', '.')} seconds`;
 }
 

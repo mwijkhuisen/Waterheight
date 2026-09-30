@@ -6,17 +6,22 @@ import { LOAD_ADAPTERS, type LoadAdapter } from './adapters.ts';
 import { type Alert, Loader, parseLine } from './pipeline.ts';
 import { lock } from './store.ts';
 
-// `replay --source X [--spec Y] --from YYYY-MM-DD --to YYYY-MM-DD [--dry-run]`
+// `replay --source X [--spec Y] --from YYYY-MM-DD[THH:MM:SSZ] --to YYYY-MM-DD [--dry-run]`
 // (A§7.4 step 5): re-parses archived payloads through the loader's own code
 // path. It never moves the load cursor and never touches the fetch health. A
 // payload that loads exactly as before writes nothing; a quarantined one that
-// now parses becomes `ok`.
+// now parses becomes `ok`. With an instant as `--from`, lines fetched before it
+// are skipped (after a unit change, review R3-1: replay.md §3).
 
 export type ReplayArgs = { source: string; spec: string | null; from: string; to: string; dryRun: boolean };
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const isDay = (v: string) =>
   DAY.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v);
+/** A UTC instant to the second, `Z` only. */
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+const isInstant = (v: string) =>
+  INSTANT.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString() === `${v.slice(0, 19)}.000Z`;
 
 /** The arguments, or a usage error. Every value is checked against a fixed pattern AND the adapter table. */
 export function parseReplayArgs(argv: readonly string[]): ReplayArgs | string {
@@ -42,7 +47,9 @@ export function parseReplayArgs(argv: readonly string[]): ReplayArgs | string {
   if (spec !== undefined && (!SPEC_RE.test(spec) || !Object.hasOwn(LOAD_ADAPTERS[source]?.specs ?? {}, spec))) {
     return 'replay: --spec is not a spec of that adapter';
   }
-  if (!isDay(from) || !isDay(to) || from > to) return 'replay: --from and --to are UTC days (YYYY-MM-DD), from ≤ to';
+  if (!(isDay(from) || isInstant(from)) || !isDay(to) || from.slice(0, 10) > to) {
+    return 'replay: --from is a UTC day (YYYY-MM-DD) or instant (YYYY-MM-DDTHH:MM:SSZ), --to a UTC day, from ≤ to';
+  }
   return { source, spec: spec ?? null, from, to, dryRun: out.dryRun };
 }
 
@@ -67,9 +74,13 @@ export async function replay(
 ): Promise<ReplayResult> {
   const loader = new Loader(deps);
   const result: ReplayResult = { lines: 0, loaded: 0, quarantined: 0, skipped: 0, n_new: 0, n_changed: 0 };
+  // An instant is compared with the fetch time the batch records (the fetch's end); a line is filed under the day
+  // its fetch started, so the file of the day before is read too.
+  const since = isInstant(args.from) ? Date.parse(args.from) : null;
+  const first = since === null ? args.from : new Date(since - 86_400_000).toISOString().slice(0, 10);
   for (const { file } of await deps.reader.manifests()) {
     const day = file.slice(0, 10);
-    if (day < args.from || day > args.to) continue;
+    if (day < first || day > args.to) continue;
     let offset = 0;
     for (;;) {
       const chunk = await deps.reader.lines(file, offset);
@@ -82,9 +93,10 @@ export async function replay(
         if (line.error !== null || (line.status !== null && line.status >= 400)) continue;
         const spec = loader.specOf(line.source, line.spec);
         if (spec === undefined) continue;
+        const fetchedAt = new Date(line.fetched_at.end ?? line.fetched_at.start);
+        if (since !== null && fetchedAt.getTime() < since) continue;
         result.lines += 1;
         if (args.dryRun) continue;
-        const fetchedAt = new Date(line.fetched_at.end ?? line.fetched_at.start);
         const outcome = await loader.payload(line, spec, fetchedAt, (work) =>
           deps.db.transaction().execute(async (tx) => {
             await lock(tx);

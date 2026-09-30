@@ -266,15 +266,22 @@ async function missingBuckets(now: Date): Promise<number> {
 }
 
 describe('the nightly jobs', () => {
+  const idle = { files: 0, bytes: 0, age_s: null };
   it('run once per UTC day after 02:00, and a restart does not run them again (the day is kept in app_meta)', async () => {
     const at = (iso: string) => new Date(iso);
-    expect(await claimNightly(h.load.db, at('2026-10-05T01:59:59Z'))).toBe(false);
-    expect(await claimNightly(h.load.db, at('2026-10-05T02:00:00Z'))).toBe(true);
-    expect(await claimNightly(h.load.db, at('2026-10-05T02:10:00Z'))).toBe(false);
+    expect(await claimNightly(h.load.db, at('2026-10-05T01:59:59Z'), idle)).toBe(false);
+    expect(await claimNightly(h.load.db, at('2026-10-05T02:00:00Z'), idle)).toBe(true);
+    expect(await claimNightly(h.load.db, at('2026-10-05T02:10:00Z'), idle)).toBe(false);
     // Another process (a restart): nothing in memory, the database remembers.
     const again = h.dbAs('rws_load', 1);
-    expect(await claimNightly(again.db, at('2026-10-05T23:59:00Z'))).toBe(false);
-    expect(await claimNightly(again.db, at('2026-10-06T02:00:00Z'))).toBe(true);
+    expect(await claimNightly(again.db, at('2026-10-05T23:59:00Z'), idle)).toBe(false);
+    expect(await claimNightly(again.db, at('2026-10-06T02:00:00Z'), idle)).toBe(true);
+  });
+
+  it('wait while a whole manifest line is unconsumed; a torn last line does not hold them up (review N7, R3-9)', async () => {
+    const at = new Date('2026-10-07T02:00:00Z');
+    expect(await claimNightly(h.load.db, at, { files: 1, bytes: 812, age_s: 30 })).toBe(false);
+    expect(await claimNightly(h.load.db, at, { files: 1, bytes: 40, age_s: null })).toBe(true);
   });
 });
 

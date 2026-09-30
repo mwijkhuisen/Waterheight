@@ -26,7 +26,7 @@ export const EXIT_USAGE = 64;
 export { EXIT_CONFIG };
 
 const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; watchdog takes --once or --dry-run;
-  replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--dry-run])`;
+  replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD[THH:MM:SSZ]> --to <YYYY-MM-DD> [--dry-run])`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
 const RWS_LIMIT = 400;
 
