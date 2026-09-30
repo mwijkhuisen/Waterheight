@@ -1,4 +1,5 @@
 import type { Normalised, Registry } from '@rws/core';
+import { type Drift, driftReport } from '../adapters/de-1/drift.ts';
 import { normaliseBasin, normaliseMeta, normaliseSeries } from '../adapters/de-1/normalise.ts';
 import { parseMeasurements, parseStations } from '../adapters/de-1/parse.ts';
 
@@ -22,6 +23,11 @@ export type SpecLoader = {
   needsVariant: boolean;
   /** Strict parse, then pure normalise. Throws SchemaDrift on a payload it does not recognise. */
   run: (body: Uint8Array, ctx: LoadContext) => Normalised;
+  /**
+   * For a payload that lists the provider's stations: what it says that the
+   * registry does not (the loader runs it once a day and only reports).
+   */
+  drift?: (body: Uint8Array, registry: Registry) => Drift;
 };
 
 export type LoadAdapter = {
@@ -36,7 +42,12 @@ export const LOAD_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
   'DE-1': {
     version: 1,
     specs: {
-      'de-1-basin': { maxBytes: 4 * MIB, needsVariant: false, run: (b, c) => normaliseBasin(parseStations(b), c) },
+      'de-1-basin': {
+        maxBytes: 4 * MIB,
+        needsVariant: false,
+        run: (b, c) => normaliseBasin(parseStations(b), c),
+        drift: (b, registry) => driftReport(registry, parseStations(b)),
+      },
       'de-1-series': { maxBytes: 8 * MIB, needsVariant: true, run: (b, c) => normaliseSeries(parseMeasurements(b), c) },
       'de-1-meta': { maxBytes: 16 * MIB, needsVariant: false, run: (b, c) => normaliseMeta(parseStations(b), c) },
     },

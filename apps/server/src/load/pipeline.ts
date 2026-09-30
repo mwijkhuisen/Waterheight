@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { type Normalised, SchemaDrift } from '@rws/core';
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { ManifestLine } from '../archive/manifest.ts';
 import { ArchiveError, type ArchiveReader, type RawLine } from '../archive/reader.ts';
 import type { DB } from '../db/generated.ts';
@@ -56,6 +56,8 @@ export class Loader {
   private readonly deps: LoadDeps;
   private readonly series = new Map<string, Map<string, SeriesRow>>();
   private readonly attempts = new Map<string, number>();
+  /** The UTC day of the last registry drift report per source and spec. */
+  private readonly driftDay = new Map<string, string>();
   private readonly adapters: Readonly<Record<string, LoadAdapter>>;
   badLines = 0;
 
@@ -317,6 +319,8 @@ export class Loader {
     });
 
     const ids = { source: line.source, spec: line.spec };
+    // Tail only (a replay reports nothing new), once per UTC day.
+    if (health && spec.drift) await this.reportDrift(line, spec.drift, body, registry, fetchedAt);
     if ((result.dropped.unit_mismatch ?? 0) > 0)
       this.deps.alert('unit_mismatch', { ...ids, n: result.dropped.unit_mismatch ?? 0 });
     if ((result.dropped.unknown_zero_unit ?? 0) > 0)
@@ -327,6 +331,39 @@ export class Loader {
     }
     if (result.unknown > 0) this.deps.info?.('series not in the registry', { ...ids, n: result.unknown });
     return outcome;
+  }
+  /**
+   * The registry drift report (issue #17): stored in app_meta for the owner
+   * and the runbook, alerted when a registered series vanished or changed its
+   * unit or step. It never changes the registry and never fails a load.
+   */
+  private async reportDrift(
+    line: ManifestLine,
+    drift: NonNullable<SpecLoader['drift']>,
+    body: Uint8Array,
+    registry: Map<string, SeriesRow>,
+    fetchedAt: Date,
+  ): Promise<void> {
+    const day = fetchedAt.toISOString().slice(0, 10);
+    const slot = `${line.source}/${line.spec}`;
+    if (this.driftDay.get(slot) === day) return;
+    this.driftDay.set(slot, day);
+    try {
+      const report = drift(body, registry);
+      const value = JSON.stringify({ at: fetchedAt.toISOString(), spec: line.spec, ...report });
+      await sql`
+        INSERT INTO app_meta (key, value, updated_at) VALUES (${`registry_drift:${line.source}`}, ${value}::jsonb, now())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`.execute(this.deps.db);
+      const counts = {
+        unregistered: report.unregistered.length,
+        vanished: report.vanished.length,
+        changed: report.changed.length,
+      };
+      if (counts.vanished + counts.changed > 0) this.deps.alert('registry_drift', { source: line.source, ...counts });
+      else if (counts.unregistered > 0) this.deps.info?.('registry drift', { source: line.source, ...counts });
+    } catch {
+      // A report, not a load: try again tomorrow.
+    }
   }
 }
 

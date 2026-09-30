@@ -4,7 +4,7 @@ import { createTestDb } from '../apps/server/test/db/testdb.ts';
 // The Q1 benchmark of issue #17: "all series at T" on the synthetic seed of
 // 3,000 series × 60 days × 15 min (17.3 M rows) must run in < 50 ms. It runs
 // exactly as production does: a real rws_api login (read-only, 2 s statement
-// timeout), through the public views of audience.ts, with the A§8 Q1 text.
+// timeout), through the public at-T function of audience.ts (A§8 Q1).
 //
 //   DATABASE_URL=<superuser of a throw-away PostgreSQL 18> node scripts/bench-q1.ts [series] [days]
 

@@ -67,6 +67,13 @@ describe('schema drift', () => {
     expect(n).toEqual([{ n: 0 }]);
   });
 
+  it('the loader stores the registry drift report of the day: nothing differs from the recorded basin call', async () => {
+    const { rows } = await h.t.admin.query("SELECT value FROM app_meta WHERE key = 'registry_drift:DE-1'");
+    expect(rows).toEqual([
+      { value: { at: '2026-09-29T13:43:26.000Z', spec: 'de-1-basin', unregistered: [], vanished: [], changed: [] } },
+    ]);
+  });
+
   it('a replay with the same parser quarantines it again without a second batch row', async () => {
     const before = await h.count('ingest_batch');
     const result = await replay(
