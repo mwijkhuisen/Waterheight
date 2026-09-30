@@ -1,0 +1,12 @@
+{
+  "spec": "de-1-series",
+  "source": "DE-1",
+  "synthetic": true,
+  "recorded_at": "2026-10-25T03:40:00Z",
+  "status": 200,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/9598e4cb-0849-401e-bba0-689234b27644/W/measurements.json?start=PT6H",
+  "bytes": 1113,
+  "trimmed": false,
+  "note": "[U] Hand-made: the fall-back night of 2026-10-25 (+02:00 then +01:00, the local hour 02:00-02:59 twice), a 99999 sentinel, a repeated timestamp and a future timestamp. Replaced by the real payloads of that night in P5."
+}

@@ -1,0 +1,12 @@
+{
+  "spec": "de-1-series",
+  "source": "DE-1",
+  "synthetic": false,
+  "recorded_at": "2026-09-30T07:17:45Z",
+  "status": 200,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/1d26e504-7f9e-480a-b52c-5932be6549ab/W/measurements.json?start=P31D",
+  "bytes": 216556,
+  "trimmed": false,
+  "note": "The 31-day seed window (KAUB W): crosses a month boundary; holds negative W."
+}

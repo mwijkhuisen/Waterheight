@@ -1,0 +1,12 @@
+{
+  "spec": "de-1-series",
+  "source": "DE-1",
+  "synthetic": false,
+  "recorded_at": "2026-09-30T07:17:42Z",
+  "status": 200,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/b6c6d5c8-e2d5-4469-8dd8-fa972ef7eaea/Q/measurements.json?start=PT6H",
+  "bytes": 1704,
+  "trimmed": false,
+  "note": "A discharge series (MAXAU Q)."
+}
