@@ -37,17 +37,19 @@ export async function writeMeta(db: Kysely<DB>, key: string, value: unknown): Pr
 }
 
 /**
- * The tail's attempt at one payload (S1): `n` passes began, and `code` says
- * how the last one ended: `load_crashed` while it runs (so a process that dies
- * mid-payload leaves exactly that), else the fixed code of a failure that
- * belongs to the payload. Written in its own transaction before the payload is
- * touched; asynchronous commit is enough for a counter the database server
- * keeps even when our process dies.
+ * The tail's attempt at one payload line (S1), named by its position in the
+ * manifest (file and end offset), which is what the tail retries: `n` passes
+ * began, and `code` says how the last one ended: `load_crashed` while it runs
+ * (so a process that dies mid-payload leaves exactly that), else the fixed
+ * code of a failure that belongs to the payload. Written in its own
+ * transaction before the payload is touched; asynchronous commit is enough for
+ * a counter the database server keeps even when our process dies. The commit
+ * that ends the line's pass (loaded or set aside) clears it (`null`).
  */
-export type Attempt = { key: string; n: number; code: string };
+export type Attempt = { file: string; end: number; n: number; code: string };
 const ATTEMPT = 'load_attempt';
 
-export const readAttempt = (db: Kysely<DB>) => readMeta<Attempt>(db, ATTEMPT);
+export const readAttempt = (db: Kysely<DB>) => readMeta<Attempt | null>(db, ATTEMPT);
 
 export async function writeAttempt(db: Kysely<DB>, attempt: Attempt): Promise<void> {
   await db.transaction().execute(async (tx) => {
@@ -55,6 +57,9 @@ export async function writeAttempt(db: Kysely<DB>, attempt: Attempt): Promise<vo
     await writeMeta(tx, ATTEMPT, attempt);
   });
 }
+
+/** Inside the transaction that ends a line's pass. */
+export const clearAttempt = (tx: Tx) => writeMeta(tx, ATTEMPT, null);
 
 /**
  * The series keys of a source whose unit its newest unit-stating payload (the
@@ -148,10 +153,14 @@ type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience'>;
  *  - the input is `real[]`, so a value is compared as the type it is stored in;
  *  - a timestamp that occurs twice in one payload keeps its last value;
  *  - newest fetch wins: the stored row of a point is what the payload with the
- *    greatest (fetched_at, batch id) among all that stated it says, whatever
- *    order they arrive in. A point is written only when the batch that holds it
- *    is older than this one; the batch itself (a replay) or a newer one leaves
- *    it alone, so a replay writes nothing and a late payload reverts nothing;
+ *    greatest (fetched_at, batch id) among all that stated it says. A point is
+ *    written when the batch that holds it is older than this one, or is this
+ *    very batch and the value or qc differs (a replay after a fix of the
+ *    parser, the normaliser or a registry factor corrects what its own batch
+ *    stored). A newer batch's row is never touched, so a late payload reverts
+ *    nothing, and a replay with an unchanged parser writes nothing. Payloads
+ *    fetched in the same instant are ordered by batch id, which follows the
+ *    order a database first loaded them (KG-066);
  *  - a newer fetch that states the same value and qc is a confirmation: the
  *    row's batch_id moves to it (and obs_latest's, for the latest row), with no
  *    revision, no rollup and no count, so a late payload fetched in between
@@ -197,17 +206,18 @@ export async function upsertObs(
            WITH ORDINALITY AS i(series_id, ts, value, qc, ord)
       ORDER BY i.series_id, i.ts, i.ord DESC
     ),
-    older AS (
+    wins AS (
       SELECT i.series_id, i.ts, i.value, i.qc
       FROM incoming i
       LEFT JOIN obs o ON o.series_id = i.series_id AND o.ts = i.ts
       LEFT JOIN ingest_batch b ON b.id = o.batch_id
       WHERE o.series_id IS NULL OR b.id IS NULL
          OR (b.fetched_at, b.id) < (${fetchedAt}::timestamptz, ${batch}::bigint)
+         OR (b.id = ${batch}::bigint AND (o.value, o.qc) IS DISTINCT FROM (i.value, i.qc))
     ),
     up AS (
       INSERT INTO obs AS o (series_id, ts, value, qc, batch_id)
-      SELECT series_id, ts, value, qc, ${batch}::bigint FROM older
+      SELECT series_id, ts, value, qc, ${batch}::bigint FROM wins
       ON CONFLICT (series_id, ts) DO UPDATE
         SET value = EXCLUDED.value, qc = EXCLUDED.qc, batch_id = EXCLUDED.batch_id
       RETURNING old.series_id AS old_series, old.value AS old_value, old.qc AS old_qc,
@@ -278,8 +288,12 @@ export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'older_ignored';
 /**
  * The current gauge zero (PNP) of a series. Only the current one is kept up
  * to date (the history of zeros is P7): a newer validFrom closes the stored
- * range and opens a new one, the same validFrom with another value corrects
- * it, an older validFrom is reported and changes nothing. Changes of series
+ * range and opens a new one, an older validFrom is reported and changes
+ * nothing. The same validFrom follows the observations' newest fetch wins: a
+ * newer payload with another value corrects it and one with the same value
+ * becomes its holder (a confirmation, not counted), the holding payload itself
+ * corrects it when its value now differs (a replay after a fix), and an older
+ * payload (a late line, a partial replay) leaves it alone. Changes of series
  * that do not share their source's audience are made but not counted.
  */
 export async function applyGaugeZeros(
@@ -287,6 +301,7 @@ export async function applyGaugeZeros(
   zeros: readonly GaugeZeroRow[],
   ids: ReadonlyMap<string, Series>,
   batch: string,
+  fetchedAt: Date,
 ): Promise<Partial<Record<ZeroChange, number>>> {
   const changes: Partial<Record<ZeroChange, number>> = {};
   if (zeros.length === 0) return changes;
@@ -294,10 +309,20 @@ export async function applyGaugeZeros(
     const series = ids.get(z.series);
     return series === undefined || series.off ? [] : [{ ...z, id: series.id, counted: series.sameAudience }];
   });
-  const { rows } = await sql<{ series_id: number; value_m: number; datum: string; valid_from: Date | null }>`
-    SELECT series_id, value_m, datum, lower(valid) AS valid_from
-    FROM gauge_zero WHERE upper_inf(valid) AND series_id = ANY(${wanted.map((w) => w.id)}::int[])`.execute(tx);
+  const { rows } = await sql<{
+    series_id: number;
+    value_m: number;
+    datum: string;
+    valid_from: Date | null;
+    mine: boolean;
+    older: boolean;
+  }>`
+    SELECT g.series_id, g.value_m, g.datum, lower(g.valid) AS valid_from, g.batch_id = ${batch}::bigint AS mine,
+           b.id IS NULL OR (b.fetched_at, b.id) < (${fetchedAt}::timestamptz, ${batch}::bigint) AS older
+    FROM gauge_zero g LEFT JOIN ingest_batch b ON b.id = g.batch_id
+    WHERE upper_inf(g.valid) AND g.series_id = ANY(${wanted.map((w) => w.id)}::int[])`.execute(tx);
   const current = new Map(rows.map((r) => [r.series_id, { ...r, valid_from: r.valid_from?.toISOString() ?? null }]));
+  const confirmed: number[] = [];
   for (const z of wanted) {
     const note = (c: ZeroChange) => {
       if (z.counted) changes[c] = (changes[c] ?? 0) + 1;
@@ -309,7 +334,11 @@ export async function applyGaugeZeros(
                 VALUES (${z.id}, ${z.value_m}, ${z.datum}, tstzrange(${from}, NULL), ${batch}::bigint)`.execute(tx);
       note('new');
     } else if (now.valid_from === z.valid_from) {
-      if (now.value_m === z.value_m && now.datum === z.datum) continue;
+      if (!now.mine && !now.older) continue;
+      if (now.value_m === z.value_m && now.datum === z.datum) {
+        if (now.older) confirmed.push(z.id);
+        continue;
+      }
       await sql`UPDATE gauge_zero SET value_m = ${z.value_m}, datum = ${z.datum}, batch_id = ${batch}::bigint
                 WHERE series_id = ${z.id} AND upper_inf(valid)`.execute(tx);
       note('corrected');
@@ -322,6 +351,10 @@ export async function applyGaugeZeros(
     } else {
       note('older_ignored');
     }
+  }
+  if (confirmed.length > 0) {
+    await sql`UPDATE gauge_zero SET batch_id = ${batch}::bigint
+              WHERE upper_inf(valid) AND series_id = ANY(${confirmed}::int[])`.execute(tx);
   }
   return changes;
 }

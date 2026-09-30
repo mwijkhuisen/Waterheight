@@ -12,6 +12,7 @@ import {
   applyFetchHealth,
   applyGaugeZeros,
   type BatchInput,
+  clearAttempt,
   closeBatch,
   cursors,
   emptyFold,
@@ -75,8 +76,16 @@ export type TickOptions = {
   stop?: () => boolean;
 };
 
-/** Manifest bytes not consumed yet, and how old the oldest unconsumed line is (null when there is none). */
+/**
+ * Manifest bytes not consumed yet, and how old the oldest whole unconsumed
+ * manifest line is. A damaged line is skipped (the next tick steps over it),
+ * and a torn last line is not whole: `age_s` is null when no whole line is
+ * left to load, whatever `bytes` still reports.
+ */
 export type Backlog = { files: number; bytes: number; age_s: number | null };
+
+/** Nothing left to load: the gate of the checksums and the nightly jobs (a torn last line never blocks them). */
+export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
 
 /** A payload is tried at most this often; the next pass quarantines it without reading it. */
 export const MAX_TRIES = 2;
@@ -87,8 +96,10 @@ export class Loader {
   private readonly deps: LoadDeps;
   private readonly series = new Map<string, Map<string, SeriesRow>>();
   private readonly units = new Map<string, Set<string>>();
-  /** What app_meta `load_attempt` says, once read. */
+  /** What app_meta `load_attempt` says, once read (null: no line in flight). */
   private attempt: Attempt | undefined | null;
+  /** An attempt record the database did not take (it was down): the next pass writes it first. */
+  private owed: Attempt | undefined;
   /** The UTC day of the last registry drift report per source and spec. */
   private readonly driftDay = new Map<string, string>();
   /** The highest end offset of a damaged line counted per file: a line re-read after a stall is not counted again. */
@@ -140,6 +151,10 @@ export class Loader {
     let loaded = 0;
     const cut = () => opts.stop?.() === true || (opts.until !== undefined && this.deps.now().getTime() >= opts.until);
     try {
+      if (this.owed !== undefined) {
+        await writeAttempt(this.deps.db, this.owed);
+        this.owed = undefined;
+      }
       const done = await cursors(this.deps.db);
       for (const { file, size } of await this.deps.reader.manifests()) {
         let offset = done.get(file) ?? 0;
@@ -186,17 +201,25 @@ export class Loader {
     return { files, bytes, age_s: oldest === null ? null : Math.max(0, Math.round((now.getTime() - oldest) / 1000)) };
   }
 
-  /** When the first whole unconsumed line of a file was fetched; a line or file that cannot be read counts from its day. */
+  /**
+   * When the first whole unconsumed manifest line of a file was fetched: a
+   * damaged line is skipped, and null means no whole line is left (only an
+   * unfinished last line, which the recorder is still writing, or tore). A
+   * file that cannot be read counts from its day.
+   */
   private async firstLineAt(file: string, offset: number): Promise<number | null> {
-    const day = Date.parse(`${file.slice(0, 10)}T00:00:00Z`);
     try {
-      const [first] = await this.deps.reader.lines(file, offset, 64 * 1024);
-      // Only an unfinished last line: the recorder is still writing it.
-      if (first === undefined) return null;
-      const line = parseLine(first.text);
-      return line === null ? day : Date.parse(line.fetched_at.end ?? line.fetched_at.start);
+      for (let at = offset; ; ) {
+        const chunk = await this.deps.reader.lines(file, at, 64 * 1024);
+        if (chunk.length === 0) return null;
+        for (const raw of chunk) {
+          const line = parseLine(raw.text);
+          if (line !== null) return Date.parse(line.fetched_at.end ?? line.fetched_at.start);
+        }
+        at = (chunk.at(-1) as RawLine).end;
+      }
     } catch {
-      return day;
+      return Date.parse(`${file.slice(0, 10)}T00:00:00Z`);
     }
   }
 
@@ -214,15 +237,26 @@ export class Loader {
     this.deps.alert('load_stalled', { ...fields, code, stalled_s: this.stalledFor() });
   }
 
-  private async attemptOf(key: string): Promise<Attempt> {
+  private async attemptOf(file: string, end: number): Promise<Attempt> {
     if (this.attempt === undefined) this.attempt = (await readAttempt(this.deps.db)) ?? null;
-    return this.attempt?.key === key ? this.attempt : { key, n: 0, code: 'load_crashed' };
+    return this.attempt?.file === file && this.attempt.end === end
+      ? this.attempt
+      : { file, end, n: 0, code: 'load_crashed' };
   }
 
-  /** Records how an attempt ended; a failed write is not fatal: this process still knows. */
+  /**
+   * Records how a pass that committed nothing ended. When the database does
+   * not take it (it is down), this process still knows, and the next pass
+   * writes it first (R2-4; KG-073 is the process dying in that window).
+   */
   private async settle(attempt: Attempt): Promise<void> {
     this.attempt = attempt;
-    await writeAttempt(this.deps.db, attempt).catch(() => {});
+    try {
+      await writeAttempt(this.deps.db, attempt);
+      this.owed = undefined;
+    } catch {
+      this.owed = attempt;
+    }
   }
 
   /**
@@ -257,10 +291,15 @@ export class Loader {
     const flush = async (end: number, work?: (tx: Tx) => Promise<void>) => {
       await this.deps.db.transaction().execute(async (tx) => {
         await lock(tx);
-        if (work) await work(tx);
+        if (work) {
+          await work(tx);
+          // The payload line's pass ended (loaded or set aside): its attempt ends with it.
+          await clearAttempt(tx);
+        }
         for (const [source, f] of pending) await applyFetchHealth(tx, source, f);
         await advanceCursor(tx, file, end);
       });
+      if (work) this.attempt = null;
       pending.clear();
       committed = end;
       folded = end;
@@ -296,14 +335,14 @@ export class Loader {
       }
       // A payload line: its own transaction, which also commits everything folded before it.
       const ids = { source: line.source, spec: line.spec };
-      const prior = await this.attemptOf(line.key as string);
+      const prior = await this.attemptOf(file, raw.end);
       if (prior.n >= MAX_TRIES) {
         // Two attempts failed or died: quarantine it without reading or parsing it, and move on.
         const batch = batchInput(line, plan.adapterVersion, fetchedAt);
         await flush(raw.end, (tx) => setBatchAside(tx, batch, 'quarantined', prior.code));
         this.deps.alert('quarantined', { ...ids, code: prior.code });
       } else {
-        const next = { key: prior.key, n: prior.n + 1, code: 'load_crashed' };
+        const next = { ...prior, n: prior.n + 1, code: 'load_crashed' };
         await writeAttempt(this.deps.db, next);
         this.attempt = next;
         try {
@@ -408,7 +447,7 @@ export class Loader {
     await commit(async (tx) => {
       const state = await openBatch(tx, batch, 'ok');
       const written = await upsertObs(tx, result.obs, registry, state.id, fetchedAt);
-      zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, registry, state.id);
+      zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, registry, state.id, fetchedAt);
       if (result.unitMismatch !== undefined) {
         units = await storeUnitMismatch(tx, line.source, fetchedAt, result.unitMismatch);
       }
@@ -501,25 +540,22 @@ function markFetchOk(f: FetchFold, at: Date): void {
   f.reset = true;
 }
 
-/** SQLSTATEs that say the deployment is broken, not the payload: a missing grant, table, column or function. */
-const SYSTEMIC = new Set(['42501', '42P01', '42703', '42883', '0A000']);
-
 /**
  * What a failed payload means. `payload`: the failure belongs to this payload
- * (a constraint, a bad value, a bug that its data triggers, an object that
- * cannot be read) and counts towards its quarantine, with the code the batch
- * gets then. `stall`: the database, the deployment or the archive is at fault
- * (a connection, a lock timeout, a missing grant, anything we cannot name), so
- * the tail waits and tries again for as long as it takes; `code` is what the
- * alert names.
+ * (a constraint, a bad value, a bug that its data triggers: SQLSTATE classes
+ * 21, 22, 23 and P0; an object that cannot be read) and counts towards its
+ * quarantine, with the code the batch gets then. `stall`: the database, the
+ * deployment or the archive is at fault (a connection, a lock timeout, anything
+ * we cannot name, and every class 42 and 0A error: with bound parameters a
+ * payload's values cannot cause a syntax or access-rule error, so our SQL or
+ * schema did), so the tail waits and tries again for as long as it takes;
+ * `code` is what the alert names.
  */
 export function failureOf(err: unknown): { kind: 'payload' | 'stall'; code: string } {
   if (err instanceof ArchiveError) return { kind: 'payload', code: `archive_${err.code}` };
   const code = errorCode(err);
   if (/^[0-9A-Z]{5}$/.test(code)) {
-    return !SYSTEMIC.has(code) && /^(?:21|22|23|42|P0)/.test(code)
-      ? { kind: 'payload', code: 'load_error' }
-      : { kind: 'stall', code };
+    return /^(?:21|22|23|P0)/.test(code) ? { kind: 'payload', code: 'load_error' } : { kind: 'stall', code };
   }
   if (err instanceof TypeError || err instanceof RangeError) return { kind: 'payload', code: 'load_error' };
   return { kind: 'stall', code };

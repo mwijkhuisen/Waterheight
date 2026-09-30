@@ -1,9 +1,9 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, readFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { SchemaDrift } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildFixtureArchive, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
+import { bareLine, buildFixtureArchive, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { driftCount, driftReport } from '../../src/adapters/de-1/drift.ts';
 import { parseStations } from '../../src/adapters/de-1/parse.ts';
 import { createApp } from '../../src/app.ts';
@@ -34,6 +34,23 @@ const status = async () =>
       'SELECT spec_id, parse_status, error, adapter_version, n_new FROM ingest_batch ORDER BY fetched_at, id',
     )
   ).rows;
+/** The size of the day's manifest file: the end offset of its last line. */
+const manifestEnd = () => statSync(`${h.raw}/_manifest/2026-09-30.jsonl`).size;
+/** The tail's attempt record (app_meta `load_attempt`). */
+const attempt = async () =>
+  (await h.t.admin.query("SELECT value FROM app_meta WHERE key = 'load_attempt'")).rows[0]?.value;
+/** A loader process whose parser kills it (crash-child.ts); returns its exit status. */
+const crashOnce = () =>
+  spawnSync(
+    process.execPath,
+    [
+      '--no-experimental-webstorage',
+      fileURLToPath(new URL('./crash-child.ts', import.meta.url)),
+      h.t.urlFor('rws_load'),
+      h.raw,
+    ],
+    { timeout: 60_000 },
+  ).status;
 
 describe('schema drift', () => {
   it('quarantines only the mutated payload; every other payload loads and the cursor moves on', async () => {
@@ -267,7 +284,6 @@ describe('payloads the loader cannot use', () => {
       },
     };
     // A damaged manifest line in front of it is re-read on every stalled pass: counted and alerted once only.
-    const { appendFileSync } = await import('node:fs');
     appendFileSync(`${h.raw}/_manifest/2026-09-30.jsonl`, '{"v":1,"damaged"\n');
     const poison = await writePayload(h.archive, {
       source: 'DE-1',
@@ -287,6 +303,8 @@ describe('payloads the loader cannot use', () => {
     });
     const loader = h.loader({ adapters: broken });
     expect(await loader.tick()).toEqual({ lines: 1, loaded: 0 });
+    // The stall is aged from the payload it waits on, not from the damaged line in front of it (review R2-6).
+    expect(await loader.backlog(new Date('2026-09-30T11:21:00Z'))).toMatchObject({ files: 1, age_s: 1200 });
     // The stall is alerted once when it starts, with the fixed code of the cause, not on every pass.
     expect(h.alerts.splice(0)).toEqual([
       { code: 'manifest_bad_line', fields: { file: '2026-09-30.jsonl' } },
@@ -319,16 +337,12 @@ describe('payloads the loader cannot use', () => {
       body: Buffer.from('[3]'),
       url: SERIES_URL(EMMERICH_W),
     });
-    const child = fileURLToPath(new URL('./crash-child.ts', import.meta.url));
-    const attempt = async () =>
-      (await h.t.admin.query("SELECT value FROM app_meta WHERE key = 'load_attempt'")).rows[0]?.value;
+    // The attempt names the line by its place in the manifest.
+    const end = manifestEnd();
     // Two loader processes die inside the parser (as an out-of-memory kill would): each leaves its attempt behind.
     for (const n of [1, 2]) {
-      const run = spawnSync(process.execPath, ['--no-experimental-webstorage', child, h.t.urlFor('rws_load'), h.raw], {
-        timeout: 60_000,
-      });
-      expect(run.status).toBe(137);
-      expect(await attempt()).toEqual({ key: crash.key, n, code: 'load_crashed' });
+      expect(crashOnce()).toBe(137);
+      expect(await attempt()).toEqual({ file: '2026-09-30.jsonl', end, n, code: 'load_crashed' });
     }
     // The third pass never opens the object (it is unreadable now) and never runs a parser.
     let runs = 0;
@@ -363,16 +377,15 @@ describe('payloads the loader cannot use', () => {
   });
 
   it('a failure outside the payload (the database going away) stalls and alerts, and never counts', async () => {
-    const key = (
-      await writePayload(h.archive, {
-        source: 'DE-1',
-        spec: 'de-1-series',
-        variant: EMMERICH_W,
-        at: new Date('2026-09-30T11:04:00Z'),
-        body: measurements(['2026-09-30T13:00:00+02:00', 4]),
-        url: SERIES_URL(EMMERICH_W),
-      })
-    ).key;
+    await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: EMMERICH_W,
+      at: new Date('2026-09-30T11:04:00Z'),
+      body: measurements(['2026-09-30T13:00:00+02:00', 4]),
+      url: SERIES_URL(EMMERICH_W),
+    });
+    const end = manifestEnd();
     // The last statement of every load transaction fails as a server shutdown would (57P01).
     await h.t.admin.query(`
       CREATE FUNCTION fail_cursor() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'down' USING ERRCODE = '57P01'; END $$;
@@ -383,15 +396,91 @@ describe('payloads the loader cannot use', () => {
     } finally {
       await h.t.admin.query('DROP TRIGGER fail_cursor ON load_cursor; DROP FUNCTION fail_cursor()');
     }
-    const attempt = (await h.t.admin.query("SELECT value FROM app_meta WHERE key = 'load_attempt'")).rows[0]?.value;
-    expect(attempt).toEqual({ key, n: 0, code: 'load_crashed' });
+    expect(await attempt()).toEqual({ file: '2026-09-30.jsonl', end, n: 0, code: 'load_crashed' });
     // Alerted when it started, with the SQLSTATE: not on every one of the four passes.
     expect(h.alerts.splice(0)).toEqual([
       { code: 'load_stalled', fields: { source: 'DE-1', spec: 'de-1-series', code: '57P01', stalled_s: 0 } },
     ]);
-    // Four passes did not use up the payload's two tries: it loads now.
+    // Four passes did not use up the payload's two tries: it loads now, and its attempt ends with its commit.
     expect(await loader.tick()).toEqual({ lines: 1, loaded: 1 });
     expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
+    expect(await attempt()).toBeNull();
+  });
+
+  it('a try that the database was too far down to undo is undone as the first write of the next pass (review R2-4)', async () => {
+    // A fetch-only line in front of the payload: a pass stopped after one line writes nothing of the payload.
+    await h.archive.append(bareLine('DE-1', 'de-1-basin', new Date('2026-09-30T11:04:30Z'), { status: 304 }));
+    await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: EMMERICH_W,
+      at: new Date('2026-09-30T11:04:40Z'),
+      body: measurements(['2026-09-30T13:00:00+02:00', 4]),
+      url: SERIES_URL(EMMERICH_W),
+    });
+    const end = manifestEnd();
+    // The payload's commit fails (57P01), and so does the undo of its try (the record with n = 0).
+    await h.t.admin.query(`
+      CREATE FUNCTION fail_down() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'down' USING ERRCODE = '57P01'; END $$;
+      CREATE TRIGGER fail_cursor BEFORE INSERT OR UPDATE ON load_cursor FOR EACH ROW EXECUTE FUNCTION fail_down();
+      CREATE TRIGGER fail_undo BEFORE INSERT OR UPDATE ON app_meta FOR EACH ROW
+        WHEN (NEW.key = 'load_attempt' AND NEW.value ->> 'n' = '0') EXECUTE FUNCTION fail_down();`);
+    const loader = h.loader();
+    try {
+      expect(await loader.tick()).toMatchObject({ loaded: 0 });
+      expect(await attempt()).toEqual({ file: '2026-09-30.jsonl', end, n: 1, code: 'load_crashed' });
+    } finally {
+      await h.t.admin.query(
+        'DROP TRIGGER fail_cursor ON load_cursor; DROP TRIGGER fail_undo ON app_meta; DROP FUNCTION fail_down()',
+      );
+    }
+    // The database is back. The next pass is stopped after its first line (a SIGTERM), before the payload:
+    // the undo was its first write, so a process that exits now leaves no try behind.
+    expect(await loader.tick({ stop: () => true })).toEqual({ lines: 1, loaded: 0, more: true });
+    expect(await attempt()).toEqual({ file: '2026-09-30.jsonl', end, n: 0, code: 'load_crashed' });
+    expect(await loader.tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await attempt()).toBeNull();
+    h.alerts.length = 0;
+  });
+
+  it('manifest lines that name one archived object are each tried on their own (review R2-5, N4)', async () => {
+    // Byte-identical bodies fetched in the same second share one object (KG-072): three lines, one key.
+    const same = () =>
+      writePayload(h.archive, {
+        source: 'DE-1',
+        spec: 'de-1-series',
+        variant: EMMERICH_W,
+        at: new Date('2026-09-30T11:05:30Z'),
+        body: measurements(['2026-09-30T13:05:00+02:00', 9]),
+        url: SERIES_URL(EMMERICH_W),
+      });
+    const keys = [(await same()).key, (await same()).key, (await same()).key];
+    expect(new Set(keys).size).toBe(1);
+    expect(await h.loader().tick()).toEqual({ lines: 3, loaded: 3 });
+    expect(h.alerts).toEqual([]);
+    expect(await attempt()).toBeNull();
+
+    // One crash on the first of three more such lines, then a good retry, then the lines after it.
+    const again = () =>
+      writePayload(h.archive, {
+        source: 'DE-1',
+        spec: 'de-1-series',
+        variant: EMMERICH_W,
+        at: new Date('2026-09-30T11:05:40Z'),
+        body: measurements(['2026-09-30T13:05:00+02:00', 10]),
+        url: SERIES_URL(EMMERICH_W),
+      });
+    const key = (await again()).key;
+    const end = manifestEnd();
+    await again();
+    await again();
+    expect(crashOnce()).toBe(137);
+    expect(await attempt()).toEqual({ file: '2026-09-30.jsonl', end, n: 1, code: 'load_crashed' });
+    expect(await h.loader().tick()).toEqual({ lines: 3, loaded: 3 });
+    expect(h.alerts).toEqual([]);
+    expect(
+      (await h.t.admin.query('SELECT parse_status, error FROM ingest_batch WHERE archive_key = $1', [key])).rows,
+    ).toEqual([{ parse_status: 'ok', error: null }]);
   });
 
   // Review C1 (exp3): one object at mode 000 with a good payload behind it. Root reads anything: skipped as root.
@@ -485,6 +574,37 @@ describe('payloads the loader cannot use', () => {
     expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
   });
 
+  it('a release whose SQL does not match the schema (42804 on every obs write) stalls and quarantines nothing (review R2-3)', async () => {
+    const keys: (string | null)[] = [];
+    for (const m of [0, 1, 2]) {
+      const line = await writePayload(h.archive, {
+        source: 'DE-1',
+        spec: 'de-1-series',
+        variant: EMMERICH_W,
+        at: new Date(Date.UTC(2026, 8, 30, 11, 8, 10 + m)),
+        body: measurements(['2026-09-30T13:06:00+02:00', 30 + m]),
+        url: SERIES_URL(EMMERICH_W),
+      });
+      keys.push(line.key);
+    }
+    const before = await h.t.admin.query('SELECT manifest_file, byte_offset FROM load_cursor ORDER BY 1');
+    await h.t.admin.query(`
+      CREATE FUNCTION fail_type() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'type' USING ERRCODE = '42804'; END $$;
+      CREATE TRIGGER fail_type BEFORE INSERT OR UPDATE ON obs FOR EACH ROW EXECUTE FUNCTION fail_type();`);
+    const loader = h.loader();
+    try {
+      for (let pass = 0; pass < 4; pass++) expect(await loader.tick()).toEqual({ lines: 0, loaded: 0 });
+    } finally {
+      await h.t.admin.query('DROP TRIGGER fail_type ON obs; DROP FUNCTION fail_type()');
+    }
+    expect((await h.t.admin.query('SELECT 1 FROM ingest_batch WHERE archive_key = ANY($1)', [keys])).rows).toEqual([]);
+    expect((await h.t.admin.query('SELECT manifest_file, byte_offset FROM load_cursor ORDER BY 1')).rows).toEqual(
+      before.rows,
+    );
+    expect(h.alerts.splice(0).map((a) => [a.code, a.fields.code])).toEqual([['load_stalled', '42804']]);
+    expect(await loader.tick()).toEqual({ lines: 3, loaded: 3 });
+  });
+
   it('a payload that loaded before (a replay ran ahead of the tail) is never downgraded by a later quarantine', async () => {
     const line = await writePayload(h.archive, {
       source: 'DE-1',
@@ -571,12 +691,29 @@ describe('payloads the loader cannot use', () => {
     const { failureOf } = await import('../../src/load/pipeline.ts');
     const pg = (code: string) => Object.assign(new Error('driver text'), { code });
     // The payload's own: a constraint, a bad value, a bug its data triggers, an object that cannot be read.
-    for (const code of ['23514', '23505', '22P02', '22003', '21000', '42P10', 'P0001'])
+    for (const code of ['23514', '23505', '22P02', '22003', '21000', 'P0001'])
       expect([code, failureOf(pg(code))]).toEqual([code, { kind: 'payload', code: 'load_error' }]);
     expect(failureOf(new TypeError('x'))).toEqual({ kind: 'payload', code: 'load_error' });
     expect(failureOf(new ArchiveError('unreadable'))).toEqual({ kind: 'payload', code: 'archive_unreadable' });
-    // Not the payload's: a missing grant, table, column or function, a feature, a lock timeout, the connection.
-    for (const code of ['42501', '42P01', '42703', '42883', '0A000', '55P03', '57P01', '08006', '53300', '40001'])
+    // Not the payload's: every class 42 and 0A error (with bound parameters, our SQL or schema: a missing grant,
+    // table, column or function, a type mismatch, an ambiguous name, a syntax error, an ON CONFLICT without its
+    // index; review R2-3), a lock timeout, the connection.
+    for (const code of [
+      '42501',
+      '42P01',
+      '42703',
+      '42883',
+      '42804',
+      '42702',
+      '42601',
+      '42P10',
+      '0A000',
+      '55P03',
+      '57P01',
+      '08006',
+      '53300',
+      '40001',
+    ])
       expect([code, failureOf(pg(code))]).toEqual([code, { kind: 'stall', code }]);
     expect(failureOf(new Error('Connection terminated unexpectedly'))).toEqual({ kind: 'stall', code: 'unknown' });
     expect(failureOf(Object.assign(new Error('x'), { code: 'EACCES' }))).toEqual({ kind: 'stall', code: 'EACCES' });
@@ -633,7 +770,18 @@ describe('a unit switch (review C7) and what the pruner keeps (review C10)', () 
       return Buffer.from(JSON.stringify(doc));
     };
     const at = (hhmm: string) => new Date(`2026-09-30T${hhmm}:00Z`);
-    // The provider switches Emmerich W from cm to m+NN: the basin call shows it.
+    // The provider switches Emmerich W from cm to m+NN shortly before 12:00. A series payload fetched in between
+    // carries no unit: its metres are stored as centimetres until the switch is detected.
+    const early = await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: EMMERICH_W,
+      at: at('11:55'),
+      body: measurements(['2026-09-30T13:30:00+02:00', 7.6], ['2026-09-30T13:45:00+02:00', 7.7]),
+      url: SERIES_URL(EMMERICH_W),
+    });
+    expect(await h.loader().tick()).toMatchObject({ lines: 1, loaded: 1 });
+    // The basin call shows the switch.
     await writePayload(h.archive, {
       source: 'DE-1',
       spec: 'de-1-basin',
@@ -707,11 +855,65 @@ describe('a unit switch (review C7) and what the pruner keeps (review C10)', () 
     expect(await stored()).toEqual([{ value: 780 }, { value: 790 }]);
     expect(await batch()).toEqual([{ parse_status: 'ok', n_rows: 2, n_skipped: 0 }]);
     expect(await parsedOkIn(h.load.db)([series.key as string])).toEqual(new Set([series.key]));
+    // The replay also corrects what was stored between the switch and its detection: that payload holds the rows
+    // it stored mis-scaled, and rewrites them (review R2-1).
+    const corrected = await h.t.admin.query(
+      "SELECT value FROM obs WHERE series_id = $1 AND ts IN ('2026-09-30T11:30:00Z', '2026-09-30T11:45:00Z') ORDER BY ts",
+      [id],
+    );
+    expect(corrected.rows).toEqual([{ value: 760 }, { value: 770 }]);
+    expect(
+      (await h.t.admin.query('SELECT n_changed FROM ingest_batch WHERE archive_key = $1', [early.key])).rows,
+    ).toEqual([{ n_changed: 2 }]);
     // Back to the registry the rest of this file was written for.
     await h.t.admin.query(
       "UPDATE series SET native_unit = 'cm', to_canonical = 1, value_kind = 'stage', datum = 'NHN' WHERE id = $1",
       [id],
     );
+  });
+
+  it('a payload with a series the registry does not know keeps its object until a replay after the registry gains it (review R2-8)', async () => {
+    const unknown = '00000000-0000-4000-8000-000000000001/W';
+    // Its own day, so that the replay below reads nothing else.
+    const line = await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: unknown,
+      at: new Date('2026-10-01T00:30:00Z'),
+      body: measurements(['2026-10-01T02:15:00+02:00', 5]),
+      url: SERIES_URL(unknown),
+    });
+    expect(await h.loader().tick()).toEqual({ lines: 1, loaded: 1 });
+    const batch = async () =>
+      (
+        await h.t.admin.query('SELECT parse_status, n_rows, n_skipped FROM ingest_batch WHERE archive_key = $1', [
+          line.key,
+        ])
+      ).rows;
+    expect(await batch()).toEqual([{ parse_status: 'ok', n_rows: 0, n_skipped: 1 }]);
+    const { parsedOkIn } = await import('../../src/load/prune.ts');
+    expect(await parsedOkIn(h.load.db)([line.key as string])).toEqual(new Set());
+    // A reviewed registry change adds the series (here by hand, beside Emmerich W).
+    await h.t.admin.query(
+      `INSERT INTO series (station_id, source_id, quantity, value_kind, provider_key, native_unit, to_canonical, datum,
+                           native_step, expected_step, staleness_limit, role)
+       SELECT station_id, source_id, quantity, value_kind, $1, native_unit, to_canonical, datum, native_step,
+              expected_step, staleness_limit, 'mirror'
+       FROM series WHERE provider_key = $2`,
+      [unknown, EMMERICH_W],
+    );
+    try {
+      const result = await replay(
+        { db: h.load.db, reader: h.reader, alert: () => {}, now: () => new Date() },
+        { source: 'DE-1', spec: 'de-1-series', from: '2026-10-01', to: '2026-10-01', dryRun: false },
+      );
+      expect(result).toEqual({ lines: 1, loaded: 1, quarantined: 0, skipped: 0, n_new: 1, n_changed: 0 });
+      expect(await batch()).toEqual([{ parse_status: 'ok', n_rows: 1, n_skipped: 0 }]);
+      expect(await parsedOkIn(h.load.db)([line.key as string])).toEqual(new Set([line.key]));
+    } finally {
+      // Out of the registry again: the drift report below compares it with the recorded basin call.
+      await h.t.admin.query('UPDATE series SET active = false WHERE provider_key = $1', [unknown]);
+    }
   });
 });
 

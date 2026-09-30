@@ -6,7 +6,7 @@ import type { DB } from '../db/generated.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { startHeartbeat } from '../heartbeat.ts';
 import { computeHealth, LagWindow, storeChecksums } from './health.ts';
-import { Loader } from './pipeline.ts';
+import { Loader, nothingToLoad } from './pipeline.ts';
 import { parsedOkIn, prune } from './prune.ts';
 import { reconcileRollups } from './reconcile.ts';
 import { parseReplayArgs, replay } from './replay.ts';
@@ -97,8 +97,9 @@ export async function runLoad(
     const now = new Date();
     try {
       const backlog = await loader.backlog(now);
+      const idle = nothingToLoad(backlog);
       // Checksums once the first replay is complete, then nightly.
-      if (!caughtUp && backlog.bytes === 0) {
+      if (!caughtUp && idle) {
         caughtUp = true;
         await storeChecksums(db, now);
         logger.info('caught up with the manifest: partition checksums stored');
@@ -107,7 +108,7 @@ export async function runLoad(
         await computeHealth(db, { cadenceS, lagP95Ms: lag.p95(now), backlog, badLines: loader.badLines, now });
         lastHealth = now.getTime();
       }
-      if (backlog.bytes === 0 && (await claimNightly(db, now))) {
+      if (idle && (await claimNightly(db, now))) {
         await sql`SELECT ensure_partitions(now(), now() + interval '3 months')`.execute(db);
         const { repaired } = await reconcileRollups(db, now);
         if (repaired > 0) logger.error({ alert: 'rollup_mismatch', repaired }, 'alert');

@@ -179,8 +179,27 @@ describe('registry sync', () => {
     expect((await h.t.admin.query("SELECT history_window::text AS w FROM source WHERE id = 'CH-4'")).rows).toEqual([
       { w: '720:00:00' },
     ]);
-    // A month is no fixed number of hours: the sync refuses it, and the previous registry stays.
-    await expect(syncRegistry(owner.db, { ...input, sources: windowed('P1M') })).rejects.toThrow();
+    // Weeks, fractions of a second and a zero duration are valid too (review R2-7).
+    const stored = async () =>
+      (await h.t.admin.query("SELECT history_window::text AS w FROM source WHERE id = 'CH-4'")).rows[0]?.w;
+    for (const [window, expected] of [
+      ['P1W', '168:00:00'],
+      ['P2DT3H', '51:00:00'],
+      ['PT90M', '01:30:00'],
+      ['PT1.5S', '00:00:01.5'],
+      ['PT0S', '00:00:00'],
+      ['P0D', '00:00:00'],
+    ] as const) {
+      await syncRegistry(owner.db, { ...input, sources: windowed(window) });
+      expect([window, await stored()]).toEqual([window, expected]);
+    }
+    // A month or a year is no fixed number of hours: the sync refuses it with a registry error, and the previous
+    // registry stays.
+    for (const window of ['P1M', 'P1Y', 'P1Y2D'])
+      await expect(syncRegistry(owner.db, { ...input, sources: windowed(window) })).rejects.toThrow(
+        /CH-4: history_window .* no fixed length/,
+      );
+    expect(await stored()).toBe('00:00:00');
     await syncRegistry(owner.db, input);
     await owner.close();
     expect((await h.t.admin.query("SELECT history_window::text AS w FROM source WHERE id = 'CH-4'")).rows).toEqual([

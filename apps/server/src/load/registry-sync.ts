@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { type Source, type Station, validateRegistry, validateStations } from '@rws/contracts';
-import { durationMs } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { parse } from 'yaml';
 import { REGISTRY_DIR } from '../capture/specs.ts';
@@ -60,10 +59,22 @@ const ROLE_PRECEDENCE = { primary: 0, twin: 1, mirror: 2 } as const;
 /**
  * The window as hours and smaller only (source.history_window has a CHECK):
  * `now() - '30 days'` depends on the session's time zone, `now() - '720 hours'`
- * does not. A month or year cannot be written as hours and fails the sync.
+ * does not. A week is 168 hours and a zero duration is '0'; a month or year
+ * cannot be written as hours and fails the sync.
  */
-const historyWindow = (s: Source) =>
-  s.history_window === undefined ? '0' : `${durationMs(s.history_window)} milliseconds`;
+function historyWindow(s: Source): string {
+  const w = s.history_window;
+  if (w === undefined) return '0';
+  const m = /^P(?:(\d+)W|(?=\d|T\d)(?:(\d+)D)?(?:T(?=\d)(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:[.,]\d+)?)S)?)?)$/.exec(w);
+  if (m === null) {
+    throw new RegistryError(
+      `${s.id}: history_window ${w} is not in weeks, days, hours, minutes and seconds (a month or year has no fixed length)`,
+    );
+  }
+  const [, weeks = '0', days = '0', hours = '0', minutes = '0', seconds = '0'] = m;
+  const h = Number(weeks) * 168 + Number(days) * 24 + Number(hours);
+  return `${h} hours ${minutes} minutes ${seconds.replace(',', '.')} seconds`;
+}
 
 function one<T>(values: readonly T[], what: string, id: string): T {
   const distinct = [...new Set(values.map((v) => JSON.stringify(v)))];

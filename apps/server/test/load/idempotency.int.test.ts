@@ -2,8 +2,9 @@ import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SchemaDrift } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bareLine, buildFixtureArchive, writePayload } from '../../../../scripts/fixture-archive.ts';
+import { bareLine, buildFixtureArchive, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from '../../src/load/adapters.ts';
+import { nothingToLoad } from '../../src/load/pipeline.ts';
 import { replay } from '../../src/load/replay.ts';
 import { EMMERICH_W, type Harness, harness, measurements, RUHRWEHR_W, SERIES_URL } from './harness.ts';
 
@@ -283,6 +284,20 @@ describe('load and replay of the fixture archive', () => {
     expect((await cursor())['2026-09-30.jsonl']).toBe((sizes['2026-09-30.jsonl'] as number) - torn);
     // A torn last line is still being written: backlog bytes, but no unconsumed line to age.
     expect(await loader.backlog()).toEqual({ files: 1, bytes: torn, age_s: null });
+    // Nor does it hold up the checksums and the nightly jobs if it is never completed (review N7).
+    expect(nothingToLoad(await loader.backlog())).toBe(true);
+    // The torn line ends as a damaged one, and another follows. Damaged whole lines are skipped when the backlog is
+    // aged: the first manifest line after them counts (review R2-6).
+    appendFileSync(file, '\n{"v":1,"damaged"\n');
+    expect(await loader.backlog()).toMatchObject({ files: 1, age_s: null });
+    const at = new Date('2026-09-30T07:00:00Z');
+    appendFileSync(file, `${JSON.stringify(bareLine('DE-1', 'de-1-basin', at, { status: 304 }))}\n`);
+    const later = new Date(at.getTime() + 20 * 60_000);
+    expect(await loader.backlog(later)).toMatchObject({ files: 1, age_s: 1200 });
+    expect(nothingToLoad(await loader.backlog(later))).toBe(false);
+    expect(await loader.tick()).toEqual({ lines: 3, loaded: 0 });
+    expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
+    h.alerts.length = 0;
   });
 });
 
@@ -387,7 +402,7 @@ describe('newest fetch wins, whatever order the payloads arrive in (review C2, C
     keys = (
       await n.t.admin.query(
         `SELECT provider_key FROM series WHERE source_id = 'DE-1' AND quantity = 'H' AND native_step = '15 minutes'
-           AND audience IS NULL AND active ORDER BY provider_key LIMIT 10`,
+           AND audience IS NULL AND active ORDER BY provider_key LIMIT 12`,
       )
     ).rows.map((r) => r.provider_key);
   });
@@ -453,9 +468,9 @@ describe('newest fetch wins, whatever order the payloads arrive in (review C2, C
       expect([order, await stored(keys[i] as string)]).toEqual([order, [final]]);
     // The revision log records each change of the stored value in the order it was stored: the one thing that
     // depends on arrival order. The reviewer's order (A, B, then the late D) changes nothing.
-    const log = Object.fromEntries(
-      await Promise.all(orders.map(async (o, i) => [o, await revisions(keys[i] as string)])),
-    );
+    // One query at a time: a pg client does not run queries concurrently.
+    const log: Record<string, number> = {};
+    for (const [i, o] of orders.entries()) log[o] = await revisions(keys[i] as string);
     expect(log).toEqual({ ABD: 0, ADB: 2, BAD: 0, BDA: 0, DAB: 1, DBA: 1 });
 
     const sums = await n.checksums();
@@ -575,5 +590,147 @@ describe('newest fetch wins, whatever order the payloads arrive in (review C2, C
       await n.t.admin.query("SELECT n_rows, n_new FROM ingest_batch WHERE fetched_at = '2026-09-30T17:00:00Z'")
     ).rows;
     expect(batch).toEqual([{ n_rows: 3, n_new: 2 }]);
+  });
+
+  // The fix of a parser, a normaliser or a registry factor: every value of the given series doubles.
+  const doubled = (...variants: string[]): Record<string, LoadAdapter> => {
+    const real = (LOAD_ADAPTERS['DE-1'] as LoadAdapter).specs['de-1-series'] as SpecLoader;
+    const run: SpecLoader['run'] = (body, ctx) => {
+      const out = real.run(body, ctx);
+      return variants.includes(ctx.variant) ? { ...out, obs: out.obs.map((o) => ({ ...o, value: o.value * 2 })) } : out;
+    };
+    return { 'DE-1': { version: 2, specs: { 'de-1-series': { ...real, run } } } };
+  };
+  const batchAt = async (hhmm: string) =>
+    (
+      await n.t.admin.query(
+        'SELECT id, n_new, n_changed, adapter_version, loaded_at FROM ingest_batch WHERE fetched_at = $1',
+        [fetched(hhmm)],
+      )
+    ).rows;
+
+  it('R2-1: a replay after a fix corrects what its own batch stored: one revision, latest and rollup follow', async () => {
+    const s = keys[10] as string;
+    await put(s, '18:00', 100);
+    expect(await n.loader().tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await replayDay(doubled(s))).toMatchObject({ n_new: 0, n_changed: 1, quarantined: 0 });
+    expect(await stored(s)).toEqual([
+      { value: 200, qc: 1, fetched_at: fetched('18:00'), latest: 200, latest_fetched: fetched('18:00'), vlast: 200 },
+    ]);
+    expect(await revisions(s)).toBe(1);
+    expect(await batchAt('18:00')).toMatchObject([{ n_new: 0, n_changed: 1, adapter_version: 2 }]);
+  });
+
+  it('R2-1: a full replay after a fix corrects a point that an older payload stated and a newer one confirmed', async () => {
+    const s = keys[11] as string;
+    await put(s, '19:00', 100);
+    await put(s, '20:00', 100);
+    expect(await n.loader().tick()).toEqual({ lines: 2, loaded: 2 });
+    expect(await revisions(s)).toBe(0);
+    const older = await batchAt('19:00');
+    const holder = (await batchAt('20:00'))[0].id;
+    // In manifest order: the older payload leaves the point alone, the confirming payload (its holder) rewrites it.
+    const fix = doubled(keys[10] as string, s);
+    expect(await replayDay(fix)).toMatchObject({ n_new: 0, n_changed: 1, quarantined: 0 });
+    expect(await stored(s)).toEqual([
+      { value: 200, qc: 1, fetched_at: fetched('20:00'), latest: 200, latest_fetched: fetched('20:00'), vlast: 200 },
+    ]);
+    const log = await n.t.admin.query('SELECT old_value, new_value, batch_id FROM obs_revision WHERE series_id = $1', [
+      await n.seriesId(s),
+    ]);
+    expect(log.rows).toEqual([{ old_value: 100, new_value: 200, batch_id: holder }]);
+    expect(await batchAt('19:00')).toEqual(older);
+
+    // The same fix again, twice: nothing is written.
+    const sums = await n.checksums();
+    const logged = await n.count('obs_revision');
+    const all = async () => (await n.t.admin.query('SELECT * FROM ingest_batch ORDER BY id')).rows;
+    const before = await all();
+    for (let pass = 0; pass < 2; pass++) {
+      expect(await replayDay(fix)).toMatchObject({ n_new: 0, n_changed: 0, quarantined: 0 });
+      expect(await n.checksums()).toEqual(sums);
+      expect(await n.count('obs_revision')).toBe(logged);
+      expect(await all()).toEqual(before);
+    }
+  });
+
+  it('R2-2: a gauge zero follows newest fetch wins too: an older metadata payload never reverts it', async () => {
+    const meta = recorded('de-1-meta');
+    type Station = { uuid: string; timeseries: { shortname: string; gaugeZero?: { value: number } }[] };
+    const registered = new Set(
+      (
+        await n.t.admin.query(
+          "SELECT provider_key FROM series WHERE source_id = 'DE-1' AND active AND audience IS NULL",
+        )
+      ).rows.map((r) => r.provider_key),
+    );
+    const [x, y, z] = (JSON.parse(meta.body.toString('utf8')) as Station[]).filter((st) =>
+      st.timeseries.some((t) => t.shortname === 'W' && t.gaugeZero !== undefined && registered.has(`${st.uuid}/W`)),
+    ) as [Station, Station, Station];
+    // A metadata payload with one station, whose W gauge zero (same validFrom) is `value`.
+    const zero = (st: Station, day: string, hh: string, value: number) =>
+      writePayload(n.archive, {
+        source: 'DE-1',
+        spec: 'de-1-meta',
+        variant: '',
+        at: new Date(`2026-09-${day}T${hh}:00:00Z`),
+        body: Buffer.from(
+          JSON.stringify([
+            {
+              ...st,
+              timeseries: st.timeseries.map((t) =>
+                t.shortname === 'W' ? { ...t, gaugeZero: { ...t.gaugeZero, value } } : t,
+              ),
+            },
+          ]),
+        ),
+        url: meta.url,
+        retention: 'forever',
+      });
+    const held = async (st: Station) =>
+      (
+        await n.t.admin.query(
+          `SELECT g.value_m, b.fetched_at FROM gauge_zero g JOIN ingest_batch b ON b.id = g.batch_id
+           WHERE g.series_id = $1 AND upper_inf(g.valid)`,
+          [await n.seriesId(`${st.uuid}/W`)],
+        )
+      ).rows;
+    const at = (day: string, hh: string) => new Date(`2026-09-${day}T${hh}:00:00Z`);
+    const loader = n.loader();
+    n.alerts.length = 0;
+    // x: M1 (older) then M2 (newer); y: M2 first, then M1 as a late line.
+    await zero(x, '28', '03', 9.521);
+    await zero(x, '29', '03', 10.521);
+    expect(await loader.tick()).toEqual({ lines: 2, loaded: 2 });
+    await zero(y, '29', '04', 10.521);
+    await loader.tick();
+    await zero(y, '28', '04', 9.521);
+    await loader.tick();
+    // z: M1 9.521, a newer M3 confirms it, then M2 (between them) arrives late with 10.521.
+    await zero(z, '28', '05', 9.521);
+    await loader.tick();
+    await zero(z, '30', '05', 9.521);
+    await loader.tick();
+    await zero(z, '29', '05', 10.521);
+    await loader.tick();
+    expect(await held(x)).toEqual([{ value_m: 10.521, fetched_at: at('29', '03') }]);
+    expect(await held(y)).toEqual([{ value_m: 10.521, fetched_at: at('29', '04') }]);
+    expect(await held(z)).toEqual([{ value_m: 9.521, fetched_at: at('30', '05') }]);
+    // Only x's newer payload corrected a zero.
+    expect(n.alerts.splice(0)).toEqual([
+      { code: 'gauge_zero_corrected', fields: { source: 'DE-1', spec: 'de-1-meta', n: 1 } },
+    ]);
+
+    // A replay of the older day only reverts nothing and alerts nothing.
+    const alerts: string[] = [];
+    const result = await replay(
+      { db: n.load.db, reader: n.reader, alert: (code) => alerts.push(code), now: () => new Date() },
+      { source: 'DE-1', spec: 'de-1-meta', from: '2026-09-28', to: '2026-09-28', dryRun: false },
+    );
+    expect(result).toEqual({ lines: 3, loaded: 3, quarantined: 0, skipped: 0, n_new: 0, n_changed: 0 });
+    expect(alerts).toEqual([]);
+    expect(await held(x)).toEqual([{ value_m: 10.521, fetched_at: at('29', '03') }]);
+    expect(await held(y)).toEqual([{ value_m: 10.521, fetched_at: at('29', '04') }]);
+    expect(await held(z)).toEqual([{ value_m: 9.521, fetched_at: at('30', '05') }]);
   });
 });

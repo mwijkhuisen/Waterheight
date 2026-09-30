@@ -18,7 +18,8 @@ import {
 // The retention pruner (issue #17 †): dry-run by default; forever classes, the
 // daily promoted copy of a mixed payload, CH-1/CH-2 payloads, unparsed objects
 // and anything outside raw/ are never deleted. The database side of "parsed
-// ok" (status ok and n_skipped 0) is tested in prune.int.test.ts.
+// ok" (status ok and n_skipped 0: a unit switch, an unregistered series) is
+// tested in drift.int.test.ts.
 
 const NOW = new Date('2027-03-01T00:00:00Z');
 const daysAgo = (n: number, second = 0) => new Date(NOW.getTime() - n * 86_400_000 + second * 1000);
