@@ -12,6 +12,8 @@ readonly RWS_ISSUER='https://token.actions.githubusercontent.com'
 readonly RWS_TAG_RE='^prod-[0-9]{8}T[0-9]{6}Z$'
 readonly RWS_HEX64_RE='^[0-9a-f]{64}$'
 readonly RWS_PING_SLUGS='^(backup|restore-drill|update|watchdog|cert|disk)$'
+# The database roles that log in with a password (deploy/postgres/roles.sql).
+readonly RWS_DB_LOGIN_ROLES=(rws_migrator rws_load rws_publish rws_api rws_owner_api)
 
 RWS_STATE_DIR=${RWS_STATE_DIR:-/var/lib/rws}
 RWS_ETC=${RWS_ETC:-/etc/rws}
@@ -19,6 +21,8 @@ RWS_SRV=${RWS_SRV:-/srv/rws}
 RWS_LOCK_DIR=${RWS_LOCK_DIR:-/run/rws}
 RWS_RELEASES_URL=${RWS_RELEASES_URL:-https://github.com/mwijkhuisen/Waterheight/releases}
 RWS_STATUS_COPY=${RWS_STATUS_COPY:-$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-status-copy}
+# The installed host copy (bootstrap.sh), like the scripts: never a release's own.
+RWS_ROLES_SQL=${RWS_ROLES_SQL:-$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../postgres/roles.sql}
 export TUF_ROOT=${TUF_ROOT:-$RWS_STATE_DIR/sigstore}
 DRY_RUN=${DRY_RUN:-0}
 
@@ -257,16 +261,28 @@ stage_release() {
   fi
 }
 
+# has_service <name>: the active release's compose.yaml defines that service (a
+# P1b release has no db, load or api). False too when compose cannot read the
+# file; then the `up` that follows fails on it as well.
+has_service() {
+  local services
+  services=$(rws_compose config --services) || return 1
+  grep -qxF -- "$1" <<<"$services"
+}
+
 # smoke <epoch>: /healthz answers 200 over real TLS and capture.json was written
-# after <epoch> (taken once `up -d` returned), within RWS_SMOKE_TIMEOUT seconds.
-# It publishes capture's newest file itself (rws-status-copy) before each try,
-# so a deploy never depends on rws-status-copy.path.
+# after <epoch> (taken once `up -d` returned), within RWS_SMOKE_TIMEOUT seconds;
+# when the active release has an api, /api/v1/health also answers 200 with a
+# JSON status (any value: a first deploy is still loading). A P1b release, a
+# rollback target, has no api. It publishes capture's newest file itself
+# (rws-status-copy) before each try, so a deploy never depends on rws-status-copy.path.
 smoke() {
-  local t0=$1 deadline gen epoch resolve
+  local t0=$1 deadline gen epoch resolve api=0
   if ((${RWS_INJECT_SMOKE_FAILURE:-0})); then
     log "smoke test: failure injected (rws-deploy --inject-smoke-failure)"
     return 1
   fi
+  if has_service api; then api=1; fi
   resolve=$RWS_DOMAIN:443:$RWS_PUBLIC_IPV4
   deadline=$((SECONDS + ${RWS_SMOKE_TIMEOUT:-300}))
   while ((SECONDS < deadline)); do
@@ -274,25 +290,85 @@ smoke() {
     if curl -fsS -o /dev/null --max-time 10 --resolve "$resolve" "https://$RWS_DOMAIN/healthz" 2>/dev/null &&
       gen=$(curl -fsS --max-time 10 --resolve "$resolve" "https://$RWS_DOMAIN/status/capture.json" 2>/dev/null |
         jq -r '.generated_at | strings') &&
-      epoch=$(date -u -d "$gen" +%s 2>/dev/null) && ((epoch > t0)); then
+      epoch=$(date -u -d "$gen" +%s 2>/dev/null) && ((epoch > t0)) &&
+      { ((api == 0)) || curl -fsS --max-time 10 --resolve "$resolve" "https://$RWS_DOMAIN/api/v1/health" 2>/dev/null |
+        jq -e '.status | type == "string"' >/dev/null 2>&1; }; then
       log "smoke test passed"
       return 0
     fi
     sleep "${RWS_SMOKE_INTERVAL:-10}"
   done
-  log "smoke test failed: no /healthz 200 and fresh capture.json within ${RWS_SMOKE_TIMEOUT:-300} s"
+  log "smoke test failed: no /healthz 200, fresh capture.json$( ((api)) && echo ' and /api/v1/health status') within ${RWS_SMOKE_TIMEOUT:-300} s"
   return 1
+}
+
+# db_prepare: the roles (roles.sql as bootstrap.sh installed it) and the
+# password of each login role from $RWS_ETC/secrets/db_<role>, applied in one
+# transaction by psql on the db container's local socket as the superuser (peer).
+# Every password must be 64 lowercase hex characters before any is used. They
+# reach psql only on stdin, never argv or the environment; the session logs no
+# statement; psql's output is discarded (an error can quote a statement), so
+# only a fixed line is logged.
+db_prepare() {
+  local role
+  local -A pw=()
+  if [[ ! -f $RWS_ROLES_SQL ]]; then
+    log "db_prepare: no installed roles.sql (run bootstrap.sh from the release)"
+    return 1
+  fi
+  for role in "${RWS_DB_LOGIN_ROLES[@]}"; do
+    if ! pw[$role]=$(secret "db_$role") || ! [[ ${pw[$role]} =~ $RWS_HEX64_RE ]]; then
+      log "db_prepare: the secret db_$role is missing or not 64 lowercase hex characters (bootstrap.sh)"
+      return 1
+    fi
+  done
+  {
+    printf '%s\n' "SET log_statement = 'none';" "SET log_min_error_statement = 'panic';" \
+      "SET log_min_duration_statement = -1;"
+    cat -- "$RWS_ROLES_SQL"
+    printf '\n'
+    for role in "${RWS_DB_LOGIN_ROLES[@]}"; do
+      printf "ALTER ROLE %s PASSWORD '%s';\n" "$role" "${pw[$role]}"
+    done
+  } | rws_compose exec -T db psql -X -q -v ON_ERROR_STOP=1 -1 -U postgres -d rws -f - >/dev/null 2>&1 || {
+    log "db_prepare: psql in the db container failed: roles and passwords not set"
+    return 1
+  }
+}
+
+# db_up: for a release with a db service (P2a on), start db and wait until it
+# is healthy, set the roles and passwords, and run the migrations (the migrate
+# job). A release without one (every P1b release) skips it. On a failure it
+# pings /fail with the step's fixed code; the caller rolls back. A migration
+# is never undone: migrations are expand/contract, so the release rolled back
+# to runs on the newer schema.
+db_up() {
+  has_service db || return 0
+  if ! rws_compose up -d --wait --wait-timeout 180 db; then
+    ping update fail db_start_failed
+    return 1
+  fi
+  if ! db_prepare; then
+    ping update fail db_prepare_failed
+    return 1
+  fi
+  if ! rws_compose run --rm --no-deps -T migrate; then
+    ping update fail migrate_failed
+    return 1
+  fi
 }
 
 # host_files <dir>: the sha256 and path of every host file under <dir>/deploy,
 # sorted, so a changed, added or removed one changes the list. Host files are
 # the ones bootstrap.sh installs or the host runs from /usr/local/lib/rws/deploy:
-# bin/, host/, systemd/, the healthchecks, reachability and owner-term lists
-# and the two [owner] tests. Not compose.yaml (every deploy takes it), the
-# image build inputs (they arrive as signed images) or the CI-only tests.
-# bootstrap.sh records the list of the files it installed (host-files.sha256).
+# bin/, host/, systemd/, postgres/ (roles.sql, pg_hba.conf, pg_ident.conf), the
+# healthchecks, reachability and owner-term lists and the two [owner] tests.
+# Not compose.yaml (every deploy takes it), the image build inputs (they arrive
+# as signed images) or the CI-only tests. bootstrap.sh records the list of the
+# files it installed (host-files.sha256).
 host_files() {
   (cd "$1" && find deploy -type f \( -path 'deploy/bin/*' -o -path 'deploy/host/*' -o -path 'deploy/systemd/*' \
+    -o -path 'deploy/postgres/*' \
     -o -path deploy/healthchecks.yaml -o -path deploy/reachability.yaml -o -path deploy/owner-terms.json \
     -o -path deploy/tests/negative-deploy.sh -o -path deploy/tests/object-lock-prune.sh \) -print0 |
     sort -z | xargs -0 -r sha256sum)
@@ -338,7 +414,8 @@ cleanup_releases() {
     done
 }
 
-# rollback <failed tag> <current tag or empty>: never returns.
+# rollback <failed tag> <current tag or empty>: never returns. Back to a P1b
+# release, `--remove-orphans` removes db, load and api; the pgdata volume stays.
 rollback() {
   local tag=$1 cur=$2 skip t0
   # An injected failure (rws-deploy --inject-smoke-failure) is for the new release only.
@@ -360,8 +437,8 @@ rollback() {
 }
 
 # deploy_release <dir with the verified manifest> <tag>: stage, pull by digest,
-# up, smoke; the current pointer moves only after a green smoke test. Returns
-# only on success; the caller then pings update_ok.
+# the database steps (db_up), up, smoke; the current pointer moves only after a
+# green smoke test. Returns only on success; the caller then pings update_ok.
 deploy_release() {
   local src=$1 tag=$2 cur t0
   if ! stage_release "$src" "$tag"; then
@@ -376,7 +453,7 @@ deploy_release() {
   set_active "$tag"
   # t0 after `up`: the replaced capture container has stopped by then, so only
   # the running release can write a newer capture.json.
-  if rws_compose up -d --remove-orphans && t0=$(date -u +%s) && smoke "$t0"; then
+  if db_up && rws_compose up -d --remove-orphans && t0=$(date -u +%s) && smoke "$t0"; then
     state_set current "$tag"
     log "deployed $tag"
     cleanup_releases

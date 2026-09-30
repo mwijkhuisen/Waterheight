@@ -1,9 +1,10 @@
-# healthchecks.io checks (issue #16 "P1a ↔ P1b contract"; A§11.3): 15 of the 20
-# free checks. timeout = the check's cadence (a capture group's shortest
-# cadence), grace = 2 × timeout, so an alert fires after 3 × cadence without a
-# ping. The check name is the slug and carries no source ID. Synced by
-# deploy/bin/rws-hc-sync; test/healthchecks.test.ts ties the cap-* timeouts to
-# registry/capture.yaml. JSON syntax (valid YAML), so the host reads it with jq.
+# healthchecks.io checks (issue #16 "P1a ↔ P1b contract"; A§11.3): 16 of the 20
+# free checks (P2a adds `load`, which the watchdog pings from /api/v1/health).
+# timeout = the check's cadence (a capture group's shortest cadence), grace =
+# 2 × timeout, so an alert fires after 3 × cadence without a ping. The check
+# name is the slug and carries no source ID. Synced by deploy/bin/rws-hc-sync;
+# test/healthchecks.test.ts ties the cap-* timeouts to registry/capture.yaml.
+# JSON syntax (valid YAML), so the host reads it with jq.
 {
   "checks": [
     { "slug": "cap-nl", "timeout": 600, "grace": 1200 },
@@ -20,6 +21,7 @@
     { "slug": "update", "timeout": 300, "grace": 600 },
     { "slug": "watchdog", "timeout": 300, "grace": 600 },
     { "slug": "cert", "timeout": 300, "grace": 600 },
-    { "slug": "disk", "timeout": 300, "grace": 600 }
+    { "slug": "disk", "timeout": 300, "grace": 600 },
+    { "slug": "load", "timeout": 300, "grace": 600 }
   ]
 }

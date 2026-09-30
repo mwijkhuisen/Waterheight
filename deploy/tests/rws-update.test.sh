@@ -45,6 +45,7 @@ case $url in
   "$RWS_RELEASES_URL"/download/*) rest=${url#"$RWS_RELEASES_URL"/download/}; file=$FIX/rel/$rest ;;
   */healthz) [[ -e $FIX/healthz ]] && exit 0; exit 22 ;;
   */status/capture.json) file=$FIX/capture.json ;;
+  */api/v1/health) file=$FIX/api-health ;;
   *) exit 6 ;;
 esac
 [[ -f $file ]] || exit 22
@@ -73,21 +74,34 @@ cat >"$T/stubs/docker" <<'STUB'
 #!/usr/bin/env bash
 # compose pull/up are recorded; `up` with a compose file whose first line says
 # "broken" makes capture.json stale, so the smoke test fails; $FIX/up-fails
-# makes the next `up` fail (once).
+# makes the next `up` fail (once). `config --services` lists the fixture's
+# services; `up --wait` (db), `exec` (psql; its stdin goes to $FIX/psql-stdin)
+# and `run` (migrate) fail while $FIX/db-up-fails, psql-fails, migrate-fails exist.
 set -euo pipefail
 printf 'docker %s\n' "$*" >>"$FIX/calls"
 [[ $1 == compose ]] || exit 0
-file='' sub=''
+file='' sub='' wait=0
 while (($#)); do
   case $1 in
     -f) file=$2; shift ;;
-    pull | up | run) [[ -n $sub ]] || sub=$1 ;;
+    --wait) wait=1 ;;
+    pull | up | run | config | exec) [[ -n $sub ]] || sub=$1 ;;
   esac
   shift
 done
 case $sub in
   pull) [[ ! -e $FIX/pull-fails ]] ;;
+  config) sed -n 's/^  \([a-z-]*\):.*/\1/p' "$file" ;;
+  exec)
+    cat >"$FIX/psql-stdin"
+    [[ ! -e $FIX/psql-fails ]]
+    ;;
+  run) [[ ! -e $FIX/migrate-fails ]] ;;
   up)
+    if ((wait)); then
+      [[ ! -e $FIX/db-up-fails ]]
+      exit
+    fi
     head -n 1 "$file" >>"$FIX/ups"
     if [[ -e $FIX/up-fails ]]; then
       rm "$FIX/up-fails"
@@ -110,14 +124,19 @@ chmod +x "$T/stubs"/*
 
 # ---------------------------------------------------------------- fixtures
 # mkrel <tag> [flags]: a release on the fake GitHub; flags: broken badsig badsha
-# badtag, host=<word> (the content of a host file, deploy/host/x.conf),
-# build=<word> (the content of files that are not host files: image build
-# inputs and CI-only tests).
+# badtag, db (services db, load, migrate: a P2a release), api (service api),
+# host=<word> (the content of a host file, deploy/host/x.conf), build=<word>
+# (the content of files that are not host files: image build inputs and CI-only
+# tests). Without db and api it is a P1b release.
 mkrel() {
   local tag=$1 flags=${2:-} d sha mtag word f
   d=$FIX/rel/$tag
   mkdir -p "$d" "$C/bundles/$tag/deploy/host"
-  printf '# release %s %s\nservices: {}\n' "$tag" "$flags" >"$C/bundles/$tag/deploy/compose.yaml"
+  {
+    printf '# release %s %s\nservices:\n  caddy: {}\n  capture: {}\n' "$tag" "$flags"
+    [[ " $flags " != *" db "* ]] || printf '  db: {}\n  load: {}\n  migrate: {}\n'
+    [[ " $flags " != *" api "* ]] || printf '  api: {}\n'
+  } >"$C/bundles/$tag/deploy/compose.yaml"
   if [[ $flags == *host=* ]]; then
     word=${flags#*host=}
     printf '%s\n' "${word%% *}" >"$C/bundles/$tag/deploy/host/x.conf"
@@ -149,6 +168,11 @@ bootstrapped() {
   bash -c '. "$1" && host_files "$2"' _ "$bin/rws-lib.sh" "$RWS_STATE_DIR/releases/$1" >"$RWS_STATE_DIR/host-files.sha256"
 }
 server_ref() { jq -r .images.server "$FIX/rel/$1/release-manifest.json"; }
+# The login roles' test passwords: 64 hex characters derived from the role name.
+readonly DB_ROLES=(rws_migrator rws_load rws_publish rws_api rws_owner_api)
+dbpw() { printf '%s' "test-pw-$1" | sha256sum | cut -c1-64; }
+# The docker compose calls after the fixed prefix (-p ... --env-file images.env), without `config`.
+compose_calls() { grep '^docker compose ' "$FIX/calls" | sed -E 's/^.* --env-file [^ ]+ //' | grep -v '^config --services$' || true; }
 
 setup() {
   cases=$((cases + 1))
@@ -165,6 +189,7 @@ RWS_PUBLIC_IPV4=198.51.100.7
 RWS_PUBLIC_IPV6=2001:db8::7
 EOF
   printf '%s\n' "$KEY" >"$C/etc/secrets/hc_ping_key"
+  for role in "${DB_ROLES[@]}"; do dbpw "$role" >"$C/etc/secrets/db_$role"; done
   echo '{"generated_at":"2020-01-01T00:00:00.000Z"}' >"$FIX/capture.json"
   touch "$FIX/healthz" "$FIX/calls" "$FIX/pings" "$FIX/codes" "$FIX/ups"
 }
@@ -221,7 +246,8 @@ expect_grep "cosign verify-blob --bundle" "$FIX/calls"
 expect_count "cosign verify .*@sha256:" "$FIX/calls" 3
 expect_grep "compose .* --profile jobs pull" "$FIX/calls"
 expect_grep "compose .* up -d --remove-orphans" "$FIX/calls"
-[[ $(grep -A 1 -E 'compose .* up -d' "$FIX/calls" | tail -n 1) == status-copy ]] || fail "smoke did not run rws-status-copy after up"
+[[ $(grep -v ' config --services$' "$FIX/calls" | grep -A 1 -E 'compose .* up -d' | tail -n 1) == status-copy ]] ||
+  fail "smoke did not run rws-status-copy after up"
 expect_grep "^https://hc-ping.com/$KEY/update$" "$FIX/pings"
 expect_no_grep "/fail$" "$FIX/pings"
 [[ $(stat -c %a "$RWS_STATE_DIR/current") == 600 ]] || fail "current is not mode 0600"
@@ -559,6 +585,140 @@ expect_rc 0
 expect_grep "dry-run: would deploy $T1" "$C/out"
 expect_no_grep "^docker" "$FIX/calls"
 expect_no_grep "." "$FIX/pings"
+
+case_ "a P1b release (no db, no api) deploys as before: no database step, no /api/v1/health"
+setup
+mkrel $T1
+latest $T1
+run rws-update
+expect_rc 0
+expect_state current $T1
+[[ $(compose_calls | tr '\n' '|') == "--profile jobs pull --quiet|up -d --remove-orphans|" ]] ||
+  fail "compose calls: $(compose_calls | tr '\n' '|')"
+expect_no_grep "api/v1/health" "$FIX/calls"
+
+case_ "a release with db and api: up --wait db, roles and passwords through psql's stdin, migrate, up; smoke needs /api/v1/health"
+setup
+mkrel $T1 "db api"
+latest $T1
+echo '{"status":"degraded","generated_at":"2026-09-30T00:00:00Z"}' >"$FIX/api-health"
+run rws-update
+expect_rc 0
+expect_state current $T1
+want="--profile jobs pull --quiet|up -d --wait --wait-timeout 180 db|exec -T db psql -X -q -v ON_ERROR_STOP=1 -1 -U postgres -d rws -f -|run --rm --no-deps -T migrate|up -d --remove-orphans|"
+[[ $(compose_calls | tr '\n' '|') == "$want" ]] || fail "compose calls: $(compose_calls | tr '\n' '|')"
+expect_grep "^curl .*https://rivierstanden\.example/api/v1/health$" "$FIX/calls"
+[[ $(head -n 3 "$FIX/psql-stdin" | tr '\n' '|') == "SET log_statement = 'none';|SET log_min_error_statement = 'panic';|SET log_min_duration_statement = -1;|" ]] ||
+  fail "psql stdin does not start by turning statement logging off"
+n=$(wc -l <"$here/../postgres/roles.sql")
+tail -n +4 "$FIX/psql-stdin" | head -n "$n" | cmp -s - "$here/../postgres/roles.sql" ||
+  fail "psql stdin does not carry deploy/postgres/roles.sql right after the SET lines"
+for role in "${DB_ROLES[@]}"; do
+  expect_count "^ALTER ROLE $role PASSWORD '$(dbpw "$role")';$" "$FIX/psql-stdin" 1
+  expect_no_grep "$(dbpw "$role")" "$FIX/calls"
+  expect_no_grep "$(dbpw "$role")" "$C/out"
+done
+expect_no_grep "ALTER ROLE rws_backup PASSWORD" "$FIX/psql-stdin"
+expect_no_grep "/fail" "$FIX/pings"
+
+case_ "a release with an api whose /api/v1/health does not answer: rolled back to the P1b release, whose smoke needs no api"
+setup
+mkrel $T1
+latest $T1
+run rws-update
+mkrel $T2 "db api"
+latest $T2
+run rws-update
+expect_rc 1
+expect_state current $T1
+expect_active $T1
+expect_state skip_upto $T2
+expect_grep "rolled back to $T1" "$C/out"
+[[ $(tail -n 1 "$FIX/ups") == "# release $T1 " ]] || fail "the last up was not the P1b release: $(tail -n 1 "$FIX/ups")"
+[[ $(tail -n 1 "$FIX/codes") == "update/fail rolled_back" ]] || fail "last ping: $(tail -n 1 "$FIX/codes")"
+
+case_ "db_prepare fails: /fail db_prepare_failed, no migrate, no up of the new release, rolled back"
+setup
+mkrel $T1
+latest $T1
+run rws-update
+mkrel $T2 "db api"
+latest $T2
+touch "$FIX/psql-fails"
+echo '{"status":"ok"}' >"$FIX/api-health"
+run rws-update
+expect_rc 1
+expect_state current $T1
+expect_active $T1
+[[ $(grep -c "update/fail" "$FIX/codes") == 2 && $(grep "update/fail" "$FIX/codes" | tr '\n' '|') == "update/fail db_prepare_failed|update/fail rolled_back|" ]] ||
+  fail "pings: $(tr '\n' '|' <"$FIX/codes")"
+expect_no_grep "run --rm --no-deps -T migrate" "$FIX/calls"
+expect_no_grep "^# release $T2" "$FIX/ups"
+expect_grep "db_prepare: psql in the db container failed" "$C/out"
+
+case_ "migrate fails: /fail migrate_failed, no up of the new release, rolled back"
+setup
+mkrel $T1
+latest $T1
+run rws-update
+mkrel $T2 "db api"
+latest $T2
+touch "$FIX/migrate-fails"
+echo '{"status":"ok"}' >"$FIX/api-health"
+run rws-update
+expect_rc 1
+expect_state current $T1
+[[ $(grep "update/fail" "$FIX/codes" | tr '\n' '|') == "update/fail migrate_failed|update/fail rolled_back|" ]] ||
+  fail "pings: $(tr '\n' '|' <"$FIX/codes")"
+expect_no_grep "^# release $T2" "$FIX/ups"
+
+case_ "db does not become healthy: /fail db_start_failed, nothing else of the new release, rolled back"
+setup
+mkrel $T1
+latest $T1
+run rws-update
+mkrel $T2 "db api"
+latest $T2
+touch "$FIX/db-up-fails"
+run rws-update
+expect_rc 1
+expect_state current $T1
+[[ $(grep "update/fail" "$FIX/codes" | tr '\n' '|') == "update/fail db_start_failed|update/fail rolled_back|" ]] ||
+  fail "pings: $(tr '\n' '|' <"$FIX/codes")"
+expect_no_grep "exec -T db psql" "$FIX/calls"
+
+case_ "a malformed db secret is refused before any exec and never echoed; nothing in it is evaluated"
+for bad in 'NotHex-secret-value-0123456789' "$(printf 'a%.0s' {1..63})" "\$(touch $T/pwned)" "x[\$(touch $T/pwned)]"; do
+  setup
+  mkrel $T1
+  latest $T1
+  run rws-update
+  mkrel $T2 "db api"
+  latest $T2
+  printf '%s\n' "$bad" >"$C/etc/secrets/db_rws_load"
+  echo '{"status":"ok"}' >"$FIX/api-health"
+  run rws-update
+  expect_rc 1
+  expect_state current $T1
+  expect_no_grep "exec -T db" "$FIX/calls"
+  expect_grep "the secret db_rws_load is missing or not 64 lowercase hex characters" "$C/out"
+  grep -qF -- "$bad" "$C/out" "$FIX/calls" && fail "the malformed secret was echoed"
+  [[ ! -e $T/pwned ]] || fail "a command substitution in a secret ran"
+  [[ $(grep "update/fail" "$FIX/codes" | head -n 1) == "update/fail db_prepare_failed" ]] ||
+    fail "pings: $(tr '\n' '|' <"$FIX/codes")"
+done
+
+case_ "no installed roles.sql: db_prepare refuses, rolled back"
+setup
+mkrel $T1
+latest $T1
+run rws-update
+mkrel $T2 "db api"
+latest $T2
+RWS_ROLES_SQL=$C/missing.sql run rws-update
+expect_rc 1
+expect_grep "no installed roles.sql" "$C/out"
+expect_no_grep "exec -T db" "$FIX/calls"
 
 echo "$labels cases, $failures failures"
 ((failures == 0))

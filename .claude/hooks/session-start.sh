@@ -9,9 +9,12 @@
 #   corepack), PostgreSQL 18 from the signed apt.postgresql.org repository whose
 #   key file is sha256-pinned (fingerprint B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8).
 # - PostgreSQL: cluster 18/rws on localhost:5433 only, builtin C.UTF-8 locale.
-#   Over TCP only role rws may reach database rws (trust: a throwaway sandbox
-#   database, so no password exists to leak into $CLAUDE_ENV_FILE or the log);
-#   every other TCP login, the superuser included, is rejected.
+#   Role rws is a SUPERUSER of this throwaway sandbox cluster (the integration
+#   tests create the production roles and a database per test file) and logs
+#   in over loopback TCP without a password (trust, so no password exists to
+#   leak into $CLAUDE_ENV_FILE or the log). Other roles log in over loopback
+#   with scram-sha-256 (the tests' throw-away passwords, so the role settings
+#   apply as in production); the superuser postgres never over TCP.
 # - Writes PATH and DATABASE_URL to $CLAUDE_ENV_FILE, then runs
 #   `pnpm install --frozen-lockfile`.
 #
@@ -84,9 +87,9 @@ else
   as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "postgresql-$PG_MAJOR" >/dev/null
 fi
 
-# 4. The cluster: localhost:5433, builtin C.UTF-8. Over TCP only the role rws
-#    may connect, to database rws, without a password; everything else is
-#    rejected (the superuser only through the local peer socket).
+# 4. The cluster: localhost:5433, builtin C.UTF-8, loopback only. Over TCP the
+#    role rws without a password, other roles with scram-sha-256; postgres only
+#    through the local peer socket.
 if ! pg_lsclusters -h | awk -v v="$PG_MAJOR" -v c="$PG_CLUSTER" '$1 == v && $2 == c { found = 1 } END { exit !found }'; then
   log "creating cluster $PG_MAJOR/$PG_CLUSTER on port $PG_PORT"
   as_root pg_createcluster "$PG_MAJOR" "$PG_CLUSTER" --port "$PG_PORT" --locale C.UTF-8 \
@@ -96,8 +99,11 @@ fi
 hba=/etc/postgresql/$PG_MAJOR/$PG_CLUSTER/pg_hba.conf
 hba_want="# Managed by .claude/hooks/session-start.sh
 local all all peer
-host $PG_DB $PG_ROLE 127.0.0.1/32 trust
-host $PG_DB $PG_ROLE ::1/128 trust
+host all $PG_ROLE 127.0.0.1/32 trust
+host all $PG_ROLE ::1/128 trust
+host all postgres all reject
+host all all 127.0.0.1/32 scram-sha-256
+host all all ::1/128 scram-sha-256
 host all all all reject"
 hba_changed=0
 if [[ $(as_root cat "$hba") != "$hba_want" ]]; then
@@ -113,10 +119,17 @@ elif ((hba_changed)); then
   as_root pg_ctlcluster "$PG_MAJOR" "$PG_CLUSTER" reload
 fi
 psql_admin() { as_postgres psql -X -q -p "$PG_PORT" -v ON_ERROR_STOP=1 -Atc "$1"; }
-if [[ -z $(psql_admin "select 1 from pg_roles where rolname = '$PG_ROLE'") ]]; then
-  log "creating role $PG_ROLE"
-  psql_admin "create role $PG_ROLE login"
-fi
+case $(psql_admin "select rolsuper from pg_roles where rolname = '$PG_ROLE'") in
+  t) ;;
+  f)
+    log "writing role $PG_ROLE: superuser"
+    psql_admin "alter role $PG_ROLE superuser"
+    ;;
+  *)
+    log "creating role $PG_ROLE (superuser)"
+    psql_admin "create role $PG_ROLE login superuser"
+    ;;
+esac
 if [[ -z $(psql_admin "select 1 from pg_database where datname = '$PG_DB'") ]]; then
   log "creating database $PG_DB"
   psql_admin "create database $PG_DB owner $PG_ROLE"

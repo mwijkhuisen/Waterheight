@@ -30,8 +30,15 @@ readonly COSIGN_SHA256=4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9
 readonly LIB=/usr/local/lib/rws
 # Secret groups: a file secret keeps its host owner in the container, so each is
 # root:<gid> 0440 and only its consumer gets that gid (compose.yaml group_add).
-readonly -A SECRET_GID=(['hc_ping_key']=61001 ['rws_x_api_key']=61002 ['restic_password']=61003 ['s3_credentials']=61003)
-readonly -A GROUP_GID=(['rws-hc']=61001 ['rws-rwskey']=61002 ['rws-backup']=61003)
+# The db_* passwords (P2a): db (the superuser's, read by initdb only), migrate,
+# load and api; db_rws_publish and db_rws_owner_api have no consumer before P9.
+readonly -A SECRET_GID=(['hc_ping_key']=61001 ['rws_x_api_key']=61002 ['restic_password']=61003 ['s3_credentials']=61003
+  ['db_postgres']=61004 ['db_rws_migrator']=61005 ['db_rws_load']=61006 ['db_rws_publish']=61007
+  ['db_rws_api']=61008 ['db_rws_owner_api']=61009)
+readonly -A GROUP_GID=(['rws-hc']=61001 ['rws-rwskey']=61002 ['rws-backup']=61003
+  ['rws-dbpostgres']=61004 ['rws-dbmigrator']=61005 ['rws-dbload']=61006 ['rws-dbpublish']=61007
+  ['rws-dbapi']=61008 ['rws-dbownerapi']=61009)
+readonly DB_SECRETS=(db_postgres db_rws_migrator db_rws_load db_rws_publish db_rws_api db_rws_owner_api)
 
 case ${1:-} in
   --dry-run) DRY_RUN=1 ;;
@@ -209,6 +216,8 @@ ensure_dir /srv/rws/tiles 0755 0 0
 ensure_dir /srv/rws/backup 0700 65532 65532
 ensure_dir /srv/rws/backup/cache 0700 65532 65532
 ensure_dir /srv/rws/backup/drill 0700 65532 65532
+# The nightly database dump: written by root (rws-backup), read by the backup job (gid 61003).
+ensure_dir /srv/rws/backup/db 0750 0 61003
 
 for name in "${!SECRET_GID[@]}"; do
   file=/etc/rws/secrets/$name gid=${SECRET_GID[$name]}
@@ -227,6 +236,41 @@ if [[ -s /etc/rws/secrets/rws_x_api_key ]]; then
 else
   gen_key() { cat /proc/sys/kernel/random/uuid >/etc/rws/secrets/rws_x_api_key; }
   fix "rws_x_api_key generated" gen_key
+fi
+# The database passwords: 32 bytes of the kernel CSPRNG as 64 lowercase hex
+# characters, written in place (the file keeps root:<gid> 0440) only while the
+# file is empty; never overwritten, never printed. rws-lib.sh (db_prepare)
+# refuses any other format, so a malformed one stops here first.
+gen_db_secret() {
+  local hex
+  hex=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')
+  [[ $hex =~ $RWS_HEX64_RE ]] || die "could not read 32 random bytes"
+  printf '%s\n' "$hex" >"$1"
+}
+for name in "${DB_SECRETS[@]}"; do
+  file=/etc/rws/secrets/$name
+  if [[ ! -s $file ]]; then
+    fix "$name generated" gen_db_secret "$file"
+  elif [[ $(secret "$name" || true) =~ $RWS_HEX64_RE ]]; then
+    ok "$name present"
+  else
+    msg="$file does not hold 64 lowercase hex characters: empty it (: >$file), run bootstrap again, then rws-deploy the current release"
+    if ((DRY_RUN)); then printf 'would    stop: %s\n' "$msg"; else die "$msg"; fi
+  fi
+done
+
+# The db service's pg_hba.conf and pg_ident.conf at an absolute path (compose.yaml
+# mounts /etc/rws/postgres read-only; a release directory is replaced on every
+# deploy). World-readable: uid 999 in the container reads them; no secret in them.
+ensure_dir /etc/rws/postgres 0755 0 0
+pg_conf_changed=0
+for f in pg_hba.conf pg_ident.conf; do
+  install_file "$bundle/deploy/postgres/$f" "/etc/rws/postgres/$f" 0644 && pg_conf_changed=1
+done
+# A running db reads them again on SIGHUP (the postmaster is its PID 1).
+if ((pg_conf_changed && !DRY_RUN)) &&
+  [[ $(docker inspect -f '{{.State.Running}}' rws-db-1 2>/dev/null || true) == true ]]; then
+  docker kill --signal HUP rws-db-1 >/dev/null && echo "changed  db reloaded its pg_hba.conf and pg_ident.conf"
 fi
 
 if [[ -f /etc/rws/rws.env ]]; then

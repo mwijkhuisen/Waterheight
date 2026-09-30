@@ -9,6 +9,8 @@
 !apps/
 !packages/
 !registry/
+# The migrations only (P2a: the migrate role); never db/schema.sql or anything else.
+!db/migrations/
 !scripts/install-pnpm.sh
 !deploy/web/Caddyfile
 !deploy/web/site.caddy

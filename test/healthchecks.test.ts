@@ -6,8 +6,9 @@ import { parse } from 'yaml';
 import { GROUP_SLUGS, loadRegistry } from '../apps/server/src/capture/specs.ts';
 import { repoRoot } from './catalogue.ts';
 
-// deploy/healthchecks.yaml (issue #16 "P1a ↔ P1b contract"): the 15 slugs, a
-// timeout of each check's cadence and a grace of twice that (alert at 3 × cadence).
+// deploy/healthchecks.yaml (issue #16 "P1a ↔ P1b contract"; P2a adds `load`): the
+// 16 slugs, a timeout of each check's cadence and a grace of twice that (alert at
+// 3 × cadence).
 
 type Check = { slug: string; timeout: number; grace: number };
 const checks = (parse(readFileSync(join(repoRoot, 'deploy/healthchecks.yaml'), 'utf8')) as { checks: Check[] }).checks;
@@ -18,10 +19,11 @@ const OPS: Record<string, number> = {
   watchdog: 300, // watchdog cycle every 5 min
   cert: 300,
   disk: 300,
+  load: 300, // the watchdog pings it every 5 min from /api/v1/health (P2a)
 };
 
 describe('deploy/healthchecks.yaml', () => {
-  it('has exactly the 15 contract slugs: the 9 capture groups and the 6 P1b checks', () => {
+  it('has exactly the 16 contract slugs: the 9 capture groups and the 7 operations checks', () => {
     expect(checks.map((c) => c.slug).sort()).toEqual([...GROUP_SLUGS, ...Object.keys(OPS)].sort());
   });
 
@@ -31,7 +33,7 @@ describe('deploy/healthchecks.yaml', () => {
     }
   });
 
-  it('times the P1b checks at their job cadence, and every grace is twice the timeout', () => {
+  it('times the operations checks at their job cadence, and every grace is twice the timeout', () => {
     for (const [slug, timeout] of Object.entries(OPS)) {
       expect(checks.find((c) => c.slug === slug)?.timeout, slug).toBe(timeout);
     }

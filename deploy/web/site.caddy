@@ -1,7 +1,8 @@
 # The public site (A§12.2; issue #16 P1b). Every A§12.2 header, noindex until
-# the public launch (P12), /healthz and the two coarse status files. No CORS
-# headers, no owner site (P9; WireGuard-only from P12a). scripts/verify-prod.ts
-# compares these headers with A§12.2 byte for byte.
+# the public launch (P12), /healthz, the two coarse status files and (P2a) the
+# api's two health paths. No CORS headers, no owner site (P9; WireGuard-only
+# from P12a). scripts/verify-prod.ts compares these headers with A§12.2 byte for
+# byte; the header block also applies to the proxied responses.
 {$RWS_DOMAIN} {
 	header {
 		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp"
@@ -57,6 +58,27 @@
 		file_server
 	}
 	handle /status/* {
+		respond 404
+	}
+
+	# The api (P2a): exactly its two health paths, GET or HEAD, any query (the
+	# api answers 400 to a parameter it does not know). The expression compares
+	# the request path as sent, case and all (the path matcher would fold case,
+	# merge slashes and resolve dot segments). Every other /api/ path is a 404
+	# from Caddy. Named matchers keep this order: health first.
+	@api_health {
+		method GET HEAD
+		expression `{path} == '/api/v1/health' || {path} == '/api/v1/health/sources'`
+	}
+	@api path /api/*
+	handle @api_health {
+		# Deferred like the site block: nothing names the upstream software.
+		header -Via
+		reverse_proxy api:8080 {
+			header_down -Server
+		}
+	}
+	handle @api {
 		respond 404
 	}
 
