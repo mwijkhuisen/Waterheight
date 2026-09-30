@@ -273,7 +273,7 @@ expect_eq "$(stat -c %a "$d/rws.dump") $(stat -c %a "$d/globals.sql")" "440 440"
 expect_grep "^chown 0:61003 -- $d/\.rws\.dump\.[A-Za-z0-9]{6}$" "$FIX/calls"
 expect_grep "^chown 0:61003 -- $d/\.globals\.sql\.[A-Za-z0-9]{6}$" "$FIX/calls"
 expect_grep "compose .* exec -T db pg_dumpall --globals-only --no-role-passwords -w -U rws_backup -l rws$" "$FIX/calls"
-expect_grep "compose .* exec -T db pg_dump -Fc -w -U rws_backup -d rws$" "$FIX/calls"
+expect_grep "compose .* exec -T db pg_dump -Fc --no-large-objects -w -U rws_backup -d rws$" "$FIX/calls"
 expect_grep "compose .* run --rm --no-deps -T backup backup --host rws .* /data/raw /data/db$" "$FIX/calls"
 [[ $(grep -n 'exec -T db pg_dump -Fc' "$FIX/calls" | cut -d: -f1) -lt $(grep -n 'backup backup --host' "$FIX/calls" | cut -d: -f1) ]] ||
   fail "the dump did not run before restic"

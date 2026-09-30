@@ -31,13 +31,32 @@ ALTER ROLE rws_backup    LOGIN   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATI
 GRANT rws_owner TO rws_migrator WITH INHERIT FALSE, SET TRUE;
 ALTER ROLE rws_migrator SET role = 'rws_owner';
 
--- The readers: read-only sessions, 2 s per statement (A§6, A§9.2).
+-- The readers: read-only sessions, 2 s per statement (A§6, A§9.2). Both are
+-- session defaults, which a session can change: the grants (views only), the
+-- connection limits, the revoked large-object functions below and
+-- temp_file_limit are what hold against a hostile reader session.
 ALTER ROLE rws_publish   SET default_transaction_read_only = on;
 ALTER ROLE rws_publish   SET statement_timeout = '2s';
 ALTER ROLE rws_api       SET default_transaction_read_only = on;
 ALTER ROLE rws_api       SET statement_timeout = '2s';
 ALTER ROLE rws_owner_api SET default_transaction_read_only = on;
 ALTER ROLE rws_owner_api SET statement_timeout = '2s';
+-- A superuser-only setting, set here by the superuser: a reader session cannot
+-- raise it. Q1 (an index step per series) and the health queries write no
+-- temporary file at all; a session that sorts a whole table cannot fill the disk.
+ALTER ROLE rws_publish   SET temp_file_limit = '256MB';
+ALTER ROLE rws_api       SET temp_file_limit = '256MB';
+ALTER ROLE rws_owner_api SET temp_file_limit = '256MB';
+
+-- Nothing of ours is a large object. No application role may create, open or
+-- write one (a stray one would also fail the nightly dump). Function privileges
+-- belong to each database: this file runs connected to the application database.
+REVOKE EXECUTE ON FUNCTION
+  pg_catalog.lo_create(oid), pg_catalog.lo_creat(integer), pg_catalog.lo_from_bytea(oid, bytea),
+  pg_catalog.lo_put(oid, bigint, bytea), pg_catalog.lo_open(oid, integer), pg_catalog.lowrite(integer, bytea),
+  pg_catalog.lo_truncate(integer, integer), pg_catalog.lo_truncate64(integer, bigint), pg_catalog.lo_unlink(oid),
+  pg_catalog.lo_import(text), pg_catalog.lo_import(text, oid)
+  FROM PUBLIC;
 
 -- pg_dump: reads everything, writes nothing.
 -- rws_backup is NOINHERIT like every role here; this one membership is inherited on purpose.

@@ -213,7 +213,9 @@ ensure_dir /srv/rws/public/ops 0755 0 0
 ensure_dir /srv/rws/owner 0750 65532 65532
 ensure_dir /srv/rws/owner/status 0750 65532 65532
 ensure_dir /srv/rws/tiles 0755 0 0
-ensure_dir /srv/rws/backup 0700 65532 65532
+# Root's: the backup job mounts only the subdirectories below, and an owner of the parent could swap db/ for a
+# link under root's nightly dump (nothing writes the parent itself).
+ensure_dir /srv/rws/backup 0700 0 0
 ensure_dir /srv/rws/backup/cache 0700 65532 65532
 ensure_dir /srv/rws/backup/drill 0700 65532 65532
 # The nightly database dump: written by root (rws-backup), read by the backup job (gid 61003).

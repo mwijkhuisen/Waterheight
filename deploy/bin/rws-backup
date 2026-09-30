@@ -10,9 +10,11 @@
 # The nightly database dump (P2a, plan D3), while the active release has a db
 # service: once a UTC day, on the first run at or after 02:00 UTC or whenever
 # the last good dump is older than 24 h. pg_dumpall --globals-only
-# --no-role-passwords and pg_dump -Fc run inside the db container as rws_backup
-# (peer-mapped on the local socket, so no password exists for it; read-only
-# sessions; the data through its pg_read_all_data membership). Their stdout is
+# --no-role-passwords and pg_dump -Fc --no-large-objects (nothing of ours is a
+# large object, so a stray one can never fail the dump) run inside the db
+# container as rws_backup (peer-mapped on the local socket, so no password
+# exists for it; read-only sessions; the data through its pg_read_all_data
+# membership). Their stdout is
 # streamed to a temporary file in /srv/rws/backup/db, fsynced and renamed to
 # globals.sql and rws.dump, root:61003 0440 (the backup job's group; the backup
 # job never joins the db network), and restic backs up /data/db with the raw
@@ -98,7 +100,7 @@ db_dump() {
   dump_to "$DUMP_DIR/globals.sql" '--' \
     rws_compose exec -T db pg_dumpall --globals-only --no-role-passwords -w -U rws_backup -l rws &&
     dump_to "$DUMP_DIR/rws.dump" PGDMP \
-      rws_compose exec -T db pg_dump -Fc -w -U rws_backup -d rws &&
+      rws_compose exec -T db pg_dump -Fc --no-large-objects -w -U rws_backup -d rws &&
     sync -- "$DUMP_DIR" &&
     log "database dump written"
   local rc=$?

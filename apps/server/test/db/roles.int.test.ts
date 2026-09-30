@@ -109,6 +109,49 @@ describe.each([
   });
 });
 
+// Review S2: read-only and the 2 s timeout are session defaults a hostile session can switch off. What holds
+// then: no large object can be made or written, the loader lock cannot be taken, temp files stay capped.
+describe.each([
+  ['rws_api', () => api],
+  ['rws_publish', () => publish],
+  ['rws_owner_api', () => owner],
+] as const)('%s with its session defaults switched off', (_role, client) => {
+  it('can neither create, open nor write a large object, nor take the loader lock', async () => {
+    await client().query("SET default_transaction_read_only = off; SET statement_timeout = '0'");
+    try {
+      for (const call of [
+        "SELECT lo_from_bytea(0, '\\x00')",
+        'SELECT lo_create(0)',
+        'SELECT lo_creat(-1)',
+        'SELECT lo_open(1, 131072)',
+        "SELECT lo_put(1, 0, '\\x00')",
+        "SELECT lowrite(0, '\\x00')",
+        'SELECT lo_truncate(0, 0)',
+        'SELECT lo_truncate64(0, 0)',
+        'SELECT lo_unlink(1)',
+        "SELECT lo_import('/etc/hostname')",
+        "SELECT lo_import('/etc/hostname', 1)",
+      ])
+        expect(await sqlState(client(), call), call).toBe('42501');
+      await client().query('BEGIN');
+      try {
+        expect(await sqlState(client(), "SELECT 1 FROM app_meta WHERE key = 'loader_lock' FOR UPDATE")).toBe('42501');
+      } finally {
+        await client().query('ROLLBACK');
+      }
+      expect((await t.admin.query('SELECT count(*)::int AS n FROM pg_largeobject_metadata')).rows).toEqual([{ n: 0 }]);
+    } finally {
+      await client().query("SET default_transaction_read_only = on; SET statement_timeout = '2s'");
+    }
+  });
+
+  it('cannot raise its temp_file_limit (a superuser-only setting)', async () => {
+    expect((await client().query("SELECT current_setting('temp_file_limit') AS l")).rows).toEqual([{ l: '256MB' }]);
+    for (const set of ['SET temp_file_limit = -1', "SET temp_file_limit = '1TB'", 'RESET temp_file_limit'])
+      expect(await sqlState(client(), set), set).toBe('42501');
+  });
+});
+
 describe('rws_owner_api (owner reader)', () => {
   it('is read-only with a 2 s statement timeout and is not the object owner', async () => {
     const { rows } = await owner.query(
@@ -194,6 +237,23 @@ describe('rws_load (the loader)', () => {
       ),
     ).toBe('42501');
     expect(await sqlState(load, 'DELETE FROM attribution')).toBe('42501');
+  });
+
+  it('takes the loader lock, a row lock that waits at most 30 s', async () => {
+    await load.query('BEGIN');
+    try {
+      await load.query("SET LOCAL lock_timeout = '30s'");
+      expect((await load.query("SELECT key FROM app_meta WHERE key = 'loader_lock' FOR UPDATE")).rows).toEqual([
+        { key: 'loader_lock' },
+      ]);
+      // A second loader session waits for it, and gives up at its lock_timeout (a transient stall).
+      const other = await t.connectAs('rws_load');
+      await other.query("SET lock_timeout = '100ms'");
+      expect(await sqlState(other, "SELECT 1 FROM app_meta WHERE key = 'loader_lock' FOR UPDATE")).toBe('55P03');
+      await other.end();
+    } finally {
+      await load.query('ROLLBACK');
+    }
   });
 
   it('cannot delete observations, rewrite the revision log, or read the reader views', async () => {

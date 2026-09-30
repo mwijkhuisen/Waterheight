@@ -177,7 +177,9 @@ install -d -m 0755 /srv/rws/public /srv/rws/public/ops /srv/rws/tiles /etc/rws
 install -d -m 0700 /etc/rws/secrets "$RWS_STATE_DIR" "$RWS_STATE_DIR/releases"
 install -d -m 0750 -o 65532 -g 65532 /srv/rws/raw /srv/rws/owner /srv/rws/owner/status
 install -d -m 0755 -o 65532 -g 65532 /srv/rws/public/status
-install -d -m 0700 -o 65532 -g 65532 /srv/rws/backup /srv/rws/backup/cache /srv/rws/backup/drill
+# The parent is root's: its subdirectories are bind-mounted one by one, and a uid-65532 owner could swap db/ for a link.
+install -d -m 0700 -o 0 -g 0 /srv/rws/backup
+install -d -m 0700 -o 65532 -g 65532 /srv/rws/backup/cache /srv/rws/backup/drill
 install -d -m 0750 -o 0 -g 61003 /srv/rws/backup/db
 install -d -m 0755 /etc/rws/postgres
 install -m 0644 "$repo/deploy/postgres/pg_hba.conf" "$repo/deploy/postgres/pg_ident.conf" /etc/rws/postgres/
@@ -595,7 +597,7 @@ snapshot=$(rws_compose run --rm --no-deps -T backup ls latest /data/db)
 for f in rws.dump globals.sql; do
   grep -qx "/data/db/$f" <<<"$snapshot" || fail "the latest snapshot has no /data/db/$f"
 done
-proof "the nightly dump: pg_dump -Fc and pg_dumpall --globals-only --no-role-passwords as rws_backup (peer, no password) wrote rws.dump (custom format, $tables TABLE DATA entries by pg_restore -l) and globals.sql (the roles, no password hash), root:61003 0440: uid 65532 cannot read them, the backup job's gid can, and restic's latest snapshot holds /data/db"
+proof "the nightly dump: pg_dump -Fc --no-large-objects and pg_dumpall --globals-only --no-role-passwords as rws_backup (peer, no password) wrote rws.dump (custom format, $tables TABLE DATA entries by pg_restore -l) and globals.sql (the roles, no password hash), root:61003 0440 in root's /srv/rws/backup: uid 65532 cannot read them, the backup job's gid can, and restic's latest snapshot holds /data/db"
 drill=$("$repo/deploy/bin/rws-restore-drill" --force | tail -n 1)
 [[ $drill == 'restore drill: sampled 100, matched 100' ]] || fail "drill: $drill"
 jq -e '.drill.sampled == 100 and .drill.matched == 100' /srv/rws/public/ops/ops.json >/dev/null || fail "ops.json drill"
