@@ -98,16 +98,16 @@ After cloning into a new repository, the owner applies the settings of `docs/git
 
 ## 2. Production host (P1)
 
-> **Status:** P1 is planned, not built yet: `deploy/` is still empty. This section lists what the host needs and the order of the owner steps, so they can be prepared now. The scripts named here (`deploy/host/bootstrap.sh`, `rws-update`, `rws-deploy`, `rws-hc-sync`, `rws-reachability`, `scripts/verify-prod.sh`) arrive with P1b, together with the runbooks.
+> **Status:** this section follows the P1b platform PR (branch `claude/p1b-platform`, draft, under review). The authoritative, tested commands are in its runbooks, `docs/runbooks/bootstrap.md` and `docs/runbooks/owner-checks.md`; if a step here and a runbook disagree, the runbook wins. Other runbooks: `deploy-rollback.md`, `recorder-down.md`, `restore.md`, `disk-full.md`, `lost-ssh.md`.
 
 ### 2.1 System requirements (A§3, §6.2 A3)
 
 | Item | Requirement |
 |---|---|
 | VPS | One EU-region VPS: **4 vCPU, 8 GB RAM, ≥ 200 GB NVMe**, ≥ 1 Gbit/s, ≥ 20 TB/month traffic, IPv4 + IPv6 |
-| OS | **Debian 13 "trixie"** (matches the distroless `debian13` images) |
+| OS | **Debian 13 "trixie", amd64** (matches the distroless `debian13` images; the pinned cosign and Docker packages are amd64) |
 | Provider features | Weekly snapshots, provider firewall (port 22 from your own IPs if static), a working break-glass console |
-| Container runtime | Docker Engine 29.8.1 + Docker Compose 5.5.1 from Docker's signed apt repository (installed by bootstrap) |
+| Container runtime | Docker Engine 29.8.1, Compose 5.5.1, containerd 2.3.5 and cosign 3.1.3, pinned and installed by `bootstrap.sh`; install nothing yourself |
 | Domain | A registered domain with mailboxes `contact@` and `security@` |
 | DNS | A/AAAA → the VPS; CAA `0 issue "letsencrypt.org"`; DNSSEC if available |
 | Off-site backup | An EU S3-compatible bucket, versioned, **Object Lock (compliance, 30 days) enabled at creation** |
@@ -115,7 +115,7 @@ After cloning into a new repository, the owner applies the settings of `docs/git
 
 Expected use in year 1 is about 60 GB of disk; an alert fires at 75%.
 
-### 2.2 Owner preparation, step by step (§6.2 A1–A7, B2, B4)
+### 2.2 Owner preparation, step by step (§6.2 A1–A6, B1–B2)
 
 None of these steps depends on P1 code, so they can be done now. Tick each box and keep the notes (provider, region, key IDs, never the secrets themselves) in your password manager. Deadlines are from PHASES §6.2; the recorder is meant to be live by **10-02**.
 
@@ -149,7 +149,7 @@ Record your answers in the issue for P1 (defaults from PHASES §6.1):
 
 #### Step 4 · Order the VPS (A3, by 09-27)
 
-- [ ] Order: **EU region, 4 vCPU, 8 GB RAM, ≥ 200 GB NVMe, ≥ 1 Gbit/s, ≥ 20 TB/month traffic, IPv4 + IPv6, Debian 13 "trixie"**.
+- [ ] Order: **EU region, 4 vCPU, 8 GB RAM, ≥ 200 GB NVMe, ≥ 1 Gbit/s, ≥ 20 TB/month traffic, IPv4 + IPv6, Debian 13 "trixie" amd64**.
 - [ ] Add your SSH public key from step 3 during ordering.
 - [ ] Enable **weekly provider snapshots**.
 - [ ] Enable the **provider firewall**: inbound 22/tcp (only from your own IPs if they are static), 80/tcp, 443/tcp and 443/udp; everything else dropped.
@@ -157,72 +157,174 @@ Record your answers in the issue for P1 (defaults from PHASES §6.1):
 - [ ] Write down the IPv4 and IPv6 addresses.
 - [ ] Check from your workstation:
   ```bash
-  ssh -i ~/.ssh/rws_ops root@<ipv4> 'cat /etc/debian_version; nproc; free -g; df -h /'
+  ssh -i ~/.ssh/rws_ops root@<ipv4> 'grep VERSION_CODENAME /etc/os-release; dpkg --print-architecture; nproc; free -g; df -h /; ip -br a'
   ```
-  Expect `13.x`, 4 CPUs, ~8 GB and ≥ 200 GB. Do nothing else on the host: `bootstrap.sh` (P1b) sets up users, firewall and Docker.
+  Expect `trixie`, `amd64`, 4 CPUs, ~8 GB, ≥ 200 GB and a global IPv4 and IPv6 address. Do nothing else on the host: `bootstrap.sh` (P1b) sets up users, firewall and Docker.
 
 #### Step 5 · DNS (A4, by 09-27)
 
 - [ ] `A <domain> → <ipv4>` and `AAAA <domain> → <ipv6>` (and the same for `www` if you want it).
 - [ ] `CAA <domain> 0 issue "letsencrypt.org"`.
-- [ ] Enable DNSSEC at the registrar, if supported.
-- [ ] Check:
-  ```bash
-  dig +short A <domain>; dig +short AAAA <domain>; dig +short CAA <domain>
-  dig +dnssec +short <domain> | grep -q RRSIG && echo "DNSSEC ok"
-  ```
+- [#### Step 6 · Off-site backup bucket (A5, by 09-28)
 
-#### Step 6 · Off-site backup bucket (A5, by 09-28)
-
-- [ ] At your D13 provider, create a bucket in an EU region with **versioning and Object Lock enabled at creation** (it cannot be added later), default retention **compliance mode, 30 days**.
-- [ ] Create the **VPS key**, scoped to this bucket only, with *put, get, list* and **without** `DeleteObjectVersion`, `BypassGovernanceRetention` and `PutObjectRetention`.
-- [ ] Create the **workstation key** (used only from your own machine, for `restic forget --prune`). It never goes on the VPS.
+- [ ] At your D13 provider, create a bucket in an EU region with **versioning and Object Lock enabled at creation** (it cannot be added later), default retention **COMPLIANCE, 30 days**, reachable on port **443** (the firewall allows no other port).
+- [ ] Create the **VPS key** with the policy in `deploy/host/s3-vps-key-policy.json` (replace `RWS_BUCKET` with your bucket name). It may put, get, list and delete *objects* (restic removes its own lock files; under versioning that only adds a delete marker), but **not** delete object versions, bypass or change retention, change the lock or versioning configuration, or add lifecycle rules.
+- [ ] Create the **workstation key** for `restic forget --prune` (7 daily, 8 weekly, 12 monthly). It never goes on the VPS.
 - [ ] Generate the restic repository password: `openssl rand -base64 48`. Store it in your password manager **and** on paper; without it the backups cannot be read.
-- [ ] Write down the endpoint URL, region and bucket name (not secret) for P1b.
-- [ ] Check with the VPS key (any S3 client, e.g. `aws s3api` with `--endpoint-url`): uploading an object works, and deleting a specific object version is **refused**.
+- [ ] Write down the endpoint host, region (e.g. `fr-par`, `eu-central-1`) and bucket name for step 13.
+- [ ] Check: the provider console shows versioning on and the default retention. The real proof is `object-lock-prune.sh` in step 14.
 
 #### Step 7 · healthchecks.io (A6, by 09-28)
 
-- [ ] Create an account (free tier, 20 checks) with two-factor authentication.
-- [ ] Create a project, e.g. `rws`.
-- [ ] Add integrations: **e-mail** and **phone/push** (the mobile app, Pushover, Signal or similar); send a test notification to each.
-- [ ] Create a **project API key** (read-write) for `rws-hc-sync`. Do not create the checks by hand: `rws-hc-sync` does that in P1b from `deploy/healthchecks.yaml`.
+- [ ] Create an account (free tier) with two-factor authentication, and a project, e.g. `rws`.
+- [ ] Add integrations: **e-mail** and **phone/push**; send a test notification to each.
+- [ ] From the project settings, copy two keys: the **ping key** (goes on the VPS, step 12) and a read-write **API key** (stays on your workstation, step 16). Create no checks by hand: `rws-hc-sync` creates all 15.
 
-#### Step 8 · GitHub (B2, B4, before the first P1b release)
+#### Step 8 · GitHub environment (B2, before the first release)
 
-- [ ] Confirm `scripts/gh-settings.sh --check` passes (B1).
-- [ ] Create the **`production`** environment: required reviewer = you; deployment branch = `main`; **no environment secrets**.
-- [ ] Add **no repository secrets** (B5): cosign uses GitHub OIDC, and GHCR pushes use `GITHUB_TOKEN`.
-- [ ] If the repository is **private** (D7), create a fine-grained token with only `read:packages` for the VPS (step 9). If it is public, set the GHCR packages public after the first release instead.
+- [ ] `scripts/gh-settings.sh --check` passes (B1).
+- [ ] Environment **`production`**: required reviewer = you; deployment branch = `main`; **no secrets**. Add no repository secrets either (B5): cosign uses GitHub OIDC and GHCR pushes use `GITHUB_TOKEN`.
 
-#### Step 9 · Put the secrets on the VPS (A7)
+### 2.3 Install and go live (P1b), step by step
 
-Do this after `bootstrap.sh` has created `/etc/rws/secrets/` in P1b; prepare the values now. The exact file names come with P1b's `deploy/compose.yaml` and runbooks.
+The order below is the fastest way to live capture (`docs/runbooks/bootstrap.md`). Commands with `sudo` run on the VPS as `ops`; step 10 and 11 run as root.
 
-- [ ] Restic repository password (step 6).
-- [ ] The **VPS** S3 access key ID and secret (step 6), never the workstation key.
-- [ ] The healthchecks.io project API key (step 7).
-- [ ] The GHCR read token, only if the repository is private (step 8).
-- [ ] Write each value without a trailing newline or shell history, e.g. `sudo install -m 0600 /dev/stdin /etc/rws/secrets/<name>` and paste, then Ctrl-D. The directory is 0700, files 0600.
-- [ ] Never put these values in the repository, GitHub, an issue, a chat or a log. Database role passwords are generated by bootstrap in P2; you do not create them.
+#### Step 9 · Merge and promote the release
 
-When steps 1–8 are done, tell the P1b session the non-secret values (domain, IPs, bucket endpoint/region/name, healthchecks project name) so it can fill in the config.
+- [ ] Merge the P1a and P1b PRs into `main`. `release.yml` builds, signs and attests the three images (`server`, `web`, `backup`).
+- [ ] In GitHub → Actions, **approve the `promote` job** (environment `production`). It publishes the release `prod-<UTC timestamp>` with `release-manifest.json`, its sigstore bundle and `deploy-bundle.tar.gz`.
+- [ ] **B4:** set the three GHCR packages `waterheight/server`, `web` and `backup` to **public** (package settings → Change visibility). Check:
+  ```bash
+  curl -s 'https://ghcr.io/token?scope=repository:mwijkhuisen/waterheight/server:pull' | grep -q '"token"' && echo public
+  ```
 
-### 2.3 Install (P1b)
+#### Step 10 · Fetch and verify the release on the VPS (never a git checkout)
 
-1. As root on a fresh Debian 13 host, run `deploy/host/bootstrap.sh` (idempotent). It creates the `ops` user (SSH keys only, no root login); nftables inbound 22 (rate-limited), 80, 443/tcp and 443/udp, and egress TCP 443 + DNS only for the container subnets; unattended-upgrades, needrestart, chrony and a sysctl baseline; Docker with `no-new-privileges`, `live-restore`, `icc: false` and the `local` log driver; and `/srv/rws/{raw,public,owner,tiles,backup}`.
-2. Releases are built by `.github/workflows/release.yml` (SBOM, provenance, cosign keyless signing) and promoted by the owner through the `production` environment. Nothing is built on the VPS.
-3. Deploy with `rws-deploy <release>`; afterwards the `rws-update` systemd timer (every 5 min) pulls new releases. Both verify the signed manifest and image signatures, smoke-test and roll back automatically on failure. Services: `caddy`, `capture`, `watchdog` and `backup` (`deploy/compose.yaml`).
-4. Run `rws-hc-sync` to create the healthchecks, and enable `rws-backup.timer` (hourly restic to the bucket) and `rws-restore-drill.timer` (monthly).
-5. Run `deploy/bin/rws-reachability` on the VPS (IPv4 and IPv6) and attach its output as `docs/reachability-<date>.md`.
+- [ ] `ssh root@<ipv4>` (or `sudo -i`), in an interactive shell.
+- [ ] Paste the block from **`docs/runbooks/bootstrap.md` §1** exactly. It downloads cosign (sha256-pinned), the manifest, its signature and the deploy bundle, verifies the signature against the release workflow's identity and the bundle's sha256, and unpacks it into `/root/rws-release/bundle`. It is kept in the runbook only, because a test checks it against `release.yml`.
+- [ ] Check: `Verified OK`, `deploy-bundle.tar.gz: OK`, and the last line reads `VERIFIED: release prod-…`. On `STOP`, run nothing from that directory and find out why.
 
-### 2.4 Verify
+#### Step 11 · Bootstrap the host
 
 ```bash
-scripts/verify-prod.sh <domain>   # TLS, security headers, /healthz, capture freshness, noindex
+cd /root/rws-release
+bundle/deploy/host/bootstrap.sh --dry-run   # shows what it would change
+bundle/deploy/host/bootstrap.sh             # applies it
+bundle/deploy/host/bootstrap.sh             # must report "0 change(s)"
 ```
 
-Then check `https://<domain>/status/capture.json` (every public spec fresh within 3× its cadence), `/status/ops.json` (a forced restore drill with 100 of 100 sha256 matches), and the owner checks of P1: a stopped `capture` alerts your phone, `restic forget --prune` with the VPS key fails, and capture is fresh again within 20 min after a reboot.
+It creates the `ops` user (NOPASSWD sudo, your key copied over), makes SSH keys-only with no root login, sets UTC, chrony, AppArmor, unattended-upgrades (reboot at 03:40 UTC when needed), the sysctl baseline and the `rws-firewall` service; installs the pinned Docker and cosign; creates `/srv/rws` and `/etc/rws/secrets`; generates `rws_x_api_key` and a template `/etc/rws/rws.env`; and installs the host scripts and timers.
+
+- [ ] **Before closing the root session**, log in as `ops` in a second terminal: `ssh -i ~/.ssh/rws_ops ops@<ipv4>`. From now on root login is off.
+- [ ] Check:
+  ```bash
+  sudo systemctl is-active rws-firewall docker chrony
+  sudo nft list table inet rws | head
+  sudo docker version --format '{{.Server.Version}}'   # 29.8.1
+  systemctl list-timers 'rws-*'
+  ```
+
+#### Step 12 · Secrets (A7), before `rws.env`
+
+A complete `rws.env` starts the deploys, so the secrets go first. Edit each file **in place** with `sudoedit /etc/rws/secrets/<name>` (never `mv`, `install` or an editor that replaces the file: containers keep reading the old inode).
+
+| File | Content |
+|---|---|
+| `hc_ping_key` | the healthchecks.io **ping key** (step 7) |
+| `rws_x_api_key` | already generated by bootstrap; keep it (C7 tells RWS the value) |
+| `restic_password` | the repository password (step 6) |
+| `s3_credentials` | three lines: `[default]`, `aws_access_key_id = …`, `aws_secret_access_key = …` with the **VPS key** |
+
+- [ ] Fill the three files above; `ghcr_token` is not needed (the repository is public).
+- [ ] Run bootstrap again, which resets the owners and modes: `sudo /usr/local/lib/rws/deploy/host/bootstrap.sh`.
+- [ ] Check: `sudo stat -c '%n %a %U:%G' /etc/rws/secrets/*` shows every file `440 root:rws-*`.
+
+#### Step 13 · Fill `/etc/rws/rws.env`
+
+`sudoedit /etc/rws/rws.env`, plain `KEY=VALUE` lines without quotes:
+
+| Key | Value |
+|---|---|
+| `RWS_DOMAIN` | your domain, e.g. `rivierstanden.nl` |
+| `RWS_CONTACT_EMAIL` | `contact@<domain>` (sent in every provider request's User-Agent) |
+| `RWS_PUBLIC_IPV4`, `RWS_PUBLIC_IPV6` | detected by bootstrap; compare them with your DNS records (step 5): the site listens only on these |
+| `RWS_RESTIC_REPOSITORY` | `s3:https://<endpoint>/<bucket>/restic` |
+| `RWS_S3_REGION` | the bucket's region |
+| `RWS_BACKUP` | leave `off` until step 15 |
+
+- [ ] Check: `sudo rws-update --dry-run` no longer says "rws.env is not complete".
+
+#### Step 14 · First deploy
+
+Wait up to 5 minutes for `rws-update.timer`, or deploy now with the tag verified in step 10:
+
+```bash
+tag=$(sudo grep -o '"tag": *"prod-[0-9]\{8\}T[0-9]\{6\}Z"' /root/rws-release/release-manifest.json | grep -o 'prod-[0-9]\{8\}T[0-9]\{6\}Z')
+sudo rws-deploy "$tag"
+```
+
+It verifies the manifest and the three images, pulls by digest, starts the services and smoke-tests `/healthz` over real TLS plus a fresh `capture.json`. Caddy gets its Let's Encrypt certificate in the first minute, so DNS (step 5) must resolve. If it fails, it says why; fix the cause (DNS, B4, `rws.env`) and run `rws-deploy "$tag"` again.
+
+- [ ] Check:
+  ```bash
+  sudo docker compose -p rws ps                       # caddy, capture, watchdog: healthy
+  curl -s https://<domain>/status/capture.json | head -c 300
+  sudo cat /var/lib/rws/current
+  ```
+
+#### Step 15 · Backups
+
+```bash
+sudo sed -i 's/^RWS_BACKUP=off$/RWS_BACKUP=on/' /etc/rws/rws.env
+sudo rws-backup --init                 # once: creates the restic repository
+sudo rws-backup                        # first backup (then hourly at :17)
+sudo rws-restore-drill --force         # restores 100 random objects and compares them
+sudo /usr/local/lib/rws/deploy/tests/object-lock-prune.sh   # the VPS key cannot remove versions
+```
+
+- [ ] Check: `curl -s https://<domain>/status/ops.json` shows `last_backup` and a drill with `"sampled":100,"matched":100`; `object-lock-prune.sh` prints five PASS lines.
+
+#### Step 16 · Healthchecks, from your workstation
+
+```bash
+deploy/bin/rws-hc-sync --dry-run                        # lists the 15 checks
+deploy/bin/rws-hc-sync --key-file ~/secure/hc_api_key   # creates or updates them
+```
+
+Keep the API key off the VPS (it can delete the checks that watch the VPS).
+
+- [ ] Check: the project lists 15 checks; after 10 minutes `cap-*`, `update`, `watchdog`, `cert` and `disk` are green, and `backup` after the next :17.
+
+#### Step 17 · Verify from outside
+
+```bash
+scripts/verify-prod.sh <domain>   # from a checkout after pnpm install --frozen-lockfile; no SSH
+```
+
+- [ ] Every line is PASS (IPv6 may be N/A only if your own machine has no IPv6).
+
+#### Step 18 · Owner checks (`docs/runbooks/owner-checks.md`)
+
+Paste each output into the P1 issue (#16).
+
+- [ ] **Reachability** (as `ops`): `rws-reachability --out /tmp/reachability.md`. Every required row PASS (or `n/a (no AAAA)`); a required FAIL goes into `docs/risk-register.md` with its fallback. The agent commits the table as `docs/reachability-<date>.md`.
+- [ ] **Phone alert:** `sudo docker compose -p rws stop capture`; wait for the alert (about 15–30 min); `sudo docker compose -p rws start capture`; the check turns green within one cadence.
+- [ ] **Reboot:** `sudo reboot`; within 20 min `capture.json` is fresh, `verify-prod.sh` passes and the timers are scheduled, with no manual step.
+- [ ] **Negative deploy** (after at least two releases): `sudo /usr/local/lib/rws/deploy/tests/negative-deploy.sh` prints four PASS lines (unsigned and wrongly signed images refused; an injected smoke failure rolls back).
+- [ ] **Capacity:** after 48 h, give the agent the owner-audience bytes/day aggregate (the `jq` command in owner-checks §7) for `docs/capacity.md`.
+
+### 2.4 Later: updates and rollbacks
+
+- A merge to `main` plus your approval of `promote` is the whole deploy: `rws-update.timer` verifies and deploys within 5 minutes and rolls back on a failed smoke test (`docs/runbooks/deploy-rollback.md`).
+- When a release changes host files, the `update` check fails with `host_files_changed`. Then run that release's bootstrap: `sudo /var/lib/rws/releases/<tag>/deploy/host/bootstrap.sh --dry-run`, then without `--dry-run`. Never run the bootstrap of an older release than the last one you ran.
+- Changing a secret: `sudoedit` it in place; after changing `rws_x_api_key`, `sudo docker restart rws-capture-1`.
+- Something red: start with `docs/runbooks/recorder-down.md`; the other runbooks cover restore, disk full and lost SSH access.
+
+The owner view (WireGuard, `basic_auth`, `owner.<domain>`) is not part of P1; it is set up in P12a (§6.2 A8).
+
+---
+
+estic forget --prune` with the VPS key fails, and capture is fresh again within 20 min after a reboot.
 
 The owner view (WireGuard, `basic_auth`, `owner.<domain>`) is not part of P1; it is set up in P12a (§6.2 A8).
 
