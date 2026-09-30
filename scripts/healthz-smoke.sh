@@ -39,13 +39,14 @@ checks=$(env -u RWS_DOMAIN -u RWS_CONTACT_EMAIL node "$main" watchdog --dry-run 
 grep -q '^cert: ' <<<"$checks" || { echo "healthz-smoke: watchdog --dry-run listed no checks" >&2; exit 1; }
 echo "watchdog --dry-run -> exit 0 ($(wc -l <<<"$checks") checks)"
 
-# Never a live recorder or watchdog: without the contact variables both exit 78; the timeout is a backstop.
-for role in capture load publish replay watchdog nope; do
+# Never a live recorder, watchdog or loader: without the contact variables (capture, watchdog) or the
+# database settings (load, migrate) they exit 78; the timeout is a backstop.
+for role in capture load migrate publish replay watchdog nope; do
   code=0
-  env -u RWS_DOMAIN -u RWS_CONTACT_EMAIL timeout 10 node "$main" "$role" >/dev/null 2>&1 || code=$?
+  env -u RWS_DOMAIN -u RWS_CONTACT_EMAIL -u DATABASE_URL -u RWS_DB_HOST timeout 10 node "$main" "$role" >/dev/null 2>&1 || code=$?
   [[ $code -ne 0 ]] || { echo "healthz-smoke: role $role exited 0" >&2; exit 1; }
-  # capture and watchdog must refuse to start (78): any other code, the timeout's 124 included, may be a live role.
-  if [[ $role == capture || $role == watchdog ]] && [[ $code -ne 78 ]]; then
+  # These must refuse to start (78): any other code, the timeout's 124 included, may be a live role.
+  if [[ $role == capture || $role == watchdog || $role == load || $role == migrate ]] && [[ $code -ne 78 ]]; then
     echo "healthz-smoke: role $role exited $code, not 78" >&2
     exit 1
   fi

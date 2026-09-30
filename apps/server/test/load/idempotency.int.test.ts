@@ -1,0 +1,363 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { bareLine, buildFixtureArchive, writePayload } from '../../../../scripts/fixture-archive.ts';
+import { replay } from '../../src/load/replay.ts';
+import { EMMERICH_W, type Harness, harness, KAUB_W, measurements, RUHRWEHR_W, SERIES_URL } from './harness.ts';
+
+// The loader on the recorded DE-1 archive (issue #17): replaying it gives the
+// identical checksum, no new row and no revision; one changed value gives
+// exactly one revision; nothing is lost, skipped or applied twice.
+
+let h: Harness;
+
+beforeAll(async () => {
+  h = await harness();
+});
+
+afterAll(async () => {
+  await h.close();
+});
+
+const replayAll = () =>
+  replay(
+    {
+      db: h.load.db,
+      reader: h.reader,
+      alert: (code, fields = {}) => h.alerts.push({ code, fields }),
+      now: () => new Date(),
+    },
+    { source: 'DE-1', spec: null, from: '2026-08-01', to: '2026-12-31', dryRun: false },
+  );
+const batches = async () =>
+  (
+    await h.t.admin.query(
+      'SELECT id, archive_key, parse_status, n_rows, n_new, n_changed, loaded_at FROM ingest_batch ORDER BY id',
+    )
+  ).rows;
+const cursor = async () =>
+  Object.fromEntries(
+    (await h.t.admin.query('SELECT manifest_file, byte_offset FROM load_cursor')).rows.map((r) => [
+      r.manifest_file,
+      Number(r.byte_offset),
+    ]),
+  );
+const manifestSizes = async () => Object.fromEntries((await h.reader.manifests()).map((m) => [m.file, m.size]));
+
+describe('load and replay of the fixture archive', () => {
+  let first: Record<string, string>;
+
+  it('loads every payload: rows in the right partitions, latest values, gauge zeros, one batch per payload', async () => {
+    const written = await buildFixtureArchive(h.raw);
+    expect(written).toHaveLength(6);
+    const result = await h.loader().tick();
+    expect(result).toEqual({ lines: 6, loaded: 6 });
+    expect(h.alerts).toEqual([]);
+
+    // basin 237 + Emmerich 24 + Kaub 2973 + Ruhrwehr 23 + Maxau 23, minus the rows two payloads share.
+    const n = await h.count('obs');
+    expect(n).toBeGreaterThan(3200);
+    expect(n).toBeLessThanOrEqual(237 + 24 + 2973 + 23 + 23);
+    const parts = await h.t.admin.query(
+      'SELECT tableoid::regclass::text AS p, count(*)::int AS n FROM obs GROUP BY 1 ORDER BY 1',
+    );
+    expect(parts.rows.map((r) => r.p)).toEqual(['obs_2026_08', 'obs_2026_09']);
+    expect(await h.count('gauge_zero')).toBe(181);
+    expect(await h.count('obs_revision')).toBe(0);
+    expect(await h.count('obs_latest')).toBe(237);
+    expect((await batches()).map((b) => [b.parse_status, b.n_changed])).toEqual(Array(6).fill(['ok', 0]));
+    // The sentinel of the recorded payload is nowhere.
+    const { rows } = await h.t.admin.query('SELECT count(*)::int AS n FROM obs WHERE value >= 99999');
+    expect(rows).toEqual([{ n: 0 }]);
+    // The cursor is at the end of every manifest file.
+    expect(await cursor()).toEqual(await manifestSizes());
+    first = await h.checksums();
+  });
+
+  it('a second pass has nothing to read; a replay writes 0 rows, 0 revisions and leaves every batch untouched', async () => {
+    const before = await batches();
+    const rows = await h.count('obs');
+    expect(await h.loader().tick()).toEqual({ lines: 0, loaded: 0 });
+
+    for (let pass = 0; pass < 2; pass++) {
+      const result = await replayAll();
+      expect(result).toEqual({ lines: 6, loaded: 6, quarantined: 0, skipped: 0, n_new: 0, n_changed: 0 });
+      expect(await h.checksums()).toEqual(first);
+      expect(await h.count('obs')).toBe(rows);
+      expect(await h.count('obs_revision')).toBe(0);
+      expect(await batches()).toEqual(before);
+    }
+    // A replay never moves the cursor.
+    expect(await cursor()).toEqual(await manifestSizes());
+  });
+
+  it('m+NN is stored ×100, a 1-minute series on its 15-minute grid plus its snapshot value as published', async () => {
+    const id = await h.seriesId(RUHRWEHR_W);
+    const { rows } = await h.t.admin.query('SELECT ts, value FROM obs WHERE series_id = $1 ORDER BY ts', [id]);
+    expect(new Set(rows.map((r) => r.value))).toEqual(new Set([2500]));
+    expect(rows).toHaveLength(24);
+    expect(rows[0].ts.toISOString()).toBe('2026-09-29T13:15:00.000Z');
+  });
+
+  it('a changed value produces exactly one obs_revision row and updates latest and rollups', async () => {
+    const id = await h.seriesId(EMMERICH_W);
+    const before = (
+      await h.t.admin.query('SELECT value, batch_id FROM obs WHERE series_id = $1 AND ts = $2', [
+        id,
+        '2026-09-29T13:30:00Z',
+      ])
+    ).rows[0];
+    expect(before.value).toBe(-28);
+    // A later fetch publishes a corrected value for 15:30 and one new point.
+    await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: EMMERICH_W,
+      at: new Date('2026-09-29T14:40:00Z'),
+      body: measurements(['2026-09-29T15:30:00+02:00', -27], ['2026-09-29T15:45:00+02:00', -26]),
+      url: SERIES_URL(EMMERICH_W),
+    });
+    expect(await h.loader().tick()).toEqual({ lines: 1, loaded: 1 });
+    const revisions = (
+      await h.t.admin.query('SELECT series_id, ts, old_value, new_value, old_qc, new_qc FROM obs_revision')
+    ).rows;
+    expect(revisions).toEqual([
+      { series_id: id, ts: new Date('2026-09-29T13:30:00Z'), old_value: -28, new_value: -27, old_qc: 1, new_qc: 1 },
+    ]);
+    const latest = (await h.t.admin.query('SELECT ts, value FROM obs_latest WHERE series_id = $1', [id])).rows[0];
+    expect(latest).toEqual({ ts: new Date('2026-09-29T13:45:00Z'), value: -26 });
+    const batch = (await batches()).at(-1);
+    expect(batch).toMatchObject({ parse_status: 'ok', n_rows: 2, n_new: 1, n_changed: 1 });
+    const hour = (
+      await h.t.admin.query(
+        "SELECT vmax, vlast, n FROM obs_1h WHERE series_id = $1 AND bucket = '2026-09-29T13:00:00Z'",
+        [id],
+      )
+    ).rows[0];
+    // 13:00, 13:15, 13:30 (corrected) and 13:45 (new): the rollup was recomputed from all four.
+    expect(hour).toEqual({ vmax: -26, vlast: -26, n: 4 });
+
+    // Replaying everything again: the older payload must not bring -28 back, and nothing is written.
+    const sums = await h.checksums();
+    const result = await replayAll();
+    expect(result).toMatchObject({ n_new: 0, n_changed: 0, quarantined: 0 });
+    expect(await h.checksums()).toEqual(sums);
+    expect(await h.count('obs_revision')).toBe(1);
+  });
+
+  it('an older payload that arrives after a newer one never reverts a value (newest fetch wins)', async () => {
+    const id = await h.seriesId(EMMERICH_W);
+    await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: EMMERICH_W,
+      at: new Date('2026-09-29T14:00:00Z'), // fetched before the correction above
+      body: measurements(['2026-09-29T15:30:00+02:00', -99], ['2026-09-29T15:50:00+02:00', -31]),
+      url: SERIES_URL(EMMERICH_W),
+    });
+    await h.loader().tick();
+    const rows = (
+      await h.t.admin.query(
+        "SELECT ts, value FROM obs WHERE series_id = $1 AND ts >= '2026-09-29T13:30:00Z' ORDER BY ts",
+        [id],
+      )
+    ).rows;
+    expect(rows.map((r) => r.value)).toEqual([-27, -26, -31]);
+    expect(await h.count('obs_revision')).toBe(1);
+  });
+
+  it("a late line appended to an older day's manifest file is still consumed", async () => {
+    const before = await h.count('obs');
+    // Day 2026-09-30 is already consumed; this line is filed under 2026-09-29.
+    await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: KAUB_W,
+      at: new Date('2026-09-29T23:59:59Z'),
+      body: measurements(['2026-09-30T09:30:00+02:00', 2]),
+      url: SERIES_URL(KAUB_W),
+    });
+    expect((await h.reader.manifests()).map((m) => m.file)).toEqual(['2026-09-29.jsonl', '2026-09-30.jsonl']);
+    // Within 15 minutes of the fetch? No: 07:30Z is hours after 23:59Z the day before, so it is rejected as future.
+    expect(await h.loader().tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await h.count('obs')).toBe(before);
+    expect(await cursor()).toEqual(await manifestSizes());
+  });
+
+  it('lines without a payload move the cursor and the fetch health, and add no rows and no batch', async () => {
+    const at = (s: string) => new Date(`2026-09-30T08:${s}Z`);
+    const rowsBefore = await h.count('obs');
+    const batchesBefore = await h.count('ingest_batch');
+    const known = (await batches())[0]?.archive_key as string;
+    await h.archive.append(bareLine('DE-1', 'de-1-basin', at('00:00'), { status: 304 }));
+    await h.archive.append(
+      bareLine('DE-1', 'de-1-basin', at('15:00'), { dup_of: known, sha256: 'a'.repeat(64), bytes: 10 }),
+    );
+    await h.archive.append(bareLine('DE-1', 'de-1-series', at('16:00'), { status: null, error: 'timeout' }));
+    await h.archive.append(bareLine('DE-1', 'de-1-series', at('17:00'), { status: 503 }));
+    await h.archive.append(bareLine('DE-1', 'de-1-series', at('18:00'), { status: 404 }));
+    // An owner-audience spec P1 captures: no adapter until P5c, so it is skipped.
+    await writePayload(h.archive, {
+      source: 'BE-3',
+      spec: 'be-3-levels',
+      variant: '',
+      at: at('19:00'),
+      body: Buffer.from('{"synthetic":true}'),
+      url: 'https://example.org/',
+    });
+    expect(await h.loader().tick()).toEqual({ lines: 6, loaded: 0 });
+    expect(await h.count('obs')).toBe(rowsBefore);
+    expect(await h.count('ingest_batch')).toBe(batchesBefore);
+    expect(h.alerts).toEqual([]);
+    const health = (
+      await h.t.admin.query(
+        "SELECT source_id, last_fetch_ok, consecutive_failures FROM source_health WHERE source_id IN ('DE-1', 'BE-3') ORDER BY 1",
+      )
+    ).rows;
+    expect(health).toEqual([
+      { source_id: 'BE-3', last_fetch_ok: at('19:00'), consecutive_failures: 0 },
+      // 304 and dup_of were fine; then three failures in a row.
+      { source_id: 'DE-1', last_fetch_ok: at('15:00'), consecutive_failures: 3 },
+    ]);
+    expect(await cursor()).toEqual(await manifestSizes());
+  });
+
+  it('a failed-validity payload and an unattributable recovered payload are skipped, not drift', async () => {
+    const at = new Date('2026-09-30T09:00:00Z');
+    await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: EMMERICH_W,
+      at,
+      body: Buffer.from('[]'),
+      url: SERIES_URL(EMMERICH_W),
+      validity: { ok: false, reason: 'count', count: 0 },
+    });
+    const recovered = await writePayload(h.archive, {
+      source: 'DE-1',
+      spec: 'de-1-series',
+      variant: '',
+      at: new Date('2026-09-30T09:01:00Z'),
+      body: measurements(['2026-09-30T10:45:00+02:00', 5]),
+      url: SERIES_URL(EMMERICH_W),
+    });
+    expect(recovered.variant).toBe('');
+    expect(await h.loader().tick()).toEqual({ lines: 2, loaded: 0 });
+    const last = (await h.t.admin.query('SELECT parse_status, error FROM ingest_batch ORDER BY id DESC LIMIT 2')).rows;
+    expect(last).toEqual([
+      { parse_status: 'skipped', error: 'recovered_unattributed' },
+      { parse_status: 'skipped', error: 'failed_validity' },
+    ]);
+    expect(h.alerts).toEqual([]);
+    const health = (await h.t.admin.query("SELECT consecutive_failures FROM source_health WHERE source_id = 'DE-1'"))
+      .rows;
+    expect(health).toEqual([{ consecutive_failures: 0 }]);
+  });
+
+  it('a damaged manifest line is counted, reported and stepped over; a torn last line is left for later', async () => {
+    const file = join(h.raw, '_manifest', '2026-09-30.jsonl');
+    appendFileSync(file, '{"v":1,"source":"DE-1"\n');
+    appendFileSync(file, '{"v":2,"future":"format"}\n');
+    appendFileSync(file, '{"v":1,"source":"DE-1","spec":"de-1-basin","torn');
+    const loader = h.loader();
+    expect(await loader.tick()).toEqual({ lines: 2, loaded: 0 });
+    expect(loader.badLines).toBe(2);
+    expect(h.alerts.splice(0).map((a) => a.code)).toEqual(['manifest_bad_line', 'manifest_bad_line']);
+    const sizes = await manifestSizes();
+    const torn = '{"v":1,"source":"DE-1","spec":"de-1-basin","torn'.length;
+    expect((await cursor())['2026-09-30.jsonl']).toBe((sizes['2026-09-30.jsonl'] as number) - torn);
+    expect(await loader.backlog()).toEqual({ files: 1, bytes: torn });
+  });
+});
+
+describe('atomicity: a payload is one transaction', () => {
+  it('when the last statement of the transaction fails, nothing of the payload is stored and the cursor stays', async () => {
+    const h2 = await harness();
+    try {
+      await buildFixtureArchive(h2.raw);
+      // The cursor write is the last statement of every load transaction: make it fail.
+      await h2.t.admin.query(`
+        CREATE FUNCTION fail_cursor() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'killed' USING ERRCODE = '57P01'; END $$;
+        CREATE TRIGGER fail_cursor BEFORE INSERT OR UPDATE ON load_cursor FOR EACH ROW EXECUTE FUNCTION fail_cursor();`);
+      const loader = h2.loader();
+      expect(await loader.tick()).toEqual({ lines: 0, loaded: 0 });
+      for (const table of [
+        'obs',
+        'obs_latest',
+        'obs_1h',
+        'obs_1d',
+        'gauge_zero',
+        'ingest_batch',
+        'load_cursor',
+        'source_health',
+      ]) {
+        expect(await h2.count(table), table).toBe(0);
+      }
+      // The database is back: the same lines load exactly once.
+      await h2.t.admin.query('DROP TRIGGER fail_cursor ON load_cursor');
+      expect(await loader.tick()).toEqual({ lines: 6, loaded: 6 });
+      expect(await h2.count('ingest_batch')).toBe(6);
+      expect(await h2.count('obs_revision')).toBe(0);
+      expect(await loader.tick()).toEqual({ lines: 0, loaded: 0 });
+    } finally {
+      await h2.close();
+    }
+  });
+
+  it('duplicate timestamps in one payload and a session in another time zone change nothing', async () => {
+    const h2 = await harness();
+    try {
+      await h2.t.admin.query(`ALTER DATABASE ${h2.t.name} SET timezone = 'Europe/Amsterdam'`);
+      const load = h2.dbAs('rws_load');
+      const { Loader } = await import('../../src/load/pipeline.ts');
+      const loader = new Loader({
+        db: load.db,
+        reader: h2.reader,
+        alert: (code) => h2.alerts.push({ code, fields: {} }),
+        now: () => new Date(),
+      });
+      await buildFixtureArchive(h2.raw);
+      await loader.tick();
+      await writePayload(h2.archive, {
+        source: 'DE-1',
+        spec: 'de-1-series',
+        variant: EMMERICH_W,
+        at: new Date('2026-09-30T10:00:00Z'),
+        body: measurements(
+          ['2026-09-30T11:30:00+02:00', 1],
+          ['2026-09-30T11:30:00+02:00', 2],
+          ['2026-09-30T11:45:00+02:00', 3],
+        ),
+        url: SERIES_URL(EMMERICH_W),
+      });
+      expect(await loader.tick()).toEqual({ lines: 1, loaded: 1 });
+      expect(h2.alerts).toEqual([]);
+      const id = await h2.seriesId(EMMERICH_W);
+      const rows = (
+        await h2.t.admin.query(
+          "SELECT value FROM obs WHERE series_id = $1 AND ts >= '2026-09-30T09:30:00Z' ORDER BY ts",
+          [id],
+        )
+      ).rows;
+      expect(rows.map((r) => r.value)).toEqual([2, 3]);
+      // Buckets are UTC hours and days although the loader's session is in Amsterdam.
+      const drift = await h2.t.admin.query(`
+        SELECT count(*)::int AS n FROM (
+          (SELECT series_id, bucket, n FROM obs_1d
+           EXCEPT SELECT series_id, date_bin('1 day', ts, timestamptz '2000-01-01 00:00:00+00'), count(*)::int FROM obs GROUP BY 1, 2)
+          UNION ALL
+          (SELECT series_id, date_bin('1 day', ts, timestamptz '2000-01-01 00:00:00+00'), count(*)::int FROM obs GROUP BY 1, 2
+           EXCEPT SELECT series_id, bucket, n FROM obs_1d)) d`);
+      expect(drift.rows).toEqual([{ n: 0 }]);
+      const sums = await h2.checksums();
+      await replay(
+        { db: load.db, reader: h2.reader, alert: () => {}, now: () => new Date() },
+        { source: 'DE-1', spec: null, from: '2026-09-01', to: '2026-10-31', dryRun: false },
+      );
+      expect(await h2.checksums()).toEqual(sums);
+      expect(await h2.count('obs_revision')).toBe(0);
+    } finally {
+      await h2.close();
+    }
+  });
+});
