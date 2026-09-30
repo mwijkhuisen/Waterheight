@@ -658,8 +658,9 @@ describe('drift: anything unknown is a SchemaDrift with a fixed code', () => {
 // ---------------------------------------------------------------- CSV round trip
 
 /**
- * What a text cell may hold (review S2), stated here on its own: no C0 control but tab and line feed, no DEL
- * or C1 control, no surrogate half, no U+FFFE or U+FFFF, and none of the bidi and format controls.
+ * What a text cell may hold (review S2 and R4), stated here on its own: no C0 control but tab and line feed,
+ * no DEL or C1 control, no surrogate half, no U+FFFE or U+FFFF, no format character (Unicode Cf) and no
+ * bidirectional control (Bidi_Control), as Node's own tables define the last two.
  */
 const allowed = (s: string) =>
   [...s].every((c) => {
@@ -668,9 +669,9 @@ const allowed = (s: string) =>
       (cp >= 0x20 || cp === 0x9 || cp === 0xa) &&
       !(cp >= 0x7f && cp <= 0x9f) &&
       !(cp >= 0xd800 && cp <= 0xdfff) &&
-      !(cp >= 0x202a && cp <= 0x202e) &&
-      !(cp >= 0x2066 && cp <= 0x2069) &&
-      ![0x200e, 0x200f, 0xfeff, 0xfffe, 0xffff].includes(cp)
+      !/\p{Cf}/u.test(c) &&
+      !/\p{Bidi_Control}/u.test(c) &&
+      ![0xfffe, 0xffff].includes(cp)
     );
   });
 

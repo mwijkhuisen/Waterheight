@@ -301,12 +301,13 @@ export const XML_MAX_BYTES = 1024 * 1024;
  * tags plus attributes are 669,675 (the NL-4 sheet of 3.8 MB; LU-5 CAP 218), and
  * 1.5 M is about twice that.
  */
-export const XML_CAPS = { maxTag: 16 * 1024, maxItems: 1_500_000 } as const;
+export const XML_CAPS = { maxTag: 16 * 1024, maxItems: 1_500_000, maxDepth: 256 } as const;
 
 /**
  * DTDs and entities off: any DOCTYPE or ENTITY declaration is refused before
- * parsing; a tag over XML_CAPS.maxTag characters or more tags plus attributes
- * than XML_CAPS.maxItems are refused before the validator runs.
+ * parsing; a tag over XML_CAPS.maxTag characters, more tags plus attributes
+ * than XML_CAPS.maxItems or elements nested deeper than XML_CAPS.maxDepth are
+ * refused before the validator runs (which keeps a stack entry per open tag).
  */
 export function checkXmlText(text: string): void {
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) fail('xml_dtd');

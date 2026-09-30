@@ -6,8 +6,9 @@ import { lock } from './store.ts';
 // `offset` relation, a − b on the timestamps both series have, over the 24
 // hours before the current UTC hour. One row per pair and hour, recomputed on
 // every health pass (idempotent), so a late value or a revision still counts.
-// A pair that was checked before and now has no aligned timestamp (one side
-// has no values in the window: RWS stopped serving it, or its capture stopped)
+// A pair that was checked before and now has no timestamp both sides state
+// (one side has no values in the window: RWS stopped serving it, or its
+// capture stopped; or their instants no longer coincide: a changed step)
 // gets a failing row with n_aligned 0 (review F2 of P2b); a pair never
 // checked gets none, so data that has not arrived yet is not a breach.
 // P5 adds the pairs that need a lag; this one needs none.

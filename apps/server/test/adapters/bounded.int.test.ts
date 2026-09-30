@@ -36,6 +36,10 @@ const expected: Record<keyof typeof BODIES, string> = {
   'xml-one-tag-3m-equals': 'xml_tag_too_long',
   'xml-one-tag-1.5m-quoted': 'xml_tag_too_long',
   'xml-many-tags-10-attributes': 'xml_too_many_items',
+  'nl4-unclosed-1.5m-tags': 'xml_too_deep at xl?worksheets?sheet1.xml',
+  'nl4-one-instruction-1.6m-attributes': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
+  'xml-unclosed-1.5m-tags': 'xml_too_deep',
+  'xml-one-instruction-1.6m-attributes': 'xml_tag_too_long',
 };
 
 describe('bounded parsing: every hostile body ends in a SchemaDrift or a guard code, not a crash', () => {

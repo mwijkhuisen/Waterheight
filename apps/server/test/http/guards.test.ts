@@ -180,7 +180,7 @@ describe('XML (CAP)', () => {
 
 describe('XML bounds (review S1)', () => {
   it('passes a tag of exactly the length cap and refuses one character more', () => {
-    expect(XML_CAPS).toEqual({ maxTag: 16 * 1024, maxItems: 1_500_000 });
+    expect(XML_CAPS).toEqual({ maxTag: 16 * 1024, maxItems: 1_500_000, maxDepth: 256 });
     expect(() => checkXmlText(`<a b="${'x'.repeat(XML_CAPS.maxTag - 9)}"/>`)).not.toThrow();
     expect(() => checkXmlText(`<a b="${'x'.repeat(XML_CAPS.maxTag - 8)}"/>`)).toThrow('xml_tag_too_long');
   });

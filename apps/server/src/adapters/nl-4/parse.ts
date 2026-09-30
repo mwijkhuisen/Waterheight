@@ -62,15 +62,18 @@ export const MAX_TEXT = 512;
 export const MAX_ITEMS = 1_500_000;
 /** Characters of one tag, from `<` to `>` (643: the workbook's root with its namespaces); the guard's cap too. */
 export const MAX_TAG = 16 * 1024;
+/** Open elements at any point (5: worksheet, sheetData, row, c, v); the guard's cap too. */
+export const MAX_DEPTH = 256;
 // Columns: exactly the 17 of the header; a cell right of column Q is drift.
 
 /**
- * A character no text of ours may hold (review S2 of P2b), decoded or raw: one XML 1.0 does not allow (a
- * lone surrogate, U+FFFE, U+FFFF), a C0 or C1 control or DEL other than tab and line feed, and the
- * bidirectional and format controls that reorder or hide text (U+200E, U+200F, U+202A–U+202E, U+2066–U+2069,
- * U+FEFF). Workbook text reaches a public reference view.
+ * A character no text of ours may hold (review S2 and R4 of P2b), decoded or raw: one XML 1.0 does not allow
+ * (a lone surrogate, U+FFFE, U+FFFF), a C0 or C1 control or DEL other than tab and line feed, every format
+ * character (Unicode Cf: zero-width and joining characters, the soft hyphen, U+FEFF, the tag characters) and
+ * every bidirectional control (Bidi_Control: U+061C, U+200E, U+200F, U+202A–U+202E, U+2066–U+2069): what
+ * reorders or hides text. Workbook text reaches a public reference view.
  */
-export const FORBIDDEN_TEXT = /[[\p{Cc}--[\t\n]]\p{Cs}\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF\uFFFE\uFFFF]/v;
+export const FORBIDDEN_TEXT = /[[\p{Cc}--[\t\n]]\p{Cs}\p{Cf}\p{Bidi_Control}\uFFFE\uFFFF]/v;
 
 const WORKSHEET_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
 const SHARED_STRINGS_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings';
@@ -97,7 +100,9 @@ const drift = (code: string, path = ''): never => {
 
 /**
  * One member as a tree: refused before parsing when it declares a DTD, holds CDATA, has a tag over MAX_TAG
- * characters or more tags plus attributes than MAX_ITEMS, or is not well-formed.
+ * characters, more tags plus attributes than MAX_ITEMS or elements deeper than MAX_DEPTH, or is not
+ * well-formed. A text node is not bounded here beyond the member's size (the parser holds one text of a
+ * member's size at most: about 30 bytes per character, review R3 of P2b).
  */
 function tree(members: ReadonlyMap<string, string>, path: string): Node {
   const raw = members.get(path);
@@ -106,7 +111,7 @@ function tree(members: ReadonlyMap<string, string>, path: string): Node {
   const text = raw.replace(/\r\n?/g, '\n');
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) drift('xml_dtd', path);
   if (text.includes('<![CDATA[')) drift('xml_cdata', path);
-  const over = xmlOverCaps(text, { maxTag: MAX_TAG, maxItems: MAX_ITEMS });
+  const over = xmlOverCaps(text, { maxTag: MAX_TAG, maxItems: MAX_ITEMS, maxDepth: MAX_DEPTH });
   if (over !== null) drift(over, path);
   try {
     if (XMLValidator.validate(text) !== true) throw new Error();

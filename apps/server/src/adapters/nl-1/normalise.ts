@@ -132,8 +132,8 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
                     : null;
     if (reason !== null) {
       // A series we store that now arrives under another ProcesType, compartment or grouping is withheld and
-      // reported (review F3 of P2b). Forecasts, tides and HW/LW extremes come under methods of their own
-      // (RWSM-F232, F012, F009, F010, F029), never a registered key, and stay a plain count.
+      // reported (review F3 of P2b). A forecast comes under its own method (RWSM-F232), a tide or a HW/LW
+      // extreme under a grouping or a method of its own: never a registered key, and a plain count.
       const registered =
         decl !== undefined && (reason === 'process' || reason === 'compartment' || reason === 'grouping');
       count(out, registered ? 'registered_dropped' : reason, n);

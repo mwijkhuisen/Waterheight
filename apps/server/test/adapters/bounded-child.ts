@@ -75,6 +75,13 @@ export const XML_FLOODS: Record<string, [() => string, string]> = {
       `<worksheet ${SML}><sheetData>${'<c a="" b="" c="" d="" e="" f="" g="" h="" i="" j=""/>'.repeat(136_364)}</sheetData></worksheet>`,
     'xml_too_many_items',
   ],
+  // Review round 2 of P2b: 1.5 M unclosed tags (a stack entry each in the validator), and one processing
+  // instruction carrying 1.6 M attributes (the parser builds them, whatever it is told to ignore).
+  'unclosed-1.5m-tags': [() => `<worksheet ${SML}>${'<abc>'.repeat(1_500_000)}`, 'xml_too_deep'],
+  'one-instruction-1.6m-attributes': [
+    () => `<?x >${' a=""'.repeat(1_600_000)}?><worksheet ${SML}/>`,
+    'xml_tag_too_long',
+  ],
 };
 /** The NL-4 parser with the flood as its ParameterLimits sheet: the workbook, relationships and strings are sound. */
 const nl4 = (b: Uint8Array) =>
