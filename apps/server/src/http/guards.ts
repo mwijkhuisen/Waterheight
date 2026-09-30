@@ -304,34 +304,82 @@ export const XLSX_XML_MEMBER_MAX = 8 * 1024 * 1024;
 export const XLSX_XML_TOTAL_MAX = 16 * 1024 * 1024;
 
 /**
- * XLSX: the ZIP rules with OOXML names, plus the XML rule on every .xml/.rels
- * member, whose text is capped per member and in total while it is inflated.
+ * The ZIP rules for a workbook: every member name must pass `names` on top of
+ * the OOXML rule, and the bytes of every .xml/.rels member are held, capped per
+ * member and in total while they are inflated. Other members are only counted.
  */
-export async function checkXlsx(buf: Buffer, maxMembers: number): Promise<string[]> {
-  const texts = new Map<string, Buffer[]>();
+async function xlsxMembers(
+  buf: Buffer,
+  names: (name: string) => boolean,
+  maxMembers: number,
+): Promise<{ names: string[]; xml: Map<string, Buffer> }> {
+  const parts = new Map<string, Buffer[]>();
   let total = 0;
   const members = await checkZip(buf, {
-    names: ooxmlNames,
+    names: (name) => ooxmlNames(name) && names(name),
     maxMembers,
     onMember: (name) => {
       if (!/\.(?:xml|rels)$/.test(name)) return undefined;
-      const parts: Buffer[] = [];
+      const chunks: Buffer[] = [];
       let size = 0;
-      texts.set(name, parts);
+      parts.set(name, chunks);
       return {
         data: (c) => {
           size += c.length;
           total += c.length;
           if (size > XLSX_XML_MEMBER_MAX) fail('xlsx_xml_member');
           if (total > XLSX_XML_TOTAL_MAX) fail('xlsx_xml_total');
-          parts.push(Buffer.from(c));
+          chunks.push(Buffer.from(c));
         },
         end: () => {},
       };
     },
   });
-  for (const parts of texts.values()) checkXmlText(Buffer.concat(parts).toString('utf8'));
-  return members.map((m) => m.name);
+  const xml = new Map([...parts].map(([name, chunks]) => [name, Buffer.concat(chunks)] as const));
+  return { names: members.map((m) => m.name), xml };
+}
+
+/**
+ * XLSX: the ZIP rules with OOXML names, plus the XML rule on every .xml/.rels
+ * member, whose text is capped per member and in total while it is inflated.
+ */
+export async function checkXlsx(buf: Buffer, maxMembers: number): Promise<string[]> {
+  const { names, xml } = await xlsxMembers(buf, () => true, maxMembers);
+  for (const bytes of xml.values()) checkXmlText(bytes.toString('utf8'));
+  return names;
+}
+
+const UTF8 = new TextDecoder('utf-8', { fatal: true });
+
+/**
+ * XLSX for a reader (the NL-4 converter): the rules of checkXlsx with an exact
+ * member list, so a member outside `allow` fails `zip_name`; every .xml/.rels
+ * member must be valid UTF-8 and pass the XML rule. Returns the text of the
+ * `read` members, each of which must be present. Nothing is written to disk.
+ */
+export async function readXlsx(
+  buf: Buffer,
+  opts: { allow: readonly string[]; read: readonly string[] },
+): Promise<Map<string, string>> {
+  const { xml } = await xlsxMembers(buf, (name) => opts.allow.includes(name), XLSX_MAX_MEMBERS);
+  const texts = new Map<string, string>();
+  for (const [name, bytes] of xml) {
+    let text = '';
+    try {
+      text = UTF8.decode(bytes);
+    } catch {
+      fail('xlsx_utf8');
+    }
+    checkXmlText(text);
+    texts.set(name, text);
+  }
+  const out = new Map<string, string>();
+  for (const name of opts.read) {
+    const text = texts.get(name);
+    if (text === undefined) return fail('xlsx_member_missing');
+    out.set(name, text);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- HTML (LU-4)
@@ -357,8 +405,11 @@ export function extractDataToJson(bytes: Uint8Array): unknown {
   if (end < 0 || end - start > ATTR_MAX) return fail('html_attr');
   const raw = html.slice(start, end).replace(/&(#x[0-9a-f]{1,6}|#[0-9]{1,7}|[a-z]{2,4});/gi, (m, e: string) => {
     const k = e.toLowerCase();
-    if (k.startsWith('#x')) return String.fromCodePoint(Number.parseInt(k.slice(2), 16));
-    if (k.startsWith('#')) return String.fromCodePoint(Number(k.slice(1)));
+    if (k.startsWith('#')) {
+      const point = k.startsWith('#x') ? Number.parseInt(k.slice(2), 16) : Number(k.slice(1));
+      // Beyond Unicode: not a character (String.fromCodePoint would throw). The text stays as it is.
+      return point <= 0x10ffff ? String.fromCodePoint(point) : m;
+    }
     return ENTITIES[k] ?? m;
   });
   try {
