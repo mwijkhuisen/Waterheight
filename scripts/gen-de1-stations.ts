@@ -125,7 +125,12 @@ const MIRROR_AGENCIES = new Set([
   'REGIERUNGSPRÄSIDIUM FREIBURG',
   'RUHRVERBAND',
 ]);
-/** A third-party agency whose gauge stays a primary tier-2 row. [U] The licence of that data is unverified. */
+/**
+ * A third-party agency whose gauge PEGELONLINE publishes: a primary tier-2 row
+ * that fails closed, audience `off` (a narrowing needs no permission record),
+ * until the owner has verified the licence of that agency's data [U]. The
+ * loader stores nothing for an `off` series.
+ */
 const OTHER_AGENCIES = new Set(['DEICHINFORMATIONSZENTRUM NEUWIED']);
 
 const RIVERS = new Map([
@@ -358,9 +363,9 @@ function rowsOf(s: BasinStation, meta: ReturnType<typeof readMeta>): PublicStati
       expected_threshold_source: quantity === 'H' && found.thresholds ? 'DE-1' : null,
       // DE-2 is owner-audience: a public row may not name it.
       expected_forecast_source: null,
-      licence_gate: 'open',
+      licence_gate: OTHER_AGENCIES.has(s.agency) ? 'withheld' : 'open',
       first_release: tier1,
-      audience: 'public',
+      audience: OTHER_AGENCIES.has(s.agency) ? 'off' : 'public',
       datum,
       gauge_zero: gaugeZero,
     });
@@ -377,7 +382,7 @@ const header = (recordedAt: { basin: string; meta: string }) =>
     `#   apps/server/src/adapters/de-1/fixtures/de-1-meta.raw   recorded_at ${recordedAt.meta}  gauge zero, characteristic values`,
     '# tier 1 (first_release) = the catalogue §3.1/§3.2 key gauges. role mirror = a gauge another agency operates, which',
     '# PEGELONLINE republishes (canonical source elsewhere). tidal null = unknown. NEUWIED STADT (27100370) is a',
-    '# third-party agency: the licence of that data is unverified [U].',
+    '# third-party agency whose licence is unverified [U]: audience off (nothing is stored) until the owner verifies it.',
     '',
   ].join('\n');
 

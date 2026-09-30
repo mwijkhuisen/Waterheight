@@ -5,7 +5,7 @@
 #   apps/server/src/adapters/de-1/fixtures/de-1-meta.raw   recorded_at 2026-09-29T13:43:26Z  gauge zero, characteristic values
 # tier 1 (first_release) = the catalogue §3.1/§3.2 key gauges. role mirror = a gauge another agency operates, which
 # PEGELONLINE republishes (canonical source elsewhere). tidal null = unknown. NEUWIED STADT (27100370) is a
-# third-party agency: the licence of that data is unverified [U].
+# third-party agency whose licence is unverified [U]: audience off (nothing is stored) until the owner verifies it.
 stations:
   - id: de.wsv.2310010
     source: DE-1
@@ -6594,9 +6594,9 @@ stations:
     staleness_limit: PT45M
     expected_threshold_source: null
     expected_forecast_source: null
-    licence_gate: open
+    licence_gate: withheld
     first_release: false
-    audience: public
+    audience: "off"
     datum: NHN
     gauge_zero:
       - value_m: 52.86

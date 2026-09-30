@@ -15,7 +15,8 @@ const run = (basin: unknown = inputs.basin, meta: unknown = inputs.meta) => gene
 const sources = SourcesFile.parse(parse(readFileSync(`${repoRoot}registry/sources.yaml`, 'utf8'))).sources;
 const catalogue = strip(readFileSync(`${repoRoot}docs/sources/SOURCE-CATALOGUE.md`, 'utf8'));
 
-const rows = StationsFile.parse(parse(committed)).stations.filter((s): s is PublicStation => s.audience === 'public');
+// Every DE-1 row carries datum and gauge-zero metadata; one (NEUWIED STADT) is audience off.
+const rows = StationsFile.parse(parse(committed)).stations.filter((s): s is PublicStation => s.audience !== 'owner');
 const stationIds = (of: PublicStation[]) => new Set(of.map((r) => r.id));
 const find = (number: string, quantity: 'H' | 'Q' = 'H') => {
   const row = rows.find((r) => r.provider_code === number && r.quantity === quantity);
@@ -51,13 +52,16 @@ describe('registry/stations/de-1.yaml', () => {
     expect(validateStations(parse(committed), sources).problems).toEqual([]);
   });
 
-  it('holds one public, open DE-1 row per basin station and quantity (199 stations)', () => {
+  it('holds one DE-1 row per basin station and quantity (199 stations), public and open but for one', () => {
     expect(stationIds(rows).size).toBe(199);
     expect(rows).toHaveLength(238);
     expect(rows.filter((r) => r.quantity === 'H')).toHaveLength(198);
     expect(rows.filter((r) => r.quantity === 'Q')).toHaveLength(40);
+    const offRow = (r: PublicStation) => r.provider_code === '27100370';
+    expect(rows.filter(offRow)).toHaveLength(1);
     for (const r of rows) {
-      expect([r.id, r.source, r.audience, r.licence_gate]).toEqual([r.id, 'DE-1', 'public', 'open']);
+      const want = offRow(r) ? ['off', 'withheld'] : ['public', 'open'];
+      expect([r.id, r.source, r.audience, r.licence_gate]).toEqual([r.id, 'DE-1', ...want]);
       expect([r.id, r.expected_forecast_source]).toEqual([r.id, null]);
       expect(r.provider_key).toBe(`${r.provider_key.slice(0, 36)}/${r.quantity === 'H' ? 'W' : 'Q'}`);
     }
@@ -307,8 +311,15 @@ describe('registry/stations/de-1.yaml', () => {
       }
     });
 
-    it('keeps the third-party NEUWIED STADT gauge a primary tier-2 row', () => {
-      expect(find('27100370')).toMatchObject({ name: 'NEUWIED STADT', role: 'primary', tier: 2, first_release: false });
+    it('keeps the third-party NEUWIED STADT gauge a primary tier-2 row, off until the owner verifies its licence', () => {
+      expect(find('27100370')).toMatchObject({
+        name: 'NEUWIED STADT',
+        role: 'primary',
+        tier: 2,
+        first_release: false,
+        audience: 'off',
+        licence_gate: 'withheld',
+      });
     });
   });
 });
