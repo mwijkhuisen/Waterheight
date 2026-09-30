@@ -23,6 +23,7 @@ function scratch(): string {
     'apps/web',
     'packages/core',
     'packages/contracts',
+    'deploy',
   ];
   for (const f of files) cpSync(join(repoRoot, f), join(dir, f));
   for (const d of dirs) {
@@ -109,6 +110,20 @@ describe('check-bom', () => {
     const dir = scratch();
     edit(dir, '.claude/hooks/session-start.sh', 'NODE_VERSION=26.10.0', 'NODE_VERSION=26.10.9');
     expect(checkBom(dir).join('\n')).toMatch(/node: pin \S+ with version 26\.10\.0 not found together/);
+  });
+
+  it('fails on a Dockerfile base image without an installed row', () => {
+    const dir = scratch();
+    edit(dir, 'deploy/web/Dockerfile', /^FROM caddy:2\.11\.4-alpine@sha256:[0-9a-f]{64}/m, 'FROM caddy:2.11.4-alpine');
+    expect(checkBom(dir).join('\n')).toMatch(
+      /deploy\/web\/Dockerfile: base image caddy:2\.11\.4-alpine has no installed image row/,
+    );
+  });
+
+  it('fails when a Dockerfile pins a different binary than the BOM', () => {
+    const dir = scratch();
+    edit(dir, 'deploy/backup/Dockerfile', 'RESTIC_VERSION=0.19.1', 'RESTIC_VERSION=0.19.2');
+    expect(checkBom(dir).join('\n')).toMatch(/BOM row restic: pin f415[0-9a-f]+ with version 0\.19\.1 not found/);
   });
 
   it('fails on a duplicate row', () => {

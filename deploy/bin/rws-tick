@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# rws-tick (rws-tick.timer, every 10 min; A§11.3; issue #16 P1b).
+# 1. Restores the host firewall (table inet rws from $RWS_ETC/nftables.conf)
+#    when it is missing, first, so no later step can skip it: stopping
+#    rws-firewall keeps the table, but a break-glass `nft delete table inet
+#    rws` (docs/runbooks/lost-ssh.md) removes it while live-restore keeps the
+#    containers running. Stop rws-tick.timer to hold this off.
+# 2. Writes the disk use of /srv/rws into /status/ops.json (disk_pct); the
+#    watchdog judges it from outside (< 75%).
+# 3. Restarts any container of the rws project that Docker reports unhealthy
+#    (a wedged recorder whose heartbeat stopped): Docker itself never restarts
+#    an unhealthy container, only one that exited.
+# 4. Backstops: reloads the container DNS allowlist (rws-resolvers), re-arms
+#    rws-status-copy.path if it is not active (a unit that hit a start or
+#    trigger limit stops watching for good) and publishes capture.json
+#    (rws-status-copy), in case an event was missed.
+#
+# Usage: rws-tick [--dry-run]
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+case ${1:-} in
+  --dry-run) DRY_RUN=1 ;;
+  '') ;;
+  *)
+    echo "usage: rws-tick [--dry-run]" >&2
+    exit 64
+    ;;
+esac
+
+if ! nft list table inet rws >/dev/null 2>&1; then
+  if ((DRY_RUN)); then
+    log "dry-run: table inet rws is missing: would load $RWS_ETC/nftables.conf"
+  else
+    log "warning: the host firewall (table inet rws) is missing: loading $RWS_ETC/nftables.conf (stop rws-tick.timer to hold this off)"
+    nft -f "$RWS_ETC/nftables.conf" || log "error: loading $RWS_ETC/nftables.conf failed: the host runs without its firewall"
+  fi
+fi
+
+pct=$(df --output=pcent "$RWS_SRV" | tail -n 1 | tr -dc '0-9')
+[[ $pct =~ ^[0-9]{1,3}$ ]] || die "cannot read the disk use of $RWS_SRV"
+if ((DRY_RUN)); then
+  log "dry-run: disk_pct $pct"
+else
+  # shellcheck disable=SC2016 # a jq filter, not shell
+  ops_update --argjson p "$pct" '.disk_pct = $p'
+fi
+
+mapfile -t sick < <(docker ps --filter label=com.docker.compose.project=rws --filter health=unhealthy \
+  --format '{{.Names}}' 2>/dev/null || true)
+for name in "${sick[@]}"; do
+  [[ $name =~ ^[a-zA-Z0-9_.-]+$ ]] || continue
+  if ((DRY_RUN)); then
+    log "dry-run: would restart unhealthy container $name"
+  else
+    log "restarting unhealthy container $name"
+    docker restart "$name" >/dev/null || log "restart of $name failed"
+  fi
+done
+
+here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+dry=()
+((!DRY_RUN)) || dry=(--dry-run)
+"$here/rws-resolvers" --quiet "${dry[@]}" || log "rws-resolvers failed"
+if ! systemctl is-active --quiet rws-status-copy.path; then
+  if ((DRY_RUN)); then
+    log "dry-run: would re-arm rws-status-copy.path"
+  else
+    log "warning: rws-status-copy.path is not active: re-arming it"
+    systemctl reset-failed rws-status-copy.path rws-status-copy.service 2>/dev/null || true
+    systemctl start rws-status-copy.path || log "re-arming rws-status-copy.path failed"
+  fi
+fi
+"$here/rws-status-copy" "${dry[@]}" || log "rws-status-copy failed"

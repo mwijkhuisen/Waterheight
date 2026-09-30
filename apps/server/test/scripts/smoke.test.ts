@@ -39,13 +39,15 @@ describe('scripts/smoke-capture.ts', () => {
 });
 
 describe('scripts/healthz-smoke.sh (S10)', () => {
-  // A stand-in for the built server: its capture role "starts the live recorder" (hangs) whenever
-  // the contact variables reach it, as the real one would; without them it exits `captureExit`.
-  const fakeMain = (captureExit: number) => `const [role, flag] = process.argv.slice(2);
+  // A stand-in for the built server: its capture and watchdog roles "start live" (hang) whenever
+  // the contact variables reach them, as the real ones would; without them they exit `liveExit`.
+  const fakeMain = (liveExit: number) => `const [role, flag] = process.argv.slice(2);
+const live = role === 'capture' || role === 'watchdog';
 if (role === 'api') require('node:http').createServer((q, r) => r.end('{"status":"ok"}')).listen(Number(process.env.PORT), process.env.HOST);
 else if (role === 'capture' && flag === '--dry-run') console.log('1 specs loaded; RWS requests/hour (busiest 60 min): 1 (limit 400)');
-else if (role === 'capture' && process.env.RWS_DOMAIN) setInterval(() => {}, 1000);
-else process.exit(role === 'capture' ? ${captureExit} : 2);
+else if (role === 'watchdog' && flag === '--dry-run') console.log('cert: the certificate is valid');
+else if (live && process.env.RWS_DOMAIN) setInterval(() => {}, 1000);
+else process.exit(live ? ${liveExit} : 2);
 `;
   const smoke = (captureExit: number) => {
     const dir = mkdtempSync(join(tmpdir(), 'rws-smoke-'));
@@ -69,6 +71,7 @@ else process.exit(role === 'capture' ? ${captureExit} : 2);
     const r = smoke(78);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain('role capture -> exit 78');
+    expect(r.stdout).toContain('role watchdog -> exit 78');
   }, 40_000);
 
   it('fails unless capture exits exactly 78, e.g. on the exit 124 of its timeout (N8)', () => {

@@ -1,0 +1,9 @@
+[Unit]
+Description=rws: monthly restore drill of 100 raw objects, monthly
+
+[Timer]
+OnCalendar=*-*-03 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

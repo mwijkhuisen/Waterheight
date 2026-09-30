@@ -1,0 +1,11 @@
+# Refreshes the container DNS allowlist whenever the host's resolvers change (DHCP, resolved).
+[Unit]
+Description=rws: watch resolv.conf
+
+[Path]
+PathChanged=/etc/resolv.conf
+PathChanged=/run/systemd/resolve/resolv.conf
+Unit=rws-resolvers.service
+
+[Install]
+WantedBy=paths.target

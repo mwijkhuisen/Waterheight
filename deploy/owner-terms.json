@@ -1,0 +1,25 @@
+{
+  "note": "The invariant-11 tripwire of deploy/bin/rws-status-copy: every owner-audience source ID, spec ID and host, and the owner canary (identifiers from registry/, no owner data). test/verify-prod.test.ts keeps it equal to ownerTerms(loadRegistry()) in scripts/verify-prod.ts.",
+  "terms": [
+    "777777.777",
+    "BE-3",
+    "CANARY-OWNER",
+    "DE-2",
+    "DE-3",
+    "LU-2",
+    "LU-3",
+    "LU-4",
+    "be-3-meta",
+    "be-3-values",
+    "de-2-wv",
+    "de-3-files",
+    "de-3-index",
+    "hydrometrie.wallonie.be",
+    "inondations.public.lu",
+    "lu-2-json",
+    "lu-3-percentile",
+    "lu-4-pages",
+    "vorhersage.bafg.de",
+    "www.pegelonline.wsv.de"
+  ]
+}

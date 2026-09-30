@@ -25,6 +25,11 @@ The legacy code is archived as the annotated tag `legacy-v0` (`a4106b855c782832d
 | `scripts/healthz-smoke.sh`, `scripts/dbmate-roundtrip.sh` | Server smoke test; dbmate up/down/up on a fixture migration |
 | `scripts/check-workflows.sh`, `scripts/gitleaks-planted.sh` | Workflow greps; proof that gitleaks still catches a planted key |
 | `scripts/gh-settings.sh --check` | Read-only drift check of the GitHub settings (B1, B2); applying them is the owner's job |
+| `node apps/server/dist/main.js watchdog [--once\|--dry-run]` | The P1b watchdog: probes `https://$RWS_DOMAIN` (`/healthz`, both status files, the certificate) through DNS and TLS every 5 min and pings `watchdog`, `cert`, `disk`; exits 78 without `RWS_DOMAIN`/`RWS_CONTACT_EMAIL` |
+| `scripts/verify-prod.sh <domain> [--soak\|--capacity]` | Outside-in production check, no SSH (checks in `scripts/verify-prod.ts`); `--dry-run` lists the checks |
+| `deploy/tests/*.test.sh` | Offline tests of the host scripts (rws-update/rws-deploy, negative-deploy, backups, drill, tick, status copy, object-lock-prune, reachability, the runbook's release checks): stubs for curl, cosign, docker; needs jq and zstd |
+| `deploy/tests/e2e/run.sh` | CI only, as root: Docker 29.8.1, the real firewall, compose, Pebble and MinIO; proves the P1b `[U]` items (`ci.yml` job `deploy`) |
+| `deploy/host/bootstrap.sh [--dry-run]`, `rws-update`, `rws-deploy <tag>`, `rws-backup`, `rws-restore-drill`, `rws-hc-sync`, `rws-reachability` | On the VPS only (owner; `docs/runbooks/`); every one has `--dry-run` |
 
 ## Security invariants (A§12.1, verbatim; quoted in every build and review prompt)
 
@@ -96,15 +101,24 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | step-security/harden-runner | action | 2.21.1 | installed | e14015d583714f6e62063499dc959a02595150a1 | Apache-2.0 | audit mode |
 | github/codeql-action | action | 4.38.1 | installed | 1c5b675653bb5c22dbe9b12b556ec555138e09fd | MIT | public repository (D7) |
 | postgres | image | 18.6-trixie | installed | postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 | PostgreSQL | CI service; P2 compose `db` |
+| pebble | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199 | MPL-2.0 | CI only: the ACME server of the deploy end-to-end test |
+| pebble-challtestsrv | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b | MPL-2.0 | CI only: DNS for Pebble |
+| minio (Chainguard) | image | latest | installed | cgr.dev/chainguard/minio@sha256:71674988a1c7ddd5724928633199152b11e4ddefd6c6ce2d60772ff4a8f22ca9 | AGPL-3.0 | CI only: S3 with Object Lock for restic (built from source by Chainguard; MinIO stopped publishing images in 2025) |
+| minio-client (Chainguard) | image | latest | installed | cgr.dev/chainguard/minio-client@sha256:be51ef820151a708a8e140037e3746862a8c1dd5e624f84b404a1d71bcefb167 | AGPL-3.0 | CI only: creates the Object Lock bucket and the VPS-key user |
 | zizmor | binary | 1.30.1 | installed | e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a | MIT | security.yml |
 | gitleaks | binary | 8.30.1 | installed | 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb | MIT | security.yml |
 | dbmate | binary | 2.36.0 | installed | 47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce | MIT | ci.yml round trip |
 | shellcheck | binary | 0.11.0 | installed | b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6 | GPL-3.0 | ci.yml (tool only) |
-| Docker Engine | tool | 29.8.1 | planned | – | Apache-2.0 | P1b host (Docker's signed apt repository) |
-| Docker Compose | tool | 5.5.1 | planned | – | Apache-2.0 | P1b host |
-| node (build image) | image | 26.10.0-trixie-slim | planned | node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 | MIT | P1b build stage |
-| distroless nodejs26 | image | nonroot | planned | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89 | Apache-2.0 | P1b runtime |
-| caddy | image | 2.11.4-alpine | planned | caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b | Apache-2.0 | P1b/P4 |
+| Docker Engine | tool | 29.8.1 | installed | 5:29.8.1-1~debian.13~trixie | Apache-2.0 | P1b host, `deploy/host/bootstrap.sh`: Docker's apt repository, key file sha256-pinned, packages held |
+| containerd.io | tool | 2.3.5 | installed | 2.3.5-1~debian.13~trixie | Apache-2.0 | P1b host (2.3.6 was under 7 days old at pin time) |
+| Docker Compose | tool | 5.5.1 | installed | 5.5.1-1~debian.13~trixie | Apache-2.0 | P1b host (`docker-compose-plugin`) |
+| cosign | binary | 3.1.3 | installed | 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71 | Apache-2.0 | P1b host (`cosign-linux-amd64` sha256); verifies every release on the VPS |
+| node (build image) | image | 26.10.0-trixie-slim | installed | node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 | MIT | P1b build stage |
+| distroless nodejs26 | image | nonroot | installed | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89 | Apache-2.0 | P1b runtime |
+| caddy | image | 2.11.4-alpine | installed | caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b | Apache-2.0 | P1b web image (file capability stripped; runs with none) |
+| distroless static | image | nonroot | installed | gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 | Apache-2.0 | P1b backup image runtime |
+| buildkit | image | v0.33.0 | installed | moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 | Apache-2.0 | release.yml builder (setup-buildx driver) |
+| buildkit-syft-scanner | image | 1.12.0 | installed | docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 | Apache-2.0 | release.yml SBOM generator (Syft) |
 | dbmate (image) | image | 2.36.0 | planned | ghcr.io/amacneil/dbmate:2.36.0@sha256:520c740c6e0ad73fde2cd1ea7e2b779aaf789d22aca8858f87a478e7094535fb | MIT | P2 `migrate` |
 | croner | npm | 10.0.1 | installed | – | MIT | apps/server: capture scheduler (P1) |
 | undici | npm | 8.11.0 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
@@ -126,15 +140,15 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | fast-check | npm | 4.10.2 | planned | – | MIT | P2 |
 | @playwright/test | npm | 1.63.0 | planned | – | Apache-2.0 | P4 |
 | @axe-core/playwright | npm | 4.13.0 | planned | – | MPL-2.0 | P10 |
-| docker/build-push-action | action | 7.4.0 | planned | – | Apache-2.0 | P1b |
-| docker/login-action | action | 4.6.0 | planned | – | Apache-2.0 | P1b |
-| docker/setup-buildx-action | action | 4.4.1 | planned | – | Apache-2.0 | P1b |
-| docker/metadata-action | action | 6.2.0 | planned | – | Apache-2.0 | P1b |
-| sigstore/cosign-installer | action | 4.1.2 | planned | – | Apache-2.0 | P1b |
-| actions/attest-build-provenance | action | 4.2.2 | planned | – | MIT | P1b |
-| syft | binary | 1.52.0 | planned | – | Apache-2.0 | P1b |
-| grype | binary | 0.119.0 | planned | – | Apache-2.0 | P1b |
-| restic | binary | 0.19.1 | planned | – | BSD-2-Clause | P1b |
+| docker/build-push-action | action | 7.4.0 | installed | c3c9e263c25d99ce0380d002d59b67737d91b0dc | Apache-2.0 | P1b |
+| docker/login-action | action | 4.6.0 | installed | dbcb813823bdd20940b903addbd779551569679f | Apache-2.0 | P1b |
+| docker/setup-buildx-action | action | 4.4.1 | installed | f87e5991a6d7451dcb8d9637bfbc97413f497069 | Apache-2.0 | P1b |
+| docker/metadata-action | action | 6.2.0 | planned | – | Apache-2.0 | not needed in P1b (images are addressed by digest) |
+| sigstore/cosign-installer | action | 4.1.2 | installed | 6f9f17788090df1f26f669e9d70d6ae9567deba6 | Apache-2.0 | release.yml, with `cosign-release: v3.1.3` |
+| actions/attest-build-provenance | action | 4.2.2 | installed | 4d101475d8b20a2381f78447822ac1eab6504dd8 | MIT | release.yml |
+| syft | binary | 1.52.0 | planned | – | Apache-2.0 | P12 (P1b SBOMs come from buildkit-syft-scanner) |
+| grype | binary | 0.119.0 | planned | – | Apache-2.0 | P12 gate, deferred by the owner in P1b (risk register) |
+| restic | binary | 0.19.1 | installed | f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c | BSD-2-Clause | backup image (`restic_0.19.1_linux_amd64.bz2` sha256) |
 | go-pmtiles | binary | 1.31.2 | planned | – | BSD-3-Clause | P3 |
 | osmium-tool | binary | 1.19.1 | planned | – | GPL-3.0 | P6 (CI only) |
 | tippecanoe | binary | 2.79.0 | planned | – | BSD-2-Clause | P6 (CI only) |
@@ -163,6 +177,14 @@ Deviations from A§3, decided in P0b: pnpm **12.5.1** instead of 12.6.0 (12.6.0 
 - **YAML:** quote `"off"` and dates in registry files; YAML 1.1 parsers read `off` as `false`.
 - **Claude Code deny rules match the whole command line**, a commit message included: `git commit -m "… git push --mirror …"` is refused. Write the message to a file and use `git commit -F <file>`.
 - **setup-node v7** caches automatically when `packageManager` names npm; every job sets `package-manager-cache: false` (no caches in CI).
+- **Docker 29 / Compose 5 (P1b):**
+  - Compose bind-mounts a **file** secret with its host owner and mode (`uid`/`gid`/`mode` are ignored), so our secrets are `root:<gid> 0440` plus `group_add`.
+  - Published ports are DNATed in `nat PREROUTING` and never reach INPUT: filter them on the forward hook (`deploy/host/nftables.conf`), and never `flush ruleset` (it deletes Docker's tables).
+  - Debian's `nftables.service` flushes everything on stop; it is masked in favour of `rws-firewall.service`.
+  - Docker never restarts an *unhealthy* container (only an exited one), so `rws-tick` does.
+  - The stock caddy image's file capability breaks exec under `cap_drop: ALL`: our web image strips it.
+- **cosign 3:** image signatures are OCI-referrer bundles (GHCR through the `sha256-<digest>` tag fallback), `sign-blob`/`verify-blob` need `--bundle`, and verification fetches the TUF trusted root. The VPS keeps it in `/var/lib/rws/sigstore`.
+- **MinIO** stopped publishing images in 2025; CI uses Chainguard's source-built `cgr.dev/chainguard/minio` by digest.
 - **Protomaps** builds are kept for one week only; **Hub'Eau v1** answers 403 (use v2); **RWS documentation moves to the CTD on 2026-11-05** (URLs live in config; the NL-4 file path is at risk).
 
 ## Criterion tags, definition of done and workflow (PHASES §2)

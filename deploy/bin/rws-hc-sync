@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# rws-hc-sync (owner-run; A§11.3; issue #16 P1b): creates or updates the 15
+# healthchecks.io checks of deploy/healthchecks.yaml through the Management API
+# (POST /api/v3/checks/ with unique ["slug"], all integrations attached).
+#
+# The project API key can delete checks, so keep it off the host those checks
+# watch: run this from the owner's workstation with --key-file, or remove
+# /etc/rws/secrets/hc_api_key after a run on the VPS (owner action A6). The key
+# reaches curl through a config on stdin, never argv. Without a key it does
+# nothing (the A6 switch).
+#
+# Usage: rws-hc-sync [--dry-run] [--key-file FILE]
+#   --dry-run   print the request bodies; no network
+#   --key-file  the API key file (default /etc/rws/secrets/hc_api_key)
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+list=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../healthchecks.yaml
+key_file=$RWS_ETC/secrets/hc_api_key
+while (($#)); do
+  case $1 in
+    --dry-run) DRY_RUN=1 ;;
+    --key-file)
+      (($# >= 2)) || die "--key-file needs a file"
+      key_file=$2
+      shift
+      ;;
+    *)
+      echo "usage: rws-hc-sync [--dry-run] [--key-file FILE]" >&2
+      exit 64
+      ;;
+  esac
+  shift
+done
+
+# Comment lines out, the JSON body stays; every check is validated before use.
+bodies=$(grep -v '^[[:space:]]*#' "$list" | jq -ce '
+  .checks
+  | if length == 15 and all(.[];
+        (keys == ["grace", "slug", "timeout"]) and (.slug | test("^[a-z0-9-]{1,40}$"))
+        and (.timeout | type == "number" and . >= 60 and . <= 31536000)
+        and .grace == 2 * .timeout and .grace <= 31536000)
+    then .[] | {name: .slug, slug, timeout, grace, channels: "*", tags: "rws", unique: ["slug"]}
+    else error("deploy/healthchecks.yaml: expected 15 valid checks") end') ||
+  die "deploy/healthchecks.yaml does not validate"
+
+if ((DRY_RUN)); then
+  printf '%s\n' "$bodies"
+  exit 0
+fi
+if ! key=$(head -n 1 "$key_file" 2>/dev/null | tr -d '\r\n') || [[ -z $key ]]; then
+  log "no healthchecks.io API key in $key_file: nothing synced (owner action A6)"
+  exit 0
+fi
+[[ $key =~ ^[A-Za-z0-9_-]{16,128}$ ]] || die "the API key in $key_file has an unexpected format"
+
+created=0 updated=0
+while IFS= read -r body; do
+  slug=$(jq -r .slug <<<"$body")
+  code=$(printf 'header = "X-Api-Key: %s"\n' "$key" |
+    curl -K - --proto '=https' --tlsv1.2 -sS --max-time 30 -o /dev/null -w '%{http_code}' \
+      -X POST -H 'Content-Type: application/json' --data-raw "$body" \
+      https://healthchecks.io/api/v3/checks/) || die "check $slug: request failed"
+  case $code in
+    201) created=$((created + 1)) ;;
+    200) updated=$((updated + 1)) ;;
+    *) die "check $slug: HTTP $code (403 = the account's check limit, 401 = a wrong or read-only key)" ;;
+  esac
+done <<<"$bodies"
+log "healthchecks.io: $created created, $updated updated"

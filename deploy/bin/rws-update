@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# rws-update (rws-update.timer, every 5 min; A§11.2, ADR-0008; issue #16 P1b).
+#
+# Deploys the newest signed release: fetch the manifest of the latest GitHub
+# release, verify it (cosign, pinned identity and issuer) before reading it,
+# refuse a tag that is not newer than the current release or that a failed or
+# manual deploy marked to skip, then stage, pull by digest, up, smoke-test, and
+# roll back to the current release on failure. Pings the `update` check: /fail
+# with a fixed code on a failure, on a "latest" older than the current release,
+# and while the active release's host files are not installed (bootstrap.sh).
+#
+# Usage: rws-update [--dry-run]
+#   --dry-run  verify and report what would be deployed; no docker, state or ping
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+case ${1:-} in
+  --dry-run) DRY_RUN=1 ;;
+  '') ;;
+  *)
+    echo "usage: rws-update [--dry-run]" >&2
+    exit 64
+    ;;
+esac
+unset RWS_INJECT_SMOKE_FAILURE
+
+exec 9>"$(lockfile rws-deploy)"
+if ! flock -n 9; then
+  log "another deploy is running"
+  exit 0
+fi
+
+# Bootstrap enables the timer before the owner's settings exist (A2-A7).
+if ! env_ready; then
+  log "rws.env is not complete yet: nothing to do"
+  exit 0
+fi
+
+work=$(mktemp -d)
+trap 'rm -rf -- "$work"' EXIT
+
+# A missing or unreachable release is transient: no ping, so healthchecks
+# alerts only if it lasts (timeout + grace).
+if ! fetch_manifest latest "$work"; then
+  log "no release manifest reachable: trying again next run"
+  exit 0
+fi
+if ! tag=$(verify_manifest "$work"); then
+  ping update fail verify_failed
+  die "the latest release manifest did not verify; nothing changed"
+fi
+
+cur=$(state_get current)
+skip=$(state_get skip_upto)
+if [[ -n $cur && $tag == "$cur" ]]; then
+  ((DRY_RUN)) || update_ok
+  exit 0
+fi
+# A "latest" older than the current release would freeze deploys without a word.
+if [[ -n $cur ]] && ! tag_newer "$tag" "$cur"; then
+  log "refused: release $tag is older than the current $cur (rws-deploy $tag deploys it on purpose)"
+  ((DRY_RUN)) || ping update fail latest_older
+  exit 0
+fi
+if [[ -n $skip ]] && ! tag_newer "$tag" "$skip"; then
+  log "release $tag is marked to skip (failed or rolled back; rws-deploy $tag deploys it on purpose)"
+  ((DRY_RUN)) || update_ok
+  exit 0
+fi
+if ((DRY_RUN)); then
+  log "dry-run: would deploy $tag (current ${cur:-none})"
+  exit 0
+fi
+deploy_release "$work" "$tag"
+update_ok

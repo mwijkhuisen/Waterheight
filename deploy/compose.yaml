@@ -1,0 +1,200 @@
+# The production stack (A§11.1; issue #16 P1b and its P1a ↔ P1b contract).
+#
+# rws-deploy runs it only from a verified release bundle, as project "rws":
+#   - images: digests from the signed release manifest (images.env);
+#   - host settings: /etc/rws/rws.env (domain, contact, public addresses, bucket);
+#   - secrets: files under /etc/rws/secrets, never environment variables. Compose
+#     bind-mounts a file secret with its host owner and mode (uid/gid/mode are
+#     ignored), so each file is root:<gid> 0440 and only its consumer is in
+#     that group (docs/runbooks/bootstrap.md, "Secrets").
+# The owner channel in P1 is only /srv/rws/owner/status, mounted into capture.
+# No owner site, port or Caddy mount before P9 (WireGuard-only from P12a).
+name: rws
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs:
+    - /tmp:size=16m,mode=1777
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+
+x-node-healthcheck: &node-healthcheck
+  # The contract heartbeat: exit 0 iff /tmp/rws-heartbeat is < 120 s old. No shell in distroless.
+  test: ["CMD", "/nodejs/bin/node", "/app/apps/server/dist/main.js", "healthcheck"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 60s
+
+services:
+  caddy:
+    <<: *hardening
+    image: ${RWS_WEB_IMAGE:?}
+    user: "65533:65533"
+    # No capability: the image strips caddy's file capability, and a non-root
+    # process binds 80/443 through this namespaced sysctl (it covers IPv6 too).
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 80
+    # The only published ports, on the explicit public addresses, never a
+    # wildcard (a wildcard would also claim the later WireGuard address).
+    ports:
+      - "${RWS_PUBLIC_IPV4:?}:80:80/tcp"
+      - "${RWS_PUBLIC_IPV4:?}:443:443/tcp"
+      - "${RWS_PUBLIC_IPV4:?}:443:443/udp"
+      - "[${RWS_PUBLIC_IPV6:?}]:80:80/tcp"
+      - "[${RWS_PUBLIC_IPV6:?}]:443:443/tcp"
+      - "[${RWS_PUBLIC_IPV6:?}]:443:443/udp"
+    environment:
+      RWS_DOMAIN: ${RWS_DOMAIN:?}
+      RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+    # Only the root-owned status directory: never capture's public/status,
+    # where a planted symlink would make Caddy serve any file it can read.
+    volumes:
+      - /srv/rws/public/ops:/srv/rws/public/ops:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [public, edge]
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  capture:
+    <<: *hardening
+    image: ${RWS_SERVER_IMAGE:?}
+    command: [capture]
+    user: "65532:65532"
+    group_add: ["61001", "61002"]
+    environment:
+      RWS_RAW_DIR: /data/raw
+      RWS_STATUS_DIR: /data/status
+      RWS_OWNER_STATUS_DIR: /data/owner-status
+      RWS_DOMAIN: ${RWS_DOMAIN:?}
+      RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+    secrets: [hc_ping_key, rws_x_api_key]
+    volumes:
+      - /srv/rws/raw:/data/raw
+      - /srv/rws/public/status:/data/status
+      - /srv/rws/owner/status:/data/owner-status
+    networks: [egress]
+    mem_limit: 384m
+    cpus: 2.0
+    pids_limit: 128
+    healthcheck: *node-healthcheck
+
+  watchdog:
+    <<: *hardening
+    image: ${RWS_SERVER_IMAGE:?}
+    command: [watchdog]
+    user: "65532:65532"
+    group_add: ["61001"]
+    environment:
+      RWS_DOMAIN: ${RWS_DOMAIN:?}
+      RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+    secrets: [hc_ping_key]
+    networks: [egress]
+    mem_limit: 64m
+    cpus: 0.25
+    pids_limit: 32
+    healthcheck: *node-healthcheck
+
+  # A job, not a daemon: rws-backup and rws-restore-drill start it with
+  # `compose run` (profile "jobs", so `up` never starts it and never restarts it).
+  backup:
+    <<: *hardening
+    image: ${RWS_BACKUP_IMAGE:?}
+    profiles: [jobs]
+    restart: "no"
+    user: "65532:65532"
+    group_add: ["61003"]
+    hostname: rws
+    environment:
+      RESTIC_REPOSITORY: ${RWS_RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD_FILE: /run/secrets/restic_password
+      AWS_SHARED_CREDENTIALS_FILE: /run/secrets/s3_credentials
+      AWS_DEFAULT_REGION: ${RWS_S3_REGION:-}
+      RESTIC_CACHE_DIR: /cache/restic
+    secrets: [restic_password, s3_credentials]
+    volumes:
+      - /srv/rws/raw:/data/raw:ro
+      - /srv/rws/backup/cache:/cache
+      - /srv/rws/backup/drill:/restore
+    networks: [backup]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    healthcheck:
+      disable: true
+
+  # P2 (#17) adds these; placeholders only in P1.
+  # db:
+  #   <<: *hardening
+  #   image: postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+  #   user: "999:999"
+  #   volumes: [pgdata:/var/lib/postgresql]   # the PG18 image's VOLUME (PGDATA is /var/lib/postgresql/18/docker)
+  #   networks: [db]
+  #   mem_limit: 3g
+  # migrate:  dbmate 2.36.0, one-shot, network db, role rws_migrator
+  # load:     server image [load],    networks [db],        /srv/rws/raw rw (retention pruning), role rws_load
+  # publish:  server image [publish], networks [db],        /srv/rws/public rw, role rws_publish
+  # api:      server image [api],     networks [edge, db],  role rws_api
+
+networks:
+  public:
+    enable_ipv6: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-public
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
+        - subnet: fd7a:7773:10::/64
+  edge:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-edge
+  db:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-db
+  # Capture and watchdog: tcp/443 and DNS to the host's resolvers only (nftables).
+  egress:
+    enable_ipv6: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-egress
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      config:
+        - subnet: 172.30.20.0/24
+        - subnet: fd7a:7773:20::/64
+  # Backup: tcp/443 to the bucket's addresses only (nftables sets filled by rws-backup).
+  backup:
+    enable_ipv6: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-backup
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      config:
+        - subnet: 172.30.30.0/24
+        - subnet: fd7a:7773:30::/64
+
+secrets:
+  hc_ping_key:
+    file: /etc/rws/secrets/hc_ping_key
+  rws_x_api_key:
+    file: /etc/rws/secrets/rws_x_api_key
+  restic_password:
+    file: /etc/rws/secrets/restic_password
+  s3_credentials:
+    file: /etc/rws/secrets/s3_credentials
+
+volumes:
+  caddy_data:
+  caddy_config:

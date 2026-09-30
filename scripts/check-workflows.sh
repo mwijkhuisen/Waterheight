@@ -3,8 +3,8 @@
 #   - every `uses:` names an action at a 40-hex commit SHA plus a "# vX.Y.Z" comment;
 #   - every workflow has top-level `permissions: {}`;
 #   - no pull_request_target, workflow_run or issue_comment trigger;
-#   - no actions/cache, no setup-node `cache:` input, and package-manager-cache: false on
-#     every setup-node (a PR run must never seed a main run);
+#   - no actions/cache, no setup-node `cache:` input, no buildx cache-from/cache-to, and
+#     package-manager-cache: false on every setup-node (a PR run must never seed a main run);
 #   - every actions/checkout sets persist-credentials: false.
 # Usage: scripts/check-workflows.sh [workflow-dir]   (default .github/workflows)
 set -euo pipefail
@@ -27,7 +27,7 @@ for f in "${files[@]}"; do
   if grep -nE '^[^#]*\b(pull_request_target|workflow_run|issue_comment)\b' "$f"; then
     bad "$f: forbidden trigger"
   fi
-  if grep -nE 'uses:[[:space:]]*actions/cache[@/]|^[[:space:]]+cache:[[:space:]]' "$f"; then
+  if grep -nE 'uses:[[:space:]]*actions/cache[@/]|^[[:space:]]+cache(-from|-to)?:[[:space:]]' "$f"; then
     bad "$f: caches are not allowed"
   fi
   setup_nodes=$(grep -cE 'uses:[[:space:]]*actions/setup-node@' "$f" || true)

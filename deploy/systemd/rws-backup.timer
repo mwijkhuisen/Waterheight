@@ -1,0 +1,9 @@
+[Unit]
+Description=rws: restic backup of the raw archive, hourly
+
+[Timer]
+OnCalendar=*-*-* *:17:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

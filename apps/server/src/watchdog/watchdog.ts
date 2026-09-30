@@ -1,0 +1,209 @@
+import type { LookupFunction } from 'node:net';
+import { connect as tlsConnect } from 'node:tls';
+import { type Logger, pino } from 'pino';
+import { z } from 'zod';
+import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from '../capture/env.ts';
+import { Pinger } from '../capture/pings.ts';
+import { CaptureStatus } from '../capture/status.ts';
+import { startHeartbeat } from '../heartbeat.ts';
+import { guardedLookup } from '../http/addresses.ts';
+import { Client } from '../http/client.ts';
+
+// The watchdog role (A§4, A§11.3; issue #16 P1b). Every 5 minutes it probes our
+// own public site the way a visitor reaches it (public DNS, verified TLS,
+// the SSRF-guarded client; egress only to our domain and hc-ping.com) and pings
+// its three healthchecks: `watchdog` (site up, capture.json and ops.json fresh,
+// last backup < 2 h), `cert` (certificate valid for >= 14 days) and `disk`
+// (disk < 75%). A failure ping carries fixed codes only.
+
+export const CYCLE_MS = 5 * 60_000;
+export const CAPTURE_MAX_AGE_MS = 5 * 60_000;
+export const OPS_MAX_AGE_MS = 30 * 60_000;
+export const BACKUP_MAX_AGE_MS = 2 * 3_600_000;
+export const CERT_MIN_DAYS = 14;
+export const DISK_MAX_PCT = 75;
+
+const iso = z.iso.datetime();
+const n = z.number().int().nonnegative();
+
+/** /status/ops.json (the P1a ↔ P1b contract): written by the backup, drill and tick jobs. */
+export const OpsStatus = z.strictObject({
+  generated_at: iso,
+  last_backup: iso.nullable(),
+  drill: z.strictObject({ at: iso, sampled: n, matched: n }).nullable(),
+  disk_pct: z.number().min(0).max(100).nullable(),
+});
+export type OpsStatus = z.infer<typeof OpsStatus>;
+
+export type Got = { status: number; body: Buffer } | { error: string };
+export type Probe = {
+  get(path: string): Promise<Got>;
+  /** Whole days until the served certificate expires, or 'tls' when no valid certificate was served. */
+  certDaysLeft(): Promise<number | 'tls'>;
+};
+/** Failure codes per check; an empty list is a success. */
+export type Verdicts = { watchdog: string[]; cert: string[]; disk: string[] };
+
+export const CHECKS = [
+  'watchdog: GET /healthz answers 200',
+  `watchdog: /status/capture.json is the contract document, generated < ${CAPTURE_MAX_AGE_MS / 60_000} min ago`,
+  `watchdog: /status/ops.json is the contract document, generated < ${OPS_MAX_AGE_MS / 60_000} min ago`,
+  `watchdog: the last backup finished < ${BACKUP_MAX_AGE_MS / 3_600_000} h ago`,
+  `cert: the certificate is valid and expires in >= ${CERT_MIN_DAYS} days`,
+  `disk: /srv/rws is < ${DISK_MAX_PCT}% full (disk_pct of a fresh ops.json)`,
+];
+
+const ageMs = (at: string, now: Date) => now.getTime() - Date.parse(at);
+
+function json<T>(got: Got, schema: z.ZodType<T>): T | string {
+  if ('error' in got) return got.error;
+  if (got.status !== 200) return `status_${got.status}`;
+  try {
+    const parsed = schema.safeParse(JSON.parse(got.body.toString('utf8')));
+    return parsed.success ? parsed.data : 'contract';
+  } catch {
+    return 'json';
+  }
+}
+
+/** One watchdog cycle: pure given the probe and the clock. */
+export async function check(probe: Probe, now: Date): Promise<Verdicts> {
+  const v: Verdicts = { watchdog: [], cert: [], disk: [] };
+  const [healthz, capture, ops, days] = await Promise.all([
+    probe.get('/healthz'),
+    probe.get('/status/capture.json'),
+    probe.get('/status/ops.json'),
+    probe.certDaysLeft(),
+  ]);
+  if ('error' in healthz) v.watchdog.push(`healthz_${healthz.error}`);
+  else if (healthz.status !== 200) v.watchdog.push(`healthz_${healthz.status}`);
+
+  const cap = json(capture, CaptureStatus);
+  if (typeof cap === 'string') v.watchdog.push(`capture_${cap}`);
+  else if (ageMs(cap.generated_at, now) > CAPTURE_MAX_AGE_MS) v.watchdog.push('capture_stale');
+
+  const o = json(ops, OpsStatus);
+  if (typeof o === 'string') {
+    v.watchdog.push(`ops_${o}`);
+    v.disk.push(`ops_${o}`);
+  } else {
+    const fresh = ageMs(o.generated_at, now) <= OPS_MAX_AGE_MS;
+    if (!fresh) {
+      v.watchdog.push('ops_stale');
+      v.disk.push('ops_stale');
+    }
+    if (o.last_backup === null) v.watchdog.push('backup_none');
+    else if (ageMs(o.last_backup, now) > BACKUP_MAX_AGE_MS) v.watchdog.push('backup_stale');
+    if (o.disk_pct === null) v.disk.push('disk_unknown');
+    else if (o.disk_pct >= DISK_MAX_PCT) v.disk.push('disk_full');
+  }
+
+  if (days === 'tls') v.cert.push('tls');
+  else if (days < CERT_MIN_DAYS) v.cert.push('cert_expiring');
+  return v;
+}
+
+/** Whole days until the certificate served for `domain` expires; 'tls' on any TLS or network failure. */
+export function certDaysLeft(domain: string, lookup: LookupFunction, now = () => new Date()): Promise<number | 'tls'> {
+  return new Promise((resolve) => {
+    const socket = tlsConnect({ host: domain, port: 443, servername: domain, lookup, ALPNProtocols: ['http/1.1'] });
+    const done = (value: number | 'tls') => {
+      socket.destroy();
+      resolve(value);
+    };
+    socket.setTimeout(15_000, () => done('tls'));
+    socket.once('error', () => done('tls'));
+    socket.once('secureConnect', () => {
+      const expires = Date.parse(socket.getPeerCertificate().valid_to);
+      done(
+        socket.authorized && Number.isFinite(expires) ? Math.floor((expires - now().getTime()) / 86_400_000) : 'tls',
+      );
+    });
+  });
+}
+
+/** The production probe: our own domain through the guarded client and public DNS. `client` is a test seam (an argument only). */
+export function liveProbe(
+  domain: string,
+  userAgent: string,
+  client = new Client({ hosts: new Map([['own', [domain]]]), userAgent }),
+): Probe {
+  const lookup = guardedLookup(new Set([domain])) as unknown as LookupFunction;
+  return {
+    async get(path) {
+      const r = await client.fetch(
+        'own',
+        { url: `https://${domain}${path}`, method: 'GET', variant: path },
+        { maxBytes: 4 * 1024 * 1024, timeoutMs: 20_000 },
+      );
+      return r.ok ? { status: r.res.status, body: r.res.body } : { error: r.error };
+    },
+    certDaysLeft: () => certDaysLeft(domain, lookup),
+  };
+}
+
+/** Pings each check: success, or /fail with its failure codes. */
+export async function report(v: Verdicts, pinger: Pick<Pinger, 'ping'>): Promise<void> {
+  for (const slug of ['watchdog', 'cert', 'disk'] as const) {
+    const codes = v[slug];
+    await (codes.length === 0 ? pinger.ping(slug, 'success') : pinger.ping(slug, 'fail', codes.join(' ')));
+  }
+}
+
+export type Mode = 'loop' | 'once' | 'dry-run';
+
+/**
+ * The role: `watchdog` loops every 5 minutes until SIGTERM, `--once` runs one
+ * cycle (exit 0 when every check passed), `--dry-run` lists the checks.
+ */
+export async function runWatchdog(
+  env: Readonly<Record<string, string | undefined>>,
+  mode: Mode,
+  log: (line: string) => void,
+): Promise<number> {
+  if (mode === 'dry-run') {
+    for (const c of CHECKS) log(c);
+    return 0;
+  }
+  const cfg = captureEnv(env);
+  if (typeof cfg === 'string') {
+    log(`watchdog: ${cfg}`);
+    return EXIT_CONFIG;
+  }
+  const logger: Logger = pino({ base: { role: 'watchdog' } });
+  const userAgent = captureUserAgent(cfg);
+  const probe = liveProbe(cfg.domain, userAgent);
+  const pinger = new Pinger(() => readSecret('hc_ping_key'), userAgent, logger);
+  const cycle = async (): Promise<Verdicts> => {
+    const v = await check(probe, new Date());
+    await report(v, pinger);
+    logger.info({ watchdog: v.watchdog, cert: v.cert, disk: v.disk }, 'watchdog cycle');
+    return v;
+  };
+  if (mode === 'once') {
+    const v = await cycle();
+    return v.watchdog.length + v.cert.length + v.disk.length === 0 ? 0 : 1;
+  }
+  // A cycle never rejects: an unexpected error is logged by name only and the next cycle runs.
+  const safeCycle = () =>
+    cycle().catch((err: unknown) => {
+      const name = (err as { name?: unknown } | null)?.name;
+      logger.error({ name: typeof name === 'string' ? name.slice(0, 64) : 'other' }, 'watchdog cycle failed');
+    });
+  const stopHeartbeat = startHeartbeat();
+  let running: Promise<unknown> = safeCycle();
+  const timer = setInterval(() => {
+    running = running.then(safeCycle);
+  }, CYCLE_MS);
+  return new Promise((resolve) => {
+    const stop = () => {
+      clearInterval(timer);
+      void running.finally(() => {
+        stopHeartbeat();
+        resolve(0);
+      });
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+  });
+}

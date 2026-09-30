@@ -160,9 +160,9 @@ jobs:
             "https://github.com/koalaman/shellcheck/releases/download/$SHELLCHECK_VERSION/$tarball"
           echo "$SHELLCHECK_SHA256  $RUNNER_TEMP/$tarball" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP"
-      - name: shellcheck every shell script
+      - name: shellcheck every shell script (deploy/bin has no extensions)
         run: |
-          mapfile -t files < <(git ls-files '*.sh')
+          mapfile -t files < <(git ls-files '*.sh' 'deploy/bin/*')
           "$RUNNER_TEMP/shellcheck-$SHELLCHECK_VERSION/shellcheck" --version
           "$RUNNER_TEMP/shellcheck-$SHELLCHECK_VERSION/shellcheck" "${files[@]}"
 
@@ -223,10 +223,57 @@ jobs:
           pnpm check
           pnpm test:integration
 
+  deploy:
+    name: deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Host tools the tests need (Ubuntu's signed repository)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nftables zstd >/dev/null
+      - name: Offline tests of the host scripts (rws-update, rws-deploy, backups, drill, tick)
+        run: |
+          for t in deploy/tests/*.test.sh; do echo "== $t"; "$t"; done
+      - name: systemd-analyze verify on the units (scripts at their ExecStart paths)
+        run: |
+          for f in deploy/bin/rws-*; do [[ $f == *.sh ]] || sudo ln -sfn "$PWD/$f" "/usr/local/bin/${f##*/}"; done
+          systemd-analyze verify --man=no --recursive-errors=no deploy/systemd/*
+      - name: End to end on Docker 29.8.1 (nftables, Pebble ACME, MinIO Object Lock, restic, watchdog)
+        run: sudo deploy/tests/e2e/run.sh
+      - name: scripts/verify-prod.ts against the running stack
+        run: |
+          node scripts/verify-prod.ts rivierstanden.example --resolve 203.0.114.10 --ca /ci/pki/pebble-root.pem \
+            | tee "$RUNNER_TEMP/verify-prod.txt" || true
+          # capture cannot succeed without internet in CI, so only freshness and owner_specs may fail.
+          if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" | grep -vE '^FAIL (freshness|owner_specs) '; then
+            echo "verify-prod failed a check other than the expected CI freshness" >&2
+            exit 1
+          fi
+          grep -qE '^PASS headers / ' "$RUNNER_TEMP/verify-prod.txt"
+          grep -qE '^PASS owner leak ' "$RUNNER_TEMP/verify-prod.txt"
+
   ci:
     name: ci
     if: always()
-    needs: [check, integration, dbmate, shellcheck, fresh-start, hook]
+    needs: [check, integration, dbmate, shellcheck, fresh-start, hook, deploy]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

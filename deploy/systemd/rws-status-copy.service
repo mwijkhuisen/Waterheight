@@ -1,0 +1,18 @@
+# Copies capture.json, checked, into the root-owned directory Caddy serves (issue #16 P1b). Runs as root: the target is root-owned.
+[Unit]
+Description=rws: publish a checked copy of capture.json
+# No start limit: a burst of writes (a capture crash loop) would otherwise make
+# rws-status-copy.path fail with unit-start-limit-hit and stop watching for good.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rws-status-copy
+TimeoutStartSec=1min
+# The script caps its copy at just over 1 MiB (ulimit -f); this bounds the unit too.
+LimitFSIZE=2M
+UMask=0077
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=full
+NoNewPrivileges=yes

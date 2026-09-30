@@ -4,6 +4,29 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P1b Platform (PR #35, issue #16)
+
+### Needs the owner, the VPS or the first release
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-036 | release | `release.yml` has never pushed, signed or promoted: the first run happens on `main` after the merge. The exact certificate identity (including the repository name's capitals) and cosign 3's GHCR referrer fallback are proven only then. | The first release run: its signing step verifies with the VPS's exact identity; link it in #16 | open |
+| KG-037 | deploy | `bootstrap.sh` has not run on a Debian 13 host; the CI end-to-end test proves the same Docker 29.8.1, Compose 5.5.1, firewall and stack on Ubuntu 24.04 (R-034). | The owner's first run and a second run that reports 0 changes (`docs/runbooks/bootstrap.md`) | open |
+| KG-038 | deploy | Let's Encrypt itself: CI gets its certificate from Pebble over the same HTTP-01 path. | The first deploy; `verify-prod.sh <domain>` shows the certificate | open |
+| KG-039 | backup | Object Lock on the real bucket (D13) is untested: CI proves restic, `AWS_SHARED_CREDENTIALS_FILE` and the VPS-key policy on MinIO with a 30-day COMPLIANCE default. | The owner's first backup and `deploy/tests/object-lock-prune.sh` on the VPS (five PASS lines: it now also checks the bucket's lock configuration and a new version's retention) | open |
+| KG-040 | deploy | `negative-deploy.sh` needs two real releases on the VPS. | The owner, after the second release (`docs/runbooks/owner-checks.md` §2) | open |
+| KG-041 | ops | The [owner] items: reachability over IPv4 and IPv6, the phone alert, the reboot check, the forced drill on the real bucket. | The owner (`docs/runbooks/owner-checks.md`) | open |
+| KG-042 | capacity | `docs/capacity.md` needs 48 h of production capture. | `verify-prod.sh <domain> --capacity` and a docs PR | open |
+
+### Known limits
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-043 | deploy | `rws-update` never replaces host scripts, units, the firewall or any other host file of `deploy/`; a release that changes them needs the owner to run its bootstrap. Since the P1b reviews (S8) every run pings `update` `/fail` `host_files_changed` until then, besides the journal line. Since round 2 only host files count (an allowlist: not the image build inputs, `compose.yaml` or CI-only tests), bootstrap records them as its last step, and the check pauses during a rollback hold (an older release runs, and an older release's bootstrap is never run), also for a drift of the held release itself, until a newer release runs. | By design (T-DEP-1: no self-updating updater) | accepted |
+| KG-044 | monitoring | The watchdog runs on the VPS it watches: when the VPS dies, the alert is healthchecks.io's missing pings, not the watchdog. | By design (ADR-0013) | accepted |
+| KG-045 | security | No Grype gate in P1b (owner decision). | P12 (R-029) | accepted |
+| KG-046 | reachability | Two §1a endpoints are not in `deploy/reachability.yaml`: DE-9 (NLWKN's key is part of every URL, and keyless it answers the Azure APIM 401 that no signature may accept) and the CH-6 fallback (the catalogue elides its file names). | DE-9 once permission C5 brings the key into a spec; CH-6 when it gets a capture spec (P7, only on a C13 objection) | open |
+
 ## P1a Recorder (PR #34, issue #16)
 
 ### Needs the owner or the VPS (P1b)
@@ -14,7 +37,7 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 | KG-002 | deploy | Every provider host has not been checked as reachable from the VPS over IPv4 and IPv6 (Cloudflare at AGE). | P1b `rws-reachability` | open |
 | KG-003 | deploy | Not yet verified inside the image: the heartbeat and healthcheck in distroless, uid-65532 file modes on the mounts, and the layout (`registry/` next to `apps/server/dist`, posted in #16). | P1b image and deploy | open |
 | KG-004 | CI / prod | The [agent-prod] criteria have no `verify-prod.sh` output yet. | P1b owns `verify-prod.sh`; run after deploy | open |
-| KG-005 | alerting | The phone-alert check needs `deploy/healthchecks.yaml` with the 9 `cap-*` group timeouts (#16 comment). | P1b | open |
+| KG-005 | alerting | The phone-alert check needs `deploy/healthchecks.yaml` with the 9 `cap-*` group timeouts (#16 comment). | P1b | closed in #35 (`deploy/healthchecks.yaml`, `rws-hc-sync`, `test/healthchecks.test.ts`); the phone alert itself is KG-041 |
 
 ### Never called live, or only partly
 
@@ -34,8 +57,8 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 | KG-012 | capture | The FR-1 seed and the scheduled FR-1 run share the variant `default`: a concurrent seed persist can reset a gap walk's progress. The effect is re-fetching, never lost data. | Separate state for seed and schedule | accepted: re-fetch only |
 | KG-013 | status | A stalled FR-1 gap walk (capped with no progress) leaves the spec stale and pages, but sets no `last_failure_status`, so the status shows "stale" without a reason. | A `walk_stalled` code in the existing field | open |
 | KG-014 | alerting | Only staleness and the NL-4 file alerts page. Shape changes, invalid payloads, LU-4 threshold changes and seeds incomplete after 31 days reach only the daily report and the log; `seed_incomplete` is raised again on every start after that. | R-026 | accepted |
-| KG-015 | security | After an unexpected error, capture keeps running and so does the heartbeat, so a wedged recorder shows only through healthchecks staleness. | T-CAP-8; consider exiting on `uncaughtException` later | accepted |
-| KG-016 | security | A network-specific NAT64 prefix inside `2000::/3` (under DNS64) is not refused by the client. | T-CAP-1; P1b nftables egress rules | accepted: relies on P1b |
+| KG-015 | security | After an unexpected error, capture keeps running and so does the heartbeat, so a wedged recorder shows only through healthchecks staleness. | T-CAP-8; since P1b `rws-tick` restarts a container Docker reports unhealthy (Docker itself never does) | accepted |
+| KG-016 | security | A network-specific NAT64 prefix inside `2000::/3` (under DNS64) is not refused by the client. | T-CAP-1; P1b nftables egress rules | accepted: P1b allows TCP 443 to any address (R-033), so the client check stays the only layer here |
 | KG-017 | security | Validity parsing of a large valid JSON or CSV body runs synchronously, bounded only by `max_bytes`. The optional S3 extras were not built: a streaming DOCTYPE scan per chunk, and a smaller ZIP total for XLSX. | R-023, T-CAP-8 | accepted |
 | KG-018 | http | A request's hops share 2 × the timeout of wire time. This bound is not clamped to the caller's deadline, and each DNS check keeps its own per-hop deadline (review N6). | A one-line clamp with a floor of one timeout, if needed | accepted |
 | KG-019 | security | The owner canary (777777.777) cannot be checked yet, because nothing publishes. | P9 (publisher) | open |

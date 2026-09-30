@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# rws-reachability (owner-run once on the VPS as ops; A§12.2; catalogue §10 R7;
+# issue #16 P1b): can the production VPS reach every first-release endpoint,
+# over IPv4 and over IPv6? One request per target and family (curl -4 / -6),
+# https only with verified TLS, no redirect followed, the contact User-Agent of
+# capture, never a key. A target passes only on its body signature
+# (deploy/reachability.yaml), never on the status alone, so a datacentre block
+# served as a 200 (a "blocked" PNG, a Cloudflare challenge, an Azure APIM error,
+# Hub'Eau's "usage abusif") fails. Bodies stay in memory and are never written.
+# Never run it from a container or a timer.
+#
+# Output: a Markdown table (target | source | family | status | bytes | result)
+# for docs/reachability-<date>.md, with no header, body or secret. Exit 1 when
+# a required target fails over IPv4, or over IPv6 while it has an AAAA record;
+# optional targets (the R7 re-tests) are only reported.
+#
+# Usage: rws-reachability [--dry-run] [--only <id>] [--out FILE] [--targets FILE]
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+umask 022
+
+targets=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../reachability.yaml
+only='' out=''
+while (($#)); do
+  case $1 in
+    --dry-run) DRY_RUN=1 ;;
+    --only | --out | --targets)
+      (($# >= 2)) || die "$1 needs a value"
+      case $1 in
+        --only) only=$2 ;;
+        --out) out=$2 ;;
+        --targets) targets=$2 ;;
+      esac
+      shift
+      ;;
+    *)
+      echo "usage: rws-reachability [--dry-run] [--only <id>] [--out FILE] [--targets FILE]" >&2
+      exit 64
+      ;;
+  esac
+  shift
+done
+
+# Every target is validated before anything is sent; nothing from the file reaches a shell unquoted.
+list=$(grep -v '^[[:space:]]*#' "$targets" | jq -ce --arg only "$only" '
+  .targets
+  | if all(.[];
+        (.id | type == "string" and test("^[a-z0-9-]{1,40}$"))
+        and (.source | type == "string" and test("^[A-Za-z0-9-]{1,16}$"))
+        and (.required | type == "boolean")
+        and (.method == "GET" or .method == "POST")
+        and (.url | type == "string" and test("^https://[a-z0-9.-]+(/[^ \"\\\\]*)?$"))
+        and (.sig | type == "string" and length > 0)
+        and ((.headers // []) | all(type == "string" and test("^[A-Za-z-]+: [^\\r\\n]*$")))
+        and ((.body // "") | type == "string"))
+    then .[] | select($only == "" or .id == $only)
+    else error("deploy/reachability.yaml: a target does not validate") end') ||
+  die "$targets does not validate"
+[[ -n $list ]] || die "no target${only:+ named $only}"
+
+if ((DRY_RUN)); then
+  jq -r '"\(.id)\t\(.source)\t\(if .required then "required" else "optional" end)\t\(.method) \(.url)"' <<<"$list"
+  exit 0
+fi
+
+load_env || die "no $RWS_ETC/rws.env (the User-Agent needs RWS_DOMAIN and RWS_CONTACT_EMAIL)"
+[[ ${RWS_DOMAIN:-} =~ ^[a-z0-9.-]+\.[a-z]{2,63}$ && ${RWS_CONTACT_EMAIL:-} == *@* ]] ||
+  die "RWS_DOMAIN and RWS_CONTACT_EMAIL must be set in $RWS_ETC/rws.env (owner action A2)"
+ua="rivierstanden/0.1.0 (+https://$RWS_DOMAIN/over; $RWS_CONTACT_EMAIL)"
+
+# curl exit codes worth a word in the report.
+reason() {
+  case $1 in
+    6) echo "dns" ;;
+    7) echo "connect" ;;
+    28) echo "timeout" ;;
+    35 | 60 | 58 | 59 | 77 | 83 | 90 | 91) echo "tls" ;;
+    63) echo "too large" ;;
+    *) echo "curl $1" ;;
+  esac
+}
+
+errf=$(mktemp)
+trap 'rm -f -- "$errf"' EXIT
+rows=() failed=0
+while IFS= read -r t; do
+  id=$(jq -r .id <<<"$t")
+  source=$(jq -r .source <<<"$t")
+  required=$(jq -r .required <<<"$t")
+  method=$(jq -r .method <<<"$t")
+  url=$(jq -r .url <<<"$t")
+  sig=$(jq -r .sig <<<"$t")
+  body=$(jq -r '.body // ""' <<<"$t")
+  mapfile -t headers < <(jq -r '(.headers // [])[]' <<<"$t")
+  host=${url#https://}
+  host=${host%%/*}
+  for family in 4 6; do
+    if ((family == 6)) && [[ -z $(getent ahostsv6 "$host" 2>/dev/null | awk '$1 !~ /^::ffff:/' | head -n 1) ]]; then
+      rows+=("| $id | $source | IPv6 | – | – | n/a (no AAAA) |")
+      continue
+    fi
+    args=(-"$family" --proto '=https' --tlsv1.2 -sS --max-time 60 --max-filesize 31457280
+      -A "$ua" -X "$method" -o - -w '%{stderr}\n%{http_code} %{size_download}')
+    for h in "${headers[@]}"; do args+=(-H "$h"); done
+    [[ -z $body ]] || args+=(--data-raw "$body")
+    rc=0
+    b64=$(curl "${args[@]}" "$url" 2>"$errf" | base64 -w 0) || rc=$?
+    status='' bytes=''
+    read -r status bytes < <(tail -n 1 "$errf") || true
+    if ((rc != 0)); then
+      result="FAIL ($(reason "$rc"))"
+    elif [[ $sig == magic:* ]]; then
+      hex=${sig#magic:}
+      magic=$(base64 -d <<<"$b64" | head -c $((${#hex} / 2)) | od -An -tx1 | tr -d ' \n')
+      if [[ $magic == "$hex" ]]; then result=PASS; else result="FAIL (signature)"; fi
+    elif base64 -d <<<"$b64" | head -c 65536 | grep -aqE -- "$sig"; then
+      result=PASS
+    else
+      result="FAIL (signature)"
+    fi
+    unset b64
+    [[ $result == PASS || $required == false ]] || failed=$((failed + 1))
+    [[ $required == true ]] || result="$result, optional"
+    rows+=("| $id | $source | IPv$family | ${status:-–} | ${bytes:-0} | $result |")
+  done
+done <<<"$list"
+
+report=$(
+  echo "# Reachability from the production VPS ($(date -u +%Y-%m-%d))"
+  echo
+  echo "\`deploy/bin/rws-reachability\` on the production VPS, $(date -u +%Y-%m-%dT%H:%M:%SZ): one request per target and family, verified TLS, no redirect, the capture User-Agent, no key. PASS means the body carried the target's signature (deploy/reachability.yaml)."
+  echo
+  echo "| Target | Source | Family | Status | Bytes | Result |"
+  echo "|---|---|---|---:|---:|---|"
+  printf '%s\n' "${rows[@]}"
+  echo
+  echo "Required targets failing: $failed."
+)
+if [[ -n $out ]]; then
+  printf '%s\n' "$report" >"$out"
+  log "report written to $out"
+fi
+printf '%s\n' "$report"
+((failed == 0))

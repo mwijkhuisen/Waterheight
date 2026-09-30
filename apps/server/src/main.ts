@@ -12,6 +12,7 @@ import { loadRegistry } from './capture/specs.ts';
 import { removeStaleTmp, StateStore } from './capture/state.ts';
 import { healthy, startHeartbeat } from './heartbeat.ts';
 import { Client } from './http/client.ts';
+import { runWatchdog } from './watchdog/watchdog.ts';
 
 /** Roles of the single server image (A§4); the command picks one. */
 export const ROLES = ['capture', 'load', 'publish', 'api', 'replay', 'watchdog', 'healthcheck'] as const;
@@ -21,7 +22,7 @@ export const EXIT_NOT_IMPLEMENTED = 2;
 export const EXIT_USAGE = 64;
 export { EXIT_CONFIG };
 
-const USAGE = `usage: main.js <${ROLES.join('|')}> (capture also takes --dry-run)`;
+const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; watchdog takes --once or --dry-run)`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
 const RWS_LIMIT = 400;
 
@@ -124,7 +125,7 @@ async function capture(
     ...deps,
     registry,
     paths,
-    pinger: new Pinger(readSecret('hc_ping_key'), userAgent, logger),
+    pinger: new Pinger(() => readSecret('hc_ping_key'), userAgent, logger),
     seeds: () => seeds,
   });
   await recorder.writeStatusNow();
@@ -152,9 +153,9 @@ async function capture(
 }
 
 /**
- * Resolves with an exit code; `api` and `capture` keep running until SIGINT
- * or SIGTERM. `load`, `publish`, `replay` and `watchdog` are stubs until
- * their phase (P1b owns `watchdog`).
+ * Resolves with an exit code; `api`, `capture` and `watchdog` keep running
+ * until SIGINT or SIGTERM. `load`, `publish` and `replay` are stubs until
+ * their phase.
  */
 export function run(
   argv: readonly string[],
@@ -162,12 +163,15 @@ export function run(
   log: (line: string) => void = (line) => console.error(line),
 ): Promise<number> {
   const [role, ...rest] = argv;
-  const dry = role === 'capture' && rest.length === 1 && rest[0] === '--dry-run';
-  if (role === undefined || (rest.length > 0 && !dry) || !(ROLES as readonly string[]).includes(role)) {
+  const flag = rest.length === 1 ? rest[0] : undefined;
+  const dry = (role === 'capture' || role === 'watchdog') && flag === '--dry-run';
+  const once = role === 'watchdog' && flag === '--once';
+  if (role === undefined || (rest.length > 0 && !dry && !once) || !(ROLES as readonly string[]).includes(role)) {
     log(USAGE);
     return Promise.resolve(EXIT_USAGE);
   }
   if (role === 'healthcheck') return Promise.resolve(healthy() ? 0 : 1);
+  if (role === 'watchdog') return runWatchdog(env, dry ? 'dry-run' : once ? 'once' : 'loop', log);
   if (role === 'capture') {
     if (dry) {
       try {

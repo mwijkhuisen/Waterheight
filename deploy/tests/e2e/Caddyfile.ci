@@ -1,0 +1,10 @@
+# CI only (deploy/tests/e2e/run.sh): the production site with the ACME CA
+# pointed at Pebble. Only these globals differ from deploy/web/Caddyfile.
+{
+	admin off
+	email ci@rivierstanden.example
+	acme_ca https://pebble:14000/dir
+	acme_ca_root /etc/caddy/ci-ca.pem
+}
+
+import /etc/caddy/site.caddy

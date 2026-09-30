@@ -64,8 +64,8 @@ export async function writeFileAtomic(path: string, text: string, mode: number):
 
 /**
  * Removes the `<file>.<pid>.tmp` files a crash left behind (writeFileAtomic),
- * at start. Only names matching `pattern` go: $RWS_STATUS_DIR is served by
- * Caddy and shared with P1b's ops.json. Only regular files directly in `dir`:
+ * at start. Only names matching `pattern` go: P1b copies capture.json out of
+ * $RWS_STATUS_DIR to serve it. Only regular files directly in `dir`:
  * never a link, never a subdirectory (N4), so each directory is named.
  */
 export async function removeStaleTmp(dir: string, pattern = /\.json\.\d+\.tmp$/): Promise<number> {

@@ -1,0 +1,24 @@
+# Build context allowlist (issue #16 P1b). Only what the images need is sent to
+# the builder. The git-ignored .smoke/ holds real owner-audience payloads and
+# must never reach an image or a build log (invariant 11).
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.base.json
+!apps/
+!packages/
+!registry/
+!scripts/install-pnpm.sh
+!deploy/web/Caddyfile
+!deploy/web/site.caddy
+
+# Never, even inside an allowed directory.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/test
+**/fixtures
+**/.smoke
+**/.env*
+apps/web/src/paraglide
