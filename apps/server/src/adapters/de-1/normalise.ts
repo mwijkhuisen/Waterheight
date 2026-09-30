@@ -24,6 +24,9 @@ import type { Measurement, Station } from './parse.ts';
 //  - sentinel: 99999 (dropped before conversion); negative W and Q are valid;
 //  - unit, factor and steps: from the series' registry row. A payload unit that
 //    differs from the declared one drops that series' values (and is reported);
+//    measurements.json carries no unit, so a series whose unit the newest basin
+//    payload showed changed is dropped there too (the loader passes that list);
+//  - a gauge zero's validFrom: local midnight in Europe/Berlin;
 //  - everything is ROHDATEN: qc bit "raw";
 //  - only the W and Q timeseries; a series the registry does not know is
 //    counted, never registered.
@@ -40,15 +43,29 @@ export type Context = {
   fetchedAt: number;
   /** The manifest line's variant; `<station uuid>/<W|Q>` for a measurements payload. */
   variant: string;
+  /** Series whose unit the newest basin payload showed changed: a measurements payload carries no unit. */
+  unitMismatch?: ReadonlySet<string>;
 };
 
 const QUANTITY = new Set(['W', 'Q']);
 
-const GAUGE_ZERO_DATUM: Readonly<Record<string, Datum>> = {
-  'm. ü. NHN': 'NHN',
-  'm. ü. NN': 'NN',
+// A Map, not an object: a provider string such as `constructor` must not find an inherited property.
+const GAUGE_ZERO_DATUM: ReadonlyMap<string, Datum> = new Map([
+  ['m. ü. NHN', 'NHN'],
+  ['m. ü. NN', 'NN'],
   // Basel-Rheinhalle: the Swiss datum.
-  'mü.M.': 'LN02',
+  ['mü.M.', 'LN02'],
+]);
+
+/**
+ * A gauge zero's `validFrom` is a German calendar date: it starts at local
+ * midnight in Berlin. Midnight is never inside a DST transition there; the
+ * rule is declared anyway, because nothing is inferred.
+ */
+const VALID_FROM: TimeConvention = {
+  kind: 'naive-local',
+  zone: 'Europe/Berlin',
+  dst: { gap: 'shift-forward', overlap: 'earlier' },
 };
 
 function instant(raw: string): number {
@@ -56,6 +73,16 @@ function instant(raw: string): number {
     return parseInstant(TIME, raw);
   } catch (err) {
     if (err instanceof TimeError) throw new SchemaDrift(`time_${err.code}`);
+    throw err;
+  }
+}
+
+function validFrom(raw: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new SchemaDrift('bad_valid_from');
+  try {
+    return toIso(parseInstant(VALID_FROM, `${raw}T00:00:00`));
+  } catch (err) {
+    if (err instanceof TimeError) throw new SchemaDrift('bad_valid_from');
     throw err;
   }
 }
@@ -85,6 +112,7 @@ function row(decl: SeriesDecl, ts: number, raw: number, ctx: Context, out: Norma
 /** The basin `stations.json`: the current value of every registered W and Q series, stored as published. */
 export function normaliseBasin(stations: readonly Station[], ctx: Context): Normalised {
   const out = emptyNormalised();
+  const mismatch: string[] = [];
   for (const station of stations) {
     for (const series of station.timeseries) {
       if (!QUANTITY.has(series.shortname)) continue;
@@ -93,6 +121,8 @@ export function normaliseBasin(stations: readonly Station[], ctx: Context): Norm
         out.unknown += 1;
         continue;
       }
+      // Every series of the basin call states its unit: the loader keeps this list for the series payloads.
+      if (series.unit !== decl.native_unit) mismatch.push(decl.key);
       if (series.currentMeasurement === undefined) continue;
       if (series.unit !== decl.native_unit) {
         count(out, 'unit_mismatch');
@@ -101,6 +131,7 @@ export function normaliseBasin(stations: readonly Station[], ctx: Context): Norm
       row(decl, instant(series.currentMeasurement.timestamp), series.currentMeasurement.value, ctx, out);
     }
   }
+  out.unitMismatch = mismatch.sort();
   return out;
 }
 
@@ -117,6 +148,11 @@ export function normaliseSeries(points: readonly Measurement[], ctx: Context): N
   const decl = ctx.registry.get(ctx.variant);
   if (decl === undefined) {
     out.unknown = 1;
+    return out;
+  }
+  // The newest basin payload shows another unit for this series: its values would be stored mis-scaled.
+  if (ctx.unitMismatch?.has(decl.key)) {
+    if (points.length > 0) count(out, 'unit_mismatch', points.length);
     return out;
   }
   const byTime = new Map<number, number>();
@@ -147,17 +183,16 @@ export function normaliseMeta(stations: readonly Station[], ctx: Context): Norma
       if (!QUANTITY.has(series.shortname) || series.gaugeZero === undefined) continue;
       const decl = ctx.registry.get(`${station.uuid}/${series.shortname}`);
       if (decl === undefined) continue;
-      const datum = GAUGE_ZERO_DATUM[series.gaugeZero.unit];
+      const datum = GAUGE_ZERO_DATUM.get(series.gaugeZero.unit);
       if (datum === undefined) {
         count(out, 'unknown_zero_unit');
         continue;
       }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(series.gaugeZero.validFrom)) throw new SchemaDrift('bad_valid_from');
       out.gaugeZeros.push({
         series: decl.key,
         value_m: series.gaugeZero.value,
         datum,
-        valid_from: series.gaugeZero.validFrom,
+        valid_from: validFrom(series.gaugeZero.validFrom),
       });
     }
   }

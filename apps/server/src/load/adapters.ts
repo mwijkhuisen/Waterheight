@@ -1,7 +1,7 @@
 import type { Normalised, Registry } from '@rws/core';
 import { type Drift, driftReport } from '../adapters/de-1/drift.ts';
 import { normaliseBasin, normaliseMeta, normaliseSeries } from '../adapters/de-1/normalise.ts';
-import { parseMeasurements, parseStations } from '../adapters/de-1/parse.ts';
+import { JSON_CAPS, parseMeasurements, parseStations } from '../adapters/de-1/parse.ts';
 
 // Which archived payloads the loader parses (A§7.4 step 1): adapter by source
 // ID, function by capture spec. A source or spec that is not listed here is
@@ -14,6 +14,8 @@ export type LoadContext = {
   fetchedAt: number;
   /** The manifest line's variant (the series of a per-series call). */
   variant: string;
+  /** The series keys whose unit the source's newest unit-stating payload showed changed (Normalised.unitMismatch). */
+  unitMismatch: ReadonlySet<string>;
 };
 
 export type SpecLoader = {
@@ -45,11 +47,15 @@ export const LOAD_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       'de-1-basin': {
         maxBytes: 4 * MIB,
         needsVariant: false,
-        run: (b, c) => normaliseBasin(parseStations(b), c),
-        drift: (b, registry) => driftReport(registry, parseStations(b)),
+        run: (b, c) => normaliseBasin(parseStations(b, JSON_CAPS.basin), c),
+        drift: (b, registry) => driftReport(registry, parseStations(b, JSON_CAPS.basin)),
       },
       'de-1-series': { maxBytes: 8 * MIB, needsVariant: true, run: (b, c) => normaliseSeries(parseMeasurements(b), c) },
-      'de-1-meta': { maxBytes: 16 * MIB, needsVariant: false, run: (b, c) => normaliseMeta(parseStations(b), c) },
+      'de-1-meta': {
+        maxBytes: 16 * MIB,
+        needsVariant: false,
+        run: (b, c) => normaliseMeta(parseStations(b, JSON_CAPS.meta), c),
+      },
     },
   },
 };

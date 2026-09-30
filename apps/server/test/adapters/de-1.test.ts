@@ -3,7 +3,7 @@ import { type Normalised, ObsRow, QC, SchemaDrift } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { type Context, normaliseBasin, normaliseMeta, normaliseSeries } from '../../src/adapters/de-1/normalise.ts';
-import { parseMeasurements, parseStations } from '../../src/adapters/de-1/parse.ts';
+import { JSON_CAPS, parseMeasurements, parseStations } from '../../src/adapters/de-1/parse.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
 // DE-1 PEGELONLINE: parse + normalise of real recorded payloads equals the
@@ -104,12 +104,15 @@ describe('golden files (real payloads)', () => {
     expect(out.obs).toEqual([]);
     expect(out.gaugeZeros).toHaveLength(181);
     const zero = (key: string) => out.gaugeZeros.find((z) => z.series === key);
+    // validFrom "2019-11-01" is a German date: it starts at midnight in Berlin (CET, 23:00 UTC the day before).
     expect(zero('a6ee8177-107b-47dd-bcfd-30960ccc6e9c/W')).toEqual({
       series: 'a6ee8177-107b-47dd-bcfd-30960ccc6e9c/W',
       value_m: 35.038,
       datum: 'NHN',
-      valid_from: '2019-11-01',
+      valid_from: '2019-10-31T23:00:00.000Z',
     });
+    // A summer date starts at 22:00 UTC (CEST).
+    expect(out.gaugeZeros.filter((z) => z.valid_from === '2017-07-17T22:00:00.000Z')).toHaveLength(8);
     // Basel-Rheinhalle: "mü.M." is the Swiss datum.
     expect(zero('94f6eff1-4f3f-4850-82e0-a086198e9ffd/W')).toMatchObject({ value_m: 240, datum: 'LN02' });
     expect(new Set(out.gaugeZeros.map((z) => z.datum))).toEqual(new Set(['NHN', 'NN', 'LN02']));
@@ -188,7 +191,7 @@ describe('rules', () => {
     expect(meta.obs).toEqual([]);
   });
 
-  it('a payload unit that differs from the declared unit drops that series and is counted', () => {
+  it('a payload unit that differs from the declared unit drops that series, is counted and listed', () => {
     const stations = parseStations(rawFixture('DE-1', 'de-1-basin').body).map((s) => ({
       ...s,
       timeseries: s.timeseries.map((t) => (`${s.uuid}/${t.shortname}` === EMMERICH_W ? { ...t, unit: 'm+NN' } : t)),
@@ -196,6 +199,25 @@ describe('rules', () => {
     const out = normaliseBasin(stations, base);
     expect(out.dropped.unit_mismatch).toBe(1);
     expect(out.obs.find((r) => r.series === EMMERICH_W)).toBeUndefined();
+    // The list the loader keeps for the measurements payloads, which carry no unit.
+    expect(out.unitMismatch).toEqual([EMMERICH_W]);
+    expect(normaliseBasin(parseStations(rawFixture('DE-1', 'de-1-basin').body), base).unitMismatch).toEqual([]);
+  });
+
+  it('a measurements payload of a series on the unit-mismatch list stores nothing and counts every value', () => {
+    const pts = points(['2026-09-29T15:00:00+02:00', 1.5], ['2026-09-29T15:15:00+02:00', 1.6]);
+    const out = normaliseSeries(pts, { ...base, unitMismatch: new Set([EMMERICH_W]) });
+    expect(out).toEqual({ obs: [], gaugeZeros: [], dropped: { unit_mismatch: 2 }, unknown: 0 });
+    // Another series of the list does not affect this one.
+    expect(normaliseSeries(pts, { ...base, unitMismatch: new Set([KAUB_W]) }).obs).toHaveLength(2);
+  });
+
+  it('takes any 8-4-4-4-12 hex station id, not only an RFC 4122 UUID', () => {
+    const [first] = JSON.parse(rawFixture('DE-1', 'de-1-basin').body.toString('utf8'));
+    // Version nibble 0 and variant nibble 0: not an RFC UUID, still PEGELONLINE's shape.
+    const id = '12345678-1234-0234-0234-123456789abc';
+    expect(parseStations(Buffer.from(JSON.stringify([{ ...first, uuid: id }])))[0]?.uuid).toBe(id);
+    expect(() => parseStations(Buffer.from(JSON.stringify([{ ...first, uuid: 'not-a-guid' }])))).toThrow(SchemaDrift);
   });
 
   it('rejects a timestamp more than 15 minutes ahead and one older than the provider window', () => {
@@ -213,6 +235,51 @@ describe('rules', () => {
     expect(() => normaliseSeries([], { ...base, variant: 'x/W' })).toThrow(SchemaDrift);
     const out = normaliseSeries(points(['2026-09-29T15:00:00+02:00', 88888]), base);
     expect(out.obs[0]).toMatchObject({ value: 88888, qc: QC.RAW | QC.RANGE });
+  });
+
+  it('a gauge-zero unit that names an inherited property is an unknown unit, not a datum', () => {
+    const stations = parseStations(rawFixture('DE-1', 'de-1-meta').body);
+    const all = normaliseMeta(stations, base).gaugeZeros.length;
+    for (const unit of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      let changed = 0;
+      const mutated = stations.map((s) => ({
+        ...s,
+        timeseries: s.timeseries.map((t) => {
+          if (t.gaugeZero === undefined || changed > 0 || !registry.has(`${s.uuid}/${t.shortname}`)) return t;
+          changed += 1;
+          return { ...t, gaugeZero: { ...t.gaugeZero, unit } };
+        }),
+      }));
+      const out = normaliseMeta(mutated, base);
+      expect([unit, out.dropped]).toEqual([unit, { unknown_zero_unit: 1 }]);
+      // The rest of the payload still loads.
+      expect(out.gaugeZeros).toHaveLength(all - 1);
+      for (const z of out.gaugeZeros) expect(['NHN', 'NN', 'LN02']).toContain(z.datum);
+    }
+  });
+
+  it('validFrom is local midnight in Berlin; a date that does not exist is drift', () => {
+    const [station] = parseStations(rawFixture('DE-1', 'de-1-meta').body).filter((s) =>
+      s.timeseries.some((t) => t.gaugeZero && registry.has(`${s.uuid}/${t.shortname}`)),
+    );
+    const at = (validFrom: string) =>
+      normaliseMeta(
+        [
+          {
+            ...station,
+            timeseries: station?.timeseries.map((t) =>
+              t.gaugeZero ? { ...t, gaugeZero: { ...t.gaugeZero, validFrom } } : t,
+            ),
+          },
+        ] as Parameters<typeof normaliseMeta>[0],
+        base,
+      ).gaugeZeros[0]?.valid_from;
+    expect(at('2026-01-15')).toBe('2026-01-14T23:00:00.000Z');
+    expect(at('2026-07-15')).toBe('2026-07-14T22:00:00.000Z');
+    // The days of both transitions: midnight is before 02:00, so the offset of the day before holds.
+    expect(at('2026-03-29')).toBe('2026-03-28T23:00:00.000Z');
+    expect(at('2026-10-25')).toBe('2026-10-24T22:00:00.000Z');
+    expect(() => at('2026-02-30')).toThrow(SchemaDrift);
   });
 
   it('an unknown gauge-zero unit is counted; a malformed validFrom is drift', () => {
@@ -238,6 +305,15 @@ describe('rules', () => {
       Array.from({ length: 60_001 }, () => ({ timestamp: '2026-09-29T15:00:00+02:00', value: 1 })),
     );
     expect(() => parseMeasurements(Buffer.from(big))).toThrow(SchemaDrift);
+  });
+});
+
+describe('bounded parsing (review S1)', () => {
+  // The hostile bodies themselves run in child processes with a small heap: bounded.int.test.ts.
+  it('the caps admit every recorded payload', () => {
+    expect(parseStations(rawFixture('DE-1', 'de-1-basin').body, JSON_CAPS.basin)).toHaveLength(199);
+    expect(parseStations(rawFixture('DE-1', 'de-1-meta').body, JSON_CAPS.meta)).toHaveLength(786);
+    expect(parseMeasurements(rawFixture('DE-1', 'de-1-series-kaub-w-p31d').body)).toHaveLength(2973);
   });
 });
 

@@ -1,10 +1,12 @@
-import { SchemaDrift } from '@rws/core';
+import { cappedArray, type JsonCaps, parseJsonArray } from '@rws/core';
 import { z } from 'zod';
 
 // DE-1 PEGELONLINE rest-api/v2 (catalogue §2.2): strict schemas of the three
 // archived calls. Anything the schema does not know is a SchemaDrift: that
 // payload is quarantined and nothing of it is stored (A§7.4 step 5). Provider
-// strings are data; none is interpreted here.
+// strings are data; none is interpreted here. Every document is bounded before
+// Zod sees it (packages/core json.ts), so no payload inside the byte caps can
+// run the loader out of memory on its way to a SchemaDrift.
 
 const text = (max: number) => z.string().max(max);
 
@@ -33,7 +35,7 @@ const CharacteristicValue = z.strictObject({
   validFrom: text(10).optional(),
   timespanStart: text(10).optional(),
   timespanEnd: text(10).optional(),
-  occurrences: z.array(text(10)).max(100).optional(),
+  occurrences: cappedArray(text(10), 100).optional(),
 });
 
 const Timeseries = z.strictObject({
@@ -44,11 +46,12 @@ const Timeseries = z.strictObject({
   currentMeasurement: CurrentMeasurement.optional(),
   gaugeZero: GaugeZero.optional(),
   comment: z.strictObject({ shortDescription: text(500), longDescription: text(4000) }).optional(),
-  characteristicValues: z.array(CharacteristicValue).max(200).optional(),
+  characteristicValues: cappedArray(CharacteristicValue, 200).optional(),
 });
 
 const Station = z.strictObject({
-  uuid: z.uuid(),
+  // Any 8-4-4-4-12 hex id: PEGELONLINE's UUIDs need not follow the RFC's version and variant bits.
+  uuid: z.guid(),
   number: text(40),
   shortname: text(200),
   longname: text(200),
@@ -59,29 +62,30 @@ const Station = z.strictObject({
   voiceServiceNumber: text(80).optional(),
   remark: text(2000).optional(),
   water: z.strictObject({ shortname: text(80), longname: text(200) }),
-  timeseries: z.array(Timeseries).max(60),
+  timeseries: cappedArray(Timeseries, 60),
 });
 export type Station = z.infer<typeof Station>;
-
-/** `stations.json`: the basin call (current values) and the daily metadata call (gauge zeros). */
-const Stations = z.array(Station).max(5000);
-/** `measurements.json`: P31D of a 1-minute series is 44,640 points. */
-const Measurements = z.array(Measurement).max(60_000);
 export type Measurement = z.infer<typeof Measurement>;
 
-function parse<T>(schema: z.ZodType<T>, body: Uint8Array): T {
-  let doc: unknown;
-  try {
-    doc = JSON.parse(Buffer.from(body.buffer, body.byteOffset, body.byteLength).toString('utf8'));
-  } catch {
-    throw new SchemaDrift('not_json');
-  }
-  const result = schema.safeParse(doc);
-  if (result.success) return result.data;
-  const issue = result.error.issues[0];
-  // The issue code is Zod's own identifier; the path holds our keys and array indexes only.
-  throw new SchemaDrift(issue?.code ?? 'invalid', issue?.path.map(String).join('.') ?? '');
-}
+/**
+ * The node and depth caps of each call's document, about 5× the recorded peak
+ * (in brackets: nodes and depth of the fixture). `stations.json` holds at most
+ * 5,000 stations; `measurements.json` at most 60,000 points (P31D of a 1-minute
+ * series is 44,640), which the series cap admits (60,000 points are 180,001 values).
+ */
+export const JSON_CAPS = {
+  /** The basin call (5,776 values, depth 5: 199 stations). */
+  basin: { maxItems: 5000, maxNodes: 30_000, maxDepth: 8 },
+  /** The daily metadata call (41,043 values, depth 7: 786 stations). */
+  meta: { maxItems: 5000, maxNodes: 200_000, maxDepth: 10 },
+  /** A series window (8,920 values, depth 2: the P31D seed of a 15-minute series). */
+  series: { maxItems: 60_000, maxNodes: 200_000, maxDepth: 3 },
+} as const satisfies Record<string, JsonCaps & { maxItems: number }>;
 
-export const parseStations = (body: Uint8Array): Station[] => parse(Stations, body);
-export const parseMeasurements = (body: Uint8Array): Measurement[] => parse(Measurements, body);
+const decode = (body: Uint8Array) => Buffer.from(body.buffer, body.byteOffset, body.byteLength).toString('utf8');
+
+/** `stations.json`: the basin call (current values) and the daily metadata call (gauge zeros). */
+export const parseStations = (body: Uint8Array, caps: JsonCaps & { maxItems: number } = JSON_CAPS.meta): Station[] =>
+  parseJsonArray(decode(body), Station, caps);
+export const parseMeasurements = (body: Uint8Array): Measurement[] =>
+  parseJsonArray(decode(body), Measurement, JSON_CAPS.series);

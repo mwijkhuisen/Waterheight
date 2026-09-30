@@ -5,1087 +5,1087 @@
    "series": "04572010-1db2-4338-8562-b3dca5e715c5/W",
    "value_m": 9.521,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "ec4a598d-773d-44c1-935e-2053b54e45a3/W",
    "value_m": -5.06,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "aa6af4e6-a44f-46c4-abf6-449f8a68bab1/W",
    "value_m": -5.06,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "abb23dad-0880-41ab-8d2d-dd33e11f148f/W",
    "value_m": -5.04,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "244cae8b-ce75-4c2d-a66e-cb804f8335a2/W",
    "value_m": -5.05,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "5d1e4350-0f39-4428-84c3-6f8f0bbe80d4/W",
    "value_m": -5.05,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "edfdf747-be92-462f-87ed-53d228a33172/W",
    "value_m": -5.01,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "438b565e-f293-43c8-8771-377e555ed5ec/W",
    "value_m": -5.11,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "7753c1fa-34d8-4d09-a7c7-38024079117c/W",
    "value_m": -5.07,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "c8af067c-ba6a-4a76-86d8-1ce8e532ef8b/W",
    "value_m": -5.1,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "88698229-ada0-4c89-b006-675ef1f63bc8/W",
    "value_m": 12.77,
    "datum": "NHN",
-   "valid_from": "2026-06-18"
+   "valid_from": "2026-06-17T22:00:00.000Z"
   },
   {
    "series": "3a8ed45f-28e7-4263-8437-d926c6a194f4/W",
    "value_m": 35.69,
    "datum": "NN",
-   "valid_from": "1952-02-01"
+   "valid_from": "1952-01-31T23:00:00.000Z"
   },
   {
    "series": "50a449ba-af4c-42c7-b2c4-9a3eda37e1e3/W",
    "value_m": 24.188,
    "datum": "NHN",
-   "valid_from": "1976-10-15"
+   "valid_from": "1976-10-14T23:00:00.000Z"
   },
   {
    "series": "200363fc-cdc5-4c22-a271-a25d1ba880ed/W",
    "value_m": 14.98,
    "datum": "NN",
-   "valid_from": "2001-10-16"
+   "valid_from": "2001-10-15T22:00:00.000Z"
   },
   {
    "series": "ad357e52-0978-4583-91e6-bc03a222f655/W",
    "value_m": 12.393,
    "datum": "NHN",
-   "valid_from": "2001-10-16"
+   "valid_from": "2001-10-15T22:00:00.000Z"
   },
   {
    "series": "15456f75-fb0b-48ad-8887-544ff0108dd3/W",
    "value_m": 9.362,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "6de43652-2db9-4627-a255-9cb1f8efb820/W",
    "value_m": 6.71,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "86f8dbab-6a64-408b-a5d5-69e69f01db2f/W",
    "value_m": 8.024,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "4e7a6cfa-7548-4f7f-a97a-eb0694881003/W",
    "value_m": 173.67,
    "datum": "NN",
-   "valid_from": "1987-11-01"
+   "valid_from": "1987-10-31T23:00:00.000Z"
   },
   {
    "series": "4b386a6a-996e-4a4a-a440-15d6b40226d4/W",
    "value_m": 149.995,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "57c8e437-560c-4a5b-a9a0-b8e109804546/W",
    "value_m": 136.89,
    "datum": "NHN",
-   "valid_from": "2023-10-01"
+   "valid_from": "2023-09-30T22:00:00.000Z"
   },
   {
    "series": "32807065-b887-49f0-935a-80033e5f3cb0/W",
    "value_m": 134.993,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "34af0fca-d2c6-4243-a924-9ce1b3b6452d/W",
    "value_m": 118.501,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "b85b17cc-0569-45b2-9c84-07b57f0c442f/W",
    "value_m": 110.642,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "89038b42-8181-48df-a0cd-2ca3913f2d68/W",
    "value_m": 105.033,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "ea62ec5f-9a88-4e6a-9062-847bf8347e51/W",
    "value_m": 100.055,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "31750a0f-24a8-4bc3-9e84-f058c05b70d8/W",
    "value_m": 100.055,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "eadedeb6-c31e-483f-b6c4-ca0153359ad7/W",
    "value_m": 101.262,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "24fe419b-ed78-45d0-af54-05108098854a/W",
    "value_m": 95.076,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "3abb36d1-d5b1-41a6-bd59-5b943d828c58/W",
    "value_m": 95.085,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "15a50d2b-d662-4368-a6c9-297a37305d3b/W",
    "value_m": 91.106,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "7dfe4776-c0d4-459f-ad15-72d44ab7d2c6/W",
    "value_m": 91.106,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "a7034573-06b3-4490-bb7e-6aa70724a0ba/W",
    "value_m": 86.692,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "64f735fd-88b6-42ea-9cdd-dc18d3806c34/W",
    "value_m": 86.4,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "cedc9b0c-274a-44f1-8e68-5d035bc90c94/W",
    "value_m": 81.488,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "9beb7290-7585-4578-998e-9c7c11d7365e/W",
    "value_m": 81.488,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "29cb44a2-5004-4419-b419-51c77add55cc/W",
    "value_m": 77.07,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "3a90a346-e825-4d38-a67a-27351276cc3c/W",
    "value_m": 77.07,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "9ceb358c-bb9d-4807-b081-49cd048f5c72/W",
    "value_m": 73.067,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "eae91991-768c-4713-8cca-3b18d4af885e/W",
    "value_m": 73.067,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "f2295e77-acc0-4c24-b762-90391a38059d/W",
    "value_m": 71.533,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "c005afb9-175d-4c7a-a9c3-7766f929d81f/W",
    "value_m": 71.533,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "664d68ea-c4f0-4975-8856-a04d3e4c241f/W",
    "value_m": 59.386,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "6b6b31e2-e5c7-4c85-8405-b8d0b6e158c4/W",
    "value_m": 58.821,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "db1684c1-7ffc-4e8a-b8cf-8240a0d03519/W",
    "value_m": 82.879,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "66ff3eb4-513b-478b-abd2-2f5126ea66fd/W",
    "value_m": 90.626,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "27eed51b-c0a4-417e-926b-bb4194bfb341/W",
    "value_m": 98.113,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "4627475d-ccda-4d53-8f13-28527c49eaf5/W",
    "value_m": 101.125,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "3c7cfb10-c866-404b-b11c-0d79986f865a/W",
    "value_m": 107.78,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "355b02d2-c578-46d9-a56b-8046d470cb95/W",
    "value_m": 119.6,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "a919f57f-8378-42d8-82f8-b87eaf008641/W",
    "value_m": 128.257,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "0e065a22-9a0b-4f1d-b813-22fe6321bb1a/W",
    "value_m": 132.835,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "1ed983c3-114c-4fcc-a1db-61d336cf045f/W",
    "value_m": 146.301,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "915d76e1-3bf9-4e37-9a9a-4d144cd771cc/W",
    "value_m": 164.511,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "3de69bf8-dcbb-4afb-a15b-a8683a6a689c/W",
    "value_m": 189.465,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "42ecae60-eeb3-4b41-9721-46b3f12d04b8/W",
    "value_m": 201.117,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "a77aad00-caa0-44a2-95cb-8afd9c4ff00c/W",
    "value_m": 223.355,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "3f64ff08-ca37-4567-ba64-a387a9358d0c/W",
    "value_m": 63.075,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "dc1bb420-ec60-4bc3-bce2-b3869a2513df/W",
    "value_m": 63.081,
    "datum": "NHN",
-   "valid_from": "2018-01-01"
+   "valid_from": "2017-12-31T23:00:00.000Z"
   },
   {
    "series": "d0abe01a-f5e4-4d04-9518-d1c75fcd1706/W",
    "value_m": 63.081,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "edc67ca3-b597-402a-9037-ff39ee816452/W",
    "value_m": 70.516,
    "datum": "NHN",
-   "valid_from": "2018-01-01"
+   "valid_from": "2017-12-31T23:00:00.000Z"
   },
   {
    "series": "a5c880a3-c4cb-41c6-a8be-ca9c3f23a295/W",
    "value_m": 70.516,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "768df4e9-ed5a-4141-901b-e25ac404d559/W",
    "value_m": 77.032,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "583420a8-8903-485e-8c35-003814506838/W",
    "value_m": 77.022,
    "datum": "NHN",
-   "valid_from": "2018-01-01"
+   "valid_from": "2017-12-31T23:00:00.000Z"
   },
   {
    "series": "68198b48-8a0f-4fa3-85fe-3aad94233a10/W",
    "value_m": 77.022,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "20640279-2334-4acd-afb5-c8f3afc18379/W",
    "value_m": 84.022,
    "datum": "NHN",
-   "valid_from": "2018-01-01"
+   "valid_from": "2017-12-31T23:00:00.000Z"
   },
   {
    "series": "e4d6a271-c0a9-44cd-8066-7f7311fb0b99/W",
    "value_m": 84.022,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "ee861944-647f-4242-bf61-60f9b9d75fb7/W",
    "value_m": 91.016,
    "datum": "NHN",
-   "valid_from": "2018-01-01"
+   "valid_from": "2017-12-31T23:00:00.000Z"
   },
   {
    "series": "87207dcd-5f3d-4672-a660-5a3b1563baa4/W",
    "value_m": 91.016,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "d867e7e9-feb9-4d36-8757-4afd865e697b/W",
    "value_m": 98.512,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "8b802863-402e-4bb9-8d39-976d27519796/W",
    "value_m": 98.512,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "a392113c-d040-4b36-b47d-9099275bb308/W",
    "value_m": 104.518,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "cb4789e4-0c13-45ff-8173-c3803f5e6e93/W",
    "value_m": 104.518,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "dc344605-c507-4054-b4e3-293cf0602bc4/W",
    "value_m": 112.012,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "c40912fd-8217-41d0-be2d-3e4073f0df35/W",
    "value_m": 112.012,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "abd34ee6-a578-4639-b73d-fa4e08f40345/W",
    "value_m": 121.013,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "3bec53ca-444e-4014-a7b0-07b3591e954b/W",
    "value_m": 121.013,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "9d2b4126-6ac3-4693-ae6a-e4dc88e150f3/W",
    "value_m": 121.013,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "69308142-f78e-4877-9af8-e7221b01d303/W",
    "value_m": 128.258,
    "datum": "NHN",
-   "valid_from": "2020-11-10"
+   "valid_from": "2020-11-09T23:00:00.000Z"
   },
   {
    "series": "6e72bebf-540a-4180-bcf1-18c464a0c007/W",
    "value_m": 128.258,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "bb5560fc-7995-40a2-b92f-3d828c67dcfa/W",
    "value_m": 134.499,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "cceb7060-7c46-4cb7-a50a-6f7baeb8737a/W",
    "value_m": 134.5,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "c263ea53-ca4d-41f5-b3f5-6178fec302aa/W",
    "value_m": 138.491,
    "datum": "NHN",
-   "valid_from": "2019-01-01"
+   "valid_from": "2018-12-31T23:00:00.000Z"
   },
   {
    "series": "25582d3f-dc5f-4c70-bd08-e84fd13201ca/W",
    "value_m": 84.787,
    "datum": "NHN",
-   "valid_from": "2017-07-18"
+   "valid_from": "2017-07-17T22:00:00.000Z"
   },
   {
    "series": "48a939b9-a3cf-49f5-a804-94b45f4eb8dc/W",
    "value_m": 84.95,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "70cee7df-792f-4985-a5d3-63b704d3ee50/W",
    "value_m": 84.95,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "ec9d3a4d-029f-475e-acbf-03352252b54f/W",
    "value_m": 94.51,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "66d887a6-6437-4720-bc1f-9fa55929c40e/W",
    "value_m": 94.51,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "827b2685-47ec-44df-a90f-980f5e0c1591/W",
    "value_m": 103.22,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "3944c1fd-39f5-47b1-bb6e-323db05d70e8/W",
    "value_m": 105.83,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "7be3ff2e-5595-43a8-aeee-895e71f6b9ef/W",
    "value_m": 105.83,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "d64d07f7-495f-454c-b2e6-f94a287a48c4/W",
    "value_m": 109.72,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "acf505dd-60c9-4a57-a483-556ed0b2794f/W",
    "value_m": 114.4,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "4c00a166-7d6d-48d7-b4dc-673b96b4041e/W",
    "value_m": 119.71,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "5ab4f00f-24bd-4695-96b0-d013dc723c9c/W",
    "value_m": 119.71,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "bd36404b-ec92-43c0-8d28-3f2c246d51fc/W",
    "value_m": 125.7,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "f00c7183-ab6c-4497-ac33-218d4944f46c/W",
    "value_m": 131,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "0e1b8ae0-1339-43cc-a61b-1b313c0b7597/W",
    "value_m": 136.6,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "fc1072e4-61d4-4e89-bc70-c7e8860fd208/W",
    "value_m": 136.6,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "8f695e71-5747-4fba-8962-c3873f549b89/W",
    "value_m": 140.79,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "845944f8-39e7-42e2-b200-e60c0b982f37/W",
    "value_m": 140.79,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "f77df170-d23a-451c-9c43-b1580ccd3e2c/W",
    "value_m": 148.82,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "b76bf04c-45e7-40c7-8940-3e1419c6da15/W",
    "value_m": 152,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "d9b441a5-a585-4ac4-ae65-351a5fce3aa5/W",
    "value_m": 152,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "2f7cb553-73a0-4fb8-816e-af276ca4ccb7/W",
    "value_m": 159.37,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "8559d1a0-4a03-410a-8910-44a089a07df8/W",
    "value_m": 159.37,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "57db82c7-2785-44d0-bede-21de0686a6be/W",
    "value_m": 167.75,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "46d8ed02-73fd-4958-8e2e-006c047d0576/W",
    "value_m": 167.75,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "42c11b7a-d5ff-4372-b5ee-3b755ea4cb6f/W",
    "value_m": 167.75,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "23517de9-9b81-4a34-ab82-adff6443c235/W",
    "value_m": 174.06,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "6e183f4b-a506-4706-aeed-cf33b34e76ad/W",
    "value_m": 180.23,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "8a2e3048-7bb0-4d8e-bf8a-3fc85a2d4b89/W",
    "value_m": 180.23,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "456974a8-8cc8-4349-ba9f-b272ee6dcf3b/W",
    "value_m": 188.28,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "a73a9cb4-5bc2-4d42-b7cd-191d5e1ee307/W",
    "value_m": 188.28,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "f4854a4c-490a-43df-bc06-d2711ddf9b70/W",
    "value_m": 194.27,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "dfdfb4ff-370c-4795-a44e-0c2503674932/W",
    "value_m": 201.28,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "cf2af1a4-41a9-4a48-871b-f241daad04cc/W",
    "value_m": 204.88,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "7068d262-f466-44e1-9bfa-832fcc16c433/W",
    "value_m": 211.79,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "a5ca02fb-9a83-4da5-80f0-0e7007350af8/W",
    "value_m": 217.09,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "80e002d8-bc6a-4685-9aab-88edbfc069e0/W",
    "value_m": 220.74,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "130a3761-e060-482e-944c-f2a75d6744b7/W",
    "value_m": 229.09,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "31c32a38-aced-410c-b6a0-87506d14361f/W",
    "value_m": 234.29,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "cbfae6bc-7978-4aac-9207-7939c8080507/W",
    "value_m": 234.29,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "9de0843a-2b79-40e5-b312-31d86e91ce4d/W",
    "value_m": 234.29,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "c5b6243d-5b7e-4ec6-be61-2009085388d0/W",
    "value_m": 240.2,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "be7ce40e-5fff-42df-8386-b42694ca86da/W",
    "value_m": 245.86,
    "datum": "NHN",
-   "valid_from": "2017-11-01"
+   "valid_from": "2017-10-31T23:00:00.000Z"
   },
   {
    "series": "94f6eff1-4f3f-4850-82e0-a086198e9ffd/W",
    "value_m": 240,
    "datum": "LN02",
-   "valid_from": "2010-02-01"
+   "valid_from": "2010-01-31T23:00:00.000Z"
   },
   {
    "series": "06b978dd-8c4d-48ac-a0c8-2c16681ed281/W",
    "value_m": 217.291,
    "datum": "NHN",
-   "valid_from": "2018-11-01"
+   "valid_from": "2018-10-31T23:00:00.000Z"
   },
   {
    "series": "9da1ad2b-88db-4cbb-8132-eddfab07d5ba/W",
    "value_m": 184.515,
    "datum": "NHN",
-   "valid_from": "2018-11-01"
+   "valid_from": "2018-10-31T23:00:00.000Z"
   },
   {
    "series": "5389b878-fad5-4f37-bb87-e6cb36b7078b/W",
    "value_m": 161.511,
    "datum": "NHN",
-   "valid_from": "2018-11-01"
+   "valid_from": "2018-10-31T23:00:00.000Z"
   },
   {
    "series": "787e5d63-61e2-48cc-acf0-633e2bf923f2/W",
    "value_m": 147.32,
    "datum": "NHN",
-   "valid_from": "2018-11-01"
+   "valid_from": "2018-10-31T23:00:00.000Z"
   },
   {
    "series": "23af9b02-5c82-4f6e-acb8-f92a06e5e4da/W",
    "value_m": 133.02,
    "datum": "NHN",
-   "valid_from": "2018-11-01"
+   "valid_from": "2018-10-31T23:00:00.000Z"
   },
   {
    "series": "b02be240-1364-4c97-8bb6-675d7d842332/W",
    "value_m": 110.019,
    "datum": "NHN",
-   "valid_from": "2018-11-01"
+   "valid_from": "2018-10-31T23:00:00.000Z"
   },
   {
    "series": "6b774802-fcb5-49ae-8ecb-ecaf1a278b1c/W",
    "value_m": 106.71,
    "datum": "NHN",
-   "valid_from": "2018-11-01"
+   "valid_from": "2018-10-31T23:00:00.000Z"
   },
   {
    "series": "b6c6d5c8-e2d5-4469-8dd8-fa972ef7eaea/W",
    "value_m": 97.721,
    "datum": "NHN",
-   "valid_from": "2017-07-18"
+   "valid_from": "2017-07-17T22:00:00.000Z"
   },
   {
    "series": "88e972e1-88a0-4eb9-847c-0925e5999a46/W",
    "value_m": 90.561,
    "datum": "NHN",
-   "valid_from": "2017-07-18"
+   "valid_from": "2017-07-17T22:00:00.000Z"
   },
   {
    "series": "2cb8ae5b-c5c9-4fa8-bac0-bb724f2754f4/W",
    "value_m": 88.467,
    "datum": "NHN",
-   "valid_from": "2017-07-18"
+   "valid_from": "2017-07-17T22:00:00.000Z"
   },
   {
    "series": "57090802-c51a-4d09-8340-b4453cd0e1f5/W",
    "value_m": 85.117,
    "datum": "NHN",
-   "valid_from": "2017-07-18"
+   "valid_from": "2017-07-17T22:00:00.000Z"
   },
   {
    "series": "844a620f-f3b8-4b6b-8e3c-783ae2aa232a/W",
    "value_m": 84.112,
    "datum": "NHN",
-   "valid_from": "2017-07-18"
+   "valid_from": "2017-07-17T22:00:00.000Z"
   },
   {
    "series": "d28e7ed1-3317-41c5-bec6-725369ed1171/W",
    "value_m": 80.167,
    "datum": "NHN",
-   "valid_from": "2017-07-18"
+   "valid_from": "2017-07-17T22:00:00.000Z"
   },
   {
    "series": "f6be7857-56b3-4db3-84e5-89e0c45985ed/W",
    "value_m": 78.764,
    "datum": "NHN",
-   "valid_from": "2017-07-18"
+   "valid_from": "2017-07-17T22:00:00.000Z"
   },
   {
    "series": "a37a9aa3-45e9-4d90-9df6-109f3a28a5af/W",
    "value_m": 78.373,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "665be0fe-5e38-43f6-8b04-02a93bdbeeb4/W",
    "value_m": 77.562,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "0309cd61-90c9-470e-99d4-2ee4fb2c5f84/W",
    "value_m": 76.185,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "1d26e504-7f9e-480a-b52c-5932be6549ab/W",
    "value_m": 67.669,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "550eb7e9-172e-48e4-ae1e-d1b761b42223/W",
    "value_m": 63.751,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "2ff6379d-d168-4022-8da0-16846d45ef9b/W",
    "value_m": 61.573,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "d6dc44d1-63ac-4871-b175-60ac4040069a/W",
    "value_m": 59.608,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "4c7d796a-39f2-4f26-97a9-3aad01713e29/W",
    "value_m": 57.692,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "dc407f1e-e25f-4995-9feb-5bacc8658149/W",
    "value_m": 52.86,
    "datum": "NHN",
-   "valid_from": "1931-01-01"
+   "valid_from": "1930-12-31T23:00:00.000Z"
   },
   {
    "series": "5735892a-ec65-4b29-97c5-50939aa9584e/W",
    "value_m": 51.504,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "b45359df-c020-4314-adb1-d1921db642da/W",
    "value_m": 47.222,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "593647aa-9fea-43ec-a7d6-6476a76ae868/W",
    "value_m": 42.713,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "a6ee8177-107b-47dd-bcfd-30960ccc6e9c/W",
    "value_m": 35.038,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "8f7e5f92-1153-4f93-acba-ca48670c8ca9/W",
    "value_m": 24.529,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "c0f51e35-d0e8-4318-afaf-c5fcbc29f4c1/W",
    "value_m": 16.106,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "f33c3cc9-dc4b-4b77-baa9-5a5f10704398/W",
    "value_m": 11.206,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "2f025389-fac8-4557-94d3-7d0428878c86/W",
    "value_m": 8.743,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "9598e4cb-0849-401e-bba0-689234b27644/W",
    "value_m": 7.998,
    "datum": "NHN",
-   "valid_from": "2019-11-01"
+   "valid_from": "2019-10-31T23:00:00.000Z"
   },
   {
    "series": "c0594fb5-77ff-4287-9b8d-7ff326afe9ff/W",
    "value_m": 60.384,
    "datum": "NHN",
-   "valid_from": "2011-11-01"
+   "valid_from": "2011-10-31T23:00:00.000Z"
   },
   {
    "series": "17a33d45-2c12-4c91-8204-ec87680d77c4/W",
    "value_m": 128.263,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "8486572c-715d-421f-9fb0-a5714d9e394c/W",
    "value_m": 140.015,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "efccb5e1-4f8b-4c26-a5d4-a7c02bd93c0d/W",
    "value_m": 133.007,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "2ce9a933-07ea-4a67-b6e6-735bc6a3868c/W",
    "value_m": 140.01,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "6bb310e3-5c89-439b-85e2-54a44a70cc67/W",
    "value_m": 133.009,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "707ef20a-440d-4599-8dca-385eb5c3d020/W",
    "value_m": 140.002,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "928b840c-8926-4847-8818-e7e667dc3aae/W",
    "value_m": 154.501,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "50881379-70ca-4e85-9bf2-752a7e5aea8c/W",
    "value_m": 154.494,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "f71ba9d8-8889-4a41-89b0-226a954f6d4f/W",
    "value_m": 165.495,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "fe72ee98-88e9-4d19-aba1-f97f61b7d4de/W",
    "value_m": 165.491,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "eb28e62a-5009-4e07-9d63-225e31abe62d/W",
    "value_m": 165.479,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "0ede0e75-8897-41fe-a89a-6b552538d935/W",
    "value_m": 173.481,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "1cc71bb2-99e5-4479-8ae9-8375568ed22c/W",
    "value_m": 173.457,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "3675f292-b4e7-44dc-b12f-470f4a08145b/W",
    "value_m": 177.254,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "e0bbdb2e-e4e9-4a85-aa42-8db7885e5593/W",
    "value_m": 177.253,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "a1f437ff-6d45-43b4-bf7d-d45c9fd8fbcb/W",
    "value_m": 183.203,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "1e237d42-66cb-4145-ab99-c8fde205b281/W",
    "value_m": 183.211,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "a9ca43e9-ef92-4f1c-ac02-a6c8ccad7b9f/W",
    "value_m": 183.228,
    "datum": "NHN",
-   "valid_from": "2024-11-13"
+   "valid_from": "2024-11-12T23:00:00.000Z"
   },
   {
    "series": "13c69cb9-ef9c-459c-a48b-74c1ba4994f7/W",
    "value_m": 183.237,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "4270b713-dd98-46e8-b317-5ce54fefdd06/W",
    "value_m": 183.093,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   },
   {
    "series": "eeaba884-d4c5-4a83-88fb-adcd79adbc50/W",
    "value_m": 189.731,
    "datum": "NHN",
-   "valid_from": "2018-01-04"
+   "valid_from": "2018-01-03T23:00:00.000Z"
   }
  ],
  "dropped": {},
