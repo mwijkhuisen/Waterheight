@@ -1,15 +1,18 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["es2024", "dom", "dom.iterable"],
+    "lib": ["es2024", "esnext.temporal", "dom", "dom.iterable"],
+    "types": ["vite/client"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "allowJs": false,
+    "resolveJsonModule": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": false,
     "tsBuildInfoFile": "node_modules/.cache/tsc/web.tsbuildinfo"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [{ "path": "../../packages/core" }]
 }
