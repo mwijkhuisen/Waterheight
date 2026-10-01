@@ -496,7 +496,7 @@ describe('stage-2 requests', () => {
   it('FR-4 fetches only the stations of the basins FR-1 captures; the recorded national list has none (#39)', async () => {
     const codes = ['A850061001', 'B540001001', 'D021000101', 'E128000101', 'E240041201', 'E320001001'];
     const elsewhere = ['E432000101', 'K490003010', 'Y345401001'];
-    let list: unknown = {
+    let list: object = {
       ListEntVigiCru: [...elsewhere, ...codes].map((CdEntVigiCru) => ({ CdEntVigiCru, TypEntVigiCru: '7' })),
     };
     const seen: string[] = [];
