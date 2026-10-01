@@ -1,10 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
-// P3 e2e (issue #18): the spike page on Chromium, Firefox and WebKit under the
-// exact production headers. CI sets E2E_BASE_URL to the real Caddy serving
-// dist-e2e (.github/workflows/ci.yml job e2e); without it the sandbox test
-// server (server.ts) sends the same site.caddy headers. Both are HTTPS.
+// P3 e2e (issue #18) and P4b (issue #19): the spike page and the real pages on
+// Chromium, Firefox and WebKit under the exact production headers. CI sets
+// E2E_BASE_URL to the real Caddy serving dist-e2e, with the e2e api behind it
+// (.github/workflows/ci.yml job e2e); without it the sandbox test server
+// (server.ts) sends the same site.caddy headers. Both are HTTPS.
 const external = process.env.E2E_BASE_URL;
 const viewport = { width: 1024, height: 768 };
 
@@ -34,14 +35,27 @@ export default defineConfig({
   ],
   ...(external === undefined
     ? {
-        webServer: {
-          command: 'node e2e/server.ts',
-          cwd: fileURLToPath(new URL('..', import.meta.url)),
-          url: 'https://localhost:4443/healthz',
-          ignoreHTTPSErrors: true,
-          reuseExistingServer: false,
-          timeout: 60_000,
-        },
+        // P4b: the e2e api (a throw-away database on the PostgreSQL that DATABASE_URL names, a fixed clock) and
+        // the stand-in for Caddy that proxies /api/v1/ to it.
+        webServer: [
+          {
+            command: 'node ../server/test/e2e/api.ts',
+            cwd: fileURLToPath(new URL('..', import.meta.url)),
+            env: { HOST: '127.0.0.1', PORT: '4480' },
+            url: 'http://127.0.0.1:4480/healthz',
+            reuseExistingServer: false,
+            timeout: 120_000,
+          },
+          {
+            command: 'node e2e/server.ts',
+            cwd: fileURLToPath(new URL('..', import.meta.url)),
+            env: { E2E_API_PORT: '4480' },
+            url: 'https://localhost:4443/healthz',
+            ignoreHTTPSErrors: true,
+            reuseExistingServer: false,
+            timeout: 60_000,
+          },
+        ],
       }
     : {}),
 });
