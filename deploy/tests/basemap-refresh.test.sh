@@ -25,8 +25,16 @@ cat >"$T/stubs/docker" <<'STUB'
 # "<service>|<args>" in $FIX/runs; exits with the number in $FIX/rc-<verb>-<n>
 # (the n-th call of that verb) or else $FIX/rc-<verb> (the role's verb: fetch,
 # promote or rollback; default 0).
+# `ps ... --filter label=com.docker.compose.service=<s>`: the lines of $FIX/ps-<s>
+# (container ids); exits with $FIX/rc-ps (default 0).
 set -euo pipefail
 printf 'docker %s\n' "$*" >>"$FIX/calls"
+if [[ $1 == ps ]]; then
+  for a in "$@"; do
+    if [[ $a == label=com.docker.compose.service=* ]]; then cat "$FIX/ps-${a##*=}" 2>/dev/null || true; fi
+  done
+  exit "$(cat "$FIX/rc-ps" 2>/dev/null || echo 0)"
+fi
 [[ $1 == compose ]] || exit 0
 profile=0
 prev=''
@@ -178,6 +186,33 @@ expect_rc 0
 expect_grep "another basemap refresh is still running" "$C/out"
 expect_runs ""
 expect_no_grep "run --rm" "$FIX/calls"
+# The leftover check runs only with the lock: a running refresh's own containers are not leftovers.
+expect_no_grep "^docker ps" "$FIX/calls"
+
+case_ "a leftover container of either job (running or exited) stops every mode before any job: exit 1, its ids and the cure"
+for service in basemap basemap-promote; do
+  for args in '' '--dry-run' '--rollback' '--build 20261001'; do
+    setup
+    printf 'c0ffee000001\nc0ffee000002\n' >"$FIX/ps-$service"
+    # shellcheck disable=SC2086 # the words of $args are the arguments
+    run $args
+    expect_rc 1
+    expect_runs ""
+    expect_grep "error: a $service container is left over \(c0ffee000001 c0ffee000002\): look at it with docker ps -a --filter label=com\.docker\.compose\.service=$service, remove it with docker rm -f <id>, then run again" "$C/out"
+  done
+done
+# Exactly the rws project's containers of that service, running or not (-a); ids only (-q).
+setup
+run --dry-run
+expect_grep "^docker ps -aq --filter label=com\.docker\.compose\.project=rws --filter label=com\.docker\.compose\.service=basemap$" "$FIX/calls"
+expect_grep "^docker ps -aq --filter label=com\.docker\.compose\.project=rws --filter label=com\.docker\.compose\.service=basemap-promote$" "$FIX/calls"
+# A docker ps that fails is no proof that nothing is left: exit 1, nothing runs.
+setup
+echo 1 >"$FIX/rc-ps"
+run
+expect_rc 1
+expect_runs ""
+expect_grep "docker ps failed: cannot tell whether a basemap container is left over" "$C/out"
 
 case_ "the rws-deploy lock is never taken: a held one does not hold up the refresh"
 setup
@@ -198,7 +233,7 @@ expect_grep "^docker compose -p rws .* run --rm --no-deps -T basemap-promote bas
 expect_no_grep "^curl" "$FIX/calls"
 expect_grep "rws-basemap-refresh: basemap fetch: this can take hours" "$C/out"
 expect_grep "rws-basemap-refresh: basemap fetch done: promoting" "$C/out"
-expect_grep "rws-basemap-refresh: basemap refreshed" "$C/out"
+expect_grep "rws-basemap-refresh: basemap refresh done \(the role's lines above say whether a build was promoted\)$" "$C/out"
 
 case_ "--dry-run: only the fetch job, with --dry-run; nothing is promoted"
 setup
@@ -235,7 +270,7 @@ for code in 1 78; do
   expect_rc 1
   expect_runs "basemap-promote|basemap promote;basemap|basemap fetch;"
   expect_grep "basemap fetch failed \(exit $code\): nothing was promoted" "$C/out"
-  expect_no_grep "basemap refreshed" "$C/out"
+  expect_no_grep "basemap refresh done" "$C/out"
 done
 setup
 echo 1 >"$FIX/rc-fetch"
@@ -250,7 +285,7 @@ run
 expect_rc 1
 expect_runs "basemap-promote|basemap promote;basemap|basemap fetch;basemap-promote|basemap promote;"
 expect_grep "basemap promote failed \(exit 1\)" "$C/out"
-expect_no_grep "basemap refreshed" "$C/out"
+expect_no_grep "basemap refresh done" "$C/out"
 
 case_ "the promote of an earlier run's staged build fails: exit 1, nothing is fetched, so the staging is kept"
 setup
@@ -259,7 +294,9 @@ run
 expect_rc 1
 expect_runs "basemap-promote|basemap promote;"
 expect_grep "basemap promote of the build an earlier run staged failed \(exit 1\): nothing was fetched" "$C/out"
-expect_no_grep "basemap refreshed" "$C/out"
+# The cure, after the code: empty .staging, never the served directory.
+expect_grep "Read the role's code above .*empty \.staging \(sudo find /srv/rws/tiles/\.staging -mindepth 1 -delete\) and run again$" "$C/out"
+expect_no_grep "basemap refresh done" "$C/out"
 
 case_ "--rollback: only the promote job with the rollback role, no fetch; a failure exits 1"
 setup
