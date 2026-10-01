@@ -69,7 +69,7 @@
   gap: 0.5rem;
 }
 
-.buttons button[aria-pressed="true"] {
-  background: var(--accent);
-  color: var(--accent-ink);
+.buttons button[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: not-allowed;
 }

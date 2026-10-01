@@ -71,6 +71,28 @@ export function localInstants(date: string, time: string): number[] {
   return [...found].sort((a, b) => a - b);
 }
 
+/**
+ * The instant a typed date and time name: `near` itself when it is one of them;
+ * in the repeated hour the one with `near`'s offset (from 02:30 CET, 02:40 is
+ * 02:40 CET), else the first; 'missing' in the skipped hour; undefined while an
+ * entry is incomplete.
+ */
+export function wallInstant(date: string, time: string, near: number): number | 'missing' | undefined {
+  try {
+    Temporal.PlainDateTime.from(`${date}T${time}`);
+  } catch {
+    return undefined;
+  }
+  const found = localInstants(date, time);
+  if (found.length === 0) return 'missing';
+  const offset = amsterdam(near).offset;
+  return (
+    found.find((ms) => quantise(ms) === quantise(near)) ??
+    found.find((ms) => amsterdam(ms).offset === offset) ??
+    found[0]
+  );
+}
+
 const intlLocale = (locale: Locale) => (locale === 'nl' ? 'nl-NL' : 'en-GB');
 
 /** "zo 25 okt 2026, 02:30 CET": Amsterdam time with the label of its own offset. */

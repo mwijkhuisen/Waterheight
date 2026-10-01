@@ -1,5 +1,13 @@
 import { type KeyboardEvent, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
-import { amsterdam, formatDay, formatLocal, localInstants, quantise, STEP_MS } from '../../lib/time/time.ts';
+import {
+  amsterdam,
+  formatDay,
+  formatLocal,
+  localInstants,
+  quantise,
+  STEP_MS,
+  wallInstant,
+} from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import styles from './timebar.module.css';
@@ -9,7 +17,9 @@ import styles from './timebar.module.css';
 // steps. Every change becomes one quantised UTC instant; the page puts it in
 // `?t=`. On 2026-10-25 the repeated hour has two instants (02:30 CEST = 00:30Z,
 // 02:30 CET = 01:30Z), and both are reachable by the time input (a choice
-// appears) and by the scrubber.
+// appears) and by the scrubber. The date and time fields are the user's while
+// they have the focus: a value is taken once it is complete and inside the
+// range, and never written back into a field that is being typed in.
 
 const PLAY_MS = 1000;
 const HOUR_STEPS = 6;
@@ -41,22 +51,36 @@ export function Timebar({ locale, t, start, end, epoch, onChange }: Props) {
   const local = amsterdam(t);
   const twins = localInstants(local.date, local.time);
   const valueText = formatLocal(t, locale);
+  const first = amsterdam(start).date;
+  const last = amsterdam(end).date;
+  const dateRef = useRef<HTMLInputElement>(null);
+  const timeRef = useRef<HTMLInputElement>(null);
 
   const go = (ms: number) => {
     setMissing(false);
     onChange(Math.min(end, Math.max(start, quantise(ms))));
   };
-  /** A wall-clock date and time: the instant it names, the current one of two, or a message when it does not exist. */
-  const wall = (date: string, time: string) => {
-    if (date === '' || time === '') return;
-    const found = localInstants(date, time);
-    const first = found[0];
-    if (first === undefined) {
-      setMissing(true);
-      return;
-    }
-    go(found.some((ms) => quantise(ms) === t) ? t : first);
+  /**
+   * A typed date and time, once complete: the instant they name (see wallInstant), or the message when it does
+   * not exist. A date counts once it is a day of the range (the time of day moves to the range's edge if it must),
+   * a time once its instant is inside the range; anything else, such as a year still being typed, is left alone.
+   */
+  const wall = (date: string, time: string, fromDate: boolean) => {
+    if (fromDate && (date < first || date > last)) return;
+    const at = wallInstant(date, time, t);
+    if (at === undefined) return;
+    if (at === 'missing') setMissing(true);
+    else if (fromDate || (quantise(at) >= start && quantise(at) <= end)) go(at);
   };
+
+  // A value from elsewhere (the slider, Play, the other field) reaches a field only while it is not being typed in.
+  useEffect(() => {
+    for (const [el, value] of [
+      [dateRef.current, local.date],
+      [timeRef.current, local.time],
+    ] as const)
+      if (el !== null && el !== document.activeElement && el.value !== value) el.value = value;
+  }, [local.date, local.time]);
 
   useEffect(() => {
     if (!playing) return;
@@ -100,16 +124,29 @@ export function Timebar({ locale, t, start, end, epoch, onChange }: Props) {
         <label>
           {m.date_label({}, { locale })}
           <input
+            ref={dateRef}
             type="date"
-            value={local.date}
-            min={amsterdam(start).date}
-            max={amsterdam(end).date}
-            onChange={(e) => wall(e.currentTarget.value, local.time)}
+            defaultValue={local.date}
+            min={first}
+            max={last}
+            onChange={(e) => wall(e.currentTarget.value, local.time, true)}
+            onBlur={(e) => {
+              e.currentTarget.value = local.date;
+            }}
           />
         </label>
         <label>
           {m.time_label({}, { locale })}
-          <input type="time" step={600} value={local.time} onChange={(e) => wall(local.date, e.currentTarget.value)} />
+          <input
+            ref={timeRef}
+            type="time"
+            step={600}
+            defaultValue={local.time}
+            onChange={(e) => wall(local.date, e.currentTarget.value, false)}
+            onBlur={(e) => {
+              e.currentTarget.value = local.time;
+            }}
+          />
         </label>
       </div>
       {twins.length === 2 && (
@@ -149,17 +186,18 @@ export function Timebar({ locale, t, start, end, epoch, onChange }: Props) {
       <p id={`${id}-epoch`} className={styles.note}>
         {m.epoch_note({ date: formatDay(epoch, locale) }, { locale })}
       </p>
+      {/* At a bound a button stays focusable and does nothing (aria-disabled): a disabled one would drop the focus. */}
       <div className={styles.buttons}>
-        <button type="button" onClick={() => go(t - STEP_MS)} disabled={t <= start}>
+        <button type="button" aria-disabled={t <= start} onClick={() => t > start && go(t - STEP_MS)}>
           {m.step_back({}, { locale })}
         </button>
-        <button type="button" aria-pressed={playing} onClick={() => setPlaying((p) => !p)} disabled={reduced}>
+        <button type="button" onClick={() => setPlaying((p) => !p)} disabled={reduced}>
           {playing ? m.pause({}, { locale }) : m.play({}, { locale })}
         </button>
-        <button type="button" onClick={() => go(t + STEP_MS)} disabled={t >= end}>
+        <button type="button" aria-disabled={t >= end} onClick={() => t < end && go(t + STEP_MS)}>
           {m.step_forward({}, { locale })}
         </button>
-        <button type="button" onClick={() => go(end)} disabled={t >= end}>
+        <button type="button" aria-disabled={t >= end} onClick={() => t < end && go(end)}>
           {m.to_now({}, { locale })}
         </button>
       </div>

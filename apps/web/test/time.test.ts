@@ -9,6 +9,7 @@ import {
   parseUrlT,
   quantise,
   toUrlT,
+  wallInstant,
   zoneLabel,
 } from '../src/lib/time/time.ts';
 
@@ -120,6 +121,45 @@ describe('localInstants', () => {
     expect(localInstants('2026-13-45', '12:00')).toEqual([]);
     expect(localInstants('2026-07-01', 'noon')).toEqual([]);
     expect(localInstants('', '')).toEqual([]);
+  });
+});
+
+describe('wallInstant (the date and time fields)', () => {
+  it('names the skipped hour as missing: the time field shows its alert (2027-03-28 is outside the range today)', () => {
+    expect(wallInstant('2027-03-28', '02:30', utc(2027, 2, 27, 12, 0))).toBe('missing');
+    expect(wallInstant('2027-03-28', '03:00', utc(2027, 2, 27, 12, 0))).toBe(utc(2027, 2, 28, 1, 0));
+  });
+
+  it('leaves an incomplete entry alone', () => {
+    const near = utc(2026, 9, 26, 12, 0);
+    for (const [date, time] of [
+      ['', '12:00'],
+      ['2026-10-26', ''],
+      ['', ''],
+      ['nope', '12:00'],
+      ['2026-13-45', '12:00'],
+    ])
+      expect(wallInstant(date ?? '', time ?? '', near), `${date} ${time}`).toBeUndefined();
+  });
+
+  it('in the repeated hour keeps the offset of the current t (CR-9)', () => {
+    const cest = (minute: number) => utc(2026, 9, 25, 0, minute);
+    const cet = (minute: number) => utc(2026, 9, 25, 1, minute);
+    // From 02:30 CET, 02:40 is 02:40 CET; from 02:30 CEST, 02:40 CEST.
+    expect(wallInstant('2026-10-25', '02:40', cet(30))).toBe(cet(40));
+    expect(wallInstant('2026-10-25', '02:40', cest(30))).toBe(cest(40));
+    // From a time outside that hour, its offset decides: the afternoon is CET, the day before CEST.
+    expect(wallInstant('2026-10-25', '02:30', utc(2026, 9, 25, 13, 0))).toBe(cet(30));
+    expect(wallInstant('2026-10-25', '02:30', utc(2026, 9, 24, 12, 0))).toBe(cest(30));
+    // The current t itself (to its 10-minute bucket) is kept when its own wall time is typed again.
+    expect(wallInstant('2026-10-25', '02:30', cet(30))).toBe(cet(30));
+    expect(wallInstant('2026-10-25', '02:30', cet(35))).toBe(cet(30));
+    expect(wallInstant('2026-10-25', '02:30', cest(30))).toBe(cest(30));
+  });
+
+  it('is the one instant anywhere else', () => {
+    expect(wallInstant('2026-10-26', '12:00', utc(2026, 7, 24))).toBe(utc(2026, 9, 26, 11, 0));
+    expect(wallInstant('2026-10-24', '12:00', utc(2026, 9, 26))).toBe(utc(2026, 9, 24, 10, 0));
   });
 });
 
