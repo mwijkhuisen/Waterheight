@@ -457,6 +457,119 @@ describe('FR-1 walks (C4, S8, N2)', () => {
     expect(roots).toEqual(['2026-10-07T11:00:00Z', '2026-10-07T11:00:00Z']);
   });
 
+  /** A root with a `next`, then a last page #2 that answers `ctl.fail()` while it is set. */
+  function twoPages() {
+    const roots: (string | null)[] = [];
+    const ctl: { fail: (() => Response) | null } = { fail: null };
+    server.use(
+      http.get(OBS, ({ request }) => {
+        const u = new URL(request.url);
+        const cursor = u.searchParams.get('cursor');
+        if (cursor === null) roots.push(u.searchParams.get('date_debut_obs'));
+        if (cursor !== null && ctl.fail !== null) return ctl.fail();
+        const next = cursor === null ? `${OBS}?code_entite=A*&cursor=1&size=20000` : null;
+        return HttpResponse.json({ ...page, next }, { status: next === null ? 200 : 206 });
+      }),
+    );
+    return { roots, ctl };
+  }
+
+  it.each([
+    ['a 404', () => new HttpResponse('gone', { status: 404 }), 404],
+    ['a 200 HTML page', () => HttpResponse.html('<html><body>Maintenance</body></html>'), 'invalid'],
+  ] as const)(
+    '%s on page #2 is no success and keeps the window; the run after recovery moves it (#42)',
+    async (_, fail, code) => {
+      const c = clock('2026-10-10T12:01:00Z');
+      const deps = runDeps({ now: c.now });
+      await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
+      const { roots, ctl } = twoPages();
+      ctl.fail = fail;
+      const s = spec('fr-1-obs');
+      expect(await runSpec(s, deps)).toMatchObject({
+        requests: 2,
+        ok: 1,
+        transient: false,
+        incomplete: true,
+        firstFailure: code,
+      });
+      let st = await deps.state.read<SpecState>('fr-1-obs');
+      expect(st?.last_success).toBeUndefined();
+      expect(st?.variants.default?.last_success).toBe('2026-10-07T12:00:00.000Z');
+      ctl.fail = null;
+      c.advance(15 * 60_000);
+      expect(await runSpec(s, deps)).toMatchObject({ requests: 2, ok: 2, incomplete: false });
+      st = await deps.state.read<SpecState>('fr-1-obs');
+      expect(st?.last_success).toBe(c.now().toISOString());
+      c.advance(15 * 60_000);
+      await runSpec(s, deps);
+      expect(roots).toEqual(['2026-10-07T11:00:00Z', '2026-10-07T11:00:00Z', '2026-10-08T10:00:00Z']);
+    },
+  );
+
+  it('a page that keeps failing keeps the window, so the spec goes stale and pages (#42)', async () => {
+    const c = clock('2026-10-10T12:01:00Z');
+    const deps = runDeps({ now: c.now });
+    await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
+    const { roots, ctl } = twoPages();
+    const s = spec('fr-1-obs');
+    await runSpec(s, deps); // T0: the whole walk came in, so the window moved
+    const t0 = c.now().toISOString();
+    ctl.fail = () => new HttpResponse('gone', { status: 404 });
+    for (let i = 0; i < 4; i += 1) {
+      c.advance(15 * 60_000);
+      expect(await runSpec(s, deps)).toMatchObject({ ok: 1, incomplete: true });
+    }
+    expect(roots.slice(1)).toEqual(Array(4).fill('2026-10-08T10:00:00Z'));
+    const st = await deps.state.read<SpecState>('fr-1-obs');
+    expect(st).toMatchObject({ last_success: t0, last_failure_status: 404 });
+    expect(isFresh(s, st, new Date(Date.parse(t0) + 46 * 60_000))).toBe(false);
+  });
+
+  it("an empty last page (Hub'Eau over a closed window) ends the walk: a success, and no alert (#42)", async () => {
+    const c = clock('2026-10-10T12:01:00Z');
+    const deps = runDeps({ now: c.now });
+    await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
+    const roots: (string | null)[] = [];
+    let pages = 2;
+    server.use(
+      http.get(OBS, ({ request }) => {
+        const u = new URL(request.url);
+        const n = Number(u.searchParams.get('cursor') ?? 0) + 1;
+        if (n === 1) roots.push(u.searchParams.get('date_debut_obs'));
+        if (n === pages) return HttpResponse.json({ ...page, count: 0, data: [], next: null });
+        return HttpResponse.json({ ...page, next: `${OBS}?code_entite=A*&cursor=${n}&size=20000` }, { status: 206 });
+      }),
+    );
+    const s = spec('fr-1-obs');
+    expect(await runSpec(s, deps)).toMatchObject({ requests: 2, ok: 2, incomplete: false, firstFailure: null });
+    expect((await deps.state.read<SpecState>('fr-1-obs'))?.last_success).toBe(c.now().toISOString());
+    pages = 3; // the next day: page #2 holds data this time, and page #3 is empty
+    c.advance(15 * 60_000);
+    expect(await runSpec(s, deps)).toMatchObject({ requests: 3, ok: 3 });
+    expect(roots).toEqual(['2026-10-07T11:00:00Z', '2026-10-08T10:00:00Z']);
+    const empty = lines(deps.root).filter((l) => l.status === 200);
+    expect(empty.map((l) => [l.variant, l.validity, l.shape])).toEqual([
+      ['default#2', { ok: true, reason: null, count: 0 }, null],
+      ['default#3', { ok: true, reason: null, count: 0 }, null],
+    ]);
+    expect(deps.counters.alerts).toEqual({}); // no `invalid`, and no `shape_changed` on `default#2`
+  });
+
+  it('an empty root is still invalid: no success, and the window stays (#42)', async () => {
+    const c = clock('2026-10-10T12:01:00Z');
+    const deps = runDeps({ now: c.now });
+    await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
+    server.use(http.get(OBS, () => HttpResponse.json({ ...page, count: 0, data: [], next: null })));
+    expect(await runSpec(spec('fr-1-obs'), deps)).toMatchObject({ ok: 0, firstFailure: 'invalid' });
+    const st = await deps.state.read<SpecState>('fr-1-obs');
+    expect(st?.last_success).toBeUndefined();
+    expect(st?.variants.default?.last_success).toBe('2026-10-07T12:00:00.000Z');
+    expect(deps.counters.alerts).toEqual({
+      '2026-10-10': [{ spec: 'fr-1-obs', kind: 'invalid', at: '2026-10-10T12:01:00.000Z' }],
+    });
+  });
+
   it('a `next` that repeats a URL is fetched once, and ends the walk', async () => {
     const deps = runDeps({ now: () => new Date('2026-10-10T12:01:00Z') });
     const asked = hubeau({ pages: 0, loop: `${OBS}?code_entite=A*&cursor=same&size=20000` });
@@ -466,6 +579,13 @@ describe('FR-1 walks (C4, S8, N2)', () => {
 });
 
 describe('stage-2 requests', () => {
+  const LU5 = 'https://data.public.lu/api/2/datasets/67aca67bcaea3ae62308114f/resources/';
+  const dump = (i: number) => ({
+    id: `0ebe38da-f4fa-4132-8fc0-47074d9186d${i}`,
+    title: `dump-alert.179068836${i}.xml`,
+    url: `https://download.data.public.lu/resources/alertes-du-systeme-lu-alert/20260929-13300${i}/dump-alert.179068836${i}.xml`,
+  });
+
   it('FR-4 fetches each listed station (codes checked, the list Link never followed)', async () => {
     const deps = runDeps();
     const seen: string[] = [];
@@ -523,20 +643,14 @@ describe('stage-2 requests', () => {
   });
 
   it('LU-5 follows the list while a page still holds an unseen dump (C6)', async () => {
-    const base = 'https://data.public.lu/api/2/datasets/67aca67bcaea3ae62308114f/resources/';
-    const dump = (i: number) => ({
-      id: `0ebe38da-f4fa-4132-8fc0-47074d9186d${i}`,
-      title: `dump-alert.179068836${i}.xml`,
-      url: `https://download.data.public.lu/resources/alertes-du-systeme-lu-alert/20260929-13300${i}/dump-alert.179068836${i}.xml`,
-    });
     const got: string[] = [];
     server.use(
-      http.get(base, ({ request }) => {
+      http.get(LU5, ({ request }) => {
         const second = new URL(request.url).searchParams.get('page') === '2';
         return HttpResponse.json(
           second
             ? { data: [dump(2)], next_page: null }
-            : { data: [dump(0), dump(1)], next_page: `${base}?page=2&page_size=20` },
+            : { data: [dump(0), dump(1)], next_page: `${LU5}?page=2&page_size=20` },
         );
       }),
       http.get('https://download.data.public.lu/resources/*', ({ request }) => {
@@ -554,6 +668,33 @@ describe('stage-2 requests', () => {
     }));
     await runSpec(spec('lu-5-cap'), deps);
     expect(got.sort()).toEqual([dump(1).url, dump(2).url]);
+  });
+
+  it('LU-5: a list page that fails is no success; a file on the first page still comes in (#42)', async () => {
+    const got: string[] = [];
+    server.use(
+      http.get(LU5, ({ request }) =>
+        new URL(request.url).searchParams.get('page') === '2'
+          ? new HttpResponse('gone', { status: 404 })
+          : HttpResponse.json({ data: [dump(0)], next_page: `${LU5}?page=2&page_size=20` }),
+      ),
+      http.get('https://download.data.public.lu/resources/*', ({ request }) => {
+        got.push(request.url);
+        return new HttpResponse(fixture('LU-5', 'lu-5-file').body);
+      }),
+    );
+    const deps = runDeps();
+    expect(await runSpec(spec('lu-5-cap'), deps)).toMatchObject({
+      requests: 3,
+      ok: 2,
+      incomplete: true,
+      firstFailure: 404,
+    });
+    expect(got).toEqual([dump(0).url]);
+    const st = await deps.state.read<SpecState>('lu-5-cap');
+    expect(st?.seen).toContain(dump(0).id);
+    expect(st?.last_success).toBeUndefined();
+    expect(st?.failed_items).toEqual([]); // a list page is not an item
   });
 
   it('LU-5 fetches only new dumps, marks an id seen only after its file arrived, and remembers across runs', async () => {
