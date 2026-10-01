@@ -4,6 +4,14 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## Issue #39: FR-4 429, partial runs (PR pending)
+
+### Needs the owner, the VPS or the first release
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-093 | ops | Two items no agent can check before the deploy. [owner] The read-only jq over the manifest (#39 plan comment) was run once and pasted on #39: every FR-4 429 from 2026-09-30 12:20Z to 2026-10-01 06:50Z had no `Retry-After` and hit a station outside the NL-bound basins; the run that output came from (VPS or acceptance server) is not stated, so whether the acceptance address is throttled the same way is unknown. [agent-prod] After the deploy, `scripts/verify-prod.sh <domain>` check `freshness` must pass for `fr-4` within 3 × 1800 s; until then the fix is proven offline only (the [CI] tests of the PR). | The owner runs the jq on the other host and pastes the output on #39; the agent runs `verify-prod.sh` after the deploy (from a checkout with this PR: an older checkout rejects `failed_items`, R-059); the owner closes #39 | open |
+
 ## P2b NL-1/NL-2/NL-4 (PR pending, issue #17)
 
 ### Needs the owner, the VPS or the first release
@@ -116,7 +124,7 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 | KG-006 | data source | The RWS `X-API-KEY` header (secret `rws_x_api_key`) was never sent live. | The first production run of NL-1 | open |
 | KG-007 | alerting | `hc-ping.com` pings were never sent live. | The first production run, with `hc_ping_key` set | open |
 | KG-008 | data source | The full §0.1b harvest never ran: the volume and duration of the LU-5 and FR-1 seeds are unknown. | The first production start (see `seed-report.json`) | open |
-| KG-009 | data source | Only the first variant of each spec was fetched live. Not fetched: the FR-4 Q list, the CH-1 lake query, the BE-3 discharge group and its time-series lists, the 6-week BfG files (one checked), and the other 38 LU-2 files (names taken from the 40 LU-4 pages). | The first production run; watch the daily report for `invalid` | open |
+| KG-009 | data source | Only the first variant of each spec was fetched live. Not fetched: ~~the FR-4 Q list~~ (fetched in production since 2026-09-30: its stations are in the manifest, #39), the CH-1 lake query, the BE-3 discharge group and its time-series lists, the 6-week BfG files (one checked), and the other 38 LU-2 files (names taken from the 40 LU-4 pages). | The first production run; watch the daily report for `invalid` | open |
 | KG-010 | data source | `fr-5-ref`: only `TerEntVigiCru.json` was recorded. `StaEntVigiCru.json` is assumed to share the root key `ListEntVigiCru`; if it doesn't, a daily `invalid` alert is raised and the body is still archived. | The next smoke recording or the first daily report | open |
 
 ### Known behaviour limits
@@ -137,7 +145,7 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-020 | data source | The DE-6 alerts list may be empty (`min: 0`); the checklist allowed that for FR-4 only (review C10). | Owner OK, 2026-09-29: https://github.com/mwijkhuisen/Waterheight/issues/16#issuecomment-5894422289 | closed |
+| KG-020 | data source | The DE-6 alerts list may be empty (`min: 0`); the checklist allowed that for FR-4 only (review C10). Update 2026-10-01 (#39): the FR-4 list is national and was never empty (27–31 stations on 2026-09-29/10-01); it keeps `min: 0` because nothing says it cannot empty in a calm period. | Owner OK, 2026-09-29: https://github.com/mwijkhuisen/Waterheight/issues/16#issuecomment-5894422289 | closed |
 
 ## P0b Foundation (PR #32, issue #15)
 
