@@ -39,4 +39,4 @@ assets:
       note: derived from tangrams/icons (Copyright (c) 2017 Mapzen), per the basemaps-assets README
       url: https://github.com/tangrams/icons/blob/master/LICENSE.md
   # sha256 of the committed SHA256SUMS (written by tools/geo/basemap/fetch-assets.ts).
-  sums_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+  sums_sha256: "382c6382019334012ae49cb1a09e18a50bc616f9810bdfacadd1a63c2e7a0164"
