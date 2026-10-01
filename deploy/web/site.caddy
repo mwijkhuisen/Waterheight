@@ -1,6 +1,7 @@
 # The public site (A§12.2; issue #16 P1b). Every A§12.2 header, noindex until
-# the public launch (P12), /healthz, the two coarse status files and (P2a) the
-# api's two health paths. No CORS headers, no owner site (P9; WireGuard-only
+# the public launch (P12), /healthz, the two coarse status files, (P2a) the
+# api's two health paths and (P3) the basemap tiles and the immutable assets.
+# No CORS headers, no owner site (P9; WireGuard-only
 # from P12a). scripts/verify-prod.ts compares these headers with A§12.2 byte for
 # byte; the header block also applies to the proxied responses.
 {$RWS_DOMAIN} {
@@ -33,7 +34,15 @@
 		}
 	}
 
-	encode zstd gzip
+	# Compression for everything except the tile files: a PMTiles file is read
+	# with Range requests, and a Content-Encoding on a 206 would break the byte
+	# offsets the client asked for (its tiles are gzip inside the archive
+	# already). The path matcher folds case and merges slashes, so this
+	# exclusion covers at least every path @tiles_files below can match.
+	@compressible {
+		not path /tiles/*
+	}
+	encode @compressible zstd gzip
 
 	# The User-Agent of every capture request names https://<domain>/over.
 	redir /over / 308
@@ -80,6 +89,74 @@
 	}
 	handle @api {
 		respond 404
+	}
+
+	# The basemap tiles (P3, ADR-0016), read-only from /srv/rws/tiles, which the
+	# basemap-promote job fills (the network-facing fetch job never writes it).
+	# Three kinds of path, then a 404 for the rest. Every match is on the path as
+	# sent (like @api_health), so a folded-case, doubled-slash or dot-segment
+	# spelling is no tile file. The file matcher lets a route answer only for a
+	# file that exists: file_server's own 404 would otherwise carry the
+	# Cache-Control set before it, and a cached 404 must never be immutable.
+	#
+	# The manifest: short TTL, never immutable (it changes on every promote).
+	@tiles_manifest {
+		method GET HEAD
+		expression `{path} == '/tiles/manifest.json'`
+		file {
+			root /srv/rws/tiles
+			try_files /manifest.json
+		}
+	}
+	handle @tiles_manifest {
+		header Cache-Control "public, max-age=60"
+		uri strip_prefix /tiles
+		root * /srv/rws/tiles
+		file_server
+	}
+
+	# The tile files: dated names, so immutable. file_server answers Range
+	# requests (206, Content-Range) itself and lists no directory (no browse).
+	# The regex is TILE_FILE_RE of packages/core/src/tiles-manifest.ts.
+	@tiles_files {
+		method GET HEAD
+		expression `{path}.matches('^/tiles/(basemap|planet-z6)-[0-9]{8}\\.pmtiles$')`
+		file {
+			root /srv/rws/tiles
+			try_files /{http.request.uri.path.file}
+		}
+	}
+	handle @tiles_files {
+		header Cache-Control "public, max-age=31536000, immutable"
+		uri strip_prefix /tiles
+		root * /srv/rws/tiles
+		file_server
+	}
+
+	# Everything else under /tiles (the directory itself, .staging, a temp
+	# manifest, a file that does not exist, any other method): a 404 from Caddy,
+	# whatever the disk holds, with no Cache-Control.
+	@tiles path /tiles /tiles/*
+	handle @tiles {
+		respond 404
+	}
+
+	# Vite's hashed assets and the pinned map glyphs and sprites under
+	# /assets/map/<commit7>/ (a new commit is a new directory): immutable
+	# (A§9.1), for a file that exists; a miss or a directory falls to the
+	# catch-all below, with no Cache-Control. The HTML pages carry none either.
+	@assets {
+		path /assets/*
+		not path */
+		file {
+			root /srv/www
+			try_files {path}
+		}
+	}
+	handle @assets {
+		header Cache-Control "public, max-age=31536000, immutable"
+		root * /srv/www
+		file_server
 	}
 
 	handle {
