@@ -233,8 +233,56 @@ describe('promote: what it refuses', () => {
   });
 
   it.each([
+    ['a link to a file Caddy could read', (from: string, target: string) => symlink(target, from)],
+    ['another regular file', (from: string) => writeFile(from, 'other bytes')],
+    ['a directory', (from: string) => mkdir(from)],
+  ])(
+    'a staged file swapped for %s between the last check and the rename: removed from the served directory, no manifest',
+    async (_what, plant) => {
+      const sb = await sandbox();
+      const entry = await stage(sb);
+      const target = join(sb.work, 'caddy-key.pem');
+      await writeFile(target, 'not for the public');
+      // A writer left in .staging (SR-2): the swap lands after unchanged() and before rename().
+      const swapping = async (from: string, to: string) => {
+        if (from.endsWith(entry.planet.file)) {
+          await rm(from);
+          await plant(from, target);
+        }
+        await rename(from, to);
+      };
+      const { deps, lines } = promoteDeps(sb, { rename: swapping });
+      await failsWith(runPromote(deps, { dryRun: false }), 'file_swapped');
+      // The basemap file was moved before (an orphan without a manifest entry that the next promote keeps or
+      // refuses); the swapped name is gone, never followed, and no manifest names anything.
+      expect(await names(sb.tiles)).toEqual(['.staging', entry.basemap.file]);
+      expect(readFileSync(target, 'utf8')).toBe('not for the public');
+      expect(lines).toContainEqual({ level: 'error', code: 'file_refused', kind: 'planet', reason: 'file_swapped' });
+      expect(existsSync(join(sb.staging, 'result.json'))).toBe(true);
+    },
+  );
+
+  it.each([
     ['verify fails', { verifyExit: 1 }, 'verify_failed'],
     ['not vector tiles', { basemapHeader: { ...BASEMAP_HEADER, tile_type: 'png' } }, 'header_type'],
+    // pmtiles.js reads gzip or none only: brotli and zstd tiles would fail in the browser.
+    ['brotli tiles', { basemapHeader: { ...BASEMAP_HEADER, tile_compression: 'br' } }, 'header_compression'],
+    ['zstd tiles', { planetHeader: { ...PLANET_HEADER, tile_compression: 'zstd' } }, 'header_compression'],
+    [
+      'an unknown compression',
+      { basemapHeader: { ...BASEMAP_HEADER, tile_compression: 'unknown' } },
+      'header_compression',
+    ],
+    [
+      'a header without a compression',
+      { basemapHeader: { ...BASEMAP_HEADER, tile_compression: undefined } },
+      'header_unreadable',
+    ],
+    [
+      'a compression that is not a string',
+      { basemapHeader: { ...BASEMAP_HEADER, tile_compression: 1 } },
+      'header_unreadable',
+    ],
     ['another minzoom', { basemapHeader: { ...BASEMAP_HEADER, minzoom: 1 } }, 'header_zoom'],
     ['a lower maxzoom', { basemapHeader: { ...BASEMAP_HEADER, maxzoom: 13 } }, 'header_zoom'],
     ['planet at another maxzoom', { planetHeader: { ...PLANET_HEADER, maxzoom: 6 } }, 'header_zoom'],
@@ -278,6 +326,13 @@ describe('promote: what it refuses', () => {
     const sb2 = await sandbox({ basemapHeader: { ...BASEMAP_HEADER, bounds: [5.985, 51.82, 6.16, 51.88] } });
     await stage(sb2);
     await failsWith(promote(sb2), 'header_bounds');
+  });
+
+  it('accepts uncompressed tiles as well as gzip', async () => {
+    const sb = await sandbox({ planetHeader: { ...PLANET_HEADER, tile_compression: 'none' } });
+    await stage(sb);
+    await promote(sb);
+    expect(manifest(sb).current.planet.sha256).toBe(PLANET_SUM.sha256);
   });
 
   it('a name in the served directory that holds other bytes (files are served immutable)', async () => {

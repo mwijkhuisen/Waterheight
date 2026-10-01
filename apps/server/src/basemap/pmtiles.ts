@@ -100,13 +100,14 @@ export async function verifyArchive(d: ToolDeps, path: string): Promise<void> {
 }
 
 export type Header = {
+  tile_compression: string;
   tile_type: string;
   minzoom: number;
   maxzoom: number;
   bounds: [number, number, number, number];
 };
 
-/** `pmtiles show --header-json`, parsed strictly: only the four fields we judge are kept. */
+/** `pmtiles show --header-json`, parsed strictly: only the five fields we judge are kept. */
 export async function readHeader(d: ToolDeps, path: string): Promise<Header> {
   const run = await runTool(d.pmtiles, ['show', '--header-json', local(path)], options(d, SHOW_TIMEOUT_MS));
   if (!run.ok) throw new BasemapError('header_unreadable');
@@ -117,8 +118,9 @@ export async function readHeader(d: ToolDeps, path: string): Promise<Header> {
     throw new BasemapError('header_unreadable');
   }
   const h = (typeof doc === 'object' && doc !== null ? doc : {}) as Record<string, unknown>;
-  const { tile_type, minzoom, maxzoom, bounds } = h;
+  const { tile_compression, tile_type, minzoom, maxzoom, bounds } = h;
   if (
+    typeof tile_compression !== 'string' ||
     typeof tile_type !== 'string' ||
     !Number.isInteger(minzoom) ||
     !Number.isInteger(maxzoom) ||
@@ -128,6 +130,7 @@ export async function readHeader(d: ToolDeps, path: string): Promise<Header> {
   )
     throw new BasemapError('header_unreadable');
   return {
+    tile_compression,
     tile_type,
     minzoom: minzoom as number,
     maxzoom: maxzoom as number,
@@ -139,10 +142,13 @@ type Extract = { minzoom: number; maxzoom: number };
 /** The registry's tolerance for the regional bounds, in degrees. */
 export const BOUNDS_SLACK = 0.01;
 
+/** The tile compressions pmtiles.js reads in the browser: gzip or none (it throws on brotli and zstd). */
+const COMPRESSIONS = ['gzip', 'none'];
+
 /**
  * What is wrong with the header of an extract, as a fixed code, or null. Vector
- * tiles of the registry's zoom range; regional bounds inside the registry bbox
- * (± 0.01°); planet bounds that span the world.
+ * tiles that the browser can decompress, of the registry's zoom range; regional
+ * bounds inside the registry bbox (± 0.01°); planet bounds that span the world.
  */
 export function headerProblem(
   h: Header,
@@ -151,6 +157,7 @@ export function headerProblem(
   bbox: readonly [number, number, number, number] | undefined,
 ): string | null {
   if (h.tile_type !== 'mvt') return 'header_type';
+  if (!COMPRESSIONS.includes(h.tile_compression)) return 'header_compression';
   if (h.minzoom !== extract.minzoom || h.maxzoom !== extract.maxzoom) return 'header_zoom';
   const [w, s, e, n] = h.bounds;
   if (!(w < e && s < n)) return 'header_bounds';

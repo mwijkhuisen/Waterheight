@@ -1,4 +1,4 @@
-import { lstat, readdir, rename, unlink } from 'node:fs/promises';
+import { lstat, readdir, rename, rm, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BasemapFile } from '@rws/contracts';
 import {
@@ -42,9 +42,21 @@ export type PromoteDeps = {
   log: Log;
   /** The plan of a dry run. */
   out: (line: string) => void;
+  /** Test seam (a swap between the check and the rename); production leaves it out. */
+  rename?: (from: string, to: string) => Promise<void>;
 };
 
 export type PromoteOptions = { dryRun: boolean };
+
+/** The served name is the very file that was checked: a regular file with its device and inode (never followed). */
+async function isChecked(path: string, o: Opened): Promise<boolean> {
+  try {
+    const named = await lstat(path, { bigint: true });
+    return named.isFile() && named.dev === o.state.dev && named.ino === o.state.ino;
+  } catch {
+    return false;
+  }
+}
 
 /** result.json as fetch writes it: the keys of a manifest entry plus `schema_version`, nothing else. */
 function parseResult(text: string): TilesEntry {
@@ -155,7 +167,15 @@ export async function runPromote(d: PromoteDeps, o: PromoteOptions): Promise<voi
       if (s.action !== 'move') continue;
       if (!(await unchanged(s.opened))) throw new BasemapError('file_changed');
       await s.opened.fh.chmod(0o644);
-      await rename(s.staged, s.final);
+      await (d.rename ?? rename)(s.staged, s.final);
+      // rename moves whatever the staged name holds by then: a writer left in .staging could have swapped in a
+      // link, a directory or other bytes since the check. Such a name is removed (rm never follows a link)
+      // before the manifest can name it.
+      if (!(await isChecked(s.final, s.opened))) {
+        await rm(s.final, { recursive: true, force: true }).catch(() => {});
+        log('error', 'file_refused', { kind: s.kind, reason: 'file_swapped' });
+        throw new BasemapError('file_swapped');
+      }
       log('info', 'file_moved', { kind: s.kind, build: entry.build });
     }
     await syncDir(d.tilesDir);

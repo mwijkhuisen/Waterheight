@@ -176,12 +176,42 @@ describe('what is current', () => {
     await runFetch(second.deps, { dryRun: false });
     expect(second.codes()).toContain('not_newer');
 
-    // --build takes the previous build again.
+    // --build of the build that was rolled away from (now the previous one) is refused: a second rollback brings it back.
     await writeFile(join(sb.tiles, 'manifest.json'), manifestOf('20260930', BUILD));
     serveTiles(BUILD);
     const third = fetchDeps(sb);
-    await runFetch(third.deps, { build: BUILD, dryRun: false });
-    expect(third.codes()).toContain('staged');
+    await failsWith(runFetch(third.deps, { build: BUILD, dryRun: false }), 'build_is_previous');
+    expect(calls(sb)).toEqual([]);
+  });
+
+  it('--build of the previous build fails before staging is touched or anything is fetched, and names --rollback', async () => {
+    const sb = await sandbox();
+    // Two promotes: current 20261001, previous 20260930.
+    await writeFile(join(sb.tiles, 'manifest.json'), manifestOf(BUILD, '20260930'));
+    await writeFile(join(sb.staging, 'leftover'), 'x');
+    let requests = 0;
+    server.use(
+      http.get(BUILDS_URL, () => {
+        requests += 1;
+        return HttpResponse.json(GOOD);
+      }),
+    );
+    serveTiles('20260930');
+    const { deps, out, codes } = fetchDeps(sb);
+    for (const dryRun of [false, true])
+      await failsWith(runFetch(deps, { build: '20260930', dryRun }), 'build_is_previous');
+    expect(requests).toBe(0);
+    expect(calls(sb)).toEqual([]);
+    expect(await names(sb.staging)).toEqual(['leftover']);
+    expect(codes()).toEqual([]);
+    expect(out).toEqual([
+      '20260930 is the previous build: make it current again with rws-basemap-refresh --rollback',
+      '20260930 is the previous build: make it current again with rws-basemap-refresh --rollback',
+    ]);
+    // --build of the current build is still the no-op it was.
+    const again = fetchDeps(sb);
+    await runFetch(again.deps, { build: BUILD, dryRun: false });
+    expect(again.codes()).toContain('already_current');
   });
 
   it('refuses a manifest that is present but not ours', async () => {

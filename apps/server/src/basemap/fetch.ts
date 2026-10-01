@@ -74,6 +74,13 @@ export async function runFetch(d: FetchDeps, o: FetchOptions): Promise<void> {
   const { basemap: b, log } = d;
   await requireDir(d.tilesDir, 'tiles_dir');
   await requireDir(d.stagingDir, 'staging_dir');
+  // What is served now. The previous build is still on disk and named immutable: a re-extract of it can differ
+  // byte for byte and would stop promote (exists_different) after hours of download. A rollback brings it back.
+  const current = await readManifest(d.tilesDir);
+  if (o.build !== undefined && o.build === current?.previous?.build) {
+    d.out(`${o.build} is the previous build: make it current again with rws-basemap-refresh --rollback`);
+    throw new BasemapError('build_is_previous');
+  }
   // Extract cannot resume: every run starts clean. A dry run changes nothing.
   if (!o.dryRun) {
     try {
@@ -120,8 +127,7 @@ export async function runFetch(d: FetchDeps, o: FetchOptions): Promise<void> {
   const chosen: Build | undefined = o.build === undefined ? newest : builds.find((x) => x.build === o.build);
   if (chosen === undefined) throw new BasemapError(o.build === undefined ? 'no_eligible_build' : 'build_not_eligible');
 
-  // 2. What is served now.
-  const current = await readManifest(d.tilesDir);
+  // 2. Against what is served now.
   if (current?.current.build === chosen.build) {
     log('info', 'already_current', { build: chosen.build });
     d.out(`already current: ${chosen.build}`);
@@ -129,7 +135,7 @@ export async function runFetch(d: FetchDeps, o: FetchOptions): Promise<void> {
   }
   if (o.build === undefined && current !== null) {
     // Without --build the job only moves forward, and a rollback sticks: the build that was rolled away from is
-    // not fetched again by the daily run (the owner can still ask for it with --build).
+    // not fetched again by the daily run (a second rollback makes it current again).
     if (chosen.build < current.current.build) {
       log('info', 'not_newer', { build: chosen.build, current: current.current.build });
       d.out(`not newer than the current build ${current.current.build}: nothing to do`);
@@ -137,7 +143,7 @@ export async function runFetch(d: FetchDeps, o: FetchOptions): Promise<void> {
     }
     if (chosen.build === current.previous?.build) {
       log('info', 'rolled_back_build', { build: chosen.build });
-      d.out(`${chosen.build} is the build that was rolled back: nothing to do (use --build to take it again)`);
+      d.out(`${chosen.build} is the build that was rolled back: nothing to do (--rollback makes it current again)`);
       return;
     }
   }
