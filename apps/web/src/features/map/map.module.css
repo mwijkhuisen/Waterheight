@@ -1,0 +1,9 @@
+.map {
+  height: 65vh;
+  min-height: 22rem;
+  border: 1px solid var(--line);
+}
+
+.status {
+  margin: 0 0 0.5rem;
+}
