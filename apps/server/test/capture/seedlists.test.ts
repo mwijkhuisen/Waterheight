@@ -203,7 +203,7 @@ describe('AGE lists (owner audience: identification only)', () => {
     );
     const files = seed('lu-2').map((r) => r.file ?? '');
     expect(files).toHaveLength(39);
-    for (const f of files) expect(names.has(norm(f).replace(/^roodt-sur-syre$/, 'roodt-sur-syre')), f).toBe(true);
+    for (const f of files) expect(names.has(norm(f)), f).toBe(true);
     for (const f of ['SN_Remich', 'Bollendorf', 'Gemünd_Our']) expect(files).not.toContain(f);
   });
 
