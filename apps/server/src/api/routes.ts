@@ -6,9 +6,9 @@ import type { z } from 'zod';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { readMeta, readSeries, readSnapshot, readStations } from './data.ts';
-import { coded, validated } from './health.ts';
 import { Busy, Lru } from './lru.ts';
 import { agePolicy, type CachePolicy, noQuery, Refused, seriesParams, snapshotParams } from './params.ts';
+import { coded, validated } from './util.ts';
 import type { DisplayWindow, Window } from './window.ts';
 
 // The public data routes of the api role (A§9.2; PHASES P4a): /api/v1/meta,

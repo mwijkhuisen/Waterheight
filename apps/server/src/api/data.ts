@@ -3,6 +3,7 @@ import { type Kysely, sql } from 'kysely';
 import { OBS_AT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import type { SeriesParams } from './params.ts';
+import { iso, snapshot } from './util.ts';
 import type { Window } from './window.ts';
 
 // The reads of the public data routes (A§8 Q1, Q4; A§9.2). This process serves
@@ -13,13 +14,6 @@ import type { Window } from './window.ts';
 // lic_history_export, applied inside the views).
 
 const V = VIEWS.public;
-type Tx = Kysely<DB>;
-
-/** One snapshot of the views, so the pieces of an answer belong together. */
-const snapshot = <T>(db: Kysely<DB>, read: (tx: Tx) => Promise<T>): Promise<T> =>
-  db.transaction().setAccessMode('read only').setIsolationLevel('repeatable read').execute(read);
-
-const iso = (d: Date) => d.toISOString();
 
 type AttributionRow = {
   source_id: string;

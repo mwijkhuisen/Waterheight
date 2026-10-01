@@ -3,7 +3,7 @@ import type { Logger } from 'pino';
 import { type MetaRow, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
-import { coded } from './health.ts';
+import { coded } from './util.ts';
 
 export type Window = { dataEpochMs: number; displayStartMs: number };
 
