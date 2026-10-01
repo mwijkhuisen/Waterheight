@@ -1507,14 +1507,15 @@ describe('noindex', () => {
 
 describe('fresh DE-1 and fresh NL-1', () => {
   const at = (ages: Record<number, number>) => snapshotDoc(NOW_MS, ages);
+  const NOW = new Date(NOW_MS).toISOString();
 
   it('passes when one series of the source has a value of 45 minutes or less, naming the count and the smallest age', () => {
-    expect(checkFresh('DE-1', at({ 1: 600, 3: 1200 }), stationsDoc())).toEqual({
+    expect(checkFresh('DE-1', at({ 1: 600, 3: 1200 }), stationsDoc(), NOW)).toEqual({
       check: 'fresh DE-1',
       ok: true,
       detail: '1 of 1 DE-1 series have a value, the newest is 1200 s old',
     });
-    expect(checkFresh('NL-1', at({ 1: 600, 3: 1200 }), stationsDoc())).toMatchObject({
+    expect(checkFresh('NL-1', at({ 1: 600, 3: 1200 }), stationsDoc(), NOW)).toMatchObject({
       check: 'fresh NL-1',
       ok: true,
       detail: '1 of 2 NL-1 series have a value, the newest is 600 s old',
@@ -1523,38 +1524,49 @@ describe('fresh DE-1 and fresh NL-1', () => {
 
   it('judges the youngest series: one fresh series is enough, the limit is 2700 s', () => {
     expect(FRESH_MAX_AGE_S).toBe(2700);
-    expect(checkFresh('NL-1', at({ 1: 5000, 2: 300, 3: 99_999 }), stationsDoc())).toMatchObject({
+    expect(checkFresh('NL-1', at({ 1: 5000, 2: 300, 3: 99_999 }), stationsDoc(), NOW)).toMatchObject({
       ok: true,
       detail: /^2 of 2 .* the newest is 300 s old$/,
     });
-    expect(checkFresh('NL-1', at({ 1: 2700 }), stationsDoc()).ok).toBe(true);
-    expect(checkFresh('NL-1', at({ 1: 2701 }), stationsDoc())).toMatchObject({
+    expect(checkFresh('NL-1', at({ 1: 2700 }), stationsDoc(), NOW).ok).toBe(true);
+    expect(checkFresh('NL-1', at({ 1: 2701 }), stationsDoc(), NOW)).toMatchObject({
       ok: false,
       detail: '1 of 2 NL-1 series have a value, the newest is 2701 s old, over 2700 s',
     });
   });
 
   it('fails when none of the source has a value, even if the other source is fresh', () => {
-    expect(checkFresh('DE-1', at({ 1: 60, 2: 60 }), stationsDoc())).toEqual({
+    expect(checkFresh('DE-1', at({ 1: 60, 2: 60 }), stationsDoc(), NOW)).toEqual({
       check: 'fresh DE-1',
       ok: false,
       detail: 'none of the 1 DE-1 series has a value',
     });
-    expect(checkFresh('NL-1', at({}), stationsDoc()).ok).toBe(false);
+    expect(checkFresh('NL-1', at({}), stationsDoc(), NOW).ok).toBe(false);
     // A value of a series the stations do not list is no value of the source.
-    expect(checkFresh('DE-1', at({ 99: 60 }), stationsDoc()).ok).toBe(false);
-    expect(checkFresh('BE-3', at({ 1: 60, 3: 60 }), stationsDoc()).detail).toBe(
+    expect(checkFresh('DE-1', at({ 99: 60 }), stationsDoc(), NOW).ok).toBe(false);
+    expect(checkFresh('BE-3', at({ 1: 60, 3: 60 }), stationsDoc(), NOW).detail).toBe(
       'none of the 0 BE-3 series has a value',
     );
   });
 
-  it('fails without a valid snapshot or stations document', () => {
-    expect(checkFresh('DE-1', undefined, stationsDoc())).toEqual({
+  it('measures the age at the server’s now, not at the snapshot’s t, which is floored to 10 minutes', () => {
+    // meta.now 12:09: the snapshot of t = 12:00 says 2400 s for a value of 11:20, which is 2940 s old at 12:09.
+    const late = new Date(NOW_MS + 9 * 60_000).toISOString();
+    expect(checkFresh('NL-1', at({ 1: 2400 }), stationsDoc(), late)).toMatchObject({
+      ok: false,
+      detail: '1 of 2 NL-1 series have a value, the newest is 2940 s old, over 2700 s',
+    });
+    expect(checkFresh('NL-1', at({ 1: 2100 }), stationsDoc(), late)).toMatchObject({ ok: true, detail: /2640 s old$/ });
+  });
+
+  it('fails without a valid snapshot, stations or meta document', () => {
+    expect(checkFresh('DE-1', at({ 3: 60 }), stationsDoc(), undefined).detail).toBe('no valid meta document');
+    expect(checkFresh('DE-1', undefined, stationsDoc(), NOW)).toEqual({
       check: 'fresh DE-1',
       ok: false,
       detail: 'no valid snapshot document',
     });
-    expect(checkFresh('DE-1', at({ 3: 60 }), undefined).detail).toBe('no valid stations document');
+    expect(checkFresh('DE-1', at({ 3: 60 }), undefined, NOW).detail).toBe('no valid stations document');
   });
 });
 
@@ -1682,15 +1694,20 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       '}',
       'header -Via',
       'reverse_proxy api:8080 {',
+      // A client's own address headers never reach the api (SR-4): Caddy sets X-Forwarded-For itself.
+      'header_up -Forwarded',
+      'header_up -X-Real-IP',
       'header_down -Server',
       '}',
     ]);
     expect([...site.matchAll(/^\s+reverse_proxy (\S+)/gm)].map((m) => m[1])).toEqual(['api:8080']);
   });
 
-  it('answers another method under /api/v1/ with 405 and Allow, and any other /api path with 404 (P4b)', () => {
-    expect(rules('@api_method')).toEqual(['@api_method {', 'path /api/v1/*', 'not method GET HEAD']);
-    expect(rules('handle @api_method')).toEqual(['handle @api_method {', 'header Allow "GET, HEAD"', 'respond 405']);
+  it('answers any method but GET and HEAD with 405 and Allow before every route, any other /api path with 404', () => {
+    // One guard for the whole site (SR-3): file_server's own 405 would carry no site header and name Caddy.
+    expect(site).toContain('\n\t@write not method GET HEAD\n');
+    expect(rules('handle @write')).toEqual(['handle @write {', 'header Allow "GET, HEAD"', 'respond 405']);
+    expect(site).not.toContain('@api_method');
     expect(rules('@api_other')).toEqual(['@api_other {', 'path /api /api/*', `not expression ${API_PATH}`]);
     expect(rules('handle @api_other')).toEqual(['handle @api_other {', 'respond 404']);
   });
@@ -1817,15 +1834,15 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     expect(lines(block('handle @tiles'))).toEqual(['', 'handle @tiles {', 'respond 404']);
   });
 
-  it('keeps the routes in order: healthz, status, api, tiles, dotfiles, assets, the pages last', () => {
+  it('keeps the routes in order: the method guard, healthz, status, api, tiles, dotfiles, assets, the pages last', () => {
     const at = (needle: string) => site.indexOf(needle);
     const order = [
+      at('\thandle @write {'),
       at('\thandle /healthz {'),
       at('\thandle /status/capture.json {'),
       at('\thandle /status/* {'),
       at('\thandle /status {'),
       at('\thandle @api {'),
-      at('\thandle @api_method {'),
       at('\thandle @api_other {'),
       at('\thandle @tiles_manifest {'),
       at('\thandle @tiles_files {'),
@@ -1833,7 +1850,7 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       at('\thandle @dotfiles {'),
       at('\thandle @assets {'),
       at('\thandle @assets_miss {'),
-      at('\thandle {\n\t\troot * /srv/www'),
+      at('\thandle {\n\t\theader Cache-Control "no-cache"\n\t\troot * /srv/www'),
     ];
     expect(order.every((i) => i > 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
@@ -1864,7 +1881,7 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     expect(site.match(/^\tencode .*$/gm)).toEqual(['\tencode @compressible zstd gzip']);
   });
 
-  it('serves /assets/* immutable (A§9.1) for an existing file only, and the HTML pages with no Cache-Control', () => {
+  it('serves /assets/* immutable (A§9.1) for an existing file only, and the HTML pages with no-cache (CR-6)', () => {
     expect(lines(block('@assets'))).toEqual(
       expect.arrayContaining(['path /assets/*', 'not path */', 'root /srv/www', 'try_files {path}']),
     );
@@ -1875,8 +1892,8 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       'root * /srv/www',
       'file_server',
     ]);
-    // The catch-all that serves the HTML pages sets no header at all.
-    expect(rules('handle').some((l) => l.startsWith('header'))).toBe(false);
+    // The catch-all that serves the HTML pages sets one header: they are revalidated on every use.
+    expect(rules('handle').filter((l) => l.startsWith('header'))).toEqual(['header Cache-Control "no-cache"']);
   });
 
   it('answers 404 for any other /assets path, never the app (an HTML 200 would be cached as the asset; P4b)', () => {
@@ -1893,6 +1910,7 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
   it('falls back to the page of its language for an app route, answers 404 for a missing file (P4b)', () => {
     expect(rules('handle')).toEqual([
       'handle {',
+      'header Cache-Control "no-cache"',
       'root * /srv/www',
       '@app_en {',
       'path_regexp ^/en/',
@@ -1919,9 +1937,9 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     for (const path of ['/en', '/foo', '/english']) expect(/^\/en\//.test(path), path).toBe(false);
   });
 
-  it('has exactly the cache classes no-store, max-age=60 and immutable (tile files and assets), and no browse', () => {
+  it('has exactly the cache classes no-store, max-age=60, immutable (tile files, assets), no-cache (pages), no browse', () => {
     const cache = [...site.matchAll(/^\s+header Cache-Control "(.*)"$/gm)].map((m) => m[1]);
-    expect(cache).toEqual(['no-store', 'no-store', MANIFEST_CACHE, TILE_CACHE, TILE_CACHE]);
+    expect(cache).toEqual(['no-store', 'no-store', MANIFEST_CACHE, TILE_CACHE, TILE_CACHE, 'no-cache']);
     const directives = site.split('\n').filter((l) => !l.trim().startsWith('#'));
     expect(directives.join('\n')).not.toMatch(/\bbrowse\b/);
     // The file servers' roots: the status copy, the tiles and the site; never the parent /srv/rws.

@@ -663,7 +663,7 @@ export const STATIONS_CACHE = 'public, max-age=300';
 export const OPENAPI_CACHE = 'public, max-age=300';
 /** The public sources that /meta and /stations must show (the two with a loader since P2). */
 export const API_SOURCES = ['NL-1', 'DE-1'] as const;
-/** A source is fresh when one of its series has a value in the current snapshot no older than this (45 min). */
+/** A source is fresh when one of its series has a value in the current snapshot no older than this at meta.now (45 min). */
 export const FRESH_MAX_AGE_S = 2700;
 /** A§12.2: also the apps, the api and the tiles say noindex until the public launch (P12), whatever the status. */
 export const NOINDEX_PATHS = ['/', '/en/', '/api', '/tiles'] as const;
@@ -789,13 +789,24 @@ export function checkNoindex(got: Readonly<Record<string, Page | string>>): Resu
     : miss('noindex', lacking.join('; '));
 }
 
-/** At least one series of the source has a value in the snapshot no older than 45 minutes. */
-export function checkFresh(source: string, snapshot: Snapshot | undefined, stations: Stations | undefined): Result {
+/**
+ * At least one series of the source has a value in the snapshot no older than 45 minutes at the server's own
+ * now (`meta.now`): the snapshot's `ageSeconds` counts from its `t`, which is floored to 10 minutes.
+ */
+export function checkFresh(
+  source: string,
+  snapshot: Snapshot | undefined,
+  stations: Stations | undefined,
+  now: string | undefined,
+): Result {
   const check = `fresh ${source}`;
-  if (snapshot === undefined || stations === undefined)
-    return noDocument(check, snapshot === undefined ? 'snapshot' : 'stations');
+  if (snapshot === undefined || stations === undefined || now === undefined)
+    return noDocument(check, snapshot === undefined ? 'snapshot' : stations === undefined ? 'stations' : 'meta');
   const listed = new Set(seriesOf(stations, source).map((s) => s.id));
-  const ages = snapshot.values.filter((v) => listed.has(v.series)).map((v) => v.ageSeconds);
+  const nowMs = Date.parse(now);
+  const ages = snapshot.values
+    .filter((v) => listed.has(v.series))
+    .map((v) => Math.round((nowMs - Date.parse(v.ts)) / 1000));
   if (ages.length === 0) return miss(check, `none of the ${listed.size} ${source} series has a value`);
   const newest = ages.reduce((a, b) => Math.min(a, b));
   const detail = `${ages.length} of ${listed.size} ${source} series have a value, the newest is ${newest} s old`;
@@ -953,7 +964,7 @@ export const CHECKS = [
   `noindex: ${NOINDEX_PATHS.join(', ')} each answer (the 404s of /api and /tiles too) with X-Robots-Tag: noindex`,
   ...['DE-1', 'NL-1'].map(
     (id) =>
-      `fresh ${id}: in the "now" snapshot at least one ${id} series has a value no older than ${FRESH_MAX_AGE_S} s`,
+      `fresh ${id}: in the "now" snapshot at least one ${id} series has a value no older than ${FRESH_MAX_AGE_S} s at the server's own now (/meta)`,
   ),
   `tiles manifest: GET /tiles/manifest.json is 200 with Cache-Control exactly "${MANIFEST_CACHE}" (never immutable) and a body parseTilesManifest accepts`,
   `tiles <file>: every file the manifest lists (current and previous), GET with Range: ${TILE_HEADERS.range} and Accept-Encoding: ${TILE_HEADERS['accept-encoding']}, is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
@@ -1086,8 +1097,8 @@ async function main(argv: string[]): Promise<number> {
       checkOpenapi(readApi(await api('/api/v1/openapi.json'), OpenApi31, OPENAPI_CACHE)),
       checkApiParams(await api('/api/v1/meta?x=1')),
       checkNoindex(noindex),
-      checkFresh('DE-1', snapReads.get('now')?.data, stationsRead.data),
-      checkFresh('NL-1', snapReads.get('now')?.data, stationsRead.data),
+      checkFresh('DE-1', snapReads.get('now')?.data, stationsRead.data, metaRead.data?.now),
+      checkFresh('NL-1', snapReads.get('now')?.data, stationsRead.data, metaRead.data?.now),
     );
 
     // The P3 basemap (A§9.1): the manifest, every file it lists read with a 16-byte Range, the 404s, one pinned asset.

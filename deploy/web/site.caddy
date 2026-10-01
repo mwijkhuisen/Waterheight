@@ -48,6 +48,15 @@
 	# The User-Agent of every capture request names https://<domain>/over.
 	redir /over / 308
 
+	# Only GET and HEAD, on every route (SR-3): any other method is this 405,
+	# with Allow and the site headers. file_server's own 405 (the pages, the
+	# assets, the status files) would carry none of them and name the server.
+	@write not method GET HEAD
+	handle @write {
+		header Allow "GET, HEAD"
+		respond 405
+	}
+
 	handle /healthz {
 		respond 200
 	}
@@ -75,20 +84,17 @@
 	}
 
 	# The api (P2a: its two health paths; P4b: everything under /api/v1/). GET
-	# or HEAD only, any query: the api validates every parameter and answers its
-	# own 400s and JSON 404s (A§9.2). The expression compares the request path as
-	# sent, case and all (the path matcher would fold case, merge slashes and
-	# resolve dot segments), and no dot segment is passed on. The api reads no
-	# request body: at most 1 KB is accepted. Another method under /api/v1/ is a
-	# 405 from Caddy, any other /api path a 404 from Caddy. Each matcher excludes
-	# what the others take, so their order does not matter.
+	# or HEAD only (@write above), any query: the api validates every parameter
+	# and answers its own 400s and JSON 404s (A§9.2). The expression compares the
+	# request path as sent, case and all (the path matcher would fold case, merge
+	# slashes and resolve dot segments), and no dot segment is passed on: a dot
+	# segment that stays under /api is a 404 from Caddy, one that climbs out of
+	# /api is answered by the route of the cleaned path (SR-4). The api reads no
+	# request body: at most 1 KB is accepted. Any other /api path is a 404 from
+	# Caddy. The two matchers exclude each other, so their order does not matter.
 	@api {
 		method GET HEAD
 		expression `{path}.startsWith('/api/v1/') && !{path}.contains('/.')`
-	}
-	@api_method {
-		path /api/v1/*
-		not method GET HEAD
 	}
 	@api_other {
 		path /api /api/*
@@ -100,13 +106,14 @@
 		}
 		# Deferred like the site block: nothing names the upstream software.
 		header -Via
+		# The api reads no client address today. Caddy sets X-Forwarded-For
+		# itself; a client's Forwarded and X-Real-IP are dropped, so that a
+		# limit keyed on an address (P9b) can never be fed a spoofed one.
 		reverse_proxy api:8080 {
+			header_up -Forwarded
+			header_up -X-Real-IP
 			header_down -Server
 		}
-	}
-	handle @api_method {
-		header Allow "GET, HEAD"
-		respond 405
 	}
 	handle @api_other {
 		respond 404
@@ -193,8 +200,8 @@
 
 	# Vite's hashed assets and the pinned map glyphs and sprites under
 	# /assets/map/<commit7>/ (a new commit is a new directory): immutable
-	# (A§9.1), for a file that exists; a miss or a directory falls to the
-	# catch-all below, with no Cache-Control. The HTML pages carry none either.
+	# (A§9.1), for a file that exists; any other /assets path is the 404 below,
+	# with no Cache-Control.
 	@assets {
 		path /assets/*
 		not path */
@@ -222,8 +229,11 @@
 	# own "not found" for a route it does not know. A missing file with an
 	# extension (favicon.ico, robots.txt) stays a 404, answered here so that it
 	# keeps the site headers (file_server's own 404 would carry none, KG-107).
-	# /api, /status, /tiles and /assets never get here.
+	# Everything here is revalidated on every use (no-cache, CR-6): a page that
+	# a browser kept past a deploy would ask for asset names the new image no
+	# longer has. /api, /status, /tiles and /assets never get here.
 	handle {
+		header Cache-Control "no-cache"
 		root * /srv/www
 		@app_en {
 			path_regexp ^/en/

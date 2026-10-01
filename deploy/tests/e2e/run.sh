@@ -33,9 +33,10 @@
 #     /health/sources answer through Caddy over TLS, and (P4b) so do /api/v1/meta
 #     and /stations; an unknown path under /api/v1/ is the api's JSON 404, a
 #     wrong-case path Caddy's 404, an unknown parameter a 400, a POST a 405 and
-#     a GET with a 2048-byte body a 413; an English route that is no file is
-#     the English page, a missing asset or /favicon.ico a 404; load and api
-#     have no route out; db,
+#     a GET with a 2048-byte body a 413; a POST to a page, an app route or an
+#     asset a 405 with the site headers and no Server; an English route that is
+#     no file is the English page with no-cache, a missing asset or /favicon.ico
+#     a 404; load and api have no route out; db,
 #     load and api keep the hardening flags; each sees only its own secret;
 #     the nightly dump is a valid custom-format dump readable only by root and
 #     gid 61003, and restic backs it up;
@@ -490,6 +491,14 @@ api_req /api/v1/meta -X POST
 [[ $api_status == 405 ]] || fail "POST /api/v1/meta: HTTP $api_status, want 405"
 grep -qiFx 'allow: GET, HEAD' /ci/api.hdr || fail "POST /api/v1/meta: no Allow: GET, HEAD"
 grep -qi '^content-security-policy: default-src' /ci/api.hdr || fail "the 405 lacks the site headers"
+# The same guard before every route (SR-3): never file_server's bare 405, which names Caddy.
+for path in / /en/foo /assets/no-such-file.js; do
+  api_req "$path" -X POST
+  [[ $api_status == 405 ]] || fail "POST $path: HTTP $api_status, want 405"
+  grep -qiFx 'allow: GET, HEAD' /ci/api.hdr || fail "POST $path: no Allow: GET, HEAD"
+  grep -qi '^content-security-policy: default-src' /ci/api.hdr || fail "POST $path: the 405 lacks the site headers"
+  ! grep -qi '^server:' /ci/api.hdr || fail "POST $path: the 405 names its server"
+done
 head -c 2048 /dev/zero | tr '\0' a >/ci/api.big
 api_req /api/v1/meta -X GET -H 'Expect:' --data-binary @/ci/api.big
 [[ $api_status == 413 ]] || fail "GET /api/v1/meta with a 2048-byte body: HTTP $api_status, want 413"
@@ -497,13 +506,14 @@ api_req /api/v1/meta -X GET -H 'Expect:' --data-binary @/ci/api.big
 api_req /en/no-such-page
 [[ $api_status == 200 ]] || fail "/en/no-such-page: HTTP $api_status, want the English page"
 grep -qF '<html lang="en"' /ci/api.body || fail "/en/no-such-page is not the English page"
+grep -qiFx 'cache-control: no-cache' /ci/api.hdr || fail "/en/no-such-page: Cache-Control: $(grep -i '^cache-control:' /ci/api.hdr)"
 [[ $(api_code /assets/no-such-file) == 404 && $(api_code /favicon.ico) == 404 ]] ||
   fail "a missing asset or /favicon.ico is not a 404"
 headers=$(ip netns exec ext curl -sS -D - -o /dev/null --max-time 10 --cacert /ci/pki/pebble-root.pem \
   --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health)" | tr -d '\r')
 grep -qi '^content-security-policy: default-src' <<<"$headers" || fail "the api response lacks the site headers"
 ! grep -qiE '^(server|via|access-control-[a-z-]+):' <<<"$headers" || fail "the api response names its software or sends CORS"
-proof "load wrote $(psql_su 'select count(*) from obs') observations from the fixture archive; over TLS through Caddy /api/v1/health answers $(jq -c '{status}' <<<"$health") and /api/v1/health/sources lists DE-1, with the site headers and no Server, Via or CORS header; /api/v1/meta (max-age=60, DE-1 and NL-1 listed) and /api/v1/stations are 200 from the real api; /api/v1/x is the api's {\"error\":\"not_found\"} 404 and /API/v1/health a 404 from Caddy; an unknown parameter is a 400; a POST is a 405 with Allow: GET, HEAD (site headers kept) and a GET with a 2048-byte body a 413; /en/no-such-page is the English page (200), /assets/no-such-file and /favicon.ico are 404s"
+proof "load wrote $(psql_su 'select count(*) from obs') observations from the fixture archive; over TLS through Caddy /api/v1/health answers $(jq -c '{status}' <<<"$health") and /api/v1/health/sources lists DE-1, with the site headers and no Server, Via or CORS header; /api/v1/meta (max-age=60, DE-1 and NL-1 listed) and /api/v1/stations are 200 from the real api; /api/v1/x is the api's {\"error\":\"not_found\"} 404 and /API/v1/health a 404 from Caddy; an unknown parameter is a 400; a POST is a 405 with Allow: GET, HEAD (site headers kept), on /, /en/foo and /assets/no-such-file.js too (no Server), and a GET with a 2048-byte body a 413; /en/no-such-page is the English page (200, Cache-Control: no-cache), /assets/no-such-file and /favicon.ico are 404s"
 
 step "load and api: no route out, the hardening flags, only their own secret"
 no_route='const s = require("net").connect({ host: "1.1.1.1", port: 443, timeout: 5000 });

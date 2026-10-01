@@ -99,17 +99,34 @@ test('GET /api/v1/openapi.json is the OpenAPI 3.1 document', async ({ request })
   expect(Object.keys(body.paths)).toEqual(expect.arrayContaining(['/api/v1/meta', '/api/v1/snapshot']));
 });
 
-test('another method under /api/v1/ is a 405 with Allow: GET, HEAD', async ({ request }) => {
-  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+test('any method but GET and HEAD is a 405 with Allow: GET, HEAD and the site headers, on every route', async ({
+  request,
+}) => {
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
     const res = await request.fetch('/api/v1/meta', { method });
     expect(res.status(), method).toBe(405);
     expect(res.headers().allow, method).toBe('GET, HEAD');
     expectSiteHeaders(res);
   }
-  // Any case, any path under /api/v1/.
-  const res = await request.post('/API/v1/stations');
-  expect(res.status()).toBe(405);
-  expect(res.headers().allow).toBe('GET, HEAD');
+  // Any case under /api/v1/, the pages, an app route, the assets and the rest: never file_server's bare 405 (SR-3).
+  const asset = /src="(\/assets\/[^"]+\.js)"/.exec(await (await request.get('/')).text())?.[1];
+  expect(asset).toBeDefined();
+  for (const path of [
+    '/API/v1/stations',
+    '/',
+    '/en/',
+    '/en/foo',
+    asset ?? '',
+    '/assets/x.js',
+    '/healthz',
+    '/status/x',
+  ]) {
+    const res = await request.post(path);
+    expect(res.status(), path).toBe(405);
+    expect(res.headers().allow, path).toBe('GET, HEAD');
+    expect(res.headers()['cache-control'], path).toBeUndefined();
+    expectSiteHeaders(res);
+  }
 });
 
 test('the wrong case and the rest of /api are a 404', async ({ request }) => {
@@ -171,13 +188,28 @@ test('app routes answer the page of their language; /en redirects to /en/', asyn
     const page = await request.get(path);
     expect(page.status(), path).toBe(200);
     expect(await page.text(), path).toContain(`<html lang="${lang}"`);
-    expect(page.headers()['cache-control'] ?? '', path).not.toMatch(/immutable/);
   }
 
   const redirect = await request.get('/en', { maxRedirects: 0 });
   expect(redirect.status()).toBe(308);
   expect(new URL(redirect.headers().location ?? '', new URL('/en', baseURL)).pathname).toBe('/en/');
   expectSiteHeaders(redirect);
+});
+
+test('the pages and the app routes are revalidated on every use (no-cache); the assets stay immutable', async ({
+  request,
+}) => {
+  // A page kept past a deploy would ask for asset names the new image no longer has (CR-6).
+  for (const path of ['/', '/index.html', '/en/', '/en/some/app/route', '/some-route', '/third-party-notices.txt']) {
+    const res = await request.get(path);
+    expect(res.status(), path).toBe(200);
+    expect(res.headers()['cache-control'], path).toBe('no-cache');
+  }
+  const asset = /src="(\/assets\/[^"]+\.js)"/.exec(await (await request.get('/')).text())?.[1] ?? '';
+  expect((await request.get(asset)).headers()['cache-control']).toBe('public, max-age=31536000, immutable');
+  expect((await request.get('/api/v1/meta')).headers()['cache-control']).toBe('public, max-age=60');
+  for (const path of ['/assets/no-such-file.js', '/tiles/x', '/status/x', '/api/x'])
+    expect((await request.get(path)).headers()['cache-control'], path).toBeUndefined();
 });
 
 test('/third-party-notices.txt is plain text and names maplibre-gl@6.11.1', async ({ request }) => {
