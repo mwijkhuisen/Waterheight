@@ -20,22 +20,29 @@ describe('nativeValue', () => {
 });
 
 describe('unitLabel', () => {
-  it('names the gauge zero of a stage in the page’s language', () => {
-    const stage = { nativeUnit: 'cm', valueKind: 'stage', datum: 'LOCAL' } as const;
+  it('names the gauge zero of a stage in the page’s language, as PNP only for a German source', () => {
+    const stage = { nativeUnit: 'cm', valueKind: 'stage', datum: 'LOCAL', source: 'DE-1' } as const;
     expect(unitLabel(stage, 'nl')).toBe('cm boven peilnul (PNP)');
     expect(unitLabel(stage, 'en')).toBe('cm above gauge zero (PNP)');
+    for (const source of ['FR-1', 'CH-4', 'BE-3', 'NL-1']) {
+      expect(unitLabel({ ...stage, source }, 'nl')).toBe('cm boven peilnul');
+      expect(unitLabel({ ...stage, source }, 'en')).toBe('cm above gauge zero');
+    }
   });
 
   it('adds the datum of a level, but not twice for m+NN', () => {
-    expect(unitLabel({ nativeUnit: 'cm', valueKind: 'level', datum: 'NAP' }, 'nl')).toBe('cm NAP');
-    expect(unitLabel({ nativeUnit: 'cm', valueKind: 'level', datum: 'NAP' }, 'en')).toBe('cm NAP');
-    expect(unitLabel({ nativeUnit: 'm+NN', valueKind: 'level', datum: 'NN' }, 'nl')).toBe('m+NN');
-    expect(unitLabel({ nativeUnit: 'm+NN', valueKind: 'level', datum: 'NN' }, 'en')).toBe('m+NN');
+    const level = { nativeUnit: 'cm', valueKind: 'level', datum: 'NAP', source: 'NL-1' } as const;
+    expect(unitLabel(level, 'nl')).toBe('cm NAP');
+    expect(unitLabel(level, 'en')).toBe('cm NAP');
+    const nn = { nativeUnit: 'm+NN', valueKind: 'level', datum: 'NN', source: 'DE-1' } as const;
+    expect(unitLabel(nn, 'nl')).toBe('m+NN');
+    expect(unitLabel(nn, 'en')).toBe('m+NN');
   });
 
   it('is the bare unit for a discharge, which has no datum', () => {
-    expect(unitLabel({ nativeUnit: 'm³/s', valueKind: null, datum: null }, 'nl')).toBe('m³/s');
-    expect(unitLabel({ nativeUnit: 'm³/s', valueKind: null, datum: null }, 'en')).toBe('m³/s');
+    const q = { nativeUnit: 'm³/s', valueKind: null, datum: null, source: 'DE-1' } as const;
+    expect(unitLabel(q, 'nl')).toBe('m³/s');
+    expect(unitLabel(q, 'en')).toBe('m³/s');
   });
 });
 
