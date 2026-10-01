@@ -153,6 +153,6 @@ cd /srv/rws/tiles && sudo jq -r '(.current, (.previous // empty)) | .basemap, .p
 
 The full procedure, the failure codes and the rollback are in `docs/runbooks/basemap.md`. Paste the three logs and the `sha256sum -c` output into #18.
 
-- [ ] both refresh runs ended with `basemap refreshed`;
+- [ ] both refresh runs ended with `basemap refresh done (the role's lines above say whether a build was promoted)`, and each logged the role's `promoted` line with its build;
 - [ ] `sha256sum -c` printed `OK` for all four files (`basemap-` and `planet-z6-` of both builds);
 - [ ] `systemctl list-timers 'rws-*'` does not list `rws-basemap-refresh` yet (enable it only after this check, `docs/runbooks/basemap.md` §7).

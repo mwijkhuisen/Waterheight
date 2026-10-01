@@ -20,10 +20,10 @@ Only the owner runs it, on the VPS, as root through `sudo` (`rws-basemap-refresh
 |---|---|
 | `fetch` never writes the directory Caddy serves, and `promote` has no network | Caddy follows symlinks and holds the TLS keys. A compromised `fetch` can leave anything, links included, in `.staging`, which Caddy has no route to; only checked regular files leave it (threat model T-WEB-1, T-MAP-1) |
 | Every run starts clean: `fetch` empties `.staging` first, and go-pmtiles `extract` cannot resume | An interrupted fetch costs the whole download again. A dry run changes nothing |
-| A file name in `/srv/rws/tiles` is immutable: `promote` refuses a name that already holds other bytes (`exists_different`) | Browsers keep a dated file for a year. A re-extract of a build that is already served can differ byte for byte: take the previous extract back with `--rollback` (§6), not with `--build` |
+| A file name in `/srv/rws/tiles` is immutable: `promote` refuses a name that already holds other bytes (`exists_different`) | Browsers keep a dated file for a year. A re-extract of a build that is already served can differ byte for byte: take the previous extract back with `--rollback` (§6). `--build` of the previous build is refused at once (`build_is_previous`), before anything is downloaded |
 | Only builds of the tiles version 4.x (`tiles_major` in `registry/basemap.yaml`), with a real date no later than tomorrow (UTC), count; a date that the list gives twice with two versions is dropped | Protomaps' next tiles major makes `no_eligible_build` until a reviewed registry change and a style check (ADR-0016) |
 | Without `--build` it only moves forward: it does nothing when the newest eligible build is the current one, older than the current one, or the build that was rolled back from | A scheduled run does not undo a rollback while the build you rolled away from is still the newest (§6) |
-| It has its own lock, `rws-basemap`, and never takes the `rws-deploy` lock | A refresh takes hours. A deploy during one is harmless: `fetch` touches only `.staging`, and `promote` runs for seconds. A second refresh logs `another basemap refresh is still running: nothing to do` and exits 0 |
+| It has its own lock, `rws-basemap`, and never takes the `rws-deploy` lock; with the lock it refuses to run while a container of either job exists | A refresh takes hours. A deploy during one is harmless: `fetch` touches only `.staging`, and `promote` runs for seconds. A second refresh logs `another basemap refresh is still running: nothing to do` and exits 0. A `basemap` or `basemap-promote` container that an earlier run left behind (running or exited) stops the run with exit 1 until you remove it (§9): a live fetch container could still write `.staging` while `promote` checks it |
 | It sends no healthchecks.io ping (the 16 checks are a closed set) | A failed run is a failed unit and the journal (§9, §10); the map keeps working from the last good extract. Nothing alerts on a refresh that never ran: look after each scheduled date (§5) |
 
 ## 2. Before you start
@@ -75,7 +75,7 @@ Three runs, from `ssh ops@<domain>`. A run takes hours: the timer's unit stops i
    sudo rws-basemap-refresh --build <the older build> 2>&1 | tee ~/basemap-run-1.log
    ```
 
-   The log ends with `basemap fetch done: promoting` and `basemap refreshed`; `promoted` (`build`, `previous` null) is the role's own line. `/srv/rws/tiles` now holds that build as current. Nothing on the public site draws the map before P4, so the order has no visible effect.
+   The log ends with `basemap fetch done: promoting` and `basemap refresh done (the role's lines above say whether a build was promoted)`; above it, the role's own line `promoted` (`build`, `previous` null) says that this build was promoted. `/srv/rws/tiles` now holds that build as current. Nothing on the public site draws the map before P4, so the order has no visible effect.
 3. **The newest build.**
 
    ```bash
@@ -124,11 +124,12 @@ The basemap lines (A§9.1):
 | `tiles <file>` (four after the second run) | A `Range: bytes=0-15` request for each file the manifest lists is 206, `Content-Range` is `bytes 0-15/<the manifest's byte count>`, `Cache-Control` is exactly `public, max-age=31536000, immutable`, there is no `Content-Encoding` (the request offers gzip and zstd) and the first bytes are the PMTiles magic |
 | `tiles previous` | n/a while the manifest has no previous extract (after the second run: pass) |
 | `tiles 404` | `/tiles/`, `/tiles/.staging/` and a dated name that nothing promoted answer 404, and none of them is marked immutable |
+| `tiles 416` | The current basemap file asked for without `Range`, and with two ranges (`Range: bytes=0-0,2-2`), answers 416 and is not marked immutable: Caddy serves a tile file only for one explicit range, which is what the map's pmtiles client sends (R-061) |
 | `map assets` | A pinned glyph file under `/assets/map/028c18f/` is 200 and immutable |
 
-Before the first extract, `tiles manifest` and `tiles previous` **fail**: expected until §3 is done. By hand, `curl -sS -D - -o /dev/null -r 0-15 https://<domain>/tiles/<file>` shows the status line, `Content-Range` and `Cache-Control` of one file.
+Before the first extract, `tiles manifest` and `tiles previous` **fail**: expected until §3 is done. By hand, `curl -sS -D - -o /dev/null -r 0-15 https://<domain>/tiles/<file>` shows the status line, `Content-Range` and `Cache-Control` of one file (without `-r`, or with an open range such as `-r 0-`, the answer is 416).
 
-After a scheduled run, look within a day: `sudo journalctl -u rws-basemap-refresh --since '-1d'` ends with `basemap refreshed` (or `already current`, §7), `curl -fsS https://<domain>/tiles/manifest.json | jq '{current: .current.build, previous: .previous.build, created_at: .current.created_at}'` shows the new build, and `verify-prod.sh` is green.
+After a scheduled run, look within a day: `sudo journalctl -u rws-basemap-refresh --since '-1d'` ends with `basemap refresh done …`, and the role's `promoted` line above it names the new build (`already_current`, `not_newer` or `rolled_back_build` instead when there was nothing new, §7), `curl -fsS https://<domain>/tiles/manifest.json | jq '{current: .current.build, previous: .previous.build, created_at: .current.created_at}'` shows the new build, and `verify-prod.sh` is green.
 
 ## 6. Roll back
 
@@ -139,7 +140,7 @@ sudo rws-basemap-refresh --rollback
 Journal lines: `basemap rollback: promoting the previous build again`, the role's `rolled_back` (`current`, `previous`) and `basemap rolled back`. It takes seconds and needs no network.
 
 - It checks the previous extract first (regular files, one link each, the size and sha256 of the manifest) and then swaps `current` and `previous` in one atomic manifest write. No file is moved or deleted. Browsers learn the change from the manifest, which they keep for 60 seconds.
-- **A second rollback undoes the first.** To return to the build you rolled away from, roll back again; do not fetch it again with `--build` (`exists_different`, §1).
+- **A second rollback undoes the first.** To return to the build you rolled away from, roll back again. `--build` with that build (the previous one) is refused before anything is downloaded (`build_is_previous`, §1): a fresh extract of it could differ byte for byte from the files still on disk (`exists_different`).
 - `--rollback` takes no other flag (exit 64).
 - **A scheduled run does not undo it, for a while.** Without `--build` the job skips the build you rolled away from (`rolled_back_build`) and any build older than the current one (`not_newer`). The next quarterly run finds a newer build, fetches it and makes it current: the rolled-back state lasts only until then. To stay on the older extract longer, stop the timer (`sudo systemctl disable --now rws-basemap-refresh.timer`) and enable it again (§7) when you want refreshes back.
 - After a rollback, run `scripts/verify-prod.sh <domain>`. The map itself is checked by looking at it; before P4 there is no production page that draws it.
@@ -173,8 +174,11 @@ The script's lines (`<UTC> rws-basemap-refresh: …`; an error starts with `erro
 | `rws.env is not complete (owner steps A2-A4 …)` | `RWS_DOMAIN`, `RWS_CONTACT_EMAIL` or an address is missing | `docs/runbooks/bootstrap.md` §4 |
 | `the active release has no basemap job (it predates P3) …` | The running release has no `basemap` service | Deploy a newer release (`docs/runbooks/deploy-rollback.md`) |
 | `another basemap refresh is still running: nothing to do` | The lock is held (exit 0) | Wait. If nothing runs, look for a leftover container (below) |
+| `a basemap container is left over (<ids>): …`, `a basemap-promote container is left over (<ids>): …` | A container of that job exists, running or exited: an earlier run was killed before `--rm` removed it, or one was started by hand. Nothing ran | A leftover container (below) |
+| `docker ps failed: cannot tell whether a … container is left over` | Docker did not answer; nothing ran | `systemctl status docker`, then run again |
+| `basemap promote of the build an earlier run staged failed (exit N): nothing was fetched. Read the role's code above …` | The first step of a run, promoting what an earlier run left staged, failed (exit N as below), so `fetch` did not run and `.staging` is kept for you to look at | Read the role's code above it (table below). Fix the cause and run again; if that staged build must not be promoted at all, empty `.staging` (`sudo find /srv/rws/tiles/.staging -mindepth 1 -delete`), never the served directory, and run again |
 | `basemap fetch failed (exit N): nothing was promoted` | The fetch job exited with N: 1 failure, 78 configuration, 64 usage; 137 is the container killed from outside, most likely out of memory (KG-096) | Read the code in the role's line above it (table below) |
-| `basemap promote failed (exit N)` | The staged files were not (fully) promoted; `.staging` still holds what was not moved | The table below says which. After the cause is fixed, run `sudo rws-basemap-refresh` again: it first promotes what is staged, before it fetches anything; or promote alone (below). When the staged files themselves are bad, empty `.staging` (`sudo find /srv/rws/tiles/.staging -mindepth 1 -delete`) and refresh |
+| `basemap promote failed (exit N)` | The staged files were not (fully) promoted; `.staging` still holds what was not moved. Exit 137 here too is the container killed from outside, most likely out of memory: `pmtiles verify` of the 4.3 GB file runs under the same 512 MB (`GOMEMLIMIT` 400 MiB) and 64 pids (R-063, KG-096) | The table below says which. After the cause is fixed, run `sudo rws-basemap-refresh` again: it first promotes what is staged, before it fetches anything; or promote alone (below). After a 137, run promote alone once more; if it is killed again, `mem_limit` of `basemap-promote` in `deploy/compose.yaml` must go up, in a PR. When the staged files themselves are bad, empty `.staging` (`sudo find /srv/rws/tiles/.staging -mindepth 1 -delete`) and refresh |
 | `basemap rollback failed (exit N)` | Nothing changed | Table below |
 
 The role's codes (`{"role":"basemap","msg":"<code>",…}`; exit 1 unless noted):
@@ -190,19 +194,21 @@ The role's codes (`{"role":"basemap","msg":"<code>",…}`; exit 1 unless noted):
 | `builds_invalid` | The list is not UTF-8 or not a bounded JSON array | The format changed: open an issue |
 | `no_eligible_build` | No listed build is of tiles version 4.x, dated up to tomorrow | Protomaps moved to another tiles major: do not change `tiles_major` without the style check of ADR-0016 |
 | `build_not_eligible` | `--build` names a build that is not in the eligible list (older than the list, a bad date, another major) | List the builds again (§3, step 2) and pick another |
+| `build_is_previous` | `--build` names the manifest's previous build, which is still on disk; the line before it says `<build> is the previous build: make it current again with rws-basemap-refresh --rollback`. Nothing was touched or downloaded | `sudo rws-basemap-refresh --rollback` (§6) |
 | `tiles_status` | The one-byte `Range` probe did not answer 206 with a `Content-Range` total: the file is gone, or the host ignores `Range` | Pick another build with `--build` |
 | `disk`, `disk_unknown` | The disk would pass 75% (§8), or its size could not be read | Free space and run again; `df /srv/rws` |
 | `staging_clean` | `.staging` could not be emptied | Look at `sudo ls -la /srv/rws/tiles/.staging` (an entry owned by root, from before bootstrap); empty it as root (`disk-full.md` §2), run bootstrap, run again |
-| `extract_failed` | go-pmtiles exited non-zero, hit the 4-hour limit, or was stopped. The `extract_failed` line has `kind` (`basemap` or `planet`), `status` (`exit N`, `signal …`, `not_started`) and `tail` | A dropped connection, a build that left Protomaps' list mid-download, a redirect to another host, or memory (KG-096). Run again: nothing is resumed, the whole download starts over |
+| `extract_failed` | go-pmtiles exited non-zero, hit the 4-hour limit, or was stopped. The `extract_failed` line has `kind` (`basemap` or `planet`), `status` (`exit N`, `signal …`, `not_started`) and `tail` | A dropped connection, a build that left Protomaps' list mid-download, a redirect to another host, or memory (KG-096). `file too large` in the `tail` is the job's file size limit (6.5 GB per file, `ulimits` in `deploy/compose.yaml`): the source sent far more than an extract may be; do not raise the limit blindly, open an issue. Otherwise run again: nothing is resumed, the whole download starts over |
 | `extract_output` | The output file is missing, not a regular file, empty, larger than the registry's limit (6 GB for the basin, 100 MB for the world) or changed while it was hashed | The limits are `max_bytes` in `registry/basemap.yaml`; raising one is a reviewed change |
 | `manifest_invalid` | `/srv/rws/tiles/manifest.json` exists but is not exactly the manifest this version writes (`fetch`, `promote` and `rollback`) | Nothing of ours writes such a file (every write is checked first), so it was changed from outside. Do not edit it; open an issue |
 | `staging_dir` (from `promote`) | `.staging` is a link or cannot be read | Look at `ls -ld /srv/rws/tiles/.staging`; it must be a real directory (0700, uid 65532) |
 | `result_invalid` | `result.json` is not what `fetch` writes | Run the whole refresh again (`fetch` empties `.staging`) |
 | `not_regular_file` | A staged or served tile file is a link, a pipe or has more than one link | **Not in normal operation.** Do not promote. `sudo ls -la /srv/rws/tiles /srv/rws/tiles/.staging`, empty `.staging`, and open an issue (T-MAP-1) |
 | `file_too_large`, `sha_mismatch`, `file_changed`, `staged_missing` | A staged file is over its limit, differs from the sha256 that `fetch` recorded, changed during the check, or is gone | Run the whole refresh again |
+| `file_swapped` | **Not in normal operation.** After the rename into `/srv/rws/tiles`, the name did not hold the file that was checked (a link, a directory or other bytes swapped into `.staging` between the check and the rename): `promote` removed that name and wrote no manifest. The log has `file_refused` with `kind` | Something still writes `.staging`: `sudo docker ps -a` (a leftover container, below), `sudo ls -la /srv/rws/tiles /srv/rws/tiles/.staging`; empty `.staging` and open an issue (T-WEB-1) |
 | `exists_different` | A file of that name is already served with other bytes | Do not delete served files to get past this. If `manifest.json` names the file, take another build; if it does not (an orphan of a promote that was cut off, described below the table), delete that one file and run again |
 | `verify_failed` | `pmtiles verify` rejected the archive (limit 30 minutes) | A damaged download: run again; if it repeats, open an issue |
-| `header_unreadable`, `header_type`, `header_zoom`, `header_bounds` | The PMTiles header is not what the registry says: vector tiles, z0–14 (basin) and z0–6 (world), basin bounds inside the bbox ± 0.01°, a world extract that spans the world | Protomaps changed the build: check the style against it (ADR-0016) before any registry change. The log has a line `file_refused` with `kind` and `reason` |
+| `header_unreadable`, `header_type`, `header_compression`, `header_zoom`, `header_bounds` | The PMTiles header is not what the registry says: vector tiles, compressed with gzip or not at all (what the browser's pmtiles client reads), z0–14 (basin) and z0–6 (world), basin bounds inside the bbox ± 0.01°, a world extract that spans the world | Protomaps changed the build: check the style against it (ADR-0016) before any registry change. The log has a line `file_refused` with `kind` and `reason` |
 | `retention_failed` | The new build **is** promoted, but an old tile file could not be deleted | The map is fine. Run promote alone (below); or delete the old build's two files by hand, only names that `manifest.json` does not list |
 | `no_manifest`, `no_previous` | `rollback` has nothing to roll back to (nothing was promoted yet; only one extract so far) | Nothing to do |
 | `previous_missing`, `previous_changed` | A file of the previous extract is gone, or differs from the manifest's size or sha256 | Do not roll back to it: the tiles are not backed up. Keep the current extract, or fetch another build with `--build` |
@@ -217,11 +223,12 @@ rwsc run --rm --no-deps -T basemap-promote basemap promote
 
 A promote that was cut off after it moved a file but before it wrote the manifest leaves that file in `/srv/rws/tiles` without a manifest entry; the next run's first promote finds it there with the staged sha256 and finishes the job. Only if `.staging` was emptied by hand in between can a fetch of the same build bring other bytes, and `exists_different` stop the run: then delete that one orphan (a tile name that `manifest.json` does not list), not any other, and run again.
 
-**A leftover container.** If the script was killed (the SSH session dropped, the unit was stopped or timed out), the `fetch` container may still be running: it is not verified that the signal reaches a `compose run` container, and the lock goes with the script. A leftover go-pmtiles keeps downloading into `.staging/.tmp`, and the next run would empty that directory beneath it. Look first, and remove it before the next run:
+**A leftover container.** If the script was killed (the SSH session dropped, the unit was stopped or timed out), the `fetch` container may still be running: it is not verified that the signal reaches a `compose run` container, and the lock goes with the script. A leftover go-pmtiles keeps downloading into `.staging/.tmp`, and a live writer in `.staging` could swap a checked file while `promote` moves it. So the script refuses to run (`a basemap container is left over (<ids>)`, exit 1) while any container of the `basemap` or `basemap-promote` job exists, running or exited. Look at it, then remove it:
 
 ```bash
-sudo docker ps --filter name=basemap
-sudo docker rm -f <the container name that it shows>
+sudo docker ps -a --filter label=com.docker.compose.project=rws --filter label=com.docker.compose.service=basemap
+sudo docker ps -a --filter label=com.docker.compose.project=rws --filter label=com.docker.compose.service=basemap-promote
+sudo docker rm -f <the id that it shows>
 ```
 
 An interrupted `fetch` leaves only `.staging` behind (a partial `.tmp`, perhaps a `result.json`): nothing is served from there, and the next run empties it.
@@ -240,6 +247,6 @@ A run from a shell is not in the journal: its output is the terminal, so keep it
 - Do not put a tile file or `manifest.json` into `/srv/rws/tiles` by hand, and do not delete a file the manifest names (`disk-full.md`). `promote` is the only writer.
 - Do not mount `/srv/rws/tiles` read-write into the `basemap` (fetch) service, in a compose change or by hand: Caddy follows symlinks and holds the TLS keys (T-WEB-1).
 - Do not empty `.staging` by hand after a cut-off promote: the next run finishes it from there (§9).
-- Do not start a second run while a `fetch` container is still alive (`sudo docker ps --filter name=basemap`).
+- Do not remove a leftover `basemap` or `basemap-promote` container without looking at it first (§9); the script refuses to run while one exists.
 - Do not enable the timer before the first run has gone through and `verify-prod.sh` is green (§3, §5, §7).
 - Do not change `tiles_major`, a zoom range or a bbox in `registry/basemap.yaml` without the style check of ADR-0016: the styles and the promote checks follow it.

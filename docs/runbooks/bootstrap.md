@@ -290,4 +290,4 @@ Do this on the VPS that already runs the P2b release. No new secret, `rws.env` s
    systemctl is-enabled rws-basemap-refresh.timer                   # disabled
    ```
 3. Run the first refresh and enable the timer: `docs/runbooks/basemap.md` §3 to §7 (a dry run, an older build, then the newest, so that current and previous both exist; the `[owner]` criterion of P3 asks for its log and the sha256 comparison).
-4. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `tiles manifest`, `tiles <file>` (four after the second run), `tiles previous`, `tiles 404` and `map assets`.
+4. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `tiles manifest`, `tiles <file>` (four after the second run), `tiles previous`, `tiles 404`, `tiles 416` and `map assets`.
