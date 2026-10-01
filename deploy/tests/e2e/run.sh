@@ -39,7 +39,9 @@
 #     read-only and writes only .staging; basemap-promote has no network and moves
 #     the recorded PMTiles fixtures from .staging into /srv/rws/tiles with a
 #     manifest.json (no symlink to follow, T-WEB-1); Caddy serves them over TLS
-#     with Range, immutable caching and no content encoding.
+#     with Range, immutable caching and no content encoding, and every other
+#     request for a tile file is a 416; a leftover basemap container stops
+#     rws-basemap-refresh.
 # The stack keeps running afterwards for scripts/verify-prod.ts.
 # Usage: sudo deploy/tests/e2e/run.sh
 set -euo pipefail
@@ -606,21 +608,42 @@ for pair in "basemap-$build.pmtiles:lobith-z14.pmtiles" "planet-z6-$build.pmtile
 done
 outside -o /ci/manifest.served --resolve "$DOMAIN:443:$IP4" "$(tiles_url manifest.json)" || fail "manifest.json is not served"
 cmp -s /ci/manifest.served "$tiles/manifest.json" || fail "the served manifest.json differs from the file"
-# Only one explicit range is served (SR-1): no Range, an open range and two ranges are a 416
-# that keeps the site headers and is never marked immutable.
-for range in '' 'bytes=0-' 'bytes=0-0,2-2'; do
-  range_args=()
-  [[ -z $range ]] || range_args=(-H "Range: $range")
+# Only one explicit range is served (SR-1), and only without If-Range or If-Match (SR2-1: an If-Range
+# that does not match would send the whole file, a failed If-Match a 412 marked immutable): no Range,
+# an open range, two ranges and one range with either header are a 416 that keeps the site headers
+# and is never marked immutable. Each case is its request headers, separated by "|".
+for ask in '' 'Range: bytes=0-' 'Range: bytes=0-0,2-2' 'Range: bytes=0-15|If-Range: "e2e"' 'Range: bytes=0-15|If-Match: "e2e"'; do
+  ask_args=()
+  IFS='|' read -ra fields <<<"$ask"
+  for field in "${fields[@]}"; do ask_args+=(-H "$field"); done
+  what=${ask:-no Range}
   code=$(ip netns exec ext curl -sS --max-time 10 --cacert /ci/pki/pebble-root.pem -o /ci/416.body -D /ci/416.hdr \
-    -w '%{http_code}' "${range_args[@]}" --resolve "$DOMAIN:443:$IP4" "$(tiles_url "basemap-$build.pmtiles")") ||
-    fail "basemap-$build.pmtiles did not answer (Range '${range:-none}')"
+    -w '%{http_code}' "${ask_args[@]}" --resolve "$DOMAIN:443:$IP4" "$(tiles_url "basemap-$build.pmtiles")") ||
+    fail "basemap-$build.pmtiles did not answer ($what)"
   hdr=$(tr -d '\r' </ci/416.hdr)
-  [[ $code == 416 ]] || fail "basemap-$build.pmtiles with Range '${range:-none}': HTTP $code, want 416"
-  ! grep -qi '^cache-control:.*immutable' <<<"$hdr" || fail "the 416 for Range '${range:-none}' is marked immutable"
-  grep -qiFx 'x-content-type-options: nosniff' <<<"$hdr" || fail "the 416 for Range '${range:-none}' lacks the site headers"
-  [[ $(size /ci/416.body) == 0 ]] || fail "the 416 for Range '${range:-none}' has a body"
+  [[ $code == 416 ]] || fail "basemap-$build.pmtiles with $what: HTTP $code, want 416"
+  ! grep -qi '^cache-control:.*immutable' <<<"$hdr" || fail "the 416 for $what is marked immutable"
+  grep -qiFx 'x-content-type-options: nosniff' <<<"$hdr" || fail "the 416 for $what lacks the site headers"
+  [[ $(size /ci/416.body) == 0 ]] || fail "the 416 for $what has a body"
 done
-proof "https://$DOMAIN/tiles/basemap-$build.pmtiles and planet-z6-$build.pmtiles answer a Range request (bytes=0-15) with 206, a Content-Range for the file's size, Cache-Control public, max-age=31536000, immutable, no Content-Encoding and the file's own first 16 bytes; no Range, an open range and two ranges are a 416 with the site headers, no immutable and no body; /tiles/manifest.json is served byte for byte"
+proof "https://$DOMAIN/tiles/basemap-$build.pmtiles and planet-z6-$build.pmtiles answer a Range request (bytes=0-15) with 206, a Content-Range for the file's size, Cache-Control public, max-age=31536000, immutable, no Content-Encoding and the file's own first 16 bytes; no Range, an open range, two ranges and bytes=0-15 with If-Range or If-Match are a 416 with the site headers, no immutable and no body; /tiles/manifest.json is served byte for byte"
+# A container of the fetch job left over from an earlier run (CR2-4): a real one, started through the same
+# compose file as the rest and still running, is what rws-basemap-refresh's own filter finds, and the script
+# refuses before it runs any job. Named, so the test does not depend on what `compose run -d` prints.
+rws_compose run -d --no-deps -T --name rws-e2e-leftover --entrypoint /nodejs/bin/node basemap \
+  -e 'setTimeout(() => {}, 3e5)' >/dev/null || fail "could not start a leftover basemap container"
+leftover=$(docker inspect -f '{{.Id}}' rws-e2e-leftover) || fail "the leftover basemap container is not there"
+found=$(docker ps -aq --filter label=com.docker.compose.project=rws --filter label=com.docker.compose.service=basemap)
+refused_rc=0
+refused=$("$repo/deploy/bin/rws-basemap-refresh" --dry-run 2>&1) || refused_rc=$?
+docker rm -f rws-e2e-leftover >/dev/null || fail "could not remove the leftover basemap container"
+[[ $found == "${leftover:0:12}" ]] || fail "rws-basemap-refresh's filter found '${found//$'\n'/ }', want ${leftover:0:12}"
+[[ $refused_rc == 1 ]] || fail "rws-basemap-refresh --dry-run beside a leftover container exited $refused_rc: $refused"
+grep -qF "error: a basemap container is left over (${leftover:0:12})" <<<"$refused" ||
+  fail "rws-basemap-refresh --dry-run beside a leftover container: $refused"
+[[ -z $(docker ps -aq --filter label=com.docker.compose.project=rws --filter label=com.docker.compose.service=basemap) ]] ||
+  fail "a basemap container is still there after docker rm -f"
+proof "a basemap container started with compose run -d and left running is found by rws-basemap-refresh's filter (docker ps -aq, labels project rws and service basemap: ${leftover:0:12}); rws-basemap-refresh --dry-run beside it exits 1 with 'a basemap container is left over (${leftover:0:12})' before any job runs; after docker rm -f the filter finds nothing"
 
 # ------------------------------------------------------------------ capture
 step "Capture in distroless: contract files, modes, generated_at advances"
