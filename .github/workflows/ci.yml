@@ -329,10 +329,70 @@ jobs:
           grep -qE '^PASS health [^A-Za-z]' "$RUNNER_TEMP/verify-prod.txt"
           grep -qE '^PASS health params ' "$RUNNER_TEMP/verify-prod.txt"
 
+  # P3 (issue #18): the map spike under the exact production headers, served by
+  # the real Caddy image and deploy/web/site.caddy over HTTPS (Caddy's local
+  # CA), tested by Playwright 1.63.0 in its digest-pinned image (browsers and
+  # their system libraries baked in; nothing downloaded at run time).
+  e2e:
+    name: e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      CADDY_IMAGE: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: The e2e build (the production pages plus /_spike/ and /en/_spike/)
+        run: pnpm -F web build:e2e
+      - name: Serve it through the real Caddy image and site.caddy (HTTPS on localhost)
+        run: |
+          set -euo pipefail
+          node apps/web/e2e/prepare-tiles.ts "$RUNNER_TEMP/tiles"
+          mkdir -p "$RUNNER_TEMP/ops"
+          docker run -d --name e2e-caddy -p 127.0.0.1:443:443 \
+            -e RWS_DOMAIN=localhost -e RWS_CONTACT_EMAIL=ci@rivierstanden.example \
+            -v "$PWD/apps/web/e2e/Caddyfile.e2e:/etc/caddy/Caddyfile:ro" \
+            -v "$PWD/deploy/web/site.caddy:/etc/caddy/site.caddy:ro" \
+            -v "$PWD/apps/web/dist-e2e:/srv/www:ro" \
+            -v "$RUNNER_TEMP/tiles:/srv/rws/tiles:ro" \
+            -v "$RUNNER_TEMP/ops:/srv/rws/public/ops:ro" \
+            "$CADDY_IMAGE" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+          for _ in $(seq 1 30); do
+            if curl -fsSk -o /dev/null https://localhost/healthz; then exit 0; fi
+            sleep 1
+          done
+          docker logs e2e-caddy
+          exit 1
+      - name: Playwright (Chromium, Firefox, WebKit) in the pinned Playwright image
+        run: |
+          docker run --rm --network host --ipc=host \
+            -e CI=true -e E2E_BASE_URL=https://localhost \
+            -v "$PWD:/work" -w /work/apps/web \
+            "$PLAYWRIGHT_IMAGE" node_modules/.bin/playwright test -c e2e/playwright.config.ts
+      - name: Caddy's log
+        if: failure()
+        run: docker logs e2e-caddy 2>&1 | tail -n 100
+
   ci:
     name: ci
     if: always()
-    needs: [check, integration, dbmate, bench, shellcheck, fresh-start, hook, deploy]
+    needs: [check, integration, dbmate, bench, shellcheck, fresh-start, hook, deploy, e2e]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

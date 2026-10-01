@@ -62,7 +62,7 @@ const NOW = new Date('2026-10-02T12:00:00Z');
 describe('the A§12.2 headers', () => {
   it('reads the CSP and the other headers verbatim from ARCHITECTURE.md', () => {
     expect(expected['content-security-policy']).toBe(
-      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp",
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp",
     );
     expect(expected).toMatchObject({
       'strict-transport-security': 'max-age=31536000; includeSubDomains',
