@@ -319,7 +319,7 @@ jobs:
           # capture cannot succeed without internet in CI and the loaded data is a recorded fixture, so
           # only the checks that need fresh production data may fail.
           if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" |
-            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1) '; then
+            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|fresh DE-1|fresh NL-1|api build) '; then
             echo "verify-prod failed a check other than the ones that need live data" >&2
             exit 1
           fi
@@ -328,20 +328,39 @@ jobs:
           # "health" itself (the next word is the separator, not "params" or "DE-1").
           grep -qE '^PASS health [^A-Za-z]' "$RUNNER_TEMP/verify-prod.txt"
           grep -qE '^PASS health params ' "$RUNNER_TEMP/verify-prod.txt"
+          # P4b: the data routes through Caddy, their Cache-Control per age class, and noindex on every kind of path.
+          for check in 'api meta' 'api stations' 'api snapshot now' 'api snapshot 6h' 'api snapshot 3d' 'api openapi' \
+            'api params' 'noindex'; do
+            grep -qE "^PASS $check " "$RUNNER_TEMP/verify-prod.txt" || { echo "verify-prod: no PASS for $check" >&2; exit 1; }
+          done
 
   # P3 (issue #18): the map spike under the exact production headers, served by
   # the real Caddy image and deploy/web/site.caddy over HTTPS (Caddy's local
   # CA), tested by Playwright 1.63.0 in its digest-pinned image (browsers and
   # their system libraries baked in; nothing downloaded at run time).
+  # P4b (issue #19): the real pages too, with Caddy proxying /api/v1/ to the e2e
+  # api (apps/server/test/e2e/api.ts: a seeded throw-away database on the
+  # service container, the real routes on a fixed clock) on the runner.
   e2e:
     name: e2e
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
+    services:
+      postgres:
+        image: postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rws
+          POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
     env:
       CADDY_IMAGE: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
       PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/rws?sslmode=disable
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
@@ -360,12 +379,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: The e2e build (the production pages plus /_spike/ and /en/_spike/)
         run: pnpm -F web build:e2e
-      - name: Serve it through the real Caddy image and site.caddy (HTTPS on localhost)
+      - name: The e2e api on the runner (seeded throw-away database, fixed clock 2026-10-26T12:00Z)
+        env:
+          HOST: 0.0.0.0
+          PORT: '8080'
+        run: |
+          node apps/server/test/e2e/api.ts >"$RUNNER_TEMP/e2e-api.log" 2>&1 &
+          for _ in $(seq 1 120); do
+            if grep -q '^e2e api listening' "$RUNNER_TEMP/e2e-api.log"; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/e2e-api.log"
+          exit 1
+      - name: Serve it through the real Caddy image and site.caddy (HTTPS on localhost; api:8080 is the runner)
         run: |
           set -euo pipefail
           node apps/web/e2e/prepare-tiles.ts "$RUNNER_TEMP/tiles"
           mkdir -p "$RUNNER_TEMP/ops"
-          docker run -d --name e2e-caddy -p 127.0.0.1:443:443 \
+          docker run -d --name e2e-caddy -p 127.0.0.1:443:443 --add-host=api:host-gateway \
             -e RWS_DOMAIN=localhost -e RWS_CONTACT_EMAIL=ci@rivierstanden.example \
             -v "$PWD/apps/web/e2e/Caddyfile.e2e:/etc/caddy/Caddyfile:ro" \
             -v "$PWD/deploy/web/site.caddy:/etc/caddy/site.caddy:ro" \
@@ -390,9 +421,11 @@ jobs:
             -v "$PWD:/work" -w /work/apps/web \
             "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
             node_modules/.bin/playwright test -c e2e/playwright.config.ts
-      - name: Caddy's log
+      - name: Caddy's log and the e2e api's log
         if: failure()
-        run: docker logs e2e-caddy 2>&1 | tail -n 100
+        run: |
+          docker logs e2e-caddy 2>&1 | tail -n 100
+          tail -n 100 "$RUNNER_TEMP/e2e-api.log"
 
   ci:
     name: ci
