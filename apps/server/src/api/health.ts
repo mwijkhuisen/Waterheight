@@ -95,10 +95,10 @@ const snapshot = <T>(db: Kysely<DB>, read: (tx: Tx) => Promise<T>): Promise<T> =
   db.transaction().setAccessMode('read only').setIsolationLevel('repeatable read').execute(read);
 
 /** An error that carries only a fixed code, which is all the log ever sees. */
-const coded = (code: string) => Object.assign(new Error(code), { code });
+export const coded = (code: string) => Object.assign(new Error(code), { code });
 
 /** What is about to be sent must match the contract: a shape bug is a 503 here, never a silent leak. */
-function validated<T>(schema: z.ZodType<T>, value: unknown): T {
+export function validated<T>(schema: z.ZodType<T>, value: unknown): T {
   const r = schema.safeParse(value);
   if (!r.success) throw coded('contract');
   return r.data;
