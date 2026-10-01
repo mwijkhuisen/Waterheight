@@ -3,7 +3,7 @@
 How a release reaches the VPS (A§11.2, ADR-0008):
 
 1. A merge to `main` runs `release.yml`: images are built, signed and attested.
-2. You approve `promote` (environment `production`), which publishes `prod-<UTC>` with a signed `release-manifest.json` and the deploy bundle.
+2. You approve `promote` (environment `production`), which publishes `prod-<UTC>` with a signed `release-manifest.json` and the deploy bundle. On GitHub's Releases page it is titled `v0.0.<PR number>` (after the switch to v1, `v1.<minor>.<n>`; `.github/release-title`), and its notes link the PR, the issues it closes and the commit; a push that no merged PR produced keeps the tag as its title. The title is only a label: the VPS, `rws-deploy` and every runbook use the tag `prod-<UTC>`, shown with each release.
 3. Within 5 minutes, `rws-update.timer` verifies the manifest and every image against the release workflow's identity and deploys.
 
 GitHub holds no credential for the server.
@@ -65,7 +65,7 @@ sudo ls /var/lib/rws/releases            # the kept releases
 sudo rws-deploy prod-20261001T120000Z    # any signed release, older ones included
 ```
 
-This deploys the named release through the same checks. If it is older than the release that ran before it (a rollback), automatic updates skip everything up to the newer of that release and the latest one, so the rollback sticks until the next new release, also when GitHub cannot be reached at that moment. Redeploying the current release holds nothing back. To undo a hold, deploy the newest release on purpose.
+`rws-deploy` takes the tag, never the title: to go back to, say, `v0.0.45`, open that release on GitHub and use its `prod-…` tag. This deploys the named release through the same checks. If it is older than the release that ran before it (a rollback), automatic updates skip everything up to the newer of that release and the latest one, so the rollback sticks until the next new release, also when GitHub cannot be reached at that moment. Redeploying the current release holds nothing back. To undo a hold, deploy the newest release on purpose.
 
 A rollback changes only images and `compose.yaml`: the host files stay those of the newer release you bootstrapped. **Never run an older release's bootstrap**: it would install its older host scripts, units and firewall. While the hold lasts (`skip_upto` newer than `current`), the host-file check pauses, and it resumes once a newer release runs.
 
