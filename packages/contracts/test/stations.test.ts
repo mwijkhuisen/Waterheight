@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { repoRoot } from '../../../test/catalogue.ts';
 import { SourcesFile } from '../src/registry.ts';
-import { NATIVE_UNITS, StationsFile, TO_CANONICAL, validateStations, validateTwins } from '../src/stations.ts';
+import { StationsFile, validateStations, validateTwins } from '../src/stations.ts';
+import { NATIVE_UNITS, TO_CANONICAL } from '../src/units.ts';
 
 // The schema fixture: 5 rows across the audiences. registry/stations/ holds only real, synced files.
 const dir = `${repoRoot}registry/stations/`;

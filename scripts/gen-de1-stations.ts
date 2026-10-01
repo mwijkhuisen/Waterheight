@@ -13,7 +13,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { stringify } from 'yaml';
-import { type NativeUnit, type PublicStation, StationsFile, TO_CANONICAL } from '../packages/contracts/src/stations.ts';
+import { type PublicStation, StationsFile } from '../packages/contracts/src/stations.ts';
+import { type NativeUnit, TO_CANONICAL } from '../packages/contracts/src/units.ts';
 
 const root = join(import.meta.dirname, '..');
 export const FIXTURE_DIR = join(root, 'apps/server/src/adapters/de-1/fixtures');

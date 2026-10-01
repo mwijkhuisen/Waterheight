@@ -1,13 +1,17 @@
 import { z } from 'zod';
-import { HealthSourceId } from './health.ts';
-import { DATUMS, NATIVE_UNITS } from './stations.ts';
+import { DATUMS, NATIVE_UNITS } from './units.ts';
 
 // The public read API (A§9.2; PHASES P4a): /api/v1/meta, /stations, /snapshot
 // and /series/{id}. Field names follow the static files of A§9.1 (camelCase).
 // Every object is strict and every array bounded: the API checks each answer
 // against these schemas before it caches or sends it, so a field added by
 // mistake is a 503, never a leak. The OpenAPI document (openapi.ts) is built
-// from the same schemas.
+// from the same schemas. This module imports only the units: the web bundle
+// takes it, and nothing of the registry, the health documents or the canaries
+// may follow it there (`sideEffects: false`; apps/web/test/build.test.ts).
+
+/** A catalogue source ID: no canary, no owner-only spelling. */
+export const HealthSourceId = z.string().regex(/^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$/);
 
 const iso = z.iso.datetime();
 const count = z.number().int().nonnegative();

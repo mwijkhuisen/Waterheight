@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CANARY_RENDERINGS } from '@rws/contracts';
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { i18nHtml, keyDrift } from '../i18n-html.ts';
@@ -99,6 +100,19 @@ describe('web build', () => {
       const text = readFileSync(path, 'utf8');
       expect(text, path).not.toContain('__rws');
       expect(text, path).not.toContain('nl.e2e.');
+    }
+  });
+
+  it('ships no canary rendering and no registry or health internal of @rws/contracts (invariant 11, SR-1)', () => {
+    // The public static files are a public output: the owner canary appears in none, the withheld one nowhere.
+    // The web uses only the API contract and the units; `sideEffects: false` lets the bundler drop the rest.
+    const files = readdirSync(out, { recursive: true, withFileTypes: true }).filter((e) => e.isFile());
+    expect(CANARY_RENDERINGS.length).toBe(4);
+    for (const e of files) {
+      const path = join(e.parentPath, e.name);
+      const text = readFileSync(path, 'utf8');
+      for (const needle of [...CANARY_RENDERINGS, 'private_basis', 'owner_sources', 'licence_gate'])
+        expect(text.includes(needle), `${path}: ${needle}`).toBe(false);
     }
   });
 });
