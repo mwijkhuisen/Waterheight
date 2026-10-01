@@ -59,6 +59,12 @@
   min-width: 0;
 }
 
+/* Values of another t are on screen while this t loads (CR-4): dimmed, after a short delay so a fast answer does not flicker. */
+.busy {
+  opacity: 0.45;
+  transition: opacity 0s linear 0.2s;
+}
+
 .footer {
   border-top: 1px solid var(--line);
   padding: var(--space);

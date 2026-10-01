@@ -20,16 +20,20 @@ interface Props {
   states: ReadonlyMap<string, MarkerState>;
   selected: ApiStation | undefined;
   onSelect: (id: string | undefined) => void;
+  /** The popup's own close button: deselect, and put the focus somewhere that stays. */
+  onClose: () => void;
   /** The map could not start (no WebGL2 context, no basemap, …): the page shows the table. */
   onFailure: (code: string) => void;
 }
 
-export function StationsMap({ locale, stations, states, selected, onSelect, onFailure }: Props) {
+export function StationsMap({ locale, stations, states, selected, onSelect, onClose, onFailure }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const state = useMapLibre(ref, locale, OPTIONS);
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const select = useRef(onSelect);
   select.current = onSelect;
+  const close = useRef(onClose);
+  close.current = onClose;
   const centred = useRef(false);
 
   useEffect(() => {
@@ -100,7 +104,7 @@ export function StationsMap({ locale, stations, states, selected, onSelect, onFa
       popup
         .getElement()
         ?.querySelector('.maplibregl-popup-close-button')
-        ?.addEventListener('click', () => select.current(undefined));
+        ?.addEventListener('click', () => close.current());
       remove = () => popup.remove();
     });
     return () => {

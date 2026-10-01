@@ -113,36 +113,55 @@ describe('chartSpan', () => {
   const utc = (year: number, month: number, day: number, hour = 0, minute = 0) =>
     Date.UTC(year, month, day, hour, minute);
   const displayStart = utc(2026, 7, 24);
-  const end = utc(2026, 9, 26, 12, 0);
+  const serverNow = utc(2026, 9, 26, 12, 3);
 
   it('ends at the next 6-hour UTC boundary after t and starts 7 days earlier', () => {
     const t = utc(2026, 9, 25, 1, 30);
-    expect(chartSpan(t, displayStart, end)).toEqual({ from: utc(2026, 9, 18, 6, 0), to: utc(2026, 9, 25, 6, 0) });
+    expect(chartSpan(t, displayStart, serverNow)).toEqual({
+      from: utc(2026, 9, 18, 6, 0),
+      to: utc(2026, 9, 25, 6, 0),
+    });
     // On a boundary the span moves on to the next one, so t stays inside [from, to).
     const onBoundary = utc(2026, 9, 25, 6, 0);
-    expect(chartSpan(onBoundary, displayStart, end).to).toBe(utc(2026, 9, 25, 12, 0));
+    expect(chartSpan(onBoundary, displayStart, serverNow).to).toBe(utc(2026, 9, 25, 12, 0));
   });
 
-  it('never ends past the newest bucket plus one step (the API’s limit for `to`)', () => {
+  it('never ends past the API’s limit for `to`: the server’s now + 10 minutes, floored', () => {
     const t = utc(2026, 9, 26, 7, 0);
     const now = utc(2026, 9, 26, 7, 5);
     const span = chartSpan(t, displayStart, now);
     expect(span.to).toBe(utc(2026, 9, 26, 7, 10));
-    expect(span.to).toBe(quantise(now) + 600_000);
     expect(span.from).toBe(span.to - 7 * DAY);
+  });
+
+  it('holds the limit when the browser’s clock runs ahead of the server’s (CR-5)', () => {
+    // The API at 12:09, the browser at 12:11: the page's newest t is 12:10, and `to` must stay ≤ 12:19.
+    const api = utc(2026, 9, 26, 12, 9);
+    const browser = utc(2026, 9, 26, 12, 11);
+    const end = quantise(Math.min(browser, api + 5 * 60_000));
+    expect(end).toBe(utc(2026, 9, 26, 12, 10));
+    expect(chartSpan(end, displayStart, api).to).toBe(utc(2026, 9, 26, 12, 10));
+    // Any skew, any t up to the page's end: never past the server's now + 10 minutes.
+    for (let skew = -30 * 60_000; skew <= 30 * 60_000; skew += 60_000)
+      for (let now = utc(2026, 9, 26, 11, 0); now <= utc(2026, 9, 26, 13, 0); now += 7 * 60_000) {
+        const last = quantise(Math.min(now + skew, now + 5 * 60_000));
+        for (const t of [last, last - 600_000, last - 6 * HOUR])
+          expect(chartSpan(t, displayStart, now).to).toBeLessThanOrEqual(now + 10 * 60_000);
+      }
   });
 
   it('never starts before the display window', () => {
     const t = utc(2026, 7, 25, 3, 0);
-    const span = chartSpan(t, displayStart, end);
+    const span = chartSpan(t, displayStart, serverNow);
     expect(span.from).toBe(displayStart);
     expect(span.to).toBe(utc(2026, 7, 25, 6, 0));
   });
 
   it('holds t, is at most 7 days, and is the same for every step inside six hours', () => {
+    const end = quantise(serverNow);
     for (let t = displayStart; t <= end; t += 7 * 600_000 + 123_000) {
       const q = quantise(t);
-      const { from, to } = chartSpan(q, displayStart, end);
+      const { from, to } = chartSpan(q, displayStart, serverNow);
       expect(from).toBeLessThan(to);
       expect(q).toBeGreaterThanOrEqual(from);
       expect(q).toBeLessThan(to);
@@ -152,7 +171,7 @@ describe('chartSpan', () => {
     }
     const spans = new Set<string>();
     for (let t = utc(2026, 9, 25, 6, 0); t < utc(2026, 9, 25, 12, 0); t += 600_000)
-      spans.add(JSON.stringify(chartSpan(t, displayStart, end)));
+      spans.add(JSON.stringify(chartSpan(t, displayStart, serverNow)));
     expect(spans.size).toBe(1);
   });
 });

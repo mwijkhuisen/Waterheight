@@ -58,8 +58,9 @@ function Viewer({ locale }: { locale: Locale }) {
   const range = useMemo(() => {
     if (meta.data === undefined) return undefined;
     const start = Date.parse(meta.data.displayStart);
-    const end = quantise(Math.min(Date.now(), Date.parse(meta.data.now) + SKEW_MS));
-    return { start, end: Math.max(start, end), epoch: Date.parse(meta.data.dataEpoch) };
+    const now = Date.parse(meta.data.now);
+    const end = quantise(Math.min(Date.now(), now + SKEW_MS));
+    return { start, end: Math.max(start, end), epoch: Date.parse(meta.data.dataEpoch), now };
   }, [meta.data]);
   // A `t` outside [displayStart, now] is treated as no `t`: now.
   const t = range && (url.t !== undefined && url.t >= range.start && url.t <= range.end ? url.t : range.end);
@@ -69,7 +70,11 @@ function Viewer({ locale }: { locale: Locale }) {
   );
   const selected = url.s === undefined ? undefined : list.find((st) => st.id === url.s);
 
-  const snapshot = useSnapshot(useDebounced(t, FETCH_DEBOUNCE_MS));
+  // The data follows `t` once it has settled: a drag or a held key asks only for where it stops.
+  const settled = useDebounced(t, FETCH_DEBOUNCE_MS);
+  const snapshot = useSnapshot(settled);
+  // Until the values of this very `t` are in, the ones on screen are marked as not current (aria-busy, dimmed).
+  const current = snapshot.data !== undefined && t !== undefined && Date.parse(snapshot.data.t) === t;
   const values = useMemo(() => new Map((snapshot.data?.values ?? []).map((v) => [v.series, v])), [snapshot.data]);
   const states = useMemo(() => markerStates(list, values), [list, values]);
 
@@ -86,6 +91,10 @@ function Viewer({ locale }: { locale: Locale }) {
     },
     [select],
   );
+  const close = useCallback(() => {
+    select(undefined);
+    listRef.current?.focus();
+  }, [select]);
   const failed = useCallback(() => setMapFailed(true), []);
 
   const canMap = webgl && !mapFailed;
@@ -150,7 +159,10 @@ function Viewer({ locale }: { locale: Locale }) {
               </p>
             )}
             {snapshot.isError && <p role="alert">{m.data_unavailable({}, { locale })}</p>}
-            <div className={styles.body}>
+            <div
+              className={current ? styles.body : `${styles.body} ${styles.busy}`}
+              aria-busy={!current && !snapshot.isError}
+            >
               <div className={styles.view}>
                 {canMap && view === 'map' ? (
                   <StationsMap
@@ -159,6 +171,7 @@ function Viewer({ locale }: { locale: Locale }) {
                     states={states}
                     selected={selected}
                     onSelect={open}
+                    onClose={close}
                     onFailure={failed}
                   />
                 ) : (
@@ -180,12 +193,9 @@ function Viewer({ locale }: { locale: Locale }) {
                   values={values}
                   t={t}
                   dataEpoch={range.epoch}
-                  chartSpan={chartSpan(t, range.start, range.end)}
+                  chartSpan={chartSpan(settled ?? t, range.start, range.now)}
                   focus={focusPanel}
-                  onClose={() => {
-                    select(undefined);
-                    listRef.current?.focus();
-                  }}
+                  onClose={close}
                 />
               )}
             </div>
