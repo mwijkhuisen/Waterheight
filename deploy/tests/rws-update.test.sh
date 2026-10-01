@@ -171,8 +171,9 @@ server_ref() { jq -r .images.server "$FIX/rel/$1/release-manifest.json"; }
 # The login roles' test passwords: 64 hex characters derived from the role name.
 readonly DB_ROLES=(rws_migrator rws_load rws_publish rws_api rws_owner_api)
 dbpw() { printf '%s' "test-pw-$1" | sha256sum | cut -c1-64; }
-# The docker compose calls after the fixed prefix (-p ... --env-file images.env), without `config`.
-compose_calls() { grep '^docker compose ' "$FIX/calls" | sed -E 's/^.* --env-file [^ ]+ //' | grep -v '^config --services$' || true; }
+# The docker compose calls after the fixed prefix (-p ... --env-file images.env), without `config`
+# (has_service asks for the services of the "jobs" profile too).
+compose_calls() { grep '^docker compose ' "$FIX/calls" | sed -E 's/^.* --env-file [^ ]+ //' | grep -Ev '^(--profile jobs )?config --services$' || true; }
 
 setup() {
   cases=$((cases + 1))

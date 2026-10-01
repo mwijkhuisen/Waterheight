@@ -1,0 +1,16 @@
+# quarterly refresh of the self-hosted basemap (issue #18 P3): the `basemap` and `basemap-promote` jobs. Runs as root: it drives docker and reads /etc/rws/rws.env.
+[Unit]
+Description=rws: refresh the self-hosted basemap (Protomaps extract)
+Wants=network-online.target
+After=network-online.target docker.service rws-firewall.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rws-basemap-refresh
+TimeoutStartSec=4h
+UMask=0077
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=full
+NoNewPrivileges=yes

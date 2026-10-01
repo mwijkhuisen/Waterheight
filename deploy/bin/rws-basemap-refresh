@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# rws-basemap-refresh (rws-basemap-refresh.timer, quarterly; P3, ADR-0016; issue #18).
+# Refreshes the self-hosted basemap: the `basemap` job (server image, role
+# `basemap fetch`) reads the Protomaps build list and extracts the Rhine-basin
+# vector tiles and the low-zoom world tiles of the newest build of the current
+# tiles schema into /srv/rws/tiles/.staging; the `basemap-promote` job (role
+# `basemap promote`, no network) checks them, moves them into /srv/rws/tiles,
+# which Caddy serves, and writes the new manifest.json. The previous build stays
+# for one rollback. Two services because Caddy follows symlinks and the job with
+# the network must never write what Caddy serves (T-WEB-1; deploy/compose.yaml).
+#
+# bootstrap.sh installs the timer but does not enable it: the owner runs a dry
+# run and one real run by hand, then enables the timer.
+#
+# Its own lock, never the rws-deploy one: a refresh takes hours and must not
+# hold up a deploy (fetch touches only .staging, promote takes seconds). A second
+# run while one is running logs it and exits 0. No healthchecks.io ping (the
+# slug set is closed, rws-lib.sh): a failed run is a failed unit and a line in
+# the journal (journalctl -u rws-basemap-refresh).
+#
+# Usage: rws-basemap-refresh [--dry-run | --rollback | --build YYYYMMDD [--dry-run]]
+#   (none)            fetch the newest build, then promote it
+#   --dry-run         the fetch job's own dry run: reads the build list and the
+#                     PMTiles headers, prints the plan; writes and promotes nothing
+#   --build YYYYMMDD  that build instead of the newest one
+#   --rollback        promote the previous build again (current and previous swap)
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+DRY_RUN=0 # only --dry-run turns it on, never the environment
+
+usage() {
+  echo "usage: rws-basemap-refresh [--dry-run | --rollback | --build YYYYMMDD [--dry-run]]" >&2
+  exit 64
+}
+
+build='' rollback=0
+while (($#)); do
+  case $1 in
+    --dry-run) DRY_RUN=1 ;;
+    --rollback) rollback=1 ;;
+    --build)
+      [[ ${2:-} =~ ^[0-9]{8}$ ]] || usage
+      build=$2
+      shift
+      ;;
+    *) usage ;;
+  esac
+  shift
+done
+((!rollback)) || [[ -z $build && $DRY_RUN == 0 ]] || usage
+
+[[ -e $RWS_STATE_DIR/active ]] || die "no release is deployed yet"
+env_ready || die "rws.env is not complete (owner steps A2-A4 in docs/runbooks/bootstrap.md)"
+has_service basemap || die "the active release has no basemap job (it predates P3): deploy a newer release first"
+
+exec 9>"$(lockfile rws-basemap)"
+if ! flock -n 9; then
+  log "another basemap refresh is still running: nothing to do"
+  exit 0
+fi
+
+# job <service> <role arguments...>: one compose job, no dependencies, no tty.
+job() { rws_compose run --rm --no-deps -T "$@"; }
+
+rc=0
+if ((rollback)); then
+  log "basemap rollback: promoting the previous build again"
+  job basemap-promote basemap rollback || rc=$?
+  ((rc == 0)) || die "basemap rollback failed (exit $rc)"
+  log "basemap rolled back"
+  exit 0
+fi
+
+fetch=(basemap basemap fetch)
+[[ -z $build ]] || fetch+=(--build "$build")
+((!DRY_RUN)) || fetch+=(--dry-run)
+log "basemap fetch${build:+ of build $build}$( ((DRY_RUN)) && echo ' (dry run: nothing is written or promoted)'): this can take hours"
+job "${fetch[@]}" || rc=$?
+((rc == 0)) || die "basemap fetch failed (exit $rc): nothing was promoted"
+if ((DRY_RUN)); then
+  log "dry run done: fetch only, nothing promoted"
+  exit 0
+fi
+
+log "basemap fetch done: promoting"
+job basemap-promote basemap promote || rc=$?
+((rc == 0)) || die "basemap promote failed (exit $rc)"
+log "basemap refreshed"

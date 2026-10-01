@@ -1,0 +1,12 @@
+# Installed by bootstrap.sh, enabled by the owner after the first manual run (not on bootstrap's enable list).
+[Unit]
+Description=rws: refresh the self-hosted basemap, quarterly
+
+[Timer]
+# The 15th of January, April, July and October at 03:40 UTC (month 10 and day 15 are not a range).
+OnCalendar=*-01,04,07,10-15 03:40:00
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

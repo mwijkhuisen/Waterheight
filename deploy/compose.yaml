@@ -53,10 +53,15 @@ services:
     environment:
       RWS_DOMAIN: ${RWS_DOMAIN:?}
       RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
-    # Only the root-owned status directory: never capture's public/status,
-    # where a planted symlink would make Caddy serve any file it can read.
+    # Only directories no networked role writes: the root-owned status directory
+    # (never capture's public/status, where a planted symlink would make Caddy
+    # serve any file it can read) and the tiles directory, which only
+    # basemap-promote writes (no network; it moves only checked regular files
+    # into it, so there is no link for Caddy to follow; the networked `basemap`
+    # job gets only its .staging subdirectory; T-WEB-1).
     volumes:
       - /srv/rws/public/ops:/srv/rws/public/ops:ro
+      - /srv/rws/tiles:/srv/rws/tiles:ro
       - caddy_data:/data
       - caddy_config:/config
     networks: [public, edge]
@@ -134,6 +139,59 @@ services:
       - /srv/rws/backup/cache:/cache
       - /srv/rws/backup/drill:/restore
     networks: [backup]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    healthcheck:
+      disable: true
+
+  # The basemap refresh (P3, ADR-0016): two jobs, never daemons, that
+  # rws-basemap-refresh runs one after the other with `compose run` (profile
+  # "jobs"). The server image's `basemap` role; go-pmtiles 1.31.2 is in the image.
+  # Why two services (T-WEB-1): Caddy serves /srv/rws/tiles, follows symlinks and
+  # holds the TLS keys, and `basemap fetch` has the network and feeds on bytes
+  # from a third party. So fetch writes only .staging, a subdirectory Caddy never
+  # serves, and sees the served directory read-only; `basemap promote` has no
+  # network at all, checks what fetch left (regular files, names, sizes, sha256,
+  # PMTiles headers) and moves only those into the served directory, then writes
+  # manifest.json. A compromised fetch can put anything in .staging, links
+  # included, but nothing but checked regular files leaves it.
+  # No secret: the project User-Agent only needs the domain and the contact.
+  basemap:
+    <<: *hardening
+    image: ${RWS_SERVER_IMAGE:?}
+    command: [basemap, fetch]
+    profiles: [jobs]
+    restart: "no"
+    user: "65532:65532"
+    environment:
+      RWS_DOMAIN: ${RWS_DOMAIN:?}
+      RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+      # go-pmtiles' temporary files go to .staging: /tmp is 16 MB, the root read-only.
+      TMPDIR: /staging
+      GOMEMLIMIT: 400MiB
+    volumes:
+      - /srv/rws/tiles:/tiles:ro
+      - /srv/rws/tiles/.staging:/staging
+    networks: [egress]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    healthcheck:
+      disable: true
+
+  basemap-promote:
+    <<: *hardening
+    image: ${RWS_SERVER_IMAGE:?}
+    command: [basemap, promote]
+    profiles: [jobs]
+    restart: "no"
+    user: "65532:65532"
+    # No network at all: it never joins a network, so there is no namespace to
+    # reach anything from.
+    network_mode: none
+    volumes:
+      - /srv/rws/tiles:/tiles
     mem_limit: 512m
     cpus: 1.0
     pids_limit: 64
