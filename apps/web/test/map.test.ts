@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { parseTilesManifest } from '@rws/core/tiles-manifest';
 import { describe, expect, it } from 'vitest';
 import { acquireProtocol, protocolUsers } from '../src/features/map/protocol.ts';
@@ -26,6 +27,13 @@ describe('acquireProtocol', () => {
     const c = acquireProtocol(host, () => 'handler');
     expect(calls).toEqual(['add pmtiles', 'remove pmtiles', 'add pmtiles']);
     c();
+  });
+});
+
+describe('createMap', () => {
+  it('starts the pmtiles protocol with metadata off, said explicitly (the archive attribution never reaches the HTML sink)', () => {
+    const source = readFileSync(new URL('../src/features/map/createMap.ts', import.meta.url), 'utf8');
+    expect(source.match(/new Protocol\([^)]*\)/g)).toEqual(['new Protocol({ metadata: false })']);
   });
 });
 

@@ -58,9 +58,10 @@ export async function createMap(
   setWorkerUrl(workerUrl);
   const [manifest, style] = await Promise.all([loadManifest(signal), styles[lang]().then((s) => s.default)]);
   signal.throwIfAborted();
-  // metadata stays off (the default): the archive's own attribution HTML never
-  // reaches MapLibre's attribution control; the style's constant does.
-  const release = acquireProtocol({ addProtocol, removeProtocol }, () => new Protocol().tile);
+  // metadata off, explicitly (it is also pmtiles' default): the archive's own
+  // attribution HTML never reaches MapLibre's attribution control; the style's
+  // constant does (invariant 3, T-MAP-4, R-066).
+  const release = acquireProtocol({ addProtocol, removeProtocol }, () => new Protocol({ metadata: false }).tile);
   try {
     const map = new MapLibreMap({
       container,

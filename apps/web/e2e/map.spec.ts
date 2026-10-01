@@ -6,8 +6,8 @@ import { productionCsp, siteHeaders } from './headers.ts';
 // build served with the exact production headers (site.caddy):
 // - the map renders (pixel check) with 0 CSP violations and same-origin requests only;
 // - the style renders z4–z14 of the fixture with no map error;
-// - MapLibre is a lazy chunk and its worker a same-origin module URL;
-// - WebKit without Temporal loads the polyfill and formats dates.
+// - MapLibre is a lazy chunk, requested after the entry, and its worker a same-origin module URL;
+// - WebKit without Temporal loads the polyfill chunk and formats dates; Chromium and Firefox never request it.
 
 interface Spike {
   map: SpikeMap | null;
@@ -131,10 +131,19 @@ test('the spike renders under the production CSP, same-origin only', async ({ pa
   expect(headers['content-security-policy']).toBe(productionCsp());
   for (const [name, value] of siteHeaders()) expect(headers[name.toLowerCase()], name).toBe(value);
 
-  // MapLibre is a lazy chunk: the page names none of it; it arrives after the entry.
+  // MapLibre is a lazy chunk: the page names none of it (no script, no modulepreload), and the
+  // browser asks for it only after every script the page names, the entry included.
   const html = (await response?.text()) ?? '';
   expect(html).not.toMatch(/createMap|maplibre/i);
-  expect(log.requests.some((u) => /\/assets\/createMap-[^/]+\.js$/.test(u))).toBe(true);
+  const scripts = [...html.matchAll(/<script\b[^>]*\ssrc="([^"]+)"/g)].map((m) => new URL(m[1] ?? '', log.origin).href);
+  expect(
+    scripts.some((s) => /\/assets\/main-[^/]+\.js$/.test(s)),
+    'the entry script',
+  ).toBe(true);
+  const scriptsAt = scripts.map((s) => log.requests.indexOf(s));
+  expect(Math.min(...scriptsAt), 'every page script is requested').toBeGreaterThanOrEqual(0);
+  const mapAt = log.requests.findIndex((u) => /\/assets\/createMap-[^/]+\.js$/.test(u));
+  expect(mapAt, 'createMap after the entry').toBeGreaterThan(Math.max(...scriptsAt));
 
   // The worker is a same-origin module script under /assets/, never blob:
   // (Firefox reports the URL as given to `new Worker`, so resolve it first).
@@ -279,12 +288,16 @@ test('Temporal: native where present; WebKit without it loads the polyfill', asy
   const native = await page.evaluate(() =>
     Function.prototype.toString.call(Temporal.Instant).includes('[native code]'),
   );
+  // The polyfill is its own lazy chunk: requested only where Temporal is missing.
+  const polyfill = log.requests.filter((u) => /\/assets\/global\.esm-[^/]+\.js$/.test(u));
   if (browserName === 'webkit') {
     expect(t.impl).toBe('polyfill');
     expect(native).toBe(false);
+    expect(polyfill).toHaveLength(1);
   } else {
     expect(t.impl).toBe('native');
     expect(native).toBe(true);
+    expect(polyfill).toEqual([]);
   }
   // 2026-10-25, the DST fall-back: 02:30 local happens twice, first in CEST then in CET.
   expect(t.first).toEqual({ hour: 2, offset: '+02:00' });
