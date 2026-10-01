@@ -460,7 +460,7 @@ describe('FR-1 walks (C4, S8, N2)', () => {
   /** A root with a `next`, then a last page #2 that answers `ctl.fail()` while it is set. */
   function twoPages() {
     const roots: (string | null)[] = [];
-    const ctl: { fail: (() => HttpResponse<string>) | null } = { fail: null };
+    const ctl: { fail: (() => Response) | null } = { fail: null };
     server.use(
       http.get(OBS, ({ request }) => {
         const u = new URL(request.url);
