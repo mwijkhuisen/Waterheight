@@ -327,6 +327,21 @@ describe('seed completeness (C5, S8)', () => {
     return { all, ctl };
   }
 
+  it('an LU-5 seed whose list page 2 answered a 404 is not done, and the next round completes it (#42)', async () => {
+    const { all, ctl } = lu5();
+    ctl.fail = () => new HttpResponse('gone', { status: 404 });
+    const deps = runDeps();
+    expect(await runSeeds(only('lu-5-cap'), deps, paths(deps.root))).toBe(false);
+    let st = await deps.state.read<SeedState>('seeds/lu-5-cap');
+    expect(st?.done_at).toBeUndefined();
+    expect(st?.done).toEqual([]);
+    ctl.fail = null;
+    expect(await runSeeds(only('lu-5-cap'), deps, paths(deps.root))).toBe(true);
+    st = await deps.state.read<SeedState>('seeds/lu-5-cap');
+    expect(st?.done_at).toBeDefined();
+    expect(ctl.fetched.sort()).toEqual(all.map((a) => a.url).sort());
+  });
+
   it('caps the LU-5 requests for the whole seed, rounds included, and does not retry past the cap', async () => {
     const { ctl } = lu5();
     ctl.fail = () => new HttpResponse('gone', { status: 404 });

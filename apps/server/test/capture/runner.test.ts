@@ -556,6 +556,20 @@ describe('FR-1 walks (C4, S8, N2)', () => {
     expect(deps.counters.alerts).toEqual({}); // no `invalid`, and no `shape_changed` on `default#2`
   });
 
+  it('an empty root is still invalid: no success, and the window stays (#42)', async () => {
+    const c = clock('2026-10-10T12:01:00Z');
+    const deps = runDeps({ now: c.now });
+    await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
+    server.use(http.get(OBS, () => HttpResponse.json({ ...page, count: 0, data: [], next: null })));
+    expect(await runSpec(spec('fr-1-obs'), deps)).toMatchObject({ ok: 0, firstFailure: 'invalid' });
+    const st = await deps.state.read<SpecState>('fr-1-obs');
+    expect(st?.last_success).toBeUndefined();
+    expect(st?.variants.default?.last_success).toBe('2026-10-07T12:00:00.000Z');
+    expect(deps.counters.alerts).toEqual({
+      '2026-10-10': [{ spec: 'fr-1-obs', kind: 'invalid', at: '2026-10-10T12:01:00.000Z' }],
+    });
+  });
+
   it('a `next` that repeats a URL is fetched once, and ends the walk', async () => {
     const deps = runDeps({ now: () => new Date('2026-10-10T12:01:00Z') });
     const asked = hubeau({ pages: 0, loop: `${OBS}?code_entite=A*&cursor=same&size=20000` });
