@@ -143,17 +143,18 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | kysely | npm | 0.29.6 | installed | – | MIT | apps/server: typed, parameterised SQL (`sql` templates; P2a) |
 | kysely-codegen | npm | 0.20.0 | installed | – | MIT | dev only: `pnpm db:types` writes `apps/server/src/db/generated.ts` (base tables; P2a) |
 | @hono/zod-openapi | npm | 1.6.3 | planned | – | MIT | P9 |
-| maplibre-gl | npm | 6.11.1 | planned | – | BSD-3-Clause | P3 |
-| pmtiles | npm | 4.5.0 | planned | – | BSD-3-Clause | P3 |
-| @protomaps/basemaps | npm | 5.7.2 | planned | – | BSD-3-Clause | P3 |
+| maplibre-gl | npm | 6.11.1 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
+| pmtiles | npm | 4.5.0 | installed | – | BSD-3-Clause | apps/web: the `pmtiles://` protocol through `addProtocol` (P3) |
+| @protomaps/basemaps | npm | 5.7.2 | installed | – | BSD-3-Clause | dev only: `tools/geo/basemap/build-style.ts` generates the NL and EN styles (flavour `white`; P3) |
+| @maplibre/maplibre-gl-style-spec | npm | 26.4.4 | installed | – | ISC | dev only: validates the generated styles; the exact version maplibre-gl 6.11.1 resolves (P3) |
 | @tanstack/react-router | npm | 1.170.39 | planned | – | MIT | P4 |
 | @tanstack/react-query | npm | 5.103.2 | planned | – | MIT | P4 |
 | echarts | npm | 6.1.0 | planned | – | Apache-2.0 | P10 |
-| temporal-polyfill | npm | 1.0.5 | planned | – | MIT | P4 |
+| temporal-polyfill | npm | 1.0.5 | installed | – | MIT | apps/web `lib/time`: loaded only where `Temporal` is missing (WebKit; P3) |
 | fast-check | npm | 4.10.2 | installed | – | MIT | dev only: property and fuzz tests (P2a) |
 | @vitest/coverage-v8 | npm | 5.0.1 | installed | – | MIT | dev only: `pnpm test:coverage` (≥ 90% lines of every adapter's parse and normalise; P2a) |
-| @playwright/test | npm | 1.63.0 | planned | – | Apache-2.0 | P4 |
-| @axe-core/playwright | npm | 4.13.0 | planned | – | MPL-2.0 | P10 |
+| @playwright/test | npm | 1.63.0 | installed | – | Apache-2.0 | dev only: `pnpm -F web e2e` (Chromium, Firefox, WebKit; P3, planned for P4) |
+| @axe-core/playwright | npm | 4.13.0 | installed | – | MPL-2.0 | dev only: axe on the spike pages (P3, planned for P10) |
 | docker/build-push-action | action | 7.4.0 | installed | c3c9e263c25d99ce0380d002d59b67737d91b0dc | Apache-2.0 | P1b |
 | docker/login-action | action | 4.6.0 | installed | dbcb813823bdd20940b903addbd779551569679f | Apache-2.0 | P1b |
 | docker/setup-buildx-action | action | 4.4.1 | installed | f87e5991a6d7451dcb8d9637bfbc97413f497069 | Apache-2.0 | P1b |
