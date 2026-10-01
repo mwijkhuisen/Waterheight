@@ -16,6 +16,8 @@
     "packages/*/test/**/*.ts",
     "apps/web/vite.config.ts",
     "apps/web/i18n-html.ts",
+    "apps/web/src/features/map/protocol.ts",
+    "apps/web/src/features/map/resolveStyle.ts",
     "tools/**/*.ts"
   ],
   "references": [{ "path": "packages/contracts" }, { "path": "packages/core" }, { "path": "apps/server" }]

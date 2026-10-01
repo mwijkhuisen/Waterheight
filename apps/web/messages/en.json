@@ -3,5 +3,19 @@
   "heading": "River levels",
   "intro": "This site collects water levels, discharge, forecasts and alert levels for the rivers that flow into the Netherlands, from open sources in the Netherlands, Germany, Belgium, France, Luxembourg and Switzerland. The map will follow.",
   "not_official": "This is not an official warning service. During high water, follow Rijkswaterstaat and your local authorities.",
-  "other_language": "Nederlands"
+  "other_language": "Nederlands",
+  "spike_title": "Map spike (test, not public)",
+  "spike_heading": "Map spike",
+  "spike_intro": "Test page for the self-hosted basemap with 200 test stations. This page never ships to the public site.",
+  "spike_toggle_hide": "Hide map",
+  "spike_toggle_show": "Show map",
+  "spike_time": "Time check (Europe/Amsterdam)",
+  "map_label": "Map of river stations",
+  "map_loading": "Loading the map…",
+  "map_unavailable": "The map cannot be loaded.",
+  "map_zoom_in": "Zoom in",
+  "map_zoom_out": "Zoom out",
+  "map_reset_bearing": "Reset bearing to north",
+  "map_toggle_attribution": "Show or hide the attribution",
+  "map_feedback": "Report a map error"
 }
