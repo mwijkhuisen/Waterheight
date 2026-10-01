@@ -22,8 +22,9 @@ cat >"$T/stubs/docker" <<'STUB'
 # Records every call in $FIX/calls. `compose ... config --services`: the lines of
 # $FIX/services, and those of $FIX/jobs-services only when --profile jobs is given.
 # `compose ... run --rm --no-deps -T <service> <args>`: recorded as
-# "<service>|<args>" in $FIX/runs; exits with the number in $FIX/rc-<verb> (the
-# role's verb: fetch, promote or rollback; default 0).
+# "<service>|<args>" in $FIX/runs; exits with the number in $FIX/rc-<verb>-<n>
+# (the n-th call of that verb) or else $FIX/rc-<verb> (the role's verb: fetch,
+# promote or rollback; default 0).
 set -euo pipefail
 printf 'docker %s\n' "$*" >>"$FIX/calls"
 [[ $1 == compose ]] || exit 0
@@ -43,6 +44,8 @@ case " $* " in
     rest=${all#* run --rm --no-deps -T }
     printf '%s\n' "${rest/ /|}" >>"$FIX/runs"
     read -r _ _ verb _ <<<"$rest"
+    n=$(grep -c "|basemap $verb" "$FIX/runs" || true)
+    if [[ -f $FIX/rc-$verb-$n ]]; then exit "$(cat "$FIX/rc-$verb-$n")"; fi
     exit "$(cat "$FIX/rc-$verb" 2>/dev/null || echo 0)"
     ;;
 esac
@@ -182,14 +185,14 @@ holder rws-deploy
 run
 release
 expect_rc 0
-expect_runs "basemap|basemap fetch;basemap-promote|basemap promote;"
+expect_runs "basemap-promote|basemap promote;basemap|basemap fetch;basemap-promote|basemap promote;"
 expect_no_grep "another" "$C/out"
 
-case_ "a run: fetch, then promote, in that order, with the compose job services; no ping, no request"
+case_ "a run: promote what an earlier run staged, fetch, then promote, in that order, with the compose job services; no ping, no request"
 setup
 run
 expect_rc 0
-expect_runs "basemap|basemap fetch;basemap-promote|basemap promote;"
+expect_runs "basemap-promote|basemap promote;basemap|basemap fetch;basemap-promote|basemap promote;"
 expect_grep "^docker compose -p rws --project-directory $C/state/active -f $C/state/active/compose\.yaml --env-file $C/etc/rws\.env --env-file $C/state/active/images\.env run --rm --no-deps -T basemap basemap fetch$" "$FIX/calls"
 expect_grep "^docker compose -p rws .* run --rm --no-deps -T basemap-promote basemap promote$" "$FIX/calls"
 expect_no_grep "^curl" "$FIX/calls"
@@ -209,13 +212,13 @@ setup
 DRY_RUN="a[\$(touch $C/pwned)]" run
 expect_rc 0
 [[ ! -e $C/pwned ]] || fail "DRY_RUN from the environment was evaluated"
-expect_runs "basemap|basemap fetch;basemap-promote|basemap promote;"
+expect_runs "basemap-promote|basemap promote;basemap|basemap fetch;basemap-promote|basemap promote;"
 
 case_ "--build YYYYMMDD: passed on to fetch only, also with --dry-run"
 setup
 run --build 20261001
 expect_rc 0
-expect_runs "basemap|basemap fetch --build 20261001;basemap-promote|basemap promote;"
+expect_runs "basemap-promote|basemap promote;basemap|basemap fetch --build 20261001;basemap-promote|basemap promote;"
 setup
 run --dry-run --build 20261001
 expect_rc 0
@@ -230,7 +233,7 @@ for code in 1 78; do
   echo "$code" >"$FIX/rc-fetch"
   run
   expect_rc 1
-  expect_runs "basemap|basemap fetch;"
+  expect_runs "basemap-promote|basemap promote;basemap|basemap fetch;"
   expect_grep "basemap fetch failed \(exit $code\): nothing was promoted" "$C/out"
   expect_no_grep "basemap refreshed" "$C/out"
 done
@@ -240,13 +243,22 @@ run --dry-run
 expect_rc 1
 expect_runs "basemap|basemap fetch --dry-run;"
 
-case_ "promote fails: exit 1 and the code is logged"
+case_ "the final promote fails: exit 1 and the code is logged"
 setup
-echo 1 >"$FIX/rc-promote"
+echo 1 >"$FIX/rc-promote-2"
 run
 expect_rc 1
-expect_runs "basemap|basemap fetch;basemap-promote|basemap promote;"
+expect_runs "basemap-promote|basemap promote;basemap|basemap fetch;basemap-promote|basemap promote;"
 expect_grep "basemap promote failed \(exit 1\)" "$C/out"
+expect_no_grep "basemap refreshed" "$C/out"
+
+case_ "the promote of an earlier run's staged build fails: exit 1, nothing is fetched, so the staging is kept"
+setup
+echo 1 >"$FIX/rc-promote-1"
+run
+expect_rc 1
+expect_runs "basemap-promote|basemap promote;"
+expect_grep "basemap promote of the build an earlier run staged failed \(exit 1\): nothing was fetched" "$C/out"
 expect_no_grep "basemap refreshed" "$C/out"
 
 case_ "--rollback: only the promote job with the rollback role, no fetch; a failure exits 1"
@@ -268,7 +280,9 @@ C=$(mktemp -d "$T/case.XXXX")
 : >"$C/out"
 timer=$systemd/rws-basemap-refresh.timer service=$systemd/rws-basemap-refresh.service
 [[ -f $timer && -f $service ]] || fail "a unit file is missing"
-grep -qE '^OnCalendar=\*-01,04,07,10-15 03:40:00$' "$timer" || fail "OnCalendar is not the quarterly one"
+# 05:10 UTC plus up to an hour: clear of the 03:40 UTC unattended-upgrades reboot (deploy/host/apt-unattended-rws.conf).
+grep -qE '^OnCalendar=\*-01,04,07,10-15 05:10:00$' "$timer" || fail "OnCalendar is not the quarterly one"
+grep -qF '"03:40"' "$here/../host/apt-unattended-rws.conf" || fail "the reboot time moved: check the timer against it"
 grep -qxF 'Persistent=true' "$timer" || fail "the timer is not persistent"
 grep -qE '^RandomizedDelaySec=1h$' "$timer" || fail "the timer has no 1 h random delay"
 grep -qxF 'WantedBy=timers.target' "$timer" || fail "the timer has no [Install]"

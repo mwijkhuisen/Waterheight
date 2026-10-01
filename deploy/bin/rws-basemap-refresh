@@ -73,6 +73,13 @@ if ((rollback)); then
   exit 0
 fi
 
+# Finish what an interrupted run staged before fetch empties .staging: promote
+# is idempotent and a no-op when nothing is staged (result.json goes last).
+if ((!DRY_RUN)); then
+  job basemap-promote basemap promote || rc=$?
+  ((rc == 0)) || die "basemap promote of the build an earlier run staged failed (exit $rc): nothing was fetched"
+fi
+
 fetch=(basemap basemap fetch)
 [[ -z $build ]] || fetch+=(--build "$build")
 ((!DRY_RUN)) || fetch+=(--dry-run)
