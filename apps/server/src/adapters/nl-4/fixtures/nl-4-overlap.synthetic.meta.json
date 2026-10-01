@@ -1,0 +1,12 @@
+{
+  "spec": "nl-4-xlsx",
+  "source": "NL-4",
+  "synthetic": true,
+  "recorded_at": "2026-09-30T00:00:00Z",
+  "status": 200,
+  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "url": "https://rijkswaterstaatdata.nl/publish/pages/223004/grenswaarden-en-legendakleuren-zoals-gebruikt-op-waterinfo-15-4-2026-.xlsx",
+  "bytes": 3379,
+  "trimmed": false,
+  "note": "[U] Hand-made by apps/server/test/adapters/nl-4.test.ts (UPDATE_GOLDEN=1 rewrites it; the bytes are reproducible): a ParameterLimits sheet in xl/worksheets/sheet1.xml behind a decoy sheet, two overlapping bands of one code on one date with different Priority numbers, a season that wraps the year, a &gt; label, a label with a comma and a quote, one with leading and trailing spaces, rich text, character references, a negative bound, a formula-like label, empty Name and Slug cells, an nvt* row and a slug variant. Every value is made up."
+}

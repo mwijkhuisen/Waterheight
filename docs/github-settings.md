@@ -32,6 +32,19 @@ Rulesets are written with `PUT`, which replaces a ruleset whole. If a live rules
 
 Off GitHub, B3 also means: revoke access to the old server that the legacy `deploy/install-ubuntu.sh` set up, its database credentials and the legacy RWS API key.
 
+## Actions variables and the contract check (P2b; set by the owner, not by the script)
+
+The nightly workflow `contract-check.yml` (03:23 UTC, and by hand) needs two repository **variables**, not secrets:
+
+| Variable | Value |
+|---|---|
+| `RWS_DOMAIN` | the domain of A2/A4, as in `/etc/rws/rws.env` on the VPS |
+| `RWS_CONTACT_EMAIL` | `contact@<domain>`, as in `/etc/rws/rws.env` |
+
+Set them under Settings → Secrets and variables → Actions → **Variables**, or with `gh variable set RWS_DOMAIN --body <domain>` and `gh variable set RWS_CONTACT_EMAIL --body contact@<domain>`. They are the public domain and contact address that every provider request carries in its User-Agent, so they are not secret. They are also readable by anyone: the runner prints each step's `env:` values in the run log, which is public on a public repository. Use the site's public role address and domain only, never a personal address. `scripts/gh-settings.sh --check` does not read variables; it still requires **0 Actions secrets** (B5). Without the variables the check exits 78 before it sends a request. No RWS API key is ever given to this workflow.
+
+The workflow writes issues with the run's own `GITHUB_TOKEN`: its `report` job declares `issues: write` and nothing else (the top-level `permissions: {}` and B1's read-only default token stay), it has no checkout, and it runs only when the `check` job failed. Its first step is harden-runner (audit mode, pinned by SHA, as in every workflow), which, like every action in a job, can use that job's token. A report line's schema path (` at <path>`) admits domain-like text; only a compromised `check` job could plant one, and the report puts every line inside a code fence (`docs/threat-model.md` T-CI-5). It creates the label `contract-drift` itself, then opens the one issue "Contract drift: the nightly live check failed" or comments on the open one. No setting has to change for that, but an organisation policy that caps the workflow token to read-only would stop the report. After the merge, start the workflow once by hand (Actions → contract-check → Run workflow, or `gh workflow run contract-check`) and link the run in issue #17. The owner closes the issue when the drift is fixed (`docs/runbooks/schema-drift.md` §7).
+
 ## Other owner items
 
 - **B4** (GHCR visibility) comes with P1b's first release.

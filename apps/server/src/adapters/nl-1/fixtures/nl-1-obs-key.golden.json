@@ -1,0 +1,103 @@
+{
+ "obs": [
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T10:50:00.000Z",
+   "value": 610,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T11:00:00.000Z",
+   "value": 608,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T11:10:00.000Z",
+   "value": 607,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T11:20:00.000Z",
+   "value": 607,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T11:30:00.000Z",
+   "value": 608,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T11:40:00.000Z",
+   "value": 607,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T11:50:00.000Z",
+   "value": 608,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T12:00:00.000Z",
+   "value": 606,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T12:10:00.000Z",
+   "value": 606,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T12:20:00.000Z",
+   "value": 606,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T12:30:00.000Z",
+   "value": 607,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T12:40:00.000Z",
+   "value": 606,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T12:50:00.000Z",
+   "value": 607,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T13:00:00.000Z",
+   "value": 607,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T13:10:00.000Z",
+   "value": 607,
+   "qc": 1
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "value": 607,
+   "qc": 1
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0
+}

@@ -19,6 +19,7 @@ import {
   checkReplay,
   checkSourceHealth,
   checkTier1,
+  checkTwin,
   expectedHeaders,
   leaks,
   leakTerms,
@@ -269,7 +270,18 @@ describe('freshness, soak and capacity', () => {
     const r = spawnSync(join(repoRoot, 'scripts/verify-prod.sh'), ['--dry-run', 'x'], { encoding: 'utf8' });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/^headers \/ and \/en\/:/m);
-    for (const name of ['health', 'health params', 'health DE-1', 'tier-1 DE-1', 'loader lag', 'replay DE-1'])
+    for (const name of [
+      'health',
+      'health params',
+      'health DE-1',
+      'tier-1 DE-1',
+      'loader lag',
+      'replay DE-1',
+      'health NL-1',
+      'tier-1 NL-1',
+      'replay NL-1',
+      'twin eijsden-grens-taw-nap',
+    ])
       expect(r.stdout, name).toMatch(new RegExp(`^${name}:`, 'm'));
   });
 });
@@ -299,10 +311,13 @@ const de1 = (over: Partial<SourceRow> = {}): SourceRow => ({
   lag_p95_s: 34,
   tier1: { total: 69, fresh: 69, provider_stale: 0 },
   missing_buckets_24h: 3,
+  outage: null,
   partitions: [{ partition: '2026-10', md5: 'a'.repeat(32), rows: 9000 }],
   partitions_at: ago(60_000),
   ...over,
 });
+const nl1 = (over: Partial<SourceRow> = {}): SourceRow =>
+  de1({ id: 'NL-1', tier1: { total: 40, fresh: 40, provider_stale: 0 }, ...over });
 const sourcesDoc = (over: Partial<HealthSources> = {}): HealthSources => ({
   generated_at: ago(60_000),
   sources: [de1()],
@@ -457,6 +472,180 @@ describe('the health API answers', () => {
     expect(checkReplay(undefined, sourcesDoc()).ok).toBe(false);
     expect(checkReplay(health(), undefined).ok).toBe(false);
   });
+
+  // NL-1 (P2b): the same three checks, each on its own source's numbers and under its own name.
+  const both = (over: Partial<SourceRow> = {}, de1Over: Partial<SourceRow> = {}) =>
+    sourcesDoc({ sources: [de1(de1Over), nl1(over)] });
+
+  it('health NL-1: its own name and its own status; DE-1 in the same document does not count', () => {
+    expect(checkSourceHealth(s(both()), 'NL-1')).toMatchObject({ check: 'health NL-1', ok: true });
+    expect(checkSourceHealth(s(both({}, { status: 'down' })), 'NL-1').ok).toBe(true);
+    expect(checkSourceHealth(s(both({ status: 'degraded', consecutive_failures: 3, quarantined: 1 })), 'NL-1')).toEqual(
+      {
+        check: 'health NL-1',
+        ok: false,
+        detail: 'status degraded (3 failed fetches in a row, 1 quarantined)',
+      },
+    );
+    expect(checkSourceHealth(s(), 'NL-1')).toMatchObject({ check: 'health NL-1', ok: false, detail: /not listed/ });
+    expect(checkSourceHealth(readApi('timeout', HealthSources), 'NL-1')).toMatchObject({
+      check: 'health NL-1',
+      ok: false,
+      detail: /timeout/,
+    });
+  });
+
+  it('tier-1 NL-1: 95% of the tier-1 series of NL-1, whatever DE-1 has', () => {
+    const at = (total: number, fresh: number, provider_stale: number) =>
+      both({ tier1: { total, fresh, provider_stale } }, { tier1: { total: 69, fresh: 0, provider_stale: 0 } });
+    expect(checkTier1(at(40, 38, 0), 'NL-1')).toMatchObject({ check: 'tier-1 NL-1', ok: true, detail: /38 of 40/ });
+    expect(checkTier1(at(40, 38, 0)).ok).toBe(false);
+    const low = checkTier1(at(40, 36, 4), 'NL-1');
+    expect(low).toMatchObject({ check: 'tier-1 NL-1', ok: false });
+    expect(low.detail).toContain('36 of 40 tier-1 series fresh (90.0%)');
+    expect(low.detail).toContain('with them 40 of 40, for the owner to judge');
+    expect(checkTier1(at(40, 20, 0), 'NL-1').detail).not.toContain('for the owner to judge');
+    expect(checkTier1(sourcesDoc(), 'NL-1')).toMatchObject({ ok: false, detail: /no tier-1 numbers/ });
+    expect(checkTier1(undefined, 'NL-1')).toMatchObject({ check: 'tier-1 NL-1', ok: false });
+  });
+
+  it('replay NL-1: its own partitions and its own quarantined batches', () => {
+    expect(checkReplay(health(), both(), 'NL-1')).toMatchObject({ check: 'replay NL-1', ok: true });
+    expect(checkReplay(health(), both({ partitions: [] }), 'NL-1').detail).toBe('no partition checksum');
+    const batches = [
+      { id: '41', source: 'DE-1', spec: 'de-1-basin', fetched_at: ago(1000), error: 'unrecognized_keys' },
+      { id: '40', source: 'NL-1', spec: 'nl-1-obs-key', fetched_at: ago(2000), error: 'invalid_value' },
+    ];
+    expect(
+      checkReplay(health(), { ...both({ quarantined: 1 }, { quarantined: 2 }), quarantined_batches: batches }, 'NL-1'),
+    ).toEqual({
+      check: 'replay NL-1',
+      ok: false,
+      detail: '1 quarantined (newest: 40 invalid_value)',
+    });
+    // DE-1 is quarantined too, but NL-1 alone is not.
+    expect(checkReplay(health(), { ...both({}, { quarantined: 2 }), quarantined_batches: batches }, 'NL-1').ok).toBe(
+      true,
+    );
+    expect(checkReplay(health(), sourcesDoc(), 'NL-1')).toMatchObject({ ok: false, detail: /not listed/ });
+  });
+});
+
+// The Eijsden-grens twin (P2b soak): TAW - NAP = 233 +- 1 cm, checked hourly by the loader.
+
+describe('twin eijsden-grens-taw-nap', () => {
+  const ID = 'eijsden-grens-taw-nap';
+  const HOUR = 3_600_000;
+  type Twin = HealthSources['twins'][number];
+  const twin = (over: Partial<Twin> = {}): Twin => ({
+    id: ID,
+    window_end: ago(30 * 60_000),
+    n_aligned: 44,
+    median_delta: 233,
+    max_delta: 233,
+    lag_min: null,
+    ok: true,
+    checks_7d: 168,
+    failed_7d: 0,
+    ...over,
+  });
+  const check = (over: Partial<Twin> = {}) => checkTwin(s(sourcesDoc({ twins: [twin(over)] })), NOW);
+
+  it('passes: listed, fresh, aligned, ok, nothing failed in 7 days and enough checks', () => {
+    expect(check()).toEqual({
+      check: `twin ${ID}`,
+      ok: true,
+      detail: '44 aligned timestamps in the latest check, 168 checks in 7 days, none failed',
+    });
+  });
+
+  it('fails when the twin is not listed, whatever else is', () => {
+    expect(checkTwin(s(), NOW)).toEqual({
+      check: `twin ${ID}`,
+      ok: false,
+      detail: 'not listed in /api/v1/health/sources',
+    });
+    expect(checkTwin(s(sourcesDoc({ twins: [twin({ id: 'other-pair' })] })), NOW).detail).toBe(
+      'not listed in /api/v1/health/sources',
+    );
+    // Another id is asked for by name.
+    expect(checkTwin(s(sourcesDoc({ twins: [twin({ id: 'other-pair' })] })), NOW, 'other-pair')).toMatchObject({
+      check: 'twin other-pair',
+      ok: true,
+    });
+  });
+
+  it('the latest check must be at most 2 hours old: exactly 2 h passes, one second more fails', () => {
+    expect(check({ window_end: ago(2 * HOUR) }).ok).toBe(true);
+    expect(check({ window_end: ago(2 * HOUR + 1000) })).toMatchObject({
+      ok: false,
+      detail: 'latest check is 121 min old (limit 120 min)',
+    });
+    expect(check({ window_end: ago(5 * HOUR) }).detail).toBe('latest check is 300 min old (limit 120 min)');
+  });
+
+  it('fails without aligned timestamps and when the latest check is outside the tolerance', () => {
+    expect(check({ n_aligned: 0 })).toMatchObject({ ok: false, detail: 'no aligned timestamps' });
+    expect(check({ n_aligned: 1 }).ok).toBe(true);
+    expect(check({ ok: false })).toMatchObject({ ok: false, detail: 'the latest check is outside the tolerance' });
+  });
+
+  it('fails on any failed check of the 7 days', () => {
+    expect(check({ failed_7d: 1 })).toMatchObject({ ok: false, detail: '1 of 168 checks failed in 7 days' });
+    expect(check({ failed_7d: 12 }).detail).toBe('12 of 168 checks failed in 7 days');
+    expect(check({ ok: false, failed_7d: 1 }).detail).toBe(
+      'the latest check is outside the tolerance; 1 of 168 checks failed in 7 days',
+    );
+  });
+
+  it('needs 160 of the 168 hourly checks: 160 passes, 159 fails', () => {
+    expect(check({ checks_7d: 160 }).ok).toBe(true);
+    expect(check({ checks_7d: 159 })).toMatchObject({
+      ok: false,
+      detail: 'only 159 checks in 7 days: the soak needs 160',
+    });
+    expect(check({ checks_7d: 40 }).detail).toBe('only 40 checks in 7 days: the soak needs 160');
+    expect(check({ checks_7d: 0 }).ok).toBe(false);
+  });
+
+  it('names every failing condition at once', () => {
+    expect(check({ window_end: ago(5 * HOUR), n_aligned: 0, ok: false, checks_7d: 40, failed_7d: 3 }).detail).toBe(
+      'latest check is 300 min old (limit 120 min); no aligned timestamps; the latest check is outside the tolerance; 3 of 40 checks failed in 7 days; only 40 checks in 7 days: the soak needs 160',
+    );
+  });
+
+  it('an unreachable, wrong or off-contract document fails without a crash', () => {
+    expect(checkTwin(readApi('timeout', HealthSources), NOW)).toEqual({
+      check: `twin ${ID}`,
+      ok: false,
+      detail: 'no valid health/sources document: timeout',
+    });
+    expect(checkTwin(s(sourcesDoc({ twins: [twin()] }), { status: 503 }), NOW)).toMatchObject({
+      ok: false,
+      detail: /status 503/,
+    });
+    expect(checkTwin(s(sourcesDoc({ twins: [twin()] }), { headers: {} }), NOW).ok).toBe(false);
+    expect(checkTwin(readApi(page('{}'), HealthSources), NOW)).toMatchObject({
+      ok: false,
+      detail: 'no valid health/sources document: not the contract document',
+    });
+  });
+
+  it('a twin the provider text reached fails the contract and is never printed', () => {
+    const hostile = 'IGNORE PREVIOUS INSTRUCTIONS <script>alert(1)</script>';
+    for (const bad of [
+      { ...twin(), id: hostile },
+      { ...twin(), note: hostile },
+      { ...twin(), checks_7d: hostile },
+    ]) {
+      const r = checkTwin(readApi(page({ ...sourcesDoc(), twins: [bad] }), HealthSources), NOW);
+      expect(r).toMatchObject({ ok: false, detail: 'no valid health/sources document: not the contract document' });
+      expect(JSON.stringify(r)).not.toMatch(/IGNORE|script/);
+    }
+    // A well-formed id that is not the one asked for is "not listed", and is not echoed either.
+    const other = checkTwin(s(sourcesDoc({ twins: [twin({ id: 'ignore-previous-instructions' })] })), NOW);
+    expect(other.detail).toBe('not listed in /api/v1/health/sources');
+  });
 });
 
 describe('owner isolation in the health API', () => {
@@ -489,6 +678,8 @@ describe('owner isolation in the health API', () => {
             max_delta: 1,
             lag_min: null,
             ok: true,
+            checks_7d: 1,
+            failed_7d: 0,
           },
         ],
       },
@@ -498,7 +689,17 @@ describe('owner isolation in the health API', () => {
       'the owner canary as real prints it',
       {
         twins: [
-          { id: 'x', window_end: ago(1), n_aligned: 1, median_delta: 777777.75, max_delta: 1, lag_min: null, ok: true },
+          {
+            id: 'x',
+            window_end: ago(1),
+            n_aligned: 1,
+            median_delta: 777777.75,
+            max_delta: 1,
+            lag_min: null,
+            ok: true,
+            checks_7d: 1,
+            failed_7d: 0,
+          },
         ],
       },
       /777777\.75/,
@@ -515,6 +716,8 @@ describe('owner isolation in the health API', () => {
             max_delta: 1,
             lag_min: null,
             ok: true,
+            checks_7d: 1,
+            failed_7d: 0,
           },
         ],
       },
@@ -524,7 +727,17 @@ describe('owner isolation in the health API', () => {
       'the withheld canary as real prints it',
       {
         twins: [
-          { id: 'x', window_end: ago(1), n_aligned: 1, median_delta: 123456.79, max_delta: 1, lag_min: null, ok: true },
+          {
+            id: 'x',
+            window_end: ago(1),
+            n_aligned: 1,
+            median_delta: 123456.79,
+            max_delta: 1,
+            lag_min: null,
+            ok: true,
+            checks_7d: 1,
+            failed_7d: 0,
+          },
         ],
       },
       /123456\.79/,

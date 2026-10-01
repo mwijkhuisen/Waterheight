@@ -1,0 +1,12 @@
+{
+  "spec": "nl-1-obs-key",
+  "variant": "eijsden.grens/H",
+  "source": "NL-1",
+  "synthetic": false,
+  "recorded_at": "2026-09-30T15:49:46Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 6297,
+  "trimmed": false
+}

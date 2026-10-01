@@ -307,6 +307,12 @@ describe('the load check (P2a)', () => {
       ['load_backlog'],
     ],
     [
+      'a twin pair outside its tolerance',
+      ok(health({ status: 'degraded', twins: { ok: 0, failing: 1 } })),
+      ['load_twin'],
+    ],
+    ['every twin pair within its tolerance', ok(health({ twins: { ok: 1, failing: 0 } })), []],
+    [
       'several at once',
       ok(health({ generated_at: ago(6 * MIN), quarantined: 1, loader: { ...health().loader, lag_p95_s: 500 } })),
       ['load_stale', 'load_quarantined', 'load_lag'],

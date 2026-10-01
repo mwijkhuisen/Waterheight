@@ -1,0 +1,12 @@
+{
+  "spec": "nl-1-obs-key",
+  "source": "NL-1",
+  "synthetic": true,
+  "recorded_at": "2026-09-30T15:49:46Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 31526,
+  "trimmed": false,
+  "note": "Hand-made from nl-1-obs-key-eijsden-grens-h.raw (real structure): the list split by status with a repeated instant, plus one list per filter of the normaliser (another method, MSL, verwachting, m3/d, pannerden.regelwerk, a stale series, an unregistered location, a Groepering, another compartment, a wrong unit, another quantity) and a gap, an unknown quality code, a conflicting, a future and a too-old value. No real archive payload with a split list is in hand yet [U]."
+}

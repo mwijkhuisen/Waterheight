@@ -1,16 +1,24 @@
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
+import { ALLOW } from '../../../../scripts/convert-nl4.ts';
+import { READ } from '../../src/adapters/nl-4/parse.ts';
 import {
   checkXlsx,
+  checkXmlText,
   checkZip,
   extractDataToJson,
   flatNames,
   GuardFailure,
   lineSplitter,
   parseXml,
+  readXlsx,
   scanCsv,
+  XLSX_XML_MEMBER_MAX,
+  XML_CAPS,
 } from '../../src/http/guards.ts';
+import { XML_FLOODS } from '../adapters/bounded-child.ts';
 
 // Criterion "[CI] Per-format guards (§6.7)" (issue #16). Every bomb is generated here.
 
@@ -104,6 +112,20 @@ describe('ZIP', () => {
     );
   });
 
+  it('refuses a symbolic link (review S5): a Unix entry whose mode says S_IFLNK', async () => {
+    const make = () => Buffer.from(zipSync({ 'pegel_stationen.txt': strToU8('station_no;name\n1;a\n') }));
+    const entry = (host: number, mode: number) => {
+      const z = make();
+      z.writeUInt16LE((host << 8) | 20, cd(z) + 4); // version made by: host system, spec version 2.0
+      z.writeUInt32LE((mode << 16) >>> 0, cd(z) + 38); // external attributes: the Unix mode in the high half
+      return z;
+    };
+    expect(await reason(checkZip(entry(3, 0o120777), { names: pegel }))).toBe('zip_symlink');
+    // A regular Unix file, and the same bits from a host whose attributes are not a Unix mode, pass.
+    expect(await reason(checkZip(entry(3, 0o100644), { names: pegel }))).toBe('passed');
+    expect(await reason(checkZip(entry(0, 0o120777), { names: pegel }))).toBe('passed');
+  });
+
   it('refuses encryption, zip64 markers, a CRC mismatch, a mismatching local header and truncation', async () => {
     const make = () =>
       Buffer.from(zipSync({ 'pegel_stationen.txt': [strToU8('station_no;name\n1;a\n'), { level: 0 }] }));
@@ -149,6 +171,41 @@ describe('XML (CAP)', () => {
     expect(await reason(() => parseXml(strToU8(`<a>${'x'.repeat(1024 * 1024)}</a>`)))).toBe('xml_size');
     expect(await reason(() => parseXml(strToU8('<a><b></a>')))).toBe('xml_invalid');
   });
+
+  it('passes the recorded LU-5 CAP file', () => {
+    const body = readFileSync(new URL('../../src/adapters/lu-5/fixtures/lu-5-file.raw', import.meta.url));
+    expect(parseXml(body)).toMatchObject({ alert: { sender: '[ALVA]' } });
+  });
+});
+
+describe('XML bounds (review S1)', () => {
+  it('passes a tag of exactly the length cap and refuses one character more', () => {
+    expect(XML_CAPS).toEqual({ maxTag: 16 * 1024, maxItems: 1_500_000, maxDepth: 256 });
+    expect(() => checkXmlText(`<a b="${'x'.repeat(XML_CAPS.maxTag - 9)}"/>`)).not.toThrow();
+    expect(() => checkXmlText(`<a b="${'x'.repeat(XML_CAPS.maxTag - 8)}"/>`)).toThrow('xml_tag_too_long');
+  });
+
+  // The reviewers' three one-tag floods and a flood over many small tags, each under the 8 MB member cap; the
+  // same texts run under a 256 MB heap in bounded.int.test.ts.
+  it.each(Object.entries(XML_FLOODS))(
+    '%s ends in its fixed code, through checkXmlText, checkXlsx and readXlsx',
+    async (_, [build, code]) => {
+      const text = build();
+      expect(text.length).toBeLessThan(XLSX_XML_MEMBER_MAX);
+      expect(await reason(() => checkXmlText(text))).toBe(code);
+      // Stored, not deflated: the ZIP ratio rule would refuse the repetitive text before the XML rule sees it.
+      const zip = Buffer.from(
+        zipSync({
+          '[Content_Types].xml': strToU8('<?xml version="1.0"?><Types/>'),
+          'xl/workbook.xml': strToU8('<?xml version="1.0"?><workbook><sheets/></workbook>'),
+          'xl/worksheets/sheet1.xml': [strToU8(text), { level: 0 }],
+        }),
+      );
+      expect(await reason(checkXlsx(zip, 20))).toBe(code);
+      const allow = ['[Content_Types].xml', 'xl/workbook.xml', 'xl/worksheets/sheet1.xml'];
+      expect(await reason(readXlsx(zip, { allow, read: allow }))).toBe(code);
+    },
+  );
 });
 
 describe('XLSX', () => {
@@ -199,6 +256,85 @@ describe('XLSX', () => {
     const part = strToU8(sheet(5)); // about 7 MB each
     const z = zipSync({ 'xl/a.xml': part, 'xl/b.xml': part, 'xl/c.xml': part });
     expect(await reason(checkXlsx(Buffer.from(z), 20))).toBe('xlsx_xml_total');
+  });
+});
+
+describe('XLSX for a reader (readXlsx, the NL-4 converter)', () => {
+  const allow = ['[Content_Types].xml', 'xl/workbook.xml', 'xl/worksheets/sheet1.xml'];
+  const read = ['xl/workbook.xml', 'xl/worksheets/sheet1.xml'];
+  const members = (extra: Record<string, Uint8Array> = {}) => ({
+    '[Content_Types].xml': strToU8('<?xml version="1.0"?><Types/>'),
+    'xl/workbook.xml': strToU8('<?xml version="1.0"?><workbook><sheets/></workbook>'),
+    'xl/worksheets/sheet1.xml': strToU8('<?xml version="1.0"?><worksheet><sheetData/></worksheet>'),
+    ...extra,
+  });
+  const run = (zip: Uint8Array, opts = { allow, read }) => readXlsx(Buffer.from(zip), opts);
+
+  it('passes the real NL-4 workbook and returns the text of the members asked for only', async () => {
+    const body = readFileSync(new URL('../../src/adapters/nl-4/fixtures/nl-4-xlsx.raw', import.meta.url));
+    const texts = await readXlsx(body, { allow: ALLOW, read: READ });
+    expect([...texts.keys()]).toEqual([...READ]);
+    expect(texts.get('xl/worksheets/sheet2.xml')).toHaveLength(3_821_212);
+    // The capture validity check passes it too: no symbolic link, every XML member under the XML bounds.
+    expect(await checkXlsx(body, 20)).toHaveLength(14);
+    // One member fewer in the list is an unexpected member.
+    expect(await reason(readXlsx(body, { allow: ALLOW.filter((m) => m !== 'docProps/app.xml'), read: READ }))).toBe(
+      'zip_name',
+    );
+  });
+
+  it('passes a clean workbook', async () => {
+    const texts = await run(zipSync(members()));
+    expect(texts.get('xl/workbook.xml')).toContain('<sheets/>');
+  });
+
+  it('refuses a ZIP bomb: a ratio over 50:1, sizes that lie, more than 200 MB declared', async () => {
+    const bomb = members({ 'xl/worksheets/sheet1.xml': new Uint8Array(2 * 1024 * 1024).fill(0x20) });
+    expect(await reason(run(zipSync(bomb)))).toBe('zip_ratio');
+    const lying = Buffer.from(
+      zipSync(members({ 'xl/workbook.xml': strToU8(`<workbook>${'<a/>'.repeat(5000)}</workbook>`) })),
+    );
+    // The central directory entry of xl/workbook.xml under-declares its size: the real inflated bytes count.
+    let p = cd(lying);
+    while (lying.subarray(p + 46, p + 46 + 15).toString() !== 'xl/workbook.xml') {
+      p += 46 + lying.readUInt16LE(p + 28) + lying.readUInt16LE(p + 30) + lying.readUInt16LE(p + 32);
+    }
+    lying.writeUInt32LE(100, p + 24);
+    expect(await reason(run(lying))).toBe('zip_size');
+    const data = new Uint8Array(8 * 1024 * 1024).map((_, i) => (i * 2654435761) >>> 24);
+    const big = Buffer.from(zipSync({ 'xl/worksheets/sheet1.xml': [data, { level: 0 }] }));
+    big.writeUInt32LE(201 * 1024 * 1024, cd(big) + 24); // ratio stays under 50:1
+    expect(await reason(run(big))).toBe('zip_total');
+  });
+
+  it('refuses a member outside the exact list, and unsafe names', async () => {
+    expect(await reason(run(zipSync(members({ 'xl/evil.xml': strToU8('<a/>') }))))).toBe('zip_name');
+    for (const bad of ['../xl/workbook.xml', 'xl/../../evil.xml', '/xl/workbook.xml', 'xl\\workbook.xml']) {
+      const opts = { allow: [...allow, bad], read };
+      expect(await reason(run(zipSync(members({ [bad]: strToU8('<a/>') })), opts))).toBe('zip_name');
+    }
+  });
+
+  it('refuses a DOCTYPE or an ENTITY declaration in any XML member, asked for or not', async () => {
+    const dtd = '<?xml version="1.0"?><!DOCTYPE Types [<!ENTITY a "b">]><Types>&a;</Types>';
+    expect(await reason(run(zipSync(members({ '[Content_Types].xml': strToU8(dtd) }))))).toBe('xml_dtd');
+    const entity = '<?xml version="1.0"?><workbook><!ENTITY a "b"></workbook>';
+    expect(await reason(run(zipSync(members({ 'xl/workbook.xml': strToU8(entity) }))))).toBe('xml_dtd');
+  });
+
+  it('refuses a symbolic link entry, as the capture validity check does (review S5)', async () => {
+    const link = Buffer.from(zipSync(members()));
+    link.writeUInt16LE((3 << 8) | 20, cd(link) + 4);
+    link.writeUInt32LE((0o120777 << 16) >>> 0, cd(link) + 38);
+    expect(await reason(run(link))).toBe('zip_symlink');
+    expect(await reason(checkXlsx(link, 20))).toBe('zip_symlink');
+  });
+
+  it('refuses a missing member that is asked for, and XML that is not UTF-8', async () => {
+    const { 'xl/worksheets/sheet1.xml': _, ...fewer } = members();
+    expect(await reason(run(zipSync(fewer)))).toBe('xlsx_member_missing');
+    const latin1 = Buffer.from('<?xml version="1.0"?><workbook>Münster</workbook>', 'latin1');
+    expect(await reason(run(zipSync(members({ 'xl/workbook.xml': latin1 }))))).toBe('xlsx_utf8');
   });
 });
 
@@ -260,5 +396,10 @@ describe('LU-4 data-to-json', () => {
     ).toBe('html_attr');
     expect(await reason(() => extractDataToJson(page('x'.repeat(300 * 1024))))).toBe('html_attr');
     expect(await reason(() => extractDataToJson(page('{&quot;id&quot;:')))).toBe('html_json');
+    // A character reference beyond Unicode is left as text, never a crash (it was a RangeError).
+    for (const ref of ['&#x110000;', '&#1114112;', '&#9999999;', '&#xffffff;']) {
+      expect(extractDataToJson(page(`{&quot;n&quot;:&quot;${ref}&quot;}`))).toEqual({ n: ref });
+    }
+    expect(extractDataToJson(page('{&quot;n&quot;:&quot;&#x10ffff;&#65;&quot;}'))).toEqual({ n: '\u{10ffff}A' });
   });
 });

@@ -87,6 +87,26 @@ export type Backlog = { files: number; bytes: number; age_s: number | null };
 /** Nothing left to load: the gate of the checksums and the nightly jobs (a torn last line never blocks them). */
 export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
 
+/**
+ * The `dropped` codes of values that were withheld, not discarded: we do not
+ * store them as they stand, and a registry or parser change could. They count
+ * in the batch's n_skipped (so the pruner keeps the object for a replay; the
+ * lists or series the registry does not know add one each) and each raises an
+ * alert under its own code, in a replay too. `unregistered_method`: a registered
+ * RWS series arrived under another method code; `unknown_quality`: a quality
+ * code we cannot read; `conflict`: two values for one instant;
+ * `registered_dropped`: a registered RWS series arrived under another
+ * ProcesType, compartment or grouping.
+ */
+export const RETAINED = [
+  'unit_mismatch',
+  'unknown_zero_unit',
+  'unregistered_method',
+  'unknown_quality',
+  'conflict',
+  'registered_dropped',
+] as const;
+
 /** A payload is tried at most this often; the next pass quarantines it without reading it. */
 export const MAX_TRIES = 2;
 /** While the tail is stalled for the same reason, its alert repeats at most this often. */
@@ -438,8 +458,8 @@ export class Loader {
     const counted = (key: string) => registry.get(key)?.sameAudience === true;
     const n_rows =
       result.obs.filter((r) => counted(r.series)).length + result.gaugeZeros.filter((z) => counted(z.series)).length;
-    // Values a registry change could still load: the pruner keeps this object until a replay stores them.
-    const n_skipped = result.unknown + (result.dropped.unit_mismatch ?? 0) + (result.dropped.unknown_zero_unit ?? 0);
+    // Values a registry or parser change could still load: the pruner keeps this object until a replay stores them.
+    const n_skipped = result.unknown + RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
     let outcome: Outcome = { kind: 'loaded', n_rows, n_new: 0, n_changed: 0 };
     let zeroChanges: Awaited<ReturnType<typeof applyGaugeZeros>> = {};
     let units: Set<string> | undefined;
@@ -474,11 +494,14 @@ export class Loader {
     if (units !== undefined) this.units.set(line.source, units);
 
     // Tail only (a replay reports nothing new), once per UTC day.
-    if (health && spec.drift) await this.reportDrift(line, spec.drift, body, registry, fetchedAt);
-    if ((result.dropped.unit_mismatch ?? 0) > 0)
-      this.deps.alert('unit_mismatch', { ...ids, n: result.dropped.unit_mismatch ?? 0 });
-    if ((result.dropped.unknown_zero_unit ?? 0) > 0)
-      this.deps.alert('unknown_zero_unit', { ...ids, n: result.dropped.unknown_zero_unit ?? 0 });
+    if (health && spec.drift) {
+      const declared = spec.driftSource === undefined ? registry : await this.registry(spec.driftSource);
+      await this.reportDrift(line, spec.drift, body, declared, fetchedAt);
+    }
+    for (const code of RETAINED) {
+      const n = result.dropped[code] ?? 0;
+      if (n > 0) this.deps.alert(code, { ...ids, n });
+    }
     for (const change of ['corrected', 'superseded', 'older_ignored'] as const) {
       const n = zeroChanges[change] ?? 0;
       if (n > 0) this.deps.alert(`gauge_zero_${change}`, { ...ids, n });
@@ -489,8 +512,9 @@ export class Loader {
 
   /**
    * The registry drift report (issue #17): stored in app_meta for the owner
-   * and the runbook, alerted when a registered series vanished or changed its
-   * unit or step. It never changes the registry and never fails a load.
+   * and the runbook, alerted when a registered series vanished or the payload
+   * states something else than its declaration (unit, step, position). It
+   * never changes the registry and never fails a load.
    */
   private async reportDrift(
     line: ManifestLine,

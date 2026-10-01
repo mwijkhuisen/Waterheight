@@ -8,3 +8,4 @@ export * from './qc.ts';
 export * from './sentinels.ts';
 export * from './time.ts';
 export * from './units.ts';
+export * from './xml.ts';

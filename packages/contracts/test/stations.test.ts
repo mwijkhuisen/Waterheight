@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { repoRoot } from '../../../test/catalogue.ts';
 import { SourcesFile } from '../src/registry.ts';
-import { NATIVE_UNITS, StationsFile, TO_CANONICAL, validateStations } from '../src/stations.ts';
+import { NATIVE_UNITS, StationsFile, TO_CANONICAL, validateStations, validateTwins } from '../src/stations.ts';
 
 // The schema fixture: 5 rows across the audiences. registry/stations/ holds only real, synced files.
 const dir = `${repoRoot}registry/stations/`;
@@ -195,5 +195,79 @@ describe('station declarations (tier, role, provider_key, units, steps)', () => 
   it('fails a first_release row on tier 2, and accepts a tier-2 row that is not first_release', () => {
     expect(problemsWith(0, (r) => (r.tier = 2))).toMatch(/first_release needs tier 1/);
     expect(problemsWith(0, (r) => Object.assign(r, { tier: 2, first_release: false }))).toBe('');
+  });
+
+  /** The sample with a second H row on the Lobith station: the same gauge in another datum. */
+  const withSecond = (n: number, role: string) => {
+    const copy = structuredClone(sample);
+    for (let i = 0; i < n; i += 1) {
+      copy.stations.push({
+        ...structuredClone(sample.stations[lobith]),
+        provider_key: `lobith.bovenrijn.tolkamer/WATHTE/TAW/${i}`,
+        role,
+        datum: 'TAW',
+        first_release: false,
+      });
+    }
+    return copy;
+  };
+
+  it('a station has one row per quantity, plus at most one twin row', () => {
+    expect(validateStations(withSecond(1, 'primary'), sources).problems.join('\n')).toMatch(/duplicate$/);
+    expect(validateStations(withSecond(1, 'mirror'), sources).problems.join('\n')).toMatch(/duplicate$/);
+    expect(validateStations(withSecond(1, 'twin'), sources).problems).toEqual([]);
+    expect(validateStations(withSecond(2, 'twin'), sources).problems.join('\n')).toMatch(/duplicate$/);
+  });
+});
+
+describe('twin registry', () => {
+  const stations = validateStations(withTwinRow(), sources).stations;
+  const nap = { source: 'NL-1', provider_key: 'lobith.bovenrijn.tolkamer/WATHTE' };
+  const taw = { source: 'NL-1', provider_key: 'lobith.bovenrijn.tolkamer/WATHTE/TAW' };
+  const relation = { kind: 'offset', expected: 233, tolerance: 1, unit: 'cm' };
+  const problems = (twins: unknown[]) => validateTwins({ twins }, stations).problems.join('\n');
+
+  function withTwinRow() {
+    const copy = structuredClone(sample);
+    copy.stations.push({
+      ...structuredClone(sample.stations[lobith]),
+      provider_key: 'lobith.bovenrijn.tolkamer/WATHTE/TAW',
+      role: 'twin',
+      datum: 'TAW',
+      first_release: false,
+    });
+    return copy;
+  }
+
+  it('registry/twins.yaml validates against the station files', () => {
+    const all = files.flatMap((f) => validateStations(load(dir + f), sources).stations);
+    const doc = parse(readFileSync(`${repoRoot}registry/twins.yaml`, 'utf8'));
+    expect(validateTwins(doc, all).problems).toEqual([]);
+  });
+
+  it('accepts a pair of two registered series of one quantity', () => {
+    expect(problems([{ id: 'lobith-taw-nap', a: taw, b: nap, relation }])).toBe('');
+  });
+
+  it('fails an unregistered side, a pair of one series, a duplicate id and a wrong unit', () => {
+    const ghost = { source: 'NL-1', provider_key: 'nowhere/WATHTE' };
+    expect(problems([{ id: 't', a: ghost, b: nap, relation }])).toMatch(/a is not a registered series/);
+    expect(problems([{ id: 't', a: taw, b: ghost, relation }])).toMatch(/b is not a registered series/);
+    expect(problems([{ id: 't', a: nap, b: nap, relation }])).toMatch(/the same series/);
+    const pair = { id: 't', a: taw, b: nap, relation };
+    expect(problems([pair, pair])).toMatch(/duplicate/);
+    expect(problems([{ ...pair, relation: { ...relation, unit: 'm³/s' } }])).toMatch(/unit of a H pair/);
+  });
+
+  it('is strict: an unknown relation kind, a bad id or an extra key fails', () => {
+    const pair = { id: 't', a: taw, b: nap, relation };
+    expect(
+      validateTwins({ twins: [{ ...pair, relation: { ...relation, kind: 'lag' } }] }, stations).problems,
+    ).not.toEqual([]);
+    expect(validateTwins({ twins: [{ ...pair, id: 'Eijsden.TAW' }] }, stations).problems).not.toEqual([]);
+    expect(validateTwins({ twins: [{ ...pair, note: 'x' }] }, stations).problems).not.toEqual([]);
+    expect(
+      validateTwins({ twins: [{ ...pair, relation: { ...relation, tolerance: -1 } }] }, stations).problems,
+    ).not.toEqual([]);
   });
 });

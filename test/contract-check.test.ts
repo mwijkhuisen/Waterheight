@@ -1,0 +1,491 @@
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { HttpResponse, http } from 'msw';
+import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
+import { captureUserAgent } from '../apps/server/src/capture/env.ts';
+import { loadRegistry } from '../apps/server/src/capture/specs.ts';
+import { testClient } from '../apps/server/test/helpers.ts';
+import { SchemaDrift } from '../packages/core/src/errors.ts';
+import { check, LINE_SOURCE, type Report, reportLines, SPECS } from '../scripts/contract-check.ts';
+import { repoRoot } from './catalogue.ts';
+import { server } from './msw.setup.ts';
+
+// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1). The
+// recorded fixtures stand in for the live providers; nothing here reaches the network.
+
+type Spec = (typeof SPECS)[number];
+
+const DOMAIN = 'rivieren.example.org';
+const EMAIL = 'beheer@rivieren.example.org';
+const UA = captureUserAgent({ domain: DOMAIN, contactEmail: EMAIL });
+const LINE = new RegExp(LINE_SOURCE);
+/** A workflow expression, spelled so that the source holds no template-like string. */
+const EXPR_OPEN = '$'.concat('{{');
+const expr = (inner: string) => `${EXPR_OPEN} ${inner} }}`;
+
+const fixtureDir = (source: string) => join(repoRoot, 'apps/server/src/adapters', source, 'fixtures');
+const BODY: Record<Spec, Buffer> = {
+  'de-1-basin': readFileSync(join(fixtureDir('de-1'), 'de-1-basin.raw')),
+  'nl-1-obs-key': readFileSync(join(fixtureDir('nl-1'), 'nl-1-obs-key.raw')),
+  'nl-2-wfs': readFileSync(join(fixtureDir('nl-2'), 'nl-2-wfs.raw')),
+};
+/** The fixtures were recorded together on 2026-09-29: a minute later, no value is old or in the future. */
+const recordedAt = (source: string, spec: string) =>
+  Date.parse(JSON.parse(readFileSync(join(fixtureDir(source), `${spec}.meta.json`), 'utf8')).recorded_at as string);
+const NOW = new Date(
+  Math.max(recordedAt('de-1', 'de-1-basin'), recordedAt('nl-1', 'nl-1-obs-key'), recordedAt('nl-2', 'nl-2-wfs')) +
+    60_000,
+);
+
+const capture = loadRegistry();
+const targets = SPECS.map((id) => {
+  const spec = capture.specs.find((s) => s.id === id);
+  if (spec === undefined) throw new Error(`no spec ${id}`);
+  const url = new URL(spec.request.url);
+  return {
+    id,
+    method: spec.request.method,
+    host: url.host,
+    path: url.pathname,
+    pattern: `${url.origin}${url.pathname}`,
+  };
+});
+
+type Answer = () => Response;
+const answer =
+  (body: Buffer | string, status = 200, type = 'application/json'): Answer =>
+  () =>
+    new HttpResponse(body, { status, headers: { 'content-type': type } });
+const GOOD: Record<Spec, Answer> = {
+  'de-1-basin': answer(BODY['de-1-basin']),
+  'nl-1-obs-key': answer(BODY['nl-1-obs-key']),
+  'nl-2-wfs': answer(BODY['nl-2-wfs']),
+};
+
+type Seen = { method: string; host: string; path: string; userAgent: string | null; apiKey: boolean };
+
+/** Runs the check against msw with the real client; every spec answers with its fixture unless overridden. */
+async function run(answers: Partial<Record<Spec, Answer>> = {}, now = NOW) {
+  const seen: Seen[] = [];
+  server.use(
+    ...targets.map((t) =>
+      http[t.method === 'POST' ? 'post' : 'get'](t.pattern, ({ request }) => {
+        const url = new URL(request.url);
+        seen.push({
+          method: request.method,
+          host: url.host,
+          path: url.pathname,
+          userAgent: request.headers.get('user-agent'),
+          apiKey: request.headers.has('x-api-key'),
+        });
+        return (answers[t.id as Spec] ?? GOOD[t.id as Spec])();
+      }),
+    ),
+  );
+  const client = testClient(Object.fromEntries(capture.hosts), { userAgent: UA });
+  const report = await check({ fetch: (source, req, opts) => client.fetch(source, req, opts), now });
+  return {
+    report,
+    seen,
+    codes: Object.fromEntries(report.results.map((r) => [r.spec, r.code])) as Record<Spec, string>,
+  };
+}
+
+/** The NL-1 fixture with a change to its parsed JSON. */
+const nl1 = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => void): Answer => {
+  const doc = JSON.parse(BODY['nl-1-obs-key'].toString('utf8'));
+  change(doc);
+  return answer(JSON.stringify(doc));
+};
+
+describe('the live check on the recorded payloads', () => {
+  it('passes DE-1, NL-1 and NL-2 through the loader parse: all ok', async () => {
+    const { codes, report } = await run();
+    expect(codes).toEqual({ 'de-1-basin': 'ok', 'nl-1-obs-key': 'ok', 'nl-2-wfs': 'ok' });
+    expect(report.at).toBe(NOW.toISOString());
+    expect(reportLines(report)).toBe('de-1-basin ok\nnl-1-obs-key ok\nnl-2-wfs ok');
+  });
+
+  it('sends exactly the three registry targets, with the contact User-Agent and no API key', async () => {
+    const { seen } = await run();
+    expect(seen).toEqual(
+      targets.map((t) => ({ method: t.method, host: t.host, path: t.path, userAgent: UA, apiKey: false })),
+    );
+    expect(targets.map((t) => `${t.method} ${t.host}${t.path}`)).toEqual([
+      'GET www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json',
+      'POST ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen',
+      'GET geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs',
+    ]);
+  });
+});
+
+describe('what a drifted provider turns into', () => {
+  it('an extra key in an NL-1 payload is unrecognized_keys at a schema path', async () => {
+    const { codes } = await run({
+      'nl-1-obs-key': nl1((doc) => {
+        (doc.WaarnemingenLijst[0]?.Locatie as Record<string, unknown>).EVIL_PROVIDER_KEY = 1;
+      }),
+    });
+    expect(codes['nl-1-obs-key']).toBe('unrecognized_keys at WaarnemingenLijst.0.Locatie');
+    expect(codes['de-1-basin']).toBe('ok');
+  });
+
+  it('a method code that is not the registered one is unregistered_method', async () => {
+    const body = BODY['nl-1-obs-key'].toString('utf8').replaceAll('"other:F007"', '"other:F999"');
+    expect(body).not.toBe(BODY['nl-1-obs-key'].toString('utf8'));
+    const { codes } = await run({ 'nl-1-obs-key': answer(body) });
+    expect(codes['nl-1-obs-key']).toBe('unregistered_method');
+  });
+
+  it('a series the registry does not know is unknown_series (NL-1 only)', async () => {
+    const { codes } = await run({
+      'nl-1-obs-key': nl1((doc) => {
+        for (const list of doc.WaarnemingenLijst) (list.Locatie as { Code: string }).Code = 'nowhere.at.all';
+      }),
+    });
+    expect(codes['nl-1-obs-key']).toBe('unknown_series');
+  });
+
+  it('a registered series under another ProcesType is registered_dropped (review F3)', async () => {
+    const { codes } = await run({
+      'nl-1-obs-key': nl1((doc) => {
+        for (const list of doc.WaarnemingenLijst)
+          (list.AquoMetadata as { ProcesType: string }).ProcesType = 'verwachting';
+      }),
+    });
+    expect(codes['nl-1-obs-key']).toBe('registered_dropped');
+  });
+
+  it('a payload that parses but yields no row is no_rows', async () => {
+    const { codes } = await run({
+      'nl-1-obs-key': nl1((doc) => {
+        // Every value a gap (quality code 99): dropped one by one, none withheld.
+        for (const list of doc.WaarnemingenLijst)
+          for (const m of list.MetingenLijst as { WaarnemingMetadata: { Kwaliteitswaardecode: string } }[])
+            m.WaarnemingMetadata.Kwaliteitswaardecode = '99';
+      }),
+    });
+    expect(codes['nl-1-obs-key']).toBe('no_rows');
+  });
+
+  it('NL-1 answering 204 (no data) is ok and is not parsed', async () => {
+    const { codes } = await run({ 'nl-1-obs-key': () => new HttpResponse(null, { status: 204 }) });
+    expect(codes['nl-1-obs-key']).toBe('ok');
+  });
+
+  it('a 500 is http_500, a 404 http_404, a 304 http_304', async () => {
+    for (const status of [500, 404, 304]) {
+      const { codes } = await run({ 'nl-2-wfs': answer(status === 304 ? '' : '{"error":"x"}', status) });
+      expect(codes['nl-2-wfs']).toBe(`http_${status}`);
+    }
+  });
+
+  it('a 204 where the spec does not allow it is an empty answer, not ok', async () => {
+    const { codes } = await run({ 'de-1-basin': () => new HttpResponse(null, { status: 204 }) });
+    expect(codes['de-1-basin']).toBe('invalid_empty');
+  });
+
+  it('an HTML error page with status 200 is the validity failure code', async () => {
+    const page = '<html><body>Service unavailable: PROVIDER-SECRET-TEXT</body></html>';
+    const { codes, report } = await run({ 'nl-1-obs-key': answer(page, 200, 'text/html') });
+    expect(codes['nl-1-obs-key']).toBe('invalid_json');
+    expect(JSON.stringify(report)).not.toContain('PROVIDER-SECRET-TEXT');
+  });
+
+  it('a required key that vanished is invalid_required', async () => {
+    const { codes } = await run({ 'nl-2-wfs': answer('{"type":"FeatureCollection"}') });
+    expect(codes['nl-2-wfs']).toBe('invalid_required');
+  });
+
+  it('a transport error is fetch_<code>', async () => {
+    const { codes } = await run({ 'nl-2-wfs': () => HttpResponse.error() });
+    expect(codes['nl-2-wfs']).toBe('fetch_network');
+    expect(codes['de-1-basin']).toBe('ok');
+  });
+
+  it('a field of the wrong type in DE-1 is its SchemaDrift code', async () => {
+    const doc = JSON.parse(BODY['de-1-basin'].toString('utf8'));
+    doc[0].longitude = 'seven';
+    const { codes } = await run({ 'de-1-basin': answer(JSON.stringify(doc)) });
+    expect(codes['de-1-basin']).toBe('invalid_type at 0.longitude');
+  });
+
+  it('a fetch that throws, or an error of its own, is check_error and carries no message', async () => {
+    const report = await check({
+      fetch: async () => {
+        throw new Error(`boom https://x.example/?key=SECRET ${UA}`);
+      },
+      now: NOW,
+    });
+    expect(report.results.map((r) => r.code)).toEqual(['check_error', 'check_error', 'check_error']);
+    expect(JSON.stringify(report)).not.toMatch(/SECRET|boom|example/);
+  });
+
+  it('a fetch error code that is not a fixed-looking code is fetch_failed', async () => {
+    const report = await check({
+      fetch: async () => ({ ok: false, error: 'Bad Error! https://x' as never }),
+      now: NOW,
+    });
+    expect(report.results.map((r) => r.code)).toEqual(['fetch_failed', 'fetch_failed', 'fetch_failed']);
+  });
+});
+
+describe('the report is a list of fixed lines and nothing else', () => {
+  const hostile = [
+    'ok\n@everyone',
+    '`code`',
+    'https://evil.example/x',
+    'a'.repeat(500),
+    `unrecognized_keys at ${'x'.repeat(500)}`,
+    'code at <img src=x onerror=1>',
+    'code at @someone',
+    'code # heading',
+    'two words',
+    '',
+    'Upper',
+  ];
+
+  it('turns anything outside LINE into `<spec> unreportable`, one line per result, whatever the code', () => {
+    const report: Report = {
+      at: NOW.toISOString(),
+      results: [...hostile.map((code) => ({ spec: 'de-1-basin', code })), { spec: 'Bad Spec\n@x', code: 'ok' }],
+    };
+    const lines = reportLines(report).split('\n');
+    expect(lines).toHaveLength(hostile.length + 1);
+    for (const line of lines) expect(line).toMatch(LINE);
+    expect(lines.slice(0, hostile.length)).toEqual(hostile.map(() => 'de-1-basin unreportable'));
+    expect(lines.at(-1)).toBe('unknown unreportable');
+  });
+
+  it('a SchemaDrift with a hostile code or path never reaches a line outside LINE', () => {
+    const drifts = [
+      new SchemaDrift('code`with`ticks', 'a.b'),
+      new SchemaDrift('invalid_type', 'a`b@c\nd<e>f:g/h#i'),
+      new SchemaDrift('invalid_type', 'p'.repeat(500)),
+    ];
+    const report: Report = {
+      at: NOW.toISOString(),
+      results: drifts.map((d) => ({ spec: 'nl-2-wfs', code: d.message })),
+    };
+    const lines = reportLines(report).split('\n');
+    expect(lines).toHaveLength(3);
+    for (const line of lines) expect(line).toMatch(LINE);
+    expect(lines[0]).toBe('nl-2-wfs unreportable');
+    expect(lines[1]).toBe('nl-2-wfs invalid_type at a?b?c?d?e?f?g?h?i');
+    expect(lines[2]).toBe(`nl-2-wfs invalid_type at ${'p'.repeat(120)}`);
+    for (const c of ['`', '@', '#', '<', '>', ':', '/']) expect(lines.join('\n')).not.toContain(c);
+  });
+
+  it('holds neither the User-Agent, the domain, the address, a URL nor a byte of a provider payload', async () => {
+    const stationNames = [
+      (JSON.parse(BODY['de-1-basin'].toString('utf8')) as { longname: string }[])[0]?.longname,
+      (JSON.parse(BODY['nl-1-obs-key'].toString('utf8')) as { WaarnemingenLijst: { Locatie: { Naam: string } }[] })
+        .WaarnemingenLijst[0]?.Locatie.Naam,
+      (JSON.parse(BODY['nl-2-wfs'].toString('utf8')) as { features: { properties: { NAAM: string } }[] }).features[0]
+        ?.properties.NAAM,
+    ];
+    for (const name of stationNames) expect(name).toMatch(/\w{4}/);
+    const nasty = answer('<html>PROVIDER-SECRET-TEXT https://leak.example/?k=v</html>', 200, 'text/html');
+    const runs = [
+      await run(),
+      await run({ 'nl-1-obs-key': nasty, 'nl-2-wfs': nasty, 'de-1-basin': nasty }),
+      await run({ 'nl-2-wfs': () => HttpResponse.error(), 'nl-1-obs-key': answer('x', 500) }),
+    ];
+    for (const { report } of runs) {
+      const text = `${JSON.stringify(report)}\n${reportLines(report)}`;
+      for (const secret of [
+        UA,
+        DOMAIN,
+        EMAIL,
+        'https:',
+        'http:',
+        '://',
+        'PROVIDER-SECRET-TEXT',
+        'rijkswaterstaat',
+        'pegelonline',
+      ])
+        expect(text).not.toContain(secret);
+      for (const name of stationNames) expect(text).not.toContain(name as string);
+      for (const line of reportLines(report).split('\n')) expect(line).toMatch(LINE);
+    }
+  });
+
+  it('the LINE pattern reads the same in JavaScript and in `grep -E -x` (the workflow filters with grep)', () => {
+    const corpus = [
+      'de-1-basin ok',
+      'nl-1-obs-key unrecognized_keys at WaarnemingenLijst.0.Locatie',
+      'nl-2-wfs invalid_type at features.3.properties[0]-x?',
+      'nl-2-wfs no_adapter',
+      'nl-2-wfs unreportable',
+      'x y',
+      `s ${'c'.repeat(40)}`,
+      `s ${'c'.repeat(41)}`,
+      `s c at ${'p'.repeat(120)}`,
+      `s c at ${'p'.repeat(121)}`,
+      's c at',
+      's c at ',
+      's  c',
+      ' s c',
+      's c ',
+      's-  c',
+      '-s c',
+      'S c',
+      's C',
+      's c at a`b',
+      's c at a@b',
+      's c at a#b',
+      's c at a<b',
+      's c at a:b',
+      's c at a/b',
+      's c at a b',
+      's c at a\\b',
+      's c at a"b',
+      's c at a]b[',
+      's c at [0]',
+      '',
+    ];
+    const viaGrep = spawnSync('grep', ['-E', '-x', LINE_SOURCE], { input: `${corpus.join('\n')}\n`, encoding: 'utf8' });
+    expect(viaGrep.status).toBe(0);
+    expect(viaGrep.stdout.split('\n').filter((l) => l !== '')).toEqual(corpus.filter((l) => LINE.test(l) && l !== ''));
+    expect(corpus.filter((l) => LINE.test(l)).length).toBeGreaterThan(8);
+  });
+});
+
+describe('the command line', () => {
+  const env = { PATH: process.env.PATH ?? '' };
+  const cli = (args: string[], vars: Record<string, string> = {}) =>
+    spawnSync(process.execPath, ['scripts/contract-check.ts', ...args], {
+      cwd: repoRoot,
+      env: { ...env, ...vars },
+      encoding: 'utf8',
+      timeout: 60_000,
+    });
+
+  it('exits 78 without the contact variables, before any request, and prints one line', () => {
+    const r = cli([]);
+    expect(r.status).toBe(78);
+    expect(r.stdout).toBe('');
+    expect(r.stderr.trim().split('\n')).toHaveLength(1);
+    expect(r.stderr).toMatch(/^contract-check: RWS_DOMAIN is missing/);
+  });
+
+  it('exits 78 for a malformed address, and echoes neither value', () => {
+    const r = cli([], { RWS_DOMAIN: DOMAIN, RWS_CONTACT_EMAIL: 'not an address SECRET' });
+    expect(r.status).toBe(78);
+    expect(r.stderr).toMatch(/RWS_CONTACT_EMAIL is missing or not an e-mail address/);
+    expect(r.stderr).not.toContain('SECRET');
+    expect(r.stdout).toBe('');
+  });
+
+  it('takes no argument that names a target: usage error 64 for anything but --out <file>', () => {
+    for (const args of [
+      ['--url', 'https://evil.example/'],
+      ['--host', 'evil.example'],
+      ['--out'],
+      ['--out', 'a', 'b'],
+      ['x'],
+    ]) {
+      const r = cli(args, { RWS_DOMAIN: DOMAIN, RWS_CONTACT_EMAIL: EMAIL });
+      expect(r.status).toBe(64);
+      expect(r.stdout).toBe('');
+    }
+  });
+});
+
+describe('the workflow', () => {
+  const path = '.github/workflows/contract-check.yml';
+  const text = readFileSync(join(repoRoot, path), 'utf8');
+  type Step = { uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> };
+  type Job = { permissions?: Record<string, string>; needs?: string; if?: string; steps: Step[] };
+  const wf = parse(text) as {
+    on: Record<string, unknown>;
+    permissions: unknown;
+    jobs: Record<string, Job>;
+  };
+  const steps = Object.entries(wf.jobs).flatMap(([name, job]) => job.steps.map((step) => ({ ...step, job: name })));
+  const code = text
+    .split('\n')
+    .filter((l) => !l.trimStart().startsWith('#'))
+    .join('\n');
+
+  it('starts only on the schedule (one nightly cron) and by hand, and holds no permission at the top', () => {
+    expect(Object.keys(wf.on).sort()).toEqual(['schedule', 'workflow_dispatch']);
+    expect(wf.on.schedule).toEqual([{ cron: expect.stringMatching(/^\d{1,2} \d{1,2} \* \* \*$/) }]);
+    expect(wf.permissions).toEqual({});
+    expect(text).toMatch(/^permissions: \{\}$/m);
+    expect(text).not.toMatch(/pull_request|workflow_run|issue_comment/);
+    expect(Object.keys(wf.jobs)).toEqual(['check', 'report']);
+  });
+
+  it('writes issues in the report job only, and that job has no contents permission and no checkout', () => {
+    const writes = Object.entries(wf.jobs).flatMap(([name, job]) =>
+      Object.entries(job.permissions ?? {})
+        .filter(([, level]) => level === 'write')
+        .map(([scope]) => `${name}:${scope}`),
+    );
+    expect(writes).toEqual(['report:issues']);
+    expect(code.match(/issues: write/g)).toHaveLength(1);
+    expect(wf.jobs.report?.permissions).toEqual({ issues: 'write' });
+    expect(wf.jobs.check?.permissions).toEqual({ contents: 'read' });
+    expect(wf.jobs.report?.steps.some((s) => s.uses?.startsWith('actions/checkout'))).toBe(false);
+    expect(wf.jobs.report?.steps.some((s) => s.uses?.startsWith('actions/setup-node'))).toBe(false);
+    for (const s of wf.jobs.report?.steps ?? []) expect(s.run ?? '').not.toMatch(/\bnode\b|\bpnpm\b|scripts\//);
+  });
+
+  it('runs the report job when the check failed, although its dependency did', () => {
+    expect(wf.jobs.report?.needs).toBe('check');
+    expect(wf.jobs.report?.if).toBe(expr("always() && needs.check.result == 'failure'"));
+  });
+
+  it('uses no secret, and the contact values come from Actions variables', () => {
+    expect(text).not.toContain('secrets.');
+    const env = steps.find((s) => s.job === 'check' && s.env?.RWS_DOMAIN !== undefined)?.env;
+    expect(env).toMatchObject({
+      RWS_DOMAIN: expr('vars.RWS_DOMAIN'),
+      RWS_CONTACT_EMAIL: expr('vars.RWS_CONTACT_EMAIL'),
+    });
+    expect(wf.jobs.report?.steps.at(-1)?.env).toMatchObject({
+      GH_TOKEN: expr('github.token'),
+      GH_REPO: expr('github.repository'),
+    });
+    expect(code).not.toMatch(/x-api-key|RWS_API|api_key/i);
+  });
+
+  it('has no expression inside a run: block; the report travels through env', () => {
+    const runs = steps.filter((s) => s.run !== undefined);
+    expect(runs.length).toBeGreaterThanOrEqual(4);
+    for (const s of runs) expect(s.run).not.toContain(EXPR_OPEN);
+    const report = wf.jobs.report?.steps.at(-1);
+    expect(report?.env?.REPORT).toBe(expr('needs.check.outputs.report'));
+    expect(report?.run).toContain(`printf '%s\\n' "$REPORT" | grep -Ex "$LINE"`);
+    expect(report?.run).toContain('--body-file');
+    expect(report?.run).toMatch(/\[\[ \$number =~ \^\[0-9\]\+\$ \]\]/);
+    expect(report?.run).not.toMatch(/--body[ =]/);
+  });
+
+  it('pins every action to a commit SHA', () => {
+    const uses = steps.map((s) => s.uses).filter((u): u is string => u !== undefined);
+    expect(uses.length).toBeGreaterThanOrEqual(4);
+    for (const u of uses) expect(u).toMatch(/^[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+@[0-9a-f]{40}$/);
+    // The same pins as ci.yml, comments included.
+    const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+    for (const line of text.split('\n').filter((l) => /^\s*- uses:/.test(l)))
+      expect(ci).toContain(line.trim().slice(2));
+    for (const s of wf.jobs.check?.steps.filter((x) => x.uses?.startsWith('actions/checkout')) ?? [])
+      expect(s.with).toEqual({ 'persist-credentials': false });
+    for (const job of Object.values(wf.jobs)) expect(job.steps[0]?.uses).toMatch(/^step-security\/harden-runner@/);
+  });
+
+  it('filters with the script’s own LINE pattern in both jobs', () => {
+    const patterns = steps.map((s) => s.env?.LINE).filter((p): p is string => p !== undefined);
+    expect(patterns).toHaveLength(2);
+    for (const p of patterns) expect(p).toBe(LINE_SOURCE);
+    // The check job hands over only what LINE accepts, behind a delimiter drawn after the script has exited.
+    const run = wf.jobs.check?.steps.find((s) => s.env?.LINE !== undefined)?.run ?? '';
+    expect(run).toContain('grep -qvEx "$LINE"');
+    expect(run.indexOf('node scripts/contract-check.ts')).toBeLessThan(run.indexOf('openssl rand'));
+    expect(run.trimEnd().endsWith('exit "$status"')).toBe(true);
+  });
+});

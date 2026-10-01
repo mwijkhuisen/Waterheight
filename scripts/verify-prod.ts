@@ -5,13 +5,14 @@
 //   scripts/verify-prod.sh <domain>              TLS (IPv4 and IPv6), the exact A§12.2
 //                                                headers, noindex, /healthz, both status
 //                                                files, per-spec freshness, owner_specs,
-//                                                the P2a health API (contract, closed
-//                                                parameters, DE-1 tier-1 freshness, loader
-//                                                lag, replay), and no owner source, spec,
-//                                                host, canary or private_basis in /status/*
-//                                                or /api/v1/health*
+//                                                the health API (contract, closed
+//                                                parameters, DE-1 and NL-1 health, tier-1
+//                                                freshness and replay, loader lag), and no
+//                                                owner source, spec, host, canary or
+//                                                private_basis in /status/* or /api/v1/health*
 //   scripts/verify-prod.sh <domain> --soak       + the 72 h soak: >= 99% per source, the
-//                                                seed coverage, the byte baseline, the drill
+//                                                seed coverage, the byte baseline, the drill,
+//                                                the Eijsden-grens twin over 7 days
 //   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--out FILE]
 //                                                docs/capacity.md from >= 2 complete days
 //   scripts/verify-prod.sh <domain> --dry-run    list the checks; no network
@@ -43,6 +44,10 @@ export const OWNER_CANARY = CANARIES.owner.text;
 export const HEALTH_PATHS = ['/api/v1/health', '/api/v1/health/sources'] as const;
 /** P2a criterion: at least this share of a source's tier-1 series is fresh. */
 export const TIER1_MIN = 0.95;
+/** The twin check runs hourly: 168 in 7 days. The soak allows a few missed hours (a deploy, a restart). */
+export const TWIN_MIN_CHECKS_7D = 160;
+/** The latest twin check is fresh when its hour ended no more than this long ago (one missed hour is allowed). */
+export const TWIN_MAX_AGE_MS = 2 * 3_600_000;
 /** The A§12.2 headers, compared byte for byte; values are read from ARCHITECTURE.md. */
 export const HEADER_NAMES = [
   'Content-Security-Policy',
@@ -364,7 +369,8 @@ export function checkSourceHealth(r: ApiRead<HealthSources>, id = 'DE-1'): Resul
 }
 
 /**
- * P2a: >= 95% of the source's tier-1 series fresh. Series the provider itself
+ * P2a, P2b: >= 95% of the source's tier-1 series fresh (each series against the limit the registry declares for
+ * it, counted by the loader). Series the provider itself
  * publishes nothing newer for (`provider_stale`, low water) are named, and
  * never turn a FAIL into a PASS: the owner judges the criterion then.
  */
@@ -400,7 +406,7 @@ export function checkLoaderLag(doc: Health | undefined): Result {
     : miss('loader lag', problems.join('; '));
 }
 
-/** The loader has caught up (no backlog), DE-1 has partition checksums and nothing of DE-1 is quarantined. */
+/** The loader has caught up (no backlog), the source has partition checksums and nothing of it is quarantined. */
 export function checkReplay(health: Health | undefined, doc: HealthSources | undefined, id = 'DE-1'): Result {
   const check = `replay ${id}`;
   if (health === undefined) return noDocument(check, 'health');
@@ -424,6 +430,29 @@ export function checkReplay(health: Health | undefined, doc: HealthSources | und
         check,
         `no backlog, ${s.partitions.length} partition checksums (${s.partitions.map((p) => p.partition).join(', ')}), none quarantined`,
       )
+    : miss(check, problems.join('; '));
+}
+
+/**
+ * The soak criterion of a twin pair (P2b): its latest hourly check is fresh, has aligned timestamps and is ok, and
+ * none of the last 7 days' hourly checks failed. Only counts and our own identifiers are printed.
+ */
+export function checkTwin(r: ApiRead<HealthSources>, now: Date, id = 'eijsden-grens-taw-nap'): Result {
+  const check = `twin ${id}`;
+  if (r.data === undefined || r.problems.length > 0) return noDocument(check, 'health/sources', r);
+  const t = r.data.twins.find((x) => x.id === id);
+  if (t === undefined) return miss(check, 'not listed in /api/v1/health/sources');
+  const problems: string[] = [];
+  const age = now.getTime() - Date.parse(t.window_end);
+  if (age > TWIN_MAX_AGE_MS)
+    problems.push(`latest check is ${Math.ceil(age / 60_000)} min old (limit ${TWIN_MAX_AGE_MS / 60_000} min)`);
+  if (t.n_aligned === 0) problems.push('no aligned timestamps');
+  if (!t.ok) problems.push('the latest check is outside the tolerance');
+  if (t.failed_7d > 0) problems.push(`${t.failed_7d} of ${t.checks_7d} checks failed in 7 days`);
+  if (t.checks_7d < TWIN_MIN_CHECKS_7D)
+    problems.push(`only ${t.checks_7d} checks in 7 days: the soak needs ${TWIN_MIN_CHECKS_7D}`);
+  return problems.length === 0
+    ? pass(check, `${t.n_aligned} aligned timestamps in the latest check, ${t.checks_7d} checks in 7 days, none failed`)
     : miss(check, problems.join('; '));
 }
 
@@ -592,8 +621,12 @@ export const CHECKS = [
   'tier-1 DE-1: >= 95% of the tier-1 series are fresh (provider-stale ones are named and never make it a PASS)',
   `loader lag: loader.lag_p95_s is not null and < ${LAG_DEGRADED_S} s, and loader.backlog_age_s < ${BACKLOG_MAX_AGE_S} s (a stall fails it)`,
   'replay DE-1: no loader backlog, a partition checksum for DE-1 and no quarantined DE-1 payload',
+  'health NL-1: /api/v1/health/sources lists NL-1 with status ok',
+  'tier-1 NL-1: >= 95% of the tier-1 series are fresh, each against its own limit (provider-stale ones are named and never make it a PASS)',
+  'replay NL-1: no loader backlog, a partition checksum for NL-1 and no quarantined NL-1 payload',
   `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* or /api/v1/health* body`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
+  `twin eijsden-grens-taw-nap: (--soak) listed in /api/v1/health/sources; latest check under ${TWIN_MAX_AGE_MS / 3_600_000} h old, ok, with aligned timestamps; no failed check in 7 days; >= ${TWIN_MIN_CHECKS_7D} of the 168 hourly checks`,
   '--capacity: bytes/day per spec over >= 2 complete days, the year-1 projection vs the disk and the bucket',
 ];
 
@@ -687,6 +720,9 @@ async function main(argv: string[]): Promise<number> {
       checkTier1(sources.data),
       checkLoaderLag(health.data),
       checkReplay(health.data, sources.data),
+      checkSourceHealth(sources, 'NL-1'),
+      checkTier1(sources.data, 'NL-1'),
+      checkReplay(health.data, sources.data, 'NL-1'),
     );
 
     const body = (page: Page | string | undefined) => (typeof page === 'object' ? page.body : '');
@@ -706,6 +742,7 @@ async function main(argv: string[]): Promise<number> {
       results.push(...s.results);
       console.log(s.report.join('\n'));
     }
+    results.push(checkTwin(readApi(await tryGet(`https://${domain}${HEALTH_PATHS[1]}`, net), HealthSources), now));
   } else if (cap?.success) {
     const c = capacity(cap.data, registry, now.toISOString().slice(0, 10), ownerBytes);
     if (out !== undefined && c.ok) writeFileSync(out, c.markdown);

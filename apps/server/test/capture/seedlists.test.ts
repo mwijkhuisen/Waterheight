@@ -52,6 +52,17 @@ describe('RWS (NL-1) seed lists against the recorded OphalenCatalogus', () => {
     expect(rows.filter((r) => r.tier === 'key').every((r) => r.quantity === 'H')).toBe(true);
   });
 
+  it('the only twin row is the Eijsden-grens TAW series, which the recorded WFS snapshot shows live', () => {
+    expect(seed('nl-1').filter((r) => r.tier === 'twin')).toEqual([
+      { code: 'eijsden.grens', quantity: 'H', tier: 'twin', note: 'taw' },
+    ]);
+    type Wfs = { features: { properties: { CODE: string; GROOTHEIDCODE: string; HOEDANIGHEIDCODE: string } }[] };
+    const taw = json<Wfs>('NL-2', 'nl-2-wfs').features.filter(
+      (f) => f.properties.GROOTHEIDCODE === 'WATHTE' && f.properties.HOEDANIGHEIDCODE === 'TAW',
+    );
+    expect(taw.map((f) => f.properties.CODE)).toContain('eijsden.grens');
+  });
+
   it('the forecast list is exactly every verwachting location (183 WATHTE, 13 Q)', () => {
     const rows = seed('nl-1-forecast');
     expect(new Set(rows.filter((r) => r.quantity === 'H').map((r) => r.code))).toEqual(s.fcH);

@@ -1,0 +1,109 @@
+{
+ "obs": [
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T12:50:00.000Z",
+   "value": 4642,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T13:00:00.000Z",
+   "value": 4644,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T13:10:00.000Z",
+   "value": 4643,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T13:20:00.000Z",
+   "value": 4641,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T13:30:00.000Z",
+   "value": 4639,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T13:40:00.000Z",
+   "value": 4641,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T13:50:00.000Z",
+   "value": 4642,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T14:00:00.000Z",
+   "value": 4644,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T14:10:00.000Z",
+   "value": 4642,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T14:20:00.000Z",
+   "value": 4640,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T14:30:00.000Z",
+   "value": 4638,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T14:40:00.000Z",
+   "value": 4639,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T14:50:00.000Z",
+   "value": 4641,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T15:00:00.000Z",
+   "value": 4645,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T15:10:00.000Z",
+   "value": 4646,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T15:20:00.000Z",
+   "value": 4644,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/TAW/other:F007",
+   "ts": "2026-09-30T15:30:00.000Z",
+   "value": 4640,
+   "qc": 1
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0
+}

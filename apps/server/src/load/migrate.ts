@@ -75,7 +75,7 @@ export async function runMigrate(
     log(`migrate: ${made.rows[0]?.n ?? 0} partition(s) created`);
     const synced = await syncRegistry(db, readRegistry());
     log(
-      `migrate: registry synced (${synced.sources} sources, ${synced.stations} stations, ${synced.series} series, ${synced.deactivated} deactivated)`,
+      `migrate: registry synced (${synced.sources} sources, ${synced.stations} stations, ${synced.series} series, ${synced.deactivated} deactivated, ${synced.twins} twins, ${synced.references} NL-4 class bounds)`,
     );
     return 0;
   } catch (err) {

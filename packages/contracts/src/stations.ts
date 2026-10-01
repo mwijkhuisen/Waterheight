@@ -110,7 +110,10 @@ export const StationsFile = z.strictObject({ stations: z.array(Station).min(1) }
  * there; invariant 11), and its unit declarations agree (a discharge row has
  * a discharge unit and no value_kind, a level row the reverse, and to_canonical
  * is the factor of its native_unit). A provider_key is unique inside its
- * source, and a first-release row is a tier-1 row. Returns every problem found.
+ * source, and a first-release row is a tier-1 row. A station has one row per
+ * quantity, plus at most one more with role `twin`: the same gauge published
+ * a second time (the Eijsden-grens TAW series beside its NAP one). Returns
+ * every problem found.
  */
 export function validateStations(
   stationsInput: unknown,
@@ -124,7 +127,7 @@ export function validateStations(
   const seenKeys = new Set<string>();
   for (const row of parsed.data.stations) {
     const at = `station ${row.id} (${row.quantity})`;
-    const key = `${row.id}/${row.quantity}`;
+    const key = `${row.id}/${row.quantity}${row.role === 'twin' ? '/twin' : ''}`;
     if (seen.has(key)) problems.push(`${at}: duplicate`);
     seen.add(key);
     const providerKey = `${row.source}/${row.provider_key}`;
@@ -160,4 +163,59 @@ export function validateStations(
     }
   }
   return { problems, stations: parsed.data.stations };
+}
+
+// Twin pairs (registry/twins.yaml; A§7.4 step 7): two series of the same water
+// level or discharge, whose difference the loader checks.
+
+const TwinSide = z.strictObject({ source: SourceId, provider_key: z.string().min(1).max(120) });
+
+export const Twin = z.strictObject({
+  id: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]*$/)
+    .max(80),
+  a: TwinSide,
+  b: TwinSide,
+  /** `offset`: on equal timestamps, a − b is `expected` within `tolerance`, in the canonical unit (H cm, Q m³/s). */
+  relation: z.strictObject({
+    kind: z.literal('offset'),
+    expected: z.number(),
+    tolerance: z.number().nonnegative(),
+    unit: z.enum(['cm', 'm³/s']),
+  }),
+});
+export type Twin = z.infer<typeof Twin>;
+
+export const TwinsFile = z.strictObject({ twins: z.array(Twin).max(100) });
+
+/**
+ * A twin names two different registered series of one quantity, with the
+ * relation in that quantity's canonical unit. Returns every problem found.
+ */
+export function validateTwins(
+  twinsInput: unknown,
+  stations: readonly Station[],
+): { problems: string[]; twins: Twin[] } {
+  const parsed = TwinsFile.safeParse(twinsInput);
+  if (!parsed.success) return { problems: [z.prettifyError(parsed.error)], twins: [] };
+  const rowOf = new Map(stations.map((r) => [`${r.source}/${r.provider_key}`, r]));
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  for (const twin of parsed.data.twins) {
+    const at = `twin ${twin.id}`;
+    if (seen.has(twin.id)) problems.push(`${at}: duplicate`);
+    seen.add(twin.id);
+    const a = rowOf.get(`${twin.a.source}/${twin.a.provider_key}`);
+    const b = rowOf.get(`${twin.b.source}/${twin.b.provider_key}`);
+    if (a === undefined) problems.push(`${at}: a is not a registered series`);
+    if (b === undefined) problems.push(`${at}: b is not a registered series`);
+    if (a === undefined || b === undefined) continue;
+    if (a === b) problems.push(`${at}: a and b are the same series`);
+    if (a.quantity !== b.quantity) problems.push(`${at}: a is ${a.quantity} and b is ${b.quantity}`);
+    if (twin.relation.unit !== (a.quantity === 'Q' ? 'm³/s' : 'cm')) {
+      problems.push(`${at}: the unit of a ${a.quantity} pair is not ${twin.relation.unit}`);
+    }
+  }
+  return { problems, twins: parsed.data.twins };
 }

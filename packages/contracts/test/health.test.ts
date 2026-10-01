@@ -27,6 +27,7 @@ const source = {
   lag_p95_s: 34,
   tier1: { total: 69, fresh: 64, provider_stale: 5 },
   missing_buckets_24h: 12,
+  outage: null,
   partitions: [{ partition: '2026-09', md5: 'a'.repeat(32), rows: 1234 }],
   partitions_at: ago(60_000),
 };
@@ -188,8 +189,22 @@ describe('HealthSources', () => {
       max_delta: null,
       lag_min: null,
       ok: false,
+      checks_7d: 1,
+      failed_7d: 1,
     };
     expect(HealthSources.safeParse(sources({ twins: [twin] })).success).toBe(true);
     expect(HealthSources.safeParse(sources({ twins: [{ ...twin, id: 'Lobith' }] })).success).toBe(false);
+    expect(HealthSources.safeParse(sources({ twins: [{ ...twin, failed_7d: -1 }] })).success).toBe(false);
+  });
+
+  it('an outage is a window and a count, or null', () => {
+    const outage = { from: ago(7_200_000), to: ago(3_600_000), missing_buckets: 0 };
+    expect(HealthSources.safeParse(sources({ sources: [{ ...source, outage }] })).success).toBe(true);
+    for (const bad of [
+      { ...outage, missing_buckets: -1 },
+      { ...outage, from: 'yesterday' },
+      { ...outage, series: 'x' },
+    ])
+      expect(HealthSources.safeParse(sources({ sources: [{ ...source, outage: bad }] })).success).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 # Owner checks of P1 (issue #16)
 
-The `[owner]` acceptance items of P1b, and the ones P1a and P1b share, each with the command or checklist that proves it. Paste each output into #16. Run them after the first successful deploy and backup (`docs/runbooks/bootstrap.md`).
+The `[owner]` acceptance items of P1b, and the ones P1a and P1b share, each with the command or checklist that proves it. Paste each output into #16. Run them after the first successful deploy and backup (`docs/runbooks/bootstrap.md`). §8 to §10 are the `[owner]` items of P2b (issue #17): paste their output into #17, after the P2b release is deployed (`docs/runbooks/bootstrap.md`, "the release with P2b").
 
 ## 1. Reachability from the VPS over IPv4 and IPv6 (R7)
 
@@ -100,3 +100,41 @@ sudo jq --arg today "$(date -u +%F)" \
 ```
 
 Give the agent that number for `--owner-bytes-per-day`.
+
+## 8. The outage drill (P2b, issue #17)
+
+The `[owner]` criterion: stop capture for 2 hours, start it again, and show that Q7 reports **0 missing buckets** for the tier-1 DE-1 and NL-1 series over the outage.
+
+```bash
+ssh ops@<domain>
+sudo rws-drill stop-capture 2h --dry-run     # checks the duration and prints the plan
+sudo rws-drill stop-capture 2h
+```
+
+The full procedure, the alerts to expect, the wait of at least one hour after the restart and the check command it prints are in `docs/runbooks/outage-drill.md`. Do not start it at 02:17 UTC (the nightly dump). Paste the `rws-drill` output and the two `"pass": true` objects of the check into #17.
+
+- [ ] `rws-drill` printed the outage window and, after the wait, the check printed `"pass": true` for `DE-1` and for `NL-1`;
+- [ ] the `cap-*`, `watchdog` and `update` checks turned green again after the restart (name any that did not).
+
+## 9. The Actions variables and the first contract check (P2b)
+
+`RWS_DOMAIN` and `RWS_CONTACT_EMAIL` as repository Actions **variables** (not secrets), then start `contract-check` once by hand: `docs/github-settings.md`, "Actions variables and the contract check".
+
+```bash
+gh variable list
+gh workflow run contract-check
+gh run list --workflow contract-check --limit 1
+```
+
+- [ ] both variables are listed;
+- [ ] the run is green (three requests: `de-1-basin`, `nl-1-obs-key`, `nl-2-wfs`), or its issue "Contract drift: the nightly live check failed" names a real drift (`docs/runbooks/schema-drift.md` §7; `fetch_*` on all three specs points at the runner: R-057).
+
+## 10. The 7-day twin soak (P2b)
+
+After the Eijsden-grens twin (TAW − NAP = 233 ± 1 cm) has run for 7 days, from a checkout:
+
+```bash
+scripts/verify-prod.sh <domain> --soak
+```
+
+- [ ] `twin eijsden-grens-taw-nap` passes: listed in `/api/v1/health/sources`, its latest check at most 2 hours old, aligned timestamps, `ok`, `failed_7d` 0 and `checks_7d` at least 160 (of 168 hourly checks).

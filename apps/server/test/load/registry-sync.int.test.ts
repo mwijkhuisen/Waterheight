@@ -95,7 +95,8 @@ describe('registry sync', () => {
     // The one narrowed series: NEUWIED STADT, off until the owner has verified its licence (review C12).
     const off = (await h.t.admin.query('SELECT station_id, audience FROM series WHERE audience IS NOT NULL')).rows;
     expect(off).toEqual([{ station_id: 'de.wsv.27100370', audience: 'off' }]);
-    expect(await h.count('series')).toBe(238);
+    // 238 DE-1 series and 76 NL-1 series (registry/stations/nl-1.yaml).
+    expect(await h.count('series')).toBe(314);
     // A cm series without a published gauge zero has a local datum.
     const local = (
       await h.t.admin.query("SELECT count(*)::int AS n FROM series WHERE native_unit = 'cm' AND datum = 'LOCAL'")
@@ -103,8 +104,9 @@ describe('registry sync', () => {
     expect(local).toEqual([{ n: 8 }]);
     const tier = (await h.t.admin.query('SELECT tier, count(*)::int AS n FROM station GROUP BY 1 ORDER BY 1')).rows;
     expect(tier).toEqual([
-      { tier: 1, n: 41 },
-      { tier: 2, n: 158 },
+      // DE-1: 41 and 158; NL-1: 31 and 34.
+      { tier: 1, n: 72 },
+      { tier: 2, n: 192 },
     ]);
   });
 
@@ -137,9 +139,10 @@ describe('registry sync', () => {
         .rows;
       expect(seen, view).toEqual([]);
     }
-    // 199 stations less the five mirrors and NEUWIED STADT (off); 238 series less six mirror series and one off.
-    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.station}`)).rows).toEqual([{ n: 193 }]);
-    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.series}`)).rows).toEqual([{ n: 231 }]);
+    // DE-1: 199 stations less the five mirrors and NEUWIED STADT (off); 238 series less six mirror series and one
+    // off. NL-1: its 65 stations, and its 76 series less the Eijsden-grens TAW twin.
+    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.station}`)).rows).toEqual([{ n: 258 }]);
+    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.series}`)).rows).toEqual([{ n: 306 }]);
   });
 
   it('is idempotent: a second sync keeps every series id and changes nothing', async () => {
@@ -147,7 +150,7 @@ describe('registry sync', () => {
     const owner = h.dbAs('rws_migrator', 1);
     const result = await syncRegistry(owner.db, readRegistry());
     await owner.close();
-    expect(result).toMatchObject({ stations: 199, series: 238, deactivated: 0 });
+    expect(result).toMatchObject({ stations: 264, series: 314, deactivated: 0, twins: 1, references: 702 });
     expect((await h.t.admin.query('SELECT id, provider_key, active FROM series ORDER BY id')).rows).toEqual(before);
   });
 
@@ -213,6 +216,203 @@ describe('registry sync', () => {
     ]);
   });
 
+  it('NL-1: level series in cm above NAP, discharge in m³/s, a 10-minute step, staleness by capture tier', async () => {
+    const { rows } = await h.t.admin.query(
+      `SELECT count(*)::int AS series, count(DISTINCT station_id)::int AS stations,
+              (count(*) FILTER (WHERE quantity = 'H' AND native_unit = 'cm' AND to_canonical = 1 AND value_kind = 'level'
+                                  AND datum = 'NAP' AND role = 'primary'))::int AS h_nap,
+              (count(*) FILTER (WHERE quantity = 'Q' AND native_unit = 'm³/s' AND datum IS NULL AND value_kind IS NULL))::int AS q,
+              (count(*) FILTER (WHERE role = 'twin' AND datum = 'TAW'))::int AS twin,
+              (count(*) FILTER (WHERE native_step = '10 min' AND expected_step = '10 min'))::int AS ten_minutes,
+              (count(*) FILTER (WHERE staleness_limit = '1 hour'))::int AS stale60,
+              (count(*) FILTER (WHERE staleness_limit = '90 min'))::int AS stale90,
+              (count(*) FILTER (WHERE staleness_limit = '2 hours'))::int AS stale120,
+              (count(*) FILTER (WHERE audience IS NOT NULL OR lic_override IS NOT NULL))::int AS narrowed
+       FROM series WHERE source_id = 'NL-1'`,
+    );
+    expect(rows).toEqual([
+      {
+        series: 76,
+        stations: 65,
+        h_nap: 62,
+        q: 13,
+        twin: 1,
+        ten_minutes: 76,
+        stale60: 26,
+        stale90: 49,
+        stale120: 1,
+        narrowed: 0,
+      },
+    ]);
+    // Eijsden Q arrives about 75 minutes late: the one series with two hours.
+    const late = await h.t.admin.query("SELECT provider_key FROM series WHERE staleness_limit = '2 hours'");
+    expect(late.rows).toEqual([{ provider_key: 'eijsden.grens/Q/NVT/other:F216' }]);
+    // One station carries both Eijsden-grens level series; it is a primary station with one alias.
+    const eijsden = await h.t.admin.query(
+      `SELECT s.provider_key, s.role, st.tier, a.role AS alias_role
+       FROM series s JOIN station st ON st.id = s.station_id JOIN station_alias a ON a.station_id = st.id
+       WHERE st.id = 'nl.rws.eijsden.grens' AND s.quantity = 'H' ORDER BY 1`,
+    );
+    expect(eijsden.rows).toEqual([
+      { provider_key: 'eijsden.grens/WATHTE/NAP/other:F007', role: 'primary', tier: 1, alias_role: 'primary' },
+      { provider_key: 'eijsden.grens/WATHTE/TAW/other:F007', role: 'twin', tier: 1, alias_role: 'primary' },
+    ]);
+    const tidal = await h.t.admin.query(
+      "SELECT id FROM station WHERE flags->>'tidal' = 'true' AND id LIKE 'nl.rws.%' ORDER BY 1",
+    );
+    expect(tidal.rows.map((r) => r.id)).toEqual([
+      'nl.rws.delfzijl',
+      'nl.rws.hansweert',
+      'nl.rws.nieuwestatenzijl.dollard',
+      'nl.rws.rilland.bath',
+      'nl.rws.terneuzen',
+      'nl.rws.vlissingen',
+    ]);
+    // No audience or channel flag of an RWS source changed (invariant 8): NL-3 stays off.
+    const sources = await h.t.admin.query(
+      "SELECT id, audience::text, lic_display, lic_api, lic_bulk_export, lic_history_export FROM source WHERE id IN ('NL-1', 'NL-2', 'NL-3', 'NL-4') ORDER BY 1",
+    );
+    const open = {
+      audience: 'public',
+      lic_display: true,
+      lic_api: true,
+      lic_bulk_export: true,
+      lic_history_export: true,
+    };
+    const closed = {
+      audience: 'off',
+      lic_display: false,
+      lic_api: false,
+      lic_bulk_export: false,
+      lic_history_export: false,
+    };
+    expect(sources.rows).toEqual([
+      { id: 'NL-1', ...open },
+      { id: 'NL-2', ...open },
+      { id: 'NL-3', ...closed },
+      { id: 'NL-4', ...open },
+    ]);
+  });
+
+  it('NL-4: the display classes of the workbook, as provider_class bounds with their season and priority', async () => {
+    const ref = (where: string, params: unknown[] = []) =>
+      h.t.admin.query(
+        `SELECT s.provider_key, r.kind, r.value, r.unit, r.season_from_md AS from_md, r.season_to_md AS to_md,
+                r.priority, r.basis_label AS label
+         FROM reference_value r JOIN series s ON s.id = r.series_id WHERE ${where}
+         ORDER BY s.provider_key, r.priority, r.season_from_md, r.kind`,
+        params,
+      );
+    const totals = await h.t.admin.query(
+      `SELECT count(*)::int AS n, count(DISTINCT r.series_id)::int AS series,
+              (count(*) FILTER (WHERE r.source_id = 'NL-4' AND r.semantics = 'provider_class'
+                                  AND r.kind IN ('NL4_FROM', 'NL4_TO') AND r.period IS NULL AND r.batch_id IS NULL
+                                  AND r.valid = tstzrange('2026-04-15T00:00:00Z', NULL)))::int AS as_declared,
+              (count(*) FILTER (WHERE (s.quantity = 'H') = (r.unit = 'cm')
+                                  AND (s.quantity = 'Q') = (r.unit = 'm³/s')))::int AS unit_ok,
+              (count(*) FILTER (WHERE s.source_id = 'NL-1' AND s.role = 'primary'
+                                  AND (s.quantity = 'Q' OR s.datum = 'NAP')))::int AS on_nl1
+       FROM reference_value r JOIN series s ON s.id = r.series_id`,
+    );
+    // 58 level and 11 discharge series have classes; a class row is one or two bounds.
+    expect(totals.rows).toEqual([{ n: 702, series: 69, as_declared: 702, unit_ok: 702, on_nl1: 702 }]);
+
+    // Lobith discharge (issue #17): the whole-year bounds, and Normaal/Verlaagd at 1,400 in May, 1,000 in September.
+    const lobith = 'lobith.bovenrijn.tolkamer/Q/NVT/other:F230';
+    const on = async (md: number) =>
+      (
+        await ref(
+          `s.provider_key = $1 AND CASE WHEN r.season_from_md <= r.season_to_md
+             THEN $2 BETWEEN r.season_from_md AND r.season_to_md
+             ELSE $2 >= r.season_from_md OR $2 <= r.season_to_md END`,
+          [lobith, md],
+        )
+      ).rows.map((r) => `${r.priority} ${r.kind} ${r.value} ${r.from_md}-${r.to_md}`);
+    const wholeYear = [
+      '0 NL4_FROM 11800 101-1231',
+      '1 NL4_FROM 8100 101-1231',
+      '1 NL4_TO 11800 101-1231',
+      '2 NL4_FROM 5400 101-1231',
+      '2 NL4_TO 8100 101-1231',
+      '3 NL4_FROM 4450 101-1231',
+      '3 NL4_TO 5400 101-1231',
+    ];
+    const season = (bound: number, window: string) => [
+      `4 NL4_TO ${bound} ${window}`,
+      `5 NL4_FROM ${bound} ${window}`,
+      `5 NL4_TO 4450 ${window}`,
+    ];
+    expect(await on(515)).toEqual([...wholeYear, ...season(1400, '501-531')]);
+    expect(await on(915)).toEqual([...wholeYear, ...season(1000, '901-930')]);
+    // Winterstand runs from 1 October to 30 April: a season that wraps the year.
+    expect(await on(115)).toEqual([...wholeYear, ...season(1000, '1001-430')]);
+    // The label is the workbook's, verbatim; the unit is the series' canonical one.
+    expect((await ref('s.provider_key = $1 AND r.priority = 0', [lobith])).rows).toEqual([
+      {
+        provider_key: lobith,
+        kind: 'NL4_FROM',
+        value: 11800,
+        unit: 'm³/s',
+        from_md: 101,
+        to_md: 1231,
+        priority: 0,
+        label: 'Extreme afvoer (>11800 m3/s)',
+      },
+    ]);
+    // Eijsden-grens level: cm above NAP on the NAP series; nothing on the TAW twin.
+    const eijsden = (await ref(`s.provider_key LIKE 'eijsden.grens/WATHTE/%'`)).rows;
+    expect(new Set(eijsden.map((r) => r.provider_key))).toEqual(new Set(['eijsden.grens/WATHTE/NAP/other:F007']));
+    expect(eijsden.map((r) => `${r.priority} ${r.kind} ${r.value}`)).toEqual([
+      '0 NL4_FROM 5000',
+      '1 NL4_FROM 4885',
+      '1 NL4_TO 5000',
+      '2 NL4_FROM 4715',
+      '2 NL4_TO 4885',
+      '3 NL4_FROM 4610',
+      '3 NL4_TO 4715',
+      '4 NL4_TO 4390',
+      '5 NL4_FROM 4390',
+      '5 NL4_TO 4610',
+    ]);
+    // No row is invented for a registered series the workbook has no classes for.
+    const without = await h.t.admin.query(
+      `SELECT s.provider_key FROM series s
+       WHERE s.source_id = 'NL-1' AND s.role = 'primary'
+         AND NOT EXISTS (SELECT 1 FROM reference_value r WHERE r.series_id = s.id)
+       ORDER BY 1`,
+    );
+    expect(without.rows.map((r) => r.provider_key.split('/').slice(0, 2).join('/'))).toEqual([
+      'hagestein.boven/Q',
+      'holtheme.vecht/WATHTE',
+      'lith.beneden/WATHTE',
+      'millingenaanderijn.pannerdensekop/WATHTE',
+      'millingenaanderijn/Q',
+      'rhenen.grebbeberg/WATHTE',
+    ]);
+    // The public reader sees them through its reference view, by the audience of NL-4 itself.
+    const api = await h.t.connectAs('rws_api');
+    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.reference}`)).rows).toEqual([{ n: 702 }]);
+  });
+
+  it('NL-4: a second sync replaces the classes with the same rows, and a registry without the file has none', async () => {
+    const owner = h.dbAs('rws_migrator', 1);
+    const input = readRegistry();
+    const rows = () =>
+      h.t.admin
+        .query(
+          'SELECT series_id, kind, value, season_from_md, season_to_md, priority, basis_label FROM reference_value ORDER BY 1, 2, 4, 5, 6',
+        )
+        .then((r) => r.rows);
+    const before = await rows();
+    expect((await syncRegistry(owner.db, input)).references).toBe(702);
+    expect(await rows()).toEqual(before);
+    expect((await syncRegistry(owner.db, { ...input, thresholds: null })).references).toBe(0);
+    expect(await h.count('reference_value')).toBe(0);
+    await syncRegistry(owner.db, input);
+    expect(await rows()).toEqual(before);
+    await owner.close();
+  });
+
   it('the loader role cannot sync the registry', async () => {
     await expect(syncRegistry(h.load.db, readRegistry())).rejects.toMatchObject({ code: '42501' });
     const load = await h.t.connectAs('rws_load');
@@ -226,7 +426,7 @@ describe('registry sync', () => {
     const dir = mkdtempSync(`${tmpdir()}/rws-registry-`);
     cpSync(new URL('../../../../registry/', import.meta.url), dir, { recursive: true });
     const url = pathToFileURL(`${dir}/`);
-    expect(readRegistry(url).stations).toHaveLength(238);
+    expect(readRegistry(url).stations).toHaveLength(314);
     // An owner source that loses its private_basis.
     const sources = read(`${dir}/sources.yaml`, 'utf8');
     writeFileSync(

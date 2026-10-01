@@ -1,0 +1,8 @@
+# Twin pairs (A§7.4 step 7): two registered series of the same water, and the relation the loader checks hourly
+# over the last 24 hours (twin_check; status in /api/v1/health/sources). P5 adds the pairs that need a lag.
+twins:
+  # Eijsden-grens, published by RWS in NAP and in the Belgian TAW (catalogue §3.3, §4.1): TAW − NAP = 233 cm.
+  - id: eijsden-grens-taw-nap
+    a: { source: NL-1, provider_key: "eijsden.grens/WATHTE/TAW/other:F007" }
+    b: { source: NL-1, provider_key: "eijsden.grens/WATHTE/NAP/other:F007" }
+    relation: { kind: offset, expected: 233, tolerance: 1, unit: cm }

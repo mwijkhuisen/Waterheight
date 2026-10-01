@@ -2,7 +2,13 @@ import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SchemaDrift } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bareLine, buildFixtureArchive, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
+import {
+  bareLine,
+  buildFixtureArchive,
+  buildNlFixtureArchive,
+  recorded,
+  writePayload,
+} from '../../../../scripts/fixture-archive.ts';
 import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from '../../src/load/adapters.ts';
 import { nothingToLoad } from '../../src/load/pipeline.ts';
 import { replay } from '../../src/load/replay.ts';
@@ -732,5 +738,84 @@ describe('newest fetch wins, whatever order the payloads arrive in (review C2, C
     expect(await held(x)).toEqual([{ value_m: 10.521, fetched_at: at('29', '03') }]);
     expect(await held(y)).toEqual([{ value_m: 10.521, fetched_at: at('29', '04') }]);
     expect(await held(z)).toEqual([{ value_m: 9.521, fetched_at: at('30', '05') }]);
+  });
+});
+
+describe('the NL fixture archive: NL-1 and NL-2 payloads load, and a replay changes nothing', () => {
+  it('loads every payload, stores no NL-2 row, and replaying either source writes nothing', async () => {
+    const n = await harness();
+    try {
+      // Five NL-1 payloads, the NL-2 snapshot and the recorded 204 of arnhem.nederrijn Q (a line, no object).
+      expect(await buildNlFixtureArchive(n.raw)).toHaveLength(7);
+      // The newest payload was fetched at 15:49:46Z.
+      const loader = n.loader({ now: new Date('2026-09-30T16:00:00Z') });
+      expect(await loader.tick()).toEqual({ lines: 7, loaded: 6 });
+      // The snapshot lists two series that NL-1 does not register: a drift report in app_meta, no alert.
+      expect(n.alerts).toEqual([]);
+      const drift = await n.t.admin.query("SELECT value FROM app_meta WHERE key = 'registry_drift:NL-2'");
+      expect(drift.rows[0]?.value).toMatchObject({
+        spec: 'nl-2-wfs',
+        changed: [],
+        vanished: [],
+        unregistered: ['driel.boven/Q/NVT/other:F103', 'epen.geul.cottessen/Q/NVT/other:F007'],
+      });
+
+      // One batch per payload; the 204 line made none. NL-2 is discovery only.
+      const all = async () => (await n.t.admin.query('SELECT * FROM ingest_batch ORDER BY id')).rows;
+      const loaded = await all();
+      expect(
+        loaded.map((b) => [b.source_id, b.spec_id, b.parse_status, b.n_rows, b.n_new, b.n_changed, b.n_skipped]),
+      ).toEqual([
+        ['NL-1', 'nl-1-obs-key', 'ok', 16, 16, 0, 0],
+        ['NL-2', 'nl-2-wfs', 'ok', 0, 0, 0, 0],
+        ['NL-1', 'nl-1-obs-key', 'ok', 17, 17, 0, 0],
+        ['NL-1', 'nl-1-obs-twin', 'ok', 17, 17, 0, 0],
+        ['NL-1', 'nl-1-obs-other', 'ok', 35, 35, 0, 0],
+        ['NL-1', 'nl-1-obs-other', 'ok', 0, 0, 0, 0],
+      ]);
+      // Lobith H, Eijsden-grens H, its TAW twin, Lobith Q, and Driel Q (35 gaps, never stored). No series is NL-2's.
+      const rows = await n.count('obs');
+      expect(rows).toBe(16 + 17 + 17 + 35 + 0);
+      const ofNl2 = await n.t.admin.query(
+        "SELECT count(*)::int AS n FROM obs o JOIN series s ON s.id = o.series_id WHERE s.source_id = 'NL-2'",
+      );
+      expect(ofNl2.rows).toEqual([{ n: 0 }]);
+      expect(await n.count('obs_revision')).toBe(0);
+      expect(await loader.tick()).toEqual({ lines: 0, loaded: 0 });
+
+      const sums = await n.checksums();
+      const replayOf = (source: string) =>
+        replay(
+          {
+            db: n.load.db,
+            reader: n.reader,
+            alert: (code, fields = {}) => n.alerts.push({ code, fields }),
+            now: () => new Date(),
+          },
+          { source, spec: null, from: '2026-09-01', to: '2026-12-31', dryRun: false },
+        );
+      for (const [source, lines] of [
+        ['NL-1', 5],
+        ['NL-2', 1],
+      ] as const) {
+        for (let pass = 0; pass < 2; pass++) {
+          expect(await replayOf(source)).toEqual({
+            lines,
+            loaded: lines,
+            quarantined: 0,
+            skipped: 0,
+            n_new: 0,
+            n_changed: 0,
+          });
+          expect(await n.checksums()).toEqual(sums);
+          expect(await n.count('obs')).toBe(rows);
+          expect(await n.count('obs_revision')).toBe(0);
+          expect(await all()).toEqual(loaded);
+        }
+      }
+      expect(n.alerts).toEqual([]);
+    } finally {
+      await n.close();
+    }
   });
 });

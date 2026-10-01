@@ -86,6 +86,11 @@ export const HealthSources = z.strictObject({
         lag_p95_s: z.number().nonnegative().nullable(),
         tier1: Tier1.nullable(),
         missing_buckets_24h: count.nullable(),
+        /**
+         * The last gap in the source's loaded payloads within 168 hours (a capture outage or drill), and Q7 over
+         * it: expected buckets still without data, over the tier-1 series that had data in the day before it.
+         */
+        outage: z.strictObject({ from: iso, to: iso, missing_buckets: count }).nullable(),
         partitions: z.array(Partition).max(240),
         partitions_at: iso.nullable(),
       }),
@@ -118,6 +123,9 @@ export const HealthSources = z.strictObject({
         max_delta: z.number().nullable(),
         lag_min: z.number().nullable(),
         ok: z.boolean(),
+        /** The hourly checks of the last 168 hours, and how many of them failed. */
+        checks_7d: count,
+        failed_7d: count,
       }),
     )
     .max(100),

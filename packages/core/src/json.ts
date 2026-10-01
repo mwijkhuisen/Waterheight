@@ -58,18 +58,25 @@ export const cappedArray = <T extends z.ZodType>(item: T, max: number) =>
   z.array(z.unknown()).max(max).pipe(z.array(item));
 
 /**
+ * One value against its strict schema. Throws SchemaDrift with Zod's issue
+ * code and the schema path below `at` (our keys and array indexes, never
+ * provider text). A long array is parsed one element at a time through this,
+ * so a document of the wrong shape stops at its first bad element.
+ */
+export function parseStrict<T>(schema: z.ZodType<T>, value: unknown, at: readonly (string | number)[] = []): T {
+  const result = schema.safeParse(value);
+  if (result.success) return result.data;
+  const issue = result.error.issues[0];
+  throw new SchemaDrift(issue?.code ?? 'invalid', [...at, ...(issue?.path ?? [])].map(String).join('.'));
+}
+
+/**
  * A JSON document that is an array of `item`s: bounded by `caps`, at most
- * `maxItems` elements, each parsed on its own. Throws SchemaDrift with Zod's
- * issue code and the schema path (our keys and array indexes, never provider text).
+ * `maxItems` elements, each parsed on its own (parseStrict).
  */
 export function parseJsonArray<T>(text: string, item: z.ZodType<T>, caps: JsonCaps & { maxItems: number }): T[] {
   const doc = boundedJson(text, caps);
   if (!Array.isArray(doc)) throw new SchemaDrift('invalid_type');
   if (doc.length > caps.maxItems) throw new SchemaDrift('too_big');
-  return doc.map((element: unknown, i) => {
-    const result = item.safeParse(element);
-    if (result.success) return result.data;
-    const issue = result.error.issues[0];
-    throw new SchemaDrift(issue?.code ?? 'invalid', [i, ...(issue?.path ?? [])].map(String).join('.'));
-  });
+  return doc.map((element: unknown, i) => parseStrict(item, element, [i]));
 }

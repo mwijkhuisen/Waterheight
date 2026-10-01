@@ -54,6 +54,7 @@ sudo docker compose -p rws ps; sudo docker logs --tail 80 rws-caddy-1
 - A rollback to a P1b release (before the database) removes `db`, `load` and `api` (`up -d --remove-orphans`) and **keeps the `pgdata` volume**. Redeploying a P2a release later finds the data and applies only migrations that are newer.
 - While no release with an `api` runs, `/api/v1/health` is a 404: the watchdog sends no `load` ping, and healthchecks.io alerts on the `load` check after about 15 minutes. Pause that check during a deliberate rollback.
 - The first release with the database needs a different order (stop the timer, bootstrap, deploy on purpose): `docs/runbooks/bootstrap.md`, "the first release with the database".
+- The release with P2b deploys in the normal way but brings one new host file (`rws-drill`), so `update` pings `host_files_changed` until its bootstrap has run, and the NL-1 payloads since P1 need one replay afterwards: `docs/runbooks/bootstrap.md`, "the release with P2b".
 - The nightly database dump and a deploy take turns on the deploy lock: the dump waits up to 25 minutes for a running deploy, `rws-update` skips a run while a dump holds the lock, and `rws-deploy` waits for it.
 
 ## Roll back on purpose

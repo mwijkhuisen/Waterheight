@@ -1,5 +1,6 @@
 import { setImmediate as yieldToLoop } from 'node:timers/promises';
 import { crc32 } from 'node:zlib';
+import { xmlOverCaps } from '@rws/core';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { Inflate } from 'fflate';
 
@@ -155,9 +156,10 @@ const UNSAFE_NAME = /(^[/\\])|\\|(^|\/)\.\.(\/|$)|\0|^[A-Za-z]:/;
 
 /**
  * ZIP guard: reads the end record and the central directory first, checks
- * member count, names, sizes and ratios there, then inflates each member in
- * small pushes and counts the real output against the declared size, the
- * 200 MB total and 50:1 (a lying central directory fails), and checks CRC-32.
+ * member count, names, sizes and ratios there (a symbolic link fails), then
+ * inflates each member in small pushes and counts the real output against the
+ * declared size, the 200 MB total and 50:1 (a lying central directory fails),
+ * and checks CRC-32.
  */
 export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember[]> {
   const maxMembers = opts.maxMembers ?? ZIP_MAX_MEMBERS;
@@ -188,6 +190,7 @@ export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember
   let compressedTotal = 0;
   for (let n = 0; n < count; n += 1) {
     if (p + 46 > cdOffset + cdSize || buf.readUInt32LE(p) !== 0x02014b50) fail('zip_cd');
+    const madeBy = buf.readUInt16LE(p + 4);
     const flags = buf.readUInt16LE(p + 8);
     const method = buf.readUInt16LE(p + 10);
     const crc = buf.readUInt32LE(p + 16);
@@ -196,6 +199,7 @@ export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember
     const nameLen = buf.readUInt16LE(p + 28);
     const extraLen = buf.readUInt16LE(p + 30);
     const commentLen = buf.readUInt16LE(p + 32);
+    const external = buf.readUInt32LE(p + 38);
     const local = buf.readUInt32LE(p + 42);
     const raw = buf.subarray(p + 46, p + 46 + nameLen);
     const name = raw.toString(flags & 0x800 ? 'utf8' : 'latin1');
@@ -203,6 +207,9 @@ export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember
     if (p > cdOffset + cdSize) fail('zip_cd');
     if (flags & 0x1) fail('zip_encrypted');
     if (method !== 0 && method !== 8) fail('zip_method');
+    // A Unix symbolic link: made on host 3 (Unix) with S_IFLNK in the mode, the high half of the external
+    // attributes. Nothing is ever extracted, but no member of ours is a link.
+    if (madeBy >>> 8 === 3 && ((external >>> 16) & 0o170000) === 0o120000) fail('zip_symlink');
     if (compressed === 0xffffffff || size === 0xffffffff || local === 0xffffffff) fail('zip64');
     if (UNSAFE_NAME.test(name) || !opts.names(name)) fail('zip_name');
     if (entries.some((e) => e.name === name)) fail('zip_name');
@@ -285,10 +292,27 @@ export const ooxmlNames = (name: string): boolean =>
 // ---------------------------------------------------------------- XML
 
 export const XML_MAX_BYTES = 1024 * 1024;
+/**
+ * Bounds of one XML text before the validator reads it (review S1 of P2b): the
+ * validator holds the attributes of one tag at a time, which maxTag bounds.
+ * Measured on every real text we read (2026-09-30): the longest tag has 643
+ * characters (the root of the NL-4 xl/workbook.xml with its namespaces; the
+ * LU-5 CAP file 71), so 16 KiB leaves room for other producers' roots; the most
+ * tags plus attributes are 669,675 (the NL-4 sheet of 3.8 MB; LU-5 CAP 218), and
+ * 1.5 M is about twice that.
+ */
+export const XML_CAPS = { maxTag: 16 * 1024, maxItems: 1_500_000, maxDepth: 256 } as const;
 
-/** DTDs and entities off: any DOCTYPE or ENTITY declaration is refused before parsing. */
+/**
+ * DTDs and entities off: any DOCTYPE or ENTITY declaration is refused before
+ * parsing; a tag over XML_CAPS.maxTag characters, more tags plus attributes
+ * than XML_CAPS.maxItems or elements nested deeper than XML_CAPS.maxDepth are
+ * refused before the validator runs (which keeps a stack entry per open tag).
+ */
 export function checkXmlText(text: string): void {
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) fail('xml_dtd');
+  const over = xmlOverCaps(text, XML_CAPS);
+  if (over !== null) fail(over);
   if (XMLValidator.validate(text) !== true) fail('xml_invalid');
 }
 
@@ -304,34 +328,82 @@ export const XLSX_XML_MEMBER_MAX = 8 * 1024 * 1024;
 export const XLSX_XML_TOTAL_MAX = 16 * 1024 * 1024;
 
 /**
- * XLSX: the ZIP rules with OOXML names, plus the XML rule on every .xml/.rels
- * member, whose text is capped per member and in total while it is inflated.
+ * The ZIP rules for a workbook: every member name must pass `names` on top of
+ * the OOXML rule, and the bytes of every .xml/.rels member are held, capped per
+ * member and in total while they are inflated. Other members are only counted.
  */
-export async function checkXlsx(buf: Buffer, maxMembers: number): Promise<string[]> {
-  const texts = new Map<string, Buffer[]>();
+async function xlsxMembers(
+  buf: Buffer,
+  names: (name: string) => boolean,
+  maxMembers: number,
+): Promise<{ names: string[]; xml: Map<string, Buffer> }> {
+  const parts = new Map<string, Buffer[]>();
   let total = 0;
   const members = await checkZip(buf, {
-    names: ooxmlNames,
+    names: (name) => ooxmlNames(name) && names(name),
     maxMembers,
     onMember: (name) => {
       if (!/\.(?:xml|rels)$/.test(name)) return undefined;
-      const parts: Buffer[] = [];
+      const chunks: Buffer[] = [];
       let size = 0;
-      texts.set(name, parts);
+      parts.set(name, chunks);
       return {
         data: (c) => {
           size += c.length;
           total += c.length;
           if (size > XLSX_XML_MEMBER_MAX) fail('xlsx_xml_member');
           if (total > XLSX_XML_TOTAL_MAX) fail('xlsx_xml_total');
-          parts.push(Buffer.from(c));
+          chunks.push(Buffer.from(c));
         },
         end: () => {},
       };
     },
   });
-  for (const parts of texts.values()) checkXmlText(Buffer.concat(parts).toString('utf8'));
-  return members.map((m) => m.name);
+  const xml = new Map([...parts].map(([name, chunks]) => [name, Buffer.concat(chunks)] as const));
+  return { names: members.map((m) => m.name), xml };
+}
+
+/**
+ * XLSX: the ZIP rules with OOXML names, plus the XML rule on every .xml/.rels
+ * member, whose text is capped per member and in total while it is inflated.
+ */
+export async function checkXlsx(buf: Buffer, maxMembers: number): Promise<string[]> {
+  const { names, xml } = await xlsxMembers(buf, () => true, maxMembers);
+  for (const bytes of xml.values()) checkXmlText(bytes.toString('utf8'));
+  return names;
+}
+
+const UTF8 = new TextDecoder('utf-8', { fatal: true });
+
+/**
+ * XLSX for a reader (the NL-4 converter): the rules of checkXlsx with an exact
+ * member list, so a member outside `allow` fails `zip_name`; every .xml/.rels
+ * member must be valid UTF-8 and pass the XML rule. Returns the text of the
+ * `read` members, each of which must be present. Nothing is written to disk.
+ */
+export async function readXlsx(
+  buf: Buffer,
+  opts: { allow: readonly string[]; read: readonly string[] },
+): Promise<Map<string, string>> {
+  const { xml } = await xlsxMembers(buf, (name) => opts.allow.includes(name), XLSX_MAX_MEMBERS);
+  const texts = new Map<string, string>();
+  for (const [name, bytes] of xml) {
+    let text = '';
+    try {
+      text = UTF8.decode(bytes);
+    } catch {
+      fail('xlsx_utf8');
+    }
+    checkXmlText(text);
+    texts.set(name, text);
+  }
+  const out = new Map<string, string>();
+  for (const name of opts.read) {
+    const text = texts.get(name);
+    if (text === undefined) return fail('xlsx_member_missing');
+    out.set(name, text);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- HTML (LU-4)
@@ -357,8 +429,11 @@ export function extractDataToJson(bytes: Uint8Array): unknown {
   if (end < 0 || end - start > ATTR_MAX) return fail('html_attr');
   const raw = html.slice(start, end).replace(/&(#x[0-9a-f]{1,6}|#[0-9]{1,7}|[a-z]{2,4});/gi, (m, e: string) => {
     const k = e.toLowerCase();
-    if (k.startsWith('#x')) return String.fromCodePoint(Number.parseInt(k.slice(2), 16));
-    if (k.startsWith('#')) return String.fromCodePoint(Number(k.slice(1)));
+    if (k.startsWith('#')) {
+      const point = k.startsWith('#x') ? Number.parseInt(k.slice(2), 16) : Number(k.slice(1));
+      // Beyond Unicode: not a character (String.fromCodePoint would throw). The text stays as it is.
+      return point <= 0x10ffff ? String.fromCodePoint(point) : m;
+    }
     return ENTITIES[k] ?? m;
   });
   try {

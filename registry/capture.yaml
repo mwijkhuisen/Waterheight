@@ -148,6 +148,23 @@ specs:
     max_bytes: 2097152
     retention: obs
     validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  # The TAW duplicate of Eijsden-grens (catalogue §4.1): the twin of its NAP series, TAW − NAP = 233 cm
+  # (registry/twins.yaml). Same minute as nl-1-obs-key, so both sides of the pair are fetched together.
+  - id: nl-1-obs-twin
+    source: NL-1
+    version: 1
+    cron: "1-59/10 * * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1, where: { tier: twin }, key: [code, quantity] }
+    params: { proces: meting, hoedanigheid: TAW }
+    window: { default: PT3H, max: P31D, overlap: PT1H }
+    max_bytes: 2097152
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
   - id: nl-1-catalogue
     source: NL-1
     version: 1

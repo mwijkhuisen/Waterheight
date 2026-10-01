@@ -16,26 +16,79 @@ const SAME_AUDIENCE = sql`COALESCE(s.audience, src.audience) = src.audience`;
 export type HealthInputs = {
   /** The shortest capture cadence of each source, in seconds (from registry/capture.yaml). */
   cadenceS: ReadonlyMap<string, number>;
+  /**
+   * The cadence of each capture spec, in seconds. A series is fetched as often as its own spec runs (RWS: one
+   * request per series, every 10 or every 30 minutes), so "the provider stated it lately" is judged by the
+   * spec that stated it; without an entry the source's shortest cadence stands in.
+   */
+  specCadenceS?: ReadonlyMap<string, number>;
   /** p95 of "loaded at − fetched at" over the manifest lines fetched in the last hour, per source (ms). */
   lagP95Ms: ReadonlyMap<string, number>;
   /** Unconsumed manifest bytes and the age of the oldest unconsumed line (Loader.backlog). */
   backlog: { files: number; bytes: number; age_s: number | null };
   badLines: number;
   now: Date;
+  /** The last capture outage of each source (findOutages); Q7 is also counted over it. */
+  outages?: ReadonlyMap<string, Outage>;
 };
+
+export type Outage = { from: Date; to: Date };
+
+/** A gap between loaded payloads counts as an outage from three capture cadences, and never under 30 minutes. */
+const OUTAGE_MIN_S = 1800;
+
+/**
+ * The last gap in each source's loaded payloads, within 168 hours, that is
+ * longer than max(3 × its capture cadence, 30 min): a stopped recorder (the
+ * outage drill, docs/runbooks/outage-drill.md) or a provider that was away.
+ * Stateless, so a loader restart, a backlog or a replay changes nothing: a
+ * batch keeps the time its payload was fetched. `from` and `to` are the fetch
+ * times of the last payload before the gap and the first one after it.
+ */
+// ponytail: each call reads a week of batches through the fetched_at index (ingest_batch_fetched) and buckets
+// them; the loader calls it every 10 minutes, not every pass. The cost grows with the batches of a week (NL-1's
+// observation specs alone fetch about 280 an hour at P2b, some 47,000 a week); if P5 multiplies that, keep a
+// per-source gap summary as batches are written. computeHealth's per-source batch counts read the whole table
+// every minute: the same limit.
+export async function findOutages(
+  db: Kysely<DB>,
+  cadenceS: ReadonlyMap<string, number>,
+  now: Date,
+): Promise<Map<string, Outage>> {
+  const ids = [...cadenceS.keys()];
+  const minS = ids.map((id) => Math.max(3 * (cadenceS.get(id) as number), OUTAGE_MIN_S));
+  // Five-minute buckets first: the gaps are found over a few thousand buckets, not over every batch.
+  const { rows } = await sql<{ source_id: string; from: Date; to: Date }>`
+    WITH bucket AS (
+      SELECT b.source_id, min(b.fetched_at) AS first, max(b.fetched_at) AS last
+      FROM ingest_batch b
+      WHERE b.parse_status = 'ok' AND b.fetched_at > ${now}::timestamptz - interval '168 hours'
+        AND b.fetched_at <= ${now}::timestamptz
+      GROUP BY b.source_id, date_bin(interval '5 minutes', b.fetched_at, timestamptz '2000-01-01 00:00:00+00')
+    ), gap AS (
+      SELECT source_id, lag(last) OVER (PARTITION BY source_id ORDER BY first) AS "from", first AS "to"
+      FROM bucket
+    )
+    SELECT DISTINCT ON (g.source_id) g.source_id, g."from", g."to"
+    FROM gap g JOIN unnest(${ids}::text[], ${minS}::double precision[]) AS c(id, min_s) ON c.id = g.source_id
+    WHERE g."from" IS NOT NULL AND g."to" - g."from" > make_interval(secs => c.min_s)
+    ORDER BY g.source_id, g."to" DESC`.execute(db);
+  return new Map(rows.map((r) => [r.source_id, { from: r.from, to: r.to }]));
+}
 
 type Tier1 = { total: number; fresh: number; provider_stale: number };
 
 /**
  * Recomputes source_health for every source: freshness of its tier-1 series,
- * the quarantine count, Q7 over 24 h, and the status the API shows. Cheap
+ * the quarantine count, Q7 over 24 h and over its last outage, and the status
+ * the API shows. Cheap
  * (index probes on tier-1 series only); runs every minute.
  */
 export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promise<void> {
   // Each tier-1 series: is its latest value fresh, and when was the payload fetched that last stated it.
-  const tier1 = await sql<{ source_id: string; fresh: boolean; stated_at: Date | null }>`
+  const tier1 = await sql<{ source_id: string; fresh: boolean; stated_at: Date | null; stated_by: string | null }>`
     SELECT s.source_id, COALESCE(l.ts > ${inputs.now}::timestamptz - s.staleness_limit, false) AS fresh,
-           b.fetched_at AS stated_at
+           b.fetched_at AS stated_at, b.spec_id AS stated_by
     FROM series s
     JOIN source src ON src.id = s.source_id
     JOIN station st ON st.id = s.station_id AND st.tier = 1
@@ -57,6 +110,30 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
       AND NOT EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id AND o.ts >= g.b AND o.ts < g.b + s.expected_step)
     GROUP BY s.source_id`.execute(db);
 
+  // Q7 over each source's last outage: the buckets a payload fetched before the gap could not hold yet, up to
+  // the first fetch after it, for the tier-1 series that had data in the day before (a series that was already
+  // stale cannot be refilled and is not counted).
+  const outageOf = new Map<string, { from: string; to: string; missing_buckets: number }>();
+  for (const [source, { from, to }] of inputs.outages ?? []) {
+    const { rows } = await sql<{ missing: number }>`
+      SELECT count(*)::int AS missing
+      FROM series s
+      JOIN source src ON src.id = s.source_id
+      JOIN station st ON st.id = s.station_id AND st.tier = 1
+      CROSS JOIN LATERAL generate_series(
+        date_bin(s.expected_step, ${from}::timestamptz - s.staleness_limit, timestamptz '2000-01-01 00:00:00+00'),
+        LEAST(${to}::timestamptz, ${inputs.now}::timestamptz - s.staleness_limit - s.expected_step),
+        s.expected_step) AS g(b)
+      WHERE s.source_id = ${source} AND s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}
+        AND EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id
+                      AND o.ts >= ${from}::timestamptz - s.staleness_limit - interval '24 hours'
+                      AND o.ts < ${from}::timestamptz - s.staleness_limit)
+        AND NOT EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id AND o.ts >= g.b AND o.ts < g.b + s.expected_step)`.execute(
+      db,
+    );
+    outageOf.set(source, { from: from.toISOString(), to: to.toISOString(), missing_buckets: rows[0]?.missing ?? 0 });
+  }
+
   const batches = await sql<{ source_id: string; quarantined: number; last_ok: Date | null }>`
     SELECT b.source_id, (count(*) FILTER (WHERE b.parse_status = 'quarantined'))::int AS quarantined,
            max(b.fetched_at) FILTER (WHERE b.parse_status = 'ok') AS last_ok
@@ -70,12 +147,12 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
     FROM source src LEFT JOIN source_health h ON h.source_id = src.id
     WHERE src.capture_enabled AND NOT src.canary`.execute(db);
 
-  const tierOf = new Map<string, { total: number; fresh: number; stale: (Date | null)[] }>();
+  const tierOf = new Map<string, { total: number; fresh: number; stale: { at: Date | null; spec: string | null }[] }>();
   for (const r of tier1.rows) {
     const t = tierOf.get(r.source_id) ?? { total: 0, fresh: 0, stale: [] };
     t.total += 1;
     if (r.fresh) t.fresh += 1;
-    else t.stale.push(r.stated_at);
+    else t.stale.push({ at: r.stated_at, spec: r.stated_by });
     tierOf.set(r.source_id, t);
   }
   const gapOf = new Map(gaps.rows.map((r) => [r.source_id, r.missing]));
@@ -88,13 +165,20 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
       const cadenceMs = (inputs.cadenceS.get(src.id) ?? 3600) * 1000;
       const batch = batchOf.get(src.id);
       const t = tierOf.get(src.id);
-      const recent = (at: Date | null) => at !== null && nowMs - at.getTime() <= 2 * cadenceMs;
+      const recent = (at: Date | null, withinMs = 2 * cadenceMs) => at !== null && nowMs - at.getTime() <= withinMs;
       const payloadFresh = recent(batch?.last_ok ?? null);
+      /** Two cadences of the spec that stated the value (the source's shortest when the spec is not known). */
+      const statedLately = (s: { at: Date | null; spec: string | null }) => {
+        const specS = s.spec === null ? undefined : inputs.specCadenceS?.get(s.spec);
+        return recent(s.at, specS === undefined ? undefined : 2 * specS * 1000);
+      };
       // A stale series is the provider's (it publishes nothing newer) only when a payload fetched within two
       // cadences itself stated its latest value (obs_latest.batch_id follows every confirmation). A series we
       // stopped storing (a unit mismatch, a 404, a changed key) is plain stale.
       const tier: Tier1 | null =
-        t === undefined ? null : { total: t.total, fresh: t.fresh, provider_stale: t.stale.filter(recent).length };
+        t === undefined
+          ? null
+          : { total: t.total, fresh: t.fresh, provider_stale: t.stale.filter(statedLately).length };
       const quarantined = batch?.quarantined ?? 0;
       const fetchAgeMs = src.last_fetch_ok === null ? Number.POSITIVE_INFINITY : nowMs - src.last_fetch_ok.getTime();
       const lag = inputs.lagP95Ms.get(src.id);
@@ -111,6 +195,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
       const detail = {
         ...(tier === null ? {} : { tier1: tier }),
         ...(src.has_series ? { missing_buckets_24h: gapOf.get(src.id) ?? 0 } : {}),
+        ...(src.has_series && outageOf.has(src.id) ? { outage: outageOf.get(src.id) } : {}),
       };
       // `partitions` inside detail is written by the checksum job; this update keeps it.
       await sql`
@@ -121,7 +206,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
           quarantine_count = EXCLUDED.quarantine_count,
           lag_p95 = EXCLUDED.lag_p95,
           status = EXCLUDED.status,
-          detail = (h.detail - 'tier1' - 'missing_buckets_24h') || EXCLUDED.detail,
+          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage') || EXCLUDED.detail,
           updated_at = EXCLUDED.updated_at`.execute(tx);
     }
     const loader = {

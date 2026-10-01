@@ -1,0 +1,12 @@
+{
+  "spec": "nl-2-wfs",
+  "source": "NL-2",
+  "synthetic": true,
+  "recorded_at": "2026-10-25T00:44:57Z",
+  "status": 200,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=DDAPI20:locatiesmetlaatstewaarneming&outputFormat=application/json&PROPERTYNAME=CODE,NAAM,GROOTHEIDCODE,HOEDANIGHEIDCODE,EENHEIDCODE,WAARDEBEPALINGSMETHODECODE,WAARDE_LAATSTE_METING,TIJDSTIP_LAATSTE_METING,BEMONSTERINGSHOOGTE,OPDRACHTGEVENDE_INSTANTIE,KWALITEITSWAARDE_CODE,GEOMETRY&CQL_FILTER=COMPARTIMENTCODE%3D%27OW%27%20AND%20GROOTHEIDCODE%20IN%20(%27WATHTE%27%2C%27Q%27)%20AND%20TIJDSTIP_LAATSTE_METING%20%3E%20%272026-10-24T12%3A40%27",
+  "bytes": 3406,
+  "trimmed": false,
+  "note": "[U] Hand-made from nl-2-wfs.raw (real structure: real feature objects of distinct series, only TIJDSTIP_LAATSTE_METING, the collection timeStamp and the counts changed). The fall-back night of 2026-10-25, snapshot in the first pass of the repeated local hour (timeStamp 00:45Z = 02:45 CEST): every repeated-hour label takes its first (summer) occurrence, one of them 10 min after timeStamp (inside the future slack); a label after the repeated hour is future. Replaced by real payloads of that night once they are archived."
+}

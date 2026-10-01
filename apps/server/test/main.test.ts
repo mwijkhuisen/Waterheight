@@ -25,7 +25,8 @@ describe('role dispatcher', () => {
     [['replay']],
     [['replay', '--source', 'DE-1']],
     [['replay', '--source', 'DE-1', '--from', '2026-10-01']],
-    [['replay', '--source', 'NL-1', '--from', '2026-10-01', '--to', '2026-10-02']],
+    // A source without a loader adapter (NL-4 is converted offline, never replayed).
+    [['replay', '--source', 'NL-4', '--from', '2026-10-01', '--to', '2026-10-02']],
     [['replay', '--source', "DE-1'; --", '--from', '2026-10-01', '--to', '2026-10-02']],
     [['replay', '--source', 'DE-1', '--spec', 'nl-1-obs', '--from', '2026-10-01', '--to', '2026-10-02']],
     [['replay', '--source', 'DE-1', '--spec', '../x', '--from', '2026-10-01', '--to', '2026-10-02']],

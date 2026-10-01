@@ -1,6 +1,8 @@
 # RWS observation series (catalogue §3.1, §3.3, §3.5, §3.6 and the §0.6 Belgian points, note=be). Every code is
 # checked against the recorded OphalenCatalogus (WATHTE/NAP meting for H, Q meting for Q; test: seedlists.test.ts).
 # tier key = every 10 min (H only); tier other = every 30 min (other H and every Q), for the 400 requests/hour budget.
+# tier twin = every 10 min, asked in TAW instead of NAP (nl-1-obs-twin): the Eijsden-grens twin of registry/twins.yaml;
+# the WFS snapshot (NL-2) and the live series show it, the trimmed catalogue fixture holds no TAW entry.
 code,quantity,tier,note
 lobith.bovenrijn.tolkamer,H,key,
 millingenaanderijn.pannerdensekop,H,key,
@@ -89,3 +91,4 @@ arnhem.nederrijn,Q,other,
 maaseik,Q,other,be
 kanne,Q,other,be
 smeermaas.zuidwillemsvaart,Q,other,be
+eijsden.grens,H,twin,taw

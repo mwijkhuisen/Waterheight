@@ -3,11 +3,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { BODIES } from './bounded-child.ts';
 
-// Review S1: no DE-1 payload inside the byte caps can run the loader out of
+// Review S1: no DE-1, NL-1 or NL-2 payload inside the byte caps can run the loader out of
 // memory on its way to a SchemaDrift. Each hostile body is parsed in its own
 // process with a 256 MiB heap (the load container has 768 MiB). In the
 // integration project, which runs one file at a time: these children are heavy,
-// and the unit project has timing tests.
+// and the unit project has timing tests. Since review S1 of P2b also the XML
+// attribute floods, through the NL-4 parser and through the guard's XML rule
+// (the capture validity check and readXlsx): a fixed code, never a crash.
 
 const child = fileURLToPath(new URL('./bounded-child.ts', import.meta.url));
 const expected: Record<keyof typeof BODIES, string> = {
@@ -19,9 +21,28 @@ const expected: Record<keyof typeof BODIES, string> = {
   'basin-issues': 'invalid_type at 0.timeseries.0.shortname',
   'meta-issues': 'invalid_type at 0.timeseries.0.shortname',
   'series-issues': 'invalid_type at 0.timestamp',
+  'nl1-bytes': 'json_too_many_nodes',
+  'nl1-lists': 'too_big at WaarnemingenLijst',
+  'nl1-values': 'too_big at WaarnemingenLijst.0.MetingenLijst',
+  'nl1-issues': 'invalid_type at WaarnemingenLijst.0.MetingenLijst.0.Meetwaarde',
+  'nl2-bytes': 'json_too_many_nodes',
+  'nl2-features': 'too_big at features',
+  'nl2-issues': 'invalid_value at features.0.type',
+  'nl4-one-tag-700k-attributes': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
+  'nl4-one-tag-3m-equals': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
+  'nl4-one-tag-1.5m-quoted': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
+  'nl4-many-tags-10-attributes': 'xml_too_many_items at xl?worksheets?sheet1.xml',
+  'xml-one-tag-700k-attributes': 'xml_tag_too_long',
+  'xml-one-tag-3m-equals': 'xml_tag_too_long',
+  'xml-one-tag-1.5m-quoted': 'xml_tag_too_long',
+  'xml-many-tags-10-attributes': 'xml_too_many_items',
+  'nl4-unclosed-1.5m-tags': 'xml_too_deep at xl?worksheets?sheet1.xml',
+  'nl4-one-instruction-1.6m-attributes': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
+  'xml-unclosed-1.5m-tags': 'xml_too_deep',
+  'xml-one-instruction-1.6m-attributes': 'xml_tag_too_long',
 };
 
-describe('bounded parsing: every hostile body ends in a SchemaDrift, not a crash', () => {
+describe('bounded parsing: every hostile body ends in a SchemaDrift or a guard code, not a crash', () => {
   it.each(Object.keys(expected))('%s, under a 256 MiB heap', (name) => {
     const run = spawnSync(process.execPath, ['--max-old-space-size=256', '--no-experimental-webstorage', child, name], {
       encoding: 'utf8',

@@ -1,0 +1,129 @@
+# Nightly live contract check (issue #17; A§7.1; PHASES P2b). Once a night, one payload each of
+# DE-1, NL-1 and NL-2 is fetched live and run through the loader's own parse and normalise code;
+# a provider that changed its format or moved its host (the RWS CTD switch, 2026-11-05) turns the
+# run red and opens or updates the one `contract-drift` issue.
+# Same hardening as ci.yml. Only `schedule` and `workflow_dispatch` start it. No secrets: the
+# contact User-Agent comes from the Actions VARIABLES RWS_DOMAIN and RWS_CONTACT_EMAIL, and the
+# optional RWS API key is never sent from here. Two jobs, so that no job holds both a checkout and
+# a write token: `check` runs repository code with contents: read; `report` has issues: write,
+# no checkout and runs no repository code, it only handles the report text.
+name: contract-check
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: contract-check
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      report: ${{ steps.run.outputs.report }}
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Three live requests through the loader's parse; the report is the job output
+        id: run
+        env:
+          RWS_DOMAIN: ${{ vars.RWS_DOMAIN }}
+          RWS_CONTACT_EMAIL: ${{ vars.RWS_CONTACT_EMAIL }}
+          # The script's LINE_SOURCE (test/contract-check.test.ts keeps the two equal).
+          LINE: '^[a-z0-9]+(-[a-z0-9]+)* [a-z0-9_]{1,40}( at ([A-Za-z0-9_.?-]|\[|\]){1,120})?$'
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/report.txt"
+          status=0
+          node scripts/contract-check.ts --out "$report" || status=$?
+          # Only lines of the fixed shape (at most 20) become the output, and the delimiter is drawn
+          # after the script has exited: no line can contain it, and none can be a second output.
+          if [[ -s $report ]] && ! grep -qvEx "$LINE" "$report" && (($(wc -l <"$report") <= 20)); then
+            delimiter="report_$(openssl rand -hex 16)"
+            {
+              echo "report<<$delimiter"
+              cat "$report"
+              echo "$delimiter"
+            } >>"$GITHUB_OUTPUT"
+          fi
+          exit "$status"
+
+  report:
+    name: report
+    needs: check
+    # always(): without a status function a failed dependency skips this job.
+    if: ${{ always() && needs.check.result == 'failure' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write # create the contract-drift label and issue, comment on it; the only write here
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Open or update the one contract-drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # Untrusted by rule: it is only ever filtered through LINE, never put on a command line.
+          REPORT: ${{ needs.check.outputs.report }}
+          LINE: '^[a-z0-9]+(-[a-z0-9]+)* [a-z0-9_]{1,40}( at ([A-Za-z0-9_.?-]|\[|\]){1,120})?$'
+        run: |
+          set -euo pipefail
+          valid="$RUNNER_TEMP/valid.txt"
+          body="$RUNNER_TEMP/body.md"
+          printf '%s\n' "$REPORT" | grep -Ex "$LINE" | head -n 20 >"$valid" || true
+          # A kept line has no backtick, @, #, <, colon, slash or newline (LINE): it cannot close the fence,
+          # mention anyone, link or start markup. Everything else in the body is fixed text or runner-provided.
+          {
+            echo 'The nightly live contract check failed: a provider changed its format or moved its host.'
+            echo
+            if [[ -s $valid ]]; then
+              echo 'Spec and outcome (fixed codes only, never provider text):'
+              echo
+              printf '%s\n' '```text'
+              cat "$valid"
+              printf '%s\n' '```'
+            else
+              echo 'The check failed before it produced a report, or its report was missing or malformed.'
+            fi
+            echo
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >"$body"
+          gh label create contract-drift --force --color B60205 \
+            --description 'The nightly live contract check failed: a provider changed its format or moved'
+          number=$(gh issue list --label contract-drift --state open --json number --jq '.[0].number // empty')
+          if [[ -z $number ]]; then
+            gh issue create --title 'Contract drift: the nightly live check failed' \
+              --label contract-drift --body-file "$body"
+          elif [[ $number =~ ^[0-9]+$ ]]; then
+            gh issue comment "$number" --body-file "$body"
+          else
+            echo 'report: gh returned something other than an issue number' >&2
+            exit 1
+          fi

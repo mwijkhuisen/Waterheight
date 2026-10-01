@@ -3,7 +3,9 @@ import type { Adapter } from '../../http/types.ts';
 // NL-1 RWS WaterWebservices (catalogue §2.1): POST OphalenWaarnemingen, one
 // Locatie per request, Periode in UTC. H is OW/WATHTE/NAP with ProcesType and
 // no method filter (F155 on the Vecht); Q is Q with ProcesType and no method.
-// Forecasts use ProcesType `verwachting` over T−10 min … T+48 h.
+// A spec with `params.hoedanigheid: TAW` asks for the TAW duplicate instead
+// (the Eijsden-grens twin, §4.1). Forecasts use ProcesType `verwachting` over
+// T−10 min … T+48 h.
 
 const utc = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 const MINUTE = 60_000;
@@ -17,7 +19,7 @@ export const adapter: Adapter = {
         : {
             Compartiment: { Code: 'OW' },
             Grootheid: { Code: 'WATHTE' },
-            Hoedanigheid: { Code: 'NAP' },
+            Hoedanigheid: { Code: params.hoedanigheid === 'TAW' ? 'TAW' : 'NAP' },
             ProcesType: proces,
           };
     let from: Date;

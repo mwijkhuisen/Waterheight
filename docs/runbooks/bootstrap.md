@@ -253,3 +253,26 @@ Do this on the VPS that already runs a P1b release. The installed P1b `rws-updat
    - `health DE-1` and `loader lag` need fresh data from the running loader.
 
 If the deploy fails, it rolls back to the P1b release (`db`, `load` and `api` are removed; the `pgdata` volume stays) and pings `update` `/fail` with `db_start_failed`, `db_prepare_failed` or `migrate_failed`. Fix the cause, then run step 5 again. A rollback leaves the `load` check without pings: it alerts after about 15 minutes until a release with the api runs again.
+
+## Later: the release with P2b (NL-1, NL-2, NL-4; owner)
+
+Do this on the VPS that already runs the P2a release. No new secret, service or healthchecks check and no `rws.env` change: the release brings one new host file, `rws-drill`, and the registry of the NL sources. There is no special order (the normal `rws-update` deploy works); these steps follow it.
+
+1. Approve the `promote` job for the P2b release. `rws-update` deploys it within 5 minutes; the `migrate` job syncs the NL-1 registry, the Eijsden twin pair and the 702 NL-4 class bounds. **Check:**
+
+   ```bash
+   sudo docker compose -p rws ps                                        # db, load, api, capture healthy
+   curl -s https://<domain>/api/v1/health/sources | jq '.twins'         # eijsden-grens-taw-nap, after the first hour
+   ```
+
+2. Until you run the release's bootstrap, `rws-update` pings `update` `/fail` with `host_files_changed` (the new `rws-drill`). Run it as in "a new release with changed host files" above, from the verified release directory, twice; the second run must say "0 change(s)". **Check:** `command -v rws-drill`.
+3. Load the NL-1 payloads since P1: `docs/runbooks/replay.md` §5. The loader of the P2a release had no NL-1 adapter and moved its cursor past those lines, so this one replay is needed; NL-2 needs none (it stores nothing) and NL-4 is never replayed. `rwsc` is the shell function defined in `docs/runbooks/replay.md` §2; count first with `--dry-run`:
+
+   ```bash
+   rwsc run --rm --no-deps -T load replay --source NL-1 --from <first day> --to <today>
+   ```
+
+4. Set the two GitHub Actions **variables** `RWS_DOMAIN` and `RWS_CONTACT_EMAIL` (not secrets) for the nightly contract check (`docs/github-settings.md`), and start the workflow `contract-check` once by hand.
+5. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `health NL-1`, `tier-1 NL-1` (each series against its own `staleness_limit`: KG-081) and `replay NL-1`; `replay NL-1` passes once the backlog is 0 and nothing is quarantined.
+6. The outage drill, the P2b `[owner]` criterion: `docs/runbooks/outage-drill.md`.
+7. After 7 days: `scripts/verify-prod.sh <domain> --soak` for the Eijsden twin.

@@ -1,0 +1,118 @@
+{
+ "obs": [
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T12:50:00.000Z",
+   "value": 4409,
+   "qc": 2
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T13:00:00.000Z",
+   "value": 4411,
+   "qc": 2
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T13:10:00.000Z",
+   "value": 4410,
+   "qc": 2
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T13:20:00.000Z",
+   "value": 4408,
+   "qc": 2
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T13:30:00.000Z",
+   "value": 4406,
+   "qc": 2
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T13:40:00.000Z",
+   "value": 4408,
+   "qc": 2
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T13:50:00.000Z",
+   "value": 4409,
+   "qc": 2
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T14:00:00.000Z",
+   "value": 4411,
+   "qc": 2
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T14:10:00.000Z",
+   "value": 4409,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T14:20:00.000Z",
+   "value": 4407,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T14:30:00.000Z",
+   "value": 4405,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T15:10:00.000Z",
+   "value": 4413,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T15:20:00.000Z",
+   "value": 4411,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F007",
+   "ts": "2026-09-30T15:30:00.000Z",
+   "value": 4407,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/Q/NVT/other:F216",
+   "ts": "2026-09-30T13:50:00.000Z",
+   "value": 47.6,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/Q/NVT/other:F216",
+   "ts": "2026-09-30T14:00:00.000Z",
+   "value": 47.9,
+   "qc": 2
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {
+  "unknown_quality": 1,
+  "gap": 1,
+  "duplicate": 2,
+  "conflict": 3,
+  "future": 1,
+  "too_old": 1,
+  "unregistered_method": 2,
+  "datum": 2,
+  "registered_dropped": 4,
+  "sommatie": 1,
+  "excluded": 2,
+  "stale_series": 2,
+  "unit_mismatch": 2,
+  "quantity": 1
+ },
+ "unknown": 1
+}
