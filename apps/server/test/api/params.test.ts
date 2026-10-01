@@ -193,10 +193,10 @@ describe('snapshotParams: the instant', () => {
   it('a value of 32 characters is parsed, one of 33 is refused before it is', () => {
     const t32 = '2026-11-20T10:00:00.123456+02:00';
     expect(t32).toHaveLength(32);
-    expect(snapOutcome(`t=${t32.replace('+', '%2B')}`, FAR)).toBe('ok');
+    expect(snapOutcome(`t=${encodeURIComponent(t32)}`, FAR)).toBe('ok');
     const t33 = '2026-11-20T10:00:00.1234567+02:00';
     expect(t33).toHaveLength(33);
-    expect(snapOutcome(`t=${t33.replace('+', '%2B')}`, FAR)).toBe('bad_parameter');
+    expect(snapOutcome(`t=${encodeURIComponent(t33)}`, FAR)).toBe('bad_parameter');
     // The length is checked first: the unknown key would otherwise win.
     expect(snapOutcome(`t=${'a'.repeat(33)}&x=1`, FAR)).toBe('bad_parameter');
   });
