@@ -1,0 +1,4 @@
+# The vendored map assets are checked byte for byte against SHA256SUMS and the
+# registry pin (test/basemap-style.test.ts): never convert their line endings.
+apps/web/public/assets/map/** -text
+tools/geo/fixtures/*.pmtiles binary

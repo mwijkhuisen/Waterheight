@@ -129,6 +129,9 @@
     { "id": "protomaps", "source": "R7", "required": false, "method": "GET",
       "url": "https://build.protomaps.com/",
       "sig": "[0-9]{8}\\.pmtiles" },
+    { "id": "protomaps-builds", "source": "R7", "required": false, "method": "GET",
+      "url": "https://build-metadata.protomaps.dev/builds.json",
+      "sig": "\"key\":\"[0-9]{8}\\.pmtiles\"" },
 
     { "id": "be-1-hic", "source": "BE-1", "required": false, "method": "GET",
       "url": "https://hicws.vlaanderen.be/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=4&request=getTimeseriesValueLayer&timeseriesgroup_id=156163&format=json&metadata=true&md_returnfields=ts_id,station_no&timezone=UTC",

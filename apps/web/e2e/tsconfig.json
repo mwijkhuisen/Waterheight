@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2024", "esnext.temporal", "dom", "dom.iterable"],
+    "types": ["node"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": false,
+    "tsBuildInfoFile": "../node_modules/.cache/tsc/e2e.tsbuildinfo"
+  },
+  "include": ["."],
+  "references": [{ "path": "../../../packages/core" }]
+}

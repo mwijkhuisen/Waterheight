@@ -20,6 +20,7 @@ sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -Atc "SELECT pg_size_pre
 | Container logs | `sudo journalctl --vacuum-time=7d`; Docker's `local` driver keeps 5 × 20 MB per container | Logs only |
 | Restic cache | `sudo find /srv/rws/backup/cache -mindepth 1 -delete` | Rebuilt on the next run |
 | Drill scratch | `sudo find /srv/rws/backup/drill -mindepth 1 -delete` | Always temporary |
+| Basemap staging (P3) | `sudo find /srv/rws/tiles/.staging -mindepth 1 -delete`, while no basemap refresh runs (`sudo docker ps --filter name=basemap`) | The leftovers of an interrupted fetch; the next refresh empties it first anyway (an extract that waits for a failed `promote` is lost with it: a fetch again). The rest of `/srv/rws/tiles` is not spare: the current and the previous extract take about 9 GB, so never delete a file that `manifest.json` names (`docs/runbooks/basemap.md`) |
 
 **Never** delete anything under `/srv/rws/raw` by hand. Retention pruning of the obs window belongs to the pruner of the `load` role (§4), which is a dry run until you switch it on, and a forever class is never pruned. Never drop or detach database partitions to save space (`docs/runbooks/partition-maintenance.md`). Check first that the last backup is fresh (`/status/ops.json` `last_backup` < 1 h).
 

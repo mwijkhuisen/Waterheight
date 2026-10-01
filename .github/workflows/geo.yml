@@ -1,0 +1,61 @@
+# Basemap style and assets (P3, issue #18; ADR-0016). Runs on a pull request that touches the style
+# generator, the registry's basemap file, the generated styles or the committed glyph and sprite
+# assets (or the lockfile that pins their tools), so it is not a required check: `ci` is.
+# The generated styles must be exactly the generator's output, the offline tests must pass, and the
+# committed assets must be byte for byte what the pinned basemaps-assets commit gives: one
+# download from codeload.github.com, the only networked step. Same hardening as ci.yml: top-level
+# permissions {}, contents: read, harden-runner first, persist-credentials: false, no caches, no
+# expressions inside run: (values come in through env:), actions pinned to full SHAs.
+name: geo
+
+on:
+  pull_request:
+    paths:
+      - tools/geo/**
+      - registry/basemap.yaml
+      - apps/web/src/features/map/styles/**
+      - apps/web/public/assets/map/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/geo.yml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: geo-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  style:
+    name: style
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: The committed styles are the generator's output
+        run: node tools/geo/basemap/build-style.ts --check
+      - name: Style, lockfile and asset tests (offline)
+        run: node_modules/.bin/vitest run --project unit test/basemap-style.test.ts
+      - name: The committed assets are the pinned basemaps-assets commit (one download)
+        run: node tools/geo/basemap/fetch-assets.ts --verify

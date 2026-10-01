@@ -3,5 +3,19 @@
   "heading": "Rivierstanden",
   "intro": "Deze site verzamelt de waterstanden, afvoer, verwachtingen en alarmniveaus van de rivieren die Nederland binnenstromen, uit open bronnen in Nederland, Duitsland, België, Frankrijk, Luxemburg en Zwitserland. De kaart volgt later.",
   "not_official": "Dit is geen officiële waarschuwingsdienst. Volg bij hoogwater de berichten van Rijkswaterstaat en je gemeente.",
-  "other_language": "English"
+  "other_language": "English",
+  "spike_title": "Kaartproef (test, niet publiek)",
+  "spike_heading": "Kaartproef",
+  "spike_intro": "Testpagina voor de zelf gehoste basiskaart met 200 proefstations. Deze pagina komt nooit op de publieke site.",
+  "spike_toggle_hide": "Kaart verbergen",
+  "spike_toggle_show": "Kaart tonen",
+  "spike_time": "Tijdtest (Europe/Amsterdam)",
+  "map_label": "Kaart met rivierstations",
+  "map_loading": "Kaart laden…",
+  "map_unavailable": "De kaart kan niet worden geladen.",
+  "map_zoom_in": "Inzoomen",
+  "map_zoom_out": "Uitzoomen",
+  "map_reset_bearing": "Kaart naar het noorden draaien",
+  "map_toggle_attribution": "Bronvermelding tonen of verbergen",
+  "map_feedback": "Kaartfout melden"
 }

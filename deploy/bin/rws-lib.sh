@@ -262,11 +262,12 @@ stage_release() {
 }
 
 # has_service <name>: the active release's compose.yaml defines that service (a
-# P1b release has no db, load or api). False too when compose cannot read the
+# P1b release has no db, load or api; an older one has no basemap job), jobs
+# of the "jobs" profile included. False too when compose cannot read the
 # file; then the `up` that follows fails on it as well.
 has_service() {
   local services
-  services=$(rws_compose config --services) || return 1
+  services=$(rws_compose --profile jobs config --services) || return 1
   grep -qxF -- "$1" <<<"$services"
 }
 

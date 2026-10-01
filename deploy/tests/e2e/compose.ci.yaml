@@ -4,6 +4,7 @@
 # - capture runs for real but on an internal network: every fetch fails on DNS,
 #   so no provider sees a request, while it still writes its status and state;
 # - backup reaches a local MinIO bucket with Object Lock (COMPLIANCE);
+# - basemap-promote reads the CI copy of the basemap registry (the fixtures' extracts);
 # - probe publishes a port the firewall must not let through from outside.
 services:
   caddy:
@@ -29,6 +30,15 @@ services:
       SSL_CERT_FILE: /ci/pki/ca.pem
     volumes:
       - /ci/pki/ca.pem:/ci/pki/ca.pem:ro
+
+  # P3: promote runs for real on the recorded PMTiles fixtures, checked against
+  # a CI copy of registry/basemap.yaml whose extracts match them (the fetch job
+  # needs the internet and is not run here).
+  basemap-promote:
+    environment:
+      RWS_BASEMAP_REGISTRY: /ci/basemap.yaml
+    volumes:
+      - /ci/basemap.yaml:/ci/basemap.yaml:ro
 
   probe:
     image: ${RWS_WEB_IMAGE:?}

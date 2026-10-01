@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { type Logger, pino } from 'pino';
 import { createApp } from './app.ts';
 import { Archive } from './archive/writer.ts';
+import { runBasemap } from './basemap/index.ts';
 import { budgets, schedule } from './capture/budget.ts';
 import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from './capture/env.ts';
 import { Pinger } from './capture/pings.ts';
@@ -18,7 +19,17 @@ import { runLoad, runReplay } from './load/run.ts';
 import { runWatchdog } from './watchdog/watchdog.ts';
 
 /** Roles of the single server image (A§4); the command picks one. */
-export const ROLES = ['capture', 'load', 'publish', 'api', 'replay', 'migrate', 'watchdog', 'healthcheck'] as const;
+export const ROLES = [
+  'capture',
+  'load',
+  'publish',
+  'api',
+  'replay',
+  'migrate',
+  'basemap',
+  'watchdog',
+  'healthcheck',
+] as const;
 export type Role = (typeof ROLES)[number];
 
 export const EXIT_NOT_IMPLEMENTED = 2;
@@ -26,7 +37,8 @@ export const EXIT_USAGE = 64;
 export { EXIT_CONFIG };
 
 const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; watchdog takes --once or --dry-run;
-  replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD[THH:MM:SSZ]> --to <YYYY-MM-DD> [--dry-run])`;
+  replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD[THH:MM:SSZ]> --to <YYYY-MM-DD> [--dry-run];
+  basemap takes <fetch|promote|rollback> [--build <YYYYMMDD>] [--dry-run])`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
 const RWS_LIMIT = 400;
 
@@ -189,7 +201,7 @@ function api(env: Readonly<Record<string, string | undefined>>, listen: Listen, 
 
 /**
  * Resolves with an exit code; `api`, `capture`, `load` and `watchdog` keep
- * running until SIGINT or SIGTERM; `migrate` and `replay` are one-shot.
+ * running until SIGINT or SIGTERM; `migrate`, `replay` and `basemap` are one-shot.
  * `publish` is a stub until its phase (P9).
  */
 export function run(
@@ -201,7 +213,7 @@ export function run(
   const flag = rest.length === 1 ? rest[0] : undefined;
   const dry = (role === 'capture' || role === 'watchdog') && flag === '--dry-run';
   const once = role === 'watchdog' && flag === '--once';
-  const takesArgs = dry || once || role === 'replay';
+  const takesArgs = dry || once || role === 'replay' || role === 'basemap';
   if (role === undefined || (rest.length > 0 && !takesArgs) || !(ROLES as readonly string[]).includes(role)) {
     log(USAGE);
     return Promise.resolve(EXIT_USAGE);
@@ -210,6 +222,7 @@ export function run(
   if (role === 'migrate') return runMigrate(env, log);
   if (role === 'load') return runLoad(env, log);
   if (role === 'replay') return runReplay(rest, env, log);
+  if (role === 'basemap') return runBasemap(rest, env, log);
   if (role === 'watchdog') return runWatchdog(env, dry ? 'dry-run' : once ? 'once' : 'loop', log);
   if (role === 'capture') {
     if (dry) {

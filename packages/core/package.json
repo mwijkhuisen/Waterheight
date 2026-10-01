@@ -9,6 +9,10 @@
     ".": {
       "rws-dist": "./dist/index.js",
       "default": "./src/index.ts"
+    },
+    "./tiles-manifest": {
+      "rws-dist": "./dist/tiles-manifest.js",
+      "default": "./src/tiles-manifest.ts"
     }
   },
   "dependencies": {
