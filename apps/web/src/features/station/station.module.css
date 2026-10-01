@@ -1,0 +1,61 @@
+.panel {
+  flex: 1 1 22rem;
+  border: 1px solid var(--line);
+  padding: var(--space);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.head h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.close {
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0.1rem 0.5rem;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.15rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.series h3 {
+  margin: var(--space) 0 0.25rem;
+  font-size: 1rem;
+}
+
+.value {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.chart {
+  height: 13rem;
+  width: 100%;
+}
+
+.note {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
