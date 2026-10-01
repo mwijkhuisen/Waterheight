@@ -1,0 +1,13 @@
+# Installed by bootstrap.sh, enabled by the owner after the first manual run (not on bootstrap's enable list).
+[Unit]
+Description=rws: refresh the self-hosted basemap, quarterly
+
+[Timer]
+# The 15th of January, April, July and October at 05:10 UTC (month 10 and day 15 are not a range),
+# clear of the 03:40 UTC unattended-upgrades reboot (deploy/host/apt-unattended-rws.conf).
+OnCalendar=*-01,04,07,10-15 05:10:00
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

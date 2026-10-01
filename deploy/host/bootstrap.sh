@@ -212,7 +212,10 @@ ensure_dir /srv/rws/public/status 0755 65532 65532
 ensure_dir /srv/rws/public/ops 0755 0 0
 ensure_dir /srv/rws/owner 0750 65532 65532
 ensure_dir /srv/rws/owner/status 0750 65532 65532
-ensure_dir /srv/rws/tiles 0755 0 0
+# The basemap (P3): Caddy serves /srv/rws/tiles read-only; only the basemap-promote job (uid 65532, no network)
+# writes it, and the networked basemap job only its .staging subdirectory (T-WEB-1). Before P3 it was root's.
+ensure_dir /srv/rws/tiles 0755 65532 65532
+ensure_dir /srv/rws/tiles/.staging 0700 65532 65532
 # Root's: the backup job mounts only the subdirectories below, and an owner of the parent could swap db/ for a
 # link under root's nightly dump (nothing writes the parent itself).
 ensure_dir /srv/rws/backup 0700 0 0
@@ -416,6 +419,8 @@ if [[ -s /srv/rws/public/ops/ops.json ]]; then
 else
   fix "/srv/rws/public/ops/ops.json" ops_update '.'
 fi
+# The basemap refresh timer is installed with the other units but not enabled here: the owner enables it after the
+# first manual run of rws-basemap-refresh.
 for unit in rws-status-copy.path rws-update.timer rws-backup.timer rws-restore-drill.timer rws-tick.timer; do
   enable_now "$unit"
 done

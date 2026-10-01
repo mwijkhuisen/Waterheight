@@ -5,6 +5,7 @@
     { "path": "packages/core" },
     { "path": "apps/server" },
     { "path": "apps/web" },
+    { "path": "apps/web/e2e" },
     { "path": "tsconfig.tooling.json" }
   ]
 }

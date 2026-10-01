@@ -56,6 +56,8 @@
       "Bash(pnpm check:bom)",
       "Bash(pnpm check:boundaries)",
       "Bash(pnpm -F web build)",
+      "Bash(pnpm -F web build:e2e)",
+      "Bash(pnpm -F web e2e)",
       "Bash(pnpm -F web i18n)",
       "Bash(git status)",
       "Bash(git status *)",

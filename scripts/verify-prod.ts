@@ -7,7 +7,11 @@
 //                                                files, per-spec freshness, owner_specs,
 //                                                the health API (contract, closed
 //                                                parameters, DE-1 and NL-1 health, tier-1
-//                                                freshness and replay, loader lag), and no
+//                                                freshness and replay, loader lag), the
+//                                                basemap tiles (P3: the manifest, a Range
+//                                                read of every listed file, the 404s, the
+//                                                416 for no Range or two ranges) and
+//                                                the pinned map assets, and no
 //                                                owner source, spec, host, canary or
 //                                                private_basis in /status/* or /api/v1/health*
 //   scripts/verify-prod.sh <domain> --soak       + the 72 h soak: >= 99% per source, the
@@ -36,6 +40,12 @@ import {
   HealthSources,
   LAG_DEGRADED_S,
 } from '../packages/contracts/src/index.ts';
+import {
+  parseTilesManifest,
+  type TileFile,
+  type TilesManifest,
+  TilesManifestError,
+} from '../packages/core/src/tiles-manifest.ts';
 
 const root = join(import.meta.dirname, '..');
 export const CERT_MIN_DAYS = 14;
@@ -485,6 +495,146 @@ export function checkOwnerLeak(bodies: Readonly<Record<string, string>>, terms: 
     : miss('owner leak', `found in ${found.join('; ')}`);
 }
 
+// ---------------------------------------------------------------- basemap tiles (P3)
+
+/** A§9.1: a dated tile file, and the pinned map assets, never change. */
+export const TILE_CACHE = 'public, max-age=31536000, immutable';
+/** The manifest changes on every promote: a short TTL, never immutable. */
+export const MANIFEST_CACHE = 'public, max-age=60';
+/** The PMTiles v3 header starts with "PMTiles" and the version byte 3. */
+export const PMTILES_MAGIC = 'PMTiles\u0003';
+/** A tile file is read like the client reads it: a Range, and the encodings a browser offers (Caddy must apply none). */
+export const TILE_HEADERS = { range: 'bytes=0-15', 'accept-encoding': 'gzip, zstd' } as const;
+/** A glyph range of the pinned assets: `/assets/map/<first 7 of assets.commit in registry/basemap.yaml>/`. */
+export const MAP_ASSET_PATH = '/assets/map/028c18f/fonts/Noto%20Sans%20Regular/0-255.pbf';
+/** Paths under /tiles that answer 404: the directory, the staging directory, a dated name nothing promoted. */
+export const TILES_404_PATHS = ['/tiles/', '/tiles/.staging/', '/tiles/basemap-19700101.pmtiles'] as const;
+/**
+ * Requests for the current basemap file that Caddy refuses with 416: only one explicit
+ * range is served (SR-1). A range-less GET that is not refused streams the file; `get` cuts it off at 8 MiB.
+ */
+export const TILE_416_REQUESTS = [
+  ['no Range', {}],
+  ['two ranges', { range: 'bytes=0-0,2-2' }],
+] as const;
+
+const show = (v: string | undefined) => JSON.stringify(v ?? null);
+
+export type ManifestRead = { manifest?: TilesManifest; problems: string[] };
+
+/**
+ * `/tiles/manifest.json`: 200, `Cache-Control` exactly max-age=60 and a body
+ * `parseTilesManifest` accepts. `manifest` is set whenever the body is a valid
+ * manifest, whatever else is wrong; a string is a network error.
+ */
+export function readTilesManifest(page: Page | string): ManifestRead {
+  if (typeof page === 'string') return { problems: [page] };
+  const problems: string[] = [];
+  if (page.status !== 200) problems.push(`status ${page.status}`);
+  const cache = page.headers['cache-control'];
+  if (cache !== MANIFEST_CACHE) problems.push(`cache-control ${show(cache)}`);
+  try {
+    return { manifest: parseTilesManifest(page.body), problems };
+  } catch (e) {
+    // A fixed code and a fixed schema path, never content of the body.
+    problems.push(e instanceof TilesManifestError ? e.message : 'not the manifest');
+    return { problems };
+  }
+}
+
+export function checkTilesManifestPage(r: ManifestRead): Result {
+  const m = r.manifest;
+  return m !== undefined && r.problems.length === 0
+    ? pass(
+        'tiles manifest',
+        `200, ${MANIFEST_CACHE}, current build ${m.current.build} (tiles ${m.current.version}), previous ${m.previous?.build ?? 'none'}`,
+      )
+    : miss('tiles manifest', r.problems.join('; '));
+}
+
+/** Every file the manifest lists, current first, then the previous extract's. */
+export const tileFiles = (m: TilesManifest | undefined): TileFile[] =>
+  m === undefined
+    ? []
+    : [m.current, ...(m.previous === null ? [] : [m.previous])].flatMap((e) => [e.basemap, e.planet]);
+
+/**
+ * One listed file, read with `TILE_HEADERS`: 206, `Content-Range` with the
+ * manifest's byte count as the total, immutable, no `Content-Encoding`, and the
+ * PMTiles v3 magic first. Only fixed strings and the validated file name are printed.
+ */
+export function checkTileFile(file: TileFile, page: Page | string): Result {
+  const check = `tiles ${file.file}`;
+  if (typeof page === 'string') return miss(check, page);
+  const problems: string[] = [];
+  if (page.status !== 206) problems.push(`status ${page.status}, want 206`);
+  const range = page.headers['content-range'];
+  if (range !== `bytes 0-15/${file.bytes}`)
+    problems.push(`content-range ${show(range)}, want bytes 0-15/${file.bytes}`);
+  const cache = page.headers['cache-control'];
+  if (cache !== TILE_CACHE) problems.push(`cache-control ${show(cache)}`);
+  const encoding = page.headers['content-encoding'];
+  if (encoding !== undefined) problems.push(`content-encoding ${show(encoding)}`);
+  if (!page.body.startsWith(PMTILES_MAGIC)) problems.push('not a PMTiles v3 file');
+  return problems.length === 0
+    ? pass(check, `206, bytes 0-15/${file.bytes}, immutable, no Content-Encoding, PMTiles v3`)
+    : miss(check, problems.join('; '));
+}
+
+/** n/a while the manifest has no previous extract (the first run); a pass once it lists one. */
+export function checkTilesPrevious(r: ManifestRead): Result {
+  const check = 'tiles previous';
+  if (r.manifest === undefined) return miss(check, 'no valid manifest');
+  const p = r.manifest.previous;
+  return p === null
+    ? { check, ok: 'n/a', detail: 'one extract so far; run the job again on a later build' }
+    : pass(check, `build ${p.build} (tiles ${p.version}) is listed; its two files are read above`);
+}
+
+/** Everything else under /tiles is a 404, and no 404 is marked immutable (a browser would keep it for a year). */
+export function checkTiles404(got: Readonly<Record<string, Page | string>>): Result {
+  const problems = TILES_404_PATHS.flatMap((path) => {
+    const page = got[path];
+    if (page === undefined || typeof page === 'string') return [`${path}: ${page ?? 'not asked'}`];
+    const bad: string[] = [];
+    if (page.status !== 404) bad.push(`status ${page.status}, want 404`);
+    if (/immutable/i.test(page.headers['cache-control'] ?? '')) bad.push('a 404 marked immutable');
+    return bad.map((b) => `${path}: ${b}`);
+  });
+  return problems.length === 0
+    ? pass('tiles 404', `${TILES_404_PATHS.join(', ')} are 404 and not immutable`)
+    : miss('tiles 404', problems.join('; '));
+}
+
+/** The current basemap file without a Range and with two ranges: 416, and never marked immutable. */
+export function checkTiles416(file: TileFile | undefined, got: Readonly<Record<string, Page | string>>): Result {
+  const check = 'tiles 416';
+  if (file === undefined) return miss(check, 'no valid manifest');
+  const problems = TILE_416_REQUESTS.flatMap(([label]) => {
+    const page = got[label];
+    if (page === undefined || typeof page === 'string') return [`${label}: ${page ?? 'not asked'}`];
+    const bad: string[] = [];
+    if (page.status !== 416) bad.push(`status ${page.status}, want 416`);
+    if (/immutable/i.test(page.headers['cache-control'] ?? '')) bad.push('marked immutable');
+    return bad.map((b) => `${label}: ${b}`);
+  });
+  return problems.length === 0
+    ? pass(check, `${file.file}: no Range and two ranges are 416, not immutable`)
+    : miss(check, problems.join('; '));
+}
+
+/** A glyph file of the pinned map assets: 200, non-empty, immutable. */
+export function checkMapAsset(page: Page | string): Result {
+  const check = 'map assets';
+  if (typeof page === 'string') return miss(check, page);
+  const problems: string[] = [];
+  if (page.status !== 200) problems.push(`status ${page.status}, want 200`);
+  const cache = page.headers['cache-control'];
+  if (cache !== TILE_CACHE) problems.push(`cache-control ${show(cache)}`);
+  if (page.status === 200 && page.body.length === 0) problems.push('empty body');
+  return problems.length === 0 ? pass(check, `${MAP_ASSET_PATH}: 200, immutable`) : miss(check, problems.join('; '));
+}
+
 // ---------------------------------------------------------------- network
 
 type Net = { resolve?: string; ca?: Buffer };
@@ -498,7 +648,7 @@ function lookupFor(net: Net): LookupFunction | undefined {
     options.all ? cb(null, [{ address, family }]) : cb(null, address, family)) as unknown as LookupFunction;
 }
 
-function get(url: string, net: Net): Promise<Page> {
+function get(url: string, net: Net, headers: Readonly<Record<string, string>> = {}): Promise<Page> {
   const u = new URL(url);
   const request = u.protocol === 'https:' ? httpsRequest : httpRequest;
   return new Promise((resolve, reject) => {
@@ -506,7 +656,7 @@ function get(url: string, net: Net): Promise<Page> {
       u,
       {
         method: 'GET',
-        headers: { 'user-agent': 'rivierstanden-verify-prod' },
+        headers: { 'user-agent': 'rivierstanden-verify-prod', ...headers },
         timeout: 20_000,
         ...(net.ca === undefined ? {} : { ca: net.ca }),
         ...(lookupFor(net) === undefined ? {} : { lookup: lookupFor(net) }),
@@ -534,8 +684,8 @@ function get(url: string, net: Net): Promise<Page> {
 }
 
 /** A page, or the error text when the request itself failed: the checks report it instead of crashing. */
-const tryGet = (url: string, net: Net): Promise<Page | string> =>
-  get(url, net).catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
+const tryGet = (url: string, net: Net, headers?: Readonly<Record<string, string>>): Promise<Page | string> =>
+  get(url, net, headers).catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
 
 /** TLS on one address: a certificate valid for the domain, days left. */
 function tlsOn(domain: string, address: string, net: Net): Promise<{ days: number } | { error: string }> {
@@ -624,6 +774,12 @@ export const CHECKS = [
   'health NL-1: /api/v1/health/sources lists NL-1 with status ok',
   'tier-1 NL-1: >= 95% of the tier-1 series are fresh, each against its own limit (provider-stale ones are named and never make it a PASS)',
   'replay NL-1: no loader backlog, a partition checksum for NL-1 and no quarantined NL-1 payload',
+  `tiles manifest: GET /tiles/manifest.json is 200 with Cache-Control exactly "${MANIFEST_CACHE}" (never immutable) and a body parseTilesManifest accepts`,
+  `tiles <file>: every file the manifest lists (current and previous), GET with Range: ${TILE_HEADERS.range} and Accept-Encoding: ${TILE_HEADERS['accept-encoding']}, is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
+  'tiles previous: n/a while the manifest has no previous extract (run the job again on a later build); a pass once it lists one',
+  `tiles 404: ${TILES_404_PATHS.join(', ')} are 404 and none is marked immutable`,
+  `tiles 416: GET on the current basemap file without Range, and with Range: ${TILE_416_REQUESTS[1][1].range}, is 416 and not immutable (only one explicit range is served)`,
+  `map assets: GET ${MAP_ASSET_PATH} (a pinned glyph range of the web image) is 200 with Cache-Control exactly "${TILE_CACHE}"`,
   `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* or /api/v1/health* body`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
   `twin eijsden-grens-taw-nap: (--soak) listed in /api/v1/health/sources; latest check under ${TWIN_MAX_AGE_MS / 3_600_000} h old, ok, with aligned timestamps; no failed check in 7 days; >= ${TWIN_MIN_CHECKS_7D} of the 168 hourly checks`,
@@ -724,6 +880,22 @@ async function main(argv: string[]): Promise<number> {
       checkTier1(sources.data, 'NL-1'),
       checkReplay(health.data, sources.data, 'NL-1'),
     );
+
+    // The P3 basemap (A§9.1): the manifest, every file it lists read with a 16-byte Range, the 404s, one pinned asset.
+    const tile = (path: string, headers?: Readonly<Record<string, string>>) =>
+      tryGet(`https://${domain}${path}`, net, headers);
+    const manifest = readTilesManifest(await tile('/tiles/manifest.json'));
+    results.push(checkTilesManifestPage(manifest));
+    for (const file of tileFiles(manifest.manifest))
+      results.push(checkTileFile(file, await tile(`/tiles/${file.file}`, TILE_HEADERS)));
+    results.push(checkTilesPrevious(manifest));
+    const missing: Record<string, Page | string> = {};
+    for (const path of TILES_404_PATHS) missing[path] = await tile(path);
+    const current = manifest.manifest?.current.basemap;
+    const refused: Record<string, Page | string> = {};
+    if (current !== undefined)
+      for (const [label, headers] of TILE_416_REQUESTS) refused[label] = await tile(`/tiles/${current.file}`, headers);
+    results.push(checkTiles404(missing), checkTiles416(current, refused), checkMapAsset(await tile(MAP_ASSET_PATH)));
 
     const body = (page: Page | string | undefined) => (typeof page === 'object' ? page.body : '');
     results.push(

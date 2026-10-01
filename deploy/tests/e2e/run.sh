@@ -34,7 +34,14 @@
 #     404 and an unknown parameter a 400; load and api have no route out; db,
 #     load and api keep the hardening flags; each sees only its own secret;
 #     the nightly dump is a valid custom-format dump readable only by root and
-#     gid 61003, and restic backs it up.
+#     gid 61003, and restic backs it up;
+#   - (P3) the basemap jobs: the networked basemap job sees the served directory
+#     read-only and writes only .staging; basemap-promote has no network and moves
+#     the recorded PMTiles fixtures from .staging into /srv/rws/tiles with a
+#     manifest.json (no symlink to follow, T-WEB-1); Caddy serves them over TLS
+#     with Range, immutable caching and no content encoding, and every other
+#     request for a tile file is a 416; a leftover basemap container stops
+#     rws-basemap-refresh.
 # The stack keeps running afterwards for scripts/verify-prod.ts.
 # Usage: sudo deploy/tests/e2e/run.sh
 set -euo pipefail
@@ -84,6 +91,7 @@ on_exit() {
     echo "::group::diagnostics"
     docker compose -p rws ps -a 2>/dev/null || true
     for s in caddy capture watchdog db load api pebble minio; do docker logs --tail 60 "rws-$s-1" 2>&1 | sed "s/^/$s| /" || true; done
+    find /srv/rws/tiles -maxdepth 2 -printf '%M %u:%g %s %p\n' 2>&1 | head -n 20 || true
     systemctl status --no-pager rws-status-copy.path rws-status-copy.service 2>&1 | tail -n 20 || true
     nft list ruleset 2>/dev/null | head -n 200 || true
     echo "::endgroup::"
@@ -151,7 +159,7 @@ proof "server image: capture --dry-run loads every spec from /app/registry next 
 # ------------------------------------------------------------------ PKI
 step "A throwaway CA for Pebble's and MinIO's TLS"
 install -d -m 0755 /ci /ci/pki /ci/pki/minio
-cp "$e2e/Caddyfile.ci" "$e2e/pebble.json" /ci/
+cp "$e2e/Caddyfile.ci" "$e2e/pebble.json" "$e2e/basemap.yaml" /ci/
 openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=rws-ci-ca -keyout /ci/pki/ca.key -out /ci/pki/ca.pem \
   -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign 2>/dev/null
 for name in pebble minio; do
@@ -173,10 +181,13 @@ done
 # The runner's own disk is often over 75% full: a tmpfs keeps the watchdog's disk check about our layout.
 install -d -m 0755 /srv/rws
 mountpoint -q /srv/rws || mount -t tmpfs -o size=2g,mode=0755 tmpfs /srv/rws
-install -d -m 0755 /srv/rws/public /srv/rws/public/ops /srv/rws/tiles /etc/rws
+install -d -m 0755 /srv/rws/public /srv/rws/public/ops /etc/rws
 install -d -m 0700 /etc/rws/secrets "$RWS_STATE_DIR" "$RWS_STATE_DIR/releases"
 install -d -m 0750 -o 65532 -g 65532 /srv/rws/raw /srv/rws/owner /srv/rws/owner/status
 install -d -m 0755 -o 65532 -g 65532 /srv/rws/public/status
+# The basemap (P3): the promote job's directory, Caddy serves it read-only; .staging is the fetch job's.
+install -d -m 0755 -o 65532 -g 65532 /srv/rws/tiles
+install -d -m 0700 -o 65532 -g 65532 /srv/rws/tiles/.staging
 # The parent is root's: its subdirectories are bind-mounted one by one, and a uid-65532 owner could swap db/ for a link.
 install -d -m 0700 -o 0 -g 0 /srv/rws/backup
 install -d -m 0700 -o 65532 -g 65532 /srv/rws/backup/cache /srv/rws/backup/drill
@@ -285,6 +296,8 @@ docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$e2e/compose.ci.yaml" \
   --env-file /etc/rws/rws.env --env-file "$REL/images.env" --profile jobs config >"$REL/compose.yaml"
 grep -q '^  backup:' "$REL/compose.yaml" || fail "the merged compose file has no backup service"
 grep -q '^  migrate:' "$REL/compose.yaml" || fail "the merged compose file has no migrate job"
+grep -q '^  basemap:' "$REL/compose.yaml" || fail "the merged compose file has no basemap job"
+grep -q '^  basemap-promote:' "$REL/compose.yaml" || fail "the merged compose file has no basemap-promote job"
 set_active prod-ci
 # The production path (deploy_release): db healthy, roles and passwords through
 # its socket (db_prepare), the migrate job; then up. Twice: a redeploy changes nothing.
@@ -486,6 +499,151 @@ if docker run --rm --network none --user 65532:65532 -v /etc/rws/secrets/db_rws_
 fi
 proof "load and api have no route out (1.1.1.1:443: ${routes% })"
 proof "db (uid 999), load and api (uid 65532): read-only root, cap_drop ALL, CapEff 0, NoNewPrivs 1; each mounts only its own secret (db_postgres, db_rws_load, db_rws_api), and uid 65532 without gid 61008 cannot read db_rws_api"
+
+# ------------------------------------------------------------------ basemap (P3)
+step "basemap: fetch cannot write what Caddy serves; promote (no network) moves the checked PMTiles in; Caddy serves them with Range"
+tiles=/srv/rws/tiles build=20261001 fixtures=$repo/tools/geo/fixtures
+# The shape T-WEB-1 rests on, from the merged compose file the stack runs: the job with the
+# network sees the served directory read-only and writes only .staging, no file of it over
+# 6.5 GB (fsize, T-MAP-1); the job that writes the served directory has no network (and
+# neither has a secret); Caddy mounts it read-only.
+# shellcheck disable=SC2016 # a jq program, not shell
+shape='.services.basemap as $f | .services["basemap-promote"] as $p | .services.caddy as $c
+  | ($f.networks | keys) == ["egress"] and $f.network_mode == null
+  and $f.profiles == ["jobs"] and $p.profiles == ["jobs"]
+  and $f.user == "65532:65532" and $p.user == "65532:65532"
+  and $f.read_only == true and $p.read_only == true
+  and $f.cap_drop == ["ALL"] and $p.cap_drop == ["ALL"]
+  and ([$f.volumes[].target] | sort) == ["/staging", "/tiles"]
+  and ([$f.volumes[] | select(.target == "/tiles")][0] | .source == "/srv/rws/tiles" and .read_only == true)
+  and ([$f.volumes[] | select(.target == "/staging")][0] | .source == "/srv/rws/tiles/.staging" and .read_only != true)
+  and $p.network_mode == "none" and $p.networks == null
+  and ([$p.volumes[].target] | sort) == ["/ci/basemap.yaml", "/tiles"]
+  and ([$p.volumes[] | select(.target == "/tiles")][0] | .source == "/srv/rws/tiles" and .read_only != true)
+  and ([$c.volumes[] | select(.target == "/srv/rws/tiles")][0] | .source == "/srv/rws/tiles" and .read_only == true)
+  and $f.secrets == null and $p.secrets == null
+  and $f.ulimits.fsize == {soft: 6500000000, hard: 6500000000}
+  and $p.environment.RWS_BASEMAP_REGISTRY == "/ci/basemap.yaml"'
+rws_compose --profile jobs config --format json | jq -e "$shape" >/dev/null ||
+  fail "the basemap jobs or caddy's tiles mount do not have the shape T-WEB-1 needs (deploy/compose.yaml)"
+[[ $(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/srv/rws/tiles"}}{{.RW}}{{end}}{{end}}' rws-caddy-1) == false ]] ||
+  fail "caddy mounts /srv/rws/tiles read-write, or not at all"
+# The same from inside the real containers (distroless: node is the probe).
+fs_probe='const fs = require("fs"); const r = [];
+try { fs.writeFileSync("/tiles/e2e-probe", "x"); r.push("tiles:wrote"); } catch (e) { r.push("tiles:" + e.code); }
+try { fs.writeFileSync("/staging/e2e-probe", "x"); fs.unlinkSync("/staging/e2e-probe"); r.push("staging:ok"); } catch (e) { r.push("staging:" + e.code); }
+console.log(r.join(" "));'
+got=$(rws_compose run --rm --no-deps -T --entrypoint /nodejs/bin/node basemap -e "$fs_probe")
+[[ $got == 'tiles:EROFS staging:ok' ]] || fail "the basemap job's file systems: $got"
+# Docker hands the fsize value to setrlimit as is: bytes (the kernel's unit for RLIMIT_FSIZE).
+limits_probe='console.log(require("fs").readFileSync("/proc/self/limits", "utf8").split("\n").find((l) => l.startsWith("Max file size")).trim().split(/ {2,}/).slice(1).join(" "))'
+fsize=$(rws_compose run --rm --no-deps -T --entrypoint /nodejs/bin/node basemap -e "$limits_probe")
+[[ $fsize == '6500000000 6500000000 bytes' ]] || fail "the basemap job's file size limit: $fsize"
+ifaces='console.log(Object.keys(require("os").networkInterfaces()).join(","))'
+got=$(rws_compose run --rm --no-deps -T --entrypoint /nodejs/bin/node basemap-promote -e "$ifaces")
+[[ $got == lo ]] || fail "basemap-promote has network interfaces: $got"
+promote_route=$(rws_compose run --rm --no-deps -T --entrypoint /nodejs/bin/node basemap-promote -e "$no_route") ||
+  fail "basemap-promote reached 1.1.1.1:443"
+proof "from the merged compose file: basemap joins only rws_egress, mounts /srv/rws/tiles read-only and only .staging read-write, has no secret and a file size limit of 6.5 GB (/proc/self/limits: $fsize); basemap-promote has network_mode none, mounts /srv/rws/tiles read-write and no secret; caddy mounts /srv/rws/tiles read-only (docker inspect agrees); in the real containers basemap gets EROFS writing /tiles and can write /staging, and basemap-promote has only lo (1.1.1.1:443: $promote_route)"
+
+# What fetch leaves behind (its real output is a file per extract under its final name and result.json), from the recorded fixtures.
+sha() { sha256sum "$1" | cut -d' ' -f1; }
+size() { stat -c %s "$1"; }
+install -m 0644 -o 65532 -g 65532 "$fixtures/lobith-z14.pmtiles" "$tiles/.staging/basemap-$build.pmtiles"
+install -m 0644 -o 65532 -g 65532 "$fixtures/planet-z2.pmtiles" "$tiles/.staging/planet-z6-$build.pmtiles"
+jq -n --arg build "$build" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg bsum "$(sha "$fixtures/lobith-z14.pmtiles")" --argjson bsize "$(size "$fixtures/lobith-z14.pmtiles")" \
+  --arg psum "$(sha "$fixtures/planet-z2.pmtiles")" --argjson psize "$(size "$fixtures/planet-z2.pmtiles")" \
+  '{schema_version: 1, build: $build, version: "4.15.2", created_at: $at,
+    basemap: {file: "basemap-\($build).pmtiles", sha256: $bsum, bytes: $bsize},
+    planet: {file: "planet-z6-\($build).pmtiles", sha256: $psum, bytes: $psize}}' >/ci/result.json
+install -m 0644 -o 65532 -g 65532 /ci/result.json "$tiles/.staging/result.json"
+# The real promote job, through the same compose file as the rest, against the CI copy of the basemap registry.
+promote_out=$(rws_compose run --rm --no-deps -T basemap-promote basemap promote 2>&1) || {
+  echo "$promote_out"
+  fail "basemap promote failed"
+}
+echo "$promote_out"
+ls -la "$tiles" "$tiles/.staging"
+# shellcheck disable=SC2016 # a jq program, not shell
+manifest_shape='keys == ["current", "previous", "schema_version"] and .schema_version == 1 and .previous == null
+  and (.current | keys == ["basemap", "build", "created_at", "planet", "version"])
+  and .current.build == $build and .current.version == "4.15.2"
+  and (.current.created_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$"))
+  and .current.basemap == {file: "basemap-\($build).pmtiles", sha256: $bsum, bytes: $bsize}
+  and .current.planet == {file: "planet-z6-\($build).pmtiles", sha256: $psum, bytes: $psize}'
+jq -e --arg build "$build" \
+  --arg bsum "$(sha "$fixtures/lobith-z14.pmtiles")" --argjson bsize "$(size "$fixtures/lobith-z14.pmtiles")" \
+  --arg psum "$(sha "$fixtures/planet-z2.pmtiles")" --argjson psize "$(size "$fixtures/planet-z2.pmtiles")" \
+  "$manifest_shape" "$tiles/manifest.json" >/dev/null || fail "manifest.json: $(cat "$tiles/manifest.json")"
+[[ $(stat -c '%a %u:%g' "$tiles/manifest.json") =~ ^[0-7][0-7][4-7]\ 65532:65532$ ]] ||
+  fail "manifest.json mode and owner: $(stat -c '%a %u:%g' "$tiles/manifest.json")"
+for pair in "basemap-$build.pmtiles:lobith-z14.pmtiles" "planet-z6-$build.pmtiles:planet-z2.pmtiles"; do
+  name=${pair%%:*} orig=$fixtures/${pair#*:}
+  [[ $(stat -c '%F %a %u:%g' "$tiles/$name") == 'regular file 644 65532:65532' ]] ||
+    fail "$name: $(stat -c '%F %a %u:%g' "$tiles/$name")"
+  cmp -s "$orig" "$tiles/$name" || fail "$name differs from the staged fixture"
+done
+[[ -z $(find "$tiles/.staging" -mindepth 1) ]] || fail ".staging is not empty after promote: $(ls -A "$tiles/.staging")"
+[[ $(stat -c '%a %u:%g' "$tiles/.staging") == '700 65532:65532' ]] || fail ".staging: $(stat -c '%a %u:%g' "$tiles/.staging")"
+[[ $(find "$tiles" -mindepth 1 -maxdepth 1 -not -name '.*' -printf '%f\n' | sort | tr '\n' ' ') == "basemap-$build.pmtiles manifest.json planet-z6-$build.pmtiles " ]] ||
+  fail "the served directory holds: $(ls -A "$tiles")"
+# A run with nothing staged is a no-op that changes nothing (the quarterly timer may find nothing to do).
+cp -p "$tiles/manifest.json" /ci/manifest.before
+rws_compose run --rm --no-deps -T basemap-promote basemap promote >/dev/null 2>&1 || fail "a promote with nothing staged failed"
+cmp -s /ci/manifest.before "$tiles/manifest.json" || fail "a promote with nothing staged changed manifest.json"
+proof "basemap promote (the real job, no network, CI copy of registry/basemap.yaml with the fixtures' extracts) exited 0 on the staged Lobith z0-14 and planet z0-2 PMTiles: manifest.json names build $build with previous null and the staged sha256 and sizes; both files are regular, 0644, 65532:65532 and equal to the fixtures; .staging is empty and 0700; nothing else sits in the served directory; a second promote with nothing staged changed nothing"
+tiles_url() { printf 'https://%s/tiles/%s' "$DOMAIN" "$1"; }
+for pair in "basemap-$build.pmtiles:lobith-z14.pmtiles" "planet-z6-$build.pmtiles:planet-z2.pmtiles"; do
+  name=${pair%%:*} orig=$fixtures/${pair#*:}
+  code=$(outside -o /ci/range.body -D /ci/range.hdr -w '%{http_code}' -H 'Range: bytes=0-15' \
+    --resolve "$DOMAIN:443:$IP4" "$(tiles_url "$name")") || fail "$(tiles_url "$name") did not answer (the Caddy routes of P2b)"
+  hdr=$(tr -d '\r' </ci/range.hdr)
+  [[ $code == 206 ]] || fail "Range request for $name: HTTP $code"
+  grep -qiFx "content-range: bytes 0-15/$(size "$orig")" <<<"$hdr" || fail "$name: no Content-Range for its size: $hdr"
+  grep -qiFx 'cache-control: public, max-age=31536000, immutable' <<<"$hdr" || fail "$name: Cache-Control: $hdr"
+  ! grep -qi '^content-encoding:' <<<"$hdr" || fail "$name is served with a Content-Encoding"
+  [[ $(size /ci/range.body) == 16 ]] || fail "$name: the body is not 16 bytes"
+  cmp -s -n 16 /ci/range.body "$orig" || fail "$name: the 16 bytes served are not the file's first 16"
+done
+outside -o /ci/manifest.served --resolve "$DOMAIN:443:$IP4" "$(tiles_url manifest.json)" || fail "manifest.json is not served"
+cmp -s /ci/manifest.served "$tiles/manifest.json" || fail "the served manifest.json differs from the file"
+# Only one explicit range is served (SR-1), and only without If-Range or If-Match (SR2-1: an If-Range
+# that does not match would send the whole file, a failed If-Match a 412 marked immutable): no Range,
+# an open range, two ranges and one range with either header are a 416 that keeps the site headers
+# and is never marked immutable. Each case is its request headers, separated by "|".
+for ask in '' 'Range: bytes=0-' 'Range: bytes=0-0,2-2' 'Range: bytes=0-15|If-Range: "e2e"' 'Range: bytes=0-15|If-Match: "e2e"'; do
+  ask_args=()
+  IFS='|' read -ra fields <<<"$ask"
+  for field in "${fields[@]}"; do ask_args+=(-H "$field"); done
+  what=${ask:-no Range}
+  code=$(ip netns exec ext curl -sS --max-time 10 --cacert /ci/pki/pebble-root.pem -o /ci/416.body -D /ci/416.hdr \
+    -w '%{http_code}' "${ask_args[@]}" --resolve "$DOMAIN:443:$IP4" "$(tiles_url "basemap-$build.pmtiles")") ||
+    fail "basemap-$build.pmtiles did not answer ($what)"
+  hdr=$(tr -d '\r' </ci/416.hdr)
+  [[ $code == 416 ]] || fail "basemap-$build.pmtiles with $what: HTTP $code, want 416"
+  ! grep -qi '^cache-control:.*immutable' <<<"$hdr" || fail "the 416 for $what is marked immutable"
+  grep -qiFx 'x-content-type-options: nosniff' <<<"$hdr" || fail "the 416 for $what lacks the site headers"
+  [[ $(size /ci/416.body) == 0 ]] || fail "the 416 for $what has a body"
+done
+proof "https://$DOMAIN/tiles/basemap-$build.pmtiles and planet-z6-$build.pmtiles answer a Range request (bytes=0-15) with 206, a Content-Range for the file's size, Cache-Control public, max-age=31536000, immutable, no Content-Encoding and the file's own first 16 bytes; no Range, an open range, two ranges and bytes=0-15 with If-Range or If-Match are a 416 with the site headers, no immutable and no body; /tiles/manifest.json is served byte for byte"
+# A container of the fetch job left over from an earlier run (CR2-4): a real one, started through the same
+# compose file as the rest and still running, is what rws-basemap-refresh's own filter finds, and the script
+# refuses before it runs any job. Named, so the test does not depend on what `compose run -d` prints.
+rws_compose run -d --no-deps -T --name rws-e2e-leftover --entrypoint /nodejs/bin/node basemap \
+  -e 'setTimeout(() => {}, 3e5)' >/dev/null || fail "could not start a leftover basemap container"
+leftover=$(docker inspect -f '{{.Id}}' rws-e2e-leftover) || fail "the leftover basemap container is not there"
+found=$(docker ps -aq --filter label=com.docker.compose.project=rws --filter label=com.docker.compose.service=basemap)
+refused_rc=0
+refused=$("$repo/deploy/bin/rws-basemap-refresh" --dry-run 2>&1) || refused_rc=$?
+docker rm -f rws-e2e-leftover >/dev/null || fail "could not remove the leftover basemap container"
+[[ $found == "${leftover:0:12}" ]] || fail "rws-basemap-refresh's filter found '${found//$'\n'/ }', want ${leftover:0:12}"
+[[ $refused_rc == 1 ]] || fail "rws-basemap-refresh --dry-run beside a leftover container exited $refused_rc: $refused"
+grep -qF "error: a basemap container is left over (${leftover:0:12})" <<<"$refused" ||
+  fail "rws-basemap-refresh --dry-run beside a leftover container: $refused"
+[[ -z $(docker ps -aq --filter label=com.docker.compose.project=rws --filter label=com.docker.compose.service=basemap) ]] ||
+  fail "a basemap container is still there after docker rm -f"
+proof "a basemap container started with compose run -d and left running is found by rws-basemap-refresh's filter (docker ps -aq, labels project rws and service basemap: ${leftover:0:12}); rws-basemap-refresh --dry-run beside it exits 1 with 'a basemap container is left over (${leftover:0:12})' before any job runs; after docker rm -f the filter finds nothing"
 
 # ------------------------------------------------------------------ capture
 step "Capture in distroless: contract files, modes, generated_at advances"

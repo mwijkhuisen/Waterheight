@@ -1,0 +1,42 @@
+# The self-hosted basemap (P3, ADR-0016): where the `basemap` job fetches from, what it extracts, and the pinned
+# style assets. Validated by packages/contracts `validateBasemap` (packages/contracts/test/basemap.test.ts).
+# The job's only fetch targets are these URLs (invariant 1); `hosts` is its allowlist (catalogue §5.1).
+version: 1
+protomaps:
+  hosts: [build-metadata.protomaps.dev, build.protomaps.com]
+  # The build list: [{key: "<YYYYMMDD>.pmtiles", version: "4.15.2", ...}], newest last; builds are kept about a week.
+  builds_url: https://build-metadata.protomaps.dev/builds.json
+  builds_max_bytes: 1048576
+  # Each build is <tiles_base_url><YYYYMMDD>.pmtiles (HTTP Range; no CORS, which we never need).
+  tiles_base_url: https://build.protomaps.com/
+  # Only builds of this tiles schema major are extracted (the style is made for v4 tiles).
+  tiles_major: 4
+extracts:
+  # The Rhine basin with the Swiss Alps and the Main (catalogue §5.1: about 4.3 GB) and the world context (45 MB).
+  basemap: { bbox: [1.5, 45.8, 12.5, 54.0], minzoom: 0, maxzoom: 14, max_bytes: 6000000000 }
+  planet: { minzoom: 0, maxzoom: 6, max_bytes: 100000000 }
+# The job refuses to start when the new files would take /srv/rws past this (the watchdog's disk alert, A§11.3).
+disk_max_pct: 75
+style:
+  package: "@protomaps/basemaps"
+  version: "5.7.2"
+  # Owner decision 2026-10-01: 5.7.2 has no "muted" flavour; white is its minimal light flavour for data overlays.
+  flavour: white
+  langs: [nl, en]
+  # The regional extract draws from this zoom up; below it, and outside the bbox, the planet extract does.
+  regional_minzoom: 7
+assets:
+  # Fonts (glyph PBFs) and sprites: the official Protomaps assets at one commit, served from
+  # /assets/map/<first 7 of commit>/ (apps/web/public/assets/map/), every file listed in its SHA256SUMS.
+  repo: https://github.com/protomaps/basemaps-assets
+  commit: 028c18f713baecad011301ff7a69acc39bcc2ae7
+  archive_url: https://codeload.github.com/protomaps/basemaps-assets/tar.gz/028c18f713baecad011301ff7a69acc39bcc2ae7
+  fonts: [Noto Sans Regular, Noto Sans Medium, Noto Sans Italic, Noto Sans Devanagari Regular v1]
+  licences:
+    fonts: { spdx: OFL-1.1, file: fonts/OFL.txt }
+    sprites:
+      spdx: MIT
+      note: derived from tangrams/icons (Copyright (c) 2017 Mapzen), per the basemaps-assets README
+      url: https://github.com/tangrams/icons/blob/master/LICENSE.md
+  # sha256 of the committed SHA256SUMS (written by tools/geo/basemap/fetch-assets.ts).
+  sums_sha256: "382c6382019334012ae49cb1a09e18a50bc616f9810bdfacadd1a63c2e7a0164"

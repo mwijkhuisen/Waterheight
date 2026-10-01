@@ -9,6 +9,13 @@ ARG DBMATE_VERSION=2.36.0
 ADD --checksum=sha256:47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce \
   https://github.com/amacneil/dbmate/releases/download/v${DBMATE_VERSION}/dbmate-linux-amd64 \
   /tmp/dbmate
+# The `basemap` role runs the go-pmtiles release binary (P3, ADR-0016) to extract
+# the regional and planet tiles, checked against its pinned sha256 (a statically
+# linked Go binary; the archive holds LICENSE, README.md and pmtiles).
+ARG GO_PMTILES_VERSION=1.31.2
+ADD --checksum=sha256:3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f \
+  https://github.com/protomaps/go-pmtiles/releases/download/v${GO_PMTILES_VERSION}/go-pmtiles_${GO_PMTILES_VERSION}_Linux_x86_64.tar.gz \
+  /tmp/go-pmtiles.tar.gz
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
@@ -25,11 +32,13 @@ RUN pnpm install --frozen-lockfile \
   && cp -r registry /out/registry \
   && mkdir -p /out/db /out/bin \
   && cp -r db/migrations /out/db/migrations \
-  && install -m 0755 /tmp/dbmate /out/bin/dbmate
+  && install -m 0755 /tmp/dbmate /out/bin/dbmate \
+  && tar -xzf /tmp/go-pmtiles.tar.gz -C /tmp pmtiles \
+  && install -m 0755 /tmp/pmtiles /out/bin/pmtiles
 
 # The layout is part of the P1a ↔ P1b contract: capture reads <root>/registry
 # next to <root>/apps/server/dist; migrate runs <root>/bin/dbmate on
-# <root>/db/migrations.
+# <root>/db/migrations; basemap runs <root>/bin/pmtiles.
 FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89
 WORKDIR /app
 COPY --from=build /out /app

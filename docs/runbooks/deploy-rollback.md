@@ -55,6 +55,7 @@ sudo docker compose -p rws ps; sudo docker logs --tail 80 rws-caddy-1
 - While no release with an `api` runs, `/api/v1/health` is a 404: the watchdog sends no `load` ping, and healthchecks.io alerts on the `load` check after about 15 minutes. Pause that check during a deliberate rollback.
 - The first release with the database needs a different order (stop the timer, bootstrap, deploy on purpose): `docs/runbooks/bootstrap.md`, "the first release with the database".
 - The release with P2b deploys in the normal way but brings one new host file (`rws-drill`), so `update` pings `host_files_changed` until its bootstrap has run, and the NL-1 payloads since P1 need one replay afterwards: `docs/runbooks/bootstrap.md`, "the release with P2b".
+- The release with P3 deploys in the normal way (the basemap job is a role of the server image: no new image, no manifest change) but brings new host files (`rws-basemap-refresh`, its service and timer, `rws-lib.sh`), so `update` pings `host_files_changed` until its bootstrap has run: `docs/runbooks/bootstrap.md`, "the release with the basemap job". A rollback to an older release keeps `/srv/rws/tiles`; its Caddy does not serve the tiles, and `rws-basemap-refresh` refuses to run (no basemap job).
 - The nightly database dump and a deploy take turns on the deploy lock: the dump waits up to 25 minutes for a running deploy, `rws-update` skips a run while a dump holds the lock, and `rws-deploy` waits for it.
 
 ## Roll back on purpose

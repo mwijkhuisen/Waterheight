@@ -1,0 +1,10 @@
+# CI only (.github/workflows/ci.yml job e2e): the production site, served by
+# the real Caddy image for the Playwright tests on https://localhost with
+# Caddy's own local CA. Only these globals differ from deploy/web/Caddyfile.
+{
+	admin off
+	local_certs
+	skip_install_trust
+}
+
+import /etc/caddy/site.caddy

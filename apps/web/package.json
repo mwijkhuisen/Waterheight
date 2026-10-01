@@ -4,15 +4,23 @@
   "type": "module",
   "scripts": {
     "i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy globalVariable baseLocale --emit-ts-declarations --silent",
-    "build": "pnpm i18n && tsc -b && vite build"
+    "build": "pnpm i18n && tsc -b && vite build",
+    "build:e2e": "pnpm i18n && tsc -b && vite build --mode e2e",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
+    "@rws/core": "workspace:*",
+    "maplibre-gl": "6.11.1",
+    "pmtiles": "4.5.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "temporal-polyfill": "1.0.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@inlang/paraglide-js": "2.25.4",
     "@inlang/plugin-message-format": "4.4.4",
+    "@playwright/test": "1.63.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.1",

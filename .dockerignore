@@ -18,6 +18,8 @@
 # Never, even inside an allowed directory.
 **/node_modules
 **/dist
+**/dist-e2e
+**/e2e
 **/*.tsbuildinfo
 **/test
 **/fixtures

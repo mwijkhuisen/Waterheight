@@ -276,3 +276,18 @@ Do this on the VPS that already runs the P2a release. No new secret, service or 
 5. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `health NL-1`, `tier-1 NL-1` (each series against its own `staleness_limit`: KG-081) and `replay NL-1`; `replay NL-1` passes once the backlog is 0 and nothing is quarantined.
 6. The outage drill, the P2b `[owner]` criterion: `docs/runbooks/outage-drill.md`.
 7. After 7 days: `scripts/verify-prod.sh <domain> --soak` for the Eijsden twin.
+
+## Later: the release with the basemap job (P3; owner)
+
+Do this on the VPS that already runs the P2b release. No new secret, `rws.env` setting, healthchecks check or migration, and no change to the release manifest or `rws-update`: the release brings a new job in `compose.yaml` (`basemap` and `basemap-promote`, profile `jobs`, from the same server image), Caddy's `/tiles` routes and a read-only mount of `/srv/rws/tiles`, and new host files (`rws-basemap-refresh`, `rws-basemap-refresh.service` and `.timer`, and a changed `rws-lib.sh`). There is no special order (the normal `rws-update` deploy works); these steps follow it.
+
+1. Approve the `promote` job for the P3 release. `rws-update` deploys it within 5 minutes. **Check:** `sudo docker compose -p rws ps` (caddy, capture, watchdog, db, load and api healthy), `curl -s https://<domain>/healthz`. `scripts/verify-prod.sh <domain>` shows `tiles manifest`, `tiles previous` and `tiles 416` as FAIL until the first extract (step 3; without a manifest there is no file to ask for): expected.
+2. Until you run the release's bootstrap, `rws-update` pings `update` `/fail` with `host_files_changed`. Run it as in "a new release with changed host files" above, from the verified release directory, twice; the second run must say "0 change(s)". It links `rws-basemap-refresh` into `/usr/local/bin`, installs the service and the timer (the timer is **not** enabled), changes the owner of `/srv/rws/tiles` to uid 65532 (it was root's; mode 0755) and creates `/srv/rws/tiles/.staging` (0700, uid 65532). Run it before the first refresh: without it Docker creates `.staging` as root and the fetch job cannot write there. **Check:**
+
+   ```bash
+   command -v rws-basemap-refresh
+   stat -c '%n %a %U:%G' /srv/rws/tiles /srv/rws/tiles/.staging     # 755 65532:65532, then 700 65532:65532
+   systemctl is-enabled rws-basemap-refresh.timer                   # disabled
+   ```
+3. Run the first refresh and enable the timer: `docs/runbooks/basemap.md` §3 to §7 (a dry run, an older build, then the newest, so that current and previous both exist; the `[owner]` criterion of P3 asks for its log and the sha256 comparison).
+4. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `tiles manifest`, `tiles <file>` (four after the second run), `tiles previous`, `tiles 404`, `tiles 416` and `map assets`.
