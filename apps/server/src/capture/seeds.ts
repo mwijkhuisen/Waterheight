@@ -20,7 +20,7 @@ export type SeedState = {
   files: number;
   series: number;
   coverage: { from: string; to: string } | null;
-  /** Requests of a `days` seed so far: its page_cap bounds the whole seed, retries included. */
+  /** Requests of a `days` or `all-resources` seed so far: its page_cap bounds the whole seed, retries included. */
   requests?: number;
   /** When the first round started: the windows of every round are computed from it. */
   started?: string;
@@ -76,10 +76,10 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
   const now = new Date(st.started ?? deps.now().toISOString());
   if (st.started === undefined) await save({ started: now.toISOString() });
   const add = async (key: string, s: Awaited<ReturnType<typeof runSpec>>) => {
-    // Done when nothing failed transiently and no cap cut it short; a 404 or an invalid body will not
-    // heal by retrying, a failed page or a cut walk may.
+    // Done when nothing failed transiently, no list page failed and no cap cut it short: a 404 or an invalid
+    // body on a root or an item will not heal by retrying, a failed list page or a cut walk may (#42).
     await save({
-      done: !s.transient && !s.capped ? [...st.done, key] : st.done,
+      done: !s.transient && !s.capped && !s.incomplete ? [...st.done, key] : st.done,
       files: st.files + s.stored,
       coverage: mergeCoverage(st.coverage, s.coverage),
       requests: (st.requests ?? 0) + s.requests,
@@ -122,12 +122,25 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
       await deps.sleep(seed.pace_ms);
     }
   } else {
-    // all-resources (LU-5): walk every list page and fetch each dump not seen yet, by its own url.
-    const s = await runSpec(spec, deps, { seed: true, spaceMs: seed.pace_ms, maxExpand: seed.page_cap });
+    // all-resources (LU-5): walk every list page and fetch each dump not seen yet, by its own url. page_cap
+    // bounds the whole seed, every round included, so a list page that keeps failing cannot have the list walked
+    // again every hour for 31 days.
+    const left = seed.page_cap - (st.requests ?? 0);
+    if (left <= 0) {
+      deps.log.warn({ spec: spec.id, cap: seed.page_cap }, 'seed page cap reached: not retried');
+      return true;
+    }
+    const s = await runSpec(spec, deps, { seed: true, spaceMs: seed.pace_ms, maxExpand: left - 1 });
     const seen = (await deps.state.read<{ seen: string[] }>(spec.id))?.seen.length ?? 0;
-    await save({ series: 1, files: seen, coverage: mergeCoverage(st.coverage, s.coverage) });
-    // Done only when nothing failed transiently: older dumps are not in the 5-min list, so the seed must get them.
-    if (s.ok === 0 || s.transient || s.capped) {
+    await save({
+      series: 1,
+      files: seen,
+      coverage: mergeCoverage(st.coverage, s.coverage),
+      requests: (st.requests ?? 0) + s.requests,
+    });
+    // Done only when nothing failed transiently and every list page came in (#42): older dumps are not in the
+    // 5-min list, so the seed must get them.
+    if (s.ok === 0 || s.transient || s.capped || s.incomplete) {
       deps.log.warn({ spec: spec.id, files: seen }, 'seed incomplete: next round within the hour');
       return false;
     }

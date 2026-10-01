@@ -109,6 +109,11 @@ export type RunSummary = {
   doneVariants: string[];
   /** The stage-2 cap cut the run short (a seed then resumes next time). */
   capped: boolean;
+  /**
+   * No success, and no walk moves its window or stores a rest: a root failed transiently, a list page failed
+   * in any way (#42), the deadline cut the run or a manifest line was lost.
+   */
+  incomplete: boolean;
 };
 
 const isoNoMs = (d: Date) => d.toISOString();
@@ -164,6 +169,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     coverage: null,
     doneVariants: [],
     capped: false,
+    incomplete: false,
   };
   const timeoutMs = spec.timeout === 'metadata' ? METADATA_TIMEOUT_MS : TOTAL_TIMEOUT_MS;
   const spaceMs = opts.spaceMs ?? spec.variants?.space_ms ?? 0;
@@ -215,8 +221,6 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
   const oldest = new Map<string, number>();
   /** A capped walk got no older: this run is no success (N2). */
   let stalled = false;
-  /** A root or list page failed transiently, the deadline cut the run or a manifest line was lost: no success. */
-  let incomplete = false;
   /**
    * Items: stage-2 requests that are not list pages (FR-4 stations, FR-5 sections, LU-5 files). A failed item
    * leaves the run a success (#39) unless no item came in and one failed transiently (a throttled host pages).
@@ -231,7 +235,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     deps.state.update<SpecState>(spec.id, (cur) => {
       const base = cur ?? st;
       const finished = deps.now();
-      const success = summary.ok > 0 && !incomplete && !(itemsOk === 0 && itemsTransient > 0) && !stalled;
+      const success = summary.ok > 0 && !summary.incomplete && !(itemsOk === 0 && itemsTransient > 0) && !stalled;
       return {
         ...base,
         variants: { ...base.variants, ...touched },
@@ -246,12 +250,13 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
   for (let i = 0; i < queue.length; i += 1) {
     const { req, validity: vspec, expandable, root, window, walk } = queue[i] as Item;
     const item = !root && !expandable;
+    const page = !root && expandable;
     if (i > 0 && spaceMs > 0) await deps.sleep(spaceMs);
     if (opts.deadline !== undefined && deps.now().getTime() > opts.deadline) {
       // Out of time: the remaining requests of this run are skipped, not queued.
       for (let j = i; j < queue.length; j += 1) if (!opts.seed) deps.counters.record(day, spec.source, 'other');
       summary.transient = true;
-      incomplete = true;
+      summary.incomplete = true;
       break;
     }
     summary.requests += 1;
@@ -314,6 +319,8 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
       line.headers = keptHeaders(res.headers);
       if (res.status >= 200 && res.status < 300 && res.status !== 204) {
         v = await validate(vspec, res.status, res.body);
+        // An empty last page has no item shape to compare: a page number is empty on one walk, full on the next.
+        if (page && v.count === 0) v = { ...v, shape: null };
         const hash = sha256(res.body);
         line.sha256 = hash;
         line.bytes = res.body.length;
@@ -366,7 +373,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
       deps.log.error({ spec: spec.id, variant: req.variant, alert: 'manifest' }, 'manifest append failed');
       if (!opts.seed) deps.counters.record(day, spec.source, 'other');
       summary.transient = true;
-      incomplete = true;
+      summary.incomplete = true;
       summary.firstFailure ??= 'manifest';
       continue;
     }
@@ -429,8 +436,11 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
       ) {
         summary.transient = true;
         if (item) itemsTransient += 1;
-        else incomplete = true;
+        else summary.incomplete = true;
       }
+      // A failed list page ends its walk early, so the walk asks again from the same point, whatever the
+      // failure (#42).
+      if (page) summary.incomplete = true;
       if (item) failedItems.push(req.variant);
       summary.firstFailure ??= line.error ?? (v !== null && !v.ok ? 'invalid' : status);
     }
@@ -464,7 +474,8 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
         const list = r.variant === 'list' || /#\d+$/.test(r.variant);
         queue.push({
           req: r,
-          validity: list ? spec.validity : (spec.request.expand_validity ?? spec.validity),
+          // An empty page ends a walk (Hub'Eau over a closed window, #42); a root keeps its `min`.
+          validity: list ? { ...spec.validity, min: 0 } : (spec.request.expand_validity ?? spec.validity),
           expandable: list,
           root: false,
           window: null,
@@ -476,8 +487,9 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
 
   // A completed walk moves its window (C4). A capped windowed walk (FR-1) goes on next run below the oldest
   // time it fetched (N2); one that got no older (a `next` that never ends, a window ignored upstream) keeps
-  // its point and is no success, so its group goes stale and pages. A cut or failed walk asks again.
-  if (!summary.transient) {
+  // its point and is no success, so its group goes stale and pages. A cut or failed walk (a list page that
+  // failed in any way, #42) keeps its window and its rest, and asks again from the same point.
+  if (!summary.transient && !summary.incomplete) {
     for (const [variant, { at, window }] of walks) {
       const { walk: _, ...vs } = st.variants[variant] ?? {};
       let next: VariantState | undefined;
@@ -507,6 +519,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
       ok: summary.ok,
       stored: summary.stored,
       transient: summary.transient,
+      incomplete: summary.incomplete,
       failed_items: failedItems.length,
     },
     'run done',

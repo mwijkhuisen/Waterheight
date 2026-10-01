@@ -29,13 +29,27 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 | KG-107 | web | Caddy's `file_server` 404s (any missing path under the catch-all, such as `/assets/nope.js`) carry none of the A§12.2 headers (measured on Caddy 2.11.4 with `site.caddy`; a route's own `respond 404` keeps them). Pre-existing since P1b; the bodies are empty, so there is nothing for a missing header to protect today (P3 review CR-8). | A `handle_errors` block that sets the A§12.2 headers on error responses, in P12 | open |
 | KG-108 | licence | The lazy map chunk (`createMap-*.js`) ships MapLibre GL JS (BSD-3-Clause), pmtiles (BSD-3-Clause) and its polyfill chunk temporal-polyfill (MIT) without their licence notices; the glyphs and sprites have `LICENSES.md` beside them (P3 review SR-5). Nothing in production loads the chunk before P4. | A third-party notices file served with the web build, before P4 puts the map on the public pages | open |
 
-## Issue #39: FR-4 429, partial runs (PR pending)
+## Issue #42: a failed walk page keeps its window (PR pending)
 
 ### Needs the owner, the VPS or the first release
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-093 | ops | Two items no agent can check before the deploy. [owner] The read-only jq over the manifest (#39 plan comment) was run once and pasted on #39: every FR-4 429 from 2026-09-30 12:20Z to 2026-10-01 06:50Z had no `Retry-After` and hit a station outside the NL-bound basins; the run that output came from (VPS or acceptance server) is not stated, so whether the acceptance address is throttled the same way is unknown. [agent-prod] After the deploy, `scripts/verify-prod.sh <domain>` check `freshness` must pass for `fr-4` within 3 × 1800 s; until then the fix is proven offline only (the [CI] tests of the PR). | The owner runs the jq on the other host and pastes the output on #39; the agent runs `verify-prod.sh` after the deploy (from a checkout with this PR: an older checkout rejects `failed_items`, R-059); the owner closes #39 | open |
+| KG-095 | ops | [agent-prod] After the deploy, `scripts/verify-prod.sh <domain>` check `freshness` must pass for `fr-1-obs` and `lu-5-cap`; until then the fix is proven offline only (the [CI] tests of the PR). [owner] The read-only jq over the manifest (#42 plan comment, now in `docs/runbooks/recorder-down.md` §1) was run on the VPS and pasted on #42 (2026-10-01): no scheduled FR-1 run and no `lu-5-cap` list page had failed, the FR-1 seed of 2026-09-30 logged 30 empty last pages (200, reason `count`) and one timeout, and no window was lost. Its output from the acceptance server is not pasted. | The agent runs `verify-prod.sh` after the deploy; the owner closes #42 | open |
+
+### Known limits
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-094 | capture | A refused provider link (an FR-1 `next` or an LU-5 `next_page` that fails the client's allowlist or the adapter's path check) ends the walk with no request and no log line, and the window moves as if the walk had completed: the sibling of #42 that this PR leaves open. | Follow-up issue #44 | open |
+
+## Issue #39: FR-4 429, partial runs (PR #41)
+
+### Needs the owner, the VPS or the first release
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-093 | ops | Two items no agent can check before the deploy. [owner] The read-only jq over the manifest (#39 plan comment) was run once and pasted on #39: every FR-4 429 from 2026-09-30 12:20Z to 2026-10-01 06:50Z had no `Retry-After` and hit a station outside the NL-bound basins; the run that output came from (VPS or acceptance server) is not stated, so whether the acceptance address is throttled the same way is unknown. [agent-prod] After the deploy, `scripts/verify-prod.sh <domain>` check `freshness` must pass for `fr-4` within 3 × 1800 s; until then the fix is proven offline only (the [CI] tests of the PR). | The owner runs the jq on the other host and pastes the output on #39; the agent runs `verify-prod.sh` after the deploy (from a checkout with this PR: an older checkout rejects `failed_items`, R-059); the owner closes #39 | closed 2026-10-01 ([evidence on #39](https://github.com/mwijkhuisen/Waterheight/issues/39#issuecomment-5928189906)): on the acceptance server (`prod-20261001T075843Z`), `verify-prod.sh` passed `freshness` for all 34 public specs, `fr-4` included (08:57:41Z), and the first `fr-4` run of the new code fetched only the two lists (both 200, `failed_items` `[]`). The owner dropped the jq on another host: no 429 had a `Retry-After`, and the fix depends on none. A production VPS deployed later gets the same `freshness` check at its first deploy |
 
 ## P2b NL-1/NL-2/NL-4 (PR pending, issue #17)
 
@@ -156,7 +170,7 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-011 | capture | LU-5 after a long outage: a catch-up that hits `max_expand` (40) can leave older dumps unfetched, behind list pages already seen. The run is marked `capped` and logged, but nothing re-fetches them (review C6, one case left). | A persisted pending walk for LU-5 | open |
+| KG-011 | capture | LU-5 after a long outage: a catch-up that hits `max_expand` (40) can leave older dumps unfetched, behind list pages already seen. The run is marked `capped` and logged, but nothing re-fetches them (review C6, one case left). The same holds after a failed `list` page (#42): that run is no success, but its first page's dumps are then seen, so the next run's first page holds nothing unseen and does not follow the list again. | A persisted pending walk for LU-5 | open |
 | KG-012 | capture | The FR-1 seed and the scheduled FR-1 run share the variant `default`: a concurrent seed persist can reset a gap walk's progress. The effect is re-fetching, never lost data. | Separate state for seed and schedule | accepted: re-fetch only |
 | KG-013 | status | A stalled FR-1 gap walk (capped with no progress) leaves the spec stale and pages, but sets no `last_failure_status`, so the status shows "stale" without a reason. | A `walk_stalled` code in the existing field | open |
 | KG-014 | alerting | Only staleness and the NL-4 file alerts page. Shape changes, invalid payloads, LU-4 threshold changes and seeds incomplete after 31 days reach only the daily report and the log; `seed_incomplete` is raised again on every start after that. | R-026 | accepted |
