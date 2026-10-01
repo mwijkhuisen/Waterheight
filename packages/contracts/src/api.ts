@@ -118,7 +118,7 @@ export const Meta = z.strictObject({
   now: iso,
   /** The first production capture (A§7.5, D9). */
   dataEpoch: iso,
-  /** The earliest instant `t`, `from` may take (D9). */
+  /** The earliest instant `t`, `from` may take (D9): app_meta `display_start` rounded up to the 10-minute grid. */
   displayStart: iso,
   /** The git commit of the server image, or `dev`. */
   build: z.string().regex(/^(?:[0-9a-f]{40}|dev)$/),

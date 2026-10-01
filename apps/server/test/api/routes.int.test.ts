@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+import { type AddressInfo, createServer } from 'node:net';
 import {
   type ApiErrorCode,
   CANARY_RENDERINGS,
@@ -749,6 +751,37 @@ describe('without the display window', () => {
     const doc = await get(createApp(), '/api/v1/openapi.json');
     expect(doc.status).toBe(200);
     expect((doc.json() as { openapi: string }).openapi).toBe('3.1.0');
+  });
+});
+
+describe('the api role of main.ts', () => {
+  it('loads the display window before it listens: its very first request is served', async () => {
+    const port = await new Promise<number>((resolve) => {
+      const probe = createServer().listen(0, '127.0.0.1', () => {
+        const { port } = probe.address() as AddressInfo;
+        probe.close(() => resolve(port));
+      });
+    });
+    const child = spawnSync(
+      process.execPath,
+      ['--no-experimental-webstorage', new URL('./api-child.ts', import.meta.url).pathname],
+      {
+        encoding: 'utf8',
+        timeout: 30_000,
+        env: { PATH: process.env.PATH, DATABASE_URL: t.urlFor('rws_api'), HOST: '127.0.0.1', PORT: String(port) },
+      },
+    );
+    const lines = child.stdout
+      .split('\n')
+      .filter((l) => l.startsWith('{'))
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    const answer = lines.find((l) => 'status' in l) as { status: number; body: string } | undefined;
+    // Until the first load the window answers 503, and start() tries again only after 10 s.
+    expect(answer?.status, child.stdout + child.stderr).toBe(200);
+    expect(Meta.parse(JSON.parse(answer?.body ?? '')).displayStart).toBe(
+      new Date(display.current?.displayStartMs ?? 0).toISOString(),
+    );
+    expect(lines.at(-1)).toEqual({ exit: 0 });
   });
 });
 
