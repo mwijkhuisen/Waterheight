@@ -10,14 +10,14 @@ import {
   Snapshot,
   Stations,
 } from './api.ts';
-import { Health, HealthSources } from './health.ts';
+import { Health, HealthSources, HealthUnavailable } from './health.ts';
 
 // The OpenAPI 3.1 document of the public API (GET /api/v1/openapi.json). The
 // paths are written out here; every body schema is generated from the same Zod
 // schema the API validates its answers against (z.toJSONSchema; OpenAPI 3.1
 // uses JSON Schema 2020-12). No version of any software appears in it.
 
-const COMPONENTS = { ApiError, Meta, Stations, Snapshot, Series, Health, HealthSources } as const;
+const COMPONENTS = { ApiError, Meta, Stations, Snapshot, Series, Health, HealthSources, HealthUnavailable } as const;
 type Component = keyof typeof COMPONENTS;
 
 function jsonSchema(schema: z.ZodType): Record<string, unknown> {
@@ -44,9 +44,12 @@ const instant = (name: string, description: string) => ({
   schema: { type: 'string', maxLength: INSTANT_MAX_LENGTH, pattern: INSTANT_RE.source },
 });
 
+/** `more` adds responses, or replaces one of ERRORS. */
 const get = (summary: string, ok: ReturnType<typeof json>, parameters: unknown[] = [], more = {}) => ({
-  get: { summary, ...(parameters.length > 0 ? { parameters } : {}), responses: { '200': ok, ...more, ...ERRORS } },
+  get: { summary, ...(parameters.length > 0 ? { parameters } : {}), responses: { '200': ok, ...ERRORS, ...more } },
 });
+/** The health routes keep their own 503 body. */
+const HEALTH_503 = { '503': json('HealthUnavailable', 'The health documents are unavailable for now') };
 
 /** The document, built once per process. */
 export function openApiDocument(): Record<string, unknown> {
@@ -86,8 +89,8 @@ export function openApiDocument(): Record<string, unknown> {
         ],
         { '404': json('ApiError', 'No such series in the api channel') },
       ),
-      '/api/v1/health': get('Loader and source health (public sources)', json('Health', 'Health')),
-      '/api/v1/health/sources': get('Health per public source', json('HealthSources', 'HealthSources')),
+      '/api/v1/health': get('Loader and source health (public sources)', json('Health', 'Health'), [], HEALTH_503),
+      '/api/v1/health/sources': get('Health per public source', json('HealthSources', 'HealthSources'), [], HEALTH_503),
       '/api/v1/openapi.json': {
         get: {
           summary: 'This document',

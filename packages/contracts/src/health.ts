@@ -57,6 +57,10 @@ export const Health = z.strictObject({
 });
 export type Health = z.infer<typeof Health>;
 
+/** The 503 body of both health routes (no database, or it failed); never cached. */
+export const HealthUnavailable = z.strictObject({ status: z.literal('down'), error: z.literal('unavailable') });
+export type HealthUnavailable = z.infer<typeof HealthUnavailable>;
+
 const Tier1 = z.strictObject({ total: count, fresh: count, provider_stale: count });
 
 const Partition = z.strictObject({

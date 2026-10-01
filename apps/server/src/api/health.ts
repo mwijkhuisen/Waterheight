@@ -1,4 +1,4 @@
-import { Health, HealthSources, overallStatus } from '@rws/contracts';
+import { Health, HealthSources, type HealthUnavailable, overallStatus } from '@rws/contracts';
 import type { Hono } from 'hono';
 import { type Kysely, sql } from 'kysely';
 import type { Logger } from 'pino';
@@ -24,6 +24,7 @@ import { coded, iso, snapshot, validated } from './util.ts';
 // the queries are fixed, and the view names come from db/audience.ts.
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
+const UNAVAILABLE: HealthUnavailable = { status: 'down', error: 'unavailable' };
 /** How long a computed answer is served; also the response's max-age. */
 export const CACHE_MS = 30_000;
 /** After a database error the next attempt waits this long (the answer stays a 503 meanwhile). */
@@ -219,7 +220,7 @@ export function registerHealth(app: Hono, deps: HealthDeps): void {
           'Cache-Control': `public, max-age=${CACHE_MS / 1000}`,
         });
       } catch {
-        return c.json({ status: 'down', error: 'unavailable' }, 503, NO_STORE);
+        return c.json(UNAVAILABLE, 503, NO_STORE);
       }
     });
   };

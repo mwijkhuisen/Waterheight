@@ -25,6 +25,7 @@ import {
   Stations,
 } from '../src/api.ts';
 import { CANARY_RENDERINGS } from '../src/canaries.ts';
+import { HealthUnavailable } from '../src/health.ts';
 import { openApiDocument } from '../src/openapi.ts';
 
 // The public read API: its strict answer schemas, the query grammar and the OpenAPI document built from them.
@@ -511,7 +512,16 @@ describe('openApiDocument', () => {
 
   it('has a component for every answer and every error', () => {
     expect(Object.keys(doc.components.schemas)).toEqual(
-      expect.arrayContaining(['ApiError', 'Meta', 'Stations', 'Snapshot', 'Series', 'Health', 'HealthSources']),
+      expect.arrayContaining([
+        'ApiError',
+        'Meta',
+        'Stations',
+        'Snapshot',
+        'Series',
+        'Health',
+        'HealthSources',
+        'HealthUnavailable',
+      ]),
     );
   });
 
@@ -532,6 +542,31 @@ describe('openApiDocument', () => {
     expect(doc.paths['/api/v1/meta']?.get?.responses['404']).toBeUndefined();
   });
 
+  it('the health routes answer their own 503 body; their 400 and 405 are the ApiError body', () => {
+    for (const path of ['/api/v1/health', '/api/v1/health/sources']) {
+      const responses = doc.paths[path]?.get?.responses ?? {};
+      expect(refs(responses['503']), path).toEqual(['#/components/schemas/HealthUnavailable']);
+      for (const code of ['400', '405'])
+        expect(refs(responses[code]), `${path} ${code}`).toEqual(['#/components/schemas/ApiError']);
+    }
+    for (const path of ['/api/v1/meta', '/api/v1/stations', '/api/v1/snapshot', '/api/v1/series/{id}'])
+      expect(refs(doc.paths[path]?.get?.responses['503']), path).toEqual(['#/components/schemas/ApiError']);
+    // The schema is exactly the body the health routes send.
+    expect(doc.components.schemas.HealthUnavailable).toEqual({
+      type: 'object',
+      properties: { status: { type: 'string', const: 'down' }, error: { type: 'string', const: 'unavailable' } },
+      required: ['status', 'error'],
+      additionalProperties: false,
+    });
+    expect(HealthUnavailable.parse(JSON.parse('{"status":"down","error":"unavailable"}'))).toEqual({
+      status: 'down',
+      error: 'unavailable',
+    });
+    expect(ok(HealthUnavailable, { error: 'unavailable' })).toBe(false);
+    expect(ok(HealthUnavailable, { status: 'down', error: 'busy' })).toBe(false);
+    expect(ok(HealthUnavailable, { status: 'down', error: 'unavailable', detail: 'x' })).toBe(false);
+  });
+
   it('the schema of the error codes is the list of the contract', () => {
     const apiError = doc.components.schemas.ApiError as {
       properties: { error: { enum: string[] } };
@@ -542,7 +577,7 @@ describe('openApiDocument', () => {
   });
 
   it('the answer schemas are strict, as the API checks them', () => {
-    for (const name of ['Meta', 'Stations', 'Snapshot', 'Health', 'HealthSources'])
+    for (const name of ['Meta', 'Stations', 'Snapshot', 'Health', 'HealthSources', 'HealthUnavailable'])
       expect(doc.components.schemas[name]?.additionalProperties, name).toBe(false);
   });
 
