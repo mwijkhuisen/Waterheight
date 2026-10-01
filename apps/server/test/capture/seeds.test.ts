@@ -133,44 +133,67 @@ describe('seed completeness (C5, S8)', () => {
   const OBS = 'https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr';
   const page = JSON.parse(fixture('FR-1', 'fr-1-obs').body.toString()) as { next: string | null };
 
-  it('a day whose second page failed is not done, and the next round, an hour later, completes it', async () => {
-    vi.useFakeTimers({ now: new Date('2026-10-02T06:00:00Z') });
-    let failures = 1;
-    let requests = 0;
-    const roots: string[] = [];
+  it.each([
+    ['a 503', () => new HttpResponse('busy', { status: 503 })],
+    ['a 404', () => new HttpResponse('gone', { status: 404 })],
+    ['an invalid body', () => HttpResponse.html('<html><body>Maintenance</body></html>')],
+  ])(
+    'a day whose second page answered %s is not done, and the next round, an hour later, completes it (#42)',
+    async (_, fail) => {
+      vi.useFakeTimers({ now: new Date('2026-10-02T06:00:00Z') });
+      let failures = 1;
+      let requests = 0;
+      const roots: string[] = [];
+      server.use(
+        http.get(OBS, ({ request }) => {
+          requests += 1;
+          const cursor = new URL(request.url).searchParams.get('cursor');
+          if (cursor === null) roots.push(new URL(request.url).searchParams.get('date_debut_obs') as string);
+          if (cursor !== null && failures > 0) {
+            failures -= 1;
+            return fail();
+          }
+          return HttpResponse.json({
+            ...page,
+            next: cursor === null ? `${OBS}?code_entite=A*&cursor=1&size=20000` : null,
+          });
+        }),
+      );
+      const deps = runDeps({ now: () => new Date() });
+      const rounds: number[] = [];
+      const harvest = startSeeds(only('fr-1-obs'), deps, paths(deps.root), async () => {
+        rounds.push(requests);
+      });
+      await vi.waitFor(() => expect(rounds).toHaveLength(1), { timeout: 15_000 });
+      const st = await deps.state.read<SeedState>('seeds/fr-1-obs');
+      expect(st?.done).not.toContain('day0');
+      expect(st?.done).toHaveLength(29);
+      expect(st?.done_at).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(SEED_RETRY_MS);
+      await vi.waitFor(() => expect(rounds).toHaveLength(2), { timeout: 15_000 });
+      expect(rounds[1] as number).toBe((rounds[0] as number) + 2); // only day 0 again, both pages
+      expect(roots.at(-1)).toBe(roots[0]); // the same window as in the first round, an hour earlier
+      expect((await deps.state.read<SeedState>('seeds/fr-1-obs'))?.done_at).toBeDefined();
+      await vi.advanceTimersByTimeAsync(3 * SEED_RETRY_MS);
+      expect(rounds).toHaveLength(2); // done: no more rounds
+      harvest.stop();
+    },
+  );
+
+  it('a day whose walk ends in an empty page is done, with no alert (#42)', async () => {
     server.use(
-      http.get(OBS, ({ request }) => {
-        requests += 1;
-        const cursor = new URL(request.url).searchParams.get('cursor');
-        if (cursor === null) roots.push(new URL(request.url).searchParams.get('date_debut_obs') as string);
-        if (cursor !== null && failures > 0) {
-          failures -= 1;
-          return new HttpResponse('busy', { status: 503 });
-        }
-        return HttpResponse.json({
-          ...page,
-          next: cursor === null ? `${OBS}?code_entite=A*&cursor=1&size=20000` : null,
-        });
-      }),
+      http.get(OBS, ({ request }) =>
+        new URL(request.url).searchParams.get('cursor') === null
+          ? HttpResponse.json({ ...page, next: `${OBS}?code_entite=A*&cursor=1&size=20000` }, { status: 206 })
+          : HttpResponse.json({ ...page, count: 0, data: [], next: null }),
+      ),
     );
-    const deps = runDeps({ now: () => new Date() });
-    const rounds: number[] = [];
-    const harvest = startSeeds(only('fr-1-obs'), deps, paths(deps.root), async () => {
-      rounds.push(requests);
-    });
-    await vi.waitFor(() => expect(rounds).toHaveLength(1), { timeout: 15_000 });
+    const deps = runDeps();
+    expect(await runSeeds(only('fr-1-obs'), deps, paths(deps.root))).toBe(true);
     const st = await deps.state.read<SeedState>('seeds/fr-1-obs');
-    expect(st?.done).not.toContain('day0');
-    expect(st?.done).toHaveLength(29);
-    expect(st?.done_at).toBeUndefined();
-    await vi.advanceTimersByTimeAsync(SEED_RETRY_MS);
-    await vi.waitFor(() => expect(rounds).toHaveLength(2), { timeout: 15_000 });
-    expect(rounds[1] as number).toBe((rounds[0] as number) + 2); // only day 0 again, both pages
-    expect(roots.at(-1)).toBe(roots[0]); // the same window as in the first round, an hour earlier
-    expect((await deps.state.read<SeedState>('seeds/fr-1-obs'))?.done_at).toBeDefined();
-    await vi.advanceTimersByTimeAsync(3 * SEED_RETRY_MS);
-    expect(rounds).toHaveLength(2); // done: no more rounds
-    harvest.stop();
+    expect(st?.done).toHaveLength(30);
+    expect(st?.done_at).toBeDefined();
+    expect(deps.counters.alerts).toEqual({});
   });
 
   it.each([403, 451])('a row a WAF answers with %i is not done, and gets another round (N5)', async (status) => {
