@@ -4,6 +4,24 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P4a API (PR pending, issue #19)
+
+### Needs the owner, the VPS or the first release
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-109 | ops | `RWS_BUILD` is set only by the release workflow (`build-args: RWS_BUILD=${{ github.sha }}` in `release.yml`): an image built any other way, and every release before the one that carries this PR, reports `dev`. `/api/v1/meta` shows the commit only from that release on. | [agent-prod] After that release deploys and P4b proxies `/api/v1/meta` (KG-110): `build` equals the release's commit | open [U] |
+| KG-110 | ops | The data routes (`/meta`, `/stations`, `/snapshot`, `/series/{id}`, `/openapi.json`) are not reachable through Caddy: it proxies only the two health paths until P4b widens its allowlist. The P4 [agent-prod] criterion "`/api/v1/openapi.json` is served" therefore has no production output from P4a, and `scripts/verify-prod.ts` keeps its 404 check for `/api/v1/stations`. Until then the data routes are proven in CI only, through the app in process and a real database. R-067. | P4b: the Caddy `/api/v1/*` proxy, `verify-prod.sh` checks of the data routes, their cache headers and the owner-leak grep over them, and a production look at `/meta`, `/stations`, one `/snapshot` and one `/series` | open [U] |
+
+### Known limits
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-111 | CI | The performance criterion (`/snapshot` p95 under 150 ms cold and under 50 ms warm, `/series` over 14 days raw under 50 ms) is proven on the synthetic seed of the CI `bench` job (3,000 series × 60 days on a local PostgreSQL 18), not in production. The numbers are in the PR. | Accepted for P4a; measured again through Caddy once P4b proxies the routes, and by the load tests of P12 | accepted |
+| KG-112 | data | `dataSince` in `/stations` has day precision: it is the first UTC day with data in the daily rollup of the display channel, not the instant of the first observation. It is a `GROUP BY` over that rollup on each computation (cached 300 s). | Accepted; store the first-data day per series once the registry passes 1,000 active series or an uncached `/stations` passes 500 ms (580 ms was measured at 3,000 series × 365 days; `ponytail:` in `apps/server/src/api/data.ts`) | accepted |
+| KG-113 | data | The registry has no English attribution variants for NL-1 and DE-1. `/meta` returns each source's rows verbatim in the registry's language (NL-1 `nl`, DE-1 `de`), so the English web shows the original text. | A reviewed registry change that adds `en` rows, or the per-response attribution of P9b (#24) | open |
+| KG-114 | security | The API's cache lifetime ignores a source's history window (review SR-2): an answer about an instant older than 48 h is kept a day in the LRU and sent with `max-age=86400`, while the views drop the rows past `history_window` of a source without `history_export`. No public source, and no public series, has `history_export` off today, so nothing leaks (invariant 8 holds). T-API-2 | Before a public source or series turns `history_export` off: cap the LRU TTL and the max-age at the window's edge. `apps/server/test/api/history-export.test.ts` fails until then | accepted |
+
 ## P3 Map spike and basemap (PR #45, issue #18)
 
 ### Needs the owner, the VPS or the first release

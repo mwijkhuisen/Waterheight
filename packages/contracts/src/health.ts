@@ -31,7 +31,7 @@ export const SourceStatus = z.enum(['ok', 'degraded', 'down', 'unknown']);
 export type SourceStatus = z.infer<typeof SourceStatus>;
 
 /** A catalogue source ID: no canary, no owner-only spelling. */
-const HealthSourceId = z.string().regex(/^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$/);
+export const HealthSourceId = z.string().regex(/^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$/);
 
 export const Health = z.strictObject({
   status: HealthStatus,
@@ -56,6 +56,10 @@ export const Health = z.strictObject({
   twins: z.strictObject({ ok: count, failing: count }),
 });
 export type Health = z.infer<typeof Health>;
+
+/** The 503 body of both health routes (no database, or it failed); never cached. */
+export const HealthUnavailable = z.strictObject({ status: z.literal('down'), error: z.literal('unavailable') });
+export type HealthUnavailable = z.infer<typeof HealthUnavailable>;
 
 const Tier1 = z.strictObject({ total: count, fresh: count, provider_stale: count });
 

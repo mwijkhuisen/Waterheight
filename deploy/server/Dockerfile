@@ -45,5 +45,10 @@ COPY --from=build /out /app
 # The workspace packages resolve to their compiled dist/ (Node does not strip
 # types inside node_modules); dev and tests keep running from src/.
 ENV NODE_OPTIONS=--conditions=rws-dist
+# The git commit of the release (release.yml passes it); `dev` for any other
+# build. The api reports it in /api/v1/meta and accepts nothing but 40 hex
+# characters or `dev`.
+ARG RWS_BUILD=dev
+ENV RWS_BUILD=${RWS_BUILD}
 USER 65532:65532
 ENTRYPOINT ["/nodejs/bin/node", "/app/apps/server/dist/main.js"]

@@ -185,7 +185,7 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
     expect(expected).toContain('DE-1');
   });
 
-  it('HEAD answers like GET without a body; other methods, other paths and a trailing slash are 404', async () => {
+  it('HEAD answers like GET without a body; other methods are 405, other paths and a trailing slash 404', async () => {
     const { app } = appAt();
     const head = await app.request('/api/v1/health', { method: 'HEAD' });
     expect(head.status).toBe(200);
@@ -194,15 +194,10 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
     for (const [path, method] of [
       ['/api/v1/health', 'POST'],
       ['/api/v1/health/sources', 'DELETE'],
-      ['/api/v1/health/', 'GET'],
-      ['/api/v1/health/sources/', 'GET'],
-      ['/api/v1/health/other', 'GET'],
-      ['/api/v1/', 'GET'],
-      ['/api/v1/stations', 'GET'],
-      ['/api/', 'GET'],
-      ['/api/v1/openapi.json', 'GET'],
     ] as const)
-      expect((await app.request(path, { method })).status, `${method} ${path}`).toBe(404);
+      expect((await app.request(path, { method })).status, `${method} ${path}`).toBe(405);
+    for (const path of ['/api/v1/health/', '/api/v1/health/sources/', '/api/v1/health/other', '/api/v1/', '/api/'])
+      expect((await app.request(path)).status, path).toBe(404);
   });
 
   it('ANY query parameter is a 400 that never echoes it; /healthz is unaffected', async () => {

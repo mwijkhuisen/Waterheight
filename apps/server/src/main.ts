@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { type Logger, pino } from 'pino';
+import { DisplayWindow } from './api/window.ts';
 import { createApp } from './app.ts';
 import { Archive } from './archive/writer.ts';
 import { runBasemap } from './basemap/index.ts';
@@ -11,7 +12,7 @@ import { startRecorder } from './capture/scheduler.ts';
 import { seedRecords, startSeeds } from './capture/seeds.ts';
 import { loadRegistry } from './capture/specs.ts';
 import { removeStaleTmp, StateStore } from './capture/state.ts';
-import { dbConfig, openDb } from './db/pool.ts';
+import { type Db, dbConfig, openDb } from './db/pool.ts';
 import { healthy, startHeartbeat } from './heartbeat.ts';
 import { Client } from './http/client.ts';
 import { runMigrate } from './load/migrate.ts';
@@ -168,28 +169,55 @@ async function capture(
   });
 }
 
-/**
- * The api role: `/healthz` and the two health routes. It logs in as `rws_api`
- * with a pool of 4; without database settings it still starts (`/healthz` must
- * answer, and the health routes answer 503).
- */
-function api(env: Readonly<Record<string, string | undefined>>, listen: Listen, log: (line: string) => void) {
-  const logger = pino({ base: { role: 'api' } });
+/** The api role's pool (A§9.2): the role's CONNECTION LIMIT of 12 leaves room for a deploy's overlap. */
+export const API_POOL_MAX = 10;
+
+/** The api role's database: `rws_api` with a pool of API_POOL_MAX, or an error text. */
+export function openApiDb(
+  env: Readonly<Record<string, string | undefined>>,
+  onError?: (code: string) => void,
+): Db | string {
   const cfg = dbConfig(env, 'rws_api');
-  if (typeof cfg === 'string') log(`api: no database (${cfg}): the health routes answer 503`);
-  const pool =
-    typeof cfg === 'string'
-      ? undefined
-      : openDb(cfg, { max: 4, onError: (code) => logger.error({ code }, 'pool error') });
+  return typeof cfg === 'string' ? cfg : openDb(cfg, { max: API_POOL_MAX, ...(onError ? { onError } : {}) });
+}
+
+/** The build id the image carries (`RWS_BUILD`, its git commit); anything else is `dev`. */
+export function buildId(env: Readonly<Record<string, string | undefined>>): string {
+  const build = env.RWS_BUILD ?? '';
+  return /^[0-9a-f]{40}$/.test(build) ? build : 'dev';
+}
+
+/**
+ * The api role: `/healthz`, the public data routes and the two health routes.
+ * It logs in as `rws_api` with a pool of 10 and loads the display window before
+ * it listens; without database settings it still starts (`/healthz` must
+ * answer, and the other routes answer 503).
+ */
+async function api(env: Readonly<Record<string, string | undefined>>, listen: Listen, log: (line: string) => void) {
+  const logger = pino({ base: { role: 'api' } });
+  const db = openApiDb(env, (code) => logger.error({ code }, 'pool error'));
+  if (typeof db === 'string') log(`api: no database (${db}): the data and health routes answer 503`);
+  const pool = typeof db === 'string' ? undefined : db;
+  const stopHeartbeat = startHeartbeat();
+  // Loaded before the server listens, so validating a request never asks the database.
+  const window = pool === undefined ? undefined : new DisplayWindow(pool.db, logger);
+  if (window !== undefined) {
+    await window.refresh();
+    window.start();
+  }
   return new Promise<number>((resolve) => {
-    const stopHeartbeat = startHeartbeat();
-    const app = createApp({ log: logger, ...(pool === undefined ? {} : { db: pool.db }) });
+    const app = createApp({
+      log: logger,
+      build: buildId(env),
+      ...(pool === undefined || window === undefined ? {} : { db: pool.db, window }),
+    });
     const server = serve({ fetch: app.fetch, ...listen }, (info) => {
       log(`api listening on ${info.address}:${info.port}`);
     });
     const stop = () =>
       server.close(() => {
         stopHeartbeat();
+        window?.stop();
         const done = () => resolve(0);
         if (pool === undefined) done();
         else void pool.close().then(done, done);

@@ -1,4 +1,4 @@
-import { Health, HealthSources, overallStatus } from '@rws/contracts';
+import { Health, HealthSources, type HealthUnavailable, overallStatus } from '@rws/contracts';
 import type { Hono } from 'hono';
 import { type Kysely, sql } from 'kysely';
 import type { Logger } from 'pino';
@@ -15,6 +15,7 @@ import {
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { TtlCache } from './cache.ts';
+import { coded, iso, snapshot, validated } from './util.ts';
 
 // GET /api/v1/health and GET /api/v1/health/sources (A§9.2). The loader
 // precomputes everything (load/health.ts); this only reads it, as `rws_api`,
@@ -23,6 +24,7 @@ import { TtlCache } from './cache.ts';
 // the queries are fixed, and the view names come from db/audience.ts.
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
+const UNAVAILABLE: HealthUnavailable = { status: 'down', error: 'unavailable' };
 /** How long a computed answer is served; also the response's max-age. */
 export const CACHE_MS = 30_000;
 /** After a database error the next attempt waits this long (the answer stays a 503 meanwhile). */
@@ -89,22 +91,6 @@ const latestTwinChecks = (tx: Tx, now: Date) =>
     ORDER BY twin_id, window_end DESC LIMIT ${MAX_TWINS}`
     .execute(tx)
     .then((r) => r.rows);
-
-/** One snapshot of the views, so the pieces of an answer belong together. */
-const snapshot = <T>(db: Kysely<DB>, read: (tx: Tx) => Promise<T>): Promise<T> =>
-  db.transaction().setAccessMode('read only').setIsolationLevel('repeatable read').execute(read);
-
-/** An error that carries only a fixed code, which is all the log ever sees. */
-const coded = (code: string) => Object.assign(new Error(code), { code });
-
-/** What is about to be sent must match the contract: a shape bug is a 503 here, never a silent leak. */
-function validated<T>(schema: z.ZodType<T>, value: unknown): T {
-  const r = schema.safeParse(value);
-  if (!r.success) throw coded('contract');
-  return r.data;
-}
-
-const iso = (d: Date | null): string | null => d?.toISOString() ?? null;
 
 /**
  * source_health.detail as the loader writes it. Read leniently and stripped
@@ -234,7 +220,7 @@ export function registerHealth(app: Hono, deps: HealthDeps): void {
           'Cache-Control': `public, max-age=${CACHE_MS / 1000}`,
         });
       } catch {
-        return c.json({ status: 'down', error: 'unavailable' }, 503, NO_STORE);
+        return c.json(UNAVAILABLE, 503, NO_STORE);
       }
     });
   };
