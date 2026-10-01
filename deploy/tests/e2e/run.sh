@@ -502,8 +502,9 @@ proof "db (uid 999), load and api (uid 65532): read-only root, cap_drop ALL, Cap
 step "basemap: fetch cannot write what Caddy serves; promote (no network) moves the checked PMTiles in; Caddy serves them with Range"
 tiles=/srv/rws/tiles build=20261001 fixtures=$repo/tools/geo/fixtures
 # The shape T-WEB-1 rests on, from the merged compose file the stack runs: the job with the
-# network sees the served directory read-only and writes only .staging; the job that writes
-# the served directory has no network (and neither has a secret); Caddy mounts it read-only.
+# network sees the served directory read-only and writes only .staging, no file of it over
+# 6.5 GB (fsize, T-MAP-1); the job that writes the served directory has no network (and
+# neither has a secret); Caddy mounts it read-only.
 # shellcheck disable=SC2016 # a jq program, not shell
 shape='.services.basemap as $f | .services["basemap-promote"] as $p | .services.caddy as $c
   | ($f.networks | keys) == ["egress"] and $f.network_mode == null
@@ -519,6 +520,7 @@ shape='.services.basemap as $f | .services["basemap-promote"] as $p | .services.
   and ([$p.volumes[] | select(.target == "/tiles")][0] | .source == "/srv/rws/tiles" and .read_only != true)
   and ([$c.volumes[] | select(.target == "/srv/rws/tiles")][0] | .source == "/srv/rws/tiles" and .read_only == true)
   and $f.secrets == null and $p.secrets == null
+  and $f.ulimits.fsize == {soft: 6500000000, hard: 6500000000}
   and $p.environment.RWS_BASEMAP_REGISTRY == "/ci/basemap.yaml"'
 rws_compose --profile jobs config --format json | jq -e "$shape" >/dev/null ||
   fail "the basemap jobs or caddy's tiles mount do not have the shape T-WEB-1 needs (deploy/compose.yaml)"
@@ -531,12 +533,16 @@ try { fs.writeFileSync("/staging/e2e-probe", "x"); fs.unlinkSync("/staging/e2e-p
 console.log(r.join(" "));'
 got=$(rws_compose run --rm --no-deps -T --entrypoint /nodejs/bin/node basemap -e "$fs_probe")
 [[ $got == 'tiles:EROFS staging:ok' ]] || fail "the basemap job's file systems: $got"
+# Docker hands the fsize value to setrlimit as is: bytes (the kernel's unit for RLIMIT_FSIZE).
+limits_probe='console.log(require("fs").readFileSync("/proc/self/limits", "utf8").split("\n").find((l) => l.startsWith("Max file size")).trim().split(/ {2,}/).slice(1).join(" "))'
+fsize=$(rws_compose run --rm --no-deps -T --entrypoint /nodejs/bin/node basemap -e "$limits_probe")
+[[ $fsize == '6500000000 6500000000 bytes' ]] || fail "the basemap job's file size limit: $fsize"
 ifaces='console.log(Object.keys(require("os").networkInterfaces()).join(","))'
 got=$(rws_compose run --rm --no-deps -T --entrypoint /nodejs/bin/node basemap-promote -e "$ifaces")
 [[ $got == lo ]] || fail "basemap-promote has network interfaces: $got"
 promote_route=$(rws_compose run --rm --no-deps -T --entrypoint /nodejs/bin/node basemap-promote -e "$no_route") ||
   fail "basemap-promote reached 1.1.1.1:443"
-proof "from the merged compose file: basemap joins only rws_egress, mounts /srv/rws/tiles read-only and only .staging read-write, has no secret; basemap-promote has network_mode none, mounts /srv/rws/tiles read-write and no secret; caddy mounts /srv/rws/tiles read-only (docker inspect agrees); in the real containers basemap gets EROFS writing /tiles and can write /staging, and basemap-promote has only lo (1.1.1.1:443: $promote_route)"
+proof "from the merged compose file: basemap joins only rws_egress, mounts /srv/rws/tiles read-only and only .staging read-write, has no secret and a file size limit of 6.5 GB (/proc/self/limits: $fsize); basemap-promote has network_mode none, mounts /srv/rws/tiles read-write and no secret; caddy mounts /srv/rws/tiles read-only (docker inspect agrees); in the real containers basemap gets EROFS writing /tiles and can write /staging, and basemap-promote has only lo (1.1.1.1:443: $promote_route)"
 
 # What fetch leaves behind (its real output is a file per extract under its final name and result.json), from the recorded fixtures.
 sha() { sha256sum "$1" | cut -d' ' -f1; }
@@ -600,7 +606,21 @@ for pair in "basemap-$build.pmtiles:lobith-z14.pmtiles" "planet-z6-$build.pmtile
 done
 outside -o /ci/manifest.served --resolve "$DOMAIN:443:$IP4" "$(tiles_url manifest.json)" || fail "manifest.json is not served"
 cmp -s /ci/manifest.served "$tiles/manifest.json" || fail "the served manifest.json differs from the file"
-proof "https://$DOMAIN/tiles/basemap-$build.pmtiles and planet-z6-$build.pmtiles answer a Range request (bytes=0-15) with 206, a Content-Range for the file's size, Cache-Control public, max-age=31536000, immutable, no Content-Encoding and the file's own first 16 bytes; /tiles/manifest.json is served byte for byte"
+# Only one explicit range is served (SR-1): no Range, an open range and two ranges are a 416
+# that keeps the site headers and is never marked immutable.
+for range in '' 'bytes=0-' 'bytes=0-0,2-2'; do
+  range_args=()
+  [[ -z $range ]] || range_args=(-H "Range: $range")
+  code=$(ip netns exec ext curl -sS --max-time 10 --cacert /ci/pki/pebble-root.pem -o /ci/416.body -D /ci/416.hdr \
+    -w '%{http_code}' "${range_args[@]}" --resolve "$DOMAIN:443:$IP4" "$(tiles_url "basemap-$build.pmtiles")") ||
+    fail "basemap-$build.pmtiles did not answer (Range '${range:-none}')"
+  hdr=$(tr -d '\r' </ci/416.hdr)
+  [[ $code == 416 ]] || fail "basemap-$build.pmtiles with Range '${range:-none}': HTTP $code, want 416"
+  ! grep -qi '^cache-control:.*immutable' <<<"$hdr" || fail "the 416 for Range '${range:-none}' is marked immutable"
+  grep -qiFx 'x-content-type-options: nosniff' <<<"$hdr" || fail "the 416 for Range '${range:-none}' lacks the site headers"
+  [[ $(size /ci/416.body) == 0 ]] || fail "the 416 for Range '${range:-none}' has a body"
+done
+proof "https://$DOMAIN/tiles/basemap-$build.pmtiles and planet-z6-$build.pmtiles answer a Range request (bytes=0-15) with 206, a Content-Range for the file's size, Cache-Control public, max-age=31536000, immutable, no Content-Encoding and the file's own first 16 bytes; no Range, an open range and two ranges are a 416 with the site headers, no immutable and no body; /tiles/manifest.json is served byte for byte"
 
 # ------------------------------------------------------------------ capture
 step "Capture in distroless: contract files, modes, generated_at advances"

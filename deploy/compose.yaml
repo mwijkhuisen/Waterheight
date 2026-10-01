@@ -177,6 +177,15 @@ services:
     mem_limit: 512m
     cpus: 1.0
     pids_limit: 64
+    # No file the job writes may pass 6.5 GB, a little above the basin extract's
+    # max_bytes (6 GB, registry/basemap.yaml), so a hostile or runaway source
+    # cannot fill the disk while go-pmtiles runs; the size checks come only
+    # after it. RLIMIT_FSIZE is in bytes; go-pmtiles 1.31.2 then fails its
+    # write with EFBIG ("file too large", exit 1: extract_failed) at once.
+    ulimits:
+      fsize:
+        soft: 6500000000
+        hard: 6500000000
     healthcheck:
       disable: true
 
