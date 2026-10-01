@@ -4,6 +4,7 @@ import { Readable } from 'node:stream';
 import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { server } from '../../../../test/msw.setup.ts';
+import { BASINS } from '../../src/adapters/fr-4/capture.ts';
 import { ManifestLine } from '../../src/archive/manifest.ts';
 import { Archive } from '../../src/archive/writer.ts';
 import { runSpec } from '../../src/capture/runner.ts';
@@ -490,6 +491,35 @@ describe('stage-2 requests', () => {
         .filter((l) => l.variant.startsWith('A850061001'))
         .every((l) => l.validity?.ok),
     ).toBe(true);
+  });
+
+  it('FR-4 fetches only the stations of the basins FR-1 captures; the recorded national list has none (#39)', async () => {
+    const codes = ['A850061001', 'B540001001', 'D021000101', 'E128000101', 'E240041201', 'E320001001'];
+    const elsewhere = ['E432000101', 'K490003010', 'Y345401001'];
+    let list: unknown = {
+      ListEntVigiCru: [...elsewhere, ...codes].map((CdEntVigiCru) => ({ CdEntVigiCru, TypEntVigiCru: '7' })),
+    };
+    const seen: string[] = [];
+    server.use(
+      http.get('https://www.vigicrues.gouv.fr/services/v1.1/prevision.json', ({ request }) => {
+        const u = new URL(request.url);
+        if (!u.searchParams.has('CdEntVigiCru')) return HttpResponse.json(list);
+        seen.push(`${u.searchParams.get('CdEntVigiCru')}/${u.searchParams.get('GrdSimul')}`);
+        return new HttpResponse(fixture('FR-4', 'fr-4-station').body);
+      }),
+    );
+    await runSpec(spec('fr-4'), runDeps());
+    expect(seen.sort()).toEqual(codes.flatMap((c) => [`${c}/H`, `${c}/Q`]).sort());
+    // The basin list is fr-1-obs's code_entite: the two cannot drift apart.
+    const entite = new URL(spec('fr-1-obs').request.url).searchParams.get('code_entite') ?? '';
+    expect(BASINS).toEqual(entite.split(',').map((p) => p.replace(/\*$/, '')));
+    // The national list recorded on 2026-09-29: 27 stations (Loire, Garonne, Adour, …), none NL-bound.
+    list = JSON.parse(fixture('FR-4', 'fr-4').body.toString());
+    seen.length = 0;
+    const deps = runDeps();
+    expect(await runSpec(spec('fr-4'), deps)).toMatchObject({ requests: 2, ok: 2 });
+    expect(seen).toEqual([]);
+    expect(lines(deps.root).every((l) => l.key !== null && l.validity?.count === 27)).toBe(true); // archived in full
   });
 
   it('LU-5 follows the list while a page still holds an unseen dump (C6)', async () => {
