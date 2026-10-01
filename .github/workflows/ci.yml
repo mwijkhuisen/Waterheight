@@ -379,12 +379,15 @@ jobs:
           done
           docker logs e2e-caddy
           exit 1
+      # Headless Firefox finds no GL driver without an X display (FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS):
+      # the image's own Xvfb gives it one, with Mesa's software renderer (ADR-0016).
       - name: Playwright (Chromium, Firefox, WebKit) in the pinned Playwright image
         run: |
           docker run --rm --network host --ipc=host \
             -e CI=true -e E2E_BASE_URL=https://localhost \
             -v "$PWD:/work" -w /work/apps/web \
-            "$PLAYWRIGHT_IMAGE" node_modules/.bin/playwright test -c e2e/playwright.config.ts
+            "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
+            node_modules/.bin/playwright test -c e2e/playwright.config.ts
       - name: Caddy's log
         if: failure()
         run: docker logs e2e-caddy 2>&1 | tail -n 100

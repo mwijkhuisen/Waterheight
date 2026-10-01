@@ -20,7 +20,12 @@ export default defineConfig({
   use: { baseURL: external ?? 'https://localhost:4443', ignoreHTTPSErrors: true },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport } },
+    {
+      name: 'firefox',
+      // Firefox refuses WebGL on a GL driver it does not trust; on a GPU-less runner that is Mesa's
+      // software renderer under Xvfb (ci.yml). The page still has to create its own WebGL2 context.
+      use: { ...devices['Desktop Firefox'], viewport, launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true } } },
+    },
     { name: 'webkit', use: { ...devices['Desktop Safari'], viewport } },
   ],
   ...(external === undefined
