@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +48,14 @@ describe('web build', () => {
       expect(body.trim()).toBe('');
     }
     expect(html).not.toMatch(/<style\b|\sstyle=|\son[a-z]+=/i);
+  });
+
+  it('never ships the P3 map spike (it exists only in `--mode e2e`)', () => {
+    const files = readdirSync(out, { recursive: true, encoding: 'utf8' });
+    expect(files.filter((f) => f.includes('_spike'))).toEqual([]);
+    for (const f of files.filter((f) => /\.(html|js|css)$/.test(f))) {
+      expect(readFileSync(join(out, f), 'utf8'), f).not.toMatch(/__spike|Kaartproef|Map spike/);
+    }
   });
 });
 
