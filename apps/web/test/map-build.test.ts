@@ -2,12 +2,14 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { build } from 'vite';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // The e2e build (`vite build --mode e2e`, P3): MapLibre and pmtiles reach the
 // browser only as lazy chunks, the MapLibre worker is its own same-origin
-// file, and the polyfill and the styles load on demand.
+// file, and the polyfill and the styles load on demand. P4b adds the ECharts
+// chunk (also lazy) and the initial-load budget of issue #19.
 
 const webDir = fileURLToPath(new URL('..', import.meta.url));
 const tmp = mkdtempSync(join(tmpdir(), 'rws-web-e2e-'));
@@ -26,29 +28,46 @@ describe('e2e build', () => {
   const pages = ['index.html', 'en/index.html', '_spike/index.html', 'en/_spike/index.html'];
 
   beforeAll(async () => {
-    await build({
-      root: webDir,
-      mode: 'e2e',
-      logLevel: 'silent',
-      build: { outDir: out, emptyOutDir: true, manifest: true },
-    });
+    // Vitest sets NODE_ENV=test, which makes Vite bundle React's development build (about 60% more gzip than the
+    // CLI build that ships): build as the CLI does, or the budget below would measure the wrong bundle.
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      await build({
+        root: webDir,
+        mode: 'e2e',
+        logLevel: 'silent',
+        build: { outDir: out, emptyOutDir: true, manifest: true },
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
     manifest = JSON.parse(read('.vite/manifest.json'));
   }, 120_000);
 
-  /** Every file a page loads before any dynamic import runs: its scripts and their static imports. */
-  function initialLoad(page: string): Set<string> {
-    const byFile = new Map(Object.values(manifest).map((c) => [c.file, c]));
+  const byFile = () => new Map(Object.values(manifest).map((c) => [c.file, c]));
+
+  /** `files` and everything they import statically, as built files. */
+  function staticClosure(files: Iterable<string>): Set<string> {
+    const chunks = byFile();
     const seen = new Set<string>();
     const visit = (file: string) => {
       if (seen.has(file)) return;
       seen.add(file);
-      for (const key of byFile.get(file)?.imports ?? []) {
+      for (const key of chunks.get(file)?.imports ?? []) {
         const dep = manifest[key];
         if (dep !== undefined) visit(dep.file);
       }
     };
-    for (const [, src] of read(page).matchAll(/\s(?:src|href)="\/(assets\/[^"]+\.js)"/g)) if (src) visit(src);
+    for (const file of files) visit(file);
     return seen;
+  }
+
+  /** Every file a page loads before any dynamic import runs: its scripts and their static imports. */
+  function initialLoad(page: string): Set<string> {
+    const scripts = [...read(page).matchAll(/\s(?:src|href)="\/(assets\/[^"]+\.js)"/g)].flatMap(([, src]) =>
+      src ? [src] : [],
+    );
+    return staticClosure(scripts);
   }
 
   it('builds both spike pages, each loading its own entry script', () => {
@@ -83,5 +102,38 @@ describe('e2e build', () => {
     expect(read(join('assets', workers[0] ?? ''))).not.toMatch(/^\s*import\s/m); // the shared code is bundled in
     const all = readdirSync(out, { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.js'));
     for (const f of all) expect(read(f), f).not.toMatch(/\?worker&inline|new Blob\(\[[^\]]*maplibre-gl-worker/);
+  });
+
+  // Issue #19: "Initial JS ≤ 250 KB gzip, excluding the lazy MapLibre and ECharts chunks".
+  it.each(['index.html', 'en/index.html'])('%s: the initial JavaScript is at most 250 KB gzip', (page) => {
+    const files = [...initialLoad(page)].filter((f) => f.endsWith('.js'));
+    expect(files.length).toBeGreaterThan(0);
+    const gzip = files.reduce((sum, f) => sum + gzipSync(readFileSync(join(out, f))).length, 0);
+    console.log(`initial JS of ${page}: ${gzip} bytes gzip (${(gzip / 1024).toFixed(1)} KiB) in ${files.join(', ')}`);
+    expect(gzip).toBeLessThanOrEqual(250 * 1024);
+  });
+
+  it('keeps ECharts in its own lazy chunk, away from every initial load and from the map chunk', () => {
+    const chart = manifest['src/features/station/chart.ts'];
+    const map = manifest['src/features/map/createMap.ts'];
+    expect(chart?.isDynamicEntry).toBe(true);
+    expect(map?.isDynamicEntry).toBe(true);
+    const chartCode = read(chart?.file ?? '');
+    expect(chartCode).toContain('_echarts_instance_'); // ECharts is in the lazy chart chunk
+    expect(chartCode).toContain('ecModel');
+    for (const page of pages) {
+      for (const file of initialLoad(page)) {
+        const code = read(file);
+        expect(code, `${page} → ${file}`).not.toMatch(/_echarts_instance_|ecModel/);
+        expect(file, `${page} → ${file}`).not.toBe(chart?.file);
+      }
+    }
+    // The chart chunk is not the map chunk, and neither loads the other or holds the other's code.
+    expect(chart?.file).not.toBe(map?.file);
+    expect(staticClosure([map?.file ?? '']).has(chart?.file ?? '')).toBe(false);
+    expect(staticClosure([chart?.file ?? '']).has(map?.file ?? '')).toBe(false);
+    expect(read(map?.file ?? '')).not.toMatch(/_echarts_instance_|ecModel/);
+    expect(chartCode).not.toMatch(/Wrong magic number for PMTiles|maplibregl-canvas/);
+    for (const file of staticClosure([chart?.file ?? ''])) expect(file).not.toMatch(/createMap|maplibre-gl-worker/);
   });
 });

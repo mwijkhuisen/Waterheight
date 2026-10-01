@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { i18nHtml, keyDrift } from '../i18n-html.ts';
 
 const webDir = fileURLToPath(new URL('..', import.meta.url));
@@ -15,17 +15,24 @@ describe('web build', () => {
   const page = (p: string) => readFileSync(join(out, p), 'utf8');
 
   beforeAll(async () => {
-    await build({ root: webDir, logLevel: 'silent', build: { outDir: out, emptyOutDir: true } });
+    // Vitest sets NODE_ENV=test, which makes Vite bundle React's development build: build as the CLI does.
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      await build({ root: webDir, logLevel: 'silent', build: { outDir: out, emptyOutDir: true } });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   }, 60_000);
 
   it.each([
     ['index.html', 'nl', 'Rivierstanden', 'geen officiële waarschuwingsdienst'],
     ['en/index.html', 'en', 'River levels', 'not an official warning service'],
-  ])('%s is the static %s placeholder with its title and <main>', (file, lang, title, notice) => {
+  ])('%s is the static %s page shell with its title and <main>', (file, lang, title, notice) => {
     const html = page(file);
     expect(html).toMatch(new RegExp(`<html lang="${lang}">`));
     expect(html).toContain(`<title>${title}</title>`);
-    expect(html).toMatch(new RegExp(`<main id="app">\\s*<h1>${title}</h1>\\s*<p>`));
+    // The app mounts into #app and replaces the shell; until then (and without JavaScript) the page is this <main>.
+    expect(html).toMatch(new RegExp(`<div id="app">\\s*<main>\\s*<h1>${title}</h1>\\s*<p>`));
     expect(html).toContain(notice);
     expect(html).not.toMatch(/%m:/);
   });
@@ -55,6 +62,43 @@ describe('web build', () => {
     expect(files.filter((f) => f.includes('_spike'))).toEqual([]);
     for (const f of files.filter((f) => /\.(html|js|css)$/.test(f))) {
       expect(readFileSync(join(out, f), 'utf8'), f).not.toMatch(/__spike|Kaartproef|Map spike/);
+    }
+  });
+
+  it('serves the third-party notices of every npm package in the bundle (KG-108), none of ours', () => {
+    const text = page('third-party-notices.txt');
+    // The lazy map, polyfill and chart chunks are in the bundle too, so their packages are named.
+    for (const header of [
+      'react@19.3.0 — MIT',
+      'react-dom@19.3.0 — MIT',
+      'maplibre-gl@6.11.1 — BSD-3-Clause',
+      'pmtiles@4.5.0 — BSD-3-Clause',
+      'temporal-polyfill@1.0.5 — MIT',
+      'echarts@6.1.0 — Apache-2.0',
+      'zrender@6.1.0 — BSD-3-Clause',
+      'tslib@2.3.0 — 0BSD',
+      '@tanstack/react-query@5.103.2 — MIT',
+      '@tanstack/query-core@5.103.2 — MIT',
+      'zod@4.6.5 — MIT',
+    ])
+      expect(text, header).toContain(`\n${header}\n`);
+    expect(text).toContain('Permission is hereby granted'); // MIT
+    expect(text).toContain('Redistribution and use in source and binary forms'); // BSD-3-Clause
+    expect(text).toMatch(/Apache License\s+Version 2\.0, January 2004/); // ECharts
+    expect(text).not.toContain('@rws/');
+    const commit = readdirSync(join(webDir, 'public/assets/map'))[0];
+    expect(text).toContain(`/assets/map/${commit}/LICENSES.md`);
+    expect(text).toContain('© OpenStreetMap contributors · Protomaps');
+  });
+
+  it('never ships the e2e test hook (`window.__rws`) or the e2e seed ids; both exist only in `--mode e2e`', () => {
+    const files = readdirSync(out, { recursive: true, withFileTypes: true }).filter((e) => e.isFile());
+    expect(files.length).toBeGreaterThan(0);
+    for (const e of files) {
+      const path = join(e.parentPath, e.name);
+      const text = readFileSync(path, 'utf8');
+      expect(text, path).not.toContain('__rws');
+      expect(text, path).not.toContain('nl.e2e.');
     }
   });
 });
