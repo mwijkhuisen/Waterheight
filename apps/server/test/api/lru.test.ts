@@ -3,7 +3,7 @@ import { Busy, Lru } from '../../src/api/lru.ts';
 
 // The in-process answer cache of the public API: bounded, single flight, no failure kept.
 
-type Opts = { maxEntries?: number; maxBytes?: number; maxInflight?: number };
+type Opts = { maxEntries?: number; maxBytes?: number; maxInflight?: number; reserved?: string[] };
 
 function setup(opts: Opts = {}) {
   const clock = { t: 1_000 };
@@ -316,6 +316,23 @@ describe('Lru: the in-flight cap', () => {
     expect(await lru.get('a', TTL, async () => 'a')).toBe('a');
     await expect(lru.get('b', TTL, () => Promise.reject(new Error('b')))).rejects.toThrow('b');
     expect(await lru.get('c', TTL, async () => 'c')).toBe('c');
+    expect(lru.size.inflight).toBe(0);
+  });
+
+  it('never refuses a reserved key: the map grows by at most the reserved keys', async () => {
+    const { lru } = setup({ maxInflight: 1, reserved: ['meta', 'stations'] });
+    const g = gate();
+    const running = lru.get('a', TTL, () => g.promise);
+    await tick();
+    await expect(lru.get('b', TTL, async () => 'never')).rejects.toBeInstanceOf(Busy);
+    const meta = lru.get('meta', TTL, () => g.promise);
+    const stations = lru.get('stations', TTL, () => g.promise);
+    await tick();
+    expect(lru.size.inflight).toBe(3);
+    // A reserved key in flight still counts against the others.
+    await expect(lru.get('c', TTL, async () => 'never')).rejects.toBeInstanceOf(Busy);
+    g.resolve('done');
+    expect(await Promise.all([running, meta, stations])).toEqual(['done', 'done', 'done']);
     expect(lru.size.inflight).toBe(0);
   });
 

@@ -35,7 +35,8 @@ const FIXED: Readonly<Record<'meta' | 'stations' | 'openapi', CachePolicy>> = {
   stations: { header: 'public, max-age=300', ttlMs: 300_000 },
   openapi: { header: 'public, max-age=300', ttlMs: 300_000 },
 };
-// The in-process cache: bounded by entries and bytes; at most 64 distinct keys computed at once.
+// The in-process cache: bounded by entries and bytes; at most 64 distinct keys computed at once, and the two fixed
+// keys never refused (a flood of /series or /snapshot keys must not take /meta and /stations down).
 const LRU_ENTRIES = 2048;
 const LRU_BYTES = 64 * 1024 * 1024;
 const LRU_INFLIGHT = 64;
@@ -56,6 +57,7 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
     maxEntries: LRU_ENTRIES,
     maxBytes: LRU_BYTES,
     maxInflight: LRU_INFLIGHT,
+    reserved: ['meta', 'stations'],
     now: () => deps.now().getTime(),
   });
   const openapi = JSON.stringify(openApiDocument());

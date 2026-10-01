@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DisplayWindow } from '../src/api/window.ts';
 import { createApp } from '../src/app.ts';
 import { openApiDb } from '../src/main.ts';
+import { fakeDb } from './api/fake-db.ts';
 
 describe('GET /healthz', () => {
   it('answers 200 with a status and nothing else', async () => {
@@ -115,5 +116,51 @@ describe('the data routes when the database fails', () => {
     } finally {
       await dead.close();
     }
+  });
+});
+
+describe('the in-flight cap of the data routes', () => {
+  it('refuses a 65th distinct key in flight with 503 busy, joins a key in flight, and never refuses /meta or /stations', async () => {
+    let release = () => {};
+    const held = new Promise<void>((r) => {
+      release = r;
+    });
+    let waiting = 0;
+    // A snapshot (a statement with a parameter) waits; the fixed reads of /meta and /stations find no rows at once.
+    const db = fakeDb(async (q) => {
+      if (q.parameters.length > 0) {
+        waiting += 1;
+        await held;
+      }
+      return { rows: [] };
+    });
+    const window = { current: { dataEpochMs: 0, displayStartMs: Date.parse('2026-08-24T00:00:00Z') } };
+    const app = createApp({
+      db,
+      window: window as unknown as DisplayWindow,
+      now: () => new Date('2026-10-01T12:00:00Z'),
+    });
+    const path = (i: number) =>
+      `/api/v1/snapshot?t=${new Date(Date.parse('2026-10-01T00:00:00Z') + i * 600_000).toISOString()}`;
+    const first = Array.from({ length: 64 }, (_, i) => app.request(path(i)));
+    await vi.waitFor(() => expect(waiting).toBe(64));
+
+    const busy = await app.request(path(64));
+    expect(busy.status).toBe(503);
+    expect(busy.headers.get('retry-after')).toBe('5');
+    expect(busy.headers.get('cache-control')).toBe('no-store');
+    expect(await busy.text()).toBe('{"error":"busy"}');
+    const joined = app.request(path(0));
+    // The fixed keys are a closed set: the cap never refuses them (review SR-1).
+    for (const fixed of ['/api/v1/meta', '/api/v1/stations']) {
+      const res = await app.request(fixed);
+      expect(res.status, fixed).toBe(200);
+      expect(res.headers.get('cache-control'), fixed).not.toBe('no-store');
+    }
+    expect(waiting).toBe(64);
+
+    release();
+    expect((await Promise.all([...first, joined])).map((r) => r.status)).toEqual(Array(65).fill(200));
+    expect((await app.request(path(64))).status).toBe(200);
   });
 });
