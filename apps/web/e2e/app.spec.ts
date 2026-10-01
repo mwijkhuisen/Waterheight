@@ -103,6 +103,28 @@ async function press(page: Page, key: string, expectedT: string, valueTextEnd: R
   await expect(page.locator('time').first()).toHaveText((await after.getAttribute('aria-valuetext')) ?? '');
 }
 
+/** Counts every URL the page writes (replaceState) in `window.__urls`; added before the page loads. */
+const countUrlWrites = () => {
+  const w = window as unknown as { __urls: string[] };
+  w.__urls = [];
+  const replace = history.replaceState.bind(history);
+  history.replaceState = (...args: Parameters<History['replaceState']>) => {
+    replace(...args);
+    w.__urls.push(location.search);
+  };
+};
+const urlWrites = (page: Page) => page.evaluate(() => (window as unknown as W).__urls ?? []);
+
+/** The values on screen are those of the page's t (nothing is marked busy) and every chart has drawn its points. */
+async function settled(page: Page) {
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  await page.waitForFunction(() => {
+    const charts = [...((window as unknown as W).__rws?.charts ?? [])];
+    const panels = document.querySelectorAll('aside div[role="img"]').length;
+    return charts.length === panels && charts.every((c) => (c.getOption()?.series?.[0]?.data?.length ?? 0) > 0);
+  });
+}
+
 /** Replaces canvas.getContext so 'webgl2' answers null (everything else is untouched). */
 const withoutWebGL2 = () => {
   const get = HTMLCanvasElement.prototype.getContext as (this: HTMLCanvasElement, ...a: unknown[]) => unknown;
@@ -117,15 +139,20 @@ const withoutWebGL2 = () => {
 
 /** axe on the page (or one part of it): no undecided check, and no serious or critical finding (issue #19). */
 async function expectNoSeriousAxe(page: Page, scope?: string) {
+  // axe yields to the page between its rules: a DOM that changes during the run makes checks undecidable (CR-1).
+  await settled(page);
   const axe = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']);
   const result = await (scope === undefined ? axe : axe.include(scope)).analyze();
   expect(result.passes.length, 'axe ran its rules').toBeGreaterThan(10);
+  /** Each node by its selector, its markup and axe's own reason, so a failure in CI can be diagnosed from the log. */
+  const nodes = (v: (typeof result.violations)[number]) =>
+    v.nodes.map((n) => `${n.target.join(' ')} ${n.html.slice(0, 160)} ${n.failureSummary ?? ''}`.trim());
   // Every check it ran was decidable (an "incomplete" colour contrast would be a check that proved nothing).
-  expect(result.incomplete.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+  expect(result.incomplete.map((v) => `${v.id}: ${nodes(v).join(' | ')}`)).toEqual([]);
   expect(
     result.violations
       .filter((v) => v.impact === 'serious' || v.impact === 'critical')
-      .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`),
+      .map((v) => `${v.id} (${v.impact}): ${nodes(v).join(' | ')}`),
   ).toEqual([]);
 }
 
@@ -241,9 +268,17 @@ test('the slider and the buttons update ?t= and the marker states', async ({ pag
   await page.getByRole('button', { name: '10 minuten vooruit' }).click();
   await expect.poll(() => tParam(page)).toBe('2026-10-26T10:00Z');
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /11:00 CET$/);
-  await page.getByRole('button', { name: 'Nu', exact: true }).click();
+  const now = page.getByRole('button', { name: 'Nu', exact: true });
+  await now.click();
   await expect.poll(() => tParam(page)).toBe('2026-10-26T12:00Z');
-  await expect(page.getByRole('button', { name: 'Nu', exact: true })).toBeDisabled();
+  // At the bound the button says so (aria-disabled) but keeps the focus, and does nothing (CR-10).
+  await expect(now).toHaveAttribute('aria-disabled', 'true');
+  await expect(now).not.toHaveAttribute('disabled');
+  await expect(now).toBeFocused();
+  await expect(page.getByRole('button', { name: '10 minuten vooruit' })).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Enter');
+  await expect(now).toBeFocused();
+  expect(tParam(page)).toBe('2026-10-26T12:00Z');
   await expect.poll(() => featureState(page, 'nl.e2e.gap')).toMatchObject({ has: false });
   expect(await featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true });
   await finish(page, s);
@@ -333,6 +368,108 @@ test('the slider and the station list work from the keyboard alone', async ({ pa
   await finish(page, s);
 });
 
+test('a held arrow key keeps the timebar moving; the URL follows with few writes (CR-3)', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  // WebKit throws after 100 replaceState calls in 30 s (Chromium ignores calls past its own limit): the state
+  // moves at once, the URL at most every 250 ms, and it ends at the last value.
+  const s = await start(page, context, baseURL);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(countUrlWrites);
+  await open(page, '/?t=2026-10-20T00:00Z');
+  await slider(page).focus();
+  for (let i = 0; i < 150; i++) await page.keyboard.press('ArrowRight');
+  // 150 steps of ten minutes: 25 hours on.
+  await expect(slider(page)).toHaveValue(ms('2026-10-21T01:00:00Z'));
+  await expect(slider(page)).toHaveAttribute('aria-valuetext', /03:00 CEST$/);
+  await expect.poll(() => tParam(page)).toBe('2026-10-21T01:00Z');
+  const writes = await urlWrites(page);
+  expect(writes.at(-1)).toBe('?t=2026-10-21T01:00Z');
+  expect(writes.length, `${writes.length} URL writes`).toBeLessThan(40);
+  expect(errors).toEqual([]);
+  await finish(page, s);
+});
+
+test('a held key asks the API only where it stops: one series request, few snapshots (SR-2)', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL);
+  await open(page, '/?t=2026-10-24T12:00Z&s=nl.e2e.dst');
+  await settled(page);
+  const asked = (route: string) =>
+    s.log.requests.map((u) => new URL(u)).filter((u) => u.pathname.startsWith(`/api/v1/${route}`));
+  const before = { series: asked('series').length, snapshot: asked('snapshot').length };
+  expect(before.series).toBe(1);
+
+  // Forty hours forward an hour at a time: the chart's span (six-hour blocks) would change six times on the way.
+  await slider(page).focus();
+  for (let i = 0; i < 40; i++) await page.keyboard.press('PageUp');
+  await expect.poll(() => tParam(page)).toBe('2026-10-26T04:00Z');
+  await settled(page);
+  await expect(panelOf(page).getByRole('region', { name: 'Waterstand' })).toContainText('Geen waarde op dit tijdstip');
+  const series = asked('series').slice(before.series);
+  const snapshots = asked('snapshot').slice(before.snapshot);
+  expect(series.map((u) => u.search)).toEqual(['?from=2026-10-19T06:00Z&to=2026-10-26T06:00Z&res=raw']);
+  expect(snapshots.length, snapshots.map((u) => u.search).join(' ')).toBeLessThanOrEqual(3);
+  expect(snapshots.at(-1)?.search).toBe('?t=2026-10-26T04:00Z');
+  await finish(page, s);
+});
+
+test('while a new t loads, the values of the old one are marked busy and dimmed (CR-4)', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL);
+  let release = () => {};
+  const held = new Promise<void>((r) => {
+    release = r;
+  });
+  await page.route('**/api/v1/snapshot?t=2026-10-26T11:50Z', async (route) => {
+    await held;
+    await route.continue();
+  });
+  await open(page, '/?s=nl.e2e.dst');
+  const body = panelOf(page).locator('..');
+  await expect(body).toHaveAttribute('aria-busy', 'false');
+  await expect(panelOf(page).locator('strong')).toHaveText('444');
+  await page.getByRole('button', { name: '10 minuten terug' }).click();
+  await expect(slider(page)).toHaveAttribute('aria-valuetext', /12:50 CET$/);
+  // The panel still shows the value of 12:00Z, so the region says it is not current yet, and looks it.
+  await expect(body).toHaveAttribute('aria-busy', 'true');
+  await expect.poll(() => body.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeLessThan(0.6);
+  release();
+  await expect(body).toHaveAttribute('aria-busy', 'false');
+  await expect.poll(() => body.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+  await finish(page, s);
+});
+
+test('a date typed digit by digit is taken when complete; a year half typed is never clamped (CR-8)', async ({
+  page,
+  context,
+  baseURL,
+  browserName,
+}) => {
+  test.skip(browserName !== 'chromium', 'typing into the segments of a date field is Chromium’s behaviour');
+  const s = await start(page, context, baseURL);
+  await open(page, '/?t=2026-10-26T11:00Z'); // 12:00 CET
+  const date = page.getByLabel('Datum', { exact: true });
+  await date.focus();
+  // The browser's locale (en-US) orders the segments month, day, year; on the way, 2026-01-26 and 0002-10-24
+  // are complete dates outside the range: they are left alone, never moved to its edge.
+  await page.keyboard.type('10242026');
+  await expect(date).toHaveValue('2026-10-24');
+  await expect(date).toBeFocused();
+  await expect.poll(() => tParam(page)).toBe('2026-10-24T10:00Z'); // 12:00 CEST
+  await expect(slider(page)).toHaveAttribute('aria-valuetext', /12:00 CEST$/);
+  await finish(page, s);
+});
+
 // ---------------------------------------------------------------- 2026-10-25, 02:30 twice
 
 test('02:50 CEST is followed by 02:00 CET on the scrubber, and both 02:30 instants are reachable', async ({
@@ -375,23 +512,19 @@ test('02:30 CEST and 02:30 CET are two choices of the time input, with their own
   await expect(level()).toHaveText('50');
   await expect(page.getByRole('group', { name: /Dit uur komt twee keer voor/ })).toHaveCount(0);
 
-  await page.getByLabel('Datum', { exact: true }).fill('2026-10-25');
+  const date = page.getByLabel('Datum', { exact: true });
+  const time = page.getByLabel('Tijd (Nederlandse tijd)', { exact: true });
+  await date.fill('2026-10-25');
   await expect.poll(() => tParam(page)).toBe('2026-10-25T13:00Z'); // 14:00 CET, the time of day it had
-  await page.getByLabel('Tijd (Nederlandse tijd)', { exact: true }).fill('02:30');
+  await time.fill('02:30');
 
-  // 02:30 on that date happens twice: the first one is taken, and the choice appears.
+  // 02:30 on that date happens twice: the one with the offset of the current t (14:00 CET) is taken, and the
+  // choice appears.
   const choice = page.getByRole('group', { name: 'Dit uur komt twee keer voor (einde zomertijd). Welke bedoel je?' });
   await expect(choice).toBeVisible();
   await expect(choice.getByRole('radio')).toHaveCount(2);
   const cest = choice.getByRole('radio', { name: '02:30 CEST (UTC+02:00)' });
   const cet = choice.getByRole('radio', { name: '02:30 CET (UTC+01:00)' });
-  await expect.poll(() => tParam(page)).toBe('2026-10-25T00:30Z');
-  await expect(cest).toBeChecked();
-  await expect(cet).not.toBeChecked();
-  await expect(level()).toHaveText('111');
-  await expect(slider(page)).toHaveAttribute('aria-valuetext', /02:30 CEST$/);
-
-  await cet.check();
   await expect.poll(() => tParam(page)).toBe('2026-10-25T01:30Z');
   await expect(cet).toBeChecked();
   await expect(cest).not.toBeChecked();
@@ -402,9 +535,23 @@ test('02:30 CEST and 02:30 CET are two choices of the time input, with their own
 
   await cest.check();
   await expect.poll(() => tParam(page)).toBe('2026-10-25T00:30Z');
+  await expect(cest).toBeChecked();
+  await expect(cet).not.toBeChecked();
   await expect(level()).toHaveText('111');
+  await expect(slider(page)).toHaveAttribute('aria-valuetext', /02:30 CEST$/);
   await expect(page.locator('time').first()).toHaveAttribute('datetime', '2026-10-25T00:30:00.000Z');
   expect(where(page)).toBe('/?t=2026-10-25T00:30Z&s=nl.e2e.dst');
+
+  // Another minute in the repeated hour keeps the offset it is in (CR-9): 02:40 CEST, then from 02:30 CET 02:40 CET.
+  await expect(time).toHaveValue('02:30');
+  await time.fill('02:40');
+  await expect.poll(() => tParam(page)).toBe('2026-10-25T00:40Z');
+  await expect(slider(page)).toHaveAttribute('aria-valuetext', /02:40 CEST$/);
+  await choice.getByRole('radio', { name: '02:40 CET (UTC+01:00)' }).check();
+  await expect.poll(() => tParam(page)).toBe('2026-10-25T01:40Z');
+  await time.fill('02:30');
+  await expect.poll(() => tParam(page)).toBe('2026-10-25T01:30Z');
+  await expect(level()).toHaveText('222');
   await finish(page, s);
 });
 
@@ -585,6 +732,8 @@ test("the popup's own close button deselects the station", async ({ page, contex
   await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
   await expect.poll(() => featureState(page, 'nl.e2e.dst')).toMatchObject({ selected: false });
   await expect(stationList(page)).toHaveValue('');
+  // The focus goes to the station list, not to the page body the removed button leaves behind (CR-10).
+  await expect(stationList(page)).toBeFocused();
   await finish(page, s);
 });
 
@@ -706,29 +855,24 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
 test('play steps ten minutes a second; Pause and a hidden tab stop it', async ({ page, context, baseURL }) => {
   const s = await start(page, context, baseURL);
   // Every URL the page writes (replaceState), so the steps are counted exactly instead of sampled.
-  await page.addInitScript(() => {
-    const w = window as unknown as { __urls: string[] };
-    w.__urls = [];
-    const replace = history.replaceState.bind(history);
-    history.replaceState = (...args: Parameters<History['replaceState']>) => {
-      replace(...args);
-      w.__urls.push(location.search);
-    };
-  });
+  await page.addInitScript(countUrlWrites);
   await open(page, '/?t=2026-10-26T11:00Z');
-  const urls = () => page.evaluate(() => (window as unknown as W).__urls ?? []);
+  const urls = () => urlWrites(page);
   const play = page.getByRole('button', { name: 'Afspelen' });
   const pause = page.getByRole('button', { name: 'Pauzeren' });
 
+  // One button whose name says what it does next; no aria-pressed besides (CR-10).
   await expect(play).toBeEnabled();
-  await expect(play).toHaveAttribute('aria-pressed', 'false');
+  await expect(play).not.toHaveAttribute('aria-pressed');
   await play.click();
-  await expect(pause).toHaveAttribute('aria-pressed', 'true');
+  await expect(pause).toBeVisible();
+  await expect(pause).not.toHaveAttribute('aria-pressed');
+  await expect(pause).toBeFocused();
   await expect.poll(async () => (await urls()).length, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
   expect((await urls()).slice(0, 2)).toEqual(['?t=2026-10-26T11:10Z', '?t=2026-10-26T11:20Z']);
 
   await pause.click();
-  await expect(play).toHaveAttribute('aria-pressed', 'false');
+  await expect(play).toBeVisible();
   const stopped = await urls();
   const last = stopped.at(-1) ?? '';
   expect(last).toMatch(/^\?t=2026-10-26T11:[1-5]0Z$/);
@@ -738,13 +882,13 @@ test('play steps ten minutes a second; Pause and a hidden tab stop it', async ({
 
   // Play again, then hide the tab: it stops by itself.
   await play.click();
-  await expect(pause).toHaveAttribute('aria-pressed', 'true');
+  await expect(pause).toBeVisible();
   await expect.poll(async () => (await urls()).length, { timeout: 10_000 }).toBeGreaterThan(stopped.length);
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await expect(play).toHaveAttribute('aria-pressed', 'false');
+  await expect(play).toBeVisible();
   const hidden = await urls();
   await page.waitForTimeout(2500);
   expect(await urls()).toEqual(hidden);
@@ -783,6 +927,26 @@ test('an unknown app path is a page of its own, in its language', async ({ page,
   await finish(page, s);
 });
 
+test('when the Temporal polyfill cannot load, the page says so instead of staying blank (CR-12)', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL);
+  // Every browser runs without Temporal here, and the polyfill chunk answers 404.
+  await page.addInitScript(() => {
+    delete (globalThis as { Temporal?: unknown }).Temporal;
+  });
+  await page.route('**/assets/global.esm-*.js', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.goto('/');
+  await expect(page.getByRole('alert')).toHaveText('De pagina kan niet worden geladen. Probeer het later opnieuw.');
+  // The static page stays as it was, under the alert's text node.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Rivierstanden');
+  await expect(page.locator('#app [role="alert"]')).toHaveCount(1);
+  await expect(slider(page)).toHaveCount(0);
+  await finish(page, s);
+});
+
 // ---------------------------------------------------------------- axe
 
 const axeSpec = (title: string, run: (page: Page) => Promise<void>) =>
@@ -797,10 +961,7 @@ axeSpec('axe finds no serious or critical issue: map view with the station panel
   await open(page, '/?s=nl.e2e.dst');
   await mapReady(page);
   await expect(panelOf(page).getByRole('heading', { level: 2, name: 'E2E DST' })).toBeVisible();
-  await page.waitForFunction(() => {
-    const option = [...((window as unknown as W).__rws?.charts ?? [])][0]?.getOption();
-    return !!option?.tooltip?.[0];
-  });
+  await expect(panelOf(page).locator('strong')).toHaveText('444');
   await expect(page.locator('.maplibregl-popup-content > span')).toHaveText('E2E DST');
 });
 
@@ -834,6 +995,8 @@ test('axe finds no serious or critical issue: the station panel next to the tabl
   await page.addInitScript(withoutWebGL2);
   await open(page, '/?s=nl.e2e.dst');
   await expect(panelOf(page).getByRole('heading', { level: 2, name: 'E2E DST' })).toBeVisible();
+  // As in the map view: the panel's value and chart are in before axe runs (expectNoSeriousAxe waits for both).
+  await expect(panelOf(page).locator('strong')).toHaveText('444');
   // The table beside the panel wraps into rows taller than its scroll area, which axe cannot judge for contrast
   // (the page without a panel is checked whole above): the panel and the controls above the table are.
   await expectNoSeriousAxe(page, 'aside');
