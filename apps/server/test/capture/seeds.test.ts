@@ -294,4 +294,51 @@ describe('seed completeness (C5, S8)', () => {
     // The scheduled window anchor is not moved by a seed.
     expect((await deps.state.read<SpecState>('fr-1-obs'))?.variants.default?.last_success).toBeUndefined();
   });
+
+  const LU5 = 'https://data.public.lu/api/2/datasets/67aca67bcaea3ae62308114f/resources/';
+  /** The LU-5 list: six dumps on two pages of three; page 2 answers `ctl.fail()` while it is set. */
+  function lu5() {
+    const all = Array.from({ length: 6 }, (_, i) => ({
+      id: `0ebe38da-f4fa-4132-8fc0-47074d9186d${i}`,
+      title: `dump-alert.179068836${i}.xml`,
+      url: `https://download.data.public.lu/resources/alertes-du-systeme-lu-alert/20260929-13300${i}/dump-alert.179068836${i}.xml`,
+    }));
+    const ctl: { fail: (() => Response) | null; requests: number; fetched: string[] } = {
+      fail: null,
+      requests: 0,
+      fetched: [],
+    };
+    server.use(
+      http.get(LU5, ({ request }) => {
+        ctl.requests += 1;
+        const p = Number(new URL(request.url).searchParams.get('page') ?? '1');
+        if (p === 2 && ctl.fail !== null) return ctl.fail();
+        return HttpResponse.json({
+          data: all.slice((p - 1) * 3, p * 3),
+          next_page: p === 1 ? `${LU5}?page=2&page_size=20` : null,
+        });
+      }),
+      http.get('https://download.data.public.lu/resources/*', ({ request }) => {
+        ctl.requests += 1;
+        ctl.fetched.push(request.url);
+        return new HttpResponse(fixture('LU-5', 'lu-5-file').body);
+      }),
+    );
+    return { all, ctl };
+  }
+
+  it('caps the LU-5 requests for the whole seed, rounds included, and does not retry past the cap', async () => {
+    const { ctl } = lu5();
+    ctl.fail = () => new HttpResponse('gone', { status: 404 });
+    const s = spec('lu-5-cap');
+    const capped: LoadedSpec = { ...s, seed: { ...(s.seed as NonNullable<LoadedSpec['seed']>), page_cap: 8 } };
+    const deps = runDeps();
+    const rounds: boolean[] = [];
+    while (rounds.at(-1) !== true && rounds.length < 10) {
+      rounds.push(await runSeeds({ ...registry, specs: [capped] }, deps, paths(deps.root)));
+      expect(ctl.requests).toBeLessThanOrEqual(8);
+    }
+    expect(rounds.at(-1)).toBe(true);
+    expect((await deps.state.read<SeedState>('seeds/lu-5-cap'))?.done_at).toBeUndefined();
+  });
 });
