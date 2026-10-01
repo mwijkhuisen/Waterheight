@@ -444,10 +444,12 @@ specs:
       expand: true
       max_expand: 200
       expand_validity: { format: json, required: [Simul], reject: [error_msg], min: 0 }
-    variants: { values: [{ grd: H }, { grd: Q }] }
+    # 2 s between requests: www.vigicrues.gouv.fr answered 429 to back-to-back requests (#39, R-059).
+    variants: { values: [{ grd: H }, { grd: Q }], space_ms: 2000 }
     max_bytes: 4194304
     retention: forever
-    # Outside events the list is empty: the one empty-list allowance of the checklist.
+    # The list is national (27–31 stations on 2026-09-29/10-01, none NL-bound) and archived in full; only its
+    # stations in the basins FR-1 captures are fetched (adapters/fr-4/capture.ts). It may still empty: min 0.
     validity: { format: json, required: [ListEntVigiCru], reject: [error_msg], count: ListEntVigiCru, min: 0 }
   - id: fr-5-vigilance
     source: FR-5

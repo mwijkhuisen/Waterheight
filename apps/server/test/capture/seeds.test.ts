@@ -67,7 +67,7 @@ describe('seeds', () => {
     expect(st?.done_at).toBeDefined();
   });
 
-  it('resume the LU-5 harvest after a failure, fetching every dump by its own url', async () => {
+  it.each([503, 429])('resume the LU-5 harvest after a file %i, fetching every dump by its own url', async (status) => {
     const all = Array.from({ length: 6 }, (_, i) => ({
       id: `0ebe38da-f4fa-4132-8fc0-47074d9186d${i}`,
       title: `dump-alert.179068836${i}.xml`,
@@ -85,7 +85,7 @@ describe('seeds', () => {
         });
       }),
       http.get('https://download.data.public.lu/resources/*', ({ request }) => {
-        if (down && request.url.endsWith('88365.xml')) return new HttpResponse('busy', { status: 503 });
+        if (down && request.url.endsWith('88365.xml')) return new HttpResponse('busy', { status });
         fetched.push(request.url);
         return new HttpResponse(fixture('LU-5', 'lu-5-file').body);
       }),
@@ -94,6 +94,9 @@ describe('seeds', () => {
     await runSeeds(only('lu-5-cap'), deps, paths(deps.root));
     expect((await deps.state.read<SeedState>('seeds/lu-5-cap'))?.done_at).toBeUndefined();
     expect(fetched).toHaveLength(5);
+    // The seed's item stays open, though the run counts and names the file (#39).
+    expect((await deps.state.read<SeedState>('seeds/lu-5-cap'))?.done).toEqual([]);
+    expect((await deps.state.read<SpecState>('lu-5-cap'))?.failed_items).toEqual([`file/${all[5]?.id}`]);
     down = false;
     deps.client.politeness.success('download.data.public.lu');
     await runSeeds(only('lu-5-cap'), deps, paths(deps.root));

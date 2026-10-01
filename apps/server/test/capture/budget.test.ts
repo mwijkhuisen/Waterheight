@@ -35,6 +35,19 @@ describe('request budgets', () => {
     expect(spec('fr-1-obs').seed?.pace_ms).toBeGreaterThanOrEqual(2000);
   });
 
+  it('Vigicrues: every spec that expands spaces its requests ≥ 2 s, and its longest run fits its deadline (#39)', () => {
+    const vigi = registry.specs.filter(
+      (s) => s.request.expand && new URL(s.request.url).hostname === 'www.vigicrues.gouv.fr',
+    );
+    expect(vigi.map((s) => s.id).sort()).toEqual(['fr-4', 'fr-5-sections']);
+    for (const s of vigi) {
+      const space = s.variants?.space_ms ?? 0;
+      expect(space, s.id).toBeGreaterThanOrEqual(2000);
+      // Every root plus a full stage 2, spaced, inside the run deadline (0.9 × cadence).
+      expect((s.rows.length + s.request.max_expand) * space, s.id).toBeLessThan(0.9 * (s.cadence_s as number) * 1000);
+    }
+  });
+
   it('BE-3: ≤ 2 value requests per 10 min plus the daily metadata', () => {
     expect(spec('be-3-values').rows).toHaveLength(2);
     expect(spec('be-3-values').cadence_s).toBe(600);
