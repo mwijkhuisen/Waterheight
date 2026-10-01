@@ -188,7 +188,7 @@ jobs:
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      - name: Q1 "all series at T" on 3,000 series × 60 days, as rws_api (under 50 ms)
+      - name: Q1 and the API (/snapshot cold/warm, /series 14 d raw) on 3,000 series × 60 days, as rws_api
         run: node scripts/bench-q1.ts
 
   shellcheck:
