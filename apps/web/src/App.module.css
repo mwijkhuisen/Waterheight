@@ -1,0 +1,76 @@
+.beta {
+  margin: 0;
+  padding: 0.4rem var(--space);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 0.9rem;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space);
+  padding: 0 var(--space);
+}
+
+.main {
+  padding: 0 var(--space) var(--space);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space);
+  margin: var(--space) 0;
+}
+
+.toggle button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.select {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.select select {
+  max-width: 22rem;
+}
+
+.notice {
+  padding: 0.5rem var(--space);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
+.body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space);
+  align-items: flex-start;
+}
+
+.view {
+  flex: 3 1 32rem;
+  min-width: 0;
+}
+
+.footer {
+  border-top: 1px solid var(--line);
+  padding: var(--space);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.footer h2 {
+  font-size: 1rem;
+}
+
+.disclaimer {
+  font-weight: 600;
+  color: var(--ink);
+}
