@@ -1,4 +1,4 @@
-import { mkdir, rename, rm, statfs } from 'node:fs/promises';
+import { lstat, mkdir, rename, rm, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BasemapFile } from '@rws/contracts';
 import { checkTilesManifest, type TileFile, type TilesEntry, tileFileNames } from '@rws/core';
@@ -249,7 +249,13 @@ async function extractOne(d: FetchDeps, build: string, kind: Kind, scratch: stri
     ...(d.signal === undefined ? {} : { signal: d.signal }),
   });
   if (!run.ok) {
-    d.log('error', 'extract_failed', { kind, status: run.status, tail: run.tail });
+    // With --quiet, go-pmtiles prints nothing when the file size limit stops it: the size of what it wrote
+    // (read before the cleanup empties staging; 0 when there is no file) shows that limit (6.5 GB, fsize).
+    const partialBytes = await lstat(partial).then(
+      (s) => (s.isFile() ? s.size : 0),
+      () => 0,
+    );
+    d.log('error', 'extract_failed', { kind, status: run.status, partial_bytes: partialBytes, tail: run.tail });
     throw new BasemapError('extract_failed');
   }
   const opened = await openRegular(partial);

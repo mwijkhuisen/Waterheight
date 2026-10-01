@@ -456,7 +456,13 @@ describe('staging', () => {
       const { deps, lines } = fetchDeps(sb);
       await failsWith(runFetch(deps, { dryRun: false }), 'extract_failed');
       expect(await names(sb.staging)).toEqual([]);
-      expect(lines.find((l) => l.code === 'extract_failed')).toMatchObject({ kind, status: 'exit 3' });
+      // The size of the partial output, read before the cleanup (the fake writes "partial\n"): go-pmtiles prints
+      // nothing under --quiet when the file size limit stops it, so this number is what shows the limit.
+      expect(lines.find((l) => l.code === 'extract_failed')).toMatchObject({
+        kind,
+        status: 'exit 3',
+        partial_bytes: 8,
+      });
     },
   );
 
@@ -473,11 +479,11 @@ describe('staging', () => {
     const sb = await sandbox();
     serveList(GOOD);
     serveTiles(BUILD);
-    await failsWith(
-      runFetch(fetchDeps(sb, { pmtiles: join(sb.work, 'missing') }).deps, { dryRun: false }),
-      'extract_failed',
-    );
+    const { deps, lines } = fetchDeps(sb, { pmtiles: join(sb.work, 'missing') });
+    await failsWith(runFetch(deps, { dryRun: false }), 'extract_failed');
     expect(await names(sb.staging)).toEqual([]);
+    // No output file at all: 0, not a missing field.
+    expect(lines.find((l) => l.code === 'extract_failed')).toMatchObject({ kind: 'basemap', partial_bytes: 0 });
   });
 
   it('a stop signal ends go-pmtiles and cleans up', async () => {
