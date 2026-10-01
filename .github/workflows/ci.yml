@@ -421,11 +421,13 @@ jobs:
             -v "$PWD:/work" -w /work/apps/web \
             "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
             node_modules/.bin/playwright test -c e2e/playwright.config.ts
-      - name: Caddy's log and the e2e api's log
+      - name: Caddy's log, the e2e api's log and Playwright's failure context
         if: failure()
         run: |
           docker logs e2e-caddy 2>&1 | tail -n 100
           tail -n 100 "$RUNNER_TEMP/e2e-api.log"
+          # Each failed test's page snapshot (error-context.md): what the browser showed, e.g. its own error page.
+          find apps/web/test-results -name error-context.md -print -exec head -n 80 {} \; 2>/dev/null | head -n 400
 
   ci:
     name: ci

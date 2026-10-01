@@ -28,7 +28,10 @@ export default defineConfig({
       use: {
         ...devices['Desktop Firefox'],
         viewport,
-        launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true } },
+        // No HTTP/3: the CI job's Caddy advertises h3 (Alt-Svc) on a UDP port its container does not publish, and one
+        // CI run showed Firefox's own network-error page after a navigation (P4b review round 2, R2-CR-2). The site
+        // itself keeps h3 (production publishes 443/udp); this changes the runner, not an assertion.
+        launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true, 'network.http.http3.enable': false } },
       },
     },
     { name: 'webkit', use: { ...devices['Desktop Safari'], viewport } },

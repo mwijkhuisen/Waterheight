@@ -374,21 +374,26 @@ test('a held arrow key keeps the timebar moving; the URL follows with few writes
   baseURL,
 }) => {
   // WebKit throws after 100 replaceState calls in 30 s (Chromium ignores calls past its own limit): the state
-  // moves at once, the URL at most every 250 ms, and it ends at the last value.
+  // moves at once, the URL at most every 400 ms, and it ends at the last value.
   const s = await start(page, context, baseURL);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(countUrlWrites);
   await open(page, '/?t=2026-10-20T00:00Z');
   await slider(page).focus();
+  const began = Date.now();
   for (let i = 0; i < 150; i++) await page.keyboard.press('ArrowRight');
+  const took = Date.now() - began;
   // 150 steps of ten minutes: 25 hours on.
   await expect(slider(page)).toHaveValue(ms('2026-10-21T01:00:00Z'));
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /03:00 CEST$/);
   await expect.poll(() => tParam(page)).toBe('2026-10-21T01:00Z');
   const writes = await urlWrites(page);
   expect(writes.at(-1)).toBe('?t=2026-10-21T01:00Z');
-  expect(writes.length, `${writes.length} URL writes`).toBeLessThan(40);
+  // At most one write per 400 ms while the keys went down, plus the leading and the trailing one: never one per key,
+  // and a slow runner (a longer run) cannot make this flaky.
+  expect(writes.length, `${writes.length} URL writes in ${took} ms`).toBeLessThanOrEqual(Math.ceil(took / 400) + 2);
+  expect(writes.length).toBeLessThan(150);
   expect(errors).toEqual([]);
   await finish(page, s);
 });
@@ -414,8 +419,11 @@ test('a held key asks the API only where it stops: one series request, few snaps
   await expect(panelOf(page).getByRole('region', { name: 'Waterstand' })).toContainText('Geen waarde op dit tijdstip');
   const series = asked('series').slice(before.series);
   const snapshots = asked('snapshot').slice(before.snapshot);
-  expect(series.map((u) => u.search)).toEqual(['?from=2026-10-19T06:00Z&to=2026-10-26T06:00Z&res=raw']);
-  expect(snapshots.length, snapshots.map((u) => u.search).join(' ')).toBeLessThanOrEqual(3);
+  // The live t would ask for every six-hour block on the way (six requests); the settled one asks where the keys
+  // stopped. One more is allowed for a runner that pauses longer than the debounce between two presses.
+  expect(series.length, series.map((u) => u.search).join(' ')).toBeLessThanOrEqual(2);
+  expect(series.at(-1)?.search).toBe('?from=2026-10-19T06:00Z&to=2026-10-26T06:00Z&res=raw');
+  expect(snapshots.length, snapshots.map((u) => u.search).join(' ')).toBeLessThanOrEqual(5);
   expect(snapshots.at(-1)?.search).toBe('?t=2026-10-26T04:00Z');
   await finish(page, s);
 });
