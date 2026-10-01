@@ -1,9 +1,10 @@
 # The public site (A§12.2; issue #16 P1b). Every A§12.2 header, noindex until
-# the public launch (P12), /healthz, the two coarse status files, (P2a) the
-# api's two health paths and (P3) the basemap tiles and the immutable assets.
-# No CORS headers, no owner site (P9; WireGuard-only
-# from P12a). scripts/verify-prod.ts compares these headers with A§12.2 byte for
-# byte; the header block also applies to the proxied responses.
+# the public launch (P12), /healthz, the two coarse status files, (P2a, P4b) the
+# api under /api/v1/, (P3) the basemap tiles and the immutable assets, and
+# (P4b) the web app with its fallback for app routes. No CORS headers, no owner
+# site (P9; WireGuard-only from P12a). scripts/verify-prod.ts compares these
+# headers with A§12.2 byte for byte; the header block also applies to the
+# proxied responses.
 {$RWS_DOMAIN} {
 	header {
 		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp"
@@ -69,25 +70,45 @@
 	handle /status/* {
 		respond 404
 	}
-
-	# The api (P2a): exactly its two health paths, GET or HEAD, any query (the
-	# api answers 400 to a parameter it does not know). The expression compares
-	# the request path as sent, case and all (the path matcher would fold case,
-	# merge slashes and resolve dot segments). Every other /api/ path is a 404
-	# from Caddy. Named matchers keep this order: health first.
-	@api_health {
-		method GET HEAD
-		expression `{path} == '/api/v1/health' || {path} == '/api/v1/health/sources'`
+	handle /status {
+		respond 404
 	}
-	@api path /api/*
-	handle @api_health {
+
+	# The api (P2a: its two health paths; P4b: everything under /api/v1/). GET
+	# or HEAD only, any query: the api validates every parameter and answers its
+	# own 400s and JSON 404s (A§9.2). The expression compares the request path as
+	# sent, case and all (the path matcher would fold case, merge slashes and
+	# resolve dot segments), and no dot segment is passed on. The api reads no
+	# request body: at most 1 KB is accepted. Another method under /api/v1/ is a
+	# 405 from Caddy, any other /api path a 404 from Caddy. Each matcher excludes
+	# what the others take, so their order does not matter.
+	@api {
+		method GET HEAD
+		expression `{path}.startsWith('/api/v1/') && !{path}.contains('/.')`
+	}
+	@api_method {
+		path /api/v1/*
+		not method GET HEAD
+	}
+	@api_other {
+		path /api /api/*
+		not expression `{path}.startsWith('/api/v1/') && !{path}.contains('/.')`
+	}
+	handle @api {
+		request_body {
+			max_size 1KB
+		}
 		# Deferred like the site block: nothing names the upstream software.
 		header -Via
 		reverse_proxy api:8080 {
 			header_down -Server
 		}
 	}
-	handle @api {
+	handle @api_method {
+		header Allow "GET, HEAD"
+		respond 405
+	}
+	handle @api_other {
 		respond 404
 	}
 
@@ -187,9 +208,36 @@
 		root * /srv/www
 		file_server
 	}
+	# Any other /assets path is a 404 from Caddy, never the app below: an HTML
+	# 200 under an asset path would be cached as that asset (P4b). A regexp, so
+	# Caddy keeps it after @assets.
+	@assets_miss path_regexp ^/assets(/|$)
+	handle @assets_miss {
+		respond 404
+	}
 
+	# The pages and the app routes (P4b). A file is served as it is. A path with
+	# no file and no dot in its last segment is an app route: under /en/ the
+	# English page answers, anywhere else the Dutch one, and the app shows its
+	# own "not found" for a route it does not know. A missing file with an
+	# extension (favicon.ico, robots.txt) stays a 404, answered here so that it
+	# keeps the site headers (file_server's own 404 would carry none, KG-107).
+	# /api, /status, /tiles and /assets never get here.
 	handle {
 		root * /srv/www
+		@app_en {
+			path_regexp ^/en/
+			not file {path} {path}/
+			not path_regexp \.[^/]*$
+		}
+		@app {
+			not file {path} {path}/
+			not path_regexp \.[^/]*$
+		}
+		rewrite @app_en /en/index.html
+		rewrite @app /index.html
+		@missing not file {path} {path}/
+		respond @missing 404
 		file_server
 	}
 }
