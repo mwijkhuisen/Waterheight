@@ -4,13 +4,13 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
-## Issue #39: FR-4 429, partial runs (PR pending)
+## Issue #39: FR-4 429, partial runs (PR #41)
 
 ### Needs the owner, the VPS or the first release
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-093 | ops | Two items no agent can check before the deploy. [owner] The read-only jq over the manifest (#39 plan comment) was run once and pasted on #39: every FR-4 429 from 2026-09-30 12:20Z to 2026-10-01 06:50Z had no `Retry-After` and hit a station outside the NL-bound basins; the run that output came from (VPS or acceptance server) is not stated, so whether the acceptance address is throttled the same way is unknown. [agent-prod] After the deploy, `scripts/verify-prod.sh <domain>` check `freshness` must pass for `fr-4` within 3 × 1800 s; until then the fix is proven offline only (the [CI] tests of the PR). | The owner runs the jq on the other host and pastes the output on #39; the agent runs `verify-prod.sh` after the deploy (from a checkout with this PR: an older checkout rejects `failed_items`, R-059); the owner closes #39 | open |
+| KG-093 | ops | Two items no agent can check before the deploy. [owner] The read-only jq over the manifest (#39 plan comment) was run once and pasted on #39: every FR-4 429 from 2026-09-30 12:20Z to 2026-10-01 06:50Z had no `Retry-After` and hit a station outside the NL-bound basins; the run that output came from (VPS or acceptance server) is not stated, so whether the acceptance address is throttled the same way is unknown. [agent-prod] After the deploy, `scripts/verify-prod.sh <domain>` check `freshness` must pass for `fr-4` within 3 × 1800 s; until then the fix is proven offline only (the [CI] tests of the PR). | The owner runs the jq on the other host and pastes the output on #39; the agent runs `verify-prod.sh` after the deploy (from a checkout with this PR: an older checkout rejects `failed_items`, R-059); the owner closes #39 | closed 2026-10-01 ([evidence on #39](https://github.com/mwijkhuisen/Waterheight/issues/39#issuecomment-5928189906)): on the acceptance server (`prod-20261001T075843Z`), `verify-prod.sh` passed `freshness` for all 34 public specs, `fr-4` included (08:57:41Z), and the first `fr-4` run of the new code fetched only the two lists (both 200, `failed_items` `[]`). The owner dropped the jq on another host: no 429 had a `Retry-After`, and the fix depends on none. A production VPS deployed later gets the same `freshness` check at its first deploy |
 
 ## P2b NL-1/NL-2/NL-4 (PR pending, issue #17)
 
