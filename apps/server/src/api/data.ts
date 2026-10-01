@@ -164,13 +164,16 @@ export async function readSnapshot(db: Kysely<DB>, t: number): Promise<Snapshot>
 type RawRow = { ts: Date; value: number; qc: number };
 type BucketRow = { bucket: Date; vmin: number; vmax: number; vavg: number; vlast: number; n: number; qc_or: number };
 
-/** A§8 Q4 over [from, to) in the api channel; undefined when the series is not in it (unknown, or lic_api off). */
+/**
+ * A§8 Q4 over [from, to) in the api channel; undefined when the series is not in it (unknown, or lic_api off)
+ * or is inactive, as /stations and /snapshot show only active series.
+ */
 export async function readSeries(db: Kysely<DB>, p: SeriesParams): Promise<Series | undefined> {
   const from = new Date(p.from);
   const to = new Date(p.to);
   const span = { id: p.id, from: iso(from), to: iso(to) };
   return snapshot(db, async (tx) => {
-    const known = await sql`SELECT 1 FROM ${sql.table(V.api.series)} WHERE id = ${p.id}`.execute(tx);
+    const known = await sql`SELECT 1 FROM ${sql.table(V.api.series)} WHERE id = ${p.id} AND active`.execute(tx);
     if (known.rows.length === 0) return undefined;
     if (p.res === 'raw') {
       const { rows } = await sql<RawRow>`

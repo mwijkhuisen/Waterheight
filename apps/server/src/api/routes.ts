@@ -133,7 +133,7 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
       policy: agePolicy(p.to, now),
       read: async (db) => {
         const series = await readSeries(db, p);
-        // Unknown and api-channel-off answer the same; a 404 is never cached.
+        // Unknown, inactive and api-channel-off answer the same; a 404 is never cached.
         if (series === undefined) throw new Refused('not_found', 404);
         return series;
       },

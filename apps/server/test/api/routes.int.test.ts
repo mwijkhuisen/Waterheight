@@ -84,7 +84,20 @@ beforeAll(async () => {
     ).rows[0]?.id as number;
   const dst = await add('nl.rws.dst', 'dst', '15 min');
   const dense = await add('nl.rws.dense', 'dense', '1 min');
-  ids = { ...fixture, dst, dense };
+  // An inactive public series that holds the data of `public`: in no answer, and /series is the plain 404.
+  await t.admin.query(`INSERT INTO station (id, name, country, tier) VALUES ('nl.rws.inactive', 'Inactive', 'NL', 1)`);
+  const inactive = await add('nl.rws.inactive', 'inactive', '15 min');
+  await t.admin.query('UPDATE series SET active = false WHERE id = $1', [inactive]);
+  await t.admin.query(
+    'INSERT INTO obs (series_id, ts, value, qc, batch_id) SELECT $1, ts, value, qc, batch_id FROM obs WHERE series_id = $2',
+    [inactive, fixture.public],
+  );
+  await t.admin.query(
+    `INSERT INTO obs_1d (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
+     SELECT $1, bucket, vmin, vmax, vavg, vlast, n, qc_or FROM obs_1d WHERE series_id = $2`,
+    [inactive, fixture.public],
+  );
+  ids = { ...fixture, dst, dense, inactive };
 
   // The DST night: 02:30+02:00 is 00:30Z and 02:30+01:00 is 01:30Z, with a 45 min staleness limit
   // neither value can reach the other's bucket.
@@ -776,10 +789,11 @@ describe('on the real clock: channels and canaries', () => {
     'twin',
     'noDisplay',
     'widenAudience',
+    'inactive',
   ];
   const DISPLAYED = ['public', 'public2', 'noApi', 'displayOnly', 'window', 'windowExport'];
 
-  it('/snapshot shows the display channel only: api-off series are in, owner, off, mirror and twin are not', async () => {
+  it('/snapshot shows the display channel only: api-off series are in, owner, off, mirror, twin and inactive are not', async () => {
     const instants = [
       // 40 days back: the history window of CH-3 (30 days, no history export) hides its value.
       { at: hours[0] as Date, keys: DISPLAYED.filter((k) => k !== 'window') },
@@ -809,7 +823,7 @@ describe('on the real clock: channels and canaries', () => {
     }
   });
 
-  it('/series answers the api channel only: display-only series and every non-public series are 404', async () => {
+  it('/series answers the api channel only: display-only, inactive and every non-public series are 404', async () => {
     const instant = (ms: number) => new Date(ms).toISOString();
     const from = instant(Date.now() - 13 * DAY);
     const to = instant(Date.now() + 10 * 60_000);
@@ -851,7 +865,7 @@ describe('on the real clock: channels and canaries', () => {
     expect([none.status, none.text]).toEqual([404, '{"error":"not_found"}']);
   });
 
-  it('/meta and /stations name no owner, off, mirror or twin series, source or attribution', async () => {
+  it('/meta and /stations name no owner, off, mirror, twin or inactive series, source or attribution', async () => {
     const meta = await get(app(), '/api/v1/meta');
     clean('meta', meta.text);
     const body = Meta.parse(meta.json());
