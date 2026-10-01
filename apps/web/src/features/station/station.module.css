@@ -19,9 +19,12 @@
 }
 
 .close {
-  font-size: 1.3rem;
-  line-height: 1;
-  padding: 0.1rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0;
 }
 
 .facts {

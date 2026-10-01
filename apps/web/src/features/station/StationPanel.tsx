@@ -44,7 +44,10 @@ export function StationPanel({ locale, station, values, t, dataEpoch, chartSpan,
           {station.name}
         </h2>
         <button type="button" className={styles.close} onClick={onClose} aria-label={m.panel_close({}, { locale })}>
-          ×
+          {/* An icon, not a one-character text: axe cannot judge the contrast of a lone glyph (review round 2). */}
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+            <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+          </svg>
         </button>
       </div>
       <dl className={styles.facts}>

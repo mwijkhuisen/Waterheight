@@ -2,13 +2,13 @@ import { useCallback, useSyncExternalStore } from 'react';
 import { readSearch, searchOf, type UrlState } from './url.ts';
 
 // The page's view state lives in memory and follows into the URL. The state
-// changes at once; the URL is written at most once per WRITE_MS, the last
-// value always last: WebKit throws after 100 replaceState calls in 30 s and
-// Chromium ignores calls past its own limit, while a held arrow key on the
-// slider makes 30 changes a second. Back and forward (popstate) win over a
-// write still pending.
+// changes at once; the URL is written at most once per WRITE_MS (75 writes in
+// 30 s), the last value always last: WebKit throws after 100 replaceState calls
+// in 30 s and Chromium ignores calls past its own limit, while a held arrow key
+// on the slider makes 30 changes a second. Back and forward (popstate) win over
+// a write still pending.
 
-const WRITE_MS = 250;
+const WRITE_MS = 400;
 const listeners = new Set<() => void>();
 let search: string | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;

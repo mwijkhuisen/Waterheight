@@ -75,6 +75,8 @@ function Viewer({ locale }: { locale: Locale }) {
   const snapshot = useSnapshot(settled);
   // Until the values of this very `t` are in, the ones on screen are marked as not current (aria-busy, dimmed).
   const current = snapshot.data !== undefined && t !== undefined && Date.parse(snapshot.data.t) === t;
+  // Not after a failed request: the alert says so, and a dimmed page would stay unreadable (review round 2).
+  const loading = !current && !snapshot.isError;
   const values = useMemo(() => new Map((snapshot.data?.values ?? []).map((v) => [v.series, v])), [snapshot.data]);
   const states = useMemo(() => markerStates(list, values), [list, values]);
 
@@ -159,10 +161,7 @@ function Viewer({ locale }: { locale: Locale }) {
               </p>
             )}
             {snapshot.isError && <p role="alert">{m.data_unavailable({}, { locale })}</p>}
-            <div
-              className={current ? styles.body : `${styles.body} ${styles.busy}`}
-              aria-busy={!current && !snapshot.isError}
-            >
+            <div className={loading ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={loading}>
               <div className={styles.view}>
                 {canMap && view === 'map' ? (
                   <StationsMap
