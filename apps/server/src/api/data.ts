@@ -85,7 +85,9 @@ const flag = (flags: unknown, key: string): boolean | null => {
  * in the display channel (the daily rollup; the history window applies), not
  * the registration time.
  */
-// ponytail: dataSince is a GROUP BY over the daily rollup (about 1.1 M rows a year), cached 300 s; a stored column if it nears the 2 s timeout.
+// ponytail: dataSince is a GROUP BY over the whole daily rollup, cached 300 s; an uncached /stations took 580 ms at
+// 3,000 series × 365 days. Store the first-data day per series once the registry passes 1,000 active series or an
+// uncached /stations passes 500 ms.
 export async function readStations(db: Kysely<DB>): Promise<Stations> {
   const { stations, series, since } = await snapshot(db, async (tx) => ({
     stations: (
