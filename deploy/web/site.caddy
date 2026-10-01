@@ -93,11 +93,13 @@
 
 	# The basemap tiles (P3, ADR-0016), read-only from /srv/rws/tiles, which the
 	# basemap-promote job fills (the network-facing fetch job never writes it).
-	# Three kinds of path, then a 404 for the rest. Every match is on the path as
-	# sent (like @api_health), so a folded-case, doubled-slash or dot-segment
-	# spelling is no tile file. The file matcher lets a route answer only for a
-	# file that exists: file_server's own 404 would otherwise carry the
-	# Cache-Control set before it, and a cached 404 must never be immutable.
+	# Three kinds of path, then a 404 for the rest. Every match is an exact,
+	# case-sensitive one on the request path as Go decoded it, not cleaned
+	# (like @api_health): a folded-case, doubled-slash or dot-segment spelling is
+	# no tile file, while a percent-escape such as %2D reaches the same file as
+	# the plain name. The file matcher lets a route answer only for a file that
+	# exists: file_server's own 404 would otherwise carry the Cache-Control set
+	# before it, and a cached 404 must never be immutable.
 	#
 	# The manifest: short TTL, never immutable (it changes on every promote).
 	@tiles_manifest {
@@ -126,11 +128,23 @@
 			try_files /{http.request.uri.path.file}
 		}
 	}
+	# Only one explicit byte range is served, the request pmtiles.js makes
+	# (bytes=<first>-<last>). No Range (the whole multi-GB file), an open or
+	# suffix range and several ranges (a multipart answer about 30 times the
+	# size of the request) are a 416 with the site headers and no Cache-Control
+	# (SR-1, R-061). The header placeholder joins repeated Range fields with a
+	# comma, so a second Range field fails the match too.
 	handle @tiles_files {
-		header Cache-Control "public, max-age=31536000, immutable"
-		uri strip_prefix /tiles
-		root * /srv/rws/tiles
-		file_server
+		@one_range expression `{header.Range}.matches('^bytes=[0-9]+-[0-9]+$')`
+		handle @one_range {
+			header Cache-Control "public, max-age=31536000, immutable"
+			uri strip_prefix /tiles
+			root * /srv/rws/tiles
+			file_server
+		}
+		handle {
+			respond 416
+		}
 	}
 
 	# Everything else under /tiles (the directory itself, .staging, a temp
@@ -138,6 +152,17 @@
 	# whatever the disk holds, with no Cache-Control.
 	@tiles path /tiles /tiles/*
 	handle @tiles {
+		respond 404
+	}
+
+	# No dotfile from the web root or /assets: a path with a segment that
+	# starts with "." (the path decoded and cleaned, as file_server reads it)
+	# is a 404, whatever /srv/www holds. ACME challenges are answered before
+	# any route; a file under /.well-known would need its own route above this
+	# one. A regexp, not a path matcher: Caddy re-sorts path-only matchers
+	# (a probe put `path */.*` after @assets) but keeps this order.
+	@dotfiles path_regexp /\.
+	handle @dotfiles {
 		respond 404
 	}
 

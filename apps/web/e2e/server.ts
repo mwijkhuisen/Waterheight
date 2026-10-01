@@ -1,8 +1,9 @@
 // The sandbox stand-in for Caddy (agent sessions have no Docker): HTTPS on
 // https://localhost:4443 with a throw-away self-signed certificate, every
 // response carrying the security headers read from deploy/web/site.caddy, the
-// routes of site.caddy that the spike uses, and single-range requests on the
-// tiles. CI runs the same specs against the real Caddy image instead
+// routes of site.caddy that the spike uses, and, like site.caddy, only one
+// explicit range on a tile file (anything else is a 416). CI runs the same
+// specs against the real Caddy image instead
 // (.github/workflows/ci.yml job e2e).
 // Usage: node e2e/server.ts   (from apps/web; E2E_PORT overrides 4443)
 import { execFileSync } from 'node:child_process';
@@ -10,7 +11,7 @@ import { createReadStream, mkdtempSync, readFileSync, rmSync, statSync } from 'n
 import type { ServerResponse } from 'node:http';
 import { createServer } from 'node:https';
 import { tmpdir } from 'node:os';
-import { extname, join, normalize, sep } from 'node:path';
+import { extname, isAbsolute, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { siteHeaders } from './headers.ts';
 import { prepareTiles } from './prepare-tiles.ts';
@@ -32,6 +33,8 @@ execFileSync(
 
 const headers = siteHeaders();
 const TILE = /^\/tiles\/(basemap|planet-z6)-[0-9]{8}\.pmtiles$/;
+/** site.caddy's @one_range: a tile file is served only for this Range (SR-1). */
+const ONE_RANGE = /^bytes=[0-9]+-[0-9]+$/;
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -51,11 +54,12 @@ function send(res: ServerResponse, status: number, extra: Record<string, string 
   res.end(body);
 }
 
-/** A file under `root`, or undefined (no traversal, no directories but their index.html). */
+/** A file under `root` for a decoded URL path, or undefined (no traversal, no directories but their index.html). */
 function file(root: string, urlPath: string): string | undefined {
-  const rel = normalize(decodeURIComponent(urlPath)).replace(/^[/\\]+/, '');
+  const rel = normalize(urlPath).replace(/^[/\\]+/, '');
   const path = join(root, rel.endsWith(sep) || rel === '' ? join(rel, 'index.html') : rel);
-  if (!path.startsWith(root)) return undefined;
+  const inside = relative(root, path);
+  if (inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) return undefined;
   try {
     return statSync(path).isFile() ? path : undefined;
   } catch {
@@ -89,7 +93,14 @@ const server = createServer(
   { key: readFileSync(join(tmp, 'key')), cert: readFileSync(join(tmp, 'cert')) },
   (req, res) => {
     for (const [name, value] of headers) res.setHeader(name, value);
-    const path = new URL(req.url ?? '/', 'https://localhost').pathname;
+    // The path as Caddy matches it: percent-decoded (Go answers a malformed escape with 400 before any route).
+    let path: string;
+    try {
+      path = decodeURIComponent(new URL(req.url ?? '/', 'https://localhost').pathname);
+    } catch {
+      return send(res, 400);
+    }
+    // Node joins repeated Range fields with ", ", as Caddy's placeholder joins them with ",": either fails ONE_RANGE.
     const range = req.headers.range;
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405);
     if (path === '/healthz') return send(res, 200);
@@ -97,7 +108,8 @@ const server = createServer(
       return serve(res, join(tiles, 'manifest.json'), undefined, 'public, max-age=60');
     if (TILE.test(path)) {
       const tile = file(tiles, path.slice('/tiles'.length));
-      return tile ? serve(res, tile, range, IMMUTABLE) : send(res, 404);
+      if (tile === undefined) return send(res, 404);
+      return ONE_RANGE.test(range ?? '') ? serve(res, tile, range, IMMUTABLE) : send(res, 416);
     }
     if (path.startsWith('/tiles/')) return send(res, 404);
     const asset = file(www, path);

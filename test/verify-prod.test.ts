@@ -25,6 +25,7 @@ import {
   checkTier1,
   checkTileFile,
   checkTiles404,
+  checkTiles416,
   checkTilesManifestPage,
   checkTilesPrevious,
   checkTwin,
@@ -44,6 +45,7 @@ import {
   readTilesManifest,
   soak,
   staleSpecs,
+  TILE_416_REQUESTS,
   TILE_CACHE,
   TILE_HEADERS,
   TILES_404_PATHS,
@@ -1029,6 +1031,44 @@ describe('verify-prod: the 404s and the pinned map assets', () => {
     expect(checkTiles404({}).ok).toBe(false);
   });
 
+  const refused = (over: Partial<Page> = {}): Page => ({ status: 416, headers: {}, body: '', ...over });
+  const asked = (over: Record<string, Page | string> = {}): Record<string, Page | string> => ({
+    ...Object.fromEntries(TILE_416_REQUESTS.map(([label]) => [label, refused()])),
+    ...over,
+  });
+
+  it('tiles 416: the current basemap file without a Range and with two ranges (SR-1)', () => {
+    expect(TILE_416_REQUESTS).toEqual([
+      ['no Range', {}],
+      ['two ranges', { range: 'bytes=0-0,2-2' }],
+    ]);
+    expect(checkTiles416(currentBasemap, asked())).toEqual({
+      check: 'tiles 416',
+      ok: true,
+      detail: 'basemap-20261001.pmtiles: no Range and two ranges are 416, not immutable',
+    });
+  });
+
+  it('tiles 416 fails on a served file (200 or a multipart 206), an immutable 416, a network error and no manifest', () => {
+    expect(checkTiles416(currentBasemap, asked({ 'no Range': refused({ status: 200 }) }))).toMatchObject({
+      ok: false,
+      detail: 'no Range: status 200, want 416',
+    });
+    expect(checkTiles416(currentBasemap, asked({ 'two ranges': refused({ status: 206 }) })).detail).toBe(
+      'two ranges: status 206, want 416',
+    );
+    expect(
+      checkTiles416(currentBasemap, asked({ 'two ranges': refused({ headers: { 'cache-control': TILE_CACHE } }) }))
+        .detail,
+    ).toBe('two ranges: marked immutable');
+    // A range-less GET that is answered with the file is cut off by the 8 MiB cap of the request: a FAIL.
+    expect(checkTiles416(currentBasemap, asked({ 'no Range': 'body too large' })).detail).toBe(
+      'no Range: body too large',
+    );
+    expect(checkTiles416(currentBasemap, {}).detail).toBe('no Range: not asked; two ranges: not asked');
+    expect(checkTiles416(undefined, asked())).toEqual({ check: 'tiles 416', ok: false, detail: 'no valid manifest' });
+  });
+
   const asset = (over: Partial<Page> = {}): Page => ({
     status: 200,
     headers: { 'cache-control': TILE_CACHE },
@@ -1059,12 +1099,13 @@ describe('verify-prod: the 404s and the pinned map assets', () => {
   });
 
   it('the --dry-run list names every new check, and the checks do not echo bodies', () => {
-    for (const name of ['tiles manifest', 'tiles <file>', 'tiles previous', 'tiles 404', 'map assets'])
+    for (const name of ['tiles manifest', 'tiles <file>', 'tiles previous', 'tiles 404', 'tiles 416', 'map assets'])
       expect(
         CHECKS.filter((c) => c.startsWith(`${name}:`)),
         name,
       ).toHaveLength(1);
     expect(CHECKS.find((c) => c.startsWith('tiles <file>:'))).toContain('Range: bytes=0-15');
+    expect(CHECKS.find((c) => c.startsWith('tiles 416:'))).toContain('Range: bytes=0-0,2-2');
   });
 });
 
@@ -1147,11 +1188,41 @@ describe('site.caddy: the tile and asset routes', () => {
     expect(handle).toEqual([
       '',
       'handle @tiles_files {',
+      "@one_range expression `{header.Range}.matches('^bytes=[0-9]+-[0-9]+$')`",
+      'handle @one_range {',
       IMMUTABLE,
       'uri strip_prefix /tiles',
       'root * /srv/rws/tiles',
       'file_server',
+      '}',
+      'handle {',
+      'respond 416',
+      '}',
     ]);
+  });
+
+  it('serves a tile file only for one explicit range, what pmtiles.js sends; anything else is a 416 (SR-1)', () => {
+    const expression = /@one_range expression `\{header\.Range\}\.matches\('(.+)'\)`/.exec(site)?.[1];
+    expect(expression).toBe('^bytes=[0-9]+-[0-9]+$');
+    const one = new RegExp(expression ?? '');
+    // pmtiles 4.5.0's FetchSource: `bytes=${offset}-${offset + length - 1}`, also for its 416 retry.
+    for (const range of ['bytes=0-16383', 'bytes=0-15', 'bytes=127-127', 'bytes=4300000000-4300016383'])
+      expect(one.test(range), range).toBe(true);
+    const refused = [
+      '', // no Range: the whole multi-GB file
+      'bytes=0-', // open
+      'bytes=-16', // suffix
+      'bytes=0-0,2-2', // several ranges: a multipart answer
+      'bytes=0-0, 2-2',
+      // Two Range fields: Caddy's header placeholder joins them with a comma.
+      'bytes=0-0,bytes=2-2',
+      `bytes=${Array.from({ length: 20_000 }, (_, i) => `${2 * i}-${2 * i}`).join(',')}`,
+      'items=0-15',
+      'bytes=0-15\n',
+      'bytes = 0-15',
+      'bytes=0x0-15',
+    ];
+    for (const range of refused) expect(one.test(range), range.slice(0, 40)).toBe(false);
   });
 
   it('answers 404 for every other /tiles path, after the two routes above and before the catch-all', () => {
@@ -1162,11 +1233,31 @@ describe('site.caddy: the tile and asset routes', () => {
       at('\thandle @tiles_manifest {'),
       at('\thandle @tiles_files {'),
       at('\thandle @tiles {'),
+      at('\thandle @dotfiles {'),
       at('\thandle @assets {'),
       at('\thandle {\n\t\troot * /srv/www'),
     ];
     expect(order.every((i) => i > 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('answers 404 for a dotfile under the web root or /assets, with a matcher Caddy does not re-sort', () => {
+    // path_regexp, not path: Caddy sorts path-only matchers by their own rule, and a probe of the real
+    // Caddy 2.11.4 put `path */.*` after @assets; a regexp keeps its place before @assets and the catch-all.
+    expect(site).toContain('\n\t@dotfiles path_regexp /\\.\n');
+    expect(lines(block('handle @dotfiles'))).toEqual(['', 'handle @dotfiles {', 'respond 404']);
+    // Caddy matches path_regexp on the decoded, cleaned path, as file_server reads it.
+    const dot = /\/\./;
+    for (const path of [
+      '/.env',
+      '/.vite/manifest.json',
+      '/assets/.secret.js',
+      '/assets/map/.DS_Store',
+      '/.well-known/x',
+    ])
+      expect(dot.test(path), path).toBe(true);
+    for (const path of ['/', '/index.html', '/en/', '/assets/main-Bj_Syg2T.js', MAP_ASSET_PATH, '/assets/x.y.js'])
+      expect(dot.test(decodeURIComponent(path)), path).toBe(false);
   });
 
   it('keeps encode off the tile files: one encode, scoped by a matcher that excludes /tiles/*', () => {

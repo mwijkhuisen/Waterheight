@@ -9,7 +9,8 @@
 //                                                parameters, DE-1 and NL-1 health, tier-1
 //                                                freshness and replay, loader lag), the
 //                                                basemap tiles (P3: the manifest, a Range
-//                                                read of every listed file, the 404s) and
+//                                                read of every listed file, the 404s, the
+//                                                416 for no Range or two ranges) and
 //                                                the pinned map assets, and no
 //                                                owner source, spec, host, canary or
 //                                                private_basis in /status/* or /api/v1/health*
@@ -508,6 +509,14 @@ export const TILE_HEADERS = { range: 'bytes=0-15', 'accept-encoding': 'gzip, zst
 export const MAP_ASSET_PATH = '/assets/map/028c18f/fonts/Noto%20Sans%20Regular/0-255.pbf';
 /** Paths under /tiles that answer 404: the directory, the staging directory, a dated name nothing promoted. */
 export const TILES_404_PATHS = ['/tiles/', '/tiles/.staging/', '/tiles/basemap-19700101.pmtiles'] as const;
+/**
+ * Requests for the current basemap file that Caddy refuses with 416: only one explicit
+ * range is served (SR-1). A range-less GET that is not refused streams the file; `get` cuts it off at 8 MiB.
+ */
+export const TILE_416_REQUESTS = [
+  ['no Range', {}],
+  ['two ranges', { range: 'bytes=0-0,2-2' }],
+] as const;
 
 const show = (v: string | undefined) => JSON.stringify(v ?? null);
 
@@ -595,6 +604,23 @@ export function checkTiles404(got: Readonly<Record<string, Page | string>>): Res
   return problems.length === 0
     ? pass('tiles 404', `${TILES_404_PATHS.join(', ')} are 404 and not immutable`)
     : miss('tiles 404', problems.join('; '));
+}
+
+/** The current basemap file without a Range and with two ranges: 416, and never marked immutable. */
+export function checkTiles416(file: TileFile | undefined, got: Readonly<Record<string, Page | string>>): Result {
+  const check = 'tiles 416';
+  if (file === undefined) return miss(check, 'no valid manifest');
+  const problems = TILE_416_REQUESTS.flatMap(([label]) => {
+    const page = got[label];
+    if (page === undefined || typeof page === 'string') return [`${label}: ${page ?? 'not asked'}`];
+    const bad: string[] = [];
+    if (page.status !== 416) bad.push(`status ${page.status}, want 416`);
+    if (/immutable/i.test(page.headers['cache-control'] ?? '')) bad.push('marked immutable');
+    return bad.map((b) => `${label}: ${b}`);
+  });
+  return problems.length === 0
+    ? pass(check, `${file.file}: no Range and two ranges are 416, not immutable`)
+    : miss(check, problems.join('; '));
 }
 
 /** A glyph file of the pinned map assets: 200, non-empty, immutable. */
@@ -752,6 +778,7 @@ export const CHECKS = [
   `tiles <file>: every file the manifest lists (current and previous), GET with Range: ${TILE_HEADERS.range} and Accept-Encoding: ${TILE_HEADERS['accept-encoding']}, is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
   'tiles previous: n/a while the manifest has no previous extract (run the job again on a later build); a pass once it lists one',
   `tiles 404: ${TILES_404_PATHS.join(', ')} are 404 and none is marked immutable`,
+  `tiles 416: GET on the current basemap file without Range, and with Range: ${TILE_416_REQUESTS[1][1].range}, is 416 and not immutable (only one explicit range is served)`,
   `map assets: GET ${MAP_ASSET_PATH} (a pinned glyph range of the web image) is 200 with Cache-Control exactly "${TILE_CACHE}"`,
   `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* or /api/v1/health* body`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
@@ -864,7 +891,11 @@ async function main(argv: string[]): Promise<number> {
     results.push(checkTilesPrevious(manifest));
     const missing: Record<string, Page | string> = {};
     for (const path of TILES_404_PATHS) missing[path] = await tile(path);
-    results.push(checkTiles404(missing), checkMapAsset(await tile(MAP_ASSET_PATH)));
+    const current = manifest.manifest?.current.basemap;
+    const refused: Record<string, Page | string> = {};
+    if (current !== undefined)
+      for (const [label, headers] of TILE_416_REQUESTS) refused[label] = await tile(`/tiles/${current.file}`, headers);
+    results.push(checkTiles404(missing), checkTiles416(current, refused), checkMapAsset(await tile(MAP_ASSET_PATH)));
 
     const body = (page: Page | string | undefined) => (typeof page === 'object' ? page.body : '');
     results.push(
