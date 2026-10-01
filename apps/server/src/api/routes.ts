@@ -145,8 +145,9 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
   app.get('/api/v1/openapi.json', (c) => {
     try {
       noQuery(c.req.url);
-    } catch {
-      return refuse(c, 400, 'unknown_parameter');
+    } catch (err) {
+      if (err instanceof Refused) return refuse(c, err.status, err.code);
+      throw err;
     }
     return c.body(openapi, 200, { 'Content-Type': 'application/json', 'Cache-Control': FIXED.openapi.header });
   });

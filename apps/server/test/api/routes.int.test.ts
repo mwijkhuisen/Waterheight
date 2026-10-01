@@ -271,6 +271,8 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       ['meta with a parameter', '/api/v1/meta?zzfoobar=1', 'unknown_parameter'],
       ['stations with a parameter', '/api/v1/stations?zzfoobar=1', 'unknown_parameter'],
       ['openapi with a parameter', '/api/v1/openapi.json?zzfoobar=1', 'unknown_parameter'],
+      ['openapi with a repeated parameter', '/api/v1/openapi.json?zzfoobar=1&zzfoobar=2', 'repeated_parameter'],
+      ['openapi with a value of 33 characters', `/api/v1/openapi.json?zzfoobar=${'x'.repeat(33)}`, 'bad_parameter'],
       // series: the id
       ['an id that is not a number', `/api/v1/series/abcdefgh?${span}`, 'bad_parameter'],
       ['a decimal id', `/api/v1/series/1.5?${span}`, 'bad_parameter'],
