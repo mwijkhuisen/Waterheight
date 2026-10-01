@@ -8,20 +8,37 @@ import { loadRegistry } from '../apps/server/src/capture/specs.ts';
 import type { SpecState } from '../apps/server/src/capture/state.ts';
 import { buildStatus, type CaptureStatus } from '../apps/server/src/capture/status.ts';
 import type { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
-import { basemapAssetsPath, Health, HealthSources, validateBasemap } from '../packages/contracts/src/index.ts';
+import {
+  basemapAssetsPath,
+  Health,
+  HealthSources,
+  Meta,
+  Snapshot,
+  Stations,
+  validateBasemap,
+} from '../packages/contracts/src/index.ts';
 import { TILE_FILE_RE, type TileFile, type TilesManifest } from '../packages/core/src/tiles-manifest.ts';
 import {
+  API_SOURCES,
   CHECKS,
   capacity,
+  checkApiParams,
+  checkBuild,
   checkCapture,
+  checkFresh,
   checkHeaders,
   checkHealth,
   checkHealthParams,
   checkLoaderLag,
   checkMapAsset,
+  checkMeta,
+  checkNoindex,
+  checkOpenapi,
   checkOwnerLeak,
   checkReplay,
+  checkSnapshot,
   checkSourceHealth,
+  checkStations,
   checkTier1,
   checkTileFile,
   checkTiles404,
@@ -30,11 +47,16 @@ import {
   checkTilesPrevious,
   checkTwin,
   expectedHeaders,
+  FRESH_MAX_AGE_S,
   leaks,
   leakTerms,
   MANIFEST_CACHE,
   MAP_ASSET_PATH,
+  META_CACHE,
+  NOINDEX_PATHS,
   noIpv6Here,
+  OPENAPI_CACHE,
+  OpenApi31,
   OWNER_CANARY,
   ownerKeys,
   ownerTerms,
@@ -42,7 +64,12 @@ import {
   type Page,
   PMTILES_MAGIC,
   readApi,
+  readSnapshot,
   readTilesManifest,
+  SNAPSHOT_ASKS,
+  type SnapshotAsk,
+  STATIONS_CACHE,
+  snapshotAt,
   soak,
   staleSpecs,
   TILE_416_REQUESTS,
@@ -298,6 +325,18 @@ describe('freshness, soak and capacity', () => {
       'health NL-1',
       'tier-1 NL-1',
       'replay NL-1',
+      'api meta',
+      'api build',
+      'api stations',
+      'api snapshot now',
+      'api snapshot 6h',
+      'api snapshot 3d',
+      'api openapi',
+      'api params',
+      'noindex',
+      'fresh DE-1',
+      'fresh NL-1',
+      'owner leak',
       'tiles manifest',
       'tiles <file>',
       'tiles previous',
@@ -392,11 +431,11 @@ describe('the health API answers', () => {
     expect(checkHealth(h(health(), { status: 404 })).ok).toBe(false);
   });
 
-  it('health params: a parameter is the fixed 400 and the rest of /api/ is 404', () => {
+  it("health params: a parameter is the fixed 400 and an unknown path is the api's fixed 404", () => {
     const good: Record<string, Page | string> = Object.fromEntries(
       PARAM_CASES.map(([path, status]) => [
         path,
-        page(status === 400 ? '{"error":"unknown_parameter"}' : 'Not Found', { status }),
+        page(status === 400 ? '{"error":"unknown_parameter"}' : '{"error":"not_found"}', { status }),
       ]),
     );
     expect(checkHealthParams(good)).toMatchObject({ check: 'health params', ok: true });
@@ -404,13 +443,13 @@ describe('the health API answers', () => {
       ...good,
       '/api/v1/health?x=1': page('{"health":1}', { status: 200 }),
       '/api/v1/health/sources?x=1': page('{"error":"unknown_parameter","x":"1"}', { status: 400 }),
-      '/api/v1/stations': page('[]', { status: 200 }),
+      '/api/v1/x': page('[]', { status: 200 }),
       '/api/v1/': 'ECONNRESET',
     });
     expect(bad.ok).toBe(false);
     expect(bad.detail).toMatch(/health\?x=1: status 200, want 400/);
     expect(bad.detail).toMatch(/sources\?x=1: the body is not the fixed 400 body/);
-    expect(bad.detail).toMatch(/\/api\/v1\/stations: status 200, want 404/);
+    expect(bad.detail).toMatch(/\/api\/v1\/x: status 200, want 404/);
     expect(bad.detail).toMatch(/\/api\/v1\/: ECONNRESET/);
     expect(checkHealthParams({}).ok).toBe(false);
   });
@@ -1109,10 +1148,509 @@ describe('verify-prod: the 404s and the pinned map assets', () => {
   });
 });
 
-// deploy/web/site.caddy: the routes of the tiles and the assets (P3). Validated against a real Caddy by
-// hand (the offline run does not start one); the CI deploy job proves them end to end.
+// The P4b data API (issue #19) through Caddy: the pure checks on synthetic answers.
 
-describe('site.caddy: the tile and asset routes', () => {
+const SERVER_NOW = '2026-10-02T12:03:41.000Z'; // its 10-minute floor is 12:00
+const BUILD = '0123456789abcdef0123456789abcdef01234567';
+const metaDoc = (over: Partial<Meta> = {}): Meta => ({
+  now: SERVER_NOW,
+  dataEpoch: '2026-10-02T00:00:00.000Z',
+  displayStart: '2026-08-24T00:00:00.000Z',
+  build: BUILD,
+  sources: [
+    { id: 'NL-1', attribution: [] },
+    {
+      id: 'DE-1',
+      attribution: [
+        { lang: 'de', text: 'Datenquelle: WSV', url: 'https://example.org/de', required: true, needsDate: false },
+      ],
+    },
+  ],
+  ...over,
+});
+const seriesDoc = (id: number, source: string, quantity: 'H' | 'Q') => ({
+  id,
+  source,
+  quantity,
+  valueKind: quantity === 'H' ? 'stage' : null,
+  unit: quantity === 'H' ? 'cm' : 'm³/s',
+  datum: null,
+  nativeUnit: quantity === 'H' ? 'cm' : 'm³/s',
+  expectedStepSeconds: 600,
+  stalenessLimitSeconds: 3600,
+  dataSince: '2026-10-01T00:00:00.000Z',
+});
+const stationDoc = (id: string, country: string, series: unknown[]) => ({
+  id,
+  name: 'Lobith',
+  waterName: 'Rijn',
+  country,
+  lon: 6.1,
+  lat: 51.8,
+  tier: 1,
+  flags: { tidal: false, impounded: null },
+  series,
+});
+// Series 1 and 2 are NL-1, series 3 is DE-1.
+const stationsDoc = (): Stations =>
+  Stations.parse({
+    stations: [
+      stationDoc('nl.rws.lobith.bovenrijn.tolkamer', 'NL', [seriesDoc(1, 'NL-1', 'H'), seriesDoc(2, 'NL-1', 'Q')]),
+      stationDoc('de.wsv.kaub', 'DE', [seriesDoc(3, 'DE-1', 'H')]),
+    ],
+  });
+const snapshotDoc = (ms: number, ages: Record<number, number> = { 1: 600, 3: 1200 }): Snapshot =>
+  Snapshot.parse({
+    t: new Date(ms).toISOString(),
+    values: Object.entries(ages).map(([series, ageSeconds]) => ({
+      series: Number(series),
+      ts: new Date(ms - ageSeconds * 1000).toISOString(),
+      value: 1234,
+      qc: 0,
+      ageSeconds,
+    })),
+  });
+const apiPage = (doc: unknown, cache: string, over: Partial<Page> = {}): Page =>
+  page(doc, { headers: { 'content-type': 'application/json', 'cache-control': cache }, ...over });
+const NOW_MS = Date.parse('2026-10-02T12:00:00Z');
+const [NOW_ASK, H6_ASK, D3_ASK] = SNAPSHOT_ASKS;
+const snapRead = (ask: SnapshotAsk, ms: number, over: Partial<Page> = {}, doc: unknown = snapshotDoc(ms)) =>
+  readSnapshot(ask, ms, apiPage(doc, ask.cache, over));
+
+describe('api meta and api build', () => {
+  const read = (doc: unknown = metaDoc(), over: Partial<Page> = {}) =>
+    readApi(apiPage(doc, META_CACHE, over), Meta, META_CACHE);
+
+  it('meta passes: 200, exactly max-age=60, the Meta contract, NL-1 and DE-1 listed', () => {
+    expect(checkMeta(read())).toEqual({
+      check: 'api meta',
+      ok: true,
+      detail: '200, public, max-age=60, the Meta contract, sources NL-1, DE-1',
+    });
+    expect(API_SOURCES).toEqual(['NL-1', 'DE-1']);
+  });
+
+  it('meta fails on a wrong Cache-Control, a wrong status, a body off the contract, a missing source and a network error', () => {
+    expect(
+      checkMeta(
+        read(metaDoc(), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=30' } }),
+      ),
+    ).toMatchObject({
+      ok: false,
+      detail: 'cache-control "public, max-age=30"',
+    });
+    expect(checkMeta(read(metaDoc(), { headers: { 'content-type': 'application/json' } })).detail).toBe(
+      'cache-control ""',
+    );
+    expect(checkMeta(read(metaDoc(), { status: 503 }))).toMatchObject({ ok: false, detail: 'status 503' });
+    expect(checkMeta(read({ ...metaDoc(), extra: 1 }))).toMatchObject({
+      ok: false,
+      detail: 'not the contract document',
+    });
+    expect(checkMeta(read('<html>')).ok).toBe(false);
+    expect(checkMeta(read(metaDoc({ sources: [{ id: 'NL-1', attribution: [] }] })))).toMatchObject({
+      ok: false,
+      detail: 'DE-1 is not listed in sources',
+    });
+    expect(checkMeta(read(metaDoc({ sources: [] }))).detail).toBe(
+      'NL-1 is not listed in sources; DE-1 is not listed in sources',
+    );
+    expect(checkMeta(readApi('ECONNRESET', Meta, META_CACHE))).toEqual({
+      check: 'api meta',
+      ok: false,
+      detail: 'ECONNRESET',
+    });
+  });
+
+  it('build passes for a 40-hex commit and fails for dev (KG-109), whatever else is off in the answer', () => {
+    expect(checkBuild(metaDoc())).toEqual({ check: 'api build', ok: true, detail: `build ${BUILD}` });
+    expect(checkBuild(metaDoc({ build: 'dev' }))).toMatchObject({
+      ok: false,
+      detail: expect.stringMatching(/"dev".*RWS_BUILD.*KG-109/),
+    });
+    // The contract admits only 40 lowercase hex or dev, so an uppercase or short build is no document at all.
+    expect(read(metaDoc({ build: BUILD.toUpperCase() })).data).toBeUndefined();
+    expect(checkBuild(undefined)).toMatchObject({ check: 'api build', ok: false, detail: 'no valid meta document' });
+  });
+});
+
+describe('api stations', () => {
+  const read = (doc: unknown = stationsDoc(), over: Partial<Page> = {}) =>
+    readApi(apiPage(doc, STATIONS_CACHE, over), Stations, STATIONS_CACHE);
+
+  it('passes: 200, exactly max-age=300, the Stations contract, a DE-1 and an NL-1 series', () => {
+    expect(checkStations(read())).toEqual({
+      check: 'api stations',
+      ok: true,
+      detail: '200, public, max-age=300, the Stations contract, 2 stations, 2 NL-1 and 1 DE-1 series',
+    });
+  });
+
+  it('fails without a DE-1 or an NL-1 series, on the /meta Cache-Control, on a bad body and on a network error', () => {
+    const only = (id: string, source: string) =>
+      Stations.parse({ stations: [stationDoc(id, 'NL', [seriesDoc(1, source, 'H')])] });
+    expect(checkStations(read(only('nl.rws.lobith.bovenrijn.tolkamer', 'NL-1')))).toMatchObject({
+      ok: false,
+      detail: 'no station has a DE-1 series',
+    });
+    expect(checkStations(read(only('de.wsv.kaub', 'DE-1'))).detail).toBe('no station has a NL-1 series');
+    expect(checkStations(read(Stations.parse({ stations: [] }))).detail).toBe(
+      'no station has a NL-1 series; no station has a DE-1 series',
+    );
+    expect(checkStations(readApi(apiPage(stationsDoc(), META_CACHE), Stations, STATIONS_CACHE))).toMatchObject({
+      ok: false,
+      detail: 'cache-control "public, max-age=60"',
+    });
+    expect(checkStations(read({ stations: [{ id: 1 }] }))).toMatchObject({
+      ok: false,
+      detail: 'not the contract document',
+    });
+    expect(checkStations(read(stationsDoc(), { status: 404 })).detail).toBe('status 404');
+    expect(checkStations(readApi('timeout', Stations, STATIONS_CACHE)).detail).toBe('timeout');
+  });
+});
+
+describe('api snapshot', () => {
+  it('asks for the 10-minute floor of the SERVER clock, now, 6 h and 3 d back, as YYYY-MM-DDTHH:MMZ', () => {
+    expect(snapshotAt(SERVER_NOW, 0)).toEqual({ ms: NOW_MS, path: '/api/v1/snapshot?t=2026-10-02T12:00Z' });
+    expect(snapshotAt(SERVER_NOW, H6_ASK.back)).toEqual({
+      ms: NOW_MS - 6 * 3_600_000,
+      path: '/api/v1/snapshot?t=2026-10-02T06:00Z',
+    });
+    expect(snapshotAt(SERVER_NOW, D3_ASK.back)?.path).toBe('/api/v1/snapshot?t=2026-09-29T12:00Z');
+    // On the edge of a bucket, and across midnight.
+    expect(snapshotAt('2026-10-02T12:09:59.999Z', 0)?.path).toBe('/api/v1/snapshot?t=2026-10-02T12:00Z');
+    expect(snapshotAt('2026-10-02T12:10:00.000Z', 0)?.path).toBe('/api/v1/snapshot?t=2026-10-02T12:10Z');
+    expect(snapshotAt('2026-10-02T00:04:00.000Z', H6_ASK.back)?.path).toBe('/api/v1/snapshot?t=2026-10-01T18:00Z');
+    // Only the server's time counts: a verifier years off still asks for what the server thinks is now.
+    expect(snapshotAt('2031-01-01T00:00:30.000Z', 0)?.path).toBe('/api/v1/snapshot?t=2031-01-01T00:00Z');
+    for (const bad of [undefined, '', 'yesterday']) expect(snapshotAt(bad, 0)).toBeUndefined();
+    expect(SNAPSHOT_ASKS.map((a) => [a.name, a.back])).toEqual([
+      ['now', 0],
+      ['6h', 21_600_000],
+      ['3d', 259_200_000],
+    ]);
+  });
+
+  it('passes with the Cache-Control of its age: now 60 + stale-while-revalidate, 6 h 600, 3 d 86400', () => {
+    expect(NOW_ASK.cache).toBe('public, max-age=60, stale-while-revalidate=300');
+    expect(H6_ASK.cache).toBe('public, max-age=600');
+    expect(D3_ASK.cache).toBe('public, max-age=86400');
+    for (const ask of SNAPSHOT_ASKS) {
+      const ms = snapshotAt(SERVER_NOW, ask.back)?.ms ?? 0;
+      expect(checkSnapshot(ask, snapRead(ask, ms))).toMatchObject({
+        check: `api snapshot ${ask.name}`,
+        ok: true,
+        detail: /^200, the Snapshot contract, t 2026-/,
+      });
+    }
+  });
+
+  it('fails on any other Cache-Control, so each age class is told apart', () => {
+    const cache = (ask: SnapshotAsk, other: string) =>
+      checkSnapshot(
+        ask,
+        snapRead(ask, NOW_MS, { headers: { 'content-type': 'application/json', 'cache-control': other } }),
+      );
+    expect(cache(NOW_ASK, H6_ASK.cache)).toMatchObject({ ok: false, detail: 'cache-control "public, max-age=600"' });
+    expect(cache(NOW_ASK, 'public, max-age=60').ok).toBe(false);
+    expect(cache(H6_ASK, NOW_ASK.cache).ok).toBe(false);
+    expect(cache(H6_ASK, D3_ASK.cache).ok).toBe(false);
+    expect(cache(D3_ASK, H6_ASK.cache).ok).toBe(false);
+    expect(cache(D3_ASK, 'no-store').detail).toBe('cache-control "no-store"');
+  });
+
+  it('"now" accepts the 600 s class only when the Date header shows the server moved into the next bucket since /meta', () => {
+    const served = (date: string | undefined, cache: string) =>
+      checkSnapshot(
+        NOW_ASK,
+        snapRead(NOW_ASK, NOW_MS, {
+          headers: {
+            'content-type': 'application/json',
+            'cache-control': cache,
+            ...(date === undefined ? {} : { date }),
+          },
+        }),
+      );
+    // The same bucket (12:09:58): "now" is still current, so 600 is wrong.
+    expect(served('Fri, 02 Oct 2026 12:09:58 GMT', H6_ASK.cache).ok).toBe(false);
+    expect(served('Fri, 02 Oct 2026 12:09:58 GMT', NOW_ASK.cache).ok).toBe(true);
+    // The next bucket (12:10:02): the instant asked for is now a past one, 600.
+    expect(served('Fri, 02 Oct 2026 12:10:02 GMT', H6_ASK.cache).ok).toBe(true);
+    expect(served('Fri, 02 Oct 2026 12:10:02 GMT', NOW_ASK.cache).ok).toBe(false);
+    // No Date header, or one that is no date: no tolerance.
+    expect(served(undefined, H6_ASK.cache).ok).toBe(false);
+    expect(served('soon', H6_ASK.cache).ok).toBe(false);
+    // 6 h and 3 d never get the tolerance.
+    const late = {
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': NOW_ASK.cache,
+        date: 'Fri, 02 Oct 2026 12:10:02 GMT',
+      },
+    };
+    expect(checkSnapshot(H6_ASK, snapRead(H6_ASK, NOW_MS - 6 * 3_600_000, late)).ok).toBe(false);
+  });
+
+  it('fails when t is not the instant asked for, when the body is off the contract and on a status or network error', () => {
+    expect(checkSnapshot(NOW_ASK, snapRead(NOW_ASK, NOW_MS, {}, snapshotDoc(NOW_MS - 600_000)))).toMatchObject({
+      ok: false,
+      detail: 't is not the instant asked for',
+    });
+    expect(checkSnapshot(NOW_ASK, snapRead(NOW_ASK, NOW_MS, {}, { t: new Date(NOW_MS).toISOString() }))).toMatchObject({
+      ok: false,
+      detail: 'not the contract document',
+    });
+    expect(
+      checkSnapshot(NOW_ASK, snapRead(NOW_ASK, NOW_MS, { status: 400 }, { error: 'bad_parameter' })),
+    ).toMatchObject({
+      ok: false,
+      detail: expect.stringMatching(/^status 400/),
+    });
+    expect(checkSnapshot(NOW_ASK, readSnapshot(NOW_ASK, NOW_MS, 'ECONNRESET'))).toEqual({
+      check: 'api snapshot now',
+      ok: false,
+      detail: 'ECONNRESET',
+    });
+    // A t with seconds or milliseconds is the same instant.
+    expect(checkSnapshot(NOW_ASK, snapRead(NOW_ASK, NOW_MS, {}, { t: '2026-10-02T12:00:00Z', values: [] })).ok).toBe(
+      true,
+    );
+  });
+
+  it('is a FAIL with the reason when /meta gave no server time', () => {
+    for (const ask of SNAPSHOT_ASKS)
+      expect(checkSnapshot(ask, undefined)).toEqual({
+        check: `api snapshot ${ask.name}`,
+        ok: false,
+        detail: 'no server time from /api/v1/meta',
+      });
+  });
+});
+
+describe('api openapi and api params', () => {
+  it('openapi passes for a 3.1.0 document with exactly max-age=300', () => {
+    const read = (doc: unknown, cache = OPENAPI_CACHE, over: Partial<Page> = {}) =>
+      readApi(apiPage(doc, cache, over), OpenApi31, OPENAPI_CACHE);
+    expect(checkOpenapi(read({ openapi: '3.1.0', info: { title: 'x' }, paths: {} }))).toEqual({
+      check: 'api openapi',
+      ok: true,
+      detail: '200, public, max-age=300, openapi 3.1.0',
+    });
+    expect(checkOpenapi(read({ openapi: '3.0.3' })).ok).toBe(false);
+    expect(checkOpenapi(read({ swagger: '2.0' })).detail).toBe('not the contract document');
+    expect(checkOpenapi(read('[]')).ok).toBe(false);
+    expect(checkOpenapi(read({ openapi: '3.1.0' }, 'public, max-age=60'))).toMatchObject({
+      ok: false,
+      detail: 'cache-control "public, max-age=60"',
+    });
+    expect(checkOpenapi(read({ openapi: '3.1.0' }, OPENAPI_CACHE, { status: 404 })).detail).toBe('status 404');
+    expect(checkOpenapi(readApi('timeout', OpenApi31, OPENAPI_CACHE)).detail).toBe('timeout');
+  });
+
+  const bad = (over: Partial<Page> = {}): Page => ({
+    status: 400,
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+    body: '{"error":"unknown_parameter"}',
+    ...over,
+  });
+
+  it('params passes for the fixed 400 body with no-store', () => {
+    expect(checkApiParams(bad())).toEqual({ check: 'api params', ok: true, detail: '400, the fixed body, no-store' });
+  });
+
+  it('params fails on another status or body (not echoing the request), a cacheable 400 and a network error', () => {
+    expect(checkApiParams(bad({ status: 200 })).detail).toBe('status 200, want 400');
+    expect(checkApiParams(bad({ body: '{"error":"bad_parameter"}' })).detail).toBe(
+      'the body is not the fixed 400 body',
+    );
+    expect(checkApiParams(bad({ body: '{"error":"unknown_parameter","x":"1"}' })).ok).toBe(false);
+    expect(checkApiParams(bad({ headers: { 'cache-control': 'public, max-age=60' } })).detail).toBe(
+      'cache-control "public, max-age=60"',
+    );
+    expect(checkApiParams(bad({ headers: {} })).detail).toBe('cache-control null');
+    expect(checkApiParams('ECONNRESET')).toEqual({ check: 'api params', ok: false, detail: 'ECONNRESET' });
+  });
+});
+
+describe('noindex', () => {
+  const answer = (status: number, tag: string | null = 'noindex'): Page => ({
+    status,
+    headers: tag === null ? {} : { 'x-robots-tag': tag },
+    body: '',
+  });
+  const all = (over: Record<string, Page | string> = {}): Record<string, Page | string> => ({
+    '/': answer(200),
+    '/en/': answer(200),
+    '/api': answer(404),
+    '/tiles': answer(404),
+    ...over,
+  });
+
+  it('passes for noindex on the pages and on the 404s of /api and /tiles', () => {
+    expect([...NOINDEX_PATHS]).toEqual(['/', '/en/', '/api', '/tiles']);
+    expect(checkNoindex(all())).toMatchObject({ check: 'noindex', ok: true });
+  });
+
+  it('names every path that lacks it, whatever its status, and a network error', () => {
+    expect(checkNoindex(all({ '/api': answer(404, null) }))).toMatchObject({
+      ok: false,
+      detail: '/api: x-robots-tag null',
+    });
+    expect(checkNoindex(all({ '/en/': answer(200, 'noindex, nofollow'), '/tiles': answer(404, 'all') })).detail).toBe(
+      '/en/: x-robots-tag "noindex, nofollow"; /tiles: x-robots-tag "all"',
+    );
+    expect(checkNoindex(all({ '/': 'ECONNRESET' })).detail).toBe('/: ECONNRESET');
+    expect(checkNoindex({}).ok).toBe(false);
+  });
+});
+
+describe('fresh DE-1 and fresh NL-1', () => {
+  const at = (ages: Record<number, number>) => snapshotDoc(NOW_MS, ages);
+
+  it('passes when one series of the source has a value of 45 minutes or less, naming the count and the smallest age', () => {
+    expect(checkFresh('DE-1', at({ 1: 600, 3: 1200 }), stationsDoc())).toEqual({
+      check: 'fresh DE-1',
+      ok: true,
+      detail: '1 of 1 DE-1 series have a value, the newest is 1200 s old',
+    });
+    expect(checkFresh('NL-1', at({ 1: 600, 3: 1200 }), stationsDoc())).toMatchObject({
+      check: 'fresh NL-1',
+      ok: true,
+      detail: '1 of 2 NL-1 series have a value, the newest is 600 s old',
+    });
+  });
+
+  it('judges the youngest series: one fresh series is enough, the limit is 2700 s', () => {
+    expect(FRESH_MAX_AGE_S).toBe(2700);
+    expect(checkFresh('NL-1', at({ 1: 5000, 2: 300, 3: 99_999 }), stationsDoc())).toMatchObject({
+      ok: true,
+      detail: /^2 of 2 .* the newest is 300 s old$/,
+    });
+    expect(checkFresh('NL-1', at({ 1: 2700 }), stationsDoc()).ok).toBe(true);
+    expect(checkFresh('NL-1', at({ 1: 2701 }), stationsDoc())).toMatchObject({
+      ok: false,
+      detail: '1 of 2 NL-1 series have a value, the newest is 2701 s old, over 2700 s',
+    });
+  });
+
+  it('fails when none of the source has a value, even if the other source is fresh', () => {
+    expect(checkFresh('DE-1', at({ 1: 60, 2: 60 }), stationsDoc())).toEqual({
+      check: 'fresh DE-1',
+      ok: false,
+      detail: 'none of the 1 DE-1 series has a value',
+    });
+    expect(checkFresh('NL-1', at({}), stationsDoc()).ok).toBe(false);
+    // A value of a series the stations do not list is no value of the source.
+    expect(checkFresh('DE-1', at({ 99: 60 }), stationsDoc()).ok).toBe(false);
+    expect(checkFresh('BE-3', at({ 1: 60, 3: 60 }), stationsDoc()).detail).toBe(
+      'none of the 0 BE-3 series has a value',
+    );
+  });
+
+  it('fails without a valid snapshot or stations document', () => {
+    expect(checkFresh('DE-1', undefined, stationsDoc())).toEqual({
+      check: 'fresh DE-1',
+      ok: false,
+      detail: 'no valid snapshot document',
+    });
+    expect(checkFresh('DE-1', at({ 3: 60 }), undefined).detail).toBe('no valid stations document');
+  });
+});
+
+describe('owner isolation in the data API bodies', () => {
+  const terms = leakTerms(registry);
+  const bodies = (over: Record<string, string> = {}) => ({
+    '/api/v1/meta': JSON.stringify(metaDoc()),
+    '/api/v1/stations': JSON.stringify(stationsDoc()),
+    '/api/v1/snapshot now': JSON.stringify(snapshotDoc(NOW_MS)),
+    '/api/v1/snapshot 6h': JSON.stringify(snapshotDoc(NOW_MS - 6 * 3_600_000)),
+    '/api/v1/snapshot 3d': JSON.stringify(snapshotDoc(NOW_MS - 3 * 86_400_000)),
+    ...over,
+  });
+
+  it('finds nothing in real meta, stations and snapshot bodies', () => {
+    expect(checkOwnerLeak(bodies(), terms)).toMatchObject({ check: 'owner leak', ok: true });
+  });
+
+  const leaking: [string, string, string, RegExp][] = [
+    [
+      'an owner source in /meta',
+      '/api/v1/meta',
+      JSON.stringify(metaDoc({ sources: [{ id: 'BE-3', attribution: [] }] })),
+      /meta: BE-3/,
+    ],
+    [
+      'an owner source on a /stations series',
+      '/api/v1/stations',
+      JSON.stringify(Stations.parse({ stations: [stationDoc('be.x.y', 'BE', [seriesDoc(7, 'LU-2', 'H')])] })),
+      /stations: LU-2/,
+    ],
+    [
+      'the owner canary as real prints it, in a snapshot',
+      '/api/v1/snapshot now',
+      JSON.stringify({
+        t: '2026-10-02T12:00:00.000Z',
+        values: [{ series: 1, ts: '2026-10-02T11:50:00.000Z', value: 777777.75, qc: 0, ageSeconds: 600 }],
+      }),
+      /snapshot now: 777777\.75/,
+    ],
+    [
+      'the withheld canary, in an old snapshot',
+      '/api/v1/snapshot 3d',
+      JSON.stringify({
+        t: '2026-09-29T12:00:00.000Z',
+        values: [{ series: 1, ts: '2026-09-29T11:50:00.000Z', value: 123456.789, qc: 0, ageSeconds: 600 }],
+      }),
+      /snapshot 3d: 123456\.789/,
+    ],
+    [
+      'a private_basis key in /meta',
+      '/api/v1/meta',
+      JSON.stringify({ ...metaDoc(), private_basis: null }),
+      /key private_basis/,
+    ],
+  ];
+  it.each(leaking)('fails on %s', (_, label, body, detail) => {
+    expect(checkOwnerLeak(bodies({ [label]: body }), terms)).toMatchObject({
+      ok: false,
+      detail: expect.stringMatching(detail),
+    });
+  });
+});
+
+describe('health params through Caddy (P4b)', () => {
+  it('asks the api for a 400 on a parameter and its JSON 404 on /api/v1/ and /api/v1/x', () => {
+    expect([...PARAM_CASES]).toEqual([
+      ['/api/v1/health?x=1', 400],
+      ['/api/v1/health/sources?x=1', 400],
+      ['/api/v1/', 404],
+      ['/api/v1/x', 404],
+    ]);
+  });
+
+  it('fails on a 404 from Caddy (an empty body) where the api answers, and on a 200 for /api/v1/x', () => {
+    const good = Object.fromEntries(
+      PARAM_CASES.map(([path, status]) => [
+        path,
+        page(status === 400 ? '{"error":"unknown_parameter"}' : '{"error":"not_found"}', { status }),
+      ]),
+    );
+    expect(checkHealthParams(good).ok).toBe(true);
+    const fromCaddy = checkHealthParams({ ...good, '/api/v1/': page('', { status: 404 }) });
+    expect(fromCaddy.ok).toBe(false);
+    expect(fromCaddy.detail).toBe('/api/v1/: the body is not the fixed 404 body');
+    expect(checkHealthParams({ ...good, '/api/v1/x': page('{}', { status: 200 }) }).detail).toBe(
+      '/api/v1/x: status 200, want 404',
+    );
+  });
+});
+
+// deploy/web/site.caddy: the routes of the api (P2a, P4b), the tiles and the assets (P3) and the pages (P4b).
+// Validated against a real Caddy by hand (the offline run does not start one); the CI deploy job proves them
+// end to end.
+
+describe('site.caddy: the api, tile, asset and page routes', () => {
   const site = readFileSync(join(repoRoot, 'deploy/web/site.caddy'), 'utf8');
   /** A one-tab block `<opener> {` up to its closing one-tab brace, without the closing brace. */
   const block = (opener: string): string => {
@@ -1121,6 +1659,10 @@ describe('site.caddy: the tile and asset routes', () => {
     return site.slice(start, site.indexOf('\n\t}\n', start + 1));
   };
   const lines = (s: string) => s.split('\n').map((l) => l.trim());
+  /** The directives of a block, without blank lines and comments. */
+  const rules = (opener: string) => lines(block(opener)).filter((l) => l !== '' && !l.startsWith('#'));
+  /** What reaches the api: everything under /api/v1/ as sent, no dot segment (the path matcher would fold case). */
+  const API_PATH = "`{path}.startsWith('/api/v1/') && !{path}.contains('/.')`";
   const IMMUTABLE = `header Cache-Control "${TILE_CACHE}"`;
   /** The one request a tile file is served for (SR-1, SR2-1). */
   const ONE_RANGE =
@@ -1129,6 +1671,34 @@ describe('site.caddy: the tile and asset routes', () => {
   it('adds no second one-tab header block: the A§12.2 headers are the first and only one', () => {
     expect(site.match(/\n\theader \{\n/g)).toHaveLength(1);
     expect(site.toLowerCase()).not.toContain('access-control-');
+  });
+
+  it('proxies GET and HEAD under /api/v1/ to the api: a 1 KB body cap, no Via, no Server, no other upstream (P4b)', () => {
+    expect(rules('@api')).toEqual(['@api {', 'method GET HEAD', `expression ${API_PATH}`]);
+    expect(rules('handle @api')).toEqual([
+      'handle @api {',
+      'request_body {',
+      'max_size 1KB',
+      '}',
+      'header -Via',
+      'reverse_proxy api:8080 {',
+      'header_down -Server',
+      '}',
+    ]);
+    expect([...site.matchAll(/^\s+reverse_proxy (\S+)/gm)].map((m) => m[1])).toEqual(['api:8080']);
+  });
+
+  it('answers another method under /api/v1/ with 405 and Allow, and any other /api path with 404 (P4b)', () => {
+    expect(rules('@api_method')).toEqual(['@api_method {', 'path /api/v1/*', 'not method GET HEAD']);
+    expect(rules('handle @api_method')).toEqual(['handle @api_method {', 'header Allow "GET, HEAD"', 'respond 405']);
+    expect(rules('@api_other')).toEqual(['@api_other {', 'path /api /api/*', `not expression ${API_PATH}`]);
+    expect(rules('handle @api_other')).toEqual(['handle @api_other {', 'respond 404']);
+  });
+
+  it('answers 404 for /status and every status path but the two files', () => {
+    expect(rules('handle /status/*')).toEqual(['handle /status/* {', 'respond 404']);
+    expect(rules('handle /status')).toEqual(['handle /status {', 'respond 404']);
+    expect(site.indexOf('\thandle /status/capture.json {')).toBeLessThan(site.indexOf('\thandle /status/* {'));
   });
 
   it('serves the manifest with a short TTL, never immutable, from /srv/rws/tiles only', () => {
@@ -1245,17 +1815,29 @@ describe('site.caddy: the tile and asset routes', () => {
   it('answers 404 for every other /tiles path, after the two routes above and before the catch-all', () => {
     expect(site).toContain('\n\t@tiles path /tiles /tiles/*\n');
     expect(lines(block('handle @tiles'))).toEqual(['', 'handle @tiles {', 'respond 404']);
+  });
+
+  it('keeps the routes in order: healthz, status, api, tiles, dotfiles, assets, the pages last', () => {
     const at = (needle: string) => site.indexOf(needle);
     const order = [
+      at('\thandle /healthz {'),
+      at('\thandle /status/capture.json {'),
+      at('\thandle /status/* {'),
+      at('\thandle /status {'),
+      at('\thandle @api {'),
+      at('\thandle @api_method {'),
+      at('\thandle @api_other {'),
       at('\thandle @tiles_manifest {'),
       at('\thandle @tiles_files {'),
       at('\thandle @tiles {'),
       at('\thandle @dotfiles {'),
       at('\thandle @assets {'),
+      at('\thandle @assets_miss {'),
       at('\thandle {\n\t\troot * /srv/www'),
     ];
     expect(order.every((i) => i > 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(new Set(order).size).toBe(order.length);
   });
 
   it('answers 404 for a dotfile under the web root or /assets, with a matcher Caddy does not re-sort', () => {
@@ -1294,7 +1876,47 @@ describe('site.caddy: the tile and asset routes', () => {
       'file_server',
     ]);
     // The catch-all that serves the HTML pages sets no header at all.
-    expect(site).toMatch(/\n\thandle \{\n\t\troot \* \/srv\/www\n\t\tfile_server\n\t\}\n\}/);
+    expect(rules('handle').some((l) => l.startsWith('header'))).toBe(false);
+  });
+
+  it('answers 404 for any other /assets path, never the app (an HTML 200 would be cached as the asset; P4b)', () => {
+    // A regexp, so that Caddy keeps it after @assets.
+    expect(site).toContain('\n\t@assets_miss path_regexp ^/assets(/|$)\n');
+    expect(rules('handle @assets_miss')).toEqual(['handle @assets_miss {', 'respond 404']);
+    const miss = /^\/assets(\/|$)/;
+    for (const path of ['/assets', '/assets/', '/assets/nope', '/assets/nope.js', '/assets/map/x/'])
+      expect(miss.test(path), path).toBe(true);
+    for (const path of ['/assetsx', '/assets-old/a.js', '/en/assets/x', '/en/', '/'])
+      expect(miss.test(path), path).toBe(false);
+  });
+
+  it('falls back to the page of its language for an app route, answers 404 for a missing file (P4b)', () => {
+    expect(rules('handle')).toEqual([
+      'handle {',
+      'root * /srv/www',
+      '@app_en {',
+      'path_regexp ^/en/',
+      'not file {path} {path}/',
+      'not path_regexp \\.[^/]*$',
+      '}',
+      '@app {',
+      'not file {path} {path}/',
+      'not path_regexp \\.[^/]*$',
+      '}',
+      'rewrite @app_en /en/index.html',
+      'rewrite @app /index.html',
+      '@missing not file {path} {path}/',
+      'respond @missing 404',
+      'file_server',
+    ]);
+    // An app route has no dot in its last segment; favicon.ico and robots.txt are missing files, a 404 that
+    // keeps the site headers because Caddy's own file_server 404 would carry none (KG-107).
+    const dotted = /\.[^/]*$/;
+    for (const path of ['/favicon.ico', '/robots.txt', '/en/x.html', '/a/b.c'])
+      expect(dotted.test(path), path).toBe(true);
+    for (const path of ['/foo', '/en/foo/bar', '/a.b/c']) expect(dotted.test(path), path).toBe(false);
+    for (const path of ['/en/', '/en/foo']) expect(/^\/en\//.test(path), path).toBe(true);
+    for (const path of ['/en', '/foo', '/english']) expect(/^\/en\//.test(path), path).toBe(false);
   });
 
   it('has exactly the cache classes no-store, max-age=60 and immutable (tile files and assets), and no browse', () => {
