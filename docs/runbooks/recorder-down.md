@@ -14,8 +14,20 @@ curl -s https://<domain>/status/capture.json | jq -r '.specs[] | "\(.spec) \(.la
 ```
 
 - **Only one group is stale** and `last_failure_status` names an HTTP status or a code (`timeout`, `dns`, `backoff`, `breaker_open`): the provider is down or blocks us. See §4.
+- **`fr-1-obs` or `lu-5-cap` is stale and `last_failure_status` is `404`, `400`, `invalid` or `too_large`:** a page of a walk failed (#42). Every run asks the same window again from the same point. Hub'Eau keeps one month, so no FR-1 data is lost while it recovers; for LU-5, dumps behind the failed page may stay unfetched (KG-011). The manifest query below shows which page failed and since when. If it lasts for hours, open an issue with that output. Do not edit the state by hand.
 - **Everything is stale, or `generated_at` is old:** the capture process itself is the problem. Continue with §2.
 - **A fresh spec that names `failed_items`:** a partial run (#39). Its lists came in, and those items did not: an FR-4 station, an FR-5 section or an LU-5 file. The run still counts; `last_failure_status` keeps the first failure of the last run that had one. The next run asks again: an FR-4 station while it is listed, an LU-5 file because it is not marked seen, an FR-5 section at the next daily run or its hourly retry. Act only when the same items fail for hours (§4). A spec whose items all failed, one of them transiently, is no success and goes stale like any other. A spec whose items all failed non-transiently (a 404, a 200 carrying `error_msg`, an invalid body, a redirect or `too_large`) still counts and stays fresh with none of them stored (R-059): only `failed_items`, the daily `invalid` alert and the `run done` log line's `ok` and `failed_items` counts show it.
+
+The failed walk pages of FR-1 and LU-5 in the manifest (read-only, on the VPS; the last field is `true` for a seed request):
+
+```bash
+sudo jq -c 'select(((.spec == "fr-1-obs" and (.variant | test("#[0-9]+$"))) or (.spec == "lu-5-cap" and .variant == "list"))
+  and ((.status != 200 and .status != 206) or .validity.ok == false or .error != null))
+  | [.fetched_at.start, .spec, .variant, .status, .error, .validity.reason, (.seed // false)]' \
+  /srv/rws/raw/_manifest/*.jsonl
+```
+
+Lines with status 200 and reason `count` from before the #42 release are empty last pages, not failures: Hub'Eau ends every walk over a closed window with one, and the recorder now reads it as the end of the walk.
 
 ## 2. The container
 

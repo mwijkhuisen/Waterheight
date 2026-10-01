@@ -4,6 +4,20 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## Issue #42: a failed walk page keeps its window (PR pending)
+
+### Needs the owner, the VPS or the first release
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-095 | ops | [agent-prod] After the deploy, `scripts/verify-prod.sh <domain>` check `freshness` must pass for `fr-1-obs` and `lu-5-cap`; until then the fix is proven offline only (the [CI] tests of the PR). [owner] The read-only jq over the manifest (#42 plan comment, now in `docs/runbooks/recorder-down.md` §1) was run on the VPS and pasted on #42 (2026-10-01): no scheduled FR-1 run and no `lu-5-cap` list page had failed, the FR-1 seed of 2026-09-30 logged 30 empty last pages (200, reason `count`) and one timeout, and no window was lost. Its output from the acceptance server is not pasted. | The agent runs `verify-prod.sh` after the deploy; the owner closes #42 | open |
+
+### Known limits
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-094 | capture | A refused provider link (an FR-1 `next` or an LU-5 `next_page` that fails the client's allowlist or the adapter's path check) ends the walk with no request and no log line, and the window moves as if the walk had completed: the sibling of #42 that this PR leaves open. | Follow-up issue #44 | open |
+
 ## Issue #39: FR-4 429, partial runs (PR #41)
 
 ### Needs the owner, the VPS or the first release
@@ -131,7 +145,7 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-011 | capture | LU-5 after a long outage: a catch-up that hits `max_expand` (40) can leave older dumps unfetched, behind list pages already seen. The run is marked `capped` and logged, but nothing re-fetches them (review C6, one case left). | A persisted pending walk for LU-5 | open |
+| KG-011 | capture | LU-5 after a long outage: a catch-up that hits `max_expand` (40) can leave older dumps unfetched, behind list pages already seen. The run is marked `capped` and logged, but nothing re-fetches them (review C6, one case left). The same holds after a failed `list` page (#42): that run is no success, but its first page's dumps are then seen, so the next run's first page holds nothing unseen and does not follow the list again. | A persisted pending walk for LU-5 | open |
 | KG-012 | capture | The FR-1 seed and the scheduled FR-1 run share the variant `default`: a concurrent seed persist can reset a gap walk's progress. The effect is re-fetching, never lost data. | Separate state for seed and schedule | accepted: re-fetch only |
 | KG-013 | status | A stalled FR-1 gap walk (capped with no progress) leaves the spec stale and pages, but sets no `last_failure_status`, so the status shows "stale" without a reason. | A `walk_stalled` code in the existing field | open |
 | KG-014 | alerting | Only staleness and the NL-4 file alerts page. Shape changes, invalid payloads, LU-4 threshold changes and seeds incomplete after 31 days reach only the daily report and the log; `seed_incomplete` is raised again on every start after that. | R-026 | accepted |
