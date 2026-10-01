@@ -5,6 +5,9 @@ import { Archive, sha256 } from '../../src/archive/writer.ts';
 const [root = '', stage = 'tmp'] = process.argv.slice(2);
 const pause = () =>
   new Promise<void>(() => {
+    // Keeps the event loop alive: without it the child exits on its own (code 13,
+    // unsettled top-level await) and can beat the test's SIGKILL.
+    setInterval(() => {}, 60_000);
     process.send?.('paused');
   });
 const archive = new Archive(root, stage === 'tmp' ? { afterTmpWrite: pause } : { afterRename: pause });
