@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { DisplayWindow } from '../src/api/window.ts';
 import { createApp } from '../src/app.ts';
+import { openApiDb } from '../src/main.ts';
 
 describe('GET /healthz', () => {
   it('answers 200 with a status and nothing else', async () => {
@@ -83,5 +85,35 @@ describe('the data routes without a database', () => {
     expect(doc.status).toBe(200);
     expect(doc.headers.get('cache-control')).toBe('public, max-age=300');
     expect(((await doc.json()) as { openapi: string }).openapi).toBe('3.1.0');
+  });
+});
+
+describe('the data routes when the database fails', () => {
+  it('answer 503 with a fixed body, log one fixed code per computation and cache nothing', async () => {
+    const dead = openApiDb({ DATABASE_URL: 'postgres://nobody:secret@127.0.0.1:1/nowhere' });
+    if (typeof dead === 'string') throw new Error(dead);
+    const lines: unknown[] = [];
+    const window = { current: { dataEpochMs: 0, displayStartMs: Date.parse('2026-08-24T00:00:00Z') } };
+    const app = createApp({
+      db: dead.db,
+      window: window as unknown as DisplayWindow,
+      now: () => new Date('2026-10-01T12:00:00Z'),
+      log: { error: ((o: unknown) => lines.push(o)) as never },
+    });
+    try {
+      const path = '/api/v1/snapshot?t=2026-10-01T11:00Z';
+      const answers = await Promise.all([1, 2, 3].map(() => app.request(path)));
+      for (const res of answers) {
+        expect(res.status).toBe(503);
+        expect(res.headers.get('cache-control')).toBe('no-store');
+        expect(await res.text()).toBe('{"error":"unavailable"}');
+      }
+      // Three callers of one key share one computation, so one line, with a code and nothing else.
+      expect(lines).toEqual([{ code: 'ECONNREFUSED', route: 'snapshot' }]);
+      expect((await app.request(path)).status).toBe(503);
+      expect(lines).toHaveLength(2);
+    } finally {
+      await dead.close();
+    }
   });
 });
