@@ -3,8 +3,9 @@
 # and max provenance, cosign keyless signing and a provenance attestation; then
 # `promote` waits for the owner's approval (environment production) and
 # publishes prod-<UTC yyyymmddTHHMMSSZ> with a signed release-manifest.json and
-# the deploy bundle. GitHub holds no server credential: the VPS pulls and
-# verifies (deploy/bin/rws-update). Same hardening as ci.yml.
+# the deploy bundle, titled from .github/release-title (cosmetic: only the tag
+# and the manifest identify a release). GitHub holds no server credential: the
+# VPS pulls and verifies (deploy/bin/rws-update). Same hardening as ci.yml.
 name: release
 
 on:
@@ -164,6 +165,8 @@ jobs:
     permissions:
       contents: write # create the release
       id-token: write # keyless cosign signature of the manifest
+      pull-requests: read # the release title: the PR merged as this commit
+      issues: read # the release notes: the issues that PR closes (GraphQL Issue objects)
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
@@ -221,7 +224,25 @@ jobs:
           set -euo pipefail
           [[ $TAG =~ ^prod-[0-9]{8}T[0-9]{6}Z$ ]]
           out=$RUNNER_TEMP/release
-          gh release create "$TAG" --draft --target "$COMMIT" --title "$TAG" \
-            --notes "Signed production release of $COMMIT. The VPS deploys it after verifying the manifest and every image (deploy/bin/rws-update)." \
+          # The title and notes are cosmetic: the VPS and every runbook know a release only by its
+          # tag and signed manifest. scripts/release-text.sh turns the API's JSON into numbers and
+          # fixed text (never a PR title or body); without a merged PR the title is the tag.
+          gh api "repos/$GH_REPO/commits/$COMMIT/pulls" >"$RUNNER_TEMP/pulls.json"
+          pr=$(scripts/release-text.sh pr "$COMMIT" "$RUNNER_TEMP/pulls.json")
+          if [[ -n $pr ]]; then
+            gh api graphql -F n="$pr" -f owner="${GH_REPO%/*}" -f name="${GH_REPO#*/}" -f query='
+              query($owner: String!, $name: String!, $n: Int!) {
+                repository(owner: $owner, name: $name) { pullRequest(number: $n) {
+                  closingIssuesReferences(first: 50) { nodes { number repository { nameWithOwner } } } } } }' \
+              >"$RUNNER_TEMP/issues.json"
+          fi
+          # A {n} title is one more than the highest published one of its series; drafts (a failed
+          # run's leftover) do not count. No other promote can publish between this read and the
+          # release below: every push to main, and every re-run, is in the one concurrency group
+          # release-refs/heads/main, which runs one workflow run at a time (a newer one cancels the older).
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" >"$RUNNER_TEMP/releases.json"
+          title=$(scripts/release-text.sh title .github/release-title "$pr" "$TAG" "$RUNNER_TEMP/releases.json")
+          scripts/release-text.sh notes "$TAG" "$COMMIT" "$pr" "$RUNNER_TEMP/issues.json" >"$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --draft --target "$COMMIT" --title "$title" --notes-file "$RUNNER_TEMP/notes.md" \
             "$out/release-manifest.json" "$out/release-manifest.sigstore.json" "$out/deploy-bundle.tar.gz"
           gh release edit "$TAG" --draft=false --latest
