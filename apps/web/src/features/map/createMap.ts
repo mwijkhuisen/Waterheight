@@ -12,6 +12,9 @@ import type { Locale } from '../../paraglide/runtime.js';
 import { acquireProtocol } from './protocol.ts';
 import { resolveStyle } from './resolveStyle.ts';
 
+// For the station popup (StationsMap): taken from this chunk, which is loaded by then.
+export { Popup } from 'maplibre-gl';
+
 type Style = Exclude<MapOptions['style'], string | undefined>;
 
 const styles = {
@@ -43,6 +46,7 @@ const mapLocale = (locale: Locale): Record<string, string> => ({
   'NavigationControl.ResetBearing': m.map_reset_bearing({}, { locale }),
   'AttributionControl.ToggleAttribution': m.map_toggle_attribution({}, { locale }),
   'AttributionControl.MapFeedback': m.map_feedback({}, { locale }),
+  'Popup.Close': m.map_popup_close({}, { locale }),
 });
 
 export interface CreatedMap {

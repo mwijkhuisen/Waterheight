@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { i18nHtml } from './i18n-html.ts';
+import { thirdPartyNotices } from './notices.ts';
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -11,7 +12,7 @@ const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 export default defineConfig(({ mode }) => {
   const e2e = mode === 'e2e';
   return {
-    plugins: [react(), i18nHtml({ messagesDir: here('./messages'), locales: ['nl', 'en'] })],
+    plugins: [react(), i18nHtml({ messagesDir: here('./messages'), locales: ['nl', 'en'] }), thirdPartyNotices()],
     // MapLibre's worker is bundled as an ES module worker served from our
     // origin; setWorkerUrl() points MapLibre at it (ADR-0016: no blob: worker).
     worker: { format: 'es' },

@@ -1,0 +1,41 @@
+/* Tokens and base styles (A§10 styles/). Everything is a file: the CSP allows no inline style. */
+:root {
+  --ink: #1a1a1a;
+  --muted: #4d4d4d;
+  --paper: #ffffff;
+  --line: #c8c8c8;
+  --accent: #01665e;
+  --accent-ink: #ffffff;
+  --warn-bg: #fff3cd;
+  --warn-ink: #4a3b00;
+  --space: 0.75rem;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+}

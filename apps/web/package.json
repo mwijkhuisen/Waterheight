@@ -9,12 +9,16 @@
     "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
+    "@rws/contracts": "workspace:*",
     "@rws/core": "workspace:*",
+    "@tanstack/react-query": "5.103.2",
+    "echarts": "6.1.0",
     "maplibre-gl": "6.11.1",
     "pmtiles": "4.5.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "temporal-polyfill": "1.0.5"
+    "temporal-polyfill": "1.0.5",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

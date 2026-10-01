@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { HealthSourceId } from './api.ts';
 
 // The public health documents (A§9.2 `GET /health` and `GET /health/sources`;
 // PHASES P2a). They describe public-audience sources only: owner-audience
@@ -29,9 +30,6 @@ export type HealthStatus = z.infer<typeof HealthStatus>;
 /** A source that was never fetched yet is `unknown`; it does not degrade anything. */
 export const SourceStatus = z.enum(['ok', 'degraded', 'down', 'unknown']);
 export type SourceStatus = z.infer<typeof SourceStatus>;
-
-/** A catalogue source ID: no canary, no owner-only spelling. */
-export const HealthSourceId = z.string().regex(/^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$/);
 
 export const Health = z.strictObject({
   status: HealthStatus,

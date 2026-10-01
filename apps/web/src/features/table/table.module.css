@@ -1,0 +1,53 @@
+.wrap {
+  max-height: 65vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.table caption {
+  text-align: left;
+  padding: 0.5rem;
+  font-weight: 600;
+}
+
+.note {
+  display: block;
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.table th,
+.table td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--paper);
+}
+
+.table th button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.table th button[aria-pressed="true"] {
+  font-weight: 700;
+}

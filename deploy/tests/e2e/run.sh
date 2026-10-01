@@ -30,8 +30,13 @@
 #     rws_api in with its password and refuses a wrong one and the superuser
 #     over TCP; rws_api can neither read a base table nor insert; load turns
 #     the DE-1 fixture archive into observations; /api/v1/health and
-#     /health/sources answer through Caddy over TLS, any other /api/ path is a
-#     404 and an unknown parameter a 400; load and api have no route out; db,
+#     /health/sources answer through Caddy over TLS, and (P4b) so do /api/v1/meta
+#     and /stations; an unknown path under /api/v1/ is the api's JSON 404, a
+#     wrong-case path Caddy's 404, an unknown parameter a 400, a POST a 405 and
+#     a GET with a 2048-byte body a 413; a POST to a page, an app route or an
+#     asset a 405 with the site headers and no Server; an English route that is
+#     no file is the English page with no-cache, a missing asset or /favicon.ico
+#     a 404; load and api have no route out; db,
 #     load and api keep the hardening flags; each sees only its own secret;
 #     the nightly dump is a valid custom-format dump readable only by root and
 #     gid 61003, and restic backs it up;
@@ -445,7 +450,7 @@ got=$(docker exec rws-api-1 /nodejs/bin/node -e "$pg_try")
 [[ $got == 'ok login:28P01 login:28000 sql:42501 sql:25006 sql:42501' ]] || fail "pg_hba and grants: $got"
 proof "db publishes no port (PortBindings empty) and sits only on rws_db (internal); from the api container: rws_api logs in with its secret, a wrong password is refused (28P01), postgres over TCP is rejected by pg_hba (28000); rws_api cannot read the base table obs (42501), its session is read-only (25006) and even a read-write transaction cannot insert (42501)"
 
-step "load turns the DE-1 fixture archive into observations; the api answers through Caddy"
+step "load turns the DE-1 fixture archive into observations; the api and the pages answer through Caddy"
 obs_loaded() { [[ $(psql_su 'select count(*) from obs') =~ ^[1-9][0-9]*$ ]]; }
 wait_for "observations from the DE-1 fixture archive" 300 obs_loaded
 api_url() { printf 'https://%s%s' "$DOMAIN" "$1"; }
@@ -458,14 +463,57 @@ health=$(outside --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health)")
 jq -e '.status | type == "string"' <<<"$health" >/dev/null || fail "/api/v1/health: no status"
 sources=$(outside --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health/sources)")
 grep -q '"DE-1"' <<<"$sources" || fail "/api/v1/health/sources does not list DE-1"
-[[ $(api_code /api/v1/x) == 404 && $(api_code /api/v1/health/x) == 404 && $(api_code /API/v1/health) == 404 ]] ||
-  fail "a non-health /api/ path is not a 404"
+# One request through Caddy from outside: the status goes to api_status, the headers to /ci/api.hdr (CR stripped)
+# and the body to /ci/api.body. Further arguments are curl options (a method, a body).
+api_req() {
+  local path=$1
+  shift
+  api_status=$(ip netns exec ext curl -sS -o /ci/api.body -D /ci/api.hdr.raw -w '%{http_code}' --max-time 10 \
+    --cacert /ci/pki/pebble-root.pem --resolve "$DOMAIN:443:$IP4" "$@" "$(api_url "$path")")
+  tr -d '\r' </ci/api.hdr.raw >/ci/api.hdr
+}
+# P4b: every GET and HEAD under /api/v1/ reaches the api, which answers from the fixture-loaded database.
+api_req /api/v1/meta
+[[ $api_status == 200 ]] || fail "/api/v1/meta: HTTP $api_status"
+grep -qiFx 'cache-control: public, max-age=60' /ci/api.hdr || fail "/api/v1/meta: Cache-Control: $(grep -i '^cache-control:' /ci/api.hdr)"
+jq -e '(.sources | map(.id)) as $ids | ($ids | index("DE-1")) != null and ($ids | index("NL-1")) != null' /ci/api.body >/dev/null ||
+  fail "/api/v1/meta does not list DE-1 and NL-1"
+api_req /api/v1/stations
+[[ $api_status == 200 ]] || fail "/api/v1/stations: HTTP $api_status"
+jq -e '.stations | length > 0' /ci/api.body >/dev/null || fail "/api/v1/stations lists no station"
+# The api's own 404 is a fixed JSON body; Caddy's 404 for a wrong-case path has none.
+api_req /api/v1/x
+[[ $api_status == 404 && $(</ci/api.body) == '{"error":"not_found"}' ]] || fail "/api/v1/x: HTTP $api_status, not the api's 404"
+[[ $(api_code /API/v1/health) == 404 ]] || fail "/API/v1/health is not a 404"
 [[ $(api_code '/api/v1/health?rws-e2e-unknown=1') == 400 ]] || fail "an unknown parameter is not a 400"
+# Only GET and HEAD, and no request body of any size: a 405 with Allow, a 413.
+api_req /api/v1/meta -X POST
+[[ $api_status == 405 ]] || fail "POST /api/v1/meta: HTTP $api_status, want 405"
+grep -qiFx 'allow: GET, HEAD' /ci/api.hdr || fail "POST /api/v1/meta: no Allow: GET, HEAD"
+grep -qi '^content-security-policy: default-src' /ci/api.hdr || fail "the 405 lacks the site headers"
+# The same guard before every route (SR-3): never file_server's bare 405, which names Caddy.
+for path in / /en/foo /assets/no-such-file.js; do
+  api_req "$path" -X POST
+  [[ $api_status == 405 ]] || fail "POST $path: HTTP $api_status, want 405"
+  grep -qiFx 'allow: GET, HEAD' /ci/api.hdr || fail "POST $path: no Allow: GET, HEAD"
+  grep -qi '^content-security-policy: default-src' /ci/api.hdr || fail "POST $path: the 405 lacks the site headers"
+  ! grep -qi '^server:' /ci/api.hdr || fail "POST $path: the 405 names its server"
+done
+head -c 2048 /dev/zero | tr '\0' a >/ci/api.big
+api_req /api/v1/meta -X GET -H 'Expect:' --data-binary @/ci/api.big
+[[ $api_status == 413 ]] || fail "GET /api/v1/meta with a 2048-byte body: HTTP $api_status, want 413"
+# The pages: an English route that is no file is the English page, a missing file or asset is a 404.
+api_req /en/no-such-page
+[[ $api_status == 200 ]] || fail "/en/no-such-page: HTTP $api_status, want the English page"
+grep -qF '<html lang="en"' /ci/api.body || fail "/en/no-such-page is not the English page"
+grep -qiFx 'cache-control: no-cache' /ci/api.hdr || fail "/en/no-such-page: Cache-Control: $(grep -i '^cache-control:' /ci/api.hdr)"
+[[ $(api_code /assets/no-such-file) == 404 && $(api_code /favicon.ico) == 404 ]] ||
+  fail "a missing asset or /favicon.ico is not a 404"
 headers=$(ip netns exec ext curl -sS -D - -o /dev/null --max-time 10 --cacert /ci/pki/pebble-root.pem \
   --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health)" | tr -d '\r')
 grep -qi '^content-security-policy: default-src' <<<"$headers" || fail "the api response lacks the site headers"
 ! grep -qiE '^(server|via|access-control-[a-z-]+):' <<<"$headers" || fail "the api response names its software or sends CORS"
-proof "load wrote $(psql_su 'select count(*) from obs') observations from the fixture archive; over TLS through Caddy /api/v1/health answers $(jq -c '{status}' <<<"$health") and /api/v1/health/sources lists DE-1, with the site headers and no Server, Via or CORS header; /api/v1/x, /api/v1/health/x and /API/v1/health are 404s from Caddy, an unknown parameter a 400"
+proof "load wrote $(psql_su 'select count(*) from obs') observations from the fixture archive; over TLS through Caddy /api/v1/health answers $(jq -c '{status}' <<<"$health") and /api/v1/health/sources lists DE-1, with the site headers and no Server, Via or CORS header; /api/v1/meta (max-age=60, DE-1 and NL-1 listed) and /api/v1/stations are 200 from the real api; /api/v1/x is the api's {\"error\":\"not_found\"} 404 and /API/v1/health a 404 from Caddy; an unknown parameter is a 400; a POST is a 405 with Allow: GET, HEAD (site headers kept), on /, /en/foo and /assets/no-such-file.js too (no Server), and a GET with a 2048-byte body a 413; /en/no-such-page is the English page (200, Cache-Control: no-cache), /assets/no-such-file and /favicon.ico are 404s"
 
 step "load and api: no route out, the hardening flags, only their own secret"
 no_route='const s = require("net").connect({ host: "1.1.1.1", port: 443, timeout: 5000 });

@@ -1,0 +1,75 @@
+.timebar {
+  border: 1px solid var(--line);
+  padding: var(--space);
+}
+
+.heading {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.current {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space);
+}
+
+.fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.twins {
+  margin: 0.5rem 0;
+}
+
+.twins label {
+  margin-right: var(--space);
+}
+
+.missing {
+  color: #8a1c1c;
+}
+
+.track {
+  position: relative;
+  margin-top: 0.75rem;
+}
+
+.track input {
+  width: 100%;
+}
+
+/* The data epoch (D9): a tick under the scrubber; the note below says what it means. */
+.epoch {
+  position: absolute;
+  bottom: -0.35rem;
+  width: 2px;
+  height: 0.7rem;
+  background: var(--ink);
+  pointer-events: none;
+}
+
+.note {
+  margin: 0.4rem 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.buttons button[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: not-allowed;
+}
