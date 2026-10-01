@@ -1,6 +1,6 @@
 # Owner checks of P1 (issue #16)
 
-The `[owner]` acceptance items of P1b, and the ones P1a and P1b share, each with the command or checklist that proves it. Paste each output into #16. Run them after the first successful deploy and backup (`docs/runbooks/bootstrap.md`). §8 to §10 are the `[owner]` items of P2b (issue #17): paste their output into #17, after the P2b release is deployed (`docs/runbooks/bootstrap.md`, "the release with P2b").
+The `[owner]` acceptance items of P1b, and the ones P1a and P1b share, each with the command or checklist that proves it. Paste each output into #16. Run them after the first successful deploy and backup (`docs/runbooks/bootstrap.md`). §8 to §10 are the `[owner]` items of P2b (issue #17): paste their output into #17, after the P2b release is deployed (`docs/runbooks/bootstrap.md`, "the release with P2b"). §11 is the `[owner]` item of P3 (issue #18): paste its output into #18, after the P3 release is deployed and bootstrapped (`docs/runbooks/bootstrap.md`, "the release with the basemap job").
 
 ## 1. Reachability from the VPS over IPv4 and IPv6 (R7)
 
@@ -138,3 +138,21 @@ scripts/verify-prod.sh <domain> --soak
 ```
 
 - [ ] `twin eijsden-grens-taw-nap` passes: listed in `/api/v1/health/sources`, its latest check at most 2 hours old, aligned timestamps, `ok`, `failed_7d` 0 and `checks_7d` at least 160 (of 168 hourly checks).
+
+## 11. The basemap extract on the VPS (P3, issue #18)
+
+The `[owner]` criterion: the extract job ran on the VPS, the log is attached and the sha256 matches the manifest. Two runs on two builds, so that `manifest.json` lists a current and a previous version (the `[agent-prod]` criterion needs both).
+
+```bash
+ssh ops@<domain>
+sudo rws-basemap-refresh --dry-run 2>&1 | tee ~/basemap-0-dry-run.log                 # the plan; writes nothing
+sudo rws-basemap-refresh --build <an older listed build> 2>&1 | tee ~/basemap-1.log    # the list: docs/runbooks/basemap.md §3
+sudo rws-basemap-refresh 2>&1 | tee ~/basemap-2.log                                    # the newest build
+cd /srv/rws/tiles && sudo jq -r '(.current, (.previous // empty)) | .basemap, .planet | "\(.sha256)  \(.file)"' manifest.json | sudo sha256sum -c -
+```
+
+The full procedure, the failure codes and the rollback are in `docs/runbooks/basemap.md`. Paste the three logs and the `sha256sum -c` output into #18.
+
+- [ ] both refresh runs ended with `basemap refreshed`;
+- [ ] `sha256sum -c` printed `OK` for all four files (`basemap-` and `planet-z6-` of both builds);
+- [ ] `systemctl list-timers 'rws-*'` does not list `rws-basemap-refresh` yet (enable it only after this check, `docs/runbooks/basemap.md` §7).
