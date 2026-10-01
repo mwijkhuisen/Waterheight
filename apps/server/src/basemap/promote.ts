@@ -48,11 +48,14 @@ export type PromoteDeps = {
 
 export type PromoteOptions = { dryRun: boolean };
 
-/** The served name is the very file that was checked: a regular file with its device and inode (never followed). */
+/**
+ * The served name is the very file that was checked: a regular file with its device and inode (never followed),
+ * and still its only name (a second one, made in .staging before the rename, could change the bytes later).
+ */
 async function isChecked(path: string, o: Opened): Promise<boolean> {
   try {
     const named = await lstat(path, { bigint: true });
-    return named.isFile() && named.dev === o.state.dev && named.ino === o.state.ino;
+    return named.isFile() && named.nlink === 1n && named.dev === o.state.dev && named.ino === o.state.ino;
   } catch {
     return false;
   }
@@ -163,22 +166,34 @@ export async function runPromote(d: PromoteDeps, o: PromoteOptions): Promise<voi
     }
 
     // 2. Move: the same file that was checked, still unchanged, readable by Caddy.
-    for (const s of steps) {
-      if (s.action !== 'move') continue;
-      if (!(await unchanged(s.opened))) throw new BasemapError('file_changed');
-      await s.opened.fh.chmod(0o644);
-      await (d.rename ?? rename)(s.staged, s.final);
-      // rename moves whatever the staged name holds by then: a writer left in .staging could have swapped in a
-      // link, a directory or other bytes since the check. Such a name is removed (rm never follows a link)
-      // before the manifest can name it.
-      if (!(await isChecked(s.final, s.opened))) {
-        await rm(s.final, { recursive: true, force: true }).catch(() => {});
-        log('error', 'file_refused', { kind: s.kind, reason: 'file_swapped' });
-        throw new BasemapError('file_swapped');
+    const moved: { kind: Kind; final: string }[] = [];
+    try {
+      for (const s of steps) {
+        if (s.action !== 'move') continue;
+        if (!(await unchanged(s.opened))) throw new BasemapError('file_changed');
+        await s.opened.fh.chmod(0o644);
+        await (d.rename ?? rename)(s.staged, s.final);
+        moved.push({ kind: s.kind, final: s.final });
+        // rename moves whatever the staged name holds by then: a writer left in .staging could have swapped in
+        // a link, a directory or other bytes since the check, or given the file a second name.
+        if (!(await isChecked(s.final, s.opened))) {
+          log('error', 'file_refused', { kind: s.kind, reason: 'file_swapped' });
+          throw new BasemapError('file_swapped');
+        }
+        log('info', 'file_moved', { kind: s.kind, build: entry.build });
       }
-      log('info', 'file_moved', { kind: s.kind, build: entry.build });
+      await syncDir(d.tilesDir);
+    } catch (e) {
+      // Before the manifest is written, every name this run moved in goes again (rm never follows a link): each
+      // was absent when the run began, so no manifest names it, and a rerun with the build staged again finds
+      // the served directory as it was (no orphan for exists_different to stop on). A name that cannot be
+      // removed is logged; the run fails with the first error either way.
+      for (const m of moved)
+        await rm(m.final, { recursive: true, force: true }).catch(() =>
+          log('error', 'file_remove_failed', { kind: m.kind }),
+        );
+      throw e;
     }
-    await syncDir(d.tilesDir);
 
     // 3. The manifest makes the new build current.
     await writeManifest(d.tilesDir, next);

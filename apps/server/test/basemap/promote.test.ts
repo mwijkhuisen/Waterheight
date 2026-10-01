@@ -236,9 +236,11 @@ describe('promote: what it refuses', () => {
     ['a link to a file Caddy could read', (from: string, target: string) => symlink(target, from)],
     ['another regular file', (from: string) => writeFile(from, 'other bytes')],
     ['a directory', (from: string) => mkdir(from)],
+    // The checked file itself, with a second name in .staging through which its bytes could change later.
+    ['a second hard link to it', (from: string) => link(from, `${from}.second`)],
   ])(
     'a staged file swapped for %s between the last check and the rename: removed from the served directory, no manifest',
-    async (_what, plant) => {
+    async (what, plant) => {
       const sb = await sandbox();
       const entry = await stage(sb);
       const target = join(sb.work, 'caddy-key.pem');
@@ -246,19 +248,89 @@ describe('promote: what it refuses', () => {
       // A writer left in .staging (SR-2): the swap lands after unchanged() and before rename().
       const swapping = async (from: string, to: string) => {
         if (from.endsWith(entry.planet.file)) {
-          await rm(from);
+          if (!what.includes('hard link')) await rm(from);
           await plant(from, target);
         }
         await rename(from, to);
       };
       const { deps, lines } = promoteDeps(sb, { rename: swapping });
       await failsWith(runPromote(deps, { dryRun: false }), 'file_swapped');
-      // The basemap file was moved before (an orphan without a manifest entry that the next promote keeps or
-      // refuses); the swapped name is gone, never followed, and no manifest names anything.
-      expect(await names(sb.tiles)).toEqual(['.staging', entry.basemap.file]);
+      // The swapped name is gone, never followed, and so is the basemap file this run moved in before it
+      // (CR2-2: no orphan); no manifest names anything.
+      expect(await names(sb.tiles)).toEqual(['.staging']);
       expect(readFileSync(target, 'utf8')).toBe('not for the public');
       expect(lines).toContainEqual({ level: 'error', code: 'file_refused', kind: 'planet', reason: 'file_swapped' });
+      expect(lines.map((l) => l.code)).not.toContain('file_remove_failed');
       expect(existsSync(join(sb.staging, 'result.json'))).toBe(true);
+    },
+  );
+
+  it('after a swap of the second file, the first is gone too, the manifest is unchanged, and a rerun converges (CR2-2)', async () => {
+    const sb = await sandbox();
+    await stage(sb, '20260930');
+    await promote(sb);
+    const before = readFileSync(join(sb.tiles, 'manifest.json'), 'utf8');
+    const served = await names(sb.tiles);
+    const entry = await stage(sb);
+    const swapping = async (from: string, to: string) => {
+      if (from.endsWith(entry.planet.file)) {
+        await rm(from);
+        await writeFile(from, 'other bytes');
+      }
+      await rename(from, to);
+    };
+    await failsWith(promote(sb, false, { rename: swapping }), 'file_swapped');
+    expect(await names(sb.tiles)).toEqual(served);
+    expect(readFileSync(join(sb.tiles, 'manifest.json'), 'utf8')).toBe(before);
+    // The runbook's way out: empty .staging, fetch again (here: stage again), promote.
+    await rm(sb.staging, { recursive: true });
+    await mkdir(sb.staging, { mode: 0o700 });
+    await stage(sb);
+    await promote(sb);
+    expect(manifest(sb)).toMatchObject({ current: { build: entry.build }, previous: { build: '20260930' } });
+    expect(sha(join(sb.tiles, entry.basemap.file))).toBe(LOBITH_SUM.sha256);
+    expect(sha(join(sb.tiles, entry.planet.file))).toBe(PLANET_SUM.sha256);
+  });
+
+  it('any other failure after the first rename removes what this run moved in, too (CR2-2)', async () => {
+    const sb = await sandbox();
+    const entry = await stage(sb);
+    // The planet file changes once the basemap file has moved: its unchanged() check fails before its rename.
+    const changing = async (from: string, to: string) => {
+      await rename(from, to);
+      if (from.endsWith(entry.basemap.file)) await appendFile(join(sb.staging, entry.planet.file), 'x');
+    };
+    await failsWith(promote(sb, false, { rename: changing }), 'file_changed');
+    await untouched(sb);
+  });
+
+  it.skipIf(process.getuid?.() === 0)(
+    'a swapped name it cannot remove is logged with a fixed code, and the run still fails on the swap (CR2-6)',
+    async () => {
+      const sb = await sandbox();
+      const entry = await stage(sb);
+      const locked = join(sb.tiles, entry.planet.file, 'locked');
+      const swapping = async (from: string, to: string) => {
+        if (from.endsWith(entry.planet.file)) {
+          // A directory with a subdirectory its owner cannot write: rm cannot empty it.
+          await rm(from);
+          await mkdir(join(from, 'locked'), { recursive: true });
+          await writeFile(join(from, 'locked', 'f'), 'x');
+          await chmod(join(from, 'locked'), 0o500);
+        }
+        await rename(from, to);
+      };
+      const { deps, lines } = promoteDeps(sb, { rename: swapping });
+      try {
+        await failsWith(runPromote(deps, { dryRun: false }), 'file_swapped');
+        expect(lines).toContainEqual({ level: 'error', code: 'file_remove_failed', kind: 'planet' });
+        expect(lines.filter((l) => l.code === 'file_remove_failed')).toHaveLength(1);
+        // The basemap file, which could be removed, is gone.
+        expect(await names(sb.tiles)).toEqual(['.staging', entry.planet.file]);
+        expect(existsSync(join(sb.tiles, 'manifest.json'))).toBe(false);
+      } finally {
+        await chmod(locked, 0o700);
+      }
     },
   );
 
