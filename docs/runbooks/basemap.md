@@ -91,7 +91,7 @@ sudo systemd-run --unit=rws-basemap-manual --collect /usr/local/bin/rws-basemap-
 sudo journalctl -fu rws-basemap-manual
 ```
 
-The duration and memory of a real 4.3 GB extract under the job's 512 MB limit (`GOMEMLIMIT` 400 MiB) have not been measured yet (KG-096): note the start and end times from the log, and tell the build agent if the run was killed (§9, exit 137).
+The duration and memory of a real 4.3 GB extract under the job's 512 MB limit (`GOMEMLIMIT` 400 MiB) have not been measured yet (KG-098): note the start and end times from the log, and tell the build agent if the run was killed (§9, exit 137).
 
 ## 4. Record the result
 
@@ -108,7 +108,7 @@ For the `[owner]` criterion, paste into issue #18:
 
   `sha256sum -c` prints `<file>: OK` for the four files. `ls -la /srv/rws/tiles` must show nothing but those four, `manifest.json` and `.staging`. `sha256sum /srv/rws/tiles/*.pmtiles` prints the same sums, for reading by eye. Hashing a 4.3 GB file takes a minute or more.
 
-The agent then ticks the criterion in `docs/plan/PHASES.md` and updates KG-094 to KG-096 (`docs/known-gaps.md`).
+The agent then ticks the criterion in `docs/plan/PHASES.md` and updates KG-096 to KG-098 (`docs/known-gaps.md`).
 
 ## 5. Check from outside
 
@@ -177,8 +177,8 @@ The script's lines (`<UTC> rws-basemap-refresh: …`; an error starts with `erro
 | `a basemap container is left over (<ids>): …`, `a basemap-promote container is left over (<ids>): …` | A container of that job exists, running or exited: an earlier run was killed before `--rm` removed it, or one was started by hand. Nothing ran | A leftover container (below) |
 | `docker ps failed: cannot tell whether a … container is left over` | Docker did not answer; nothing ran | `systemctl status docker`, then run again |
 | `basemap promote of the build an earlier run staged failed (exit N): nothing was fetched. Read the role's code above …` | The first step of a run, promoting what an earlier run left staged, failed (exit N as below), so `fetch` did not run and `.staging` is kept for you to look at | Read the role's code above it (table below). Fix the cause and run again; if that staged build must not be promoted at all, empty `.staging` (`sudo find /srv/rws/tiles/.staging -mindepth 1 -delete`), never the served directory, and run again |
-| `basemap fetch failed (exit N): nothing was promoted` | The fetch job exited with N: 1 failure, 78 configuration, 64 usage; 137 is the container killed from outside, most likely out of memory (KG-096) | Read the code in the role's line above it (table below) |
-| `basemap promote failed (exit N)` | The staged files were not (fully) promoted; `.staging` still holds what was not moved. Exit 137 here too is the container killed from outside, most likely out of memory: `pmtiles verify` of the 4.3 GB file runs under the same 512 MB (`GOMEMLIMIT` 400 MiB) and 64 pids (R-063, KG-096) | The table below says which. After the cause is fixed, run `sudo rws-basemap-refresh` again: it first promotes what is staged, before it fetches anything; or promote alone (below). After a 137, run promote alone once more; if it is killed again, `mem_limit` of `basemap-promote` in `deploy/compose.yaml` must go up, in a PR. When the staged files themselves are bad, empty `.staging` (`sudo find /srv/rws/tiles/.staging -mindepth 1 -delete`) and refresh |
+| `basemap fetch failed (exit N): nothing was promoted` | The fetch job exited with N: 1 failure, 78 configuration, 64 usage; 137 is the container killed from outside, most likely out of memory (KG-098) | Read the code in the role's line above it (table below) |
+| `basemap promote failed (exit N)` | The staged files were not (fully) promoted; `.staging` still holds what was not moved. Exit 137 here too is the container killed from outside, most likely out of memory: `pmtiles verify` of the 4.3 GB file runs under the same 512 MB (`GOMEMLIMIT` 400 MiB) and 64 pids (R-063, KG-098) | The table below says which. After the cause is fixed, run `sudo rws-basemap-refresh` again: it first promotes what is staged, before it fetches anything; or promote alone (below). After a 137, run promote alone once more; if it is killed again, `mem_limit` of `basemap-promote` in `deploy/compose.yaml` must go up, in a PR. When the staged files themselves are bad, empty `.staging` (`sudo find /srv/rws/tiles/.staging -mindepth 1 -delete`) and refresh |
 | `basemap rollback failed (exit N)` | Nothing changed | Table below |
 
 The role's codes (`{"role":"basemap","msg":"<code>",…}`; exit 1 unless noted):
@@ -198,7 +198,7 @@ The role's codes (`{"role":"basemap","msg":"<code>",…}`; exit 1 unless noted):
 | `tiles_status` | The one-byte `Range` probe did not answer 206 with a `Content-Range` total: the file is gone, or the host ignores `Range` | Pick another build with `--build` |
 | `disk`, `disk_unknown` | The disk would pass 75% (§8), or its size could not be read | Free space and run again; `df /srv/rws` |
 | `staging_clean` | `.staging` could not be emptied | Look at `sudo ls -la /srv/rws/tiles/.staging` (an entry owned by root, from before bootstrap); empty it as root (`disk-full.md` §2), run bootstrap, run again |
-| `extract_failed` | go-pmtiles exited non-zero, hit the 4-hour limit, or was stopped. The `extract_failed` line has `kind` (`basemap` or `planet`), `status` (`exit N`, `signal …`, `not_started`) and `tail` | A dropped connection, a build that left Protomaps' list mid-download, a redirect to another host, or memory (KG-096). `file too large` in the `tail` is the job's file size limit (6.5 GB per file, `ulimits` in `deploy/compose.yaml`): the source sent far more than an extract may be; do not raise the limit blindly, open an issue. Otherwise run again: nothing is resumed, the whole download starts over |
+| `extract_failed` | go-pmtiles exited non-zero, hit the 4-hour limit, or was stopped. The `extract_failed` line has `kind` (`basemap` or `planet`), `status` (`exit N`, `signal …`, `not_started`) and `tail` | A dropped connection, a build that left Protomaps' list mid-download, a redirect to another host, or memory (KG-098). `file too large` in the `tail` is the job's file size limit (6.5 GB per file, `ulimits` in `deploy/compose.yaml`): the source sent far more than an extract may be; do not raise the limit blindly, open an issue. Otherwise run again: nothing is resumed, the whole download starts over |
 | `extract_output` | The output file is missing, not a regular file, empty, larger than the registry's limit (6 GB for the basin, 100 MB for the world) or changed while it was hashed | The limits are `max_bytes` in `registry/basemap.yaml`; raising one is a reviewed change |
 | `manifest_invalid` | `/srv/rws/tiles/manifest.json` exists but is not exactly the manifest this version writes (`fetch`, `promote` and `rollback`) | Nothing of ours writes such a file (every write is checked first), so it was changed from outside. Do not edit it; open an issue |
 | `staging_dir` (from `promote`) | `.staging` is a link or cannot be read | Look at `ls -ld /srv/rws/tiles/.staging`; it must be a real directory (0700, uid 65532) |
