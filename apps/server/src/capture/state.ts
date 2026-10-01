@@ -28,6 +28,8 @@ export type SpecState = {
   last_attempt?: string;
   last_success?: string;
   last_failure_status?: number | string | null;
+  /** The items (stage-2 requests that are not list pages) that failed in the last finished run, replaced by each. */
+  failed_items?: string[];
   variants: Record<string, VariantState>;
   /** Resource ids already fetched (LU-5), shared by the spec and its seed. */
   seen: string[];

@@ -97,7 +97,16 @@ describe('status files', () => {
     expect(Object.keys(p).sort()).toEqual(['days', 'generated_at', 'owner_specs', 'seeds', 'specs']);
     const s = CaptureStatus.parse(p);
     expect(Object.keys(s.specs[0] ?? {}).sort()).toEqual(
-      ['bytes_today', 'cadence_s', 'last_failure_status', 'last_success', 'next_due', 'source', 'spec'].sort(),
+      [
+        'bytes_today',
+        'cadence_s',
+        'failed_items',
+        'last_failure_status',
+        'last_success',
+        'next_due',
+        'source',
+        'spec',
+      ].sort(),
     );
     expect(new Set(s.days.map((d) => d.date))).toEqual(new Set(['2026-09-30', '2026-10-01', '2026-10-02']));
     const today = s.days.find((d) => d.source === 'NL-1' && d.date === '2026-10-02');
@@ -105,6 +114,39 @@ describe('status files', () => {
     expect(Object.keys(today?.bytes ?? {}).every((id) => id.startsWith('nl-1-'))).toBe(true);
     // Seed-only specs are not scheduled specs.
     expect(s.specs.some((x) => x.spec === 'fr-3-obs' || x.spec === 'ch-3-40d')).toBe(false);
+  });
+
+  it('name at most 20 failed items, pattern-checked, an owner spec’s only in the owner file (#39)', async () => {
+    const { paths, input } = cycle();
+    const items = Array.from({ length: 25 }, (_, i) => `A85006${String(i).padStart(4, '0')}/H`);
+    items[1] = '../etc';
+    items[2] = `x${'y'.repeat(64)}`;
+    items[3] = 'file/0ebe38da-f4fa-4132-8fc0-47074d9186d0';
+    const fr4 = input.states.get('fr-4') as SpecState;
+    input.states.set('fr-4', { ...fr4, failed_items: items });
+    const be3 = input.states.get('be-3-values') as SpecState;
+    input.states.set('be-3-values', { ...be3, failed_items: ['OWNERITEM1'] });
+    await writeStatus(paths, input);
+    const pub = readFileSync(join(paths.statusDir, 'capture.json'), 'utf8');
+    const own = readFileSync(join(paths.ownerStatusDir, 'capture.json'), 'utf8');
+    const p = CaptureStatus.parse(JSON.parse(pub));
+    expect(p.specs.find((s) => s.spec === 'fr-4')?.failed_items).toEqual([
+      items[0],
+      'other',
+      'other',
+      items[3],
+      ...items.slice(4, 20),
+    ]);
+    expect(p.specs.find((s) => s.spec === 'nl-2-wfs')?.failed_items).toEqual([]);
+    expect(pub).not.toContain('OWNERITEM1');
+    const o = CaptureStatus.parse(JSON.parse(own));
+    expect(o.specs.find((s) => s.spec === 'be-3-values')?.failed_items).toEqual(['OWNERITEM1']);
+    // A file of the previous release (no failed_items) still parses; a 21st item or a bad key does not.
+    const spec0 = { ...(p.specs[0] as object), failed_items: undefined };
+    expect(CaptureStatus.safeParse({ ...p, specs: [spec0] }).success).toBe(true);
+    const many = { ...p.specs[0], failed_items: items.slice(0, 21).map(() => 'A850060000/H') };
+    expect(CaptureStatus.safeParse({ ...p, specs: [many] }).success).toBe(false);
+    expect(CaptureStatus.safeParse({ ...p, specs: [{ ...p.specs[0], failed_items: ['../etc'] }] }).success).toBe(false);
   });
 
   it('split the daily report and the seed report by audience', async () => {

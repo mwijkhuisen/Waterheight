@@ -8,9 +8,9 @@ import { ManifestLine } from '../../src/archive/manifest.ts';
 import { Archive } from '../../src/archive/writer.ts';
 import { runSpec } from '../../src/capture/runner.ts';
 import type { SpecState } from '../../src/capture/state.ts';
-import { isFresh } from '../../src/capture/status.ts';
+import { buildStatus, isFresh } from '../../src/capture/status.ts';
 import type { Transport } from '../../src/http/types.ts';
-import { fixture, runDeps, spec } from './helpers.ts';
+import { fixture, registry, runDeps, spec } from './helpers.ts';
 
 // dup_of, 204/304, gates and windows (issue #16 criteria "The manifest
 // round-trips its Zod schema. An identical body produces dup_of and no new
@@ -428,6 +428,34 @@ describe('FR-1 walks (C4, S8, N2)', () => {
     expect(isFresh(s, st, new Date(Date.parse(first) + 46 * 60_000))).toBe(false);
   });
 
+  it('a 429 on page #2 is no success, and the next run asks the same window again (C4, N2, #39)', async () => {
+    const c = clock('2026-10-10T12:01:00Z');
+    const deps = runDeps({ now: c.now });
+    await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
+    let throttle = true;
+    const roots: (string | null)[] = [];
+    server.use(
+      http.get(OBS, ({ request }) => {
+        const u = new URL(request.url);
+        const cursor = u.searchParams.get('cursor');
+        if (cursor === null) roots.push(u.searchParams.get('date_debut_obs'));
+        if (cursor !== null && throttle) return new HttpResponse('slow down', { status: 429 });
+        const next = cursor === null ? `${OBS}?code_entite=A*&cursor=1&size=20000` : null;
+        return HttpResponse.json({ ...page, next }, { status: next === null ? 200 : 206 });
+      }),
+    );
+    const s = spec('fr-1-obs');
+    expect(await runSpec(s, deps)).toMatchObject({ requests: 2, ok: 1, transient: true, firstFailure: 429 });
+    const st = await deps.state.read<SpecState>('fr-1-obs');
+    expect(st?.last_success).toBeUndefined();
+    expect(st?.variants.default?.last_success).toBe('2026-10-07T12:00:00.000Z');
+    expect(st?.failed_items).toEqual([]); // a page is not an item
+    throttle = false;
+    c.advance(15 * 60_000);
+    await runSpec(s, deps);
+    expect(roots).toEqual(['2026-10-07T11:00:00Z', '2026-10-07T11:00:00Z']);
+  });
+
   it('a `next` that repeats a URL is fetched once, and ends the walk', async () => {
     const deps = runDeps({ now: () => new Date('2026-10-10T12:01:00Z') });
     const asked = hubeau({ pages: 0, loop: `${OBS}?code_entite=A*&cursor=same&size=20000` });
@@ -520,11 +548,89 @@ describe('stage-2 requests', () => {
     const st1 = await deps.state.read<SpecState>('lu-5-cap');
     expect(st1?.seen).toHaveLength(page.data.length - 1);
     expect(st1?.seen).not.toContain(page.data[0]?.id);
+    // The other files came in: the run counts, and names the failed file (#39).
+    expect(st1?.last_success).toBeDefined();
+    expect(st1?.failed_items).toEqual([`file/${page.data[0]?.id}`]);
     fail = false;
     deps.client.politeness.success('download.data.public.lu');
     got.length = 0;
     await runSpec(s, deps);
     expect(got).toEqual([first]);
-    expect((await deps.state.read<SpecState>('lu-5-cap'))?.seen).toHaveLength(page.data.length);
+    const st2 = await deps.state.read<SpecState>('lu-5-cap');
+    expect(st2?.seen).toHaveLength(page.data.length);
+    expect(st2?.failed_items).toEqual([]); // replaced by every finished run
+  });
+});
+
+describe('partial runs (#39)', () => {
+  const FR4 = 'https://www.vigicrues.gouv.fr/services/v1.1/prevision.json';
+  /** H and Q lists of `n` NL-bound stations (A850060000, A850060001, …); `fail(key)` answers 429 (`list/H`, `<code>/Q`). */
+  function vigicrues(n: number, fail: (key: string) => boolean) {
+    const list = {
+      ListEntVigiCru: Array.from({ length: n }, (_, i) => ({
+        CdEntVigiCru: `A85006${String(i).padStart(4, '0')}`,
+        TypEntVigiCru: '7',
+      })),
+    };
+    let stations = 0;
+    server.use(
+      http.get(FR4, ({ request }) => {
+        const u = new URL(request.url);
+        const code = u.searchParams.get('CdEntVigiCru');
+        if (code !== null) stations += 1;
+        if (fail(`${code ?? 'list'}/${u.searchParams.get('GrdSimul')}`))
+          return new HttpResponse('Too Many Requests', { status: 429, headers: { 'retry-after': '1' } });
+        return code === null ? HttpResponse.json(list) : new HttpResponse(fixture('FR-4', 'fr-4-station').body);
+      }),
+    );
+    return { stations: () => stations };
+  }
+
+  it('one throttled station: the run counts, names it and honours Retry-After', async () => {
+    const waits: number[] = [];
+    const deps = runDeps({ client: { sleep: async (ms) => void waits.push(ms) } });
+    vigicrues(3, (key) => key === 'A850060001/H');
+    const s = spec('fr-4');
+    const summary = await runSpec(s, deps);
+    expect(summary).toMatchObject({ requests: 8, ok: 7, transient: true, firstFailure: 429 });
+    const st = await deps.state.read<SpecState>('fr-4');
+    expect(st?.last_success).toBeDefined();
+    expect(st).toMatchObject({ last_failure_status: 429, failed_items: ['A850060001/H'] });
+    expect(isFresh(s, st, new Date())).toBe(true);
+    const l = lines(deps.root);
+    expect(l).toHaveLength(summary.requests);
+    expect(l.find((x) => x.variant === 'A850060001/H')).toMatchObject({ status: 429, headers: { 'retry-after': '1' } });
+    expect(waits.some((ms) => ms > 900 && ms <= 1000)).toBe(true);
+  });
+
+  it('every station throttled (the breaker opens after 5): no success, stale, 20 named in the status', async () => {
+    const deps = runDeps();
+    const { stations } = vigicrues(12, (key) => !key.startsWith('list/'));
+    const s = spec('fr-4');
+    expect(await runSpec(s, deps)).toMatchObject({ requests: 26, ok: 2, transient: true, firstFailure: 429 });
+    expect(stations()).toBe(5);
+    expect(lines(deps.root).filter((x) => x.error === 'breaker_open')).toHaveLength(19);
+    const st = (await deps.state.read<SpecState>('fr-4')) as SpecState;
+    expect(st.last_success).toBeUndefined();
+    expect(isFresh(s, st, new Date())).toBe(false);
+    expect(st.failed_items).toHaveLength(24);
+    const status = buildStatus('public', {
+      registry,
+      states: new Map([['fr-4', st]]),
+      counters: deps.counters,
+      seeds: [],
+      nextDue: () => null,
+      now: new Date(),
+    });
+    expect(status.specs.find((x) => x.spec === 'fr-4')?.failed_items).toEqual(st.failed_items?.slice(0, 20));
+  });
+
+  it('a throttled list is no success, and is not named as an item', async () => {
+    const deps = runDeps();
+    vigicrues(1, (key) => key === 'list/H');
+    expect(await runSpec(spec('fr-4'), deps)).toMatchObject({ requests: 3, ok: 2, transient: true });
+    const st = await deps.state.read<SpecState>('fr-4');
+    expect(st?.last_success).toBeUndefined();
+    expect(st).toMatchObject({ last_failure_status: 429, failed_items: [] });
   });
 });

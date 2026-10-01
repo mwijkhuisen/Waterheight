@@ -9,10 +9,14 @@ import { type SpecState, writeFileAtomic } from './state.ts';
 // specs only, plus the aggregate owner_specs {fresh, total}; the owner file
 // holds the same fields for owner specs and nothing serves it in P1. Nothing
 // else goes in: no URLs, hosts, versions or error bodies (invariant 11).
+// failed_items names the failed items of the last run by their variant keys
+// (#39): pattern-checked, anything else "other", at most 20.
 
 const iso = z.iso.datetime();
 const n = z.number().int().nonnegative();
 const SourceId = z.string().regex(/^(?:NL|DE|BE|FR|LU|CH)-\d+$/);
+const ITEM = /^[A-Za-z0-9][A-Za-z0-9_./-]{0,63}$/;
+const MAX_FAILED_ITEMS = 20;
 
 export const StatusSpec = z.strictObject({
   source: SourceId,
@@ -22,6 +26,8 @@ export const StatusSpec = z.strictObject({
   last_failure_status: z.union([z.number().int(), z.string().regex(/^[a-z_]+$/)]).nullable(),
   next_due: iso.nullable(),
   bytes_today: n,
+  // Optional: a status file of the previous release still parses (watchdog, verify-prod) during a deploy.
+  failed_items: z.array(z.string().regex(ITEM)).max(MAX_FAILED_ITEMS).optional(),
 });
 export const StatusDay = z.strictObject({
   source: SourceId,
@@ -89,6 +95,9 @@ export function buildStatus(audience: Audience, input: StatusInput): CaptureStat
         last_failure_status: typeof failure === 'string' && !/^[a-z_]+$/.test(failure) ? 'other' : failure,
         next_due: due === null ? null : due.toISOString(),
         bytes_today: counters.days[today]?.[s.source]?.bytes[s.id] ?? 0,
+        failed_items: (st?.failed_items ?? [])
+          .slice(0, MAX_FAILED_ITEMS)
+          .map((v) => (typeof v === 'string' && ITEM.test(v) ? v : 'other')),
       };
     }),
     days: [],

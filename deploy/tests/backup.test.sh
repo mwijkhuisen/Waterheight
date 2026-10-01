@@ -433,7 +433,8 @@ case_ "status copy: capture.json published 0644; a symlink, a non-contract and a
 setup
 mkdir -p "$RWS_SRV/public/status"
 src=$RWS_SRV/public/status/capture.json
-printf '{"generated_at":"2026-09-02T00:00:00.000Z","specs":[],"days":[],"seeds":[],"owner_specs":{"fresh":0,"total":0}}\n' >"$src"
+# A spec naming its failed items (#39): the copy checks the top-level keys only.
+printf '{"generated_at":"2026-09-02T00:00:00.000Z","specs":[{"spec":"fr-4","failed_items":["A850061001/H"]}],"days":[],"seeds":[],"owner_specs":{"fresh":0,"total":0}}\n' >"$src"
 run rws-status-copy
 expect_rc 0
 cmp -s "$src" "$RWS_SRV/public/ops/capture.json" || fail "the served copy differs from capture's file"

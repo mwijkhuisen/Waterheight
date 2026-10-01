@@ -215,30 +215,43 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
   const oldest = new Map<string, number>();
   /** A capped walk got no older: this run is no success (N2). */
   let stalled = false;
+  /** A root or list page failed transiently, the deadline cut the run or a manifest line was lost: no success. */
+  let incomplete = false;
+  /**
+   * Items: stage-2 requests that are not list pages (FR-4 stations, FR-5 sections, LU-5 files). A failed item
+   * leaves the run a success (#39) unless no item came in and one failed transiently (a throttled host pages).
+   */
+  const failedItems: string[] = [];
+  let itemsOk = 0;
+  let itemsTransient = 0;
   const day = utcDay(started);
 
-  /** Writes the variants, seen ids and new page alerts; `done` also sets last success/failure. */
+  /** Writes the variants, seen ids and new page alerts; `done` also sets last success/failure and failed items. */
   const persist = (done: boolean) =>
     deps.state.update<SpecState>(spec.id, (cur) => {
       const base = cur ?? st;
       const finished = deps.now();
+      const success = summary.ok > 0 && !incomplete && !(itemsOk === 0 && itemsTransient > 0) && !stalled;
       return {
         ...base,
         variants: { ...base.variants, ...touched },
         seen: [...new Set([...(base.seen ?? []), ...seen])].slice(-5000),
         pending_page: [...new Set([...(base.pending_page ?? []), ...pages])],
-        ...(done && summary.ok > 0 && !summary.transient && !stalled ? { last_success: finished.toISOString() } : {}),
+        ...(done && success ? { last_success: finished.toISOString() } : {}),
         ...(done && summary.firstFailure !== null ? { last_failure_status: summary.firstFailure } : {}),
+        ...(done ? { failed_items: failedItems } : {}),
       };
     });
 
   for (let i = 0; i < queue.length; i += 1) {
     const { req, validity: vspec, expandable, root, window, walk } = queue[i] as Item;
+    const item = !root && !expandable;
     if (i > 0 && spaceMs > 0) await deps.sleep(spaceMs);
     if (opts.deadline !== undefined && deps.now().getTime() > opts.deadline) {
       // Out of time: the remaining requests of this run are skipped, not queued.
       for (let j = i; j < queue.length; j += 1) if (!opts.seed) deps.counters.record(day, spec.source, 'other');
       summary.transient = true;
+      incomplete = true;
       break;
     }
     summary.requests += 1;
@@ -353,6 +366,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
       deps.log.error({ spec: spec.id, variant: req.variant, alert: 'manifest' }, 'manifest append failed');
       if (!opts.seed) deps.counters.record(day, spec.source, 'other');
       summary.transient = true;
+      incomplete = true;
       summary.firstFailure ??= 'manifest';
       continue;
     }
@@ -378,6 +392,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     if (v?.shape) vs.shape = v.shape;
     if (outcome === 'ok') {
       summary.ok += 1;
+      if (item) itemsOk += 1;
       // The window anchor belongs to the schedule: a seed never moves it, and a walk moves it at its end
       // (the end of its first window, when a capped walk went on).
       if (!opts.seed && root && spec.request.expand) {
@@ -407,10 +422,16 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
         if (key !== null) vs.alert_key = key;
       }
     } else {
-      if (status !== null && status >= 500) summary.transient = true;
-      // Throttling and a WAF block (403, 451) may lift: a seed item stays open, a daily spec retries (N5).
-      if ((status !== null && BACK_OFF.has(status)) || (line.error !== null && TRANSIENT.has(line.error)))
+      // A 5xx, throttling or a WAF block (403, 451) may lift: a seed item stays open, a daily spec retries (N5).
+      if (
+        (status !== null && (status >= 500 || BACK_OFF.has(status))) ||
+        (line.error !== null && TRANSIENT.has(line.error))
+      ) {
         summary.transient = true;
+        if (item) itemsTransient += 1;
+        else incomplete = true;
+      }
+      if (item) failedItems.push(req.variant);
       summary.firstFailure ??= line.error ?? (v !== null && !v.ok ? 'invalid' : status);
     }
     st.variants[req.variant] = vs;
@@ -479,7 +500,15 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
   }
   await persist(true);
   deps.log.info(
-    { spec: spec.id, seed: opts.seed === true, requests: summary.requests, ok: summary.ok, stored: summary.stored },
+    {
+      spec: spec.id,
+      seed: opts.seed === true,
+      requests: summary.requests,
+      ok: summary.ok,
+      stored: summary.stored,
+      transient: summary.transient,
+      failed_items: failedItems.length,
+    },
     'run done',
   );
   return summary;

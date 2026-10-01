@@ -171,6 +171,62 @@ describe('recorder', () => {
     expect((await store.read<SpecState>(id))?.pending_page).toEqual(['late']);
   });
 
+  it('a daily spec with one throttled item counts, and still retries within the hour (N5, #39)', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-02T12:00:00Z') });
+    const territory = {
+      ListEntVigiCru: [
+        {
+          aNMoinsUn: [
+            { CdEntVigiCruInferieur: 'MO1', TypEntVigiCruInferieur: '8' },
+            { CdEntVigiCruInferieur: 'MO2', TypEntVigiCruInferieur: '8' },
+          ],
+        },
+      ],
+    };
+    let lists = 0;
+    let throttle = true;
+    server.use(
+      http.get('https://www.vigicrues.gouv.fr/services/TerEntVigiCru.json', () => {
+        lists += 1;
+        return HttpResponse.json(territory);
+      }),
+      http.get('https://www.vigicrues.gouv.fr/services/TronEntVigiCru.json', ({ request }) =>
+        throttle && new URL(request.url).searchParams.get('CdEntVigiCru') === 'MO2'
+          ? new HttpResponse('Too Many Requests', { status: 429 })
+          : new HttpResponse(fixture('FR-5', 'fr-5-tron').body),
+      ),
+    );
+    const deps = runDeps({ now: () => new Date() });
+    // Ran at 02:25 today: no catch-up, so only the explicit run and the retry fetch.
+    await deps.state.update<SpecState>('fr-5-sections', () => ({
+      enabled_since: '2026-10-01T00:00:00.000Z',
+      last_attempt: '2026-10-02T02:25:00.000Z',
+      variants: {},
+      seen: [],
+      pending_page: [],
+    }));
+    const rec = await startRecorder({
+      ...deps,
+      registry: oneSpec('fr-5-sections'),
+      pinger: new Pinger(undefined, 'ua', quiet),
+      paths: { rawDir: deps.root, statusDir: `${deps.root}/s`, ownerStatusDir: `${deps.root}/o` },
+      seeds: () => [],
+    });
+    try {
+      await rec.run(spec('fr-5-sections'));
+      const st = await deps.state.read<SpecState>('fr-5-sections');
+      expect(st?.last_success).toBeDefined();
+      expect(st?.failed_items).toEqual(['section/MO2']); // the three territories share both sections: fetched once each
+      expect(lists).toBe(3);
+      throttle = false;
+      await vi.advanceTimersByTimeAsync(3_600_000);
+    } finally {
+      await rec.stop();
+    }
+    expect(lists).toBe(6);
+    expect((await deps.state.read<SpecState>('fr-5-sections'))?.failed_items).toEqual([]);
+  });
+
   it('pings the group: /start, then success when fresh, /fail with no body for an owner group', async () => {
     const pings: { path: string; body: string }[] = [];
     server.use(
