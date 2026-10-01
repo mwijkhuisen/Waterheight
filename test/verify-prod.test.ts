@@ -1122,6 +1122,9 @@ describe('site.caddy: the tile and asset routes', () => {
   };
   const lines = (s: string) => s.split('\n').map((l) => l.trim());
   const IMMUTABLE = `header Cache-Control "${TILE_CACHE}"`;
+  /** The one request a tile file is served for (SR-1, SR2-1). */
+  const ONE_RANGE =
+    "{header.Range}.matches('^bytes=[0-9]+-[0-9]+$') && {header.If-Range} == '' && {header.If-Match} == '' && {header.If-Unmodified-Since} == ''";
 
   it('adds no second one-tab header block: the A§12.2 headers are the first and only one', () => {
     expect(site.match(/\n\theader \{\n/g)).toHaveLength(1);
@@ -1188,7 +1191,7 @@ describe('site.caddy: the tile and asset routes', () => {
     expect(handle).toEqual([
       '',
       'handle @tiles_files {',
-      "@one_range expression `{header.Range}.matches('^bytes=[0-9]+-[0-9]+$')`",
+      `@one_range expression \`${ONE_RANGE}\``,
       'handle @one_range {',
       IMMUTABLE,
       'uri strip_prefix /tiles',
@@ -1202,7 +1205,7 @@ describe('site.caddy: the tile and asset routes', () => {
   });
 
   it('serves a tile file only for one explicit range, what pmtiles.js sends; anything else is a 416 (SR-1)', () => {
-    const expression = /@one_range expression `\{header\.Range\}\.matches\('(.+)'\)`/.exec(site)?.[1];
+    const expression = /@one_range expression `\{header\.Range\}\.matches\('([^']+)'\)/.exec(site)?.[1];
     expect(expression).toBe('^bytes=[0-9]+-[0-9]+$');
     const one = new RegExp(expression ?? '');
     // pmtiles 4.5.0's FetchSource: `bytes=${offset}-${offset + length - 1}`, also for its 416 retry.
@@ -1223,6 +1226,20 @@ describe('site.caddy: the tile and asset routes', () => {
       'bytes=0x0-15',
     ];
     for (const range of refused) expect(one.test(range), range.slice(0, 40)).toBe(false);
+  });
+
+  it('serves that range only without If-Range, If-Match or If-Unmodified-Since; the 304 validators stay (SR2-1)', () => {
+    // Go's ServeContent answers a range whose If-Range does not match with the whole file (200), and a failed
+    // If-Match or If-Unmodified-Since with a 412 that would carry the immutable header; pmtiles.js sends none of
+    // them. If-None-Match and If-Modified-Since only ever turn the answer into a 304. Caddy's placeholder is ''
+    // for an absent header, and for an empty one, which Go ignores as well.
+    const line = site.split('\n').find((l) => l.includes('@one_range expression')) ?? '';
+    expect([...line.matchAll(/\{header\.([A-Za-z-]+)\} == ''/g)].map((m) => m[1])).toEqual([
+      'If-Range',
+      'If-Match',
+      'If-Unmodified-Since',
+    ]);
+    expect(line).not.toMatch(/If-None-Match|If-Modified-Since|\|\||!=/);
   });
 
   it('answers 404 for every other /tiles path, after the two routes above and before the catch-all', () => {

@@ -133,9 +133,13 @@
 	# suffix range and several ranges (a multipart answer about 30 times the
 	# size of the request) are a 416 with the site headers and no Cache-Control
 	# (SR-1, R-061). The header placeholder joins repeated Range fields with a
-	# comma, so a second Range field fails the match too.
+	# comma, so a second Range field fails the match too. So is a range with
+	# If-Range (one that does not match gets the whole file, 200), If-Match or
+	# If-Unmodified-Since (a failed one is a 412 that would be marked immutable)
+	# (SR2-1); pmtiles.js sends none of them. If-None-Match and If-Modified-Since
+	# keep their 304. An empty header is no header, to Go as to the placeholder.
 	handle @tiles_files {
-		@one_range expression `{header.Range}.matches('^bytes=[0-9]+-[0-9]+$')`
+		@one_range expression `{header.Range}.matches('^bytes=[0-9]+-[0-9]+$') && {header.If-Range} == '' && {header.If-Match} == '' && {header.If-Unmodified-Since} == ''`
 		handle @one_range {
 			header Cache-Control "public, max-age=31536000, immutable"
 			uri strip_prefix /tiles

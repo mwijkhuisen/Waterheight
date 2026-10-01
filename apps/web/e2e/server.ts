@@ -2,7 +2,8 @@
 // https://localhost:4443 with a throw-away self-signed certificate, every
 // response carrying the security headers read from deploy/web/site.caddy, the
 // routes of site.caddy that the spike uses, and, like site.caddy, only one
-// explicit range on a tile file (anything else is a 416). CI runs the same
+// explicit range on a tile file, without If-Range, If-Match or
+// If-Unmodified-Since (anything else is a 416). CI runs the same
 // specs against the real Caddy image instead
 // (.github/workflows/ci.yml job e2e).
 // Usage: node e2e/server.ts   (from apps/web; E2E_PORT overrides 4443)
@@ -33,8 +34,10 @@ execFileSync(
 
 const headers = siteHeaders();
 const TILE = /^\/tiles\/(basemap|planet-z6)-[0-9]{8}\.pmtiles$/;
-/** site.caddy's @one_range: a tile file is served only for this Range (SR-1). */
+/** site.caddy's @one_range: a tile file is served only for this Range (SR-1)... */
 const ONE_RANGE = /^bytes=[0-9]+-[0-9]+$/;
+/** ...and only when none of these is there (SR2-1; an empty header counts as absent, as in Caddy and Go). */
+const NO_CONDITION = ['if-range', 'if-match', 'if-unmodified-since'] as const;
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -109,7 +112,8 @@ const server = createServer(
     if (TILE.test(path)) {
       const tile = file(tiles, path.slice('/tiles'.length));
       if (tile === undefined) return send(res, 404);
-      return ONE_RANGE.test(range ?? '') ? serve(res, tile, range, IMMUTABLE) : send(res, 416);
+      const one = ONE_RANGE.test(range ?? '') && NO_CONDITION.every((h) => !req.headers[h]);
+      return one ? serve(res, tile, range, IMMUTABLE) : send(res, 416);
     }
     if (path.startsWith('/tiles/')) return send(res, 404);
     const asset = file(www, path);
