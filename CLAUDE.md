@@ -130,6 +130,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | node (build image) | image | 26.10.0-trixie-slim | installed | node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 | MIT | P1b build stage |
 | distroless nodejs26 | image | nonroot | installed | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:afc6657a4b662f9cb69ca892b0596e55d6ef81a10e83ee8887b13f602877df89 | Apache-2.0 | P1b runtime |
 | caddy | image | 2.11.4-alpine | installed | caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b | Apache-2.0 | P1b web image (file capability stripped; runs with none) |
+| playwright (image) | image | 1.63.0 | installed | mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27 | Apache-2.0 | CI only: the `e2e` job runs `@playwright/test` in it (Chromium, Firefox, WebKit and their libraries baked in; P3) |
 | distroless static | image | nonroot | installed | gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 | Apache-2.0 | P1b backup image runtime |
 | buildkit | image | v0.33.0 | installed | moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 | Apache-2.0 | release.yml builder (setup-buildx driver) |
 | buildkit-syft-scanner | image | 1.12.0 | installed | docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 | Apache-2.0 | release.yml SBOM generator (Syft) |
@@ -164,7 +165,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | syft | binary | 1.52.0 | planned | – | Apache-2.0 | P12 (P1b SBOMs come from buildkit-syft-scanner) |
 | grype | binary | 0.119.0 | planned | – | Apache-2.0 | P12 gate, deferred by the owner in P1b (risk register) |
 | restic | binary | 0.19.1 | installed | f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c | BSD-2-Clause | backup image (`restic_0.19.1_linux_amd64.bz2` sha256) |
-| go-pmtiles | binary | 1.31.2 | planned | – | BSD-3-Clause | P3 |
+| go-pmtiles | binary | 1.31.2 | installed | 3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f | BSD-3-Clause | server image `/app/bin/pmtiles` (`go-pmtiles_1.31.2_Linux_x86_64.tar.gz` sha256; statically linked): the `basemap` role (P3) |
 | osmium-tool | binary | 1.19.1 | planned | – | GPL-3.0 | P6 (CI only) |
 | tippecanoe | binary | 2.79.0 | planned | – | BSD-2-Clause | P6 (CI only) |
 | k6 | binary | 1.8.1 | planned | – | AGPL-3.0 | P12 (tool only) |
