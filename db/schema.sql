@@ -719,6 +719,19 @@ CREATE VIEW public.own_ingest_batch WITH (security_barrier='true') AS
 
 
 --
+-- Name: own_meta; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.own_meta WITH (security_barrier='true') AS
+ SELECT ( SELECT ((m.value #>> '{}'::text[]))::timestamp with time zone AS timestamptz
+           FROM public.app_meta m
+          WHERE (m.key = 'data_epoch'::text)) AS data_epoch,
+    ( SELECT ((m.value #>> '{}'::text[]))::timestamp with time zone AS timestamptz
+           FROM public.app_meta m
+          WHERE (m.key = 'display_start'::text)) AS display_start;
+
+
+--
 -- Name: own_obs; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -1312,6 +1325,19 @@ CREATE VIEW public.pub_loader WITH (security_barrier='true') AS
     ((value ->> 'bad_manifest_lines'::text))::integer AS bad_manifest_lines
    FROM public.app_meta m
   WHERE (key = 'loader'::text);
+
+
+--
+-- Name: pub_meta; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.pub_meta WITH (security_barrier='true') AS
+ SELECT ( SELECT ((m.value #>> '{}'::text[]))::timestamp with time zone AS timestamptz
+           FROM public.app_meta m
+          WHERE (m.key = 'data_epoch'::text)) AS data_epoch,
+    ( SELECT ((m.value #>> '{}'::text[]))::timestamp with time zone AS timestamptz
+           FROM public.app_meta m
+          WHERE (m.key = 'display_start'::text)) AS display_start;
 
 
 --
@@ -2184,4 +2210,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261003000004'),
     ('20261003000005'),
     ('20261003000006'),
-    ('20261003000007');
+    ('20261003000007'),
+    ('20261014000001'),
+    ('20261014000002');

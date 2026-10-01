@@ -29,6 +29,7 @@ export const VIEWS = {
     sourceHealth: 'pub_source_health',
     twinCheck: 'pub_twin_check',
     ingestBatch: 'pub_ingest_batch',
+    meta: 'pub_meta',
     api: {
       series: 'pub_api_series',
       obs: 'pub_api_obs',
@@ -54,6 +55,7 @@ export const VIEWS = {
     sourceHealth: 'own_source_health',
     twinCheck: 'own_twin_check',
     ingestBatch: 'own_ingest_batch',
+    meta: 'own_meta',
     api: {
       series: 'own_api_series',
       obs: 'own_api_obs',
@@ -81,7 +83,8 @@ export type DisplayView =
   | 'attribution'
   | 'sourceHealth'
   | 'twinCheck'
-  | 'ingestBatch';
+  | 'ingestBatch'
+  | 'meta';
 export type ApiView = 'series' | 'obs' | 'obs1h' | 'obs1d' | 'forecastRun' | 'forecastValue';
 
 /**
@@ -156,6 +159,9 @@ export const SOURCE_HEALTH_COLUMNS = [
   'detail',
   'updated_at',
 ] as const satisfies readonly (keyof SourceHealthRow)[];
+
+/** The display window (D9): app_meta `data_epoch` and `display_start`; the same in both families. */
+export type MetaRow = { data_epoch: Date | null; display_start: Date | null };
 
 export type OwnerHealthRow = { healthy: number; total: number };
 export const OWNER_HEALTH_COLUMNS = ['healthy', 'total'] as const satisfies readonly (keyof OwnerHealthRow)[];

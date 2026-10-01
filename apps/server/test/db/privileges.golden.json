@@ -102,6 +102,10 @@
       "rws_backup": "SELECT",
       "rws_owner_api": "SELECT"
     },
+    "own_meta": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
     "own_obs": {
       "rws_backup": "SELECT",
       "rws_owner_api": "SELECT"
@@ -206,6 +210,11 @@
       "rws_publish": "SELECT"
     },
     "pub_loader": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_meta": {
       "rws_api": "SELECT",
       "rws_backup": "SELECT",
       "rws_publish": "SELECT"
