@@ -53,7 +53,8 @@ afterAll(async () => {
   await h.close();
 });
 
-describe('NL-1 observations', () => {
+// A registry sync writes about 1,700 series since P5a (seconds on a CI runner); some tests here sync twice.
+describe('NL-1 observations', { timeout: 60_000 }, () => {
   it('loads the recorded payloads; a 204 is a fetch that worked, not a payload', async () => {
     await put('nl-1-obs-key', 'nl-1-obs-key', 'lobith.bovenrijn.tolkamer/H');
     await put('nl-1-obs-key', 'nl-1-obs-key-eijsden-grens-h', 'eijsden.grens/H');

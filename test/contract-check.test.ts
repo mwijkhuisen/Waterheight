@@ -112,7 +112,8 @@ const nl1 = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => 
   return answer(JSON.stringify(doc));
 };
 
-describe('the live check on the recorded payloads', () => {
+// Each run parses the whole registry (about 1,700 series since P5a) and six payloads: seconds on a CI runner.
+describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
   it('passes DE-1, NL-1, NL-2, FR-1, CH-1 and CH-2 through the loader parse: all six ok', async () => {
     const { codes, report } = await run();
     expect(codes).toEqual({
@@ -156,7 +157,7 @@ describe('the live check on the recorded payloads', () => {
   });
 });
 
-describe('what a drifted provider turns into', () => {
+describe('what a drifted provider turns into', { timeout: 30_000 }, () => {
   it('an extra key in an NL-1 payload is unrecognized_keys at a schema path', async () => {
     const { codes } = await run({
       'nl-1-obs-key': nl1((doc) => {
@@ -309,7 +310,7 @@ describe('what a drifted provider turns into', () => {
   });
 });
 
-describe('the report is a list of fixed lines and nothing else', () => {
+describe('the report is a list of fixed lines and nothing else', { timeout: 30_000 }, () => {
   const hostile = [
     'ok\n@everyone',
     '`code`',
@@ -445,7 +446,7 @@ describe('the report is a list of fixed lines and nothing else', () => {
   });
 });
 
-describe('the command line', () => {
+describe('the command line', { timeout: 30_000 }, () => {
   const env = { PATH: process.env.PATH ?? '' };
   const cli = (args: string[], vars: Record<string, string> = {}) =>
     spawnSync(process.execPath, ['scripts/contract-check.ts', ...args], {
