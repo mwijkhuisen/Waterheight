@@ -1,6 +1,7 @@
+import { QC } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import type { DB } from '../db/generated.ts';
-import { lock } from './store.ts';
+import { type Intervals, lock } from './store.ts';
 
 // Health is precomputed here and only read by the API (A§9.2: no checksum or
 // gap scan per request). Everything is per source, over the series that share
@@ -22,6 +23,11 @@ export type HealthInputs = {
    * spec that stated it; without an entry the source's shortest cadence stands in.
    */
   specCadenceS?: ReadonlyMap<string, number>;
+  /**
+   * The sources captured by a seed only: a seed spec and no cron spec (CH-3; `cadences` in run.ts). They are not
+   * judged on how old their last fetch is; every other source is, a source with no spec at all included.
+   */
+  seedOnly?: ReadonlySet<string>;
   /** p95 of "loaded at − fetched at" over the manifest lines fetched in the last hour, per source (ms). */
   lagP95Ms: ReadonlyMap<string, number>;
   /** Unconsumed manifest bytes and the age of the oldest unconsumed line (Loader.backlog). */
@@ -30,6 +36,18 @@ export type HealthInputs = {
   now: Date;
   /** The last capture outage of each source (findOutages); Q7 is also counted over it. */
   outages?: ReadonlyMap<string, Outage>;
+  /** Q7 since each tier-1 series' first data (findCoverage). */
+  coverage?: ReadonlyMap<string, Coverage>;
+};
+
+export type Coverage = {
+  from: string;
+  /** Buckets with a value over expected buckets (each series at its own step), over every tier-1 series. */
+  ratio: number;
+  series: number;
+  series_below_95: number;
+  /** The newest 20 gaps between loaded payloads since `from`, as findOutages measures one. */
+  gaps: { from: string; to: string }[];
 };
 
 export type Outage = { from: Date; to: Date };
@@ -76,6 +94,98 @@ export async function findOutages(
   return new Map(rows.map((r) => [r.source_id, { from: r.from, to: r.to }]));
 }
 
+/**
+ * Q7 since the seed (P5a): per source, over its tier-1 primary series, the
+ * expected buckets from each series' first hour with data (at or after the
+ * display start: the seed's first day, or the data epoch for a source without
+ * a seed) to the last hour a value may already have arrived in, against the
+ * buckets that hold a value (the hourly rollup's count, at most one per
+ * expected step). The gaps are the newest 20 longer than max(3 × the capture
+ * cadence, 30 min) between payloads loaded `ok`, since the same start.
+ */
+// ponytail: reads every tier-1 series' hourly rollup and the source's batches since the seed on each call
+// (every 10 minutes, with findOutages): about 200 series × 1,000 hours. Keep a running total per series if the
+// registry grows by an order of magnitude.
+export async function findCoverage(
+  db: Kysely<DB>,
+  cadenceS: ReadonlyMap<string, number>,
+  now: Date,
+): Promise<Map<string, Coverage>> {
+  const ORIGIN = sql`timestamptz '2000-01-01 00:00:00+00'`;
+  const { rows } = await sql<{
+    source_id: string;
+    from: Date;
+    expected: number;
+    present: number;
+    series: number;
+    below: number;
+  }>`
+    WITH start AS (
+      SELECT (value #>> '{}')::timestamptz AS at FROM app_meta WHERE key = 'display_start'
+    ), s AS (
+      SELECT s.id, s.source_id, s.staleness_limit,
+             floor(3600 / GREATEST(EXTRACT(EPOCH FROM s.expected_step), 1))::int AS per_hour,
+             (SELECT min(r.bucket) FROM obs_1h r
+              WHERE r.series_id = s.id AND r.bucket >= COALESCE((SELECT at FROM start), '-infinity')) AS first
+      FROM series s
+      JOIN source src ON src.id = s.source_id
+      JOIN station st ON st.id = s.station_id AND st.tier = 1
+      WHERE s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}
+    ), per_series AS (
+      SELECT s.source_id, s.id, min(s.first) AS first,
+             sum(GREATEST(s.per_hour, 1))::bigint AS expected,
+             sum(LEAST(COALESCE(r.n, 0), GREATEST(s.per_hour, 1)))::bigint AS present
+      FROM s
+      CROSS JOIN LATERAL generate_series(
+        s.first,
+        date_bin(interval '1 hour', ${now}::timestamptz - s.staleness_limit, ${ORIGIN}) - interval '1 hour',
+        interval '1 hour') AS g(h)
+      LEFT JOIN obs_1h r ON r.series_id = s.id AND r.bucket = g.h
+      WHERE s.first IS NOT NULL
+      GROUP BY s.source_id, s.id
+    )
+    SELECT source_id, min(first) AS "from", sum(expected)::float8 AS expected, sum(present)::float8 AS present,
+           count(*)::int AS series, (count(*) FILTER (WHERE present < 0.95 * expected))::int AS below
+    FROM per_series GROUP BY source_id`.execute(db);
+  const out = new Map<string, Coverage>();
+  for (const r of rows) {
+    const minS = Math.max(3 * (cadenceS.get(r.source_id) ?? 3600), OUTAGE_MIN_S);
+    const gaps = await sql<{ from: Date; to: Date }>`
+      WITH bucket AS (
+        SELECT min(b.fetched_at) AS first, max(b.fetched_at) AS last
+        FROM ingest_batch b
+        WHERE b.source_id = ${r.source_id} AND b.parse_status = 'ok'
+          AND b.fetched_at >= ${r.from}::timestamptz AND b.fetched_at <= ${now}::timestamptz
+        GROUP BY date_bin(interval '5 minutes', b.fetched_at, ${ORIGIN})
+      ), gap AS (SELECT lag(last) OVER (ORDER BY first) AS "from", first AS "to" FROM bucket)
+      SELECT "from", "to" FROM gap
+      WHERE "from" IS NOT NULL AND "to" - "from" > make_interval(secs => ${minS})
+      ORDER BY "to" DESC LIMIT 20`.execute(db);
+    out.set(r.source_id, {
+      from: r.from.toISOString(),
+      ratio: r.expected === 0 ? 1 : Math.round((r.present / r.expected) * 10_000) / 10_000,
+      series: r.series,
+      series_below_95: r.below,
+      gaps: gaps.rows.reverse().map((g) => ({ from: g.from.toISOString(), to: g.to.toISOString() })),
+    });
+  }
+  return out;
+}
+
+/**
+ * The shortest gap between two requests of one spec and variant over the last 24 hours, per spec (P5a): the hour
+ * buckets from the one that holds now − 24 h onward (review CR-8).
+ */
+export function minIntervals(state: Intervals, now: Date): { spec: string; seconds: number }[] {
+  const since = now.getTime() - 24 * 3_600_000;
+  return Object.entries(state.hours)
+    .flatMap(([spec, hours]) => {
+      const gaps = Object.entries(hours).flatMap(([h, s]) => (Number(h) > since - 3_600_000 ? [s] : []));
+      return gaps.length === 0 ? [] : [{ spec, seconds: Math.min(...gaps) }];
+    })
+    .sort((a, b) => a.spec.localeCompare(b.spec));
+}
+
 type Tier1 = { total: number; fresh: number; provider_stale: number };
 
 /**
@@ -85,10 +195,15 @@ type Tier1 = { total: number; fresh: number; provider_stale: number };
  * (index probes on tier-1 series only); runs every minute.
  */
 export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promise<void> {
-  // Each tier-1 series: is its latest value fresh, and when was the payload fetched that last stated it.
+  // Each tier-1 series: is its latest value fresh, and when was the payload fetched that last stated it. A latest
+  // row that another source filled (bit 512: FR-3 into FR-1, CH-3 into CH-1) says nothing about the series' own
+  // source: it is neither fresh nor provider-stale, and its fetch counts as unknown (review CR-3).
   const tier1 = await sql<{ source_id: string; fresh: boolean; stated_at: Date | null; stated_by: string | null }>`
-    SELECT s.source_id, COALESCE(l.ts > ${inputs.now}::timestamptz - s.staleness_limit, false) AS fresh,
-           b.fetched_at AS stated_at, b.spec_id AS stated_by
+    SELECT s.source_id,
+           COALESCE(l.ts > ${inputs.now}::timestamptz - s.staleness_limit AND (l.qc & ${QC.BACKFILLED}::int2) = 0,
+                    false) AS fresh,
+           CASE WHEN (l.qc & ${QC.BACKFILLED}::int2) = 0 THEN b.fetched_at END AS stated_at,
+           CASE WHEN (l.qc & ${QC.BACKFILLED}::int2) = 0 THEN b.spec_id END AS stated_by
     FROM series s
     JOIN source src ON src.id = s.source_id
     JOIN station st ON st.id = s.station_id AND st.tier = 1
@@ -156,12 +271,17 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
     tierOf.set(r.source_id, t);
   }
   const gapOf = new Map(gaps.rows.map((r) => [r.source_id, r.missing]));
+  const intervals = await sql<{ key: string; value: Intervals }>`
+    SELECT key, value FROM app_meta WHERE key LIKE 'intervals:%'`.execute(db);
+  const intervalsOf = new Map(intervals.rows.map((r) => [r.key.slice('intervals:'.length), r.value]));
   const batchOf = new Map(batches.rows.map((r) => [r.source_id, r]));
   const nowMs = inputs.now.getTime();
 
   await db.transaction().execute(async (tx) => {
     await lock(tx);
     for (const src of sources.rows) {
+      // A source captured by a seed only (CH-3: a seed spec, no cron spec) is not judged on how old its last fetch is.
+      const seedOnly = inputs.seedOnly?.has(src.id) === true;
       const cadenceMs = (inputs.cadenceS.get(src.id) ?? 3600) * 1000;
       const batch = batchOf.get(src.id);
       const t = tierOf.get(src.id);
@@ -185,9 +305,9 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
 
       let status: 'ok' | 'degraded' | 'down' | 'unknown';
       if (src.last_fetch_ok === null && (src.failures ?? 0) === 0) status = 'unknown';
-      else if ((src.failures ?? 0) >= 5 || fetchAgeMs > 3 * cadenceMs) status = 'down';
+      else if ((src.failures ?? 0) >= 5 || (!seedOnly && fetchAgeMs > 3 * cadenceMs)) status = 'down';
       else if (quarantined > 0) status = 'degraded';
-      else if (src.has_series && !payloadFresh) status = 'degraded';
+      else if (src.has_series && !seedOnly && !payloadFresh) status = 'degraded';
       else if (tier !== null && tier.total > 0 && (tier.fresh + tier.provider_stale) / tier.total < 0.95)
         status = 'degraded';
       else status = 'ok';
@@ -196,6 +316,8 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
         ...(tier === null ? {} : { tier1: tier }),
         ...(src.has_series ? { missing_buckets_24h: gapOf.get(src.id) ?? 0 } : {}),
         ...(src.has_series && outageOf.has(src.id) ? { outage: outageOf.get(src.id) } : {}),
+        ...(inputs.coverage?.has(src.id) ? { coverage: inputs.coverage.get(src.id) } : {}),
+        min_interval_s: minIntervals(intervalsOf.get(src.id) ?? { last: {}, hours: {} }, inputs.now),
       };
       // `partitions` inside detail is written by the checksum job; this update keeps it.
       await sql`
@@ -206,7 +328,8 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
           quarantine_count = EXCLUDED.quarantine_count,
           lag_p95 = EXCLUDED.lag_p95,
           status = EXCLUDED.status,
-          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage') || EXCLUDED.detail,
+          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage' - 'coverage' - 'min_interval_s')
+                   || EXCLUDED.detail,
           updated_at = EXCLUDED.updated_at`.execute(tx);
     }
     const loader = {

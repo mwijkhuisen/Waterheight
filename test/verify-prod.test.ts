@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { Counters } from '../apps/server/src/capture/runner.ts';
-import { loadRegistry } from '../apps/server/src/capture/specs.ts';
+import { cadenceOf, loadRegistry } from '../apps/server/src/capture/specs.ts';
 import type { SpecState } from '../apps/server/src/capture/state.ts';
 import { buildStatus, type CaptureStatus } from '../apps/server/src/capture/status.ts';
 import type { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
@@ -20,15 +20,23 @@ import {
 import { TILE_FILE_RE, type TileFile, type TilesManifest } from '../packages/core/src/tiles-manifest.ts';
 import {
   API_SOURCES,
+  BELGIAN_FRESH_PCT,
+  BELGIAN_MAX_AGE_S,
+  BELGIAN_NL1,
+  belgianIds,
   CHECKS,
+  COVERAGE_MIN,
   capacity,
   checkApiParams,
+  checkBelgianSet,
   checkBuild,
   checkCapture,
+  checkCoverage,
   checkFresh,
   checkHeaders,
   checkHealth,
   checkHealthParams,
+  checkInterval,
   checkLoaderLag,
   checkMapAsset,
   checkMeta,
@@ -48,6 +56,8 @@ import {
   checkTwin,
   expectedHeaders,
   FRESH_MAX_AGE_S,
+  INTERVAL_MIN_S,
+  INTERVAL_SPEC,
   leaks,
   leakTerms,
   MANIFEST_CACHE,
@@ -325,6 +335,13 @@ describe('freshness, soak and capacity', () => {
       'health NL-1',
       'tier-1 NL-1',
       'replay NL-1',
+      'health FR-1',
+      'tier-1 FR-1',
+      'coverage FR-1',
+      'health CH-1',
+      'tier-1 CH-1',
+      'coverage CH-1',
+      'interval CH-1',
       'api meta',
       'api build',
       'api stations',
@@ -336,6 +353,9 @@ describe('freshness, soak and capacity', () => {
       'noindex',
       'fresh DE-1',
       'fresh NL-1',
+      'fresh FR-1',
+      'fresh CH-1',
+      'belgian set',
       'owner leak',
       'tiles manifest',
       'tiles <file>',
@@ -374,6 +394,8 @@ const de1 = (over: Partial<SourceRow> = {}): SourceRow => ({
   tier1: { total: 69, fresh: 69, provider_stale: 0 },
   missing_buckets_24h: 3,
   outage: null,
+  coverage: null,
+  min_interval_s: [],
   partitions: [{ partition: '2026-10', md5: 'a'.repeat(32), rows: 9000 }],
   partitions_at: ago(60_000),
   ...over,
@@ -590,6 +612,166 @@ describe('the health API answers', () => {
       true,
     );
     expect(checkReplay(health(), sourcesDoc(), 'NL-1')).toMatchObject({ ok: false, detail: /not listed/ });
+  });
+});
+
+// P5a: FR-1 and CH-1 get the same health and tier-1 checks as DE-1 and NL-1, plus the coverage since the seed and
+// (CH-1 only) the request interval BAFU asks for.
+
+describe('FR-1 and CH-1 health, tier-1, coverage and interval', () => {
+  const fr1 = (over: Partial<SourceRow> = {}) =>
+    de1({ id: 'FR-1', tier1: { total: 39, fresh: 39, provider_stale: 0 }, ...over });
+  const ch1 = (over: Partial<SourceRow> = {}) =>
+    de1({ id: 'CH-1', tier1: { total: 17, fresh: 17, provider_stale: 0 }, ...over });
+  const day = (hoursAgo: number) => new Date(NOW.getTime() - hoursAgo * 3_600_000).toISOString();
+  const coverage = (over: Partial<NonNullable<SourceRow['coverage']>> = {}): NonNullable<SourceRow['coverage']> => ({
+    from: '2026-09-02T00:00:00.000Z',
+    ratio: 0.987,
+    series: 39,
+    series_below_95: 2,
+    gaps: [{ from: day(30), to: day(29) }],
+    ...over,
+  });
+  const interval = (seconds: number, spec = INTERVAL_SPEC) => ({ spec, seconds });
+  const all = (over: Partial<HealthSources> = {}) =>
+    sourcesDoc({ sources: [de1(), nl1(), fr1({ coverage: coverage() }), ch1({ coverage: coverage() })], ...over });
+
+  it('the builders are documents of the strict contract, with the two new fields', () => {
+    const doc = s(all()).data;
+    expect(doc?.sources.map((x) => x.id)).toEqual(['DE-1', 'NL-1', 'FR-1', 'CH-1']);
+    expect(doc?.sources[2]?.coverage?.series).toBe(39);
+    expect(s(sourcesDoc({ sources: [fr1({ coverage: coverage({ ratio: 1.01 }) })] })).data).toBeUndefined();
+    expect(
+      s(sourcesDoc({ sources: [fr1({ min_interval_s: [{ spec: 'Bad Spec', seconds: 600 }] })] })).data,
+    ).toBeUndefined();
+    expect(s(sourcesDoc({ sources: [fr1({ coverage: undefined as never })] })).data).toBeUndefined();
+  });
+
+  it('health FR-1 and health CH-1: each its own name and its own status', () => {
+    expect(checkSourceHealth(s(all()), 'FR-1')).toMatchObject({ check: 'health FR-1', ok: true });
+    expect(checkSourceHealth(s(all()), 'CH-1')).toMatchObject({ check: 'health CH-1', ok: true });
+    const down = sourcesDoc({ sources: [de1(), nl1(), fr1({ status: 'down', consecutive_failures: 4 }), ch1()] });
+    expect(checkSourceHealth(s(down), 'FR-1')).toEqual({
+      check: 'health FR-1',
+      ok: false,
+      detail: 'status down (4 failed fetches in a row, 0 quarantined)',
+    });
+    expect(checkSourceHealth(s(down), 'CH-1').ok).toBe(true);
+    expect(checkSourceHealth(s(), 'CH-1')).toMatchObject({ ok: false, detail: /not listed/ });
+  });
+
+  it('tier-1 FR-1 and tier-1 CH-1: 95% of their own series', () => {
+    const at = (id: 'FR-1' | 'CH-1', total: number, fresh: number) =>
+      sourcesDoc({ sources: [de1(), (id === 'FR-1' ? fr1 : ch1)({ tier1: { total, fresh, provider_stale: 0 } })] });
+    expect(checkTier1(at('FR-1', 39, 38), 'FR-1')).toMatchObject({
+      check: 'tier-1 FR-1',
+      ok: true,
+      detail: /38 of 39/,
+    });
+    expect(checkTier1(at('CH-1', 17, 17), 'CH-1')).toMatchObject({ check: 'tier-1 CH-1', ok: true });
+    // With 17 tier-1 series one stale series is already below 95%.
+    expect(checkTier1(at('CH-1', 17, 16), 'CH-1')).toMatchObject({
+      ok: false,
+      detail: /16 of 17 tier-1 series fresh \(94\.1%\)/,
+    });
+    expect(checkTier1(at('CH-1', 17, 17), 'FR-1')).toMatchObject({ ok: false, detail: /no tier-1 numbers/ });
+  });
+
+  it('coverage: PASS from 95%, with the ratio, the series below 95%, the first instant, the gaps and the newest gap', () => {
+    expect(COVERAGE_MIN).toBe(0.95);
+    const gaps = [
+      { from: day(30), to: day(29) },
+      { from: day(10), to: day(9) },
+      { from: day(50), to: day(48) },
+    ];
+    const doc = s(sourcesDoc({ sources: [fr1({ coverage: coverage({ gaps }) })] })).data;
+    expect(checkCoverage(doc, 'FR-1')).toEqual({
+      check: 'coverage FR-1',
+      ok: true,
+      detail: `98.7% of the expected buckets since 2026-09-02T00:00:00.000Z, 2 of 39 tier-1 series below 95%, 3 gaps, the newest from ${day(10)} to ${day(9)}`,
+    });
+    expect(checkCoverage(s(all()).data, 'CH-1')).toMatchObject({ check: 'coverage CH-1', ok: true });
+  });
+
+  it('coverage: 95% is the boundary, and a source without gaps names none', () => {
+    const at = (ratio: number, gaps: { from: string; to: string }[] = []) =>
+      checkCoverage(s(sourcesDoc({ sources: [fr1({ coverage: coverage({ ratio, gaps }) })] })).data, 'FR-1');
+    expect(at(1)).toMatchObject({ ok: true, detail: expect.stringMatching(/^100\.0% .*, 0 gaps$/) });
+    expect(at(0.95).ok).toBe(true);
+    const low = at(0.9499, [{ from: day(5), to: day(4) }]);
+    expect(low.ok).toBe(false);
+    expect(low.detail).toMatch(/^95\.0% of the expected buckets/);
+    expect(low.detail).toMatch(/1 gaps, the newest from .* to .*; below 95%$/);
+    expect(at(0.5)).toMatchObject({ ok: false, detail: expect.stringContaining('50.0%') });
+    expect(at(0).ok).toBe(false);
+  });
+
+  it('coverage: no coverage yet, a source that is not listed and no document are FAILs', () => {
+    expect(checkCoverage(s(all()).data, 'DE-1')).toEqual({
+      check: 'coverage DE-1',
+      ok: false,
+      detail: 'no coverage yet',
+    });
+    expect(checkCoverage(s(all()).data, 'FR-3')).toMatchObject({ ok: false, detail: /not listed/ });
+    expect(checkCoverage(undefined, 'CH-1')).toMatchObject({
+      check: 'coverage CH-1',
+      ok: false,
+      detail: /no valid health\/sources document/,
+    });
+  });
+
+  it('coverage prints only numbers and instants: a hostile source id in the same document never appears', () => {
+    const doc = s(sourcesDoc({ sources: [fr1({ coverage: coverage() })], quarantined_batches: [] })).data;
+    expect(checkCoverage(doc, 'FR-1').detail).toMatch(/^[0-9A-Za-z .,%:-]+$/);
+  });
+
+  it('interval: the BAFU rule is 600 s, the check allows 5 s of scheduling jitter', () => {
+    expect([INTERVAL_SPEC, INTERVAL_MIN_S]).toEqual(['ch-1-lindas', 595]);
+    const spec = registry.specs.find((x) => x.id === INTERVAL_SPEC);
+    expect(spec?.source).toBe('CH-1');
+    expect(cadenceOf(spec?.cron ?? '')).toBeGreaterThanOrEqual(INTERVAL_MIN_S + 5);
+    const at = (...entries: { spec: string; seconds: number }[]) =>
+      checkInterval(s(sourcesDoc({ sources: [ch1({ min_interval_s: entries })] })).data);
+    expect(at(interval(600))).toEqual({
+      check: 'interval CH-1',
+      ok: true,
+      detail: 'ch-1-lindas: the shortest gap between two requests of one variant in 24 h is 600 s, not under 595 s',
+    });
+    expect(at(interval(595)).ok).toBe(true);
+    expect(at(interval(594))).toMatchObject({
+      ok: false,
+      detail: expect.stringMatching(/is 594 s, under 595 s \(BAFU: at most one download per 10 minutes\)$/),
+    });
+    expect(at(interval(0)).ok).toBe(false);
+    // Only the entry of the LINDAS spec counts; another spec's short gap does not.
+    expect(at(interval(10, 'ch-2-pq'), interval(600)).ok).toBe(true);
+    expect(at(interval(10, 'ch-2-pq'))).toEqual({
+      check: 'interval CH-1',
+      ok: false,
+      detail: 'no interval measured yet',
+    });
+    expect(at()).toMatchObject({ ok: false, detail: 'no interval measured yet' });
+  });
+
+  it('interval: a source that is not listed, and no document, are FAILs', () => {
+    expect(checkInterval(s(sourcesDoc({ sources: [de1()] })).data)).toMatchObject({
+      check: 'interval CH-1',
+      ok: false,
+      detail: /not listed/,
+    });
+    expect(checkInterval(undefined)).toMatchObject({ ok: false, detail: /no valid health\/sources document/ });
+  });
+
+  it('the --dry-run list states the new rules', () => {
+    const one = (name: string) => {
+      const found = CHECKS.filter((c) => c.startsWith(`${name}:`));
+      expect(found, name).toHaveLength(1);
+      return found[0] ?? '';
+    };
+    expect(one('coverage FR-1')).toContain('95%');
+    expect(one('coverage CH-1')).toContain('null is a FAIL');
+    expect(one('interval CH-1')).toMatch(/>= 595 s.*BAFU.*10 minutes.*5 s/);
+    for (const name of ['health FR-1', 'health CH-1', 'tier-1 FR-1', 'tier-1 CH-1']) one(name);
   });
 });
 
@@ -1165,6 +1347,8 @@ const metaDoc = (over: Partial<Meta> = {}): Meta => ({
         { lang: 'de', text: 'Datenquelle: WSV', url: 'https://example.org/de', required: true, needsDate: false },
       ],
     },
+    { id: 'FR-1', attribution: [] },
+    { id: 'CH-1', attribution: [] },
   ],
   ...over,
 });
@@ -1191,12 +1375,14 @@ const stationDoc = (id: string, country: string, series: unknown[]) => ({
   flags: { tidal: false, impounded: null },
   series,
 });
-// Series 1 and 2 are NL-1, series 3 is DE-1.
+// Series 1 and 2 are NL-1, series 3 is DE-1, series 4 is FR-1, series 5 is CH-1.
 const stationsDoc = (): Stations =>
   Stations.parse({
     stations: [
       stationDoc('nl.rws.lobith.bovenrijn.tolkamer', 'NL', [seriesDoc(1, 'NL-1', 'H'), seriesDoc(2, 'NL-1', 'Q')]),
       stationDoc('de.wsv.kaub', 'DE', [seriesDoc(3, 'DE-1', 'H')]),
+      stationDoc('fr.sandre.A701061001', 'FR', [seriesDoc(4, 'FR-1', 'Q')]),
+      stationDoc('ch.bafu.2289', 'CH', [seriesDoc(5, 'CH-1', 'H')]),
     ],
   });
 const snapshotDoc = (ms: number, ages: Record<number, number> = { 1: 600, 3: 1200 }): Snapshot =>
@@ -1225,9 +1411,9 @@ describe('api meta and api build', () => {
     expect(checkMeta(read())).toEqual({
       check: 'api meta',
       ok: true,
-      detail: '200, public, max-age=60, the Meta contract, sources NL-1, DE-1',
+      detail: '200, public, max-age=60, the Meta contract, sources NL-1, DE-1, FR-1, CH-1',
     });
-    expect(API_SOURCES).toEqual(['NL-1', 'DE-1']);
+    expect(API_SOURCES).toEqual(['NL-1', 'DE-1', 'FR-1', 'CH-1']);
   });
 
   it('meta fails on a wrong Cache-Control, a wrong status, a body off the contract, a missing source and a network error', () => {
@@ -1250,10 +1436,16 @@ describe('api meta and api build', () => {
     expect(checkMeta(read('<html>')).ok).toBe(false);
     expect(checkMeta(read(metaDoc({ sources: [{ id: 'NL-1', attribution: [] }] })))).toMatchObject({
       ok: false,
-      detail: 'DE-1 is not listed in sources',
+      detail: 'DE-1 is not listed in sources; FR-1 is not listed in sources; CH-1 is not listed in sources',
     });
+    // FR-1 and CH-1 count since P5a: each alone makes the check fail.
+    for (const id of ['FR-1', 'CH-1'])
+      expect(checkMeta(read(metaDoc({ sources: metaDoc().sources.filter((x) => x.id !== id) })))).toMatchObject({
+        ok: false,
+        detail: `${id} is not listed in sources`,
+      });
     expect(checkMeta(read(metaDoc({ sources: [] }))).detail).toBe(
-      'NL-1 is not listed in sources; DE-1 is not listed in sources',
+      'NL-1 is not listed in sources; DE-1 is not listed in sources; FR-1 is not listed in sources; CH-1 is not listed in sources',
     );
     expect(checkMeta(readApi('ECONNRESET', Meta, META_CACHE))).toEqual({
       check: 'api meta',
@@ -1278,11 +1470,12 @@ describe('api stations', () => {
   const read = (doc: unknown = stationsDoc(), over: Partial<Page> = {}) =>
     readApi(apiPage(doc, STATIONS_CACHE, over), Stations, STATIONS_CACHE);
 
-  it('passes: 200, exactly max-age=300, the Stations contract, a DE-1 and an NL-1 series', () => {
+  it('passes: 200, exactly max-age=300, the Stations contract, a series of NL-1, DE-1, FR-1 and CH-1', () => {
     expect(checkStations(read())).toEqual({
       check: 'api stations',
       ok: true,
-      detail: '200, public, max-age=300, the Stations contract, 2 stations, 2 NL-1 and 1 DE-1 series',
+      detail:
+        '200, public, max-age=300, the Stations contract, 4 stations, 2 NL-1 and 1 DE-1 and 1 FR-1 and 1 CH-1 series',
     });
   });
 
@@ -1291,12 +1484,23 @@ describe('api stations', () => {
       Stations.parse({ stations: [stationDoc(id, 'NL', [seriesDoc(1, source, 'H')])] });
     expect(checkStations(read(only('nl.rws.lobith.bovenrijn.tolkamer', 'NL-1')))).toMatchObject({
       ok: false,
-      detail: 'no station has a DE-1 series',
+      detail: 'no station has a DE-1 series; no station has a FR-1 series; no station has a CH-1 series',
     });
-    expect(checkStations(read(only('de.wsv.kaub', 'DE-1'))).detail).toBe('no station has a NL-1 series');
-    expect(checkStations(read(Stations.parse({ stations: [] }))).detail).toBe(
-      'no station has a NL-1 series; no station has a DE-1 series',
+    expect(checkStations(read(only('de.wsv.kaub', 'DE-1'))).detail).toBe(
+      'no station has a NL-1 series; no station has a FR-1 series; no station has a CH-1 series',
     );
+    expect(checkStations(read(Stations.parse({ stations: [] }))).detail).toBe(
+      'no station has a NL-1 series; no station has a DE-1 series; no station has a FR-1 series; no station has a CH-1 series',
+    );
+    // A source's series alone are not enough: each of FR-1 and CH-1 is needed (P5a).
+    for (const [id, source] of [
+      ['fr.sandre.A701061001', 'FR-1'],
+      ['ch.bafu.2289', 'CH-1'],
+    ] as const)
+      expect(checkStations(read({ stations: stationsDoc().stations.filter((st) => st.id !== id) }))).toMatchObject({
+        ok: false,
+        detail: `no station has a ${source} series`,
+      });
     expect(checkStations(readApi(apiPage(stationsDoc(), META_CACHE), Stations, STATIONS_CACHE))).toMatchObject({
       ok: false,
       detail: 'cache-control "public, max-age=60"',
@@ -1550,13 +1754,32 @@ describe('fresh DE-1 and fresh NL-1', () => {
   });
 
   it('measures the age at the server’s now, not at the snapshot’s t, which is floored to 10 minutes', () => {
-    // meta.now 12:09: the snapshot of t = 12:00 says 2400 s for a value of 11:20, which is 2940 s old at 12:09.
+    // meta.now 12:09: a value that is 10,800 s old at t (12:00) is 11,340 s old at the server's now.
     const late = new Date(NOW_MS + 9 * 60_000).toISOString();
     expect(checkFresh('NL-1', at({ 1: 2400 }), stationsDoc(), late)).toMatchObject({
       ok: false,
       detail: '1 of 2 NL-1 series have a value, the newest is 2940 s old, over 2700 s',
     });
     expect(checkFresh('NL-1', at({ 1: 2100 }), stationsDoc(), late)).toMatchObject({ ok: true, detail: /2640 s old$/ });
+  });
+
+  it('fresh FR-1 and fresh CH-1 judge their own series (4 and 5), whatever the other sources have', () => {
+    expect(checkFresh('FR-1', at({ 1: 60, 3: 60, 4: 900 }), stationsDoc(), NOW)).toEqual({
+      check: 'fresh FR-1',
+      ok: true,
+      detail: '1 of 1 FR-1 series have a value, the newest is 900 s old',
+    });
+    expect(checkFresh('CH-1', at({ 5: 600 }), stationsDoc(), NOW)).toMatchObject({ check: 'fresh CH-1', ok: true });
+    expect(checkFresh('CH-1', at({ 5: 2701 }), stationsDoc(), NOW)).toMatchObject({
+      ok: false,
+      detail: '1 of 1 CH-1 series have a value, the newest is 2701 s old, over 2700 s',
+    });
+    expect(checkFresh('FR-1', at({ 1: 60, 3: 60, 5: 60 }), stationsDoc(), NOW)).toEqual({
+      check: 'fresh FR-1',
+      ok: false,
+      detail: 'none of the 1 FR-1 series has a value',
+    });
+    expect(checkFresh('CH-1', at({ 4: 60 }), stationsDoc(), NOW).ok).toBe(false);
   });
 
   it('fails without a valid snapshot, stations or meta document', () => {
@@ -1567,6 +1790,152 @@ describe('fresh DE-1 and fresh NL-1', () => {
       detail: 'no valid snapshot document',
     });
     expect(checkFresh('DE-1', at({ 3: 60 }), undefined, NOW).detail).toBe('no valid stations document');
+  });
+});
+
+describe('belgian set (catalogue §0.6)', () => {
+  const ids = belgianIds();
+  const NOW_ISO = new Date(NOW_MS).toISOString();
+  /** One BE station per id, each with series 100 + its place in the list. */
+  const stationsOf = (list: readonly string[], name = 'Antwerpen'): Stations =>
+    Stations.parse({
+      stations: list.map((id, i) => ({
+        ...stationDoc(id, 'BE', [seriesDoc(100 + i, id.startsWith('nl.') ? 'NL-1' : 'FR-1', 'H')]),
+        name,
+      })),
+    });
+  /** A snapshot with the given age (seconds before NOW) for series 100 + i. */
+  const snapOf = (ages: Record<number, number>) => snapshotDoc(NOW_MS, ages);
+  const ageAll = (age: number, n = ids.length) =>
+    Object.fromEntries(Array.from({ length: n }, (_, i) => [100 + i, age]));
+  const run = (list = ids, ages: Record<number, number> = ageAll(1200), stations = stationsOf(list), now = NOW_ISO) =>
+    checkBelgianSet(list, stations, snapOf(ages), now);
+
+  it('the 25 points are the 7 NL-1 locations and the 18 partners of registry/seed/fr-1-be.csv, all distinct', () => {
+    expect(ids).toHaveLength(25);
+    expect(new Set(ids).size).toBe(25);
+    expect(BELGIAN_NL1).toHaveLength(7);
+    expect(ids.slice(0, 7)).toEqual(BELGIAN_NL1.map((c) => `nl.rws.${c}`));
+    const partners = ids.slice(7);
+    expect(partners).toHaveLength(18);
+    for (const id of partners) expect(id).toMatch(/^fr\.sandre\.[A-Z][0-9A-Z]{9}$/);
+    // Read from the file, not listed in the script: another list gives another set.
+    expect(belgianIds([{ code_station: 'X000000001' }]).slice(7)).toEqual(['fr.sandre.X000000001']);
+  });
+
+  it('every one of the 25 is a public primary station of the registry on Belgian soil (an id typo here would never pass)', () => {
+    type Row = { id: string; country: string; role: string; audience: string };
+    const rows = ['nl-1', 'fr-1'].flatMap(
+      (file) =>
+        (parse(readFileSync(join(repoRoot, `registry/stations/${file}.yaml`), 'utf8')) as { stations: Row[] }).stations,
+    );
+    for (const id of ids) {
+      const of = rows.filter((r) => r.id === id);
+      expect(of.length, id).toBeGreaterThan(0);
+      for (const r of of) expect([r.country, r.role, r.audience], id).toEqual(['BE', 'primary', 'public']);
+    }
+  });
+
+  it('passes when all 25 are stations with a value of at most 3 hours', () => {
+    expect(BELGIAN_MAX_AGE_S).toBe(10_800);
+    expect(BELGIAN_FRESH_PCT).toBe(90);
+    expect(run()).toEqual({
+      check: 'belgian set',
+      ok: true,
+      detail: 'present 25/25, fresh 25/25 (a value no older than 3 h)',
+    });
+  });
+
+  it('90% is the boundary: 23 of 25 fresh pass, 22 fail; 9 of 10 pass', () => {
+    const fresh = (n: number) => ({
+      ...ageAll(1200, n),
+      ...Object.fromEntries(Array.from({ length: 25 - n }, (_, i) => [100 + n + i, 20_000])),
+    });
+    expect(run(ids, fresh(23))).toMatchObject({ ok: true, detail: expect.stringContaining('fresh 23/25') });
+    const low = run(ids, fresh(22));
+    expect(low.ok).toBe(false);
+    expect(low.detail).toBe(
+      `present 25/25, fresh 22/25 (a value no older than 3 h); stale: ${ids.slice(22).join(', ')}`,
+    );
+    const ten = ids.slice(0, 10);
+    expect(run(ten, ageAll(1200, 9), stationsOf(ten))).toMatchObject({
+      ok: true,
+      detail: expect.stringContaining('fresh 9/10'),
+    });
+    expect(run(ten, ageAll(1200, 8), stationsOf(ten)).ok).toBe(false);
+  });
+
+  it('3 hours is the boundary, measured at the server’s now and not at the snapshot’s t', () => {
+    expect(run(ids, ageAll(10_800)).ok).toBe(true);
+    expect(run(ids, ageAll(10_801))).toMatchObject({ ok: false, detail: expect.stringContaining('fresh 0/25') });
+    // meta.now 12:09: a value of 09:10 is 3 h 0 min 0 s... plus 9 minutes: 11,340 s old at now, 10,800 s at t.
+    const late = new Date(NOW_MS + 9 * 60_000).toISOString();
+    expect(run(ids, ageAll(10_800), stationsOf(ids), late).ok).toBe(false);
+    expect(run(ids, ageAll(10_200), stationsOf(ids), late).ok).toBe(true);
+  });
+
+  it('a point that is not a station fails the check, however fresh the others are', () => {
+    const one = ids[3] as string;
+    const without = ids.filter((id) => id !== one);
+    const r = checkBelgianSet(ids, stationsOf(without), snapOf(ageAll(1200)), NOW_ISO);
+    expect(r.ok).toBe(false);
+    expect(r.detail).toBe(`present 24/25, fresh 24/25 (a value no older than 3 h); missing: ${one}`);
+    // Every one of them missing: all named, nothing is fresh.
+    const none = checkBelgianSet(ids, Stations.parse({ stations: [] }), snapOf({}), NOW_ISO);
+    expect(none.ok).toBe(false);
+    expect(none.detail).toContain('present 0/25, fresh 0/25');
+    expect(none.detail).toContain(`missing: ${ids.join(', ')}`);
+  });
+
+  it('a point is fresh when any of its series has a value; the values of other series do not count', () => {
+    const two = Stations.parse({
+      stations: [
+        stationDoc('nl.rws.antwerpen', 'BE', [seriesDoc(1, 'NL-1', 'H'), seriesDoc(2, 'NL-1', 'Q')]),
+        stationDoc('fr.sandre.B400101101', 'BE', [seriesDoc(3, 'FR-1', 'H')]),
+      ],
+    });
+    const list = ['nl.rws.antwerpen', 'fr.sandre.B400101101'];
+    expect(checkBelgianSet(list, two, snapOf({ 1: 20_000, 2: 600, 3: 600 }), NOW_ISO)).toMatchObject({
+      ok: true,
+      detail: 'present 2/2, fresh 2/2 (a value no older than 3 h)',
+    });
+    // Series 9 belongs to no listed station; series 1 is too old.
+    expect(checkBelgianSet(list, two, snapOf({ 1: 20_000, 3: 600, 9: 60 }), NOW_ISO)).toMatchObject({
+      ok: false,
+      detail: 'present 2/2, fresh 1/2 (a value no older than 3 h); stale: nl.rws.antwerpen',
+    });
+  });
+
+  it('prints only our own ids and numbers, never a station name', () => {
+    const r = run(ids, ageAll(99_999), stationsOf(ids.slice(0, 20), 'PROVIDER-SECRET-TEXT'));
+    expect(r.ok).toBe(false);
+    expect(r.detail).not.toContain('PROVIDER-SECRET-TEXT');
+    expect(r.detail).toMatch(/^[A-Za-z0-9 ./,:;()-]+$/);
+  });
+
+  it('is a FAIL with the reason when a document is missing, or when there is nothing to look for', () => {
+    const doc = snapOf(ageAll(60));
+    const stations = stationsOf(ids);
+    expect(checkBelgianSet(ids, stations, undefined, NOW_ISO)).toEqual({
+      check: 'belgian set',
+      ok: false,
+      detail: 'no valid snapshot document',
+    });
+    expect(checkBelgianSet(ids, undefined, doc, NOW_ISO).detail).toBe('no valid stations document');
+    expect(checkBelgianSet(ids, stations, doc, undefined).detail).toBe('no valid meta document');
+    expect(checkBelgianSet([], stations, doc, NOW_ISO)).toMatchObject({
+      ok: false,
+      detail: 'no Belgian point to look for',
+    });
+  });
+
+  it('the --dry-run list states the rule', () => {
+    const found = CHECKS.filter((c) => c.startsWith('belgian set:'));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('25 points');
+    expect(found[0]).toContain('registry/seed/fr-1-be.csv');
+    expect(found[0]).toContain('>= 90%');
+    expect(found[0]).toContain('3 h');
   });
 });
 

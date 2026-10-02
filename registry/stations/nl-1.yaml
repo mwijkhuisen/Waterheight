@@ -9,11 +9,12 @@
 # provider_key = <code>/<Grootheid>/<Hoedanigheid>/<WaardeBepalingsMethode>, as the NL-1 normaliser builds it.
 # tier 1 (first_release) = the curated key stations of the Rhine branches, IJssel, Meuse, Geul and Vecht; every row
 # of such a station is tier 1. role twin = eijsden.grens asked in TAW (registry/twins.yaml): tier 1, not first_release.
+# country BE = the 9 seed rows noted `be` (catalogue §0.6: the 7 RWS points on Belgian soil, antwerpen, lixhebiefaval,
+# maaseik, herenlaak, lanaken, smeermaas.zuidwillemsvaart and kanne): ordinary tier-2 primary rows, public (A§7.2 exception
+# until a Belgian source is public, P13). kanne has no river until the water body is verified (catalogue §10 R9).
 # tidal true = the curated sea and estuary gauges, false = the tier-1 river gauges, null = unknown (RWS metadata cannot
 # tell river from tide). river, km and water_name are null: RWS publishes none (P6 builds the river graph).
 # Seed rows not registered:
-#   Belgian points (note be), curated in P5: lanaken H, maaseik H, herenlaak H, lixhebiefaval H, antwerpen H,
-#     smeermaas.zuidwillemsvaart H, maaseik Q, kanne Q, smeermaas.zuidwillemsvaart Q.
 #   stale at the provider (STALE_SERIES of the NL-1 normaliser): driel.boven Q, arnhem.nederrijn Q.
 #   not live (NOT_LIVE in the generator): hedel H (no feature in the WFS snapshot).
 stations:
@@ -74,6 +75,36 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.antwerpen
+    source: NL-1
+    provider_code: antwerpen
+    provider_key: antwerpen/WATHTE/NAP/other:F007
+    name: Antwerpen
+    water_name: null
+    country: BE
+    lon: 4.397
+    lat: 51.228
+    quantity: H
+    tier: 2
+    role: primary
+    river: null
+    km: null
+    flags:
+      tidal: true
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT90M
+    expected_threshold_source: null
+    expected_forecast_source: NL-1
+    licence_gate: open
+    first_release: false
     audience: public
     datum: NAP
     gauge_zero: []
@@ -767,6 +798,36 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.herenlaak
+    source: NL-1
+    provider_code: herenlaak
+    provider_key: herenlaak/WATHTE/NAP/other:F007
+    name: Maaseik Herenlaak
+    water_name: null
+    country: BE
+    lon: 5.81875
+    lat: 51.101167
+    quantity: H
+    tier: 2
+    role: primary
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT90M
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
   - id: nl.rws.hoekvanholland
     source: NL-1
     provider_code: hoekvanholland
@@ -887,6 +948,36 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.kanne
+    source: NL-1
+    provider_code: kanne
+    provider_key: kanne/Q/NVT/other:F103
+    name: Kanne
+    water_name: null
+    country: BE
+    lon: 5.671551
+    lat: 50.814742
+    quantity: Q
+    tier: 2
+    role: primary
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT90M
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
   - id: nl.rws.krimpenaandelek.lek
     source: NL-1
     provider_code: krimpenaandelek.lek
@@ -896,6 +987,36 @@ stations:
     country: NL
     lon: 4.628906
     lat: 51.890722
+    quantity: H
+    tier: 2
+    role: primary
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT90M
+    expected_threshold_source: NL-4
+    expected_forecast_source: NL-1
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.lanaken
+    source: NL-1
+    provider_code: lanaken
+    provider_key: lanaken/WATHTE/NAP/other:F007
+    name: Lanaken-Smeermaas
+    water_name: null
+    country: BE
+    lon: 5.683083
+    lat: 50.889528
     quantity: H
     tier: 2
     role: primary
@@ -1007,6 +1128,36 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.lixhebiefaval
+    source: NL-1
+    provider_code: lixhebiefaval
+    provider_key: lixhebiefaval/WATHTE/NAP/other:F007
+    name: Lixhe Bief Aval
+    water_name: null
+    country: BE
+    lon: 5.680889
+    lat: 50.759639
+    quantity: H
+    tier: 2
+    role: primary
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT90M
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
   - id: nl.rws.lobith.bovenrijn.tolkamer
     source: NL-1
     provider_code: lobith.bovenrijn.tolkamer
@@ -1064,6 +1215,66 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: null
+    gauge_zero: []
+  - id: nl.rws.maaseik
+    source: NL-1
+    provider_code: maaseik
+    provider_key: maaseik/WATHTE/NAP/other:F007
+    name: Maaseik
+    water_name: null
+    country: BE
+    lon: 5.801669
+    lat: 51.094527
+    quantity: H
+    tier: 2
+    role: primary
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT90M
+    expected_threshold_source: NL-4
+    expected_forecast_source: NL-1
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.maaseik
+    source: NL-1
+    provider_code: maaseik
+    provider_key: maaseik/Q/NVT/other:F006
+    name: Maaseik
+    water_name: null
+    country: BE
+    lon: 5.801669
+    lat: 51.094527
+    quantity: Q
+    tier: 2
+    role: primary
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT90M
+    expected_threshold_source: NL-4
+    expected_forecast_source: NL-1
+    licence_gate: open
+    first_release: false
     audience: public
     datum: null
     gauge_zero: []
@@ -1786,6 +1997,66 @@ stations:
     first_release: false
     audience: public
     datum: NAP
+    gauge_zero: []
+  - id: nl.rws.smeermaas.zuidwillemsvaart
+    source: NL-1
+    provider_code: smeermaas.zuidwillemsvaart
+    provider_key: smeermaas.zuidwillemsvaart/WATHTE/NAP/other:F007
+    name: Smeermaas, Zuid-Willemsvaart
+    water_name: null
+    country: BE
+    lon: 5.678438
+    lat: 50.874748
+    quantity: H
+    tier: 2
+    role: primary
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT90M
+    expected_threshold_source: NL-4
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.smeermaas.zuidwillemsvaart
+    source: NL-1
+    provider_code: smeermaas.zuidwillemsvaart
+    provider_key: smeermaas.zuidwillemsvaart/Q/NVT/other:F103
+    name: Smeermaas, Zuid-Willemsvaart
+    water_name: null
+    country: BE
+    lon: 5.678438
+    lat: 50.874748
+    quantity: Q
+    tier: 2
+    role: primary
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: PT90M
+    expected_threshold_source: NL-4
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
     gauge_zero: []
   - id: nl.rws.stevensweert
     source: NL-1

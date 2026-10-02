@@ -1,0 +1,14 @@
+{
+  "spec": "ch-1-lindas",
+  "variant": "lake",
+  "source": "CH-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/CH-1/ch-1-lindas/2026/09/30/120400Z-633ba0899d28bd11.zst",
+  "recorded_at": "2026-09-30T12:04:00Z",
+  "status": 200,
+  "url": "https://ld.admin.ch/query",
+  "bytes": 6146,
+  "source_sha256": "633ba0899d28bd1116d725ea1f423e173f38faf44d443998a1cfc7a5fa75fe5e",
+  "trimmed": false
+}

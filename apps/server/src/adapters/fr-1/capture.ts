@@ -6,6 +6,8 @@ import type { Adapter } from '../../http/types.ts';
 // (a provider-supplied URL, re-checked by the client); 206 is a success.
 
 const utc = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+/** The only path a `next` may name (review SR-7: exactly, not by its suffix). */
+const OBSERVATIONS_TR = '/api/v2/hydrometrie/observations_tr';
 
 export const adapter: Adapter = {
   coverage(doc) {
@@ -29,9 +31,11 @@ export const adapter: Adapter = {
   },
   expand({ req, doc, checkUrl }) {
     const next = (doc as { next?: unknown } | null)?.next;
-    if (typeof next !== 'string' || next === '') return { reqs: [] };
+    if (next === null || next === undefined) return { reqs: [] };
+    // A `next` we will not follow cuts the walk: the runner treats it like a capped walk, never as its end (P5a).
+    if (typeof next !== 'string' || next === '') return { reqs: [], refused: true };
     const url = checkUrl(next);
-    if (url === null || !new URL(url).pathname.endsWith('/observations_tr')) return { reqs: [] };
+    if (url === null || new URL(url).pathname !== OBSERVATIONS_TR) return { reqs: [], refused: true };
     const page = Number(/#(\d+)$/.exec(req.variant)?.[1] ?? 1) + 1;
     return { reqs: [{ url, method: 'GET', variant: `${req.variant.replace(/#\d+$/, '')}#${page}` }] };
   },

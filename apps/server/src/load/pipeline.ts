@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { type Normalised, SchemaDrift } from '@rws/core';
+import { type Normalised, type ObsRow, SchemaDrift } from '@rws/core';
 import type { Kysely } from 'kysely';
 import { ManifestLine } from '../archive/manifest.ts';
 import { ArchiveError, type ArchiveReader, type RawLine } from '../archive/reader.ts';
@@ -96,7 +96,8 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * RWS series arrived under another method code; `unknown_quality`: a quality
  * code we cannot read; `conflict`: two values for one instant;
  * `registered_dropped`: a registered RWS series arrived under another
- * ProcesType, compartment or grouping.
+ * ProcesType, compartment or grouping; `datum_mismatch` (P5a): a CH value that
+ * contradicts its series' declared level or relative stage.
  */
 export const RETAINED = [
   'unit_mismatch',
@@ -105,6 +106,7 @@ export const RETAINED = [
   'unknown_quality',
   'conflict',
   'registered_dropped',
+  'datum_mismatch',
 ] as const;
 
 /** A payload is tried at most this often; the next pass quarantines it without reading it. */
@@ -343,6 +345,14 @@ export class Loader {
       }
       const fetchedAt = new Date(line.fetched_at.end ?? line.fetched_at.start);
       const lag = () => this.deps.onLag?.(line.source, fetchedAt, this.deps.now().getTime() - fetchedAt.getTime());
+      // Every request of a scheduled run, whatever came back (dup_of, 304, an error): how often a spec asks.
+      if (line.seed !== true && line.recovered !== true && line.variant !== '' && !/#\d+$/.test(line.variant)) {
+        fold(line.source).starts.push({
+          spec: line.spec,
+          variant: line.variant,
+          at: Date.parse(line.fetched_at.start),
+        });
+      }
       const plan = this.classify(line);
       if (plan.kind !== 'payload') {
         const f = fold(line.source);
@@ -444,22 +454,44 @@ export class Loader {
     }
 
     const registry = await this.registry(line.source);
+    const fillRegistry = spec.fill === undefined ? undefined : await this.registry(spec.fill);
     const unitMismatch = await this.unitMismatch(line.source);
     let result: Normalised;
     try {
-      result = spec.run(body, { registry, fetchedAt: fetchedAt.getTime(), variant: line.variant, unitMismatch });
+      result = spec.run(body, {
+        registry,
+        fetchedAt: fetchedAt.getTime(),
+        variant: line.variant,
+        unitMismatch,
+        ...(fillRegistry === undefined ? {} : { fillRegistry }),
+      });
     } catch (err) {
       if (err instanceof SchemaDrift) return setAside('quarantined', err.code, err.path);
       // A parser bug must not stall the loader either; the payload stays in the archive for a replay.
       return setAside('quarantined', 'adapter_error');
     }
 
+    // Gap-fill rows go only into an active primary series of the fill source that is not withheld; a key that
+    // source does not register is unknown (a registry change could still load it), any other is dropped.
+    const fill: ObsRow[] = [];
+    const fillUnknown = new Set<string>();
+    for (const r of result.fill ?? []) {
+      const target = fillRegistry?.get(r.series);
+      if (target === undefined) fillUnknown.add(r.series);
+      else if (target.role === 'primary' && !target.off) fill.push(r);
+      else result.dropped.fill_not_primary = (result.dropped.fill_not_primary ?? 0) + 1;
+    }
     // Only the series that share their source's audience count in its numbers (public health, batch counters).
+    // A batch's n_rows counts its own rows and its fill rows: an FR-3 payload states each value twice, as a row of
+    // its twin series and as a fill row of the FR-1 series of the same key (review CR-6).
     const counted = (key: string) => registry.get(key)?.sameAudience === true;
     const n_rows =
-      result.obs.filter((r) => counted(r.series)).length + result.gaugeZeros.filter((z) => counted(z.series)).length;
+      result.obs.filter((r) => counted(r.series)).length +
+      result.gaugeZeros.filter((z) => counted(z.series)).length +
+      fill.length;
     // Values a registry or parser change could still load: the pruner keeps this object until a replay stores them.
-    const n_skipped = result.unknown + RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
+    const n_skipped =
+      result.unknown + fillUnknown.size + RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
     let outcome: Outcome = { kind: 'loaded', n_rows, n_new: 0, n_changed: 0 };
     let zeroChanges: Awaited<ReturnType<typeof applyGaugeZeros>> = {};
     let units: Set<string> | undefined;
@@ -467,16 +499,21 @@ export class Loader {
     await commit(async (tx) => {
       const state = await openBatch(tx, batch, 'ok');
       const written = await upsertObs(tx, result.obs, registry, state.id, fetchedAt);
+      const filled =
+        fill.length === 0 || fillRegistry === undefined
+          ? { n_new: 0, n_changed: 0, writes: 0 }
+          : await upsertObs(tx, fill, fillRegistry, state.id, fetchedAt, true);
       zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, registry, state.id, fetchedAt);
       if (result.unitMismatch !== undefined) {
         units = await storeUnitMismatch(tx, line.source, fetchedAt, result.unitMismatch);
       }
       const zeroWrites = (zeroChanges.new ?? 0) + (zeroChanges.corrected ?? 0) + (zeroChanges.superseded ?? 0);
-      const n_new = written.n_new + (zeroChanges.new ?? 0) + (zeroChanges.superseded ?? 0);
-      const n_changed = written.n_changed + (zeroChanges.corrected ?? 0);
+      // The batch's own numbers include its fill rows (their provenance); the source's health does not.
+      const n_new = written.n_new + filled.n_new + (zeroChanges.new ?? 0) + (zeroChanges.superseded ?? 0);
+      const n_changed = written.n_changed + filled.n_changed + (zeroChanges.corrected ?? 0);
       outcome = { kind: 'loaded', n_rows, n_new, n_changed };
       // A replay that changes nothing leaves the batch exactly as the first load wrote it.
-      const changed = written.writes + zeroWrites > 0 || state.skipped !== n_skipped;
+      const changed = written.writes + filled.writes + zeroWrites > 0 || state.skipped !== n_skipped;
       if (!state.existed || changed || state.previous !== 'ok') {
         await closeBatch(tx, state.id, batch, { status: 'ok', n_rows, n_new, n_changed, n_skipped, error: null });
       }

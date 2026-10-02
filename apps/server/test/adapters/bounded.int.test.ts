@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { BODIES } from './bounded-child.ts';
 
-// Review S1: no DE-1, NL-1 or NL-2 payload inside the byte caps can run the loader out of
+// Review S1: no DE-1, NL-1, NL-2, FR-1, FR-3, CH-1, CH-2 or CH-3 payload inside the byte caps can run the loader out of
 // memory on its way to a SchemaDrift. Each hostile body is parsed in its own
 // process with a 256 MiB heap (the load container has 768 MiB). In the
 // integration project, which runs one file at a time: these children are heavy,
@@ -28,6 +28,24 @@ const expected: Record<keyof typeof BODIES, string> = {
   'nl2-bytes': 'json_too_many_nodes',
   'nl2-features': 'too_big at features',
   'nl2-issues': 'invalid_value at features.0.type',
+  'fr1-bytes': 'json_too_many_nodes',
+  'fr1-ref-bytes': 'json_too_many_nodes',
+  'fr1-nodes': 'json_too_many_nodes',
+  'fr1-issues': 'invalid_type at data.0.code_site',
+  'fr1-ref-issues': 'invalid_type at data.0.code_site',
+  'fr3-bytes': 'json_too_many_nodes',
+  'fr3-nodes': 'json_too_many_nodes',
+  'fr3-issues': 'invalid_type at Serie.ObssHydro.0',
+  'ch1-rows': 'csv_rows',
+  'ch1-columns': 'csv_columns',
+  'ch1-quote': 'csv_field',
+  'ch1-issues': 'bad_id at rows.0',
+  'ch2-bytes': 'json_too_many_nodes',
+  'ch2-features': 'too_big at features',
+  'ch2-issues': 'invalid_value at features.0.type',
+  'ch3-bytes': 'json_too_many_nodes',
+  'ch3-nodes': 'json_too_many_nodes',
+  'ch3-issues': 'invalid_type at plot.data.0.x.0',
   'nl4-one-tag-700k-attributes': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
   'nl4-one-tag-3m-equals': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
   'nl4-one-tag-1.5m-quoted': 'xml_tag_too_long at xl?worksheets?sheet1.xml',

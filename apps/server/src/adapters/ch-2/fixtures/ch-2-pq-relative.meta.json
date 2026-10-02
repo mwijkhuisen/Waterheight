@@ -1,0 +1,13 @@
+{
+  "spec": "ch-2-pq",
+  "source": "CH-2",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/octet-stream",
+  "url": "https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson",
+  "bytes": 247465,
+  "source_sha256": "bb4b7a7add0ffa0044e1569cb4f1966ea7a29b765c291a43291ee79ab9d030f6",
+  "trimmed": "features of keys 2384, 2283, 2282, 2269 and of every station with metric discharge_ls, in recorded order"
+}

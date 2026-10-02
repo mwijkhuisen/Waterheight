@@ -23,6 +23,8 @@ const ALIAS: Record<string, string> = {
   'nl-1-fc-3h-1': 'nl-1-fc-1h',
   'nl-1-fc-3h-2': 'nl-1-fc-1h',
   'nl-1-obs-other': 'nl-1-obs-key',
+  // The same Vigicrues request as the seed, for two of its rows (P5a).
+  'fr-3-twin': 'fr-3-obs',
 };
 /** Stage-2 documents (expand_validity) per spec. */
 export const STAGE2: Record<string, string> = {

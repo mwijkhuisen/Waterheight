@@ -16,6 +16,23 @@ import {
 } from '../src/index.ts';
 
 describe('units (catalogue §4.5)', () => {
+  it('a product beyond the double range is drift, never ±Infinity (P5a: 1.8e306 m ×100)', () => {
+    expect(() => toCanonical('m', 1.8e306)).toThrow(SchemaDrift);
+    expect(() => toCanonical('m', -1.8e306)).toThrow(SchemaDrift);
+    expect(() => toCanonical('m', 1.8e306)).toThrow('value_out_of_range');
+  });
+
+  it('a finite canonical value over 1e7 in magnitude is drift too, never a PostgreSQL real overflow (review SR-2)', () => {
+    for (const raw of [1e300, -1e300, 1.0000001e7, -1.0000001e7]) {
+      expect(() => toCanonical('cm', raw), String(raw)).toThrow('value_out_of_range');
+    }
+    expect(() => toCanonical('m', 100_001)).toThrow('value_out_of_range');
+    expect(toCanonical('cm', 9_999_999)).toBe(9_999_999);
+    expect(toCanonical('m³/s', -9_999_999)).toBe(-9_999_999);
+    expect(toCanonical('cm', 1e7)).toBe(1e7);
+    expect(toCanonical('m', 100_000)).toBe(1e7);
+  });
+
   it('converts to cm and m³/s', () => {
     expect(toCanonical('cm', 53)).toBe(53);
     expect(toCanonical('cm', -22)).toBe(-22);

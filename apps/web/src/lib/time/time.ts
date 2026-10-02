@@ -115,13 +115,13 @@ export function formatShort(ms: number, locale: Locale): string {
   return z.toLocaleString(intlLocale(locale), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-/** A UTC day (a `dataSince`) as a date. */
-export const formatDay = (ms: number, locale: Locale): string =>
+/** A UTC day (a `dataSince`) as a date; with `ZONE`, the Amsterdam day of an instant (the attribution date). */
+export const formatDay = (ms: number, locale: Locale, timeZone = 'UTC'): string =>
   new Intl.DateTimeFormat(intlLocale(locale), {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-    timeZone: 'UTC',
+    timeZone,
   }).format(ms);
 
 /** "12 min", "3 uur": how old a value is at t. */

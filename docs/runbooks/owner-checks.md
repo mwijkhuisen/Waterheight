@@ -80,6 +80,8 @@ Checklist:
 - [ ] `ssh ops@<domain> systemctl list-timers 'rws-*'` shows the timers scheduled;
 - [ ] the `update`, `watchdog` and `backup` checks are green again.
 
+`interval CH-1` is the one check that may FAIL here without a fault (KG-125). It reads the shortest gap between two requests of one spec and variant over 24 h (`min_interval_s`): river and lake are two LINDAS downloads seconds apart every 10 minutes, measured per variant (whether BAFU counts them as one download is asked in C13). After any recorder restart (a reboot, a deploy), a tick the recorder missed runs once as a catch-up 15 s after the start, so the gap to the next regular tick is under 10 minutes (about 9 when the stop spanned a tick). The check then fails until that gap leaves the 24-hour window. Note the restart time in #16; a FAIL long after a restart is a real finding.
+
 The chain: `rws-firewall` loads before Docker, which `Requires=` it. Docker restarts the `unless-stopped` containers (non-local bind covers the IPv6 address that is still tentative at boot). `rws-resolvers` refills the container DNS allowlist once the network is online. Capture writes `capture.json` within a minute, and `rws-status-copy.path` publishes it. The `Persistent=true` timers catch up.
 
 ## 6. The forced restore drill
@@ -127,7 +129,7 @@ gh run list --workflow contract-check --limit 1
 ```
 
 - [ ] both variables are listed;
-- [ ] the run is green (three requests: `de-1-basin`, `nl-1-obs-key`, `nl-2-wfs`), or its issue "Contract drift: the nightly live check failed" names a real drift (`docs/runbooks/schema-drift.md` §7; `fetch_*` on all three specs points at the runner: R-057).
+- [ ] the run is green (six requests since P5a, scheduled at 03:29 UTC: `de-1-basin`, `nl-1-obs-key`, `nl-2-wfs`, `fr-1-obs`, `ch-1-lindas`, `ch-2-pq`; three until then), or its issue "Contract drift: the nightly live check failed" names a real drift (`docs/runbooks/schema-drift.md` §7; `fetch_*` on all six specs points at the runner: R-057).
 
 ## 10. The 7-day twin soak (P2b)
 

@@ -1,13 +1,17 @@
-// Nightly live contract check (issue #17; A§7.1; PHASES P2b): one payload each of DE-1, NL-1 and
-// NL-2 is fetched live and run through the exact code the loader uses (validity, strict parse,
-// normalise). A provider that changed its format or moved its host (the RWS CTD switch on
-// 2026-11-05) turns the night red; .github/workflows/contract-check.yml files the issue.
+// Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a): one payload each of DE-1, NL-1,
+// NL-2, FR-1, CH-1 and CH-2 is fetched live and run through the exact code the loader uses
+// (validity, strict parse, normalise). A provider that changed its format or moved its host (the
+// RWS CTD switch on 2026-11-05) turns the night red; .github/workflows/contract-check.yml files
+// the issue.
 //
 //   RWS_DOMAIN=… RWS_CONTACT_EMAIL=… node scripts/contract-check.ts [--out <file>]
 //
 // Targets come only from registry/capture.yaml (invariant 1): no argument names a URL or a host.
-// Three requests at most, one after the other, through the SSRF-guarded client with the contact
-// User-Agent and no secret header (no RWS API key ever leaves CI). It does not refuse under CI.
+// Six requests at most (one per spec, the first row of each; FR-1 only its first page, never `next`),
+// one after the other, through the SSRF-guarded client with the contact User-Agent and no secret
+// header (no RWS API key ever leaves CI). It does not refuse under CI. BAFU asks LINDAS users for
+// at most one download per 10 minutes: the workflow runs at 03:29, midway between the recorder's
+// CH-1 fetches (minutes 4, 14, 24, 34, …), so ours never comes within 5 minutes of one.
 //
 // stdout and --out: one line per spec, `<spec> <code>`, nothing else (LINE_SOURCE). The code is a
 // fixed identifier of ours; no URL, header, User-Agent, e-mail or byte of a provider payload ever
@@ -25,7 +29,7 @@ import { RETAINED } from '../apps/server/src/load/pipeline.ts';
 import { declarationsOf, readRegistry } from '../apps/server/src/load/registry-sync.ts';
 import { SchemaDrift } from '../packages/core/src/errors.ts';
 
-export const SPECS = ['de-1-basin', 'nl-1-obs-key', 'nl-2-wfs'] as const;
+export const SPECS = ['de-1-basin', 'nl-1-obs-key', 'nl-2-wfs', 'fr-1-obs', 'ch-1-lindas', 'ch-2-pq'] as const;
 
 export type Report = { at: string; results: { spec: string; code: string }[] };
 export type Deps = {

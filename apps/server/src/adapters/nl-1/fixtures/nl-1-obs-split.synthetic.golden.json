@@ -105,7 +105,7 @@
   "conflict": 3,
   "future": 1,
   "too_old": 1,
-  "unregistered_method": 2,
+  "unregistered_method": 4,
   "datum": 2,
   "registered_dropped": 4,
   "sommatie": 1,
@@ -114,5 +114,5 @@
   "unit_mismatch": 2,
   "quantity": 1
  },
- "unknown": 1
+ "unknown": 0
 }

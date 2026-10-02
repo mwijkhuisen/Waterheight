@@ -28,6 +28,8 @@ const source = {
   tier1: { total: 69, fresh: 64, provider_stale: 5 },
   missing_buckets_24h: 12,
   outage: null,
+  coverage: null,
+  min_interval_s: [],
   partitions: [{ partition: '2026-09', md5: 'a'.repeat(32), rows: 1234 }],
   partitions_at: ago(60_000),
 };
@@ -195,6 +197,31 @@ describe('HealthSources', () => {
     expect(HealthSources.safeParse(sources({ twins: [twin] })).success).toBe(true);
     expect(HealthSources.safeParse(sources({ twins: [{ ...twin, id: 'Lobith' }] })).success).toBe(false);
     expect(HealthSources.safeParse(sources({ twins: [{ ...twin, failed_7d: -1 }] })).success).toBe(false);
+  });
+
+  it('coverage (P5a) is a ratio in [0, 1] with at most 20 gaps, or null; min_interval_s names a spec and whole seconds', () => {
+    const coverage = { from: ago(86_400_000), ratio: 0.97, series: 40, series_below_95: 2, gaps: [] };
+    expect(HealthSources.safeParse(sources({ sources: [{ ...source, coverage }] })).success).toBe(true);
+    const gap = { from: ago(7_200_000), to: ago(3_600_000) };
+    for (const bad of [
+      { ...coverage, ratio: 1.01 },
+      { ...coverage, ratio: -0.01 },
+      { ...coverage, series: -1 },
+      { ...coverage, gaps: Array.from({ length: 21 }, () => gap) },
+      { ...coverage, gaps: [{ ...gap, note: 'x' }] },
+      { ...coverage, extra: 1 },
+    ])
+      expect(HealthSources.safeParse(sources({ sources: [{ ...source, coverage: bad }] })).success).toBe(false);
+    const interval = { spec: 'ch-1-lindas', seconds: 600 };
+    expect(HealthSources.safeParse(sources({ sources: [{ ...source, min_interval_s: [interval] }] })).success).toBe(
+      true,
+    );
+    for (const bad of [
+      { ...interval, seconds: 600.5 },
+      { ...interval, spec: 'CH-1 lindas' },
+      { ...interval, seconds: -1 },
+    ])
+      expect(HealthSources.safeParse(sources({ sources: [{ ...source, min_interval_s: [bad] }] })).success).toBe(false);
   });
 
   it('an outage is a window and a count, or null', () => {

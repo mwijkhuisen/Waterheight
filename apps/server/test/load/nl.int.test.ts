@@ -53,7 +53,8 @@ afterAll(async () => {
   await h.close();
 });
 
-describe('NL-1 observations', () => {
+// A registry sync writes about 1,700 series since P5a (seconds on a CI runner); some tests here sync twice.
+describe('NL-1 observations', { timeout: 60_000 }, () => {
   it('loads the recorded payloads; a 204 is a fetch that worked, not a payload', async () => {
     await put('nl-1-obs-key', 'nl-1-obs-key', 'lobith.bovenrijn.tolkamer/H');
     await put('nl-1-obs-key', 'nl-1-obs-key-eijsden-grens-h', 'eijsden.grens/H');
@@ -199,14 +200,15 @@ describe('NL-1 observations', () => {
     await put('nl-1-obs-key', 'nl-1-obs-split.synthetic', 'eijsden.grens/H');
     await tick();
     const { rows } = await h.t.admin.query('SELECT parse_status, n_skipped FROM ingest_batch ORDER BY id DESC LIMIT 1');
-    // One unregistered series (maaseik Q) and the values withheld: unit 2, method 2, quality code 1, conflict 3,
-    // and registered_dropped 4 (the lists under the registered Eijsden NAP key with ProcesType verwachting (2
-    // values), Groepering GETETM2 (1) and compartment BS (1)): 1 + 2 + 2 + 1 + 3 + 4 = 13.
-    expect(rows).toEqual([{ parse_status: 'ok', n_skipped: 13 }]);
+    // The values withheld: unit 2, method 4 (2 Eijsden values, and the 2 maaseik Q values under F103: since P5a
+    // maaseik Q is registered with its live method F006, so the list is no longer an unregistered series), quality
+    // code 1, conflict 3, and registered_dropped 4 (the lists under the registered Eijsden NAP key with ProcesType
+    // verwachting (2 values), Groepering GETETM2 (1) and compartment BS (1)): 2 + 4 + 1 + 3 + 4 = 14.
+    expect(rows).toEqual([{ parse_status: 'ok', n_skipped: 14 }]);
     const ids = { source: 'NL-1', spec: 'nl-1-obs-key' };
     expect(h.alerts).toEqual([
       { code: 'unit_mismatch', fields: { ...ids, n: 2 } },
-      { code: 'unregistered_method', fields: { ...ids, n: 2 } },
+      { code: 'unregistered_method', fields: { ...ids, n: 4 } },
       { code: 'unknown_quality', fields: { ...ids, n: 1 } },
       { code: 'conflict', fields: { ...ids, n: 3 } },
       { code: 'registered_dropped', fields: { ...ids, n: 4 } },

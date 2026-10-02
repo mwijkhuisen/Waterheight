@@ -106,7 +106,7 @@ try {
                                         CASE WHEN s.station_id = 'nl.e2e.gap' THEN $3::timestamptz ELSE $2::timestamptz END,
                                         s.expected_step) g
      WHERE s.active AND e.role = 'primary' AND e.audience = 'public' AND e.lic_display
-       AND s.source_id IN ('NL-1', 'DE-1') AND s.station_id <> 'nl.e2e.dst'`,
+       AND s.station_id <> 'nl.e2e.dst'`,
     [FROM, NOW.toISOString(), GAP_LAST],
   );
   await t.admin.query(

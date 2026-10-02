@@ -1,7 +1,10 @@
-# Nightly live contract check (issue #17; A§7.1; PHASES P2b). Once a night, one payload each of
-# DE-1, NL-1 and NL-2 is fetched live and run through the loader's own parse and normalise code;
-# a provider that changed its format or moved its host (the RWS CTD switch, 2026-11-05) turns the
-# run red and opens or updates the one `contract-drift` issue.
+# Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a). Once a night, one payload each of
+# DE-1, NL-1, NL-2, FR-1, CH-1 and CH-2 is fetched live and run through the loader's own parse and
+# normalise code; a provider that changed its format or moved its host (the RWS CTD switch,
+# 2026-11-05) turns the run red and opens or updates the one `contract-drift` issue.
+# The cron minute is 29, midway between the recorder's CH-1 fetches (minutes 4, 14, 24, 34, ...):
+# BAFU asks LINDAS users for at most one download per 10 minutes. (Nominal: GitHub starts a
+# scheduled run a little late and the install takes a minute or two before the request.)
 # Same hardening as ci.yml. Only `schedule` and `workflow_dispatch` start it. No secrets: the
 # contact User-Agent comes from the Actions VARIABLES RWS_DOMAIN and RWS_CONTACT_EMAIL, and the
 # optional RWS API key is never sent from here. Two jobs, so that no job holds both a checkout and
@@ -11,7 +14,7 @@ name: contract-check
 
 on:
   schedule:
-    - cron: '23 3 * * *'
+    - cron: '29 3 * * *'
   workflow_dispatch:
 
 permissions: {}
@@ -49,7 +52,7 @@ jobs:
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      - name: Three live requests through the loader's parse; the report is the job output
+      - name: Six live requests through the loader's parse; the report is the job output
         id: run
         env:
           RWS_DOMAIN: ${{ vars.RWS_DOMAIN }}

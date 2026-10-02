@@ -153,7 +153,8 @@ describe('synthetic payloads [U]', () => {
       conflict: 3,
       future: 1,
       too_old: 1,
-      unregistered_method: 2,
+      // 2 Eijsden values, and (since P5a registers maaseik Q with its live method F006) the 2 F103 maaseik values.
+      unregistered_method: 4,
       datum: 2,
       // The verwachting (2 values), GETETM2 (1) and BS (1) lists are under the registered Eijsden NAP key.
       registered_dropped: 4,
@@ -163,8 +164,8 @@ describe('synthetic payloads [U]', () => {
       unit_mismatch: 2,
       quantity: 1,
     });
-    // maaseik Q: a Belgian point the registry does not hold until P5.
-    expect(out.unknown).toBe(1);
+    // maaseik Q is registered since P5a (catalogue §0.6): its F103 list is another method, not an unknown series.
+    expect(out.unknown).toBe(0);
   });
 });
 
@@ -296,7 +297,8 @@ describe('rules', () => {
   });
 
   it('a series the registry does not know is counted, never registered; an inherited name is no series', () => {
-    for (const code of ['maaseik', 'nowhere', 'constructor', '__proto__', 'toString']) {
+    // sasvangent is a live RWS point in NL that the registry does not hold (catalogue §0.6 correction).
+    for (const code of ['sasvangent', 'nowhere', 'constructor', '__proto__', 'toString']) {
       expect([code, normalise(recode(eijsden, code), base)]).toEqual([
         code,
         { obs: [], gaugeZeros: [], dropped: {}, unknown: 1 },

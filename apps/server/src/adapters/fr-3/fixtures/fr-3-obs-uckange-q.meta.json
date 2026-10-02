@@ -1,0 +1,15 @@
+{
+  "spec": "fr-3-obs",
+  "variant": "A850061001/Q",
+  "source": "FR-3",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/FR-3/fr-3-obs/2026/09/30/134857Z-bcba364dbf53729c.zst",
+  "recorded_at": "2026-09-30T13:48:57Z",
+  "seed": true,
+  "status": 200,
+  "url": "https://www.vigicrues.gouv.fr/services/observations.json/index.php?CdStationHydro=A850061001&GrdSerie=Q&FormatSortie=simple",
+  "bytes": 293158,
+  "source_sha256": "bcba364dbf53729c442f73f3beda73636e7b168250744d945e2ddae27496ab86",
+  "trimmed": "last 600 points of Serie.ObssHydro"
+}

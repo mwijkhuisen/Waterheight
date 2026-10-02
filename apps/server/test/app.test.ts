@@ -126,9 +126,10 @@ describe('the in-flight cap of the data routes', () => {
       release = r;
     });
     let waiting = 0;
-    // A snapshot (a statement with a parameter) waits; the fixed reads of /meta and /stations find no rows at once.
+    // A snapshot (a statement with an instant) waits; the fixed reads of /meta and /stations find no rows at once
+    // (/meta binds only the fill-source lists).
     const db = fakeDb(async (q) => {
-      if (q.parameters.length > 0) {
+      if (q.parameters.some((p) => p instanceof Date)) {
         waiting += 1;
         await held;
       }

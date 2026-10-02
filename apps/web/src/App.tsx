@@ -7,8 +7,9 @@ import { hasWebGL2 } from './features/map/webgl.ts';
 import { StationPanel } from './features/station/StationPanel.tsx';
 import { StationTable } from './features/table/StationTable.tsx';
 import { Timebar } from './features/timebar/Timebar.tsx';
+import { attributionText } from './lib/attribution.ts';
 import { chartSpan, useDebounced, useMeta, useSnapshot, useStations } from './lib/data/api.ts';
-import { quantise } from './lib/time/time.ts';
+import { formatDay, quantise, ZONE } from './lib/time/time.ts';
 import { otherLanguageHref } from './lib/url/url.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
 import { m } from './paraglide/messages.js';
@@ -42,7 +43,7 @@ function NotFound({ locale }: { locale: Locale }) {
           <a href={locale === 'nl' ? '/' : '/en/'}>{m.not_found_link({}, { locale })}</a>
         </p>
       </main>
-      <Footer locale={locale} meta={undefined} />
+      <Footer locale={locale} meta={undefined} t={undefined} />
     </>
   );
 }
@@ -201,7 +202,7 @@ function Viewer({ locale }: { locale: Locale }) {
           </>
         )}
       </main>
-      <Footer locale={locale} meta={meta.data} />
+      <Footer locale={locale} meta={meta.data} t={t} />
     </>
   );
 }
@@ -216,22 +217,33 @@ const httpsUrl = (url: string | null): string | undefined => {
   }
 };
 
-function Footer({ locale, meta }: { locale: Locale; meta: Meta | undefined }) {
+/**
+ * The sources from /meta, a source that fills another's series included (FR-3, CH-3). Where a row needs a date, it
+ * is the Amsterdam date of `t` in the page's language; a text that another source already showed is not repeated
+ * (CH-3 says what CH-1 says).
+ */
+function Footer({ locale, meta, t }: { locale: Locale; meta: Meta | undefined; t: number | undefined }) {
+  const date = t === undefined ? undefined : formatDay(t, locale, ZONE);
+  const shown = new Set<string>();
   return (
     <footer className={styles.footer}>
       <p className={styles.disclaimer}>{m.disclaimer({}, { locale })}</p>
-      {meta !== undefined && meta.sources.length > 0 && (
+      {meta !== undefined && date !== undefined && meta.sources.length > 0 && (
         <>
           <h2>{m.sources_heading({}, { locale })}</h2>
           <ul>
             {meta.sources.flatMap((source) =>
-              source.attribution.map((a) => {
+              source.attribution.flatMap((a) => {
+                const text = attributionText(a.text, a.needsDate, date);
                 const href = httpsUrl(a.url);
-                return (
+                const seen = `${a.lang}|${href}|${text}`;
+                if (shown.has(seen)) return [];
+                shown.add(seen);
+                return [
                   <li key={`${source.id}|${a.text}`} lang={a.lang ?? undefined}>
-                    {href === undefined ? a.text : <a href={href}>{a.text}</a>}
-                  </li>
-                );
+                    {href === undefined ? text : <a href={href}>{text}</a>}
+                  </li>,
+                ];
               }),
             )}
           </ul>

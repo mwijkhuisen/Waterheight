@@ -1,0 +1,934 @@
+{
+ "obs": [],
+ "gaugeZeros": [
+  {
+   "series": "A022020001/H",
+   "value_m": 277.721,
+   "datum": "IGN69",
+   "valid_from": "2002-07-01T00:00:00.000Z"
+  },
+  {
+   "series": "A040000101/H",
+   "value_m": 185.05,
+   "datum": "IGN69",
+   "valid_from": "2024-01-05T00:00:00.000Z"
+  },
+  {
+   "series": "A053074201/H",
+   "value_m": 0.15994999999999998,
+   "datum": "IGN69",
+   "valid_from": "2021-05-06T00:00:00.000Z"
+  },
+  {
+   "series": "A060005050/H",
+   "value_m": 133.6,
+   "datum": "IGN69",
+   "valid_from": "2024-07-01T00:00:00.000Z"
+  },
+  {
+   "series": "A061005051/H",
+   "value_m": 134.21,
+   "datum": "IGN69",
+   "valid_from": "2010-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A100003001/H",
+   "value_m": 401.776,
+   "datum": "IGN69",
+   "valid_from": "2006-09-07T00:00:00.000Z"
+  },
+  {
+   "series": "A105003001/H",
+   "value_m": 282.17,
+   "datum": "NGF1884",
+   "valid_from": "1963-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A107020001/H",
+   "value_m": 280.289,
+   "datum": "IGN69",
+   "valid_from": "1980-11-14T00:00:00.000Z"
+  },
+  {
+   "series": "A112010001/H",
+   "value_m": 340.5,
+   "datum": "NGF1884",
+   "valid_from": "1969-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A112010002/H",
+   "value_m": 350.386,
+   "datum": "IGN69",
+   "valid_from": "2011-07-01T00:00:00.000Z"
+  },
+  {
+   "series": "A113030002/H",
+   "value_m": 294.45,
+   "datum": "NGF1884",
+   "valid_from": "2014-03-24T00:00:00.000Z"
+  },
+  {
+   "series": "A115020001/H",
+   "value_m": 262.813,
+   "datum": "IGN69",
+   "valid_from": "2000-10-26T00:00:00.000Z"
+  },
+  {
+   "series": "A116003002/H",
+   "value_m": 242.78,
+   "datum": "IGN69",
+   "valid_from": "1985-10-16T00:00:00.000Z"
+  },
+  {
+   "series": "A116003004/H",
+   "value_m": 239.328,
+   "datum": "IGN69",
+   "valid_from": "2024-07-23T00:00:00.000Z"
+  },
+  {
+   "series": "A116003101/H",
+   "value_m": 231.626,
+   "datum": "IGN69",
+   "valid_from": "2024-07-25T00:00:00.000Z"
+  },
+  {
+   "series": "A120020302/H",
+   "value_m": 597.135,
+   "datum": "IGN69",
+   "valid_from": "1991-10-15T00:00:00.000Z"
+  },
+  {
+   "series": "A124020101/H",
+   "value_m": 294.736,
+   "datum": "NGF1884",
+   "valid_from": "1962-11-30T00:00:00.000Z"
+  },
+  {
+   "series": "A125020001/H",
+   "value_m": 260.65,
+   "datum": "NGF1884",
+   "valid_from": "1967-11-22T00:00:00.000Z"
+  },
+  {
+   "series": "A130000101/H",
+   "value_m": 228.846,
+   "datum": "IGN69",
+   "valid_from": "2015-04-14T00:00:00.000Z"
+  },
+  {
+   "series": "A133003001/H",
+   "value_m": 213,
+   "datum": "NGF1884",
+   "valid_from": "1957-01-16T00:00:00.000Z"
+  },
+  {
+   "series": "A140202001/H",
+   "value_m": 568.953,
+   "datum": "IGN69",
+   "valid_from": "2011-10-24T00:00:00.000Z"
+  },
+  {
+   "series": "A143020002/H",
+   "value_m": 365.607,
+   "datum": "IGN69",
+   "valid_from": "1996-08-01T00:00:00.000Z"
+  },
+  {
+   "series": "A146020302/H",
+   "value_m": 231.667,
+   "datum": "IGN69",
+   "valid_from": "2002-07-01T00:00:00.000Z"
+  },
+  {
+   "series": "A147004001/H",
+   "value_m": 189.738,
+   "datum": "IGN69",
+   "valid_from": "1997-10-29T00:00:00.000Z"
+  },
+  {
+   "series": "A150020001/H",
+   "value_m": 496,
+   "datum": "NGF1884",
+   "valid_from": "1975-06-12T00:00:00.000Z"
+  },
+  {
+   "series": "A152020001/H",
+   "value_m": 290.146,
+   "datum": "IGN69",
+   "valid_from": "1992-09-17T00:00:00.000Z"
+  },
+  {
+   "series": "A161003001/H",
+   "value_m": 180.939,
+   "datum": "NGF1884",
+   "valid_from": "1999-07-05T00:00:00.000Z"
+  },
+  {
+   "series": "A201010001/H",
+   "value_m": 439,
+   "datum": "NGF1884",
+   "valid_from": "1978-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A202030001/H",
+   "value_m": 430.592,
+   "datum": "IGN69",
+   "valid_from": "1976-08-27T00:00:00.000Z"
+  },
+  {
+   "series": "A204010201/H",
+   "value_m": 304.74,
+   "datum": "IGN69",
+   "valid_from": "2006-09-08T00:00:00.000Z"
+  },
+  {
+   "series": "A211030001/H",
+   "value_m": 410.66,
+   "datum": "IGN69",
+   "valid_from": "1983-11-14T00:00:00.000Z"
+  },
+  {
+   "series": "A212020001/H",
+   "value_m": 298.12,
+   "datum": "IGN69",
+   "valid_from": "2006-08-30T00:00:00.000Z"
+  },
+  {
+   "series": "A214010001/H",
+   "value_m": 177.466,
+   "datum": "IGN69",
+   "valid_from": "1972-04-28T00:00:00.000Z"
+  },
+  {
+   "series": "A215030001/H",
+   "value_m": 284,
+   "datum": "NGF1884",
+   "valid_from": "1971-06-25T00:00:00.000Z"
+  },
+  {
+   "series": "A220000101/H",
+   "value_m": 0.17361000000000001,
+   "datum": "IGN69",
+   "valid_from": "2022-11-15T00:00:00.000Z"
+  },
+  {
+   "series": "A222000101/H",
+   "value_m": 175.24,
+   "datum": "IGN69",
+   "valid_from": "2019-11-14T00:00:00.000Z"
+  },
+  {
+   "series": "A226032101/H",
+   "value_m": 172.2,
+   "datum": "IGN69",
+   "valid_from": "2019-08-08T00:00:00.000Z"
+  },
+  {
+   "series": "A228003001/H",
+   "value_m": 131,
+   "datum": "IGN69",
+   "valid_from": "1901-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A231020001/H",
+   "value_m": 227.51,
+   "datum": "NGF1884",
+   "valid_from": "1984-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A234021001/H",
+   "value_m": 259.46,
+   "datum": "IGN69",
+   "valid_from": "1993-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A235020001/H",
+   "value_m": 172.469,
+   "datum": "IGN69",
+   "valid_from": "2007-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A236003001/H",
+   "value_m": 158.3,
+   "datum": "NGF1884",
+   "valid_from": "1945-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A242020101/H",
+   "value_m": 155.98,
+   "datum": "IGN69",
+   "valid_from": "2023-06-08T00:00:00.000Z"
+  },
+  {
+   "series": "A243003001/H",
+   "value_m": 141,
+   "datum": "NGF1884",
+   "valid_from": "1967-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A251020001/H",
+   "value_m": 217.47,
+   "datum": "NGF1884",
+   "valid_from": "1973-10-01T00:00:00.000Z"
+  },
+  {
+   "series": "A261020001/H",
+   "value_m": 160.45,
+   "datum": "IGN69",
+   "valid_from": "2007-02-21T00:00:00.000Z"
+  },
+  {
+   "series": "A273011002/H",
+   "value_m": 263.18,
+   "datum": "NGF1884",
+   "valid_from": "1962-08-12T00:00:00.000Z"
+  },
+  {
+   "series": "A284020001/H",
+   "value_m": 167.64,
+   "datum": "IGN69",
+   "valid_from": "2007-02-21T00:00:00.000Z"
+  },
+  {
+   "series": "A285011001/H",
+   "value_m": 161.778,
+   "datum": "IGN69",
+   "valid_from": "2006-10-01T00:00:00.000Z"
+  },
+  {
+   "series": "A286011003/H",
+   "value_m": 144.385,
+   "datum": "IGN69",
+   "valid_from": "1995-09-19T00:00:00.000Z"
+  },
+  {
+   "series": "A302009050/H",
+   "value_m": 103.24,
+   "datum": "IGN69",
+   "valid_from": "1953-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A312000101/H",
+   "value_m": 172.49,
+   "datum": "IGN69",
+   "valid_from": "2014-01-25T00:00:00.000Z"
+  },
+  {
+   "series": "A325021001/H",
+   "value_m": 163.741,
+   "datum": "IGN69",
+   "valid_from": "2002-02-11T00:00:00.000Z"
+  },
+  {
+   "series": "A330010001/H",
+   "value_m": 144.29,
+   "datum": "IGN69",
+   "valid_from": "2007-02-21T00:00:00.000Z"
+  },
+  {
+   "series": "A341020001/H",
+   "value_m": 189.52,
+   "datum": "NGF1884",
+   "valid_from": "1965-03-16T00:00:00.000Z"
+  },
+  {
+   "series": "A343021001/H",
+   "value_m": 190.46,
+   "datum": "IGN69",
+   "valid_from": "2006-07-05T00:00:00.000Z"
+  },
+  {
+   "series": "A348020001/H",
+   "value_m": 147.65,
+   "datum": "IGN69",
+   "valid_from": "2007-02-21T00:00:00.000Z"
+  },
+  {
+   "series": "A350010001/H",
+   "value_m": 119.406,
+   "datum": "IGN69",
+   "valid_from": "2000-05-01T00:00:00.000Z"
+  },
+  {
+   "series": "A361011001/H",
+   "value_m": 171,
+   "datum": "NGF1884",
+   "valid_from": "1948-01-22T00:00:00.000Z"
+  },
+  {
+   "series": "A368021001/H",
+   "value_m": 115.465,
+   "datum": "IGN69",
+   "valid_from": "2002-09-11T00:00:00.000Z"
+  },
+  {
+   "series": "A369011001/H",
+   "value_m": 112.277,
+   "datum": "IGN69",
+   "valid_from": "1964-10-23T00:00:00.000Z"
+  },
+  {
+   "series": "A373020001/H",
+   "value_m": 119,
+   "datum": "NGF1884",
+   "valid_from": "1964-10-25T00:00:00.000Z"
+  },
+  {
+   "series": "A380020001/H",
+   "value_m": 166.975,
+   "datum": "IGN69",
+   "valid_from": "2002-07-23T00:00:00.000Z"
+  },
+  {
+   "series": "A402061001/H",
+   "value_m": 511.6,
+   "datum": "IGN69",
+   "valid_from": "1971-10-01T00:00:00.000Z"
+  },
+  {
+   "series": "A405062001/H",
+   "value_m": 432.57,
+   "datum": "IGN69",
+   "valid_from": "1968-08-01T00:00:00.000Z"
+  },
+  {
+   "series": "A414020201/H",
+   "value_m": 407.29,
+   "datum": "IGN69",
+   "valid_from": "2013-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A417301001/H",
+   "value_m": 451.3,
+   "datum": "IGN69",
+   "valid_from": "1970-08-01T00:00:00.000Z"
+  },
+  {
+   "series": "A420063001/H",
+   "value_m": 371.18,
+   "datum": "IGN69",
+   "valid_from": "1961-10-30T00:00:00.000Z"
+  },
+  {
+   "series": "A420063002/H",
+   "value_m": 379.22,
+   "datum": "IGN69",
+   "valid_from": "1993-10-11T00:00:00.000Z"
+  },
+  {
+   "series": "A433301001/H",
+   "value_m": 442.46,
+   "datum": "IGN69",
+   "valid_from": "1986-06-01T00:00:00.000Z"
+  },
+  {
+   "series": "A436203001/H",
+   "value_m": 368,
+   "datum": "IGN69",
+   "valid_from": "1988-03-24T00:00:00.000Z"
+  },
+  {
+   "series": "A443064001/H",
+   "value_m": 324.27,
+   "datum": "IGN69",
+   "valid_from": "1951-10-31T00:00:00.000Z"
+  },
+  {
+   "series": "A455000201/H",
+   "value_m": 282.42,
+   "datum": "IGN69",
+   "valid_from": "2014-06-27T00:00:00.000Z"
+  },
+  {
+   "series": "A463201001/H",
+   "value_m": 296.9,
+   "datum": "IGN69",
+   "valid_from": "1969-12-01T00:00:00.000Z"
+  },
+  {
+   "series": "A511061001/H",
+   "value_m": 230.52,
+   "datum": "IGN69",
+   "valid_from": "1980-08-20T00:00:00.000Z"
+  },
+  {
+   "series": "A511061002/H",
+   "value_m": 231.46,
+   "datum": "IGN69",
+   "valid_from": "2008-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A524201001/H",
+   "value_m": 272.72,
+   "datum": "IGN69",
+   "valid_from": "1979-02-01T00:00:00.000Z"
+  },
+  {
+   "series": "A526102001/H",
+   "value_m": 262.97,
+   "datum": "IGN69",
+   "valid_from": "1993-09-07T00:00:00.000Z"
+  },
+  {
+   "series": "A542201101/H",
+   "value_m": 240.768,
+   "datum": "IGN69",
+   "valid_from": "2020-01-23T00:00:00.000Z"
+  },
+  {
+   "series": "A543101001/H",
+   "value_m": 225,
+   "datum": "IGN69",
+   "valid_from": "2003-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A550061001/H",
+   "value_m": 214.94,
+   "datum": "IGN69",
+   "valid_from": "1988-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A573061001/H",
+   "value_m": 200.74,
+   "datum": "IGN69",
+   "valid_from": "1959-03-27T00:00:00.000Z"
+  },
+  {
+   "series": "A600101001/H",
+   "value_m": 497.64,
+   "datum": "IGN69",
+   "valid_from": "1971-07-07T00:00:00.000Z"
+  },
+  {
+   "series": "A605102001/H",
+   "value_m": 335.9,
+   "datum": "IGN69",
+   "valid_from": "1992-08-11T00:00:00.000Z"
+  },
+  {
+   "series": "A615103001/H",
+   "value_m": 280.98,
+   "datum": "IGN69",
+   "valid_from": "1973-11-01T00:00:00.000Z"
+  },
+  {
+   "series": "A623201001/H",
+   "value_m": 290.12,
+   "datum": "IGN69",
+   "valid_from": "1969-11-09T00:00:00.000Z"
+  },
+  {
+   "series": "A631101001/H",
+   "value_m": 260.52,
+   "datum": "IGN69",
+   "valid_from": "1981-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A631101003/H",
+   "value_m": 261.11,
+   "datum": "IGN69",
+   "valid_from": "2015-07-16T00:00:00.000Z"
+  },
+  {
+   "series": "A634101001/H",
+   "value_m": 218.75,
+   "datum": "IGN69",
+   "valid_from": "1970-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A643112001/H",
+   "value_m": 259.718,
+   "datum": "IGN69",
+   "valid_from": "1991-09-23T00:00:00.000Z"
+  },
+  {
+   "series": "A643112002/H",
+   "value_m": 259.72,
+   "datum": "IGN69",
+   "valid_from": "2013-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A648000101/H",
+   "value_m": 264.755,
+   "datum": "IGN69",
+   "valid_from": "2023-05-24T00:00:00.000Z"
+  },
+  {
+   "series": "A654111001/H",
+   "value_m": 231.18,
+   "datum": "IGN69",
+   "valid_from": "1992-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A657111001/H",
+   "value_m": 219.67,
+   "datum": "IGN69",
+   "valid_from": "1968-12-01T00:00:00.000Z"
+  },
+  {
+   "series": "A662121201/H",
+   "value_m": 228.17,
+   "datum": "IGN69",
+   "valid_from": "2024-06-10T00:00:00.000Z"
+  },
+  {
+   "series": "A664031001/H",
+   "value_m": 295,
+   "datum": "IGN69",
+   "valid_from": "2010-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A670121001/H",
+   "value_m": 270.68,
+   "datum": "IGN69",
+   "valid_from": "1992-02-17T00:00:00.000Z"
+  },
+  {
+   "series": "A673122001/H",
+   "value_m": 233.35,
+   "datum": "IGN69",
+   "valid_from": "1969-11-01T00:00:00.000Z"
+  },
+  {
+   "series": "A692101001/H",
+   "value_m": 200.41,
+   "datum": "IGN69",
+   "valid_from": "1984-07-26T00:00:00.000Z"
+  },
+  {
+   "series": "A694102004/H",
+   "value_m": 188.08,
+   "datum": "IGN69",
+   "valid_from": "1991-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A701061001/H",
+   "value_m": 183.6,
+   "datum": "IGN69",
+   "valid_from": "1983-05-23T00:00:00.000Z"
+  },
+  {
+   "series": "A712201001/H",
+   "value_m": 182,
+   "datum": "IGN69",
+   "valid_from": "1969-08-01T00:00:00.000Z"
+  },
+  {
+   "series": "A735201001/H",
+   "value_m": 184.22,
+   "datum": "IGN69",
+   "valid_from": "1964-08-01T00:00:00.000Z"
+  },
+  {
+   "series": "A740000102/H",
+   "value_m": 166.684,
+   "datum": "IGN69",
+   "valid_from": "2014-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A743061001/H",
+   "value_m": 159.01,
+   "datum": "IGN69",
+   "valid_from": "1986-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A758102001/H",
+   "value_m": 198.93,
+   "datum": "IGN69",
+   "valid_from": "1985-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A764201001/H",
+   "value_m": 202,
+   "datum": "IGN69",
+   "valid_from": "1968-08-01T00:00:00.000Z"
+  },
+  {
+   "series": "A770101001/H",
+   "value_m": 198.65,
+   "datum": "IGN69",
+   "valid_from": "1997-02-25T00:00:00.000Z"
+  },
+  {
+   "series": "A782101001/H",
+   "value_m": 180.66,
+   "datum": "IGN69",
+   "valid_from": "1968-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A788101002/H",
+   "value_m": 163.54,
+   "datum": "IGN69",
+   "valid_from": "2015-09-22T00:00:00.000Z"
+  },
+  {
+   "series": "A793061002/H",
+   "value_m": 153.91,
+   "datum": "IGN69",
+   "valid_from": "2012-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A800621001/H",
+   "value_m": 207,
+   "datum": "IGN69",
+   "valid_from": "1984-06-01T00:00:00.000Z"
+  },
+  {
+   "series": "A802101001/H",
+   "value_m": 199.04,
+   "datum": "IGN69",
+   "valid_from": "2000-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A807101001/H",
+   "value_m": 185,
+   "datum": "NGF1884",
+   "valid_from": "1967-10-01T00:00:00.000Z"
+  },
+  {
+   "series": "A812020101/H",
+   "value_m": 188.96,
+   "datum": "IGN69",
+   "valid_from": "2003-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A812200001/H",
+   "value_m": 196.77,
+   "datum": "IGN69",
+   "valid_from": "1996-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A820101001/H",
+   "value_m": 186.1,
+   "datum": "IGN69",
+   "valid_from": "2005-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A830020101/H",
+   "value_m": 231.13,
+   "datum": "IGN69",
+   "valid_from": "2004-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A831030001/H",
+   "value_m": 211.91,
+   "datum": "IGN69",
+   "valid_from": "2003-03-17T00:00:00.000Z"
+  },
+  {
+   "series": "A832201001/H",
+   "value_m": 204,
+   "datum": "NGF1884",
+   "valid_from": "1967-06-14T00:00:00.000Z"
+  },
+  {
+   "series": "A840101001/H",
+   "value_m": 169.03,
+   "datum": "IGN69",
+   "valid_from": "2013-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A843101001/H",
+   "value_m": 164.45,
+   "datum": "IGN69",
+   "valid_from": "2000-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A850061001/H",
+   "value_m": 150.28,
+   "datum": "IGN69",
+   "valid_from": "1981-10-01T00:00:00.000Z"
+  },
+  {
+   "series": "A860304001/H",
+   "value_m": 153.13,
+   "datum": "IGN69",
+   "valid_from": "2013-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A861202001/H",
+   "value_m": 200.71,
+   "datum": "IGN69",
+   "valid_from": "1984-10-01T00:00:00.000Z"
+  },
+  {
+   "series": "A864030001/H",
+   "value_m": 155.66,
+   "datum": "IGN69",
+   "valid_from": "2004-01-28T00:00:00.000Z"
+  },
+  {
+   "series": "A873201001/H",
+   "value_m": 148,
+   "datum": "IGN69",
+   "valid_from": "1969-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A891030101/H",
+   "value_m": 299.22,
+   "datum": "IGN69",
+   "valid_from": "2004-03-01T00:00:00.000Z"
+  },
+  {
+   "series": "A900105050/H",
+   "value_m": 268,
+   "datum": "IGN69",
+   "valid_from": "1968-08-01T00:00:00.000Z"
+  },
+  {
+   "series": "A901305050/H",
+   "value_m": 279,
+   "datum": "IGN69",
+   "valid_from": "1968-08-01T00:00:00.000Z"
+  },
+  {
+   "series": "A902101050/H",
+   "value_m": 258.68,
+   "datum": "IGN69",
+   "valid_from": "2008-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A902102050/H",
+   "value_m": 243,
+   "datum": "IGN69",
+   "valid_from": "1953-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A902102101/H",
+   "value_m": 251.7,
+   "datum": "IGN69",
+   "valid_from": "2015-09-01T00:00:00.000Z"
+  },
+  {
+   "series": "A903000101/H",
+   "value_m": 245.24,
+   "datum": "IGN69",
+   "valid_from": "2026-08-03T00:00:00.000Z"
+  },
+  {
+   "series": "A906215050/H",
+   "value_m": 231,
+   "datum": "IGN69",
+   "valid_from": "1969-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A907105050/H",
+   "value_m": 222,
+   "datum": "IGN69",
+   "valid_from": "1970-07-01T00:00:00.000Z"
+  },
+  {
+   "series": "A909106050/H",
+   "value_m": 208,
+   "datum": "IGN69",
+   "valid_from": "1967-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A919205050/H",
+   "value_m": 207,
+   "datum": "IGN69",
+   "valid_from": "2008-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A923205040/H",
+   "value_m": 223,
+   "datum": "IGN69",
+   "valid_from": "2010-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A926000101/H",
+   "value_m": 210,
+   "datum": "IGN69",
+   "valid_from": "1968-05-01T00:00:00.000Z"
+  },
+  {
+   "series": "A930108040/H",
+   "value_m": 200,
+   "datum": "IGN69",
+   "valid_from": "1987-04-02T00:00:00.000Z"
+  },
+  {
+   "series": "A932215050/H",
+   "value_m": 265,
+   "datum": "IGN69",
+   "valid_from": "1969-10-01T00:00:00.000Z"
+  },
+  {
+   "series": "A937204050/H",
+   "value_m": 0.20255,
+   "datum": "IGN69",
+   "valid_from": "2024-02-09T00:00:00.000Z"
+  },
+  {
+   "series": "A937205050/H",
+   "value_m": 202,
+   "datum": "IGN69",
+   "valid_from": "2007-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A937205051/H",
+   "value_m": 202.03,
+   "datum": "IGN69",
+   "valid_from": "2015-02-28T00:00:00.000Z"
+  },
+  {
+   "series": "A937205301/H",
+   "value_m": 0.198462,
+   "datum": "IGN69",
+   "valid_from": "2018-10-25T00:00:00.000Z"
+  },
+  {
+   "series": "A940000101/H",
+   "value_m": 191.3,
+   "datum": "IGN69",
+   "valid_from": "2021-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A953205050/H",
+   "value_m": 198,
+   "datum": "IGN69",
+   "valid_from": "2008-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A961205050/H",
+   "value_m": 201,
+   "datum": "IGN69",
+   "valid_from": "1978-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "A973121001/H",
+   "value_m": 218.09,
+   "datum": "IGN69",
+   "valid_from": "2002-06-20T00:00:00.000Z"
+  },
+  {
+   "series": "A975201001/H",
+   "value_m": 204,
+   "datum": "NGF1884",
+   "valid_from": "1968-11-01T00:00:00.000Z"
+  },
+  {
+   "series": "A983201001/H",
+   "value_m": 242.01,
+   "datum": "IGN69",
+   "valid_from": "1984-04-01T00:00:00.000Z"
+  },
+  {
+   "series": "A986201001/H",
+   "value_m": 204.39,
+   "datum": "IGN69",
+   "valid_from": "1968-11-01T00:00:00.000Z"
+  },
+  {
+   "series": "A994202001/H",
+   "value_m": 188.68,
+   "datum": "IGN69",
+   "valid_from": "2002-02-22T00:00:00.000Z"
+  }
+ ],
+ "dropped": {
+  "zero_missing": 17,
+  "zero_datum_unknown": 10
+ },
+ "unknown": 0
+}

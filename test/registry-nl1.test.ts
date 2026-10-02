@@ -67,7 +67,27 @@ const TIER1 = [
   'zutphen.ijssel',
   'zwolle.ijssel',
 ];
-const TIDAL = ['delfzijl', 'hansweert', 'nieuwestatenzijl.dollard', 'rilland.bath', 'terneuzen', 'vlissingen'];
+// P5a: antwerpen (the tidal Scheldt, a seed row on Belgian soil) joins the six Dutch sea and estuary gauges.
+const TIDAL = [
+  'antwerpen',
+  'delfzijl',
+  'hansweert',
+  'nieuwestatenzijl.dollard',
+  'rilland.bath',
+  'terneuzen',
+  'vlissingen',
+];
+// P5a: the 7 RWS points on Belgian soil of catalogue §0.6 (9 series), the seed rows noted `be`: registered as ordinary
+// tier-2 primary rows with country BE (A§7.2 exception until a Belgian source is public, P13).
+const BELGIAN = [
+  'antwerpen',
+  'herenlaak',
+  'kanne',
+  'lanaken',
+  'lixhebiefaval',
+  'maaseik',
+  'smeermaas.zuidwillemsvaart',
+];
 
 describe('registry/stations/nl-1.yaml', () => {
   it('is exactly what the generator writes from its inputs', () => {
@@ -87,17 +107,18 @@ describe('registry/stations/nl-1.yaml', () => {
     expect(validateStations(parse(committed), sources).problems).toEqual([]);
   });
 
-  it('holds 76 rows at 65 stations (62 H, 1 TAW twin, 13 Q), all public, open and NL', () => {
-    expect(stationIds(rows).size).toBe(65);
-    expect(rows).toHaveLength(76);
-    expect(rows.filter((r) => r.quantity === 'H' && r.role === 'primary')).toHaveLength(62);
+  it('holds 85 rows at 72 stations (68 H, 1 TAW twin, 16 Q), all public and open, NL but for the Belgian points', () => {
+    // P5a: 76 rows at 65 stations (62 H, 1 twin, 13 Q) plus the 9 Belgian series (6 H, 3 Q) at 7 stations.
+    expect(stationIds(rows).size).toBe(72);
+    expect(rows).toHaveLength(85);
+    expect(rows.filter((r) => r.quantity === 'H' && r.role === 'primary')).toHaveLength(68);
     expect(rows.filter((r) => r.role === 'twin')).toHaveLength(1);
-    expect(rows.filter((r) => r.quantity === 'Q')).toHaveLength(13);
+    expect(rows.filter((r) => r.quantity === 'Q')).toHaveLength(16);
     for (const r of rows) {
       expect(r).toMatchObject({
         id: `nl.rws.${r.provider_code}`,
         source: 'NL-1',
-        country: 'NL',
+        country: BELGIAN.includes(r.provider_code) ? 'BE' : 'NL',
         water_name: null,
         river: null,
         km: null,
@@ -135,9 +156,16 @@ describe('registry/stations/nl-1.yaml', () => {
     expect(tier1.filter((r) => r.quantity === 'Q')).toHaveLength(13);
     expect(tier1.filter((r) => r.first_release)).toHaveLength(41);
     expect(tier1.every((r) => r.first_release === (r.role === 'primary'))).toBe(true);
+    // Tier 2: 34 H stations of the earlier files, and the 7 Belgian stations (6 H, 3 Q rows) of P5a.
     const tier2 = rows.filter((r) => r.tier === 2);
-    expect(stationIds(tier2).size).toBe(34);
-    expect(tier2.every((r) => !r.first_release && r.role === 'primary' && r.quantity === 'H')).toBe(true);
+    expect(stationIds(tier2).size).toBe(41);
+    expect(tier2).toHaveLength(43);
+    expect(tier2.every((r) => !r.first_release && r.role === 'primary')).toBe(true);
+    expect(tier2.filter((r) => r.quantity === 'Q').map((r) => r.provider_code)).toEqual([
+      'kanne',
+      'maaseik',
+      'smeermaas.zuidwillemsvaart',
+    ]);
   });
 
   it('gives every tier-1 row every field of the station registry', () => {
@@ -148,7 +176,7 @@ describe('registry/stations/nl-1.yaml', () => {
     }
   });
 
-  it('flags the six sea and estuary gauges tidal (tier 2), the tier-1 river gauges not tidal, the rest unknown', () => {
+  it('flags the seven sea and estuary gauges tidal (tier 2), the tier-1 river gauges not tidal, the rest unknown', () => {
     expect(codes(rows.filter((r) => r.flags.tidal === true))).toEqual(TIDAL);
     expect(rows.filter((r) => TIDAL.includes(r.provider_code)).every((r) => r.tier === 2)).toBe(true);
     for (const r of rows) {
@@ -174,10 +202,23 @@ describe('registry/stations/nl-1.yaml', () => {
     for (const key of twinKeys) expect(rows.filter((r) => r.provider_key === key)).toHaveLength(1);
   });
 
-  it('registers no Belgian point, no stale series, no Pannerden weir gauge and no Hedel', () => {
-    const belgian = inputs.seed.filter((r) => r.note === 'be').map((r) => r.code);
-    expect(belgian).toHaveLength(9);
-    expect(rows.filter((r) => belgian.includes(r.provider_code))).toEqual([]);
+  it('registers the 7 Belgian points (9 series) of §0.6 as primary tier-2 rows, country BE; no stale series, no Pannerden weir gauge, no Hedel', () => {
+    // Before P5a these 9 seed rows were skipped; now each is an ordinary `other` row (method from the WFS snapshot).
+    const seeded = inputs.seed.filter((r) => r.note === 'be');
+    expect(seeded).toHaveLength(9);
+    expect([...new Set(seeded.map((r) => r.code))].sort()).toEqual(BELGIAN);
+    const be = rows.filter((r) => r.country === 'BE');
+    expect(be.map((r) => `${r.provider_code}/${r.quantity}`).sort()).toEqual(
+      seeded.map((r) => `${r.code}/${r.quantity}`).sort(),
+    );
+    expect(be).toHaveLength(9);
+    for (const r of be) {
+      expect([r.id, r.role, r.tier, r.first_release, r.audience]).toEqual([r.id, 'primary', 2, false, 'public']);
+    }
+    // kanne keeps no river: the water body is unverified (catalogue §10 R9), and no NL-1 row has a river anyway.
+    expect(find('kanne', 'Q')).toMatchObject({ river: null, water_name: null, tier: 2 });
+    // sasvangent is on Dutch soil and not in the seed: not registered.
+    expect(rows.filter((r) => r.provider_code === 'sasvangent')).toEqual([]);
     const stale = (key: string) => STALE_SERIES.some((s) => key === s || key.startsWith(`${s}/`));
     expect(rows.filter((r) => stale(r.provider_key))).toEqual([]);
     expect(rows.filter((r) => r.provider_code === 'arnhem.nederrijn')).toEqual([]);
@@ -192,12 +233,14 @@ describe('registry/stations/nl-1.yaml', () => {
     expect(new Set(h.filter((r) => method(r) !== 'other:F007').map(method))).toEqual(new Set(['other:F155']));
   });
 
-  it('declares the live method of each Q series, per station', () => {
+  it('declares the live method of each Q series, per station (maaseik F006, kanne and smeermaas F103: P5a)', () => {
     expect(Object.fromEntries(rows.filter((r) => r.quantity === 'Q').map((r) => [r.provider_code, method(r)]))).toEqual(
       {
         'eijsden.grens': 'other:F216',
         'hagestein.boven': 'other:F103',
+        kanne: 'other:F103',
         'lobith.bovenrijn.tolkamer': 'other:F230',
+        maaseik: 'other:F006',
         'maastricht.borgharen.maas.beneden': 'other:F006',
         'maastricht.sintpieter': 'other:F103',
         'megen.maas': 'other:F103',
@@ -205,6 +248,7 @@ describe('registry/stations/nl-1.yaml', () => {
         olst: 'other:F006',
         'ommen.vecht': 'other:F103',
         'pannerden.pannerdenschkanaal': 'other:F230',
+        'smeermaas.zuidwillemsvaart': 'other:F103',
         'tiel.waal': 'other:F006',
         venlo: 'other:F103',
         'westervoort.1': 'other:F006',
@@ -224,26 +268,32 @@ describe('registry/stations/nl-1.yaml', () => {
       expect([r.id, r.quantity, r.staleness_limit]).toEqual([r.id, r.quantity, want]);
     }
     const count = (limit: string) => rows.filter((r) => r.staleness_limit === limit).length;
-    expect([count('PT1H'), count('PT90M'), count('PT2H')]).toEqual([26, 49, 1]);
+    // P5a: the 9 Belgian series are `other` rows (every 30 min): 49 + 9 stale after 90 min.
+    expect([count('PT1H'), count('PT90M'), count('PT2H')]).toEqual([26, 58, 1]);
   });
 
-  it('names NL-4 as the threshold source of 58 of 62 H and 11 of 13 Q series, never of the twin', () => {
+  it('names NL-4 as the threshold source of 61 of 68 H and 13 of 16 Q series, never of the twin', () => {
     const without = (quantity: 'H' | 'Q') =>
       codes(
         rows.filter((r) => r.quantity === quantity && r.role === 'primary' && r.expected_threshold_source === null),
       );
+    // P5a: the Belgian rows add antwerpen, herenlaak and lixhebiefaval (no NL-4 class) and kanne Q; lanaken, maaseik
+    // and smeermaas have classes, which is also why the converter's 702 NL-4 reference rows grow.
     expect(without('H')).toEqual([
+      'antwerpen',
+      'herenlaak',
       'holtheme.vecht',
       'lith.beneden',
+      'lixhebiefaval',
       'millingenaanderijn.pannerdensekop',
       'rhenen.grebbeberg',
     ]);
-    expect(without('Q')).toEqual(['hagestein.boven', 'millingenaanderijn']);
-    expect(rows.filter((r) => r.expected_threshold_source === 'NL-4')).toHaveLength(69);
+    expect(without('Q')).toEqual(['hagestein.boven', 'kanne', 'millingenaanderijn']);
+    expect(rows.filter((r) => r.expected_threshold_source === 'NL-4')).toHaveLength(74);
     expect(new Set(rows.map((r) => r.expected_threshold_source))).toEqual(new Set(['NL-4', null]));
   });
 
-  it('names NL-1 as the forecast source of the series on the forecast list (58 H, 9 Q), never of the twin', () => {
+  it('names NL-1 as the forecast source of the series on the forecast list (61 H, 10 Q), never of the twin', () => {
     const forecast = new Set(inputs.forecast.map((r) => `${r.code}/${r.quantity}`));
     for (const r of rows) {
       const want = r.role === 'primary' && forecast.has(`${r.provider_code}/${r.quantity}`) ? 'NL-1' : null;
@@ -251,7 +301,8 @@ describe('registry/stations/nl-1.yaml', () => {
     }
     const withForecast = (quantity: 'H' | 'Q') =>
       rows.filter((r) => r.quantity === quantity && r.expected_forecast_source === 'NL-1').length;
-    expect([withForecast('H'), withForecast('Q')]).toEqual([58, 9]);
+    // P5a: + antwerpen H, maaseik H, lanaken H and maaseik Q.
+    expect([withForecast('H'), withForecast('Q')]).toEqual([61, 10]);
   });
 
   it('takes every code, name and coordinate from the recorded catalogue, the same on every row of a station', () => {

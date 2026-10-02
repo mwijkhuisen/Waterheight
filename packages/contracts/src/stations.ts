@@ -10,6 +10,13 @@ export const LICENCE_GATES = ['open', 'owner-only', 'permission-pending', 'withh
 
 const Duration = z.iso.duration();
 
+/** Provider text as published, bounded (the API's Text(200)), without control or format characters (bidi included). */
+const Label = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((s) => !/[\p{Cc}\p{Cf}]/u.test(s), 'a control or format character');
+
 const identification = {
   /** Registry format, e.g. 'nl.rws.lobith.bovenrijn.tolkamer', 'ch.bafu.2289'. */
   id: z
@@ -22,15 +29,20 @@ const identification = {
   /** The series key inside the source, unique per source (DE-1: "<station uuid>/<W|Q>"). */
   provider_key: z.string().min(1).max(120),
   /** Exactly as the operating agency publishes them. */
-  name: z.string().min(1),
-  water_name: z.string().min(1).nullable(),
+  name: Label,
+  water_name: Label.nullable(),
   country: z.enum(['NL', 'DE', 'BE', 'FR', 'LU', 'CH']),
   lon: z.number().min(-180).max(180).nullable(),
   lat: z.number().min(-90).max(90).nullable(),
   quantity: z.enum(['H', 'Q']),
   river: z.string().min(1).nullable(),
   km: z.strictObject({ system: z.string().min(1), value: z.number() }).nullable(),
-  flags: z.strictObject({ tidal: z.boolean().nullable(), impounded: z.boolean().nullable() }),
+  /** `lake` (P5a: the CH-1 lake cube, e.g. Bodensee) is optional, so the earlier files keep their bytes. */
+  flags: z.strictObject({
+    tidal: z.boolean().nullable(),
+    impounded: z.boolean().nullable(),
+    lake: z.boolean().optional(),
+  }),
   /** 1: first-release key gauge; 2: the source's other gauges. */
   tier: z.union([z.literal(1), z.literal(2)]),
   /** primary: the canonical gauge; twin: the same gauge in another source; mirror: a gauge another agency operates. */

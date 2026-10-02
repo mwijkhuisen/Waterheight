@@ -1,0 +1,14 @@
+{
+  "spec": "ch-1-lindas",
+  "variant": "river",
+  "source": "CH-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/CH-1/ch-1-lindas/2026/09/30/124400Z-7b800992820e6a97.zst",
+  "recorded_at": "2026-09-30T12:44:00Z",
+  "status": 200,
+  "url": "https://ld.admin.ch/query",
+  "bytes": 33,
+  "source_sha256": "7b800992820e6a975fdaddc715e498360136e197f0be94ae04b14b48f8728df9",
+  "trimmed": false
+}

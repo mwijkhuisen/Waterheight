@@ -21,6 +21,7 @@
     "apps/web/src/features/map/resolveStyle.ts",
     "apps/web/src/features/map/stationLayer.ts",
     "apps/web/src/features/station/value.ts",
+    "apps/web/src/lib/attribution.ts",
     "apps/web/src/lib/data/api.ts",
     "apps/web/src/lib/time/time.ts",
     "apps/web/src/lib/url/url.ts",

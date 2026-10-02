@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import type { ManifestLine } from '../apps/server/src/archive/manifest.ts';
 import { Archive, sha256 } from '../apps/server/src/archive/writer.ts';
 
-// Builds a small raw archive from the recorded DE-1, NL-1 and NL-2 fixtures,
+// Builds a small raw archive from the recorded DE-1, NL-1, NL-2, FR-1, FR-3,
+// CH-1, CH-2 and CH-3 fixtures,
 // written by the recorder's own Archive class (real zstd objects, real
 // manifest lines). The loader tests and the CI end-to-end run load it;
 // nothing is fetched.
@@ -25,6 +26,8 @@ export type FixtureLine = {
   retention?: 'obs' | 'forever';
   validity?: ManifestLine['validity'];
   seed?: true;
+  /** The HTTP status the recorder logged (Hub'Eau answers 206 for a page with a `next`). Default 200. */
+  status?: number;
 };
 
 /** A manifest line without a payload (304, an error, a closed gate) or with fields to override. */
@@ -68,6 +71,7 @@ export async function writePayload(archive: Archive, f: FixtureLine): Promise<Ma
     gate: { kind: 'hash', key: null, open: true },
     validity: f.validity ?? { ok: true, reason: null, count: 1 },
     retention: f.retention ?? 'obs',
+    ...(f.status === undefined ? {} : { status: f.status }),
     ...(f.seed ? { seed: true as const } : {}),
   });
   await archive.append(line);
@@ -190,6 +194,98 @@ export async function buildNlFixtureArchive(rawDir: string): Promise<ManifestLin
   return lines;
 }
 
+/**
+ * The P5a fixtures (P1a smoke recordings and payloads exported from the production archive), with the variant
+ * and status the recorder logged. The FR-1 seed pages are the two first pages of one walk (HTTP 206) and the
+ * empty last page of another day.
+ */
+export const FRCH_FIXTURES: readonly {
+  source: 'FR-1' | 'FR-3' | 'CH-1' | 'CH-2' | 'CH-3';
+  spec: string;
+  name: string;
+  variant: string;
+  status?: number;
+  seed?: true;
+  method?: 'POST';
+  retention: 'obs' | 'forever';
+}[] = [
+  { source: 'FR-1', spec: 'fr-1-ref', name: 'fr-1-ref', variant: 'A', retention: 'forever' },
+  {
+    source: 'FR-1',
+    spec: 'fr-1-obs',
+    name: 'fr-1-obs-page1',
+    variant: 'default',
+    status: 206,
+    seed: true,
+    retention: 'obs',
+  },
+  {
+    source: 'FR-1',
+    spec: 'fr-1-obs',
+    name: 'fr-1-obs-page2',
+    variant: 'default#2',
+    status: 206,
+    seed: true,
+    retention: 'obs',
+  },
+  { source: 'FR-1', spec: 'fr-1-obs', name: 'fr-1-obs-empty', variant: 'default#6', seed: true, retention: 'obs' },
+  { source: 'FR-1', spec: 'fr-1-obs', name: 'fr-1-obs', variant: 'default', retention: 'obs' },
+  {
+    source: 'FR-3',
+    spec: 'fr-3-obs',
+    name: 'fr-3-obs-uckange-q',
+    variant: 'A850061001/Q',
+    seed: true,
+    retention: 'obs',
+  },
+  {
+    source: 'FR-3',
+    spec: 'fr-3-obs',
+    name: 'fr-3-obs-lauterbourg-h',
+    variant: 'A302009050/H',
+    seed: true,
+    retention: 'obs',
+  },
+  { source: 'FR-3', spec: 'fr-3-obs', name: 'fr-3-obs', variant: 'B720000001/H', retention: 'obs' },
+  { source: 'CH-3', spec: 'ch-3-40d', name: 'ch-3-40d-2473', variant: '2473', seed: true, retention: 'obs' },
+  { source: 'CH-3', spec: 'ch-3-40d', name: 'ch-3-40d-2289', variant: '2289', seed: true, retention: 'obs' },
+  { source: 'CH-3', spec: 'ch-3-40d', name: 'ch-3-40d', variant: '2091', retention: 'obs' },
+  {
+    source: 'CH-1',
+    spec: 'ch-1-lindas',
+    name: 'ch-1-lindas-lake',
+    variant: 'lake',
+    method: 'POST',
+    retention: 'forever',
+  },
+  { source: 'CH-1', spec: 'ch-1-lindas', name: 'ch-1-lindas', variant: 'river', method: 'POST', retention: 'forever' },
+  { source: 'CH-2', spec: 'ch-2-pq', name: 'ch-2-pq', variant: 'default', retention: 'forever' },
+];
+
+/** The FR-1, FR-3, CH-1, CH-2 and CH-3 fixtures at their recorded times. Returns the lines written. */
+export async function buildFrChFixtureArchive(rawDir: string): Promise<ManifestLine[]> {
+  const archive = new Archive(rawDir);
+  const lines: ManifestLine[] = [];
+  for (const f of FRCH_FIXTURES) {
+    const { body, at, url } = recorded(f.name, f.source);
+    lines.push(
+      await writePayload(archive, {
+        source: f.source,
+        spec: f.spec,
+        variant: f.variant,
+        at,
+        body,
+        url,
+        retention: f.retention,
+        ...(f.method ? { method: f.method } : {}),
+        ...(f.status ? { status: f.status } : {}),
+        ...(f.seed ? { seed: true as const } : {}),
+      }),
+    );
+  }
+  return lines;
+}
+
 if (import.meta.main) {
   const dir = process.argv[2];
   if (dir === undefined || process.argv.length !== 3) {
@@ -197,7 +293,11 @@ if (import.meta.main) {
     process.exitCode = 64;
   } else {
     process.umask(0o027);
-    const lines = [...(await buildFixtureArchive(dir)), ...(await buildNlFixtureArchive(dir))];
+    const lines = [
+      ...(await buildFixtureArchive(dir)),
+      ...(await buildNlFixtureArchive(dir)),
+      ...(await buildFrChFixtureArchive(dir)),
+    ];
     const payloads = lines.filter((l) => l.key !== null).length;
     console.log(`fixture-archive: ${lines.length} manifest lines (${payloads} payloads) written to ${dir}`);
   }

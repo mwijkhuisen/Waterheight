@@ -1,7 +1,7 @@
 # FR-3 key stations (catalogue §2.5, §3; the ~2-month Vigicrues seed and the weekly CruesHistoriques), each in the
 # recorded Hub'Eau referential.
 code,name
-B720000001,"La Meuse à Chooz - Trou du Diable "DREAL""
+B720000001,"La Meuse à Chooz - Trou du Diable ""DREAL"""
 A850061001,"La Moselle à Uckange"
 A302009050,"Le Rhin à Lauterbourg"
 A061005051,"Le Rhin à Strasbourg [sémaphore nord]"

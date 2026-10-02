@@ -1,5 +1,6 @@
 export * from './audience.ts';
 export * from './canonical.ts';
+export * from './csv.ts';
 export * from './datums.ts';
 export * from './downsample.ts';
 export * from './errors.ts';
