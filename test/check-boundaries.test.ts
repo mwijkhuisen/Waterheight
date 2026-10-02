@@ -33,6 +33,8 @@ describe('check-boundaries', () => {
     expect(problems).toMatch(/parse\.ts: imports \.\.\/\.\.\/http\/client\.ts/);
     // `import { type X }` is still a runtime import (verbatimModuleSyntax).
     expect(problems).toMatch(/normalise\.ts: imports \.\.\/\.\.\/http\/client\.ts/);
+    // A protocol's shared folder only for the providers that serve it (P5c: KiWIS for SPW, HIC and VMM).
+    expect(problems).toMatch(/nl-1\/kiwis\.ts: imports \.\.\/_shared\/kiwis\/values\.ts/);
   });
 
   it('fails when a view name appears outside audience.ts: TypeScript, tests, scripts and SQL, in any case', () => {

@@ -16,7 +16,12 @@ export default defineConfig({
     // It runs the adapter tests only: under instrumentation the timing tests of the recorder are too slow.
     coverage: {
       provider: 'v8',
-      include: ['apps/server/src/adapters/*/parse.ts', 'apps/server/src/adapters/*/normalise.ts'],
+      include: [
+        'apps/server/src/adapters/*/parse.ts',
+        'apps/server/src/adapters/*/normalise.ts',
+        // P5c: the shared code of a provider or a protocol (the KiWIS client, the AGE slug).
+        'apps/server/src/adapters/_shared/*/*.ts',
+      ],
       reporter: ['text'],
       thresholds: { lines: 90, perFile: true },
     },

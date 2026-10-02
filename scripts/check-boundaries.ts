@@ -85,6 +85,16 @@ function workspacePackages(root: string): Map<string, string> {
   return names;
 }
 
+/**
+ * Shared code of a wire protocol that several providers serve (P5c): `_shared/kiwis` is the KISTERS KiWIS client of
+ * SPW (BE-3) and, from P13, HIC (BE-1) and VMM (BE-2). An adapter may import the folder of its provider's protocol.
+ */
+const SHARED_PROTOCOLS: Readonly<Record<string, readonly string[]>> = { kiwis: ['spw', 'hic', 'vmm'] };
+const protocolsOf = (provider: string) =>
+  Object.entries(SHARED_PROTOCOLS)
+    .filter(([, providers]) => providers.includes(provider))
+    .map(([protocol]) => protocol);
+
 function adapterProviders(root: string): Map<string, string> {
   const file = join(root, 'registry/sources.yaml');
   const map = new Map<string, string>();
@@ -137,17 +147,17 @@ export function checkBoundaries(root: string): string[] {
 
     const adapter = /^apps\/server\/src\/adapters\/([^/]+)(?:\/([^/]+))?\//.exec(from);
     let own: string | null = null;
-    let sharedAllowed: string | null = null;
+    let sharedAllowed: string[] = [];
     if (adapter) {
       const [, folder = '', sub = ''] = adapter;
       if (folder === '_shared') {
         own = `apps/server/src/adapters/_shared/${sub}`;
-        sharedAllowed = own;
+        sharedAllowed = [own];
       } else {
         own = `apps/server/src/adapters/${folder}`;
         const provider = providers.get(folder);
         if (provider === undefined) problems.push(`${from}: adapter folder ${folder} is not a registry source ID`);
-        else sharedAllowed = `apps/server/src/adapters/_shared/${provider}`;
+        else sharedAllowed = [provider, ...protocolsOf(provider)].map((p) => `apps/server/src/adapters/_shared/${p}`);
       }
     }
 
@@ -165,10 +175,12 @@ export function checkBoundaries(root: string): string[] {
         const allowed =
           under(to, 'packages/core') ||
           under(to, own) ||
-          (sharedAllowed !== null && under(to, sharedAllowed)) ||
+          sharedAllowed.some((dir) => under(to, dir)) ||
           (typeOnly && under(to, 'apps/server/src/http'));
         if (!allowed) {
-          bad('an adapter imports only packages/core, http types, its own folder and _shared/<its provider>');
+          bad(
+            'an adapter imports only packages/core, http types, its own folder, _shared/<its provider> and _shared/<its protocol>',
+          );
         }
       }
     }
