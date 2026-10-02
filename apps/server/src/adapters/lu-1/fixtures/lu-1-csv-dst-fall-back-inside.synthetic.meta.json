@@ -1,0 +1,12 @@
+{
+  "spec": "lu-1-csv",
+  "source": "LU-1",
+  "synthetic": true,
+  "recorded_at": "2026-10-25T03:10:00Z",
+  "status": 200,
+  "content_type": "text/csv",
+  "url": "https://inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv",
+  "bytes": 437,
+  "trimmed": false,
+  "note": "Hand-made: a window that starts inside the repeated hour of 2026-10-25 (second pass 02:15 +01:00 = 01:15Z): only the column order after it places the first three labels."
+}

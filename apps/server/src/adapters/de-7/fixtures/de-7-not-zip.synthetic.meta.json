@@ -1,0 +1,11 @@
+{
+  "spec": "de-7-messwerte",
+  "source": "DE-7",
+  "synthetic": true,
+  "status": 200,
+  "content_type": "text/plain",
+  "url": "https://www.hochwasserportal.nrw/data/downloads/messwerte.zip",
+  "bytes": 10243,
+  "trimmed": false,
+  "note": "Synthetic ZIP attack payload, made with python3 zipfile. The member's text itself (200 well-formed rows), served without the ZIP wrapper. Must end in zip_eocd. Expected SchemaDrift code: zip_eocd."
+}

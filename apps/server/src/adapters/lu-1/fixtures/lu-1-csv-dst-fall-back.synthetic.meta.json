@@ -1,0 +1,12 @@
+{
+  "spec": "lu-1-csv",
+  "source": "LU-1",
+  "synthetic": true,
+  "recorded_at": "2026-10-25T02:40:00Z",
+  "status": 200,
+  "content_type": "text/csv",
+  "url": "https://inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv",
+  "bytes": 740,
+  "trimmed": false,
+  "note": "Hand-made in the real file structure (quoted header, Name/Number/Unit, an empty trailing field per row): the fall-back night of 2026-10-25, labels 01:00 to 03:30 local with 02:00-02:45 twice (first pass +02:00, second +01:00, by column order); one gap. Replaced by the real payload of that night (DST set) once exported; this one stays as the DST-gate proof."
+}

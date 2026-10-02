@@ -1,5 +1,5 @@
-# Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a). Once a night, one payload each of
-# DE-1, NL-1, NL-2, FR-1, CH-1 and CH-2 is fetched live and run through the loader's own parse and
+# Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a, P5b). Once a night, one payload each of
+# DE-1, NL-1, NL-2, FR-1, CH-1, CH-2, DE-7 and LU-1 is fetched live and run through the loader's own parse and
 # normalise code; a provider that changed its format or moved its host (the RWS CTD switch,
 # 2026-11-05) turns the run red and opens or updates the one `contract-drift` issue.
 # The cron minute is 29, midway between the recorder's CH-1 fetches (minutes 4, 14, 24, 34, ...):
@@ -52,7 +52,7 @@ jobs:
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      - name: Six live requests through the loader's parse; the report is the job output
+      - name: Eight live requests through the loader's parse; the report is the job output
         id: run
         env:
           RWS_DOMAIN: ${{ vars.RWS_DOMAIN }}

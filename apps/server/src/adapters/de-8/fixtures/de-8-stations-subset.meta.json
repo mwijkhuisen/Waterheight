@@ -1,0 +1,13 @@
+{
+  "spec": "de-8-stations",
+  "source": "DE-8",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "text/plain; charset=UTF-8",
+  "url": "https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hygon/OpenHygon-Pegel-Stationen_EPSG4326.txt",
+  "bytes": 32529,
+  "source_sha256": "2bbb9795c89e853647ad700ced88e77aec6af6341e8a1ba22d618fe3b505bec4",
+  "trimmed": "the rows of 2829100000100, 2869500000200, 9286455000200, 2847500000100, 1234512345, 2768898001"
+}

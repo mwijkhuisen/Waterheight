@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import { type Normalised, type ObsRow, SchemaDrift } from '@rws/core';
+import { type Normalised, type ObsRow, obsParts, SchemaDrift } from '@rws/core';
 import type { Kysely } from 'kysely';
 import { ManifestLine } from '../archive/manifest.ts';
 import { ArchiveError, type ArchiveReader, type RawLine } from '../archive/reader.ts';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
+import { labelOffsetsOf } from './label-offset.ts';
 import {
   type Attempt,
   advanceCursor,
@@ -19,6 +20,7 @@ import {
   type FetchFold,
   lock,
   openBatch,
+  previousLoad,
   readAttempt,
   type SeriesRow,
   seriesOf,
@@ -27,6 +29,7 @@ import {
   type Tx,
   unitMismatchOf,
   upsertObs,
+  type Written,
   writeAttempt,
   writeMeta,
 } from './store.ts';
@@ -455,15 +458,26 @@ export class Loader {
 
     const registry = await this.registry(line.source);
     const fillRegistry = spec.fill === undefined ? undefined : await this.registry(spec.fill);
+    const zeroRegistry = spec.zeroTarget === undefined ? undefined : await this.registry(spec.zeroTarget);
     const unitMismatch = await this.unitMismatch(line.source);
+    // A re-stating payload loads from shortly before the previous loaded one (a seed loads whole); read per
+    // payload, like the label offsets, which the nightly detector may have changed since the last one.
+    const previous =
+      spec.window === undefined || line.seed === true
+        ? null
+        : await previousLoad(this.deps.db, line.source, line.spec, fetchedAt);
+    const labelOffsets = spec.labelOffsets === true ? await labelOffsetsOf(this.deps.db, line.source) : undefined;
     let result: Normalised;
     try {
-      result = spec.run(body, {
+      result = await spec.run(body, {
         registry,
         fetchedAt: fetchedAt.getTime(),
         variant: line.variant,
         unitMismatch,
         ...(fillRegistry === undefined ? {} : { fillRegistry }),
+        ...(zeroRegistry === undefined ? {} : { zeroRegistry }),
+        ...(previous === null || spec.window === undefined ? {} : { since: previous.getTime() - spec.window }),
+        ...(labelOffsets === undefined ? {} : { labelOffsets }),
       });
     } catch (err) {
       if (err instanceof SchemaDrift) return setAside('quarantined', err.code, err.path);
@@ -485,10 +499,11 @@ export class Loader {
     // A batch's n_rows counts its own rows and its fill rows: an FR-3 payload states each value twice, as a row of
     // its twin series and as a fill row of the FR-1 series of the same key (review CR-6).
     const counted = (key: string) => registry.get(key)?.sameAudience === true;
+    const zeroIds = zeroRegistry ?? registry;
+    let nObs = 0;
+    for (const part of obsParts(result)) nObs += part.filter((r) => counted(r.series)).length;
     const n_rows =
-      result.obs.filter((r) => counted(r.series)).length +
-      result.gaugeZeros.filter((z) => counted(z.series)).length +
-      fill.length;
+      nObs + result.gaugeZeros.filter((z) => zeroIds.get(z.series)?.sameAudience === true).length + fill.length;
     // Values a registry or parser change could still load: the pruner keeps this object until a replay stores them.
     const n_skipped =
       result.unknown + fillUnknown.size + RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
@@ -498,12 +513,23 @@ export class Loader {
     const before = health && { newestTs: health.newestTs, lastNewData: health.lastNewData };
     await commit(async (tx) => {
       const state = await openBatch(tx, batch, 'ok');
-      const written = await upsertObs(tx, result.obs, registry, state.id, fetchedAt);
+      // A large payload comes in chunks of whole series (Normalised.obsChunks): one upsert each, one batch.
+      let written: Written = { n_new: 0, n_changed: 0, newest: null, writes: 0 };
+      for (const part of obsParts(result)) {
+        const w = await upsertObs(tx, part, registry, state.id, fetchedAt);
+        written = {
+          n_new: written.n_new + w.n_new,
+          n_changed: written.n_changed + w.n_changed,
+          newest:
+            written.newest === null || (w.newest !== null && w.newest > written.newest) ? w.newest : written.newest,
+          writes: written.writes + w.writes,
+        };
+      }
       const filled =
         fill.length === 0 || fillRegistry === undefined
           ? { n_new: 0, n_changed: 0, writes: 0 }
           : await upsertObs(tx, fill, fillRegistry, state.id, fetchedAt, true);
-      zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, registry, state.id, fetchedAt);
+      zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, zeroIds, state.id, fetchedAt);
       if (result.unitMismatch !== undefined) {
         units = await storeUnitMismatch(tx, line.source, fetchedAt, result.unitMismatch);
       }
@@ -539,7 +565,7 @@ export class Loader {
       const n = result.dropped[code] ?? 0;
       if (n > 0) this.deps.alert(code, { ...ids, n });
     }
-    for (const change of ['corrected', 'superseded', 'older_ignored'] as const) {
+    for (const change of ['corrected', 'superseded', 'older_ignored', 'withheld'] as const) {
       const n = zeroChanges[change] ?? 0;
       if (n > 0) this.deps.alert(`gauge_zero_${change}`, { ...ids, n });
     }

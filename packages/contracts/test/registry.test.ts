@@ -101,7 +101,7 @@ describe('registry', () => {
         .get(id)
         ?.series.filter((o) => o.audience === 'off')
         .map((o) => o.key);
-    expect(offKeys('LU-1')).toEqual(['bollendorf', 'gemuend']);
+    expect(offKeys('LU-1')).toEqual(['bollendorf', 'gemund-our']);
     expect(offKeys('LU-2')).toEqual(['bollendorf', 'gemuend-our']);
     expect(offKeys('LU-3')).toEqual(['perl', 'stadtbredimus', 'wasserbillig']);
   });
@@ -332,6 +332,53 @@ describe('permission records and the baseline (invariant 8)', () => {
       expect([s.id, BASELINE[s.id]?.audience]).toEqual([s.id, expected]);
     }
     expect(Object.keys(BASELINE).sort()).toEqual(sources.map((s) => s.id).sort());
+  });
+});
+
+describe('withholding records (P5b: registry/permissions/LU-1.md)', () => {
+  const withheld = (over: Record<string, unknown> = {}) =>
+    new Map<string, unknown>([
+      [
+        'LU-1',
+        {
+          source: 'LU-1',
+          withheld: ['Bollendorf'],
+          audience: 'off',
+          basis: 'Third-party gauge inside the CC0 file; until C4 or C11.',
+          recorded_on: '2026-10-02',
+          ...over,
+        },
+      ],
+    ]);
+
+  it('the committed LU-1 record is a withholding record of the two LfU RLP series, and validates', () => {
+    expect(registry.withholdings).toEqual([
+      expect.objectContaining({ source: 'LU-1', withheld: ['Bollendorf', 'Gemünd_Our'], audience: 'off' }),
+    ]);
+    expect(registry.problems).toEqual([]);
+  });
+
+  it('narrows only: it is no grant, so a widened audience or channel still fails', () => {
+    expect(problemsWith('LU-1', () => undefined, withheld())).toBe('');
+    expect(
+      problemsWith('DE-12', (s) => Object.assign(s, { audience: 'public', capture_enabled: true }), withheld()),
+    ).toMatch(/audience public differs from off without registry\/permissions\/DE-12\.md/);
+    expect(
+      problemsWith(
+        'DE-9',
+        (s) => (s.api = true),
+        new Map([['DE-9', { ...(withheld().get('LU-1') as object), source: 'DE-9' }]]),
+      ),
+    ).toMatch(/permission-based source/);
+  });
+
+  it.each([
+    ['another audience', { audience: 'owner' }, /not a valid permission record/],
+    ['no series', { withheld: [] }, /not a valid permission record/],
+    ['a future date', { recorded_on: '2999-01-01' }, /recorded_on 2999-01-01 is in the future/],
+    ['another source', { source: 'LU-2' }, /source is LU-2, expected LU-1/],
+  ])('fails with %s', (_, over, problem) => {
+    expect(problemsWith('LU-1', () => undefined, withheld(over))).toMatch(problem);
   });
 });
 

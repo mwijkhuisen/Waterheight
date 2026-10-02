@@ -353,6 +353,18 @@ describe('CSV', () => {
     expect(scanCsv(csv(`${head}\n${`${row}\n`.repeat(42)}`), { delimiter: ',' }).rows).toHaveLength(42);
   });
 
+  it("keeps a row's one extra field with extraField 'keep' (P5b: LU-1 Esch-Sure), drops it by default", () => {
+    const text = csv('Name,Unit,t0\nA,cm,1,\nB,m,2,9\n');
+    expect(scanCsv(text, { delimiter: ',' }).rows).toEqual([
+      ['A', 'cm', '1'],
+      ['B', 'm', '2'],
+    ]);
+    expect(scanCsv(text, { delimiter: ',', extraField: 'keep' }).rows).toEqual([
+      ['A', 'cm', '1', ''],
+      ['B', 'm', '2', '9'],
+    ]);
+  });
+
   it('skips comment lines before the header (BfG)', () => {
     expect(
       scanCsv(csv('# note\n# more\nDatum;5%\n23.09.2026 00:00;9\n'), { delimiter: ';', commentPrefix: '#' }).rows,

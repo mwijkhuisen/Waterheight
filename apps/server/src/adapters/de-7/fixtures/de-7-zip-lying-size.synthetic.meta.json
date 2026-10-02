@@ -1,0 +1,11 @@
+{
+  "spec": "de-7-messwerte",
+  "source": "DE-7",
+  "synthetic": true,
+  "status": 200,
+  "content_type": "application/zip",
+  "url": "https://www.hochwasserportal.nrw/data/downloads/messwerte.zip",
+  "bytes": 58488,
+  "trimmed": false,
+  "note": "Synthetic ZIP attack payload, made with python3 zipfile. The zip-bomb payload (60,000,000 bytes of '0' behind the header line) with the uncompressed size in the central directory and the local header rewritten to 2,000,000: 34:1, so the directory passes the ratio rule while the data inflates to 30 times what it declares. Must end in zip_size as soon as the inflated bytes pass the declared size. Expected SchemaDrift code: zip_size."
+}

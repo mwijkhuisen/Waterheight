@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { BODIES } from './bounded-child.ts';
 
-// Review S1: no DE-1, NL-1, NL-2, FR-1, FR-3, CH-1, CH-2 or CH-3 payload inside the byte caps can run the loader out of
+// Review S1: no DE-1, NL-1, NL-2, FR-1, FR-3, CH-1, CH-2, CH-3, DE-7, DE-8, LU-1 or LU-6 payload inside the byte caps can run the loader out of
 // memory on its way to a SchemaDrift. Each hostile body is parsed in its own
 // process with a 256 MiB heap (the load container has 768 MiB). In the
 // integration project, which runs one file at a time: these children are heavy,
@@ -46,6 +46,23 @@ const expected: Record<keyof typeof BODIES, string> = {
   'ch3-bytes': 'json_too_many_nodes',
   'ch3-nodes': 'json_too_many_nodes',
   'ch3-issues': 'invalid_type at plot.data.0.x.0',
+  // P5b: DE-7 through the loader's ZIP path (the row cap at 400,001 rows; one line that never ends), LU-1 and DE-8
+  // at their CSV caps, LU-6 as JSON.
+  'de7-rows': 'csv_rows at line.400002',
+  'de7-stations': 'csv_stations at line.1002',
+  'de7-times': 'csv_times at line.4002',
+  'de7-line': 'line_length',
+  'lu1-rows': 'csv_rows',
+  'lu1-columns': 'csv_columns',
+  'lu1-quote': 'csv_field',
+  'lu1-issues': 'name at rows.0',
+  'de8-stations-rows': 'csv_rows',
+  'de8-stations-columns': 'csv_columns',
+  'de8-hydro-rows': 'csv_rows',
+  'de8-hydro-quote': 'csv_field',
+  'lu6-bytes': 'json_too_many_nodes',
+  'lu6-features': 'too_big at features',
+  'lu6-issues': 'invalid_value at features.0.type',
   'nl4-one-tag-700k-attributes': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
   'nl4-one-tag-3m-equals': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
   'nl4-one-tag-1.5m-quoted': 'xml_tag_too_long at xl?worksheets?sheet1.xml',

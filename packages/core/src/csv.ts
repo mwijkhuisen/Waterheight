@@ -17,9 +17,10 @@ export type CsvScanOptions = {
    * A data row may be one field wider than the header, the extra field dropped
    * (LU-1: a trailing empty field, and one row with one more value column).
    * `false` makes any width but the header's fail (CH-1: a shifted column must
-   * never pass). Default true.
+   * never pass). `'keep'` allows it and keeps the field (P5b: LU-1 reads it, because
+   * one station's extra field holds a value). Default true.
    */
-  extraField?: boolean;
+  extraField?: boolean | 'keep';
 };
 
 const fail = (code: string): never => {
@@ -80,11 +81,12 @@ export function scanCsv(input: string, opts: CsvScanOptions): { header: string[]
   if (field !== '' || row.length > 0) endRow();
   const [header, ...rows] = records;
   if (header === undefined) return fail('csv_empty');
-  // A row one field wider than the header loses that field (unless `extraField` is false); any other width
-  // fails, which catches a truncated last row.
+  // A row one field wider than the header loses that field (unless `extraField` is false, or 'keep'); any
+  // other width fails, which catches a truncated last row.
   for (const r of rows) {
-    if (r.length === header.length + 1 && opts.extraField !== false) r.pop();
-    else if (r.length !== header.length) fail('csv_width');
+    if (r.length === header.length + 1 && opts.extraField !== false) {
+      if (opts.extraField !== 'keep') r.pop();
+    } else if (r.length !== header.length) fail('csv_width');
   }
   return { header, rows };
 }

@@ -1,0 +1,15 @@
+{
+  "spec": "de-7-pegeldaten",
+  "variant": "default",
+  "source": "DE-7",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/DE-7/de-7-pegeldaten/2026/09/30/120016Z-1576abf82aebfd78.zst",
+  "recorded_at": "2026-09-30T12:00:15Z",
+  "seed": true,
+  "status": 200,
+  "url": "https://www.hochwasserportal.nrw/data/downloads/pegeldaten.zip",
+  "bytes": 10080319,
+  "source_sha256": "1576abf82aebfd7880de33836f628bd748cc858f7202980eca6a58998749f08c",
+  "trimmed": "in every member the whole blocks (pegel_stationen.txt: the rows) of 2829100000100, 1234512345, re-zipped with the recorded member names and times"
+}

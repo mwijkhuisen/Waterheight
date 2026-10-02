@@ -59,6 +59,16 @@ export type Normalised = {
    * that source states no value, with the backfilled bit, never as a revision.
    */
   fill?: ObsRow[];
+  /**
+   * P5b: the rows of a payload too large to hold as one array (the DE-7 seed, about two million values), in
+   * place of `obs` (which is then empty). Every check and drop has already happened when `normalise` returns:
+   * the chunks only materialise rows it decided on, never throw, hold no (series, ts) twice across chunks
+   * (each series lies in one chunk) and may be iterated more than once.
+   */
+  obsChunks?: () => Iterable<ObsRow[]>;
 };
+
+/** The observation rows of a Normalised, as one or more arrays (`obsChunks` when the payload set it). */
+export const obsParts = (n: Normalised): Iterable<ObsRow[]> => n.obsChunks?.() ?? [n.obs];
 
 export const emptyNormalised = (): Normalised => ({ obs: [], gaugeZeros: [], dropped: {}, unknown: 0 });

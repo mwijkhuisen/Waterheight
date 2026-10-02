@@ -1,0 +1,11 @@
+{
+  "spec": "de-7-messwerte",
+  "source": "DE-7",
+  "synthetic": true,
+  "status": 200,
+  "content_type": "application/zip",
+  "url": "https://www.hochwasserportal.nrw/data/downloads/messwerte.zip",
+  "bytes": 58488,
+  "trimmed": false,
+  "note": "Synthetic ZIP attack payload, made with python3 zipfile. One member messwerte.txt: the header line and 60,000,000 bytes of '0', deflated at level 9 (about 58 KB, 1000:1). The honest central directory already exceeds 50:1. Must end in the ZIP guard's zip_ratio before anything is inflated. Expected SchemaDrift code: zip_ratio."
+}

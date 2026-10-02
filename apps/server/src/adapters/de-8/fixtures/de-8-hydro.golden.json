@@ -1,0 +1,1321 @@
+{
+ "obs": [],
+ "gaugeZeros": [
+  {
+   "series": "4427000000100/W",
+   "value_m": 295.302,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4449900000100/W",
+   "value_m": 165.324,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4433000000100/W",
+   "value_m": 220.376,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4281334000100/W",
+   "value_m": 427.738,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4281591000100/W",
+   "value_m": 353.324,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4284170000100/W",
+   "value_m": 370.949,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4281319000100/W",
+   "value_m": 430.449,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4281490000100/W",
+   "value_m": 400.254,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2741500000100/W",
+   "value_m": 220.772,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2746310000100/W",
+   "value_m": 139.286,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2743000000100/W",
+   "value_m": 101.645,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2745400000100/W",
+   "value_m": 105.119,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2741870000100/W",
+   "value_m": 199.408,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2744910000100/W",
+   "value_m": 115.429,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2747390000100/W",
+   "value_m": 56.749,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2746790000100/W",
+   "value_m": 81.551,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2742510000100/W",
+   "value_m": 143.556,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2741490000200/W",
+   "value_m": 254.946,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2747900000200/W",
+   "value_m": 40.704,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2748900000100/W",
+   "value_m": 38.202,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2742990000200/W",
+   "value_m": 106.453,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4639000000100/W",
+   "value_m": 64.285,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4745000000100/W",
+   "value_m": 39.448,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4566900000100/W",
+   "value_m": 126.679,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4647000000100/W",
+   "value_m": 69.353,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4528900000100/W",
+   "value_m": 126.639,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4761500000100/W",
+   "value_m": 43.889,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4651000000100/W",
+   "value_m": 56.268,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4624900000100/W",
+   "value_m": 86.674,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4627100000200/W",
+   "value_m": 72.557,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4670000000100/W",
+   "value_m": 46.994,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4761270000100/W",
+   "value_m": 40.11,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4667100000100/W",
+   "value_m": 62.519,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4529500000100/W",
+   "value_m": 101.491,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4619100000100/W",
+   "value_m": 82.155,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4714900000100/W",
+   "value_m": 42.393,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4526900000100/W",
+   "value_m": 138.92,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4568900000100/W",
+   "value_m": 119.239,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4567000000100/W",
+   "value_m": 117.998,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4569300000100/W",
+   "value_m": 109.421,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4621900000100/W",
+   "value_m": 104.552,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "4622900000100/W",
+   "value_m": 106.359,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9284730000100/W",
+   "value_m": 25.35,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9286190000100/W",
+   "value_m": 36.931,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9281330000100/W",
+   "value_m": 30.933,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9284300000010/W",
+   "value_m": 59.863,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9286455000200/W",
+   "value_m": 33.886,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9285291000100/W",
+   "value_m": 33,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9286453000200/W",
+   "value_m": 47.691,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9281700000200/W",
+   "value_m": 15.335,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9286410000100/W",
+   "value_m": 59.257,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9284100000100/W",
+   "value_m": 87.932,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9282570000100/W",
+   "value_m": 30.33,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "9286291000300/W",
+   "value_m": 41.504,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2581119000100/W",
+   "value_m": 388.738,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2781610000200/W",
+   "value_m": 215.958,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2788100000100/W",
+   "value_m": 60.591,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2783390000100/W",
+   "value_m": 88.953,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2785229000100/W",
+   "value_m": 89.051,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2782490000200/W",
+   "value_m": 211.081,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2784700000100/W",
+   "value_m": 69.763,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2789100000100/W",
+   "value_m": 30.856,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2782846000100/W",
+   "value_m": 272.259,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2785790000300/W",
+   "value_m": 63.635,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2787990000100/W",
+   "value_m": 34.094,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2781100000100/W",
+   "value_m": 136.983,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2783990000100/W",
+   "value_m": 70.283,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2783970000300/W",
+   "value_m": 70.526,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2783970000200/W",
+   "value_m": 72.239,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2786110000100/W",
+   "value_m": 89.039,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2782330000100/W",
+   "value_m": 270.414,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2781730000200/W",
+   "value_m": 101.738,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2782900000200/W",
+   "value_m": 100.744,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2783250000100/W",
+   "value_m": 101.746,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2782190000100/W",
+   "value_m": 304.855,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2782700000100/W",
+   "value_m": 141.22,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2782890000100/W",
+   "value_m": 129.312,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2788730000100/W",
+   "value_m": 40.39,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2785290000200/W",
+   "value_m": 76.299,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2781810000100/W",
+   "value_m": 103.62,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2781829000100/W",
+   "value_m": 104.683,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2783310000100/W",
+   "value_m": 96.883,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2789770000100/W",
+   "value_m": 20.622,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2789760000100/W",
+   "value_m": 31.388,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2782861000100/W",
+   "value_m": 256.355,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2788630000200/W",
+   "value_m": 52.367,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2788330000100/W",
+   "value_m": 51.885,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2786690000100/W",
+   "value_m": 63.057,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2783721000100/W",
+   "value_m": 97.175,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2782370000100/W",
+   "value_m": 222.127,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2786700000100/W",
+   "value_m": 57.572,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3211000000300/W",
+   "value_m": 73.446,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3259000000100/W",
+   "value_m": 48.678,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3125000000100/W",
+   "value_m": 87.088,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3171000000100/W",
+   "value_m": 45.222,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3331000000100/W",
+   "value_m": 32.691,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3190000000100/W",
+   "value_m": 36.32,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3445900000100/W",
+   "value_m": 37.797,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3448390000200/W",
+   "value_m": 40.018,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3128100000100/W",
+   "value_m": 91.454,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3448310000600/W",
+   "value_m": 62.106,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3132900000100/W",
+   "value_m": 62.204,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3169000000100/W",
+   "value_m": 49.582,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3119000000200/W",
+   "value_m": 65.271,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3323000000200/W",
+   "value_m": 55.251,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3283000000100/W",
+   "value_m": 62.334,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3113000000100/W",
+   "value_m": 84.527,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3128490000100/W",
+   "value_m": 85.892,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3166000000100/W",
+   "value_m": 60.907,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3345000000100/W",
+   "value_m": 36.452,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "3289100000100/W",
+   "value_m": 51.982,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2739230000100/W",
+   "value_m": 84.552,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2739229000100/W",
+   "value_m": 50.966,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2738900000300/W",
+   "value_m": 43.306,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2751270000100/W",
+   "value_m": 34.817,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2799222000100/W",
+   "value_m": 11.546,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2796300000100/W",
+   "value_m": 16.129,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2756500000100/W",
+   "value_m": 37.41,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2766930000100/W",
+   "value_m": 154.23,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2763190000100/W",
+   "value_m": 146.83,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2764190000100/W",
+   "value_m": 256.83,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2764511000100/W",
+   "value_m": 218.059,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2762510000100/W",
+   "value_m": 247.446,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2762510000300/W",
+   "value_m": 248.976,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2761829000100/W",
+   "value_m": 326.092,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2769720000200/W",
+   "value_m": 97.773,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2769720000300/W",
+   "value_m": 51.986,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2769800000200/W",
+   "value_m": 42.333,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2768775000100/W",
+   "value_m": 136.899,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2768900000100/W",
+   "value_m": 91.402,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2768897000100/W",
+   "value_m": 120.549,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2768784000200/W",
+   "value_m": 217.008,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2764890000100/W",
+   "value_m": 172.807,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2766250000100/W",
+   "value_m": 307.275,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2765419000100/W",
+   "value_m": 171.4,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2765490000100/W",
+   "value_m": 115.605,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2768529000200/W",
+   "value_m": 343.822,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2766199000100/W",
+   "value_m": 281.731,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2768390000100/W",
+   "value_m": 330.963,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2769630000200/W",
+   "value_m": 96.916,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2764590000100/W",
+   "value_m": 162.196,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2764950000100/W",
+   "value_m": 130.742,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2761510000100/W",
+   "value_m": 255.084,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2761490000200/W",
+   "value_m": 260.69,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2761895000100/W",
+   "value_m": 176.122,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2761990000200/W",
+   "value_m": 150.675,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2769629000100/W",
+   "value_m": 134.585,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2769649000100/W",
+   "value_m": 87.625,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2766133000100/W",
+   "value_m": 428.796,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2766645000100/W",
+   "value_m": 365.58,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2761759000100/W",
+   "value_m": 205.617,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2761150000100/W",
+   "value_m": 329.33,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2766530000100/W",
+   "value_m": 219.388,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2768579000100/W",
+   "value_m": 245.563,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2765590000100/W",
+   "value_m": 101.21,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2761695000100/W",
+   "value_m": 268.91,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2769169000100/W",
+   "value_m": 84.805,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2823900000200/W",
+   "value_m": 82.651,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2824590000400/W",
+   "value_m": 126.261,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2822900000200/W",
+   "value_m": 326.368,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2828200000200/W",
+   "value_m": 143.962,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2822849000100/W",
+   "value_m": 409.91,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2828300000200/W",
+   "value_m": 101.731,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2828400000200/W",
+   "value_m": 104.487,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2828890000200/W",
+   "value_m": 54.326,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2825190000200/W",
+   "value_m": 74.245,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2828100000100/W",
+   "value_m": 147.047,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2822700000200/W",
+   "value_m": 368.499,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2824900000200/W",
+   "value_m": 85.877,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2824300000100/W",
+   "value_m": 220.497,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2824900000300/W",
+   "value_m": 98.769,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2825330000100/W",
+   "value_m": 57.873,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2824890000300/W",
+   "value_m": 115.86,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2821530000200/W",
+   "value_m": 395.389,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2824450000100/W",
+   "value_m": 298.968,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2828900000200/W",
+   "value_m": 49.65,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2824410000100/W",
+   "value_m": 392.614,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2823100000100/W",
+   "value_m": 376.291,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2822870000100/W",
+   "value_m": 365.278,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2823900000100/W",
+   "value_m": 99.494,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2829100000100/W",
+   "value_m": 29.938,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2818100000200/W",
+   "value_m": 44.645,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2825349000100/W",
+   "value_m": 69.274,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2823500000100/W",
+   "value_m": 171.232,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2736510000300/W",
+   "value_m": 117.057,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2736731000100/W",
+   "value_m": 82.329,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2736879000200/W",
+   "value_m": 44.33,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2736790000200/W",
+   "value_m": 45.284,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2736510000100/W",
+   "value_m": 142.226,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2726900000100/W",
+   "value_m": 69.217,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2726599000100/W",
+   "value_m": 124.517,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2728189000100/W",
+   "value_m": 200.543,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2725910000100/W",
+   "value_m": 81.46,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2727290000100/W",
+   "value_m": 70.631,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2728893000100/W",
+   "value_m": 77.591,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2728849000100/W",
+   "value_m": 128.691,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2728930000200/W",
+   "value_m": 57.953,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2729100000100/W",
+   "value_m": 49.367,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2723830000200/W",
+   "value_m": 206.22,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2727890000100/W",
+   "value_m": 59.243,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2728219000100/W",
+   "value_m": 240.195,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2727500000100/W",
+   "value_m": 58.469,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2721459000100/W",
+   "value_m": 273.894,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2721650000100/W",
+   "value_m": 271.55,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2721770000200/W",
+   "value_m": 213.102,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2721390000100/W",
+   "value_m": 240.473,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2721490000100/W",
+   "value_m": 239.558,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2842000000100/W",
+   "value_m": 62.164,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2864900000100/W",
+   "value_m": 21.348,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2869500000200/W",
+   "value_m": 12,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2862790000100/W",
+   "value_m": 28.367,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2866500000200/W",
+   "value_m": 20.296,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2849900000100/W",
+   "value_m": 27.404,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2843000000100/W",
+   "value_m": 52.08,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2861700000100/W",
+   "value_m": 30.302,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2847500000100/W",
+   "value_m": 42.825,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2862500000100/W",
+   "value_m": 37.015,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2850000000200/W",
+   "value_m": 22.376,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2867900000100/W",
+   "value_m": 14.606,
+   "datum": "NHN",
+   "valid_from": null
+  }
+ ],
+ "dropped": {},
+ "unknown": 61
+}

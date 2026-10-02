@@ -1,0 +1,60 @@
+{
+ "stations": [
+  {
+   "name": "Diekirch",
+   "code": "11",
+   "inService": true,
+   "lon": 6.161812723357767,
+   "lat": 49.866622443809945
+  },
+  {
+   "name": "Gemünd",
+   "code": "2626030300",
+   "inService": true,
+   "lon": 6.171281005754491,
+   "lat": 49.98528821116878
+  },
+  {
+   "name": "Kautenbach",
+   "code": "14",
+   "inService": true,
+   "lon": 6.0250444913811,
+   "lat": 49.946524260595275
+  },
+  {
+   "name": "Niederfeulen",
+   "code": "27",
+   "inService": true,
+   "lon": 6.0526371271034245,
+   "lat": 49.85553447282677
+  },
+  {
+   "name": "Niederfeulen",
+   "code": "77",
+   "inService": false,
+   "lon": 6.050606293760676,
+   "lat": 49.86153817943808
+  },
+  {
+   "name": "Kautenbach",
+   "code": "104",
+   "inService": true,
+   "lon": 6.017921155358073,
+   "lat": 49.952305178023785
+  },
+  {
+   "name": "Esch/Sûre",
+   "code": "40",
+   "inService": true,
+   "lon": 5.922790092697149,
+   "lat": 49.91176734528336
+  },
+  {
+   "name": "Wasserbillig",
+   "code": "0029151",
+   "inService": true,
+   "lon": 6.5060046032652865,
+   "lat": 49.714210949881206
+  }
+ ]
+}

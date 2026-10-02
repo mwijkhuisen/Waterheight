@@ -7,16 +7,18 @@
 //                                                files, per-spec freshness, owner_specs,
 //                                                the health API (contract, closed
 //                                                parameters, DE-1 and NL-1 health, tier-1
-//                                                freshness and replay, FR-1 and CH-1 health,
-//                                                tier-1 freshness and coverage since the seed,
-//                                                CH-1's 10-minute request interval, loader lag), the data
+//                                                freshness and replay, FR-1, CH-1, DE-7 and LU-1
+//                                                health, tier-1 freshness and coverage since the
+//                                                seed, CH-1's 10-minute and DE-7's 15-minute
+//                                                request interval, DE-7's bytes per day, loader lag), the data
 //                                                API through Caddy (P4b: /meta with the
 //                                                release commit, /stations, three snapshots
 //                                                at the server's own clock, /openapi.json,
 //                                                the closed parameters, noindex on the app,
 //                                                /api and /tiles, DE-1, NL-1, FR-1 and CH-1
-//                                                data under 45 minutes old, the 25 Belgian
-//                                                points of catalogue §0.6), the
+//                                                data under 45 minutes old, DE-7's under 90 and
+//                                                LU-1's under 75, LU-1's label offset, the 25
+//                                                Belgian points of catalogue §0.6), the
 //                                                basemap tiles (P3: the manifest, a Range
 //                                                read of every listed file, the 404s, the
 //                                                416 for no Range or two ranges) and
@@ -26,7 +28,7 @@
 //                                                body above
 //   scripts/verify-prod.sh <domain> --soak       + the 72 h soak: >= 99% per source, the
 //                                                seed coverage, the byte baseline, the drill,
-//                                                the Eijsden-grens twin over 7 days
+//                                                every twin pair over 7 days (TWIN_IDS)
 //   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--out FILE]
 //                                                docs/capacity.md from >= 2 complete days
 //   scripts/verify-prod.sh <domain> --dry-run    list the checks; no network
@@ -76,6 +78,33 @@ export const COVERAGE_MIN = 0.95;
  */
 export const INTERVAL_SPEC = 'ch-1-lindas';
 export const INTERVAL_MIN_S = 595;
+/**
+ * P5b: `de-7-messwerte` is captured hourly today and every 15 minutes once the owner enables it (the
+ * RWS_PRUNE_APPLY switch of the budget test): never more often than every 15 minutes, less 5 s of jitter. The
+ * detail prints the seconds, so the owner sees 3600 (hourly) or about 900 (every 15 minutes).
+ */
+export const DE7_SPEC = 'de-7-messwerte';
+export const DE7_INTERVAL_MIN_S = 895;
+/** P5b: the zstd bytes one UTC day of `de-7-messwerte` may store (96 fetches of a 0.9 MB ZIP). */
+export const DE7_BYTES_MAX = 90_000_000;
+/** The sources with an interval rule: the spec, the least gap in seconds, and why. */
+export const INTERVAL_RULES = {
+  'CH-1': { spec: INTERVAL_SPEC, minS: INTERVAL_MIN_S, why: 'BAFU: at most one download per 10 minutes' },
+  'DE-7': { spec: DE7_SPEC, minS: DE7_INTERVAL_MIN_S, why: 'requested more often than every 15 minutes' },
+} as const;
+/**
+ * The twin pairs of registry/twins.yaml (test/verify-prod.test.ts keeps the two lists equal): `--soak` asks for
+ * each one, with the rules of the first.
+ */
+export const TWIN_IDS = [
+  'eijsden-grens-taw-nap',
+  'chooz-fr3-fr1-h',
+  'uckange-fr3-fr1-q',
+  'basel-ch1-de1-h',
+  'perl-lu1-de1-h',
+  'stadtbredimus-lu1-de1-h',
+  'grevenmacher-lu1-de1-h',
+] as const;
 /** The twin check runs hourly: 168 in 7 days. The soak allows a few missed hours (a deploy, a restart). */
 export const TWIN_MIN_CHECKS_7D = 160;
 /** The latest twin check is fresh when its hour ended no more than this long ago (one missed hour is allowed). */
@@ -453,18 +482,69 @@ export function checkCoverage(doc: HealthSources | undefined, id: string): Resul
   return c.ratio >= COVERAGE_MIN ? pass(check, detail) : miss(check, `${detail}; below ${COVERAGE_MIN * 100}%`);
 }
 
-/** P5a: CH-1 is not requested more often than BAFU allows (see `INTERVAL_MIN_S`). */
-export function checkInterval(doc: HealthSources | undefined): Result {
-  const check = 'interval CH-1';
+/**
+ * P5a: CH-1 is not requested more often than BAFU allows (see `INTERVAL_MIN_S`). P5b: nor DE-7 more often than
+ * every 15 minutes (`DE7_INTERVAL_MIN_S`); its detail says the seconds, 3600 while it is hourly.
+ */
+export function checkInterval(doc: HealthSources | undefined, id: keyof typeof INTERVAL_RULES = 'CH-1'): Result {
+  const check = `interval ${id}`;
   if (doc === undefined) return noDocument(check, 'health/sources');
-  const s = sourceOf(doc, 'CH-1');
+  const s = sourceOf(doc, id);
   if (s === undefined) return miss(check, 'not listed in /api/v1/health/sources');
-  const m = s.min_interval_s.find((x) => x.spec === INTERVAL_SPEC);
+  const rule = INTERVAL_RULES[id];
+  const m = s.min_interval_s.find((x) => x.spec === rule.spec);
   if (m === undefined) return miss(check, 'no interval measured yet');
-  const detail = `${INTERVAL_SPEC}: the shortest gap between two requests of one variant in 24 h is ${m.seconds} s`;
-  return m.seconds >= INTERVAL_MIN_S
-    ? pass(check, `${detail}, not under ${INTERVAL_MIN_S} s`)
-    : miss(check, `${detail}, under ${INTERVAL_MIN_S} s (BAFU: at most one download per 10 minutes)`);
+  const detail = `${rule.spec}: the shortest gap between two requests of one variant in 24 h is ${m.seconds} s`;
+  return m.seconds >= rule.minS
+    ? pass(check, `${detail}, not under ${rule.minS} s`)
+    : miss(check, `${detail}, under ${rule.minS} s (${rule.why})`);
+}
+
+/**
+ * P5b: the loader measured the LU-1 label offset on a recent UTC day (no older than 2 days before the server's own
+ * `meta.now`, not in its future). Freshness is judged on the latest day the detector tried, decided or not (review
+ * CR-4: quiet days on the impounded Perl reach decide nothing, and the alert `label_offset_unknown` says so); the
+ * detail reports that day and the offset in force, from the latest day that decided it. Any offset passes; the
+ * owner reads it (15 is the AGE file's habit). Numbers and dates only.
+ */
+export function checkLabelOffset(doc: HealthSources | undefined, now: string | undefined): Result {
+  const check = 'label offset LU-1';
+  if (doc === undefined) return noDocument(check, 'health/sources');
+  if (now === undefined || Number.isNaN(Date.parse(now))) return noDocument(check, 'meta');
+  const s = sourceOf(doc, 'LU-1');
+  if (s === undefined) return miss(check, 'not listed in /api/v1/health/sources');
+  const o = s.label_offset;
+  if (o === null) return miss(check, 'no label offset measured yet');
+  const today = new Date(Date.parse(now)).toISOString().slice(0, 10);
+  const oldest = new Date(Date.parse(now) - 2 * 86_400_000).toISOString().slice(0, 10);
+  const tried = o.decided
+    ? `day ${o.day}: decided over ${o.n_aligned} instants (share ${o.share})`
+    : `day ${o.day}: undecided (${o.n_aligned} instants)`;
+  const offset = o.minutes === null ? 'no day decided yet' : `${o.minutes} min since ${o.decided_day}`;
+  const detail = `${tried}; ${offset}`;
+  if (o.day > today) return miss(check, `${detail}, after ${today}`);
+  return o.day >= oldest ? pass(check, detail) : miss(check, `${detail}, older than ${oldest} (2 days before now)`);
+}
+
+/**
+ * P5b: `de-7-messwerte` stored at most `DE7_BYTES_MAX` zstd bytes on each UTC day of the capture status
+ * (today, partial, and the two days before). Hourly it is about a quarter of that.
+ */
+export function checkBytes(status: CaptureStatus): Result {
+  const check = 'bytes DE-7';
+  if (!status.specs.some((x) => x.spec === DE7_SPEC)) return miss(check, `${DE7_SPEC} is not in capture.json`);
+  const days = status.days
+    .filter((d) => d.bytes[DE7_SPEC] !== undefined)
+    .map((d) => ({ date: d.date, bytes: d.bytes[DE7_SPEC] ?? 0 }));
+  const most = days.reduce<(typeof days)[number] | undefined>(
+    (a, d) => (a === undefined || d.bytes > a.bytes ? d : a),
+    undefined,
+  );
+  if (most === undefined) return miss(check, `no bytes of ${DE7_SPEC} stored in the days of capture.json`);
+  const detail = `${DE7_SPEC}: at most ${most.bytes} bytes on ${most.date} (${days.length} day(s) with bytes)`;
+  return most.bytes <= DE7_BYTES_MAX
+    ? pass(check, `${detail}, not over ${DE7_BYTES_MAX}`)
+    : miss(check, `${detail}, over ${DE7_BYTES_MAX}`);
 }
 
 /** The loader keeps up: a fresh lag sample under 2 minutes, and no manifest line waiting 15 minutes or more (a stall). */
@@ -512,8 +592,9 @@ export function checkReplay(health: Health | undefined, doc: HealthSources | und
 }
 
 /**
- * The soak criterion of a twin pair (P2b): its latest hourly check is fresh, has aligned timestamps and is ok, and
- * none of the last 7 days' hourly checks failed. Only counts and our own identifiers are printed.
+ * The soak criterion of a twin pair (P2b): its latest hourly check is fresh, has aligned timestamps, is ok and
+ * finds no lag (P5b: the pairs that need a lag check carry the number), and none of the last 7 days' hourly checks
+ * failed. A pair absent from the document fails: no data is not ok. Only counts and our own identifiers are printed.
  */
 export function checkTwin(r: ApiRead<HealthSources>, now: Date, id = 'eijsden-grens-taw-nap'): Result {
   const check = `twin ${id}`;
@@ -526,6 +607,7 @@ export function checkTwin(r: ApiRead<HealthSources>, now: Date, id = 'eijsden-gr
     problems.push(`latest check is ${Math.ceil(age / 60_000)} min old (limit ${TWIN_MAX_AGE_MS / 60_000} min)`);
   if (t.n_aligned === 0) problems.push('no aligned timestamps');
   if (!t.ok) problems.push('the latest check is outside the tolerance');
+  if (t.lag_min !== null && t.lag_min !== 0) problems.push(`the latest check finds a lag of ${t.lag_min} min`);
   if (t.failed_7d > 0) problems.push(`${t.failed_7d} of ${t.checks_7d} checks failed in 7 days`);
   if (t.checks_7d < TWIN_MIN_CHECKS_7D)
     problems.push(`only ${t.checks_7d} checks in 7 days: the soak needs ${TWIN_MIN_CHECKS_7D}`);
@@ -709,8 +791,8 @@ export function checkMapAsset(page: Page | string): Result {
 export const META_CACHE = 'public, max-age=60';
 export const STATIONS_CACHE = 'public, max-age=300';
 export const OPENAPI_CACHE = 'public, max-age=300';
-/** The public sources that /meta and /stations must show (those with a loader: P2, and FR-1 and CH-1 since P5a). */
-export const API_SOURCES = ['NL-1', 'DE-1', 'FR-1', 'CH-1'] as const;
+/** The public sources that /meta and /stations must show (those with a loader: P2, FR-1 and CH-1 since P5a, DE-7 and LU-1 since P5b). */
+export const API_SOURCES = ['NL-1', 'DE-1', 'FR-1', 'CH-1', 'DE-7', 'LU-1'] as const;
 /** NL-1 locations on Belgian soil (catalogue §0.6): the stations are `nl.rws.<code>`; the 18 FR-1 partners are in the seed. */
 export const BELGIAN_NL1 = [
   'antwerpen',
@@ -726,6 +808,15 @@ export const BELGIAN_FRESH_PCT = 90;
 export const BELGIAN_MAX_AGE_S = 3 * 3600;
 /** A source is fresh when one of its series has a value in the current snapshot no older than this at meta.now (45 min). */
 export const FRESH_MAX_AGE_S = 2700;
+/**
+ * P5b: the sources that are slower than that. DE-7 is captured hourly (90 min); LU-1 labels its values 15 minutes
+ * late and the file is published 11 to 25 minutes after them (75 min with the quarter-hour capture).
+ */
+export const FRESH_MAX_AGE_BY_SOURCE: ReadonlyMap<string, number> = new Map([
+  ['DE-7', 5400],
+  ['LU-1', 4500],
+]);
+export const freshLimit = (source: string): number => FRESH_MAX_AGE_BY_SOURCE.get(source) ?? FRESH_MAX_AGE_S;
 /** A§12.2: also the apps, the api and the tiles say noindex until the public launch (P12), whatever the status. */
 export const NOINDEX_PATHS = ['/', '/en/', '/api', '/tiles'] as const;
 /**
@@ -851,8 +942,9 @@ export function checkNoindex(got: Readonly<Record<string, Page | string>>): Resu
 }
 
 /**
- * At least one series of the source has a value in the snapshot no older than 45 minutes at the server's own
- * now (`meta.now`): the snapshot's `ageSeconds` counts from its `t`, which is floored to 10 minutes.
+ * At least one series of the source has a value in the snapshot no older than 45 minutes (`freshLimit`: 90 for
+ * DE-7, 75 for LU-1) at the server's own now (`meta.now`): the snapshot's `ageSeconds` counts from its `t`, which
+ * is floored to 10 minutes.
  */
 export function checkFresh(
   source: string,
@@ -871,7 +963,8 @@ export function checkFresh(
   if (ages.length === 0) return miss(check, `none of the ${listed.size} ${source} series has a value`);
   const newest = ages.reduce((a, b) => Math.min(a, b));
   const detail = `${ages.length} of ${listed.size} ${source} series have a value, the newest is ${newest} s old`;
-  return newest <= FRESH_MAX_AGE_S ? pass(check, detail) : miss(check, `${detail}, over ${FRESH_MAX_AGE_S} s`);
+  const limit = freshLimit(source);
+  return newest <= limit ? pass(check, detail) : miss(check, `${detail}, over ${limit} s`);
 }
 
 /**
@@ -1057,12 +1150,14 @@ export const CHECKS = [
   'health NL-1: /api/v1/health/sources lists NL-1 with status ok',
   'tier-1 NL-1: >= 95% of the tier-1 series are fresh, each against its own limit (provider-stale ones are named and never make it a PASS)',
   'replay NL-1: no loader backlog, a partition checksum for NL-1 and no quarantined NL-1 payload',
-  ...['FR-1', 'CH-1'].flatMap((id) => [
+  ...['FR-1', 'CH-1', 'DE-7', 'LU-1'].flatMap((id) => [
     `health ${id}: /api/v1/health/sources lists ${id} with status ok`,
     `tier-1 ${id}: >= 95% of the tier-1 series are fresh, each against its own limit (provider-stale ones are named and never make it a PASS)`,
     `coverage ${id}: coverage.ratio >= ${COVERAGE_MIN * 100}% (the expected buckets of the tier-1 series that hold a value since the seed; the series below 95%, the first instant and the gaps are listed; null is a FAIL; a tier-1 series that never had data is not in the coverage: tier-1 ${id} catches it)`,
   ]),
   `interval CH-1: the min_interval_s of ${INTERVAL_SPEC} is >= ${INTERVAL_MIN_S} s (BAFU: at most one download per 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL. The gap is per spec and variant: river and lake are two LINDAS downloads seconds apart every 10 minutes (whether BAFU counts them as one is asked in C13), and a recorder restart can run a catch-up under 10 minutes before the next tick, so this can FAIL for up to 24 h after a restart without a breach (KG-125)`,
+  `interval DE-7: the min_interval_s of ${DE7_SPEC} is >= ${DE7_INTERVAL_MIN_S} s (every 15 minutes, less 5 s for the scheduling jitter of a fetch start); the detail prints the seconds, 3600 while the spec is hourly and about 900 once it runs every 15 minutes; no entry yet is a FAIL`,
+  `bytes DE-7: the days of /status/capture.json (today, partial, and the two before) each hold at most ${DE7_BYTES_MAX / 1e6} MB of zstd bytes stored for ${DE7_SPEC}; the spec missing from capture.json, or no bytes in any day, is a FAIL`,
   `api meta: GET /api/v1/meta is 200 with Cache-Control exactly "${META_CACHE}", the Meta contract document, and ${API_SOURCES.join(', ')} among the sources`,
   'api build: /api/v1/meta build is the 40-hex release commit, not "dev" (KG-109: the image carries RWS_BUILD)',
   `api stations: GET /api/v1/stations is 200 with Cache-Control exactly "${STATIONS_CACHE}", the Stations contract document, a station with a series of each of ${API_SOURCES.join(', ')}`,
@@ -1073,10 +1168,11 @@ export const CHECKS = [
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
   'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter"} with Cache-Control: no-store',
   `noindex: ${NOINDEX_PATHS.join(', ')} each answer (the 404s of /api and /tiles too) with X-Robots-Tag: noindex`,
-  ...['DE-1', 'NL-1', 'FR-1', 'CH-1'].map(
+  ...['DE-1', 'NL-1', 'FR-1', 'CH-1', 'DE-7', 'LU-1'].map(
     (id) =>
-      `fresh ${id}: in the "now" snapshot at least one ${id} series has a value no older than ${FRESH_MAX_AGE_S} s at the server's own now (/meta)`,
+      `fresh ${id}: in the "now" snapshot at least one ${id} series has a value no older than ${freshLimit(id)} s at the server's own now (/meta)`,
   ),
+  "label offset LU-1: /api/v1/health/sources lists LU-1 with a label_offset whose latest measured UTC day, decided or not, is no older than 2 days before the server's own now (/meta); any offset passes, the detail prints that day (decided, its instants and share; or undecided), and the offset in force in minutes (15 is the AGE file's habit) with the day that decided it; none measured yet is a FAIL",
   `belgian set: the 25 points of catalogue §0.6 (the NL-1 locations ${BELGIAN_NL1.join(', ')} as nl.rws.<code>, the 18 FR-1 partners of registry/seed/fr-1-be.csv as fr.sandre.<code>) are all stations of /api/v1/stations, and >= ${BELGIAN_FRESH_PCT}% have a value in the "now" snapshot no older than ${BELGIAN_MAX_AGE_S / 3600} h at the server's own now`,
   `tiles manifest: GET /tiles/manifest.json is 200 with Cache-Control exactly "${MANIFEST_CACHE}" (never immutable) and a body parseTilesManifest accepts`,
   `tiles <file>: every file the manifest lists (current and previous), GET with Range: ${TILE_HEADERS.range} and Accept-Encoding: ${TILE_HEADERS['accept-encoding']}, is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
@@ -1086,7 +1182,10 @@ export const CHECKS = [
   `map assets: GET ${MAP_ASSET_PATH} (a pinned glyph range of the web image) is 200 with Cache-Control exactly "${TILE_CACHE}"`,
   `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
-  `twin eijsden-grens-taw-nap: (--soak) listed in /api/v1/health/sources; latest check under ${TWIN_MAX_AGE_MS / 3_600_000} h old, ok, with aligned timestamps; no failed check in 7 days; >= ${TWIN_MIN_CHECKS_7D} of the 168 hourly checks`,
+  ...TWIN_IDS.map(
+    (id) =>
+      `twin ${id}: (--soak) listed in /api/v1/health/sources (a pair with no check yet is a FAIL); latest check under ${TWIN_MAX_AGE_MS / 3_600_000} h old, ok, with aligned timestamps and a lag of 0; no failed check in 7 days; >= ${TWIN_MIN_CHECKS_7D} of the 168 hourly checks`,
+  ),
   '--capacity: bytes/day per spec over >= 2 complete days, the year-1 projection vs the disk and the bucket',
 ];
 
@@ -1164,7 +1263,7 @@ async function main(argv: string[]): Promise<number> {
     } catch (e) {
       results.push(miss('http', (e as Error).message));
     }
-    if (cap?.success) results.push(...checkCapture(cap.data, now));
+    if (cap?.success) results.push(...checkCapture(cap.data, now), checkBytes(cap.data));
 
     // The P2a health API (A§9.2). Every request has a fixed path; a network error is a FAIL, never a crash.
     const api = (path: string) => tryGet(`https://${domain}${path}`, net);
@@ -1183,12 +1282,13 @@ async function main(argv: string[]): Promise<number> {
       checkSourceHealth(sources, 'NL-1'),
       checkTier1(sources.data, 'NL-1'),
       checkReplay(health.data, sources.data, 'NL-1'),
-      ...(['FR-1', 'CH-1'] as const).flatMap((id) => [
+      ...(['FR-1', 'CH-1', 'DE-7', 'LU-1'] as const).flatMap((id) => [
         checkSourceHealth(sources, id),
         checkTier1(sources.data, id),
         checkCoverage(sources.data, id),
       ]),
       checkInterval(sources.data),
+      checkInterval(sources.data, 'DE-7'),
     );
 
     // The P4b data API through Caddy (A§9.2). The snapshots ask for the server's own "now" from /meta, never this clock.
@@ -1216,9 +1316,10 @@ async function main(argv: string[]): Promise<number> {
       checkApiParams(await api('/api/v1/meta?x=1')),
       checkNoindex(noindex),
       checkFresh('DE-1', snapReads.get('now')?.data, stationsRead.data, metaRead.data?.now),
-      ...(['NL-1', 'FR-1', 'CH-1'] as const).map((id) =>
+      ...(['NL-1', 'FR-1', 'CH-1', 'DE-7', 'LU-1'] as const).map((id) =>
         checkFresh(id, snapReads.get('now')?.data, stationsRead.data, metaRead.data?.now),
       ),
+      checkLabelOffset(sources.data, metaRead.data?.now),
       checkBelgianSet(belgianIds(), stationsRead.data, snapReads.get('now')?.data, metaRead.data?.now),
     );
 
@@ -1260,7 +1361,8 @@ async function main(argv: string[]): Promise<number> {
       results.push(...s.results);
       console.log(s.report.join('\n'));
     }
-    results.push(checkTwin(readApi(await tryGet(`https://${domain}${HEALTH_PATHS[1]}`, net), HealthSources), now));
+    const twinSources = readApi(await tryGet(`https://${domain}${HEALTH_PATHS[1]}`, net), HealthSources);
+    for (const id of TWIN_IDS) results.push(checkTwin(twinSources, now, id));
   } else if (cap?.success) {
     const c = capacity(cap.data, registry, now.toISOString().slice(0, 10), ownerBytes);
     if (out !== undefined && c.ok) writeFileSync(out, c.markdown);

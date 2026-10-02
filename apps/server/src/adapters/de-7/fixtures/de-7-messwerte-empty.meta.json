@@ -1,0 +1,13 @@
+{
+  "spec": "de-7-messwerte",
+  "source": "DE-7",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/zip",
+  "url": "https://www.hochwasserportal.nrw/data/downloads/messwerte.zip",
+  "bytes": 881400,
+  "source_sha256": "b2a4c46a3f9156b8c5087c45686e947fc08913e2eefe9457876165986c828ba2",
+  "trimmed": "the header line alone, re-zipped with the recorded member name and time"
+}

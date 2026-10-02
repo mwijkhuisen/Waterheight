@@ -1,6 +1,6 @@
 # Owner checks of P1 (issue #16)
 
-The `[owner]` acceptance items of P1b, and the ones P1a and P1b share, each with the command or checklist that proves it. Paste each output into #16. Run them after the first successful deploy and backup (`docs/runbooks/bootstrap.md`). §8 to §10 are the `[owner]` items of P2b (issue #17): paste their output into #17, after the P2b release is deployed (`docs/runbooks/bootstrap.md`, "the release with P2b"). §11 is the `[owner]` item of P3 (issue #18): paste its output into #18, after the P3 release is deployed and bootstrapped (`docs/runbooks/bootstrap.md`, "the release with the basemap job").
+The `[owner]` acceptance items of P1b, and the ones P1a and P1b share, each with the command or checklist that proves it. Paste each output into #16. Run them after the first successful deploy and backup (`docs/runbooks/bootstrap.md`). §8 to §10 are the `[owner]` items of P2b (issue #17): paste their output into #17, after the P2b release is deployed (`docs/runbooks/bootstrap.md`, "the release with P2b"). §11 is the `[owner]` item of P3 (issue #18): paste its output into #18, after the P3 release is deployed and bootstrapped (`docs/runbooks/bootstrap.md`, "the release with the basemap job"). §12 holds the `[owner]` items and the new `verify-prod.sh` checks of P5b (issue #20): paste their output into #20, after the P5b release is deployed.
 
 ## 1. Reachability from the VPS over IPv4 and IPv6 (R7)
 
@@ -129,7 +129,7 @@ gh run list --workflow contract-check --limit 1
 ```
 
 - [ ] both variables are listed;
-- [ ] the run is green (six requests since P5a, scheduled at 03:29 UTC: `de-1-basin`, `nl-1-obs-key`, `nl-2-wfs`, `fr-1-obs`, `ch-1-lindas`, `ch-2-pq`; three until then), or its issue "Contract drift: the nightly live check failed" names a real drift (`docs/runbooks/schema-drift.md` §7; `fetch_*` on all six specs points at the runner: R-057).
+- [ ] the run is green (eight requests since P5b, scheduled at 03:29 UTC: `de-1-basin`, `nl-1-obs-key`, `nl-2-wfs`, `fr-1-obs`, `ch-1-lindas`, `ch-2-pq`, `de-7-messwerte`, `lu-1-csv`; six until P5b and three until P5a), or its issue "Contract drift: the nightly live check failed" names a real drift (`docs/runbooks/schema-drift.md` §7; `fetch_*` on all eight specs points at the runner: R-057).
 
 ## 10. The 7-day twin soak (P2b)
 
@@ -140,6 +140,7 @@ scripts/verify-prod.sh <domain> --soak
 ```
 
 - [ ] `twin eijsden-grens-taw-nap` passes: listed in `/api/v1/health/sources`, its latest check at most 2 hours old, aligned timestamps, `ok`, `failed_7d` 0 and `checks_7d` at least 160 (of 168 hourly checks).
+- [ ] (P5b) the same for the six pairs that join it: `chooz-fr3-fr1-h`, `uckange-fr3-fr1-q`, `basel-ch1-de1-h`, `perl-lu1-de1-h`, `stadtbredimus-lu1-de1-h` and `grevenmacher-lu1-de1-h`, each with a lag of 0 (`--soak` prints one `twin <id>` line per pair). A pair that is not listed yet is a FAIL, not a skip. A failing pair: `docs/runbooks/twin-failure.md`.
 
 ## 11. The basemap extract on the VPS (P3, issue #18)
 
@@ -158,3 +159,25 @@ The full procedure, the failure codes and the rollback are in `docs/runbooks/bas
 - [ ] both refresh runs ended with `basemap refresh done (the role's lines above say whether a build was promoted)`, and each logged the role's `promoted` line with its build;
 - [ ] `sha256sum -c` printed `OK` for all four files (`basemap-` and `planet-z6-` of both builds);
 - [ ] `systemctl list-timers 'rws-*'` does not list `rws-basemap-refresh` yet (enable it only after this check, `docs/runbooks/basemap.md` §7).
+
+## 12. DE-7, LU-1 and the twins (P5b, issue #20)
+
+The `[owner]` items of P5b and the checks that `scripts/verify-prod.sh <domain>` gained. Run them after the P5b release is deployed and bootstrapped, and after the replays of `docs/runbooks/replay.md` §8 (Action D2).
+
+1. **The replays** (`replay.md` §8): DE-7, DE-8, LU-1 and LU-6 from the first manifest day, `--dry-run` first, and each a second time (`"n_new":0,"n_changed":0`). Note the time the `pegeldaten` seed took and paste the JSON lines into #20.
+2. **The checks** (from a checkout of this release):
+
+   ```bash
+   scripts/verify-prod.sh <domain>
+   ```
+
+   - [ ] `health DE-7`, `health LU-1`, `tier-1 DE-7`, `tier-1 LU-1`, `coverage DE-7` and `coverage LU-1` pass (`coverage.ratio` at least 95 % of the expected buckets since the seed);
+   - [ ] `fresh DE-7` (a value no older than 90 minutes at `meta.now`) and `fresh LU-1` (75 minutes) pass;
+   - [ ] `interval DE-7` passes: it reads the shortest gap between two `de-7-messwerte` requests in 24 hours and wants at least 895 s (900 s less 5 s of jitter). It prints 3600 while the spec is hourly. Like `interval CH-1` (§5) it can FAIL for up to 24 hours after a recorder restart that ran a catch-up (KG-125);
+   - [ ] `bytes DE-7` passes: no UTC day of `/status/capture.json` (today, partial, and the two days before) holds more than 90 MB of zstd bytes for `de-7-messwerte`; hourly it is about a quarter of that;
+   - [ ] `label offset LU-1` passes once the first nightly job (after 02:00 UTC) has measured a day: the `label_offset` of LU-1 in `/api/v1/health/sources`, whose latest measured day, decided or not, is not older than 2 days before the server's own now. The detail prints that day (decided, with its informative instants and their share, or undecided: a quiet day on the impounded Perl reach may decide nothing) and the offset in force with the day that decided it (0 is expected: AGE's labels are on time since 2026-09-30; "no day decided yet" until the first decision). Any offset passes; a different one is `docs/runbooks/label-offset.md`;
+   - [ ] `api meta` and `api stations` list DE-7 and LU-1 (`API_SOURCES`).
+3. **The twins after 7 days**: §10, now seven pairs.
+4. **DE-7 every 15 minutes** (KG-136): the plan runs `de-7-messwerte` every 15 minutes once the retention pruner is applied (KG-062); until then it is hourly, and `apps/server/test/capture/budget.test.ts` fails if the cron and the `RWS_PRUNE_APPLY` switch of `deploy/compose.yaml` disagree. When you enable the pruner, the same PR moves the cron; afterwards `interval DE-7` prints about 900 s and `bytes DE-7` is the check that the day stays within 90 MB.
+5. **The fall-back night** (KG-134, issue #55): after 03:30 UTC on 2026-10-25, run the read-only export script (in #55's body, and `C:\temp\p5b-dst-export.sh`) on the VPS as `ops` (it writes only under `$HOME`; public sources only: DE-1, NL-1, NL-2, FR-1, CH-1, DE-7 and LU-1) and give the archive to the agent: `scripts/import-fixtures.ts` imports the payloads as the fixtures `apps/server/test/adapters/dst-2026-10-25.test.ts` waits for, and the same PR removes each source from its `PENDING` list.
+6. **Licence questions** (no blocker): the Service de la navigation gauges in the AGE file (KG-138) go with the C4 e-mail (`docs/permissions.md`), and the four DE-7 gauges of other operators and the 32 DE-7 gauges that the hydro file does not list (KG-137) go into the optional LANUK notice (`docs/legal/requests/optional-lanuk.md`). Record the answers in `docs/permissions.md`.

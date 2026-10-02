@@ -14,7 +14,14 @@ import {
   TWIN_CHECK_COLUMNS,
   VIEWS,
 } from '../../src/db/audience.ts';
-import { NEVER_OWNER, NEVER_PUBLIC, OWNER_CANARY_REAL, seedAudienceFixture } from './seed.ts';
+import {
+  NEVER_OWNER,
+  NEVER_PUBLIC,
+  OWNER_CANARY_REAL,
+  seedAudienceFixture,
+  WITHHELD_CANARY,
+  WITHHELD_KEYS,
+} from './seed.ts';
 import { createTestDb, type TestDb } from './testdb.ts';
 
 // The audience filter at every join (issue #17; invariants 8 and 11). Every
@@ -381,6 +388,89 @@ describe('sweeps over whole families', () => {
         'WAAK_OWNER',
       ]);
       expect(found(await sweep(t.admin, ['mutant.station_without_filter']), NEVER_PUBLIC).length).toBeGreaterThan(5);
+    } finally {
+      await t.admin.query('DROP SCHEMA mutant CASCADE');
+    }
+  });
+});
+
+describe('the withheld canary on every series that must stay hidden (invariant 8, issue #20)', () => {
+  const hidden = () => WITHHELD_KEYS.map((k) => ids[k] as number);
+
+  it('is stored on the withheld series, the series narrowed to off (the LU-1 RLP case), a mirror and a twin', async () => {
+    expect([...WITHHELD_KEYS]).toEqual(['withheld', 'narrowedOff', 'mirror', 'twin']);
+    for (const key of WITHHELD_KEYS) {
+      const { rows } = await t.admin.query(
+        `SELECT (SELECT count(*) FROM obs WHERE series_id = $1 AND value = $2::real)::int AS obs,
+                (SELECT count(*) FROM obs_latest WHERE series_id = $1 AND value = $2::real)::int AS latest,
+                (SELECT count(*) FROM obs_1h WHERE series_id = $1 AND vmax = $2::real)::int AS h1,
+                (SELECT count(*) FROM obs_1d WHERE series_id = $1 AND vmax = $2::real)::int AS d1,
+                (SELECT count(*) FROM forecast_run r JOIN forecast_value v ON v.run_id = r.id
+                 WHERE r.series_id = $1 AND v.value = $2)::int AS forecast`,
+        [ids[key], WITHHELD_CANARY],
+      );
+      expect(rows, key).toEqual([{ obs: 3, latest: 1, h1: 2, d1: 2, forecast: 1 }]);
+    }
+    // …and the mirror's reference carries it too.
+    const ref = await t.admin.query(
+      'SELECT count(*)::int AS n FROM reference_value WHERE series_id = $1 AND value = $2',
+      [ids.mirror, WITHHELD_CANARY],
+    );
+    expect(ref.rows).toEqual([{ n: 1 }]);
+  });
+
+  it('is in no view and no at-T function of either family, series, reference and forecast views included', async () => {
+    for (const [client, family, fn] of [
+      [api, PUB, OBS_AT.public],
+      [owner, OWN, OBS_AT.owner],
+    ] as const) {
+      const bySeries = [
+        family.obs,
+        family.obsLatest,
+        family.obs1h,
+        family.obs1d,
+        family.api.obs,
+        family.api.obs1h,
+        family.api.obs1d,
+        family.reference,
+        family.forecastRun,
+        family.api.forecastRun,
+      ];
+      for (const view of bySeries)
+        expect(
+          await column(client, `SELECT count(*)::int FROM ${view} WHERE series_id = ANY($1)`, [hidden()]),
+          view,
+        ).toEqual([0]);
+      for (const view of [family.series, family.api.series])
+        expect(await column(client, `SELECT count(*)::int FROM ${view} WHERE id = ANY($1)`, [hidden()]), view).toEqual([
+          0,
+        ]);
+      expect(
+        await column(client, `SELECT count(*)::int FROM ${fn}(${FIXTURE_NOW}) WHERE series_id = ANY($1)`, [hidden()]),
+      ).toEqual([0]);
+    }
+  });
+
+  it('would be found by the sweeps in a view that forgot the role rule (mirror, twin) or the series narrowing (off)', async () => {
+    await t.admin.query(`
+      CREATE SCHEMA mutant;
+      CREATE VIEW mutant.obs_any_role AS
+        SELECT o.series_id, o.value FROM obs o JOIN series_eff e ON e.series_id = o.series_id
+        WHERE e.audience = 'public' AND e.lic_display;
+      CREATE VIEW mutant.obs_source_audience AS
+        SELECT o.series_id, o.value FROM obs o JOIN series s ON s.id = o.series_id JOIN source src ON src.id = s.source_id
+        WHERE src.audience = 'public' AND s.role = 'primary';`);
+    try {
+      for (const [view, keys] of [
+        ['mutant.obs_any_role', ['mirror', 'twin']],
+        ['mutant.obs_source_audience', ['narrowedOff', 'withheld']],
+      ] as const) {
+        const seen = new Set(
+          (await t.admin.query<{ series_id: number }>(`SELECT series_id FROM ${view}`)).rows.map((r) => r.series_id),
+        );
+        for (const key of keys) expect(seen.has(ids[key] as number), `${view} ${key}`).toBe(true);
+        expect(found(await sweep(t.admin, [view]), NEVER_PUBLIC), view).toContain(CANARIES.withheld.real);
+      }
     } finally {
       await t.admin.query('DROP SCHEMA mutant CASCADE');
     }

@@ -216,7 +216,7 @@ test('z4–z14 at Lobith: planet below z7, the regional extract from z7, no map 
   await expectClean(page, log);
 });
 
-test('unmount removes the map and releases the protocol; remount works', async ({ page, context, baseURL }) => {
+test('unmount removes the map and drops its protocol hold; remount works', async ({ page, context, baseURL }) => {
   const log = await instrument(page, context, baseURL);
   await openSpike(page);
   const state = () =>

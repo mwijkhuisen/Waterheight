@@ -30,6 +30,7 @@ const source = {
   outage: null,
   coverage: null,
   min_interval_s: [],
+  label_offset: null,
   partitions: [{ partition: '2026-09', md5: 'a'.repeat(32), rows: 1234 }],
   partitions_at: ago(60_000),
 };
@@ -116,6 +117,34 @@ describe('HealthSources', () => {
   it('accepts a source without tier-1 numbers, gaps or checksums yet', () => {
     const fresh = { ...source, tier1: null, missing_buckets_24h: null, partitions: [], partitions_at: null };
     expect(HealthSources.safeParse(sources({ sources: [fresh] })).success).toBe(true);
+  });
+
+  it('label_offset is the latest day, whether it decided, and the offset in force, nothing else, and is required (null for most sources)', () => {
+    const decided = {
+      day: '2026-10-04',
+      decided: true,
+      n_aligned: 34,
+      share: 0.978,
+      minutes: 15,
+      decided_day: '2026-10-04',
+    };
+    const lu = { ...source, id: 'LU-1', label_offset: decided };
+    expect(HealthSources.safeParse(sources({ sources: [lu] })).success).toBe(true);
+    const bad = (label_offset: unknown) => HealthSources.safeParse(sources({ sources: [{ ...lu, label_offset }] }));
+    // Review CR-4: an undecided latest day has no share, and before the first decided day no offset either.
+    const undecided = { ...decided, day: '2026-10-05', decided: false, n_aligned: 3, share: null };
+    expect(bad(undecided).success).toBe(true);
+    expect(bad({ ...undecided, minutes: null, decided_day: null }).success).toBe(true);
+    expect(bad({ ...decided, extra: 1 }).success).toBe(false);
+    expect(bad({ ...decided, day: '2026-10-04T00:00:00Z' }).success).toBe(false);
+    expect(bad({ ...decided, decided_day: '2026-10-04T00:00:00Z' }).success).toBe(false);
+    expect(bad({ ...decided, share: 1.2 }).success).toBe(false);
+    expect(bad({ ...decided, n_aligned: -1 }).success).toBe(false);
+    expect(bad({ ...decided, decided: 'yes' }).success).toBe(false);
+    const { decided: _flag, ...unflagged } = decided;
+    expect(bad(unflagged).success).toBe(false);
+    const { label_offset: _omitted, ...without } = source;
+    expect(HealthSources.safeParse(sources({ sources: [without] })).success).toBe(false);
   });
 
   it('only catalogue source IDs: no canary, no owner-only spelling, no free text', () => {

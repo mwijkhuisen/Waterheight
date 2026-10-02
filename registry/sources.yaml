@@ -831,7 +831,7 @@ sources:
       - key: bollendorf
         audience: "off"
         reason: "LfU RLP-operated gauge inside the CC0 file: withheld in both audiences until C4 or C11 (catalogue §0.8 notes)."
-      - key: gemuend
+      - key: gemund-our
         audience: "off"
         reason: "LfU RLP-operated gauge (Gemünd) inside the CC0 file: withheld in both audiences until C4 or C11 (catalogue §0.8 notes)."
   - id: LU-2

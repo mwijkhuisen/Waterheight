@@ -3,7 +3,7 @@
 // URL (no blob:, ADR-0016), the style is bundled here, glyphs and sprites are
 // under /assets/map/, the tiles are named by /tiles/manifest.json.
 import { parseTilesManifest } from '@rws/core/tiles-manifest';
-import { addProtocol, Map as MapLibreMap, type MapOptions, removeProtocol, setWorkerUrl } from 'maplibre-gl';
+import { addProtocol, Map as MapLibreMap, type MapOptions, setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { Protocol } from 'pmtiles';
@@ -51,7 +51,7 @@ const mapLocale = (locale: Locale): Record<string, string> => ({
 
 export interface CreatedMap {
   map: MapLibreMap;
-  /** Removes the map and releases the pmtiles protocol; safe to call twice. */
+  /** Removes the map and releases its hold on the pmtiles protocol (which stays registered); safe to call twice. */
   dispose(): void;
 }
 
@@ -65,7 +65,7 @@ export async function createMap(
   // metadata off, explicitly (it is also pmtiles' default): the archive's own
   // attribution HTML never reaches MapLibre's attribution control; the style's
   // constant does (invariant 3, T-MAP-4, R-066).
-  const release = acquireProtocol({ addProtocol, removeProtocol }, () => new Protocol({ metadata: false }).tile);
+  const release = acquireProtocol({ addProtocol }, () => new Protocol({ metadata: false }).tile);
   try {
     const map = new MapLibreMap({
       container,

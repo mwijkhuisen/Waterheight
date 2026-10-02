@@ -1,0 +1,13 @@
+{
+  "spec": "lu-1-csv",
+  "source": "LU-1",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "text/csv",
+  "url": "https://inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv",
+  "bytes": 153872,
+  "source_sha256": "32f39b9be51357d3f46a7f38ee0635970ce21bf82f7272c16e1e066263c8d373",
+  "trimmed": "the header of the last 96 labels, no row"
+}

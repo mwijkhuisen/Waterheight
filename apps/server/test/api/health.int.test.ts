@@ -185,6 +185,30 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
     expect(expected).toContain('DE-1');
   });
 
+  it('label_offset (P5b): null unless the loader wrote one, then its six fields and nothing else', async () => {
+    const offset = async (id: string) => {
+      const doc = HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources')));
+      return doc.sources.find((s) => s.id === id)?.label_offset;
+    };
+    expect(await offset('DE-1')).toBeNull();
+    await admin(
+      `UPDATE source_health SET detail = detail || '{"label_offset": {"day": "2026-09-28", "decided": false, "n_aligned": 9, "share": null, "minutes": 15, "decided_day": "2026-09-27", "stray": "x"}}' WHERE source_id = 'DE-1'`,
+    );
+    try {
+      expect(await offset('DE-1')).toEqual({
+        day: '2026-09-28',
+        decided: false,
+        n_aligned: 9,
+        share: null,
+        minutes: 15,
+        decided_day: '2026-09-27',
+      });
+    } finally {
+      await admin(`UPDATE source_health SET detail = detail - 'label_offset' WHERE source_id = 'DE-1'`);
+    }
+    expect(await offset('DE-1')).toBeNull();
+  });
+
   it('HEAD answers like GET without a body; other methods are 405, other paths and a trailing slash 404', async () => {
     const { app } = appAt();
     const head = await app.request('/api/v1/health', { method: 'HEAD' });

@@ -21,7 +21,7 @@ const inputs = readInputs();
 const run = (change: Partial<Inputs> = {}) => generate({ ...inputs, ...change });
 const sources = SourcesFile.parse(parse(readFileSync(`${repoRoot}registry/sources.yaml`, 'utf8'))).sources;
 const twinsDoc = parse(readFileSync(`${repoRoot}registry/twins.yaml`, 'utf8')) as {
-  twins: { a: { provider_key: string }; b: { provider_key: string } }[];
+  twins: { a: { source: string; provider_key: string }; b: { source: string; provider_key: string } }[];
 };
 
 const rows = StationsFile.parse(parse(committed)).stations.filter((s): s is PublicStation => s.audience !== 'owner');
@@ -196,8 +196,10 @@ describe('registry/stations/nl-1.yaml', () => {
       expected_forecast_source: null,
     });
     expect(find('eijsden.grens').provider_key).toBe('eijsden.grens/WATHTE/NAP/other:F007');
-    expect(validateTwins(twinsDoc, rows).problems).toEqual([]);
-    const twinKeys = twinsDoc.twins.flatMap((t) => [t.a.provider_key, t.b.provider_key]).sort();
+    // The NL-1 pair validates against the NL-1 rows (P5b added pairs of other sources: test/registry-precedence.test.ts).
+    const nl1 = { twins: twinsDoc.twins.filter((t) => t.a.source === 'NL-1' && t.b.source === 'NL-1') };
+    expect(validateTwins(nl1, rows).problems).toEqual([]);
+    const twinKeys = nl1.twins.flatMap((t) => [t.a.provider_key, t.b.provider_key]).sort();
     expect(twinKeys).toEqual(['eijsden.grens/WATHTE/NAP/other:F007', 'eijsden.grens/WATHTE/TAW/other:F007']);
     for (const key of twinKeys) expect(rows.filter((r) => r.provider_key === key)).toHaveLength(1);
   });

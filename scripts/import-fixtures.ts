@@ -1,7 +1,9 @@
 // Turns payloads the owner exported from the production raw archive (Action D2;
 // the read-only export command is in the P5a PR) into adapter fixtures:
 //
-//   node scripts/import-fixtures.ts <export dir>
+//   node scripts/import-fixtures.ts [--p5b] <export dir>
+//
+// (`--p5b`: the P5b export and its rules, `IMPORTS_P5B`; without it the P5a list.)
 //
 // The export holds `<name>.raw` (the archived body) and `<name>.line.json` (its
 // manifest line). Each payload listed below is copied to
@@ -18,6 +20,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { crc32, deflateRawSync, inflateRawSync } from 'node:zlib';
 
 const root = join(import.meta.dirname, '..');
 
@@ -53,6 +56,138 @@ export const TRIM: Readonly<Record<Import['source'], (doc: Doc, n: number, last:
     return `last ${n} points of every trace`;
   },
 };
+
+// ---------------------------------------------------------------- P5b: the text and ZIP rules (scripts/trim-fixtures.ts
+// uses them too)
+
+/**
+ * LU-1 rows kept: a tier-1 gauge, the Perl twin, a row with gaps, Esch-Sûre (m, a value after the last label). No
+ * withheld row (review L3 of P5b): the RLP gauges' values stay out of the trims, and the `off` path is tested on a
+ * synthetic row; the P1a recording `lu-1-csv.raw` holds them as recorded, the only fixture that does.
+ */
+export const LU1_ROWS: readonly string[] = ['Diekirch', 'Perl', 'SN_Remich', 'Bissen', 'Esch-Sure'];
+export const LU1_LABELS = 96;
+/** DE-7 blocks kept: Stah (15 min), Goch, Gronau, a 5-minute station, the placeholder block, the 10-digit number. */
+export const DE7_BLOCKS: readonly string[] = [
+  '2829100000100',
+  '2869500000200',
+  '9286455000200',
+  '2847500000100',
+  '1234512345',
+  '2768898001',
+];
+/** The pegeldaten.zip seed holds two months: Stah and the placeholder block only. */
+export const DE7_SEED_BLOCKS: readonly string[] = ['2829100000100', '1234512345'];
+/** LU-6 features kept, by the AGE number of their fiche: both Kautenbach (14, 104), both Niederfeulen (27, 77), Wasserbillig, Gemünd, Esch-Sûre. */
+export const LU6_CODES: readonly string[] = ['14', '104', '27', '77', '0029151', '2626030300', '40', '11'];
+
+/** Splits a text body into lines and its line end (CRLF or LF), keeping both. */
+export function lines(text: string): { lines: string[]; eol: string } {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const all = text.split(eol);
+  if (all.at(-1) === '') all.pop();
+  return { lines: all, eol };
+}
+export const join_ = (l: readonly string[], eol: string) => `${l.join(eol)}${eol}`;
+
+export type ZipEntry = { name: string; time: number; date: number; data: Buffer };
+
+/** The members of one of our own recorded ZIPs (no zip64, deflate or stored): read, never trusted beyond that. */
+export function unzip(buf: Buffer): ZipEntry[] {
+  const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const out: ZipEntry[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const method = buf.readUInt16LE(p + 10);
+    const time = buf.readUInt16LE(p + 12);
+    const date = buf.readUInt16LE(p + 14);
+    const compressed = buf.readUInt32LE(p + 20);
+    const size = buf.readUInt32LE(p + 24);
+    const nameLen = buf.readUInt16LE(p + 28);
+    const extra = buf.readUInt16LE(p + 30);
+    const comment = buf.readUInt16LE(p + 32);
+    const local = buf.readUInt32LE(p + 42);
+    const name = buf.subarray(p + 46, p + 46 + nameLen).toString('latin1');
+    const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const body = buf.subarray(start, start + compressed);
+    const data = method === 0 ? Buffer.from(body) : inflateRawSync(body);
+    if (data.length !== size) throw new Error(`${name}: size`);
+    out.push({ name, time, date, data });
+    p += 46 + nameLen + extra + comment;
+  }
+  return out;
+}
+
+/** A ZIP of the given members, deflated, with their recorded names and DOS times: the same input, the same bytes. */
+export function zip(entries: readonly ZipEntry[]): Buffer {
+  const locals: Buffer[] = [];
+  const central: Buffer[] = [];
+  let offset = 0;
+  for (const e of entries) {
+    const name = Buffer.from(e.name, 'latin1');
+    const deflated = deflateRawSync(e.data, { level: 9 });
+    const crc = crc32(e.data);
+    const head = Buffer.alloc(30);
+    head.writeUInt32LE(0x04034b50, 0);
+    head.writeUInt16LE(20, 4);
+    head.writeUInt16LE(0, 6);
+    head.writeUInt16LE(8, 8);
+    head.writeUInt16LE(e.time, 10);
+    head.writeUInt16LE(e.date, 12);
+    head.writeUInt32LE(crc, 14);
+    head.writeUInt32LE(deflated.length, 18);
+    head.writeUInt32LE(e.data.length, 22);
+    head.writeUInt16LE(name.length, 26);
+    head.writeUInt16LE(0, 28);
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(0x02014b50, 0);
+    cd.writeUInt16LE(20, 4);
+    cd.writeUInt16LE(20, 6);
+    cd.writeUInt16LE(0, 8);
+    cd.writeUInt16LE(8, 10);
+    cd.writeUInt16LE(e.time, 12);
+    cd.writeUInt16LE(e.date, 14);
+    cd.writeUInt32LE(crc, 16);
+    cd.writeUInt32LE(deflated.length, 20);
+    cd.writeUInt32LE(e.data.length, 24);
+    cd.writeUInt16LE(name.length, 28);
+    cd.writeUInt32LE(offset, 42);
+    locals.push(head, name, deflated);
+    central.push(cd, name);
+    offset += head.length + name.length + deflated.length;
+  }
+  const cdBuf = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(cdBuf.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, cdBuf, end]);
+}
+
+/** A DE-7 member with only the whole blocks of `keep` (their data lines and terminator lines), in recorded order. */
+export function de7Blocks(text: string, keep: readonly string[]): string {
+  const { lines: all, eol } = lines(text);
+  return join_([all[0] as string, ...all.slice(1).filter((l) => keep.includes(l.split(';')[0] as string))], eol);
+}
+
+/** An LU-1 CSV with only the rows named in `names` and the last `n` labels, every row's trailing field kept. */
+export function lu1Cut(text: string, names: readonly string[] | null, n: number): string {
+  const { lines: all, eol } = lines(text);
+  const fields = (l: string) => l.split('","');
+  const header = fields(all[0] as string);
+  const labels = header.length - 3;
+  const pick = (f: string[], extra: boolean) => {
+    const head = f.slice(0, 3);
+    const cells = f.slice(3 + labels - n, 3 + labels);
+    return [...head, ...cells, ...(extra ? f.slice(3 + labels) : [])];
+  };
+  const head = pick(header, false).join('","');
+  const rows = all.slice(1).filter((l) => names?.includes(l.slice(1, l.indexOf('"', 1))));
+  return join_([head, ...rows.map((l) => pick(fields(l), true).join('","'))], eol);
+}
 
 /** The exported payloads that P5a uses, and the fixture each becomes. */
 export const IMPORTS: readonly Import[] = [
@@ -100,12 +235,77 @@ export function cut(
   return { body: Buffer.from(JSON.stringify(doc)), trimmed };
 }
 
-function main(dir: string): void {
-  for (const { name, source, fixture, keep, last } of IMPORTS) {
+/**
+ * P5b (Action D2, export of 2026-10-02): the payloads P5b imports and the rule that cuts each. LU-1: the seed
+ * (the first capture, 2026-09-30, in the 672-label format AGE serves since that day) with the rows of
+ * `LU1_ROWS` and its last two days of labels; DE-1: the Perl W seed (31 days, 2,976 points) cut to its last 300
+ * points, which overlap that LU-1 seed (the label-offset detector's fixture); DE-7: one production messwerte.zip
+ * with the whole blocks of `DE7_BLOCKS`, and the pegeldaten.zip seed (two months) with those of
+ * `DE7_SEED_BLOCKS` only (Stah and the placeholder: a readable golden), in every member (pegel_stationen.txt:
+ * its rows of those stations), re-zipped.
+ */
+export const IMPORTS_P5B: readonly {
+  name: string;
+  source: 'DE-1' | 'DE-7' | 'LU-1';
+  fixture: string;
+  rule: 'lu1-rows' | 'de1-last' | 'de7-blocks' | 'de7-seed-blocks';
+  n?: number;
+}[] = [
+  { name: 'lu-1-seed', source: 'LU-1', fixture: 'lu-1-csv-seed', rule: 'lu1-rows', n: 192 },
+  { name: 'de-1-series-c263ea53-seed', source: 'DE-1', fixture: 'de-1-series-perl-w-seed', rule: 'de1-last', n: 300 },
+  { name: 'de-7-messwerte-005000-1', source: 'DE-7', fixture: 'de-7-messwerte-archive', rule: 'de7-blocks' },
+  { name: 'de-7-pegeldaten-seed', source: 'DE-7', fixture: 'de-7-pegeldaten-blocks', rule: 'de7-seed-blocks' },
+];
+
+/** The body a P5b rule keeps, and what it says it kept. */
+export function cutP5b(
+  rule: (typeof IMPORTS_P5B)[number]['rule'],
+  raw: Buffer,
+  n = 0,
+): { body: Buffer; trimmed: string } {
+  if (rule === 'lu1-rows') {
+    return {
+      body: Buffer.from(lu1Cut(raw.toString('utf8'), LU1_ROWS, n)),
+      trimmed: `rows ${LU1_ROWS.join(', ')} and the last ${n} labels, each row's trailing field kept`,
+    };
+  }
+  if (rule === 'de1-last') {
+    return {
+      body: Buffer.from(JSON.stringify((JSON.parse(raw.toString('utf8')) as unknown[]).slice(-n))),
+      trimmed: `last ${n} measurements`,
+    };
+  }
+  const blocks = rule === 'de7-seed-blocks' ? DE7_SEED_BLOCKS : DE7_BLOCKS;
+  const members = unzip(raw).map((m) => {
+    const text = m.data.toString('latin1');
+    const kept =
+      m.name === 'pegel_stationen.txt'
+        ? (() => {
+            const { lines: all, eol } = lines(text);
+            return join_(
+              [all[0] as string, ...all.slice(1).filter((l) => DE7_BLOCKS.includes(l.split(';')[3] as string))],
+              eol,
+            );
+          })()
+        : de7Blocks(text, blocks);
+    return { ...m, data: Buffer.from(kept, 'latin1') };
+  });
+  return {
+    body: zip(members),
+    trimmed: `in every member the whole blocks (pegel_stationen.txt: the rows) of ${blocks.join(', ')}, re-zipped with the recorded member names and times`,
+  };
+}
+
+function main(dir: string, p5b: boolean): void {
+  const list = p5b
+    ? IMPORTS_P5B.map((i) => ({ ...i, keep: undefined, last: undefined }))
+    : IMPORTS.map((i) => ({ ...i, rule: undefined, n: undefined }));
+  for (const { name, source, fixture, keep, last, rule, n } of list) {
     const raw = readFileSync(join(dir, `${name}.raw`));
     const line = JSON.parse(readFileSync(join(dir, `${name}.line.json`), 'utf8')) as Line;
     if (sha256(raw) !== line.sha256) throw new Error(`${name}: the body is not the archived object (sha256)`);
-    const { body, trimmed } = cut(source, raw, keep, last === true);
+    const { body, trimmed } =
+      rule === undefined ? cut(source as Import['source'], raw, keep, last === true) : cutP5b(rule, raw, n);
     const meta = {
       spec: line.spec,
       variant: line.variant,
@@ -129,9 +329,10 @@ function main(dir: string): void {
 }
 
 if (import.meta.main) {
-  const dir = process.argv[2];
+  const p5b = process.argv[2] === '--p5b';
+  const dir = process.argv[p5b ? 3 : 2];
   if (dir === undefined) {
-    console.error('usage: node scripts/import-fixtures.ts <export dir>');
+    console.error('usage: node scripts/import-fixtures.ts [--p5b] <export dir>');
     process.exitCode = 64;
-  } else main(dir);
+  } else main(dir, p5b);
 }

@@ -3,7 +3,7 @@ import type { ManifestLine } from '../apps/server/src/archive/manifest.ts';
 import { Archive, sha256 } from '../apps/server/src/archive/writer.ts';
 
 // Builds a small raw archive from the recorded DE-1, NL-1, NL-2, FR-1, FR-3,
-// CH-1, CH-2 and CH-3 fixtures,
+// CH-1, CH-2, CH-3, DE-7, DE-8, LU-1 and LU-6 fixtures,
 // written by the recorder's own Archive class (real zstd objects, real
 // manifest lines). The loader tests and the CI end-to-end run load it;
 // nothing is fetched.
@@ -286,6 +286,45 @@ export async function buildFrChFixtureArchive(rawDir: string): Promise<ManifestL
   return lines;
 }
 
+/**
+ * P5b: the DE-7, DE-8, LU-1 and LU-6 fixtures (DE-7 as its trimmed blocks: the whole recording is 239k rows,
+ * too much for the CI end-to-end container): the NRW station master and gauge zeros, the LU station points,
+ * one day of five LU-1 rows (no withheld row, review L3).
+ */
+export const NRWLU_FIXTURES: readonly {
+  source: 'DE-7' | 'DE-8' | 'LU-1' | 'LU-6';
+  spec: string;
+  name: string;
+  retention: 'obs' | 'forever';
+}[] = [
+  { source: 'DE-8', spec: 'de-8-stations', name: 'de-8-stations', retention: 'forever' },
+  { source: 'DE-8', spec: 'de-8-hydro', name: 'de-8-hydro', retention: 'forever' },
+  { source: 'DE-7', spec: 'de-7-messwerte', name: 'de-7-messwerte-blocks', retention: 'obs' },
+  { source: 'LU-6', spec: 'lu-6-geo', name: 'lu-6-geo', retention: 'forever' },
+  { source: 'LU-1', spec: 'lu-1-csv', name: 'lu-1-csv-day', retention: 'obs' },
+];
+
+/** The DE-7, DE-8, LU-1 and LU-6 fixtures at their recorded times. Returns the lines written. */
+export async function buildNrwLuFixtureArchive(rawDir: string): Promise<ManifestLine[]> {
+  const archive = new Archive(rawDir);
+  const lines: ManifestLine[] = [];
+  for (const f of NRWLU_FIXTURES) {
+    const { body, at, url } = recorded(f.name, f.source);
+    lines.push(
+      await writePayload(archive, {
+        source: f.source,
+        spec: f.spec,
+        variant: '',
+        at,
+        body,
+        url,
+        retention: f.retention,
+      }),
+    );
+  }
+  return lines;
+}
+
 if (import.meta.main) {
   const dir = process.argv[2];
   if (dir === undefined || process.argv.length !== 3) {
@@ -297,6 +336,7 @@ if (import.meta.main) {
       ...(await buildFixtureArchive(dir)),
       ...(await buildNlFixtureArchive(dir)),
       ...(await buildFrChFixtureArchive(dir)),
+      ...(await buildNrwLuFixtureArchive(dir)),
     ];
     const payloads = lines.filter((l) => l.key !== null).length;
     console.log(`fixture-archive: ${lines.length} manifest lines (${payloads} payloads) written to ${dir}`);

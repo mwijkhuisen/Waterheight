@@ -117,7 +117,8 @@ describe('NL-1 observations', { timeout: 60_000 }, () => {
         n_aligned: 17,
         median_delta: 233,
         max_delta: 233,
-        lag_min: null,
+        // P5b: the lag is measured (0: none); it stays NULL only when nothing aligned.
+        lag_min: 0,
         ok: true,
       },
     ]);
@@ -177,7 +178,7 @@ describe('NL-1 observations', { timeout: 60_000 }, () => {
       n_aligned: 17,
       median_delta: 233,
       max_delta: 236,
-      lag_min: null,
+      lag_min: 0,
       ok: false,
     });
     // A new hour with the pair still failing reports it again.
@@ -225,24 +226,29 @@ describe('NL-1 observations', { timeout: 60_000 }, () => {
   });
 
   it('the registry sync owns the pair: a pair that leaves the registry is no longer checked', async () => {
-    const twin = await h.t.admin.query('SELECT id, relation FROM twin');
+    // P5b: the registry holds seven pairs (docs: registry/twins.yaml); this test follows the Eijsden one.
+    const twin = await h.t.admin.query('SELECT id, relation FROM twin WHERE id = $1', [TWIN]);
     expect(twin.rows).toEqual([{ id: TWIN, relation: { kind: 'offset', expected: 233, tolerance: 1, unit: 'cm' } }]);
+    expect(await h.count('twin')).toBe(7);
     const sides = await h.t.admin.query(
       `SELECT a.provider_key AS a, b.provider_key AS b, a.role AS a_role, b.role AS b_role
-       FROM twin t JOIN series a ON a.id = t.series_a JOIN series b ON b.id = t.series_b`,
+       FROM twin t JOIN series a ON a.id = t.series_a JOIN series b ON b.id = t.series_b WHERE t.id = $1`,
+      [TWIN],
     );
     expect(sides.rows).toEqual([{ a: TAW, b: NAP, a_role: 'twin', b_role: 'primary' }]);
     const owner = h.dbAs('rws_migrator', 1);
     const input = readRegistry();
-    expect((await syncRegistry(owner.db, input)).twins).toBe(1);
+    expect((await syncRegistry(owner.db, input)).twins).toBe(7);
     expect((await syncRegistry(owner.db, { ...input, twins: [] })).twins).toBe(0);
-    expect((await h.t.admin.query('SELECT relation FROM twin')).rows).toEqual([{ relation: {} }]);
+    expect((await h.t.admin.query('SELECT relation FROM twin WHERE id = $1', [TWIN])).rows).toEqual([{ relation: {} }]);
     const checks = (await check()).length;
     expect(await checkTwins(h.load.db, new Date('2026-09-30T19:10:00Z'))).toEqual([]);
     expect(await check()).toHaveLength(checks);
     // Its checks stay, and the pair comes back with the registry.
     await syncRegistry(owner.db, input);
-    expect((await h.t.admin.query("SELECT relation->>'kind' AS kind FROM twin")).rows).toEqual([{ kind: 'offset' }]);
+    expect((await h.t.admin.query("SELECT relation->>'kind' AS kind FROM twin WHERE id = $1", [TWIN])).rows).toEqual([
+      { kind: 'offset' },
+    ]);
   });
 
   it('a stale series is the provider’s when the spec that fetches it stated it within two of its own cadences', async () => {
@@ -322,6 +328,7 @@ describe('NL-1 observations', { timeout: 60_000 }, () => {
       n_aligned: 17,
       median_delta: 233,
       max_delta: 233,
+      lag_min: 0,
       ok: true,
     });
   });

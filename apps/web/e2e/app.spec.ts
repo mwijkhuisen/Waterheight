@@ -4,7 +4,7 @@ import { expectClean, instrument, type Log } from './clean.ts';
 
 // P4b acceptance (issue #19), on Chromium, Firefox and WebKit, against the e2e
 // build served under the production headers with the e2e api behind it (a real
-// PostgreSQL, the registry's 712 public stations, synthetic values, a fixed clock):
+// PostgreSQL, the registry's 1,000 public stations (P5b), synthetic values, a fixed clock):
 // - NL is the default and the language switch keeps t and s; the slider updates ?t= and the
 //   marker states; a deep link restores the view; the slider works from the keyboard;
 // - 02:30 CEST and 02:30 CET on 2026-10-25 are distinct selectable instants (scrubber and time input);
