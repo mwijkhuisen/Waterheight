@@ -434,6 +434,19 @@ specs:
     retention: obs
     validity: { format: json, required: [Serie], reject: [error_msg], count: Serie.ObssHydro, min: 1 }
     seed: { kind: once, pace_ms: 2000 }
+  # P5a (owner decision, 2026-10-02): the two FR-3 twins of A§7.4 item 7 (Chooz H, Uckange Q) need recent
+  # Vigicrues values after the seed ends. Each answer is the whole ~2-month series (~0.8 MB), so every 6 h
+  # is enough for the hourly twin check over 24 h; 8 requests a day, 2 s apart.
+  - id: fr-3-twin
+    source: FR-3
+    version: 1
+    cron: "17 */6 * * *"
+    request:
+      url: https://www.vigicrues.gouv.fr/services/observations.json/index.php?CdStationHydro={code}&GrdSerie={grd}&FormatSortie=simple
+    variants: { values: [{ code: B720000001, grd: H }, { code: A850061001, grd: Q }], key: [code, grd], space_ms: 2000 }
+    max_bytes: 4194304
+    retention: obs
+    validity: { format: json, required: [Serie], reject: [error_msg], count: Serie.ObssHydro, min: 1 }
   - id: fr-4
     source: FR-4
     version: 1

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { budgets } from '../../src/capture/budget.ts';
-import { baseRequest } from '../../src/capture/specs.ts';
+import { baseRequest, variantKey } from '../../src/capture/specs.ts';
 import { registry, spec } from './helpers.ts';
 
 // Criterion "[CI] The budget config test holds" (issue #16; A§7.3), computed
@@ -33,6 +33,14 @@ describe('request budgets', () => {
   it('FR-1 seed pages are ≥ 2 s apart', () => {
     expect(spec('fr-1-obs').seed?.kind).toBe('days');
     expect(spec('fr-1-obs').seed?.pace_ms).toBeGreaterThanOrEqual(2000);
+  });
+
+  it('FR-3 twins (P5a): Chooz H and Uckange Q every 6 h, 2 s apart, 8 requests a day', () => {
+    const s = spec('fr-3-twin');
+    expect(s.rows.map((r) => variantKey(r, s.variants?.key))).toEqual(['B720000001/H', 'A850061001/Q']);
+    expect(s.cadence_s).toBe(6 * 3600);
+    expect(s.variants?.space_ms).toBeGreaterThanOrEqual(2000);
+    expect(perHour('fr-3-twin') * 24).toBe(8);
   });
 
   it('Vigicrues: every spec that expands spaces its requests ≥ 2 s, and its longest run fits its deadline (#39)', () => {
