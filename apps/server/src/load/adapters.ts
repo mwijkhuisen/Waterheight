@@ -1,7 +1,17 @@
 import type { Normalised, Registry } from '@rws/core';
+import { normaliseCube } from '../adapters/ch-1/normalise.ts';
+import { parseCube } from '../adapters/ch-1/parse.ts';
+import { normaliseFeatures } from '../adapters/ch-2/normalise.ts';
+import { parseFeatures } from '../adapters/ch-2/parse.ts';
+import { normalisePlot } from '../adapters/ch-3/normalise.ts';
+import { parsePlot } from '../adapters/ch-3/parse.ts';
 import { driftReport } from '../adapters/de-1/drift.ts';
 import { normaliseBasin, normaliseMeta, normaliseSeries } from '../adapters/de-1/normalise.ts';
 import { JSON_CAPS, parseMeasurements, parseStations } from '../adapters/de-1/parse.ts';
+import { normaliseStations as normaliseFr1Stations, normaliseObservations } from '../adapters/fr-1/normalise.ts';
+import { parseStations as parseFr1Stations, parseObservations } from '../adapters/fr-1/parse.ts';
+import { normaliseSerie } from '../adapters/fr-3/normalise.ts';
+import { parseSerie } from '../adapters/fr-3/parse.ts';
 import { normalise as normaliseNl1 } from '../adapters/nl-1/normalise.ts';
 import { parseWaarnemingen } from '../adapters/nl-1/parse.ts';
 import { driftReport as driftNl2 } from '../adapters/nl-2/drift.ts';
@@ -23,6 +33,8 @@ export type LoadContext = {
   variant: string;
   /** The series keys whose unit the source's newest unit-stating payload showed changed (Normalised.unitMismatch). */
   unitMismatch: ReadonlySet<string>;
+  /** The registry of the spec's `fill` source (its series that the payload's fill rows may fill). */
+  fillRegistry?: Registry;
 };
 
 /**
@@ -53,6 +65,11 @@ export type SpecLoader = {
   drift?: (body: Uint8Array, registry: ReadonlyMap<string, SeriesRow>) => Drift;
   /** The source whose registry `drift` compares with, when it is not the payload's own (NL-2 lists NL-1's series). */
   driftSource?: string;
+  /**
+   * The source whose primary series the payload's `fill` rows gap-fill (FR-3 → FR-1, CH-3 → CH-1): stored only
+   * where that source states no value, with the backfilled bit, never as a revision (load/store.ts).
+   */
+  fill?: string;
 };
 
 export type LoadAdapter = {
@@ -62,6 +79,14 @@ export type LoadAdapter = {
 };
 
 const MIB = 1024 * 1024;
+
+/** One Vigicrues series (the seed and the twin spec): rows of the FR-3 twin series, and the same rows as FR-1 fill. */
+const fr3Serie: SpecLoader = {
+  maxBytes: 4 * MIB,
+  needsVariant: false,
+  run: (b, c) => normaliseSerie(parseSerie(b), c),
+  fill: 'FR-1',
+};
 
 /** One `OphalenWaarnemingen` response: the lists name their own series, so a `recovered` line loads too. */
 const nl1Observations: SpecLoader = {
@@ -95,6 +120,47 @@ export const LOAD_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       'nl-1-obs-key': nl1Observations,
       'nl-1-obs-other': nl1Observations,
       'nl-1-obs-twin': nl1Observations,
+    },
+  },
+  // Every page of an observations_tr walk is its own payload and names its own series; a recovered line loads too.
+  'FR-1': {
+    version: 1,
+    specs: {
+      'fr-1-obs': {
+        maxBytes: 16 * MIB,
+        needsVariant: false,
+        run: (b, c) => normaliseObservations(parseObservations(b).data, c),
+      },
+      'fr-1-ref': {
+        maxBytes: 8 * MIB,
+        needsVariant: false,
+        run: (b, c) => normaliseFr1Stations(parseFr1Stations(b), c),
+      },
+    },
+  },
+  // A twin and gap-fill source, never primary (A§7.2): the ~2-month seed and the 6-hourly Chooz/Uckange twin spec.
+  'FR-3': { version: 1, specs: { 'fr-3-obs': fr3Serie, 'fr-3-twin': fr3Serie } },
+  'CH-1': {
+    version: 1,
+    specs: { 'ch-1-lindas': { maxBytes: 4 * MIB, needsVariant: false, run: (b, c) => normaliseCube(parseCube(b), c) } },
+  },
+  // A twin of CH-1, nothing depends on it (C13 may move it to the owner audience, or stop it).
+  'CH-2': {
+    version: 1,
+    specs: {
+      'ch-2-pq': { maxBytes: 4 * MIB, needsVariant: false, run: (b, c) => normaliseFeatures(parseFeatures(b), c) },
+    },
+  },
+  // The 40-day seed: gap-fill rows of the CH-1 series only; the station is the seed row (the variant).
+  'CH-3': {
+    version: 1,
+    specs: {
+      'ch-3-40d': {
+        maxBytes: 8 * MIB,
+        needsVariant: true,
+        run: (b, c) => normalisePlot(parsePlot(b), c),
+        fill: 'CH-1',
+      },
     },
   },
   // Discovery only: no row is ever stored (REST wins); the snapshot feeds NL-1's drift report. Listed only while

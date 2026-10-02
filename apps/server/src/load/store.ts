@@ -1,4 +1,4 @@
-import type { GaugeZeroRow, ObsRow, SeriesDecl } from '@rws/core';
+import { type GaugeZeroRow, type ObsRow, QC, type SeriesDecl } from '@rws/core';
 import { type Kysely, sql, type Transaction } from 'kysely';
 import type { DB } from '../db/generated.ts';
 
@@ -91,6 +91,8 @@ export type SeriesRow = SeriesDecl & {
   off: boolean;
   /** It shares its source's audience: only such series count in the source's health and batch numbers. */
   sameAudience: boolean;
+  /** primary, twin or mirror: only a primary series takes gap-fill rows (FR-3, CH-3). */
+  role: 'primary' | 'twin' | 'mirror';
   /** Its station's registered position (a drift report compares it with what a payload states). */
   lon: number | null;
   lat: number | null;
@@ -110,6 +112,7 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
     tier: number;
     off: boolean;
     same_audience: boolean;
+    role: 'primary' | 'twin' | 'mirror';
     lon: number | null;
     lat: number | null;
   }>`
@@ -117,7 +120,7 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
            (EXTRACT(EPOCH FROM s.native_step) * 1000)::double precision AS native_step_ms,
            (EXTRACT(EPOCH FROM s.expected_step) * 1000)::double precision AS expected_step_ms, st.tier,
            LEAST(src.audience, COALESCE(s.audience, src.audience)) = 'off' AS off,
-           COALESCE(s.audience, src.audience) = src.audience AS same_audience, st.lon, st.lat
+           COALESCE(s.audience, src.audience) = src.audience AS same_audience, s.role, st.lon, st.lat
     FROM series s JOIN station st ON st.id = s.station_id JOIN source src ON src.id = s.source_id
     WHERE s.source_id = ${source} AND s.active`.execute(db);
   return new Map(
@@ -135,6 +138,7 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
         tier: r.tier,
         off: r.off,
         sameAudience: r.same_audience,
+        role: r.role,
         lon: r.lon,
         lat: r.lat,
       },
@@ -174,7 +178,14 @@ type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience'>;
  *    cannot overwrite it;
  *  - a changed value or qc writes exactly one obs_revision row. The revision
  *    log records the changes of the stored value in the order they were
- *    stored, so it is the one thing here that depends on arrival order.
+ *    stored, so it is the one thing here that depends on arrival order;
+ *  - `fill` (P5a: the FR-3 and CH-3 seeds, into FR-1 and CH-1 series) marks
+ *    every row with the backfilled bit (512). A fill row is written only where
+ *    the series has no row or holds a fill row of an older fetch (newest fetch
+ *    wins among fills), and any row of the series' own source replaces a fill
+ *    row whatever its fetch time. Neither writes an obs_revision row: a fill
+ *    is not a revision of the source's value. So the rows, rollups and
+ *    revisions are the same in either load order of a source and its fill.
  */
 // ponytail: every re-statement of an unchanged point rewrites its batch_id (about six row updates per insert
 // for DE-1's hourly PT6H window). If obs bloat shows, keep the newest fetch per series in a coverage table,
@@ -185,6 +196,7 @@ export async function upsertObs(
   ids: ReadonlyMap<string, Series>,
   batch: string,
   fetchedAt: Date,
+  fill = false,
 ): Promise<Written> {
   const none: Written = { n_new: 0, n_changed: 0, newest: null, writes: 0 };
   const sid: number[] = [];
@@ -200,7 +212,7 @@ export async function upsertObs(
     sid.push(series.id);
     ts.push(r.ts);
     value.push(r.value);
-    qc.push(r.qc);
+    qc.push(fill ? r.qc | QC.BACKFILLED : r.qc);
   }
   if (sid.length === 0) return none;
   const sorted = [...ts].sort();
@@ -218,9 +230,14 @@ export async function upsertObs(
       FROM incoming i
       LEFT JOIN obs o ON o.series_id = i.series_id AND o.ts = i.ts
       LEFT JOIN ingest_batch b ON b.id = o.batch_id
-      WHERE o.series_id IS NULL OR b.id IS NULL
-         OR (b.fetched_at, b.id) < (${fetchedAt}::timestamptz, ${batch}::bigint)
-         OR (b.id = ${batch}::bigint AND (o.value, o.qc) IS DISTINCT FROM (i.value, i.qc))
+      WHERE o.series_id IS NULL
+         -- the source's own row replaces a fill row, whatever its fetch time
+         OR (NOT ${fill}::boolean AND (o.qc & ${QC.BACKFILLED}::int2) <> 0)
+         -- a fill row never replaces the source's own row
+         OR ((NOT ${fill}::boolean OR (o.qc & ${QC.BACKFILLED}::int2) <> 0)
+             AND (b.id IS NULL
+                  OR (b.fetched_at, b.id) < (${fetchedAt}::timestamptz, ${batch}::bigint)
+                  OR (b.id = ${batch}::bigint AND (o.value, o.qc) IS DISTINCT FROM (i.value, i.qc))))
     ),
     up AS (
       INSERT INTO obs AS o (series_id, ts, value, qc, batch_id)
@@ -234,6 +251,7 @@ export async function upsertObs(
       INSERT INTO obs_revision (series_id, ts, old_value, new_value, old_qc, new_qc, batch_id)
       SELECT series_id, ts, old_value, value, old_qc, qc, ${batch}::bigint FROM up
       WHERE old_series IS NOT NULL AND (old_value, old_qc) IS DISTINCT FROM (value, qc)
+        AND (old_qc & ${QC.BACKFILLED}::int2) = 0 AND (qc & ${QC.BACKFILLED}::int2) = 0
     ),
     latest AS (
       INSERT INTO obs_latest AS l (series_id, ts, value, qc, batch_id)
@@ -243,7 +261,7 @@ export async function upsertObs(
         SET ts = EXCLUDED.ts, value = EXCLUDED.value, qc = EXCLUDED.qc, batch_id = EXCLUDED.batch_id
         WHERE EXCLUDED.ts >= l.ts
     )
-    SELECT series_id, ts, old_series IS NULL AS inserted,
+    SELECT series_id, ts, old_series IS NULL OR (old_qc & ${QC.BACKFILLED}::int2) <> 0 AS inserted,
            (old_value, old_qc) IS DISTINCT FROM (value, qc) AS changed
     FROM up`.execute(tx);
   const changed = written.filter((w) => w.changed);
@@ -451,6 +469,8 @@ export type FetchFold = {
   reset: boolean;
   lastNewData: Date | null;
   newestTs: Date | null;
+  /** When each root request of a scheduled run started (not a seed, a walk page or a recovered line), in order. */
+  starts: { spec: string; variant: string; at: number }[];
 };
 
 export const emptyFold = (): FetchFold => ({
@@ -459,7 +479,45 @@ export const emptyFold = (): FetchFold => ({
   reset: false,
   lastNewData: null,
   newestTs: null,
+  starts: [],
 });
+
+/**
+ * Loader-private (app_meta `intervals:<source>`): the last start per spec and
+ * variant, and per spec the shortest gap between two starts of one variant in
+ * each UTC hour, for the last 25 hours. Health publishes only the minimum per
+ * spec over the last 24 hours (P5a; the CH-1 10-minute rule of BAFU).
+ */
+export type Intervals = { last: Record<string, number>; hours: Record<string, Record<string, number>> };
+
+const HOUR_MS = 3_600_000;
+
+/** Folds request starts into the interval state; a start not after the last one of its variant is ignored. */
+export function foldIntervals(state: Intervals, starts: FetchFold['starts']): Intervals {
+  const last = { ...state.last };
+  const hours: Intervals['hours'] = Object.fromEntries(Object.entries(state.hours).map(([k, v]) => [k, { ...v }]));
+  let newest = Math.max(0, ...Object.values(last));
+  for (const { spec, variant, at } of starts) {
+    const key = `${spec}|${variant}`;
+    const before = last[key];
+    if (before !== undefined && at <= before) continue;
+    if (before !== undefined) {
+      const hour = String(at - (at % HOUR_MS));
+      const gap = Math.round((at - before) / 1000);
+      const spec_ = hours[spec] ?? {};
+      spec_[hour] = Math.min(spec_[hour] ?? gap, gap);
+      hours[spec] = spec_;
+    }
+    last[key] = at;
+    newest = Math.max(newest, at);
+  }
+  for (const spec of Object.keys(hours)) {
+    const kept = Object.entries(hours[spec] ?? {}).filter(([h]) => Number(h) > newest - 25 * HOUR_MS);
+    if (kept.length === 0) delete hours[spec];
+    else hours[spec] = Object.fromEntries(kept);
+  }
+  return { last, hours };
+}
 
 export async function applyFetchHealth(tx: Tx, source: string, f: FetchFold): Promise<void> {
   // A source the registry does not know has no health row: the manifest is data, not a registry.
@@ -474,4 +532,9 @@ export async function applyFetchHealth(tx: Tx, source: string, f: FetchFold): Pr
       last_new_data = greatest(h.last_new_data, EXCLUDED.last_new_data),
       newest_ts = greatest(h.newest_ts, EXCLUDED.newest_ts),
       updated_at = now()`.execute(tx);
+  if (f.starts.length > 0) {
+    const key = `intervals:${source}`;
+    const state = (await readMeta<Intervals>(tx, key)) ?? { last: {}, hours: {} };
+    await writeMeta(tx, key, foldIntervals(state, f.starts));
+  }
 }

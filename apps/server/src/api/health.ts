@@ -100,6 +100,16 @@ const Detail = z.object({
   tier1: z.object({ total: z.number(), fresh: z.number(), provider_stale: z.number() }).optional(),
   missing_buckets_24h: z.number().optional(),
   outage: z.object({ from: z.string(), to: z.string(), missing_buckets: z.number() }).optional(),
+  coverage: z
+    .object({
+      from: z.string(),
+      ratio: z.number(),
+      series: z.number(),
+      series_below_95: z.number(),
+      gaps: z.array(z.object({ from: z.string(), to: z.string() })),
+    })
+    .optional(),
+  min_interval_s: z.array(z.object({ spec: z.string(), seconds: z.number() })).optional(),
   partitions: z.record(z.string(), z.object({ md5: z.string(), rows: z.number() })).optional(),
   partitions_at: z.string().optional(),
 });
@@ -155,6 +165,8 @@ export async function readSources(db: Kysely<DB>, now: Date): Promise<HealthSour
         tier1: detail.tier1 ?? null,
         missing_buckets_24h: detail.missing_buckets_24h ?? null,
         outage: detail.outage ?? null,
+        coverage: detail.coverage ?? null,
+        min_interval_s: detail.min_interval_s ?? [],
         partitions: Object.entries(detail.partitions ?? {})
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([partition, p]) => ({ partition, md5: p.md5, rows: p.rows })),

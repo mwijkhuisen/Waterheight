@@ -5,7 +5,15 @@ import { loadRegistry } from '../capture/specs.ts';
 import type { DB } from '../db/generated.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { startHeartbeat } from '../heartbeat.ts';
-import { computeHealth, findOutages, LagWindow, type Outage, storeChecksums } from './health.ts';
+import {
+  type Coverage,
+  computeHealth,
+  findCoverage,
+  findOutages,
+  LagWindow,
+  type Outage,
+  storeChecksums,
+} from './health.ts';
 import { type Backlog, Loader, nothingToLoad } from './pipeline.ts';
 import { parsedOkIn, prune } from './prune.ts';
 import { reconcileRollups } from './reconcile.ts';
@@ -97,6 +105,7 @@ export async function runLoad(
   let lastHealth = 0;
   let lastOutages = 0;
   let outages: Map<string, Outage> = new Map();
+  let coverage: Map<string, Coverage> = new Map();
   let caughtUp = false;
   while (!stopped) {
     // The tick alerts its own stalls and never throws.
@@ -121,6 +130,10 @@ export async function runLoad(
             logger.error({ code: errorCode(err) }, 'outage scan failed; the last result stands');
             return outages;
           });
+          coverage = await findCoverage(db, cadenceS, now).catch((err: unknown) => {
+            logger.error({ code: errorCode(err) }, 'coverage scan failed; the last result stands');
+            return coverage;
+          });
         }
         await computeHealth(db, {
           cadenceS,
@@ -130,6 +143,7 @@ export async function runLoad(
           badLines: loader.badLines,
           now,
           outages,
+          coverage,
         });
         for (const twin of await checkTwins(db, now)) logger.error({ alert: 'twin_breach', twin }, 'alert');
         lastHealth = now.getTime();
