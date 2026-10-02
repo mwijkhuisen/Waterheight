@@ -1,0 +1,2156 @@
+{
+  "head" : {
+    "vars" : [ "item", "label", "osm", "mouth", "mouthLabel", "country", "nl", "en" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q181067"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217818"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "IJssel"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Issel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "423096"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q181067"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217818"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "IJssel"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "423096"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q181067"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217818"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "IJssel"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Issel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "423096"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q181067"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217818"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "IJssel"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Oude IJssel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "423096"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q208493"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Leie"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q37620"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scheldt"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1201127"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q208493"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Leie"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q37620"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scheldt"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Leie"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1201127"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q208493"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Leie"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q37620"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scheldt"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1201127"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q208493"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Leie"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q37620"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scheldt"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Leie"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1201127"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q253696"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Prüm"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Prüm"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Prüm"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1108057"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q269407"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dender"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Dender"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q37620"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scheldt"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Dendre"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "11154751"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q269407"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dender"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Dender"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q37620"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scheldt"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Dender"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "11154751"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q291144"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Houille"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Houille"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Houille"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q291144"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Houille"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Houille"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Houille"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q303621"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1727715"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q303621"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1727715"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q303621"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1727715"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q303621"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Semois"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1727715"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q327236"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Ton"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Ton"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Ton"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q38"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "47050"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q402635"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Ahr"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Ahr"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Ahr"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q38"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q279908"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Rienz"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q522444"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "158995"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q667543"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "2498086"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q835333"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "406674"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q835333"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "406674"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q835333"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "406674"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q835333"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Niers"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "406674"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q878506"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Nahe"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Nahe"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q320390"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Schleuse"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Nahe"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "5926122"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q707795"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q168904"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q707795"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q168904"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q707795"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q168904"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q707795"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q168904"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Dinkel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q819319"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Issel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Issel"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Issel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "2082663"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q677944"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kyll"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Kyll"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1667"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Moselle"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Kyll"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q677944"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kyll"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Kyll"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1667"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Moselle"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Kyll"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q697718"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Prüm River"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Prüm"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q158847"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Sauer"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Prüm"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q707763"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217818"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "IJssel"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q707763"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217818"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "IJssel"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q707763"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217818"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "IJssel"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q707763"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217818"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "IJssel"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Berkel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q564312"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Nahe"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Nahe"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Nahe"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "422706"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q635969"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1307164"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q635969"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q32"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1307164"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q635969"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1307164"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q153394"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Ahr"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Ahr"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q584"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Rhine"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Ahr"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "318372"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q168696"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Nahe"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Nahe"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q584"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Rhine"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Nahe"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "406638"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q168904"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Overijsselse Vecht"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q231763"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Zwarte Water"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Overijsselse Vecht"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "409101"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q168904"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Overijsselse Vecht"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q231763"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Zwarte Water"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "409101"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q168904"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Overijsselse Vecht"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q231763"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Zwarte Water"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Overijsselse Vecht"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "409101"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q168904"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Overijsselse Vecht"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q231763"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Zwarte Water"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Vechte"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "409101"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1399762"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q675028"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dora Baltea"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q38"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1569447"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Haine"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Hene"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q37620"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scheldt"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Haine"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1569447"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Haine"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Hene"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q37620"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scheldt"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Haine"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1818615"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scarpe"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Scarpe"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q37620"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scheldt"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Scarpe"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "1812718"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1818933"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Viroin"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Viroin"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Viroin"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1818933"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Viroin"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Viroin"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41986"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Meuse"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Viroin"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1897253"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Vecht"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Vecht"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q4121"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "IJsselmeer"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Vecht"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2353066"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Ton"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Ton"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q635969"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Ton"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q31"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2353066"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Ton"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Ton"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q635969"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Chiers"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Ton"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3269730"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q208174"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dordogne"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "9481641"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q10952811"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Leie"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Leie"
+      },
+      "label" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Leie"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q191"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "354117"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q17265564"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Issel"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q826673"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Fauerbach"
+      },
+      "label" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Issel"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q183"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1132776"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thon"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q200231"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Oise"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Thon"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "6820135"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1295726"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "mouth" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1548241"
+      },
+      "mouthLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Layon"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Lys"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1379645"
+      },
+      "en" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Semoy"
+      },
+      "nl" : {
+        "xml:lang" : "nl",
+        "type" : "literal",
+        "value" : "Semoy"
+      },
+      "label" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Semoy"
+      },
+      "country" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q142"
+      },
+      "osm" : {
+        "type" : "literal",
+        "value" : "147549"
+      }
+    } ]
+  }
+}

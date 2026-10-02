@@ -1,0 +1,7 @@
+{
+  "source": "https://download.geofabrik.de/index-v1-nogeom.json",
+  "fetched": "2026-10-02",
+  "source_sha256": "265afa7d9e5929934cb523afcb1aa05e16add94887b87eb9acb138eeccc3b151",
+  "trimmed": "features whose properties.id is one of the 16 regions of sources.yaml or the decoys germany and france, each reduced to {type, properties}; nothing edited",
+  "md5_fixture": "luxembourg-latest.osm.pbf.md5 is the untouched body of https://download.geofabrik.de/europe/luxembourg-latest.osm.pbf.md5, fetched 2026-10-02"
+}

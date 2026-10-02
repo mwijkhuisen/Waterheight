@@ -1,0 +1,137 @@
+# One lang:label per line: river and canal names to look up on Wikidata (opt-in, lookup-wikidata.ts).
+# Main rivers
+de:Rhein
+nl:Rijn
+fr:Rhin
+en:Rhine
+de:Maas
+nl:Maas
+fr:Meuse
+en:Meuse
+nl:Schelde
+fr:Escaut
+en:Scheldt
+de:Mosel
+nl:Moezel
+fr:Moselle
+en:Moselle
+de:Ems
+nl:Eems
+en:Ems
+de:Main
+nl:Main
+de:Neckar
+fr:Sambre
+nl:Samber
+fr:Ourthe
+nl:Ourthe
+de:Rur
+nl:Roer
+en:Roer
+de:Lahn
+de:Saar
+fr:Sarre
+en:Saar
+de:Sieg
+de:Ruhr
+de:Lippe
+# Dutch branches
+nl:Bovenrijn
+nl:Boven-Rijn
+nl:Waal
+en:Waal
+nl:Pannerdensch Kanaal
+nl:Pannerdens Kanaal
+nl:Nederrijn
+nl:Lek
+nl:IJssel
+nl:Bijlands Kanaal
+nl:Bijlandsch Kanaal
+# Swiss
+de:Aare
+en:Aare
+de:Reuss
+fr:Reuss
+de:Limmat
+de:Thur
+# Luxembourg and Rhineland-Palatinate
+de:Sauer
+fr:Sûre
+fr:Sauer
+de:Our
+fr:Our
+fr:Alzette
+de:Alzette
+lb:Uelzecht
+de:Nahe
+de:Ahr
+de:Kyll
+de:Prüm
+# Scheldt basin
+nl:Leie
+fr:Lys
+nl:Dender
+fr:Dendre
+fr:Haine
+nl:Haine
+fr:Scarpe
+# Northeast NL and Germany
+de:Niers
+nl:Niers
+nl:Vecht
+de:Vechte
+nl:Overijsselse Vecht
+nl:Dinkel
+de:Dinkel
+nl:Berkel
+de:Berkel
+nl:Oude IJssel
+de:Issel
+# Meuse tributaries
+fr:Semois
+nl:Semois
+fr:Semoy
+fr:Chiers
+fr:Ton
+fr:Thon
+fr:Viroin
+fr:Houille
+fr:Thure
+fr:Hante
+fr:Trouille
+nl:Voer
+fr:Fouron
+nl:Geul
+fr:Gueule
+de:Göhl
+de:Erft
+nl:Swalm
+de:Schwalm
+nl:Worm
+de:Wurm
+# Kempen rivers
+nl:Mark
+nl:Dommel
+nl:Aa
+nl:Weerijs
+nl:Warmbeek
+nl:Tongelreep
+nl:Keersop
+nl:Merkske
+nl:Dieze
+# Other
+de:Birs
+fr:Birse
+de:Ill
+fr:Ill
+de:Blies
+fr:Blies
+fr:Orne
+fr:Meurthe
+de:Dortmund-Ems-Kanal
+# Canals
+nl:Julianakanaal
+nl:Albertkanaal
+fr:Canal Albert
+fr:Grand Canal d'Alsace
+nl:Zuid-Willemsvaart

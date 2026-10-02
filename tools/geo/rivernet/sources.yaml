@@ -1,0 +1,60 @@
+# Fetch targets of the river-network pipeline (P6a; invariant 1: nothing else is ever fetched).
+# Validated by tools/geo/rivernet/sources.ts. The Geofabrik paths were checked against
+# index-v1-nogeom.json on 2026-10-02. Geofabrik has no grand-est or hauts-de-france extract, only the old
+# regions (alsace, lorraine, champagne-ardenne; nord-pas-de-calais, picardie). The md5 URL of a region is
+# `url + '.md5'` (derived, not stored). `<id>-latest.osm.pbf` answers 307 to the dated file on the same host.
+# max_bytes is about twice the file size of 2026-10-02 (HEAD of the dated file), rounded up to whole MiB.
+version: 1
+geofabrik:
+  index_url: https://download.geofabrik.de/index-v1-nogeom.json
+  index_max_bytes: 4194304
+  regions:
+    - { id: netherlands, url: https://download.geofabrik.de/europe/netherlands-latest.osm.pbf, max_bytes: 2809135104 }
+    - { id: belgium, url: https://download.geofabrik.de/europe/belgium-latest.osm.pbf, max_bytes: 1391460352 }
+    - { id: luxembourg, url: https://download.geofabrik.de/europe/luxembourg-latest.osm.pbf, max_bytes: 95420416 }
+    - { id: switzerland, url: https://download.geofabrik.de/europe/switzerland-latest.osm.pbf, max_bytes: 1095761920 }
+    - { id: baden-wuerttemberg, url: https://download.geofabrik.de/europe/germany/baden-wuerttemberg-latest.osm.pbf, max_bytes: 1298137088 }
+    - { id: bayern, url: https://download.geofabrik.de/europe/germany/bayern-latest.osm.pbf, max_bytes: 1707081728 }
+    - { id: hessen, url: https://download.geofabrik.de/europe/germany/hessen-latest.osm.pbf, max_bytes: 692060160 }
+    - { id: rheinland-pfalz, url: https://download.geofabrik.de/europe/germany/rheinland-pfalz-latest.osm.pbf, max_bytes: 542113792 }
+    - { id: saarland, url: https://download.geofabrik.de/europe/germany/saarland-latest.osm.pbf, max_bytes: 110100480 }
+    - { id: nordrhein-westfalen, url: https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest.osm.pbf, max_bytes: 1827667968 }
+    - { id: niedersachsen, url: https://download.geofabrik.de/europe/germany/niedersachsen-latest.osm.pbf, max_bytes: 1013972992 }
+    - { id: alsace, url: https://download.geofabrik.de/europe/france/alsace-latest.osm.pbf, max_bytes: 263192576 }
+    - { id: lorraine, url: https://download.geofabrik.de/europe/france/lorraine-latest.osm.pbf, max_bytes: 342884352 }
+    - { id: champagne-ardenne, url: https://download.geofabrik.de/europe/france/champagne-ardenne-latest.osm.pbf, max_bytes: 210763776 }
+    - { id: nord-pas-de-calais, url: https://download.geofabrik.de/europe/france/nord-pas-de-calais-latest.osm.pbf, max_bytes: 480247808 }
+    - { id: picardie, url: https://download.geofabrik.de/europe/france/picardie-latest.osm.pbf, max_bytes: 267386880 }
+euhydro:
+  base_url: https://image.discomap.eea.europa.eu/arcgis/rest/services/EUHydro/EUHydro_RiverNetworkDatabase/MapServer
+  layers: [5, 6, 7, 8, 9, 10, 11, 12]
+  max_requests: 300
+  min_interval_ms: 1000
+  timeout_ms: 60000
+  max_body_bytes: 33554432
+wikidata:
+  sparql_url: https://query.wikidata.org/sparql
+  max_requests: 80
+# Canal traps (P6b's snapping tests, catalogue §5.3 step 5): canals that run beside the rivers. They are in the
+# extract and the fixture so that P6b can prove no station snaps to them; the graph builder never makes them edges.
+canal_traps:
+  - name: Julianakanaal
+    osm_relation_id: 5362867
+    wikidata: Q1712089
+    evidence: "Wikidata Q1712089 (P402 5362867), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - name: Albertkanaal
+    osm_relation_id: 1424029
+    wikidata: Q835090
+    evidence: "Wikidata Q835090 (P402 1424029), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - name: Zuid-Willemsvaart
+    osm_relation_id: 2243765
+    wikidata: Q228617
+    evidence: "Wikidata Q228617 (P402 2243765), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the canal at Smeermaas"
+  - name: Grand Canal d'Alsace
+    osm_relation_id: 537130
+    wikidata: Q382574
+    evidence: "Wikidata Q382574 (P402 537130), second SPARQL by hand (\"Grand canal d'Alsace\"@fr) 2026-10-02"
+  - name: Bijlands Kanaal
+    osm_relation_id: null
+    wikidata: Q568819
+    evidence: "OSM way 662657942 carries wikidata=Q568819 (docs/sources/research/map-rivers.md, live OSM API check); ways selected by that tag"
