@@ -202,6 +202,11 @@ test('NL is the default: language, heading, banner, disclaimer, and t is now', a
   await expect(page.locator('footer h2')).toHaveText('Bronnen');
   await expect(page.locator('footer li[lang="nl"]')).not.toHaveCount(0);
   await expect(page.locator('footer li[lang="de"]')).not.toHaveCount(0);
+  // The date duty of FR-1, FR-3 (Etalab) and CH-1, CH-3 (BAFU): the date of t, never the registry's placeholder; and
+  // FR-3, which fills FR-1 series, is attributed in its own words (review SR-1).
+  await expect(page.locator('footer ul')).toContainText('26 oktober 2026');
+  await expect(page.locator('footer ul')).not.toContainText(/\[date de mise à jour\]|Bezugsdatum|<date>|<datum>/);
+  await expect(page.locator('footer ul')).toContainText('© VIGICRUES – www.vigicrues.gouv.fr, 26 oktober 2026,');
 
   // No t in the URL: now (the clock is fixed at 2026-10-26T12:00Z = 13:00 CET).
   await expect(slider(page)).toHaveValue(String(NOW.getTime()));
