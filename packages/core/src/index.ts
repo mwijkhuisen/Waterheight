@@ -4,6 +4,7 @@ export * from './csv.ts';
 export * from './datums.ts';
 export * from './downsample.ts';
 export * from './errors.ts';
+export * from './html.ts';
 export * from './json.ts';
 export * from './qc.ts';
 export * from './sentinels.ts';

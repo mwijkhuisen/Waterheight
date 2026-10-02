@@ -1,6 +1,6 @@
 import { setImmediate as yieldToLoop } from 'node:timers/promises';
 import { crc32 } from 'node:zlib';
-import { type CsvScanOptions, SchemaDrift, scanCsv as scanCsvText, xmlOverCaps } from '@rws/core';
+import { type CsvScanOptions, dataToJson, SchemaDrift, scanCsv as scanCsvText, xmlOverCaps } from '@rws/core';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { Inflate } from 'fflate';
 
@@ -363,37 +363,16 @@ export async function readXlsx(
 
 // ---------------------------------------------------------------- HTML (LU-4)
 
-const ATTR_MAX = 256 * 1024;
-const ENTITIES: Record<string, string> = { quot: '"', amp: '&', lt: '<', gt: '>', apos: "'", '#39': "'" };
-
 /**
- * Reads only the `data-to-json` attribute of the first `<cmp-dashboard-station`
- * tag with a bounded scan and parses it as JSON. Nothing else of the page is
- * parsed, and no script ever runs.
+ * The parsed `data-to-json` attribute of the one `<cmp-dashboard-station>` element of a page: `dataToJson` of
+ * packages/core on decoded bytes, failing with the same fixed reasons as a GuardFailure. Nothing else of the
+ * page is parsed, and no script ever runs.
  */
 export function extractDataToJson(bytes: Uint8Array): unknown {
-  const html = decode(bytes);
-  const tag = /<cmp-dashboard-station[\s>]/.exec(html);
-  if (tag === null) return fail('html_tag');
-  const attr = html.indexOf('data-to-json=', tag.index);
-  if (attr < 0 || attr - tag.index > 4096 || html.slice(tag.index, attr).includes('>')) return fail('html_attr');
-  const quote = html[attr + 13];
-  if (quote !== '"' && quote !== "'") return fail('html_attr');
-  const start = attr + 14;
-  const end = html.indexOf(quote, start);
-  if (end < 0 || end - start > ATTR_MAX) return fail('html_attr');
-  const raw = html.slice(start, end).replace(/&(#x[0-9a-f]{1,6}|#[0-9]{1,7}|[a-z]{2,4});/gi, (m, e: string) => {
-    const k = e.toLowerCase();
-    if (k.startsWith('#')) {
-      const point = k.startsWith('#x') ? Number.parseInt(k.slice(2), 16) : Number(k.slice(1));
-      // Beyond Unicode: not a character (String.fromCodePoint would throw). The text stays as it is.
-      return point <= 0x10ffff ? String.fromCodePoint(point) : m;
-    }
-    return ENTITIES[k] ?? m;
-  });
   try {
-    return JSON.parse(raw);
-  } catch {
-    return fail('html_json');
+    return dataToJson(decode(bytes));
+  } catch (err) {
+    if (err instanceof SchemaDrift) return fail(err.code);
+    throw err;
   }
 }
