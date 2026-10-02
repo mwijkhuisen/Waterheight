@@ -73,6 +73,11 @@ const BatchError = z
   .max(170)
   .regex(/^[a-z0-9_]{1,40}(?: at [A-Za-z0-9_.?[\]-]{1,120})?$/);
 
+const SpecId = z
+  .string()
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+  .max(80);
+
 export const HealthSources = z.strictObject({
   generated_at: iso.nullable(),
   sources: z
@@ -93,6 +98,25 @@ export const HealthSources = z.strictObject({
          * it: expected buckets still without data, over the tier-1 series that had data in the day before it.
          */
         outage: z.strictObject({ from: iso, to: iso, missing_buckets: count }).nullable(),
+        /**
+         * Q7 since the seed (P5a): over the tier-1 series, from each one's first hour with data (the seed's first
+         * day, or the data epoch), the share of expected buckets that hold a value, the series below 95 %, and the
+         * newest gaps between loaded payloads (each longer than max(3 × the capture cadence, 30 min)).
+         */
+        coverage: z
+          .strictObject({
+            from: iso,
+            ratio: z.number().min(0).max(1),
+            series: count,
+            series_below_95: count,
+            gaps: z.array(z.strictObject({ from: iso, to: iso })).max(20),
+          })
+          .nullable(),
+        /**
+         * The shortest gap between two requests of one capture spec and variant in the last 24 hours, from the
+         * manifest's fetch start times (P5a; BAFU asks LINDAS users for at most one download per 10 minutes).
+         */
+        min_interval_s: z.array(z.strictObject({ spec: SpecId, seconds: count })).max(50),
         partitions: z.array(Partition).max(240),
         partitions_at: iso.nullable(),
       }),
@@ -103,10 +127,7 @@ export const HealthSources = z.strictObject({
       z.strictObject({
         id: z.string().regex(/^[0-9]{1,19}$/),
         source: HealthSourceId,
-        spec: z
-          .string()
-          .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
-          .max(80),
+        spec: SpecId,
         fetched_at: iso,
         error: BatchError.nullable(),
       }),
