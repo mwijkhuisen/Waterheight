@@ -1,0 +1,8 @@
+{
+  "spec": "lu-4-pages",
+  "source": "LU-4",
+  "synthetic": true,
+  "derived_from": "hand-made: a normal page: three levels, six HQ lines (one with value 0, one legend that names none), zero and date, river km, LUREF position, banner",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

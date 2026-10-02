@@ -1,0 +1,11 @@
+{
+  "spec": "lu-4-pages",
+  "source": "LU-4",
+  "synthetic": true,
+  "derived_from": "an archived payload (owner audience: not committed)",
+  "values": "every number, name and string generated, timestamps shifted by one constant whole number of days; keys, structure, identifiers, nulls, -1, 0, 9999.0 and quality codes kept (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "moselle/moselle/stadtbredimus",
+  "archive_key": "raw/LU-4/lu-4-pages/2026/09/30/120152Z-eda6c2a6e5b94481.zst",
+  "source_sha256": "eda6c2a6e5b94481b28cf2d93c2de76f7fce29c9dcb3eff4d88ebaae1689ae29"
+}

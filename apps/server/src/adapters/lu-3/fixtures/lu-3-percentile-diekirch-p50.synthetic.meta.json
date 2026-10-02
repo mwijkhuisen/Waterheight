@@ -1,0 +1,8 @@
+{
+  "spec": "lu-3-percentile",
+  "source": "LU-3",
+  "synthetic": true,
+  "derived_from": "hand-made: a Diekirch run (p50) of 46 hourly steps that crosses the 2030-03-31 spring-forward step, ordered percentiles",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

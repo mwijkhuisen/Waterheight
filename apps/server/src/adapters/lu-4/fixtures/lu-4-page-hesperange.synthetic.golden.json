@@ -1,0 +1,53 @@
+{
+ "record": {
+  "station": "hesperange",
+  "page_id": "Hesperange",
+  "levels": {
+   "yellow": 287,
+   "orange": 341,
+   "red": 393
+  },
+  "hq": [
+   {
+    "kind": "HQ2",
+    "value_cm": 301
+   },
+   {
+    "kind": "HQ5",
+    "value_cm": 322
+   },
+   {
+    "kind": "HQ10",
+    "value_cm": 340
+   },
+   {
+    "kind": "HQ50",
+    "value_cm": 371
+   },
+   {
+    "kind": "HQ100",
+    "value_cm": 389
+   }
+  ],
+  "zero": {
+   "value_m": 142.37,
+   "datum": "NG95",
+   "valid_from": "2011-03-14"
+  },
+  "pk_km": 27.4,
+  "forecast_limit_h": 24,
+  "forecast_slug": "hesperange",
+  "position": {
+   "lon": 6.149079187263286,
+   "lat": 49.586287410339544,
+   "from": "lu-6"
+  },
+  "banner": "Generated note <b>not markup</b> & \"quoted\". Station d’alerte (generated).",
+  "operator": "Generated Operator"
+ },
+ "dropped": {
+  "undefined_hq": 1,
+  "unknown_hq": 1,
+  "coordinates_from_lu6": 1
+ }
+}

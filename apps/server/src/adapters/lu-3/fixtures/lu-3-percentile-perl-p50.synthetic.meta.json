@@ -1,0 +1,8 @@
+{
+  "spec": "lu-3-percentile",
+  "source": "LU-3",
+  "synthetic": true,
+  "derived_from": "hand-made: a Perl run (p50) of 46 hourly steps at the Moselle floor of 250.0 cm for the first steps, then rising",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

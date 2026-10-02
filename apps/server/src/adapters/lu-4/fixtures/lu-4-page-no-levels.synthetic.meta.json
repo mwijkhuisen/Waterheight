@@ -1,0 +1,8 @@
+{
+  "spec": "lu-4-pages",
+  "source": "LU-4",
+  "synthetic": true,
+  "derived_from": "hand-made: levelsMax all 0 (undefined), no HQ lines, a zero that is no number, no river km, coordinates that are no E N, no date, an empty banner",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

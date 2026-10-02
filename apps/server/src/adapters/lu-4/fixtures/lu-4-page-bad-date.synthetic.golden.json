@@ -1,0 +1,31 @@
+{
+ "record": {
+  "station": "heiderscheidergrund",
+  "page_id": "Heiderscheidergrund",
+  "levels": {
+   "yellow": null,
+   "orange": 255,
+   "red": 301
+  },
+  "hq": [],
+  "zero": {
+   "value_m": 317.52,
+   "datum": "NG95",
+   "valid_from": null
+  },
+  "pk_km": 12.8,
+  "forecast_limit_h": 24,
+  "forecast_slug": "heiderscheidergrund",
+  "position": {
+   "crs": "EPSG:2169",
+   "e": 57234,
+   "n": 105891,
+   "from": "page"
+  },
+  "banner": "Generated note <b>not markup</b> & \"quoted\". Station d’alerte (generated).",
+  "operator": "Generated Operator"
+ },
+ "dropped": {
+  "bad_date": 1
+ }
+}

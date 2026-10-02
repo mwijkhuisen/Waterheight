@@ -1,0 +1,8 @@
+{
+  "spec": "lu-4-pages",
+  "source": "LU-4",
+  "synthetic": true,
+  "derived_from": "hand-made: an impossible service date (01.111996) beside an otherwise valid zero, decimal comma and point, a semicolon between the coordinates",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

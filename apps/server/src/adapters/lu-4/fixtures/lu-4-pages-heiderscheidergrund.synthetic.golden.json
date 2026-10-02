@@ -1,0 +1,57 @@
+{
+ "record": {
+  "station": "heiderscheidergrund",
+  "page_id": "Heiderscheidergrund",
+  "levels": {
+   "yellow": null,
+   "orange": null,
+   "red": null
+  },
+  "hq": [
+   {
+    "kind": "HQ100",
+    "value_cm": 669
+   },
+   {
+    "kind": "HQ50",
+    "value_cm": 522
+   },
+   {
+    "kind": "HQ20",
+    "value_cm": 954
+   },
+   {
+    "kind": "HQ10",
+    "value_cm": 564
+   },
+   {
+    "kind": "HQ5",
+    "value_cm": 483
+   },
+   {
+    "kind": "HQ2",
+    "value_cm": 637
+   }
+  ],
+  "zero": {
+   "value_m": 291,
+   "datum": "NG95",
+   "valid_from": null
+  },
+  "pk_km": 0.1,
+  "forecast_limit_h": 24,
+  "forecast_slug": "heiderscheidergrund",
+  "position": {
+   "lon": 5.950723748248705,
+   "lat": 49.90119602587789,
+   "from": "lu-6"
+  },
+  "banner": "synthetic-5",
+  "operator": "Administration de la gestion de l'eau"
+ },
+ "dropped": {
+  "bad_date": 1,
+  "bad_coordinates": 1,
+  "coordinates_from_lu6": 1
+ }
+}
