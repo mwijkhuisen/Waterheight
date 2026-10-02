@@ -462,8 +462,14 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
           return typeof u === 'string' ? null : u.href;
         },
       });
+      // A walk cut short (a refused `next`, or one that repeats a page already asked: a loop) is a capped walk,
+      // never a completed one: the window does not move past pages that were never fetched (P5a).
+      let cut = more.refused === true;
       for (const r of more.reqs) {
-        if (queued.has(r.url)) continue;
+        if (queued.has(r.url)) {
+          if (/#\d+$/.test(r.variant)) cut = true;
+          continue;
+        }
         if (expanded >= maxExpand) {
           summary.capped = true;
           deps.log.warn({ spec: spec.id, cap: maxExpand }, 'expansion cap reached');
@@ -481,6 +487,11 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
           window: null,
           walk,
         });
+      }
+      if (cut) {
+        summary.capped = true;
+        deps.counters.alert({ spec: spec.id, kind: 'walk_broken', at: end.toISOString() });
+        deps.log.warn({ spec: spec.id, variant: req.variant, alert: 'walk_broken' }, 'walk cut: a next page refused');
       }
     }
   }

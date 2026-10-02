@@ -98,7 +98,12 @@ export type ExpandContext = {
   seed: boolean;
 };
 
-export type Expansion = { reqs: Req[]; seen?: string[] };
+export type Expansion = {
+  reqs: Req[];
+  seen?: string[];
+  /** A walk page names a next page that is refused (another host or path, not a URL): the walk is cut there (P5a). */
+  refused?: true;
+};
 
 /** Pure per-source hooks; the runner does everything else from the registry. */
 export type Adapter = {

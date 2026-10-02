@@ -29,9 +29,11 @@ export const adapter: Adapter = {
   },
   expand({ req, doc, checkUrl }) {
     const next = (doc as { next?: unknown } | null)?.next;
-    if (typeof next !== 'string' || next === '') return { reqs: [] };
+    if (next === null || next === undefined) return { reqs: [] };
+    // A `next` we will not follow cuts the walk: the runner treats it like a capped walk, never as its end (P5a).
+    if (typeof next !== 'string' || next === '') return { reqs: [], refused: true };
     const url = checkUrl(next);
-    if (url === null || !new URL(url).pathname.endsWith('/observations_tr')) return { reqs: [] };
+    if (url === null || !new URL(url).pathname.endsWith('/observations_tr')) return { reqs: [], refused: true };
     const page = Number(/#(\d+)$/.exec(req.variant)?.[1] ?? 1) + 1;
     return { reqs: [{ url, method: 'GET', variant: `${req.variant.replace(/#\d+$/, '')}#${page}` }] };
   },

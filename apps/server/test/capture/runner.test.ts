@@ -570,11 +570,30 @@ describe('FR-1 walks (C4, S8, N2)', () => {
     });
   });
 
-  it('a `next` that repeats a URL is fetched once, and ends the walk', async () => {
+  it('a `next` that repeats a URL is fetched once, and cuts the walk like a cap (P5a: never a completed walk)', async () => {
     const deps = runDeps({ now: () => new Date('2026-10-10T12:01:00Z') });
     const asked = hubeau({ pages: 0, loop: `${OBS}?code_entite=A*&cursor=same&size=20000` });
-    expect(await runSpec(spec('fr-1-obs'), deps)).toMatchObject({ requests: 2, capped: false });
+    expect(await runSpec(spec('fr-1-obs'), deps)).toMatchObject({ requests: 2, capped: true });
     expect(asked.map((a) => a.cursor)).toEqual([null, 'same']);
+    expect(deps.counters.alerts['2026-10-10']?.map((a) => a.kind)).toEqual(['walk_broken']);
+  });
+
+  it('a `next` on another host or path is refused and cuts the walk like a cap; the window keeps its unfetched part (P5a)', async () => {
+    for (const next of [
+      'https://evil.example/api/v2/hydrometrie/observations_tr?cursor=1',
+      `${OBS.replace('observations_tr', 'sites')}?cursor=1`,
+      42,
+    ]) {
+      const c = clock('2026-10-10T12:01:00Z');
+      const deps = runDeps({ now: c.now });
+      await lastSuccess(deps, '2026-10-10T09:00:00.000Z');
+      server.use(http.get(OBS, () => HttpResponse.json({ ...page, next }, { status: 206 })));
+      expect(await runSpec(spec('fr-1-obs'), deps), String(next)).toMatchObject({ requests: 1, capped: true });
+      expect(deps.counters.alerts['2026-10-10']?.map((a) => a.kind)).toEqual(['walk_broken']);
+      // The page came in, but the walk did not complete: the window's start stays where it was.
+      const st = await deps.state.read<SpecState>('fr-1-obs');
+      expect(st?.variants.default?.last_success).toBe('2026-10-10T09:00:00.000Z');
+    }
   });
 });
 
