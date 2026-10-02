@@ -258,6 +258,20 @@ describe('synthetic payloads [U]', () => {
     expect(norm([line({ w: '244.782' })], { ...base, registry: flipped }).dropped).toEqual({ datum_mismatch: 1 });
   });
 
+  it('an exact 0 at a level series is a sentinel, not a datum mismatch; at a relative gauge it is a reading', () => {
+    // 2602 Domat/Ems (~564 m ü. M.) froze at W = 0.0 on 2026-10-01: dropped quietly, its Q kept.
+    for (const w of ['0.0', '0', '0.000', '-0.0']) {
+      const out = norm([line({ w })]);
+      expect(out.obs.map((r) => r.series)).toEqual(['2289/Q']);
+      expect(out.dropped).toEqual({ sentinel: 1 });
+    }
+    expect(norm([line({ w: '0.001' })]).dropped).toEqual({ datum_mismatch: 1 });
+    expect(norm([line({ id: '2283', w: '0.0' })]).obs.find((r) => r.series === '2283/W')).toMatchObject({
+      value: 0,
+      qc: QC.RAW,
+    });
+  });
+
   it('the guard does not apply to discharge, and Q has its own plausible range', () => {
     expect(norm([line({ id: '2283', q: '0.003', w: '' })]).obs[0]).toMatchObject({ series: '2283/Q', value: 0.003 });
     expect(norm([line({ q: '1000000', w: '' })]).obs[0]).toMatchObject({ value: 1_000_000, qc: QC.RAW | QC.RANGE });
@@ -492,6 +506,9 @@ describe('property and fuzz tests', () => {
           ObsRow.parse(r);
           expect(Date.parse(r.ts)).toBeLessThanOrEqual(at + 15 * 60_000);
           expect(Date.parse(r.ts)).toBeGreaterThanOrEqual(at - 45 * 86_400_000);
+          // The datum guard and the 0 sentinel (#51): a level is never below 150 m, a stage never at or above it.
+          const decl = registry.get(r.series);
+          if (decl?.quantity === 'H') expect(r.value >= 15_000).toBe(decl.value_kind !== 'stage');
         }
         const keys = out.obs.map((r) => `${r.series}@${r.ts}`);
         expect(new Set(keys).size).toBe(keys.length);
