@@ -1060,9 +1060,9 @@ export const CHECKS = [
   ...['FR-1', 'CH-1'].flatMap((id) => [
     `health ${id}: /api/v1/health/sources lists ${id} with status ok`,
     `tier-1 ${id}: >= 95% of the tier-1 series are fresh, each against its own limit (provider-stale ones are named and never make it a PASS)`,
-    `coverage ${id}: coverage.ratio >= ${COVERAGE_MIN * 100}% (the expected buckets of the tier-1 series that hold a value since the seed; the series below 95%, the first instant and the gaps are listed; null is a FAIL)`,
+    `coverage ${id}: coverage.ratio >= ${COVERAGE_MIN * 100}% (the expected buckets of the tier-1 series that hold a value since the seed; the series below 95%, the first instant and the gaps are listed; null is a FAIL; a tier-1 series that never had data is not in the coverage: tier-1 ${id} catches it)`,
   ]),
-  `interval CH-1: the min_interval_s of ${INTERVAL_SPEC} is >= ${INTERVAL_MIN_S} s (BAFU: at most one download per 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
+  `interval CH-1: the min_interval_s of ${INTERVAL_SPEC} is >= ${INTERVAL_MIN_S} s (BAFU: at most one download per 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL. The gap is per spec and variant: river and lake are two LINDAS downloads seconds apart every 10 minutes (whether BAFU counts them as one is asked in C13), and a recorder restart can run a catch-up under 10 minutes before the next tick, so this can FAIL for up to 24 h after a restart without a breach (KG-125)`,
   `api meta: GET /api/v1/meta is 200 with Cache-Control exactly "${META_CACHE}", the Meta contract document, and ${API_SOURCES.join(', ')} among the sources`,
   'api build: /api/v1/meta build is the 40-hex release commit, not "dev" (KG-109: the image carries RWS_BUILD)',
   `api stations: GET /api/v1/stations is 200 with Cache-Control exactly "${STATIONS_CACHE}", the Stations contract document, a station with a series of each of ${API_SOURCES.join(', ')}`,

@@ -1141,7 +1141,7 @@ GET https://www.vigicrues.gouv.fr/services/observations.json/index.php?CdStation
 - H is in **m** and Q in m³/s (`GrdSerie=Q`). Timestamps are epoch **ms UTC**; `FormatDate=iso` gives `"DtObsHydro":"2026-09-23T20:00:00+00:00"`.
 - It holds about 2 months (Chooz H from 2026-07-18T23:00Z, 13,934 points; Uckange Q from 2026-07-27). There is **no time-range parameter**.
 - The station codes are the same Sandre codes as Hub'Eau.
-- (P5a: the first name in `registry/seed/fr-3.csv` (Chooz) has an unescaped inner quote, so the file's quoting is broken at that row. Only the `code` column is used; the station names come from the Hub'Eau referentiel.)
+- (P5a: the first name in `registry/seed/fr-3.csv` (Chooz) holds inner quotes, escaped as `""` since review CR-9 (they were unescaped before). Only the `code` column is used; the station names come from the Hub'Eau referentiel.)
 - `GET https://www.vigicrues.gouv.fr/services/observations.json` without parameters returns only the latest timestamp per station (2,352 stations, 140 KB, 9 s), useful as a freshness index.
 - `observations.xml` exists (not called).
 - **Several `/services/v1.1/...` and `/services/x.json/?` URLs return 302** (to `/services/...` or `index.php`). Follow same-host redirects.
