@@ -332,10 +332,13 @@ export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'older_ignored' | 
  * becomes its holder (a confirmation, not counted), the holding payload itself
  * corrects it when its value now differs (a replay after a fix), and an older
  * payload (a late line, a partial replay) leaves it alone. A zero without a
- * published validity (P5b: DE-8's `Nullpunkt`) is never overwritten by another
- * payload: a different value is not written (`withheld`, alerted), because
- * nothing says from when it holds. Changes of series that do not share their
- * source's audience are made but not counted.
+ * published validity is never overwritten by another payload, whatever its
+ * source (P5b, review CR-2): DE-8's `Nullpunkt` has no date at all, and an
+ * FR-1 zero without `date_debut_ref_alti_station` is held the same way. A
+ * different value is not written (`withheld`, alerted), because nothing says
+ * from when it holds; the holding payload corrects it on its own replay, and a
+ * dated zero supersedes it (the history of zeros is P7, R-072). Changes of
+ * series that do not share their source's audience are made but not counted.
  */
 export async function applyGaugeZeros(
   tx: Tx,

@@ -20,7 +20,7 @@ curl -s https://<domain>/api/v1/health/sources | jq '.twins[] | select(.ok | not
 | `window_end` | The hour the check is for. It covers the 24 hours before it, less the newest 30 minutes (the two sides are fetched by different requests) |
 | `n_aligned` | The timestamps both series state in that window. Rows filled from another source's payload (QC bit 512, FR-3 into FR-1) are left out of both sides |
 | `median_delta`, `max_delta` | a − b over the aligned timestamps, in the canonical unit (cm or m³/s). `max_delta` is the delta furthest from the expected one. Both are null when `n_aligned` is 0 |
-| `lag_min` | The lag found: the minutes added to a's timestamps to meet b's (a side that states each value 15 minutes late has −15). 0 when no shift beats the unshifted share by 0.05 while holding the relation (a flat river agrees at every shift, a constant bias at none); null when `n_aligned` is 0 |
+| `lag_min` | The lag found: the minutes added to a's timestamps to meet b's (a side that states each value 15 minutes late has −15). 0 when no shift beats the unshifted share by 0.05 while holding the relation (a flat river agrees at every shift, a constant bias at none), and 0 when shifts on both sides of 0 share the best share (a periodic signal: the lag is undetermined, and `ok` is then the relation at shift 0); null when `n_aligned` is 0 |
 | `ok` | At least `min_share` (default 1: every point) of the aligned points are within the tolerance of the expected delta, and the lag is 0 |
 | `checks_7d`, `failed_7d` | The hourly checks of the last 168 hours, and how many of them failed |
 
@@ -42,7 +42,7 @@ What the combinations say:
 | `chooz-fr3-fr1-h` | FR-3 (Vigicrues, `fr-3-twin`, every 6 hours) and FR-1 (Hub'Eau), Chooz H `B720000001` | 0 ± 1 cm | One host is stalled (`fr-3-twin` or `fr-1-obs` in `/status/capture.json`), a unit changed (`unit_mismatch` alerts), or the two feeds use another gauge zero |
 | `uckange-fr3-fr1-q` | The same two feeds, Uckange Q `A850061001` | 0 ± 0.001 m³/s | As above; the FR-1 side is l/s times 0.001 |
 | `basel-ch1-de1-h` | CH-1 `2289/W` (a level in cm LN02) and the DE-1 Basel mirror (a stage above the gauge zero 240.00 m LN02) | 24,000 ± 1 cm | BAFU or WSV changed the gauge zero or the unit, or one feed stopped. The check shows although b is a mirror, until either side is `off` |
-| `perl-lu1-de1-h`, `stadtbredimus-lu1-de1-h` | LU-1 (the AGE CSV) and DE-1, the same gauge (the CSV republishes PEGELONLINE's values) | 0 ± 0.05 cm for at least 99 % of the points | A lag of −15 or +15: the label offset in force is wrong, `docs/runbooks/label-offset.md`. Otherwise one feed stopped or changed a unit |
+| `perl-lu1-de1-h`, `stadtbredimus-lu1-de1-h` | LU-1 (the AGE CSV) and DE-1, the same gauge (the CSV republishes PEGELONLINE's values) | 0 ± 0.05 cm for at least 98 % of the points (about 94 aligned a day: one stray point passes, two fail) | A lag of −15 or +15: the label offset in force is wrong, `docs/runbooks/label-offset.md`. Otherwise one feed stopped or changed a unit |
 | `grevenmacher-lu1-de1-h` | LU-1 `SN_Grevenmacher` and DE-1 Grevenmacher UP | 0 ± 3 cm for at least 95 % of the points | The two feeds differ by up to 3 cm by nature (catalogue §2.6); a failure means more than 5 % of the points differ by more, or a lag |
 
 ## 3. Find the cause

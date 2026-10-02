@@ -21,6 +21,11 @@ named here is not registered or not `off`.
 
 The same gauges in AGE's other files (LU-2 `Bollendorf.json` and `Gemünd_Our.json`, and the LfU RLP-computed
 LU-3 Moselle runs at Perl, Stadtbredimus and Wasserbillig) are not fetched at all (A§7.2, catalogue §0.8 notes).
+Fixtures (review L3 of P5b): the P1a recording `apps/server/src/adapters/lu-1/fixtures/lu-1-csv.raw` (committed in
+P1a, 2026-09-29) holds both rows as recorded, and it is the only fixture that does. The trims cut from it and from
+the archive (`lu-1-csv-day`, `lu-1-csv-seed`, `LU1_ROWS` in `scripts/import-fixtures.ts`) keep no withheld row, and
+the `off` path is tested on rows built in the tests with generated values.
+
 To lift the withholding after an answer: record it in `docs/permissions.md` (C4 or C11), remove the name from
 `WITHHELD` in `scripts/gen-lu1-stations.ts` and from this record (or delete the record), regenerate, and replay
 LU-1 from the first manifest day (`docs/runbooks/replay.md`).
