@@ -117,6 +117,19 @@ export const HealthSources = z.strictObject({
          * manifest's fetch start times (P5a; BAFU asks LINDAS users for at most one download per 10 minutes).
          */
         min_interval_s: z.array(z.strictObject({ spec: SpecId, seconds: count })).max(50),
+        /**
+         * LU-1 only (P5b): the offset of its labels measured on the latest UTC day against the DE-1 Perl twin, in
+         * minutes (the AGE file labels each value about 15 minutes late), over how many instants and the share
+         * of them that agreed. null for every other source.
+         */
+        label_offset: z
+          .strictObject({
+            day: z.iso.date(),
+            minutes: z.number(),
+            n_aligned: count,
+            share: z.number().min(0).max(1),
+          })
+          .nullable(),
         partitions: z.array(Partition).max(240),
         partitions_at: iso.nullable(),
       }),

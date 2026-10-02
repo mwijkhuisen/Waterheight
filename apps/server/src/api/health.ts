@@ -110,6 +110,7 @@ const Detail = z.object({
     })
     .optional(),
   min_interval_s: z.array(z.object({ spec: z.string(), seconds: z.number() })).optional(),
+  label_offset: z.object({ day: z.string(), minutes: z.number(), n_aligned: z.number(), share: z.number() }).optional(),
   partitions: z.record(z.string(), z.object({ md5: z.string(), rows: z.number() })).optional(),
   partitions_at: z.string().optional(),
 });
@@ -167,6 +168,7 @@ export async function readSources(db: Kysely<DB>, now: Date): Promise<HealthSour
         outage: detail.outage ?? null,
         coverage: detail.coverage ?? null,
         min_interval_s: detail.min_interval_s ?? [],
+        label_offset: detail.label_offset ?? null,
         partitions: Object.entries(detail.partitions ?? {})
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([partition, p]) => ({ partition, md5: p.md5, rows: p.rows })),

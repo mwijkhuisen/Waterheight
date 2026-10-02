@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { budgets } from '../../src/capture/budget.ts';
+import { parse } from 'yaml';
+import { budgets, requestsPerMinute } from '../../src/capture/budget.ts';
 import { baseRequest, variantKey } from '../../src/capture/specs.ts';
 import { registry, spec } from './helpers.ts';
 
@@ -11,6 +13,19 @@ const perHour = (id: string) => {
   const s = spec(id);
   return (s.rows.length * 3600) / (s.cadence_s as number);
 };
+
+/** The `environment` of one service of deploy/compose.yaml, parsed (a comment there names RWS_PRUNE_APPLY=1: never grep). */
+function composeEnv(service: string): Record<string, string> {
+  const doc = parse(readFileSync(new URL('../../../../deploy/compose.yaml', import.meta.url), 'utf8')) as {
+    services: Record<string, { environment?: Record<string, unknown> | string[] }>;
+  };
+  const env = doc.services[service]?.environment;
+  expect(env, `compose service ${service} has an environment`).toBeDefined();
+  const pairs = Array.isArray(env)
+    ? env.map((e): [string, string] => [e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)])
+    : Object.entries(env ?? {}).map(([k, v]): [string, string] => [k, String(v)]);
+  return Object.fromEntries(pairs);
+}
 
 describe('request budgets', () => {
   it('RWS: ≤ 400 requests in any 60 minutes (ddapi20-waterwebservices.rijkswaterstaat.nl)', () => {
@@ -98,6 +113,61 @@ describe('request budgets', () => {
     for (const f of ['perl', 'stadtbredimus', 'wasserbillig', 'bollendorf']) expect(lu3.has(f)).toBe(false);
     expect(lu3.size).toBe(11);
     expect(spec('lu-3-percentile').rows).toHaveLength(55);
+  });
+
+  it('DE-7 (P5b): every 15 minutes exactly when the retention pruner is applied, else hourly', () => {
+    // 96 fetches a day of the 0.9 MB ZIP need the pruner to delete what the 90-day window drops: the two switches
+    // (RWS_PRUNE_APPLY=1 on the load service of deploy/compose.yaml, the cron of de-7-messwerte) flip together.
+    const env = composeEnv('load');
+    expect(env.RWS_RAW_DIR, 'the parse reads the load service').toBe('/data/raw');
+    const apply = env.RWS_PRUNE_APPLY === '1';
+    const s = spec('de-7-messwerte');
+    expect(s.rows).toHaveLength(1);
+    expect(s.cadence_s, apply ? 'pruner applied: DE-7 every 15 minutes' : 'pruner dry run: DE-7 hourly').toBe(
+      apply ? 900 : 3600,
+    );
+    if (!apply) expect(s.cron).toBe('50 * * * *');
+    // The weekly pegeldaten and the seed are not on this switch.
+    expect(spec('de-7-pegeldaten').cadence_s).toBe(604800);
+  });
+
+  it('DE-8 (P5b): the hydro file is weekly, and www.opengeodata.nrw.de gets at most 2 requests in any 24 hours', () => {
+    expect(spec('de-8-hydro').cadence_s).toBe(604800);
+    expect(spec('de-8-hydro').rows).toHaveLength(1);
+    expect(spec('de-8-stations').cadence_s).toBe(86400);
+    const specs = registry.specs.filter((x) => new URL(x.request.url).hostname === 'www.opengeodata.nrw.de');
+    expect(specs.map((x) => x.id).sort()).toEqual(['de-8-hydro', 'de-8-stations']);
+    const minutes = requestsPerMinute(registry).get('www.opengeodata.nrw.de');
+    expect(minutes).toBeDefined();
+    // The busiest sliding 24 h of the simulated week, wrapped around Sunday to Monday.
+    const week = minutes?.length ?? 0;
+    let window = 0;
+    let peak = 0;
+    for (let i = 0; i < week + 1440; i += 1) {
+      window += minutes?.[i % week] ?? 0;
+      if (i >= 1440) window -= minutes?.[(i - 1440) % week] ?? 0;
+      peak = Math.max(peak, window);
+    }
+    expect(peak).toBeGreaterThan(0);
+    expect(peak).toBeLessThanOrEqual(2);
+    expect(budgets(registry).find((b) => b.host === 'www.opengeodata.nrw.de')?.perWeek).toBe(8);
+  });
+
+  it('inondations.public.lu: no request of any spec carries a query string (its robots.txt says Disallow: /*?*)', () => {
+    const age = registry.specs.filter(
+      (x) => new URL(baseRequest(x, x.rows[0] ?? {}).url).hostname === 'inondations.public.lu',
+    );
+    expect(age.map((x) => x.source)).toContain('LU-1');
+    for (const s of age)
+      for (const row of s.rows) {
+        const url = baseRequest(s, row).url;
+        expect(url, s.id).not.toContain('?');
+        expect(new URL(url).search, s.id).toBe('');
+      }
+    // LU-6 is a geoportail.lu feature service (it needs ?f=json&limit=100), not the AGE site.
+    expect(new URL(spec('lu-6-geo').request.url).hostname).toBe('features.geoportail.lu');
+    expect(registry.hosts.get('LU-6')).toEqual(['features.geoportail.lu']);
+    expect(registry.hosts.get('LU-1')).toEqual(['inondations.public.lu']);
   });
 
   it('no spec for NL-3, DE-9, DE-10, DE-12, BE-1, BE-2 or any off source', () => {

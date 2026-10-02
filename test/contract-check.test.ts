@@ -11,8 +11,9 @@ import { SchemaDrift } from '../packages/core/src/errors.ts';
 import { check, LINE_SOURCE, type Report, reportLines, SPECS } from '../scripts/contract-check.ts';
 import { repoRoot } from './catalogue.ts';
 import { server } from './msw.setup.ts';
+import { zip } from './zip.ts';
 
-// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1; P5a: six specs). The
+// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1; P5b: eight specs). The
 // recorded fixtures stand in for the live providers; nothing here reaches the network.
 
 type Spec = (typeof SPECS)[number];
@@ -33,6 +34,8 @@ const BODY: Record<Spec, Buffer> = {
   'fr-1-obs': readFileSync(join(fixtureDir('fr-1'), 'fr-1-obs.raw')),
   'ch-1-lindas': readFileSync(join(fixtureDir('ch-1'), 'ch-1-lindas.raw')),
   'ch-2-pq': readFileSync(join(fixtureDir('ch-2'), 'ch-2-pq.raw')),
+  'de-7-messwerte': readFileSync(join(fixtureDir('de-7'), 'de-7-messwerte.raw')),
+  'lu-1-csv': readFileSync(join(fixtureDir('lu-1'), 'lu-1-csv.raw')),
 };
 /** The fixtures were recorded together on 2026-09-29: a minute later, no value is old or in the future. */
 const recordedAt = (source: string, spec: string) =>
@@ -45,6 +48,8 @@ const NOW = new Date(
     recordedAt('fr-1', 'fr-1-obs'),
     recordedAt('ch-1', 'ch-1-lindas'),
     recordedAt('ch-2', 'ch-2-pq'),
+    recordedAt('de-7', 'de-7-messwerte'),
+    recordedAt('lu-1', 'lu-1-csv'),
   ) + 60_000,
 );
 
@@ -55,6 +60,8 @@ const targets = SPECS.map((id) => {
   const url = new URL(spec.request.url);
   return {
     id,
+    source: spec.source,
+    rawUrl: spec.request.url,
     method: spec.request.method,
     host: url.host,
     path: url.pathname,
@@ -74,6 +81,8 @@ const GOOD: Record<Spec, Answer> = {
   'fr-1-obs': answer(BODY['fr-1-obs']),
   'ch-1-lindas': answer(BODY['ch-1-lindas'], 200, 'text/csv;charset=UTF-8'),
   'ch-2-pq': answer(BODY['ch-2-pq'], 200, 'application/octet-stream'),
+  'de-7-messwerte': answer(BODY['de-7-messwerte'], 200, 'application/zip'),
+  'lu-1-csv': answer(BODY['lu-1-csv'], 200, 'text/csv'),
 };
 
 type Seen = { method: string; host: string; path: string; userAgent: string | null; apiKey: boolean };
@@ -112,9 +121,9 @@ const nl1 = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => 
   return answer(JSON.stringify(doc));
 };
 
-// Each run parses the whole registry (about 1,700 series since P5a) and six payloads: seconds on a CI runner.
+// Each run parses the whole registry (about 2,000 series since P5b) and eight payloads: seconds on a CI runner.
 describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
-  it('passes DE-1, NL-1, NL-2, FR-1, CH-1 and CH-2 through the loader parse: all six ok', async () => {
+  it('passes DE-1, NL-1, NL-2, FR-1, CH-1, CH-2, DE-7 and LU-1 through the loader parse: all eight ok', async () => {
     const { codes, report } = await run();
     expect(codes).toEqual({
       'de-1-basin': 'ok',
@@ -123,14 +132,16 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
       'fr-1-obs': 'ok',
       'ch-1-lindas': 'ok',
       'ch-2-pq': 'ok',
+      'de-7-messwerte': 'ok',
+      'lu-1-csv': 'ok',
     });
     expect(report.at).toBe(NOW.toISOString());
     expect(reportLines(report)).toBe(
-      'de-1-basin ok\nnl-1-obs-key ok\nnl-2-wfs ok\nfr-1-obs ok\nch-1-lindas ok\nch-2-pq ok',
+      'de-1-basin ok\nnl-1-obs-key ok\nnl-2-wfs ok\nfr-1-obs ok\nch-1-lindas ok\nch-2-pq ok\nde-7-messwerte ok\nlu-1-csv ok',
     );
   });
 
-  it('sends exactly the six registry targets, with the contact User-Agent and no API key', async () => {
+  it('sends exactly the eight registry targets, with the contact User-Agent and no API key', async () => {
     const { seen } = await run();
     expect(seen).toEqual(
       targets.map((t) => ({ method: t.method, host: t.host, path: t.path, userAgent: UA, apiKey: false })),
@@ -142,9 +153,22 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
       'GET hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr',
       'POST ld.admin.ch/query',
       'GET www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson',
+      'GET www.hochwasserportal.nrw/data/downloads/messwerte.zip',
+      'GET inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv',
     ]);
-    expect(targets).toHaveLength(6);
-    expect(seen).toHaveLength(6);
+    expect(targets).toHaveLength(8);
+    expect(seen).toHaveLength(8);
+  });
+
+  it('asks inondations.public.lu without a query string (its robots.txt says Disallow: /*?*)', () => {
+    const age = targets.filter((t) => t.host === 'inondations.public.lu');
+    expect(age.map((t) => t.id)).toEqual(['lu-1-csv']);
+    for (const t of age) {
+      expect(t.rawUrl, t.id).not.toContain('?');
+      expect(new URL(t.rawUrl).search, t.id).toBe('');
+    }
+    // The check never adds one: the request that goes out is the registry URL, whatever the spec.
+    expect(targets.filter((t) => t.source === 'LU-1')).toHaveLength(1);
   });
 
   it('checks the first FR-1 page only: a `next` link in the payload is never followed', async () => {
@@ -153,7 +177,7 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
     const { codes, seen } = await run({ 'fr-1-obs': answer(JSON.stringify(doc)) });
     expect(codes['fr-1-obs']).toBe('ok');
     expect(seen.filter((r) => r.host === 'hubeau.eaufrance.fr')).toHaveLength(1);
-    expect(seen).toHaveLength(6);
+    expect(seen).toHaveLength(8);
   });
 });
 
@@ -246,6 +270,73 @@ describe('what a drifted provider turns into', { timeout: 30_000 }, () => {
     const { codes, report } = await run({ 'ch-2-pq': answer(JSON.stringify(doc)) });
     expect(codes['ch-2-pq']).toMatch(/^unrecognized_keys at /);
     expect(JSON.stringify(report)).not.toContain('EVIL_PROVIDER_KEY');
+  });
+
+  // A messwerte.zip of our own: the real header and a block of 10,050 rows (the validity wants 10,000 lines).
+  const messwerte = (rows: string[] = [], header = 'station_no;time;value(cm)', member = 'messwerte.txt') =>
+    zip({
+      [member]: Buffer.from(
+        [
+          header,
+          // One row a minute for 7 days, a varying value: a repeated row would trip the ZIP ratio guard.
+          ...Array.from({ length: 10_050 }, (_, i) => {
+            const at = new Date(Date.UTC(2026, 8, 22, 13, 0, 0) + i * 60_000 + 3_600_000).toISOString();
+            return `2768898001;${at.slice(0, 19)}.000+01:00;${(((i * 7919) % 19_000) / 100).toFixed(2)}`;
+          }),
+          ...rows,
+          '2768898001;',
+          '',
+        ].join('\r\n'),
+      ),
+    });
+
+  it('a DE-7 ZIP of the right shape passes, one with another header, member or value is a fixed code', async () => {
+    const zipped = (body: Buffer) => answer(body, 200, 'application/zip');
+    // The synthetic ZIP is the real shape: unregistered ids are only counted, so a registered station is needed
+    // for a row; here only the validity and the strict parse are under test.
+    expect((await run({ 'de-7-messwerte': zipped(messwerte()) })).codes['de-7-messwerte']).toBe('ok');
+    const header = await run({ 'de-7-messwerte': zipped(messwerte([], 'station_no;time;value(m)')) });
+    expect(header.codes['de-7-messwerte']).toMatch(/^invalid_[a-z_]+$/);
+    const member = await run({ 'de-7-messwerte': zipped(messwerte([], 'station_no;time;value(cm)', 'other.txt')) });
+    expect(member.codes['de-7-messwerte']).toMatch(/^invalid_[a-z_]+$/);
+    const value = await run({ 'de-7-messwerte': zipped(messwerte(['2768898001;2026-09-29T12:59:00.000+01:00;EVIL'])) });
+    expect(value.codes['de-7-messwerte']).toMatch(/^[a-z0-9_]+ at line\.\d+$/);
+    expect(JSON.stringify(value.report)).not.toContain('EVIL');
+    // The other seven specs are untouched.
+    expect(value.codes['lu-1-csv']).toBe('ok');
+    expect(value.codes['ch-2-pq']).toBe('ok');
+  });
+
+  it('a DE-7 payload that is not a ZIP, or an LU-1 file that is HTML, is the validity code', async () => {
+    const html = '<html><body>Service unavailable: PROVIDER-SECRET-TEXT</body></html>';
+    const { codes, report } = await run({
+      'de-7-messwerte': answer(html, 200, 'text/html'),
+      'lu-1-csv': answer(html, 200, 'text/html'),
+    });
+    expect(codes['de-7-messwerte']).toMatch(/^invalid_[a-z_]+$/);
+    expect(codes['lu-1-csv']).toMatch(/^invalid_[a-z_]+$/);
+    expect(JSON.stringify(report)).not.toContain('PROVIDER-SECRET-TEXT');
+  });
+
+  it('an LU-1 CSV that lost a column the validity needs is invalid_required; a drifted label or cell is a code', async () => {
+    const body = BODY['lu-1-csv'].toString('utf8');
+    const noUnit = body.replace('"Unit"', '"Einheit"');
+    expect(noUnit).not.toBe(body);
+    expect((await run({ 'lu-1-csv': answer(noUnit, 200, 'text/csv') })).codes['lu-1-csv']).toBe('invalid_required');
+    // A label that is no "dd.mm.yyyy HH:MM" instant.
+    const label = body.replace('"24.09.2026 15:45"', '"24.09.2026 PROVIDER-SECRET-LABEL"');
+    expect(label).not.toBe(body);
+    const labelled = await run({ 'lu-1-csv': answer(label, 200, 'text/csv') });
+    expect(labelled.codes['lu-1-csv']).toMatch(/^[a-z0-9_]+( at [A-Za-z0-9_.]+)?$/);
+    expect(labelled.codes['lu-1-csv']).not.toBe('ok');
+    expect(JSON.stringify(labelled.report)).not.toContain('PROVIDER-SECRET-LABEL');
+    // A cell that is no number.
+    const lines = body.split('\n');
+    lines[1] = (lines[1] ?? '').replace(/,"?-?\d+(?:\.\d+)?"?(?=,|$)/, ',"PROVIDER-SECRET-VALUE"');
+    const cell = await run({ 'lu-1-csv': answer(lines.join('\n'), 200, 'text/csv') });
+    expect(cell.codes['lu-1-csv']).not.toBe('ok');
+    expect(JSON.stringify(cell.report)).not.toContain('PROVIDER-SECRET-VALUE');
+    expect(cell.codes['de-7-messwerte']).toBe('ok');
   });
 
   it('NL-1 answering 204 (no data) is ok and is not parsed', async () => {
@@ -375,6 +466,8 @@ describe('the report is a list of fixed lines and nothing else', { timeout: 30_0
         'fr-1-obs': nasty,
         'ch-1-lindas': nasty,
         'ch-2-pq': nasty,
+        'de-7-messwerte': nasty,
+        'lu-1-csv': nasty,
       }),
       await run({
         'nl-2-wfs': () => HttpResponse.error(),
@@ -398,6 +491,8 @@ describe('the report is a list of fixed lines and nothing else', { timeout: 30_0
         'eaufrance',
         'ld.admin',
         'hydrodaten',
+        'hochwasserportal',
+        'inondations',
       ])
         expect(text).not.toContain(secret);
       for (const name of stationNames) expect(text).not.toContain(name as string);
@@ -524,9 +619,9 @@ describe('the workflow', () => {
       expect(Math.min(Math.abs(minute - f), 60 - Math.abs(minute - f))).toBeGreaterThanOrEqual(5);
   });
 
-  it('says six requests, never three', () => {
-    expect(text).toContain('Six live requests');
-    expect(text).not.toMatch(/\bthree\b/i);
+  it('says eight requests, never three or six', () => {
+    expect(text).toContain('Eight live requests');
+    expect(text).not.toMatch(/\b(three|six)\b/i);
   });
 
   it('writes issues in the report job only, and that job has no contents permission and no checkout', () => {

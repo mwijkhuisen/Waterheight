@@ -30,6 +30,7 @@ import {
   checkApiParams,
   checkBelgianSet,
   checkBuild,
+  checkBytes,
   checkCapture,
   checkCoverage,
   checkFresh,
@@ -37,6 +38,7 @@ import {
   checkHealth,
   checkHealthParams,
   checkInterval,
+  checkLabelOffset,
   checkLoaderLag,
   checkMapAsset,
   checkMeta,
@@ -54,8 +56,13 @@ import {
   checkTilesManifestPage,
   checkTilesPrevious,
   checkTwin,
+  DE7_BYTES_MAX,
+  DE7_INTERVAL_MIN_S,
+  DE7_SPEC,
   expectedHeaders,
+  FRESH_MAX_AGE_BY_SOURCE,
   FRESH_MAX_AGE_S,
+  freshLimit,
   INTERVAL_MIN_S,
   INTERVAL_SPEC,
   leaks,
@@ -86,6 +93,7 @@ import {
   TILE_CACHE,
   TILE_HEADERS,
   TILES_404_PATHS,
+  TWIN_IDS,
   tileFiles,
 } from '../scripts/verify-prod.ts';
 import { repoRoot } from './catalogue.ts';
@@ -341,7 +349,15 @@ describe('freshness, soak and capacity', () => {
       'health CH-1',
       'tier-1 CH-1',
       'coverage CH-1',
+      'health DE-7',
+      'tier-1 DE-7',
+      'coverage DE-7',
+      'health LU-1',
+      'tier-1 LU-1',
+      'coverage LU-1',
       'interval CH-1',
+      'interval DE-7',
+      'bytes DE-7',
       'api meta',
       'api build',
       'api stations',
@@ -355,6 +371,9 @@ describe('freshness, soak and capacity', () => {
       'fresh NL-1',
       'fresh FR-1',
       'fresh CH-1',
+      'fresh DE-7',
+      'fresh LU-1',
+      'label offset LU-1',
       'belgian set',
       'owner leak',
       'tiles manifest',
@@ -362,7 +381,7 @@ describe('freshness, soak and capacity', () => {
       'tiles previous',
       'tiles 404',
       'map assets',
-      'twin eijsden-grens-taw-nap',
+      ...TWIN_IDS.map((id) => `twin ${id}`),
     ])
       expect(r.stdout, name).toMatch(new RegExp(`^${name}:`, 'm'));
   });
@@ -396,6 +415,7 @@ const de1 = (over: Partial<SourceRow> = {}): SourceRow => ({
   outage: null,
   coverage: null,
   min_interval_s: [],
+  label_offset: null,
   partitions: [{ partition: '2026-10', md5: 'a'.repeat(32), rows: 9000 }],
   partitions_at: ago(60_000),
   ...over,
@@ -775,6 +795,197 @@ describe('FR-1 and CH-1 health, tier-1, coverage and interval', () => {
   });
 });
 
+// P5b: DE-7 (LANUK NRW) and LU-1 (AGE) join the per-source checks; their own rules: DE-7's 15-minute interval and
+// bytes per day, LU-1's label offset, and slower freshness limits.
+
+describe('DE-7 and LU-1 health, tier-1, coverage, interval, bytes and label offset', () => {
+  const de7 = (over: Partial<SourceRow> = {}) =>
+    de1({ id: 'DE-7', tier1: { total: 120, fresh: 120, provider_stale: 0 }, ...over });
+  const lu1 = (over: Partial<SourceRow> = {}) =>
+    de1({ id: 'LU-1', tier1: { total: 20, fresh: 20, provider_stale: 0 }, ...over });
+  const offset = (over: Partial<NonNullable<SourceRow['label_offset']>> = {}) => ({
+    day: '2026-10-01',
+    minutes: 15,
+    n_aligned: 92,
+    share: 0.978,
+    ...over,
+  });
+  const cover = { from: '2026-09-02T00:00:00.000Z', ratio: 0.99, series: 120, series_below_95: 1, gaps: [] };
+  const NOW_ISO = NOW.toISOString();
+
+  it('health, tier-1 and coverage: each source its own, by name', () => {
+    const doc = s(sourcesDoc({ sources: [de1(), de7({ coverage: cover }), lu1({ status: 'degraded' })] }));
+    expect(checkSourceHealth(doc, 'DE-7')).toMatchObject({ check: 'health DE-7', ok: true });
+    expect(checkSourceHealth(doc, 'LU-1')).toMatchObject({
+      check: 'health LU-1',
+      ok: false,
+      detail: /status degraded/,
+    });
+    expect(checkTier1(doc.data, 'DE-7')).toMatchObject({ check: 'tier-1 DE-7', ok: true, detail: /120 of 120/ });
+    expect(checkTier1(doc.data, 'LU-1')).toMatchObject({ check: 'tier-1 LU-1', ok: true, detail: /20 of 20/ });
+    expect(checkCoverage(doc.data, 'DE-7')).toMatchObject({ check: 'coverage DE-7', ok: true });
+    expect(checkCoverage(doc.data, 'LU-1')).toMatchObject({
+      check: 'coverage LU-1',
+      ok: false,
+      detail: 'no coverage yet',
+    });
+    expect(checkSourceHealth(s(), 'DE-7')).toMatchObject({ ok: false, detail: /not listed/ });
+  });
+
+  it('interval DE-7: 895 s is the least gap (15 minutes less 5 s), the detail says the seconds', () => {
+    expect([DE7_SPEC, DE7_INTERVAL_MIN_S]).toEqual(['de-7-messwerte', 895]);
+    const spec = registry.specs.find((x) => x.id === DE7_SPEC);
+    expect(spec?.source).toBe('DE-7');
+    expect(cadenceOf(spec?.cron ?? '')).toBeGreaterThanOrEqual(DE7_INTERVAL_MIN_S + 5);
+    const at = (...entries: { spec: string; seconds: number }[]) =>
+      checkInterval(s(sourcesDoc({ sources: [de7({ min_interval_s: entries })] })).data, 'DE-7');
+    // Hourly today: 3600 s passes, and the owner reads it.
+    expect(at({ spec: DE7_SPEC, seconds: 3600 })).toEqual({
+      check: 'interval DE-7',
+      ok: true,
+      detail: 'de-7-messwerte: the shortest gap between two requests of one variant in 24 h is 3600 s, not under 895 s',
+    });
+    expect(at({ spec: DE7_SPEC, seconds: 900 }).ok).toBe(true);
+    expect(at({ spec: DE7_SPEC, seconds: 895 }).ok).toBe(true);
+    expect(at({ spec: DE7_SPEC, seconds: 894 })).toMatchObject({
+      ok: false,
+      detail: expect.stringMatching(/is 894 s, under 895 s \(requested more often than every 15 minutes\)$/),
+    });
+    expect(at({ spec: 'de-7-pegeldaten', seconds: 60 }, { spec: DE7_SPEC, seconds: 900 }).ok).toBe(true);
+    expect(at({ spec: 'de-7-pegeldaten', seconds: 900 })).toMatchObject({
+      ok: false,
+      detail: 'no interval measured yet',
+    });
+    expect(checkInterval(s(sourcesDoc({ sources: [de1()] })).data, 'DE-7')).toMatchObject({
+      ok: false,
+      detail: /not listed/,
+    });
+    expect(checkInterval(undefined, 'DE-7')).toMatchObject({ check: 'interval DE-7', ok: false });
+    // CH-1 stays the default, with its own rule.
+    expect(checkInterval(s(sourcesDoc({ sources: [de1()] })).data).check).toBe('interval CH-1');
+  });
+
+  it('bytes DE-7: a day over 90 MB fails, the biggest of the days is named, the spec must be in capture.json', () => {
+    expect(DE7_BYTES_MAX).toBe(90_000_000);
+    const { pub } = statusCycle();
+    const withBytes = (bytes: Record<string, number>): CaptureStatus => ({
+      ...pub,
+      days: pub.days.map((d) =>
+        d.source === 'DE-7' && d.date === '2026-10-02' ? { ...d, bytes: { ...d.bytes, ...bytes } } : d,
+      ),
+    });
+    expect(checkBytes(pub)).toEqual({
+      check: 'bytes DE-7',
+      ok: true,
+      detail: 'de-7-messwerte: at most 1000 bytes on 2026-10-02 (1 day(s) with bytes), not over 90000000',
+    });
+    // 96 fetches of the 0.9 MB ZIP at 15 minutes fit; one day over the limit does not.
+    expect(checkBytes(withBytes({ [DE7_SPEC]: 90_000_000 })).ok).toBe(true);
+    expect(checkBytes(withBytes({ [DE7_SPEC]: 90_000_001 }))).toMatchObject({
+      ok: false,
+      detail: 'de-7-messwerte: at most 90000001 bytes on 2026-10-02 (1 day(s) with bytes), over 90000000',
+    });
+    expect(checkBytes({ ...pub, specs: pub.specs.filter((x) => x.spec !== DE7_SPEC) })).toMatchObject({
+      ok: false,
+      detail: 'de-7-messwerte is not in capture.json',
+    });
+    expect(checkBytes({ ...pub, days: pub.days.map((d) => ({ ...d, bytes: {} })) })).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('no bytes of de-7-messwerte'),
+    });
+  });
+
+  it('label offset LU-1: a day no older than 2 days before meta.now, any offset, numbers and a date only', () => {
+    const at = (label_offset: SourceRow['label_offset'], now: string | undefined = NOW_ISO) =>
+      checkLabelOffset(s(sourcesDoc({ sources: [de1(), lu1({ label_offset })] })).data, now);
+    expect(at(offset())).toEqual({
+      check: 'label offset LU-1',
+      ok: true,
+      detail: 'day 2026-10-01: 15 min over 92 instants (share 0.978)',
+    });
+    // Any value is reported, not judged; a zero or a negative offset is as good as 15.
+    expect(at(offset({ minutes: 0 })).ok).toBe(true);
+    expect(at(offset({ minutes: -15 }))).toMatchObject({ ok: true, detail: expect.stringContaining('-15 min') });
+    // 2026-10-02T12:00Z less 2 days is 2026-09-30: that day passes, the one before fails.
+    expect(at(offset({ day: '2026-09-30' })).ok).toBe(true);
+    expect(at(offset({ day: '2026-09-29' }))).toMatchObject({
+      ok: false,
+      detail: 'day 2026-09-29: 15 min over 92 instants (share 0.978), older than 2026-09-30 (2 days before now)',
+    });
+    expect(at(offset({ day: '2026-10-03' }))).toMatchObject({
+      ok: false,
+      detail: expect.stringMatching(/, after 2026-10-02$/),
+    });
+    expect(at(offset({ day: '2026-10-02' })).ok).toBe(true);
+    expect(at(null)).toEqual({ check: 'label offset LU-1', ok: false, detail: 'no label offset measured yet' });
+    const doc = s(sourcesDoc({ sources: [de1(), lu1({ label_offset: offset() })] })).data;
+    expect(checkLabelOffset(doc, undefined)).toMatchObject({ ok: false, detail: 'no valid meta document' });
+    expect(at(offset(), 'yesterday')).toMatchObject({ ok: false, detail: 'no valid meta document' });
+    expect(checkLabelOffset(s().data, NOW_ISO)).toMatchObject({ ok: false, detail: /not listed/ });
+    expect(checkLabelOffset(undefined, NOW_ISO)).toMatchObject({
+      ok: false,
+      detail: /no valid health\/sources document/,
+    });
+    expect(at(offset()).detail).toMatch(/^[0-9A-Za-z .,%:()-]+$/);
+  });
+
+  it('label_offset must be a day, minutes and a share: anything else is no document', () => {
+    for (const bad of [
+      { ...offset(), extra: 1 },
+      offset({ day: '2026-10-01T00:00:00Z' }),
+      offset({ share: 2 }),
+      offset({ n_aligned: -1 }),
+    ])
+      expect(s(sourcesDoc({ sources: [lu1({ label_offset: bad })] })).data).toBeUndefined();
+    expect(s(sourcesDoc({ sources: [lu1({ label_offset: undefined as never })] })).data).toBeUndefined();
+  });
+
+  it('fresh DE-7 is 90 minutes and fresh LU-1 is 75, every other source keeps 45', () => {
+    expect([
+      FRESH_MAX_AGE_S,
+      freshLimit('DE-7'),
+      freshLimit('LU-1'),
+      freshLimit('NL-1'),
+      freshLimit('constructor'),
+    ]).toEqual([2700, 5400, 4500, 2700, 2700]);
+    expect([...FRESH_MAX_AGE_BY_SOURCE.keys()]).toEqual(['DE-7', 'LU-1']);
+    const now = new Date(NOW_MS).toISOString();
+    const at = (ages: Record<number, number>) => snapshotDoc(NOW_MS, ages);
+    expect(checkFresh('DE-7', at({ 6: 5400 }), stationsDoc(), now)).toEqual({
+      check: 'fresh DE-7',
+      ok: true,
+      detail: '1 of 1 DE-7 series have a value, the newest is 5400 s old',
+    });
+    expect(checkFresh('DE-7', at({ 6: 5401 }), stationsDoc(), now)).toMatchObject({
+      ok: false,
+      detail: '1 of 1 DE-7 series have a value, the newest is 5401 s old, over 5400 s',
+    });
+    expect(checkFresh('LU-1', at({ 7: 4500 }), stationsDoc(), now).ok).toBe(true);
+    expect(checkFresh('LU-1', at({ 7: 4501 }), stationsDoc(), now)).toMatchObject({
+      ok: false,
+      detail: '1 of 1 LU-1 series have a value, the newest is 4501 s old, over 4500 s',
+    });
+    // A DE-7 value of 60 minutes is stale for DE-1 and fresh for DE-7: the limits are per source.
+    expect(checkFresh('DE-7', at({ 6: 3600, 3: 60 }), stationsDoc(), now).ok).toBe(true);
+    expect(checkFresh('DE-1', at({ 3: 3600 }), stationsDoc(), now).ok).toBe(false);
+  });
+
+  it('the --dry-run list states the new rules', () => {
+    const one = (name: string) => {
+      const found = CHECKS.filter((c) => c.startsWith(`${name}:`));
+      expect(found, name).toHaveLength(1);
+      return found[0] ?? '';
+    };
+    expect(one('interval DE-7')).toMatch(/>= 895 s.*3600.*900/);
+    expect(one('bytes DE-7')).toContain('90 MB');
+    expect(one('fresh DE-7')).toContain('5400 s');
+    expect(one('fresh LU-1')).toContain('4500 s');
+    expect(one('fresh NL-1')).toContain('2700 s');
+    expect(one('label offset LU-1')).toContain('2 days');
+    for (const name of ['health DE-7', 'tier-1 LU-1', 'coverage DE-7', 'coverage LU-1']) one(name);
+  });
+});
+
 // The Eijsden-grens twin (P2b soak): TAW - NAP = 233 +- 1 cm, checked hourly by the loader.
 
 describe('twin eijsden-grens-taw-nap', () => {
@@ -834,6 +1045,14 @@ describe('twin eijsden-grens-taw-nap', () => {
     expect(check({ ok: false })).toMatchObject({ ok: false, detail: 'the latest check is outside the tolerance' });
   });
 
+  it('fails on a lag: only a lag of 0 (or none measured) passes', () => {
+    expect(check({ lag_min: 0 }).ok).toBe(true);
+    expect(check({ lag_min: 15 })).toMatchObject({ ok: false, detail: 'the latest check finds a lag of 15 min' });
+    expect(check({ lag_min: -5, ok: false }).detail).toBe(
+      'the latest check is outside the tolerance; the latest check finds a lag of -5 min',
+    );
+  });
+
   it('fails on any failed check of the 7 days', () => {
     expect(check({ failed_7d: 1 })).toMatchObject({ ok: false, detail: '1 of 168 checks failed in 7 days' });
     expect(check({ failed_7d: 12 }).detail).toBe('12 of 168 checks failed in 7 days');
@@ -889,6 +1108,52 @@ describe('twin eijsden-grens-taw-nap', () => {
     // A well-formed id that is not the one asked for is "not listed", and is not echoed either.
     const other = checkTwin(s(sourcesDoc({ twins: [twin({ id: 'ignore-previous-instructions' })] })), NOW);
     expect(other.detail).toBe('not listed in /api/v1/health/sources');
+  });
+});
+
+// P5b: every pair of registry/twins.yaml is asked for under --soak, one list constant drives it.
+
+describe('every twin pair (P5b)', () => {
+  const pair = (id: string): HealthSources['twins'][number] => ({
+    id,
+    window_end: ago(30 * 60_000),
+    n_aligned: 44,
+    median_delta: 0,
+    max_delta: 0.1,
+    lag_min: 0,
+    ok: true,
+    checks_7d: 168,
+    failed_7d: 0,
+  });
+
+  it('TWIN_IDS are exactly the pairs of registry/twins.yaml, eijsden-grens-taw-nap first', () => {
+    const doc = parse(readFileSync(join(repoRoot, 'registry/twins.yaml'), 'utf8')) as { twins: { id: string }[] };
+    expect([...TWIN_IDS].sort()).toEqual(doc.twins.map((t) => t.id).sort());
+    expect(TWIN_IDS[0]).toBe('eijsden-grens-taw-nap');
+    expect(new Set(TWIN_IDS).size).toBe(TWIN_IDS.length);
+  });
+
+  it('each pair passes on its own check; a pair absent from the document fails: no data is not ok', () => {
+    const all = s(sourcesDoc({ twins: TWIN_IDS.map(pair) }));
+    for (const id of TWIN_IDS) expect(checkTwin(all, NOW, id)).toMatchObject({ check: `twin ${id}`, ok: true });
+    for (const id of TWIN_IDS) {
+      const without = s(sourcesDoc({ twins: TWIN_IDS.filter((x) => x !== id).map(pair) }));
+      expect(checkTwin(without, NOW, id)).toEqual({
+        check: `twin ${id}`,
+        ok: false,
+        detail: 'not listed in /api/v1/health/sources',
+      });
+    }
+  });
+
+  it('one failing pair fails its own check only', () => {
+    const doc = s(
+      sourcesDoc({
+        twins: TWIN_IDS.map((id) => (id === 'perl-lu1-de1-h' ? { ...pair(id), lag_min: 15, ok: false } : pair(id))),
+      }),
+    );
+    expect(checkTwin(doc, NOW, 'perl-lu1-de1-h').ok).toBe(false);
+    expect(checkTwin(doc, NOW, 'basel-ch1-de1-h').ok).toBe(true);
   });
 });
 
@@ -1349,6 +1614,8 @@ const metaDoc = (over: Partial<Meta> = {}): Meta => ({
     },
     { id: 'FR-1', attribution: [] },
     { id: 'CH-1', attribution: [] },
+    { id: 'DE-7', attribution: [] },
+    { id: 'LU-1', attribution: [] },
   ],
   ...over,
 });
@@ -1375,7 +1642,7 @@ const stationDoc = (id: string, country: string, series: unknown[]) => ({
   flags: { tidal: false, impounded: null },
   series,
 });
-// Series 1 and 2 are NL-1, series 3 is DE-1, series 4 is FR-1, series 5 is CH-1.
+// Series 1 and 2 are NL-1, series 3 is DE-1, series 4 is FR-1, series 5 is CH-1, series 6 is DE-7, series 7 is LU-1.
 const stationsDoc = (): Stations =>
   Stations.parse({
     stations: [
@@ -1383,6 +1650,8 @@ const stationsDoc = (): Stations =>
       stationDoc('de.wsv.kaub', 'DE', [seriesDoc(3, 'DE-1', 'H')]),
       stationDoc('fr.sandre.A701061001', 'FR', [seriesDoc(4, 'FR-1', 'Q')]),
       stationDoc('ch.bafu.2289', 'CH', [seriesDoc(5, 'CH-1', 'H')]),
+      stationDoc('de.lanuk.2768898001', 'DE', [seriesDoc(6, 'DE-7', 'H')]),
+      stationDoc('lu.age.Perl', 'LU', [seriesDoc(7, 'LU-1', 'H')]),
     ],
   });
 const snapshotDoc = (ms: number, ages: Record<number, number> = { 1: 600, 3: 1200 }): Snapshot =>
@@ -1411,9 +1680,9 @@ describe('api meta and api build', () => {
     expect(checkMeta(read())).toEqual({
       check: 'api meta',
       ok: true,
-      detail: '200, public, max-age=60, the Meta contract, sources NL-1, DE-1, FR-1, CH-1',
+      detail: '200, public, max-age=60, the Meta contract, sources NL-1, DE-1, FR-1, CH-1, DE-7, LU-1',
     });
-    expect(API_SOURCES).toEqual(['NL-1', 'DE-1', 'FR-1', 'CH-1']);
+    expect(API_SOURCES).toEqual(['NL-1', 'DE-1', 'FR-1', 'CH-1', 'DE-7', 'LU-1']);
   });
 
   it('meta fails on a wrong Cache-Control, a wrong status, a body off the contract, a missing source and a network error', () => {
@@ -1436,16 +1705,17 @@ describe('api meta and api build', () => {
     expect(checkMeta(read('<html>')).ok).toBe(false);
     expect(checkMeta(read(metaDoc({ sources: [{ id: 'NL-1', attribution: [] }] })))).toMatchObject({
       ok: false,
-      detail: 'DE-1 is not listed in sources; FR-1 is not listed in sources; CH-1 is not listed in sources',
+      detail:
+        'DE-1 is not listed in sources; FR-1 is not listed in sources; CH-1 is not listed in sources; DE-7 is not listed in sources; LU-1 is not listed in sources',
     });
-    // FR-1 and CH-1 count since P5a: each alone makes the check fail.
-    for (const id of ['FR-1', 'CH-1'])
+    // FR-1 and CH-1 count since P5a, DE-7 and LU-1 since P5b: each alone makes the check fail.
+    for (const id of ['FR-1', 'CH-1', 'DE-7', 'LU-1'])
       expect(checkMeta(read(metaDoc({ sources: metaDoc().sources.filter((x) => x.id !== id) })))).toMatchObject({
         ok: false,
         detail: `${id} is not listed in sources`,
       });
     expect(checkMeta(read(metaDoc({ sources: [] }))).detail).toBe(
-      'NL-1 is not listed in sources; DE-1 is not listed in sources; FR-1 is not listed in sources; CH-1 is not listed in sources',
+      'NL-1 is not listed in sources; DE-1 is not listed in sources; FR-1 is not listed in sources; CH-1 is not listed in sources; DE-7 is not listed in sources; LU-1 is not listed in sources',
     );
     expect(checkMeta(readApi('ECONNRESET', Meta, META_CACHE))).toEqual({
       check: 'api meta',
@@ -1470,12 +1740,12 @@ describe('api stations', () => {
   const read = (doc: unknown = stationsDoc(), over: Partial<Page> = {}) =>
     readApi(apiPage(doc, STATIONS_CACHE, over), Stations, STATIONS_CACHE);
 
-  it('passes: 200, exactly max-age=300, the Stations contract, a series of NL-1, DE-1, FR-1 and CH-1', () => {
+  it('passes: 200, exactly max-age=300, the Stations contract, a series of NL-1, DE-1, FR-1, CH-1, DE-7 and LU-1', () => {
     expect(checkStations(read())).toEqual({
       check: 'api stations',
       ok: true,
       detail:
-        '200, public, max-age=300, the Stations contract, 4 stations, 2 NL-1 and 1 DE-1 and 1 FR-1 and 1 CH-1 series',
+        '200, public, max-age=300, the Stations contract, 6 stations, 2 NL-1 and 1 DE-1 and 1 FR-1 and 1 CH-1 and 1 DE-7 and 1 LU-1 series',
     });
   });
 
@@ -1484,18 +1754,21 @@ describe('api stations', () => {
       Stations.parse({ stations: [stationDoc(id, 'NL', [seriesDoc(1, source, 'H')])] });
     expect(checkStations(read(only('nl.rws.lobith.bovenrijn.tolkamer', 'NL-1')))).toMatchObject({
       ok: false,
-      detail: 'no station has a DE-1 series; no station has a FR-1 series; no station has a CH-1 series',
+      detail:
+        'no station has a DE-1 series; no station has a FR-1 series; no station has a CH-1 series; no station has a DE-7 series; no station has a LU-1 series',
     });
     expect(checkStations(read(only('de.wsv.kaub', 'DE-1'))).detail).toBe(
-      'no station has a NL-1 series; no station has a FR-1 series; no station has a CH-1 series',
+      'no station has a NL-1 series; no station has a FR-1 series; no station has a CH-1 series; no station has a DE-7 series; no station has a LU-1 series',
     );
     expect(checkStations(read(Stations.parse({ stations: [] }))).detail).toBe(
-      'no station has a NL-1 series; no station has a DE-1 series; no station has a FR-1 series; no station has a CH-1 series',
+      'no station has a NL-1 series; no station has a DE-1 series; no station has a FR-1 series; no station has a CH-1 series; no station has a DE-7 series; no station has a LU-1 series',
     );
-    // A source's series alone are not enough: each of FR-1 and CH-1 is needed (P5a).
+    // A source's series alone are not enough: each of FR-1 and CH-1 is needed (P5a), DE-7 and LU-1 too (P5b).
     for (const [id, source] of [
       ['fr.sandre.A701061001', 'FR-1'],
       ['ch.bafu.2289', 'CH-1'],
+      ['de.lanuk.2768898001', 'DE-7'],
+      ['lu.age.Perl', 'LU-1'],
     ] as const)
       expect(checkStations(read({ stations: stationsDoc().stations.filter((st) => st.id !== id) }))).toMatchObject({
         ok: false,

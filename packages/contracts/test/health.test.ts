@@ -30,6 +30,7 @@ const source = {
   outage: null,
   coverage: null,
   min_interval_s: [],
+  label_offset: null,
   partitions: [{ partition: '2026-09', md5: 'a'.repeat(32), rows: 1234 }],
   partitions_at: ago(60_000),
 };
@@ -116,6 +117,18 @@ describe('HealthSources', () => {
   it('accepts a source without tier-1 numbers, gaps or checksums yet', () => {
     const fresh = { ...source, tier1: null, missing_buckets_24h: null, partitions: [], partitions_at: null };
     expect(HealthSources.safeParse(sources({ sources: [fresh] })).success).toBe(true);
+  });
+
+  it('label_offset is a day, minutes and a share, nothing else, and is required (null for most sources)', () => {
+    const lu = { ...source, id: 'LU-1', label_offset: { day: '2026-10-04', minutes: 15, n_aligned: 92, share: 0.978 } };
+    expect(HealthSources.safeParse(sources({ sources: [lu] })).success).toBe(true);
+    const bad = (label_offset: unknown) => HealthSources.safeParse(sources({ sources: [{ ...lu, label_offset }] }));
+    expect(bad({ ...lu.label_offset, extra: 1 }).success).toBe(false);
+    expect(bad({ ...lu.label_offset, day: '2026-10-04T00:00:00Z' }).success).toBe(false);
+    expect(bad({ ...lu.label_offset, share: 1.2 }).success).toBe(false);
+    expect(bad({ ...lu.label_offset, n_aligned: -1 }).success).toBe(false);
+    const { label_offset: _omitted, ...without } = source;
+    expect(HealthSources.safeParse(sources({ sources: [without] })).success).toBe(false);
   });
 
   it('only catalogue source IDs: no canary, no owner-only spelling, no free text', () => {
