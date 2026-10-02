@@ -1,0 +1,8 @@
+{
+  "spec": "lu-2-json",
+  "source": "LU-2",
+  "synthetic": true,
+  "derived_from": "hand-made: the fall-back night of 2026-10-25: stamps 01:45+02:00 to 02:45+02:00, then 02:00+01:00 to 03:15+01:00 (the repeated local hour, each with its own offset)",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

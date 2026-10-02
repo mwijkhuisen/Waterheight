@@ -1,0 +1,28 @@
+{
+ "record": {
+  "station": "ettelbruck-alzette",
+  "page_id": "Ettelbrück / Alzette",
+  "levels": {
+   "yellow": null,
+   "orange": null,
+   "red": null
+  },
+  "hq": [],
+  "zero": null,
+  "pk_km": null,
+  "forecast_limit_h": null,
+  "forecast_slug": "ettelbruck-alzette",
+  "position": {
+   "lon": 6.09858419912852,
+   "lat": 49.84480000685473,
+   "from": "lu-6"
+  },
+  "banner": null,
+  "operator": null
+ },
+ "dropped": {
+  "bad_zero": 1,
+  "bad_coordinates": 1,
+  "coordinates_from_lu6": 1
+ }
+}

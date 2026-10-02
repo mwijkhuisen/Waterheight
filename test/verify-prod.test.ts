@@ -7,6 +7,7 @@ import { Counters } from '../apps/server/src/capture/runner.ts';
 import { cadenceOf, loadRegistry } from '../apps/server/src/capture/specs.ts';
 import type { SpecState } from '../apps/server/src/capture/state.ts';
 import { buildStatus, type CaptureStatus } from '../apps/server/src/capture/status.ts';
+import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
 import type { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
 import {
   basemapAssetsPath,
@@ -44,7 +45,10 @@ import {
   checkMeta,
   checkNoindex,
   checkOpenapi,
+  checkOwnerHealth,
   checkOwnerLeak,
+  checkOwnerSources,
+  checkOwnerStations,
   checkReplay,
   checkSnapshot,
   checkSourceHealth,
@@ -75,7 +79,11 @@ import {
   OPENAPI_CACHE,
   OpenApi31,
   OWNER_CANARY,
+  OWNER_SOURCES_MIN,
+  OWNER_STATION_PREFIXES,
   ownerKeys,
+  ownerSourceIds,
+  ownerStationIds,
   ownerTerms,
   PARAM_CASES,
   type Page,
@@ -375,6 +383,9 @@ describe('freshness, soak and capacity', () => {
       'fresh LU-1',
       'label offset LU-1',
       'belgian set',
+      'owner sources',
+      'owner health',
+      'owner stations',
       'owner leak',
       'tiles manifest',
       'tiles <file>',
@@ -2290,6 +2301,200 @@ describe('owner isolation in the data API bodies', () => {
       ok: false,
       detail: expect.stringMatching(detail),
     });
+  });
+});
+
+// P5c (issue #20): the owner sources never show in the public API. `owner sources` reads the counts of
+// /api/v1/health/sources, `owner stations` the station list; both pure, on contract documents. `owner health` is
+// the half that needs live capture (review SR-8), so the CI deploy job may let only it fail.
+
+describe('owner sources and owner stations (P5c)', () => {
+  const ownerIds = ownerSourceIds(registry);
+  const readStations = (doc: unknown = stationsDoc(), over: Partial<Page> = {}) =>
+    readApi(apiPage(doc, STATIONS_CACHE, over), Stations, STATIONS_CACHE);
+  const withStation = (id: string) =>
+    ({ stations: [...stationsDoc().stations, stationDoc(id, 'BE', [seriesDoc(9, 'NL-1', 'H')])] }) as unknown;
+
+  it('ownerSourceIds: the owner-audience sources of registry/sources.yaml, and no public one', () => {
+    expect(ownerIds).toEqual(expect.arrayContaining(['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3']));
+    for (const id of ['NL-1', 'LU-1', 'DE-1']) expect(ownerIds).not.toContain(id);
+    expect(ownerIds.length).toBeGreaterThanOrEqual(OWNER_SOURCES_MIN);
+  });
+
+  it('owner sources passes: at least 4 owner sources and none listed, healthy or not (no capture in CI)', () => {
+    expect(checkOwnerSources(s(sourcesDoc({ owner_sources: { healthy: 6, total: 6 } })), ownerIds)).toEqual({
+      check: 'owner sources',
+      ok: true,
+      detail: '6 owner sources (at least 4), none listed in sources',
+    });
+    expect(
+      checkOwnerSources(s(sourcesDoc({ owner_sources: { healthy: 4, total: 4 }, sources: [de1(), nl1()] })), ownerIds)
+        .ok,
+    ).toBe(true);
+    expect(checkOwnerSources(s(sourcesDoc({ owner_sources: { healthy: 0, total: 6 } })), ownerIds).ok).toBe(true);
+  });
+
+  it.each([
+    ['all healthy', { healthy: 6, total: 6 }, true, '6 of 6 owner sources healthy'],
+    ['fewer healthy than total', { healthy: 5, total: 6 }, false, '5 of 6 owner sources healthy'],
+    ['none healthy', { healthy: 0, total: 6 }, false, '0 of 6 owner sources healthy'],
+  ])('owner health on %s', (_, owner_sources, ok, detail) => {
+    expect(checkOwnerHealth(s(sourcesDoc({ owner_sources })))).toEqual({ check: 'owner health', ok, detail });
+  });
+
+  it('owner health: a 5xx and a network error are FAILs', () => {
+    const doc = sourcesDoc({ owner_sources: { healthy: 6, total: 6 } });
+    expect(checkOwnerHealth(s(doc, { status: 503 }))).toMatchObject({
+      check: 'owner health',
+      ok: false,
+      detail: expect.stringContaining('status 503'),
+    });
+    expect(checkOwnerHealth(readApi('ECONNRESET', HealthSources)).ok).toBe(false);
+  });
+
+  it.each([
+    ['fewer than 4 owner sources', { owner_sources: { healthy: 3, total: 3 } }, '3 owner sources, at least 4 expected'],
+    ['no owner source at all', { owner_sources: { healthy: 0, total: 0 } }, '0 owner sources, at least 4 expected'],
+  ])('owner sources fails on %s', (_, over, detail) => {
+    expect(checkOwnerSources(s(sourcesDoc(over)), ownerIds)).toEqual({
+      check: 'owner sources',
+      ok: false,
+      detail,
+    });
+  });
+
+  it('owner sources fails on an owner source id in sources[], and the detail counts it without naming it', () => {
+    const doc = sourcesDoc({
+      owner_sources: { healthy: 6, total: 6 },
+      sources: [de1(), de1({ id: 'LU-3' }), de1({ id: 'BE-3' })],
+    });
+    const r = checkOwnerSources(s(doc), ownerIds);
+    expect(r).toEqual({ check: 'owner sources', ok: false, detail: '2 owner sources listed in sources' });
+    expect(leaks(r.detail, ownerTerms(registry))).toEqual([]);
+  });
+
+  it('owner sources: a 5xx, a non-JSON body, another cache time and a network error are FAILs', () => {
+    const doc = sourcesDoc({ owner_sources: { healthy: 6, total: 6 } });
+    expect(checkOwnerSources(s(doc, { status: 503 }), ownerIds)).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('status 503'),
+    });
+    expect(checkOwnerSources(readApi(page('<html>'), HealthSources), ownerIds)).toMatchObject({
+      ok: false,
+      detail: 'no valid health/sources document: not the contract document',
+    });
+    expect(checkOwnerSources(readApi(page(doc, { status: 500, body: 'oops' }), HealthSources), ownerIds).ok).toBe(
+      false,
+    );
+    expect(
+      checkOwnerSources(
+        readApi(
+          page(doc, { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=300' } }),
+          HealthSources,
+        ),
+        ownerIds,
+      ),
+    ).toMatchObject({ ok: false, detail: expect.stringContaining('cache-control') });
+    expect(checkOwnerSources(readApi('ECONNRESET', HealthSources), ownerIds)).toEqual({
+      check: 'owner sources',
+      ok: false,
+      detail: 'no valid health/sources document: ECONNRESET',
+    });
+  });
+
+  it('ownerStationIds: the ids of the owner rows only', () => {
+    expect(
+      ownerStationIds([
+        { id: 'be.spw.a', audience: 'owner' },
+        { id: 'lu.age.b', audience: 'public' },
+        { id: 'lu.age.c', audience: 'off' },
+        { id: 'lu.age-json.d', audience: 'owner' },
+      ]),
+    ).toEqual(['be.spw.a', 'lu.age-json.d']);
+  });
+
+  it('every owner station row of the registry is under an owner station-id prefix, and none is a public id', () => {
+    const rows = readRegistry().stations;
+    for (const id of ownerStationIds(rows))
+      expect(
+        OWNER_STATION_PREFIXES.some((p) => id.startsWith(p)),
+        id,
+      ).toBe(true);
+    for (const st of rows.filter((x) => x.audience !== 'owner'))
+      expect(
+        OWNER_STATION_PREFIXES.some((p) => st.id.startsWith(p)),
+        st.id,
+      ).toBe(false);
+  });
+
+  it('owner stations passes on public stations only, and says how many it checked', () => {
+    expect(checkOwnerStations(readStations(), new Set(['be.spw.x']))).toEqual({
+      check: 'owner stations',
+      ok: true,
+      detail: '6 public stations checked, none an owner station',
+    });
+    expect(checkOwnerStations(readStations(Stations.parse({ stations: [] })), new Set()).ok).toBe(true);
+  });
+
+  it.each([
+    ['a station id of an owner row of the registry', 'lu.age.owner-row', new Set(['lu.age.owner-row'])],
+    ['a be.spw. id', 'be.spw.11', new Set<string>()],
+    ['a lu.age-json. id', 'lu.age-json.diekirch', new Set<string>()],
+  ])('owner stations fails on %s, without naming it', (_, id, ids) => {
+    const r = checkOwnerStations(readStations(withStation(id)), ids);
+    expect(r).toEqual({ check: 'owner stations', ok: false, detail: '1 of 7 stations are owner stations' });
+    expect(r.detail).not.toContain(id);
+  });
+
+  it('owner stations: the prefix is a prefix, not a substring', () => {
+    expect(checkOwnerStations(readStations(withStation('nl.be.spw.1')), new Set()).ok).toBe(true);
+    expect(checkOwnerStations(readStations(withStation('lu.age-jsonx.1')), new Set()).ok).toBe(true);
+  });
+
+  it('owner stations: a 5xx, a non-JSON body and a network error are FAILs; a leak is one whatever the headers say', () => {
+    expect(checkOwnerStations(readStations(stationsDoc(), { status: 502 }), new Set())).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('status 502'),
+    });
+    expect(checkOwnerStations(readStations('<html>'), new Set())).toMatchObject({
+      ok: false,
+      detail: 'no valid stations document: not the contract document',
+    });
+    expect(checkOwnerStations(readApi('timeout', Stations, STATIONS_CACHE), new Set())).toMatchObject({
+      ok: false,
+      detail: 'no valid stations document: timeout',
+    });
+    expect(
+      checkOwnerStations(readApi(apiPage(stationsDoc(), META_CACHE), Stations, STATIONS_CACHE), new Set()),
+    ).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('cache-control'),
+    });
+    expect(
+      checkOwnerStations(readApi(apiPage(withStation('be.spw.1'), META_CACHE), Stations, STATIONS_CACHE), new Set())
+        .detail,
+    ).toBe('1 of 7 stations are owner stations');
+  });
+
+  it('the --dry-run list has exactly one entry for each new check', () => {
+    for (const name of ['owner sources', 'owner health', 'owner stations'])
+      expect(
+        CHECKS.filter((c) => c.startsWith(`${name}:`)),
+        name,
+      ).toHaveLength(1);
+    expect(CHECKS.find((c) => c.startsWith('owner stations:'))).toContain('be.spw. or lu.age-json.');
+  });
+
+  it('ci.yml lets only `owner health` fail in the deploy job: `owner sources`, `owner stations` and `owner leak` must PASS', () => {
+    const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+    const list = /grep -vE '\^FAIL \(([^)]+)\) '/.exec(ci)?.[1]?.split('|');
+    expect(list).toBeDefined();
+    expect(list).toContain('owner health');
+    expect(list).not.toContain('owner sources');
+    expect(list).not.toContain('owner stations');
+    expect(list).not.toContain('owner leak');
+    for (const name of ['owner leak', 'owner sources', 'owner stations'])
+      expect(ci).toContain(`grep -qE '^PASS ${name} '`);
   });
 });
 

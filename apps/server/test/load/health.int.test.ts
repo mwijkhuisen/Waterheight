@@ -15,7 +15,7 @@ let api: pg.Client;
 const NOW = new Date('2026-09-29T13:44:00Z');
 const cadenceS = new Map([
   ['DE-1', 900],
-  ['BE-3', 600],
+  ['LU-3', 3600],
   ['LU-4', 604800],
 ]);
 const inputs = (over: Partial<Parameters<typeof computeHealth>[1]> = {}) => ({
@@ -44,7 +44,8 @@ beforeAll(async () => {
     await writePayload(archive, { source: 'DE-1', spec, variant, at: f.at, body: f.body, url: f.url });
   }
   // Owner-audience specs are captured too; their lines carry no adapter.
-  await h.archive.append(bareLine('BE-3', 'be-3-levels', new Date('2026-09-29T13:43:50Z'), { status: 304 }));
+  // P5c: an owner source without series (LU-3) answered; BE-3 holds series since P5c and was never fetched here.
+  await h.archive.append(bareLine('LU-3', 'lu-3-percentile', new Date('2026-09-29T13:43:50Z'), { status: 304 }));
   await h.archive.append(
     bareLine('LU-4', 'lu-4-pages', new Date('2026-09-20T00:00:00Z'), { status: null, error: 'timeout' }),
   );
@@ -94,7 +95,7 @@ describe('source health', () => {
     for (const owner of ['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3', 'CANARY-OWNER'])
       expect(ids).not.toContain(owner);
     for (const off of ['NL-3', 'DE-9', 'DE-10']) expect(ids).not.toContain(off);
-    // Six captured owner sources; BE-3 answered, LU-4 only ever failed, the others have not been fetched at all.
+    // Six captured owner sources; LU-3 answered, LU-4 only ever failed, the others have not been fetched at all.
     expect((await api.query(`SELECT * FROM ${PUBLIC_ONLY_VIEWS.ownerHealth}`)).rows).toEqual([
       { healthy: 1, total: 6 },
     ]);
@@ -105,7 +106,7 @@ describe('source health', () => {
         r.status,
       ]),
     );
-    expect(own).toMatchObject({ 'BE-3': 'ok', 'LU-4': 'down', 'DE-2': 'unknown', 'DE-1': 'ok' });
+    expect(own).toMatchObject({ 'LU-3': 'ok', 'LU-4': 'down', 'DE-2': 'unknown', 'BE-3': 'unknown', 'DE-1': 'ok' });
   });
 
   it('partition checksums are stored beside the rest and survive the next health pass', async () => {

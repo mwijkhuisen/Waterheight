@@ -1,0 +1,8 @@
+{
+  "spec": "lu-4-pages",
+  "source": "LU-4",
+  "synthetic": true,
+  "derived_from": "hand-made: an easting that is no LUREF coordinate (999999): the position falls back to the LU-6 point",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

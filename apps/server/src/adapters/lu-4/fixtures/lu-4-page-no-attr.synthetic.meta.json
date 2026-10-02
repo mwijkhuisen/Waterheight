@@ -1,0 +1,8 @@
+{
+  "spec": "lu-4-pages",
+  "source": "LU-4",
+  "synthetic": true,
+  "derived_from": "hand-made: a page whose element has no data-to-json attribute (a decoy sits in a script): parse refuses it",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

@@ -1,0 +1,117 @@
+{
+ "obs": [],
+ "gaugeZeros": [
+  {
+   "series": "2971/H",
+   "value_m": 35.917,
+   "datum": "DNG",
+   "valid_from": "1985-01-10T08:08:40.606Z"
+  },
+  {
+   "series": "5803/H_sonde",
+   "value_m": 42.766,
+   "datum": "DNG",
+   "valid_from": "2035-04-03T05:33:10.104Z"
+  },
+  {
+   "series": "5804/H",
+   "value_m": 90.7,
+   "datum": "DNG",
+   "valid_from": "1978-03-19T07:08:07.103Z"
+  },
+  {
+   "series": "5806/H",
+   "value_m": 48.6,
+   "datum": "DNG",
+   "valid_from": "1986-05-09T22:50:07.753Z"
+  },
+  {
+   "series": "7137/H",
+   "value_m": 41.3,
+   "datum": "DNG",
+   "valid_from": null
+  },
+  {
+   "series": "L5170/H",
+   "value_m": 9.273,
+   "datum": "DNG",
+   "valid_from": "2014-07-22T15:34:29.749Z"
+  },
+  {
+   "series": "L5412/H",
+   "value_m": 86.733,
+   "datum": "DNG",
+   "valid_from": null
+  },
+  {
+   "series": "L5442/H",
+   "value_m": 394.64,
+   "datum": "DNG",
+   "valid_from": "1972-06-30T19:04:50.488Z"
+  },
+  {
+   "series": "L6023/H",
+   "value_m": 303.43,
+   "datum": "DNG",
+   "valid_from": "1971-07-10T08:55:18.658Z"
+  },
+  {
+   "series": "L6050/H",
+   "value_m": 22.852,
+   "datum": "DNG",
+   "valid_from": "1985-03-30T03:21:13.245Z"
+  },
+  {
+   "series": "L6290/H",
+   "value_m": 444.883,
+   "datum": "DNG",
+   "valid_from": "1977-02-13T03:58:02.685Z"
+  },
+  {
+   "series": "L6470/H",
+   "value_m": 624.236,
+   "datum": "DNG",
+   "valid_from": "1972-07-24T03:57:14.473Z"
+  },
+  {
+   "series": "L6530/H",
+   "value_m": 2.9,
+   "datum": "DNG",
+   "valid_from": null
+  },
+  {
+   "series": "L6861/H",
+   "value_m": 54.037,
+   "datum": "DNG",
+   "valid_from": "2042-11-12T18:32:54.610Z"
+  },
+  {
+   "series": "L6900/H",
+   "value_m": 58.016,
+   "datum": "DNG",
+   "valid_from": "2058-08-16T18:58:00.267Z"
+  },
+  {
+   "series": "L6990/H",
+   "value_m": 406,
+   "datum": "DNG",
+   "valid_from": "2063-08-10T06:10:37.047Z"
+  },
+  {
+   "series": "L7620/H",
+   "value_m": 68.06,
+   "datum": "DNG",
+   "valid_from": null
+  },
+  {
+   "series": "L8640/H",
+   "value_m": 637.233,
+   "datum": "DNG",
+   "valid_from": null
+  }
+ ],
+ "dropped": {
+  "zero_datum_unknown": 1
+ },
+ "unknown": 0
+}

@@ -1,4 +1,15 @@
 import { emptyNormalised, type Normalised, type Registry, SchemaDrift, type TimeConvention } from '@rws/core';
+import {
+  TIME as BE3_TIME,
+  normaliseLayer as normaliseBe3Layer,
+  normaliseStations as normaliseBe3Stations,
+  normaliseValues as normaliseBe3Values,
+} from '../adapters/be-3/normalise.ts';
+import {
+  parseCatchup as parseBe3Catchup,
+  parseLayer as parseBe3Layer,
+  parseTable as parseBe3Table,
+} from '../adapters/be-3/parse.ts';
 import { TIME as CH1_TIME, normaliseCube } from '../adapters/ch-1/normalise.ts';
 import { parseCube } from '../adapters/ch-1/parse.ts';
 import { TIME as CH2_TIME, normaliseFeatures } from '../adapters/ch-2/normalise.ts';
@@ -22,6 +33,8 @@ import { TIME as FR3_TIME, normaliseSerie } from '../adapters/fr-3/normalise.ts'
 import { parseSerie } from '../adapters/fr-3/parse.ts';
 import { TIME as LU1_TIME, normalise as normaliseLu1 } from '../adapters/lu-1/normalise.ts';
 import { parseCsv as parseLu1 } from '../adapters/lu-1/parse.ts';
+import { TIME as LU2_TIME, normalise as normaliseLu2 } from '../adapters/lu-2/normalise.ts';
+import { parseJson as parseLu2 } from '../adapters/lu-2/parse.ts';
 import { driftReport as driftLu6, normalise as normaliseLu6 } from '../adapters/lu-6/normalise.ts';
 import { parseFeatures as parseLu6 } from '../adapters/lu-6/parse.ts';
 import { TIME as NL1_TIME, normalise as normaliseNl1 } from '../adapters/nl-1/normalise.ts';
@@ -35,7 +48,8 @@ import type { SeriesRow } from './store.ts';
 // Which archived payloads the loader parses (A§7.4 step 1): adapter by source
 // ID, function by capture spec. A source or spec that is not listed here is
 // skipped: its payloads stay in the archive, unparsed, until its phase (the
-// owner-audience specs wait for P5c and P8; NL-4 is converted offline into
+// owner-audience forecasts and references wait for P8a and P7a (LU-3, LU-4, DE-2, DE-3; P5c parses LU-3 and LU-4
+// without loading them); NL-4 is converted offline into
 // registry/thresholds/nl-4.csv, never loaded from the archive).
 
 export type LoadContext = {
@@ -330,6 +344,47 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       },
     },
   },
+  // P5c, owner audience: SPW's KiWIS. The layers (the latest value of every series, every 10 minutes) and the
+  // catch-up's values name their series (`<station_no>/<stationparameter_no>`) and state each stamp's offset; the
+  // catch-up's list roots and the daily timeseries lists are parsed strictly (drift) and store nothing; the station
+  // list gives the gauge zeros (m DNG) of the stage series.
+  'BE-3': {
+    version: 1,
+    specs: {
+      'be-3-values': { maxBytes: 2 * MIB, needsVariant: false, run: (b, c) => normaliseBe3Layer(parseBe3Layer(b), c) },
+      'be-3-catchup': {
+        maxBytes: 24 * MIB,
+        needsVariant: false,
+        run: (b, c) => {
+          const doc = parseBe3Catchup(b);
+          return doc.kind === 'list' ? emptyNormalised() : normaliseBe3Values(doc.items, c);
+        },
+      },
+      'be-3-meta': {
+        maxBytes: 16 * MIB,
+        needsVariant: true,
+        run: (b, c) => {
+          const rows = parseBe3Table(b);
+          if (c.variant === 'stations') return normaliseBe3Stations(rows, c);
+          if (c.variant === 'timeseries-1962373' || c.variant === 'timeseries-1962340') return emptyNormalised();
+          throw new SchemaDrift('bad_variant');
+        },
+      },
+    },
+  },
+  // P5c, owner audience: AGE's per-station JSON, a twin of LU-1 in both audiences (never primary). Each file names its
+  // series by `ts_path` and states its times with their offset, so a recovered line loads too. No load window:
+  // `previousLoad` is per spec, and the 39 files of one run would each take the one before as their previous load.
+  'LU-2': {
+    version: 1,
+    specs: {
+      'lu-2-json': {
+        maxBytes: MIB,
+        needsVariant: false,
+        run: (b, c) => normaliseLu2(parseLu2(b)[0], c),
+      },
+    },
+  },
   // Station points only (registry input); the daily payload reports drift against the LU-1 registry.
   'LU-6': {
     version: 1,
@@ -350,6 +405,7 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
  * null: the source has no timestamps (station files). A source missing here counts as gated.
  */
 export const ADAPTER_TIME: Readonly<Record<string, TimeConvention | null>> = {
+  'BE-3': BE3_TIME,
   'DE-1': DE1_TIME,
   'NL-1': NL1_TIME,
   'FR-1': FR1_TIME,
@@ -361,6 +417,7 @@ export const ADAPTER_TIME: Readonly<Record<string, TimeConvention | null>> = {
   'DE-7': DE7_TIME,
   'DE-8': null,
   'LU-1': LU1_TIME,
+  'LU-2': LU2_TIME,
   'LU-6': null,
 };
 

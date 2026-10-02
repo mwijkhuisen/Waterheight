@@ -28,6 +28,7 @@ const ALIAS: Record<string, string> = {
 };
 /** Stage-2 documents (expand_validity) per spec. */
 export const STAGE2: Record<string, string> = {
+  'be-3-catchup': 'be-3-catchup-values',
   'fr-4': 'fr-4-station',
   'fr-5-sections': 'fr-5-tron',
   'lu-5-cap': 'lu-5-file',

@@ -107,9 +107,16 @@ export const Spec = z.strictObject({
     .strictObject({
       kind: z.enum(['once', 'window', 'days', 'all-resources']),
       window: Duration.optional(),
+      /** `once`: a fixed start of the window every row asks for, up to the seed's start (P5c: the BE-3 catch-up). */
+      from: z.iso.datetime().optional(),
       days: z.number().int().positive().max(31).optional(),
       pace_ms: z.number().int().nonnegative().default(1000),
       page_cap: z.number().int().positive().max(2000).default(50),
+      /** UTC hours [from, to) in which a round may run (P5c: off-peak); outside them the round waits for the next. */
+      utc_hours: z
+        .tuple([z.number().int().min(0).max(23), z.number().int().min(1).max(24)])
+        .refine(([a, b]) => a < b, 'utc_hours: from before to')
+        .optional(),
     })
     .optional(),
 });
@@ -249,6 +256,7 @@ export function loadRegistry(dir: URL = REGISTRY_DIR): Registry {
       continue;
     }
     if (spec.cron === null && spec.seed === undefined) problems.push(`${at}: neither scheduled nor seeded`);
+    if (spec.seed?.from !== undefined && spec.seed.kind !== 'once') problems.push(`${at}: seed.from needs kind once`);
     let cadence: number | null = null;
     try {
       cadence = spec.cron === null ? null : cadenceOf(spec.cron);

@@ -1,0 +1,11 @@
+{
+  "spec": "lu-2-json",
+  "source": "LU-2",
+  "synthetic": true,
+  "derived_from": "an archived payload (owner audience: not committed)",
+  "values": "every number, name and string generated, timestamps shifted by one constant whole number of days; keys, structure, identifiers, nulls, -1, 0, 9999.0 and quality codes kept (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "Diekirch",
+  "archive_key": "raw/LU-2/lu-2-json/2026/10/02/152720Z-53eb81b339e42a37.zst",
+  "source_sha256": "53eb81b339e42a37fe2e2b97690b0ef2e6e7674f3b1d4236700aaeb3fbeced65"
+}

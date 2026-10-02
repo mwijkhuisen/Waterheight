@@ -1,0 +1,8 @@
+{
+  "spec": "lu-2-json",
+  "source": "LU-2",
+  "synthetic": true,
+  "derived_from": "hand-made: a stage file whose unit is m where the registry declares cm (8 rows): withheld as unit_mismatch",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

@@ -226,10 +226,11 @@ describe('NL-1 observations', { timeout: 60_000 }, () => {
   });
 
   it('the registry sync owns the pair: a pair that leaves the registry is no longer checked', async () => {
-    // P5b: the registry holds seven pairs (docs: registry/twins.yaml); this test follows the Eijsden one.
+    // P5b: the registry holds seven public pairs (registry/twins.yaml) and, from P5c, the generated owner pairs
+    // (registry/twins/*.yaml); this test follows the Eijsden one.
     const twin = await h.t.admin.query('SELECT id, relation FROM twin WHERE id = $1', [TWIN]);
     expect(twin.rows).toEqual([{ id: TWIN, relation: { kind: 'offset', expected: 233, tolerance: 1, unit: 'cm' } }]);
-    expect(await h.count('twin')).toBe(7);
+    expect(await h.count('twin')).toBe(readRegistry().twins.length);
     const sides = await h.t.admin.query(
       `SELECT a.provider_key AS a, b.provider_key AS b, a.role AS a_role, b.role AS b_role
        FROM twin t JOIN series a ON a.id = t.series_a JOIN series b ON b.id = t.series_b WHERE t.id = $1`,
@@ -238,7 +239,7 @@ describe('NL-1 observations', { timeout: 60_000 }, () => {
     expect(sides.rows).toEqual([{ a: TAW, b: NAP, a_role: 'twin', b_role: 'primary' }]);
     const owner = h.dbAs('rws_migrator', 1);
     const input = readRegistry();
-    expect((await syncRegistry(owner.db, input)).twins).toBe(7);
+    expect((await syncRegistry(owner.db, input)).twins).toBe(input.twins.length);
     expect((await syncRegistry(owner.db, { ...input, twins: [] })).twins).toBe(0);
     expect((await h.t.admin.query('SELECT relation FROM twin WHERE id = $1', [TWIN])).rows).toEqual([{ relation: {} }]);
     const checks = (await check()).length;

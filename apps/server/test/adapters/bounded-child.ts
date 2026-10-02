@@ -4,6 +4,7 @@
 // else exits 1, and running out of memory kills it.
 import { SchemaDrift } from '@rws/core';
 import { strToU8, zipSync } from 'fflate';
+import { KIWIS_CAPS, parseLayer, parseTable, parseValues } from '../../src/adapters/_shared/kiwis/parse.ts';
 import { parseCube } from '../../src/adapters/ch-1/parse.ts';
 import { JSON_CAPS as CH2_CAPS, parseFeatures } from '../../src/adapters/ch-2/parse.ts';
 import { JSON_CAPS as CH3_CAPS, parsePlot } from '../../src/adapters/ch-3/parse.ts';
@@ -22,6 +23,9 @@ import {
 } from '../../src/adapters/fr-1/parse.ts';
 import { JSON_CAPS as FR3_CAPS, parseSerie } from '../../src/adapters/fr-3/parse.ts';
 import { parseCsv as parseLu1 } from '../../src/adapters/lu-1/parse.ts';
+import { JSON_CAPS as LU2_CAPS, parseJson as parseLu2 } from '../../src/adapters/lu-2/parse.ts';
+import { parsePercentile as parseLu3 } from '../../src/adapters/lu-3/parse.ts';
+import { parsePage as parseLu4 } from '../../src/adapters/lu-4/parse.ts';
 import { JSON_CAPS as LU6_CAPS, parseFeatures as parseLu6 } from '../../src/adapters/lu-6/parse.ts';
 import { JSON_CAPS as NL1_CAPS, parseWaarnemingen } from '../../src/adapters/nl-1/parse.ts';
 import { JSON_CAPS as NL2_CAPS, parseCollection } from '../../src/adapters/nl-2/parse.ts';
@@ -260,6 +264,26 @@ export const BODIES: Record<string, [() => string | Uint8Array, (b: Uint8Array) 
   'lu6-bytes': [() => objects(2 * MIB), parseLu6],
   'lu6-features': [() => lu6(list(LU6_CAPS.maxItems + 1, '0')), parseLu6],
   'lu6-issues': [() => lu6(list(LU6_CAPS.maxItems, '{}')), parseLu6],
+  // P5c, the owner parsers. KiWIS (BE-3 and later HIC, VMM): a body of empty objects past each document's node cap;
+  // the worst values answer within the caps (one series of 250,000 rows, its last time a cell longer than any KiWIS
+  // time), and a station table at its row cap whose last row is one cell short. AGE: LU-2 and LU-3 past their node
+  // caps; LU-4 a 4 MB page of `<` (no element) and one whose attribute is past 256 KiB.
+  'kiwis-layer-bytes': [() => objects(2 * MIB), parseLayer],
+  'kiwis-values-bytes': [() => objects(24 * MIB), parseValues],
+  'kiwis-values-rows': [
+    () =>
+      `[{"ts_id":"1","station_no":"1","stationparameter_no":"H","ts_unitsymbol":"m","columns":"Timestamp,Value,Quality Code","data":[${list(249_999, '["2030-01-01T00:00:00.000Z",1.5,200]')},["${'x'.repeat(41)}",1.5,200]]}]`,
+    parseValues,
+  ],
+  'kiwis-table-bytes': [() => objects(16 * MIB), parseTable],
+  'kiwis-table-rows': [() => `[["a","b"],${list(KIWIS_CAPS.table.maxItems - 2, '["x","y"]')},["x"]]`, parseTable],
+  'lu2-bytes': [() => `[{"data":[${list(LU2_CAPS.maxNodes, '0')}]}]`, parseLu2],
+  'lu3-bytes': [() => `{"data":[${list(6_000, '0')}]}`, parseLu3],
+  'lu4-scan': [() => '<'.repeat(4 * MIB), parseLu4],
+  'lu4-attr': [
+    () => `<cmp-dashboard-station data-to-json="${'x'.repeat(257 * 1024)}"></cmp-dashboard-station>`,
+    parseLu4,
+  ],
   // The XML floods through the NL-4 parser and through the guard's XML rule (capture validity, readXlsx).
   ...Object.fromEntries(
     Object.entries(XML_FLOODS).flatMap(([name, [build]]) => [

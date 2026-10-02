@@ -43,6 +43,123 @@ describe('seeds', () => {
     expect(infos).toContain('seed already done');
   });
 
+  it('the BE-3 catch-up (P5c) waits for its off-peak hours, then asks its fixed window 5 s apart and resumes', async () => {
+    const list = fixture('BE-3', 'be-3-catchup').body;
+    const values = fixture('BE-3', 'be-3-catchup-values').body;
+    const asked: string[] = [];
+    let fail = true;
+    server.use(
+      http.get('https://hydrometrie.wallonie.be/services/KiWIS/KiWIS', ({ request }) => {
+        const u = new URL(request.url);
+        if (u.searchParams.get('request') === 'getTimeseriesList') return new HttpResponse(list);
+        asked.push(`${u.searchParams.get('from')}..${u.searchParams.get('to')}`);
+        // One call fails transiently on the first round: the row stays open and the next round asks only it.
+        if (fail && asked.length === 3) return new HttpResponse('busy', { status: 503 });
+        return new HttpResponse(values);
+      }),
+    );
+    let now = new Date('2026-08-27T12:00:00Z');
+    const sleeps: number[] = [];
+    const infos: string[] = [];
+    // The client shares the clock: the round's deadline (05:00) is judged against it after the 503's backoff.
+    const deps = runDeps({
+      now: () => now,
+      sleep: async (ms) => void sleeps.push(ms),
+      log: { info: (_o: unknown, m?: string) => void infos.push(String(m)), warn: () => {}, error: () => {} },
+      client: { now: () => now.getTime() },
+    });
+    // 12:00 UTC is outside [0, 5): nothing is asked and the seed has not started.
+    expect(await runSeeds(only('be-3-catchup'), deps, paths(deps.root))).toBe(false);
+    expect(asked).toEqual([]);
+    expect(infos).toContain('seed waits for its hours');
+    expect((await deps.state.read<SeedState>('seeds/be-3-catchup'))?.started).toBeUndefined();
+    now = new Date('2026-08-27T01:30:00Z');
+    expect(await runSeeds(only('be-3-catchup'), deps, paths(deps.root))).toBe(false);
+    // Each group (both answer with the fixture's 120 series): a batch of 100 in one-day calls from the display start
+    // to the seed's start, then the last 20 series in one call (their bound allows eight days).
+    const group = [
+      '2026-08-24T00:00:00Z..2026-08-25T00:00:00Z',
+      '2026-08-25T00:00:00Z..2026-08-26T00:00:00Z',
+      '2026-08-26T00:00:00Z..2026-08-27T00:00:00Z',
+      '2026-08-27T00:00:00Z..2026-08-27T01:30:00Z',
+      '2026-08-24T00:00:00Z..2026-08-27T01:30:00Z',
+    ];
+    expect(asked).toEqual([...group, ...group]);
+    for (const ms of sleeps) expect(ms).toBeGreaterThanOrEqual(5000);
+    const first = asked.length;
+    fail = false;
+    now = new Date('2026-08-28T02:00:00Z');
+    expect(await runSeeds(only('be-3-catchup'), deps, paths(deps.root))).toBe(true);
+    // The second round asks only the failed call, over the first round's window (its clock is kept).
+    expect(asked.slice(first)).toEqual(['2026-08-26T00:00:00Z..2026-08-27T00:00:00Z']);
+    expect((await deps.state.read<SeedState>('seeds/be-3-catchup'))?.done_at).toBeDefined();
+  });
+
+  it('the BE-3 catch-up starts no request after its hours end; the rest resumes the next night (CR-6)', async () => {
+    const list = fixture('BE-3', 'be-3-catchup').body;
+    const values = fixture('BE-3', 'be-3-catchup-values').body;
+    const asked: string[] = [];
+    let lists = 0;
+    server.use(
+      http.get('https://hydrometrie.wallonie.be/services/KiWIS/KiWIS', ({ request }) => {
+        const u = new URL(request.url);
+        if (u.searchParams.get('request') === 'getTimeseriesList') {
+          lists += 1;
+          return new HttpResponse(list);
+        }
+        asked.push(`${u.searchParams.get('from')}..${u.searchParams.get('to')}`);
+        return new HttpResponse(values);
+      }),
+    );
+    // Every pause moves the clock: the round starts 8 s before 05:00, so the first group's list and one values call
+    // go out (04:59:52, 04:59:57) and nothing after 05:00:00.
+    let now = new Date('2026-08-27T04:59:52Z');
+    const deps = runDeps({
+      now: () => now,
+      sleep: async (ms) => {
+        now = new Date(now.getTime() + ms);
+      },
+      client: { now: () => now.getTime() },
+    });
+    expect(await runSeeds(only('be-3-catchup'), deps, paths(deps.root))).toBe(false);
+    expect([lists, asked.length]).toEqual([1, 1]);
+    expect(now.getTime()).toBeGreaterThan(Date.parse('2026-08-27T05:00:00Z'));
+    const group = [
+      '2026-08-24T00:00:00Z..2026-08-25T00:00:00Z',
+      '2026-08-25T00:00:00Z..2026-08-26T00:00:00Z',
+      '2026-08-26T00:00:00Z..2026-08-27T00:00:00Z',
+      '2026-08-27T00:00:00Z..2026-08-27T04:59:52Z',
+      '2026-08-24T00:00:00Z..2026-08-27T04:59:52Z',
+    ];
+    expect(asked).toEqual(group.slice(0, 1));
+    // The next night: the first group asks only what it did not fetch (its seen ids), the second group all of it.
+    now = new Date('2026-08-28T00:10:00Z');
+    expect(await runSeeds(only('be-3-catchup'), deps, paths(deps.root))).toBe(true);
+    expect(asked.slice(1)).toEqual([...group.slice(1), ...group]);
+    expect(lists).toBe(3);
+  });
+
+  it('the BE-3 catch-up starts no request at the very end of its hours, as its hour gate (R2-SR-8)', async () => {
+    const asked: string[] = [];
+    server.use(
+      http.get('https://hydrometrie.wallonie.be/services/KiWIS/KiWIS', ({ request }) => {
+        asked.push(new URL(request.url).searchParams.get('request') ?? '');
+        return new HttpResponse(fixture('BE-3', asked.length === 1 ? 'be-3-catchup' : 'be-3-catchup-values').body);
+      }),
+    );
+    // The list goes out at 04:59:55; the first values call would be due at 05:00:00 exactly, after the 5 s pause.
+    let now = new Date('2026-08-27T04:59:55Z');
+    const deps = runDeps({
+      now: () => now,
+      sleep: async (ms) => {
+        now = new Date(now.getTime() + ms);
+      },
+      client: { now: () => now.getTime() },
+    });
+    expect(await runSeeds(only('be-3-catchup'), deps, paths(deps.root))).toBe(false);
+    expect(asked).toEqual(['getTimeseriesList']);
+  });
+
   it('pace FR-1 at ≥ 2 s per request, day by day, within one month', async () => {
     const sleeps: number[] = [];
     const windows: string[] = [];

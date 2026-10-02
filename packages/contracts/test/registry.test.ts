@@ -102,7 +102,7 @@ describe('registry', () => {
         ?.series.filter((o) => o.audience === 'off')
         .map((o) => o.key);
     expect(offKeys('LU-1')).toEqual(['bollendorf', 'gemund-our']);
-    expect(offKeys('LU-2')).toEqual(['bollendorf', 'gemuend-our']);
+    expect(offKeys('LU-2')).toEqual(['bollendorf', 'gemund-our']);
     expect(offKeys('LU-3')).toEqual(['perl', 'stadtbredimus', 'wasserbillig']);
   });
 

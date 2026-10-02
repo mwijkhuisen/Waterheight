@@ -8,6 +8,8 @@
 - the `load` check fails with `load_twin`, or a log line with `"alert":"twin_breach"` or one of the NL-1 alerts `unregistered_method`, `unknown_quality`, `conflict`, `registered_dropped` (§3, §4), or, from P5a, `datum_mismatch` (CH-1 and CH-3) or `unknown_quality` (FR-1), or, from P5b, `gauge_zero_withheld` (DE-8), `label_offset_changed` or `label_offset_unknown` (LU-1: `docs/runbooks/label-offset.md`) or `dst_gate` (§3, §4);
 - a GitHub issue "Contract drift: the nightly live check failed" (§7).
 
+The owner-audience sources (BE-3, LU-2; later LU-3, LU-4) never page and never reach public health: their drift codes, quarantines and twin breaches are in `docs/runbooks/owner-drift.md` (P5c).
+
 By design (A§7.4 step 5) a payload that the strict parser does not recognise is set aside **alone**. Its batch row becomes `quarantined` with a fixed error code, one alert line is logged, and the load cursor moves on. Nothing of that payload is stored. Every other payload and source keeps loading. Nothing retries it by itself: after a fix you replay it (`docs/runbooks/replay.md`). A failure that is not the payload's (the database, a grant, the archive) is never quarantined: the loader stalls, alerts `load_stalled` and goes on by itself once the cause is fixed (§6).
 
 A quarantine can leave a gap. The hourly `de-1-series` windows are 6 h long and overlap, so one quarantined payload leaves no gap once later ones load. Several in a row can.

@@ -1,0 +1,8 @@
+{
+  "spec": "lu-2-json",
+  "source": "LU-2",
+  "synthetic": true,
+  "derived_from": "hand-made: an Esch-Sûre-like dam file: unit m, an absolute level (m NN, NG95), 48 rows of 15 minutes",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

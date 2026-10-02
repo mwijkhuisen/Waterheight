@@ -1,0 +1,8 @@
+{
+  "spec": "be-3-values",
+  "source": "BE-3",
+  "synthetic": true,
+  "derived_from": "hand-made: a getTimeseriesValueLayer answer of the discharge group: Q and QADM, the m3/s spelling, a QADM at -1 one step ahead, a value from the future, a unit mismatch, two ts_ids under one key, zero and negative discharge",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

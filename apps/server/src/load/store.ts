@@ -483,6 +483,12 @@ export async function cursors(db: Kysely<DB>): Promise<Map<string, number>> {
   return new Map(rows.map((r) => [r.manifest_file, Number(r.byte_offset)]));
 }
 
+/** The owner-audience sources (P5c): their manifest lines stay out of the public loader numbers (KG-075). */
+export async function ownerSources(db: Kysely<DB>): Promise<Set<string>> {
+  const { rows } = await sql<{ id: string }>`SELECT id FROM source WHERE audience = 'owner'`.execute(db);
+  return new Set(rows.map((r) => r.id));
+}
+
 /** What a run of manifest lines says about fetching one source, folded in line order. */
 export type FetchFold = {
   lastOk: Date | null;

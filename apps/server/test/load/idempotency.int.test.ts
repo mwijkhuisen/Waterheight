@@ -14,6 +14,9 @@ import { nothingToLoad } from '../../src/load/pipeline.ts';
 import { replay } from '../../src/load/replay.ts';
 import { EMMERICH_W, type Harness, harness, measurements, RUHRWEHR_W, SERIES_URL } from './harness.ts';
 
+/** An empty backlog, over every line and over the public sources' lines (P5c, KG-075). */
+const NONE = { files: 0, bytes: 0, age_s: null };
+
 // The loader on the recorded DE-1 archive (issue #17): replaying it gives the
 // identical checksum, no new row and no revision; one changed value gives
 // exactly one revision; nothing is lost, skipped or applied twice.
@@ -289,7 +292,13 @@ describe('load and replay of the fixture archive', () => {
     const torn = '{"v":1,"source":"DE-1","spec":"de-1-basin","torn'.length;
     expect((await cursor())['2026-09-30.jsonl']).toBe((sizes['2026-09-30.jsonl'] as number) - torn);
     // A torn last line is still being written: backlog bytes, but no unconsumed line to age.
-    expect(await loader.backlog()).toEqual({ files: 1, bytes: torn, age_s: null });
+    expect(await loader.backlog()).toEqual({
+      files: 1,
+      bytes: torn,
+      age_s: null,
+      // P5c (KG-075): what public health shows, the lines of non-owner sources; a torn line names none and counts.
+      public: { files: 1, bytes: torn, age_s: null },
+    });
     // Nor does it hold up the checksums and the nightly jobs if it is never completed (review N7).
     expect(nothingToLoad(await loader.backlog())).toBe(true);
     // The torn line ends as a damaged one, and another follows. Damaged whole lines are skipped when the backlog is
@@ -302,7 +311,7 @@ describe('load and replay of the fixture archive', () => {
     expect(await loader.backlog(later)).toMatchObject({ files: 1, age_s: 1200 });
     expect(nothingToLoad(await loader.backlog(later))).toBe(false);
     expect(await loader.tick()).toEqual({ lines: 3, loaded: 0 });
-    expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
+    expect(await loader.backlog()).toEqual({ ...NONE, public: NONE });
     h.alerts.length = 0;
   });
 });

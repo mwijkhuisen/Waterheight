@@ -414,6 +414,27 @@ specs:
     retention: forever
     validity: { format: json, count: '', min: 100 }
 
+  # The catch-up (P5c, run once, off-peak): each group's series list (the ts_path → ts_id resolution of this run),
+  # then getTimeseriesValues for every H/H_sonde/Habs/Habs_sonde/Q/QADM series of the group from the display start
+  # (2026-08-24) to the seed's start, built by adapters/_shared/kiwis: at most 100 ts_ids and 250,000 values a call
+  # (one-day windows), timezone=UTC, explicit Z bounds, 5 s apart; resumable per call (seen ids). About 400 calls.
+  # Its report goes to the owner status only.
+  - id: be-3-catchup
+    source: BE-3
+    version: 1
+    cron: null
+    request:
+      url: https://hydrometrie.wallonie.be/services/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&format=json&request=getTimeseriesList&timeseriesgroup_id={group}&returnfields=station_no,station_name,ts_id,ts_path,stationparameter_no,ts_unitsymbol,site_no,coverage
+      expand: true
+      max_expand: 500
+      expand_validity: { format: json, required: ['0.ts_id', '0.data'], count: '', min: 1 }
+    variants: { values: [{ group: '1962373' }, { group: '1962340' }], space_ms: 5000 }
+    timeout: metadata
+    max_bytes: 25165824
+    retention: obs
+    validity: { format: json, count: '', min: 100 }
+    seed: { kind: once, from: '2026-08-24T00:00:00Z', pace_ms: 5000, utc_hours: [0, 5] }
+
   # ------------------------------------------------------------------ FR: Hub'Eau, Vigicrues
   - id: fr-1-obs
     source: FR-1

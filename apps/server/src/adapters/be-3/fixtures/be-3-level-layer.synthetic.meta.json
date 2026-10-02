@@ -1,0 +1,8 @@
+{
+  "spec": "be-3-values",
+  "source": "BE-3",
+  "synthetic": true,
+  "derived_from": "hand-made: a getTimeseriesValueLayer answer of the level group: same-name stations told apart by number, H, H_sonde, Habs and Habs_sonde, a +02:00 stamp, nulls, a range case, an unknown key and a unit mismatch",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

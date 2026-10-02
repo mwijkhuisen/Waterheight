@@ -114,21 +114,24 @@ describe('registry sync', { timeout: 60_000 }, () => {
       { source_id: 'FR-1', n: 5 },
       { source_id: 'LU-1', n: 2 },
     ]);
-    // DE-1 238, NL-1 85, FR-1 550, FR-3 26, CH-1 412, CH-2 380, DE-7 251 and LU-1 42 series (registry/stations/*.yaml).
-    expect(await h.count('series')).toBe(1984);
+    // DE-1 238, NL-1 85, FR-1 550, FR-3 26, CH-1 412, CH-2 380, DE-7 251 and LU-1 42 series, and from P5c the owner
+    // audience's BE-3 607 and LU-2 39 (registry/stations/*.yaml).
+    expect(await h.count('series')).toBe(2630);
     // A cm series without a published gauge zero has a local datum: 8 before P5b, and the 41 LU-1 gauges in cm
     // (their zeros are LU-4's, an owner source; Esch-Sure is a level in m NG95). The 251 DE-7 gauges are NHN.
     const local = (
       await h.t.admin.query("SELECT count(*)::int AS n FROM series WHERE native_unit = 'cm' AND datum = 'LOCAL'")
     ).rows;
-    expect(local).toEqual([{ n: 49 }]);
+    // P5c: and the 38 LU-2 twins in cm (owner rows carry no datum; a stage's is LOCAL; Esch-Sûre is NG95).
+    expect(local).toEqual([{ n: 87 }]);
     const tier = (await h.t.admin.query('SELECT tier, count(*)::int AS n FROM station GROUP BY 1 ORDER BY 1')).rows;
     expect(tier).toEqual([
       // DE-1: 41 and 158; NL-1: 31 and 41 (P5a: the 7 Belgian points); FR-1: 40 and 264 (review CR-4: the bold
       // Torgny); CH-1: 17 and 210; the 15 FR-3 and 207 CH-2 twin stations are tier 2. P5b: DE-7 9 and 242; LU-1 11
       // (Bollendorf, withheld, among them) and 31 (28 primary, 3 twins).
-      { tier: 1, n: 149 },
-      { tier: 2, n: 1168 },
+      // P5c: BE-3 19 and 313, LU-2 39 (twins, tier 2).
+      { tier: 1, n: 168 },
+      { tier: 2, n: 1520 },
     ]);
   });
 
@@ -163,6 +166,9 @@ describe('registry sync', { timeout: 60_000 }, () => {
       await h.t.admin.query('SELECT source_id, role, count(*)::int AS n FROM station_alias GROUP BY 1, 2 ORDER BY 1, 2')
     ).rows;
     expect(aliases).toEqual([
+      // P5c: 16 SPW stations whose every series is a twin of a public gauge (partners, border gauges, Lixhe Aval).
+      { source_id: 'BE-3', role: 'primary', n: 316 },
+      { source_id: 'BE-3', role: 'twin', n: 16 },
       { source_id: 'CH-1', role: 'primary', n: 227 },
       { source_id: 'CH-2', role: 'twin', n: 207 },
       { source_id: 'DE-1', role: 'mirror', n: 5 },
@@ -173,6 +179,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
       { source_id: 'FR-3', role: 'twin', n: 15 },
       { source_id: 'LU-1', role: 'primary', n: 39 },
       { source_id: 'LU-1', role: 'twin', n: 3 },
+      { source_id: 'LU-2', role: 'twin', n: 39 },
       { source_id: 'NL-1', role: 'primary', n: 72 },
     ]);
     const mirrors = (
@@ -188,11 +195,19 @@ describe('registry sync', { timeout: 60_000 }, () => {
       'e020e651-e422-46d3-ae28-34887c5a4a8e/W',
       'efe13a3d-f239-4655-9c13-4ac56dfa4478/W',
     ]);
+    // A station with no primary series (only mirrors or twins) is in neither family. P5c: an SPW station whose H is a
+    // twin of a public gauge may still have a primary Q (Chooz 8702), which the owner family shows.
+    const noPrimary = (
+      await h.t.admin.query(
+        `SELECT DISTINCT s.station_id FROM series s WHERE s.source_id <> 'NL-1'
+           AND NOT EXISTS (SELECT 1 FROM series p WHERE p.station_id = s.station_id AND p.role = 'primary')`,
+      )
+    ).rows.map((r) => r.station_id as string);
+    expect(noPrimary.length).toBeGreaterThan(200);
     const api = await h.t.connectAs('rws_api');
     for (const view of [VIEWS.public.station, VIEWS.owner.station]) {
       const client = view === VIEWS.public.station ? api : await h.t.connectAs('rws_owner_api');
-      const seen = (await client.query(`SELECT id FROM ${view} WHERE id = ANY($1)`, [mirrors.map((m) => m.station_id)]))
-        .rows;
+      const seen = (await client.query(`SELECT id FROM ${view} WHERE id = ANY($1)`, [noPrimary])).rows;
       expect(seen, view).toEqual([]);
     }
     // DE-1: 199 stations less the five mirrors and NEUWIED STADT (off); 238 series less six mirror series and one
@@ -209,7 +224,8 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const owner = h.dbAs('rws_migrator', 1);
     const result = await syncRegistry(owner.db, readRegistry());
     await owner.close();
-    expect(result).toMatchObject({ stations: 1317, series: 1984, deactivated: 0, twins: 7, references: 742 });
+    // P5c: 332 BE-3 and 39 LU-2 stations; 7 public twin pairs, 38 BE-3 and 39 LU-1/LU-2 owner pairs.
+    expect(result).toMatchObject({ stations: 1688, series: 2630, deactivated: 0, twins: 84, references: 742 });
     expect((await h.t.admin.query('SELECT id, provider_key, active FROM series ORDER BY id')).rows).toEqual(before);
   });
 
@@ -496,7 +512,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const dir = mkdtempSync(`${tmpdir()}/rws-registry-`);
     cpSync(new URL('../../../../registry/', import.meta.url), dir, { recursive: true });
     const url = pathToFileURL(`${dir}/`);
-    expect(readRegistry(url).stations).toHaveLength(1984);
+    expect(readRegistry(url).stations).toHaveLength(2630);
     // An owner source that loses its private_basis.
     const sources = read(`${dir}/sources.yaml`, 'utf8');
     writeFileSync(
@@ -511,7 +527,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     writeFileSync(`${dir}/permissions/BE-3.md`, '---\nsource: BE-3\n---\n');
     expect(() => readRegistry(url)).toThrow(/permissions/);
     rmSync(`${dir}/permissions/BE-3.md`);
-    expect(readRegistry(url).stations).toHaveLength(1984);
+    expect(readRegistry(url).stations).toHaveLength(2630);
     // A withholding record names registered series that are audience off, else the sync refuses it.
     const record = read(`${dir}/permissions/LU-1.md`, 'utf8');
     writeFileSync(`${dir}/permissions/LU-1.md`, record.replace('[Bollendorf, Gemünd_Our]', '[Bollendorf, Diekirch]'));

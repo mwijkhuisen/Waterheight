@@ -1,0 +1,53 @@
+{
+ "record": {
+  "station": "stadtbredimus",
+  "page_id": "Stadtbredimus",
+  "levels": {
+   "yellow": 249,
+   "orange": 103,
+   "red": 968
+  },
+  "hq": [
+   {
+    "kind": "HQ100",
+    "value_cm": 7174
+   },
+   {
+    "kind": "HQ50",
+    "value_cm": 342
+   },
+   {
+    "kind": "HQ20",
+    "value_cm": 722
+   },
+   {
+    "kind": "HQ10",
+    "value_cm": 938
+   },
+   {
+    "kind": "HQ5",
+    "value_cm": 714
+   }
+  ],
+  "zero": {
+   "value_m": 549.6,
+   "datum": "NG95",
+   "valid_from": null
+  },
+  "pk_km": 995.59,
+  "forecast_limit_h": 24,
+  "forecast_slug": "stadtbredimus",
+  "position": {
+   "lon": 6.35961974706615,
+   "lat": 49.569063883545994,
+   "from": "lu-6"
+  },
+  "banner": "synthetic-7",
+  "operator": "synthetic-13"
+ },
+ "dropped": {
+  "bad_date": 1,
+  "bad_coordinates": 1,
+  "coordinates_from_lu6": 1
+ }
+}

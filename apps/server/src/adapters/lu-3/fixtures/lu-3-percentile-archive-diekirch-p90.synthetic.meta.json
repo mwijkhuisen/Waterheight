@@ -1,0 +1,11 @@
+{
+  "spec": "lu-3-percentile",
+  "source": "LU-3",
+  "synthetic": true,
+  "derived_from": "an archived payload (owner audience: not committed)",
+  "values": "every number, name and string generated, timestamps shifted by one constant whole number of days; keys, structure, identifiers, nulls, -1, 0, 9999.0 and quality codes kept (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "diekirch/90",
+  "archive_key": "raw/LU-3/lu-3-percentile/2026/10/02/154521Z-a30e2d6a2b8c55fa.zst",
+  "source_sha256": "a30e2d6a2b8c55fa45522166b8f0a24b3694ce2abb37063067ba151ceb5df8c5"
+}

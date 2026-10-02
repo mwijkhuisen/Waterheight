@@ -1,0 +1,247 @@
+{
+ "obs": [
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T13:30:00.000Z",
+   "value": 407.23,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T13:45:00.000Z",
+   "value": 672.919,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T14:00:00.000Z",
+   "value": 795.693,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T14:15:00.000Z",
+   "value": 402.954,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T14:30:00.000Z",
+   "value": 958.768,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T14:45:00.000Z",
+   "value": 707.217,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T15:00:00.000Z",
+   "value": 895.497,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T15:15:00.000Z",
+   "value": 766.348,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T15:30:00.000Z",
+   "value": 508.102,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T15:45:00.000Z",
+   "value": 385.009,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T16:00:00.000Z",
+   "value": 217.359,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T16:15:00.000Z",
+   "value": 990.325,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T16:30:00.000Z",
+   "value": 892.287,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T16:45:00.000Z",
+   "value": 667.817,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T17:00:00.000Z",
+   "value": 967.334,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T17:15:00.000Z",
+   "value": 334.846,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T17:30:00.000Z",
+   "value": 647.065,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T17:45:00.000Z",
+   "value": 351.542,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T18:00:00.000Z",
+   "value": 598.351,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T18:15:00.000Z",
+   "value": 169.248,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T18:30:00.000Z",
+   "value": 530.054,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T18:45:00.000Z",
+   "value": 515.747,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T19:00:00.000Z",
+   "value": 553.836,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T19:15:00.000Z",
+   "value": 339.839,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T19:30:00.000Z",
+   "value": 513,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T19:45:00.000Z",
+   "value": 310,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T20:00:00.000Z",
+   "value": 844,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T20:15:00.000Z",
+   "value": 107.955,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T20:30:00.000Z",
+   "value": 235.652,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T20:45:00.000Z",
+   "value": 581.617,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T21:00:00.000Z",
+   "value": 721.061,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T21:15:00.000Z",
+   "value": 982.909,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T21:30:00.000Z",
+   "value": 417.16,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T21:45:00.000Z",
+   "value": 443.179,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T22:00:00.000Z",
+   "value": 950.651,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T22:15:00.000Z",
+   "value": 215.86,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T22:30:00.000Z",
+   "value": 739.173,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T22:45:00.000Z",
+   "value": 342.37,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T23:00:00.000Z",
+   "value": 641.087,
+   "qc": 1
+  },
+  {
+   "series": "0/11/W_out/15m.Cmd.RelAbs.P",
+   "ts": "2031-07-10T23:15:00.000Z",
+   "value": 952.895,
+   "qc": 1
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0
+}

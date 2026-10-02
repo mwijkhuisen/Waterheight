@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { kiwisUrlProblems, MAX_IDS, MAX_VALUES, MIN_STEP_MS } from '../../src/adapters/_shared/kiwis/request.ts';
+import { adapter as be3 } from '../../src/adapters/be-3/capture.ts';
 import { budgets, requestsPerMinute } from '../../src/capture/budget.ts';
 import { baseRequest, variantKey } from '../../src/capture/specs.ts';
-import { registry, spec } from './helpers.ts';
+import type { Row } from '../../src/http/types.ts';
+import { fixture, registry, spec } from './helpers.ts';
 
 // Criterion "[CI] The budget config test holds" (issue #16; A§7.3), computed
 // from registry/capture.yaml × the seed files, never a constant.
@@ -80,7 +83,54 @@ describe('request budgets', () => {
         .filter((s) => s.source === 'BE-3')
         .map((s) => s.id)
         .sort(),
-    ).toEqual(['be-3-meta', 'be-3-values']);
+    ).toEqual(['be-3-catchup', 'be-3-meta', 'be-3-values']);
+  });
+
+  it('BE-3 catch-up (P5c): seed only, off-peak, 5 s apart, from the display start, KiWIS call limits', () => {
+    const s = spec('be-3-catchup');
+    expect([s.cron, s.seed?.kind, s.seed?.from, s.seed?.utc_hours]).toEqual([
+      null,
+      'once',
+      '2026-08-24T00:00:00Z',
+      [0, 5],
+    ]);
+    expect(s.seed?.pace_ms).toBeGreaterThanOrEqual(5000);
+    expect(s.variants?.space_ms).toBeGreaterThanOrEqual(5000);
+    expect(s.rows.map((r) => r.group)).toEqual(['1962373', '1962340']);
+    // Every call the expand builds over the longest window this release can have stays within the KiWIS limits.
+    const list = JSON.parse(fixture('BE-3', 'be-3-catchup').body.toString('utf8')) as unknown[];
+    const many = [
+      list[0],
+      ...Array.from({ length: 330 }, (_, i) => [`${i}`, 'x', `${100000 + i}`, 'p', 'H', 'm', 'DGH', '']),
+    ];
+    const window = { from: new Date('2026-08-24T00:00:00Z'), to: new Date('2027-01-01T00:00:00Z') };
+    const { reqs } = be3.expand?.({
+      req: baseRequest(s, s.rows[0] as Row),
+      doc: many,
+      now: window.to,
+      seen: new Set(),
+      seed: true,
+      window,
+      checkUrl: (raw) => raw,
+    }) ?? { reqs: [] };
+    // 130 days: three batches of 100 in one-day calls, and the last 30 series in five-day calls (26).
+    expect(reqs.length).toBe(3 * 130 + 26);
+    expect(reqs.length).toBeLessThanOrEqual(s.request.max_expand);
+    for (const r of reqs) {
+      const u = new URL(r.url);
+      expect(u.hostname).toBe('hydrometrie.wallonie.be');
+      expect((u.searchParams.get('ts_id') ?? '').split(',').length).toBeLessThanOrEqual(MAX_IDS);
+      const span = Date.parse(u.searchParams.get('to') ?? '') - Date.parse(u.searchParams.get('from') ?? '');
+      expect((u.searchParams.get('ts_id') ?? '').split(',').length * (span / MIN_STEP_MS + 1)).toBeLessThanOrEqual(
+        MAX_VALUES,
+      );
+      expect(kiwisUrlProblems(r.url)).toEqual([]);
+    }
+  });
+
+  it('every KiWIS URL of the registry asks in UTC, without a wildcard or the frontend services (catalogue §2.4)', () => {
+    for (const s of registry.specs.filter((x) => x.source === 'BE-3'))
+      for (const row of s.rows) expect([s.id, kiwisUrlProblems(baseRequest(s, row).url)]).toEqual([s.id, []]);
   });
 
   it('LU-2 ≤ 39 and LU-3 ≤ 55 requests/hour; LU-4 weekly', () => {

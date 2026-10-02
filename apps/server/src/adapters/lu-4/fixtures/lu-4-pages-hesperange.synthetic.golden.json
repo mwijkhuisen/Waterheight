@@ -1,0 +1,57 @@
+{
+ "record": {
+  "station": "hesperange",
+  "page_id": "Hesperange",
+  "levels": {
+   "yellow": null,
+   "orange": 580,
+   "red": 274
+  },
+  "hq": [
+   {
+    "kind": "HQ100",
+    "value_cm": 811
+   },
+   {
+    "kind": "HQ50",
+    "value_cm": 434
+   },
+   {
+    "kind": "HQ20",
+    "value_cm": 628
+   },
+   {
+    "kind": "HQ10",
+    "value_cm": 914
+   },
+   {
+    "kind": "HQ5",
+    "value_cm": 808
+   },
+   {
+    "kind": "HQ2",
+    "value_cm": 648
+   }
+  ],
+  "zero": {
+   "value_m": 844.62,
+   "datum": "NG95",
+   "valid_from": null
+  },
+  "pk_km": 81.53,
+  "forecast_limit_h": 24,
+  "forecast_slug": "hesperange",
+  "position": {
+   "lon": 6.149079187263286,
+   "lat": 49.586287410339544,
+   "from": "lu-6"
+  },
+  "banner": "synthetic-6",
+  "operator": "synthetic-12"
+ },
+ "dropped": {
+  "bad_date": 1,
+  "bad_coordinates": 1,
+  "coordinates_from_lu6": 1
+ }
+}
