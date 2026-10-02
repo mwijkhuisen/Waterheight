@@ -14,6 +14,8 @@ export type Req = {
   variant: string;
   /** A provider resource id recorded as seen once this request succeeds (LU-5). */
   seen_id?: string;
+  /** This request's timeout class when it differs from its spec's (P5c: a KiWIS list root, then data calls). */
+  timeout?: 'normal' | 'metadata';
 };
 
 /** A final (non-redirect) response with its decoded body. */
@@ -96,6 +98,8 @@ export type ExpandContext = {
   checkUrl: (raw: string) => string | null;
   /** True during the §0.1b harvest (follow every page). */
   seed: boolean;
+  /** The window of the root request the document answered (P5c: the BE-3 catch-up splits it); null for a page. */
+  window: { from: Date; to: Date } | null;
 };
 
 export type Expansion = {

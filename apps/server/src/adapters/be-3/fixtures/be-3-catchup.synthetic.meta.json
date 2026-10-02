@@ -1,0 +1,8 @@
+{
+  "spec": "be-3-catchup",
+  "source": "BE-3",
+  "synthetic": true,
+  "derived_from": "hand-made: a getTimeseriesList table of the catch-up root (header row, 120 series)",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

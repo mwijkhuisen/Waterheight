@@ -1,3 +1,4 @@
+import { adapter as be3 } from '../adapters/be-3/capture.ts';
 import { adapter as ch3 } from '../adapters/ch-3/capture.ts';
 import { adapter as ch4 } from '../adapters/ch-4/capture.ts';
 import { adapter as de1 } from '../adapters/de-1/capture.ts';
@@ -28,6 +29,7 @@ export const ADAPTERS: Readonly<Record<string, Adapter>> = {
   'LU-1': lu1,
   'LU-2': lu2,
   'LU-5': lu5,
+  'BE-3': be3,
   'CH-3': ch3,
   'CH-4': ch4,
 };

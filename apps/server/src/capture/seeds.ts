@@ -62,6 +62,14 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
     deps.log.info({ spec: spec.id }, 'seed already done');
     return true;
   }
+  // Off-peak only (P5c, the BE-3 catch-up): outside its hours a round neither starts the seed nor moves its clock.
+  if (seed.utc_hours !== undefined) {
+    const hour = deps.now().getUTCHours();
+    if (hour < seed.utc_hours[0] || hour >= seed.utc_hours[1]) {
+      deps.log.info({ spec: spec.id }, 'seed waits for its hours');
+      return false;
+    }
+  }
   if (st.started !== undefined && deps.now().getTime() - Date.parse(st.started) >= SEED_MAX_MS) {
     // Not silent (N3): the log, and the daily report of the seed's audience.
     deps.log.warn({ spec: spec.id, done: st.done.length }, 'seed incomplete after 31 days: no more rounds');
@@ -90,7 +98,9 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
     const window =
       seed.kind === 'window' && seed.window
         ? { from: new Date(now.getTime() - durationMs(seed.window)), to: now }
-        : undefined;
+        : seed.from !== undefined
+          ? { from: new Date(seed.from), to: now }
+          : undefined;
     await save({ series: spec.rows.length });
     for (const [i, row] of spec.rows.entries()) {
       const key = `row${i}`;

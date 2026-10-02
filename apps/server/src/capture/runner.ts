@@ -171,7 +171,8 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     capped: false,
     incomplete: false,
   };
-  const timeoutMs = spec.timeout === 'metadata' ? METADATA_TIMEOUT_MS : TOTAL_TIMEOUT_MS;
+  const timeoutOf = (req: Req) =>
+    (req.timeout ?? spec.timeout) === 'metadata' ? METADATA_TIMEOUT_MS : TOTAL_TIMEOUT_MS;
   const spaceMs = opts.spaceMs ?? spec.variants?.space_ms ?? 0;
   const maxExpand = opts.maxExpand ?? spec.request.max_expand;
 
@@ -274,7 +275,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
       { ...req, headers },
       {
         maxBytes: spec.max_bytes,
-        timeoutMs,
+        timeoutMs: timeoutOf(req),
         ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
       },
     );
@@ -457,6 +458,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
         now: end,
         seen,
         seed: opts.seed === true,
+        window,
         checkUrl: (raw) => {
           const u = deps.client.checkUrl(spec.source, raw);
           return typeof u === 'string' ? null : u.href;

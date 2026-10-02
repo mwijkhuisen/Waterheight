@@ -77,13 +77,17 @@ describe('status files', () => {
     for (const host of [...registry.hosts.values()].flat()) expect(pub, host).not.toContain(host);
     expect(pub).not.toMatch(/https?:\/\//);
     const p = CaptureStatus.parse(JSON.parse(pub));
-    expect(p.owner_specs).toEqual({ fresh: ownerSpecs.length - 1, total: ownerSpecs.length }); // lu-3 is stale
+    // Scheduled owner specs only (the seed-only BE-3 catch-up has no cadence to be fresh against); lu-3 is stale.
+    const scheduledOwner = registry.specs
+      .filter((s) => s.audience === 'owner' && s.cadence_s !== null)
+      .map((s) => s.id);
+    expect(p.owner_specs).toEqual({ fresh: scheduledOwner.length - 1, total: scheduledOwner.length });
     expect(p.specs.every((s) => registry.sources.get(s.source)?.audience === 'public')).toBe(true);
     expect(p.seeds.map((s) => s.spec)).toEqual(['fr-1-obs']);
     // The owner file: owner specs and the LU-2 seed, no owner_specs.
     const o = CaptureStatus.parse(JSON.parse(own));
     expect(o.owner_specs).toBeUndefined();
-    expect(o.specs.map((s) => s.spec).sort()).toEqual(ownerSpecs.sort());
+    expect(o.specs.map((s) => s.spec).sort()).toEqual(scheduledOwner.sort());
     expect(o.seeds.map((s) => s.spec)).toEqual(['lu-2-json']);
     expect(o.specs.find((s) => s.spec === 'be-3-values')?.last_failure_status).toBe(503);
     expect(statSync(join(paths.statusDir, 'capture.json')).mode & 0o777).toBe(0o644);

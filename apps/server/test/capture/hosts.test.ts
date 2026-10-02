@@ -82,6 +82,7 @@ describe('per-source allowlist', () => {
       now: new Date(),
       seen: new Set(),
       seed: false,
+      window: null,
       checkUrl: (raw) => {
         const u = deps.client.checkUrl('LU-5', raw);
         return typeof u === 'string' ? null : u.href;
@@ -134,6 +135,7 @@ describe('per-source allowlist', () => {
       now: new Date(),
       seen: new Set(),
       seed: true,
+      window: null,
       checkUrl: check,
     });
     expect(out?.reqs).toEqual([]);
