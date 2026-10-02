@@ -16,6 +16,13 @@ import {
 } from '../src/index.ts';
 
 describe('units (catalogue §4.5)', () => {
+  it('a product beyond the double range is drift, never ±Infinity (P5a: 1.8e306 m ×100)', () => {
+    expect(() => toCanonical('m', 1.8e306)).toThrow(SchemaDrift);
+    expect(() => toCanonical('m', -1.8e306)).toThrow(SchemaDrift);
+    expect(() => toCanonical('m', 1.8e306)).toThrow('value_out_of_range');
+    expect(toCanonical('m', 1e300)).toBe(1e302);
+  });
+
   it('converts to cm and m³/s', () => {
     expect(toCanonical('cm', 53)).toBe(53);
     expect(toCanonical('cm', -22)).toBe(-22);

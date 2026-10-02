@@ -53,6 +53,12 @@ export type Normalised = {
    * of the context), so a unit switch never stores mis-scaled values.
    */
   unitMismatch?: string[];
+  /**
+   * Gap-fill rows (P5a: the FR-3 and CH-3 seeds), keyed by the provider key of
+   * a series of the spec's fill target (`SpecLoader.fill`): stored only where
+   * that source states no value, with the backfilled bit, never as a revision.
+   */
+  fill?: ObsRow[];
 };
 
 export const emptyNormalised = (): Normalised => ({ obs: [], gaugeZeros: [], dropped: {}, unknown: 0 });

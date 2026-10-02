@@ -1,6 +1,6 @@
 import { setImmediate as yieldToLoop } from 'node:timers/promises';
 import { crc32 } from 'node:zlib';
-import { xmlOverCaps } from '@rws/core';
+import { type CsvScanOptions, SchemaDrift, scanCsv as scanCsvText, xmlOverCaps } from '@rws/core';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { Inflate } from 'fflate';
 
@@ -35,79 +35,18 @@ export function parseJson(bytes: Uint8Array): unknown {
 
 // ---------------------------------------------------------------- CSV
 
-export const CSV_MAX_ROWS = 100_000;
-export const CSV_MAX_COLUMNS = 1000;
-export const CSV_MAX_FIELD = 1024;
+export { CSV_MAX_COLUMNS, CSV_MAX_FIELD, CSV_MAX_ROWS } from '@rws/core';
 
-export type CsvOptions = {
-  delimiter: string;
-  encoding?: Encoding;
-  /** Lines starting with this prefix before the header are skipped (BfG `#` notes). */
-  commentPrefix?: string;
-  maxRows?: number;
-};
+export type CsvOptions = CsvScanOptions & { encoding?: Encoding };
 
-/**
- * A quote-aware CSV scan with the §6.7 caps: ≤ 100,000 data rows, ≤ 1,000
- * columns, fields ≤ 1 KB, and every row as wide as the header (a truncated
- * last row fails). Returns the header and the data rows.
- */
+/** `scanCsv` of packages/core on decoded bytes, failing with the same fixed reasons as a GuardFailure. */
 export function scanCsv(bytes: Uint8Array, opts: CsvOptions): { header: string[]; rows: string[][] } {
-  let text = decode(bytes, opts.encoding);
-  if (opts.commentPrefix !== undefined) {
-    while (text.startsWith(opts.commentPrefix)) {
-      const nl = text.indexOf('\n');
-      text = nl < 0 ? '' : text.slice(nl + 1);
-    }
+  try {
+    return scanCsvText(decode(bytes, opts.encoding), opts);
+  } catch (err) {
+    if (err instanceof SchemaDrift) return fail(err.code);
+    throw err;
   }
-  const maxRows = opts.maxRows ?? CSV_MAX_ROWS;
-  const records: string[][] = [];
-  let row: string[] = [];
-  let field = '';
-  let quoted = false;
-  let i = 0;
-  const endField = () => {
-    if (field.length > CSV_MAX_FIELD) fail('csv_field');
-    row.push(field);
-    field = '';
-    if (row.length > CSV_MAX_COLUMNS) fail('csv_columns');
-  };
-  const endRow = () => {
-    endField();
-    records.push(row);
-    row = [];
-    if (records.length > maxRows + 1) fail('csv_rows');
-  };
-  while (i < text.length) {
-    const c = text[i] as string;
-    if (quoted) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i += 1;
-        } else quoted = false;
-      } else field += c;
-      if (field.length > CSV_MAX_FIELD) fail('csv_field');
-    } else if (c === '"' && field === '') quoted = true;
-    else if (c === opts.delimiter) endField();
-    else if (c === '\n') endRow();
-    else if (c !== '\r') {
-      field += c;
-      if (field.length > CSV_MAX_FIELD) fail('csv_field');
-    }
-    i += 1;
-  }
-  if (quoted) fail('csv_quote');
-  if (field !== '' || row.length > 0) endRow();
-  const [header, ...rows] = records;
-  if (header === undefined) return fail('csv_empty');
-  // A data row may be one field wider than the header (LU-1: a trailing empty field, and one row with one more
-  // value column); any other width fails, which catches a truncated last row.
-  for (const r of rows) {
-    if (r.length === header.length + 1) r.pop();
-    else if (r.length !== header.length) fail('csv_width');
-  }
-  return { header, rows };
 }
 
 /** Splits streamed bytes into lines (bounded length) for ZIP members too large to hold. */

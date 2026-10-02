@@ -1,6 +1,8 @@
 // Units and canonical factors (catalogue §4.5): H is stored in cm, Q in m³/s.
 // The unit belongs to the series declaration in the registry, never to a row.
 
+import { SchemaDrift } from './errors.ts';
+
 export type Quantity = 'H' | 'Q';
 
 export type UnitDef = {
@@ -38,9 +40,15 @@ export const isUnit = (unit: string): unit is Unit => Object.hasOwn(UNITS, unit)
  */
 const tidy = (v: number) => Number(v.toPrecision(7));
 
-/** A provider value times the factor its series declares in the registry (`to_canonical`). */
+/**
+ * A provider value times the factor its series declares in the registry (`to_canonical`). A product that is not
+ * a finite number (a raw value near the edge of the double range, ×100) is drift, never a stored ±Infinity: the
+ * payload is quarantined with a fixed code instead of failing in the loader (P5a review of the test package).
+ */
 export function scale(factor: number, value: number): number {
-  return tidy(value * factor);
+  const v = tidy(value * factor);
+  if (!Number.isFinite(v)) throw new SchemaDrift('value_out_of_range');
+  return v;
 }
 
 export function toCanonical(unit: Unit, value: number): number {
