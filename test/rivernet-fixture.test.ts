@@ -204,7 +204,6 @@ describe('the fixture graph (P6a criterion)', () => {
     const ways = await readWays(Readable.from([readFileSync(files.ways)]));
     const relations = parseOplRelations(readFileSync(files.relations, 'utf8'));
     const digest = (v: unknown) => sha(canonicalJson(v));
-    const golden = JSON.parse(readFileSync(`${FX}rivernet.readers.golden.json`, 'utf8'));
     const actual = {
       ways: ways.size,
       relations: relations.length,
@@ -214,6 +213,7 @@ describe('the fixture graph (P6a criterion)', () => {
     };
     if (process.env.UPDATE_GOLDENS === '1')
       writeFileSync(`${FX}rivernet.readers.golden.json`, `${JSON.stringify(actual, null, 2)}\n`);
+    const golden = JSON.parse(readFileSync(`${FX}rivernet.readers.golden.json`, 'utf8'));
     expect(actual).toEqual(golden);
   });
 

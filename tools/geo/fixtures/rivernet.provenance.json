@@ -10,19 +10,19 @@
       "url": "https://download.geofabrik.de/europe/france/alsace-latest.osm.pbf"
     },
     {
-      "bytes": 648984611,
+      "bytes": 649071029,
       "id": "baden-wuerttemberg",
-      "md5": "d143f7149259d8b3b94e8e1d107a1f10",
-      "replication_timestamp": "2026-09-30T20:22:42Z",
-      "sha256": "8a98a997b3354f9d0ceaaad13bb11d24a89465f02940b00fc0bf4a209a4f8349",
+      "md5": "eb886d7f3a3cd5dd8e878aa9fe1ff904",
+      "replication_timestamp": "2026-10-01T20:22:06Z",
+      "sha256": "5b67868085a813a92d932810b8121535cf0170e2233e99be19947dbddaa41d02",
       "url": "https://download.geofabrik.de/europe/germany/baden-wuerttemberg-latest.osm.pbf"
     },
     {
-      "bytes": 853301683,
+      "bytes": 853389989,
       "id": "bayern",
-      "md5": "7ee4160c8f1cb339b54714e1564c0d60",
-      "replication_timestamp": "2026-09-30T20:22:42Z",
-      "sha256": "384e7fb800ebf5a253ad42ce6410aef699ae4724443fc137012633388103d81b",
+      "md5": "1c692936c54a7a3916b70020ae5d2ece",
+      "replication_timestamp": "2026-10-01T20:22:06Z",
+      "sha256": "7a412a4f88df61a5df64d27eae3f313ca3c320d7108e61bdeaa7ecf8d1bd2be5",
       "url": "https://download.geofabrik.de/europe/germany/bayern-latest.osm.pbf"
     },
     {
@@ -42,11 +42,11 @@
       "url": "https://download.geofabrik.de/europe/france/champagne-ardenne-latest.osm.pbf"
     },
     {
-      "bytes": 345921985,
+      "bytes": 345988075,
       "id": "hessen",
-      "md5": "629c8c89ce5daa89d8dfc1a4396d3d1e",
-      "replication_timestamp": "2026-09-30T20:22:42Z",
-      "sha256": "224f860a347fa2a3fb5cfe581051f71f4e0a4f7cdd12875f8e12fccdc30cd2f0",
+      "md5": "33e4fd685663830c1efd428f97e26f40",
+      "replication_timestamp": "2026-10-01T20:22:06Z",
+      "sha256": "43e0eeb54a21a6de39d4d0188db43bfddac6d4951db8d7629b0bf69dcaa53501",
       "url": "https://download.geofabrik.de/europe/germany/hessen-latest.osm.pbf"
     },
     {
@@ -74,11 +74,11 @@
       "url": "https://download.geofabrik.de/europe/netherlands-latest.osm.pbf"
     },
     {
-      "bytes": 506598348,
+      "bytes": 506691685,
       "id": "niedersachsen",
-      "md5": "e8289d6c04bce91e8a3a6014ff821358",
-      "replication_timestamp": "2026-09-30T20:22:42Z",
-      "sha256": "c269d6a5ad11761d2b1f4a9dbd5e4465214e79c75c9c62c3dddfb29583b02a58",
+      "md5": "b44b65ad15710bbf59c0bc8e78b93ded",
+      "replication_timestamp": "2026-10-01T20:22:06Z",
+      "sha256": "bbcd68ece262fddb1b38d599eac1c169586290018b821d31bc6605a64c56055b",
       "url": "https://download.geofabrik.de/europe/germany/niedersachsen-latest.osm.pbf"
     },
     {
@@ -90,11 +90,11 @@
       "url": "https://download.geofabrik.de/europe/france/nord-pas-de-calais-latest.osm.pbf"
     },
     {
-      "bytes": 913804819,
+      "bytes": 913893355,
       "id": "nordrhein-westfalen",
-      "md5": "4a4281057650122e428a7d17bc87e910",
-      "replication_timestamp": "2026-09-30T20:22:42Z",
-      "sha256": "531d7760d5132db0b5d81fc2c57323f0e9833c04d7758a27689af7a7a9a74368",
+      "md5": "e56bc24b017f1fb02e098c193b99d942",
+      "replication_timestamp": "2026-10-01T20:22:06Z",
+      "sha256": "8adedd79fd663e9674e60062dc6ae1bd8bcecb7121c66c3425a5a9268e39a8e7",
       "url": "https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest.osm.pbf"
     },
     {
@@ -106,19 +106,19 @@
       "url": "https://download.geofabrik.de/europe/france/picardie-latest.osm.pbf"
     },
     {
-      "bytes": 270799691,
+      "bytes": 270843400,
       "id": "rheinland-pfalz",
-      "md5": "85b5fcfbebdff4ce65f8eef25e82a2e0",
-      "replication_timestamp": "2026-09-30T20:22:42Z",
-      "sha256": "0771f8ee9c8ba51f59d0f2a0a18c5e9f98bfd9b85b7b3cc622d4b921de2c11ca",
+      "md5": "4f4fff17f1cc879aeb3a1d251c6f510e",
+      "replication_timestamp": "2026-10-01T20:22:06Z",
+      "sha256": "762df2aa54755be3c3848080c5f5321fd7d33fe4737386a0d305a95077313995",
       "url": "https://download.geofabrik.de/europe/germany/rheinland-pfalz-latest.osm.pbf"
     },
     {
-      "bytes": 54828528,
+      "bytes": 54831534,
       "id": "saarland",
-      "md5": "8ff03943c44409d9a74555847394ae9c",
-      "replication_timestamp": "2026-09-30T20:22:42Z",
-      "sha256": "4d7fa7d322b173b532386417c30579bb0d4f64f42731e8018665f4f2b7b3810a",
+      "md5": "8c2571de58f8ff443c9b3719581d6ce5",
+      "replication_timestamp": "2026-10-01T20:22:06Z",
+      "sha256": "3deea842620beb7d7ce6ceb3b7472963e88c80981e70206d496145b3ed3f38b6",
       "url": "https://download.geofabrik.de/europe/germany/saarland-latest.osm.pbf"
     },
     {

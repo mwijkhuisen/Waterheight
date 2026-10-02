@@ -73,13 +73,13 @@ Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/37064062453 (`workflow_dispatch` on `claude/p6a-graph-pipeline`, 2026-10-02) |
-| Extracts | the 16 Geofabrik regions of `registry/geo-sources.yaml`; replication timestamps 2026-09-30T20:22:42Z (the seven German states) and 2026-10-01T20:22:06Z (the other nine); md5, sha256 and bytes per region in `rivernet.provenance.json` |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/37071962474 (`workflow_dispatch` on `claude/p6a-graph-pipeline`, 2026-10-02, after review round 1 pinned the Prüm; the first committed fixture came from run 37064062453) |
+| Extracts | the 16 Geofabrik regions of `registry/geo-sources.yaml`, all with replication timestamp 2026-10-01T20:22:06Z; md5, sha256 and bytes per region in `rivernet.provenance.json` |
 | Made | osmium-tool 1.19.1 in the tool image (`tools/geo/Dockerfile`), `tools/geo/rivernet/extract.sh` |
-| `rivernet.osm.pbf` | 2,024,486 bytes, sha256 `5ebcaa70ce856196c045db0e3f9588275d8693587965ec9971174a4ea82f9cd7` |
-| `rivernet.ways.geojsonseq` | 9,945,754 bytes, sha256 `f181e66a1e88eaa3de6c9bb0d42ba2d73d0909cf002fb6ceae88dd8dfbb53468` |
-| `rivernet.relations.opl` | 180,437 bytes, sha256 `9e9e309ecd08f36b77472515f99799afd0d771fbe38928877046efa4c77cf41b` |
-| `rivernet.provenance.json` | 5,546 bytes, sha256 `3d0e64859289f37d3bd3beb35011318ec7aef5485d23d446274f2ec62e072c89` |
-| Graph | 3,744 nodes, 3,756 edges, 19 components, 39 bifurcations; the run's `river_graph.json` (sha256 `a621bed5…`) and `reaches.geojson` (`ddf4d61a…`) equal a local build of these files byte for byte |
+| `rivernet.osm.pbf` | 2,039,272 bytes, sha256 `f79f666d1ecb6b93b4681eed7a4b1040822365feb9799f84aeaa164e0e814b75` |
+| `rivernet.ways.geojsonseq` | 10,017,794 bytes, sha256 `1b84d8339c3ef2eadc55cd23b30bb574bf437af91d9052e66ae2e9251f1496aa` |
+| `rivernet.relations.opl` | 180,661 bytes, sha256 `0da620fb683674a679f53dd90a3b0dcaf47d6a2ccd029866f5a89352f3d96724` |
+| `rivernet.provenance.json` | 5,546 bytes, sha256 `6bfaf2ecb13480e7742ea565855c76d9dbccac3f085d97f70742db8ed0628dfa` |
+| Graph | 3,756 nodes, 3,768 edges, 19 components, 39 bifurcations; the run's `river_graph.json` (sha256 `9e305106…`) and `reaches.geojson` (`cca549c1…`) equal a local build of these files byte for byte |
 
 A refresh replaces the four files from a newer run's artifact (at most 15 MB for the PBF, a test checks it), updates this table, and regenerates the golden only after reviewing every changed bifurcation.
