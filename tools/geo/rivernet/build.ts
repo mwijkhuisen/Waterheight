@@ -213,7 +213,9 @@ export function buildGraph(
       missing.push(`r${river.osm_relation_id}`);
       continue;
     }
-    if (relation !== undefined && relation.tags.wikidata !== river.wikidata) mismatch.push(`r${relation.id}`);
+    // A relation tagged with another item is the wrong relation; one without the tag is reported, not refused.
+    const tag = relation?.tags.wikidata;
+    if (tag !== undefined && tag !== river.wikidata) mismatch.push(`r${relation?.id}`);
     const sel = selectWays(river, relation, ways);
     if (sel.kept.size === 0) empty.push(river.id);
     for (const id of sel.kept) wayRivers.set(id, (wayRivers.get(id) ?? new Set()).add(river.id));
@@ -296,7 +298,10 @@ export function buildGraph(
     regions: [...provenance.regions].sort((a, b) => byString(a.id, b.id)),
   };
   const head = { attribution: ATTRIBUTION, attribution_url: ATTRIBUTION_URL, licence: LICENCE, osm, schema_version: 1 };
-  const edgeCount = (river: string) => edges.filter((e) => e.rivers.includes(river)).length;
+  const riverEdges = new Map<string, Edge[]>();
+  for (const e of edges) for (const r of e.rivers) riverEdges.set(r, [...(riverEdges.get(r) ?? []), e]);
+  const edgeCount = (river: string) => riverEdges.get(river)?.length ?? 0;
+  for (const r of riverReports) r.components = components(riverEdges.get(r.id as string) ?? []);
   const graph = {
     ...head,
     rivers: rivers.rivers
@@ -323,24 +328,33 @@ export function buildGraph(
       edges: edges.length,
       sources: nodes.filter((n) => !indeg.has(`n${n}`)).length,
       sinks: nodes.filter((n) => !outEdges.has(`n${n}`)).length,
-      components: components(nodes, edges),
+      components: components(edges),
+      // Rivers whose edges share no node with their parent's: a gap P6b must close or explain (report only).
+      detached: rivers.rivers
+        .filter((r) => r.parent_river_id !== null && riverEdges.has(r.parent_river_id))
+        .filter((r) => {
+          const own = new Set((riverEdges.get(r.id) ?? []).flatMap((e) => [e.from, e.to]));
+          return !(riverEdges.get(r.parent_river_id as string) ?? []).some((e) => own.has(e.from) || own.has(e.to));
+        })
+        .map((r) => r.id)
+        .sort(byString),
       bifurcations,
     },
   };
   return { graph, reaches, report, edges };
 }
 
-/** Weakly connected components. */
-function components(nodes: readonly number[], edges: readonly Edge[]): number {
-  const parent = new Map(nodes.map((n) => [`n${n}`, `n${n}`]));
+/** Weakly connected components of the nodes the edges touch. */
+function components(edges: readonly Edge[]): number {
+  const parent = new Map<string, string>();
   const find = (x: string): string => {
     let r = x;
-    while (parent.get(r) !== r) r = parent.get(r) as string;
+    while ((parent.get(r) ?? r) !== r) r = parent.get(r) as string;
     parent.set(x, r);
     return r;
   };
   for (const e of edges) parent.set(find(e.from), find(e.to));
-  return new Set(nodes.map((n) => find(`n${n}`))).size;
+  return new Set([...parent.keys()].map(find)).size;
 }
 
 /** JSON with every object's keys sorted, so the bytes depend on the content only. */

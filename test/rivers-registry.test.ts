@@ -11,7 +11,9 @@ import { repoRoot } from './catalogue.ts';
 const read = (path: string) => parse(readFileSync(`${repoRoot}${path}`, 'utf8'));
 const { problems, rivers } = validateRivers(read('registry/rivers.yaml'));
 const byId = new Map((rivers?.rivers ?? []).map((r) => [r.id, r]));
-const excluded = (rivers?.excluded ?? []).map((e) => e.name);
+// An excluded name compares as a slug: lower case, no diacritics ("Prüm" is prum).
+const slug = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replaceAll(' ', '-');
+const excluded = (rivers?.excluded ?? []).map((e) => slug(e.name));
 
 const stations: { source: string; water_name: string | null; river: string | null }[] = readdirSync(
   `${repoRoot}registry/stations`,
@@ -69,7 +71,7 @@ describe('registry/rivers.yaml', () => {
       ['semois', 'chiers', 'ton', 'viroin', 'houille', 'thure', 'hante', 'trouille'],
       ['mark', 'dommel', 'aa-of-weerijs', 'tongelreep', 'keersop', 'merkske', 'voer', 'ahr', 'kyll', 'prum'],
     ].flat();
-    const missing = required.filter((id) => !byId.has(id) && !excluded.some((n) => n.toLowerCase().startsWith(id)));
+    const missing = required.filter((id) => !byId.has(id) && !excluded.includes(id));
     expect(missing).toEqual([]);
   });
 

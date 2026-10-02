@@ -228,6 +228,49 @@ describe('buildGraph', () => {
     expect(r.edges.map((e) => e.way)).toEqual([1, 2]);
   });
 
+  it('reports per-river components and the rivers whose edges never touch their parent', () => {
+    const a = river('main', 1);
+    const b = river('trib', 2, { parent_river_id: 'main' });
+    const c = river('far', 3, { parent_river_id: 'main' });
+    const r = buildGraph(
+      ways(way(1, [1, 2, 3]), way(2, [9, 2]), way(3, [20, 21]), way(4, [30, 31])),
+      [
+        rel(1, a.wikidata, [[1, 'main_stream']]),
+        rel(2, b.wikidata, [[2, 'main_stream']]),
+        rel(3, c.wikidata, [
+          [3, ''],
+          [4, ''],
+        ]),
+      ],
+      rivers(a, b, c),
+      provenance,
+    );
+    const rep = r.report as {
+      graph: { detached: string[]; components: number };
+      rivers: { id: string; components: number }[];
+    };
+    expect(rep.graph.detached).toEqual(['far']);
+    expect(rep.graph.components).toBe(3);
+    expect(rep.rivers.map((x) => [x.id, x.components])).toEqual([
+      ['far', 2],
+      ['main', 1],
+      ['trib', 1],
+    ]);
+  });
+
+  it('accepts a relation without a wikidata tag and reports it, but refuses one tagged with another item', () => {
+    const a = river('main', 1);
+    const r = buildGraph(
+      ways(way(1, [1, 2])),
+      [{ id: 1, tags: { type: 'waterway' }, members: [{ type: 'w', ref: 1, role: '' }] }],
+      rivers(a),
+      provenance,
+    );
+    expect((r.report as { rivers: { relation_tags: unknown }[] }).rivers[0]?.relation_tags).toEqual({
+      type: 'waterway',
+    });
+  });
+
   it('fails on a missing relation, a Wikidata mismatch and a river without edges', () => {
     const a = river('main', 1);
     const w = ways(way(1, [1, 2]));
