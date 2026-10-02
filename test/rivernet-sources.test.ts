@@ -65,11 +65,18 @@ describe('sources.yaml', () => {
   it('refuses http, another host, a duplicate id, an unknown key and an empty canal trap', () => {
     expect(mutated((o) => (o.geofabrik.index_url = 'http://download.geofabrik.de/x.json'))).toThrow();
     expect(
-      mutated((o) => (o.geofabrik.regions[0]!.url = 'https://example.org/europe/netherlands-latest.osm.pbf')),
+      mutated(
+        (o) =>
+          ((o.geofabrik.regions[0] as { url: string }).url = 'https://example.org/europe/netherlands-latest.osm.pbf'),
+      ),
     ).toThrow();
-    expect(mutated((o) => (o.geofabrik.regions[1]!.id = 'netherlands'))).toThrow();
+    expect(mutated((o) => ((o.geofabrik.regions[1] as { id: string }).id = 'netherlands'))).toThrow();
     expect(
-      mutated((o) => (o.geofabrik.regions[0]!.url = 'https://download.geofabrik.de/europe/netherlands.osm.pbf')),
+      mutated(
+        (o) =>
+          ((o.geofabrik.regions[0] as { url: string }).url =
+            'https://download.geofabrik.de/europe/netherlands.osm.pbf'),
+      ),
     ).toThrow();
     expect(mutated((o) => (o.extra = 1))).toThrow();
     expect(

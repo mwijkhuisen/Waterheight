@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -39,13 +40,25 @@ const deps = () => ({ userAgent: UA, sleep: noSleep });
 const QUERY = `${CFG.base_url}/:layer/query`;
 const serve = (text: string, init?: ResponseInit) => http.get(QUERY, () => new HttpResponse(text, init));
 
-// Goldens are generated once (UPDATE_GOLDENS=1) and committed; the test compares.
+// Goldens are written only with UPDATE_GOLDENS=1 and committed; a missing golden fails.
 function golden(name: string, value: unknown) {
   const file = join(FIX, `${name}.golden.json`);
   const text = `${JSON.stringify(value, null, 2)}\n`;
-  if (process.env.UPDATE_GOLDENS === '1' || !existsSync(file)) writeFileSync(file, text);
+  if (process.env.UPDATE_GOLDENS === '1') writeFileSync(file, text);
+  expect(existsSync(file), `${name}.golden.json`).toBe(true);
   expect(readFileSync(file, 'utf8')).toBe(text);
 }
+// The 445-feature layer-7 page: its count, first and last segment and a sha256 of the whole parse.
+const digest = (value: ReturnType<typeof outcome>) =>
+  'segments' in value
+    ? {
+        exceeded: value.exceeded,
+        count: value.segments.length,
+        first: value.segments[0],
+        last: value.segments.at(-1),
+        sha256: createHash('sha256').update(JSON.stringify(value)).digest('hex'),
+      }
+    : value;
 const outcome = (text: string) => {
   try {
     return parsePage(text);
@@ -56,7 +69,7 @@ const outcome = (text: string) => {
 
 describe('euhydro parsePage: real recorded bodies', () => {
   for (const name of ['l12-pannerdensche-kop', 'l12-empty', 'l99-error', 'l7-page1']) {
-    it(`golden ${name}`, () => golden(name, outcome(body(name))));
+    it(`golden ${name}`, () => golden(name, name === 'l7-page1' ? digest(outcome(body(name))) : outcome(body(name))));
   }
   it('reads the normal body', () => {
     const page = parsePage(body('l12-pannerdensche-kop'));
