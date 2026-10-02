@@ -64,8 +64,17 @@ const TIER1 = new Set([
 /**
  * Sea and estuary gauges: tidal true. The tier-1 stations are river gauges (false);
  * every other station is null, because RWS metadata cannot tell river from tide (catalogue §2.1).
+ * Antwerpen (a seed row on Belgian soil, P5a) is on the tidal Scheldt.
  */
-const TIDAL = new Set(['vlissingen', 'terneuzen', 'hansweert', 'rilland.bath', 'delfzijl', 'nieuwestatenzijl.dollard']);
+const TIDAL = new Set([
+  'vlissingen',
+  'terneuzen',
+  'hansweert',
+  'rilland.bath',
+  'delfzijl',
+  'nieuwestatenzijl.dollard',
+  'antwerpen',
+]);
 
 /** Seed series RWS does not publish today (`<code>/<Grootheid>/<Hoedanigheid>`), with the reason. */
 const NOT_LIVE = new Map([['hedel/WATHTE/NAP', 'no feature in the WFS snapshot']]);
@@ -167,7 +176,7 @@ function readWfs(payload: unknown): Map<string, Feature[]> {
 }
 
 export type Inputs = ReturnType<typeof readInputs>;
-type Skipped = { code: string; quantity: 'H' | 'Q'; reason: 'be' | 'stale' | 'not live'; why?: string | undefined };
+type Skipped = { code: string; quantity: 'H' | 'Q'; reason: 'stale' | 'not live'; why?: string | undefined };
 
 function build(inputs: Inputs): { rows: PublicStation[]; skipped: Skipped[] } {
   const location = readCatalogue(inputs.catalogue);
@@ -191,10 +200,6 @@ function build(inputs: Inputs): { rows: PublicStation[]; skipped: Skipped[] } {
     if (!kind.notes.includes(note)) throw new Error(`seed ${code} ${quantity}/${r.tier}: unknown note "${note}"`);
     const series = `${code}/${kind.grootheid}/${kind.hoedanigheid}`;
     const at = `series ${series}`;
-    if (note === 'be') {
-      skipped.push({ code, quantity, reason: 'be' });
-      continue;
-    }
     // Deduplicated on (CODE, GROOTHEIDCODE, HOEDANIGHEIDCODE, method): the snapshot repeats a few features.
     const features = live.get(series) ?? [];
     const methods = [...new Set(features.map((f) => f.method))].filter((m) => !stale(`${series}/${m}`));
@@ -230,7 +235,8 @@ function build(inputs: Inputs): { rows: PublicStation[]; skipped: Skipped[] } {
       provider_key: `${series}/${method}`,
       name: loc.name,
       water_name: null,
-      country: 'NL',
+      // The 9 seed rows noted `be` are the RWS points on Belgian soil (catalogue §0.6, P5a): primary rows, country BE.
+      country: note === 'be' ? 'BE' : 'NL',
       lon: loc.lon,
       lat: loc.lat,
       quantity,
@@ -322,10 +328,12 @@ function header(inputs: Inputs, skipped: Skipped[]): string {
     '# provider_key = <code>/<Grootheid>/<Hoedanigheid>/<WaardeBepalingsMethode>, as the NL-1 normaliser builds it.',
     '# tier 1 (first_release) = the curated key stations of the Rhine branches, IJssel, Meuse, Geul and Vecht; every row',
     '# of such a station is tier 1. role twin = eijsden.grens asked in TAW (registry/twins.yaml): tier 1, not first_release.',
+    '# country BE = the 9 seed rows noted `be` (catalogue §0.6: the 7 RWS points on Belgian soil, antwerpen, lixhebiefaval,',
+    '# maaseik, herenlaak, lanaken, smeermaas.zuidwillemsvaart and kanne): ordinary tier-2 primary rows, public (A§7.2 exception',
+    '# until a Belgian source is public, P13). kanne has no river until the water body is verified (catalogue §10 R9).',
     '# tidal true = the curated sea and estuary gauges, false = the tier-1 river gauges, null = unknown (RWS metadata cannot',
     '# tell river from tide). river, km and water_name are null: RWS publishes none (P6 builds the river graph).',
     '# Seed rows not registered:',
-    ...comment(`Belgian points (note be), curated in P5: ${list('be')}.`),
     ...comment(`stale at the provider (STALE_SERIES of the NL-1 normaliser): ${list('stale')}.`),
     ...comment(`not live (NOT_LIVE in the generator): ${list('not live')}.`),
     '',
