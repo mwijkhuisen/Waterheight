@@ -156,7 +156,9 @@ export async function runLoad(
           specCadenceS,
           seedOnly,
           lagP95Ms: lag.p95(now),
-          backlog,
+          // Public health shows the backlog of the public sources' lines only (KG-075); the nightly gate below
+          // waits for every line.
+          backlog: backlog.public,
           badLines: loader.badLines,
           now,
           outages,

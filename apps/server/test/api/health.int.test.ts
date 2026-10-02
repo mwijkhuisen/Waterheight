@@ -22,7 +22,7 @@ let api: Db;
 const NOW = new Date('2026-09-29T13:44:00Z');
 const cadenceS = new Map([
   ['DE-1', 900],
-  ['BE-3', 600],
+  ['LU-3', 3600],
   ['LU-4', 604800],
 ]);
 // Every recompute keeps the lag the beforeAll load measured (34 s): a pass without samples would show none.
@@ -89,7 +89,9 @@ beforeAll(async () => {
     const f = recorded(name);
     await writePayload(archive, { source: 'DE-1', spec, variant, at: f.at, body: f.body, url: f.url });
   }
-  await h.archive.append(bareLine('BE-3', 'be-3-levels', new Date('2026-09-29T13:43:50Z'), { status: 304 }));
+  // P5c: an owner source without series (LU-3, not loaded before P8a): its fetch alone makes it healthy. BE-3 holds
+  // series since P5c, so it is healthy only with fresh tier-1 values, which this fixture does not have.
+  await h.archive.append(bareLine('LU-3', 'lu-3-percentile', new Date('2026-09-29T13:43:50Z'), { status: 304 }));
   await h.archive.append(
     bareLine('LU-4', 'lu-4-pages', new Date('2026-09-20T00:00:00Z'), { status: null, error: 'timeout' }),
   );
@@ -131,7 +133,7 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
       // The three DE-1 lines were loaded 34 s after their fetch; no other source has a lag sample.
       loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
       sources: expect.objectContaining({ ok: 1, degraded: 0, down: 0 }),
-      // Six captured owner sources: BE-3 answered, LU-4 only ever failed, the others were not fetched.
+      // Six captured owner sources: LU-3 answered, LU-4 only ever failed, the others were not fetched.
       owner_sources: { healthy: 1, total: 6 },
       quarantined: 0,
       twins: { ok: 0, failing: 0 },
@@ -279,7 +281,7 @@ describe('owner isolation (invariant 11) and the withheld canary', () => {
     }
     await admin(
       `INSERT INTO ingest_batch (source_id, spec_id, archive_key, fetched_at, adapter_version, parse_status, error)
-       VALUES ('BE-3', 'be-3-levels', 'raw/BE-3/be-3-levels/2026/09/29/134000Z-0000000000000000.zst', $1, 1,
+       VALUES ('LU-3', 'lu-3-percentile', 'raw/LU-3/lu-3-percentile/2026/09/29/134000Z-0000000000000000.zst', $1, 1,
                'quarantined', 'be3_owner_secret_code')`,
       [NOW],
     );
@@ -289,12 +291,12 @@ describe('owner isolation (invariant 11) and the withheld canary', () => {
     // The owner rows exist in the database and in the owner family (so the test proves something).
     const owner = await h.t.connectAs('rws_owner_api');
     const own = await owner.query(`SELECT source_id, status, quarantine_count FROM ${VIEWS.owner.sourceHealth}`);
-    expect(own.rows).toContainEqual({ source_id: 'BE-3', status: 'degraded', quarantine_count: 1 });
+    expect(own.rows).toContainEqual({ source_id: 'LU-3', status: 'degraded', quarantine_count: 1 });
 
     const health = await (await appAt().app.request('/api/v1/health')).text();
     const sources = await (await appAt().app.request('/api/v1/health/sources')).text();
     for (const text of [health, sources]) for (const term of NEVER) expect(text, term).not.toContain(term);
-    // The public numbers are unchanged, except the owner counts: BE-3 is degraded now.
+    // The public numbers are unchanged, except the owner counts: LU-3 is degraded now.
     const [healthAfter, sourcesAfter] = (await read()) as [Health, HealthSources];
     expect(healthAfter.owner_sources).toEqual({ healthy: 0, total: 6 });
     expect(sourcesAfter.owner_sources).toEqual({ healthy: 0, total: 6 });

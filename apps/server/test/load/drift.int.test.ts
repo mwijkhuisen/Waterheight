@@ -15,6 +15,9 @@ import { seriesOf } from '../../src/load/store.ts';
 import { check } from '../../src/watchdog/watchdog.ts';
 import { EMMERICH_W, type Harness, harness, measurements, SERIES_URL } from './harness.ts';
 
+/** An empty backlog, over every line and over the public sources' lines (P5c, KG-075). */
+const NONE = { files: 0, bytes: 0, age_s: null };
+
 // Drift simulation (issue #17): a mutated payload is quarantined and raises an
 // alert, the other payloads still load, and a replay after the fix loads it.
 
@@ -66,7 +69,7 @@ describe('schema drift', () => {
     await buildFixtureArchive(h.raw);
     const loader = h.loader();
     expect(await loader.tick()).toEqual({ lines: 7, loaded: 6 });
-    expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
+    expect(await loader.backlog()).toEqual({ ...NONE, public: NONE });
     expect(await status()).toEqual([
       {
         spec_id: 'de-1-basin',
@@ -325,7 +328,7 @@ describe('payloads the loader cannot use', () => {
     expect(h.alerts.splice(0)).toEqual([
       { code: 'quarantined', fields: { source: 'DE-1', spec: 'de-1-series', code: 'load_error' } },
     ]);
-    expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
+    expect(await loader.backlog()).toEqual({ ...NONE, public: NONE });
   });
 
   it('a payload that kills the loader twice is quarantined on the next pass without reading or parsing it', async () => {
@@ -403,7 +406,7 @@ describe('payloads the loader cannot use', () => {
     ]);
     // Four passes did not use up the payload's two tries: it loads now, and its attempt ends with its commit.
     expect(await loader.tick()).toEqual({ lines: 1, loaded: 1 });
-    expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
+    expect(await loader.backlog()).toEqual({ ...NONE, public: NONE });
     expect(await attempt()).toBeNull();
   });
 
@@ -571,7 +574,7 @@ describe('payloads the loader cannot use', () => {
     }
     // The grant is back: the same line loads, nothing was skipped.
     expect(await loader.tick()).toEqual({ lines: 1, loaded: 1 });
-    expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
+    expect(await loader.backlog()).toEqual({ ...NONE, public: NONE });
   });
 
   it('a release whose SQL does not match the schema (42804 on every obs write) stalls and quarantines nothing (review R2-3)', async () => {
@@ -641,7 +644,7 @@ describe('payloads the loader cannot use', () => {
     };
     const loader = h.loader({ adapters: refused });
     for (let pass = 0; pass < 3; pass++) await loader.tick();
-    expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
+    expect(await loader.backlog()).toEqual({ ...NONE, public: NONE });
     expect(await status()).toEqual([{ parse_status: 'ok', error: null }]);
     h.alerts.length = 0;
   });
@@ -682,7 +685,7 @@ describe('payloads the loader cannot use', () => {
       if (!next.more) break;
     }
     expect(lines).toBe(5);
-    expect(await loader.backlog()).toEqual({ files: 0, bytes: 0, age_s: null });
+    expect(await loader.backlog()).toEqual({ ...NONE, public: NONE });
     expect(h.alerts).toEqual([]);
   });
 

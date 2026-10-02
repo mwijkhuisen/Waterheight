@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { BODIES } from './bounded-child.ts';
 
-// Review S1: no DE-1, NL-1, NL-2, FR-1, FR-3, CH-1, CH-2, CH-3, DE-7, DE-8, LU-1 or LU-6 payload inside the byte caps can run the loader out of
+// Review S1: no DE-1, NL-1, NL-2, FR-1, FR-3, CH-1, CH-2, CH-3, DE-7, DE-8, LU-1, LU-6, BE-3 (KiWIS), LU-2, LU-3 or LU-4
+// payload inside the byte caps can run the loader out of
 // memory on its way to a SchemaDrift. Each hostile body is parsed in its own
 // process with a 256 MiB heap (the load container has 768 MiB). In the
 // integration project, which runs one file at a time: these children are heavy,
@@ -63,6 +64,16 @@ const expected: Record<keyof typeof BODIES, string> = {
   'lu6-bytes': 'json_too_many_nodes',
   'lu6-features': 'too_big at features',
   'lu6-issues': 'invalid_value at features.0.type',
+  // P5c: the owner parsers (KiWIS and AGE).
+  'kiwis-layer-bytes': 'json_too_many_nodes',
+  'kiwis-values-bytes': 'json_too_many_nodes',
+  'kiwis-values-rows': 'too_big at 0.data.249999.0',
+  'kiwis-table-bytes': 'json_too_many_nodes',
+  'kiwis-table-rows': 'kiwis_row_width at 4999',
+  'lu2-bytes': 'json_too_many_nodes',
+  'lu3-bytes': 'json_too_many_nodes',
+  'lu4-scan': 'html_tag',
+  'lu4-attr': 'html_attr',
   'nl4-one-tag-700k-attributes': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
   'nl4-one-tag-3m-equals': 'xml_tag_too_long at xl?worksheets?sheet1.xml',
   'nl4-one-tag-1.5m-quoted': 'xml_tag_too_long at xl?worksheets?sheet1.xml',

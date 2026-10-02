@@ -2,6 +2,7 @@ import { QC } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VIEWS } from '../../src/db/audience.ts';
 import { detectLabelOffsets, labelOffsetsOf, offsetKey } from '../../src/load/label-offset.ts';
+import { readRegistry } from '../../src/load/registry-sync.ts';
 import { checkTwins } from '../../src/load/twins.ts';
 import { type Harness, harness } from './harness.ts';
 
@@ -102,9 +103,20 @@ afterAll(async () => {
 });
 
 describe('the registered pairs', { timeout: 60_000 }, () => {
-  it('are the seven of registry/twins.yaml, each between two series that exist', async () => {
+  it('are the seven of registry/twins.yaml and the owner pairs of registry/twins/*.yaml (P5c)', async () => {
     const { rows } = await h.t.admin.query<{ id: string }>('SELECT id FROM twin ORDER BY id');
-    expect(rows.map((r) => r.id)).toEqual([
+    expect(rows.map((r) => r.id)).toEqual(
+      readRegistry()
+        .twins.map((t) => t.id)
+        .sort(),
+    );
+    // The public seven: both sides of a public source (the owner pairs have an owner side, P5c).
+    const { rows: pub } = await h.t.admin.query<{ id: string }>(
+      `SELECT t.id FROM twin t JOIN series a ON a.id = t.series_a JOIN series b ON b.id = t.series_b
+       JOIN source sa ON sa.id = a.source_id JOIN source sb ON sb.id = b.source_id
+       WHERE sa.audience = 'public' AND sb.audience = 'public' ORDER BY t.id`,
+    );
+    expect(pub.map((r) => r.id)).toEqual([
       'basel-ch1-de1-h',
       'chooz-fr3-fr1-h',
       'eijsden-grens-taw-nap',

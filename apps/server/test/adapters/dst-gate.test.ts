@@ -10,6 +10,7 @@ import { ADAPTER_TIME, DST_PROOF, DST_REFUSED, GATED_KINDS, gate, LOAD_ADAPTERS 
 // offset-less parser (DE-6 in P7, DE-3 in P8, DE-10/12/13 in P13) inherits it; the adapter's own test holds each
 // golden's exact UTC instants. load/adapters.ts `gate()` drops a spec without its proof at start-up.
 
+import { TIME as BE3 } from '../../src/adapters/be-3/normalise.ts';
 import { TIME as CH1 } from '../../src/adapters/ch-1/normalise.ts';
 import { TIME as CH2 } from '../../src/adapters/ch-2/normalise.ts';
 import { TIME as CH3 } from '../../src/adapters/ch-3/normalise.ts';
@@ -18,6 +19,8 @@ import { TIME as DE7 } from '../../src/adapters/de-7/normalise.ts';
 import { TIME as FR1 } from '../../src/adapters/fr-1/normalise.ts';
 import { TIME as FR3 } from '../../src/adapters/fr-3/normalise.ts';
 import { TIME as LU1 } from '../../src/adapters/lu-1/normalise.ts';
+import { TIME as LU2 } from '../../src/adapters/lu-2/normalise.ts';
+import { TIME as LU3 } from '../../src/adapters/lu-3/normalise.ts';
 import { TIME as NL1 } from '../../src/adapters/nl-1/normalise.ts';
 import { TIME as NL2 } from '../../src/adapters/nl-2/normalise.ts';
 
@@ -29,6 +32,7 @@ const ADAPTERS = new URL('../../src/adapters/', import.meta.url);
  * adapter with a normalise.ts is missing here, so a new one cannot slip past the gate.
  */
 const declared: Readonly<Record<string, TimeConvention | null>> = {
+  'BE-3': BE3,
   'CH-1': CH1,
   'CH-2': CH2,
   'CH-3': CH3,
@@ -38,6 +42,9 @@ const declared: Readonly<Record<string, TimeConvention | null>> = {
   'FR-1': FR1,
   'FR-3': FR3,
   'LU-1': LU1,
+  'LU-2': LU2,
+  'LU-3': LU3,
+  'LU-4': null,
   'LU-6': null,
   'NL-1': NL1,
   'NL-2': NL2,

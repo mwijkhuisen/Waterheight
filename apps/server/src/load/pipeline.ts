@@ -20,6 +20,7 @@ import {
   type FetchFold,
   lock,
   openBatch,
+  ownerSources,
   previousLoad,
   readAttempt,
   type SeriesRow,
@@ -86,6 +87,12 @@ export type TickOptions = {
  * left to load, whatever `bytes` still reports.
  */
 export type Backlog = { files: number; bytes: number; age_s: number | null };
+
+/**
+ * How far the public backlog scan reads into one file's unread lines; the rest of a longer backlog counts whole, as
+ * public (a backlog that long is an outage, whoever's lines it holds).
+ */
+const PUBLIC_SCAN_BYTES = 16 * 1024 * 1024;
 
 /** Nothing left to load: the gate of the checksums and the nightly jobs (a torn last line never blocks them). */
 export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
@@ -209,12 +216,19 @@ export class Loader {
     return result;
   }
 
-  /** Manifest bytes not consumed yet, over all files, and the age of the oldest unconsumed line. */
-  async backlog(now: Date = this.deps.now()): Promise<Backlog> {
+  /**
+   * Manifest bytes not consumed yet, over all files, and the age of the oldest unconsumed line (the nightly gate);
+   * `public`: the same over the lines of sources that are not owner audience only, which is what public health shows
+   * (P5c, KG-075: an owner source's loading leaves no trace in a public number).
+   */
+  async backlog(now: Date = this.deps.now()): Promise<Backlog & { public: Backlog }> {
     const done = await cursors(this.deps.db);
+    const owner = await ownerSources(this.deps.db);
+    const age = (at: number | null) => (at === null ? null : Math.max(0, Math.round((now.getTime() - at) / 1000)));
     let files = 0;
     let bytes = 0;
     let oldest: number | null = null;
+    const pub = { files: 0, bytes: 0, oldest: null as number | null };
     for (const { file, size } of await this.deps.reader.manifests()) {
       const offset = done.get(file) ?? 0;
       if (size <= offset) continue;
@@ -222,8 +236,55 @@ export class Loader {
       bytes += size - offset;
       const at = await this.firstLineAt(file, offset);
       if (at !== null && (oldest === null || at < oldest)) oldest = at;
+      const p = owner.size === 0 ? { bytes: size - offset, at } : await this.publicPart(file, offset, size, owner);
+      if (p.bytes > 0) pub.files += 1;
+      pub.bytes += p.bytes;
+      if (p.at !== null && (pub.oldest === null || p.at < pub.oldest)) pub.oldest = p.at;
     }
-    return { files, bytes, age_s: oldest === null ? null : Math.max(0, Math.round((now.getTime() - oldest) / 1000)) };
+    return {
+      files,
+      bytes,
+      age_s: age(oldest),
+      public: { files: pub.files, bytes: pub.bytes, age_s: age(pub.oldest) },
+    };
+  }
+
+  /** The unread bytes of one file's lines that are not an owner source's, and when the first of them was fetched. */
+  private async publicPart(
+    file: string,
+    offset: number,
+    size: number,
+    owner: ReadonlySet<string>,
+  ): Promise<{ bytes: number; at: number | null }> {
+    let bytes = 0;
+    let at: number | null = null;
+    try {
+      for (let pos = offset; pos < size; ) {
+        if (pos - offset >= PUBLIC_SCAN_BYTES) {
+          bytes += size - pos;
+          at ??= Date.parse(`${file.slice(0, 10)}T00:00:00Z`);
+          break;
+        }
+        const chunk = await this.deps.reader.lines(file, pos, 1024 * 1024);
+        if (chunk.length === 0) {
+          // A torn last line (still being written) names no source yet: its bytes count, as in the full backlog.
+          bytes += size - pos;
+          break;
+        }
+        for (const raw of chunk) {
+          const line = parseLine(raw.text);
+          // A damaged line names no source we can trust: it counts.
+          if (line === null || !owner.has(line.source)) {
+            bytes += raw.end - pos;
+            if (line !== null) at ??= Date.parse(line.fetched_at.end ?? line.fetched_at.start);
+          }
+          pos = raw.end;
+        }
+      }
+    } catch {
+      return { bytes: size - offset, at: Date.parse(`${file.slice(0, 10)}T00:00:00Z`) };
+    }
+    return { bytes, at };
   }
 
   /**
