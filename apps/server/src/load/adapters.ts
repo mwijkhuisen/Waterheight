@@ -113,27 +113,40 @@ export type LoadAdapter = {
 
 const MIB = 1024 * 1024;
 const HOUR = 3_600_000;
+/** The DE-8 hydro member, read whole: 51,225 bytes (2024-06-12). */
+export const HYDRO_MAX = 2 * MIB;
 
 /**
  * One member of a ZIP payload, inflated under the §6.7 guard (central directory first, allowlisted flat names,
  * ≤ 10 members, ≤ 200 MB, ≤ 50:1, CRC) and fed to `read` line by line or whole. The other allowlisted members
  * are inflated for their checks and dropped. A guard failure is drift of the payload. Adapters may not import
- * the guards (scripts/check-boundaries.ts), so the wiring is here.
+ * the guards (scripts/check-boundaries.ts), so the wiring is here. A member read whole is held in memory: it has
+ * a byte cap of its own (`max`), beyond which it is `zip_member_size` drift as soon as it is reached.
  */
 async function zipMember(
   body: Uint8Array,
   members: readonly string[],
   read: string,
-  sink: { line: (text: string) => void } | { bytes: (member: Uint8Array) => void },
+  sink: { line: (text: string) => void } | { bytes: (member: Uint8Array) => void; max: number },
   encoding: Encoding = 'utf-8',
 ): Promise<void> {
   const parts: Uint8Array[] = [];
+  let size = 0;
   try {
     await checkZip(Buffer.from(body.buffer, body.byteOffset, body.byteLength), {
       names: flatNames(members),
       onMember: (name) => {
         if (name !== read) return undefined;
-        if ('bytes' in sink) return { data: (c: Uint8Array) => parts.push(c.slice()), end: () => undefined };
+        if ('bytes' in sink) {
+          return {
+            data: (c: Uint8Array) => {
+              size += c.length;
+              if (size > sink.max) throw new SchemaDrift('zip_member_size');
+              parts.push(c.slice());
+            },
+            end: () => undefined,
+          };
+        }
         const split = lineSplitter(sink.line, encoding, 1024, { fatal: true });
         return { data: split.push, end: split.end };
       },
@@ -238,8 +251,9 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       },
     },
   },
-  // Discovery only: no row is ever stored (REST wins); the snapshot feeds NL-1's drift report. Listed only while
-  // its DST fixtures pass (the DST gate of A§7.4; test/adapters/nl-2.test.ts).
+  // Discovery only: no row is ever stored (REST wins); the snapshot feeds NL-1's drift report. Loaded only while
+  // a DST proof is declared for it (DST_PROOF: the gate below checks the declaration at run time; CI runs the
+  // proof's fixtures against their goldens, test/adapters/dst-gate.test.ts).
   'NL-2': {
     version: 1,
     specs: {
@@ -294,7 +308,7 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
         needsVariant: false,
         run: async (b, c) => {
           let member: Uint8Array = new Uint8Array();
-          await zipMember(b, [HYDRO_MEMBER], HYDRO_MEMBER, { bytes: (m) => (member = m) }, 'latin1');
+          await zipMember(b, [HYDRO_MEMBER], HYDRO_MEMBER, { bytes: (m) => (member = m), max: HYDRO_MAX }, 'latin1');
           return normaliseHydro(parseHydro(member), { registry: c.zeroRegistry ?? new Map() });
         },
         zeroTarget: 'DE-7',
@@ -302,7 +316,8 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
     },
   },
   // The CC0 wide CSV: naive Europe/Luxembourg labels (their offset, 0 since 2026-09-30, is measured daily against
-  // the DE-1 Perl twin), 7 days per payload. Listed only while its DST fixtures pass (the gate below).
+  // the DE-1 Perl twin), 7 days per payload. Loaded only while a DST proof is declared for it (DST_PROOF: the gate
+  // below checks the declaration at run time; CI runs the proof's fixtures against their goldens).
   'LU-1': {
     version: 1,
     specs: {

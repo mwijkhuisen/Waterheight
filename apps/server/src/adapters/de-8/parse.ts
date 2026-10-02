@@ -22,6 +22,14 @@ const STATION = /^\d{6,13}$/;
 const COORD = /^-?\d{1,3}\.\d{1,16}$/;
 /** m on DHHN2016, up to four decimals (29.938; 340.587). */
 const ZERO = /^-?\d{1,4}(?:\.\d{1,4})?$/;
+/**
+ * A plausible NRW gauge zero in m NHN; a value outside it is drift of the payload, because the first zero stored
+ * for a series is never overwritten by another payload (load/store.ts). The file of 2024-06-12 spans 0 … 546.221 m
+ * (six stations at 0, none of them a DE-7 gauge), plus one `9999.9` (Rehringhausen, not a DE-7 gauge): that is
+ * the file's missing marker and reads as no zero, like `NA` and an empty cell.
+ */
+export const ZERO_RANGE_M = { min: -10, max: 1000 } as const;
+const MISSING: ReadonlySet<string> = new Set(['', 'NA', '9999.9']);
 const MAX_TEXT = 200;
 
 export type Station = { no: string; name: string; lat: number; lon: number };
@@ -70,13 +78,11 @@ export function parseHydro(member: Uint8Array): HydroRow[] {
     if (id === 'NA') return;
     if (!STATION.test(id)) throw new SchemaDrift('station_no', at);
     const zero = r[13] as string;
-    if (zero !== '' && zero !== 'NA' && !ZERO.test(zero)) throw new SchemaDrift('bad_value', at);
-    out.push({
-      id,
-      name: text(name, at),
-      operator: text(r[6] as string, at),
-      zero: zero === '' || zero === 'NA' ? null : Number(zero),
-    });
+    const value = MISSING.has(zero) ? null : Number(zero);
+    if (value !== null && (!ZERO.test(zero) || value < ZERO_RANGE_M.min || value > ZERO_RANGE_M.max)) {
+      throw new SchemaDrift('bad_value', at);
+    }
+    out.push({ id, name: text(name, at), operator: text(r[6] as string, at), zero: value });
   });
   return out;
 }

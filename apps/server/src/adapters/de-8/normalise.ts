@@ -8,7 +8,10 @@ import type { HydroRow, Station } from './parse.ts';
 //  - the file gives no validity date (`Errichtung` is when the gauge was built), so `valid_from` is null:
 //    the loader never overwrites a stored zero without a date with another value (load/store.ts), it
 //    withholds the new one and alerts (the history of zeros is P7);
-//  - a station the DE-7 registry does not have is unknown (its zero loads once the registry has it).
+//  - a station the DE-7 registry does not have is unknown (its zero loads once the registry has it);
+//  - a registered station listed twice gives no zero: both rows are withheld as `conflict` (counted, alerted, and
+//    retained for a replay), never one of them by a guess (two zeros of one series would also break the zero's
+//    range key and quarantine the whole payload).
 // The station master (`de-8-stations`) stores nothing: it is registry input for scripts/gen-de7-stations.ts,
 // and in the loader its daily payload only reports drift against the DE-7 registry (our keys, numbers).
 
@@ -21,10 +24,16 @@ export type Context = { registry: Registry };
 export function normaliseHydro(rows: readonly HydroRow[], ctx: Context): Normalised {
   const out = emptyNormalised();
   const unknown = new Set<string>();
+  const listed = new Map<string, number>();
+  for (const r of rows) listed.set(r.id, (listed.get(r.id) ?? 0) + 1);
   for (const r of rows) {
     const key = keyOf(r.id);
     if (!ctx.registry.has(key)) {
       unknown.add(key);
+      continue;
+    }
+    if ((listed.get(r.id) as number) > 1) {
+      out.dropped.conflict = (out.dropped.conflict ?? 0) + 1;
       continue;
     }
     if (r.zero === null) {

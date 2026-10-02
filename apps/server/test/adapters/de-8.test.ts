@@ -16,8 +16,9 @@ import {
   parseStations,
   STATIONS_HEADER,
   type Station,
+  ZERO_RANGE_M,
 } from '../../src/adapters/de-8/parse.ts';
-import { LOAD_ADAPTERS, type LoadContext } from '../../src/load/adapters.ts';
+import { HYDRO_MAX, LOAD_ADAPTERS, type LoadContext } from '../../src/load/adapters.ts';
 import type { SeriesRow } from '../../src/load/store.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
@@ -261,6 +262,36 @@ describe('the loader specs', () => {
     // A member that is not the hydro table is the parser's drift (header pinned).
     expect(await run(zipSync({ [HYDRO_MEMBER]: strToU8('a;b\n1;2\n') }))).toBe('csv_header');
   });
+
+  it('the hydro member is read whole, so it has a byte cap of its own: 2 MiB, then zip_member_size (review L6)', async () => {
+    expect(HYDRO_MAX).toBe(2 * 1024 * 1024);
+    const run = (b: Uint8Array) => refusal(Promise.resolve(hydroSpec?.run(b, hydroCtx('de-8-hydro'))));
+    // Stored (level 0): the guard's 50:1 ratio does not apply, the member cap does. One byte over is refused.
+    const padded = (n: number) => {
+      const text = strToU8(hydroText(hydroRow()));
+      const out = new Uint8Array(n).fill(0x0a);
+      out.set(text);
+      return zipSync({ [HYDRO_MEMBER]: [out, { level: 0 }] });
+    };
+    expect(await run(padded(HYDRO_MAX + 1))).toBe('zip_member_size');
+    // At the cap the member reaches the parser (whose row cap then refuses the padding lines).
+    expect(await run(padded(HYDRO_MAX))).toBe('csv_rows');
+    expect(member('de-8-hydro').length).toBeLessThan(HYDRO_MAX / 40);
+  });
+
+  it('a station listed twice in the real subset: neither row gives a zero, both are withheld as conflict (review CR-1)', async () => {
+    const text = Buffer.from(member('de-8-hydro-subset')).toString('latin1');
+    const stah = text.split('\n').find((l) => l.split(';')[1] === '2829100000100');
+    if (stah === undefined) throw new Error('no Stah row in the subset');
+    for (const extra of [stah, stah.replace(';29.938;', ';29.94;')]) {
+      const zip = zipSync({ [HYDRO_MEMBER]: Buffer.from(`${text}${extra}\n`, 'latin1') });
+      const out = (await hydroSpec?.run(zip, hydroCtx('de-8-hydro-subset'))) as Normalised;
+      expect(out.gaugeZeros.map((z) => z.series)).not.toContain('2829100000100/W');
+      expect(out.dropped).toEqual({ conflict: 2 });
+      // The other stations of the subset keep their zeros.
+      expect(out.gaugeZeros).toHaveLength((await runHydro('de-8-hydro-subset')).gaugeZeros.length - 1);
+    }
+  });
 });
 
 describe('parseStations (UTF-8, header pinned)', () => {
@@ -336,7 +367,9 @@ describe('parseHydro (ISO-8859-1, header pinned)', () => {
           hydroRow({ id: '2829100000200', zero: 'NA' }),
           hydroRow({ id: '2829100000300', zero: '' }),
           hydroRow({ id: '2829100000400', zero: '-0.5' }),
-          hydroRow({ id: '2829100000500', zero: '1234' }),
+          hydroRow({ id: '2829100000500', zero: '1000' }),
+          hydroRow({ id: '2829100000600', zero: '-10' }),
+          hydroRow({ id: '2829100000700', zero: '9999.9' }),
         ),
       ),
     ).toEqual([
@@ -344,8 +377,22 @@ describe('parseHydro (ISO-8859-1, header pinned)', () => {
       { id: '2829100000200', name: 'Stah', operator: 'LANUV, NRW', zero: null },
       { id: '2829100000300', name: 'Stah', operator: 'LANUV, NRW', zero: null },
       { id: '2829100000400', name: 'Stah', operator: 'LANUV, NRW', zero: -0.5 },
-      { id: '2829100000500', name: 'Stah', operator: 'LANUV, NRW', zero: 1234 },
+      { id: '2829100000500', name: 'Stah', operator: 'LANUV, NRW', zero: 1000 },
+      { id: '2829100000600', name: 'Stah', operator: 'LANUV, NRW', zero: -10 },
+      // The file's missing marker (Rehringhausen in the file of 2024-06-12): no zero, never 9999.9 m.
+      { id: '2829100000700', name: 'Stah', operator: 'LANUV, NRW', zero: null },
     ]);
+  });
+
+  it('a zero outside −10 … 1000 m NHN is bad_value drift (review L6: the first stored zero stands)', () => {
+    expect(ZERO_RANGE_M).toEqual({ min: -10, max: 1000 });
+    for (const zero of ['-10.001', '1000.001', '1234', '9999.8', '-999'])
+      expect([zero, drift(() => hydro(hydroText(hydroRow(), hydroRow({ zero }))))]).toEqual([
+        zero,
+        ['bad_value', 'rows.1'],
+      ]);
+    // The real file reads: its zeros lie within the range (0 … 546.221 m) or are the missing marker.
+    expect(parseHydro(member('de-8-hydro')).find((r) => r.id === '2766424000100')?.zero).toBeNull();
   });
 
   it('the catchment row of NA values (a catchment without a station) is skipped, wherever it stands', () => {
@@ -394,6 +441,20 @@ describe('normaliseHydro', () => {
     { id: '9999999999992', name: 'Another', operator: 'x', zero: null },
     { id: '2847500000100', name: 'Pannenmühle', operator: 'LANUV, NRW', zero: null },
   ];
+
+  it('a registered station listed twice gives no zero: both rows are conflict, whatever their values (review CR-1)', () => {
+    const twice: HydroRow[] = [
+      { id: '2829100000100', name: 'Stah', operator: 'LANUV, NRW', zero: 29.938 },
+      { id: '2869500000200', name: 'Goch', operator: 'LANUV, NRW', zero: 12 },
+      { id: '2829100000100', name: 'Stah', operator: 'LANUV, NRW', zero: 29.938 },
+      { id: '2847500000100', name: 'Pannenmühle', operator: 'LANUV, NRW', zero: 30 },
+      { id: '2847500000100', name: 'Pannenmühle', operator: 'LANUV, NRW', zero: null },
+    ];
+    const out = normaliseHydro(twice, { registry: de7 });
+    expect(out.gaugeZeros).toEqual([{ series: '2869500000200/W', value_m: 12, datum: 'NHN', valid_from: null }]);
+    expect(out.dropped).toEqual({ conflict: 4 });
+    expect(out.unknown).toBe(0);
+  });
 
   it('only a registered DE-7 series gets a zero: NHN, no validity date; unknown counts once per series; a missing zero is zero_missing', () => {
     const out = normaliseHydro(rows, { registry: de7 });
@@ -537,7 +598,7 @@ describe('property and fuzz tests', () => {
           fc.tuple(
             no,
             fc.integer({ min: 0, max: 99_999 }),
-            fc.option(fc.integer({ min: -999_999, max: 9_999_999 }), { nil: null }),
+            fc.option(fc.integer({ min: -10_000, max: 1_000_000 }), { nil: null }),
           ),
           { maxLength: 20 },
         ),
@@ -579,7 +640,11 @@ describe('property and fuzz tests', () => {
           GaugeZeroRow.parse(z);
           expect(de7.has(z.series)).toBe(true);
         }
-        expect(out.gaugeZeros.length + (out.dropped.zero_missing ?? 0)).toBe(registered.length);
+        expect(out.gaugeZeros.length + (out.dropped.zero_missing ?? 0) + (out.dropped.conflict ?? 0)).toBe(
+          registered.length,
+        );
+        // At most one zero per series (two would break the zero's range key).
+        expect(new Set(out.gaugeZeros.map((z) => z.series)).size).toBe(out.gaugeZeros.length);
         expect(out.unknown).toBe(new Set(list.filter((r) => !de7.has(keyOf(r.id))).map((r) => r.id)).size);
         expect(normaliseHydro(list, { registry: de7 })).toEqual(out);
       }),
