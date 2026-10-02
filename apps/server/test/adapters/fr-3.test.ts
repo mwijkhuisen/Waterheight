@@ -241,17 +241,18 @@ describe('synthetic payloads [U]', () => {
     expect(big.obs[0]).toMatchObject({ value: 8000, qc: QC.RAW | QC.RANGE });
   });
 
-  it('a raw value near the edge of the double range overflows the ×100 factor: value_out_of_range drift, never ±Infinity', () => {
+  it('a raw value that overflows the ×100 factor, or any canonical value over 1e7: value_out_of_range drift', () => {
     const h = { GrdSerie: 'H', CdStationHydro: 'A302009050' } as const;
     const hc = { ...base, variant: LAUTERBOURG_H };
-    for (const raw of [1.8e306, -1.8e306, Number.MAX_VALUE]) {
+    for (const raw of [1.8e306, -1.8e306, Number.MAX_VALUE, 1e300, 100_001]) {
       expect(() => run1([[T, raw]], h, hc), String(raw)).toThrow(
         expect.objectContaining({ code: 'value_out_of_range' }),
       );
     }
-    // Just inside the range it is a stored value (with the range bit); a ×1 discharge of the same size is finite.
-    expect(run1([[T, 1e300]], h, hc).obs[0]).toMatchObject({ value: 1e302, qc: QC.RAW | QC.RANGE });
-    expect(run1([[T, 1.8e306]]).obs[0]).toMatchObject({ value: 1.8e306, qc: QC.RAW | QC.RANGE });
+    // A finite ×1 discharge over 1e7 is drift too (review SR-2: it would overflow the real column); 1e7 is kept.
+    expect(() => run1([[T, 1e300]])).toThrow(expect.objectContaining({ code: 'value_out_of_range' }));
+    expect(run1([[T, 100_000]], h, hc).obs[0]).toMatchObject({ value: 1e7, qc: QC.RAW | QC.RANGE });
+    expect(run1([[T, 9_999_999]]).obs[0]).toMatchObject({ value: 9_999_999, qc: QC.RAW | QC.RANGE });
   });
 
   it('every row is raw: Vigicrues publishes no quality', () => {

@@ -263,17 +263,20 @@ describe('synthetic payloads [U]', () => {
     expect(norm([line({ q: '1000000', w: '' })]).obs[0]).toMatchObject({ value: 1_000_000, qc: QC.RAW | QC.RANGE });
   });
 
-  it('a level near the edge of the double range overflows the ×100 factor: value_out_of_range drift, never ±Infinity', () => {
-    for (const w of ['1.8e306', '9999999e300']) {
+  it('a level that overflows the ×100 factor, or any canonical value over 1e7: value_out_of_range drift', () => {
+    for (const w of ['1.8e306', '9999999e300', '1e300', '100001']) {
       expect(() => norm([line({ w })]), w).toThrow(expect.objectContaining({ code: 'value_out_of_range' }));
     }
     // A relative gauge (a stage) at the negative edge: the same drift.
     expect(() => norm([line({ id: '2283', w: '-1.8e306' })])).toThrow(
       expect.objectContaining({ code: 'value_out_of_range' }),
     );
-    // Just inside the range it is a stored level (with the range bit); a ×1 discharge of the same size is finite.
-    expect(norm([line({ w: '1e300', q: '' })]).obs[0]).toMatchObject({ value: 1e302, qc: QC.RAW | QC.RANGE });
-    expect(norm([line({ q: '1.8e306', w: '' })]).obs[0]).toMatchObject({ value: 1.8e306, qc: QC.RAW | QC.RANGE });
+    // A finite ×1 discharge over 1e7 is drift too (review SR-2: it would overflow the real column); 1e7 is kept.
+    expect(() => norm([line({ q: '1.8e306', w: '' })])).toThrow(
+      expect.objectContaining({ code: 'value_out_of_range' }),
+    );
+    expect(norm([line({ w: '100000', q: '' })]).obs[0]).toMatchObject({ value: 1e7, qc: QC.RAW | QC.RANGE });
+    expect(norm([line({ q: '9999999', w: '' })]).obs[0]).toMatchObject({ value: 9_999_999, qc: QC.RAW | QC.RANGE });
   });
 
   it('a value more than 15 minutes ahead of the fetch is dropped; a station not heard for 45 days is too_old', () => {
@@ -293,7 +296,7 @@ describe('synthetic payloads [U]', () => {
   });
 
   it('an implausible level or discharge is kept with the range bit', () => {
-    expect(norm([line({ w: '9999999' })]).obs.find((r) => r.series === '2289/W')).toMatchObject({
+    expect(norm([line({ w: '99999' })]).obs.find((r) => r.series === '2289/W')).toMatchObject({
       qc: QC.RAW | QC.RANGE,
     });
   });

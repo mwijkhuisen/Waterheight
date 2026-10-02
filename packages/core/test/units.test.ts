@@ -20,7 +20,17 @@ describe('units (catalogue §4.5)', () => {
     expect(() => toCanonical('m', 1.8e306)).toThrow(SchemaDrift);
     expect(() => toCanonical('m', -1.8e306)).toThrow(SchemaDrift);
     expect(() => toCanonical('m', 1.8e306)).toThrow('value_out_of_range');
-    expect(toCanonical('m', 1e300)).toBe(1e302);
+  });
+
+  it('a finite canonical value over 1e7 in magnitude is drift too, never a PostgreSQL real overflow (review SR-2)', () => {
+    for (const raw of [1e300, -1e300, 1.0000001e7, -1.0000001e7]) {
+      expect(() => toCanonical('cm', raw), String(raw)).toThrow('value_out_of_range');
+    }
+    expect(() => toCanonical('m', 100_001)).toThrow('value_out_of_range');
+    expect(toCanonical('cm', 9_999_999)).toBe(9_999_999);
+    expect(toCanonical('m³/s', -9_999_999)).toBe(-9_999_999);
+    expect(toCanonical('cm', 1e7)).toBe(1e7);
+    expect(toCanonical('m', 100_000)).toBe(1e7);
   });
 
   it('converts to cm and m³/s', () => {

@@ -41,14 +41,22 @@ export const isUnit = (unit: string): unit is Unit => Object.hasOwn(UNITS, unit)
 const tidy = (v: number) => Number(v.toPrecision(7));
 
 /**
+ * The largest canonical magnitude a payload may state: 1e7 cm is 100 km, 1e7 m³/s ten million. Above every real
+ * value and far below the range of a PostgreSQL `real` (about 3.4e38).
+ */
+const MAX_CANONICAL = 1e7;
+
+/**
  * A provider value times the factor its series declares in the registry (`to_canonical`). A product that is not
  * a finite number (a raw value near the edge of the double range, ×100) is drift, never a stored ±Infinity: the
- * payload is quarantined with a fixed code instead of failing in the loader (P5a review of the test package).
+ * payload is quarantined with a fixed code instead of failing in the loader (P5a review of the test package). So
+ * is a finite product whose magnitude is over MAX_CANONICAL before it is rounded (1e300 would fail the `real` column
+ * as 22003 and be retried as `load_error`; P5a review SR-2): a payload that states one is broken.
  */
 export function scale(factor: number, value: number): number {
-  const v = tidy(value * factor);
-  if (!Number.isFinite(v)) throw new SchemaDrift('value_out_of_range');
-  return v;
+  const v = value * factor;
+  if (!Number.isFinite(v) || Math.abs(v) > MAX_CANONICAL) throw new SchemaDrift('value_out_of_range');
+  return tidy(v);
 }
 
 export function toCanonical(unit: Unit, value: number): number {

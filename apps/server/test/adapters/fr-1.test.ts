@@ -382,6 +382,17 @@ describe('synthetic payloads [U]', () => {
     expect(one({ resultat_obs: 0 }).obs[0]).toMatchObject({ value: 0, qc: QC.RAW });
   });
 
+  it('a row of 1e300 makes the page value_out_of_range drift, never a database overflow (review SR-2)', () => {
+    const page = [row({ date_obs: '2026-09-30T11:50:00Z' }), row({ resultat_obs: 1e300 })];
+    expect(() => normaliseObservations(page, base)).toThrow(expect.objectContaining({ code: 'value_out_of_range' }));
+    expect(() => one({ grandeur_hydro: 'H', resultat_obs: -1e300 })).toThrow(
+      expect.objectContaining({ code: 'value_out_of_range' }),
+    );
+    // 1e10 l/s is 1e7 m³/s, the largest discharge kept (with the range bit); 100 m³/s more is drift.
+    expect(one({ resultat_obs: 1e10 }).obs[0]).toMatchObject({ value: 1e7, qc: QC.RAW | QC.RANGE });
+    expect(() => one({ resultat_obs: 1.00001e10 })).toThrow(expect.objectContaining({ code: 'value_out_of_range' }));
+  });
+
   it('a null value is a gap, an unregistered station is counted, a site-level row is dropped', () => {
     expect(one({ resultat_obs: null })).toEqual({ obs: [], gaugeZeros: [], dropped: { gap: 1 }, unknown: 0 });
     expect(one({ code_station: 'Z999999999' })).toMatchObject({ obs: [], unknown: 1, dropped: {} });
