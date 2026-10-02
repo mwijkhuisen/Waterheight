@@ -148,14 +148,17 @@ const de7Load = (b: Uint8Array) =>
   });
 /** A messwerte.zip whose one member is `text` (level 6: the ratio must stay under the guard's 50:1). */
 const de7Zip = (text: string) => zipSync({ 'messwerte.txt': [strToU8(text), { level: 6 }] });
-/** `n` plausible rows (increasing times, scattered values), about 50 bytes each, as a real member has. */
-const de7Rows = (n: number) => {
+/**
+ * `n` plausible rows (scattered values), about 50 bytes each, as a real member has. `stations` and `times` set how
+ * many distinct station numbers and times they cycle through (a real messwerte.txt: 252 and 2,016).
+ */
+const de7Rows = (n: number, { stations = 1, times = 2_016 }: { stations?: number; times?: number } = {}) => {
   const out: string[] = [DE7_HEADER];
   let x = 12_345;
   for (let i = 0; i < n; i += 1) {
     x = (x * 1_103_515_245 + 12_345) % 2_147_483_648;
-    const t = new Date(Date.UTC(2026, 8, 22, 13, 45) + i * 60_000).toISOString().replace('Z', '+01:00');
-    out.push(`2847500000100;${t};${(x % 20_000) / 100}`);
+    const t = new Date(Date.UTC(2026, 8, 22, 13, 45) + (i % times) * 60_000).toISOString().replace('Z', '+01:00');
+    out.push(`${2_847_500_000_100 + (i % stations)};${t};${(x % 20_000) / 100}`);
   }
   return out.join('\r\n');
 };
@@ -231,6 +234,16 @@ export const BODIES: Record<string, [() => string | Uint8Array, (b: Uint8Array) 
   // P5b. DE-7 through the loader's own path (ZIP guard, line sink): a member of one row more than the cap, and a
   // member whose one line never ends (the splitter cuts it at 1 KB). LU-1 and DE-8 at their CSV caps, LU-6 as JSON.
   'de7-rows': [() => de7Zip(de7Rows(DE7_MAX_ROWS['messwerte.txt'] + 1)), de7Load],
+  // Review M1 of P5b: the reviewer's flood (800,000 distinct station numbers, 753 MB without a cap), here as many
+  // as the row cap allows, and as many distinct times; both end at the first number or time over its cap.
+  'de7-stations': [
+    () => de7Zip(de7Rows(DE7_MAX_ROWS['messwerte.txt'], { stations: DE7_MAX_ROWS['messwerte.txt'] })),
+    de7Load,
+  ],
+  'de7-times': [
+    () => de7Zip(de7Rows(DE7_MAX_ROWS['messwerte.txt'], { times: DE7_MAX_ROWS['messwerte.txt'] })),
+    de7Load,
+  ],
   'de7-line': [
     () =>
       zipSync({ 'messwerte.txt': [Buffer.concat([Buffer.from(`${DE7_HEADER}\r\n`), noise(4 * MIB)]), { level: 6 }] }),

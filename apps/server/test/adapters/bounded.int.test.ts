@@ -49,6 +49,8 @@ const expected: Record<keyof typeof BODIES, string> = {
   // P5b: DE-7 through the loader's ZIP path (the row cap at 400,001 rows; one line that never ends), LU-1 and DE-8
   // at their CSV caps, LU-6 as JSON.
   'de7-rows': 'csv_rows at line.400002',
+  'de7-stations': 'csv_stations at line.1002',
+  'de7-times': 'csv_times at line.4002',
   'de7-line': 'line_length',
   'lu1-rows': 'csv_rows',
   'lu1-columns': 'csv_columns',

@@ -4,7 +4,16 @@ import fc from 'fast-check';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { CHUNK, type Context, keyOf, normalise, PLACEHOLDERS, TIME } from '../../src/adapters/de-7/normalise.ts';
-import { HEADER, lineSink, MAX_LINE, MAX_ROWS, parseText, type Readings } from '../../src/adapters/de-7/parse.ts';
+import {
+  HEADER,
+  lineSink,
+  MAX_LINE,
+  MAX_ROWS,
+  MAX_STATIONS,
+  MAX_TIMES,
+  parseText,
+  type Readings,
+} from '../../src/adapters/de-7/parse.ts';
 import { LOAD_ADAPTERS, type LoadContext } from '../../src/load/adapters.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
@@ -383,6 +392,47 @@ describe('parse (the strict line sink)', () => {
     // The header, the rows and the terminator are lines 1…MAX+2; the next row is over the cap.
     expect(drift(() => sink.line(line))).toEqual(['csv_rows', `line.${MAX_ROWS['messwerte.txt'] + 3}`]);
   }, 60_000);
+
+  it('the distinct station numbers per member: MAX_STATIONS fit, the next new one is csv_stations (review M1)', () => {
+    expect(MAX_STATIONS).toBe(1_000);
+    for (const member of ['messwerte.txt', 'pegel_messwerte.txt'] as const) {
+      const sink = lineSink(member, { ascii: true });
+      sink.line(HEADER);
+      const no = (i: number) => String(9_000_000_000_000 + i);
+      for (let i = 0; i < MAX_STATIONS; i += 1) sink.line(row(-15, 1, no(i)));
+      // A known number still loads; a terminator of an unknown number is no station.
+      sink.line(row(-30, 1, no(0)));
+      sink.line(`${no(MAX_STATIONS)};`);
+      expect(drift(() => sink.line(row(-15, 1, no(MAX_STATIONS))))).toEqual([
+        'csv_stations',
+        `line.${MAX_STATIONS + 4}`,
+      ]);
+    }
+  });
+
+  it('the distinct times per member: 4,000 in messwerte.txt, 20,000 in pegel_messwerte.txt, then csv_times (review M1)', () => {
+    expect(MAX_TIMES).toEqual({ 'messwerte.txt': 4_000, 'pegel_messwerte.txt': 20_000 });
+    for (const member of ['messwerte.txt', 'pegel_messwerte.txt'] as const) {
+      const sink = lineSink(member, { ascii: true });
+      sink.line(HEADER);
+      for (let i = 0; i < MAX_TIMES[member]; i += 1) sink.line(row(-i, 1));
+      // A time already seen, from another station, is no new time.
+      sink.line(row(0, 1, '2869500000200'));
+      expect(drift(() => sink.line(row(-MAX_TIMES[member], 1)))).toEqual([
+        'csv_times',
+        `line.${MAX_TIMES[member] + 3}`,
+      ]);
+    }
+  });
+
+  it('the real members stay well under the caps: 252 stations and 2,016 times in the P1a messwerte.txt', async () => {
+    const out = parseText(
+      Buffer.from(unzipSync(rawFixture('DE-7', 'de-7-messwerte').body)['messwerte.txt'] as Uint8Array).toString(),
+      'messwerte.txt',
+      { ascii: true },
+    );
+    expect([out.stations.length, out.times.length]).toEqual([252, 2016]);
+  });
 
   it('the rows are compact columns: a time shared by many stations is one string', () => {
     const r = read([row(-15, 1), row(-15, 2, '2869500000200'), row(-15, 3, '9286455000200')]);

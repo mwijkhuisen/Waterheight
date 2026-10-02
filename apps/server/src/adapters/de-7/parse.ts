@@ -9,7 +9,8 @@ import { SchemaDrift } from '@rws/core';
 //
 // A member is far too large to hold as rows (pegel_messwerte.txt: 108 MB, about 2.13 million lines), so
 // parsing is a pure line sink: the loader inflates the member under the ZIP guard of §6.7 and feeds it the
-// lines (an adapter may not import the guards, load/adapters.ts does), and the sink keeps compact columns.
+// lines (an adapter may not import the guards, load/adapters.ts does), and the sink keeps compact columns, with
+// caps on the rows, the distinct station numbers and the distinct times of a member.
 // Every line is checked strictly here; times stay text until normalise reads them under their declared
 // convention. Failures are SchemaDrift with a fixed code and the line number, never provider text.
 
@@ -18,6 +19,19 @@ export const HEADER = 'station_no;time;value(cm)';
 /** Lines per member, measured: messwerte.txt 238,931 (2026-09-29), pegel_messwerte.txt 2,127,026 (2026-09-23). */
 export const MAX_ROWS = { 'messwerte.txt': 400_000, 'pegel_messwerte.txt': 3_000_000 } as const;
 export type Member = keyof typeof MAX_ROWS;
+
+/**
+ * Distinct station numbers per member (review M1 of P5b: the rows alone bounded nothing else, and 800,000 distinct
+ * numbers in a 6.5 MB ZIP took the loader to 753 MB). Measured: 252 in messwerte.txt (the P1a recording and the
+ * archived payloads of 2026-09-30 to 10-01), 253 in pegel_messwerte.txt (the seed of 2026-09-30); the station file
+ * lists 254. A number the registry does not know is `unknown`, so this also caps the unknown keys.
+ */
+export const MAX_STATIONS = 1_000;
+/**
+ * Distinct time strings per member. Measured: 2,016 in messwerte.txt (7 days at 5 minutes, every payload), 17,856 in
+ * pegel_messwerte.txt (62 days at 5 minutes, the seed of 2026-09-30).
+ */
+export const MAX_TIMES = { 'messwerte.txt': 4_000, 'pegel_messwerte.txt': 20_000 } as const;
 
 /** The longest line is about 50 bytes. */
 export const MAX_LINE = 128;
@@ -50,6 +64,7 @@ export type LineSink = { line: (text: string) => void; end: () => Readings };
  */
 export function lineSink(member: Member, { ascii }: { ascii: boolean }): LineSink {
   const max = MAX_ROWS[member];
+  const maxTimes = MAX_TIMES[member];
   const out: Readings = { stations: [], times: [], station: [], time: [], value: [], terminators: 0 };
   const stationIx = new Map<string, number>();
   const timeIx = new Map<string, number>();
@@ -82,11 +97,13 @@ export function lineSink(member: Member, { ascii }: { ascii: boolean }): LineSin
       if (out.station.length >= max) drift('csv_rows');
       let s = stationIx.get(no);
       if (s === undefined) {
+        if (out.stations.length >= MAX_STATIONS) drift('csv_stations');
         s = out.stations.push(no) - 1;
         stationIx.set(no, s);
       }
       let t = timeIx.get(ts);
       if (t === undefined) {
+        if (out.times.length >= maxTimes) drift('csv_times');
         t = out.times.push(ts) - 1;
         timeIx.set(ts, t);
       }
