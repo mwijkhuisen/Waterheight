@@ -272,16 +272,19 @@ describe('what a drifted provider turns into', { timeout: 30_000 }, () => {
     expect(JSON.stringify(report)).not.toContain('EVIL_PROVIDER_KEY');
   });
 
-  // A messwerte.zip of our own: the real header and a block of 10,050 rows (the validity wants 10,000 lines).
+  // A messwerte.zip of our own: the real header and 10,050 rows (the validity wants 10,000 lines).
+  const STATIONS = ['2768898001', '2829100000100', '2869500000200', '9286455000200', '2847500000100'];
   const messwerte = (rows: string[] = [], header = 'station_no;time;value(cm)', member = 'messwerte.txt') =>
     zip({
       [member]: Buffer.from(
         [
           header,
-          // One row a minute for 7 days, a varying value: a repeated row would trip the ZIP ratio guard.
+          // Five stations, one row every 5 minutes for 7 days each (a real member: 252 stations and 2,016 times,
+          // within the parser's caps of 1,000 and 4,000), a varying value: repeated rows would trip the ZIP ratio guard.
           ...Array.from({ length: 10_050 }, (_, i) => {
-            const at = new Date(Date.UTC(2026, 8, 22, 13, 0, 0) + i * 60_000 + 3_600_000).toISOString();
-            return `2768898001;${at.slice(0, 19)}.000+01:00;${(((i * 7919) % 19_000) / 100).toFixed(2)}`;
+            const at = new Date(Date.UTC(2026, 8, 22, 13, 0, 0) + (i % 2_010) * 300_000 + 3_600_000).toISOString();
+            const no = STATIONS[Math.floor(i / 2_010)];
+            return `${no};${at.slice(0, 19)}.000+01:00;${(((i * 7919) % 19_000) / 100).toFixed(2)}`;
           }),
           ...rows,
           '2768898001;',
