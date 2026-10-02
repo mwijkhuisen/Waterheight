@@ -34,7 +34,7 @@ Off GitHub, B3 also means: revoke access to the old server that the legacy `depl
 
 ## Actions variables and the contract check (P2b; set by the owner, not by the script)
 
-The nightly workflow `contract-check.yml` (03:23 UTC, and by hand) needs two repository **variables**, not secrets:
+The nightly workflow `contract-check.yml` (03:29 UTC since P5a, 03:23 before; GitHub may start it late; and by hand) needs two repository **variables**, not secrets:
 
 | Variable | Value |
 |---|---|

@@ -4,7 +4,7 @@
 - after a fix, to load payloads that were quarantined (`docs/runbooks/schema-drift.md`);
 - after a parse, normalise or registry change that alters what is stored (values dropped by a wrong unit or stored with a wrong factor, a new rule; §3 after a provider's unit change), except over a range that reaches back before a unit or factor change of a series: it rescales that series' older rows (check `docs/known-gaps.md` KG-074 for the recorded changes first);
 - after a restore of the raw archive when a payload was skipped as `object_missing` (`docs/runbooks/restore.md`);
-- after the release that first brings an adapter (NL-1 in P2b, §5): the loader without it moved its cursor past those lines and stored nothing;
+- after the release that first brings an adapter (NL-1 in P2b, §5; FR-1, FR-3, CH-1, CH-2 and CH-3 in P5a, §6): the loader without it moved its cursor past those lines and stored nothing (for NL-1 again in P5a: its 9 Belgian series were captured since P1 and counted as unknown until the registry knew them);
 - to prove that the archive still reproduces the database (a second replay must change nothing), with the same exception: a range that reaches back before a unit or factor change of a series rescales that series' older rows (KG-074 first).
 
 `replay` re-parses archived objects through the loader's own code path. It **never fetches**, never moves the load cursor and never touches the fetch health. The raw archive is the source of truth; the database can be rebuilt from it, as far as the retention pruner has not deleted objects (`docs/runbooks/disk-full.md` §4) and except across a unit or factor change of a series, which the registry does not date (KG-074).
@@ -22,12 +22,13 @@
 | A quarantined or skipped payload that now loads becomes `ok` | This is how a fixed drift is cleared |
 | A payload that loaded before is never downgraded (for instance its object was pruned since) | A missing object of an `ok` batch changes nothing |
 | The batch's `n_skipped` (values a registry change could still load) is counted again | After a registry fix, a replay sets it to 0 and the pruner may keep the object no longer |
+| **Gap-fill rows (P5a):** the FR-3 and CH-3 payloads also write fill rows into FR-1 and CH-1 series (qc bit 512). A fill row is written only where the target source states no value, a row of the target source replaces a fill row whatever the fetch times, and neither writes an `obs_revision` | The end state is the same in whatever order FR-1, FR-3, CH-1 and CH-3 are replayed (integration-tested); the `n_new` of a first replay depends on that order (a row of the target source that replaces a fill row counts as new), and a second replay of any of them prints `"n_new":0,"n_changed":0`. Removing fill rows is §7 |
 | It never touches the tail's attempt record (`app_meta` `load_attempt`) and stops at the first payload that fails for a reason of its own or cannot be read | Exit 1 with the code (`replay: failed (<code>)`); the payloads before it are committed. Fix the cause and run it again, or narrow the range |
 | Lines with a fetch error, an HTTP status of 400 or more, no object (304, `dup_of`, a closed gate) or no adapter are skipped | Only archived payloads are replayed |
 | The range is in **manifest days**: the UTC day of the file `raw/_manifest/<day>.jsonl` the line is filed under (the day its fetch started; the recorder's recovery appends to past days). `--from` may instead be a UTC **instant** (`2026-10-05T07:10:00Z`): a line whose fetch ended before it (the batch's `fetched_at`) is skipped, not counted and never read | Use a range that includes the day of the payload, `--to` inclusive; an instant after a unit change (§3) |
 | Arguments are checked against fixed patterns **and** the adapter table: `--source` must have a load adapter, `--spec` must be one of its specs, `--from` a real UTC day or a real UTC instant to the second with `Z`, `--to` a real UTC day, not before the day of `--from` | No identifier reaches SQL from the command line |
 
-Adapter table today: `DE-1` with the specs `de-1-basin`, `de-1-series` and `de-1-meta`; `NL-1` with `nl-1-obs-key`, `nl-1-obs-other` and `nl-1-obs-twin`; `NL-2` with `nl-2-wfs` (NL-2 stores no observation, so a replay of it never writes a row). NL-4 has no adapter: `--source NL-4` is refused. The NL-1 forecast and catalogue specs have no loader entry yet (P8), so their lines are not counted.
+Adapter table today: `DE-1` with the specs `de-1-basin`, `de-1-series` and `de-1-meta`; `NL-1` with `nl-1-obs-key`, `nl-1-obs-other` and `nl-1-obs-twin`; `NL-2` with `nl-2-wfs` (NL-2 stores no observation, so a replay of it never writes a row); from P5a `FR-1` with `fr-1-obs` (every walk page is its own line) and `fr-1-ref` (the daily gauge zeros), `FR-3` with `fr-3-obs` (the seed) and `fr-3-twin`, `CH-1` with `ch-1-lindas`, `CH-2` with `ch-2-pq` and `CH-3` with `ch-3-40d`. NL-4 has no adapter: `--source NL-4` is refused. The NL-1 forecast and catalogue specs have no loader entry yet (P8), so their lines are not counted.
 
 ## 2. Run it
 
@@ -144,6 +145,47 @@ The loader of the P2a release had no NL-1 adapter, so it moved its cursor past e
 4. Expect `"n_new"` greater than 0 the first time and `"quarantined":0`. Run the same command a second time: it must print `"n_new":0,"n_changed":0`.
 5. Check `scripts/verify-prod.sh <domain>`: the checks `health NL-1`, `tier-1 NL-1` and `replay NL-1` pass once the loader has caught up (`.loader.backlog_age_s` small). A payload that quarantines is handled by `docs/runbooks/schema-drift.md`; the codes `unregistered_method`, `unknown_quality`, `conflict`, `registered_dropped` and `unit_mismatch` are alerts, and the values they withheld load in a replay after the fix (`n_skipped` of those batches is above 0 until then). These alerts fire **during the replay too**: one line per payload and code, so a replay over months of payloads that each withhold a value logs one alert per payload. Count them before you act on them, and do not read them as new drift. A batch's `n_skipped` adds two things: the values withheld under those codes and, for each list of a series the registry does not know (an info line, `series not in the registry`), one.
 
+## 6. After the P5a deploy: load the FR and CH payloads since P1
+
+The loader of the releases before P5a had no adapter for FR-1, FR-3, CH-1, CH-2 and CH-3, so it moved its cursor past every one of their lines since P1 and stored nothing (fetch health only). It also did not know the nine Belgian series that `nl-1-obs-other` has captured since P1 (the points on Belgian soil: `antwerpen`, `lixhebiefaval`, `maaseik`, `herenlaak`, `lanaken`, `kanne`, `smeermaas.zuidwillemsvaart`): their values were counted as unknown. After the release with P5a is deployed and `migrate` has synced the registry (it now holds `fr-1.yaml`, `fr-3.yaml`, `ch-1.yaml` and `ch-2.yaml`, and the Belgian NL-1 rows), load them once. The lines are all still in the archive (the pruner is a dry run, and the objects of CH-1 and CH-2 are kept whole until P7). The first production manifest day is 2026-09-30.
+
+1. Find the first day of the archive and use today's UTC day as `<today>`, as in §5 step 1.
+2. Count first, for each of `FR-1`, `FR-3`, `CH-1`, `CH-2`, `CH-3` and `NL-1`, with the `rwsc` function of §2 (`--dry-run` writes nothing):
+
+   ```bash
+   for s in FR-1 FR-3 CH-1 CH-2 CH-3 NL-1; do
+     rwsc run --rm --no-deps -T load replay --source $s --from <first day> --to <today> --dry-run
+   done
+   ```
+
+   An FR-1 `lines` counts every page of every walk, the seed walks included.
+3. Run each of them, without `--spec` (every spec of the source loads):
+
+   ```bash
+   for s in FR-1 FR-3 CH-1 CH-2 CH-3 NL-1; do
+     rwsc run --rm --no-deps -T load replay --source $s --from <first day> --to <today>
+   done
+   ```
+
+   **The order does not matter.** FR-3 and CH-3 write gap-fill rows (qc bit 512) into FR-1 and CH-1 series, only where FR-1 and CH-1 state no value, and a row of FR-1 or CH-1 replaces a fill row whatever the fetch times: replaying FR-3 first or last gives the same `obs`, `obs_latest`, rollups and revisions (§1). A payload that still quarantines is counted in `quarantined` (§2); `docs/runbooks/schema-drift.md` §2 lists the codes of the five adapters.
+4. Expect `"n_new"` above 0 the first time and `"quarantined":0`. Run each command a second time: it must print `"n_new":0,"n_changed":0`, whatever order the first runs had.
+5. Check `scripts/verify-prod.sh <domain>`: `health FR-1`, `health CH-1`, `tier-1 FR-1`, `tier-1 CH-1`, `coverage FR-1` and `coverage CH-1` (at least 95 % of the expected buckets since the seed), `interval CH-1`, `fresh FR-1`, `fresh CH-1` and `belgian set` pass once the loader has caught up (`.loader.backlog_age_s` small) and the first scheduled payloads after the deploy have loaded. The alerts of the retained drop codes (`unknown_quality`, `datum_mismatch`, `conflict`, …) fire **during a replay too**, one line per payload and code: count them before you act on them (§5 step 5). A batch's `n_skipped` above 0 means values a registry change could still load: for FR-1 a series that the registry does not hold yet (one that only delivers on days the registry's one-day derivation did not see; `docs/known-gaps.md` KG-123), for CH-3 a fill row whose CH-1 series does not exist.
+
+## 7. Removing gap-fill rows (a licence withdrawn)
+
+A replay never removes a stored point (§1), and `rws_load` may not delete. Gap-fill rows sit in FR-1 and CH-1 series under those sources' licence. If the use of FR-3 or CH-3 is withdrawn, the rows must go through a **reviewed data migration**, never by hand, and the loader must stop writing them in the same change:
+
+1. In the PR, remove `fill` from the FR-3 and CH-3 entries of `apps/server/src/load/adapters.ts` (and, if the fetching stops too, the capture specs `fr-3-obs`, `fr-3-twin` and `ch-3-40d`), so that neither the loader nor a replay writes fill rows again. A fill row is recognised by the backfilled bit (512 in `obs.qc`) and by its batch: the batch of a fill row belongs to the withdrawn source (`ingest_batch.source_id`). A row that FR-1 or CH-1 stated itself has no bit 512 and is never touched.
+2. Count what the migration will delete (read-only, on the VPS):
+
+   ```bash
+   sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
+     "SELECT b.source_id, count(*) FROM obs o JOIN ingest_batch b ON b.id = o.batch_id
+      WHERE (o.qc & 512) <> 0 GROUP BY 1"
+   ```
+
+3. The migration deletes those `obs` rows (qc bit 512 and a batch of the withdrawn source) and recomputes the `obs_latest` rows and the hourly and daily buckets of the series it touched, as for a fix that drops values (§1). Fill rows never wrote an `obs_revision`, so there is none to remove. A new migration needs its sha256 in `test/migrations.test.ts`. The rows of the source's own twin series (the FR-3 twins, CH-2) are other series: they stay unless the withdrawal covers them too.
+
 ## What not to do
 
 - Do not replay to "fix" a value the provider itself corrected: a newer payload already wins, and the older revision is in `obs_revision`.
@@ -152,3 +194,4 @@ The loader of the P2a release had no NL-1 adapter, so it moved its cursor past e
 - Do not run it against the raw archive while a restore is still copying files in: the loader would set an object that has not arrived yet to `skipped` (`object_missing`). Stop `load` first (`docs/runbooks/restore.md`).
 - Do not move or edit `load_cursor`. Replay never needs to; `load` moves it by itself.
 - Do not expect it to bring back what the pruner deleted: an object that is gone is `object_missing`.
+- Do not delete gap-fill rows (qc bit 512) by hand, and do not expect a replay to remove them: §7.

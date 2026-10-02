@@ -1079,6 +1079,7 @@ GET https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=A
 - Measured: `A*,B*,D*,E*` over 3 h → 200, 19,099 rows, 3.66 MB uncompressed, 9.3 s, one page. `A*,B*,D*,E1*,E2*,E3*` over 20 min → 155 rows in 0.8 s. The planned poll is about 5–7k rows per call and about 100–150 calls per day.
 - Follow `next`, send `Accept-Encoding: gzip`, upsert on (code_station, grandeur, date_obs), drop rows where `code_station` is null, and convert mm → m and l/s → m³/s.
 - **Use a 2–3 h overlapping window**, because hourly-transmitting stations deliver late.
+- (P5a: `next` is the field of the JSON body, and the recorder follows it; the `Link` header is not read. A page with a `next` is HTTP 206. `count` is the total of the whole walk, not the length of the page (6,592 in the example below, for 5 rows), so a parser never compares the two. A day with few values leaves series out of the payload, so a registry derived from one day of runs does not know a series that delivers only on other days: KG-123.)
 ```json
 GET …/observations_tr?code_entite=B720000001&grandeur_hydro=H&size=5      → HTTP 206 Partial Content + Link: first/prev/next
 {"count":6592,"next":"https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=B720000001&grandeur_hydro=H&cursor=AoJw9Jfr...&size=5",
@@ -1140,6 +1141,7 @@ GET https://www.vigicrues.gouv.fr/services/observations.json/index.php?CdStation
 - H is in **m** and Q in m³/s (`GrdSerie=Q`). Timestamps are epoch **ms UTC**; `FormatDate=iso` gives `"DtObsHydro":"2026-09-23T20:00:00+00:00"`.
 - It holds about 2 months (Chooz H from 2026-07-18T23:00Z, 13,934 points; Uckange Q from 2026-07-27). There is **no time-range parameter**.
 - The station codes are the same Sandre codes as Hub'Eau.
+- (P5a: the first name in `registry/seed/fr-3.csv` (Chooz) has an unescaped inner quote, so the file's quoting is broken at that row. Only the `code` column is used; the station names come from the Hub'Eau referentiel.)
 - `GET https://www.vigicrues.gouv.fr/services/observations.json` without parameters returns only the latest timestamp per station (2,352 stations, 140 KB, 9 s), useful as a freshness index.
 - `observations.xml` exists (not called).
 - **Several `/services/v1.1/...` and `/services/x.json/?` URLs return 302** (to `/services/...` or `index.php`). Follow same-host redirects.
@@ -1299,7 +1301,7 @@ SELECT ?id ?name ?water ?time ?q ?w ?t ?dl ?wkt WHERE {
 - `measurementTime` is always a **fixed `+01:00`** (`2026-09-23T20:40:00+01:00` = 19:40Z).
 - Most stations are on a 10-min clock; some report every 20 or 60 min.
 - Stale stations: 2269 Blatten (destroyed by the 2025-05-28 rockslide); 2283 since 2026-09-17; 2356 since 2026-09-22. The shape's `sh:minInclusive` reveals the oldest stale timestamp. **Check freshness per value.**
-- Duplicates: stations 520 and 2283 return two observations each; keep the latest.
+- Duplicates: stations 520 and 2283 return two observations each; keep the latest. (P5a: the river payload of 2026-09-29 also had duplicates at 2303, 2288, 2417 and 2252.)
 - 36 stations have `dangerLevel` = `https://cube.link/Undefined` (no thresholds).
 - Some small stations report relative levels (0.074 m, −0.137 m).
 - 2289 Basel and 2205 Stilli have no temperature. 2288's temperature is flagged as distorted (the flag is visible on hydrodaten only).
@@ -1314,7 +1316,7 @@ SELECT ?id ?name ?water ?time ?q ?w ?t ?dl ?wkt WHERE {
 ```
 - `wl_1`–`wl_4` are the **lower bounds of danger levels 2, 3, 4 and 5**; 180 of 207 stations have them. For lakes they are in m ü. M. (Ägerisee `724.10 m ü.M.`).
 - `threshold_customer` exists for 16 stations; its meaning is UNVERIFIED.
-- **Values are strings with units attached; strip the units.** `failure_text` is in the station's own language.
+- **Values are strings with units attached; strip the units.** `failure_text` is in the station's own language. (P5a: `metric` is `masl` for 34 of the 207 stations, which publish a level in m ü.M. as their main value, and some of them have a discharge sensor as well (2446 and 2447: `sensor_discharge_last_value`); the six stations on `discharge_ls` publish l/s; three stations (2384, 2283, 2282) state a relative level in plain `m`. `sensor_waterlevel_last_value` and `sensor_discharge_last_value` are what the adapter reads.)
 - `produced_at` was 22:08:06 local; the latest value 20:00Z was seen at 20:08Z.
 - There is no robots.txt (404).
 
