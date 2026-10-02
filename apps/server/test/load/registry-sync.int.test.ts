@@ -121,10 +121,10 @@ describe('registry sync', { timeout: 60_000 }, () => {
     expect(local).toEqual([{ n: 8 }]);
     const tier = (await h.t.admin.query('SELECT tier, count(*)::int AS n FROM station GROUP BY 1 ORDER BY 1')).rows;
     expect(tier).toEqual([
-      // DE-1: 41 and 158; NL-1: 31 and 41 (P5a: the 7 Belgian points); FR-1: 39 and 265; CH-1: 17 and 210; the 15
-      // FR-3 and 207 CH-2 twin stations are tier 2.
-      { tier: 1, n: 128 },
-      { tier: 2, n: 896 },
+      // DE-1: 41 and 158; NL-1: 31 and 41 (P5a: the 7 Belgian points); FR-1: 40 and 264 (review CR-4: the bold
+      // Torgny); CH-1: 17 and 210; the 15 FR-3 and 207 CH-2 twin stations are tier 2.
+      { tier: 1, n: 129 },
+      { tier: 2, n: 895 },
     ]);
   });
 

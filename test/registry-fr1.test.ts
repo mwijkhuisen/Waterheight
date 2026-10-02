@@ -60,6 +60,7 @@ const TIER1 = [
   'B315002001',
   'B402101001',
   'B403101001',
+  'B422431101',
   'B460101001',
   'B463101001',
   'B466010101',
@@ -234,14 +235,15 @@ describe('registry/stations/fr-1.yaml', () => {
     for (const r of fr1) expect([r.id, r.native_step]).toEqual([r.id, steps.get(r.provider_key)]);
   });
 
-  it('marks exactly the 39 bold stations of §3.1-§3.4 (69 rows) as tier 1 and first_release, all primary', () => {
+  it('marks exactly the 40 bold stations of §3.1-§3.4 (71 rows) as tier 1 and first_release, all primary', () => {
     const tier1 = fr1.filter((r) => r.tier === 1);
     expect(codes(tier1)).toEqual([...TIER1].sort());
-    expect(tier1).toHaveLength(69);
-    expect(tier1.filter((r) => r.quantity === 'H')).toHaveLength(39);
-    expect(tier1.filter((r) => r.quantity === 'Q')).toHaveLength(30);
+    // Review CR-4: Torgny B422431101 (H and Q) is bold in §3.3, so tier 1, although a Belgian partner.
+    expect(tier1).toHaveLength(71);
+    expect(tier1.filter((r) => r.quantity === 'H')).toHaveLength(40);
+    expect(tier1.filter((r) => r.quantity === 'Q')).toHaveLength(31);
     expect(tier1.every((r) => r.first_release && r.role === 'primary' && r.audience === 'public')).toBe(true);
-    expect(tier1.every((r) => r.country === 'FR')).toBe(true);
+    expect(codes(tier1.filter((r) => r.country !== 'FR'))).toEqual(['B422431101']);
     // Every other row is tier 2 and never first_release; the day export holds a series for every tier-1 station.
     expect(fr1.filter((r) => r.tier === 2).every((r) => !r.first_release)).toBe(true);
     for (const code of TIER1) expect(seriesCodes.has(code), code).toBe(true);
@@ -302,18 +304,19 @@ describe('registry/stations/fr-1.yaml', () => {
       for (const code of PARTNERS) expect(ref.get(code)?.code_commune_station, code).toBe('99131');
     });
 
-    it('are registered as primary tier-2 rows, country BE, public: every partner that has a series in any input (all 18, 31 rows)', () => {
+    it('are registered as primary rows, country BE, public, tier 2 but bold Torgny: every partner that has a series in any input (all 18, 31 rows)', () => {
       const delivering = PARTNERS.filter((c) => seriesCodes.has(c)).sort();
       expect(delivering).toEqual([...PARTNERS].sort());
       const be = fr1.filter((r) => r.country === 'BE');
       expect(codes(be)).toEqual(delivering);
       expect(be).toHaveLength(31);
       for (const r of be) {
+        const bold = r.provider_code === 'B422431101';
         expect([r.id, r.role, r.tier, r.first_release, r.audience, r.licence_gate]).toEqual([
           r.id,
           'primary',
-          2,
-          false,
+          bold ? 1 : 2,
+          bold,
           'public',
           'open',
         ]);

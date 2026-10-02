@@ -57,8 +57,8 @@ const SLOWEST_STEP_MS = 60 * 60_000;
 const SPARSE = 12;
 
 /**
- * The bold stations of catalogue §3.1–§3.4 (tier 1, first release): every row of them is tier 1.
- * Each needs a series in fr-1-series.csv, or an entry of NOT_LIVE.
+ * The bold stations of catalogue §3.1–§3.4 (tier 1, first release): every row of them is tier 1, a Belgian
+ * partner too (Torgny, §3.3; review CR-4). Each needs a series in fr-1-series.csv, or an entry of NOT_LIVE.
  */
 const TIER1 = new Set([
   'A061005051', // Rhin à Strasbourg
@@ -77,6 +77,7 @@ const TIER1 = new Set([
   'B315002001', // Meuse à Stenay
   'B402101001',
   'B403101001',
+  'B422431101', // Chiers à Torgny (BE, a partner)
   'B460101001',
   'B463101001',
   'B466010101',
@@ -417,7 +418,8 @@ function build(inputs: Inputs): { fr1: PublicStation[]; fr3: PublicStation[]; sk
   const partners = new Set(inputs.partners.map((r, i) => field(r, 'code_station', `fr-1-be.csv row ${i + 1}`)));
   const fr3Codes = inputs.fr3.map((r, i) => field(r, 'code', `fr-3.csv row ${i + 1}`));
 
-  // The curated tables must not overlap, and every entry must be in the referentiel.
+  // The curated tables must not overlap (a bold partner is the one overlap: tier 1 is a rank, not a role), and every
+  // entry must be in the referentiel.
   const tableOf = new Map<string, string>();
   for (const [table, codes] of [
     ['mirror', [...MIRRORS.keys()]],
@@ -429,7 +431,8 @@ function build(inputs: Inputs): { fr1: PublicStation[]; fr3: PublicStation[]; sk
     for (const code of codes) {
       if (!ref.has(code)) throw new Error(`${table} station ${code} is not in the referentiel fixtures`);
       const other = tableOf.get(code);
-      if (other !== undefined) throw new Error(`station ${code} is in the ${other} table and the ${table} table`);
+      if (other !== undefined && !(other === 'partner' && table === 'tier-1'))
+        throw new Error(`station ${code} is in the ${other} table and the ${table} table`);
       tableOf.set(code, table);
     }
   }
@@ -589,11 +592,12 @@ function header(inputs: Inputs, file: 'FR-1' | 'FR-3', skips: Skips): string {
       ? [
           '# provider_key = <code_station>/<H|Q>, the same key as the FR-3 twin (FR-3 gap-fills the FR-1 series). H is mm (x0.1,',
           '# stage, datum LOCAL: the gauge zero is read from the referentiel by the loader), Q is l/s (x0.001).',
-          `# tier 1 (first_release) = the ${TIER1.size} bold stations of catalogue §3.1-§3.4; every other row is tier 2. native_step =`,
-          '# expected_step = the modal gap of the series in the recording (PT1H for a series with one point); staleness_limit =',
-          '# max(3 x step, PT90M). expected_forecast_source FR-4 = the Vigicrues forecast stations (§3 "F"); no thresholds.',
+          `# tier 1 (first_release) = the ${TIER1.size} bold stations of catalogue §3.1-§3.4, the bold codes only (CH-1 takes the`,
+          '# whole §3.1 Swiss table); every other row is tier 2. native_step = expected_step = the modal gap of the series in the',
+          '# recording (PT1H for a series with one point); staleness_limit = max(3 x step, PT90M). expected_forecast_source FR-4 =',
+          '# the Vigicrues forecast stations (§3 "F"); no thresholds.',
           '# country by commune: 99131 BE, 99109 DE, 99140 CH, otherwise FR. The 18 Belgian partners (registry/seed/fr-1-be.csv)',
-          '# are primary rows, country BE (A§7.2 exception until a Belgian source is public, P13).',
+          '# are primary rows, country BE (A§7.2 exception until a Belgian source is public, P13); Torgny B422431101 is bold: tier 1.',
           '# role mirror = a gauge another agency operates (never published), with its primary:',
           ...comment([...MIRRORS].map(([code, m]) => `${code} ${m.name} -> ${m.source} ${m.code}`).join(', ')),
           '# Not registered, or registered off:',

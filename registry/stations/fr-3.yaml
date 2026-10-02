@@ -9,7 +9,7 @@
 #   apps/server/src/adapters/fr-1/fixtures/fr-1-ref-E3.raw  sha256 feea225f635d29f820ad7a6321db4b988524a58ba5c306c885154f28a89a85c6
 #   registry/seed/fr-1-series.csv  sha256 f8c3928123767e8278394d81a580ebe5e1a750bcb5ed1de6d7c1992b7714eacc
 #   registry/seed/fr-1-be.csv  sha256 07b706f858e6750c3ca236a39867af86aabb46150113761293229d4317c7c53b
-#   registry/seed/fr-3.csv  sha256 6ea03e7e132aea82a733ed5b438fcb21825c4361e70158c6af2206fc78298b7c
+#   registry/seed/fr-3.csv  sha256 7db61c0aaed592a63fbe1d692fa924e319990bc133c0849e16a227fc2b56159f
 # role twin, tier 2, never published. H is m (x100, stage, LOCAL), Q is m³/s; the step is the FR-1 step of the same
 # key (the gap-fill grid); staleness_limit PT12H. name, coordinates, country and audience are those of the FR-1 row.
 stations:

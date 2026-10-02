@@ -52,7 +52,10 @@ const STEP_MINUTES = new Map([...STEPS].map(([minutes, iso]) => [iso, minutes]))
 /** BAFU publishes every 10 minutes: the step of a station without a measured one (also a one-point day). */
 const DEFAULT_STEP = 'PT10M';
 
-/** Catalogue §3.1 (Swiss table): the river-cube stations of tier 1, first release. */
+/**
+ * Catalogue §3.1 (Swiss table): the river-cube stations of tier 1, first release. CH tier 1 is every station of the
+ * table, bold or not; FR-1 takes only the bold codes of §3.1-§3.4 (review CR-5).
+ */
 const TIER1_RIVER = new Set([
   '2473', // Rhein - Diepoldsau, Rietbrücke
   '2288', // Rhein - Neuhausen, Flurlingerbrücke
@@ -782,7 +785,8 @@ function header(inputs: Inputs, file: 'CH-1' | 'CH-2', skips: Skips): string {
           '# provider_key = <id>/<W|Q>. H is m (x100): an LN02 level (value_kind level), except a relative gauge (a W below',
           `# ${RELATIVE_BELOW_M} m): stage, datum LOCAL. Q is m³/s. name and coordinates come from the latest observation of the`,
           '# station in the cube (a station may appear twice); water_name is the percent-decoded last segment of its water IRI.',
-          '# tier 1 (first_release) = the 17 stations of the catalogue §3.1 Swiss table (the Bodensee 2032 and 2043 are in the lake cube).',
+          '# tier 1 (first_release) = all 17 stations of the catalogue §3.1 Swiss table, bold or not (FR-1 takes only the bold codes',
+          '# of §3.1-§3.4); the Bodensee 2032 and 2043 are in the lake cube.',
           '# expected_threshold_source CH-1 = BAFU danger levels (dl 1-5) in the latest observation, none when it says cube:Undefined;',
           '# expected_forecast_source CH-4 = the stations of registry/seed/ch-4.csv. native_step = expected_step = the station step',
           `# (registry/seed/ch-1-steps.csv; ${DEFAULT_STEP} without an entry); staleness_limit = max(3 x step, PT1H).`,

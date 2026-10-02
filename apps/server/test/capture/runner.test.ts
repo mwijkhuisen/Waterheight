@@ -582,6 +582,10 @@ describe('FR-1 walks (C4, S8, N2)', () => {
     for (const next of [
       'https://evil.example/api/v2/hydrometrie/observations_tr?cursor=1',
       `${OBS.replace('observations_tr', 'sites')}?cursor=1`,
+      // The path must be exactly the observations path, not end like it (review SR-7).
+      'https://hubeau.eaufrance.fr/other/observations_tr?cursor=1',
+      'https://hubeau.eaufrance.fr/api/v1/hydrometrie/observations_tr?cursor=1',
+      `${OBS}/observations_tr?cursor=1`,
       42,
     ]) {
       const c = clock('2026-10-10T12:01:00Z');

@@ -10,14 +10,15 @@
 #   apps/server/src/adapters/fr-1/fixtures/fr-1-ref-E3.raw  sha256 feea225f635d29f820ad7a6321db4b988524a58ba5c306c885154f28a89a85c6
 #   registry/seed/fr-1-series.csv  sha256 f8c3928123767e8278394d81a580ebe5e1a750bcb5ed1de6d7c1992b7714eacc
 #   registry/seed/fr-1-be.csv  sha256 07b706f858e6750c3ca236a39867af86aabb46150113761293229d4317c7c53b
-#   registry/seed/fr-3.csv  sha256 6ea03e7e132aea82a733ed5b438fcb21825c4361e70158c6af2206fc78298b7c
+#   registry/seed/fr-3.csv  sha256 7db61c0aaed592a63fbe1d692fa924e319990bc133c0849e16a227fc2b56159f
 # provider_key = <code_station>/<H|Q>, the same key as the FR-3 twin (FR-3 gap-fills the FR-1 series). H is mm (x0.1,
 # stage, datum LOCAL: the gauge zero is read from the referentiel by the loader), Q is l/s (x0.001).
-# tier 1 (first_release) = the 39 bold stations of catalogue §3.1-§3.4; every other row is tier 2. native_step =
-# expected_step = the modal gap of the series in the recording (PT1H for a series with one point); staleness_limit =
-# max(3 x step, PT90M). expected_forecast_source FR-4 = the Vigicrues forecast stations (§3 "F"); no thresholds.
+# tier 1 (first_release) = the 40 bold stations of catalogue §3.1-§3.4, the bold codes only (CH-1 takes the
+# whole §3.1 Swiss table); every other row is tier 2. native_step = expected_step = the modal gap of the series in the
+# recording (PT1H for a series with one point); staleness_limit = max(3 x step, PT90M). expected_forecast_source FR-4 =
+# the Vigicrues forecast stations (§3 "F"); no thresholds.
 # country by commune: 99131 BE, 99109 DE, 99140 CH, otherwise FR. The 18 Belgian partners (registry/seed/fr-1-be.csv)
-# are primary rows, country BE (A§7.2 exception until a Belgian source is public, P13).
+# are primary rows, country BE (A§7.2 exception until a Belgian source is public, P13); Torgny B422431101 is bold: tier 1.
 # role mirror = a gauge another agency operates (never published), with its primary:
 #   A021005050 Basel -> CH-1 2289, A040000101 Breisach -> DE-1 23300320, A060005050 Kehl -> DE-1 23300900, A355005050
 #     Plittersdorf -> DE-1 23500700, A375005050 Maxau -> DE-1 23700200, A940000101 Hanweiler -> DE-1 26400100
@@ -11411,7 +11412,7 @@ stations:
     lon: 5.46588626
     lat: 49.508744903
     quantity: H
-    tier: 2
+    tier: 1
     role: primary
     river: null
     km: null
@@ -11427,7 +11428,7 @@ stations:
     expected_threshold_source: null
     expected_forecast_source: null
     licence_gate: open
-    first_release: false
+    first_release: true
     audience: public
     datum: LOCAL
     gauge_zero: []
@@ -11441,7 +11442,7 @@ stations:
     lon: 5.46588626
     lat: 49.508744903
     quantity: Q
-    tier: 2
+    tier: 1
     role: primary
     river: null
     km: null
@@ -11457,7 +11458,7 @@ stations:
     expected_threshold_source: null
     expected_forecast_source: null
     licence_gate: open
-    first_release: false
+    first_release: true
     audience: public
     datum: null
     gauge_zero: []
