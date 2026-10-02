@@ -43,9 +43,9 @@ canal_traps:
     wikidata: Q1712089
     evidence: "Wikidata Q1712089 (P402 5362867), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
   - name: Albertkanaal
-    osm_relation_id: 1424029
+    osm_relation_id: null
     wikidata: Q835090
-    evidence: "Wikidata Q835090 (P402 1424029), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q835090, SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); its P402 1424029 is the canal's multipolygon area, not a waterway relation (OSM API relation multi-fetch 2026-10-02), so ways and relations are selected by the wikidata tag"
   - name: Zuid-Willemsvaart
     osm_relation_id: 2243765
     wikidata: Q228617

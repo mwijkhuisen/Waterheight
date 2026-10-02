@@ -309,12 +309,12 @@ rivers:
       CH-1: ["Limmat"]
       CH-2: ["Limmat"]
     aliases: []
-    osm_relation_id: 1598599
-    osm_way_name: null
+    osm_relation_id: null
+    osm_way_name: "Limmat"
     wikidata: Q14338
     parent_river_id: aare
     km_direction: none
-    evidence: "Wikidata Q14338 (P402 1598599; P403 Q1675 Aare), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q14338 (P402 1598599; P403 Q1675 Aare), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); its P402 1598599 is a multipolygon (the water area), not a waterway relation (OSM API relation multi-fetch 2026-10-02): ways selected until the geo run finds the waterway relation tagged Q14338"
   - id: thur
     name_nl: "Thur"
     name_en: "Thur"
@@ -530,12 +530,12 @@ rivers:
     names:
       FR-1: ["La Scarpe Canalisée", "Rivière Scarpe"]
     aliases: []
-    osm_relation_id: 1812718
-    osm_way_name: null
+    osm_relation_id: null
+    osm_way_name: "La Scarpe"
     wikidata: Q1818615
     parent_river_id: scheldt
     km_direction: none
-    evidence: "Wikidata Q1818615 (P402 1812718; P403 Q37620 Scheldt), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q1818615 (P402 1812718; P403 Q37620 Scheldt), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); its P402 1812718 is the relation of La Sensée (wikidata Q1461589, OSM API relation multi-fetch 2026-10-02): ways selected until the geo run finds the relation tagged Q1818615"
   - id: niers
     name_nl: "Niers"
     name_en: "Niers"

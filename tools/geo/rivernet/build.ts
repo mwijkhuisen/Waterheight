@@ -49,7 +49,7 @@ export interface Edge {
 
 // Roles counted by name in the report; any other role is counted as `other_role`
 // (a role string is OSM text and never becomes a key of our output).
-const KNOWN_ROLES = ['side_stream', 'tributary', 'spring', 'mouth'] as const;
+const KNOWN_ROLES = ['side_stream', 'tributary', 'distributary', 'anabranch', 'spring', 'mouth'] as const;
 // Relation tags copied into the build report as seeds for the reviewed names.
 const SEED_TAGS = ['type', 'waterway', 'name', 'name:nl', 'name:en', 'name:de', 'name:fr', 'wikidata'] as const;
 

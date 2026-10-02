@@ -6,6 +6,7 @@
 # RWS_DOMAIN and RWS_CONTACT_EMAIL for the downloads). Region ids and QIDs come from sources.ts and are checked
 # against fixed patterns before they reach a path or an argument.
 set -euo pipefail
+trap 'echo "extract: failed at line $LINENO" >&2' ERR
 
 (($# == 2)) || { echo "usage: extract.sh <workdir> <outdir>" >&2; exit 64; }
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -65,7 +66,15 @@ osm merge -H "${merge_in[@]}" -o /work/merged-all.osm.pbf --overwrite
 osm time-filter /work/merged-all.osm.pbf -o /work/merged.osm.pbf --overwrite
 rm -f "$work/merged-all.osm.pbf"
 
-osm getid -r -i /work/relations.txt /work/merged.osm.pbf -o /work/sel-rel.osm.pbf --overwrite
+# getid exits 1 both on an error and when a requested id is absent; an absent relation is reported here by id
+# (build.ts then fails relation_missing), anything else stops the run.
+status=0
+osm getid -r -i /work/relations.txt /work/merged.osm.pbf -o /work/sel-rel.osm.pbf --overwrite || status=$?
+((status <= 1)) || fail "osmium getid failed ($status)"
+mapfile -t found < <(osm cat /work/sel-rel.osm.pbf -t relation -f opl,add_metadata=false | cut -d' ' -f1 | sort -u)
+mapfile -t missing < <(comm -23 <(sort -u "$work/relations.txt") <(printf '%s\n' "${found[@]}"))
+((${#missing[@]} == 0)) || echo "extract: relations not in the extract: ${missing[*]}" >&2
+((status == 0 || ${#missing[@]} > 0)) || fail "osmium getid failed (1)"
 sel=(/work/sel-rel.osm.pbf)
 if [[ -n $qids ]]; then
   # Ways and relations that carry a selected QID: the way selections, the canal traps without a relation, and
