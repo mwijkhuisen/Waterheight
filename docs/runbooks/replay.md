@@ -4,7 +4,7 @@
 - after a fix, to load payloads that were quarantined (`docs/runbooks/schema-drift.md`);
 - after a parse, normalise or registry change that alters what is stored (values dropped by a wrong unit or stored with a wrong factor, a new rule; §3 after a provider's unit change), except over a range that reaches back before a unit or factor change of a series: it rescales that series' older rows (check `docs/known-gaps.md` KG-074 for the recorded changes first);
 - after a restore of the raw archive when a payload was skipped as `object_missing` (`docs/runbooks/restore.md`);
-- after the release that first brings an adapter (NL-1 in P2b, §5; FR-1, FR-3, CH-1, CH-2 and CH-3 in P5a, §6): the loader without it moved its cursor past those lines and stored nothing (for NL-1 again in P5a: its 9 Belgian series were captured since P1 and counted as unknown until the registry knew them);
+- after the release that first brings an adapter (NL-1 in P2b, §5; FR-1, FR-3, CH-1, CH-2 and CH-3 in P5a, §6; DE-7, DE-8, LU-1 and LU-6 in P5b, §8): the loader without it moved its cursor past those lines and stored nothing (for NL-1 again in P5a: its 9 Belgian series were captured since P1 and counted as unknown until the registry knew them);
 - to prove that the archive still reproduces the database (a second replay must change nothing), with the same exception: a range that reaches back before a unit or factor change of a series rescales that series' older rows (KG-074 first).
 
 `replay` re-parses archived objects through the loader's own code path. It **never fetches**, never moves the load cursor and never touches the fetch health. The raw archive is the source of truth; the database can be rebuilt from it, as far as the retention pruner has not deleted objects (`docs/runbooks/disk-full.md` §4) and except across a unit or factor change of a series, which the registry does not date (KG-074).
@@ -23,12 +23,14 @@
 | A payload that loaded before is never downgraded (for instance its object was pruned since) | A missing object of an `ok` batch changes nothing |
 | The batch's `n_skipped` (values a registry change could still load) is counted again | After a registry fix, a replay sets it to 0 and the pruner may keep the object no longer |
 | **Gap-fill rows (P5a):** the FR-3 and CH-3 payloads also write fill rows into FR-1 and CH-1 series (qc bit 512). A fill row is written only where the target source states no value, a row of the target source replaces a fill row whatever the fetch times, and neither writes an `obs_revision` | The end state is the same in whatever order FR-1, FR-3, CH-1 and CH-3 are replayed (integration-tested); the `n_new` of a first replay depends on that order (a row of the target source that replaces a fill row counts as new), and a second replay of any of them prints `"n_new":0,"n_changed":0`. Removing fill rows is §7 |
+| **Load windows (P5b):** `de-7-messwerte`, `de-7-pegeldaten` and `lu-1-csv` re-state days that earlier payloads stated, so each payload loads only the rows from 6 hours before the previous loaded (`ok`) payload of its spec, fetched within 8 days; a seed line loads whole, and rows before the window are dropped as `outside_window`. A replay applies the same rule | A replay writes what the tail did, not more: it does not load a provider revision older than the window, and a no-op replay stays a no-op. A replay of a range with no earlier `ok` batch (the first one after the deploy) loads each payload's rows from the first one on |
+| **Label offsets (P5b):** an LU-1 payload is read with the label offsets measured so far (`app_meta` `label_offset:LU-1`, per UTC day), at the time of the replay | A replay after the detector measured another offset moves the values of that day, one `obs_revision` per moved value (`docs/runbooks/label-offset.md` §3) |
 | It never touches the tail's attempt record (`app_meta` `load_attempt`) and stops at the first payload that fails for a reason of its own or cannot be read | Exit 1 with the code (`replay: failed (<code>)`); the payloads before it are committed. Fix the cause and run it again, or narrow the range |
 | Lines with a fetch error, an HTTP status of 400 or more, no object (304, `dup_of`, a closed gate) or no adapter are skipped | Only archived payloads are replayed |
 | The range is in **manifest days**: the UTC day of the file `raw/_manifest/<day>.jsonl` the line is filed under (the day its fetch started; the recorder's recovery appends to past days). `--from` may instead be a UTC **instant** (`2026-10-05T07:10:00Z`): a line whose fetch ended before it (the batch's `fetched_at`) is skipped, not counted and never read | Use a range that includes the day of the payload, `--to` inclusive; an instant after a unit change (§3) |
 | Arguments are checked against fixed patterns **and** the adapter table: `--source` must have a load adapter, `--spec` must be one of its specs, `--from` a real UTC day or a real UTC instant to the second with `Z`, `--to` a real UTC day, not before the day of `--from` | No identifier reaches SQL from the command line |
 
-Adapter table today: `DE-1` with the specs `de-1-basin`, `de-1-series` and `de-1-meta`; `NL-1` with `nl-1-obs-key`, `nl-1-obs-other` and `nl-1-obs-twin`; `NL-2` with `nl-2-wfs` (NL-2 stores no observation, so a replay of it never writes a row); from P5a `FR-1` with `fr-1-obs` (every walk page is its own line) and `fr-1-ref` (the daily gauge zeros), `FR-3` with `fr-3-obs` (the seed) and `fr-3-twin`, `CH-1` with `ch-1-lindas`, `CH-2` with `ch-2-pq` and `CH-3` with `ch-3-40d`. NL-4 has no adapter: `--source NL-4` is refused. The NL-1 forecast and catalogue specs have no loader entry yet (P8), so their lines are not counted.
+Adapter table today: `DE-1` with the specs `de-1-basin`, `de-1-series` and `de-1-meta`; `NL-1` with `nl-1-obs-key`, `nl-1-obs-other` and `nl-1-obs-twin`; `NL-2` with `nl-2-wfs` (NL-2 stores no observation, so a replay of it never writes a row); from P5a `FR-1` with `fr-1-obs` (every walk page is its own line) and `fr-1-ref` (the daily gauge zeros), `FR-3` with `fr-3-obs` (the seed) and `fr-3-twin`, `CH-1` with `ch-1-lindas`, `CH-2` with `ch-2-pq` and `CH-3` with `ch-3-40d`; from P5b `DE-7` with `de-7-messwerte` and `de-7-pegeldaten`, `DE-8` with `de-8-stations` (it stores nothing: its lines only report drift against the DE-7 registry) and `de-8-hydro` (the gauge zeros of the DE-7 series), `LU-1` with `lu-1-csv` and `LU-6` with `lu-6-geo` (it stores nothing). NL-4 has no adapter: `--source NL-4` is refused. The NL-1 forecast and catalogue specs have no loader entry yet (P8), so their lines are not counted.
 
 ## 2. Run it
 
@@ -185,6 +187,32 @@ A replay never removes a stored point (§1), and `rws_load` may not delete. Gap-
    ```
 
 3. The migration deletes those `obs` rows (qc bit 512 and a batch of the withdrawn source) and recomputes the `obs_latest` rows and the hourly and daily buckets of the series it touched, as for a fix that drops values (§1). Fill rows never wrote an `obs_revision`, so there is none to remove. A new migration needs its sha256 in `test/migrations.test.ts`. The rows of the source's own twin series (the FR-3 twins, CH-2) are other series: they stay unless the withdrawal covers them too.
+
+## 8. After the P5b deploy: load the NRW and Luxembourg payloads since P1
+
+The loader of the releases before P5b had no adapter for DE-7, DE-8, LU-1 and LU-6, so it moved its cursor past every one of their lines since P1 and stored nothing (fetch health only). After the release with P5b is deployed and `migrate` has synced the registry (it now holds `de-7.yaml` with 251 rows and `lu-1.yaml` with 42, and the seven twin pairs), load them once. The lines are all still in the archive (the pruner is a dry run). The first production manifest day is 2026-09-30; the `pegeldaten.zip` seed (two months, about 10 MB) is on that day, and the first weekly `pegeldaten.zip` is Monday 2026-10-05.
+
+1. Find the first day of the archive and use today's UTC day as `<today>`, as in §5 step 1.
+2. Count first, for each of `DE-7`, `DE-8`, `LU-1` and `LU-6`, with the `rwsc` function of §2 (`--dry-run` writes nothing):
+
+   ```bash
+   for s in DE-7 DE-8 LU-1 LU-6; do
+     rwsc run --rm --no-deps -T load replay --source $s --from <first day> --to <today> --dry-run
+   done
+   ```
+
+   A DE-7 `lines` counts every hourly `messwerte.zip` (about 24 a day) and the seed; DE-8 the daily station master and the weekly hydro file; LU-1 every 15-minute CSV (about 96 a day).
+3. Run each of them, without `--spec` (every spec of the source loads):
+
+   ```bash
+   for s in DE-7 DE-8 LU-1 LU-6; do
+     rwsc run --rm --no-deps -T load replay --source $s --from <first day> --to <today>
+   done
+   ```
+
+   The order does not matter for the values. **Expect one slow payload:** the `pegeldaten` seed holds more than a million rows of registered series within the 45-day age window (older rows are dropped as `too_old`), and it loads whole, in chunks of whole series of at most 50,000 rows, in one transaction under the loader lock. While it runs, the tail's health pass and the nightly jobs wait for the lock (a 30 s lock timeout each), so a long transaction can leave the loader's health older than 5 minutes (the watchdog's `load_stale`, `docs/runbooks/schema-drift.md` §6) until it commits; this passes by itself. Every later payload of DE-7 and LU-1 loads only the rows of its window (6 hours before the previous loaded payload), so the rest of the replay is fast and most of its rows are `outside_window` drops (counted, not alerts). A DE-8 hydro payload puts the gauge zeros onto the DE-7 series (a zero already stored with no validity date is never overwritten by another payload: the alert `gauge_zero_withheld` means the file changed, `docs/runbooks/schema-drift.md` §4). LU-1 is read with the label offsets measured so far; none has been measured yet, so every payload uses the default, 0, which is right for the 7-day file AGE has served since 2026-09-30. If the first nights measure another offset, `docs/runbooks/label-offset.md` §3.
+4. Expect `"n_new"` above 0 the first time and `"quarantined":0`. Run each command a second time: it must print `"n_new":0,"n_changed":0`. A DE-8 or LU-6 replay prints `"n_new":0` the first time as well, because they store no observation.
+5. Check `scripts/verify-prod.sh <domain>`: `health DE-7`, `health LU-1`, `tier-1 DE-7`, `tier-1 LU-1`, `coverage DE-7`, `coverage LU-1` (at least 95 % of the expected buckets since the seed), `interval DE-7` (3600 s while the spec is hourly, `docs/runbooks/owner-checks.md` §12), `bytes DE-7`, `fresh DE-7` and `fresh LU-1` pass once the loader has caught up (`.loader.backlog_age_s` small) and the first scheduled payloads after the deploy have loaded; `label offset LU-1` passes only after the first nightly job (after 02:00 UTC) has measured a day, which a replay does not do. A batch's `n_skipped` above 0 means values a registry change could still load: for DE-7 a station number the registry does not hold (`unknown`, once per series), for DE-8 a station that is not a DE-7 series. The ZIP and line codes of a quarantined payload are in `docs/runbooks/schema-drift.md` §2.
 
 ## What not to do
 
