@@ -1,0 +1,799 @@
+# Rivers of the graph (P6a, ADR-0012; A§6 `river`): one row per river that feeds the Netherlands, its
+# reviewed NL/EN names and how the OSM data is selected. Owner-reviewed (CODEOWNERS); no workflow writes it.
+# Validated by packages/contracts (validateRivers) and test/rivers-registry.test.ts; read by tools/geo/rivernet.
+#   names            provider water-body spellings, verbatim, per public catalogue source (the station registry's
+#                    water_name); a test checks each one occurs there
+#   aliases          other spellings (OSM name:* and local forms), for P6b matching; never shown
+#   osm_relation_id  the curated type=waterway relation; the geo run fails if its wikidata tag is not `wikidata`
+#   osm_way_name     only without a relation: ways tagged waterway=*, wikidata=<wikidata> and name=<this>
+#   parent_river_id  the river it flows into, or for a delta branch the one it splits from
+#   km_direction     how the official km count (downstream, upstream = from the mouth, none known)
+#   evidence         where the relation and Wikidata ids come from (never guessed)
+version: 1
+rivers:
+  - id: rhine
+    name_nl: "Rijn"
+    name_en: "Rhine"
+    names:
+      DE-1: ["RHEIN"]
+      CH-1: ["Rhein"]
+      CH-2: ["Rhein"]
+      FR-1: ["Le Rhin"]
+      FR-3: ["Le Rhin"]
+    aliases: ["Rhein", "Rhin", "Rijn"]
+    osm_relation_id: 123924
+    osm_way_name: null
+    wikidata: Q584
+    parent_river_id: null
+    km_direction: downstream
+    evidence: "catalogue §5.3 relation; Wikidata Q584 (P402 123924; P403 Q1693 North Sea), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: bovenrijn
+    name_nl: "Bovenrijn"
+    name_en: "Bovenrijn"
+    names: {}
+    aliases: ["Boven-Rijn"]
+    osm_relation_id: null
+    osm_way_name: "Boven-Rijn"
+    wikidata: Q55022283
+    parent_river_id: rhine
+    km_direction: downstream
+    evidence: "Wikidata Q55022283 (no P402; P403 Q568819 Bijlands Kanaal), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); RWS rkm 857-867.3 continue the Rhine km"
+  - id: waal
+    name_nl: "Waal"
+    name_en: "Waal"
+    names: {}
+    aliases: []
+    osm_relation_id: 11134535
+    osm_way_name: null
+    wikidata: Q216171
+    parent_river_id: rhine
+    km_direction: downstream
+    evidence: "Wikidata Q216171 (P402 11134535; P403 Boven-Merwede), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); splits from the Rhine at the Pannerdensche Kop"
+  - id: pannerdensch-kanaal
+    name_nl: "Pannerdensch Kanaal"
+    name_en: "Pannerden Canal"
+    names: {}
+    aliases: ["Pannerdens Kanaal"]
+    osm_relation_id: null
+    osm_way_name: "Pannerdensch Kanaal"
+    wikidata: Q2035350
+    parent_river_id: rhine
+    km_direction: downstream
+    evidence: "Wikidata Q2035350 (no P402; P403 Q1152951 Nederrijn), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts), second SPARQL by hand without the P402/P403 filter; splits from the Rhine at the Pannerdensche Kop"
+  - id: nederrijn
+    name_nl: "Nederrijn"
+    name_en: "Nederrijn"
+    names: {}
+    aliases: []
+    osm_relation_id: 12233572
+    osm_way_name: null
+    wikidata: Q1152951
+    parent_river_id: pannerdensch-kanaal
+    km_direction: downstream
+    evidence: "Wikidata Q1152951 (P402 12233572; P403 Q1143852 Lek), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); splits from the Pannerdensch Kanaal at the IJsselkop"
+  - id: lek
+    name_nl: "Lek"
+    name_en: "Lek"
+    names: {}
+    aliases: []
+    osm_relation_id: 7463845
+    osm_way_name: null
+    wikidata: Q1143852
+    parent_river_id: nederrijn
+    km_direction: downstream
+    evidence: "Wikidata Q1143852 (P402 7463845; P403 Nieuwe Maas), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: ijssel
+    name_nl: "IJssel"
+    name_en: "IJssel"
+    names: {}
+    aliases: []
+    osm_relation_id: 2741748
+    osm_way_name: null
+    wikidata: Q217818
+    parent_river_id: pannerdensch-kanaal
+    km_direction: downstream
+    evidence: "Wikidata Q217818 (P402 2741748; P403 Ketelmeer), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); splits from the Pannerdensch Kanaal at the IJsselkop"
+  - id: meuse
+    name_nl: "Maas"
+    name_en: "Meuse"
+    names:
+      FR-1: ["La Meuse"]
+      FR-3: ["La Meuse"]
+    aliases: ["Maas", "Meuse"]
+    osm_relation_id: 1075197
+    osm_way_name: null
+    wikidata: Q41986
+    parent_river_id: null
+    km_direction: downstream
+    evidence: "catalogue §5.3 relation; Wikidata Q41986 (P402 1075197; P403 Q1693 North Sea), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); RWS Meuse rkm count up downstream (Eijsden-grens 2.56, Venlo 107.47)"
+  - id: scheldt
+    name_nl: "Schelde"
+    name_en: "Scheldt"
+    names:
+      FR-1: ["L'Escaut Canalisée"]
+      FR-3: ["L'Escaut Canalisée"]
+    aliases: ["Escaut", "Schelde"]
+    osm_relation_id: 324288
+    osm_way_name: null
+    wikidata: Q37620
+    parent_river_id: null
+    km_direction: none
+    evidence: "catalogue §5.3 relation; Wikidata Q37620 (P402 324288; P403 Q1693 North Sea), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); French and Belgian PK are unverified"
+  - id: moselle
+    name_nl: "Moezel"
+    name_en: "Moselle"
+    names:
+      DE-1: ["MOSEL"]
+      FR-1: ["La Moselle", "La Moselle Canalisee"]
+      FR-3: ["La Moselle"]
+    aliases: ["Mosel", "Moselle"]
+    osm_relation_id: 390416
+    osm_way_name: null
+    wikidata: Q1667
+    parent_river_id: rhine
+    km_direction: upstream
+    evidence: "catalogue §5.3 relation; Wikidata Q1667 (P402 390416; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up from the mouth (Koblenz 1.3, Perl 241.8)"
+  - id: ems
+    name_nl: "Eems"
+    name_en: "Ems"
+    names:
+      DE-1: ["EMS"]
+    aliases: ["Eems"]
+    osm_relation_id: 370068
+    osm_way_name: null
+    wikidata: Q1648
+    parent_river_id: null
+    km_direction: downstream
+    evidence: "catalogue §5.3 relation; Wikidata Q1648 (P402 370068; P403 Q218377 Dollart), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); two km systems (upper Ems/DEK 96-235, tidal Ems from Papenburg 0.39), both up downstream; rejected Q895958 (mouth Eder)"
+  - id: dortmund-ems-kanal
+    name_nl: "Dortmund-Eemskanaal"
+    name_en: "Dortmund–Ems Canal"
+    names:
+      DE-1: ["DORTMUND-EMS-KANAL"]
+    aliases: []
+    osm_relation_id: 1328741
+    osm_way_name: null
+    wikidata: Q702695
+    parent_river_id: ems
+    km_direction: downstream
+    evidence: "Wikidata Q702695 (P402 1328741; P403 Q1648 Ems), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the DE-1 river slug of 11 stations"
+  - id: main
+    name_nl: "Main"
+    name_en: "Main"
+    names:
+      DE-1: ["MAIN"]
+    aliases: []
+    osm_relation_id: 412876
+    osm_way_name: null
+    wikidata: Q1670
+    parent_river_id: rhine
+    km_direction: upstream
+    evidence: "catalogue §5.3 relation; Wikidata Q1670 (P402 412876; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up from the mouth"
+  - id: neckar
+    name_nl: "Neckar"
+    name_en: "Neckar"
+    names:
+      DE-1: ["NECKAR"]
+    aliases: []
+    osm_relation_id: 123881
+    osm_way_name: null
+    wikidata: Q1673
+    parent_river_id: rhine
+    km_direction: upstream
+    evidence: "catalogue §5.3 relation; Wikidata Q1673 (P402 123881; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up from the mouth"
+  - id: sambre
+    name_nl: "Samber"
+    name_en: "Sambre"
+    names:
+      FR-1: ["La Sambre Canalisée"]
+      FR-3: ["La Sambre Canalisée"]
+    aliases: ["Sambre", "Samber"]
+    osm_relation_id: 1600647
+    osm_way_name: null
+    wikidata: Q208267
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "catalogue §5.3 relation; Wikidata Q208267 (P402 1600647; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: ourthe
+    name_nl: "Ourthe"
+    name_en: "Ourthe"
+    names: {}
+    aliases: []
+    osm_relation_id: 2246211
+    osm_way_name: null
+    wikidata: Q160698
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "catalogue §5.3 relation; Wikidata Q160698 (P402 2246211; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: rur
+    name_nl: "Roer"
+    name_en: "Rur"
+    names: {}
+    aliases: ["Roer", "Rur"]
+    osm_relation_id: 384594
+    osm_way_name: null
+    wikidata: Q152331
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "catalogue §5.3 relation; Wikidata Q152331 (P402 384594; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: lahn
+    name_nl: "Lahn"
+    name_en: "Lahn"
+    names:
+      DE-1: ["LAHN"]
+    aliases: []
+    osm_relation_id: 412935
+    osm_way_name: null
+    wikidata: Q103148
+    parent_river_id: rhine
+    km_direction: downstream
+    evidence: "catalogue §5.3 relation; Wikidata Q103148 (P402 412935; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up downstream (Marburg -38.7, Lahnstein 136)"
+  - id: saar
+    name_nl: "Saar"
+    name_en: "Saar"
+    names:
+      DE-1: ["SAAR"]
+      FR-1: ["La Sarre"]
+      FR-3: ["La Sarre"]
+    aliases: ["Sarre"]
+    osm_relation_id: 390393
+    osm_way_name: null
+    wikidata: Q153972
+    parent_river_id: moselle
+    km_direction: upstream
+    evidence: "catalogue §5.3 relation; Wikidata Q153972 (P402 390393; P403 Q1667 Moselle), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up from the mouth"
+  - id: sieg
+    name_nl: "Sieg"
+    name_en: "Sieg"
+    names: {}
+    aliases: []
+    osm_relation_id: 409090
+    osm_way_name: null
+    wikidata: Q152484
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "catalogue §5.3 relation; Wikidata Q152484 (P402 409090; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: ruhr
+    name_nl: "Ruhr"
+    name_en: "Ruhr"
+    names:
+      DE-1: ["RUHR"]
+    aliases: []
+    osm_relation_id: 364754
+    osm_way_name: null
+    wikidata: Q1664
+    parent_river_id: rhine
+    km_direction: upstream
+    evidence: "catalogue §5.3 relation; Wikidata Q1664 (P402 364754; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); federal Ruhr km count up upstream"
+  - id: lippe
+    name_nl: "Lippe"
+    name_en: "Lippe"
+    names: {}
+    aliases: []
+    osm_relation_id: 379691
+    osm_way_name: null
+    wikidata: Q153945
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "catalogue §5.3 relation; Wikidata Q153945 (P402 379691; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: aare
+    name_nl: "Aare"
+    name_en: "Aare"
+    names:
+      CH-1: ["Aare"]
+      CH-2: ["Aare"]
+    aliases: []
+    osm_relation_id: 2192950
+    osm_way_name: null
+    wikidata: Q1675
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q1675 (P402 2192950; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: reuss
+    name_nl: "Reuss"
+    name_en: "Reuss"
+    names:
+      CH-1: ["Reuss"]
+      CH-2: ["Reuss"]
+    aliases: []
+    osm_relation_id: 2185933
+    osm_way_name: null
+    wikidata: Q4015
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q4015 (P402 2185933; P403 Q1675 Aare (a second P403 is Lake Lucerne)), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: limmat
+    name_nl: "Limmat"
+    name_en: "Limmat"
+    names:
+      CH-1: ["Limmat"]
+      CH-2: ["Limmat"]
+    aliases: []
+    osm_relation_id: 1598599
+    osm_way_name: null
+    wikidata: Q14338
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q14338 (P402 1598599; P403 Q1675 Aare), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: thur
+    name_nl: "Thur"
+    name_en: "Thur"
+    names:
+      CH-1: ["Thur"]
+      CH-2: ["Thur"]
+    aliases: []
+    osm_relation_id: 2202570
+    osm_way_name: null
+    wikidata: Q14339
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q14339 (P402 2202570; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q127629 (the Alsatian Thur, mouth Ill; FR-1 \"La Thur\")"
+  - id: birs
+    name_nl: "Birs"
+    name_en: "Birs"
+    names:
+      CH-1: ["Birs"]
+      CH-2: ["Birs"]
+    aliases: []
+    osm_relation_id: 2202591
+    osm_way_name: null
+    wikidata: Q14340
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q14340 (P402 2202591; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: ill
+    name_nl: "Ill"
+    name_en: "Ill"
+    names:
+      FR-1: ["L'Ill"]
+    aliases: []
+    osm_relation_id: 1075766
+    osm_way_name: null
+    wikidata: Q668472
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q668472 (P402 1075766; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the Alsatian Ill (FR); rejected Q688454 (Vorarlberg) and Q883408 (mouth Theel)"
+  - id: sauer
+    name_nl: "Sûre"
+    name_en: "Sauer"
+    names: {}
+    aliases: ["Sauer", "Sûre"]
+    osm_relation_id: 408622
+    osm_way_name: null
+    wikidata: Q158847
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q158847 (P402 408622; P403 Q1667 Moselle), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); FR-1 \"La Sauer\" is the Alsatian Sauer (Q705057, mouth Rhine), not this river"
+  - id: our
+    name_nl: "Our"
+    name_en: "Our"
+    names: {}
+    aliases: []
+    osm_relation_id: 3646368
+    osm_way_name: null
+    wikidata: Q318762
+    parent_river_id: sauer
+    km_direction: none
+    evidence: "Wikidata Q318762 (P402 3646368; P403 Q158847 Sauer), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q650039 and Q2356986 (mouth Lesse)"
+  - id: alzette
+    name_nl: "Alzette"
+    name_en: "Alzette"
+    names: {}
+    aliases: ["Uelzecht"]
+    osm_relation_id: null
+    osm_way_name: "Alzette"
+    wikidata: Q450722
+    parent_river_id: sauer
+    km_direction: none
+    evidence: "Wikidata Q450722 (no P402; P403 Q158847 Sauer), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: prum
+    name_nl: "Prüm"
+    name_en: "Prüm"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Prüm"
+    wikidata: Q697718
+    parent_river_id: sauer
+    km_direction: none
+    evidence: "Wikidata Q697718 (no P402; P403 Q158847 Sauer), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q253696 (the town; its P402 is a boundary)"
+  - id: nahe
+    name_nl: "Nahe"
+    name_en: "Nahe"
+    names: {}
+    aliases: []
+    osm_relation_id: 406638
+    osm_way_name: null
+    wikidata: Q168696
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q168696 (P402 406638; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the second candidate Q878506 flows into the Schleuse (Thuringia) and Q564312 has no mouth: rejected"
+  - id: ahr
+    name_nl: "Ahr"
+    name_en: "Ahr"
+    names: {}
+    aliases: []
+    osm_relation_id: 318372
+    osm_way_name: null
+    wikidata: Q153394
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q153394 (P402 318372; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: kyll
+    name_nl: "Kyll"
+    name_en: "Kyll"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Kyll"
+    wikidata: Q677944
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q677944 (no P402; P403 Q1667 Moselle), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: erft
+    name_nl: "Erft"
+    name_en: "Erft"
+    names: {}
+    aliases: []
+    osm_relation_id: 408032
+    osm_way_name: null
+    wikidata: Q708840
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q708840 (P402 408032; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: blies
+    name_nl: "Blies"
+    name_en: "Blies"
+    names:
+      FR-1: ["La Blies"]
+    aliases: []
+    osm_relation_id: 410743
+    osm_way_name: null
+    wikidata: Q585833
+    parent_river_id: saar
+    km_direction: none
+    evidence: "Wikidata Q585833 (P402 410743; P403 Q153972 Saar), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: orne
+    name_nl: "Orne"
+    name_en: "Orne"
+    names:
+      FR-1: ["L'Orne"]
+    aliases: []
+    osm_relation_id: 1111462
+    osm_way_name: null
+    wikidata: Q1047027
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q1047027 (P402 1111462; P403 Q1667 Moselle), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the Lorraine Orne; rejected Q659526 (English Channel), Q12679 and Q3356524"
+  - id: meurthe
+    name_nl: "Meurthe"
+    name_en: "Meurthe"
+    names:
+      FR-1: ["La Meurthe"]
+    aliases: []
+    osm_relation_id: 1108999
+    osm_way_name: null
+    wikidata: Q1160441
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q1160441 (P402 1108999; P403 Q1667 Moselle), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: lys
+    name_nl: "Leie"
+    name_en: "Lys"
+    names:
+      FR-1: ["La Lys"]
+      FR-3: ["La Lys"]
+    aliases: ["Leie", "Lys"]
+    osm_relation_id: 1201127
+    osm_way_name: null
+    wikidata: Q208493
+    parent_river_id: scheldt
+    km_direction: none
+    evidence: "Wikidata Q208493 (P402 1201127; P403 Q37620 Scheldt), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the other candidates Q522444, Q3269730 (mouth Dordogne), Q667543 and Q10952811 do not flow into the Scheldt: rejected"
+  - id: dender
+    name_nl: "Dender"
+    name_en: "Dender"
+    names: {}
+    aliases: ["Dendre"]
+    osm_relation_id: 11154751
+    osm_way_name: null
+    wikidata: Q269407
+    parent_river_id: scheldt
+    km_direction: none
+    evidence: "Wikidata Q269407 (P402 11154751; P403 Q37620 Scheldt), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: haine
+    name_nl: "Hene"
+    name_en: "Haine"
+    names: {}
+    aliases: ["Haine", "Hene"]
+    osm_relation_id: null
+    osm_way_name: "Haine"
+    wikidata: Q1569447
+    parent_river_id: scheldt
+    km_direction: none
+    evidence: "Wikidata Q1569447 (no P402; P403 Q37620 Scheldt), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); links the Trouille to the Scheldt"
+  - id: trouille
+    name_nl: "Trouille"
+    name_en: "Trouille"
+    names:
+      FR-1: ["Trouille"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Trouille"
+    wikidata: Q2683350
+    parent_river_id: haine
+    km_direction: none
+    evidence: "Wikidata Q2683350 (no P402; P403 Q1569447 Haine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: scarpe
+    name_nl: "Scarpe"
+    name_en: "Scarpe"
+    names:
+      FR-1: ["La Scarpe Canalisée", "Rivière Scarpe"]
+    aliases: []
+    osm_relation_id: 1812718
+    osm_way_name: null
+    wikidata: Q1818615
+    parent_river_id: scheldt
+    km_direction: none
+    evidence: "Wikidata Q1818615 (P402 1812718; P403 Q37620 Scheldt), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: niers
+    name_nl: "Niers"
+    name_en: "Niers"
+    names: {}
+    aliases: []
+    osm_relation_id: 406674
+    osm_way_name: null
+    wikidata: Q835333
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q835333 (P402 406674; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: vechte
+    name_nl: "Overijsselse Vecht"
+    name_en: "Vechte"
+    names: {}
+    aliases: ["Vecht", "Vechte", "Overijsselse Vecht"]
+    osm_relation_id: 409101
+    osm_way_name: null
+    wikidata: Q168904
+    parent_river_id: null
+    km_direction: none
+    evidence: "Wikidata Q168904 (P402 409101; P403 Q231763 Zwarte Water), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: dinkel
+    name_nl: "Dinkel"
+    name_en: "Dinkel"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Dinkel"
+    wikidata: Q707795
+    parent_river_id: vechte
+    km_direction: none
+    evidence: "Wikidata Q707795 (no P402; P403 Q168904 Vechte), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: berkel
+    name_nl: "Berkel"
+    name_en: "Berkel"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Berkel"
+    wikidata: Q707763
+    parent_river_id: ijssel
+    km_direction: none
+    evidence: "Wikidata Q707763 (no P402; P403 Q217818 IJssel), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: oude-ijssel
+    name_nl: "Oude IJssel"
+    name_en: "Oude IJssel"
+    names: {}
+    aliases: ["Issel"]
+    osm_relation_id: 423096
+    osm_way_name: null
+    wikidata: Q181067
+    parent_river_id: ijssel
+    km_direction: none
+    evidence: "Wikidata Q181067 (P402 423096; P403 Q217818 IJssel), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: semois
+    name_nl: "Semois"
+    name_en: "Semois"
+    names:
+      FR-1: ["La Semoy"]
+      FR-3: ["La Semoy"]
+    aliases: ["Semoy"]
+    osm_relation_id: 1727715
+    osm_way_name: null
+    wikidata: Q303621
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q303621 (P402 1727715; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: chiers
+    name_nl: "Chiers"
+    name_en: "Chiers"
+    names:
+      FR-1: ["La Chiers"]
+    aliases: ["Korn"]
+    osm_relation_id: 1307164
+    osm_way_name: null
+    wikidata: Q635969
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q635969 (P402 1307164; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: ton
+    name_nl: "Ton"
+    name_en: "Ton"
+    names:
+      FR-1: ["Le Thon"]
+    aliases: ["Thon"]
+    osm_relation_id: null
+    osm_way_name: "Ton"
+    wikidata: Q2353066
+    parent_river_id: chiers
+    km_direction: none
+    evidence: "Wikidata Q2353066 (no P402; P403 Q635969 Chiers), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); FR-1 spells it \"Le Thon\" (stations \"Le Ton à Écouviez\", \"Le Ton en Belgique\"); rejected Q1132776 (the Thon to the Oise)"
+  - id: viroin
+    name_nl: "Viroin"
+    name_en: "Viroin"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Viroin"
+    wikidata: Q1818933
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q1818933 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); FR-1 publishes no water name for its Viroin stations"
+  - id: houille
+    name_nl: "Houille"
+    name_en: "Houille"
+    names:
+      FR-1: ["La Houille"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Houille"
+    wikidata: Q291144
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q291144 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: thure
+    name_nl: "Thure"
+    name_en: "Thure"
+    names:
+      FR-1: ["rivière la thure"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Thure"
+    wikidata: Q2429986
+    parent_river_id: sambre
+    km_direction: none
+    evidence: "Wikidata Q2429986 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: hante
+    name_nl: "Hantes"
+    name_en: "Hantes"
+    names:
+      FR-1: ["Hante"]
+    aliases: ["Hante"]
+    osm_relation_id: null
+    osm_way_name: "Hantes"
+    wikidata: Q2628420
+    parent_river_id: sambre
+    km_direction: none
+    evidence: "Wikidata Q2628420 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts), second SPARQL by hand (\"Hantes\"@fr); FR-1 spells it \"Hante\""
+  - id: geul
+    name_nl: "Geul"
+    name_en: "Geul"
+    names: {}
+    aliases: ["Gueule"]
+    osm_relation_id: 3476949
+    osm_way_name: null
+    wikidata: Q1520184
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q1520184 (P402 3476949; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: schwalm
+    name_nl: "Swalm"
+    name_en: "Schwalm"
+    names: {}
+    aliases: ["Swalm", "Schwalm"]
+    osm_relation_id: 4744973
+    osm_way_name: null
+    wikidata: Q697777
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q697777 (P402 4744973; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q562349 (mouth Eder)"
+  - id: wurm
+    name_nl: "Worm"
+    name_en: "Wurm"
+    names: {}
+    aliases: ["Worm", "Wurm"]
+    osm_relation_id: 384602
+    osm_way_name: null
+    wikidata: Q153310
+    parent_river_id: rur
+    km_direction: none
+    evidence: "Wikidata Q153310 (P402 384602; P403 Q152331 Rur), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: voer
+    name_nl: "Voer"
+    name_en: "Voer"
+    names: {}
+    aliases: ["Fouron"]
+    osm_relation_id: null
+    osm_way_name: "Voer"
+    wikidata: Q540657
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q540657 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q3562063 (mouth Dijle)"
+  - id: dieze
+    name_nl: "Dieze"
+    name_en: "Dieze"
+    names: {}
+    aliases: []
+    osm_relation_id: 2243764
+    osm_way_name: null
+    wikidata: Q1224319
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q1224319 (P402 2243764; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); links the Dommel to the Meuse"
+  - id: dommel
+    name_nl: "Dommel"
+    name_en: "Dommel"
+    names: {}
+    aliases: []
+    osm_relation_id: 3384830
+    osm_way_name: null
+    wikidata: Q1238549
+    parent_river_id: dieze
+    km_direction: none
+    evidence: "Wikidata Q1238549 (P402 3384830; P403 Q1224319 Dieze), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: tongelreep
+    name_nl: "Tongelreep"
+    name_en: "Tongelreep"
+    names: {}
+    aliases: ["Warmbeek"]
+    osm_relation_id: 8770389
+    osm_way_name: null
+    wikidata: Q2231770
+    parent_river_id: dommel
+    km_direction: none
+    evidence: "Wikidata Q2231770 (P402 8770389; P403 Q1238549 Dommel), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the Warmbeek is its Belgian name"
+  - id: keersop
+    name_nl: "Keersop"
+    name_en: "Keersop"
+    names: {}
+    aliases: []
+    osm_relation_id: 8770479
+    osm_way_name: null
+    wikidata: Q2236069
+    parent_river_id: dommel
+    km_direction: none
+    evidence: "Wikidata Q2236069 (P402 8770479; P403 Q1238549 Dommel), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: mark
+    name_nl: "Mark"
+    name_en: "Mark"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Mark"
+    wikidata: Q935474
+    parent_river_id: null
+    km_direction: none
+    evidence: "Wikidata Q935474 (no P402; P403 Q3028474 Dintel), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the six other \"Mark\" items are a municipality, places and other rivers: rejected"
+  - id: aa-of-weerijs
+    name_nl: "Aa of Weerijs"
+    name_en: "Aa or Weerijs"
+    names: {}
+    aliases: ["Aa", "Weerijs"]
+    osm_relation_id: 18962588
+    osm_way_name: null
+    wikidata: Q300663
+    parent_river_id: mark
+    km_direction: none
+    evidence: "Wikidata Q300663 (P402 18962588; P403 Q935474 Mark), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts), second SPARQL by hand (\"Aa of Weerijs\"@nl); not the Brabantse Aa (Q300658, mouth Dieze)"
+  - id: merkske
+    name_nl: "Merkske"
+    name_en: "Merkske"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Merkske"
+    wikidata: Q1823901
+    parent_river_id: mark
+    km_direction: none
+    evidence: "Wikidata Q1823901 (a stream; no P402, no P403), second SPARQL by hand (\"Merkske\"@nl) 2026-10-02; joins the Mark at Castelré (geo; verify in the geo run)"
+excluded: []
