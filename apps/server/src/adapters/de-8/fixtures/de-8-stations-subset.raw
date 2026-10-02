@@ -1,0 +1,7 @@
+station_latitude;station_longitude;station_name;station_no;catchment_no;catchment_name;LANUV_Info_1;LANUV_Info_2;LANUV_Info_3;LANUV_MNW;LANUV_MW;LANUV_MHW;station_carteasting;station_cartnorthing;CATCHMENT_SIZE;DIST_TO_CONFL
+52.2179431471272;7.02467077663036;Gronau;9286455000200;928;IJssel-, Berkel- und Vechteeinzugsgebiet;153.0;177.0;198.0;5.0;20.0;108.0;;;183.17 km²;54.86 km
+51.6839560861143;6.15062410946041;Goch;2869500000200;286;Niers- und Schwalmeinzugsgebiet;185.0;200.0;230.0;31.0;65.0;146.0;;;1203.21 km²;21.46 km
+51.2962668238609;7.43112447623609;Haspertalsperre_Zu;2768898001;276;Ruhreinzugsgebiet;;;;;;;;;6.00 km²;8.00 km
+51.1994486957107;6.22985892748387;Pannenmuehle;2847500000100;286;Niers- und Schwalmeinzugsgebiet;;;;29.0;40.0;90.0;;;130.19 km²;25.57 km
+51.5758988498307;8.10111210332354;Soestbach;1234512345;278;Lippeeinzugsgebiet;;;;0.0;;0.0;;;;
+51.0978936437795;6.10451262980085;Stah;2829100000100;282;Rureinzugsgebiet;200.0;245.0;265.0;31.0;65.0;211.0;;;2135.15 km²;22.91 km

@@ -1,0 +1,12 @@
+{
+  "spec": "lu-1-csv",
+  "source": "LU-1",
+  "synthetic": true,
+  "recorded_at": "2027-03-28T02:10:00Z",
+  "status": 200,
+  "content_type": "text/csv",
+  "url": "https://inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv",
+  "bytes": 481,
+  "trimmed": false,
+  "note": "Hand-made: the spring-forward night of 2027-03-28, labels 01:00 to 04:00 local without the missing hour 02:00-02:59 (01:45 +01:00 is followed by 03:00 +02:00, 15 minutes later)."
+}

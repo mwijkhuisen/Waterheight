@@ -1,0 +1,15 @@
+{
+  "spec": "lu-1-csv",
+  "variant": "default",
+  "source": "LU-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/LU-1/lu-1-csv/2026/09/30/134955Z-f788f968d11d630a.zst",
+  "recorded_at": "2026-09-30T13:49:55Z",
+  "seed": true,
+  "status": 200,
+  "url": "https://inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv",
+  "bytes": 214669,
+  "source_sha256": "f788f968d11d630ad1c98787c16cb52e8054d1509f5a14b693d4f8eec8bdbf2c",
+  "trimmed": "rows Diekirch, Perl, SN_Remich, Bissen, Esch-Sure, Bollendorf and the last 192 labels, each row's trailing field kept"
+}

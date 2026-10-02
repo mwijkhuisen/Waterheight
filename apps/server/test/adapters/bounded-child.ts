@@ -3,20 +3,31 @@
 // prints the SchemaDrift message (or the guard's reason) and exits 0; anything
 // else exits 1, and running out of memory kills it.
 import { SchemaDrift } from '@rws/core';
+import { strToU8, zipSync } from 'fflate';
 import { parseCube } from '../../src/adapters/ch-1/parse.ts';
 import { JSON_CAPS as CH2_CAPS, parseFeatures } from '../../src/adapters/ch-2/parse.ts';
 import { JSON_CAPS as CH3_CAPS, parsePlot } from '../../src/adapters/ch-3/parse.ts';
 import { JSON_CAPS, parseMeasurements, parseStations } from '../../src/adapters/de-1/parse.ts';
+import { HEADER as DE7_HEADER, MAX_ROWS as DE7_MAX_ROWS } from '../../src/adapters/de-7/parse.ts';
+import {
+  HYDRO_HEADER,
+  parseStations as parseDe8Stations,
+  parseHydro,
+  STATIONS_HEADER,
+} from '../../src/adapters/de-8/parse.ts';
 import {
   JSON_CAPS as FR1_CAPS,
   parseObservations as parseFr1Observations,
   parseStations as parseFr1Stations,
 } from '../../src/adapters/fr-1/parse.ts';
 import { JSON_CAPS as FR3_CAPS, parseSerie } from '../../src/adapters/fr-3/parse.ts';
+import { parseCsv as parseLu1 } from '../../src/adapters/lu-1/parse.ts';
+import { JSON_CAPS as LU6_CAPS, parseFeatures as parseLu6 } from '../../src/adapters/lu-6/parse.ts';
 import { JSON_CAPS as NL1_CAPS, parseWaarnemingen } from '../../src/adapters/nl-1/parse.ts';
 import { JSON_CAPS as NL2_CAPS, parseCollection } from '../../src/adapters/nl-2/parse.ts';
 import { parse as parseNl4 } from '../../src/adapters/nl-4/parse.ts';
 import { checkXmlText, GuardFailure } from '../../src/http/guards.ts';
+import { LOAD_ADAPTERS } from '../../src/load/adapters.ts';
 
 const MIB = 1024 * 1024;
 const station = (timeseries: string) =>
@@ -69,6 +80,9 @@ const features = (fs: string) =>
 const plot = (x: string, y: string) =>
   `{"plot":{"layout":null,"data":[{"name":"Wasserstand","x":[${x}],"y":[${y}],"meta":{"unit":"m"}}]},"hoverInfo":null}`;
 const CSV_HEADER = 'id,name,water,time,q,w,t,dl,wkt';
+/** A geoportail.lu station collection (LU-6) with the given features. */
+const lu6 = (fs: string) =>
+  `{"type":"FeatureCollection","features":[${fs}],"numberReturned":0,"numberMatched":0,"links":[],"timeStamp":"x"}`;
 const basin = (b: Uint8Array) => parseStations(b, JSON_CAPS.basin);
 const meta = (b: Uint8Array) => parseStations(b, JSON_CAPS.meta);
 
@@ -124,7 +138,41 @@ const nl4 = (b: Uint8Array) =>
   );
 const xml = (b: Uint8Array) => checkXmlText(Buffer.from(b).toString('utf8'));
 
-export const BODIES: Record<string, [() => string, (b: Uint8Array) => unknown]> = {
+/** The loader's DE-7 path: the ZIP guard inflates the member into the strict line sink (async). */
+const de7Load = (b: Uint8Array) =>
+  LOAD_ADAPTERS['DE-7']?.specs['de-7-messwerte']?.run(b, {
+    registry: new Map(),
+    fetchedAt: Date.parse('2026-09-29T13:43:26Z'),
+    variant: '',
+    unitMismatch: new Set(),
+  });
+/** A messwerte.zip whose one member is `text` (level 6: the ratio must stay under the guard's 50:1). */
+const de7Zip = (text: string) => zipSync({ 'messwerte.txt': [strToU8(text), { level: 6 }] });
+/** `n` plausible rows (increasing times, scattered values), about 50 bytes each, as a real member has. */
+const de7Rows = (n: number) => {
+  const out: string[] = [DE7_HEADER];
+  let x = 12_345;
+  for (let i = 0; i < n; i += 1) {
+    x = (x * 1_103_515_245 + 12_345) % 2_147_483_648;
+    const t = new Date(Date.UTC(2026, 8, 22, 13, 45) + i * 60_000).toISOString().replace('Z', '+01:00');
+    out.push(`2847500000100;${t};${(x % 20_000) / 100}`);
+  }
+  return out.join('\r\n');
+};
+/** Letters from a fixed xorshift generator: a ZIP member that does not compress (a line that never ends). */
+const noise = (bytes: number) => {
+  const a = new Uint8Array(bytes);
+  let x = 2_463_534_242;
+  for (let i = 0; i < bytes; i += 1) {
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    a[i] = 97 + ((x >>> 0) % 26);
+  }
+  return a;
+};
+
+export const BODIES: Record<string, [() => string | Uint8Array, (b: Uint8Array) => unknown]> = {
   // The reviewer's two: 8 MiB of [0,0,…] as a series window; a basin body of 101 valid-looking stations, one
   // of which has a timeseries array of 2 M zeros (both inside the byte caps).
   'series-zeros': [() => `[${list(4 * MIB - 1, '0')}]`, parseMeasurements],
@@ -180,6 +228,25 @@ export const BODIES: Record<string, [() => string, (b: Uint8Array) => unknown]> 
   'ch3-bytes': [() => objects(8 * MIB), parsePlot],
   'ch3-nodes': [() => plot(list(CH3_CAPS.maxNodes, '"x"'), '0'), parsePlot],
   'ch3-issues': [() => plot(list(20_000, '0'), list(20_000, '0')), parsePlot],
+  // P5b. DE-7 through the loader's own path (ZIP guard, line sink): a member of one row more than the cap, and a
+  // member whose one line never ends (the splitter cuts it at 1 KB). LU-1 and DE-8 at their CSV caps, LU-6 as JSON.
+  'de7-rows': [() => de7Zip(de7Rows(DE7_MAX_ROWS['messwerte.txt'] + 1)), de7Load],
+  'de7-line': [
+    () =>
+      zipSync({ 'messwerte.txt': [Buffer.concat([Buffer.from(`${DE7_HEADER}\r\n`), noise(4 * MIB)]), { level: 6 }] }),
+    de7Load,
+  ],
+  'lu1-rows': [() => `Name,Number,Unit,"25.09.2026 13:00"\n${'x\n'.repeat(2 * MIB)}`, parseLu1],
+  'lu1-columns': [() => `${','.repeat(2 * MIB)}\n`, parseLu1],
+  'lu1-quote': [() => `Name,Number,Unit,"25.09.2026 13:00"\n"${'x'.repeat(4 * MIB)}`, parseLu1],
+  'lu1-issues': [() => `Name,Number,Unit,"25.09.2026 13:00"\n${Array(100).fill('"",,,,').join('\n')}\n`, parseLu1],
+  'de8-stations-rows': [() => `${STATIONS_HEADER}\n${'x\n'.repeat(2 * MIB)}`, parseDe8Stations],
+  'de8-stations-columns': [() => `${';'.repeat(2 * MIB)}\n`, parseDe8Stations],
+  'de8-hydro-rows': [() => `${HYDRO_HEADER}\n${'x\n'.repeat(2 * MIB)}`, parseHydro],
+  'de8-hydro-quote': [() => `${HYDRO_HEADER}\n"${'x'.repeat(4 * MIB)}`, parseHydro],
+  'lu6-bytes': [() => objects(2 * MIB), parseLu6],
+  'lu6-features': [() => lu6(list(LU6_CAPS.maxItems + 1, '0')), parseLu6],
+  'lu6-issues': [() => lu6(list(LU6_CAPS.maxItems, '{}')), parseLu6],
   // The XML floods through the NL-4 parser and through the guard's XML rule (capture validity, readXlsx).
   ...Object.fromEntries(
     Object.entries(XML_FLOODS).flatMap(([name, [build]]) => [
@@ -193,7 +260,8 @@ if (import.meta.main) {
   const [build, parse] = BODIES[process.argv[2] ?? ''] ?? [];
   if (build === undefined || parse === undefined) process.exit(64);
   try {
-    parse(Buffer.from(build()));
+    const made = build();
+    await parse(typeof made === 'string' ? Buffer.from(made) : made);
     console.log('parsed');
     process.exit(1);
   } catch (err) {

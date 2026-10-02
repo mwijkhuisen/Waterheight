@@ -1,0 +1,13 @@
+{
+  "spec": "de-8-hydro",
+  "source": "DE-8",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-10-02T11:11:11Z",
+  "status": 200,
+  "content_type": null,
+  "url": "https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hydro/Hydrologische-Stationen-NRW_EPSG25832_CSV.zip",
+  "bytes": 13088,
+  "source_sha256": "d1a1f4a92aee5f7a0a63ed5cbd85909fa8ed5beaf00f4429a6a9b8b3ddb31a24",
+  "trimmed": "the rows of 2829100000100, 2869500000200, 9286455000200, 2847500000100, 1234512345, 2768898001 and the NA rows, re-zipped with the recorded member name and time"
+}

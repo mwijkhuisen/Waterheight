@@ -1,0 +1,11 @@
+{
+  "spec": "de-7-messwerte",
+  "source": "DE-7",
+  "synthetic": true,
+  "status": 200,
+  "content_type": "application/zip",
+  "url": "https://www.hochwasserportal.nrw/data/downloads/messwerte.zip",
+  "bytes": 881,
+  "trimmed": false,
+  "note": "Synthetic ZIP attack payload, made with python3 zipfile. One member named messwerte.zip that is itself a ZIP holding messwerte.txt. Must end in zip_name: only the flat member messwerte.txt is allowed, nothing is ever unpacked recursively. Expected SchemaDrift code: zip_name."
+}

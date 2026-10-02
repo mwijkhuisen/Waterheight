@@ -1,0 +1,31 @@
+{
+ "obs": [],
+ "gaugeZeros": [
+  {
+   "series": "9286455000200/W",
+   "value_m": 33.886,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2829100000100/W",
+   "value_m": 29.938,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2869500000200/W",
+   "value_m": 12,
+   "datum": "NHN",
+   "valid_from": null
+  },
+  {
+   "series": "2847500000100/W",
+   "value_m": 42.825,
+   "datum": "NHN",
+   "valid_from": null
+  }
+ ],
+ "dropped": {},
+ "unknown": 0
+}
