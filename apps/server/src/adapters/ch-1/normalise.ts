@@ -29,6 +29,9 @@ import type { Observation } from './parse.ts';
 //    registry declares as stage on LOCAL. A value that contradicts its
 //    station's declaration (a level below 150 m, a stage at 150 m or more) is
 //    withheld as `datum_mismatch`: the declaration is never changed per row;
+//  - sentinel: an exact 0 at a level series is BAFU's "no value" (2602
+//    Domat/Ems froze at W = 0.0 on 2026-10-01), dropped as `sentinel` before
+//    that guard; a relative gauge's 0 is a reading;
 //  - qc "raw" (BAFU: raw, unverified data); the danger level and the
 //    temperature are not stored (classes are P7).
 
@@ -60,6 +63,10 @@ function row(decl: SeriesDecl | undefined, ts: number, raw: number | null, ctx: 
   if (raw === null) return;
   if (decl === undefined) {
     out.unknown += 1;
+    return;
+  }
+  if (decl.quantity === 'H' && decl.value_kind !== 'stage' && raw === 0) {
+    count(out, 'sentinel');
     return;
   }
   if (decl.quantity === 'H' && (decl.value_kind === 'stage') !== raw < LEVEL_FLOOR_M) {
