@@ -7,6 +7,7 @@ import {
   validateRegistry,
   validateStations,
   validateTwins,
+  WithholdingRecord,
 } from '@rws/contracts';
 import { durationMs, SchemaDrift, type SeriesDecl } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
@@ -43,12 +44,19 @@ export function readRegistry(
 ): RegistryInput {
   const yaml = (name: string) => parse(readFileSync(new URL(name, dir), 'utf8'));
   const permissions = new URL('permissions/', dir);
-  if (existsSync(permissions) && readdirSync(permissions).some((f) => f.endsWith('.md'))) {
-    // A permission record changes what may be published; this sync does not read them yet (P13).
-    throw new RegistryError('registry/permissions holds records, which the sync cannot apply yet');
+  const records = new Map<string, unknown>();
+  for (const file of existsSync(permissions) ? readdirSync(permissions).filter((f) => f.endsWith('.md')) : []) {
+    const front = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(readFileSync(new URL(file, permissions), 'utf8'))?.[1];
+    const record = front === undefined ? null : (parse(front) as unknown);
+    // A grant changes what may be published; this sync does not apply grants yet (P13). A withholding record
+    // (P5b) only narrows, and is checked against the station rows below.
+    if (!WithholdingRecord.safeParse(record).success) {
+      throw new RegistryError('registry/permissions holds a grant, which the sync cannot apply yet');
+    }
+    records.set(file.slice(0, -3), record);
   }
   const registry = validateRegistry(yaml('providers.yaml'), yaml('sources.yaml'), {
-    permissionRecords: new Map(),
+    permissionRecords: records,
     today,
   });
   const problems = [...registry.problems];
@@ -63,6 +71,14 @@ export function readRegistry(
     const result = validateStations(yaml(`stations/${file}`), registry.sources);
     problems.push(...result.problems.map((p) => `stations/${file}: ${p}`));
     stations.push(...result.stations);
+  }
+  // Every series a withholding record names is a registered series of that source, withheld in both audiences.
+  for (const w of registry.withholdings) {
+    for (const key of w.withheld) {
+      const row = stations.find((r) => r.source === w.source && r.provider_key === key);
+      if (row === undefined) problems.push(`permissions/${w.source}.md: ${key} is not a registered series`);
+      else if (row.audience !== 'off') problems.push(`permissions/${w.source}.md: ${key} is not audience off`);
+    }
   }
   const twins = existsSync(new URL('twins.yaml', dir))
     ? validateTwins(yaml('twins.yaml'), stations)

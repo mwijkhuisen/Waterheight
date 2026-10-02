@@ -349,15 +349,38 @@ specs:
         header: { pegel_messwerte.txt: 'station_no;time;value(cm)' }
         time_column: 1
     seed: { kind: once, pace_ms: 0 }
+  # The OpenHygon station master is UTF-8 (P5b: the recording; version 1 declared latin1) and WGS84; it has no
+  # gauge zero (PNP), which comes from de-8-hydro.
   - id: de-8-stations
     source: DE-8
-    version: 1
+    version: 2
     cron: "30 5 * * *"
     request:
       url: https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hygon/OpenHygon-Pegel-Stationen_EPSG4326.txt
     max_bytes: 10485760
     retention: forever
-    validity: { format: csv, csv: { delimiter: ';', encoding: latin1 }, min: 100 }
+    validity: { format: csv, csv: { delimiter: ';', encoding: utf-8 }, min: 100 }
+  # P5b (owner decision Q1, 2026-10-02): the NRW station metadata with the gauge zero (`Nullpunkt`, m on
+  # DHHN2016) of the DE-7 gauges and their operator (`Betreiber`). ISO-8859-1, coordinates in EPSG:25832 (not
+  # read: de-8-stations has them in WGS84). The file changes rarely (its member dates from 2024-06-12): weekly.
+  - id: de-8-hydro
+    source: DE-8
+    version: 1
+    cron: "40 5 * * 1"
+    request:
+      url: https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hydro/Hydrologische-Stationen-NRW_EPSG25832_CSV.zip
+    max_bytes: 1048576
+    retention: forever
+    validity:
+      format: zip
+      required: [Hydrologische-Stationen-NRW_EPSG25832.csv]
+      count: Hydrologische-Stationen-NRW_EPSG25832.csv
+      min: 100
+      zip:
+        members: [Hydrologische-Stationen-NRW_EPSG25832.csv]
+        header:
+          Hydrologische-Stationen-NRW_EPSG25832.csv: 'station_name;station_id;Meldepegel;Datenpfleger;Mittelwert;Zweck;Betreiber;KOORDX;KOORDYY;UTMZone;Errichtung;GewS;EZG;Nullpunkt;Kommune;Kreis;Name'
+        encoding: latin1
 
   # ------------------------------------------------------------------ BE-3 SPW (owner audience)
   - id: be-3-values

@@ -162,6 +162,23 @@ export const PermissionRecord = z.strictObject({
 });
 export type PermissionRecord = z.infer<typeof PermissionRecord>;
 
+/**
+ * A withholding record (P5b): registry/permissions/<ID>.md that names series of a public source withheld in
+ * both audiences (`off`), and why: third-party gauges inside a provider's open file whose licence may not
+ * cover them (LU-1: the LfU RLP gauges, until C4 or C11). It narrows, never grants: the station rows carry
+ * `audience: off`, and the sync checks that each named series has it.
+ */
+export const WithholdingRecord = z.strictObject({
+  source: SourceId,
+  /** Provider keys of the source's series (registry/stations/<source>.yaml), as published. */
+  withheld: z.array(z.string().min(1).max(120)).min(1).max(50),
+  audience: z.literal('off'),
+  /** The catalogue clauses and the owner actions (C-numbers) that would lift it; no person is named. */
+  basis: z.string().min(1).max(2000),
+  recorded_on: IsoDate,
+});
+export type WithholdingRecord = z.infer<typeof WithholdingRecord>;
+
 export type RegistryOptions = {
   /**
    * The parsed front matter of every registry/permissions/<ID>.md, keyed by the
@@ -181,13 +198,14 @@ export function validateRegistry(
   providersInput: unknown,
   sourcesInput: unknown,
   options: RegistryOptions,
-): { problems: string[]; providers: Provider[]; sources: Source[] } {
+): { problems: string[]; providers: Provider[]; sources: Source[]; withholdings: WithholdingRecord[] } {
   const problems: string[] = [];
   const providersParsed = ProvidersFile.safeParse(providersInput);
   const sourcesParsed = SourcesFile.safeParse(sourcesInput);
   if (!providersParsed.success) problems.push(`providers.yaml: ${z.prettifyError(providersParsed.error)}`);
   if (!sourcesParsed.success) problems.push(`sources.yaml: ${z.prettifyError(sourcesParsed.error)}`);
-  if (!providersParsed.success || !sourcesParsed.success) return { problems, providers: [], sources: [] };
+  if (!providersParsed.success || !sourcesParsed.success)
+    return { problems, providers: [], sources: [], withholdings: [] };
 
   const providers = providersParsed.data.providers;
   const sources = sourcesParsed.data.sources;
@@ -199,7 +217,17 @@ export function validateRegistry(
 
   // Permission records: valid front matter, named after their source, not dated in the future.
   const records = new Map<string, PermissionRecord>();
+  const withholdings: WithholdingRecord[] = [];
   for (const [id, raw] of options.permissionRecords) {
+    const withheld = WithholdingRecord.safeParse(raw);
+    if (withheld.success) {
+      if (withheld.data.source !== id) {
+        problems.push(`registry/permissions/${id}.md: source is ${withheld.data.source}, expected ${id}`);
+      } else if (withheld.data.recorded_on > options.today) {
+        problems.push(`registry/permissions/${id}.md: recorded_on ${withheld.data.recorded_on} is in the future`);
+      } else withholdings.push(withheld.data);
+      continue;
+    }
     const parsed = PermissionRecord.safeParse(raw);
     if (!parsed.success) {
       problems.push(`registry/permissions/${id}.md: not a valid permission record: ${z.prettifyError(parsed.error)}`);
@@ -287,5 +315,5 @@ export function validateRegistry(
         problems.push(`${where}: the withheld canary must be audience off`);
     }
   }
-  return { problems, providers, sources };
+  return { problems, providers, sources, withholdings };
 }

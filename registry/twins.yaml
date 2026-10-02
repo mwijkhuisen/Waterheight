@@ -6,3 +6,37 @@ twins:
     a: { source: NL-1, provider_key: "eijsden.grens/WATHTE/TAW/other:F007" }
     b: { source: NL-1, provider_key: "eijsden.grens/WATHTE/NAP/other:F007" }
     relation: { kind: offset, expected: 233, tolerance: 1, unit: cm }
+  # P5b (A§7.4 step 7). The FR-3 side of Chooz and Uckange comes from `fr-3-twin` (6-hourly); FR-1 rows that FR-3
+  # filled (QC bit 512) are left out of both sides, so FR-3 is never compared with itself (KG-121).
+  # Chooz Trou du Diable, Meuse: Hub'Eau (mm) and Vigicrues (m) publish the same gauge relative to its zero.
+  - id: chooz-fr3-fr1-h
+    a: { source: FR-3, provider_key: B720000001/H }
+    b: { source: FR-1, provider_key: B720000001/H }
+    relation: { kind: offset, expected: 0, tolerance: 1, unit: cm }
+  # Uckange, Moselle: Hub'Eau l/s and Vigicrues m³/s, equal after the unit factor (14,500 l/s = 14.5 m³/s).
+  - id: uckange-fr3-fr1-q
+    a: { source: FR-3, provider_key: A850061001/Q }
+    b: { source: FR-1, provider_key: A850061001/Q }
+    relation: { kind: offset, expected: 0, tolerance: 0.001, unit: m³/s }
+  # Basel Rheinhalle: BAFU's level in m LN02 (CH-1, primary) and PEGELONLINE's mirror, a stage above the gauge zero
+  # 240.00 m (LN02): level = 240.00 m + W/100, so a − b = 24,000 cm (catalogue §3.1).
+  - id: basel-ch1-de1-h
+    a: { source: CH-1, provider_key: 2289/W }
+    b: { source: DE-1, provider_key: 94f6eff1-4f3f-4850-82e0-a086198e9ffd/W }
+    relation: { kind: offset, expected: 24000, tolerance: 1, unit: cm }
+  # Perl and Stadtbredimus UP: the LU-1 CSV republishes PEGELONLINE's values byte for byte (catalogue §2.6); the LU-1
+  # side is stored with the label offset applied (load/label-offset.ts), so the two meet at lag 0.
+  - id: perl-lu1-de1-h
+    a: { source: LU-1, provider_key: Perl }
+    b: { source: DE-1, provider_key: c263ea53-ca4d-41f5-b3f5-6178fec302aa/W }
+    relation: { kind: offset, expected: 0, tolerance: 0.05, unit: cm, min_share: 0.99 }
+  - id: stadtbredimus-lu1-de1-h
+    a: { source: LU-1, provider_key: SN_Stadtbredimus }
+    b: { source: DE-1, provider_key: dfdf753b-75bd-46f0-8cde-15545be9bfba/W }
+    relation: { kind: offset, expected: 0, tolerance: 0.05, unit: cm, min_share: 0.99 }
+  # Grevenmacher: the Service de la navigation gauge in LU-1 and WSV's Grevenmacher UP differ by up to 3 cm
+  # (catalogue §2.6; owner decision 2026-10-02: DE-1 stays primary, the LU-1 copy is this twin).
+  - id: grevenmacher-lu1-de1-h
+    a: { source: LU-1, provider_key: SN_Grevenmacher }
+    b: { source: DE-1, provider_key: 69308142-f78e-4877-9af8-e7221b01d303/W }
+    relation: { kind: offset, expected: 0, tolerance: 3, unit: cm, min_share: 0.95 }
