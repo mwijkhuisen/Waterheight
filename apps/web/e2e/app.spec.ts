@@ -4,7 +4,7 @@ import { expectClean, instrument, type Log } from './clean.ts';
 
 // P4b acceptance (issue #19), on Chromium, Firefox and WebKit, against the e2e
 // build served under the production headers with the e2e api behind it (a real
-// PostgreSQL, the registry's 261 stations, synthetic values, a fixed clock):
+// PostgreSQL, the registry's 712 public stations, synthetic values, a fixed clock):
 // - NL is the default and the language switch keeps t and s; the slider updates ?t= and the
 //   marker states; a deep link restores the view; the slider works from the keyboard;
 // - 02:30 CEST and 02:30 CET on 2026-10-25 are distinct selectable instants (scrubber and time input);
@@ -141,7 +141,13 @@ const withoutWebGL2 = () => {
 async function expectNoSeriousAxe(page: Page, scope?: string) {
   // axe yields to the page between its rules: a DOM that changes during the run makes checks undecidable (CR-1).
   await settled(page);
-  const axe = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']);
+  // Since P5a the table lists about 1,130 series (rows about 88 px tall) and the page is far taller than the 32,767 px a
+  // browser can hit-test: axe leaves the colour contrast of every row below that (from about row 370) undecided.
+  // Every row has the same markup and styles; the first 250 (about 22,000 px) are checked (KG-129: P10 pages or
+  // virtualises the table).
+  const axe = new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+    .exclude('tbody > tr:nth-child(n+251)');
   const result = await (scope === undefined ? axe : axe.include(scope)).analyze();
   expect(result.passes.length, 'axe ran its rules').toBeGreaterThan(10);
   /** Each node by its selector, its markup and axe's own reason, so a failure in CI can be diagnosed from the log. */
