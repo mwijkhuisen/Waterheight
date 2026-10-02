@@ -49,9 +49,24 @@ export function scanCsv(bytes: Uint8Array, opts: CsvOptions): { header: string[]
   }
 }
 
-/** Splits streamed bytes into lines (bounded length) for ZIP members too large to hold. */
-export function lineSplitter(onLine: (line: string) => void, encoding: Encoding = 'utf-8', maxLine = 64 * 1024) {
-  const decoder = new TextDecoder(encoding);
+/**
+ * Splits streamed bytes into lines (bounded length) for ZIP members too large to hold. `fatal` (P5b: the
+ * loader's DE-7 members) refuses bytes that are not valid in `encoding` (reason `encoding`) instead of replacing them.
+ */
+export function lineSplitter(
+  onLine: (line: string) => void,
+  encoding: Encoding = 'utf-8',
+  maxLine = 64 * 1024,
+  { fatal = false }: { fatal?: boolean } = {},
+) {
+  const decoder = new TextDecoder(encoding, { fatal });
+  const decodeChunk = (chunk?: Uint8Array) => {
+    try {
+      return chunk === undefined ? decoder.decode() : decoder.decode(chunk, { stream: true });
+    } catch {
+      return fail('encoding');
+    }
+  };
   let rest = '';
   const feed = (text: string) => {
     rest += text;
@@ -64,9 +79,9 @@ export function lineSplitter(onLine: (line: string) => void, encoding: Encoding 
     if (rest.length > maxLine) fail('line_length');
   };
   return {
-    push: (chunk: Uint8Array) => feed(decoder.decode(chunk, { stream: true })),
+    push: (chunk: Uint8Array) => feed(decodeChunk(chunk)),
     end: () => {
-      feed(decoder.decode());
+      feed(decodeChunk());
       if (rest !== '') onLine(rest.replace(/\r$/, ''));
       rest = '';
     },
@@ -199,7 +214,8 @@ export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember
         try {
           inflate.push(data.subarray(from, from + PUSH), from + PUSH >= data.length);
         } catch (err) {
-          if (err instanceof GuardFailure) throw err;
+          // A guard's own failure, or a member reader's drift (P5b: the loader's DE-7 line sink), keeps its code.
+          if (err instanceof GuardFailure || err instanceof SchemaDrift) throw err;
           fail('zip_inflate');
         }
         pushes += 1;
