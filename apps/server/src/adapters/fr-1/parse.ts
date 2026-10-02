@@ -92,7 +92,7 @@ const Envelope = z.strictObject({
  * `size=10000`.
  */
 export const JSON_CAPS = {
-  /** An observations_tr page (5,660 rows, 45,287 values, depth 2). */
+  /** An observations_tr page (5,660 rows, 45,287 values, depth 2); a full one, the usual size since #53: 20,000 rows, 160,007 values, 3.4 MB. */
   obs: { maxItems: 20_000, maxNodes: 250_000, maxDepth: 4 },
   /** A referentiel/stations prefix (409 stations of A, depth 5). */
   ref: { maxItems: 10_000, maxNodes: 600_000, maxDepth: 6 },

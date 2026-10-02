@@ -287,7 +287,7 @@ describe('gap-stretch windows', () => {
     expect(starts).toEqual(['PT6H', 'PT11H', 'P30D']);
   });
 
-  it('FR-1: from the last success − 60 min, at least 75 min back, under one month', async () => {
+  it('FR-1: from the last success − 4 h, at least 4 h back, under one month (late values, #53)', async () => {
     const c = clock('2026-10-02T12:01:00Z');
     const deps = runDeps({ now: c.now });
     const from: string[] = [];
@@ -307,7 +307,7 @@ describe('gap-stretch windows', () => {
     await runSpec(s, deps);
     c.advance(45 * 86_400_000);
     await runSpec(s, deps);
-    expect(from).toEqual(['2026-10-02T10:46:00Z', '2026-10-02T11:01:00Z', '2026-10-17T13:16:00Z']);
+    expect(from).toEqual(['2026-10-02T08:01:00Z', '2026-10-02T08:01:00Z', '2026-10-17T13:16:00Z']);
   });
 });
 
@@ -344,10 +344,10 @@ describe('FR-1 walks (C4, S8, N2)', () => {
     const asked = hubeau({ pages: 3 });
     const s = spec('fr-1-obs');
     expect(await runSpec(s, deps)).toMatchObject({ requests: 3, capped: false });
-    expect(asked[0]).toEqual({ from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z', cursor: null });
+    expect(asked[0]).toEqual({ from: '2026-10-07T08:00:00Z', to: '2026-10-08T08:00:00Z', cursor: null });
     c.advance(15 * 60_000);
     await runSpec(s, deps);
-    expect(asked[3]).toEqual({ from: '2026-10-08T10:00:00Z', to: '2026-10-09T10:00:00Z', cursor: null });
+    expect(asked[3]).toEqual({ from: '2026-10-08T04:00:00Z', to: '2026-10-09T04:00:00Z', cursor: null });
   });
 
   /**
@@ -399,11 +399,11 @@ describe('FR-1 walks (C4, S8, N2)', () => {
       [21, true], // the next day: a flood too
     ]);
     expect(roots).toEqual([
-      { from: '2026-10-07T11:00:00Z', to: '2026-10-08T11:00:00Z' },
-      { from: '2026-10-07T11:00:00Z', to: '2026-10-08T00:31:00Z' }, // 21 pages lower, plus one minute
-      { from: '2026-10-07T11:00:00Z', to: '2026-10-07T14:02:00Z' },
+      { from: '2026-10-07T08:00:00Z', to: '2026-10-08T08:00:00Z' },
+      { from: '2026-10-07T08:00:00Z', to: '2026-10-07T21:31:00Z' }, // 21 pages lower, plus one minute
+      { from: '2026-10-07T08:00:00Z', to: '2026-10-07T11:02:00Z' },
       // The walk completed: the window moves to the end of the whole day, not of its last part.
-      { from: '2026-10-08T10:00:00Z', to: '2026-10-09T10:00:00Z' },
+      { from: '2026-10-08T04:00:00Z', to: '2026-10-09T04:00:00Z' },
     ]);
   });
 
@@ -411,7 +411,7 @@ describe('FR-1 walks (C4, S8, N2)', () => {
     const c = clock('2026-10-10T12:01:00Z');
     const deps = runDeps({ now: c.now });
     await lastSuccess(deps, '2026-10-07T12:00:00.000Z');
-    const roots = slices(['2026-10-08T10:00:00Z', '2026-10-08T09:00:00Z']);
+    const roots = slices(['2026-10-08T07:00:00Z', '2026-10-08T06:00:00Z']);
     const s = spec('fr-1-obs');
     const first = c.now().toISOString();
     for (let i = 0; i < 4; i += 1) {
@@ -419,10 +419,10 @@ describe('FR-1 walks (C4, S8, N2)', () => {
       c.advance(15 * 60_000);
     }
     expect(roots.map((r) => r.to)).toEqual([
-      '2026-10-08T11:00:00Z',
-      '2026-10-08T09:01:00Z', // the first run got down to 09:00; no run after it got older
-      '2026-10-08T09:01:00Z',
-      '2026-10-08T09:01:00Z',
+      '2026-10-08T08:00:00Z',
+      '2026-10-08T06:01:00Z', // the first run got down to 06:00; no run after it got older
+      '2026-10-08T06:01:00Z',
+      '2026-10-08T06:01:00Z',
     ]);
     const st = await deps.state.read<SpecState>('fr-1-obs');
     expect(st?.last_success).toBe(first);
@@ -454,7 +454,7 @@ describe('FR-1 walks (C4, S8, N2)', () => {
     throttle = false;
     c.advance(15 * 60_000);
     await runSpec(s, deps);
-    expect(roots).toEqual(['2026-10-07T11:00:00Z', '2026-10-07T11:00:00Z']);
+    expect(roots).toEqual(['2026-10-07T08:00:00Z', '2026-10-07T08:00:00Z']);
   });
 
   /** A root with a `next`, then a last page #2 that answers `ctl.fail()` while it is set. */
@@ -503,7 +503,7 @@ describe('FR-1 walks (C4, S8, N2)', () => {
       expect(st?.last_success).toBe(c.now().toISOString());
       c.advance(15 * 60_000);
       await runSpec(s, deps);
-      expect(roots).toEqual(['2026-10-07T11:00:00Z', '2026-10-07T11:00:00Z', '2026-10-08T10:00:00Z']);
+      expect(roots).toEqual(['2026-10-07T08:00:00Z', '2026-10-07T08:00:00Z', '2026-10-08T04:00:00Z']);
     },
   );
 
@@ -520,7 +520,7 @@ describe('FR-1 walks (C4, S8, N2)', () => {
       c.advance(15 * 60_000);
       expect(await runSpec(s, deps)).toMatchObject({ ok: 1, incomplete: true });
     }
-    expect(roots.slice(1)).toEqual(Array(4).fill('2026-10-08T10:00:00Z'));
+    expect(roots.slice(1)).toEqual(Array(4).fill('2026-10-08T04:00:00Z'));
     const st = await deps.state.read<SpecState>('fr-1-obs');
     expect(st).toMatchObject({ last_success: t0, last_failure_status: 404 });
     expect(isFresh(s, st, new Date(Date.parse(t0) + 46 * 60_000))).toBe(false);
@@ -547,7 +547,7 @@ describe('FR-1 walks (C4, S8, N2)', () => {
     pages = 3; // the next day: page #2 holds data this time, and page #3 is empty
     c.advance(15 * 60_000);
     expect(await runSpec(s, deps)).toMatchObject({ requests: 3, ok: 3 });
-    expect(roots).toEqual(['2026-10-07T11:00:00Z', '2026-10-08T10:00:00Z']);
+    expect(roots).toEqual(['2026-10-07T08:00:00Z', '2026-10-08T04:00:00Z']);
     const empty = lines(deps.root).filter((l) => l.status === 200);
     expect(empty.map((l) => [l.variant, l.validity, l.shape])).toEqual([
       ['default#2', { ok: true, reason: null, count: 0 }, null],
