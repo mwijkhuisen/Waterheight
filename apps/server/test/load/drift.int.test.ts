@@ -988,7 +988,8 @@ describe('a unit switch (review C7) and what the pruner keeps (review C10)', () 
     } finally {
       await h2.close();
     }
-  });
+    // A second database with the whole registry: past 5 s on CI since P5b's registry (1,000 stations).
+  }, 60_000);
 
   it('a payload with a series the registry does not know keeps its object until a replay after the registry gains it (review R2-8)', async () => {
     const unknown = '00000000-0000-4000-8000-000000000001/W';
