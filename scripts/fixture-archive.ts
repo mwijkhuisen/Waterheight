@@ -289,7 +289,7 @@ export async function buildFrChFixtureArchive(rawDir: string): Promise<ManifestL
 /**
  * P5b: the DE-7, DE-8, LU-1 and LU-6 fixtures (DE-7 as its trimmed blocks: the whole recording is 239k rows,
  * too much for the CI end-to-end container): the NRW station master and gauge zeros, the LU station points,
- * one day of six LU-1 rows.
+ * one day of five LU-1 rows (no withheld row, review L3).
  */
 export const NRWLU_FIXTURES: readonly {
   source: 'DE-7' | 'DE-8' | 'LU-1' | 'LU-6';

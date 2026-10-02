@@ -52,7 +52,7 @@ const csv = (labels: string[], rows: string[][]) =>
   );
 
 describe('golden files (real payloads)', () => {
-  it('one day of six rows (trimmed from the P1a recording): local labels → UTC − 15 min, Name → series', () => {
+  it('one day of five rows (trimmed from the P1a recording): local labels → UTC − 15 min, Name → series', () => {
     const out = run('lu-1-csv-day', OLD_FORMAT);
     expect(out).toEqual(golden('lu-1-csv-day', out));
     // 28.09.2026 15:45 (+02:00) is 13:45Z; its value belongs to 13:30Z.
@@ -62,9 +62,37 @@ describe('golden files (real payloads)', () => {
     // Esch-Sûre carries a value after the last label: its row is withheld (`row_width`), never shifted by a guess.
     expect(of(out, 'Esch-Sure')).toEqual([]);
     expect(out.dropped.row_width).toBe(97);
-    // The RLP-operated Bollendorf comes out under its key; the loader stores nothing for an `off` series.
-    expect(of(out, 'Bollendorf')).toHaveLength(96);
+    // No withheld row is in a trim (review L3): the P1a recording alone holds the RLP gauges as recorded.
+    expect(table('lu-1-csv-day').rows.map((r) => r.name)).toEqual([
+      'Bissen',
+      'Esch-Sure',
+      'Perl',
+      'SN_Remich',
+      'Diekirch',
+    ]);
     for (const r of out.obs) expect(r.qc & QC.RAW).toBe(QC.RAW);
+  });
+
+  it('a withheld RLP gauge (synthetic row, generated values) comes out under its key; the loader stores nothing of it', () => {
+    const labels = ['28.09.2026 15:45', '28.09.2026 16:00', '28.09.2026 16:15'];
+    const out = normalise(
+      parseCsv(
+        csv(labels, [
+          ['Bollendorf', '', 'cm', '101.0', '', '102.5'],
+          ['Gemünd_Our', '', 'cm', '7.0', '7.5', '8.0'],
+        ]),
+      ),
+      { registry, fetchedAt: Date.parse('2026-09-29T13:43:26Z') },
+    );
+    expect(out.obs.map((r) => [r.series, r.ts, r.value])).toEqual([
+      ['Bollendorf', '2026-09-28T13:45:00.000Z', 101],
+      ['Bollendorf', '2026-09-28T14:15:00.000Z', 102.5],
+      ['Gemünd_Our', '2026-09-28T13:45:00.000Z', 7],
+      ['Gemünd_Our', '2026-09-28T14:00:00.000Z', 7.5],
+      ['Gemünd_Our', '2026-09-28T14:15:00.000Z', 8],
+    ]);
+    // Both are `off` series of the public source (registry/permissions/LU-1.md; test/registry-precedence.test.ts):
+    // the loader stores nothing of them (apps/server/test/load/nrw-lu.int.test.ts, on a synthetic row too).
   });
 
   it('the whole P1a file (42 rows × 480 labels) loads: every name is registered, only Esch-Sûre withheld', () => {

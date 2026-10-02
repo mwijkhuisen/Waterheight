@@ -49,6 +49,36 @@ const batches = async (x: Harness) =>
     )
   ).rows;
 
+/** The series every view of both reader families shows (Q1 at 2026-09-29T13:40Z for the at-T functions). */
+async function visible(x: Harness): Promise<Map<string, Set<number>>> {
+  const out = new Map<string, Set<number>>();
+  const at = "'2026-09-29T13:40:00Z'::timestamptz";
+  for (const [role, family, fn] of [
+    ['rws_api', VIEWS.public, OBS_AT.public],
+    ['rws_owner_api', VIEWS.owner, OBS_AT.owner],
+  ] as const) {
+    const client = await x.t.connectAs(role);
+    const queries = {
+      obs: `SELECT DISTINCT series_id FROM ${family.obs}`,
+      latest: `SELECT DISTINCT series_id FROM ${family.obsLatest}`,
+      h1: `SELECT DISTINCT series_id FROM ${family.obs1h}`,
+      d1: `SELECT DISTINCT series_id FROM ${family.obs1d}`,
+      apiObs: `SELECT DISTINCT series_id FROM ${family.api.obs}`,
+      apiH1: `SELECT DISTINCT series_id FROM ${family.api.obs1h}`,
+      apiD1: `SELECT DISTINCT series_id FROM ${family.api.obs1d}`,
+      series: `SELECT id AS series_id FROM ${family.series}`,
+      apiSeries: `SELECT id AS series_id FROM ${family.api.series}`,
+      at: `SELECT series_id FROM ${fn}(${at})`,
+    };
+    for (const [name, sql] of Object.entries(queries))
+      out.set(
+        `${role} ${name}`,
+        new Set((await client.query<{ series_id: number }>(sql)).rows.map((r) => r.series_id)),
+      );
+  }
+  return out;
+}
+
 const appMeta = async (x: Harness, key: string) =>
   (await x.t.admin.query<{ value: Record<string, unknown> }>('SELECT value FROM app_meta WHERE key = $1', [key]))
     .rows[0]?.value;
@@ -163,7 +193,7 @@ describe('the DE-7, DE-8, LU-1 and LU-6 fixtures', { timeout: 60_000 }, () => {
     expect(before.revisions).toBe(0);
   });
 
-  it('LU-1: Diekirch sits at label − 15 min; the Perl twin is stored and shown nowhere; Bollendorf and Esch-Sure store nothing', async () => {
+  it('LU-1: Diekirch sits at label − 15 min; the Perl twin is stored and shown nowhere; Esch-Sure stores nothing', async () => {
     const diekirch = await rows(h, 'LU-1', 'Diekirch');
     expect(diekirch).toHaveLength(96);
     // 28.09.2026 15:45 Luxembourg time (CEST, +02:00) is 13:45Z; the measured offset of the old format is 15 minutes.
@@ -174,23 +204,16 @@ describe('the DE-7, DE-8, LU-1 and LU-6 fixtures', { timeout: 60_000 }, () => {
     const perl = await rows(h, 'LU-1', 'Perl');
     expect(perl).toHaveLength(96);
     expect(perl[0]?.value).toBeCloseTo(214, 4);
-    // Bollendorf is an off station of a public source; Esch-Sure's row is wider than the header (row_width).
-    for (const key of ['Bollendorf', 'Esch-Sure']) expect(await rows(h, 'LU-1', key), key).toEqual([]);
+    // Esch-Sure's row is wider than the header (row_width). The withheld RLP gauges are in no trim (review L3):
+    // their off path is tested on synthetic rows below.
+    expect(await rows(h, 'LU-1', 'Esch-Sure')).toEqual([]);
     const ids = {
       perl: await seriesId(h, 'LU-1', 'Perl'),
-      bollendorf: await seriesId(h, 'LU-1', 'Bollendorf'),
       diekirch: await seriesId(h, 'LU-1', 'Diekirch'),
     };
     expect((await h.t.admin.query('SELECT role, audience FROM series WHERE id = $1', [ids.perl])).rows).toEqual([
       { role: 'twin', audience: null },
     ]);
-    const { rows: held } = await h.t.admin.query(
-      `SELECT (SELECT count(*)::int FROM obs_latest WHERE series_id = $1) AS latest,
-              (SELECT count(*)::int FROM obs_1h WHERE series_id = $1) AS h1,
-              (SELECT count(*)::int FROM obs_1d WHERE series_id = $1) AS d1`,
-      [ids.bollendorf],
-    );
-    expect(held).toEqual([{ latest: 0, h1: 0, d1: 0 }]);
     // The batch counts what it stored: the four series that share the source's audience (a gap is no row).
     const { rows: stored } = await h.t.admin.query(
       `SELECT count(*)::int AS n FROM obs o JOIN series s ON s.id = o.series_id WHERE s.source_id = 'LU-1'`,
@@ -201,33 +224,10 @@ describe('the DE-7, DE-8, LU-1 and LU-6 fixtures', { timeout: 60_000 }, () => {
       n_new: stored[0]?.n,
     });
 
-    // No view of either family shows the twin or the off gauge; Diekirch is the positive control.
-    const at = "'2026-09-29T13:40:00Z'::timestamptz";
-    for (const [role, family, fn] of [
-      ['rws_api', VIEWS.public, OBS_AT.public],
-      ['rws_owner_api', VIEWS.owner, OBS_AT.owner],
-    ] as const) {
-      const client = await h.t.connectAs(role);
-      const seen = async (sql: string) =>
-        new Set((await client.query<{ series_id: number }>(sql)).rows.map((r) => r.series_id));
-      const queries = {
-        obs: `SELECT DISTINCT series_id FROM ${family.obs}`,
-        latest: `SELECT DISTINCT series_id FROM ${family.obsLatest}`,
-        h1: `SELECT DISTINCT series_id FROM ${family.obs1h}`,
-        d1: `SELECT DISTINCT series_id FROM ${family.obs1d}`,
-        apiObs: `SELECT DISTINCT series_id FROM ${family.api.obs}`,
-        apiH1: `SELECT DISTINCT series_id FROM ${family.api.obs1h}`,
-        apiD1: `SELECT DISTINCT series_id FROM ${family.api.obs1d}`,
-        series: `SELECT id AS series_id FROM ${family.series}`,
-        apiSeries: `SELECT id AS series_id FROM ${family.api.series}`,
-        at: `SELECT series_id FROM ${fn}(${at})`,
-      };
-      for (const [name, sql] of Object.entries(queries)) {
-        const ids_ = await seen(sql);
-        expect(ids_.has(ids.diekirch), `${role} ${name} shows Diekirch`).toBe(true);
-        expect(ids_.has(ids.perl), `${role} ${name} shows the Perl twin`).toBe(false);
-        expect(ids_.has(ids.bollendorf), `${role} ${name} shows Bollendorf`).toBe(false);
-      }
+    // No view of either family shows the twin; Diekirch is the positive control.
+    for (const [view, ids_] of await visible(h)) {
+      expect(ids_.has(ids.diekirch), `${view} shows Diekirch`).toBe(true);
+      expect(ids_.has(ids.perl), `${view} shows the Perl twin`).toBe(false);
     }
   });
 
@@ -402,6 +402,42 @@ describe('the full DE-7 recording', { timeout: 300_000 }, () => {
         [second?.id],
       );
       expect(oldest[0]?.ts.getTime()).toBeGreaterThanOrEqual(f.at.getTime() - 6 * 3_600_000);
+    } finally {
+      await x.close();
+    }
+  });
+});
+
+describe('LU-1 withheld gauges (review L3: synthetic rows, never real values)', { timeout: 60_000 }, () => {
+  it('the day payload with generated Bollendorf and Gemünd_Our rows: nothing of them is stored or seen', async () => {
+    const x = await harness();
+    try {
+      const f = recorded('lu-1-csv-day', 'LU-1');
+      const row = (name: string) =>
+        [name, '', 'cm', ...Array.from({ length: 96 }, (_, i) => (50 + i / 10).toFixed(1)), '']
+          .map((c) => `"${c}"`)
+          .join(',');
+      const body = Buffer.from(`${f.body.toString('utf8')}${row('Bollendorf')}\n${row('Gemünd_Our')}\n`);
+      await writePayload(x.archive, { source: 'LU-1', spec: 'lu-1-csv', variant: '', at: f.at, body, url: f.url });
+      expect(await x.loader({ now: AFTER }).tick()).toEqual({ lines: 1, loaded: 1 });
+      expect(x.alerts).toEqual([]);
+      expect(await rows(x, 'LU-1', 'Diekirch')).toHaveLength(96);
+      const withheld = [await seriesId(x, 'LU-1', 'Bollendorf'), await seriesId(x, 'LU-1', 'Gemünd_Our')];
+      for (const key of ['Bollendorf', 'Gemünd_Our']) expect(await rows(x, 'LU-1', key), key).toEqual([]);
+      const { rows: held } = await x.t.admin.query(
+        `SELECT (SELECT count(*)::int FROM obs_latest WHERE series_id = ANY($1)) AS latest,
+                (SELECT count(*)::int FROM obs_1h WHERE series_id = ANY($1)) AS h1,
+                (SELECT count(*)::int FROM obs_1d WHERE series_id = ANY($1)) AS d1`,
+        [withheld],
+      );
+      expect(held).toEqual([{ latest: 0, h1: 0, d1: 0 }]);
+      // The batch counts only the series that share the source's audience.
+      const { rows: stored } = await x.t.admin.query(
+        `SELECT count(*)::int AS n FROM obs o JOIN series s ON s.id = o.series_id WHERE s.source_id = 'LU-1'`,
+      );
+      expect((await batches(x))[0]).toMatchObject({ parse_status: 'ok', n_rows: stored[0]?.n });
+      for (const [view, ids_] of await visible(x))
+        for (const id of withheld) expect(ids_.has(id), `${view} shows ${id}`).toBe(false);
     } finally {
       await x.close();
     }

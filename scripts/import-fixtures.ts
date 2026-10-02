@@ -60,8 +60,12 @@ export const TRIM: Readonly<Record<Import['source'], (doc: Doc, n: number, last:
 // ---------------------------------------------------------------- P5b: the text and ZIP rules (scripts/trim-fixtures.ts
 // uses them too)
 
-/** LU-1 rows kept: a tier-1 gauge, the Perl twin, a row with gaps, Esch-Sûre (m, a value after the last label), an RLP row. */
-export const LU1_ROWS: readonly string[] = ['Diekirch', 'Perl', 'SN_Remich', 'Bissen', 'Esch-Sure', 'Bollendorf'];
+/**
+ * LU-1 rows kept: a tier-1 gauge, the Perl twin, a row with gaps, Esch-Sûre (m, a value after the last label). No
+ * withheld row (review L3 of P5b): the RLP gauges' values stay out of the trims, and the `off` path is tested on a
+ * synthetic row; the P1a recording `lu-1-csv.raw` holds them as recorded, the only fixture that does.
+ */
+export const LU1_ROWS: readonly string[] = ['Diekirch', 'Perl', 'SN_Remich', 'Bissen', 'Esch-Sure'];
 export const LU1_LABELS = 96;
 /** DE-7 blocks kept: Stah (15 min), Goch, Gronau, a 5-minute station, the placeholder block, the 10-digit number. */
 export const DE7_BLOCKS: readonly string[] = [
