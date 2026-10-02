@@ -1,0 +1,11 @@
+{
+  "spec": "lu-2-json",
+  "source": "LU-2",
+  "synthetic": true,
+  "derived_from": "an archived payload (owner audience: not committed)",
+  "values": "every number, name and string generated, timestamps shifted by one constant whole number of days; keys, structure, identifiers, nulls, -1, 0, 9999.0 and quality codes kept (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "Esch-Sure",
+  "archive_key": "raw/LU-2/lu-2-json/2026/10/02/152730Z-0f59ca24ee9dcbb3.zst",
+  "source_sha256": "0f59ca24ee9dcbb30a64a0ea65962fe0eb5ddea5249a5d78a64979d73d8f7f70"
+}
