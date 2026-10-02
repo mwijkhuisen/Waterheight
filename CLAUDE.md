@@ -193,12 +193,15 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | docker/metadata-action | action | 6.2.0 | planned | – | Apache-2.0 | not needed in P1b (images are addressed by digest) |
 | sigstore/cosign-installer | action | 4.1.2 | installed | 6f9f17788090df1f26f669e9d70d6ae9567deba6 | Apache-2.0 | release.yml, with `cosign-release: v3.1.3` |
 | actions/attest-build-provenance | action | 4.2.2 | installed | 4d101475d8b20a2381f78447822ac1eab6504dd8 | MIT | release.yml |
+| actions/upload-artifact | action | 7.0.1 | installed | 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a | MIT | geo.yml |
+| actions/download-artifact | action | 8.0.1 | installed | 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c | MIT | geo.yml |
 | syft | binary | 1.52.0 | planned | – | Apache-2.0 | P12 (P1b SBOMs come from buildkit-syft-scanner) |
 | grype | binary | 0.119.0 | planned | – | Apache-2.0 | P12 gate, deferred by the owner in P1b (risk register) |
 | restic | binary | 0.19.1 | installed | f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c | BSD-2-Clause | backup image (`restic_0.19.1_linux_amd64.bz2` sha256) |
 | go-pmtiles | binary | 1.31.2 | installed | 3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f | BSD-3-Clause | server image `/app/bin/pmtiles` (`go-pmtiles_1.31.2_Linux_x86_64.tar.gz` sha256; statically linked): the `basemap` role (P3) |
-| osmium-tool | binary | 1.19.1 | planned | – | GPL-3.0 | P6 (CI only) |
-| tippecanoe | binary | 2.79.0 | planned | – | BSD-2-Clause | P6 (CI only) |
+| osmium-tool | binary | 1.19.1 | installed | e629d2f3e500ffa5df6f1b1689161ab3dea3a82f66beec2b453a74b8d782f949 | GPL-3.0 | `tools/geo/Dockerfile` (CI only; source tag tarball, never distributed) |
+| libosmium | tool | 2.23.1 | installed | eb47d8163396c73870dbf27819dcadda0c56f0191935c4f8659d1e61b261552f | BSL-1.0 | `tools/geo/Dockerfile` build of osmium-tool (header-only) |
+| tippecanoe | binary | 2.79.0 | installed | b0fd9df49b6efc988288ea48774822c6de19eb48428017f27ee0b3b01d44f05d | BSD-2-Clause | `tools/geo/Dockerfile` (CI only; P6b uses it) |
 | k6 | binary | 1.8.1 | planned | – | AGPL-3.0 | P12 (tool only) |
 <!-- bom:end -->
 

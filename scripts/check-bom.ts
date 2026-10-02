@@ -5,8 +5,8 @@
 //     each pinned to an exact version; TypeScript must stay on major 6;
 //   - node <-> .node-version; pnpm <-> packageManager and the lockfile's own pin;
 //   - action, image and binary rows (installed) <-> the pins in the workflows,
-//     the hook, scripts/*.sh and every file under deploy/ (bootstrap, Dockerfiles,
-//     compose files), and every action, CI image or Dockerfile base has a row.
+//     the hook, scripts/*.sh, every file under deploy/ (bootstrap, Dockerfiles,
+//     compose files) and tools/geo/Dockerfile, and every action, CI image or Dockerfile base has a row.
 //   - supply chain: every locked package resolves by registry integrity, and
 //     every minimumReleaseAgeExclude entry carries an unexpired "# expires" date.
 // "planned" rows are skipped. Usage: node scripts/check-bom.ts [repo-root]
@@ -192,9 +192,14 @@ export function checkBom(root: string): string[] {
   // Actions, images, binaries and the pinned tool downloads.
   const workflows = filesOf(root, ['.github/workflows']).join('\n');
   const deploy = deployFiles(root);
+  // The geo tool image (P6a) is built in CI only, but pins binaries and a base image like the deploy ones.
+  const geoDockerfile = 'tools/geo/Dockerfile';
+  const dockerfiles = [...deploy];
+  if (existsSync(join(root, geoDockerfile)))
+    dockerfiles.push({ path: geoDockerfile, text: readFileSync(join(root, geoDockerfile), 'utf8') });
   const pinnedFiles = [
     ...filesOf(root, ['.github/workflows', '.claude/hooks', 'scripts']),
-    ...deploy.map((f) => f.text),
+    ...dockerfiles.map((f) => f.text),
   ];
   const re = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const r of installed.filter((r) => ['action', 'image', 'binary', 'runtime', 'tool'].includes(r.kind))) {
@@ -229,7 +234,7 @@ export function checkBom(root: string): string[] {
   for (const [, image = ''] of workflows.matchAll(/^\s*image:\s*(\S+)/gm)) {
     if (!imageRows.has(image)) problems.push(`workflow image ${image}: no installed image row with that pin`);
   }
-  for (const { path, text } of deploy) {
+  for (const { path, text } of dockerfiles) {
     if (!/(?:^|\/)Dockerfile$/.test(path)) continue;
     for (const [, image = ''] of text.matchAll(/^FROM\s+(\S+)/gm)) {
       if (!imageRows.has(image)) problems.push(`${path}: base image ${image} has no installed image row with that pin`);

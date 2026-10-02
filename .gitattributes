@@ -5,3 +5,6 @@ tools/geo/fixtures/*.pmtiles binary
 # Adapter fixtures are payloads as recorded (CRLF in DE-7 and DE-8, ZIPs): their bytes, and the sha256 of a cut, must
 # never change with a checkout (P5b).
 apps/server/src/adapters/*/fixtures/*.raw -text
+tools/geo/fixtures/*.pbf binary
+tools/geo/fixtures/*.opl -text
+tools/geo/fixtures/*.geojsonseq -text
