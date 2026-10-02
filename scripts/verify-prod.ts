@@ -10,7 +10,8 @@
 //                                                freshness and replay, FR-1, CH-1, DE-7 and LU-1
 //                                                health, tier-1 freshness and coverage since the
 //                                                seed, CH-1's 10-minute and DE-7's 15-minute
-//                                                request interval, DE-7's bytes per day, loader lag), the data
+//                                                request interval, DE-7's bytes per day, the owner-source
+//                                                counts (healthy = total, none listed), loader lag), the data
 //                                                API through Caddy (P4b: /meta with the
 //                                                release commit, /stations, three snapshots
 //                                                at the server's own clock, /openapi.json,
@@ -43,6 +44,7 @@ import { join } from 'node:path';
 import { connect as tlsConnect } from 'node:tls';
 import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
+import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
 import { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
 import {
   BACKLOG_MAX_AGE_S,
@@ -198,9 +200,13 @@ export function staleSpecs(status: CaptureStatus, now: Date): string[] {
 /** IPv6 is n/a only when this machine has no IPv6 route; EHOSTUNREACH is the server's side, so a failure. */
 export const noIpv6Here = (code: string) => code === 'ENETUNREACH' || code === 'EADDRNOTAVAIL';
 
+/** The owner-audience source IDs of registry/sources.yaml: no public document may list one. */
+export const ownerSourceIds = (registry: Registry): string[] =>
+  [...registry.sources].filter(([, src]) => src.audience === 'owner').map(([id]) => id);
+
 /** Everything that identifies owner-audience data: source IDs, spec IDs, hosts, the canary. */
 export function ownerTerms(registry: Registry): string[] {
-  const sources = [...registry.sources].filter(([, s]) => s.audience === 'owner').map(([id]) => id);
+  const sources = ownerSourceIds(registry);
   const specs = registry.specs.filter((s) => s.audience === 'owner').map((s) => s.id);
   const hosts = sources.flatMap((id) => registry.hosts.get(id) ?? []);
   return [...new Set([...sources, ...specs, ...hosts, OWNER_CANARY])].sort();
@@ -643,6 +649,57 @@ export function checkOwnerLeak(bodies: Readonly<Record<string, string>>, terms: 
         `none of ${terms.length} owner terms and no private_basis key in ${Object.keys(bodies).join(', ')}`,
       )
     : miss('owner leak', `found in ${found.join('; ')}`);
+}
+
+/** P5c: BE-3, LU-2, LU-3 and LU-4 at least are owner sources (DE-2 and DE-3 are too): fewer means a source went missing. */
+export const OWNER_SOURCES_MIN = 4;
+/**
+ * P5c: the station-id prefixes of the owner sources that have stations (BE-3 `be.spw.`, LU-2 `lu.age-json.`; LU-3 and
+ * LU-4 use the public LU-1 slugs). Judged beside the owner rows of registry/stations/*.yaml, so a prefix change that
+ * forgets this list still fails on the prefix of a row (test/verify-prod.test.ts).
+ */
+export const OWNER_STATION_PREFIXES = ['be.spw.', 'lu.age-json.'] as const;
+
+/** The ids of the owner-audience station rows of the registry (every registry/stations/*.yaml, as readRegistry reads them). */
+export const ownerStationIds = (stations: readonly { id: string; audience: string }[]): string[] =>
+  stations.filter((st) => st.audience === 'owner').map((st) => st.id);
+
+/**
+ * P5c: the public health/sources document counts the owner sources (`owner_sources`: every one healthy, at least
+ * `OWNER_SOURCES_MIN`) and lists none of them in `sources`. Counts only: the detail never names a source.
+ */
+export function checkOwnerSources(r: ApiRead<HealthSources>, ownerIds: readonly string[]): Result {
+  const check = 'owner sources';
+  if (r.data === undefined || r.problems.length > 0) return noDocument(check, 'health/sources', r);
+  const { healthy, total } = r.data.owner_sources;
+  const listed = r.data.sources.filter((src) => ownerIds.includes(src.id)).length;
+  const problems: string[] = [];
+  if (healthy !== total) problems.push(`${healthy} of ${total} owner sources healthy`);
+  if (total < OWNER_SOURCES_MIN) problems.push(`${total} owner sources, at least ${OWNER_SOURCES_MIN} expected`);
+  if (listed > 0) problems.push(`${listed} owner sources listed in sources`);
+  return problems.length === 0
+    ? pass(
+        check,
+        `${healthy} of ${total} owner sources healthy (at least ${OWNER_SOURCES_MIN}), none listed in sources`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/**
+ * P5c: /api/v1/stations holds no owner station: not one of the owner rows of the registry (`ownerIds`) and none under
+ * an owner station-id prefix. A leak is judged whatever else is off with the answer (`api stations` judges the
+ * headers); the detail counts and names no id.
+ */
+export function checkOwnerStations(r: ApiRead<Stations>, ownerIds: ReadonlySet<string>): Result {
+  const check = 'owner stations';
+  if (r.data === undefined) return noDocument(check, 'stations', r);
+  const n = r.data.stations.length;
+  const hits = r.data.stations.filter(
+    (st) => ownerIds.has(st.id) || OWNER_STATION_PREFIXES.some((p) => st.id.startsWith(p)),
+  ).length;
+  if (hits > 0) return miss(check, `${hits} of ${n} stations are owner stations`);
+  if (r.problems.length > 0) return noDocument(check, 'stations', r);
+  return pass(check, `${n} public stations checked, none an owner station`);
 }
 
 // ---------------------------------------------------------------- basemap tiles (P3)
@@ -1158,9 +1215,11 @@ export const CHECKS = [
   `interval CH-1: the min_interval_s of ${INTERVAL_SPEC} is >= ${INTERVAL_MIN_S} s (BAFU: at most one download per 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL. The gap is per spec and variant: river and lake are two LINDAS downloads seconds apart every 10 minutes (whether BAFU counts them as one is asked in C13), and a recorder restart can run a catch-up under 10 minutes before the next tick, so this can FAIL for up to 24 h after a restart without a breach (KG-125)`,
   `interval DE-7: the min_interval_s of ${DE7_SPEC} is >= ${DE7_INTERVAL_MIN_S} s (every 15 minutes, less 5 s for the scheduling jitter of a fetch start); the detail prints the seconds, 3600 while the spec is hourly and about 900 once it runs every 15 minutes; no entry yet is a FAIL`,
   `bytes DE-7: the days of /status/capture.json (today, partial, and the two before) each hold at most ${DE7_BYTES_MAX / 1e6} MB of zstd bytes stored for ${DE7_SPEC}; the spec missing from capture.json, or no bytes in any day, is a FAIL`,
+  `owner sources: /api/v1/health/sources (the contract document, max-age=30) has owner_sources.healthy = owner_sources.total, at least ${OWNER_SOURCES_MIN} owner sources, and lists no owner-audience source of registry/sources.yaml in sources[]; the detail holds counts only`,
   `api meta: GET /api/v1/meta is 200 with Cache-Control exactly "${META_CACHE}", the Meta contract document, and ${API_SOURCES.join(', ')} among the sources`,
   'api build: /api/v1/meta build is the 40-hex release commit, not "dev" (KG-109: the image carries RWS_BUILD)',
   `api stations: GET /api/v1/stations is 200 with Cache-Control exactly "${STATIONS_CACHE}", the Stations contract document, a station with a series of each of ${API_SOURCES.join(', ')}`,
+  `owner stations: /api/v1/stations lists no owner-audience station row of registry/stations/*.yaml and no id under ${OWNER_STATION_PREFIXES.join(' or ')} (the BE-3 and LU-2 owner station-id prefixes); the detail holds the count of stations checked`,
   ...SNAPSHOT_ASKS.map(
     (a) =>
       `api snapshot ${a.name}: GET /api/v1/snapshot?t= at the 10-minute floor of the server's own now${a.back === 0 ? '' : ` - ${a.name}`} (from /meta, never this clock) is 200, the Snapshot contract with t as asked, Cache-Control exactly "${a.cache}"`,
@@ -1289,6 +1348,7 @@ async function main(argv: string[]): Promise<number> {
       ]),
       checkInterval(sources.data),
       checkInterval(sources.data, 'DE-7'),
+      checkOwnerSources(sources, ownerSourceIds(registry)),
     );
 
     // The P4b data API through Caddy (A§9.2). The snapshots ask for the server's own "now" from /meta, never this clock.
@@ -1311,6 +1371,7 @@ async function main(argv: string[]): Promise<number> {
       checkMeta(metaRead),
       checkBuild(metaRead.data),
       checkStations(stationsRead),
+      checkOwnerStations(stationsRead, new Set(ownerStationIds(readRegistry().stations))),
       ...SNAPSHOT_ASKS.map((ask) => checkSnapshot(ask, snapReads.get(ask.name))),
       checkOpenapi(readApi(await api('/api/v1/openapi.json'), OpenApi31, OPENAPI_CACHE)),
       checkApiParams(await api('/api/v1/meta?x=1')),

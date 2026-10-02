@@ -319,7 +319,7 @@ jobs:
           # capture cannot succeed without internet in CI and the loaded data is a recorded fixture, so
           # only the checks that need fresh production data may fail.
           if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" |
-            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1) '; then
+            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner sources) '; then
             echo "verify-prod failed a check other than the ones that need live data" >&2
             exit 1
           fi
