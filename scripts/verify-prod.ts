@@ -502,8 +502,10 @@ export function checkInterval(doc: HealthSources | undefined, id: keyof typeof I
 
 /**
  * P5b: the loader measured the LU-1 label offset on a recent UTC day (no older than 2 days before the server's own
- * `meta.now`, not in its future): the day, the offset in minutes and how many instants and what share of them
- * decided it. Any offset passes; the owner reads it (15 is the AGE file's habit). Numbers and a date only.
+ * `meta.now`, not in its future). Freshness is judged on the latest day the detector tried, decided or not (review
+ * CR-4: quiet days on the impounded Perl reach decide nothing, and the alert `label_offset_unknown` says so); the
+ * detail reports that day and the offset in force, from the latest day that decided it. Any offset passes; the
+ * owner reads it (15 is the AGE file's habit). Numbers and dates only.
  */
 export function checkLabelOffset(doc: HealthSources | undefined, now: string | undefined): Result {
   const check = 'label offset LU-1';
@@ -515,7 +517,11 @@ export function checkLabelOffset(doc: HealthSources | undefined, now: string | u
   if (o === null) return miss(check, 'no label offset measured yet');
   const today = new Date(Date.parse(now)).toISOString().slice(0, 10);
   const oldest = new Date(Date.parse(now) - 2 * 86_400_000).toISOString().slice(0, 10);
-  const detail = `day ${o.day}: ${o.minutes} min over ${o.n_aligned} instants (share ${o.share})`;
+  const tried = o.decided
+    ? `day ${o.day}: decided over ${o.n_aligned} instants (share ${o.share})`
+    : `day ${o.day}: undecided (${o.n_aligned} instants)`;
+  const offset = o.minutes === null ? 'no day decided yet' : `${o.minutes} min since ${o.decided_day}`;
+  const detail = `${tried}; ${offset}`;
   if (o.day > today) return miss(check, `${detail}, after ${today}`);
   return o.day >= oldest ? pass(check, detail) : miss(check, `${detail}, older than ${oldest} (2 days before now)`);
 }
@@ -1166,7 +1172,7 @@ export const CHECKS = [
     (id) =>
       `fresh ${id}: in the "now" snapshot at least one ${id} series has a value no older than ${freshLimit(id)} s at the server's own now (/meta)`,
   ),
-  "label offset LU-1: /api/v1/health/sources lists LU-1 with a label_offset measured on a UTC day no older than 2 days before the server's own now (/meta); any offset passes, the detail prints the day, the minutes (15 is the AGE file's habit), the instants and their share; none measured yet is a FAIL",
+  "label offset LU-1: /api/v1/health/sources lists LU-1 with a label_offset whose latest measured UTC day, decided or not, is no older than 2 days before the server's own now (/meta); any offset passes, the detail prints that day (decided, its instants and share; or undecided), and the offset in force in minutes (15 is the AGE file's habit) with the day that decided it; none measured yet is a FAIL",
   `belgian set: the 25 points of catalogue §0.6 (the NL-1 locations ${BELGIAN_NL1.join(', ')} as nl.rws.<code>, the 18 FR-1 partners of registry/seed/fr-1-be.csv as fr.sandre.<code>) are all stations of /api/v1/stations, and >= ${BELGIAN_FRESH_PCT}% have a value in the "now" snapshot no older than ${BELGIAN_MAX_AGE_S / 3600} h at the server's own now`,
   `tiles manifest: GET /tiles/manifest.json is 200 with Cache-Control exactly "${MANIFEST_CACHE}" (never immutable) and a body parseTilesManifest accepts`,
   `tiles <file>: every file the manifest lists (current and previous), GET with Range: ${TILE_HEADERS.range} and Accept-Encoding: ${TILE_HEADERS['accept-encoding']}, is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,

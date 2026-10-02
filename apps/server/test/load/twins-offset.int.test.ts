@@ -298,6 +298,20 @@ describe('the LU-1 label offset detector', { timeout: 60_000 }, () => {
     await h.t.admin.query(`INSERT INTO source_health (source_id, status) VALUES ('LU-1', 'ok') ON CONFLICT DO NOTHING`);
   });
 
+  /**
+   * The informative instants of day `n` (review CR-4: the LU-1 instants at which DE-1's `signal` differs from both
+   * neighbours; a value the jitter repeats does not vote), counted here as the detector counts them.
+   */
+  const informative = (n: number) => {
+    const from = Date.UTC(2026, 9, 2 + n);
+    return grid(from, from + DAY - 15 * MIN).filter((ts) => {
+      const k = step(ts);
+      return signal(k) !== signal(k - 1) && signal(k) !== signal(k + 1);
+    }).length;
+  };
+  const N = informative(0);
+  const N1 = informative(1);
+
   it('rows stored where DE-1 has them: the offset the loads applied (the default 0) is confirmed, with no alert', async () => {
     await day(
       0,
@@ -306,8 +320,8 @@ describe('the LU-1 label offset detector', { timeout: 60_000 }, () => {
     );
     await detect(0);
     expect(alerts).toEqual([]);
-    expect(await state()).toEqual({ days: { [D(0)]: { minutes: 0, n_aligned: 96, share: 1 } } });
-    expect(await detail()).toEqual({ day: D(0), minutes: 0, n_aligned: 96, share: 1 });
+    expect(await state()).toEqual({ days: { [D(0)]: { decided: true, minutes: 0, n_aligned: N, share: 1 } } });
+    expect(await detail()).toEqual({ day: D(0), decided: true, n_aligned: N, share: 1, minutes: 0, decided_day: D(0) });
   });
 
   it('rows stored 15 minutes after DE-1’s: 15 minutes, and label_offset_changed from 0 to 15', async () => {
@@ -321,14 +335,24 @@ describe('the LU-1 label offset detector', { timeout: 60_000 }, () => {
     await detect(1);
     expect(alerts).toEqual([{ code: 'label_offset_changed', fields: { source: 'LU-1', day: D(1), from: 0, to: 15 } }]);
     expect(await state()).toEqual({
-      days: { [D(0)]: { minutes: 0, n_aligned: 96, share: 1 }, [D(1)]: { minutes: 15, n_aligned: 96, share: 1 } },
+      days: {
+        [D(0)]: { decided: true, minutes: 0, n_aligned: N, share: 1 },
+        [D(1)]: { decided: true, minutes: 15, n_aligned: N1, share: 1 },
+      },
     });
-    expect(await detail()).toEqual({ day: D(1), minutes: 15, n_aligned: 96, share: 1 });
+    expect(await detail()).toEqual({
+      day: D(1),
+      decided: true,
+      n_aligned: N1,
+      share: 1,
+      minutes: 15,
+      decided_day: D(1),
+    });
   });
 
-  it('a flat day decides nothing: label_offset_unknown, and nothing is stored', async () => {
+  it('a flat day decides nothing: label_offset_unknown, stored as undecided, and health shows it beside the offset in force', async () => {
     alerts.length = 0;
-    const before = await state();
+    const before = (await state()) as { days: Record<string, unknown> };
     await day(
       2,
       () => 300,
@@ -336,7 +360,16 @@ describe('the LU-1 label offset detector', { timeout: 60_000 }, () => {
     );
     await detect(2);
     expect(alerts).toEqual([{ code: 'label_offset_unknown', fields: { source: 'LU-1', day: D(2) } }]);
-    expect(await state()).toEqual(before);
+    // Review CR-4: the day is kept as tried, with no offset, so health shows the detector ran.
+    expect(await state()).toEqual({ days: { ...before.days, [D(2)]: { decided: false, n_aligned: 0 } } });
+    expect(await detail()).toEqual({
+      day: D(2),
+      decided: false,
+      n_aligned: 0,
+      share: null,
+      minutes: 15,
+      decided_day: D(1),
+    });
   });
 
   it('a day that is measured is never measured again', async () => {
@@ -366,7 +399,24 @@ describe('the LU-1 label offset detector', { timeout: 60_000 }, () => {
     expect(alerts).toEqual([{ code: 'label_offset_unknown', fields: { source: 'LU-1', day: D(3) } }]);
   });
 
-  it('the label offsets reach the loader as minutes per day', async () => {
+  it('an offset beyond 15 minutes is not believed (review L1): label_offset_unknown, never stored as an offset', async () => {
+    alerts.length = 0;
+    // The loads applied 15 (carried forward from day 1); the rows sit another 15 minutes late: 30 in all.
+    await day(
+      4,
+      (ts) => signal(step(ts) - 1),
+      (ts) => signal(step(ts)),
+    );
+    await detect(4);
+    expect(alerts).toEqual([{ code: 'label_offset_unknown', fields: { source: 'LU-1', day: D(4), measured: 30 } }]);
+    expect(((await state()) as { days: Record<string, unknown> }).days[D(4)]).toEqual({
+      decided: false,
+      n_aligned: informative(4),
+    });
+    expect(await detail()).toMatchObject({ day: D(4), decided: false, minutes: 15, decided_day: D(1) });
+  });
+
+  it('the label offsets reach the loader as minutes per decided day; an undecided day carries the offset forward', async () => {
     expect(await labelOffsetsOf(h.load.db, 'LU-1')).toEqual({ days: { [D(0)]: 0, [D(1)]: 15 } });
   });
 });

@@ -12,7 +12,8 @@ import {
 } from '../../src/adapters/lu-1/normalise.ts';
 import { parseCsv } from '../../src/adapters/lu-1/parse.ts';
 import { DST_PROOF, LOAD_ADAPTERS } from '../../src/load/adapters.ts';
-import { detectResidual, OFFSET_PAIR } from '../../src/load/label-offset.ts';
+import { scoreShifts } from '../../src/load/align.ts';
+import { detectResidual, MARGIN, MIN_ALIGNED, OFFSET_PAIR } from '../../src/load/label-offset.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
 // LU-1 AGE `Water-Levels-LocalTime.csv` (CC0): parse + normalise of real recorded payloads equals the committed
@@ -109,8 +110,9 @@ describe('golden files (real payloads)', () => {
     expect(
       detectResidual(dayOf(old.obs, OFFSET_PAIR.key, '2026-09-28T00:00:00Z'), deDay('2026-09-28T00:00:00Z')),
     ).toEqual({
+      // 34 of the day's 96 instants are informative: DE-1 moved on both sides of them (review CR-4).
       residual: 15,
-      n_aligned: 96,
+      n_aligned: 34,
       share: 1,
     });
     // The first production capture (the 7-day file since 2026-09-30): on time.
@@ -119,8 +121,49 @@ describe('golden files (real payloads)', () => {
       detectResidual(dayOf(seed.obs, OFFSET_PAIR.key, '2026-09-29T00:00:00Z'), deDay('2026-09-29T00:00:00Z')),
     ).toEqual({
       residual: 0,
-      n_aligned: 96,
+      n_aligned: 25,
       share: 1,
+    });
+  });
+
+  it('[CI] the detector (review CR-4): a mostly flat day with one rise and fall still decides; flat instants do not vote', () => {
+    const MIN = 60_000;
+    const from = Date.parse('2026-10-05T00:00:00Z');
+    // Perl at a weir: 300.0 cm all day but for one rise and fall of 17 steps (09:00 to 13:00Z), 0.1 cm a step.
+    const level = (k: number) => (k < 36 || k > 52 ? 300 : 300 + (k <= 44 ? k - 35 : 53 - k) / 10);
+    const de = Array.from({ length: 100 }, (_, i) => ({ ts: from + (i - 2) * 15 * MIN, value: level(i - 2) }));
+    const lu = (late: number) =>
+      Array.from({ length: 96 }, (_, k) => ({ ts: from + k * 15 * MIN + late * MIN, value: level(k) }));
+    expect(detectResidual(lu(0), de)).toEqual({ residual: 0, n_aligned: 17, share: 1 });
+    expect(detectResidual(lu(15), de)).toEqual({ residual: 15, n_aligned: 17, share: 1 });
+    expect(MIN_ALIGNED).toBe(16);
+    // Every instant voting (as before the fix), the flat 79 agree at every shift and no shift is clear by MARGIN.
+    const all = scoreShifts(lu(0), de, [-15, 0, 15], { tolerance: 0.05 });
+    expect(all.map((x) => x.share > 1 - MARGIN)).toEqual([true, true, true]);
+    // Two steps fewer leave 15 informative instants, too few: no decision, with the count it saw.
+    const shorter = (k: number) => (k >= 51 ? 300 : level(k));
+    const de2 = de.map((p, i) => ({ ...p, value: shorter(i - 2) }));
+    expect(
+      detectResidual(
+        lu(0).map((p, k) => ({ ...p, value: shorter(k) })),
+        de2,
+      ),
+    ).toEqual({
+      residual: null,
+      n_aligned: 15,
+      share: 1,
+    });
+    // A flat day decides nothing, and says so: no informative instant at all.
+    const flat = de.map((p) => ({ ...p, value: 300 }));
+    expect(
+      detectResidual(
+        lu(0).map((p) => ({ ...p, value: 300 })),
+        flat,
+      ),
+    ).toEqual({
+      residual: null,
+      n_aligned: 0,
+      share: 0,
     });
   });
 

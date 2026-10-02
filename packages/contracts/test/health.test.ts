@@ -119,14 +119,30 @@ describe('HealthSources', () => {
     expect(HealthSources.safeParse(sources({ sources: [fresh] })).success).toBe(true);
   });
 
-  it('label_offset is a day, minutes and a share, nothing else, and is required (null for most sources)', () => {
-    const lu = { ...source, id: 'LU-1', label_offset: { day: '2026-10-04', minutes: 15, n_aligned: 92, share: 0.978 } };
+  it('label_offset is the latest day, whether it decided, and the offset in force, nothing else, and is required (null for most sources)', () => {
+    const decided = {
+      day: '2026-10-04',
+      decided: true,
+      n_aligned: 34,
+      share: 0.978,
+      minutes: 15,
+      decided_day: '2026-10-04',
+    };
+    const lu = { ...source, id: 'LU-1', label_offset: decided };
     expect(HealthSources.safeParse(sources({ sources: [lu] })).success).toBe(true);
     const bad = (label_offset: unknown) => HealthSources.safeParse(sources({ sources: [{ ...lu, label_offset }] }));
-    expect(bad({ ...lu.label_offset, extra: 1 }).success).toBe(false);
-    expect(bad({ ...lu.label_offset, day: '2026-10-04T00:00:00Z' }).success).toBe(false);
-    expect(bad({ ...lu.label_offset, share: 1.2 }).success).toBe(false);
-    expect(bad({ ...lu.label_offset, n_aligned: -1 }).success).toBe(false);
+    // Review CR-4: an undecided latest day has no share, and before the first decided day no offset either.
+    const undecided = { ...decided, day: '2026-10-05', decided: false, n_aligned: 3, share: null };
+    expect(bad(undecided).success).toBe(true);
+    expect(bad({ ...undecided, minutes: null, decided_day: null }).success).toBe(true);
+    expect(bad({ ...decided, extra: 1 }).success).toBe(false);
+    expect(bad({ ...decided, day: '2026-10-04T00:00:00Z' }).success).toBe(false);
+    expect(bad({ ...decided, decided_day: '2026-10-04T00:00:00Z' }).success).toBe(false);
+    expect(bad({ ...decided, share: 1.2 }).success).toBe(false);
+    expect(bad({ ...decided, n_aligned: -1 }).success).toBe(false);
+    expect(bad({ ...decided, decided: 'yes' }).success).toBe(false);
+    const { decided: _flag, ...unflagged } = decided;
+    expect(bad(unflagged).success).toBe(false);
     const { label_offset: _omitted, ...without } = source;
     expect(HealthSources.safeParse(sources({ sources: [without] })).success).toBe(false);
   });

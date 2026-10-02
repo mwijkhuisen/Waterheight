@@ -805,9 +805,11 @@ describe('DE-7 and LU-1 health, tier-1, coverage, interval, bytes and label offs
     de1({ id: 'LU-1', tier1: { total: 20, fresh: 20, provider_stale: 0 }, ...over });
   const offset = (over: Partial<NonNullable<SourceRow['label_offset']>> = {}) => ({
     day: '2026-10-01',
-    minutes: 15,
-    n_aligned: 92,
+    decided: true,
+    n_aligned: 34,
     share: 0.978,
+    minutes: 15,
+    decided_day: '2026-10-01',
     ...over,
   });
   const cover = { from: '2026-09-02T00:00:00.000Z', ratio: 0.99, series: 120, series_below_95: 1, gaps: [] };
@@ -901,8 +903,22 @@ describe('DE-7 and LU-1 health, tier-1, coverage, interval, bytes and label offs
     expect(at(offset())).toEqual({
       check: 'label offset LU-1',
       ok: true,
-      detail: 'day 2026-10-01: 15 min over 92 instants (share 0.978)',
+      detail: 'day 2026-10-01: decided over 34 instants (share 0.978); 15 min since 2026-10-01',
     });
+    // Review CR-4: freshness is the latest day tried. A run of quiet days that decided nothing still passes while
+    // the detector runs, and the offset in force is the one of the latest day that decided it.
+    const quiet = offset({ day: '2026-10-02', decided: false, n_aligned: 5, share: null, decided_day: '2026-09-25' });
+    expect(at(quiet)).toEqual({
+      check: 'label offset LU-1',
+      ok: true,
+      detail: 'day 2026-10-02: undecided (5 instants); 15 min since 2026-09-25',
+    });
+    expect(at({ ...quiet, minutes: null, decided_day: null })).toMatchObject({
+      ok: true,
+      detail: 'day 2026-10-02: undecided (5 instants); no day decided yet',
+    });
+    // A detector that stopped running fails, decided or not.
+    expect(at({ ...quiet, day: '2026-09-29' }).ok).toBe(false);
     // Any value is reported, not judged; a zero or a negative offset is as good as 15.
     expect(at(offset({ minutes: 0 })).ok).toBe(true);
     expect(at(offset({ minutes: -15 }))).toMatchObject({ ok: true, detail: expect.stringContaining('-15 min') });
@@ -910,7 +926,8 @@ describe('DE-7 and LU-1 health, tier-1, coverage, interval, bytes and label offs
     expect(at(offset({ day: '2026-09-30' })).ok).toBe(true);
     expect(at(offset({ day: '2026-09-29' }))).toMatchObject({
       ok: false,
-      detail: 'day 2026-09-29: 15 min over 92 instants (share 0.978), older than 2026-09-30 (2 days before now)',
+      detail:
+        'day 2026-09-29: decided over 34 instants (share 0.978); 15 min since 2026-10-01, older than 2026-09-30 (2 days before now)',
     });
     expect(at(offset({ day: '2026-10-03' }))).toMatchObject({
       ok: false,
@@ -926,15 +943,18 @@ describe('DE-7 and LU-1 health, tier-1, coverage, interval, bytes and label offs
       ok: false,
       detail: /no valid health\/sources document/,
     });
-    expect(at(offset()).detail).toMatch(/^[0-9A-Za-z .,%:()-]+$/);
+    expect(at(offset()).detail).toMatch(/^[0-9A-Za-z .,%:();-]+$/);
+    expect(at(quiet).detail).toMatch(/^[0-9A-Za-z .,%:();-]+$/);
   });
 
-  it('label_offset must be a day, minutes and a share: anything else is no document', () => {
+  it('label_offset must be a day, a decision, minutes and a share: anything else is no document', () => {
     for (const bad of [
       { ...offset(), extra: 1 },
       offset({ day: '2026-10-01T00:00:00Z' }),
+      offset({ decided_day: '2026-10-01T00:00:00Z' }),
       offset({ share: 2 }),
       offset({ n_aligned: -1 }),
+      offset({ decided: 'yes' as never }),
     ])
       expect(s(sourcesDoc({ sources: [lu1({ label_offset: bad })] })).data).toBeUndefined();
     expect(s(sourcesDoc({ sources: [lu1({ label_offset: undefined as never })] })).data).toBeUndefined();

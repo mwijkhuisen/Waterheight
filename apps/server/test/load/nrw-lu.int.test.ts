@@ -68,7 +68,7 @@ describe('the DE-7, DE-8, LU-1 and LU-6 fixtures', { timeout: 60_000 }, () => {
     // carried forward to the days of the recording, as the nightly detector would have left it.
     await h.t.admin.query('INSERT INTO app_meta (key, value) VALUES ($1, $2::jsonb)', [
       offsetKey('LU-1'),
-      JSON.stringify({ days: { '2026-09-20': { minutes: 15, n_aligned: 96, share: 1 } } }),
+      JSON.stringify({ days: { '2026-09-20': { decided: true, minutes: 15, n_aligned: 34, share: 1 } } }),
     ]);
     const lines = await buildNrwLuFixtureArchive(h.raw);
     const r = await h.loader({ now: AFTER }).tick();
@@ -232,10 +232,12 @@ describe('the DE-7, DE-8, LU-1 and LU-6 fixtures', { timeout: 60_000 }, () => {
   });
 
   it('the measured label offset reaches the rows through a replay: 0 minutes moves Diekirch 15 minutes later, with revisions', async () => {
+    // An undecided day (review CR-4) is no offset: 2026-09-27 keeps the 15 minutes carried forward from 09-20.
     const days = {
-      '2026-09-20': { minutes: 15, n_aligned: 96, share: 1 },
-      '2026-09-28': { minutes: 0, n_aligned: 96, share: 1 },
-      '2026-09-29': { minutes: 0, n_aligned: 96, share: 1 },
+      '2026-09-20': { decided: true, minutes: 15, n_aligned: 34, share: 1 },
+      '2026-09-27': { decided: false, n_aligned: 3 },
+      '2026-09-28': { decided: true, minutes: 0, n_aligned: 34, share: 1 },
+      '2026-09-29': { decided: true, minutes: 0, n_aligned: 25, share: 1 },
     };
     await h.t.admin.query('UPDATE app_meta SET value = $2::jsonb WHERE key = $1', [
       offsetKey('LU-1'),
