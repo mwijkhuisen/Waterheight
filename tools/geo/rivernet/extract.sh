@@ -39,24 +39,31 @@ mapfile -t ids < <(node tools/geo/rivernet/sources.ts --ids)
 filter=(r/type=waterway)
 [[ -z $qids ]] || filter+=("w/wikidata=$qids")
 
-stamps=()
+: >"$work/stamps.txt"
 for id in "${ids[@]}"; do
   [[ $id =~ ^[a-z-]+$ ]] || fail "bad region id"
   node tools/geo/rivernet/download.ts --region "$id" --out "$work/dl"
   osm tags-filter "/work/dl/$id.osm.pbf" "${filter[@]}" -o "/work/f/$id.osm.pbf" --overwrite
   stamp=$(osm fileinfo -g header.option.osmosis_replication_timestamp "/work/dl/$id.osm.pbf")
   [[ $stamp =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || fail "no_replication_timestamp for $id"
-  stamps+=("$stamp")
+  printf '%s %s\n' "$id" "$stamp" >>"$work/stamps.txt"
+  echo "$id replication timestamp $stamp"
   rm -f "$work/dl/$id.osm.pbf"
 done
 
-# osmium merge keeps every version of an object that is in two extracts: one point in time only.
-[[ $(printf '%s\n' "${stamps[@]}" | sort -u | wc -l) -eq 1 ]] || fail "mixed_extract_dates"
-stamp=${stamps[0]}
+# Geofabrik cuts the regions at different moments (2026-10-02: Belgium a day after the rest), so a border
+# object can be in two extracts in two versions. osmium merge keeps both (-H: no warning about that) and
+# time-filter with no time keeps the newest valid version of each: the same inputs give the same result.
+# Extracts more than 72 h apart are refused (extract_dates_too_far_apart): run again once Geofabrik has caught up.
+oldest=$(cut -d' ' -f2 "$work/stamps.txt" | sort | head -n1)
+stamp=$(cut -d' ' -f2 "$work/stamps.txt" | sort | tail -n1)
+(($(date -u -d "$stamp" +%s) - $(date -u -d "$oldest" +%s) <= 72 * 3600)) || fail "extract_dates_too_far_apart"
 
 merge_in=()
 for id in "${ids[@]}"; do merge_in+=("/work/f/$id.osm.pbf"); done
-osm merge "${merge_in[@]}" -o /work/merged.osm.pbf --overwrite
+osm merge -H "${merge_in[@]}" -o /work/merged-all.osm.pbf --overwrite
+osm time-filter /work/merged-all.osm.pbf -o /work/merged.osm.pbf --overwrite
+rm -f "$work/merged-all.osm.pbf"
 
 osm getid -r -i /work/relations.txt /work/merged.osm.pbf -o /work/sel-rel.osm.pbf --overwrite
 sel=(/work/sel-rel.osm.pbf)
@@ -74,10 +81,12 @@ osm cat /work/rivernet.osm.pbf -t relation -f opl,add_metadata=false -o /work/ri
 
 dl_files=()
 for id in "${ids[@]}"; do dl_files+=("$work/dl/$id.download.json"); done
-jq -S -s --arg ts "$stamp" --arg osmium "$OSMIUM_VERSION" '
+stamps_json=$(jq -R -s 'split("\n") | map(select(. != "") | split(" ") | {key: .[0], value: .[1]}) | from_entries' \
+  "$work/stamps.txt")
+jq -S -s --arg ts "$stamp" --arg osmium "$OSMIUM_VERSION" --argjson stamps "$stamps_json" '
   if all(.[]; .id != null and .url != null and .bytes != null and .md5 != null and .sha256 != null)
   then {schema_version: 1, osmium: $osmium, replication_timestamp: $ts,
-        regions: (map({id, url, bytes, md5, sha256}) | sort_by(.id))}
+        regions: (map({id, url, bytes, md5, sha256, replication_timestamp: $stamps[.id]}) | sort_by(.id))}
   else error("bad_download_json") end' "${dl_files[@]}" >"$work/rivernet.provenance.json"
 
 for f in rivernet.osm.pbf rivernet.ways.geojsonseq rivernet.relations.opl rivernet.provenance.json; do

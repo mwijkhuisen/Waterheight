@@ -34,7 +34,7 @@ export interface Provenance {
   schema_version: 1;
   osmium: string;
   replication_timestamp: string;
-  regions: { id: string; url: string; bytes: number; md5: string; sha256: string }[];
+  regions: { id: string; url: string; bytes: number; md5: string; sha256: string; replication_timestamp: string }[];
 }
 
 export interface Edge {

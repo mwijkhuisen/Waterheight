@@ -18,6 +18,7 @@ const provenance: Provenance = {
       bytes: 1,
       md5: 'a'.repeat(32),
       sha256: 'b'.repeat(64),
+      replication_timestamp: '2026-10-01T20:21:02Z',
     },
   ],
 };
