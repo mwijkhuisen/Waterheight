@@ -14,9 +14,16 @@ export const adapter: Adapter = {
   coverage(doc) {
     const data = (doc as { data?: unknown } | null)?.data;
     if (!Array.isArray(data)) return null;
-    const ts = (data as { date_obs?: unknown }[]).map((d) => Date.parse(String(d?.date_obs))).filter(Number.isFinite);
-    if (ts.length === 0) return null;
-    return { from: new Date(Math.min(...ts)).toISOString(), to: new Date(Math.max(...ts)).toISOString() };
+    // A loop, not Math.min(...ts): a spread of an unbounded body throws a RangeError past about 125,000 values.
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    for (const d of data as { date_obs?: unknown }[]) {
+      const t = Date.parse(String(d?.date_obs));
+      if (t < min) min = t;
+      if (t > max) max = t;
+    }
+    if (max === Number.NEGATIVE_INFINITY) return null;
+    return { from: new Date(min).toISOString(), to: new Date(max).toISOString() };
   },
   build({ req, window, params, now }) {
     const url = new URL(req.url);

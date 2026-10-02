@@ -400,7 +400,7 @@ specs:
       url: https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=A*,B*,D*,E1*,E2*,E3*&size=20000&fields=code_site,code_station,grandeur_hydro,date_obs,resultat_obs,code_qualification_obs,code_statut
       build: true
       expand: true
-      # A day window is ~6 pages (5,660 obs per 75 min, 20,000 a page). A walk the cap stops goes on next
+      # A day window is ~6 pages (the P1a page: 5,660 obs per 75 min, about 108,000 a day; 20,000 a page). A walk the cap stops goes on next
       # run below the oldest time it fetched, so a flood day of any size completes; a capped run that got
       # no older is no success, so the group pages.
       max_expand: 20
@@ -408,7 +408,8 @@ specs:
     # Results come newest first, so a gap over a day is walked one closed day window per run, oldest
     # first; the window moves only when its whole walk completed. date_debut_obs filters on the value's
     # own time, not on its arrival: the Belgian partners arrive about 2 h late and many French stations
-    # over 75 min, so every run asks from the last success − 4 h (about 19,000 obs; #53).
+    # over 75 min, so every run asks from the last success − 4 h: 4 h 15 min, about 19,200 obs, so a second
+    # page on many runs (96 roots a day, up to 192 requests; #53).
     window: { default: PT4H, max: P29DT23H, overlap: PT4H, min: PT4H, step: P1D }
     max_bytes: 16777216
     retention: obs

@@ -592,6 +592,14 @@ describe('bounded parsing', () => {
     );
   });
 
+  it('the caps admit a full page of 20,000 recorded rows (the usual size with the 4 h window of #53)', () => {
+    const rows = rawObs('fr-1-obs');
+    const data = Array.from({ length: 20_000 }, (_, i) => rows[i % rows.length]);
+    const page = JSON.parse(rawFixture('FR-1', 'fr-1-obs').body.toString('utf8'));
+    const body = Buffer.from(JSON.stringify({ ...page, count: 20_000, data }));
+    expect(parseObservations(body).data).toHaveLength(20_000);
+  });
+
   it('the caps admit every recorded payload', () => {
     expect(parseObservations(rawFixture('FR-1', 'fr-1-obs').body).data).toHaveLength(5660);
     expect(parseStations(rawFixture('FR-1', 'fr-1-ref').body)).toHaveLength(409);
