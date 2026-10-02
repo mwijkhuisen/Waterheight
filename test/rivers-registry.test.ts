@@ -96,11 +96,13 @@ describe('registry/rivers.yaml', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('gives every river a parent chain that ends in a river flowing into the sea or a lake', () => {
+  it('has the reviewed root rivers only, and every parent exists', () => {
+    // A root reaches the sea, a lake or a river outside the scope: the Rhine, the Meuse and the Scheldt the North
+    // Sea, the Ems the Dollart, the Vechte the Zwarte Water and the Mark the Dintel (their P403 in `evidence`).
+    const roots = (rivers?.rivers ?? []).filter((r) => r.parent_river_id === null).map((r) => r.id);
+    expect(roots.sort()).toEqual(['ems', 'mark', 'meuse', 'rhine', 'scheldt', 'vechte']);
     for (const r of rivers?.rivers ?? []) {
-      let at = r;
-      for (let i = 0; i < 20 && at.parent_river_id !== null; i++) at = byId.get(at.parent_river_id) ?? at;
-      expect(at.parent_river_id, r.id).toBeNull();
+      if (r.parent_river_id !== null) expect(byId.has(r.parent_river_id), r.id).toBe(true);
     }
   });
 });

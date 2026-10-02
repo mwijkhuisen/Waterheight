@@ -364,6 +364,17 @@ rivers:
     parent_river_id: sauer
     km_direction: none
     evidence: "Wikidata Q318762 (P402 3646368; P403 Q158847 Sauer), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q650039 and Q2356986 (mouth Lesse)"
+  - id: prum
+    name_nl: "Prüm"
+    name_en: "Prüm"
+    names: {}
+    aliases: []
+    osm_relation_id: 19137455
+    osm_way_name: null
+    wikidata: Q697718
+    parent_river_id: sauer
+    km_direction: none
+    evidence: "Wikidata Q697718 (no P402; P403 Q158847 Sauer), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the other \"Prüm\" item Q253696 is the town (P402 1108057): rejected; relation r19137455 (type=waterway, waterway=river, name Prüm, destination La Sûre, no wikidata tag, 11 empty-role ways) from one Nominatim search (q Prüm, layer natural, countrycodes de,lu; its only result) and one OSM API relation fetch, 2026-10-02 (P6a review round 1)"
   - id: alzette
     name_nl: "Alzette"
     name_en: "Alzette"
@@ -767,9 +778,6 @@ excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283
     reason: "No OSM relation or tagged way of its own in the extract (geo.yml run 37061144664): the Bovenrijn (Lobith to the Pannerdensche Kop) is the main stream of the Rhine relation 123924, so the river id rhine covers it"
-  - name: "Prüm"
-    wikidata: Q697718
-    reason: "No relation or way carries wikidata=Q697718 in the extract (geo.yml run 37061144664) and one Nominatim search found no waterway named Prüm (2026-10-02); its Wikidata P402 is the town. D21 river, resolve by hand for P13"
   - name: "Voer"
     wikidata: Q540657
-    reason: "No relation or way carries wikidata=Q540657 in the extract (geo.yml run 37061144664); Nominatim finds only the Voer at Leuven (Q3562063, a Dijle tributary), not the Meuse tributary at Voeren/Eijsden. D21 river, resolve by hand for P13"
+    reason: "No relation or way carries wikidata=Q540657 in the extract (geo.yml run 37061144664). Nominatim (2026-10-02, q Voer, layer natural, bounded to 5.68-5.92 E, 50.70-50.80 N around Voeren and Eijsden) finds five waterway=stream ways named Voer in Voeren (307446181, 867058350, 41420346, 549778722, 1298076436), none with a wikidata tag, and no relation; unbounded (countrycodes be,nl) it finds the Voer at Leuven (Q3562063, a Dijle tributary). The rules refuse a name-only selection. D21 river, resolve by hand for P13"

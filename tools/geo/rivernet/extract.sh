@@ -3,8 +3,9 @@
 # relations and the way selection, merges them, picks the curated relations and the way selection, and writes the
 # four rivernet.* files that build.ts reads (and that become the fixture). osmium runs only in the tool image,
 # with no network. Usage: tools/geo/rivernet/extract.sh <workdir> <outdir>   (RWS_GEO_IMAGE, default rws-geo-tools:local;
-# RWS_DOMAIN and RWS_CONTACT_EMAIL for the downloads). Region ids and QIDs come from sources.ts and are checked
-# against fixed patterns before they reach a path or an argument.
+# RWS_DOMAIN and RWS_CONTACT_EMAIL for the downloads). Region ids and QIDs come from registry/geo-sources.yaml and
+# registry/rivers.yaml through sources.ts and are checked against fixed patterns before they reach a path or an
+# argument.
 set -euo pipefail
 trap 'echo "extract: failed at line $LINENO" >&2' ERR
 

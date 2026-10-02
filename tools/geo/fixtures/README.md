@@ -43,7 +43,7 @@ The fixtures below feed `test/rivernet-*.test.ts`. The Geofabrik, EU-Hydro and W
 
 | File | What it is |
 |---|---|
-| `index-v1-nogeom.trimmed.json` | Geofabrik's `https://download.geofabrik.de/index-v1-nogeom.json` of 2026-10-02 (source sha256 `265afa7d9e5929934cb523afcb1aa05e16add94887b87eb9acb138eeccc3b151`), trimmed by a fixed rule: the features whose `properties.id` is one of the 16 regions of `tools/geo/rivernet/sources.yaml` or the decoys `germany` and `france`, each reduced to `{type, properties}`; nothing edited. The tests check the pinned paths against it, and that `grand-est` and `hauts-de-france` are absent |
+| `index-v1-nogeom.trimmed.json` | Geofabrik's `https://download.geofabrik.de/index-v1-nogeom.json` of 2026-10-02 (source sha256 `265afa7d9e5929934cb523afcb1aa05e16add94887b87eb9acb138eeccc3b151`), trimmed by a fixed rule: the features whose `properties.id` is one of the 16 regions of `registry/geo-sources.yaml` or the decoys `germany` and `france`, each reduced to `{type, properties}`; nothing edited. The tests check the pinned paths against it, and that `grand-est` and `hauts-de-france` are absent |
 | `luxembourg-latest.osm.pbf.md5` | The untouched body of `https://download.geofabrik.de/europe/luxembourg-latest.osm.pbf.md5`, fetched 2026-10-02 (`cfd7ce80a91679c0f85aa95ecbe4f876  luxembourg-latest.osm.pbf`) |
 
 `index-v1-nogeom.trimmed.json.meta.json` states the source, the date, the rule and the md5 file's origin.
@@ -67,14 +67,14 @@ EU-Hydro River Network Database v1.3, © European Union, Copernicus Land Monitor
 
 ## `rivernet.osm.pbf` and its exports
 
-`rivernet.osm.pbf`, `rivernet.ways.geojsonseq`, `rivernet.relations.opl` and `rivernet.provenance.json` are the `rivernet-fixture` artifact of the `geo.yml` run on the PR branch (`docs/runbooks/geo-refresh.md` §8), committed unchanged: the curated relations of `registry/rivers.yaml`, every relation and way tagged with a selected QID, and the canal traps of `tools/geo/rivernet/sources.yaml`, with their ways and nodes, no metadata. The ways and relations files are the tool image's `osmium export -f geojsonseq -a type,id,way_nodes --geometry-types=linestring` and `osmium cat -t relation -f opl,add_metadata=false` of the PBF; the `rivernet fixture` job of `geo.yml` re-exports the PBF and compares byte for byte (`export-check.sh`). `test/rivernet-fixture.test.ts` builds the graph from them (acyclic; the Pannerdensche Kop and the IJsselkop with two downstream edges each; the Moselle mouth splitting the Rhine; same bytes on a second run, with shuffled input and from the CLI). `rivernet.bifurcations.golden.json` is the reviewed list of the 39 nodes with more than one downstream edge in that graph.
+`rivernet.osm.pbf`, `rivernet.ways.geojsonseq`, `rivernet.relations.opl` and `rivernet.provenance.json` are the `rivernet-fixture` artifact of the `geo.yml` run on the PR branch (`docs/runbooks/geo-refresh.md` §8), committed unchanged: the curated relations of `registry/rivers.yaml`, every relation and way tagged with a selected QID, and the canal traps of `registry/geo-sources.yaml`, with their ways and nodes, no metadata. The ways and relations files are the tool image's `osmium export -f geojsonseq -a type,id,way_nodes --geometry-types=linestring` and `osmium cat -t relation -f opl,add_metadata=false` of the PBF; the `rivernet fixture` job of `geo.yml` re-exports the PBF and compares byte for byte (`export-check.sh`). `test/rivernet-fixture.test.ts` builds the graph from them (acyclic; the Pannerdensche Kop and the IJsselkop with two downstream edges each; the Moselle mouth a node of the Rhine; a tributary joining mid-way splitting the way; same bytes on a second run, with shuffled input and from the CLI). `rivernet.bifurcations.golden.json` is the reviewed list of the 39 nodes with more than one downstream edge in that graph.
 
 Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright).
 
 | | |
 |---|---|
 | Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/37064062453 (`workflow_dispatch` on `claude/p6a-graph-pipeline`, 2026-10-02) |
-| Extracts | the 16 Geofabrik regions of `sources.yaml`; replication timestamps 2026-09-30T20:22:42Z (the seven German states) and 2026-10-01T20:22:06Z (the other nine); md5, sha256 and bytes per region in `rivernet.provenance.json` |
+| Extracts | the 16 Geofabrik regions of `registry/geo-sources.yaml`; replication timestamps 2026-09-30T20:22:42Z (the seven German states) and 2026-10-01T20:22:06Z (the other nine); md5, sha256 and bytes per region in `rivernet.provenance.json` |
 | Made | osmium-tool 1.19.1 in the tool image (`tools/geo/Dockerfile`), `tools/geo/rivernet/extract.sh` |
 | `rivernet.osm.pbf` | 2,024,486 bytes, sha256 `5ebcaa70ce856196c045db0e3f9588275d8693587965ec9971174a4ea82f9cd7` |
 | `rivernet.ways.geojsonseq` | 9,945,754 bytes, sha256 `f181e66a1e88eaa3de6c9bb0d42ba2d73d0909cf002fb6ceae88dd8dfbb53468` |

@@ -1,4 +1,4 @@
-// Downloads for the river-network pipeline (P6a): only the URLs of tools/geo/rivernet/sources.yaml (invariant 1).
+// Downloads for the river-network pipeline (P6a): only the URLs of registry/geo-sources.yaml (invariant 1).
 //
 //   node tools/geo/rivernet/download.ts --check-index            # every pinned region is in Geofabrik's index, same path
 //   node tools/geo/rivernet/download.ts --region <id> --out <dir> # <dir>/<id>.osm.pbf and <id>.download.json

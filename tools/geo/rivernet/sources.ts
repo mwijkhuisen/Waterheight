@@ -1,4 +1,4 @@
-// The fetch targets of the river-network pipeline (P6a; invariant 1): tools/geo/rivernet/sources.yaml, strictly
+// The fetch targets of the river-network pipeline (P6a; invariant 1): registry/geo-sources.yaml, strictly
 // validated. Every URL is https on one of three hosts. CLI:
 //
 //   node tools/geo/rivernet/sources.ts --ids                  # the region ids, one per line
@@ -49,6 +49,7 @@ export const Sources = z
       min_interval_ms: Bytes,
       timeout_ms: Bytes,
       max_body_bytes: Bytes,
+      max_minutes: Bytes,
     }),
     wikidata: z.strictObject({ sparql_url: Url, max_requests: Bytes }),
     canal_traps: z.array(CanalTrap),
@@ -59,9 +60,9 @@ export const Sources = z
   );
 export type SourcesFile = z.infer<typeof Sources>;
 
-export function readSources(path = join(ROOT, 'tools/geo/rivernet/sources.yaml')): SourcesFile {
+export function readSources(path = join(ROOT, 'registry/geo-sources.yaml')): SourcesFile {
   const r = Sources.safeParse(parse(readFileSync(path, 'utf8')));
-  if (!r.success) throw new Error(`sources.yaml is invalid: ${z.prettifyError(r.error)}`);
+  if (!r.success) throw new Error(`geo-sources.yaml is invalid: ${z.prettifyError(r.error)}`);
   return r.data;
 }
 

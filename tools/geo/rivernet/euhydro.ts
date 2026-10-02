@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { captureEnv, captureUserAgent } from '../../../apps/server/src/capture/env.ts';
 import { boundedJson } from '../../../packages/core/src/json.ts';
+import { ATTRIBUTION, ATTRIBUTION_URL, LICENCE } from './build.ts';
 
 // EU-Hydro QA (P6a, CI only): the digitised direction of every OSM reach is checked against EU-Hydro v1.3 segments
 // read through the EEA ArcGIS REST service. Only segment ids and verdicts are kept; no EU-Hydro geometry is written
@@ -15,6 +16,7 @@ export type EuHydroConfig = {
   min_interval_ms: number;
   timeout_ms: number;
   max_body_bytes: number;
+  max_minutes: number;
 };
 export type Bbox = [number, number, number, number]; // minLon, minLat, maxLon, maxLat
 export type Segment = {
@@ -27,6 +29,7 @@ export type Deps = {
   userAgent: string;
   sleep?: (ms: number) => Promise<void>;
   fetch?: typeof fetch;
+  now?: () => number;
 };
 export type FetchResult = {
   segments: Segment[];
@@ -54,6 +57,8 @@ export class EuHydroError extends Error {
 }
 
 export const PAGE_SIZE = 1000;
+// About 3.5 times the 113k features of layers 5 to 12 in the basin bbox (2026-10-02): past it the QA stops.
+export const MAX_SEGMENTS = 400_000;
 const OUT_FIELDS = 'OBJECT_ID,NEXTDOWNID,STRAHLER';
 const JSON_CAPS = { maxNodes: 8_000_000, maxDepth: 12 };
 
@@ -165,14 +170,28 @@ export async function getBody(url: string, cfg: EuHydroConfig, deps: Deps): Prom
   }
 }
 
-/** Every segment of `cfg.layers` that meets `bbox`, paged, within the request budget and the request interval. */
-export async function fetchSegments(bbox: Bbox, cfg: EuHydroConfig, deps: Deps): Promise<FetchResult> {
+/**
+ * Every segment of `cfg.layers` that meets `bbox`, paged, within the request budget, the request interval, the
+ * wall-clock deadline (`max_minutes`: a request starts only before it) and `maxSegments`.
+ */
+export async function fetchSegments(
+  bbox: Bbox,
+  cfg: EuHydroConfig,
+  deps: Deps,
+  maxSegments = MAX_SEGMENTS,
+): Promise<FetchResult> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const now = deps.now ?? Date.now;
+  const deadline = now() + cfg.max_minutes * 60_000;
   const out: FetchResult = { segments: [], requests: 0, complete: false, layers_done: [] };
   for (const layer of cfg.layers) {
     for (let offset = 0; ; offset += PAGE_SIZE) {
       if (out.requests >= cfg.max_requests) return out;
       if (out.requests > 0) await sleep(cfg.min_interval_ms);
+      if (now() >= deadline) {
+        out.error = 'euhydro_timeout';
+        return out;
+      }
       out.requests++;
       try {
         const { status, text } = await getBody(queryUrl(cfg, layer, bbox, offset), cfg, deps);
@@ -180,6 +199,10 @@ export async function fetchSegments(bbox: Bbox, cfg: EuHydroConfig, deps: Deps):
         // ArcGIS answers an error with HTTP 200 and an error object.
         const page = parsePage(text);
         out.segments.push(...page.segments);
+        if (out.segments.length > maxSegments) {
+          out.error = 'euhydro_too_many_segments';
+          return out;
+        }
         if (!page.exceeded) break;
       } catch (e) {
         out.error = e instanceof EuHydroError ? e.code : 'euhydro_http';
@@ -202,6 +225,7 @@ export type Comparison = {
   unmatched: number;
   agreement_pct: number | null;
   disagreements: Disagreement[];
+  unmatched_edges: string[];
 };
 
 const M_PER_DEG = 111_195;
@@ -209,11 +233,16 @@ const SAMPLE_M = 100;
 const TANGENT_M = 50;
 const MATCH_M = 200;
 
+// One straight piece of a segment's path, with its own unit direction in digitised order.
 type Piece = { ax: number; ay: number; bx: number; by: number; dx: number; dy: number; seg: number };
 
 const uniqSorted = (xs: Iterable<string>) => [...new Set(xs)].sort();
 
-/** Edges (drawn downstream) against EU-Hydro segments (digitised downstream). Strahler plays no part. */
+/**
+ * Edges (drawn downstream) against EU-Hydro segments (digitised downstream): each sample's tangent against the
+ * direction of the piece of the segment it matched, never the segment's chord (a meander's chord can point anywhere).
+ * Strahler plays no part.
+ */
 export function compareDirections(edges: Edge[], segments: Segment[]): Comparison {
   let lonSum = 0;
   let latSum = 0;
@@ -235,18 +264,12 @@ export function compareDirections(edges: Edge[], segments: Segment[]): Compariso
   const cell = (v: number) => Math.floor(v / MATCH_M);
   segments.forEach((s, seg) => {
     for (const path of s.paths) {
-      const first = proj(path[0] as [number, number]);
-      const last = proj(path[path.length - 1] as [number, number]);
-      let dx = last[0] - first[0];
-      let dy = last[1] - first[1];
-      const len = Math.hypot(dx, dy);
-      if (len === 0) continue; // a closed ring has no direction
-      dx /= len;
-      dy /= len;
       for (let i = 1; i < path.length; i++) {
         const [ax, ay] = proj(path[i - 1] as [number, number]);
         const [bx, by] = proj(path[i] as [number, number]);
-        const piece: Piece = { ax, ay, bx, by, dx, dy, seg };
+        const len = Math.hypot(bx - ax, by - ay);
+        if (len === 0) continue; // a repeated vertex has no direction
+        const piece: Piece = { ax, ay, bx, by, dx: (bx - ax) / len, dy: (by - ay) / len, seg };
         for (let cx = cell(Math.min(ax, bx)); cx <= cell(Math.max(ax, bx)); cx++) {
           for (let cy = cell(Math.min(ay, by)); cy <= cell(Math.max(ay, by)); cy++) {
             const k = `${cx},${cy}`;
@@ -287,6 +310,7 @@ export function compareDirections(edges: Edge[], segments: Segment[]): Compariso
   let disagree = 0;
   let unmatched = 0;
   const disagreements: Disagreement[] = [];
+  const unmatchedEdges: string[] = [];
   for (const e of edges) {
     const pts = e.coords.map(proj);
     const cum = [0];
@@ -298,6 +322,7 @@ export function compareDirections(edges: Edge[], segments: Segment[]): Compariso
     const total = cum[cum.length - 1] as number;
     if (!(total > 0)) {
       unmatched++;
+      unmatchedEdges.push(e.id);
       continue;
     }
     const pointAt = (s: number): [number, number] => {
@@ -328,8 +353,10 @@ export function compareDirections(edges: Edge[], segments: Segment[]): Compariso
         badSegs.add(p.seg);
       }
     }
-    if ((ok + bad) * 2 < samples) unmatched++;
-    else if (ok > bad) agree++;
+    if ((ok + bad) * 2 < samples) {
+      unmatched++;
+      unmatchedEdges.push(e.id);
+    } else if (ok > bad) agree++;
     else {
       // A tie is reported as a disagreement: a person looks at it.
       disagree++;
@@ -351,6 +378,7 @@ export function compareDirections(edges: Edge[], segments: Segment[]): Compariso
     unmatched,
     agreement_pct: decided === 0 ? null : Math.round((agree / decided) * 10000) / 100,
     disagreements,
+    unmatched_edges: unmatchedEdges.sort(),
   };
 }
 
@@ -361,6 +389,7 @@ export const SOURCE_TEXT =
 export const MODIFICATIONS_TEXT =
   'Queried through the EEA ArcGIS REST service, generalised server-side (maxAllowableOffset 0.0002°); only segment identifiers and direction verdicts are kept; no EU-Hydro geometry is published';
 export const ENDORSEMENT_TEXT = 'No endorsement by the European Union is implied';
+export const AGREEMENT_BASIS = 'edges matched within 200 m (agree + disagree); unmatched edges are listed separately';
 
 /** JSON with sorted keys and 2-space indent. */
 export function canonicalJson(v: unknown): string {
@@ -385,6 +414,14 @@ const reachesSchema = z.object({
     }),
   ),
 });
+
+// build-report.json as euhydro.ts embeds it: every river's `relation_tags` (OSM name strings, the local review
+// seed) is dropped, so the published qa-report.json carries counts and our own ids only.
+const buildReportSchema = z.looseObject({ rivers: z.array(z.looseObject({})) });
+export const publishedBuild = (report: unknown) => {
+  const r = buildReportSchema.parse(report);
+  return { ...r, rivers: r.rivers.map(({ relation_tags: _, ...river }) => river) };
+};
 
 export const readEdges = (file: string): Edge[] =>
   reachesSchema.parse(JSON.parse(readFileSync(file, 'utf8'))).features.map((f) => ({
@@ -473,7 +510,7 @@ export async function main(
   let build: unknown;
   try {
     edges = readEdges(join(dir as string, 'reaches.geojson'));
-    build = JSON.parse(readFileSync(join(dir as string, 'build-report.json'), 'utf8'));
+    build = publishedBuild(JSON.parse(readFileSync(join(dir as string, 'build-report.json'), 'utf8')));
     if (edges.length === 0) throw new Error('no_edges');
   } catch {
     console.error('euhydro: reaches.geojson or build-report.json is unreadable');
@@ -482,12 +519,16 @@ export async function main(
   const fetched = await fetchSegments(edgesBbox(edges), cfg, deps);
   const cmp = compareDirections(edges, fetched.segments);
   const report = {
+    attribution: ATTRIBUTION,
+    attribution_url: ATTRIBUTION_URL,
+    licence: LICENCE,
     schema_version: 1,
     build,
     euhydro: {
       source: SOURCE_TEXT,
       modifications: MODIFICATIONS_TEXT,
       endorsement: ENDORSEMENT_TEXT,
+      agreement_basis: AGREEMENT_BASIS,
       requests: fetched.requests,
       complete: fetched.complete,
       ...(fetched.error ? { error: fetched.error } : {}),

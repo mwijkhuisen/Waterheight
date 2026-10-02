@@ -12,16 +12,16 @@ The river graph is a directed graph of the rivers that feed the Netherlands, bui
 
 | Rule | Consequence |
 |---|---|
-| Fetch targets come only from `tools/geo/rivernet/sources.yaml` (invariant 1) | The 16 Geofabrik URLs, the EU-Hydro MapServer and the Wikidata endpoint are constants of that file. A run takes no input from outside: a new region or host is a reviewed change |
+| Fetch targets come only from `registry/geo-sources.yaml` (invariant 1) | The 16 Geofabrik URLs, the EU-Hydro MapServer and the Wikidata endpoint are constants of that file. A run takes no input from outside: a new region or host is a reviewed change |
 | Geofabrik has no Grand-Est or Hauts-de-France extract | The French regions are the old `alsace`, `lorraine`, `champagne-ardenne`, `nord-pas-de-calais` and `picardie`. `download.ts --check-index` compares every pinned path with `index-v1-nogeom.json` at the start of each run |
 | No cache (owner decision, 2026-10-02) | Geofabrik rebuilds every `-latest` file daily and `scripts/check-workflows.sh` forbids `actions/cache`. Every run downloads about 7.4 GB again. A failed download costs the run |
 | Newest version wins | Geofabrik cuts the regions at different moments (on 2026-10-02 Belgium was a day newer than the rest), so a border object can sit in two extracts in two versions: `extract.sh` merges with `osmium merge -H` (all versions) and keeps the newest valid version of each object with `osmium time-filter` (no time given), records each region's replication timestamp in the provenance, and refuses extracts more than 72 h apart (`extract_dates_too_far_apart`). The builder fails on a duplicate way |
-| Never edit an extract | The only ways to change what a run builds are `registry/rivers.yaml` (a river, an `osm_relation_id`, `drop_ways`) and `tools/geo/rivernet/sources.yaml`, both through a reviewed PR |
+| Never edit an extract | The only ways to change what a run builds are `registry/rivers.yaml` (a river, an `osm_relation_id`, `drop_ways`) and `registry/geo-sources.yaml`, both through a reviewed PR |
 | The tool image is built in the run and never leaves it | osmium-tool is GPL-3.0; the image is not pushed, uploaded or released. It runs with no network, no capabilities, a read-only root and the runner's uid (T-GEO-2) |
 | Only `rivernet-publish` writes, and only on main | It has no checkout and runs no repository code. A branch run builds and uploads artifacts and publishes nothing (T-GEO-4) |
 | A published release is never rewritten | The same day with the same `SHA256SUMS` is a no-op; different sums fail (§7) |
-| EU-Hydro never fails the build | It is a QA of direction (§4); no EU-Hydro geometry is published. A budget of 300 requests, at least 1 s apart (T-GEO-5) |
-| The outputs hold no OSM name, no station and no value (D15) | They carry way and node IDs, coordinates, lengths and river slugs of `registry/rivers.yaml`, with the ODbL-1.0 licence and the attribution "© OpenStreetMap contributors" |
+| EU-Hydro never fails the build | It is a QA of direction (§4); no EU-Hydro geometry is published. A budget of 300 requests, at least 1 s apart, a 20-minute deadline (`max_minutes`) and at most 400,000 segments (T-GEO-5) |
+| The release holds no OSM name, no station and no value (D15) | `river_graph.json` and `reaches.geojson` carry way and node IDs, coordinates, lengths and river slugs of `registry/rivers.yaml`; `qa-report.json` adds counts, our own IDs and EU-Hydro segment IDs. All three carry the ODbL-1.0 licence and the attribution "© OpenStreetMap contributors". Only `build-report.json` holds OSM name strings (the curated relations' `name` tags, for review), and it is not published (§4) |
 
 ## 2. Dispatch a run (the owner, after the merge)
 
@@ -44,7 +44,7 @@ The river graph is a directed graph of the rivers that feed the Netherlands, bui
 | `style` | pull request, dispatch, schedule | The P3 basemap checks: the generated styles and one download of the pinned `basemaps-assets` commit | minutes |
 | `rivernet fixture` | pull request, dispatch, schedule | Builds the tool image; re-exports the committed fixture PBF and compares the two exports byte for byte (`export-check.sh`); builds the fixture graph twice and compares the sha256 of the three outputs. Offline once the image is built (the build itself downloads three tarballs from codeload.github.com and Debian packages). Passes with "no fixture yet" until the first full run's fixture is committed | limit 45 min |
 | `rivernet build` | dispatch and schedule only | Builds the image; `extract.sh` downloads the 16 regions **one at a time** (md5 first, then the PBF; checks, filters, deletes the PBF), checks that the extracts are at most 72 h apart, merges (newest version of each object), selects, exports; uploads the artifact `rivernet-fixture`; builds the graph; runs the EU-Hydro check; writes `SHA256SUMS`, the job summary and uploads the artifact `geo-assets` (14 days each) | limit 240 min; the real time is not measured yet (KG-151) |
-| `rivernet publish` | main only, after `rivernet build` | Checks `sha256sum -c`, signs each of the four assets keyless, verifies each signature, creates the release `geo-<UTC date>` as a draft (`--target $GITHUB_SHA --latest=false`) and publishes it | minutes |
+| `rivernet publish` | main only, after `rivernet build` | Checks `sha256sum -c`, signs each of the four assets keyless, verifies each signature, creates the release `geo-<UTC date>` as a draft (`--target $GITHUB_SHA --latest=false`) and publishes it (an existing release of the tag: §7) | minutes |
 
 The artifacts of one run are the ones that run publishes: `rivernet-publish` downloads `geo-assets` of its own run, never another run's.
 
@@ -56,14 +56,17 @@ The **job summary** of `rivernet build` ("Graph pipeline") lists the size of `ri
 
 | Field | Meaning |
 |---|---|
+| `attribution`, `attribution_url`, `licence` | The ODbL head ("© OpenStreetMap contributors", ODbL-1.0), as on the other two data assets |
+| `build` | `build-report.json` without the relation tags of each river: the counts, `ways_kept`, `qid_relations`, `components` and the `graph` section. No OSM name string |
 | `euhydro.source`, `modifications`, `endorsement` | The citation (EU-Hydro v1.3, © European Union, Copernicus Land Monitoring Service), what we changed (our own reach geometry compared with its segments; nothing of its geometry is kept) and the no-endorsement text |
-| `euhydro.agree`, `disagree`, `unmatched`, `agreement_pct` | Per reach: our digitised direction against EU-Hydro's. `agreement_pct` is agree ÷ (agree + disagree); a tie counts as a disagreement. P6b's criterion is 98% or more (KG-152) |
-| `euhydro.requests`, `complete`, `layers`, `error` | The budget used. `complete: false` with an `error` code (`euhydro_http`, `euhydro_error`, `euhydro_body_too_large`, `euhydro_bad_json`, `euhydro_bad_shape`) means the QA stopped early: the build still passed and the percentage covers less. Run again later |
+| `euhydro.agree`, `disagree`, `unmatched`, `agreement_pct`, `agreement_basis` | Per reach: our digitised direction against EU-Hydro's. `agreement_pct` is agree ÷ (agree + disagree), the edges matched within 200 m (`agreement_basis` says so); a tie counts as a disagreement. P6b's criterion is 98% or more (KG-152) |
+| `euhydro.unmatched_edges` | The edges (sorted) with less than half their length within 200 m of a segment, or with no length: not in the percentage |
+| `euhydro.requests`, `complete`, `layers`, `error` | The budget used. `complete: false` with an `error` code (`euhydro_http`, `euhydro_error`, `euhydro_body_too_large`, `euhydro_bad_json`, `euhydro_bad_shape`, `euhydro_timeout` past `max_minutes`, `euhydro_too_many_segments` past 400,000 segments) means the QA stopped early: the build still passed and the percentage covers less. Run again later |
 | `euhydro.disagreements` | `edge` (our `w<way>.<k>`), `OBJECT_ID` and `NEXTDOWNID` of the EU-Hydro segment. Look at the edge on openstreetmap.org (the way id is in the name): a way digitised against the flow shows up here. A real river flowing the other way in OSM is fixed in OSM, not in our extract |
 
-Direction is read from the digitised geometry (catalogue §5.3), not from `NEXTDOWNID`, which cannot express a bifurcation (`docs/sources/research/map-rivers.md`), and Strahler is not used (the Linge pitfall). EU-Hydro's layers 5 to 12 are Strahler 1 to 8; layer 13 is empty in our area; the server answers in EPSG:3857 and the QA asks `outSR=4326`.
+Direction is read from the matched piece of the digitised geometry (catalogue §5.3): each sample's tangent is compared with the straight piece of the segment it matched, never with the segment's chord (a meander's chord can point against the river). It is not read from `NEXTDOWNID`, which cannot express a bifurcation (`docs/sources/research/map-rivers.md`), and Strahler is not used (the Linge pitfall). EU-Hydro's layers 5 to 12 are Strahler 1 to 8; layer 13 is empty in our area; the server answers in EPSG:3857 and the QA asks `outSR=4326`.
 
-`build-report.json` (per-river counts, drops by role, sources, sinks, components, the bifurcations with their out edges, and the relations in the extract that carry a river's QID) is written next to the assets on the runner but is not an asset or an artifact. To read it, download the `rivernet-fixture` artifact and run the builder on it (§8, first command): the rebuild gives the same bytes as the run.
+`build-report.json` (per-river counts, drops by role, the curated relation's tags with its `name` tags as the seed for reviewed names, sources, sinks, components, the bifurcations with their out edges, and the relations in the extract that carry a river's QID) is written next to the assets on the runner but is not an asset or an artifact. To read it, download the `rivernet-fixture` artifact and run the builder on it (§8, first command): the rebuild gives the same bytes as the run.
 
 ## 5. When the build fails
 
@@ -73,15 +76,17 @@ A fatal build error stops the job, the artifact `rivernet-fixture` is already up
 |---|---|---|
 | `extract_dates_too_far_apart` (from `extract.sh`) | The oldest and the newest of the 16 extracts are more than 72 h apart: a Geofabrik region has not been rebuilt for days | Run again later; if it persists, check Geofabrik's status page. Different dates within 72 h are normal and merged by newest version |
 | `md5_mismatch` (from `download.ts`) | The streamed bytes differ from the `.md5` file, twice (one retry): a file rebuilt during the download, or a damaged transfer | Run again. Repeating three days running: open an issue; the md5 comes from the same host as the file, so it proves integrity against corruption only (R-079) |
-| `redirect_refused`, `http_status`, `too_large`, `timeout`, `network`, `bad_md5_file` (from `download.ts`) | A redirect to another host or more than two hops, a status other than 200, a file over its `max_bytes` (about twice its size of 2026-10-02), 45 minutes exceeded, a transport error, a body that is not an md5 line | A network or provider problem: run again. `too_large` for a region that really grew means a reviewed raise of `max_bytes` in `sources.yaml`; `redirect_refused` means Geofabrik moved the file |
-| `region_missing`, `region_changed`, `bad_index` (`--check-index`) | A pinned region is not in `index-v1-nogeom.json` or its URL changed | A reviewed change of `sources.yaml`; check the index by hand (`curl -s https://download.geofabrik.de/index-v1-nogeom.json`) |
+| `redirect_refused`, `http_status`, `too_large`, `timeout`, `network`, `bad_md5_file` (from `download.ts`) | A redirect to another host or more than two hops, a status other than 200, a file over its `max_bytes` (about twice its size of 2026-10-02), 45 minutes exceeded, a transport error, a body that is not an md5 line | A network or provider problem: run again. `too_large` for a region that really grew means a reviewed raise of `max_bytes` in `registry/geo-sources.yaml`; `redirect_refused` means Geofabrik moved the file |
+| `region_missing`, `region_changed`, `bad_index` (`--check-index`) | A pinned region is not in `index-v1-nogeom.json` or its URL changed | A reviewed change of `registry/geo-sources.yaml`; check the index by hand (`curl -s https://download.geofabrik.de/index-v1-nogeom.json`) |
 | `relation_missing <ids>` | A relation of `rivers.yaml` (`osm_relation_id`) or of the canal traps is not in the extract: deleted, merged or renumbered in OSM, or outside the 16 regions | Find it on openstreetmap.org and in Wikidata (P402 of the river's item). Then a reviewed change of `osm_relation_id` (and its `evidence`); never add the relation by hand to a file |
+| `relation_not_waterway <ids>` | A relation of `rivers.yaml` is not `type=waterway`: a multipolygon water area or another relation that carries the river's QID (Wikidata P402 points at such areas, PHASES §21) | Find the river's `type=waterway` relation on openstreetmap.org and fix `osm_relation_id` (and its `evidence`) in a PR; never accept the area |
 | `wikidata_mismatch <ids>` | A relation's `wikidata` tag differs from the river's `wikidata` in `rivers.yaml` | Someone retagged the relation, or the registry has the wrong item. Compare the item's mouth (P403) and the relation; fix `rivers.yaml` in a PR. Do not change the QID without the evidence line |
 | `river_without_edges <ids>` | A river of `rivers.yaml` kept no way: its relation has no `main_stream` or empty-role members, or its way selection (`osm_way_name` with its `wikidata`) matched nothing | Open the relation in OSM; check `osm_way_name`. Fix `rivers.yaml` in a PR |
 | `duplicate_way <way>` | The same way twice in the merged input: a region overlap that `osmium merge` did not reduce | Normally a mixed-version merge that the timestamp check should have caught. Run again; if it repeats, open an issue with the way ID |
 | `cycle <ways>` | The directed graph has a cycle through those ways: a way digitised against the flow, or a canal loop | Find the ways on openstreetmap.org. A way that does not belong to the river: add it to the river's `drop_ways` (`{id, reason}`) in `rivers.yaml`, in a PR. A wrong direction in OSM is fixed in OSM and arrives with the next extract. Never edit the extract or the output |
 | `bad_json`, `bad_feature`, `line_too_long`, `bad_utf8`, `input_too_large`, `bad_field`, `bad_escape`, `bad_member`, `bad_tag`, `too_many_*`, `not_relation`, `duplicate_relation` | The reader refused its input (a cap or the shape), with the line number | An osmium version change or a strange object in OSM. Download the `rivernet-fixture` artifact and look at that line (§8); open an issue |
 | `rivers_invalid <problems>` | `registry/rivers.yaml` fails `validateRivers` | A PR changed it badly: fix the file; `pnpm check` runs the same validator |
+| `provenance_invalid` | `rivernet.provenance.json` fails its strict schema (`schema_version` 1, the osmium version, UTC timestamps with `Z`, per region an https URL, bytes, md5 and sha256 in lower-case hex) | `extract.sh` or a download record changed: compare with the committed fixture's provenance; open an issue |
 
 Drops are counted, not fatal: a relation member that is not a `main_stream` way (or an empty-role way connected to one) is dropped, and `build-report.json` counts every drop per river. A way that is wrongly kept or dropped is `drop_ways`.
 
@@ -107,7 +112,7 @@ Each `cosign verify-blob` prints `Verified OK`. A different identity (another wo
 
 ## 7. Re-runs on the same day
 
-- A second run of the same UTC day with an equal `SHA256SUMS` is a no-op: it logs `<tag> already published` and exits 0. A draft left by an interrupted run is published then.
+- A second run of the same UTC day with an equal `SHA256SUMS` is a no-op: it logs `<tag> already published` and exits 0. A draft left by an interrupted run is published then, but only if it is complete: exactly the four assets and their four `.sigstore.json` bundles, each with `state` `uploaded`. Any other set fails with `geo release exists with other assets; delete it to republish`.
 - A second run with a different `SHA256SUMS` (Geofabrik published new data in between, or `rivers.yaml` changed) fails with `geo release exists with other assets; delete it to republish` and rewrites nothing. If you want the new result under that tag: delete the release **and its tag** on GitHub (`gh release delete geo-<date> --cleanup-tag --repo mwijkhuisen/Waterheight`), then dispatch again. Otherwise wait for the next day: the tag carries the date.
 - Nothing consumes the release before P6b, so deleting it today harms nothing. After P6b, a deleted release is gone for a VPS that has not yet fetched it, and a fetched one is verified once and kept.
 
@@ -143,7 +148,7 @@ The fixture is what the pull-request job builds from. It is the output of a full
 
 ## What not to do
 
-- Do not edit a Geofabrik extract, the exports or the graph by hand, and do not add a relation to a file to get past `relation_missing`: the fix is `rivers.yaml` or `sources.yaml` in a PR.
+- Do not edit a Geofabrik extract, the exports or the graph by hand, and do not add a relation to a file to get past `relation_missing`: the fix is `rivers.yaml` or `geo-sources.yaml` in a PR.
 - Do not merge regions with a plain `osmium merge` (it keeps both versions of a border object), and do not add a cache to `geo.yml` (`check-workflows.sh` forbids it).
 - Do not push, upload or release the tool image or the PBFs: osmium-tool is GPL-3.0 (ADR-0012). The release holds the four assets only.
 - Do not run a publish by hand with a personal token, and do not rewrite or re-sign a published release: delete it and run again (§7).

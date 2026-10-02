@@ -26,6 +26,7 @@ on:
       - package.json
       - pnpm-lock.yaml
       - registry/rivers.yaml
+      - registry/geo-sources.yaml
       - .github/workflows/geo.yml
   schedule:
     - cron: '23 4 3 * *'
@@ -238,10 +239,16 @@ jobs:
         run: |
           set -euo pipefail
           TAG="geo-$(date -u +%F)"
-          export TAG
+          ASSETS="river_graph.json reaches.geojson qa-report.json SHA256SUMS"
+          export TAG ASSETS
           # The releases list includes drafts; a draft is found by tag name here, not by `gh release view`.
           mapfile -t found < <(gh api "repos/$GH_REPO/releases" --paginate -q '.[] | select(.tag_name == env.TAG) | .id')
           if ((${#found[@]} > 0)); then
+            # Only a complete release counts: exactly the four assets and their four bundles, each one uploaded.
+            complete=$(gh api "repos/$GH_REPO/releases/${found[0]}" -q '
+              ([.assets[] | {name, state}] | sort_by(.name)) ==
+              ([env.ASSETS | split(" ")[] | (., . + ".sigstore.json") | {name: ., state: "uploaded"}] | sort_by(.name))')
+            [[ $complete == true ]] || { echo "geo release exists with other assets; delete it to republish" >&2; exit 1; }
             asset=$(gh api "repos/$GH_REPO/releases/${found[0]}" -q '.assets[] | select(.name == "SHA256SUMS") | .id')
             [[ $asset =~ ^[0-9]+$ ]] || { echo "geo release exists with other assets; delete it to republish" >&2; exit 1; }
             gh api -H 'Accept: application/octet-stream' "repos/$GH_REPO/releases/assets/$asset" >"$RUNNER_TEMP/existing.SHA256SUMS"

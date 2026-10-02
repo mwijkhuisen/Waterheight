@@ -28,7 +28,7 @@ type Doc = {
   canal_traps: unknown[];
   extra?: number;
 };
-const YAML_PATH = join(ROOT, 'tools/geo/rivernet/sources.yaml');
+const YAML_PATH = join(ROOT, 'registry/geo-sources.yaml');
 const FIXTURE = join(ROOT, 'tools/geo/fixtures/geofabrik/index-v1-nogeom.trimmed.json');
 
 const dirs: string[] = [];
@@ -41,17 +41,18 @@ function mutated(edit: (o: Doc) => void) {
   edit(o);
   const dir = mkdtempSync(join(tmpdir(), 'rivernet-src-'));
   dirs.push(dir);
-  const path = join(dir, 'sources.yaml');
+  const path = join(dir, 'geo-sources.yaml');
   writeFileSync(path, stringify(o));
   return () => readSources(path);
 }
 
-describe('sources.yaml', () => {
+describe('registry/geo-sources.yaml', () => {
   it('validates and holds the 16 regions', () => {
     const s = readSources();
     expect(s.geofabrik.regions.map((r) => r.id)).toEqual(IDS);
     for (const r of s.geofabrik.regions)
       expect(r.url).toMatch(/^https:\/\/download\.geofabrik\.de\/europe\/.*-latest\.osm\.pbf$/);
+    expect(s.euhydro.max_minutes).toBe(20);
   });
 
   it('names every region url as the index has it', () => {

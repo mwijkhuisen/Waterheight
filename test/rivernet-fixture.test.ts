@@ -22,9 +22,9 @@ import { readSources } from '../tools/geo/rivernet/sources.ts';
 import { repoRoot } from './catalogue.ts';
 
 // The P6a criterion on the committed fixture PBF's osmium exports (tools/geo/fixtures/README.md):
-// the graph is acyclic, the Pannerdensche Kop and the IJsselkop each have 2 downstream edges, a
-// tributary joining mid-way splits the way (the Moselle at Koblenz), and two runs on the same
-// input, in any line order, give the same bytes. geo.yml re-exports the PBF and compares.
+// the graph is acyclic, the Pannerdensche Kop and the IJsselkop each have 2 downstream edges, the
+// Moselle mouth at Koblenz is a node of the Rhine, a tributary joining mid-way splits the way, and two
+// runs on the same input, in any line order, give the same bytes. geo.yml re-exports the PBF and compares.
 
 const FX = `${repoRoot}tools/geo/fixtures/`;
 const files = {
@@ -108,12 +108,27 @@ describe('the fixture graph (P6a criterion)', () => {
     expect((result.report as { graph: { bifurcations: unknown } }).graph.bifurcations).toEqual(golden);
   });
 
-  it('makes the Moselle mouth at Koblenz a node of the Rhine, splitting the Rhine way there', () => {
+  it('makes the Moselle mouth at Koblenz a node of the Rhine', () => {
     const [mouth, ...more] = endOf('moselle');
     expect(more).toEqual([]);
     expect((into.get(mouth as string) ?? []).some((e) => e.rivers.includes('rhine'))).toBe(true);
     expect((out.get(mouth as string) ?? []).some((e) => e.rivers.includes('rhine'))).toBe(true);
-    expect(edges.some((e) => e.id.endsWith('.1'))).toBe(true);
+  });
+
+  it('splits a way where another river joins it mid-way', () => {
+    // A node where one input way runs on as two consecutive edges (w<way>.<k> ends there, w<way>.<k+1> starts
+    // there) and an edge of another river ends. In run 37064062453's fixture, for one, the Ahr joins the Rhine way
+    // w83015485 at n560170160.
+    const byId = new Map(edges.map((e) => [e.id, e]));
+    const joins = edges.filter((e) => {
+      const [way, k] = e.id.slice(1).split('.');
+      const next = byId.get(`w${way}.${Number(k) + 1}`);
+      return (
+        next?.from === e.to &&
+        (into.get(e.to) ?? []).some((o) => o !== e && !o.rivers.some((r) => e.rivers.includes(r)))
+      );
+    });
+    expect(joins.length).toBeGreaterThan(0);
   });
 
   it('carries the §0.6 rivers beside their stations, and the canal traps, which become edges only as river ways', async () => {

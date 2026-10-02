@@ -15,6 +15,7 @@ import {
   EuHydroError,
   fetchSegments,
   getBody,
+  MAX_SEGMENTS,
   main,
   PAGE_SIZE,
   parsePage,
@@ -32,6 +33,7 @@ const CFG: EuHydroConfig = {
   min_interval_ms: 250,
   timeout_ms: 5000,
   max_body_bytes: 1 << 20,
+  max_minutes: 20,
 };
 const BBOX: Bbox = [5.98, 51.85, 6.12, 51.92];
 const UA = 'rivierstanden/0.1.0 (+https://example.test/over; t@example.test)';
@@ -149,6 +151,32 @@ describe('euhydro fetchSegments', () => {
     expect(calls).toBe(3);
     expect(r).toMatchObject({ requests: 3, complete: false, layers_done: [] });
     expect(r.error).toBeUndefined();
+  });
+
+  const flaggedPage = () =>
+    serve(JSON.stringify({ ...JSON.parse(body('l12-pannerdensche-kop')), exceededTransferLimit: true }));
+
+  it('starts no request past the wall-clock deadline: complete false, euhydro_timeout', async () => {
+    server.use(flaggedPage());
+    let t = 1_000_000;
+    const clock = {
+      userAgent: UA,
+      now: () => t,
+      sleep: async (ms: number) => {
+        t += ms;
+      },
+    };
+    // Requests at 0, 25 and 50 s; at 75 s the 1-minute deadline has passed.
+    const r = await fetchSegments(BBOX, { ...CFG, max_minutes: 1, min_interval_ms: 25_000 }, clock);
+    expect(r).toMatchObject({ requests: 3, complete: false, error: 'euhydro_timeout', layers_done: [] });
+    expect(r.segments).toHaveLength(27);
+  });
+
+  it('stops past the segment cap: complete false, euhydro_too_many_segments', async () => {
+    expect(MAX_SEGMENTS).toBe(400_000);
+    server.use(flaggedPage());
+    const r = await fetchSegments(BBOX, CFG, deps(), 20);
+    expect(r).toMatchObject({ requests: 3, complete: false, error: 'euhydro_too_many_segments' });
   });
 
   it('a failed request ends the QA incomplete with its code and keeps the earlier layers', async () => {
@@ -280,6 +308,31 @@ describe('euhydro compareDirections', () => {
     expect(compareDirections(edges, segs)).toMatchObject({ agree: 3, disagree: 0, unmatched: 0, agreement_pct: 100 });
   });
 
+  it('a U-shaped segment: an edge along its return leg agrees, reversed it disagrees (the piece decides, not the chord)', () => {
+    // Digitised east 1.1 km, north 300 m, then west 1 km: its chord points north-east, against the return leg.
+    const top = 52 + 300 / 111_195;
+    const out = line(5, 5 + 1100 / M_LON, 52, 11);
+    const back = line(5 + 1100 / M_LON, 5 + 100 / M_LON, top, 10);
+    const u = [seg('U', [...out, ...back], 'D')];
+    expect(compareDirections([edge('along', back)], u)).toMatchObject({ agree: 1, disagree: 0, unmatched: 0 });
+    const rev = compareDirections([edge('rev', [...back].reverse())], u);
+    expect(rev).toMatchObject({ agree: 0, disagree: 1, unmatched: 0 });
+    expect(rev.disagreements[0]).toMatchObject({ segments: ['U'], next_down: ['D'] });
+    // The whole U, as drawn and reversed.
+    expect(compareDirections([edge('u', [...out, ...back])], u)).toMatchObject({ agree: 1, disagree: 0 });
+    expect(compareDirections([edge('u', [...out, ...back].reverse())], u)).toMatchObject({ agree: 0, disagree: 1 });
+  });
+
+  it('lists the unmatched edges, sorted, beside the agreement over the matched ones', () => {
+    const far = east.map(([x, y]) => [x, y + 300 / 111_195] as [number, number]);
+    const point: [number, number][] = [
+      [5.01, 52],
+      [5.01, 52],
+    ];
+    const r = compareDirections([edge('z', far), edge('a', east), edge('m', point)], [seg('S', east)]);
+    expect(r).toMatchObject({ agree: 1, disagree: 0, unmatched: 2, agreement_pct: 100, unmatched_edges: ['m', 'z'] });
+  });
+
   it('is deterministic and sorts disagreements by edge id', () => {
     const segs = [seg('S1', east)];
     const edges = ['z', 'a', 'm'].map((id) => edge(id, [...east].reverse()));
@@ -344,6 +397,24 @@ describe('euhydro property tests', () => {
 describe('euhydro CLI', () => {
   const CONTACT = { RWS_DOMAIN: 'rk.example.org', RWS_CONTACT_EMAIL: 'owner@example.org' };
   const QUIET = { cfg: CFG, deps: { sleep: noSleep } };
+  const buildReport = {
+    attribution: '© OpenStreetMap contributors',
+    attribution_url: 'https://www.openstreetmap.org/copyright',
+    licence: 'ODbL-1.0',
+    schema_version: 1,
+    rivers: [
+      {
+        id: 'rhine',
+        relation: 123924,
+        relation_tags: { type: 'waterway', name: 'Rhein', 'name:nl': 'Rijn', wikidata: 'Q584' },
+        members: { main_stream: 2 },
+        ways_kept: 2,
+        qid_relations: [],
+        components: 1,
+      },
+    ],
+    graph: { nodes: 2 },
+  };
   const work = (): string => {
     const dir = mkdtempSync(join(tmpdir(), 'euhydro-'));
     const seg = (parsePage(body('l12-pannerdensche-kop')).segments[0] as Segment).paths[0] as [number, number][];
@@ -359,10 +430,7 @@ describe('euhydro CLI', () => {
         features: [feature('w1.0', seg, 1), feature('w2.0', [...seg].reverse(), 2)],
       }),
     );
-    writeFileSync(
-      join(dir, 'build-report.json'),
-      JSON.stringify({ schema_version: 1, rivers: [], graph: { nodes: 2 } }),
-    );
+    writeFileSync(join(dir, 'build-report.json'), JSON.stringify(buildReport));
     return dir;
   };
 
@@ -398,8 +466,30 @@ describe('euhydro CLI', () => {
     expect(await main(['--dir', dir], CONTACT, QUIET)).toBe(0);
     const text = readFileSync(join(dir, 'qa-report.json'), 'utf8');
     const report = JSON.parse(text);
-    expect(Object.keys(report)).toEqual(['build', 'euhydro', 'schema_version']);
-    expect(report.build).toEqual({ graph: { nodes: 2 }, rivers: [], schema_version: 1 });
+    expect(Object.keys(report)).toEqual([
+      'attribution',
+      'attribution_url',
+      'build',
+      'euhydro',
+      'licence',
+      'schema_version',
+    ]);
+    expect(report).toMatchObject({
+      attribution: '© OpenStreetMap contributors',
+      attribution_url: 'https://www.openstreetmap.org/copyright',
+      licence: 'ODbL-1.0',
+    });
+    const { relation_tags: _, ...river } = buildReport.rivers[0] as (typeof buildReport.rivers)[number];
+    expect(report.build).toEqual({ ...buildReport, rivers: [river] });
+    // No OSM name string anywhere: no key starting with "name", at any depth, and none of the relation's names.
+    const keys = (v: unknown): string[] =>
+      Array.isArray(v)
+        ? v.flatMap(keys)
+        : v !== null && typeof v === 'object'
+          ? Object.entries(v).flatMap(([k, x]) => [k, ...keys(x)])
+          : [];
+    expect(keys(report).filter((k) => k.startsWith('name'))).toEqual([]);
+    expect(text).not.toContain('Rhein');
     expect(report.euhydro).toMatchObject({
       requests: 1,
       complete: true,
@@ -408,6 +498,8 @@ describe('euhydro CLI', () => {
       disagree: 1,
       unmatched: 0,
       agreement_pct: 50,
+      agreement_basis: 'edges matched within 200 m (agree + disagree); unmatched edges are listed separately',
+      unmatched_edges: [],
       endorsement: 'No endorsement by the European Union is implied',
     });
     expect(report.euhydro.source).toContain('© European Union, Copernicus Land Monitoring Service');

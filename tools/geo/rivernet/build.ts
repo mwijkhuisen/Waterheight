@@ -1,6 +1,7 @@
 import { createReadStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
+import { z } from 'zod';
 import { type RiversFile, validateRivers } from '../../../packages/contracts/src/rivers.ts';
 import { InputError, readGeoJsonSeq, type WayFeature } from './geojsonseq.ts';
 import { parseOplRelations, type Relation } from './opl.ts';
@@ -12,12 +13,15 @@ import { parseOplRelations, type Relation } from './opl.ts';
 // may have several downstream edges (Pannerdensche Kop, IJsselkop); a cycle
 // fails the build. The output is an ODbL derivative database (D15): it holds
 // OSM ids, geometry and our river ids only, no OSM name strings and no station.
+// build-report.json (not a release asset) is the one exception: see SEED_TAGS.
 // Same input, same bytes: sorted keys and arrays, 7-decimal coordinates, no clock.
 
 export const ROOT = join(import.meta.dirname, '..', '..', '..');
 export const ATTRIBUTION = '© OpenStreetMap contributors';
 export const ATTRIBUTION_URL = 'https://www.openstreetmap.org/copyright';
 export const LICENCE = 'ODbL-1.0';
+// The curated extract's ways file is about 10 MB, and readWays keeps every way in memory: 256 MiB is far past it.
+export const MAX_WAYS_BYTES = 256 * 1024 ** 2;
 
 /** A build failure: a fixed code and our own ids (r…, w…, n… or river ids), never OSM text. */
 export class BuildError extends Error {
@@ -30,11 +34,38 @@ export class BuildError extends Error {
   }
 }
 
-export interface Provenance {
-  schema_version: 1;
-  osmium: string;
-  replication_timestamp: string;
-  regions: { id: string; url: string; bytes: number; md5: string; sha256: string; replication_timestamp: string }[];
+// rivernet.provenance.json as extract.sh writes it (jq from each region's download record).
+const Stamp = z.iso.datetime(); // UTC with Z only
+const ProvenanceFile = z.strictObject({
+  schema_version: z.literal(1),
+  osmium: z.string().regex(/^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/),
+  replication_timestamp: Stamp,
+  regions: z
+    .array(
+      z.strictObject({
+        id: z.string().regex(/^[a-z][a-z-]{1,40}$/),
+        url: z.url({ protocol: /^https$/ }),
+        bytes: z.number().int().positive(),
+        md5: z.string().regex(/^[0-9a-f]{32}$/),
+        sha256: z.string().regex(/^[0-9a-f]{64}$/),
+        replication_timestamp: Stamp,
+      }),
+    )
+    .min(1),
+});
+export type Provenance = z.infer<typeof ProvenanceFile>;
+
+/** Parses rivernet.provenance.json; anything else is BuildError('provenance_invalid'), naming nothing of it. */
+export function parseProvenance(text: string): Provenance {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    throw new BuildError('provenance_invalid', []);
+  }
+  const r = ProvenanceFile.safeParse(doc);
+  if (!r.success) throw new BuildError('provenance_invalid', []);
+  return r.data;
 }
 
 export interface Edge {
@@ -50,7 +81,8 @@ export interface Edge {
 // Roles counted by name in the report; any other role is counted as `other_role`
 // (a role string is OSM text and never becomes a key of our output).
 const KNOWN_ROLES = ['side_stream', 'tributary', 'distributary', 'anabranch', 'spring', 'mouth'] as const;
-// Relation tags copied into the build report as seeds for the reviewed names.
+// Relation tags copied into the build report as seeds for the reviewed names. build-report.json is the local
+// review seed and is not a release asset; euhydro.ts drops `relation_tags` before qa-report.json embeds it.
 const SEED_TAGS = ['type', 'waterway', 'name', 'name:nl', 'name:en', 'name:de', 'name:fr', 'wikidata'] as const;
 
 const round7 = (x: number) => Number(x.toFixed(7));
@@ -203,6 +235,7 @@ export function buildGraph(
     if (q !== undefined) byQid.set(q, [...(byQid.get(q) ?? []), r.id]);
   }
   const missing: string[] = [];
+  const notWaterway: string[] = [];
   const mismatch: string[] = [];
   const empty: string[] = [];
   const wayRivers = new Map<number, Set<string>>();
@@ -213,7 +246,9 @@ export function buildGraph(
       missing.push(`r${river.osm_relation_id}`);
       continue;
     }
-    // A relation tagged with another item is the wrong relation; one without the tag is reported, not refused.
+    // A relation that is not type=waterway (a multipolygon can carry the river's QID) or is tagged with another
+    // item is the wrong relation; one without a wikidata tag is reported, not refused.
+    if (relation !== undefined && relation.tags.type !== 'waterway') notWaterway.push(`r${relation.id}`);
     const tag = relation?.tags.wikidata;
     if (tag !== undefined && tag !== river.wikidata) mismatch.push(`r${relation?.id}`);
     const sel = selectWays(river, relation, ways);
@@ -231,6 +266,7 @@ export function buildGraph(
     });
   }
   if (missing.length > 0) throw new BuildError('relation_missing', missing.sort());
+  if (notWaterway.length > 0) throw new BuildError('relation_not_waterway', notWaterway.sort());
   if (mismatch.length > 0) throw new BuildError('wikidata_mismatch', mismatch.sort());
   if (empty.length > 0) throw new BuildError('river_without_edges', empty.sort());
 
@@ -321,6 +357,9 @@ export function buildGraph(
     })),
   };
   const report = {
+    attribution: ATTRIBUTION,
+    attribution_url: ATTRIBUTION_URL,
+    licence: LICENCE,
     schema_version: 1,
     rivers: riverReports,
     graph: {
@@ -372,10 +411,10 @@ export function canonicalJson(value: unknown, indent?: number): string {
   return `${JSON.stringify(sort(value), null, indent)}\n`;
 }
 
-/** Reads the osmium GeoJSONSeq export; a way id twice is an error. */
+/** Reads the osmium GeoJSONSeq export, at most MAX_WAYS_BYTES; a way id twice is an error. */
 export async function readWays(chunks: AsyncIterable<Uint8Array>): Promise<Map<number, WayFeature>> {
   const ways = new Map<number, WayFeature>();
-  for await (const way of readGeoJsonSeq(chunks)) {
+  for await (const way of readGeoJsonSeq(chunks, { maxTotalBytes: MAX_WAYS_BYTES })) {
     if (ways.has(way.id)) throw new BuildError('duplicate_way', [`w${way.id}`]);
     ways.set(way.id, way);
   }
@@ -398,7 +437,7 @@ export interface BuildFiles {
 export async function buildFromFiles(files: BuildFiles): Promise<BuildResult> {
   const ways = await readWays(createReadStream(files.ways));
   const relations = parseOplRelations(readFileSync(files.relations, 'utf8'));
-  const provenance = JSON.parse(readFileSync(files.provenance, 'utf8')) as Provenance;
+  const provenance = parseProvenance(readFileSync(files.provenance, 'utf8'));
   return buildGraph(ways, relations, readRivers(files.rivers), provenance);
 }
 

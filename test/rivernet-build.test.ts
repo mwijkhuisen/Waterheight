@@ -1,6 +1,15 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { RiversFile } from '../packages/contracts/src/rivers.ts';
-import { BuildError, buildGraph, canonicalJson, type Provenance } from '../tools/geo/rivernet/build.ts';
+import {
+  BuildError,
+  buildGraph,
+  canonicalJson,
+  MAX_WAYS_BYTES,
+  type Provenance,
+  parseProvenance,
+  readWays,
+} from '../tools/geo/rivernet/build.ts';
 import type { WayFeature } from '../tools/geo/rivernet/geojsonseq.ts';
 import type { Relation } from '../tools/geo/rivernet/opl.ts';
 
@@ -283,6 +292,16 @@ describe('buildGraph', () => {
     );
   });
 
+  it('refuses a curated relation that is not type=waterway, even with the right wikidata tag', () => {
+    const a = river('main', 1);
+    const b = river('trib', 2);
+    const area = { ...rel(1, a.wikidata, [[1, 'main_stream']]), tags: { type: 'multipolygon', wikidata: a.wikidata } };
+    const untyped = { ...rel(2, b.wikidata, [[2, '']]), tags: { wikidata: b.wikidata } };
+    expect(() => buildGraph(ways(way(1, [1, 2]), way(2, [3, 2])), [untyped, area], rivers(a, b), provenance)).toThrow(
+      /^relation_not_waterway: r1, r2$/,
+    );
+  });
+
   it('writes the same bytes whatever the input order, with 7-decimal coordinates and lengths in metres', () => {
     const a = river('main', 1);
     const b = river('trib', 2);
@@ -305,6 +324,70 @@ describe('buildGraph', () => {
     expect(graph.edges[0]).toEqual({ from: 'n1', id: 'w10.0', length_m: 262.8, rivers: ['main'], to: 'n3', way: 10 });
     expect(Object.keys(graph)).toEqual([...Object.keys(graph)].sort());
     expect(graph).toMatchObject({ licence: 'ODbL-1.0', attribution: '© OpenStreetMap contributors' });
+  });
+
+  it('puts the ODbL head on the build report, which keeps the relation tags as review seeds', () => {
+    const a = river('main', 1);
+    const r = buildGraph(ways(way(1, [1, 2])), [rel(1, a.wikidata, [[1, '']])], rivers(a), provenance);
+    expect(r.report).toMatchObject({
+      attribution: '© OpenStreetMap contributors',
+      attribution_url: 'https://www.openstreetmap.org/copyright',
+      licence: 'ODbL-1.0',
+      rivers: [{ relation_tags: { type: 'waterway', waterway: 'river', wikidata: a.wikidata } }],
+    });
+  });
+});
+
+describe('readWays', () => {
+  it('refuses input over 256 MiB before it reads a line (input_too_large)', async () => {
+    expect(MAX_WAYS_BYTES).toBe(256 * 1024 * 1024);
+    // One untouched zero-filled chunk: the cap is checked before a byte of it is split.
+    async function* big() {
+      yield new Uint8Array(MAX_WAYS_BYTES + 1);
+    }
+    await expect(readWays(big())).rejects.toMatchObject({ code: 'input_too_large' });
+  });
+});
+
+describe('parseProvenance', () => {
+  const real = readFileSync(new URL('../tools/geo/fixtures/rivernet.provenance.json', import.meta.url), 'utf8');
+  const edit = (f: (p: Record<string, unknown> & { regions: Record<string, unknown>[] }) => void) => {
+    const p = JSON.parse(real);
+    f(p);
+    return JSON.stringify(p);
+  };
+  const refused = (text: string) => {
+    try {
+      parseProvenance(text);
+    } catch (e) {
+      return e instanceof BuildError && e.code === 'provenance_invalid' && e.ids.length === 0;
+    }
+    return false;
+  };
+
+  it('reads the committed fixture provenance', () => {
+    expect(parseProvenance(real)).toMatchObject({ schema_version: 1, osmium: '1.19.1' });
+    expect(parseProvenance(real).regions).toHaveLength(16);
+  });
+
+  it('refuses anything else with provenance_invalid and no detail', () => {
+    for (const bad of [
+      'not json',
+      '[]',
+      edit((p) => (p.schema_version = 2)),
+      edit((p) => (p.replication_timestamp = '2026-10-01T20:22:06+02:00')),
+      edit((p) => (p.replication_timestamp = '2026-10-01')),
+      edit((p) => (p.extra = 1)),
+      edit((p) => (p.regions = [])),
+      edit((p) => ((p.regions[0] as Record<string, unknown>).url = 'http://download.geofabrik.de/x.osm.pbf')),
+      edit((p) => ((p.regions[0] as Record<string, unknown>).md5 = 'A'.repeat(32))),
+      edit((p) => ((p.regions[0] as Record<string, unknown>).sha256 = 'a'.repeat(63))),
+      edit((p) => ((p.regions[0] as Record<string, unknown>).bytes = -1)),
+      edit((p) => ((p.regions[0] as Record<string, unknown>).name = '<b>x</b>')),
+      edit((p) => delete (p.regions[0] as Record<string, unknown>).replication_timestamp),
+    ]) {
+      expect(refused(bad), bad.slice(0, 60)).toBe(true);
+    }
   });
 });
 
