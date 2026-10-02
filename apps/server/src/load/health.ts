@@ -1,3 +1,4 @@
+import { QC } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import type { DB } from '../db/generated.ts';
 import { type Intervals, lock } from './store.ts';
@@ -22,6 +23,11 @@ export type HealthInputs = {
    * spec that stated it; without an entry the source's shortest cadence stands in.
    */
   specCadenceS?: ReadonlyMap<string, number>;
+  /**
+   * The sources captured by a seed only: a seed spec and no cron spec (CH-3; `cadences` in run.ts). They are not
+   * judged on how old their last fetch is; every other source is, a source with no spec at all included.
+   */
+  seedOnly?: ReadonlySet<string>;
   /** p95 of "loaded at − fetched at" over the manifest lines fetched in the last hour, per source (ms). */
   lagP95Ms: ReadonlyMap<string, number>;
   /** Unconsumed manifest bytes and the age of the oldest unconsumed line (Loader.backlog). */
@@ -166,12 +172,15 @@ export async function findCoverage(
   return out;
 }
 
-/** The shortest gap between two requests of one spec and variant over the last 24 hours, per spec (P5a). */
+/**
+ * The shortest gap between two requests of one spec and variant over the last 24 hours, per spec (P5a): the hour
+ * buckets from the one that holds now − 24 h onward (review CR-8).
+ */
 export function minIntervals(state: Intervals, now: Date): { spec: string; seconds: number }[] {
   const since = now.getTime() - 24 * 3_600_000;
   return Object.entries(state.hours)
     .flatMap(([spec, hours]) => {
-      const gaps = Object.entries(hours).flatMap(([h, s]) => (Number(h) >= since - 3_600_000 ? [s] : []));
+      const gaps = Object.entries(hours).flatMap(([h, s]) => (Number(h) > since - 3_600_000 ? [s] : []));
       return gaps.length === 0 ? [] : [{ spec, seconds: Math.min(...gaps) }];
     })
     .sort((a, b) => a.spec.localeCompare(b.spec));
@@ -186,10 +195,15 @@ type Tier1 = { total: number; fresh: number; provider_stale: number };
  * (index probes on tier-1 series only); runs every minute.
  */
 export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promise<void> {
-  // Each tier-1 series: is its latest value fresh, and when was the payload fetched that last stated it.
+  // Each tier-1 series: is its latest value fresh, and when was the payload fetched that last stated it. A latest
+  // row that another source filled (bit 512: FR-3 into FR-1, CH-3 into CH-1) says nothing about the series' own
+  // source: it is neither fresh nor provider-stale, and its fetch counts as unknown (review CR-3).
   const tier1 = await sql<{ source_id: string; fresh: boolean; stated_at: Date | null; stated_by: string | null }>`
-    SELECT s.source_id, COALESCE(l.ts > ${inputs.now}::timestamptz - s.staleness_limit, false) AS fresh,
-           b.fetched_at AS stated_at, b.spec_id AS stated_by
+    SELECT s.source_id,
+           COALESCE(l.ts > ${inputs.now}::timestamptz - s.staleness_limit AND (l.qc & ${QC.BACKFILLED}::int2) = 0,
+                    false) AS fresh,
+           CASE WHEN (l.qc & ${QC.BACKFILLED}::int2) = 0 THEN b.fetched_at END AS stated_at,
+           CASE WHEN (l.qc & ${QC.BACKFILLED}::int2) = 0 THEN b.spec_id END AS stated_by
     FROM series s
     JOIN source src ON src.id = s.source_id
     JOIN station st ON st.id = s.station_id AND st.tier = 1
@@ -266,8 +280,8 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
   await db.transaction().execute(async (tx) => {
     await lock(tx);
     for (const src of sources.rows) {
-      // A source captured by a seed only (CH-3: no recurring spec) is not judged on how old its last fetch is.
-      const seedOnly = !inputs.cadenceS.has(src.id);
+      // A source captured by a seed only (CH-3: a seed spec, no cron spec) is not judged on how old its last fetch is.
+      const seedOnly = inputs.seedOnly?.has(src.id) === true;
       const cadenceMs = (inputs.cadenceS.get(src.id) ?? 3600) * 1000;
       const batch = batchOf.get(src.id);
       const t = tierOf.get(src.id);

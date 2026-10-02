@@ -1,10 +1,13 @@
 import { QC } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareLine, buildFrChFixtureArchive, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
+import { readMeta } from '../../src/api/data.ts';
+import { loadRegistry } from '../../src/capture/specs.ts';
 import { VIEWS } from '../../src/db/audience.ts';
-import type { LoadAdapter } from '../../src/load/adapters.ts';
-import { computeHealth, findCoverage } from '../../src/load/health.ts';
+import { FILLED_BY, type LoadAdapter } from '../../src/load/adapters.ts';
+import { computeHealth, findCoverage, type HealthInputs } from '../../src/load/health.ts';
 import { replay } from '../../src/load/replay.ts';
+import { cadences } from '../../src/load/run.ts';
 import { type Harness, harness } from './harness.ts';
 
 // FR-1, FR-3, CH-1, CH-2 and CH-3 through the loader (issue #20, P5a), on the
@@ -276,4 +279,159 @@ describe('replay and health', () => {
     expect(coverage.ratio).toBeLessThanOrEqual(1);
     expect(Date.parse(coverage.from)).toBeGreaterThanOrEqual(Date.parse('2026-08-24T00:00:00Z'));
   });
+
+  it('keeps interval state only for a source the registry knows (review SR-4)', async () => {
+    for (const at of ['2026-09-30T23:04:00Z', '2026-09-30T23:14:00Z'])
+      await h.archive.append(bareLine('NL-99', 'nl-99-obs', new Date(at), { variant: 'default', status: 304 }));
+    await h.loader({ now: AFTER }).tick();
+    const { rows } = await h.t.admin.query<{ key: string }>(
+      `SELECT key FROM app_meta WHERE key LIKE 'intervals:%' ORDER BY 1`,
+    );
+    expect(rows.map((r) => r.key)).toContain('intervals:CH-1');
+    expect(rows.map((r) => r.key)).not.toContain('intervals:NL-99');
+  });
+
+  it('judges a seed-only source (a seed spec, no cron spec: CH-3) not on its fetch age, any other source on it (review SR-6)', async () => {
+    const { source: cadenceS, seedOnly } = cadences(loadRegistry().specs);
+    expect([...seedOnly]).toEqual(['CH-3']);
+    // FR-3 has a seed spec and a cron spec (fr-3-twin): it is judged on its fetch age.
+    expect(cadenceS.get('FR-3')).toBe(21_600);
+    const inputs: HealthInputs = {
+      cadenceS,
+      lagP95Ms: new Map(),
+      backlog: { files: 0, bytes: 0, age_s: null },
+      badLines: 0,
+      now: AFTER,
+    };
+    const status = async () =>
+      (await h.t.admin.query<{ status: string }>(`SELECT status FROM source_health WHERE source_id = 'CH-3'`)).rows[0]
+        ?.status;
+    // The CH-3 seed was fetched days before AFTER: not down as a seed-only source.
+    await computeHealth(h.load.db, { ...inputs, seedOnly });
+    expect(await status()).toBe('ok');
+    // Without the set, a source with neither a seed spec nor a cron spec it knows of is judged on its fetch age.
+    await computeHealth(h.load.db, inputs);
+    expect(await status()).toBe('down');
+  });
+
+  it('a latest row filled by another source is neither fresh nor provider-stale for its target (review CR-3)', async () => {
+    const x = await harness();
+    const NOW = new Date('2026-10-01T12:00:00Z');
+    const ago = (min: number) => new Date(NOW.getTime() - min * 60_000).toISOString();
+    try {
+      const own = (series: string, ts: string) => ({ series, ts, value: 1, qc: QC.RAW });
+      const adapters: Record<string, LoadAdapter> = {
+        'FR-1': {
+          version: 1,
+          specs: {
+            'fr-1-obs': {
+              maxBytes: 1024,
+              needsVariant: false,
+              run: () => ({ obs: [own('A061005051/H', ago(10))], gaugeZeros: [], dropped: {}, unknown: 0 }),
+            },
+          },
+        },
+        'FR-3': {
+          version: 1,
+          specs: {
+            'fr-3-obs': {
+              maxBytes: 1024,
+              needsVariant: false,
+              fill: 'FR-1',
+              // Chooz H: a fill row that is recent; Uckange Q: one that is stale, stated by a payload of 5 min ago.
+              run: () => ({
+                obs: [],
+                gaugeZeros: [],
+                dropped: {},
+                unknown: 0,
+                fill: [own('B720000001/H', ago(10)), own('A850061001/Q', ago(300))],
+              }),
+            },
+          },
+        },
+      };
+      for (const [source, spec] of [
+        ['FR-1', 'fr-1-obs'],
+        ['FR-3', 'fr-3-obs'],
+      ] as const) {
+        await writePayload(x.archive, {
+          source,
+          spec,
+          variant: 'default',
+          at: new Date(NOW.getTime() - 5 * 60_000),
+          body: Buffer.from(`{"${source}":1}`),
+          url: 'https://example.org/',
+        });
+      }
+      expect(await x.loader({ adapters, now: NOW }).tick()).toEqual({ lines: 2, loaded: 2 });
+      const { rows: latest } = await x.t.admin.query<{ provider_key: string; qc: number }>(
+        `SELECT s.provider_key, l.qc FROM obs_latest l JOIN series s ON s.id = l.series_id
+         WHERE s.source_id = 'FR-1' ORDER BY 1`,
+      );
+      expect(latest).toEqual([
+        { provider_key: 'A061005051/H', qc: QC.RAW },
+        { provider_key: 'A850061001/Q', qc: QC.RAW | QC.BACKFILLED },
+        { provider_key: 'B720000001/H', qc: QC.RAW | QC.BACKFILLED },
+      ]);
+      await computeHealth(x.load.db, {
+        cadenceS: new Map([
+          ['FR-1', 900],
+          ['FR-3', 21_600],
+        ]),
+        lagP95Ms: new Map(),
+        backlog: { files: 0, bytes: 0, age_s: null },
+        badLines: 0,
+        now: NOW,
+      });
+      const { rows } = await x.t.admin.query<{ tier1: { total: number; fresh: number; provider_stale: number } }>(
+        `SELECT detail->'tier1' AS tier1 FROM source_health WHERE source_id = 'FR-1'`,
+      );
+      // Only FR-1's own row is fresh; the fresh fill row and the stale one stated lately count for nothing.
+      expect(rows[0]?.tier1).toMatchObject({ fresh: 1, provider_stale: 0 });
+      expect(rows[0]?.tier1.total).toBeGreaterThan(3);
+    } finally {
+      await x.close();
+    }
+  }, 60_000);
+});
+
+describe('the attribution of the fill sources (review SR-1)', () => {
+  it('/meta lists FR-3 and CH-3 beside FR-1 and CH-1, as their own entries; never a fill source the views hide', async () => {
+    expect(FILLED_BY).toEqual(
+      new Map([
+        ['CH-1', ['CH-3']],
+        ['FR-1', ['FR-3']],
+      ]),
+    );
+    const x = await harness();
+    try {
+      const api = x.dbAs('rws_api');
+      const sources = async () => (await readMeta(api.db, { dataEpochMs: 0, displayStartMs: 0 }, 'dev', AFTER)).sources;
+      const all = await sources();
+      expect(all.map((s) => s.id)).toEqual(['CH-1', 'CH-3', 'DE-1', 'FR-1', 'FR-3', 'NL-1']);
+      // The registry's rows verbatim, the date duty included: FR-3's own text, and CH-3's three (CH-1's wording).
+      expect(all.find((s) => s.id === 'FR-3')?.attribution).toEqual([
+        {
+          lang: 'fr',
+          text: 'Source : © VIGICRUES – www.vigicrues.gouv.fr, [date de mise à jour], Licence Ouverte Etalab 2.0',
+          url: null,
+          required: true,
+          needsDate: true,
+        },
+      ]);
+      expect(all.find((s) => s.id === 'CH-3')?.attribution).toEqual(all.find((s) => s.id === 'CH-1')?.attribution);
+      expect(all.find((s) => s.id === 'CH-3')?.attribution).toHaveLength(3);
+      // A fill source that the public attribution view hides (no display channel, or not public) is never listed.
+      await x.t.admin.query(`UPDATE source SET lic_display = false WHERE id = 'FR-3'`);
+      await x.t.admin.query(`UPDATE source SET audience = 'off' WHERE id = 'CH-3'`);
+      expect((await sources()).map((s) => s.id)).toEqual(['CH-1', 'DE-1', 'FR-1', 'NL-1']);
+      // A fill source is listed only beside a source that is listed itself.
+      await x.t.admin.query(`UPDATE source SET lic_display = true WHERE id = 'FR-3'`);
+      expect((await sources()).map((s) => s.id)).toEqual(['CH-1', 'DE-1', 'FR-1', 'FR-3', 'NL-1']);
+      await x.t.admin.query(`UPDATE series SET active = false WHERE source_id = 'FR-1'`);
+      expect((await sources()).map((s) => s.id)).toEqual(['CH-1', 'DE-1', 'NL-1']);
+    } finally {
+      await x.close();
+    }
+  }, 60_000);
 });

@@ -482,6 +482,8 @@ export class Loader {
       else result.dropped.fill_not_primary = (result.dropped.fill_not_primary ?? 0) + 1;
     }
     // Only the series that share their source's audience count in its numbers (public health, batch counters).
+    // A batch's n_rows counts its own rows and its fill rows: an FR-3 payload states each value twice, as a row of
+    // its twin series and as a fill row of the FR-1 series of the same key (review CR-6).
     const counted = (key: string) => registry.get(key)?.sameAudience === true;
     const n_rows =
       result.obs.filter((r) => counted(r.series)).length +

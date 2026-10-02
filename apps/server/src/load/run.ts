@@ -1,7 +1,7 @@
 import { type Kysely, sql } from 'kysely';
 import { pino } from 'pino';
 import { ArchiveReader } from '../archive/reader.ts';
-import { loadRegistry } from '../capture/specs.ts';
+import { type LoadedSpec, loadRegistry } from '../capture/specs.ts';
 import type { DB } from '../db/generated.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { startHeartbeat } from '../heartbeat.ts';
@@ -54,17 +54,27 @@ export async function claimNightly(db: Kysely<DB>, now: Date, backlog: Backlog):
 
 const rawDirOf = (env: Readonly<Record<string, string | undefined>>) => env.RWS_RAW_DIR || '/data/raw';
 
-/** The shortest capture cadence per source (what "fresh" means for its fetches), and the cadence of every spec. */
-function cadences(): { source: Map<string, number>; spec: Map<string, number> } {
+/**
+ * The shortest capture cadence per source (what "fresh" means for its fetches), the cadence of every spec, and the
+ * seed-only sources: a seed spec and no cron spec (CH-3). A source with neither is judged on its fetch age, so a
+ * spec set to `cron: null` by mistake cannot hide its source's staleness (review SR-6).
+ */
+export function cadences(specs: readonly LoadedSpec[]): {
+  source: Map<string, number>;
+  spec: Map<string, number>;
+  seedOnly: Set<string>;
+} {
   const source = new Map<string, number>();
   const spec = new Map<string, number>();
-  for (const s of loadRegistry().specs) {
+  for (const s of specs) {
     if (s.cadence_s === null || s.cadence_s <= 0) continue;
     spec.set(s.id, s.cadence_s);
     const known = source.get(s.source);
     if (known === undefined || s.cadence_s < known) source.set(s.source, s.cadence_s);
   }
-  return { source, spec };
+  const scheduled = new Set(specs.filter((s) => s.cron !== null).map((s) => s.source));
+  const seedOnly = new Set(specs.filter((s) => s.seed !== undefined && !scheduled.has(s.source)).map((s) => s.source));
+  return { source, spec, seedOnly };
 }
 
 export async function runLoad(
@@ -88,7 +98,7 @@ export async function runLoad(
     now: () => new Date(),
     onLag: (source, fetchedAt, lagMs) => lag.add(source, fetchedAt, lagMs, new Date()),
   });
-  const { source: cadenceS, spec: specCadenceS } = cadences();
+  const { source: cadenceS, spec: specCadenceS, seedOnly } = cadences(loadRegistry().specs);
   const apply = env.RWS_PRUNE_APPLY === '1';
   const stopHeartbeat = startHeartbeat();
   logger.info({ prune: apply ? 'apply' : 'dry-run' }, 'load started');
@@ -138,6 +148,7 @@ export async function runLoad(
         await computeHealth(db, {
           cadenceS,
           specCadenceS,
+          seedOnly,
           lagP95Ms: lag.p95(now),
           backlog,
           badLines: loader.badLines,

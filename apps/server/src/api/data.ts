@@ -2,6 +2,7 @@ import { MAX_POINTS, type Meta, type Series, type Snapshot, type Stations } from
 import { type Kysely, sql } from 'kysely';
 import { OBS_AT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
+import { FILLED_BY } from '../load/adapters.ts';
 import type { SeriesParams } from './params.ts';
 import { iso, snapshot } from './util.ts';
 import type { Window } from './window.ts';
@@ -24,12 +25,27 @@ type AttributionRow = {
   needs_date: boolean | null;
 };
 
-/** The public sources that have an active display series, each with its attribution rows verbatim. */
+const FILL_TARGETS = [...FILLED_BY].flatMap(([target, fills]) => fills.map(() => target));
+const FILL_SOURCES = [...FILLED_BY].flatMap(([, fills]) => fills);
+
+/**
+ * The public sources that have an active display series, each with its attribution rows verbatim, and the sources
+ * whose rows fill a listed source's series (FILLED_BY: FR-3 for FR-1, CH-3 for CH-1; review SR-1) as their own
+ * entries, read through the same family's attribution view: a fill source the view does not show is not listed.
+ */
 export async function readMeta(db: Kysely<DB>, window: Window, build: string, now: Date): Promise<Meta> {
   const { rows } = await sql<AttributionRow>`
+    WITH listed AS (SELECT DISTINCT source_id FROM ${sql.table(V.series)} WHERE active),
+    fill AS (
+      SELECT f.source_id
+      FROM unnest(${FILL_TARGETS}::text[], ${FILL_SOURCES}::text[]) AS f(target, source_id)
+      JOIN listed l ON l.source_id = f.target
+      EXCEPT SELECT source_id FROM listed
+    )
     SELECT s.source_id, a.lang, a.text, a.url, a.required, a.needs_date
-    FROM (SELECT DISTINCT source_id FROM ${sql.table(V.series)} WHERE active) s
+    FROM (SELECT source_id, false AS filled FROM listed UNION ALL SELECT source_id, true FROM fill) s
     LEFT JOIN ${sql.table(V.attribution)} a ON a.source_id = s.source_id
+    WHERE NOT s.filled OR a.source_id IS NOT NULL
     ORDER BY s.source_id, a.ord`.execute(db);
   const sources = new Map<string, Meta['sources'][number]['attribution']>();
   for (const r of rows) {

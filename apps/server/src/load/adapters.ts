@@ -178,3 +178,15 @@ export const LOAD_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
     },
   },
 };
+
+/**
+ * The sources whose payloads fill each source's series (FR-1 ← FR-3, CH-1 ← CH-3), from the `fill` fields above:
+ * the one place the mapping lives. `/api/v1/meta` lists their attribution beside the filled source's (review SR-1).
+ */
+export const FILLED_BY: ReadonlyMap<string, readonly string[]> = (() => {
+  const by = new Map<string, Set<string>>();
+  for (const [source, adapter] of Object.entries(LOAD_ADAPTERS))
+    for (const spec of Object.values(adapter.specs))
+      if (spec.fill !== undefined) by.set(spec.fill, (by.get(spec.fill) ?? new Set()).add(source));
+  return new Map([...by].map(([target, fills]) => [target, [...fills].sort()]));
+})();

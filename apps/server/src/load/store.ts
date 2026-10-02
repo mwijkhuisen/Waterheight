@@ -483,9 +483,11 @@ export const emptyFold = (): FetchFold => ({
 });
 
 /**
- * Loader-private (app_meta `intervals:<source>`): the last start per spec and
- * variant, and per spec the shortest gap between two starts of one variant in
- * each UTC hour, for the last 25 hours. Health publishes only the minimum per
+ * Loader-private (app_meta `intervals:<source>`, only for a source the registry
+ * knows): the last start per spec and variant, and per spec the shortest gap
+ * between two starts of one variant in each UTC hour, both for the last 25
+ * hours before the newest start (a variant that stopped is forgotten, so the
+ * state stays bounded; review SR-4). Health publishes only the minimum per
  * spec over the last 24 hours (P5a; the CH-1 10-minute rule of BAFU).
  */
 export type Intervals = { last: Record<string, number>; hours: Record<string, Record<string, number>> };
@@ -516,12 +518,14 @@ export function foldIntervals(state: Intervals, starts: FetchFold['starts']): In
     if (kept.length === 0) delete hours[spec];
     else hours[spec] = Object.fromEntries(kept);
   }
+  for (const [key, at] of Object.entries(last)) if (at <= newest - 25 * HOUR_MS) delete last[key];
   return { last, hours };
 }
 
 export async function applyFetchHealth(tx: Tx, source: string, f: FetchFold): Promise<void> {
-  // A source the registry does not know has no health row: the manifest is data, not a registry.
-  await sql`
+  // A source the registry does not know has no health row and no interval state: the manifest is data, not a
+  // registry (review SR-4).
+  const { rows: known } = await sql`
     INSERT INTO source_health AS h (source_id, last_fetch_ok, consecutive_failures, last_new_data, newest_ts)
     SELECT s.id, ${f.lastOk}::timestamptz, ${f.failures}, ${f.lastNewData}::timestamptz, ${f.newestTs}::timestamptz
     FROM source s WHERE s.id = ${source}
@@ -531,8 +535,9 @@ export async function applyFetchHealth(tx: Tx, source: string, f: FetchFold): Pr
                                   ELSE h.consecutive_failures + EXCLUDED.consecutive_failures END,
       last_new_data = greatest(h.last_new_data, EXCLUDED.last_new_data),
       newest_ts = greatest(h.newest_ts, EXCLUDED.newest_ts),
-      updated_at = now()`.execute(tx);
-  if (f.starts.length > 0) {
+      updated_at = now()
+    RETURNING h.source_id`.execute(tx);
+  if (known.length > 0 && f.starts.length > 0) {
     const key = `intervals:${source}`;
     const state = (await readMeta<Intervals>(tx, key)) ?? { last: {}, hours: {} };
     await writeMeta(tx, key, foldIntervals(state, f.starts));
