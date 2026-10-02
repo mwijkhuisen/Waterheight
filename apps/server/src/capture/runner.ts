@@ -90,7 +90,7 @@ export type RunOptions = {
   window?: { from: Date; to: Date };
   /** Pause between two requests (seeds; LU-2 staggering), overriding the spec's. */
   spaceMs?: number;
-  /** Epoch ms after which no new request starts. */
+  /** Epoch ms from which no new request starts (at the deadline itself none does, as the seed's hour gate). */
   deadline?: number;
   /** Cap on stage-2 requests (default: the spec's max_expand). */
   maxExpand?: number;
@@ -253,7 +253,7 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     const item = !root && !expandable;
     const page = !root && expandable;
     if (i > 0 && spaceMs > 0) await deps.sleep(spaceMs);
-    if (opts.deadline !== undefined && deps.now().getTime() > opts.deadline) {
+    if (opts.deadline !== undefined && deps.now().getTime() >= opts.deadline) {
       // Out of time: the remaining requests of this run are skipped, not queued.
       for (let j = i; j < queue.length; j += 1) if (!opts.seed) deps.counters.record(day, spec.source, 'other');
       summary.transient = true;

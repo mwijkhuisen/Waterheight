@@ -97,7 +97,7 @@ describe('golden files (synthetic pages, generated values)', () => {
     expect(read('lu-4-page-decoy.synthetic')).toEqual(read('lu-4-page-normal.synthetic'));
   });
 
-  it('an impossible service date (01.111996, Heiderscheidergrund): valid_from null, the zero kept, bad_date counted', () => {
+  it('an impossible service date (99.999999, at Heiderscheidergrund): valid_from null, the zero kept, bad_date counted', () => {
     const out = run('lu-4-page-bad-date.synthetic', 'heiderscheidergrund');
     expect(out).toEqual(golden('lu-4-page-bad-date.synthetic', out));
     expect(out.record.zero).toEqual({ value_m: 317.52, datum: 'NG95', valid_from: null });
@@ -108,7 +108,7 @@ describe('golden files (synthetic pages, generated values)', () => {
     expect(out.record.position).toEqual({ crs: 'EPSG:2169', e: 57234, n: 105891, from: 'page' });
   });
 
-  it("Hesperange's easting 786023 is no LUREF coordinate: the position is the LU-6 point of lu.age.hesperange", () => {
+  it("an easting such as Hesperange's (999999 here) is no LUREF coordinate: the position is the LU-6 point of lu.age.hesperange", () => {
     const out = run('lu-4-page-hesperange.synthetic', 'hesperange');
     expect(out).toEqual(golden('lu-4-page-hesperange.synthetic', out));
     const point = lu1.find((s) => s.id === 'lu.age.hesperange');
@@ -226,14 +226,14 @@ describe('rules (synthetic)', () => {
   });
 
   it('zeroScale: metres on NG95 with a decimal point or comma; anything else is bad_zero', () => {
-    const zero = (s: string) => norm({ zeroScale: s, serviceDate: '02.01.2012' });
-    expect(zero('185.41 m NN').record.zero).toEqual({ value_m: 185.41, datum: 'NG95', valid_from: '2012-01-02' });
-    expect(zero(' 185,41 m NN ').record.zero?.value_m).toBe(185.41);
-    expect(zero('185.41m').record.zero?.value_m).toBe(185.41);
+    const zero = (s: string) => norm({ zeroScale: s, serviceDate: '02.01.2099' });
+    expect(zero('999.99 m NN').record.zero).toEqual({ value_m: 999.99, datum: 'NG95', valid_from: '2099-01-02' });
+    expect(zero(' 999,99 m NN ').record.zero?.value_m).toBe(999.99);
+    expect(zero('999.99m').record.zero?.value_m).toBe(999.99);
     expect(zero('223 M nn').record.zero?.value_m).toBe(223);
     expect(zero('').record).toMatchObject({ zero: null });
     expect(zero('').dropped).toEqual({ unknown_hq: 1, undefined_hq: 1 });
-    for (const bad of ['185.41', '185.41 cm', '185.41 m NG', '0 m NN', '1500 m NN', '-3 m NN', '1.2.3 m NN', 'abc']) {
+    for (const bad of ['999.99', '999.99 cm', '999.99 m NG', '0 m NN', '1500 m NN', '-3 m NN', '1.2.3 m NN', 'abc']) {
       const out = zero(bad);
       expect([bad, out.record.zero]).toEqual([bad, null]);
       expect([bad, out.dropped.bad_zero]).toEqual([bad, 1]);
@@ -241,8 +241,8 @@ describe('rules (synthetic)', () => {
   });
 
   it('zeroScale as AGE writes it (2026-10-02): a decimal comma and a trailing dot; `m NN.` alone is no zero', () => {
-    const zero = (s: string) => norm({ zeroScale: s, serviceDate: '02.01.2012' });
-    expect(zero('185,41 m NN.').record.zero).toMatchObject({ value_m: 185.41, datum: 'NG95' });
+    const zero = (s: string) => norm({ zeroScale: s, serviceDate: '02.01.2099' });
+    expect(zero('999,99 m NN.').record.zero).toMatchObject({ value_m: 999.99, datum: 'NG95' });
     for (const none of ['m NN.', 'm NN']) {
       const out = zero(none);
       expect([none, out.record.zero, out.dropped.zero_missing, out.dropped.bad_zero]).toEqual([
@@ -266,10 +266,10 @@ describe('rules (synthetic)', () => {
       ['14.03.2011', '2011-03-14'],
       ['29.02.2024', '2024-02-29'],
       ['31.12.1999', '1999-12-31'],
-      [' 02.01.2012 ', '2012-01-02'],
+      [' 02.01.2099 ', '2099-01-02'],
     ] as const)
       expect([text, from(text).record.zero?.valid_from]).toEqual([text, iso]);
-    for (const bad of ['01.111996', '29.02.2023', '31.04.2020', '00.01.2020', '1.1.2020', '2012-01-02', '15.13.2020'])
+    for (const bad of ['99.999999', '29.02.2023', '31.04.2020', '00.01.2020', '1.1.2020', '2099-01-02', '15.13.2020'])
       expect([bad, from(bad).record.zero?.valid_from, from(bad).dropped.bad_date]).toEqual([bad, null, 1]);
     expect(from('').record.zero?.valid_from).toBeNull();
     expect(from('').dropped.bad_date).toBeUndefined();
@@ -302,7 +302,7 @@ describe('rules (synthetic)', () => {
     expect(at('110000 140000').record.position).toMatchObject({ from: 'page' });
     const lu6 = positions.get('mersch');
     expect(lu6).toBeDefined();
-    for (const text of ['44999 93410', '72155 140001', '786023 76234', '72155 54999', '0 0'])
+    for (const text of ['44999 93410', '72155 140001', '999999 76234', '72155 54999', '0 0'])
       expect([text, at(text).record.position, at(text).dropped]).toEqual([
         text,
         { ...lu6, from: 'lu-6' },
@@ -312,8 +312,8 @@ describe('rules (synthetic)', () => {
     expect(at('somewhere').dropped.bad_coordinates).toBe(1);
     expect(at('somewhere').record.position).toMatchObject({ from: 'lu-6' });
     expect(positions.has('perl')).toBe(false);
-    expect(at('786023 76234', 'perl').record.position).toBeNull();
-    expect(at('786023 76234', 'perl').dropped.coordinates_from_lu6).toBeUndefined();
+    expect(at('999999 76234', 'perl').record.position).toBeNull();
+    expect(at('999999 76234', 'perl').dropped.coordinates_from_lu6).toBeUndefined();
     expect(at('', 'perl').record.position).toBeNull();
     expect(at('').record.position).toMatchObject({ from: 'lu-6' });
   });
@@ -468,19 +468,19 @@ describe('property and fuzz', () => {
       waterCourse: str(),
       basinVersion: str(),
       zeroScale: fc.oneof(
-        fc.constantFrom('185.41 m NN', '12,5 m', '0 m NN', ''),
+        fc.constantFrom('999.99 m NN', '12,5 m', '0 m NN', ''),
         str(),
         fc.double({ min: -50, max: 2000 }).map((d) => `${d} m NN`),
       ),
       pk: fc.oneof(fc.constantFrom('27,4 km', '3', ''), str()),
       coordinates: fc.oneof(
-        fc.constantFrom('E 72155 / N 93410', '786023 76234', ''),
+        fc.constantFrom('E 72155 / N 93410', '999999 76234', ''),
         str(),
         fc.tuple(number, number).map(([e, n]) => `${e * 7} ${n * 7}`),
       ),
       repTel: str(),
       serviceDate: fc.oneof(
-        fc.constantFrom('14.03.2011', '01.111996', ''),
+        fc.constantFrom('14.03.2011', '99.999999', ''),
         str(),
         fc
           .tuple(fc.integer({ min: 0, max: 40 }), fc.integer({ min: 0, max: 14 }), fc.integer({ min: 1700, max: 2300 }))

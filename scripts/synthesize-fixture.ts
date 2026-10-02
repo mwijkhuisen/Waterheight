@@ -12,17 +12,19 @@
 //     <spec>-<suffix>.synthetic.raw and .synthetic.meta.json into the adapter's fixtures folder.
 //
 // Policy (deterministic, seeded; one table per source in VERBATIM):
-//   kept     keys, structure, array lengths up to --keep (a KiWIS table: its header row plus --keep rows),
-//            booleans, nulls, the numbers -1 and 0, 9999.0 (number or string), KiWIS quality codes, empty strings,
-//            and the identifiers and codes the registry itself publishes (VERBATIM, by key or table column): a kept
-//            key or column keeps a string or an integer, never prose and never a value with a unit (refused); an
-//            object or array under it is generated like any other;
+//   kept     keys (names of letters only: any other key is refused), structure, array lengths up to --keep (a KiWIS
+//            table: its header row of returnfield names plus --keep rows; a first row of anything else is no
+//            header), booleans, nulls, the numbers -1 and 0, 9999.0 (number or string), KiWIS quality codes of SPW's
+//            table, empty strings, and the identifiers and codes the registry itself publishes (VERBATIM, by key or
+//            table column, each with its one format): a string or an integer under a kept key or column that is not
+//            in its format is refused; an object or array under it is generated like any other;
 //   shifted  every ISO timestamp by one constant whole number of days (1,000 to 2,000), offset suffix and fraction
 //            format kept, so the time grid, the order and the offsets stay as they were;
 //   random   every other number (magnitude, integer or decimal kept), the digits of a string that is a number with
-//            optional unit text ("185.41 m NN"), and every other string becomes synthetic-<n>; in a text file every
-//            data cell with a digit gets new digits (the `Datum` column new dates), and any other non-empty cell is
-//            refused.
+//            at most a unit ("999.99 m NN"), and every other string becomes synthetic-<n>; in a text file every
+//            comment line and the station line are generated whole, the first line with cells must be the `Datum`
+//            header (kept), every data cell that is a number gets new digits (the `Datum` column new dates), and any
+//            other non-empty cell is refused.
 // Both forms end with the leak scan (P5c review SR-2): a leaf of the source outside the kept places, a string of at
 // least four characters anywhere in the output outside them, or a number (or numeric string) of at least two
 // significant digits other than -1, 0 and 9999 at its own place, is refused, and so are output bytes equal to the
@@ -47,35 +49,79 @@ export class Refusal extends Error {
   }
 }
 
-/** Identifiers and enumerations the registry itself publishes, by JSON key or KiWIS table column name. */
-export const VERBATIM: Readonly<Record<string, readonly string[]>> = {
-  'BE-3': [
-    ...'ts_id station_no site_no stationparameter_no stationparameter_name parametertype_name ts_unitsymbol ts_path'.split(
-      ' ',
-    ),
-    ...'ts_name ts_shortname columns rows timezone ts_spacing station_gauge_datum_unit station_georefsystem'.split(' '),
-    ...'station_timezone station_utcoffset'.split(' '),
-  ],
-  'LU-2': ['ts_path', 'ts_unitsymbol', 'parametertype_name', 'columns', 'rows'],
-  'LU-3': [],
+/**
+ * The one format each kept value holds (P5c review R2-SR-3), measured on the owner export of 2026-10-02 (99
+ * payloads): a string or an integer under a kept key or table column stays only when it matches, and any other
+ * string or integer there is refused. Only ids, counts and the UTC offset take digits alone; a code takes digits
+ * only where its real form has them (a `ts_path` station segment, `15m.Cmd.P`, `HQ100`, `h24`, `Lambert 72`).
+ */
+const ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$/;
+const COUNT = /^\d{1,7}$/;
+const PARAMETER = /^[A-Za-z]{1,8}(?:_[A-Za-z]{1,8}){0,2}$/;
+const UNIT = /^(?:m|cm|mm|m³\/s|m3\/s|cumec|l\/s)$/;
+const COLUMNS = /^Timestamp,Value(?:,Quality Code)?$/;
+const TS_PATH = /^\w{1,40}\/\w{1,40}\/\w{1,40}\/\d{0,2}[A-Za-z][\w-]{0,39}(?:\.[A-Za-z][\w-]{0,39}){0,6}$/;
+/** An AGE page id or file name: letters, `-` and `/` (`Name-/-Name`), no digits. */
+const AGE_NAME = /^\p{L}[\p{L}_/-]{0,99}$/u;
+
+/** Identifiers and enumerations the registry itself publishes, by JSON key or KiWIS table column, with their format. */
+export const VERBATIM: Readonly<Record<string, Readonly<Record<string, RegExp>>>> = {
+  'BE-3': {
+    ts_id: /^\d{1,12}$/,
+    station_no: ID,
+    site_no: ID,
+    stationparameter_no: PARAMETER,
+    ts_unitsymbol: UNIT,
+    ts_path: TS_PATH,
+    ts_name: /^\d{1,2}[a-z]?-[A-Za-z]{1,20}(?: [a-z]{1,20})?(?:\.[A-Za-z]{1,20}){0,4}$/,
+    ts_shortname: /^[A-Za-z]{1,20}(?:[.-][A-Za-z]{1,20}){0,6}$/,
+    columns: COLUMNS,
+    rows: COUNT,
+    station_gauge_datum_unit: /^(?:[A-Z]{3}|---)$/,
+    station_georefsystem: /^Lambert (?:72|2008)$/,
+    station_timezone: /^\(UTC[+-]\d{2}:\d{2}\)(?: [A-Za-z]{1,20},?){1,8}$/,
+    station_utcoffset: /^[+-]?(?:0|60|120)$/,
+  },
+  'LU-2': { ts_path: TS_PATH, ts_unitsymbol: UNIT, parametertype_name: PARAMETER, columns: COLUMNS, rows: COUNT },
+  'LU-3': {},
   // Not `label`: AGE writes the vigilance level into it ("Cote de vigilance <colour> <n> cm"), a threshold value (P5c
-  // review CR-1). Every key here is an identifier or a code, never a text that can carry a measured or set value.
-  'LU-4':
-    'id jsonFile forecastsLimit forecastsFileName forecastsCalcul stationPath legend operator serviceStatus'.split(' '),
-  'DE-2': [],
-  'DE-3': [],
+  // review CR-1). Not `operator`, `serviceStatus` or `forecastsCalcul`: free text, which no parser needs as published
+  // (R2-SR-3).
+  'LU-4': {
+    id: AGE_NAME,
+    jsonFile: /^(?:\/[a-z]{1,40}){0,8}\/?\p{L}[\p{L}_-]{0,99}\.json$/u,
+    forecastsLimit: /^h\d{1,3}$/,
+    forecastsFileName: AGE_NAME,
+    stationPath: /^https:\/\/[a-z.]{1,60}(?:\/[a-z]{1,40}){0,8}\.html$/,
+    legend: /^HQ\d{1,4}$/,
+  },
+  'DE-2': {},
+  'DE-3': {},
 };
+
+/** A KiWIS `Quality Code` cell keeps only a code of SPW's `getQualityCodes` (catalogue §2.4) or -1 "missing". */
+const QUALITY_CODE = /^(?:-1|0|40|80|120|16[0-5]|200|205|210|253)$/;
+/** A KiWIS table's header cell: a returnfield name, never a number, a time or a value (P5c review R2-SR-2). */
+export const HEADER_CELL = /^[A-Za-z][A-Za-z0-9_ ]{0,63}$/;
+/**
+ * An object key: words of letters, `_` and `-` with single inner spaces, no digit (P5c review R2-SR-4); any other key
+ * is refused unless it is in KEYS_ALLOWED (the empty name of one LU-4 `logosHeaderPath` entry).
+ */
+export const KEY = /^[A-Za-z_-]{1,64}(?: [A-Za-z_-]{1,64}){0,7}$/;
+export const KEYS_ALLOWED: ReadonlySet<string> = new Set(['']);
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?$/;
 const NUMBER = /^-?\d+(?:\.\d+)?$/;
-const NUMBER_TEXT = /^[-+]?\d+(?:[.,]\d+)*(?: \D{1,20})?$/;
+/** The units a number may carry in a generated string or text cell (`999.99 m NN.`, `99,99 km`); other words are not. */
+const UNITS = String.raw`(?:cm|mm|m|km|km²|m NN|m NHN|m³/s|m3/s|l/s|%)\.?`;
+const NUMBER_TEXT = new RegExp(String.raw`^[-+]?\d+(?:[.,]\d+)*(?: ${UNITS})?$`);
 const KEPT_NUMBERS = new Set([-1, 0, 9999]);
 const DAY_MS = 86_400_000;
-/** A value with a unit ("321 cm", "4,5 m³/s"), not a code that holds digits ("15m.Cmd", "PT15M"): never kept. */
+/** A value with a unit ("999 cm", "9,9 m³/s"), not a code that holds digits ("15m.Cmd", "PT15M"): never kept. */
 export const VALUE_WITH_UNIT =
   /(?<![\p{L}\d.,/_])\d+(?:[.,]\d+)?\s*(?:cm|mm|m|m³\/s|m3\/s|l\/s|%)(?![\p{L}\d]|\.[\p{L}\d])/iu;
 
-type Ctx = { rnd: () => number; days: number; names: number; keep: number; verbatim: ReadonlySet<string> };
+type Ctx = { rnd: () => number; days: number; names: number; keep: number; verbatim: ReadonlyMap<string, RegExp> };
 
 const seedOf = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest().readUInt32BE(0);
 
@@ -89,7 +135,7 @@ function newCtx(source: string, keep: number, body: Uint8Array): Ctx {
     return seed / 2 ** 32;
   };
   const days = 1000 + (seedOf(`days:${source}`) % 1001);
-  return { rnd, days, names: 0, keep, verbatim: new Set(VERBATIM[source] ?? []) };
+  return { rnd, days, names: 0, keep, verbatim: new Map(Object.entries(VERBATIM[source] ?? {})) };
 }
 
 const significant = (n: number) =>
@@ -166,22 +212,40 @@ function fakeCoordinate(c: Ctx, key: string, v: unknown): unknown {
   return typeof v === 'string' ? String(fake) : fake;
 }
 
-const keptColumn = (c: Ctx, col: unknown) =>
-  typeof col === 'string' && (c.verbatim.has(col) || col.trim().toLowerCase() === 'quality code');
+/** The format of a kept table column (a `Quality Code` column of any source too), or undefined. */
+const columnFormat = (c: Ctx, col: unknown) =>
+  typeof col !== 'string'
+    ? undefined
+    : col.trim().toLowerCase() === 'quality code'
+      ? QUALITY_CODE
+      : c.verbatim.get(col);
 
 /**
- * Whether a kept key or column keeps this value: a string or an integer identifier only, never a value with a unit
- * (refused); anything else under it is generated like any other value (P5c review SR-2).
+ * Whether the value under a kept key or column (`format`) stays: a string or an integer in its one format (P5c review
+ * R2-SR-3). Any other string or integer there is refused; an empty string, null, a decimal, an object or an array
+ * is generated like any other value (P5c review SR-2).
  */
-function keeps(x: unknown): boolean {
-  if (typeof x === 'string' && VALUE_WITH_UNIT.test(x))
-    throw new Refusal(1, 'a kept key or column holds a value with a unit, not an identifier or a code');
-  return typeof x === 'string' || Number.isInteger(x);
+function keeps(format: RegExp | undefined, x: unknown): boolean {
+  if (format === undefined || x === '' || !(typeof x === 'string' || Number.isInteger(x))) return false;
+  if (format.test(String(x)) && !VALUE_WITH_UNIT.test(String(x))) return true;
+  throw new Refusal(1, 'a kept key or column holds a value outside its format');
 }
 
-/** A KiWIS table: a header row of strings, then rows (the header is kept besides the --keep rows). */
+/** An object key as it is, or a refusal: a key is copied, so it may hold no digit and no other text (R2-SR-4). */
+function checkedKey(k: string): string {
+  if (KEY.test(k) || KEYS_ALLOWED.has(k)) return k;
+  throw new Refusal(1, 'an object key is not a name of letters');
+}
+
+/**
+ * A KiWIS table: a header row of returnfield names, then rows (the header is kept besides the --keep rows). An array
+ * whose first row holds anything else (numbers, times, values) is no table and is generated whole (R2-SR-2).
+ */
 const isTable = (v: unknown[]): v is [string[], ...unknown[]] =>
-  v.length > 1 && Array.isArray(v[0]) && v[0].length > 0 && v[0].every((x) => typeof x === 'string');
+  v.length > 1 &&
+  Array.isArray(v[0]) &&
+  v[0].length > 0 &&
+  v[0].every((x) => typeof x === 'string' && HEADER_CELL.test(x));
 /** A KiWIS getTimeseriesValues item (or an AGE JSON): `data` rows follow the comma list of `columns`. */
 const dataColumns = (o: Record<string, unknown>) =>
   typeof o.columns === 'string' && Array.isArray(o.data) ? o.columns.split(',') : null;
@@ -192,7 +256,7 @@ const scrambleRows = (c: Ctx, rows: unknown[], cols: unknown[]) =>
     Array.isArray(r)
       ? r.map((x, i) => {
           const col = cols[i];
-          if (keptColumn(c, col) && keeps(x)) return x;
+          if (keeps(columnFormat(c, col), x)) return x;
           return typeof col === 'string' && COORDINATE.test(col) ? fakeCoordinate(c, col, x) : scramble(c, x);
         })
       : scramble(c, r),
@@ -208,8 +272,8 @@ function scramble(c: Ctx, v: unknown): unknown {
     const cols = dataColumns(o);
     return Object.fromEntries(
       Object.entries(o).map(([k, x]) => [
-        k,
-        c.verbatim.has(k) && keeps(x)
+        checkedKey(k),
+        keeps(c.verbatim.get(k), x)
           ? x
           : COORDINATE.test(k)
             ? fakeCoordinate(c, k, x)
@@ -224,14 +288,14 @@ function scramble(c: Ctx, v: unknown): unknown {
   return v;
 }
 
-/** Every leaf the policy does not keep (kept keys and columns, a table's header row, quality codes), by leafKey. */
+/** Every leaf the policy does not keep (kept keys and columns, a table's header of names, quality codes), by leafKey. */
 function leaves(c: Ctx, v: unknown, path = '', acc = new Set<string>()): Set<string> {
   const rows = (rs: unknown[], cols: unknown[], at: string, from: number) => {
     for (const [n, r] of rs.entries()) {
       if (!Array.isArray(r)) leaves(c, r, `${at}/${n + from}`, acc);
       else
         for (const [i, x] of r.entries())
-          if (!(keptColumn(c, cols[i]) && keeps(x))) leaves(c, x, `${at}/${n + from}/${i}`, acc);
+          if (!keeps(columnFormat(c, cols[i]), x)) leaves(c, x, `${at}/${n + from}/${i}`, acc);
     }
   };
   if (Array.isArray(v)) {
@@ -241,7 +305,7 @@ function leaves(c: Ctx, v: unknown, path = '', acc = new Set<string>()): Set<str
     const o = v as Record<string, unknown>;
     const cols = dataColumns(o);
     for (const [k, x] of Object.entries(o)) {
-      if (c.verbatim.has(k) && keeps(x)) continue;
+      if (keeps(c.verbatim.get(k), x)) continue;
       if (cols !== null && k === 'data') rows(x as unknown[], cols, `${path}/data`, 0);
       else leaves(c, x, `${path}/${k}`, acc);
     }
@@ -252,11 +316,20 @@ function leaves(c: Ctx, v: unknown, path = '', acc = new Set<string>()): Set<str
   return acc;
 }
 
-/** The cells of a text file's data lines, by leafKey (comment lines and the `Datum;` header are kept by rule). */
+/**
+ * The header of a BfG text file (catalogue §2.2, DE-3: `Datum;5%;10%;…;95%`): the date column, then percentiles or
+ * names. It is kept, and only as the first line that holds cells (P5c review R2-SR-5).
+ */
+const TEXT_HEADER = /^Datum(?:;(?:\d{1,2}%|[A-Z][A-Za-z]{0,31}))+$/;
+/** A data cell that is a number, with at most an allowed unit after it (`1.234,5`, `1e3`, `12 cm`). */
+const TEXT_NUMBER = new RegExp(String.raw`^\s*[-+]?\d+(?:[.,]\d+)*(?:e[-+]?\d+)?(?: ?${UNITS})?\s*$`, 'i');
+const CR = (line: string) => (line.endsWith('\r') ? '\r' : '');
+
+/** The cells of a text file's lines, by leafKey (the `Datum` header aside: it is kept by rule). */
 function textLeaves(text: string): Set<string> {
   const acc = new Set<string>();
   for (const [l, line] of text.split('\n').entries())
-    if (!line.startsWith('#') && !/^Datum;/.test(line))
+    if (!TEXT_HEADER.test(line.replace(/\r$/, '')))
       for (const [i, cell] of line.split(';').entries()) {
         const k = leafKey(cell, `/${l}/${i}`);
         if (k !== null) acc.add(k);
@@ -265,33 +338,35 @@ function textLeaves(text: string): Set<string> {
 }
 
 /**
- * Text files (BfG CSV): comment lines keep their words with dates and numbers replaced; in the data lines every cell
- * with a digit is generated (the dates of the `Datum` column the header declares by a clock), an empty one stays,
- * and any other cell is refused, never kept (P5c review SR-2).
+ * Text files (BfG CSV; P5c review R2-SR-5): a comment line is generated whole; a line without cells (the station
+ * line) is generated; the first line with cells must be the `Datum` header and is kept; in the data lines after it
+ * every cell that is a number (with at most an allowed unit) gets new digits, the dates of the `Datum` column come
+ * from a clock, an empty cell stays, and any other cell (a second header among them) is refused, never kept.
  */
 function scrambleText(c: Ctx, text: string): string {
   let clock = Date.parse('2030-01-01T00:00:00Z');
-  let dated = false;
+  let header = false;
   return text
     .split('\n')
     .map((line) => {
-      if (line.startsWith('#'))
-        return line.replace(/\d{4}-\d{2}-\d{2}/g, '2030-01-01').replace(/\d+/g, (d) => '9'.repeat(d.length));
-      if (/^Datum;/.test(line)) {
-        dated = true;
+      if (line.startsWith('#')) return `# ${fakeName(c)}${CR(line)}`;
+      if (line.trim() === '') return line;
+      if (!line.includes(';')) return `${fakeString(c, line.trim())}${CR(line)}`;
+      if (!header) {
+        if (!TEXT_HEADER.test(line.replace(/\r$/, '')))
+          throw new Refusal(1, 'the first line of cells is not the Datum header');
+        header = true;
         return line;
       }
-      if (line.trim() === '') return line;
-      if (!line.includes(';')) return `${fakeString(c, line.trim())}\r`.replace(/\r\r$/, '\r');
       return line
         .split(';')
         .map((cell, i) => {
-          if (dated && i === 0 && /^\d{2}\.\d{2}\.\d{4}/.test(cell)) {
+          if (i === 0 && /^\d{2}\.\d{2}\.\d{4}/.test(cell)) {
             clock += DAY_MS;
             const d = new Date(clock);
             return `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}.${d.getUTCFullYear()} 00:00`;
           }
-          if (/\d/.test(cell)) return fakeDigits(c, cell);
+          if (TEXT_NUMBER.test(cell)) return fakeDigits(c, cell);
           if (cell.trim() === '') return cell;
           throw new Refusal(1, 'a text cell is neither a number, a date nor empty');
         })

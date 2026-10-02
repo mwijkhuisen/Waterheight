@@ -106,6 +106,29 @@ describe('dataToJson', () => {
       expect(code(() => dataToJson(`<script><!--<script></script>${el()}`))).toBe('html_tag');
     });
 
+    it('`--!>` ends neither the escaped nor the double-escaped state of a script (it ends only a comment)', () => {
+      // HTML tokenizer: in the "script data escaped dash dash state" (and the double-escaped one) only `>` returns to
+      // the script data state; `!` goes back to the (double) escaped state. So in both pages the first `</script>`
+      // only undoes the double escape and the decoy is script text. Reading `--!>` as an end would end the script at
+      // the first `</script>` and take the decoy: as the page without the real element, `html_tag_count` with it.
+      const decoy = `<cmp-dashboard-station data-to-json="${EVIL}"></cmp-dashboard-station>`;
+      const escaped = `<script><!-- --!> <script> </script> ${decoy} </script>`;
+      const doubleEscaped = `<script><!--<script> --!> </script> ${decoy} </script>`;
+      for (const script of [escaped, doubleEscaped]) {
+        expect(dataToJson(script + el())).toEqual(OUT);
+        expect(code(() => dataToJson(script))).toBe('html_tag');
+      }
+    });
+
+    it('a `<![CDATA[` outside comments and raw text refuses the page: in inline SVG a browser reads it as text', () => {
+      const cdata = `<svg><![CDATA[ > <cmp-dashboard-station data-to-json="${EVIL}"> ]]></svg>`;
+      expect(code(() => dataToJson(cdata))).toBe('html_cdata');
+      expect(code(() => dataToJson(page(cdata)))).toBe('html_cdata');
+      expect(code(() => dataToJson(page('', cdata)))).toBe('html_cdata');
+      // Inside a comment or a script it is text like any other.
+      expect(dataToJson(page('<!-- <![CDATA[ x ]]> --><script><![CDATA[ x ]]></script>'))).toEqual(OUT);
+    });
+
     it('`<!--!>` and `<!---!>` do not close a comment, `<!----!>` does', () => {
       expect(code(() => dataToJson(`<!--!>${el()}`))).toBe('html_tag');
       expect(code(() => dataToJson(`<!---!>${el()}`))).toBe('html_tag');
@@ -166,6 +189,9 @@ describe('dataToJson', () => {
     it('two elements: html_tag_count', () => {
       expect(code(() => dataToJson(el() + el()))).toBe('html_tag_count');
       expect(code(() => dataToJson(`${el()}<cmp-dashboard-station>`))).toBe('html_tag_count');
+      // A start tag cut off at the end of the page: a browser drops it, the scan counts it and fails closed (R2-SR-7).
+      expect(code(() => dataToJson(`${el()}<cmp-dashboard-station data-to-json="{}`))).toBe('html_tag_count');
+      expect(code(() => dataToJson('<cmp-dashboard-station data-to-json="{}'))).toBe('html_attr');
     });
 
     it('an unterminated tag or quote, a value over 256 KiB, too many attributes: html_attr', () => {

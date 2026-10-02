@@ -2493,7 +2493,8 @@ describe('owner sources and owner stations (P5c)', () => {
     expect(list).not.toContain('owner sources');
     expect(list).not.toContain('owner stations');
     expect(list).not.toContain('owner leak');
-    expect(ci).toContain("grep -qE '^PASS owner leak '");
+    for (const name of ['owner leak', 'owner sources', 'owner stations'])
+      expect(ci).toContain(`grep -qE '^PASS ${name} '`);
   });
 });
 

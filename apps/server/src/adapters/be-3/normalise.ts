@@ -30,9 +30,9 @@ import type { LayerItem, Table, ValuesItem } from './parse.ts';
 //    Habs_sonde metres DNG (= TAW), both ×100 to cm, Q and QADM m³/s. The payload's `ts_unitsymbol` must equal the
 //    registry's native unit (`m3/s` and `cumec` mean `m³/s`), else every value of that series is withheld
 //    (`unit_mismatch`, withheld and alerted), and so is a values item that states no unit (every call asks for it).
-//    Nothing is listed in `unitMismatch`: the loader keeps one such list per source, and
-//    the layers and the catch-up's calls state disjoint sets of series, so each payload would erase the others'
-//    entries; every item carries its own unit;
+//    Nothing is listed in `unitMismatch`: the loader keeps one such list per source, and the layers and the
+//    catch-up's calls state disjoint sets of series, so each payload would erase the others' entries; every item
+//    carries its own unit;
 //  - quality: a value layer states none, and live data is quality 200, "raw". A values row says it in its `Quality
 //    Code` column (found by name): 200 → raw, 0…199 → validated, 205 and 210 "douteux" → raw + provider-suspect,
 //    253 "valeurs fantômes" → dropped (`phantom`), -1 "missing" → dropped (`sentinel`), any other code is withheld

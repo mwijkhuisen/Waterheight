@@ -325,6 +325,8 @@ jobs:
           fi
           grep -qE '^PASS headers / ' "$RUNNER_TEMP/verify-prod.txt"
           grep -qE '^PASS owner leak ' "$RUNNER_TEMP/verify-prod.txt"
+          grep -qE '^PASS owner sources ' "$RUNNER_TEMP/verify-prod.txt"
+          grep -qE '^PASS owner stations ' "$RUNNER_TEMP/verify-prod.txt"
           # "health" itself (the next word is the separator, not "params" or "DE-1").
           grep -qE '^PASS health [^A-Za-z]' "$RUNNER_TEMP/verify-prod.txt"
           grep -qE '^PASS health params ' "$RUNNER_TEMP/verify-prod.txt"

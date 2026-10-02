@@ -5,18 +5,18 @@ import type { Page } from './parse.ts';
 
 // LU-4 AGE station page → the station's reference record (catalogue §2.6; owner audience, personal use: values
 // are kept as published, nothing is rounded or converted). Declared here, never inferred:
-//  - time: a page has no observation timestamps (no `TIME`, as DE-8 and LU-6); its one date, `serviceDate` (`dd.mm.yyyy`), is the
-//    date from which the gauge zero holds. An impossible date (Heiderscheidergrund's `01.111996`) is `valid_from` null,
-//    counted `bad_date`; the zero itself is kept;
+//  - time: a page has no observation timestamps (no `TIME`, as DE-8 and LU-6); its one date, `serviceDate`
+//    (`dd.mm.yyyy`), is the date from which the gauge zero holds. An impossible date (Heiderscheidergrund's, of the
+//    form `dd.dddddd`) is `valid_from` null, counted `bad_date`; the zero itself is kept;
 //  - levels: `levelsMax` is yellow, orange, red by position, in cm; 0 means not defined → null (almost everywhere
 //    the yellow one);
 //  - HQ: `newVigilanceList` lines whose legend names HQ2, HQ5, HQ10, HQ20, HQ50 or HQ100, as water levels in cm; a
 //    legend that names none is `unknown_hq`, a value 0 is `undefined_hq`, a kind twice keeps its first (`duplicate_hq`);
-//  - zero: `zeroScale` is metres on NG95 ("185.41 m NN", the tie to NAP), the datum declared here; a string that is
+//  - zero: `zeroScale` is metres on NG95 ("999.99 m NN", the tie to NAP), the datum declared here; a string that is
 //    not that (or a value outside 0 … 1000 m) is `bad_zero`;
 //  - river km: `pk`; position: the page's LUREF (EPSG:2169) easting and northing when they lie in Luxembourg
-//    (E 45,000 … 110,000, N 55,000 … 140,000), else the LU-6 point of the station (Hesperange's easting is
-//    `786023`: `coordinates_from_lu6`), else null. A string that is not "E N" is `bad_coordinates`;
+//    (E 45,000 … 110,000, N 55,000 … 140,000), else the LU-6 point of the station (Hesperange's easting has
+//    six digits: `coordinates_from_lu6`), else null. A string that is not "E N" is `bad_coordinates`;
 //  - an empty `zeroScale`, `pk`, `coordinates` or `serviceDate` is a value the page does not state: null, not counted;
 //  - the banner and the operator are untrusted text, trimmed and length-capped, never interpreted.
 // Pure: no I/O. Loading into reference_value is P7a.
@@ -66,7 +66,8 @@ export type Context = {
 export type Normalised = { record: StationReference; dropped: Record<string, number> };
 
 // One anchored pattern per string, bounded quantifiers, decimal comma or point. The forms measured on the 40 pages
-// of 2026-10-02: `185,41 m NN.` (a trailing dot; `m NN.` alone is no zero), `12,83 km`, `73651 E | 98123 N`.
+// of 2026-10-02 (numbers made up): `999,99 m NN.` (a trailing dot; `m NN.` alone is no zero), `99,99 km`,
+// `99999 E | 99999 N`.
 const NUM = String.raw`\d{1,7}(?:[.,]\d{1,3})?`;
 const ZERO = /^(\d{1,4}(?:[.,]\d{1,3})?) ?m(?: ?NN)?\.?$/i;
 const NO_ZERO = /^m ?NN\.?$/i;

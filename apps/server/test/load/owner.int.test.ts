@@ -1,8 +1,11 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareLine, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { FAMILY_ROLES, familyViews, OBS_AT, PUBLIC_ONLY_VIEWS, VIEWS } from '../../src/db/audience.ts';
 import { computeHealth } from '../../src/load/health.ts';
+import { PUBLIC_SCAN_BYTES } from '../../src/load/pipeline.ts';
 import { replay } from '../../src/load/replay.ts';
 import { checkTwins } from '../../src/load/twins.ts';
 import type { LoginRole } from '../db/testdb.ts';
@@ -615,6 +618,26 @@ describe('the loader backlog of public health', { timeout: 60_000 }, () => {
 
       await api.end();
       await publish.end();
+    } finally {
+      await x.close();
+    }
+  });
+
+  it('reads at most PUBLIC_SCAN_BYTES of a file: the unscanned rest of a long owner backlog counts whole, as public (R2-CR-4)', async () => {
+    const x = await harness();
+    try {
+      // Owner lines only, about 1.5 MiB more than the scan reads in its last 1 MiB chunk: written in one append.
+      await x.archive.append(bareLine('LU-4', 'lu-4-pages', new Date('2026-10-02T11:50:00Z'), { status: 304 }));
+      const one = `${JSON.stringify(bareLine('LU-4', 'lu-4-pages', new Date('2026-10-02T11:51:00Z'), { status: 304 }))}\n`;
+      const lines = Math.ceil((PUBLIC_SCAN_BYTES + 2.5 * 1024 * 1024) / Buffer.byteLength(one));
+      appendFileSync(join(x.raw, '_manifest', '2026-10-02.jsonl'), one.repeat(lines));
+      const b = await x.loader({ now: AFTER }).backlog();
+      expect(b.bytes).toBeGreaterThan(PUBLIC_SCAN_BYTES + 2 * 1024 * 1024);
+      // Not 0, as a full scan of owner lines would give: the rest beyond the scan, aged from the file's day.
+      expect(b.public.files).toBe(1);
+      expect(b.public.bytes).toBeGreaterThan(0);
+      expect(b.public.bytes).toBeLessThanOrEqual(b.bytes - PUBLIC_SCAN_BYTES);
+      expect(b.public.age_s).toBe((AFTER.getTime() - Date.parse('2026-10-02T00:00:00Z')) / 1000);
     } finally {
       await x.close();
     }

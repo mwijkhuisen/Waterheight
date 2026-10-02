@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
-import { VALUE_WITH_UNIT, VERBATIM } from '../../../../scripts/synthesize-fixture.ts';
+import { HEADER_CELL, KEY, KEYS_ALLOWED, VALUE_WITH_UNIT, VERBATIM } from '../../../../scripts/synthesize-fixture.ts';
 import { extractDataToJson } from '../../src/http/guards.ts';
 
 // The P5a fixture standard (CLAUDE.md, invariants 9 and 11): every fixture has a
@@ -79,38 +79,41 @@ function ownerFixtureProblems(dir: URL): string[] {
 }
 
 /**
- * Kept (VERBATIM) keys whose values are identifiers or codes that hold digits: ids, station numbers, `ts_path` and the
- * series names built from it, file names, the KiWIS row count, coordinate system, time zone and offset codes, and
- * AGE's forecast horizon codes. Any other kept key holds no run of two digits.
+ * Kept (VERBATIM) keys whose values may hold a digit: ids, station numbers and counts, `ts_path` and the series names
+ * built from it, the KiWIS coordinate system, time zone and offset codes, and AGE's forecast horizon and HQ codes.
+ * Every kept value matches its key's format in VERBATIM, and a value of any other kept key holds no digit at all.
  */
 const KEPT_WITH_DIGITS = new Set([
   'ts_id',
   'station_no',
   'site_no',
-  'stationparameter_no',
   'ts_path',
   'ts_name',
-  'ts_spacing',
   'rows',
   'station_georefsystem',
-  'timezone',
   'station_timezone',
   'station_utcoffset',
-  'id',
-  'jsonFile',
-  'forecastsFileName',
-  'stationPath',
   'forecastsLimit',
   'legend',
 ]);
+/** The key under which keptLeaves yields the cells of a table's header row. */
+const HEADER = '<header>';
 
-/** Every leaf under a kept key or table column of a payload, with that key: what the fixture tool copied as is. */
+/**
+ * Every leaf under a kept key or table column of a payload, with that key, and every cell of a table's header row
+ * (an array whose first element is a non-empty array of strings) under HEADER: what the fixture tool copied as is.
+ */
 function* keptLeaves(v: unknown, kept: ReadonlySet<string>, under: string | null = null): Generator<[string, unknown]> {
   if (Array.isArray(v)) {
     const header =
-      under === null && v.length > 1 && Array.isArray(v[0]) && v[0].every((x) => typeof x === 'string')
+      under === null &&
+      v.length > 1 &&
+      Array.isArray(v[0]) &&
+      v[0].length > 0 &&
+      v[0].every((x) => typeof x === 'string')
         ? (v[0] as string[])
         : null;
+    for (const cell of header ?? []) yield [HEADER, cell];
     for (const [i, x] of v.entries())
       if (header !== null && i > 0 && Array.isArray(x))
         for (const [j, cell] of x.entries()) {
@@ -121,6 +124,16 @@ function* keptLeaves(v: unknown, kept: ReadonlySet<string>, under: string | null
   } else if (v !== null && typeof v === 'object') {
     for (const [k, x] of Object.entries(v)) yield* keptLeaves(x, kept, under ?? (kept.has(k) ? k : null));
   } else if (under !== null) yield [under, v];
+}
+
+/** Every object key of a payload, at any depth. */
+function* keysOf(v: unknown): Generator<string> {
+  if (Array.isArray(v)) for (const x of v) yield* keysOf(x);
+  else if (v !== null && typeof v === 'object')
+    for (const [k, x] of Object.entries(v)) {
+      yield k;
+      yield* keysOf(x);
+    }
 }
 
 const Meta = z.looseObject({
@@ -241,9 +254,11 @@ describe('the fixture standard', () => {
     }
   });
 
-  it('an archive-derived owner fixture keeps under its kept keys no value with a unit and no digits but identifiers and codes (P5c review SR-2)', () => {
+  it('an archive-derived owner fixture keeps under its kept keys only values in their format, header cells of names and keys of letters (P5c review SR-2, R2-SR-2 … R2-SR-4)', () => {
     let fixtures = 0;
     let leaves = 0;
+    let headers = 0;
+    let keys = 0;
     for (const adapter of ownerAdapters)
       for (const f of files(adapter, '.meta.json').filter((x) => meta(x).source_sha256 !== undefined)) {
         const raw = read(f, '.raw');
@@ -254,27 +269,53 @@ describe('the fixture standard', () => {
           doc = extractDataToJson(raw);
         }
         fixtures += 1;
-        for (const [key, v] of keptLeaves(doc, new Set(VERBATIM[meta(f).source] ?? []))) {
+        const formats = VERBATIM[meta(f).source] ?? {};
+        for (const [key, v] of keptLeaves(doc, new Set(Object.keys(formats)))) {
+          if (key === HEADER) {
+            headers += 1;
+            expect([f.name, key, HEADER_CELL.test(String(v))]).toEqual([f.name, key, true]);
+            continue;
+          }
           leaves += 1;
-          const text = typeof v === 'string' || typeof v === 'number' ? String(v) : '';
-          expect([f.name, key, VALUE_WITH_UNIT.test(text)]).toEqual([f.name, key, false]);
-          if (!KEPT_WITH_DIGITS.has(key)) expect([f.name, key, /\d{2}/.test(text)]).toEqual([f.name, key, false]);
+          // An empty string, null or a generated decimal, object or array is no kept value.
+          if (v === '' || !(typeof v === 'string' || Number.isInteger(v))) continue;
+          const text = String(v);
+          expect([f.name, key, formats[key]?.test(text), VALUE_WITH_UNIT.test(text)]).toEqual([
+            f.name,
+            key,
+            true,
+            false,
+          ]);
+          if (!KEPT_WITH_DIGITS.has(key)) expect([f.name, key, /\d/.test(text)]).toEqual([f.name, key, false]);
+        }
+        for (const k of keysOf(doc)) {
+          keys += 1;
+          expect([f.name, KEY.test(k) || KEYS_ALLOWED.has(k)]).toEqual([f.name, true]);
         }
       }
-    // Not vacuous: the 16 archive-derived fixtures of BE-3, LU-2, LU-3 and LU-4, and their kept identifiers.
+    // Not vacuous: the 16 archive-derived fixtures of BE-3, LU-2, LU-3 and LU-4, their kept identifiers, the header
+    // rows of the BE-3 tables (65 and 14 cells) and their keys.
     expect(fixtures).toBeGreaterThanOrEqual(16);
     expect(leaves).toBeGreaterThan(100);
-    // The walk finds kept keys at any depth, kept table columns and everything under a kept key (invented data).
+    expect(headers).toBeGreaterThanOrEqual(79);
+    expect(keys).toBeGreaterThan(1000);
+    // The walk finds kept keys at any depth, kept table columns, header cells and everything under a kept key
+    // (invented data).
     const doc = [
       ['station_no', 'station_name'],
-      ['5902', 'Mijn Station'],
+      ['9999', 'Mijn Station'],
     ];
-    const label = { label: 'Cote de vigilance orange 321 cm', levels: [{ label: 'x' }], value: 3 };
-    expect([...keptLeaves(doc, new Set(['station_no']))]).toEqual([['station_no', '5902']]);
+    const label = { label: 'Cote de vigilance orange 999 cm', levels: [{ label: 'x' }], value: 3 };
+    expect([...keptLeaves(doc, new Set(['station_no']))]).toEqual([
+      [HEADER, 'station_no'],
+      [HEADER, 'station_name'],
+      ['station_no', '9999'],
+    ]);
     expect([...keptLeaves([label], new Set(['label']))]).toEqual([
-      ['label', 'Cote de vigilance orange 321 cm'],
+      ['label', 'Cote de vigilance orange 999 cm'],
       ['label', 'x'],
     ]);
+    expect([...keysOf([{ a: [{ b: 1 }], c: null }])]).toEqual(['a', 'b', 'c']);
   });
 
   it('the owner rule fails on a planted real payload, a cut of one and a synthetic copy of its own source', () => {

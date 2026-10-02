@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { extractDataToJson } from '../apps/server/src/http/guards.ts';
 import {
+  HEADER_CELL,
   Refusal,
   synthesize,
   synthesizeFromExport,
@@ -57,6 +58,17 @@ const run = (e: { from: string; outRoot: string }, spec: string, source: string,
   return { written, raw: file('raw'), meta: JSON.parse(file('meta.json')) as Record<string, unknown>, dir };
 };
 
+/** The exit code of the Refusal that `f` throws, or null when it throws none. */
+function refusalOf(f: () => unknown): number | null {
+  try {
+    f();
+  } catch (e) {
+    expect(e).toBeInstanceOf(Refusal);
+    return (e as Refusal).code;
+  }
+  return null;
+}
+
 const DAY = 86_400_000;
 /** The whole number of days by which `after` lies after `before`, with the same time of day and offset suffix. */
 function shiftDays(before: string, after: string): number {
@@ -79,7 +91,7 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
         station_longitude: 5.1234,
         station_no: '5902',
         station_name: 'Mijn Station',
-        stationparameter_no: '1000',
+        stationparameter_no: 'H',
         ts_unitsymbol: 'm3/s',
       },
       {
@@ -91,7 +103,7 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
         station_longitude: 4.8,
         station_no: '5277',
         station_name: 'Ander Station',
-        stationparameter_no: '1001',
+        stationparameter_no: 'QADM',
         ts_unitsymbol: 'cm',
       },
     ];
@@ -145,11 +157,11 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
       columns: 'Timestamp,Value,Quality Code',
       rows: '4',
       data: [
-        ['2026-09-29T10:00:00.000+02:00', 4.25, 100],
-        ['2026-09-29T10:15:00.000+02:00', 4.5, 100],
-        ['2026-09-29T10:30:00.000+02:00', 0, 200],
+        ['2026-09-29T10:00:00.000+02:00', 4.25, 200],
+        ['2026-09-29T10:15:00.000+02:00', 4.5, 205],
+        ['2026-09-29T10:30:00.000+02:00', 0, 40],
         ['2026-09-29T10:45:00.000+02:00', null, -1],
-        ['2026-09-29T11:00:00.000+02:00', -1, 255],
+        ['2026-09-29T11:00:00.000+02:00', -1, 253],
       ],
     };
     const { raw } = run(exportOf('BE-3', 'be-3-values', [{ body: JSON.stringify([item]) }]), 'be-3-values', 'BE-3');
@@ -168,9 +180,9 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
   it('a KiWIS table: header row and registry columns kept, keep rows only, other cells generated', () => {
     const header = ['station_no', 'station_name', 'station_carteasting', 'river_name', 'station_gauge_datum_unit'];
     const rows = [
-      ['5902', 'Mijn Station', '185.41 m NN', 'Mijn Rivier', 'm'],
-      ['5277', 'Ander Station', '12,83', 'Andere Rivier', 'cm'],
-      ['5111', 'Derde Station', '01.111996', 'Derde Rivier', 'm'],
+      ['5902', 'Mijn Station', '999.99 m NN', 'Mijn Rivier', 'DNG'],
+      ['5277', 'Ander Station', '99,99', 'Andere Rivier', '---'],
+      ['5111', 'Derde Station', '09.099999', 'Derde Rivier', 'DNG'],
     ];
     const { raw } = run(
       exportOf('BE-3', 'be-3-meta', [{ body: JSON.stringify([header, ...rows]) }]),
@@ -189,7 +201,7 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
     });
     // A number with unit text keeps its shape and its letters; only the digits change.
     expect(out[1]?.[2]).toMatch(/^\d{3}\.\d{2} m NN$/);
-    expect(out[1]?.[2]).not.toBe('185.41 m NN');
+    expect(out[1]?.[2]).not.toBe('999.99 m NN');
     expect(out[2]?.[2]).toMatch(/^\d{2},\d{2}$/);
   });
 
@@ -198,7 +210,7 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
       {
         ts_path: 'Alzette/Hesperange/W/15m',
         ts_unitsymbol: 'cm',
-        parametertype_name: 'Wasserstand',
+        parametertype_name: 'W',
         station_name: 'Hesperange',
         columns: 'Timestamp,Value',
         rows: '3',
@@ -221,15 +233,19 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
     const doc = {
       id: 'mondorf',
       jsonFile: 'mondorf.json',
-      forecastsLimit: '12',
+      forecastsLimit: 'h24',
       label: 'Mondorf',
       stationName: 'Mondorf-les-Bains',
+      operator: 'Mijn Beheerder',
+      serviceStatus: 'En service',
+      forecastsCalcul: 'Mijn Rekencentrum',
       vigilanceThreshold: 47,
       showImage: true,
       levelsMax: [
         { value: 0, label: 'Cote de vigilance jaune' },
-        { value: 321.5, label: 'Cote de vigilance orange 321 cm' },
+        { value: 999.5, label: 'Cote de vigilance orange 999 cm' },
       ],
+      newVigilanceList: [{ legend: 'HQ10', value: 9 }],
     };
     const attr = JSON.stringify(doc).replace(/"/g, '&#34;');
     const body = `<!DOCTYPE html><html><body><cmp-dashboard-station data-to-json="${attr}"></cmp-dashboard-station></body></html>`;
@@ -237,29 +253,34 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
     expect(raw).toContain('<cmp-dashboard-station class="synthetic" data-to-json="{&#34;id&#34;:&#34;mondorf&#34;');
     expect(raw).not.toMatch(/data-to-json="[^"]*"[^"]*"/);
     const out = extractDataToJson(Buffer.from(raw)) as typeof doc;
-    expect([out.id, out.jsonFile, out.forecastsLimit, out.showImage]).toEqual(['mondorf', 'mondorf.json', '12', true]);
-    expect(out.stationName).toMatch(/^synthetic-\d+$/);
+    expect([out.id, out.jsonFile, out.forecastsLimit, out.showImage]).toEqual(['mondorf', 'mondorf.json', 'h24', true]);
+    expect(out.newVigilanceList[0]?.legend).toBe('HQ10');
+    expect(out.newVigilanceList[0]?.value).not.toBe(9);
+    // Free text, which no parser needs as published (P5c review R2-SR-3): generated.
+    for (const k of ['stationName', 'operator', 'serviceStatus', 'forecastsCalcul'] as const)
+      expect(out[k]).toMatch(/^synthetic-\d+$/);
     expect(out.vigilanceThreshold).not.toBe(47);
-    // A label is text that can carry the level itself ("… orange 321 cm"): generated, never kept (P5c review CR-1).
+    // A label is text that can carry the level itself ("… orange 999 cm"): generated, never kept (P5c review CR-1).
     expect(out.levelsMax.map((l) => l.label)).toEqual([
       expect.stringMatching(/^synthetic-/),
       expect.stringMatching(/^synthetic-/),
     ]);
-    expect(raw).not.toContain('321');
+    expect(raw).not.toContain('999 cm');
     expect(out.levelsMax[0]?.value).toBe(0);
-    expect(out.levelsMax[1]?.value).not.toBe(321.5);
+    expect(out.levelsMax[1]?.value).not.toBe(999.5);
   });
 
   it('keeps verbatim only identifiers and codes: no kept key of any source is a free text (P5c review CR-1)', () => {
     const FREE_TEXT = /label|name|text|info|description|remark|diary|address|adresse|banner|comment/i;
-    for (const [source, keys] of Object.entries(VERBATIM))
-      for (const key of keys)
+    for (const [source, formats] of Object.entries(VERBATIM))
+      for (const key of Object.keys(formats))
         expect([
           source,
           key,
-          FREE_TEXT.test(key) &&
-            !/^(ts_name|ts_shortname|parametertype_name|stationparameter_name|forecastsFileName)$/.test(key),
+          FREE_TEXT.test(key) && !/^(ts_name|ts_shortname|parametertype_name|forecastsFileName)$/.test(key),
         ]).toEqual([source, key, false]);
+    for (const key of ['label', 'operator', 'serviceStatus', 'forecastsCalcul'])
+      expect([key, Object.hasOwn(VERBATIM['LU-4'] ?? {}, key)]).toEqual([key, false]);
   });
 
   it('a kept key keeps a string or an integer only: an object, an array or a decimal under it is generated (P5c review SR-2)', () => {
@@ -267,36 +288,137 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
       {
         ts_id: 905579408,
         ts_path: '1/5902/Q/15m.Cmd.P',
-        ts_spacing: 'PT15M',
+        rows: '12',
         station_no: ['5902', 'Mijn Station'],
-        rows: 12.75,
-        ts_name: { level: 'Mijn Rivier', value: 318.25 },
+        site_no: 12.75,
+        ts_name: { level: 'Mijn Rivier', value: 999.25 },
       },
     ];
     const [out] = JSON.parse(synthesize('BE-3', 'json', Buffer.from(JSON.stringify(doc))).toString()) as typeof doc;
-    expect([out?.ts_id, out?.ts_path, out?.ts_spacing]).toEqual([905579408, '1/5902/Q/15m.Cmd.P', 'PT15M']);
+    expect([out?.ts_id, out?.ts_path, out?.rows]).toEqual([905579408, '1/5902/Q/15m.Cmd.P', '12']);
     expect(out?.station_no[0]).toMatch(/^\d{4}$/);
     expect(out?.station_no[0]).not.toBe('5902');
     expect(out?.station_no[1]).toMatch(/^synthetic-\d+$/);
-    expect(out?.rows).not.toBe(12.75);
+    expect(out?.site_no).not.toBe(12.75);
     expect(out?.ts_name.level).toMatch(/^synthetic-\d+$/);
-    expect(out?.ts_name.value).not.toBe(318.25);
+    expect(out?.ts_name.value).not.toBe(999.25);
   });
 
   it('refuses a kept string that holds a value with a unit, and keeps codes that hold digits', () => {
-    for (const text of ['Cote de vigilance orange 321 cm', '4,5 m³/s', 'at 12%', 'zero 3.5 m NN', '7 l/s', '90mm'])
+    for (const text of ['Cote de vigilance orange 999 cm', '9,9 m³/s', 'at 99%', 'zero 9.9 m NN', '9 l/s', '99mm'])
       expect([text, VALUE_WITH_UNIT.test(text)]).toEqual([text, true]);
     for (const code of ['0/11/W_out/15m.Cmd.RelAbs.P', '15m.Cmd.P', 'PT15M', 'h24', 'EPSG:31370', 'UTC+01:00'])
       expect([code, VALUE_WITH_UNIT.test(code)]).toEqual([code, false]);
-    const page = [{ ts_id: 1, ts_path: 'Cote de vigilance orange 321 cm' }];
+    const page = [{ ts_id: 1, ts_path: 'Cote de vigilance orange 999 cm' }];
     expect(() => synthesize('BE-3', 'json', Buffer.from(JSON.stringify(page)))).toThrow(Refusal);
   });
 
-  it('a text file: every data cell with a digit generated, Datum dates by the clock, an unknown text refused', () => {
-    const cells = ['123,45', ' 456.7 ', '+78.9', '1.234,5', '1e3', '12.5'];
+  it('a first row that is not a header of names is no KiWIS table: it is generated like the others (P5c review R2-SR-2)', () => {
+    const probes = [
+      {
+        forecast: [
+          ['2030-01-02T10:00:00Z', '999.45'],
+          ['2030-01-02T10:10:00Z', '998.1'],
+        ],
+      },
+      {
+        levels: [
+          ['999', '998', '997'],
+          ['1', '2', '3'],
+        ],
+      },
+      {
+        t: [
+          ['station_no', '99 cm'],
+          ['1', '2'],
+        ],
+      },
+    ];
+    for (const doc of probes) {
+      const [first] = Object.values(doc) as string[][][];
+      const [out] = Object.values(
+        JSON.parse(synthesize('DE-2', 'json', Buffer.from(JSON.stringify(doc))).toString()),
+      ) as string[][][];
+      expect(out).toHaveLength(2);
+      for (const [i, cell] of (first?.[0] ?? []).entries()) expect(out?.[0]?.[i]).not.toBe(cell);
+    }
+    for (const cell of ['station_no', 'Quality Code', 'ts_id', 'HQ100'])
+      expect([cell, HEADER_CELL.test(cell)]).toEqual([cell, true]);
+    for (const cell of ['999', '2030-01-02T10:00:00Z', '99 cm', '-1', '', 'synthetic-1', '9.9'])
+      expect([cell, HEADER_CELL.test(cell)]).toEqual([cell, false]);
+  });
+
+  it('a kept key keeps only its one format: any other string or integer under it is refused (P5c review R2-SR-3)', () => {
+    const lu4 = (legend: unknown) => [{ newVigilanceList: [{ legend, value: 9 }] }];
+    for (const legend of ['HQ2', 'HQ10', 'HQ100'])
+      expect([legend, refusalOf(() => synthesize('LU-4', 'json', Buffer.from(JSON.stringify(lu4(legend)))))]).toEqual([
+        legend,
+        null,
+      ]);
+    const probes = [
+      '9.999,5 cm',
+      '999 centimetres',
+      '9,9 mètres',
+      '\uff19\uff19\uff19 cm',
+      '\u0669\u0669\u0669 cm',
+      '999\u200bcm',
+      '999 \u339d',
+      'cm 999',
+      '9.99-m',
+      'Cote 999',
+      'seuil 999',
+      '999',
+      999,
+      'HQ 10',
+    ];
+    for (const legend of probes)
+      expect([legend, refusalOf(() => synthesize('LU-4', 'json', Buffer.from(JSON.stringify(lu4(legend)))))]).toEqual([
+        legend,
+        1,
+      ]);
+    // An integer only where the key is an id or a count: `ts_id` 905579408 stays, `ts_unitsymbol` 999 is refused.
+    expect(refusalOf(() => synthesize('BE-3', 'json', Buffer.from('[{"ts_id":905579408,"x":1.5}]')))).toBeNull();
+    expect(refusalOf(() => synthesize('BE-3', 'json', Buffer.from('[{"ts_unitsymbol":999}]')))).toBe(1);
+    expect(refusalOf(() => synthesize('BE-3', 'json', Buffer.from('[{"ts_unitsymbol":"9 cm"}]')))).toBe(1);
+    // Every kept key has its format (a typed table), and every format matches no bare value with a unit.
+    for (const [source, formats] of Object.entries(VERBATIM))
+      for (const [key, format] of Object.entries(formats))
+        expect([source, key, format.test('999 cm'), format.test('999,5')]).toEqual([source, key, false, false]);
+  });
+
+  it("a KiWIS Quality Code cell keeps only a code of SPW's table (P5c review R2-SR-3)", () => {
+    const item = (code: unknown) => [
+      { ts_id: '1', columns: 'Timestamp,Value,Quality Code', data: [['2026-09-29T10:00:00Z', 1.5, code]] },
+    ];
+    const quality = (code: unknown) =>
+      (
+        JSON.parse(synthesize('BE-3', 'json', Buffer.from(JSON.stringify(item(code)))).toString()) as {
+          data: unknown[][];
+        }[]
+      )[0]?.data[0]?.[2];
+    for (const code of [-1, 0, 40, 160, 165, 200, 205, 210, 253]) expect([code, quality(code)]).toEqual([code, code]);
+    expect(quality(null)).toBeNull();
+    for (const code of [1, 100, 255, 999, '999 cm']) expect([code, refusalOf(() => quality(code))]).toEqual([code, 1]);
+  });
+
+  it('an object key is a name of letters, or refused (P5c review R2-SR-4)', () => {
+    for (const key of ['ts_id', 'Quality Code', 'logos-header', ''])
+      expect([key, refusalOf(() => synthesize('DE-2', 'json', Buffer.from(JSON.stringify([{ [key]: 1.5 }]))))]).toEqual(
+        [key, null],
+      );
+    for (const key of ['999 cm', 'a1', ' a', 'a ', 'a  b', 'a.b', 'a\tb', 'mètres', 'x:y'])
+      expect([key, refusalOf(() => synthesize('DE-2', 'json', Buffer.from(JSON.stringify([{ [key]: 1.5 }]))))]).toEqual(
+        [key, 1],
+      );
+    // At any depth, under a kept key too.
+    expect(refusalOf(() => synthesize('LU-4', 'json', Buffer.from('[{"legend":{"999 cm":1}}]')))).toBe(1);
+  });
+
+  it('a text file: comment and station lines generated whole, the Datum header kept, number cells generated (P5c review R2-SR-5)', () => {
+    const cells = ['123,45', ' 456.7 ', '+78.9', '1.234,5', '1e3', '12.5 cm'];
     const text = [
-      '# Bundesanstalt fuer Gewaesserkunde, Stand 2026-09-29',
-      'Mijn Pegel',
+      '# Bundesanstalt fuer Gewaesserkunde, Stand 2026-09-29\r',
+      'Mijn Pegel\r',
       'Datum;W;Q;Hinweis',
       `29.09.2026 06:00;${cells[0]};${cells[1]};\r`,
       `30.09.2026 06:00;${cells[2]};${cells[3]};${cells[4]}\r`,
@@ -304,22 +426,37 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
       '',
     ].join('\n');
     const out = synthesize('DE-3', 'text', Buffer.from(text, 'latin1')).toString('utf8').split('\n');
-    expect(out[2]).toBe('Datum;W;Q;Hinweis');
+    expect(out[0]).toMatch(/^# synthetic-\d+\r$/);
     expect(out[1]).toMatch(/^synthetic-\d+\r$/);
+    expect(out[2]).toBe('Datum;W;Q;Hinweis');
     const rows = out.slice(3, 6).map((l) => l.split(';'));
     expect(rows.map((r) => r[0])).toEqual(['02.01.2030 00:00', '03.01.2030 00:00', '04.01.2030 00:00']);
     const generated = [rows[0]?.[1], rows[0]?.[2], rows[1]?.[1], rows[1]?.[2], rows[1]?.[3]?.trimEnd(), rows[2]?.[1]];
     generated.forEach((cell, i) => {
       const was = cells[i] as string;
       expect(cell).not.toBe(was);
-      // The shape stays (signs, separators, spaces and the exponent letter); only the digits are new.
+      // The shape stays (signs, separators, spaces, the exponent letter and an allowed unit); only the digits are new.
       expect(cell?.replace(/\d/g, '0')).toBe(was.replace(/\d/g, '0'));
     });
     expect([rows[0]?.[3], rows[2]?.[2], rows[2]?.[3]]).toEqual(['\r', '', '\r']);
-    for (const bad of ['Hochwasser', '-', 'n.a.']) {
-      const file = `Datum;W\n29.09.2026 06:00;${bad}\r\n`;
-      expect(() => synthesize('DE-3', 'text', Buffer.from(file, 'latin1'))).toThrow(Refusal);
-    }
+    // A line ends in \r only where the source's did.
+    const plain = synthesize('DE-3', 'text', Buffer.from('# x\nMijn Pegel\nDatum;W\n29.09.2026 06:00;12\n', 'latin1'));
+    expect(plain.toString('latin1')).not.toContain('\r');
+    // Refused: a text cell, a number followed by words that are no unit, a line of cells before the header or in its
+    // place, and a second header among the data lines (invented data).
+    const refused = [
+      'Datum;W\n29.09.2026 06:00;Hochwasser\r\n',
+      'Datum;W\n29.09.2026 06:00;-\r\n',
+      'Datum;W\n29.09.2026 06:00;n.a.\r\n',
+      'Datum;W\n29.09.2026 06:00;99 Hochwasser\r\n',
+      'Datum;W\n29.09.2026 06:00;cm 99\r\n',
+      '29.09.2026 06:00;99\r\nDatum;W\n',
+      'Pegel;W\n29.09.2026 06:00;99\r\n',
+      'Datum;W;99 cm\n29.09.2026 06:00;99\r\n',
+      'Datum;W\n29.09.2026 06:00;99\r\nDatum;W\n',
+    ];
+    for (const file of refused)
+      expect([file, refusalOf(() => synthesize('DE-3', 'text', Buffer.from(file, 'latin1')))]).toEqual([file, 1]);
   });
 
   describe('the leak scan', () => {

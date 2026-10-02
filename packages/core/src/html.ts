@@ -24,7 +24,11 @@ const ENTITIES: Record<string, string> = { quot: '"', amp: '&', lt: '<', gt: '>'
 const TAG = /<(\/?)([A-Za-z][^\t\n\f\r />]*)/y;
 /** `-->` ends a comment, and `--!>` too (as in a browser). */
 const COMMENT_END = /--!?>/g;
-/** What changes the state inside a script: `<!--`, `-->`, `<script` and `</script`. */
+/**
+ * What changes the state inside a script: `<!--`, `-->`, `<script` and `</script`. Not `--!>`, unlike a comment: in
+ * the HTML tokenizer's "script data escaped dash dash state" (and its double-escaped twin) only `>` goes back to the
+ * script data state, and a `!` returns to the (double) escaped state, so `--!>` ends neither escape.
+ */
 const SCRIPT = /<!--|-->|<(\/?)script(?=[\t\n\f\r />])/gi;
 const RAW = ['style', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript', 'title', 'textarea'];
 const CLOSE = new Map(RAW.map((name) => [name, new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, 'gi')]));
@@ -111,8 +115,8 @@ function scriptEnd(html: string, from: number): number {
  * The parsed JSON of the `data-to-json` attribute of the one `<cmp-dashboard-station>` element of a page (decoys
  * in comments, raw text, templates and attribute values aside). Codes: `html_tag` (no such element),
  * `html_tag_count` (two or more), `html_attr` (an unterminated element or quote, a value over 256 KiB, more than 64
- * attributes, the attribute missing or twice) and `html_json`. The five named entities and numeric references are
- * decoded; a reference beyond U+10FFFF stays as text.
+ * attributes, the attribute missing or twice), `html_cdata` (a `<![CDATA[` outside comments and raw text) and
+ * `html_json`. The five named entities and numeric references are decoded; a reference beyond U+10FFFF stays as text.
  */
 export function dataToJson(html: string): unknown {
   let found: [string, string][] | null = null;
@@ -134,6 +138,10 @@ export function dataToJson(html: string): unknown {
         i++;
         continue;
       }
+      // Inside inline `<svg>` or `<math>` a browser reads `<![CDATA[ … ]]>` as text, elsewhere as a bogus comment to
+      // the first `>`: the scan does not track that context, so it refuses the page rather than guess (no real page
+      // has one).
+      if (html.startsWith('<![CDATA[', i)) return fail('html_cdata');
       // A bogus comment (a doctype too) runs to the first `>`; `</>` is dropped.
       i = html.indexOf('>', i + 2);
       if (i < 0) break;

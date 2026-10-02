@@ -139,6 +139,27 @@ describe('seeds', () => {
     expect(lists).toBe(3);
   });
 
+  it('the BE-3 catch-up starts no request at the very end of its hours, as its hour gate (R2-SR-8)', async () => {
+    const asked: string[] = [];
+    server.use(
+      http.get('https://hydrometrie.wallonie.be/services/KiWIS/KiWIS', ({ request }) => {
+        asked.push(new URL(request.url).searchParams.get('request') ?? '');
+        return new HttpResponse(fixture('BE-3', asked.length === 1 ? 'be-3-catchup' : 'be-3-catchup-values').body);
+      }),
+    );
+    // The list goes out at 04:59:55; the first values call would be due at 05:00:00 exactly, after the 5 s pause.
+    let now = new Date('2026-08-27T04:59:55Z');
+    const deps = runDeps({
+      now: () => now,
+      sleep: async (ms) => {
+        now = new Date(now.getTime() + ms);
+      },
+      client: { now: () => now.getTime() },
+    });
+    expect(await runSeeds(only('be-3-catchup'), deps, paths(deps.root))).toBe(false);
+    expect(asked).toEqual(['getTimeseriesList']);
+  });
+
   it('pace FR-1 at ≥ 2 s per request, day by day, within one month', async () => {
     const sleeps: number[] = [];
     const windows: string[] = [];
