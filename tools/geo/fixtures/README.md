@@ -65,15 +65,21 @@ EU-Hydro River Network Database v1.3, © European Union, Copernicus Land Monitor
 
 `sparql-sample.json` is one real answer (batch 3 of 5) of the `lookup-wikidata.ts` query to `https://query.wikidata.org/sparql` (river and canal names with their OSM relation P402, mouth P403, country P17 and nl/en labels), recorded by `node tools/geo/rivernet/lookup-wikidata.ts --record <dir>` on 2026-10-02. Wikidata's data is CC0-1.0. `sparql-sample.meta.json` has the source and the date; the file is untrimmed and not synthetic.
 
-## `rivernet.osm.pbf` and its exports (to follow)
+## `rivernet.osm.pbf` and its exports
 
-**Not committed yet.** `rivernet.osm.pbf` (at most 15 MB), `rivernet.ways.geojsonseq`, `rivernet.relations.opl` and `rivernet.provenance.json` come from the `rivernet-fixture` artifact of the first full `geo.yml` run (`docs/runbooks/geo-refresh.md` §8, KG-154). The ways and relations files are `osmium export -f geojsonseq -a type,id,way_nodes --geometry-types=linestring` and `osmium cat -t relation -f opl,add_metadata=false` of the PBF by the tool image; `export-check.sh` proves that byte for byte, and the PR criterion on the graph (acyclic, the Pannerdensche Kop with two downstream edges, two builds with the same bytes) is tested on them.
+`rivernet.osm.pbf`, `rivernet.ways.geojsonseq`, `rivernet.relations.opl` and `rivernet.provenance.json` are the `rivernet-fixture` artifact of the `geo.yml` run on the PR branch (`docs/runbooks/geo-refresh.md` §8), committed unchanged: the curated relations of `registry/rivers.yaml`, every relation and way tagged with a selected QID, and the canal traps of `tools/geo/rivernet/sources.yaml`, with their ways and nodes, no metadata. The ways and relations files are the tool image's `osmium export -f geojsonseq -a type,id,way_nodes --geometry-types=linestring` and `osmium cat -t relation -f opl,add_metadata=false` of the PBF; the `rivernet fixture` job of `geo.yml` re-exports the PBF and compares byte for byte (`export-check.sh`). `test/rivernet-fixture.test.ts` builds the graph from them (acyclic; the Pannerdensche Kop and the IJsselkop with two downstream edges each; the Moselle mouth splitting the Rhine; same bytes on a second run, with shuffled input and from the CLI). `rivernet.bifurcations.golden.json` is the reviewed list of the 39 nodes with more than one downstream edge in that graph.
 
 Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright).
 
 | | |
 |---|---|
-| Source run | to follow (the `geo.yml` run URL) |
-| Replication timestamp | to follow |
-| Regions | to follow (the 16 ids of `sources.yaml`) |
-| Bytes and sha256 | to follow, per file |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/37064062453 (`workflow_dispatch` on `claude/p6a-graph-pipeline`, 2026-10-02) |
+| Extracts | the 16 Geofabrik regions of `sources.yaml`; replication timestamps 2026-09-30T20:22:42Z (the seven German states) and 2026-10-01T20:22:06Z (the other nine); md5, sha256 and bytes per region in `rivernet.provenance.json` |
+| Made | osmium-tool 1.19.1 in the tool image (`tools/geo/Dockerfile`), `tools/geo/rivernet/extract.sh` |
+| `rivernet.osm.pbf` | 2,024,486 bytes, sha256 `5ebcaa70ce856196c045db0e3f9588275d8693587965ec9971174a4ea82f9cd7` |
+| `rivernet.ways.geojsonseq` | 9,945,754 bytes, sha256 `f181e66a1e88eaa3de6c9bb0d42ba2d73d0909cf002fb6ceae88dd8dfbb53468` |
+| `rivernet.relations.opl` | 180,437 bytes, sha256 `9e9e309ecd08f36b77472515f99799afd0d771fbe38928877046efa4c77cf41b` |
+| `rivernet.provenance.json` | 5,546 bytes, sha256 `3d0e64859289f37d3bd3beb35011318ec7aef5485d23d446274f2ec62e072c89` |
+| Graph | 3,744 nodes, 3,756 edges, 19 components, 39 bifurcations; the run's `river_graph.json` (sha256 `a621bed5…`) and `reaches.geojson` (`ddf4d61a…`) equal a local build of these files byte for byte |
+
+A refresh replaces the four files from a newer run's artifact (at most 15 MB for the PBF, a test checks it), updates this table, and regenerates the golden only after reviewing every changed bifurcation.
