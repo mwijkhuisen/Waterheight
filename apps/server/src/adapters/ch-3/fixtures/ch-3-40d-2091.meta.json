@@ -1,0 +1,14 @@
+{
+  "spec": "ch-3-40d",
+  "variant": "2091",
+  "source": "CH-3",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://www.hydrodaten.admin.ch/plots/p_q_40days/2091_p_q_40days_de.json",
+  "bytes": 914687,
+  "source_sha256": "66afb092694a844fea6e685770cef48cec72eee90ab8f704c2a9205d5d061aaf",
+  "trimmed": "last 600 points of every trace"
+}

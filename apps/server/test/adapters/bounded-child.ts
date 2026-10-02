@@ -3,7 +3,16 @@
 // prints the SchemaDrift message (or the guard's reason) and exits 0; anything
 // else exits 1, and running out of memory kills it.
 import { SchemaDrift } from '@rws/core';
+import { parseCube } from '../../src/adapters/ch-1/parse.ts';
+import { JSON_CAPS as CH2_CAPS, parseFeatures } from '../../src/adapters/ch-2/parse.ts';
+import { JSON_CAPS as CH3_CAPS, parsePlot } from '../../src/adapters/ch-3/parse.ts';
 import { JSON_CAPS, parseMeasurements, parseStations } from '../../src/adapters/de-1/parse.ts';
+import {
+  JSON_CAPS as FR1_CAPS,
+  parseObservations as parseFr1Observations,
+  parseStations as parseFr1Stations,
+} from '../../src/adapters/fr-1/parse.ts';
+import { JSON_CAPS as FR3_CAPS, parseSerie } from '../../src/adapters/fr-3/parse.ts';
 import { JSON_CAPS as NL1_CAPS, parseWaarnemingen } from '../../src/adapters/nl-1/parse.ts';
 import { JSON_CAPS as NL2_CAPS, parseCollection } from '../../src/adapters/nl-2/parse.ts';
 import { parse as parseNl4 } from '../../src/adapters/nl-4/parse.ts';
@@ -47,6 +56,19 @@ const collection = (n: number, feature: string) =>
   `{"type":"FeatureCollection","features":[${list(n, feature)}],"totalFeatures":${n},"numberMatched":${n},` +
   `"numberReturned":${n},"timeStamp":"2026-09-29T13:43:29.024Z",` +
   `"crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:EPSG::4258"}}}`;
+/** A Hub'Eau page (FR-1) with the given `data` values. */
+const hubeau = (data: string) =>
+  `{"count":0,"first":null,"prev":null,"next":null,"api_version":"2.0.1","data":[${data}]}`;
+/** A Vigicrues series (FR-3) with the given points. */
+const serie = (points: string) =>
+  `{"Serie":{"CdStationHydro":"A850061001","LbStationHydro":"x","Link":"x","GrdSerie":"Q","ObssHydro":[${points}]},"VersionFlux":"x"}`;
+/** A hydrodaten feature collection (CH-2) with the given features. */
+const features = (fs: string) =>
+  `{"type":"FeatureCollection","name":"x","crs":{"type":"name","properties":{"name":"x"}},"meta":null,"features":[${fs}]}`;
+/** A hydrodaten plot (CH-3) whose one trace has the given x and y arrays. */
+const plot = (x: string, y: string) =>
+  `{"plot":{"layout":null,"data":[{"name":"Wasserstand","x":[${x}],"y":[${y}],"meta":{"unit":"m"}}]},"hoverInfo":null}`;
+const CSV_HEADER = 'id,name,water,time,q,w,t,dl,wkt';
 const basin = (b: Uint8Array) => parseStations(b, JSON_CAPS.basin);
 const meta = (b: Uint8Array) => parseStations(b, JSON_CAPS.meta);
 
@@ -137,6 +159,27 @@ export const BODIES: Record<string, [() => string, (b: Uint8Array) => unknown]> 
   'nl2-bytes': [() => objects(8 * MIB), parseCollection],
   'nl2-features': [() => collection(NL2_CAPS.maxNodes - 20, '0'), parseCollection],
   'nl2-issues': [() => collection(NL2_CAPS.maxFeatures, '{}'), parseCollection],
+  // P5a. Each parser at its spec's byte cap (FR-1 observations 16 MiB, referentiel 8 MiB, FR-3 4 MiB, CH-1 and CH-2
+  // 4 MiB, CH-3 8 MiB), and the shape that yields the most issues: a full-length array of wrong-shaped elements.
+  'fr1-bytes': [() => objects(16 * MIB), parseFr1Observations],
+  'fr1-ref-bytes': [() => objects(8 * MIB), parseFr1Stations],
+  'fr1-nodes': [() => hubeau(list(FR1_CAPS.obs.maxNodes, '0')), parseFr1Observations],
+  'fr1-issues': [() => hubeau(list(FR1_CAPS.obs.maxItems, '{}')), parseFr1Observations],
+  'fr1-ref-issues': [() => hubeau(list(FR1_CAPS.ref.maxItems, '{}')), parseFr1Stations],
+  'fr3-bytes': [() => objects(4 * MIB), parseSerie],
+  'fr3-nodes': [() => serie(list(FR3_CAPS.maxNodes, '0')), parseSerie],
+  'fr3-issues': [() => serie(list(30_000, '0')), parseSerie],
+  // A CSV has no JSON node count: rows, columns and fields are capped by the scan instead.
+  'ch1-rows': [() => `${CSV_HEADER}\n${'x\n'.repeat(2 * MIB)}`, parseCube],
+  'ch1-columns': [() => `${','.repeat(2 * MIB)}\n`, parseCube],
+  'ch1-quote': [() => `${CSV_HEADER}\n"${'x'.repeat(4 * MIB)}`, parseCube],
+  'ch1-issues': [() => `${CSV_HEADER}\n${Array(2000).fill(',,,,,,,,').join('\n')}\n`, parseCube],
+  'ch2-bytes': [() => objects(4 * MIB), parseFeatures],
+  'ch2-features': [() => features(list(CH2_CAPS.maxItems + 1, '0')), parseFeatures],
+  'ch2-issues': [() => features(list(CH2_CAPS.maxItems, '{}')), parseFeatures],
+  'ch3-bytes': [() => objects(8 * MIB), parsePlot],
+  'ch3-nodes': [() => plot(list(CH3_CAPS.maxNodes, '"x"'), '0'), parsePlot],
+  'ch3-issues': [() => plot(list(20_000, '0'), list(20_000, '0')), parsePlot],
   // The XML floods through the NL-4 parser and through the guard's XML rule (capture validity, readXlsx).
   ...Object.fromEntries(
     Object.entries(XML_FLOODS).flatMap(([name, [build]]) => [

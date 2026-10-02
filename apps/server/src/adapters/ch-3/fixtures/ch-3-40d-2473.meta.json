@@ -1,0 +1,15 @@
+{
+  "spec": "ch-3-40d",
+  "variant": "2473",
+  "source": "CH-3",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/CH-3/ch-3-40d/2026/09/30/142343Z-f0d58bacff9f8ca5.zst",
+  "recorded_at": "2026-09-30T14:23:43Z",
+  "seed": true,
+  "status": 200,
+  "url": "https://www.hydrodaten.admin.ch/plots/p_q_40days/2473_p_q_40days_de.json",
+  "bytes": 906067,
+  "source_sha256": "f0d58bacff9f8ca54a52a634df2603cd5fbb875639eb22ef0207795ec98df462",
+  "trimmed": "last 600 points of every trace"
+}

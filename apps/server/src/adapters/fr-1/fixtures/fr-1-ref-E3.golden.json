@@ -1,0 +1,141 @@
+{
+ "obs": [],
+ "gaugeZeros": [
+  {
+   "series": "E301000401/H",
+   "value_m": 59.457,
+   "datum": "IGN69",
+   "valid_from": "2024-11-14T00:00:00.000Z"
+  },
+  {
+   "series": "E310211002/H",
+   "value_m": 21.48,
+   "datum": "IGN69",
+   "valid_from": "2009-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "E334601001/H",
+   "value_m": 24.8,
+   "datum": "IGN69",
+   "valid_from": "1966-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "E334602201/H",
+   "value_m": 28.08,
+   "datum": "IGN69",
+   "valid_from": "2020-07-28T00:00:00.000Z"
+  },
+  {
+   "series": "E341210001/H",
+   "value_m": 14.72,
+   "datum": "IGN69",
+   "valid_from": "2004-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "E351121001/H",
+   "value_m": 80.673,
+   "datum": "IGN69",
+   "valid_from": "1970-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "E351122001/H",
+   "value_m": 41.006,
+   "datum": "IGN69",
+   "valid_from": "1954-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "E351851001/H",
+   "value_m": 23.344,
+   "datum": "IGN69",
+   "valid_from": "1981-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "E361121001/H",
+   "value_m": 18.41,
+   "datum": "IGN69",
+   "valid_from": "2004-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "E363121001/H",
+   "value_m": 15.496,
+   "datum": "IGN69",
+   "valid_from": "2013-01-31T00:00:00.000Z"
+  },
+  {
+   "series": "E363121002/H",
+   "value_m": 15.496,
+   "datum": "IGN69",
+   "valid_from": "2013-01-31T00:00:00.000Z"
+  },
+  {
+   "series": "E364121001/H",
+   "value_m": 13.27,
+   "datum": "IGN69",
+   "valid_from": "2013-01-31T00:00:00.000Z"
+  },
+  {
+   "series": "E364121002/H",
+   "value_m": 13318,
+   "datum": "IGN69",
+   "valid_from": "2013-01-31T00:00:00.000Z"
+  },
+  {
+   "series": "E364621001/H",
+   "value_m": 16.659,
+   "datum": "IGN69",
+   "valid_from": "1969-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "E364628001/H",
+   "value_m": 37.22,
+   "datum": "IGN69",
+   "valid_from": "2006-12-01T00:00:00.000Z"
+  },
+  {
+   "series": "E365851401/H",
+   "value_m": 0.013362,
+   "datum": "IGN69",
+   "valid_from": "2024-03-26T00:00:00.000Z"
+  },
+  {
+   "series": "E366060002/H",
+   "value_m": 32.59,
+   "datum": "IGN69",
+   "valid_from": "2004-01-01T00:00:00.000Z"
+  },
+  {
+   "series": "E366600501/H",
+   "value_m": 51.92,
+   "datum": "IGN69",
+   "valid_from": "2006-12-01T00:00:00.000Z"
+  },
+  {
+   "series": "E366601001/H",
+   "value_m": 19.52,
+   "datum": "IGN69",
+   "valid_from": "2006-12-01T00:00:00.000Z"
+  },
+  {
+   "series": "E367125002/H",
+   "value_m": 0.01267,
+   "datum": "IGN69",
+   "valid_from": "2004-05-07T00:00:00.000Z"
+  },
+  {
+   "series": "E381126501/H",
+   "value_m": 9.913,
+   "datum": "IGN69",
+   "valid_from": "2016-11-08T00:00:00.000Z"
+  },
+  {
+   "series": "E381126601/H",
+   "value_m": 0,
+   "datum": "IGN69",
+   "valid_from": "2024-11-12T00:00:00.000Z"
+  }
+ ],
+ "dropped": {
+  "zero_missing": 10
+ },
+ "unknown": 0
+}

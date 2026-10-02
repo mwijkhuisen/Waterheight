@@ -1,0 +1,15 @@
+{
+  "spec": "fr-1-obs",
+  "variant": "default#2",
+  "source": "FR-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/FR-1/fr-1-obs/2026/09/30/120146Z-23ef7049da7a574a.zst",
+  "recorded_at": "2026-09-30T12:01:13Z",
+  "seed": true,
+  "status": 206,
+  "url": "https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=A*,B*,D*,E1*,E2*,E3*&fields=code_site,code_station,grandeur_hydro,date_obs,resultat_obs,code_qualification_obs,code_statut&date_debut_obs=2026-08-31T13:00:17Z&date_fin_obs=2026-09-01T13:00:17Z&cursor=AoJw9NyFrqADPwpBMjExMDMwMF9BMjExMDMwMDAxX0hfMjAyNi0wOS0wMVQwODozMDowMA%3D%3D&size=20000",
+  "bytes": 3420586,
+  "source_sha256": "23ef7049da7a574a031a0d166bc0defa3d7c6813edd5cf7580f4d4fe9a86fab1",
+  "trimmed": "first 400 rows of data"
+}

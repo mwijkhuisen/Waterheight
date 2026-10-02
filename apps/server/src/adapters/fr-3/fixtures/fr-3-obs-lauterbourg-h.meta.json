@@ -1,0 +1,15 @@
+{
+  "spec": "fr-3-obs",
+  "variant": "A302009050/H",
+  "source": "FR-3",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/FR-3/fr-3-obs/2026/09/30/134859Z-37c43ddc678cc912.zst",
+  "recorded_at": "2026-09-30T13:48:59Z",
+  "seed": true,
+  "status": 200,
+  "url": "https://www.vigicrues.gouv.fr/services/observations.json/index.php?CdStationHydro=A302009050&GrdSerie=H&FormatSortie=simple",
+  "bytes": 170888,
+  "source_sha256": "37c43ddc678cc912c0a0ed303e3154c9bbd6a3ae0130a3f7825417b3bf2c52c0",
+  "trimmed": "last 600 points of Serie.ObssHydro"
+}
