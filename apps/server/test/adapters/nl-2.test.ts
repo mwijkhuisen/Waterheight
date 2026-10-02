@@ -584,7 +584,10 @@ describe('property and fuzz tests', () => {
     );
   });
 
-  it('a mutated real payload is either still valid or a SchemaDrift, never a crash or a row', () => {
+  // 5.6 s under v8 coverage on a CI runner (2026-10-02, main and #52): over the 5 s default.
+  it('a mutated real payload is either still valid or a SchemaDrift, never a crash or a row', {
+    timeout: 30_000,
+  }, () => {
     const doc = rawDoc();
     const mutation = fc.tuple(
       fc.constantFrom('envelope', 'feature', 'geometry', 'properties'),
