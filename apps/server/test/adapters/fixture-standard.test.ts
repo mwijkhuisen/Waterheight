@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
 // The P5a fixture standard (CLAUDE.md, invariants 9 and 11): every fixture has a
@@ -26,6 +30,45 @@ const files = (adapter: string, suffix: string): Fixture[] =>
 const all = (suffix: string) => adapters.flatMap((a) => files(a, suffix));
 const read = (f: Fixture, suffix: string) => readFileSync(new URL(`${f.name}${suffix}`, f.dir));
 const isSynthetic = (name: string) => name.endsWith('.synthetic');
+
+// Owner-audience sources are read from the registry, never listed here: a source added later is covered at once.
+const OwnerSources = z.object({
+  sources: z.array(z.looseObject({ id: z.string(), audience: z.enum(['public', 'owner', 'off']) })),
+});
+const ownerSources = OwnerSources.parse(
+  parseYaml(readFileSync(new URL('../../../../registry/sources.yaml', import.meta.url), 'utf8')),
+)
+  .sources.filter((s) => s.audience === 'owner')
+  .map((s) => s.id.toLowerCase());
+const ownerAdapters = adapters.filter((a) => ownerSources.includes(a));
+
+/**
+ * What is wrong with the fixtures in a folder of an owner-audience adapter (invariants 9 and 11: the repository is
+ * public, so only synthetic payloads are committed). Names and rules only, never content.
+ */
+function ownerFixtureProblems(dir: URL): string[] {
+  const problems: string[] = [];
+  for (const f of readdirSync(dir).sort()) {
+    const kind = /\.(raw|meta\.json|golden\.json)$/.exec(f)?.[0];
+    if (kind === undefined) continue;
+    if (!f.endsWith(`.synthetic${kind}`)) problems.push(`${f}: not named *.synthetic${kind}`);
+    if (kind !== '.raw') continue;
+    const metaFile = new URL(f.replace(/\.raw$/, '.meta.json'), dir);
+    let m: Record<string, unknown> | null = null;
+    try {
+      m = JSON.parse(readFileSync(metaFile, 'utf8'));
+    } catch {
+      problems.push(`${f}: no readable meta.json`);
+    }
+    if (m === null || typeof m !== 'object') continue;
+    if (m.synthetic !== true) problems.push(`${f}: meta is not synthetic: true`);
+    if ('from' in m) problems.push(`${f}: meta has a from (a cut of a real payload)`);
+    if ('recorded_at' in m) problems.push(`${f}: meta has recorded_at (a recording)`);
+    if (m.source_sha256 !== undefined && m.source_sha256 === sha256(readFileSync(new URL(f, dir))))
+      problems.push(`${f}: the raw file is its own source (source_sha256)`);
+  }
+  return problems;
+}
 
 const Meta = z.looseObject({
   spec: z.string().min(1),
@@ -106,8 +149,10 @@ describe('the fixture standard', () => {
     }
   });
 
-  it('every adapter that has a parse.ts has at least three real goldens (pinned exceptions below three)', () => {
-    const withParse = adapters.filter((a) => existsSync(new URL(`${a}/parse.ts`, ADAPTERS)));
+  it('every adapter that has a parse.ts has at least three real goldens (pinned exceptions below three; owner sources have synthetic ones)', () => {
+    const withParse = adapters.filter(
+      (a) => existsSync(new URL(`${a}/parse.ts`, ADAPTERS)) && !ownerAdapters.includes(a),
+    );
     expect(withParse).toEqual(
       expect.arrayContaining(['ch-1', 'ch-2', 'ch-3', 'de-1', 'fr-1', 'fr-3', 'nl-1', 'nl-2', 'nl-4']),
     );
@@ -123,6 +168,52 @@ describe('the fixture standard', () => {
       expect(floor).toBeLessThan(REAL_GOLDENS);
       const real = files(adapter, '.golden.json').filter((f) => !isSynthetic(f.name)).length;
       expect([adapter, real < REAL_GOLDENS]).toEqual([adapter, true]);
+    }
+  });
+
+  it('the owner-audience sources are read from the registry', () => {
+    expect(ownerAdapters).toEqual(expect.arrayContaining(['be-3', 'de-2', 'de-3', 'lu-2', 'lu-3', 'lu-4']));
+    for (const a of ownerAdapters) expect([a, ownerSources.includes(a)]).toEqual([a, true]);
+  });
+
+  it('every fixture of an owner-audience adapter is synthetic: *.synthetic.*, synthetic: true, no from, no recorded_at, not its own source', () => {
+    for (const adapter of ownerAdapters)
+      expect([adapter, ownerFixtureProblems(fixturesOf(adapter))]).toEqual([adapter, []]);
+  });
+
+  it('every owner-audience adapter that has a parse.ts has at least three synthetic goldens', () => {
+    for (const adapter of ownerAdapters.filter((a) => existsSync(new URL(`${a}/parse.ts`, ADAPTERS)))) {
+      const synthetic = files(adapter, '.golden.json').filter((f) => isSynthetic(f.name)).length;
+      expect([adapter, synthetic >= REAL_GOLDENS]).toEqual([adapter, true]);
+    }
+  });
+
+  it('the owner rule fails on a planted real payload, a cut of one and a synthetic copy of its own source', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'owner-fixtures-'));
+    try {
+      const put = (name: string, body: string) => writeFileSync(join(tmp, name), body);
+      const meta = (m: object) => JSON.stringify({ spec: 'x-1', source: 'BE-3', status: 200, ...m });
+      // A good one first: the rule must not flag it.
+      put('good.synthetic.raw', '[1]');
+      put('good.synthetic.meta.json', meta({ synthetic: true, source_sha256: sha256(Buffer.from('[2]')) }));
+      // 1: a real payload (not named *.synthetic.raw, not marked synthetic).
+      put('real.raw', '[3]');
+      put('real.meta.json', meta({ synthetic: false, recorded_at: '2026-09-29T10:00:00Z' }));
+      // 2: a synthetic raw whose meta says it is its own source.
+      put('copy.synthetic.raw', '[4]');
+      put('copy.synthetic.meta.json', meta({ synthetic: true, source_sha256: sha256(Buffer.from('[4]')) }));
+      // 3: a synthetic name over a cut of an archived payload.
+      put('cut.synthetic.raw', '[5]');
+      put('cut.synthetic.meta.json', meta({ synthetic: true, from: 'archive', archive_key: 'raw/x.zst' }));
+      const problems = ownerFixtureProblems(pathToFileURL(`${tmp}/`));
+      const of = (file: string) => problems.filter((p) => p.startsWith(`${file}:`));
+      expect(of('good.synthetic.raw')).toEqual([]);
+      expect(of('real.raw').length).toBeGreaterThanOrEqual(2);
+      expect(of('real.meta.json')).toHaveLength(1);
+      expect(of('copy.synthetic.raw')).toHaveLength(1);
+      expect(of('cut.synthetic.raw')).toHaveLength(1);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
     }
   });
 });
