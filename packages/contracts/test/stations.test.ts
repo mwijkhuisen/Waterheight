@@ -120,6 +120,9 @@ describe('station declarations (tier, role, provider_key, units, steps)', () => 
     ['native_step', '15 min'],
     ['expected_step', '15m'],
     ['staleness_limit', 'PT'],
+    ['name', 'Bad\u202EName'],
+    ['name', 'Bad\u2028Name'],
+    ['water_name', 'Bad\u2029Name'],
   ])('rejects %s = %j', (key, value) => {
     expect(withRow(0, (r) => (r[key] = value)).success).toBe(false);
   });

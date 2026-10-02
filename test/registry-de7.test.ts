@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { type PublicStation, SourcesFile, StationsFile, validateStations } from '../packages/contracts/src/index.ts';
-import { generate, type Inputs, OUTPUT, readInputs } from '../scripts/gen-de7-stations.ts';
+import { generate, type Inputs, NEAR_M, OUTPUT, readInputs } from '../scripts/gen-de7-stations.ts';
 import { repoRoot } from './catalogue.ts';
 
 // registry/stations/de-7.yaml is generated (scripts/gen-de7-stations.ts) from the recorded messwerte.txt (which gauges
@@ -113,6 +113,9 @@ describe('registry/stations/de-7.yaml', { timeout: 30_000 }, () => {
     expect(de1Codes.size).toBeGreaterThan(100);
     expect(rows.filter((r) => de1Codes.has(r.provider_code))).toEqual([]);
     expect(flat).toContain('the placeholder numbers 1234567, 123456, 1234512345');
+    expect(flat).toContain(
+      'the generator fails on a DE-7 station with the number of a DE-1 station, within 300 m of one, or with its name on H',
+    );
   });
 
   it('marks exactly the nine catalogue gauges as tier 1 and first_release, every other row tier 2', () => {
@@ -230,9 +233,38 @@ describe('scripts/gen-de7-stations.ts fails loudly', { timeout: 30_000 }, () => 
   });
 
   it('on a DE-7 station number that DE-1 registers (a WSV gauge)', () => {
-    expect(() => run({ de1: new Set([...inputs.de1, '2581119000100']) })).toThrow(
+    const wsv = { code: '2581119000100', name: 'Elsewhere', quantity: 'H', lon: 0, lat: 0 };
+    expect(() => run({ de1: [...inputs.de1, wsv] })).toThrow(
       /DE-7 station numbers that DE-1 registers \(WSV gauges\): 2581119000100/,
     );
+  });
+
+  it('on a DE-7 station within 300 m of a DE-1 station, or named like a DE-1 station of H (review L4)', () => {
+    expect(NEAR_M).toBe(300);
+    const stah = inputs.stations.find((s) => s.no === '2829100000100');
+    if (stah === undefined) throw new Error('no Stah');
+    // 0.0025° of latitude is about 278 m; 0.003° about 334 m.
+    const wsv = (dlat: number, over: Partial<Inputs['de1'][number]> = {}) => ({
+      code: '99999999',
+      name: 'ELSEWHERE',
+      quantity: 'H',
+      lon: stah.lon,
+      lat: stah.lat + dlat,
+      ...over,
+    });
+    expect(() => run({ de1: [...inputs.de1, wsv(0.0025)] })).toThrow(
+      /DE-7 stations within 300 m of a DE-1 station: 2829100000100 \(DE-1 99999999, 278 m\)/,
+    );
+    // Any quantity: a WSV discharge station at the same place is the same gauge.
+    expect(() => run({ de1: [...inputs.de1, wsv(0.0025, { quantity: 'Q' })] })).toThrow(/within 300 m/);
+    expect(() => run({ de1: [...inputs.de1, wsv(0.003)] })).not.toThrow();
+    // The name, case and accents aside, on H only; a station without a position is still compared by name.
+    for (const name of ['STAH', 'Ståh', 'stah'])
+      expect(() => run({ de1: [...inputs.de1, wsv(1, { name, lon: null, lat: null })] })).toThrow(
+        /DE-7 stations named like a DE-1 station of H: 2829100000100 \(DE-1 99999999\)/,
+      );
+    expect(() => run({ de1: [...inputs.de1, wsv(1, { name: 'STAH', quantity: 'Q' })] })).not.toThrow();
+    expect(() => run({ de1: [...inputs.de1, wsv(1, { name: 'STAHL' })] })).not.toThrow();
   });
 
   it('on a modal step other than 5 or 15 minutes, or no step at all', () => {
@@ -267,7 +299,12 @@ describe('scripts/gen-de7-stations.ts fails loudly', { timeout: 30_000 }, () => 
     expect(() => run({ hydro: [...inputs.hydro, hydro] })).toThrow(/hydro file: \S+ twice/);
     expect(() =>
       run({ stations: inputs.stations.map((s) => (s.no === '2581119000100' ? { ...s, name: 'Bad‮Name' } : s)) }),
-    ).toThrow(/station 2581119000100 name: a control or format character/);
+    ).toThrow(/station 2581119000100 name: a control, format or line separator character/);
+    // Review I1: the line and paragraph separators U+2028 and U+2029 too.
+    for (const sep of ['\u2028', '\u2029'])
+      expect(() =>
+        run({ stations: inputs.stations.map((s) => (s.no === '2581119000100' ? { ...s, name: `Bad${sep}Name` } : s)) }),
+      ).toThrow(/station 2581119000100 name: a control, format or line separator character/);
     expect(() =>
       run({ stations: inputs.stations.map((s) => (s.no === '2581119000100' ? { ...s, name: 'x'.repeat(201) } : s)) }),
     ).toThrow(/station 2581119000100 name: longer than 200 characters/);

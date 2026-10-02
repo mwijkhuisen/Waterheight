@@ -8,12 +8,14 @@
 //   node scripts/gen-de7-stations.ts
 //
 // The inputs are read through the adapters (the loader's own ZIP guard and the strict DE-7 and DE-8 parsers), never
-// by a parser of its own. The registry must never hold a WSV gauge: the generator fails when a DE-7 station number
-// is a DE-1 provider_code (messwerte.txt carries no site_no, so the registry is the only filter, see
-// adapters/de-7/normalise.ts).
+// by a parser of its own. The registry must never hold a WSV gauge (site_no 102): messwerte.txt carries no site_no,
+// so only registered series load (adapters/de-7/normalise.ts), and this generator fails on a DE-7 station that
+// looks like a DE-1 one: the same number, a station within 300 m, or the same name (case and accents aside) on
+// the same quantity. (LANUK numbers have 13 digits and WSV ones 7 or 8, so the number alone rarely meets; review
+// L4 of P5b.) test/registry-precedence.test.ts holds the published registry to the same 300 m.
 //
 // Fails loudly on anything it does not know: a station in messwerte.txt that the station file does not list (the
-// placeholders aside), a modal step other than PT5M or PT15M, a station number that DE-1 registers, a tier-1 gauge
+// placeholders aside), a modal step other than PT5M or PT15M, a station that looks like a DE-1 one, a tier-1 gauge
 // without data, a duplicate hydro or station row, a name that breaks the station label rule. Fixture text is data.
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -74,9 +76,22 @@ type Obj = Record<string, unknown>;
 function label(s: string, at: string): string {
   if (s === '') throw new Error(`${at}: empty`);
   if (s.length > 200) throw new Error(`${at}: longer than 200 characters`);
-  if (/[\p{Cc}\p{Cf}]/u.test(s)) throw new Error(`${at}: a control or format character`);
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(s)) throw new Error(`${at}: a control, format or line separator character`);
   return s;
 }
+
+/** A DE-7 station this close to a DE-1 one is taken for the same gauge (as test/registry-precedence.test.ts). */
+export const NEAR_M = 300;
+
+/** Metres between two WGS84 points (equirectangular; exact enough below a kilometre). */
+function metres(a: { lon: number; lat: number }, b: { lon: number; lat: number }): number {
+  const rad = Math.PI / 180;
+  const x = (b.lon - a.lon) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
+  return 6_371_000 * Math.hypot(x, (b.lat - a.lat) * rad);
+}
+
+/** A name compared with case and accents aside (NFD without its combining marks, lower case). */
+const nameKey = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
 /** Code-unit order (never locale). */
 const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -107,9 +122,11 @@ export type Inputs = {
   warns: Map<string, boolean>;
   /** The hydro file (the rows of `NA` aside). */
   hydro: HydroRow[];
-  /** The provider_codes of registry/stations/de-1.yaml (WSV gauges). */
-  de1: Set<string>;
+  /** The rows of registry/stations/de-1.yaml (WSV gauges): code, name, quantity and WGS84 position. */
+  de1: De1Row[];
 };
+
+export type De1Row = { code: string; name: string; quantity: string; lon: number | null; lat: number | null };
 
 type Plan = {
   stations: PublicStation[];
@@ -157,9 +174,25 @@ function build(inputs: Inputs): Plan {
   const placeholders = [...inputs.readings.keys()].filter((no) => PLACEHOLDERS.has(no)).sort(byCode);
   const delivering = [...inputs.readings.keys()].filter((no) => !PLACEHOLDERS.has(no)).sort(byCode);
 
-  // WSV gauges never load from here: a DE-1 provider_code must not be a DE-7 station.
-  const wsv = delivering.filter((no) => inputs.de1.has(no));
+  // WSV gauges never load from here: no DE-7 station may be a DE-1 one by its number, its place or its name.
+  const de1Codes = new Set(inputs.de1.map((r) => r.code));
+  const wsv = delivering.filter((no) => de1Codes.has(no));
   if (wsv.length > 0) throw new Error(`DE-7 station numbers that DE-1 registers (WSV gauges): ${wsv.join(', ')}`);
+  const near: string[] = [];
+  const named: string[] = [];
+  for (const no of delivering) {
+    const s = master.get(no);
+    if (s === undefined) continue;
+    for (const r of inputs.de1) {
+      if (r.lon !== null && r.lat !== null && metres(s, { lon: r.lon, lat: r.lat }) <= NEAR_M) {
+        near.push(`${no} (DE-1 ${r.code}, ${Math.round(metres(s, { lon: r.lon, lat: r.lat }))} m)`);
+      }
+      // A DE-7 series is H (W); a DE-1 station of that quantity and name is the same gauge.
+      if (r.quantity === 'H' && nameKey(r.name) === nameKey(s.name)) named.push(`${no} (DE-1 ${r.code})`);
+    }
+  }
+  if (near.length > 0) throw new Error(`DE-7 stations within ${NEAR_M} m of a DE-1 station: ${near.join(', ')}`);
+  if (named.length > 0) throw new Error(`DE-7 stations named like a DE-1 station of H: ${named.join(', ')}`);
 
   for (const [no, name] of TIER1) {
     if (PLACEHOLDERS.has(no)) throw new Error(`tier-1 station ${no} is a placeholder`);
@@ -246,7 +279,7 @@ function header(inputs: Inputs, plan: Plan): string {
     ),
     ...comment(
       `Never registered: the placeholder numbers ${[...PLACEHOLDERS].join(', ')} (catalogue §2.3; present in the recording: ${plan.placeholders.join(', ') || 'none'}), ` +
-        'and any WSV gauge: the generator fails when a DE-7 station number is a DE-1 provider_code (site_no 102).',
+        `and any WSV gauge (site_no 102, which messwerte.txt does not carry): the generator fails on a DE-7 station with the number of a DE-1 station, within ${NEAR_M} m of one, or with its name on H (case and accents aside).`,
       '#',
       '#  ',
     ),
@@ -298,7 +331,7 @@ async function readMember(zip: Buffer, member: string): Promise<Uint8Array> {
   return Buffer.concat(parts);
 }
 
-/** The inputs: the three fixtures with their sha256 and `recorded_at`, and the DE-1 provider codes. */
+/** The inputs: the three fixtures with their sha256 and `recorded_at`, and the DE-1 stations. */
 export async function readInputs(): Promise<Inputs> {
   const files: Inputs['files'] = [];
   const read = (path: string) => {
@@ -327,13 +360,21 @@ export async function readInputs(): Promise<Inputs> {
     warns.set(r[3] as string, (r[6] ?? '') !== '');
   }
   const hydro = parseHydro(await readMember(read(HYDRO_FIXTURE), HYDRO_MEMBER));
-  const de1 = new Set<string>();
-  const doc = parse(readFileSync(join(root, DE1_REGISTRY), 'utf8')) as { stations?: { provider_code?: unknown }[] };
-  for (const s of doc.stations ?? []) {
-    if (typeof s.provider_code !== 'string') throw new Error(`${DE1_REGISTRY}: a row without a provider_code`);
-    de1.add(s.provider_code);
-  }
-  if (de1.size === 0) throw new Error(`${DE1_REGISTRY}: no station`);
+  const doc = parse(readFileSync(join(root, DE1_REGISTRY), 'utf8')) as { stations?: Obj[] };
+  const de1: De1Row[] = (doc.stations ?? []).map((s) => {
+    const { provider_code: code, name, quantity, lon, lat } = s;
+    const place = (v: unknown) => v === null || typeof v === 'number';
+    if (
+      typeof code !== 'string' ||
+      typeof name !== 'string' ||
+      typeof quantity !== 'string' ||
+      !place(lon) ||
+      !place(lat)
+    )
+      throw new Error(`${DE1_REGISTRY}: a row without a provider_code, name, quantity or position`);
+    return { code, name, quantity, lon: lon as number | null, lat: lat as number | null };
+  });
+  if (de1.length === 0) throw new Error(`${DE1_REGISTRY}: no station`);
   return { files, readings, stations, warns, hydro, de1 };
 }
 

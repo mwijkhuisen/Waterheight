@@ -125,7 +125,7 @@ type Obj = Record<string, unknown>;
 function label(s: string, at: string): string {
   if (s === '') throw new Error(`${at}: empty`);
   if (s.length > 200) throw new Error(`${at}: longer than 200 characters`);
-  if (/[\p{Cc}\p{Cf}]/u.test(s)) throw new Error(`${at}: a control or format character`);
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(s)) throw new Error(`${at}: a control, format or line separator character`);
   return s;
 }
 

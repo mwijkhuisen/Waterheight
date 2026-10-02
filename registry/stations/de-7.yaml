@@ -15,8 +15,8 @@
 #   Isselburg, 9282570000100 Rhedebruegge, 2829100000100 Stah, 2849900000100 Landesgrenze, 2869500000200 Goch,
 #   3190000000100 Haskenau, 9286190000100 Bilk, 9286455000200 Gronau.
 # Never registered: the placeholder numbers 1234567, 123456, 1234512345 (catalogue §2.3; present in the recording:
-#   1234512345), and any WSV gauge: the generator fails when a DE-7 station number is a DE-1 provider_code (site_no
-#   102).
+#   1234512345), and any WSV gauge (site_no 102, which messwerte.txt does not carry): the generator fails on a DE-7
+#   station with the number of a DE-1 station, within 300 m of one, or with its name on H (case and accents aside).
 #   station-file stations without readings in the recording (not registered): 2766929300099, 2825320000100.
 #   [U] third-party operators: the hydro file names 4 registered gauges whose operator is not "LANUV, NRW":
 #     2761150000100 (RWE), 2766645000100 (Oester-Wasserverband), 2768529000200 (WBV Lüdenscheid), 2768784000200

@@ -21,8 +21,9 @@ import type { Readings } from './parse.ts';
 //  - time: ISO 8601 at a fixed +01:00 (MEZ) all year; any other offset is drift;
 //  - the placeholder station numbers 1234567, 123456 and 1234512345 (two Soestbach gauges merged into one
 //    block) belong to no gauge: dropped as `placeholder`;
-//  - WSV gauges (site_no 102) never load: messwerte.txt carries no site_no, so only registered series load
-//    and the registry generator refuses any number that DE-1 registers (scripts/gen-de7-stations.ts);
+//  - WSV gauges (site_no 102) never load: messwerte.txt carries no site_no, so only registered series load,
+//    and the registry generator refuses a station with a DE-1 number, within 300 m of a DE-1 station or with
+//    its name on H (scripts/gen-de7-stations.ts; test/registry-precedence.test.ts holds the 300 m);
 //  - `NA` is the provider's gap (`sentinel`); a point twice with the same value is one, with two values
 //    both are withheld (`conflict`);
 //  - qc raw (unvalidated raw data, LANUK); our range bit for an implausible stage, the value is kept;

@@ -10,12 +10,15 @@ export const LICENCE_GATES = ['open', 'owner-only', 'permission-pending', 'withh
 
 const Duration = z.iso.duration();
 
-/** Provider text as published, bounded (the API's Text(200)), without control or format characters (bidi included). */
+/**
+ * Provider text as published, bounded (the API's Text(200)), without control or format characters (bidi included)
+ * or the line and paragraph separators U+2028 and U+2029 (review I1 of P5b).
+ */
 const Label = z
   .string()
   .min(1)
   .max(200)
-  .refine((s) => !/[\p{Cc}\p{Cf}]/u.test(s), 'a control or format character');
+  .refine((s) => !/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(s), 'a control, format or line separator character');
 
 const identification = {
   /** Registry format, e.g. 'nl.rws.lobith.bovenrijn.tolkamer', 'ch.bafu.2289'. */
