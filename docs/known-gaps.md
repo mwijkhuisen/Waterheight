@@ -4,6 +4,27 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P6a Graph pipeline (PR pending, issue #21)
+
+### Needs the owner, the VPS or the first release
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-155 | CI | The tool image (`tools/geo/Dockerfile`: libosmium, osmium-tool and tippecanoe built from source) was not built on the agent's box (no Docker there), so its build, its version and library checks and the osmium command lines of `extract.sh` and `export-check.sh` are proven only by `geo.yml` (run 37051662333 on the branch, result pending). | The `rivernet fixture` and `rivernet build` jobs of the branch run, then of the first main run | open [CI] |
+| KG-154 | fixtures, tests | The fixture PBF and its exports (`tools/geo/fixtures/rivernet.*`) come from the first full `geo.yml` run's `rivernet-fixture` artifact (at most 15 MB), so the PR criterion on the fixture (acyclic graph, the Pannerdensche Kop with two downstream edges, two builds with the same bytes) and `export-check.sh` are proven only after that file is committed (`docs/runbooks/geo-refresh.md` §8). Until then the `rivernet fixture` job passes with "no fixture yet". | The lead commits the fixture from the run's artifact and fills `tools/geo/fixtures/README.md`; the job then proves the criterion | open [CI] |
+| KG-153 | registry | 17 rivers of `registry/rivers.yaml` have no P402 (OSM relation) in Wikidata, so the first run selects their ways by `wikidata` plus `name` (never by name alone). The relations that carry their QID are listed in `build-report.json`. | After the first run, review that list and pin each real relation as its `osm_relation_id` in a PR (P6b at the latest) | open |
+| KG-152 | QA | The EU-Hydro direction agreement of at least 98% is a P6b criterion; P6a only measures it. The first number is in `qa-report.json` of the first run, and the QA stops early (`complete: false`) when the EEA server is slow or errors (R-081). | [agent-prod] P6b reads `agreement_pct` of the release and lists the disagreements | open [agent-prod] |
+| KG-151 | release | The first main run of `geo.yml` and its release `geo-<UTC date>` do not exist until the owner dispatches the workflow on `main` after the merge (`docs/runbooks/geo-refresh.md` §2); the schedule (the 3rd of each month, 04:23 UTC) starts the same way. The run's real duration and download size are not measured yet (the job limit is 240 minutes). Nothing consumes the release before P6b. | [owner] Dispatch `geo.yml` on `main`, read the job summary and `qa-report.json` (§4) and verify the release by hand once (§6) | open [U] |
+
+### Known limits
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-159 | CI | `geo.yml` is still not a required check (KG-106): a red `rivernet fixture` job does not block a merge, and `rivernet build` and `rivernet publish` never run on a pull request. | The owner reads the `geo` result on a pull request that touches `tools/geo/**` or `registry/rivers.yaml` | accepted |
+| KG-158 | registry | Two river-like names are left for P6b because they are canals that its station snapping must handle: `kanne` and `smeermaas.zuidwillemsvaart` (the Zuid-Willemsvaart is a canal trap in `sources.yaml`). | P6b | open (P6b) |
+| KG-157 | data | The kilometre positions (PK) of the Belgian and French rivers are unverified: `registry/rivers.yaml` carries `km_direction` per river, but no source of official river-km for BE and FR has been checked against the graph. | P6b checks the chainage per source (catalogue §5.3) and sets `km_direction` accordingly | open (P6b) |
+| KG-156 | coverage | The Alpine Rhine and the Bodensee on Austrian soil are in none of the 16 extracts (D21 keeps AT out), so the graph may have the upper Rhine as a separate component or start at the Swiss border; the Bodensee is not crossed. The build report counts the components. | Accepted for P6a; P6b judges the components (a station upstream of the gap would not snap) | accepted |
+
 ## P5c owner-audience adapters (PR pending, issue #20)
 
 ### Needs the owner, the VPS or the first release
