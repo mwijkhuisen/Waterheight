@@ -29,7 +29,10 @@ import type { LayerItem, Table, ValuesItem } from './parse.ts';
 //  - unit and factor from the series' registry row: H and H_sonde are metres relative to the gauge zero, Habs and
 //    Habs_sonde metres DNG (= TAW), both ×100 to cm, Q and QADM m³/s. The payload's `ts_unitsymbol` must equal the
 //    registry's native unit (`m3/s` and `cumec` mean `m³/s`), else every value of that series is withheld
-//    (`unit_mismatch`) and the key is listed in `unitMismatch`;
+//    (`unit_mismatch`, withheld and alerted), and so is a values item that states no unit (every call asks for it).
+//    Nothing is listed in `unitMismatch`: the loader keeps one such list per source, and
+//    the layers and the catch-up's calls state disjoint sets of series, so each payload would erase the others'
+//    entries; every item carries its own unit;
 //  - quality: a value layer states none, and live data is quality 200, "raw". A values row says it in its `Quality
 //    Code` column (found by name): 200 → raw, 0…199 → validated, 205 and 210 "douteux" → raw + provider-suspect,
 //    253 "valeurs fantômes" → dropped (`phantom`), -1 "missing" → dropped (`sentinel`), any other code is withheld
@@ -61,8 +64,6 @@ export type Context = {
   registry: Registry;
   /** When the payload was fetched (UTC ms): the reference for "future" and "too old". */
   fetchedAt: number;
-  /** Series whose unit the newest unit-stating payload showed changed: the fallback of an item that states none. */
-  unitMismatch?: ReadonlySet<string>;
 };
 
 // Maps, not objects: a provider string must not find an inherited property.
@@ -112,7 +113,6 @@ function normaliseItems(items: readonly Item[], ctx: Context): Normalised {
     if (group === undefined) byKey.set(item.key, [item]);
     else group.push(item);
   }
-  const mismatch: string[] = [];
   // Per series, per instant: the row, or null once two rows disagree.
   const series = new Map<string, Map<number, { value: number; qc: number } | null>>();
   for (const [key, group] of byKey) {
@@ -122,11 +122,7 @@ function normaliseItems(items: readonly Item[], ctx: Context): Normalised {
       continue;
     }
     const n = group.reduce((sum, item) => sum + item.rows.length, 0);
-    // An item that states its unit is judged by it alone; one that states none by the newest stating payload.
-    const stated = group.filter((item) => item.unit !== undefined);
-    const wrong = stated.some((item) => unitOf(item.unit as string) !== decl.native_unit);
-    if (wrong) mismatch.push(key);
-    if (wrong || (stated.length < group.length && ctx.unitMismatch?.has(key))) {
+    if (group.some((item) => item.unit === undefined || unitOf(item.unit) !== decl.native_unit)) {
       count(out, 'unit_mismatch', n);
       continue;
     }
@@ -183,7 +179,6 @@ function normaliseItems(items: readonly Item[], ctx: Context): Normalised {
       if (row) out.obs.push({ series: key, ts: toIso(ts), value: row.value, qc: row.qc });
     }
   }
-  out.unitMismatch = mismatch.sort();
   return out;
 }
 

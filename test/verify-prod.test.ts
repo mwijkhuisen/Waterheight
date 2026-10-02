@@ -45,6 +45,7 @@ import {
   checkMeta,
   checkNoindex,
   checkOpenapi,
+  checkOwnerHealth,
   checkOwnerLeak,
   checkOwnerSources,
   checkOwnerStations,
@@ -383,6 +384,7 @@ describe('freshness, soak and capacity', () => {
       'label offset LU-1',
       'belgian set',
       'owner sources',
+      'owner health',
       'owner stations',
       'owner leak',
       'tiles manifest',
@@ -2303,7 +2305,8 @@ describe('owner isolation in the data API bodies', () => {
 });
 
 // P5c (issue #20): the owner sources never show in the public API. `owner sources` reads the counts of
-// /api/v1/health/sources, `owner stations` the station list; both pure, on contract documents.
+// /api/v1/health/sources, `owner stations` the station list; both pure, on contract documents. `owner health` is
+// the half that needs live capture (review SR-8), so the CI deploy job may let only it fail.
 
 describe('owner sources and owner stations (P5c)', () => {
   const ownerIds = ownerSourceIds(registry);
@@ -2318,21 +2321,38 @@ describe('owner sources and owner stations (P5c)', () => {
     expect(ownerIds.length).toBeGreaterThanOrEqual(OWNER_SOURCES_MIN);
   });
 
-  it('owner sources passes: healthy = total (at least 4) and no owner source listed', () => {
+  it('owner sources passes: at least 4 owner sources and none listed, healthy or not (no capture in CI)', () => {
     expect(checkOwnerSources(s(sourcesDoc({ owner_sources: { healthy: 6, total: 6 } })), ownerIds)).toEqual({
       check: 'owner sources',
       ok: true,
-      detail: '6 of 6 owner sources healthy (at least 4), none listed in sources',
+      detail: '6 owner sources (at least 4), none listed in sources',
     });
     expect(
       checkOwnerSources(s(sourcesDoc({ owner_sources: { healthy: 4, total: 4 }, sources: [de1(), nl1()] })), ownerIds)
         .ok,
     ).toBe(true);
+    expect(checkOwnerSources(s(sourcesDoc({ owner_sources: { healthy: 0, total: 6 } })), ownerIds).ok).toBe(true);
   });
 
   it.each([
-    ['fewer healthy than total', { owner_sources: { healthy: 5, total: 6 } }, '5 of 6 owner sources healthy'],
-    ['none healthy', { owner_sources: { healthy: 0, total: 6 } }, '0 of 6 owner sources healthy'],
+    ['all healthy', { healthy: 6, total: 6 }, true, '6 of 6 owner sources healthy'],
+    ['fewer healthy than total', { healthy: 5, total: 6 }, false, '5 of 6 owner sources healthy'],
+    ['none healthy', { healthy: 0, total: 6 }, false, '0 of 6 owner sources healthy'],
+  ])('owner health on %s', (_, owner_sources, ok, detail) => {
+    expect(checkOwnerHealth(s(sourcesDoc({ owner_sources })))).toEqual({ check: 'owner health', ok, detail });
+  });
+
+  it('owner health: a 5xx and a network error are FAILs', () => {
+    const doc = sourcesDoc({ owner_sources: { healthy: 6, total: 6 } });
+    expect(checkOwnerHealth(s(doc, { status: 503 }))).toMatchObject({
+      check: 'owner health',
+      ok: false,
+      detail: expect.stringContaining('status 503'),
+    });
+    expect(checkOwnerHealth(readApi('ECONNRESET', HealthSources)).ok).toBe(false);
+  });
+
+  it.each([
     ['fewer than 4 owner sources', { owner_sources: { healthy: 3, total: 3 } }, '3 owner sources, at least 4 expected'],
     ['no owner source at all', { owner_sources: { healthy: 0, total: 0 } }, '0 owner sources, at least 4 expected'],
   ])('owner sources fails on %s', (_, over, detail) => {
@@ -2457,7 +2477,7 @@ describe('owner sources and owner stations (P5c)', () => {
   });
 
   it('the --dry-run list has exactly one entry for each new check', () => {
-    for (const name of ['owner sources', 'owner stations'])
+    for (const name of ['owner sources', 'owner health', 'owner stations'])
       expect(
         CHECKS.filter((c) => c.startsWith(`${name}:`)),
         name,
@@ -2465,11 +2485,12 @@ describe('owner sources and owner stations (P5c)', () => {
     expect(CHECKS.find((c) => c.startsWith('owner stations:'))).toContain('be.spw. or lu.age-json.');
   });
 
-  it('ci.yml lets only `owner sources` fail in the deploy job: `owner stations` and `owner leak` must PASS', () => {
+  it('ci.yml lets only `owner health` fail in the deploy job: `owner sources`, `owner stations` and `owner leak` must PASS', () => {
     const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
     const list = /grep -vE '\^FAIL \(([^)]+)\) '/.exec(ci)?.[1]?.split('|');
     expect(list).toBeDefined();
-    expect(list).toContain('owner sources');
+    expect(list).toContain('owner health');
+    expect(list).not.toContain('owner sources');
     expect(list).not.toContain('owner stations');
     expect(list).not.toContain('owner leak');
     expect(ci).toContain("grep -qE '^PASS owner leak '");

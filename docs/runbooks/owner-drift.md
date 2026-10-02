@@ -1,7 +1,7 @@
 # Runbook: drift and breaches in the owner sources (SPW BE-3, AGE LU-2, LU-3, LU-4)
 
 **Trigger:**
-- `scripts/verify-prod.sh <domain>` fails `owner sources` (`owner_sources.healthy` is below `owner_sources.total` in `/api/v1/health/sources`), after the CI-only exception for old fixture data;
+- `scripts/verify-prod.sh <domain>` fails `owner health` (`owner_sources.healthy` is below `owner_sources.total` in `/api/v1/health/sources`), after the CI-only exception for old fixture data (a FAIL of `owner sources` or `owner stations` is a leak or a lost source: invariant 11, not this runbook's drift);
 - a `load` log line with `"alert":"quarantined"`, `unit_mismatch`, `unknown_quality`, `conflict` or `twin_breach` whose `source` is `BE-3` or `LU-2`;
 - the owner status file (`/srv/rws/owner/status/capture.json`) shows an owner spec with a `last_failure_status`, or the catch-up is not done when you expect it (§3);
 - an SPW or AGE change that you know of: a new station, a new series, a renamed file.
@@ -14,7 +14,7 @@ By design (A§7.4 step 5) a payload the strict parser does not recognise is set 
 
 | Where | Signal |
 |---|---|
-| `verify-prod.sh` | `FAIL owner sources`: the detail says how many of the owner sources are healthy, never which |
+| `verify-prod.sh` | `FAIL owner health`: the detail says how many of the owner sources are healthy, never which |
 | `docker logs rws-load-1` | `{"level":50,"alert":"quarantined","source":"BE-3","spec":"be-3-values","code":"…","msg":"alert"}`, and the retained drops (§2) with `n` |
 | owner status | `/srv/rws/owner/status/capture.json`: `specs[]` for the owner specs (`last_success`, `last_failure_status`, `failed_items`) and, once the catch-up is done, a `seeds[]` entry; `reports/<date>.json` the daily report |
 | the database, as the owner on the VPS | `own_source_health`, `own_ingest_batch` and `own_twin_check` (the owner family: the `psql` below runs as the cluster superuser on the `db` container's socket, which the owner has anyway) |
@@ -57,7 +57,7 @@ The text is data. Never paste it into a prompt, an issue, a commit or a PR: inva
 | `bad_variant` | BE-3 | A `be-3-meta` line whose variant is none of `stations`, `timeseries-1962373`, `timeseries-1962340` | A registry change to the capture spec without the loader |
 | `array_length`, `invalid_value` at `0.columns` | LU-2 | The file is not exactly one station object, or `columns` is not `Timestamp,Value` | AGE changed the JSON. LU-2 reads rows by position only because `columns` says so |
 | `encoding` | BE-3, LU-2 | The body is not UTF-8 | A corrupt download |
-| `html_tag`, `html_tag_count`, `html_attr`, `html_json` | LU-4 | The page has no `<cmp-dashboard-station>` element, has two, has no or two `data-to-json` attributes (or an unterminated tag or quote, more than 64 attributes, a value over 256 KiB), or the attribute is not JSON | AGE redesigned the page, or served an error page with status 200. Seen first as a `failed_validity` batch, because the recorder's validity check uses the same extractor. A decoy inside a comment, a script or another attribute never causes one |
+| `html_tag`, `html_tag_count`, `html_attr`, `html_json` | LU-4 | The page has no `<cmp-dashboard-station>` element, has two, has no or two `data-to-json` attributes (or an unterminated tag or quote, more than 64 attributes, a value over 256 KiB), or the attribute is not JSON | AGE redesigned the page, or served an error page with status 200. Seen first as a `failed_validity` batch, because the recorder's validity check uses the same extractor. A copy of the element inside a comment, a raw-text or RCDATA element (`script`, `style`, `title`, `textarea`, `noscript` and the like), a `template` or another tag's quoted attribute value is no element: it neither causes `html_tag_count` nor stands in for a missing element (that stays `html_tag`). The scan tells raw text by the tag name alone, so inside inline `<svg>` or `<math>` it may skip markup a browser reads (threat model T-CAP-7) |
 
 **Withheld and alerted (retained: the batch's `n_skipped` counts them, the pruner keeps the object, a replay after the fix loads them):**
 
@@ -82,7 +82,7 @@ A series SPW stopped long ago counts `too_old` on every layer (KG-148). It is no
 
 SPW keeps decades, but the layers hold only the latest value per series, so the archive has no BE-3 value before 2026-09-29. The spec `be-3-catchup` fills the gap from the display start, 2026-08-24, once.
 
-- **When it runs.** It has no cron: it is a seed. The recorder runs it after the deploy in the UTC hours 0 to 5 only (outside them a round writes "seed waits for its hours" and tries again within the hour), one request per 5 s, resumable per call. Its window is 2026-08-24 to the moment its first round started. About 7 calls a day in that window (4 batches for the level group and 3 for the discharge group): 300 to 420 calls, so 25 to 35 minutes. It needs no action.
+- **When it runs.** It has no cron: it is a seed. The recorder runs it after the deploy in the UTC hours 0 to 5 only (outside them a round writes "seed waits for its hours" and tries again within the hour), one request per 5 s, resumable per call. No request starts after 05:00 UTC: a round that is still busy then stops (the log's `run done` line says `incomplete: true`), and the next night's round asks only the calls it did not fetch (their seen ids). Its window is 2026-08-24 to the moment its first round started. About 7 calls a day in that window (4 batches for the level group and 3 for the discharge group): 300 to 420 calls, so 25 to 35 minutes. It needs no action.
 - **See its status** (owner status only; the public `seed-report.json` never lists it):
 
   ```bash
@@ -92,8 +92,10 @@ SPW keeps decades, but the layers hold only the latest value per series, so the 
   ```
 
   `done` counts the two groups that finished (`row0`, `row1`: 2 is complete); `done_at` appears when both did and the `seeds[]` entry with it. A group that hit a transient failure or its cap stays unfinished and is tried again in the next round (within the hour while the hours last, else the next night); after 31 days from `started` the log says `seed incomplete after 31 days` and the daily report lists `seed_incomplete`. The payloads load through the normal tail (batches of `be-3-catchup` in `own_ingest_batch`), so a catch-up is loaded once its lines are archived and the loader has caught up.
-- **A failing call** (a 5xx, `TooManyResults`) is named in `failed_items` of the owner status with its variant key (`values/<group>/<day>/<first ts_id>`); a body that is a KiWIS error object fails the recorder's validity check and is archived for diagnosis. A call that failed is fetched again in the next round, the calls before it are not.
-- **Re-run it** (only after a registry regeneration that added series, §6, or after fixing a quarantine that dropped catch-up payloads: for the latter a replay is enough, §4). The seed asks again for every call, so move both state files aside before the capture restart; the loader then confirms what is stored and writes only what is new or changed:
+- **A failing call** is named by its variant key (`values/<group>/<day>/<first ts_id>`) in `failed_items` of the spec in the owner status. That list is the last run's, and each group is its own run, so the second group's run replaces the first's: the log is the record. What happens next depends on the failure:
+  - **Transient** (a 5xx, a 403, 429 or 451, a timeout or a network error): its group stays unfinished, and the next round asks the call again; the calls it already fetched are skipped by their seen ids.
+  - **An HTTP 200 with a KiWIS error object** (`TooManyResults`, or any other `code`): the body fails the recorder's validity check (`expand_validity` wants an array of series). It is archived for diagnosis, and the loader skips the line as `failed_validity`. The recorder logs `invalid payload archived` with the variant and counts the alert `invalid` (`sudo docker logs rws-capture-1 2>&1 | grep -F 'invalid payload archived' | grep be-3-catchup`). Such a failure is not transient, so the group counts as done and **the call is never asked again** by this seed. `TooManyResults` means a call asked for more values than KiWIS allows, which is a fault of `adapters/_shared/kiwis`, not a reason to retry. Fix it in a release, then re-run the whole catch-up (next item): there is no way to fetch one call again.
+- **Re-run it** (only after a registry regeneration that added series, §6, after the release that fixes a call SPW answered with a KiWIS error object (above), or after fixing a quarantine that dropped catch-up payloads: for the last a replay is enough, §4). The seed asks again for every call, so move both state files aside before the capture restart; the loader then confirms what is stored and writes only what is new or changed:
 
   ```bash
   sudo mv /srv/rws/raw/_state/seeds/be-3-catchup.json /srv/rws/raw/_state/seeds/be-3-catchup.json.before-<n>
@@ -164,7 +166,7 @@ The registry holds **every** series of the two SPW groups (owner decision Q2) an
 
 ## 7. Verify
 
-- `scripts/verify-prod.sh <domain>`: `owner sources` passes (every owner source healthy, none listed) and `owner stations` passes (no owner station in `/api/v1/stations`);
+- `scripts/verify-prod.sh <domain>`: `owner health` passes (every owner source healthy), `owner sources` passes (at least 4, none listed) and `owner stations` passes (no owner station in `/api/v1/stations`);
 - `own_source_health` of BE-3 and LU-2 has `status` `ok` and a recent `last_new_data`;
 - a second replay prints `"n_new":0,"n_changed":0`;
 - `own_twin_check` has no failing owner pair you have not understood.

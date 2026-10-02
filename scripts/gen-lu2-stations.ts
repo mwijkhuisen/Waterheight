@@ -28,7 +28,9 @@ export const LU1_REGISTRY = 'registry/stations/lu-1.yaml';
 export const OUTPUT = join(root, 'registry/stations/lu-2.yaml');
 export const TWINS_OUTPUT = join(root, 'registry/twins/lu-2.yaml');
 
-const TS_PATH = /^[0-9A-Za-z][0-9A-Za-z_./-]{0,119}$/;
+/** Every committed ts_path (`0/<number>/<parameter>/15m.Cmd.<suffix>`); --extract writes nothing else (review SR-6). */
+export const TS_PATH = /^0\/[0-9A-Za-z_/]{1,80}\/15m\.Cmd\.[A-Za-z.]{1,30}$/;
+const UNIT = /^(cm|m)$/;
 const ID_PREFIX = 'lu.age-json.';
 
 export type SeedRow = { file: string; ts_path: string; unit: string };
@@ -142,6 +144,16 @@ export function readInputs(): Inputs {
   return { lu1, ...readSeed(readFileSync(join(root, SEED), 'utf8')) };
 }
 
+/** One seed line from a file's payload, or a fixed error: provider text reaches the CSV only through the patterns. */
+export function seedLine(file: string, body: Uint8Array): string {
+  const [series] = parseLu2(body);
+  if (series === undefined) throw new Error(`${file}: an empty payload`);
+  if (!TS_PATH.test(series.ts_path))
+    throw new Error(`${file}: the export's ts_path does not match the ts_path pattern`);
+  if (!UNIT.test(series.ts_unitsymbol)) throw new Error(`${file}: the export's unit is not cm or m`);
+  return `${file},${series.ts_path},${series.ts_unitsymbol}`;
+}
+
 /**
  * --extract: the ts_path and unit of each listed file from the newest `lu-2-json` payload of that file in an owner
  * export (pairs `<spec>-<n>.raw` / `.line.json`), read through the LU-2 parser. Prints counts only.
@@ -167,9 +179,7 @@ function extract(dir: string): void {
     const file = r[0] ?? '';
     const got = newest.get(file);
     if (got === undefined) throw new Error(`${file}: no lu-2-json payload of this file in the export`);
-    const [series] = parseLu2(got.body);
-    if (series === undefined) throw new Error(`${file}: an empty payload`);
-    out.push(`${file},${series.ts_path},${series.ts_unitsymbol}`);
+    out.push(seedLine(file, got.body));
     found += 1;
   }
   writeFileSync(join(root, SEED), `${[...comments, 'file,ts_path,unit', ...out].join('\n')}\n`);

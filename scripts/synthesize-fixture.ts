@@ -1,9 +1,9 @@
 // Synthetic fixtures for owner-audience specs (invariants 9 and 11). The repository is public, so a committed
 // fixture of an owner source keeps the real structure and nothing else: every value is generated.
 //
-//   pnpm fixtures:synth --spec <owner spec id> [--keep <n>]
+//   pnpm fixtures:synth --spec <owner spec id> [--keep <n>] [--force]
 //     P1 form: reads the git-ignored .smoke/<spec>.raw (smoke-capture.ts) and writes
-//     apps/server/src/adapters/<id>/fixtures/<spec>.synthetic.raw.
+//     apps/server/src/adapters/<id>/fixtures/<spec>.synthetic.raw (an existing one only with --force).
 //   pnpm fixtures:synth --from <export dir> --spec <spec id> [--variant <v>] [--pick latest|oldest]
 //                       --name <suffix> [--keep <n>] [--force]
 //     Export form: <export dir> (outside the repository; written by the owner's VPS script) is flat, one pair per
@@ -14,11 +14,19 @@
 // Policy (deterministic, seeded; one table per source in VERBATIM):
 //   kept     keys, structure, array lengths up to --keep (a KiWIS table: its header row plus --keep rows),
 //            booleans, nulls, the numbers -1 and 0, 9999.0 (number or string), KiWIS quality codes, empty strings,
-//            and the identifiers and enumerations the registry itself publishes (VERBATIM, by key or table column);
+//            and the identifiers and codes the registry itself publishes (VERBATIM, by key or table column): a kept
+//            key or column keeps a string or an integer, never prose and never a value with a unit (refused); an
+//            object or array under it is generated like any other;
 //   shifted  every ISO timestamp by one constant whole number of days (1,000 to 2,000), offset suffix and fraction
 //            format kept, so the time grid, the order and the offsets stay as they were;
 //   random   every other number (magnitude, integer or decimal kept), the digits of a string that is a number with
-//            optional unit text ("185.41 m NN"), and every other string becomes synthetic-<n>.
+//            optional unit text ("185.41 m NN"), and every other string becomes synthetic-<n>; in a text file every
+//            data cell with a digit gets new digits (the `Datum` column new dates), and any other non-empty cell is
+//            refused.
+// Both forms end with the leak scan (P5c review SR-2): a leaf of the source outside the kept places, a string of at
+// least four characters anywhere in the output outside them, or a number (or numeric string) of at least two
+// significant digits other than -1, 0 and 9999 at its own place, is refused, and so are output bytes equal to the
+// source's.
 // It prints only paths and byte counts, never content.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -63,6 +71,9 @@ const NUMBER = /^-?\d+(?:\.\d+)?$/;
 const NUMBER_TEXT = /^[-+]?\d+(?:[.,]\d+)*(?: \D{1,20})?$/;
 const KEPT_NUMBERS = new Set([-1, 0, 9999]);
 const DAY_MS = 86_400_000;
+/** A value with a unit ("321 cm", "4,5 m³/s"), not a code that holds digits ("15m.Cmd", "PT15M"): never kept. */
+export const VALUE_WITH_UNIT =
+  /(?<![\p{L}\d.,/_])\d+(?:[.,]\d+)?\s*(?:cm|mm|m|m³\/s|m3\/s|l\/s|%)(?![\p{L}\d]|\.[\p{L}\d])/iu;
 
 type Ctx = { rnd: () => number; days: number; names: number; keep: number; verbatim: ReadonlySet<string> };
 
@@ -79,6 +90,22 @@ function newCtx(source: string, keep: number, body: Uint8Array): Ctx {
   };
   const days = 1000 + (seedOf(`days:${source}`) % 1001);
   return { rnd, days, names: 0, keep, verbatim: new Set(VERBATIM[source] ?? []) };
+}
+
+const significant = (n: number) =>
+  String(Math.abs(n)).replace(/e.*$/, '').replace('.', '').replace(/^0+/, '').replace(/0+$/, '').length;
+
+/**
+ * The leak scan's key of the leaf at `path`, or null for one it does not compare. A string of at least four characters
+ * is compared wherever it appears; a number (or a numeric string) of at least two significant digits other than the
+ * kept -1, 0 and 9999 only at its own place, because a number drawn in the band of the original lands on another value
+ * of the source by chance (in 9 of the 99 payloads of the first owner export), which is no leak.
+ */
+function leafKey(v: unknown, path: string): string | null {
+  const t = typeof v === 'string' ? v.trim() : null;
+  const n = typeof v === 'number' ? v : t !== null && NUMBER.test(t) ? Number(t) : null;
+  if (n !== null) return KEPT_NUMBERS.has(n) || significant(n) < 2 ? null : `n${JSON.stringify(path)}${n}`;
+  return t !== null && t.length >= 4 ? `s${t}` : null;
 }
 
 function fakeNumber(c: Ctx, n: number): number {
@@ -142,13 +169,30 @@ function fakeCoordinate(c: Ctx, key: string, v: unknown): unknown {
 const keptColumn = (c: Ctx, col: unknown) =>
   typeof col === 'string' && (c.verbatim.has(col) || col.trim().toLowerCase() === 'quality code');
 
+/**
+ * Whether a kept key or column keeps this value: a string or an integer identifier only, never a value with a unit
+ * (refused); anything else under it is generated like any other value (P5c review SR-2).
+ */
+function keeps(x: unknown): boolean {
+  if (typeof x === 'string' && VALUE_WITH_UNIT.test(x))
+    throw new Refusal(1, 'a kept key or column holds a value with a unit, not an identifier or a code');
+  return typeof x === 'string' || Number.isInteger(x);
+}
+
+/** A KiWIS table: a header row of strings, then rows (the header is kept besides the --keep rows). */
+const isTable = (v: unknown[]): v is [string[], ...unknown[]] =>
+  v.length > 1 && Array.isArray(v[0]) && v[0].length > 0 && v[0].every((x) => typeof x === 'string');
+/** A KiWIS getTimeseriesValues item (or an AGE JSON): `data` rows follow the comma list of `columns`. */
+const dataColumns = (o: Record<string, unknown>) =>
+  typeof o.columns === 'string' && Array.isArray(o.data) ? o.columns.split(',') : null;
+
 /** Rows of cells: a cell of a kept column stays, the others are scrambled. */
 const scrambleRows = (c: Ctx, rows: unknown[], cols: unknown[]) =>
   rows.map((r) =>
     Array.isArray(r)
       ? r.map((x, i) => {
           const col = cols[i];
-          if (keptColumn(c, col)) return x;
+          if (keptColumn(c, col) && keeps(x)) return x;
           return typeof col === 'string' && COORDINATE.test(col) ? fakeCoordinate(c, col, x) : scramble(c, x);
         })
       : scramble(c, r),
@@ -156,19 +200,16 @@ const scrambleRows = (c: Ctx, rows: unknown[], cols: unknown[]) =>
 
 function scramble(c: Ctx, v: unknown): unknown {
   if (Array.isArray(v)) {
-    // A KiWIS table: a header row of strings, then rows (the header is kept besides the --keep rows).
-    const header = v.length > 1 && Array.isArray(v[0]) && v[0].length > 0 && v[0].every((x) => typeof x === 'string');
-    if (header) return [v[0], ...scrambleRows(c, v.slice(1, c.keep + 1), v[0])];
+    if (isTable(v)) return [v[0], ...scrambleRows(c, v.slice(1, c.keep + 1), v[0])];
     return v.slice(0, c.keep).map((x) => scramble(c, x));
   }
   if (v !== null && typeof v === 'object') {
     const o = v as Record<string, unknown>;
-    // A KiWIS getTimeseriesValues item (or an AGE JSON): `data` rows follow the comma list of `columns`.
-    const cols = typeof o.columns === 'string' && Array.isArray(o.data) ? o.columns.split(',') : null;
+    const cols = dataColumns(o);
     return Object.fromEntries(
       Object.entries(o).map(([k, x]) => [
         k,
-        c.verbatim.has(k)
+        c.verbatim.has(k) && keeps(x)
           ? x
           : COORDINATE.test(k)
             ? fakeCoordinate(c, k, x)
@@ -183,31 +224,123 @@ function scramble(c: Ctx, v: unknown): unknown {
   return v;
 }
 
-/** Text files (BfG CSV): comment lines keep their words with dates and numbers replaced; data cells are generated. */
+/** Every leaf the policy does not keep (kept keys and columns, a table's header row, quality codes), by leafKey. */
+function leaves(c: Ctx, v: unknown, path = '', acc = new Set<string>()): Set<string> {
+  const rows = (rs: unknown[], cols: unknown[], at: string, from: number) => {
+    for (const [n, r] of rs.entries()) {
+      if (!Array.isArray(r)) leaves(c, r, `${at}/${n + from}`, acc);
+      else
+        for (const [i, x] of r.entries())
+          if (!(keptColumn(c, cols[i]) && keeps(x))) leaves(c, x, `${at}/${n + from}/${i}`, acc);
+    }
+  };
+  if (Array.isArray(v)) {
+    if (isTable(v)) rows(v.slice(1), v[0], path, 1);
+    else for (const [i, x] of v.entries()) leaves(c, x, `${path}/${i}`, acc);
+  } else if (v !== null && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    const cols = dataColumns(o);
+    for (const [k, x] of Object.entries(o)) {
+      if (c.verbatim.has(k) && keeps(x)) continue;
+      if (cols !== null && k === 'data') rows(x as unknown[], cols, `${path}/data`, 0);
+      else leaves(c, x, `${path}/${k}`, acc);
+    }
+  } else {
+    const k = leafKey(v, path);
+    if (k !== null) acc.add(k);
+  }
+  return acc;
+}
+
+/** The cells of a text file's data lines, by leafKey (comment lines and the `Datum;` header are kept by rule). */
+function textLeaves(text: string): Set<string> {
+  const acc = new Set<string>();
+  for (const [l, line] of text.split('\n').entries())
+    if (!line.startsWith('#') && !/^Datum;/.test(line))
+      for (const [i, cell] of line.split(';').entries()) {
+        const k = leafKey(cell, `/${l}/${i}`);
+        if (k !== null) acc.add(k);
+      }
+  return acc;
+}
+
+/**
+ * Text files (BfG CSV): comment lines keep their words with dates and numbers replaced; in the data lines every cell
+ * with a digit is generated (the dates of the `Datum` column the header declares by a clock), an empty one stays,
+ * and any other cell is refused, never kept (P5c review SR-2).
+ */
 function scrambleText(c: Ctx, text: string): string {
   let clock = Date.parse('2030-01-01T00:00:00Z');
+  let dated = false;
   return text
     .split('\n')
     .map((line) => {
       if (line.startsWith('#'))
         return line.replace(/\d{4}-\d{2}-\d{2}/g, '2030-01-01').replace(/\d+/g, (d) => '9'.repeat(d.length));
-      if (/^Datum;/.test(line) || line.trim() === '') return line;
+      if (/^Datum;/.test(line)) {
+        dated = true;
+        return line;
+      }
+      if (line.trim() === '') return line;
       if (!line.includes(';')) return `${fakeString(c, line.trim())}\r`.replace(/\r\r$/, '\r');
       return line
         .split(';')
         .map((cell, i) => {
-          if (i === 0 && /^\d{2}\.\d{2}\.\d{4}/.test(cell)) {
+          if (dated && i === 0 && /^\d{2}\.\d{2}\.\d{4}/.test(cell)) {
             clock += DAY_MS;
             const d = new Date(clock);
             return `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}.${d.getUTCFullYear()} 00:00`;
           }
-          return /^-?\d+(?:\.\d+)?\r?$/.test(cell)
-            ? String(fakeNumber(c, Number(cell.trim()))) + (cell.endsWith('\r') ? '\r' : '')
-            : cell;
+          if (/\d/.test(cell)) return fakeDigits(c, cell);
+          if (cell.trim() === '') return cell;
+          throw new Refusal(1, 'a text cell is neither a number, a date nor empty');
         })
         .join(';');
     })
     .join('\n');
+}
+
+/** The output of one format and its leak scan: whether a leaf key of the source is a leaf key of the output. */
+function generate(c: Ctx, format: string, body: Uint8Array): { out: Buffer; leaked: boolean } {
+  const scan = (src: Set<string>, fake: Set<string>) => [...fake].some((k) => src.has(k));
+  switch (format) {
+    case 'json': {
+      const doc = JSON.parse(Buffer.from(body).toString('utf8'));
+      const fake = scramble(c, doc);
+      return { out: Buffer.from(JSON.stringify(fake)), leaked: scan(leaves(c, doc), leaves(c, fake)) };
+    }
+    case 'html-attr': {
+      const doc = extractDataToJson(body);
+      const fake = scramble(c, doc);
+      const attr = JSON.stringify(fake).replace(/&/g, '&amp;').replace(/"/g, '&#34;');
+      return {
+        out: Buffer.from(
+          `<!DOCTYPE html>\n<html lang="fr"><head><title>synthetic</title></head><body>\n<cmp-dashboard-station class="synthetic" data-to-json="${attr}"></cmp-dashboard-station>\n</body></html>\n`,
+        ),
+        leaked: scan(leaves(c, doc), leaves(c, fake)),
+      };
+    }
+    case 'html': {
+      // A fixed page and a count of links: nothing of the payload reaches it.
+      const links = (
+        Buffer.from(body)
+          .toString('utf8')
+          .match(/href="\.\/[^"]*\.csv"/g) ?? []
+      ).map((_, i) => `<a href="./synthetic-${i}.csv">synthetic-${i}.csv</a>`);
+      return {
+        out: Buffer.from(
+          `<!DOCTYPE html>\n<html><head><title>synthetic</title></head><body>\n${links.join('\n')}\n</body></html>\n`,
+        ),
+        leaked: false,
+      };
+    }
+    case 'text': {
+      const text = Buffer.from(body).toString('latin1');
+      const fake = scrambleText(c, text);
+      return { out: Buffer.from(fake), leaked: scan(textLeaves(text), textLeaves(fake)) };
+    }
+  }
+  throw new Refusal(64, `format ${format} not supported`);
 }
 
 /**
@@ -221,35 +354,17 @@ export function synthesize(
   opts: { keep?: number | undefined } = {},
 ): Buffer {
   const c = newCtx(source, opts.keep ?? 40, body);
+  let r: { out: Buffer; leaked: boolean };
   try {
-    switch (format) {
-      case 'json':
-        return Buffer.from(JSON.stringify(scramble(c, JSON.parse(Buffer.from(body).toString('utf8')))));
-      case 'html-attr': {
-        const attr = JSON.stringify(scramble(c, extractDataToJson(body)))
-          .replace(/&/g, '&amp;')
-          .replace(/"/g, '&#34;');
-        return Buffer.from(
-          `<!DOCTYPE html>\n<html lang="fr"><head><title>synthetic</title></head><body>\n<cmp-dashboard-station class="synthetic" data-to-json="${attr}"></cmp-dashboard-station>\n</body></html>\n`,
-        );
-      }
-      case 'html': {
-        const links = (
-          Buffer.from(body)
-            .toString('utf8')
-            .match(/href="\.\/[^"]*\.csv"/g) ?? []
-        ).map((_, i) => `<a href="./synthetic-${i}.csv">synthetic-${i}.csv</a>`);
-        return Buffer.from(
-          `<!DOCTYPE html>\n<html><head><title>synthetic</title></head><body>\n${links.join('\n')}\n</body></html>\n`,
-        );
-      }
-      case 'text':
-        return Buffer.from(scrambleText(c, Buffer.from(body).toString('latin1')));
-    }
-  } catch {
+    r = generate(c, format, body);
+  } catch (e) {
+    if (e instanceof Refusal) throw e;
     throw new Refusal(1, `the payload does not read as ${format}`);
   }
-  throw new Refusal(64, `format ${format} not supported`);
+  if (r.leaked) throw new Refusal(1, 'a value of the source reappears in the output outside the kept keys');
+  if (sha256(r.out) === sha256(body))
+    throw new Refusal(1, 'the synthetic bytes equal the source: nothing was generated');
+  return r.out;
 }
 
 const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
@@ -280,8 +395,14 @@ function writePair(
   return files.map((f) => ({ path: f.path, bytes: f.data.length }));
 }
 
-/** The P1 form: .smoke/<spec>.raw to <spec>.synthetic.raw. */
-export function synthesizeSmoke(o: { spec: string; keep?: number | undefined; smokeDir?: string; outRoot?: string }) {
+/** The P1 form: .smoke/<spec>.raw to <spec>.synthetic.raw (an existing one only with --force). */
+export function synthesizeSmoke(o: {
+  spec: string;
+  keep?: number | undefined;
+  force?: boolean | undefined;
+  smokeDir?: string;
+  outRoot?: string;
+}) {
   const spec = ownerSpec(o.spec);
   const file = join(o.smokeDir ?? join(root, '.smoke'), `${o.spec}.raw`);
   if (!existsSync(file)) throw new Refusal(1, 'there is no recorded payload of that spec in .smoke');
@@ -300,7 +421,7 @@ export function synthesizeSmoke(o: { spec: string; keep?: number | undefined; sm
       values: 'every value, name, id and timestamp generated (scripts/synthesize-fixture.ts)',
       status: 200,
     },
-    true,
+    o.force ?? false,
   );
 }
 
@@ -369,7 +490,6 @@ export function synthesizeFromExport(o: ExportOptions) {
   const raw = readFileSync(join(o.from, rawName(line.file)));
   if (sha256(raw) !== line.sha256) throw new Refusal(1, 'the payload does not match the sha256 of its manifest line');
   const out = synthesize(spec.source, spec.validity.format, raw, { keep: o.keep });
-  if (sha256(out) === line.sha256) throw new Refusal(1, 'the synthetic bytes equal the source: nothing was generated');
   return writePair(
     o.outRoot ?? ADAPTERS,
     spec.source,
@@ -410,12 +530,11 @@ function main(argv: string[]) {
   });
   const keep = v.keep === undefined ? undefined : Number(v.keep);
   if (v.spec === undefined || (keep !== undefined && !(Number.isInteger(keep) && keep >= 1)))
-    throw new Refusal(64, 'usage: --spec <id> [--keep <n>] | --from <dir> --spec <id> --name <suffix> [...]');
+    throw new Refusal(64, 'usage: --spec <id> [--keep <n>] [--force] | --from <dir> --spec <id> --name <suffix> [...]');
   if (v.pick !== undefined && v.pick !== 'latest' && v.pick !== 'oldest') throw new Refusal(64, '--pick latest|oldest');
   if (v.from === undefined) {
-    if ([v.variant, v.pick, v.name, v.force].some((x) => x !== undefined))
-      throw new Refusal(64, 'those flags need --from');
-    return synthesizeSmoke({ spec: v.spec, keep });
+    if ([v.variant, v.pick, v.name].some((x) => x !== undefined)) throw new Refusal(64, 'those flags need --from');
+    return synthesizeSmoke({ spec: v.spec, keep, force: v.force });
   }
   if (v.name === undefined) throw new Refusal(64, '--name <suffix> is required with --from');
   return synthesizeFromExport({

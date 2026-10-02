@@ -665,24 +665,34 @@ export const ownerStationIds = (stations: readonly { id: string; audience: strin
   stations.filter((st) => st.audience === 'owner').map((st) => st.id);
 
 /**
- * P5c: the public health/sources document counts the owner sources (`owner_sources`: every one healthy, at least
- * `OWNER_SOURCES_MIN`) and lists none of them in `sources`. Counts only: the detail never names a source.
+ * P5c: the public health/sources document counts the owner sources (`owner_sources`, at least `OWNER_SOURCES_MIN`)
+ * and lists none of them in `sources`. `total` counts the owner sources the registry sync of `migrate` wrote
+ * (captured or not), so this check holds without any capture (the CI deploy job gates on it). Counts only: the
+ * detail never names a source.
  */
 export function checkOwnerSources(r: ApiRead<HealthSources>, ownerIds: readonly string[]): Result {
   const check = 'owner sources';
   if (r.data === undefined || r.problems.length > 0) return noDocument(check, 'health/sources', r);
-  const { healthy, total } = r.data.owner_sources;
+  const { total } = r.data.owner_sources;
   const listed = r.data.sources.filter((src) => ownerIds.includes(src.id)).length;
   const problems: string[] = [];
-  if (healthy !== total) problems.push(`${healthy} of ${total} owner sources healthy`);
   if (total < OWNER_SOURCES_MIN) problems.push(`${total} owner sources, at least ${OWNER_SOURCES_MIN} expected`);
   if (listed > 0) problems.push(`${listed} owner sources listed in sources`);
   return problems.length === 0
-    ? pass(
-        check,
-        `${healthy} of ${total} owner sources healthy (at least ${OWNER_SOURCES_MIN}), none listed in sources`,
-      )
+    ? pass(check, `${total} owner sources (at least ${OWNER_SOURCES_MIN}), none listed in sources`)
     : miss(check, problems.join('; '));
+}
+
+/**
+ * P5c (review SR-8): every owner source is healthy (`owner_sources.healthy = total`). Apart from `owner sources`,
+ * because it needs live capture: the CI deploy job lets it fail, never the leak half. Counts only.
+ */
+export function checkOwnerHealth(r: ApiRead<HealthSources>): Result {
+  const check = 'owner health';
+  if (r.data === undefined || r.problems.length > 0) return noDocument(check, 'health/sources', r);
+  const { healthy, total } = r.data.owner_sources;
+  const detail = `${healthy} of ${total} owner sources healthy`;
+  return healthy === total ? pass(check, detail) : miss(check, detail);
 }
 
 /**
@@ -1215,7 +1225,8 @@ export const CHECKS = [
   `interval CH-1: the min_interval_s of ${INTERVAL_SPEC} is >= ${INTERVAL_MIN_S} s (BAFU: at most one download per 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL. The gap is per spec and variant: river and lake are two LINDAS downloads seconds apart every 10 minutes (whether BAFU counts them as one is asked in C13), and a recorder restart can run a catch-up under 10 minutes before the next tick, so this can FAIL for up to 24 h after a restart without a breach (KG-125)`,
   `interval DE-7: the min_interval_s of ${DE7_SPEC} is >= ${DE7_INTERVAL_MIN_S} s (every 15 minutes, less 5 s for the scheduling jitter of a fetch start); the detail prints the seconds, 3600 while the spec is hourly and about 900 once it runs every 15 minutes; no entry yet is a FAIL`,
   `bytes DE-7: the days of /status/capture.json (today, partial, and the two before) each hold at most ${DE7_BYTES_MAX / 1e6} MB of zstd bytes stored for ${DE7_SPEC}; the spec missing from capture.json, or no bytes in any day, is a FAIL`,
-  `owner sources: /api/v1/health/sources (the contract document, max-age=30) has owner_sources.healthy = owner_sources.total, at least ${OWNER_SOURCES_MIN} owner sources, and lists no owner-audience source of registry/sources.yaml in sources[]; the detail holds counts only`,
+  `owner sources: /api/v1/health/sources (the contract document, max-age=30) counts at least ${OWNER_SOURCES_MIN} owner sources (owner_sources.total, which the registry sync writes, captured or not) and lists no owner-audience source of registry/sources.yaml in sources[]; the detail holds counts only`,
+  'owner health: /api/v1/health/sources has owner_sources.healthy = owner_sources.total (needs live owner capture; the detail holds counts only)',
   `api meta: GET /api/v1/meta is 200 with Cache-Control exactly "${META_CACHE}", the Meta contract document, and ${API_SOURCES.join(', ')} among the sources`,
   'api build: /api/v1/meta build is the 40-hex release commit, not "dev" (KG-109: the image carries RWS_BUILD)',
   `api stations: GET /api/v1/stations is 200 with Cache-Control exactly "${STATIONS_CACHE}", the Stations contract document, a station with a series of each of ${API_SOURCES.join(', ')}`,
@@ -1349,6 +1360,7 @@ async function main(argv: string[]): Promise<number> {
       checkInterval(sources.data),
       checkInterval(sources.data, 'DE-7'),
       checkOwnerSources(sources, ownerSourceIds(registry)),
+      checkOwnerHealth(sources),
     );
 
     // The P4b data API through Caddy (A§9.2). The snapshots ask for the server's own "now" from /meta, never this clock.

@@ -15,6 +15,8 @@ export const MAX_IDS = 100;
 export const MAX_VALUES = 250_000;
 /** The densest step a KiWIS series may have: the bound of every window. */
 export const MIN_STEP_MS = 60_000;
+/** The most calls one plan may hold: a window or series list beyond it is a caller's bug, never a request plan. */
+export const MAX_CALLS = 10_000;
 const DAY_MS = 86_400_000;
 const TS_ID = /^\d{1,12}$/;
 
@@ -42,7 +44,8 @@ export function spanMs(ids: number, maxValues = MAX_VALUES, minStepMs = MIN_STEP
 /**
  * The getTimeseriesValues calls that cover `window` for `tsIds`: batches of at most `maxIds` (in the order given),
  * each split into windows of `spanMs`, every call within `maxValues`. `variant` names each call (its seen id too,
- * so a resumed seed skips what it already fetched).
+ * so a resumed seed skips what it already fetched). The limits must be whole numbers of at least 1 (a 0 or a
+ * negative one would never end the plan), and a plan of more than `MAX_CALLS` calls is refused before it is built.
  */
 export function valuesRequests(
   base: string,
@@ -57,6 +60,9 @@ export function valuesRequests(
     headers?: Readonly<Record<string, string>>;
   },
 ): ValuesRequest[] {
+  for (const v of [opts.maxIds, opts.maxValues, opts.minStepMs]) {
+    if (v !== undefined && !(Number.isInteger(v) && v >= 1)) throw new RangeError('a limit is not a whole number ≥ 1');
+  }
   const maxIds = Math.min(opts.maxIds ?? MAX_IDS, MAX_IDS);
   const maxValues = Math.min(opts.maxValues ?? MAX_VALUES, MAX_VALUES);
   const minStepMs = Math.min(opts.minStepMs ?? MIN_STEP_MS, MIN_STEP_MS);
@@ -67,6 +73,12 @@ export function valuesRequests(
   const src = new URL(base);
   const datasource = src.searchParams.get('datasource');
   if (datasource === null || !/^\d{1,3}$/.test(datasource)) throw new RangeError('the base URL names no datasource');
+  let calls = 0;
+  for (let b = 0; b * maxIds < tsIds.length; b += 1) {
+    const n = Math.min(maxIds, tsIds.length - b * maxIds);
+    calls += Math.ceil((to - from) / spanMs(n, maxValues, minStepMs));
+    if (calls > MAX_CALLS) throw new RangeError('the plan holds too many calls');
+  }
   const out: ValuesRequest[] = [];
   for (let b = 0; b * maxIds < tsIds.length; b += 1) {
     const ids = tsIds.slice(b * maxIds, (b + 1) * maxIds);

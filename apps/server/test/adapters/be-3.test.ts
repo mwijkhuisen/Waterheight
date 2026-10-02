@@ -115,21 +115,21 @@ describe('golden files (synthetic: owner audience)', () => {
     expect(out.obs).toHaveLength(8);
     expect(out.dropped).toEqual({ gap: 2, unit_mismatch: 1 });
     expect(out.unknown).toBe(1);
-    expect(out.unitMismatch).toEqual(['9108/H']);
+    expect(out.unitMismatch).toBeUndefined();
   });
 
   it('the discharge layer: Q and QADM, m3/s, the QADM at -1, the future, a unit, two ts_ids under one key', () => {
     const out = layerOf('be-3-discharge-layer.synthetic');
     expect(out).toEqual(golden('be-3-discharge-layer.synthetic', out));
     expect(out.dropped).toEqual({ sentinel: 1, future: 1, unit_mismatch: 1 });
-    expect(out.unitMismatch).toEqual(['9203/Q']);
+    expect(out.unitMismatch).toBeUndefined();
   });
 
   it('the catch-up values: every quality code, duplicates, the trailing null/-1, columns by name', () => {
     const out = valuesOf('be-3-catchup-quality.synthetic');
     expect(out).toEqual(golden('be-3-catchup-quality.synthetic', out));
     expect(out.unknown).toBe(1);
-    expect(out.unitMismatch).toEqual(['9306/H']);
+    expect(out.unitMismatch).toBeUndefined();
   });
 
   it('the stations table: the gauge zero of every registered stage series', () => {
@@ -213,7 +213,7 @@ describe('rules (synthetic)', () => {
     expect(of(out, '9105/H')[0]).toMatchObject({ value: 6000, qc: QC.RAW | QC.RANGE });
   });
 
-  it('ts_unitsymbol must equal the registry unit (m3/s and cumec mean m³/s), else the series is withheld and listed', () => {
+  it('ts_unitsymbol must equal the registry unit (m3/s and cumec mean m³/s), else the series is withheld', () => {
     const out = layerOf('be-3-discharge-layer.synthetic');
     expect(of(out, 'L9201/Q')).toHaveLength(1); // `m3/s`
     expect(of(out, '9203/Q')).toEqual([]); // `l/s`
@@ -231,27 +231,23 @@ describe('rules (synthetic)', () => {
     ]);
     expect(wrong.obs).toEqual([]);
     expect(wrong.dropped).toEqual({ unit_mismatch: 2 });
-    // The list is sorted, whatever the payload's order.
+    // Each item is judged by its own unit; no payload lists the series for the next one (they state disjoint sets).
     const two = layer(
       layerItem({ ts_id: 1, station_no: '9108', ts_unitsymbol: 'cm' }),
       layerItem({ ts_id: 2, station_no: '9106', ts_unitsymbol: 'ft' }),
       layerItem({ ts_id: 3, station_no: '8622' }),
     );
-    expect(two.unitMismatch).toEqual(['9106/H', '9108/H']);
+    expect(two.unitMismatch).toBeUndefined();
+    expect(two.dropped).toEqual({ unit_mismatch: 2 });
     expect(two.obs.map((r) => r.series)).toEqual(['8622/H']);
   });
 
-  it('ctx.unitMismatch judges an item that states no unit; one that states its unit is judged by it alone', () => {
+  it('a values item that states no unit is withheld: every call asks for it, and no other payload judges it', () => {
     const rows = [['2030-01-01T00:00:00.000Z', 1, 200]];
-    const none = valuesItem(rows, { station_no: '9304', ts_unitsymbol: undefined });
-    expect(values([none]).obs).toHaveLength(1);
-    const listed = values([none], { unitMismatch: new Set(['9304/H']) });
-    expect(listed.obs).toEqual([]);
-    expect(listed.dropped).toEqual({ unit_mismatch: 1 });
-    // The same list never withholds an item whose own unit is right (a stale list from the last unit change).
-    const stated = values([valuesItem(rows, { station_no: '9304' })], { unitMismatch: new Set(['9304/H']) });
-    expect(stated.obs).toHaveLength(1);
-    expect(stated.unitMismatch).toEqual([]);
+    const none = values([valuesItem(rows, { station_no: '9304', ts_unitsymbol: undefined })]);
+    expect(none.obs).toEqual([]);
+    expect(none.dropped).toEqual({ unit_mismatch: 1 });
+    expect(values([valuesItem(rows, { station_no: '9304' })]).obs).toHaveLength(1);
   });
 
   it('9999.0 datum → unknown, no conversion: no zero is stored and nothing is guessed', () => {
@@ -692,7 +688,7 @@ describe('property and fuzz', () => {
         const dropped = Object.values(out.dropped).reduce((a, b) => a + b, 0);
         const unknown = bodyOf.filter((i) => !registry.has(`${i.station_no}/${i.stationparameter_no}`)).length;
         expect(out.obs.length + dropped + unknown).toBe(bodyOf.length);
-        expect(out.unitMismatch).toEqual([...(out.unitMismatch ?? [])].sort());
+        expect(out.unitMismatch).toBeUndefined();
       }),
       { numRuns: 300 },
     );

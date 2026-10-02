@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
+import { VALUE_WITH_UNIT, VERBATIM } from '../../../../scripts/synthesize-fixture.ts';
+import { extractDataToJson } from '../../src/http/guards.ts';
 
 // The P5a fixture standard (CLAUDE.md, invariants 9 and 11): every fixture has a
 // .meta.json that says where it comes from, `synthetic: true` marks exactly the
@@ -44,15 +46,21 @@ const ownerAdapters = adapters.filter((a) => ownerSources.includes(a));
 
 /**
  * What is wrong with the fixtures in a folder of an owner-audience adapter (invariants 9 and 11: the repository is
- * public, so only synthetic payloads are committed). Names and rules only, never content.
+ * public, so only synthetic payloads are committed). Every entry is a regular file named *.synthetic.raw,
+ * *.synthetic.meta.json or *.synthetic.golden.json (P5c review CR-2: a real payload under any other name, or in a
+ * subdirectory, would pass a rule that looks only at known suffixes). Names and rules only, never content.
  */
 function ownerFixtureProblems(dir: URL): string[] {
   const problems: string[] = [];
-  for (const f of readdirSync(dir).sort()) {
-    const kind = /\.(raw|meta\.json|golden\.json)$/.exec(f)?.[0];
-    if (kind === undefined) continue;
-    if (!f.endsWith(`.synthetic${kind}`)) problems.push(`${f}: not named *.synthetic${kind}`);
-    if (kind !== '.raw') continue;
+  for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    const f = e.name;
+    if (!e.isFile()) {
+      problems.push(`${f}: not a regular file (a subdirectory or a link)`);
+      continue;
+    }
+    if (!/\.synthetic\.(raw|meta\.json|golden\.json)$/.test(f))
+      problems.push(`${f}: not named *.synthetic.raw, *.synthetic.meta.json or *.synthetic.golden.json`);
+    if (!f.endsWith('.raw')) continue;
     const metaFile = new URL(f.replace(/\.raw$/, '.meta.json'), dir);
     let m: Record<string, unknown> | null = null;
     try {
@@ -68,6 +76,51 @@ function ownerFixtureProblems(dir: URL): string[] {
       problems.push(`${f}: the raw file is its own source (source_sha256)`);
   }
   return problems;
+}
+
+/**
+ * Kept (VERBATIM) keys whose values are identifiers or codes that hold digits: ids, station numbers, `ts_path` and the
+ * series names built from it, file names, the KiWIS row count, coordinate system, time zone and offset codes, and
+ * AGE's forecast horizon codes. Any other kept key holds no run of two digits.
+ */
+const KEPT_WITH_DIGITS = new Set([
+  'ts_id',
+  'station_no',
+  'site_no',
+  'stationparameter_no',
+  'ts_path',
+  'ts_name',
+  'ts_spacing',
+  'rows',
+  'station_georefsystem',
+  'timezone',
+  'station_timezone',
+  'station_utcoffset',
+  'id',
+  'jsonFile',
+  'forecastsFileName',
+  'stationPath',
+  'forecastsLimit',
+  'legend',
+]);
+
+/** Every leaf under a kept key or table column of a payload, with that key: what the fixture tool copied as is. */
+function* keptLeaves(v: unknown, kept: ReadonlySet<string>, under: string | null = null): Generator<[string, unknown]> {
+  if (Array.isArray(v)) {
+    const header =
+      under === null && v.length > 1 && Array.isArray(v[0]) && v[0].every((x) => typeof x === 'string')
+        ? (v[0] as string[])
+        : null;
+    for (const [i, x] of v.entries())
+      if (header !== null && i > 0 && Array.isArray(x))
+        for (const [j, cell] of x.entries()) {
+          const col = header[j];
+          yield* keptLeaves(cell, kept, col !== undefined && kept.has(col) ? col : null);
+        }
+      else if (header === null || i > 0) yield* keptLeaves(x, kept, under);
+  } else if (v !== null && typeof v === 'object') {
+    for (const [k, x] of Object.entries(v)) yield* keptLeaves(x, kept, under ?? (kept.has(k) ? k : null));
+  } else if (under !== null) yield [under, v];
 }
 
 const Meta = z.looseObject({
@@ -188,6 +241,42 @@ describe('the fixture standard', () => {
     }
   });
 
+  it('an archive-derived owner fixture keeps under its kept keys no value with a unit and no digits but identifiers and codes (P5c review SR-2)', () => {
+    let fixtures = 0;
+    let leaves = 0;
+    for (const adapter of ownerAdapters)
+      for (const f of files(adapter, '.meta.json').filter((x) => meta(x).source_sha256 !== undefined)) {
+        const raw = read(f, '.raw');
+        let doc: unknown;
+        try {
+          doc = JSON.parse(raw.toString('utf8'));
+        } catch {
+          doc = extractDataToJson(raw);
+        }
+        fixtures += 1;
+        for (const [key, v] of keptLeaves(doc, new Set(VERBATIM[meta(f).source] ?? []))) {
+          leaves += 1;
+          const text = typeof v === 'string' || typeof v === 'number' ? String(v) : '';
+          expect([f.name, key, VALUE_WITH_UNIT.test(text)]).toEqual([f.name, key, false]);
+          if (!KEPT_WITH_DIGITS.has(key)) expect([f.name, key, /\d{2}/.test(text)]).toEqual([f.name, key, false]);
+        }
+      }
+    // Not vacuous: the 16 archive-derived fixtures of BE-3, LU-2, LU-3 and LU-4, and their kept identifiers.
+    expect(fixtures).toBeGreaterThanOrEqual(16);
+    expect(leaves).toBeGreaterThan(100);
+    // The walk finds kept keys at any depth, kept table columns and everything under a kept key (invented data).
+    const doc = [
+      ['station_no', 'station_name'],
+      ['5902', 'Mijn Station'],
+    ];
+    const label = { label: 'Cote de vigilance orange 321 cm', levels: [{ label: 'x' }], value: 3 };
+    expect([...keptLeaves(doc, new Set(['station_no']))]).toEqual([['station_no', '5902']]);
+    expect([...keptLeaves([label], new Set(['label']))]).toEqual([
+      ['label', 'Cote de vigilance orange 321 cm'],
+      ['label', 'x'],
+    ]);
+  });
+
   it('the owner rule fails on a planted real payload, a cut of one and a synthetic copy of its own source', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'owner-fixtures-'));
     try {
@@ -205,6 +294,11 @@ describe('the fixture standard', () => {
       // 3: a synthetic name over a cut of an archived payload.
       put('cut.synthetic.raw', '[5]');
       put('cut.synthetic.meta.json', meta({ synthetic: true, from: 'archive', archive_key: 'raw/x.zst' }));
+      // 4: a real payload under another name, and in a subdirectory (P5c review CR-2).
+      put('b.json', '[6]');
+      put('c.csv', 'Datum;W\n');
+      mkdirSync(join(tmp, 'sub'));
+      put('sub/d.synthetic.raw', '[7]');
       const problems = ownerFixtureProblems(pathToFileURL(`${tmp}/`));
       const of = (file: string) => problems.filter((p) => p.startsWith(`${file}:`));
       expect(of('good.synthetic.raw')).toEqual([]);
@@ -212,6 +306,10 @@ describe('the fixture standard', () => {
       expect(of('real.meta.json')).toHaveLength(1);
       expect(of('copy.synthetic.raw')).toHaveLength(1);
       expect(of('cut.synthetic.raw')).toHaveLength(1);
+      expect(of('b.json')).toHaveLength(1);
+      expect(of('c.csv')).toHaveLength(1);
+      expect(of('sub')).toHaveLength(1);
+      expect(of('good.synthetic.meta.json')).toEqual([]);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

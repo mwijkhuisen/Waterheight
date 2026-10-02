@@ -10,7 +10,16 @@ import {
   validateStations,
   validateTwins,
 } from '../packages/contracts/src/index.ts';
-import { generate, type Inputs, norm, OUTPUT, readInputs, TWINS_OUTPUT } from '../scripts/gen-lu2-stations.ts';
+import {
+  generate,
+  type Inputs,
+  norm,
+  OUTPUT,
+  readInputs,
+  seedLine,
+  TS_PATH,
+  TWINS_OUTPUT,
+} from '../scripts/gen-lu2-stations.ts';
 import { repoRoot } from './catalogue.ts';
 
 // registry/stations/lu-2.yaml and registry/twins/lu-2.yaml are generated (scripts/gen-lu2-stations.ts) from the AGE
@@ -200,7 +209,16 @@ describe('scripts/gen-lu2-stations.ts fails loudly', { timeout: 30_000 }, () => 
   });
 
   it('on a malformed ts_path, and on one used twice', () => {
-    for (const bad of ['', ' 0/1/x', '/0/1/x', '.hidden', 'a b', `0/${'x'.repeat(120)}`]) {
+    for (const bad of [
+      '',
+      ' 0/1/x',
+      '/0/1/x',
+      '.hidden',
+      'a b',
+      `0/${'x'.repeat(120)}`,
+      '0/1/W/15m.Cmd.P,9',
+      '0/../15m.Cmd.P',
+    ]) {
       expect(() => run(file(first.file, (r) => ({ ...r, ts_path: bad }))), JSON.stringify(bad)).toThrow(
         new RegExp(`lu-2\\.csv ${first.file}: ts_path is missing or malformed`),
       );
@@ -209,5 +227,50 @@ describe('scripts/gen-lu2-stations.ts fails loudly', { timeout: 30_000 }, () => 
     expect(() => run(file(second.file, (r) => ({ ...r, ts_path: first.ts_path })))).toThrow(
       new RegExp(`lu-2\\.csv ${second.file}: ts_path twice`),
     );
+  });
+});
+
+describe('scripts/gen-lu2-stations.ts --extract writes only what its patterns allow (review SR-6)', () => {
+  // Invented files in the LU-2 shape: no export is read here.
+  const body = (ts_path: string, unit: string) =>
+    Buffer.from(
+      JSON.stringify([
+        {
+          ts_path,
+          ts_unitsymbol: unit,
+          station_name: 'Station',
+          parametertype_name: 'W',
+          rows: '0',
+          columns: 'Timestamp,Value',
+          data: [],
+        },
+      ]),
+    );
+
+  it('every committed ts_path matches the pattern, and every unit is cm or m', () => {
+    expect(inputs.seed).toHaveLength(39);
+    for (const r of inputs.seed)
+      expect([r.file, TS_PATH.test(r.ts_path), /^(cm|m)$/.test(r.unit)]).toEqual([r.file, true, true]);
+  });
+
+  it('takes a well-formed file, and refuses any other ts_path or unit with a fixed message', () => {
+    expect(seedLine('Mersch', body('0/9/W/15m.Cmd.RelAbs.P', 'cm'))).toBe('Mersch,0/9/W/15m.Cmd.RelAbs.P,cm');
+    for (const bad of [
+      '0/9/W/15m.Cmd.P,x',
+      '0/9/W/15m.Cmd.P\nfile',
+      '1/9/W/15m.Cmd.P',
+      '0/9/W/1h.Cmd.P',
+      '0/9 W/15m.Cmd.P',
+      '',
+    ]) {
+      expect(() => seedLine('Mersch', body(bad, 'cm')), JSON.stringify(bad)).toThrow(
+        /^Mersch: the export's ts_path does not match the ts_path pattern$/,
+      );
+    }
+    for (const bad of ['mm', 'cm,', 'm ', '', 'CM']) {
+      expect(() => seedLine('Mersch', body('0/9/W/15m.Cmd.P', bad)), JSON.stringify(bad)).toThrow(
+        /^Mersch: the export's unit is not cm or m$/,
+      );
+    }
   });
 });

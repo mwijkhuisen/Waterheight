@@ -11,6 +11,7 @@ import {
 } from '../../src/adapters/_shared/kiwis/parse.ts';
 import {
   kiwisUrlProblems,
+  MAX_CALLS,
   MAX_IDS,
   MAX_VALUES,
   MIN_STEP_MS,
@@ -139,6 +140,28 @@ describe('valuesRequests (the KiWIS request builder)', () => {
     });
     expect(tight.every((x) => (new URL(x.url).searchParams.get('ts_id') ?? '').split(',').length <= 5)).toBe(true);
     expect(tight.every((x) => x.values <= MAX_VALUES)).toBe(true);
+  });
+
+  it('a limit of 0, a negative or a fractional one is refused (it would never end the plan)', () => {
+    for (const bad of [0, -1, -100, 0.5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      for (const key of ['maxIds', 'maxValues', 'minStepMs']) {
+        expect(() => valuesRequests(BASE, idsOf(3), WINDOW, { variant, [key]: bad })).toThrow(RangeError);
+      }
+    }
+    // The smallest legal limits still make a plan (one series and two values, one minute, a call), and a 1 ms step
+    // is a plan of 518 million calls: refused, never built.
+    expect(valuesRequests(BASE, idsOf(2), WINDOW, { variant, maxIds: 1, maxValues: 2 })).toHaveLength(2 * 3 * 1440);
+    expect(() => valuesRequests(BASE, idsOf(2), WINDOW, { variant, maxIds: 1, maxValues: 2, minStepMs: 1 })).toThrow(
+      RangeError,
+    );
+  });
+
+  it('a plan of more than MAX_CALLS calls is refused before it is built', () => {
+    // A batch of 100 series asks one day a call: 100 series over MAX_CALLS days is the largest plan.
+    const days = (n: number) => ({ from: WINDOW.from, to: new Date(WINDOW.from.getTime() + n * 86_400_000) });
+    expect(valuesRequests(BASE, idsOf(100), days(MAX_CALLS), { variant })).toHaveLength(MAX_CALLS);
+    expect(() => valuesRequests(BASE, idsOf(100), days(MAX_CALLS + 1), { variant })).toThrow(RangeError);
+    expect(() => valuesRequests(BASE, idsOf(2000), days(501), { variant })).toThrow(RangeError);
   });
 
   it('a ts_id that is not digits is refused, even for an empty window', () => {

@@ -32,8 +32,13 @@ export const TIME: TimeConvention = { kind: 'iso-offset' };
 export const PERCENTILES = [10, 30, 50, 70, 90] as const;
 export type Level = (typeof PERCENTILES)[number];
 
-/** The Moselle floors in cm (catalogue §2.6; Mondorf has none of its own file). */
-export const FLOORS: Readonly<Record<string, number>> = { perl: 250, stadtbredimus: 260, wasserbillig: 220 };
+/** The Moselle floors in cm (catalogue §2.6), by LU-1 slug: Mondorf on the Gander is `mondorf-les-bains` there. */
+export const FLOORS: Readonly<Record<string, number>> = {
+  perl: 250,
+  stadtbredimus: 260,
+  wasserbillig: 220,
+  'mondorf-les-bains': 250,
+};
 
 const HOUR_MS = 3_600_000;
 const VARIANT = /^([a-z]+(?:-[a-z]+)*)\/(10|30|50|70|90)$/;

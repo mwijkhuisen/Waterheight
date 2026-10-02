@@ -62,13 +62,17 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
     deps.log.info({ spec: spec.id }, 'seed already done');
     return true;
   }
-  // Off-peak only (P5c, the BE-3 catch-up): outside its hours a round neither starts the seed nor moves its clock.
+  // Off-peak only (P5c, the BE-3 catch-up): outside its hours a round neither starts the seed nor moves its clock,
+  // and inside them no request starts after the hours end (the deadline): the rest resumes the next night.
+  let hours: { deadline?: number } = {};
   if (seed.utc_hours !== undefined) {
-    const hour = deps.now().getUTCHours();
+    const t = deps.now();
+    const hour = t.getUTCHours();
     if (hour < seed.utc_hours[0] || hour >= seed.utc_hours[1]) {
       deps.log.info({ spec: spec.id }, 'seed waits for its hours');
       return false;
     }
+    hours = { deadline: Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(), seed.utc_hours[1]) };
   }
   if (st.started !== undefined && deps.now().getTime() - Date.parse(st.started) >= SEED_MAX_MS) {
     // Not silent (N3): the log, and the daily report of the seed's audience.
@@ -106,7 +110,7 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
       const key = `row${i}`;
       if (st.done.includes(key)) continue;
       if (i > 0 && seed.pace_ms > 0) await deps.sleep(seed.pace_ms);
-      await add(key, await runSpec(spec, deps, { seed: true, rows: [row], ...(window ? { window } : {}) }));
+      await add(key, await runSpec(spec, deps, { seed: true, rows: [row], ...(window ? { window } : {}), ...hours }));
     }
   } else if (seed.kind === 'days') {
     // Hub'Eau keeps one month: day windows from 30 days ago (+1 h margin) up to now, each paged by cursor.
@@ -127,7 +131,13 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
       const to = new Date(Math.min(start + (d + 1) * DAY, now.getTime()));
       await add(
         key,
-        await runSpec(spec, deps, { seed: true, window: { from, to }, spaceMs: seed.pace_ms, maxExpand: left - 1 }),
+        await runSpec(spec, deps, {
+          seed: true,
+          window: { from, to },
+          spaceMs: seed.pace_ms,
+          maxExpand: left - 1,
+          ...hours,
+        }),
       );
       await deps.sleep(seed.pace_ms);
     }
@@ -140,7 +150,7 @@ async function seedOne(spec: LoadedSpec, deps: RunDeps): Promise<boolean> {
       deps.log.warn({ spec: spec.id, cap: seed.page_cap }, 'seed page cap reached: not retried');
       return true;
     }
-    const s = await runSpec(spec, deps, { seed: true, spaceMs: seed.pace_ms, maxExpand: left - 1 });
+    const s = await runSpec(spec, deps, { seed: true, spaceMs: seed.pace_ms, maxExpand: left - 1, ...hours });
     const seen = (await deps.state.read<{ seen: string[] }>(spec.id))?.seen.length ?? 0;
     await save({
       series: 1,

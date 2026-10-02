@@ -156,8 +156,10 @@ describe('rules (synthetic)', () => {
     }
   });
 
-  it('the LfU RLP Moselle floors are those of catalogue §2.6', () => {
-    expect(FLOORS).toEqual({ perl: 250, stadtbredimus: 260, wasserbillig: 220 });
+  it('the Moselle floors are those of catalogue §2.6, keyed by an LU-1 slug', () => {
+    expect(FLOORS).toEqual({ perl: 250, stadtbredimus: 260, wasserbillig: 220, 'mondorf-les-bains': 250 });
+    for (const slug of Object.keys(FLOORS))
+      expect([slug, stations.some((s) => s.id === `lu.age.${slug}`)]).toEqual([slug, true]);
   });
 
   it('a manifest variant is `<slug>/<p>` or drift', () => {
@@ -416,15 +418,19 @@ describe('property and fuzz', () => {
 
   it('a sorted set is never `order`; `below_floor` exactly when any value is at or below the floor', () => {
     fc.assert(
-      fc.property(steps, fc.constantFrom('perl', 'stadtbredimus', 'wasserbillig'), (rows, slug) => {
-        const floor = FLOORS[slug] as number;
-        const ordered = rows.map((r) => [...r].sort((a, b) => a - b));
-        const { run } = combineRun(five(slug, ordered), RUN);
-        expect(run?.values.map((v) => v.flags.includes('order'))).toEqual(ordered.map(() => false));
-        expect(run?.values.map((v) => v.flags.includes('below_floor'))).toEqual(
-          ordered.map((r) => r.some((x) => x <= floor)),
-        );
-      }),
+      fc.property(
+        steps,
+        fc.constantFrom('perl', 'stadtbredimus', 'wasserbillig', 'mondorf-les-bains'),
+        (rows, slug) => {
+          const floor = FLOORS[slug] as number;
+          const ordered = rows.map((r) => [...r].sort((a, b) => a - b));
+          const { run } = combineRun(five(slug, ordered), RUN);
+          expect(run?.values.map((v) => v.flags.includes('order'))).toEqual(ordered.map(() => false));
+          expect(run?.values.map((v) => v.flags.includes('below_floor'))).toEqual(
+            ordered.map((r) => r.some((x) => x <= floor)),
+          );
+        },
+      ),
       { numRuns: 300 },
     );
   });

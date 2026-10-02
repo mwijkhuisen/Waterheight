@@ -4,7 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { extractDataToJson } from '../apps/server/src/http/guards.ts';
-import { Refusal, synthesize, synthesizeFromExport, VERBATIM } from '../scripts/synthesize-fixture.ts';
+import {
+  Refusal,
+  synthesize,
+  synthesizeFromExport,
+  synthesizeSmoke,
+  VALUE_WITH_UNIT,
+  VERBATIM,
+} from '../scripts/synthesize-fixture.ts';
 
 // The export form of scripts/synthesize-fixture.ts (P5c): a fake export in a temp directory, an injectable output
 // root, so nothing is ever written under apps/. Every value below is invented.
@@ -255,6 +262,89 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
         ]).toEqual([source, key, false]);
   });
 
+  it('a kept key keeps a string or an integer only: an object, an array or a decimal under it is generated (P5c review SR-2)', () => {
+    const doc = [
+      {
+        ts_id: 905579408,
+        ts_path: '1/5902/Q/15m.Cmd.P',
+        ts_spacing: 'PT15M',
+        station_no: ['5902', 'Mijn Station'],
+        rows: 12.75,
+        ts_name: { level: 'Mijn Rivier', value: 318.25 },
+      },
+    ];
+    const [out] = JSON.parse(synthesize('BE-3', 'json', Buffer.from(JSON.stringify(doc))).toString()) as typeof doc;
+    expect([out?.ts_id, out?.ts_path, out?.ts_spacing]).toEqual([905579408, '1/5902/Q/15m.Cmd.P', 'PT15M']);
+    expect(out?.station_no[0]).toMatch(/^\d{4}$/);
+    expect(out?.station_no[0]).not.toBe('5902');
+    expect(out?.station_no[1]).toMatch(/^synthetic-\d+$/);
+    expect(out?.rows).not.toBe(12.75);
+    expect(out?.ts_name.level).toMatch(/^synthetic-\d+$/);
+    expect(out?.ts_name.value).not.toBe(318.25);
+  });
+
+  it('refuses a kept string that holds a value with a unit, and keeps codes that hold digits', () => {
+    for (const text of ['Cote de vigilance orange 321 cm', '4,5 m³/s', 'at 12%', 'zero 3.5 m NN', '7 l/s', '90mm'])
+      expect([text, VALUE_WITH_UNIT.test(text)]).toEqual([text, true]);
+    for (const code of ['0/11/W_out/15m.Cmd.RelAbs.P', '15m.Cmd.P', 'PT15M', 'h24', 'EPSG:31370', 'UTC+01:00'])
+      expect([code, VALUE_WITH_UNIT.test(code)]).toEqual([code, false]);
+    const page = [{ ts_id: 1, ts_path: 'Cote de vigilance orange 321 cm' }];
+    expect(() => synthesize('BE-3', 'json', Buffer.from(JSON.stringify(page)))).toThrow(Refusal);
+  });
+
+  it('a text file: every data cell with a digit generated, Datum dates by the clock, an unknown text refused', () => {
+    const cells = ['123,45', ' 456.7 ', '+78.9', '1.234,5', '1e3', '12.5'];
+    const text = [
+      '# Bundesanstalt fuer Gewaesserkunde, Stand 2026-09-29',
+      'Mijn Pegel',
+      'Datum;W;Q;Hinweis',
+      `29.09.2026 06:00;${cells[0]};${cells[1]};\r`,
+      `30.09.2026 06:00;${cells[2]};${cells[3]};${cells[4]}\r`,
+      `01.10.2026 06:00;${cells[5]};;\r`,
+      '',
+    ].join('\n');
+    const out = synthesize('DE-3', 'text', Buffer.from(text, 'latin1')).toString('utf8').split('\n');
+    expect(out[2]).toBe('Datum;W;Q;Hinweis');
+    expect(out[1]).toMatch(/^synthetic-\d+\r$/);
+    const rows = out.slice(3, 6).map((l) => l.split(';'));
+    expect(rows.map((r) => r[0])).toEqual(['02.01.2030 00:00', '03.01.2030 00:00', '04.01.2030 00:00']);
+    const generated = [rows[0]?.[1], rows[0]?.[2], rows[1]?.[1], rows[1]?.[2], rows[1]?.[3]?.trimEnd(), rows[2]?.[1]];
+    generated.forEach((cell, i) => {
+      const was = cells[i] as string;
+      expect(cell).not.toBe(was);
+      // The shape stays (signs, separators, spaces and the exponent letter); only the digits are new.
+      expect(cell?.replace(/\d/g, '0')).toBe(was.replace(/\d/g, '0'));
+    });
+    expect([rows[0]?.[3], rows[2]?.[2], rows[2]?.[3]]).toEqual(['\r', '', '\r']);
+    for (const bad of ['Hochwasser', '-', 'n.a.']) {
+      const file = `Datum;W\n29.09.2026 06:00;${bad}\r\n`;
+      expect(() => synthesize('DE-3', 'text', Buffer.from(file, 'latin1'))).toThrow(Refusal);
+    }
+  });
+
+  describe('the leak scan', () => {
+    it('refuses a string of the source that appears in the output, wherever it appears', () => {
+      // The first generated name is synthetic-1: a source that already says so would get its own text back.
+      expect(() => synthesize('DE-2', 'json', Buffer.from('[{"a":"synthetic-1"}]'))).toThrow(/reappears in the output/);
+      // A timestamp moved by the constant shift onto another timestamp of the same source.
+      const [once] = JSON.parse(synthesize('DE-2', 'json', Buffer.from('[{"t":"2026-01-01T00:00:00Z"}]')).toString());
+      const doc = [{ t: '2026-01-01T00:00:00Z' }, { other: once.t }];
+      expect(() => synthesize('DE-2', 'json', Buffer.from(JSON.stringify(doc)))).toThrow(/reappears in the output/);
+    });
+
+    it('compares a number at its own place: a draw that lands on another value of the source is no leak', () => {
+      const dense = Array.from({ length: 900 }, (_, i) => 100 + i);
+      const out = JSON.parse(synthesize('DE-2', 'json', Buffer.from(JSON.stringify(dense)), { keep: 900 }).toString());
+      expect(out).toHaveLength(900);
+      expect((out as number[]).filter((v, i) => v === dense[i])).toEqual([]);
+    });
+
+    it('leaves kept keys and the numbers -1, 0 and 9999 out', () => {
+      const doc = [{ ts_id: 905579408, station_no: '5902', a: -1, b: 0, c: 9999, d: '9999.0', e: 12.5 }];
+      expect(() => synthesize('BE-3', 'json', Buffer.from(JSON.stringify(doc)))).not.toThrow();
+    });
+  });
+
   it('keeps 9999.0 (number and string), is deterministic, and shifts every timestamp by the same days', () => {
     const times = ['2026-01-01T00:00:00Z', '2026-01-01T00:10:00Z', '2026-03-31T23:50:00.5+01:00'];
     const doc = [{ a: 9999.0, b: '9999.0', c: 7777.5, d: times, e: '2026-06-01T12:00' }];
@@ -324,6 +414,27 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
       for (const name of ['Test', 'a_b', '-a', 'a--b', '', '../x']) {
         expect(refusal(() => synthesizeFromExport({ ...o, name }))).toBe(64);
       }
+    });
+
+    it('the smoke form: the same refusals, and no overwrite without --force (1)', () => {
+      counter += 1;
+      const smokeDir = join(tmp, `smoke-${counter}`);
+      const outRoot = join(tmp, `out-${counter}`);
+      mkdirSync(smokeDir, { recursive: true });
+      const o = { spec: 'de-2-wv', smokeDir, outRoot };
+      writeFileSync(join(smokeDir, 'de-2-wv.raw'), '[]');
+      expect(refusal(() => synthesizeSmoke(o))).toBe(1);
+      writeFileSync(join(smokeDir, 'de-2-wv.raw'), '[{"a":"synthetic-1"}]');
+      expect(refusal(() => synthesizeSmoke(o))).toBe(1);
+      expect(readdirSync(tmp)).not.toContain(`out-${counter}`);
+      writeFileSync(join(smokeDir, 'de-2-wv.raw'), '[{"value": 1.5, "timestamp": "2026-09-29T10:00:00+02:00"}]');
+      expect(refusal(() => synthesizeSmoke(o))).toBeNull();
+      expect(refusal(() => synthesizeSmoke(o))).toBe(1);
+      expect(refusal(() => synthesizeSmoke({ ...o, force: true }))).toBeNull();
+      expect(readdirSync(join(outRoot, 'de-2', 'fixtures'))).toEqual([
+        'de-2-wv.synthetic.meta.json',
+        'de-2-wv.synthetic.raw',
+      ]);
     });
 
     it('a body that is not JSON, without printing it (1)', () => {

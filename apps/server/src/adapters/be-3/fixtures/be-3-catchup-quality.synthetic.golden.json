@@ -95,12 +95,6 @@
    "ts": "2030-01-01T01:00:00.000Z",
    "value": 80,
    "qc": 1
-  },
-  {
-   "series": "9304/H",
-   "ts": "2030-01-01T00:00:00.000Z",
-   "value": 100,
-   "qc": 1
   }
  ],
  "gaugeZeros": [],
@@ -113,10 +107,7 @@
   "gap": 1,
   "too_old": 1,
   "future": 1,
-  "unit_mismatch": 2
+  "unit_mismatch": 3
  },
- "unknown": 1,
- "unitMismatch": [
-  "9306/H"
- ]
+ "unknown": 1
 }

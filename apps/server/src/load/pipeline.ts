@@ -90,9 +90,10 @@ export type Backlog = { files: number; bytes: number; age_s: number | null };
 
 /**
  * How far the public backlog scan reads into one file's unread lines; the rest of a longer backlog counts whole, as
- * public (a backlog that long is an outage, whoever's lines it holds).
+ * public (a backlog that long is an outage, whoever's lines it holds). The scan JSON-parses every line it reads on
+ * every pass of the loop, so it stays small (review SR-5: 16 MiB before).
  */
-const PUBLIC_SCAN_BYTES = 16 * 1024 * 1024;
+const PUBLIC_SCAN_BYTES = 2 * 1024 * 1024;
 
 /** Nothing left to load: the gate of the checksums and the nightly jobs (a torn last line never blocks them). */
 export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;

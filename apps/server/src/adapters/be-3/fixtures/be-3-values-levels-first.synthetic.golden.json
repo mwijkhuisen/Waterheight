@@ -239,6 +239,5 @@
  "dropped": {
   "too_old": 1
  },
- "unknown": 0,
- "unitMismatch": []
+ "unknown": 0
 }

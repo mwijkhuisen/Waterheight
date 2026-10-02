@@ -44,15 +44,79 @@ describe('dataToJson', () => {
       ['a comment holding a fake element', `<!-- <cmp-dashboard-station data-to-json="${EVIL}"> -->`],
       ['a div with a data-to-json attribute', `<div data-to-json="${EVIL}">x</div>`],
       ['an attribute value that holds `data-to-json=`', `<p title="data-to-json=&quot;${EVIL}&quot;">x</p>`],
+      // Review CR-3 / SR-7: a whole element inside another tag's quoted value, a title or a noscript.
+      ['a div title holding a fake element', `<div title="<cmp-dashboard-station data-to-json='${EVIL}'>">x</div>`],
+      [
+        'an unquoted and a single-quoted value holding one',
+        `<a href=<cmp-dashboard-station b='<cmp-dashboard-station>'>`,
+      ],
+      ['a title holding one', `<title><cmp-dashboard-station data-to-json="${EVIL}"></title>`],
+      ['a noscript holding one', `<noscript><cmp-dashboard-station data-to-json="${EVIL}"></noscript>`],
+      [
+        'an xmp, an iframe, a noembed and a noframes holding one',
+        ['xmp', 'iframe', 'noembed', 'NOFRAMES']
+          .map((t) => `<${t}><cmp-dashboard-station data-to-json="${EVIL}"></${t}>`)
+          .join(''),
+      ],
+      [
+        'a nested template holding one',
+        `<template><template></template><cmp-dashboard-station data-to-json="${EVIL}"></template>`,
+      ],
+      [
+        'a script whose `<!--<script>` hides a `</script>`',
+        `<script><!--<script></script><cmp-dashboard-station data-to-json="${EVIL}"></script>`,
+      ],
+      [
+        'bogus comments holding one',
+        `<!x <cmp-dashboard-station data-to-json="${EVIL}"><?x <cmp-dashboard-station><//<cmp-dashboard-station>`,
+      ],
+      [
+        '`--!>` ending a comment before a script that holds `-->`',
+        `<!-- a --!><script>--><cmp-dashboard-station data-to-json="${EVIL}"></script>`,
+      ],
+      ['everything after a plaintext', `<plaintext><cmp-dashboard-station data-to-json="${EVIL}">`],
     ];
     for (const [name, decoy] of decoys) {
-      it(`${name} before the element`, () => {
-        expect(dataToJson(page(decoy))).toEqual(OUT);
-      });
+      // `<plaintext>` hides the rest of the page, so it goes only after the element.
+      if (!name.includes('plaintext')) {
+        it(`${name} before the element`, () => {
+          expect(dataToJson(page(decoy))).toEqual(OUT);
+        });
+      }
       it(`${name} after the element`, () => {
         expect(dataToJson(page('', decoy))).toEqual(OUT);
       });
+      it(`${name} without the element: no record`, () => {
+        expect(code(() => dataToJson(`<!DOCTYPE html><html><body>${decoy}</body></html>`))).toBe('html_tag');
+      });
     }
+
+    it('a `<` or `<!--` inside a quoted value of another tag, or of an end tag, starts nothing', () => {
+      expect(dataToJson(`<p title="<!--">${el()}<!-- -->`)).toEqual(OUT);
+      expect(dataToJson(`<script></script title="><!--">${el()}<!-- -->`)).toEqual(OUT);
+      expect(dataToJson(`<p></p title="<script>">${el()}</script>`)).toEqual(OUT);
+      expect(dataToJson(`<?x title="<!--"?>${el()}<!-- -->`)).toEqual(OUT);
+    });
+
+    it('the escaped states of a script end as in a browser', () => {
+      for (const script of ['<script><!--></script>', '<script><!--<script>--></script>', '<script><!-- </script>']) {
+        expect(dataToJson(script + el())).toEqual(OUT);
+      }
+      // `<!--<script>` double-escapes: the first `</script>` only undoes it, the second ends the script.
+      expect(code(() => dataToJson(`<script><!--<script></script>${el()}`))).toBe('html_tag');
+    });
+
+    it('`<!--!>` and `<!---!>` do not close a comment, `<!----!>` does', () => {
+      expect(code(() => dataToJson(`<!--!>${el()}`))).toBe('html_tag');
+      expect(code(() => dataToJson(`<!---!>${el()}`))).toBe('html_tag');
+      expect(dataToJson(`<!----!>${el()}`)).toEqual(OUT);
+    });
+
+    it('an element inside a template is not the page, one after it is', () => {
+      expect(code(() => dataToJson(`<template>${el()}</template>`))).toBe('html_tag');
+      expect(code(() => dataToJson(`<template><template></template>${el()}</template>`))).toBe('html_tag');
+      expect(dataToJson(`</template><template><template></template></template>${el()}`)).toEqual(OUT);
+    });
 
     it('`title="data-to-json=…"` on the element itself, before the real attribute', () => {
       const attrs = `title="data-to-json=&quot;${EVIL}&quot;" data-to-json="${REAL}"`;
@@ -160,10 +224,17 @@ describe('dataToJson', () => {
       expect(performance.now() - t0).toBeLessThan(1000);
     });
 
-    it('`<script` and `<!--` repeated, and a long run of whitespace after a tag name', () => {
+    it('`<script`, comments, bogus comments, quotes and templates repeated, and a long run of whitespace after a tag name', () => {
       for (const body of [
         '<script '.repeat(MB4 / 8),
         '<!--'.repeat(MB4 / 4),
+        '<!----!>'.repeat(MB4 / 8),
+        `<script>${'<!--<script>'.repeat(MB4 / 12)}`,
+        '<a title="'.repeat(MB4 / 10),
+        '<!x'.repeat(MB4 / 3),
+        '</'.repeat(MB4 / 2),
+        '<template>'.repeat(MB4 / 10),
+        `<p ${'a '.repeat(MB4 / 2)}`,
         `<cmp-dashboard-station${' '.repeat(MB4)}`,
       ]) {
         const t0 = performance.now();
@@ -200,6 +271,17 @@ describe('dataToJson', () => {
       '<style',
       '<template',
       '<textarea',
+      '<title>',
+      '</title>',
+      '<noscript',
+      '<template>',
+      '</template>',
+      '<!--<script>',
+      '--!>',
+      '<?',
+      '<!x',
+      '</',
+      '<plaintext>',
       '<cmp-dashboard-station',
       '<CMP-DASHBOARD-STATION',
       ' data-to-json=',
