@@ -17,7 +17,7 @@ sudo docker logs --since 72h rws-load-1 2>&1 | grep '"alert":"label_offset'
 
 - `label_offset` is `{day, minutes, n_aligned, share}` for the latest measured day, or `null` until the first night after the deploy (the job runs once per UTC day after 02:00 and measures the last complete day). `minutes` is the offset, `n_aligned` the points compared (at least 48 for a decision) and `share` the part of them that agree (at least 0.9).
 - The `app_meta` value is `{"days": {"YYYY-MM-DD": {"minutes": …, "n_aligned": …, "share": …}}}`, the last 60 days. A day that is not in it was not measured, or was `unknown`.
-- Each day is measured once. A replay afterwards is not measured again (R-070).
+- Each day is measured once. A replay afterwards is not measured again (R-071).
 
 ## 2. What the alerts mean
 

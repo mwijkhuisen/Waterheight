@@ -201,7 +201,7 @@ type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience'>;
  *    revisions are the same in either load order of a source and its fill.
  */
 // ponytail: every re-statement of an unchanged point rewrites its batch_id (about six row updates per insert
-// for DE-1's hourly PT6H window). If obs bloat shows, keep the newest fetch per series in a coverage table,
+// for DE-1's hourly PT6H window, about 17 for FR-1's 15-minute PT4H window since #53; R-069). If obs bloat shows, keep the newest fetch per series in a coverage table,
 // or lower obs's fillfactor for HOT updates.
 export async function upsertObs(
   tx: Tx,
