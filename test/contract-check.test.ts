@@ -12,7 +12,7 @@ import { check, LINE_SOURCE, type Report, reportLines, SPECS } from '../scripts/
 import { repoRoot } from './catalogue.ts';
 import { server } from './msw.setup.ts';
 
-// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1). The
+// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1; P5a: six specs). The
 // recorded fixtures stand in for the live providers; nothing here reaches the network.
 
 type Spec = (typeof SPECS)[number];
@@ -30,13 +30,22 @@ const BODY: Record<Spec, Buffer> = {
   'de-1-basin': readFileSync(join(fixtureDir('de-1'), 'de-1-basin.raw')),
   'nl-1-obs-key': readFileSync(join(fixtureDir('nl-1'), 'nl-1-obs-key.raw')),
   'nl-2-wfs': readFileSync(join(fixtureDir('nl-2'), 'nl-2-wfs.raw')),
+  'fr-1-obs': readFileSync(join(fixtureDir('fr-1'), 'fr-1-obs.raw')),
+  'ch-1-lindas': readFileSync(join(fixtureDir('ch-1'), 'ch-1-lindas.raw')),
+  'ch-2-pq': readFileSync(join(fixtureDir('ch-2'), 'ch-2-pq.raw')),
 };
 /** The fixtures were recorded together on 2026-09-29: a minute later, no value is old or in the future. */
 const recordedAt = (source: string, spec: string) =>
   Date.parse(JSON.parse(readFileSync(join(fixtureDir(source), `${spec}.meta.json`), 'utf8')).recorded_at as string);
 const NOW = new Date(
-  Math.max(recordedAt('de-1', 'de-1-basin'), recordedAt('nl-1', 'nl-1-obs-key'), recordedAt('nl-2', 'nl-2-wfs')) +
-    60_000,
+  Math.max(
+    recordedAt('de-1', 'de-1-basin'),
+    recordedAt('nl-1', 'nl-1-obs-key'),
+    recordedAt('nl-2', 'nl-2-wfs'),
+    recordedAt('fr-1', 'fr-1-obs'),
+    recordedAt('ch-1', 'ch-1-lindas'),
+    recordedAt('ch-2', 'ch-2-pq'),
+  ) + 60_000,
 );
 
 const capture = loadRegistry();
@@ -62,6 +71,9 @@ const GOOD: Record<Spec, Answer> = {
   'de-1-basin': answer(BODY['de-1-basin']),
   'nl-1-obs-key': answer(BODY['nl-1-obs-key']),
   'nl-2-wfs': answer(BODY['nl-2-wfs']),
+  'fr-1-obs': answer(BODY['fr-1-obs']),
+  'ch-1-lindas': answer(BODY['ch-1-lindas'], 200, 'text/csv;charset=UTF-8'),
+  'ch-2-pq': answer(BODY['ch-2-pq'], 200, 'application/octet-stream'),
 };
 
 type Seen = { method: string; host: string; path: string; userAgent: string | null; apiKey: boolean };
@@ -101,14 +113,23 @@ const nl1 = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => 
 };
 
 describe('the live check on the recorded payloads', () => {
-  it('passes DE-1, NL-1 and NL-2 through the loader parse: all ok', async () => {
+  it('passes DE-1, NL-1, NL-2, FR-1, CH-1 and CH-2 through the loader parse: all six ok', async () => {
     const { codes, report } = await run();
-    expect(codes).toEqual({ 'de-1-basin': 'ok', 'nl-1-obs-key': 'ok', 'nl-2-wfs': 'ok' });
+    expect(codes).toEqual({
+      'de-1-basin': 'ok',
+      'nl-1-obs-key': 'ok',
+      'nl-2-wfs': 'ok',
+      'fr-1-obs': 'ok',
+      'ch-1-lindas': 'ok',
+      'ch-2-pq': 'ok',
+    });
     expect(report.at).toBe(NOW.toISOString());
-    expect(reportLines(report)).toBe('de-1-basin ok\nnl-1-obs-key ok\nnl-2-wfs ok');
+    expect(reportLines(report)).toBe(
+      'de-1-basin ok\nnl-1-obs-key ok\nnl-2-wfs ok\nfr-1-obs ok\nch-1-lindas ok\nch-2-pq ok',
+    );
   });
 
-  it('sends exactly the three registry targets, with the contact User-Agent and no API key', async () => {
+  it('sends exactly the six registry targets, with the contact User-Agent and no API key', async () => {
     const { seen } = await run();
     expect(seen).toEqual(
       targets.map((t) => ({ method: t.method, host: t.host, path: t.path, userAgent: UA, apiKey: false })),
@@ -117,7 +138,21 @@ describe('the live check on the recorded payloads', () => {
       'GET www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json',
       'POST ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen',
       'GET geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs',
+      'GET hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr',
+      'POST ld.admin.ch/query',
+      'GET www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson',
     ]);
+    expect(targets).toHaveLength(6);
+    expect(seen).toHaveLength(6);
+  });
+
+  it('checks the first FR-1 page only: a `next` link in the payload is never followed', async () => {
+    const doc = JSON.parse(BODY['fr-1-obs'].toString('utf8'));
+    doc.next = `${doc.first}&page=2`;
+    const { codes, seen } = await run({ 'fr-1-obs': answer(JSON.stringify(doc)) });
+    expect(codes['fr-1-obs']).toBe('ok');
+    expect(seen.filter((r) => r.host === 'hubeau.eaufrance.fr')).toHaveLength(1);
+    expect(seen).toHaveLength(6);
   });
 });
 
@@ -170,6 +205,48 @@ describe('what a drifted provider turns into', () => {
     expect(codes['nl-1-obs-key']).toBe('no_rows');
   });
 
+  it('a CH-1 CSV with another header is csv_header, and carries none of the payload', async () => {
+    const body = BODY['ch-1-lindas'].toString('utf8');
+    const drifted = body.replace(
+      'id,name,water,time,q,w,t,dl,wkt',
+      'id,name,water,time,q,w,t,dl,PROVIDER-SECRET-COLUMN',
+    );
+    expect(drifted).not.toBe(body);
+    const { codes, report } = await run({ 'ch-1-lindas': answer(drifted, 200, 'text/csv') });
+    expect(codes['ch-1-lindas']).toBe('csv_header');
+    expect(JSON.stringify(report)).not.toContain('PROVIDER-SECRET-COLUMN');
+    expect(codes['fr-1-obs']).toBe('ok');
+    expect(codes['ch-2-pq']).toBe('ok');
+  });
+
+  it('a CH-1 CSV that lost a column the validity needs is invalid_required, a shifted row is a csv code', async () => {
+    const body = BODY['ch-1-lindas'].toString('utf8');
+    const noDl = body.replace(',dl,', ',danger,');
+    expect(noDl).not.toBe(body);
+    expect((await run({ 'ch-1-lindas': answer(noDl, 200, 'text/csv') })).codes['ch-1-lindas']).toBe('invalid_required');
+    const lines = body.split('\n');
+    lines[1] = `${lines[1]},extra`;
+    const { codes } = await run({ 'ch-1-lindas': answer(lines.join('\n'), 200, 'text/csv') });
+    expect(codes['ch-1-lindas']).toMatch(/^csv_[a-z_]+$/);
+  });
+
+  it('an extra key in an FR-1 observation is unrecognized_keys at a schema path', async () => {
+    const doc = JSON.parse(BODY['fr-1-obs'].toString('utf8'));
+    doc.data[0].EVIL_PROVIDER_KEY = 1;
+    const { codes, report } = await run({ 'fr-1-obs': answer(JSON.stringify(doc)) });
+    expect(codes['fr-1-obs']).toMatch(/^unrecognized_keys at /);
+    expect(JSON.stringify(report)).not.toContain('EVIL_PROVIDER_KEY');
+    expect(codes['ch-1-lindas']).toBe('ok');
+  });
+
+  it('a CH-2 feature with a new key is unrecognized_keys at a schema path', async () => {
+    const doc = JSON.parse(BODY['ch-2-pq'].toString('utf8'));
+    doc.features[0].properties.EVIL_PROVIDER_KEY = 1;
+    const { codes, report } = await run({ 'ch-2-pq': answer(JSON.stringify(doc)) });
+    expect(codes['ch-2-pq']).toMatch(/^unrecognized_keys at /);
+    expect(JSON.stringify(report)).not.toContain('EVIL_PROVIDER_KEY');
+  });
+
   it('NL-1 answering 204 (no data) is ok and is not parsed', async () => {
     const { codes } = await run({ 'nl-1-obs-key': () => new HttpResponse(null, { status: 204 }) });
     expect(codes['nl-1-obs-key']).toBe('ok');
@@ -219,7 +296,7 @@ describe('what a drifted provider turns into', () => {
       },
       now: NOW,
     });
-    expect(report.results.map((r) => r.code)).toEqual(['check_error', 'check_error', 'check_error']);
+    expect(report.results.map((r) => r.code)).toEqual(Array(SPECS.length).fill('check_error'));
     expect(JSON.stringify(report)).not.toMatch(/SECRET|boom|example/);
   });
 
@@ -228,7 +305,7 @@ describe('what a drifted provider turns into', () => {
       fetch: async () => ({ ok: false, error: 'Bad Error! https://x' as never }),
       now: NOW,
     });
-    expect(report.results.map((r) => r.code)).toEqual(['fetch_failed', 'fetch_failed', 'fetch_failed']);
+    expect(report.results.map((r) => r.code)).toEqual(Array(SPECS.length).fill('fetch_failed'));
   });
 });
 
@@ -290,8 +367,20 @@ describe('the report is a list of fixed lines and nothing else', () => {
     const nasty = answer('<html>PROVIDER-SECRET-TEXT https://leak.example/?k=v</html>', 200, 'text/html');
     const runs = [
       await run(),
-      await run({ 'nl-1-obs-key': nasty, 'nl-2-wfs': nasty, 'de-1-basin': nasty }),
-      await run({ 'nl-2-wfs': () => HttpResponse.error(), 'nl-1-obs-key': answer('x', 500) }),
+      await run({
+        'nl-1-obs-key': nasty,
+        'nl-2-wfs': nasty,
+        'de-1-basin': nasty,
+        'fr-1-obs': nasty,
+        'ch-1-lindas': nasty,
+        'ch-2-pq': nasty,
+      }),
+      await run({
+        'nl-2-wfs': () => HttpResponse.error(),
+        'nl-1-obs-key': answer('x', 500),
+        'fr-1-obs': answer('x', 503),
+        'ch-1-lindas': () => HttpResponse.error(),
+      }),
     ];
     for (const { report } of runs) {
       const text = `${JSON.stringify(report)}\n${reportLines(report)}`;
@@ -305,6 +394,9 @@ describe('the report is a list of fixed lines and nothing else', () => {
         'PROVIDER-SECRET-TEXT',
         'rijkswaterstaat',
         'pegelonline',
+        'eaufrance',
+        'ld.admin',
+        'hydrodaten',
       ])
         expect(text).not.toContain(secret);
       for (const name of stationNames) expect(text).not.toContain(name as string);
@@ -417,6 +509,23 @@ describe('the workflow', () => {
     expect(text).toMatch(/^permissions: \{\}$/m);
     expect(text).not.toMatch(/pull_request|workflow_run|issue_comment/);
     expect(Object.keys(wf.jobs)).toEqual(['check', 'report']);
+  });
+
+  it('runs at minute 29, 5 minutes from every CH-1 fetch of the recorder (BAFU: at most one download per 10 minutes)', () => {
+    const [cron] = wf.on.schedule as { cron: string }[];
+    expect(cron?.cron).toBe('29 3 * * *');
+    const minute = Number(cron?.cron.split(' ')[0]);
+    const recorder = capture.specs.find((x) => x.id === 'ch-1-lindas')?.cron ?? '';
+    const m = /^(\d{1,2})-59\/10 \* \* \* \*$/.exec(recorder);
+    expect(m, recorder).not.toBeNull();
+    const fetches = Array.from({ length: 6 }, (_, i) => Number(m?.[1]) + 10 * i);
+    for (const f of fetches)
+      expect(Math.min(Math.abs(minute - f), 60 - Math.abs(minute - f))).toBeGreaterThanOrEqual(5);
+  });
+
+  it('says six requests, never three', () => {
+    expect(text).toContain('Six live requests');
+    expect(text).not.toMatch(/\bthree\b/i);
   });
 
   it('writes issues in the report job only, and that job has no contents permission and no checkout', () => {

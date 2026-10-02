@@ -7,13 +7,16 @@
 //                                                files, per-spec freshness, owner_specs,
 //                                                the health API (contract, closed
 //                                                parameters, DE-1 and NL-1 health, tier-1
-//                                                freshness and replay, loader lag), the data
+//                                                freshness and replay, FR-1 and CH-1 health,
+//                                                tier-1 freshness and coverage since the seed,
+//                                                CH-1's 10-minute request interval, loader lag), the data
 //                                                API through Caddy (P4b: /meta with the
 //                                                release commit, /stations, three snapshots
 //                                                at the server's own clock, /openapi.json,
 //                                                the closed parameters, noindex on the app,
-//                                                /api and /tiles, DE-1 and NL-1 data under
-//                                                45 minutes old), the
+//                                                /api and /tiles, DE-1, NL-1, FR-1 and CH-1
+//                                                data under 45 minutes old, the 25 Belgian
+//                                                points of catalogue §0.6), the
 //                                                basemap tiles (P3: the manifest, a Range
 //                                                read of every listed file, the 404s, the
 //                                                416 for no Range or two ranges) and
@@ -36,7 +39,7 @@ import { request as httpsRequest } from 'node:https';
 import { isIP, type LookupFunction } from 'node:net';
 import { join } from 'node:path';
 import { connect as tlsConnect } from 'node:tls';
-import { loadRegistry, type Registry } from '../apps/server/src/capture/specs.ts';
+import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
 import {
@@ -65,6 +68,14 @@ export const OWNER_CANARY = CANARIES.owner.text;
 export const HEALTH_PATHS = ['/api/v1/health', '/api/v1/health/sources'] as const;
 /** P2a criterion: at least this share of a source's tier-1 series is fresh. */
 export const TIER1_MIN = 0.95;
+/** P5a criterion (Q7): at least this share of a source's expected tier-1 buckets, since the seed, holds a value. */
+export const COVERAGE_MIN = 0.95;
+/**
+ * P5a: the shortest gap between two requests of `ch-1-lindas` (one variant) in the last 24 h. BAFU asks LINDAS
+ * users for at most one download per 10 minutes: 600 s, less 5 s for the scheduling jitter of a fetch start.
+ */
+export const INTERVAL_SPEC = 'ch-1-lindas';
+export const INTERVAL_MIN_S = 595;
 /** The twin check runs hourly: 168 in 7 days. The soak allows a few missed hours (a deploy, a restart). */
 export const TWIN_MIN_CHECKS_7D = 160;
 /** The latest twin check is fresh when its hour ended no more than this long ago (one missed hour is allowed). */
@@ -419,6 +430,43 @@ export function checkTier1(doc: HealthSources | undefined, id = 'DE-1'): Result 
   );
 }
 
+/**
+ * P5a: the loader's coverage since the seed (Q7, over the source's tier-1 series) is at least 95%. The detail holds
+ * the ratio, the series below 95%, the first instant counted and the gaps between loaded payloads (numbers and
+ * instants only).
+ */
+export function checkCoverage(doc: HealthSources | undefined, id: string): Result {
+  const check = `coverage ${id}`;
+  if (doc === undefined) return noDocument(check, 'health/sources');
+  const s = sourceOf(doc, id);
+  if (s === undefined) return miss(check, 'not listed in /api/v1/health/sources');
+  const c = s.coverage;
+  if (c === null) return miss(check, 'no coverage yet');
+  const newest = c.gaps.reduce<(typeof c.gaps)[number] | undefined>(
+    (a, g) => (a === undefined || Date.parse(g.to) > Date.parse(a.to) ? g : a),
+    undefined,
+  );
+  const detail =
+    `${(100 * c.ratio).toFixed(1)}% of the expected buckets since ${c.from}, ` +
+    `${c.series_below_95} of ${c.series} tier-1 series below 95%, ${c.gaps.length} gaps` +
+    (newest === undefined ? '' : `, the newest from ${newest.from} to ${newest.to}`);
+  return c.ratio >= COVERAGE_MIN ? pass(check, detail) : miss(check, `${detail}; below ${COVERAGE_MIN * 100}%`);
+}
+
+/** P5a: CH-1 is not requested more often than BAFU allows (see `INTERVAL_MIN_S`). */
+export function checkInterval(doc: HealthSources | undefined): Result {
+  const check = 'interval CH-1';
+  if (doc === undefined) return noDocument(check, 'health/sources');
+  const s = sourceOf(doc, 'CH-1');
+  if (s === undefined) return miss(check, 'not listed in /api/v1/health/sources');
+  const m = s.min_interval_s.find((x) => x.spec === INTERVAL_SPEC);
+  if (m === undefined) return miss(check, 'no interval measured yet');
+  const detail = `${INTERVAL_SPEC}: the shortest gap between two requests of one variant in 24 h is ${m.seconds} s`;
+  return m.seconds >= INTERVAL_MIN_S
+    ? pass(check, `${detail}, not under ${INTERVAL_MIN_S} s`)
+    : miss(check, `${detail}, under ${INTERVAL_MIN_S} s (BAFU: at most one download per 10 minutes)`);
+}
+
 /** The loader keeps up: a fresh lag sample under 2 minutes, and no manifest line waiting 15 minutes or more (a stall). */
 export function checkLoaderLag(doc: Health | undefined): Result {
   if (doc === undefined) return noDocument('loader lag', 'health');
@@ -661,8 +709,21 @@ export function checkMapAsset(page: Page | string): Result {
 export const META_CACHE = 'public, max-age=60';
 export const STATIONS_CACHE = 'public, max-age=300';
 export const OPENAPI_CACHE = 'public, max-age=300';
-/** The public sources that /meta and /stations must show (the two with a loader since P2). */
-export const API_SOURCES = ['NL-1', 'DE-1'] as const;
+/** The public sources that /meta and /stations must show (those with a loader: P2, and FR-1 and CH-1 since P5a). */
+export const API_SOURCES = ['NL-1', 'DE-1', 'FR-1', 'CH-1'] as const;
+/** NL-1 locations on Belgian soil (catalogue §0.6): the stations are `nl.rws.<code>`; the 18 FR-1 partners are in the seed. */
+export const BELGIAN_NL1 = [
+  'antwerpen',
+  'lixhebiefaval',
+  'maaseik',
+  'herenlaak',
+  'lanaken',
+  'kanne',
+  'smeermaas.zuidwillemsvaart',
+] as const;
+/** P5a criterion: this share (percent) of the Belgian points has a value no older than 3 h at the server's now. */
+export const BELGIAN_FRESH_PCT = 90;
+export const BELGIAN_MAX_AGE_S = 3 * 3600;
 /** A source is fresh when one of its series has a value in the current snapshot no older than this at meta.now (45 min). */
 export const FRESH_MAX_AGE_S = 2700;
 /** A§12.2: also the apps, the api and the tiles say noindex until the public launch (P12), whatever the status. */
@@ -813,6 +874,50 @@ export function checkFresh(
   return newest <= FRESH_MAX_AGE_S ? pass(check, detail) : miss(check, `${detail}, over ${FRESH_MAX_AGE_S} s`);
 }
 
+/**
+ * The 25 Belgian points of catalogue §0.6 as station IDs: the 7 NL-1 locations and the FR-1 partners of
+ * `registry/seed/fr-1-be.csv` (read from the file, never listed here).
+ */
+export function belgianIds(partners: readonly Readonly<Record<string, string>>[] = readSeed(REGISTRY_DIR, 'fr-1-be')) {
+  return [...BELGIAN_NL1.map((code) => `nl.rws.${code}`), ...partners.map((r) => `fr.sandre.${r.code_station ?? ''}`)];
+}
+
+/**
+ * P5a [agent-prod]: every Belgian point is a station of /api/v1/stations (that view shows primary series only, so
+ * presence means primary), and at least 90% of them have a value in the "now" snapshot no older than 3 hours at the
+ * server's own now (`meta.now`). The detail names the missing and the stale points (our own IDs, never provider text).
+ */
+export function checkBelgianSet(
+  ids: readonly string[],
+  stations: Stations | undefined,
+  snapshot: Snapshot | undefined,
+  now: string | undefined,
+): Result {
+  const check = 'belgian set';
+  if (snapshot === undefined || stations === undefined || now === undefined)
+    return noDocument(check, snapshot === undefined ? 'snapshot' : stations === undefined ? 'stations' : 'meta');
+  if (ids.length === 0) return miss(check, 'no Belgian point to look for');
+  const nowMs = Date.parse(now);
+  const ageOf = new Map(snapshot.values.map((v) => [v.series, Math.round((nowMs - Date.parse(v.ts)) / 1000)]));
+  const byId = new Map(stations.stations.map((st) => [st.id, st]));
+  const missing: string[] = [];
+  const stale: string[] = [];
+  for (const id of ids) {
+    const st = byId.get(id);
+    if (st === undefined) missing.push(id);
+    else if (!st.series.some((x) => (ageOf.get(x.id) ?? Number.POSITIVE_INFINITY) <= BELGIAN_MAX_AGE_S)) stale.push(id);
+  }
+  const present = ids.length - missing.length;
+  const fresh = present - stale.length;
+  const detail =
+    `present ${present}/${ids.length}, fresh ${fresh}/${ids.length} (a value no older than ${BELGIAN_MAX_AGE_S / 3600} h)` +
+    (missing.length === 0 ? '' : `; missing: ${missing.join(', ')}`) +
+    (stale.length === 0 ? '' : `; stale: ${stale.join(', ')}`);
+  return missing.length === 0 && fresh * 100 >= ids.length * BELGIAN_FRESH_PCT
+    ? pass(check, detail)
+    : miss(check, detail);
+}
+
 // ---------------------------------------------------------------- network
 
 type Net = { resolve?: string; ca?: Buffer };
@@ -952,9 +1057,15 @@ export const CHECKS = [
   'health NL-1: /api/v1/health/sources lists NL-1 with status ok',
   'tier-1 NL-1: >= 95% of the tier-1 series are fresh, each against its own limit (provider-stale ones are named and never make it a PASS)',
   'replay NL-1: no loader backlog, a partition checksum for NL-1 and no quarantined NL-1 payload',
-  `api meta: GET /api/v1/meta is 200 with Cache-Control exactly "${META_CACHE}", the Meta contract document, and NL-1 and DE-1 among the sources`,
+  ...['FR-1', 'CH-1'].flatMap((id) => [
+    `health ${id}: /api/v1/health/sources lists ${id} with status ok`,
+    `tier-1 ${id}: >= 95% of the tier-1 series are fresh, each against its own limit (provider-stale ones are named and never make it a PASS)`,
+    `coverage ${id}: coverage.ratio >= ${COVERAGE_MIN * 100}% (the expected buckets of the tier-1 series that hold a value since the seed; the series below 95%, the first instant and the gaps are listed; null is a FAIL)`,
+  ]),
+  `interval CH-1: the min_interval_s of ${INTERVAL_SPEC} is >= ${INTERVAL_MIN_S} s (BAFU: at most one download per 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
+  `api meta: GET /api/v1/meta is 200 with Cache-Control exactly "${META_CACHE}", the Meta contract document, and ${API_SOURCES.join(', ')} among the sources`,
   'api build: /api/v1/meta build is the 40-hex release commit, not "dev" (KG-109: the image carries RWS_BUILD)',
-  `api stations: GET /api/v1/stations is 200 with Cache-Control exactly "${STATIONS_CACHE}", the Stations contract document, a station with a DE-1 series and one with an NL-1 series`,
+  `api stations: GET /api/v1/stations is 200 with Cache-Control exactly "${STATIONS_CACHE}", the Stations contract document, a station with a series of each of ${API_SOURCES.join(', ')}`,
   ...SNAPSHOT_ASKS.map(
     (a) =>
       `api snapshot ${a.name}: GET /api/v1/snapshot?t= at the 10-minute floor of the server's own now${a.back === 0 ? '' : ` - ${a.name}`} (from /meta, never this clock) is 200, the Snapshot contract with t as asked, Cache-Control exactly "${a.cache}"`,
@@ -962,10 +1073,11 @@ export const CHECKS = [
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
   'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter"} with Cache-Control: no-store',
   `noindex: ${NOINDEX_PATHS.join(', ')} each answer (the 404s of /api and /tiles too) with X-Robots-Tag: noindex`,
-  ...['DE-1', 'NL-1'].map(
+  ...['DE-1', 'NL-1', 'FR-1', 'CH-1'].map(
     (id) =>
       `fresh ${id}: in the "now" snapshot at least one ${id} series has a value no older than ${FRESH_MAX_AGE_S} s at the server's own now (/meta)`,
   ),
+  `belgian set: the 25 points of catalogue §0.6 (the NL-1 locations ${BELGIAN_NL1.join(', ')} as nl.rws.<code>, the 18 FR-1 partners of registry/seed/fr-1-be.csv as fr.sandre.<code>) are all stations of /api/v1/stations, and >= ${BELGIAN_FRESH_PCT}% have a value in the "now" snapshot no older than ${BELGIAN_MAX_AGE_S / 3600} h at the server's own now`,
   `tiles manifest: GET /tiles/manifest.json is 200 with Cache-Control exactly "${MANIFEST_CACHE}" (never immutable) and a body parseTilesManifest accepts`,
   `tiles <file>: every file the manifest lists (current and previous), GET with Range: ${TILE_HEADERS.range} and Accept-Encoding: ${TILE_HEADERS['accept-encoding']}, is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
   'tiles previous: n/a while the manifest has no previous extract (run the job again on a later build); a pass once it lists one',
@@ -1071,6 +1183,12 @@ async function main(argv: string[]): Promise<number> {
       checkSourceHealth(sources, 'NL-1'),
       checkTier1(sources.data, 'NL-1'),
       checkReplay(health.data, sources.data, 'NL-1'),
+      ...(['FR-1', 'CH-1'] as const).flatMap((id) => [
+        checkSourceHealth(sources, id),
+        checkTier1(sources.data, id),
+        checkCoverage(sources.data, id),
+      ]),
+      checkInterval(sources.data),
     );
 
     // The P4b data API through Caddy (A§9.2). The snapshots ask for the server's own "now" from /meta, never this clock.
@@ -1098,7 +1216,10 @@ async function main(argv: string[]): Promise<number> {
       checkApiParams(await api('/api/v1/meta?x=1')),
       checkNoindex(noindex),
       checkFresh('DE-1', snapReads.get('now')?.data, stationsRead.data, metaRead.data?.now),
-      checkFresh('NL-1', snapReads.get('now')?.data, stationsRead.data, metaRead.data?.now),
+      ...(['NL-1', 'FR-1', 'CH-1'] as const).map((id) =>
+        checkFresh(id, snapReads.get('now')?.data, stationsRead.data, metaRead.data?.now),
+      ),
+      checkBelgianSet(belgianIds(), stationsRead.data, snapReads.get('now')?.data, metaRead.data?.now),
     );
 
     // The P3 basemap (A§9.1): the manifest, every file it lists read with a 16-byte Range, the 404s, one pinned asset.
