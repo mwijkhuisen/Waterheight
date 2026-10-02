@@ -307,7 +307,7 @@ app_meta     (key PK, value)                      -- data_epoch, display_start, 
 | 8 | estimated | 256 | forecast "estimate" segment |
 | 16 | our range check | 512 | filled from another source's payload (P5a: FR-3 → FR-1, CH-3 → CH-1; not the P14 backfill, see above) |
 
-**Sentinels** are declared per adapter and never stored as values: RWS `99` with `0.0`; PEGELONLINE `99999`; NLWKN `-888`; VMM `-10000`; KiWIS `null`/`-1` (SPW `QADM` ends one step in the future with `null`/`-1`); SPW gauge datum `9999.0` (unknown); NRW `NA`.
+**Sentinels** are declared per adapter and never stored as values: RWS `99` with `0.0`; PEGELONLINE `99999`; NLWKN `-888`; VMM `-10000`; KiWIS `null`/`-1` (SPW `QADM` ends one step in the future with `null`/`-1`); SPW gauge datum `9999.0` (unknown); NRW `NA`; BAFU `0.0` at a CH-1 level series (#51).
 
 **Datums** (catalogue §4.1): TAW ≈ NAP + 2.33 m; NHN ≈ NAP − 0.5…2 cm; LN02 ≈ NHN + 0.32 m at Basel (derived). **IGN69 and NGF-1884: no conversion in the first release.** The published IGN69 ≈ NAP + 0.47…0.49 m is contradicted by the only shared gauges (Hub'Eau vs PEGELONLINE zeros differ by +0.535 m at Breisach, +0.58 m at Kehl and +1.57 m at Hanweiler; EPSG:5419 accuracy is 0.1 m; catalogue C40, §10 R6). Absolute heights are derived only in the station detail, shown as "≈ x.xx m NAP (±2 cm)", with the raw value as published beside them; French stations show only their gauge zero as published, marked unverified (D16), and so does any station whose zero comes only from Hub'Eau metadata (the §0.6 Belgian partner stations in FR-1). (P5a: that mark is the datum itself, IGN69 or NGF1884, which `TO_NAP` never converts; the implausible published zeros, 13318.0 and 0.17361, are stored as published.)
 

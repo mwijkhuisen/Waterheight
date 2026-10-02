@@ -506,6 +506,9 @@ describe('property and fuzz tests', () => {
           ObsRow.parse(r);
           expect(Date.parse(r.ts)).toBeLessThanOrEqual(at + 15 * 60_000);
           expect(Date.parse(r.ts)).toBeGreaterThanOrEqual(at - 45 * 86_400_000);
+          // The datum guard and the 0 sentinel (#51): a level is never below 150 m, a stage never at or above it.
+          const decl = registry.get(r.series);
+          if (decl?.quantity === 'H') expect(r.value >= 15_000).toBe(decl.value_kind !== 'stage');
         }
         const keys = out.obs.map((r) => `${r.series}@${r.ts}`);
         expect(new Set(keys).size).toBe(keys.length);
