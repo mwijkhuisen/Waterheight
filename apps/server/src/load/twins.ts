@@ -17,8 +17,10 @@ import { lock } from './store.ts';
 // The lag: a − b is scored at every shift of b within ± `max_lag_min` (default 60) in 5-minute steps; the lag
 // is the shift where the most aligned points agree, and 0 unless the relation holds there (`min_share`) and it
 // beats the unshifted share by LAG_MARGIN (a flat river agrees at every shift, and noise or a constant bias
-// must not pick one). ok: points aligned, the share within
-// tolerance at least `min_share` (default 1), and a lag of 0.
+// must not pick one). When shifts of both signs share the best share (a periodic signal), the lag is
+// undetermined and reported as 0 (review CR-6), never the first of them. ok: points aligned, the share within
+// tolerance at least `min_share` (default 1), and a lag of 0: so `ok` is the relation at shift 0 whenever the
+// lag is undetermined.
 
 /**
  * The newest 30 minutes are left out: the two sides are fetched by different
@@ -67,13 +69,16 @@ export function judgeTwin(a: readonly Point[], b: readonly Point[], relation: Re
     sorted.length % 2 === 1 ? (sorted[mid] as number) : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
   const furthest = deltas.reduce((m, d) => (Math.abs(d - expected) > Math.abs(m - expected) ? d : m));
   // A shift that aligns far fewer points (the edge of the window) does not compete.
+  const competing = scores.filter((s) => s.n * 2 >= zero.n);
   let best = zero;
-  for (const s of scores) {
-    if (s.n * 2 < zero.n) continue;
+  for (const s of competing) {
     if (s.share > best.share || (s.share === best.share && Math.abs(s.shift) < Math.abs(best.shift))) best = s;
   }
+  // The best share reached on both sides of 0 leaves the lag's sign, and so the lag, undetermined.
+  const tied = competing.filter((s) => s.share === best.share);
+  const undetermined = tied.some((s) => s.shift < 0) && tied.some((s) => s.shift > 0);
   // A lag is a shift where the relation holds (a constant bias fails at every shift and must not invent one).
-  const lag = best.share > zero.share + LAG_MARGIN && best.share >= minShare ? best.shift : 0;
+  const lag = !undetermined && best.share > zero.share + LAG_MARGIN && best.share >= minShare ? best.shift : 0;
   return {
     n_aligned: deltas.length,
     median_delta: median,

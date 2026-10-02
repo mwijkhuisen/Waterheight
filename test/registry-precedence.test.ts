@@ -151,6 +151,14 @@ describe('the precedence rules of A§7.4 step 6', () => {
     expect(perl?.a).toEqual({ source: OFFSET_PAIR.source, provider_key: OFFSET_PAIR.key });
     expect(perl?.b).toEqual({ source: OFFSET_PAIR.against.source, provider_key: OFFSET_PAIR.against.key });
   });
+
+  it('the byte-identical LU-1 copies tolerate one stray point a day: min_share 0.98 (review CR-3)', () => {
+    for (const id of ['perl-lu1-de1-h', 'stadtbredimus-lu1-de1-h'])
+      expect([id, twins.find((t) => t.id === id)?.relation]).toEqual([
+        id,
+        { kind: 'offset', expected: 0, tolerance: 0.05, unit: 'cm', min_share: 0.98 },
+      ]);
+  });
 });
 
 describe('registry/permissions in the sync (readRegistry)', { timeout: 30_000 }, () => {
@@ -174,7 +182,14 @@ describe('registry/permissions in the sync (readRegistry)', { timeout: 30_000 },
     const grant = front(
       'source: DE-12\ngranted_by: Test\ngranted_on: "2026-09-01"\nevidence: test\naudience: public\ndisplay: true\napi: false\nbulk_export: false\nhistory_export: false',
     );
-    expect(withFile('permissions/DE-12.md', grant)).toThrow(/holds a grant/);
+    expect(withFile('permissions/DE-12.md', grant)).toThrow(
+      'registry/permissions holds a record that is not a withholding record (grants are P13)',
+    );
+  });
+
+  it('a record without front matter, or with a malformed one, is not a withholding record either (review CR-7)', () => {
+    for (const text of ['# no front matter\n', front('source: LU-1\nwithheld: Bollendorf'), front('[')])
+      expect(withFile('permissions/LU-1.md', text)).toThrow(/is not a withholding record \(grants are P13\)/);
   });
 
   it('a withholding record must name registered series that are off', () => {

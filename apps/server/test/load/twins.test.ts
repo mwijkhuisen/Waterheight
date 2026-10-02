@@ -48,4 +48,24 @@ describe('judgeTwin', () => {
     expect(judgeTwin(signal(100), b, relation).ok).toBe(false);
     expect(judgeTwin(signal(100), b, { ...relation, min_share: 0.99 })).toMatchObject({ ok: true, lag_min: 0 });
   });
+
+  it('min_share 0.98 (Perl, Stadtbredimus; review CR-3) passes one stray point in 94, as 0.99 did not', () => {
+    const b = signal(94);
+    (b[40] as { value: number }).value += 0.1;
+    expect(judgeTwin(signal(94), b, { ...relation, min_share: 0.99 }).ok).toBe(false);
+    expect(judgeTwin(signal(94), b, { ...relation, min_share: 0.98 })).toMatchObject({ n_aligned: 94, ok: true });
+    (b[41] as { value: number }).value += 0.1;
+    expect(judgeTwin(signal(94), b, { ...relation, min_share: 0.98 }).ok).toBe(false);
+  });
+
+  it('a best share on both sides of 0 (a periodic signal) leaves the lag undetermined: 0, and ok by shift 0 (review CR-6)', () => {
+    // b alternates every 15 minutes and a is b one step on: a agrees with b at ±15 and ±45 minutes, never at 0.
+    const wave = (from: number, n: number, k0: number) =>
+      Array.from({ length: n }, (_, i) => ({ ts: T0 + (from + i) * 900_000, value: (from + i + k0) & 1 ? 210 : 200 }));
+    const a = wave(0, 96, 1);
+    const b = wave(-4, 104, 0);
+    expect(judgeTwin(a, b, relation)).toMatchObject({ n_aligned: 96, lag_min: 0, ok: false });
+    // One-sided, the same agreement is a lag: b stating each value 15 minutes later is found as before.
+    expect(judgeTwin(signal(96), signal(96, 15), relation)).toMatchObject({ lag_min: 15 });
+  });
 });

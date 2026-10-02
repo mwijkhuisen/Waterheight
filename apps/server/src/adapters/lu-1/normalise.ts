@@ -18,12 +18,15 @@ import type { Table } from './parse.ts';
 //  - series: the station's Name exactly as published (Unicode NFC), because `Number` is always empty; the
 //    registry maps every Name explicitly (scripts/gen-lu1-stations.ts), so a crafted name can only miss;
 //  - time: the labels are Europe/Luxembourg wall-clock times without an offset (`naive-local`; local time
-//    with DST since 09/2026). They are resolved as one axis, never one by one: the columns are consecutive
-//    15-minute steps, so one unambiguous label fixes every column's instant by its position, and every label
-//    must then read exactly as its instant does on a Luxembourg clock. On 2026-10-25 the labels 02:00–02:45
-//    occur twice: the first pass is +02:00, the second +01:00, by column order, also when a payload starts
-//    or ends inside the repeated hour. A label that cannot exist (the spring gap), a missing, doubled or
-//    shuffled column, or any other irregularity is drift (`time_axis`): never guessed;
+//    with DST since 09/2026). They are resolved as one axis, never one by one. The axis assumes that the
+//    columns are consecutive 15-minute steps (the file's format; review CR-5): the last unambiguous label fixes
+//    every column's instant by its position, and every label must then read exactly as its instant does on a
+//    Luxembourg clock. On 2026-10-25 the labels 02:00–02:45 occur twice: the first pass is +02:00, the second
+//    +01:00, by column order, also when a payload starts or ends inside the repeated hour. A payload whose
+//    columns are not consecutive steps is drift (`time_axis`) only where its labels contradict the assumption:
+//    a label that cannot exist (the spring gap), a missing, doubled or shuffled column, any other irregularity.
+//    Where they agree with it (a payload that starts inside the repeated hour and skipped its first pass would
+//    read as the second pass), the assumption stands unproven: it is the format, not something checked;
 //  - label offset (§2.6, C14): the value under label T belongs to T − offset (15 minutes in the 5-day file of
 //    2026-09, 0 since the 7-day file of 2026-09-30). The offset is measured daily against the DE-1 Perl twin
 //    (load/label-offset.ts) and passed in per UTC day; a day without a measurement takes the latest measured

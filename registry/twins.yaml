@@ -25,15 +25,16 @@ twins:
     b: { source: DE-1, provider_key: 94f6eff1-4f3f-4850-82e0-a086198e9ffd/W }
     relation: { kind: offset, expected: 24000, tolerance: 1, unit: cm }
   # Perl and Stadtbredimus UP: the LU-1 CSV republishes PEGELONLINE's values byte for byte (catalogue §2.6); the LU-1
-  # side is stored with the label offset applied (load/label-offset.ts), so the two meet at lag 0.
+  # side is stored with the label offset applied (load/label-offset.ts), so the two meet at lag 0. min_share 0.98: a
+  # day has about 94 aligned points, so one stray point (93/94 = 0.989) passes and two do not (review CR-3).
   - id: perl-lu1-de1-h
     a: { source: LU-1, provider_key: Perl }
     b: { source: DE-1, provider_key: c263ea53-ca4d-41f5-b3f5-6178fec302aa/W }
-    relation: { kind: offset, expected: 0, tolerance: 0.05, unit: cm, min_share: 0.99 }
+    relation: { kind: offset, expected: 0, tolerance: 0.05, unit: cm, min_share: 0.98 }
   - id: stadtbredimus-lu1-de1-h
     a: { source: LU-1, provider_key: SN_Stadtbredimus }
     b: { source: DE-1, provider_key: dfdf753b-75bd-46f0-8cde-15545be9bfba/W }
-    relation: { kind: offset, expected: 0, tolerance: 0.05, unit: cm, min_share: 0.99 }
+    relation: { kind: offset, expected: 0, tolerance: 0.05, unit: cm, min_share: 0.98 }
   # Grevenmacher: the Service de la navigation gauge in LU-1 and WSV's Grevenmacher UP differ by up to 3 cm
   # (catalogue §2.6; owner decision 2026-10-02: DE-1 stays primary, the LU-1 copy is this twin).
   - id: grevenmacher-lu1-de1-h

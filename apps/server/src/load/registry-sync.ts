@@ -47,11 +47,16 @@ export function readRegistry(
   const records = new Map<string, unknown>();
   for (const file of existsSync(permissions) ? readdirSync(permissions).filter((f) => f.endsWith('.md')) : []) {
     const front = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(readFileSync(new URL(file, permissions), 'utf8'))?.[1];
-    const record = front === undefined ? null : (parse(front) as unknown);
+    let record: unknown = null;
+    try {
+      record = front === undefined ? null : parse(front);
+    } catch {
+      // Front matter that is not YAML is no withholding record either (review CR-7): the one refusal below.
+    }
     // A grant changes what may be published; this sync does not apply grants yet (P13). A withholding record
     // (P5b) only narrows, and is checked against the station rows below.
     if (!WithholdingRecord.safeParse(record).success) {
-      throw new RegistryError('registry/permissions holds a grant, which the sync cannot apply yet');
+      throw new RegistryError('registry/permissions holds a record that is not a withholding record (grants are P13)');
     }
     records.set(file.slice(0, -3), record);
   }
