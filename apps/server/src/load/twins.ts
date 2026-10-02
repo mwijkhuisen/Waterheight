@@ -4,7 +4,8 @@ import type { DB } from '../db/generated.ts';
 import { type Point, scoreShifts, shiftsWithin } from './align.ts';
 import { lock } from './store.ts';
 
-// The twin check (A§7.4 step 7; issue #17, P5b): for every registered pair with an `offset` relation, a − b
+// The twin check (A§7.4 step 7; issue #17, P5b): for every registered pair with an `offset` (or, P5c, a
+// `constant`: the expected difference detected as the median at shift 0) relation, a − b
 // on the timestamps both series have, over the 24 hours before the current UTC hour, and the lag of b against
 // a. One row per pair and hour, recomputed on every health pass (idempotent), so a late value or a revision
 // still counts. A pair that was checked before and now has no timestamp both sides state (one side has no
@@ -34,12 +35,10 @@ const STEP_MIN = 5;
 export const LAG_MARGIN = 0.05;
 
 type Relation = {
-  kind: 'offset';
-  expected: number;
   tolerance: number;
   min_share?: number;
   max_lag_min?: number;
-};
+} & ({ kind: 'offset'; expected: number } | { kind: 'constant' });
 
 export type TwinResult = {
   n_aligned: number;
@@ -51,11 +50,9 @@ export type TwinResult = {
 
 /** The check of one pair over one window (pure): `a` inside the window, `b` with the lag margin around it. */
 export function judgeTwin(a: readonly Point[], b: readonly Point[], relation: Relation): TwinResult {
-  const { expected, tolerance } = relation;
+  const { tolerance } = relation;
   const minShare = relation.min_share ?? 1;
   const maxLag = relation.max_lag_min ?? 60;
-  const scores = scoreShifts(a, b, shiftsWithin(maxLag, STEP_MIN), { expected, tolerance });
-  const zero = scores.find((s) => s.shift === 0) as (typeof scores)[number];
   const at = new Map(b.map((p) => [p.ts, p.value]));
   const deltas: number[] = [];
   for (const p of a) {
@@ -67,6 +64,11 @@ export function judgeTwin(a: readonly Point[], b: readonly Point[], relation: Re
   const mid = sorted.length >> 1;
   const median =
     sorted.length % 2 === 1 ? (sorted[mid] as number) : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
+  // `constant` (P5c): the expected difference is the one this window shows at shift 0, so a stable offset that
+  // nobody published (two gauge zeros of one gauge) passes, and noise or a jump in it does not.
+  const expected = relation.kind === 'constant' ? median : relation.expected;
+  const scores = scoreShifts(a, b, shiftsWithin(maxLag, STEP_MIN), { expected, tolerance });
+  const zero = scores.find((s) => s.shift === 0) as (typeof scores)[number];
   const furthest = deltas.reduce((m, d) => (Math.abs(d - expected) > Math.abs(m - expected) ? d : m));
   // A shift that aligns far fewer points (the edge of the window) does not compete.
   const competing = scores.filter((s) => s.n * 2 >= zero.n);
@@ -100,7 +102,8 @@ export async function checkTwins(db: Kysely<DB>, now: Date): Promise<string[]> {
     const from = windowEnd - WINDOW_MS;
     const to = windowEnd - SETTLE_MS;
     const { rows: twins } = await sql<{ id: string; series_a: number; series_b: number; relation: Relation }>`
-      SELECT id, series_a, series_b, relation FROM twin WHERE relation->>'kind' = 'offset' ORDER BY id`.execute(tx);
+      SELECT id, series_a, series_b, relation FROM twin WHERE relation->>'kind' IN ('offset', 'constant')
+      ORDER BY id`.execute(tx);
     const breached: string[] = [];
     for (const t of twins) {
       const lag = (t.relation.max_lag_min ?? 60) * 60_000;

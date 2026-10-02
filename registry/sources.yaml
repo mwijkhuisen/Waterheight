@@ -863,7 +863,7 @@ sources:
       - key: bollendorf
         audience: "off"
         reason: "LfU RLP-origin file Bollendorf.json on the AGE site: not fetched until C4 or C11 (catalogue §0.8 notes)."
-      - key: gemuend-our
+      - key: gemund-our
         audience: "off"
         reason: "LfU RLP-origin file Gemünd_Our.json on the AGE site: not fetched until C4 or C11 (catalogue §0.8 notes)."
   - id: LU-3

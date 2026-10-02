@@ -77,6 +77,11 @@ export function readRegistry(
     problems.push(...result.problems.map((p) => `stations/${file}: ${p}`));
     stations.push(...result.stations);
   }
+  for (const row of stations)
+    if (row.audience === 'owner' && row.value_kind === 'level' && !Object.hasOwn(OWNER_LEVEL_DATUM, row.source))
+      problems.push(
+        `stations: ${row.id} is an owner level row of ${row.source}, which has no datum (OWNER_LEVEL_DATUM)`,
+      );
   // Every series a withholding record names is a registered series of that source, withheld in both audiences.
   for (const w of registry.withholdings) {
     for (const key of w.withheld) {
@@ -85,10 +90,26 @@ export function readRegistry(
       else if (row.audience !== 'off') problems.push(`permissions/${w.source}.md: ${key} is not audience off`);
     }
   }
-  const twins = existsSync(new URL('twins.yaml', dir))
-    ? validateTwins(yaml('twins.yaml'), stations)
-    : { problems: [], twins: [] };
-  problems.push(...twins.problems.map((p) => `twins.yaml: ${p}`));
+  // The hand-written public pairs and the generated owner pairs (P5c: registry/twins/<source>.yaml), validated as one
+  // list: an id is unique across the files.
+  const twinsDir = new URL('twins/', dir);
+  const twinFiles = [
+    ...(existsSync(new URL('twins.yaml', dir)) ? ['twins.yaml'] : []),
+    ...(existsSync(twinsDir)
+      ? readdirSync(twinsDir)
+          .filter((f) => f.endsWith('.yaml'))
+          .sort()
+          .map((f) => `twins/${f}`)
+      : []),
+  ];
+  const pairs: unknown[] = [];
+  for (const file of twinFiles) {
+    const doc = yaml(file) as { twins?: unknown } | null;
+    if (Array.isArray(doc?.twins)) pairs.push(...doc.twins);
+    else problems.push(`${file}: no twins list`);
+  }
+  const twins = validateTwins({ twins: pairs }, stations);
+  problems.push(...twins.problems.map((p) => `twins: ${p}`));
   let thresholds: RegistryInput['thresholds'] = null;
   const nl4 = new URL('thresholds/nl-4.csv', dir);
   if (existsSync(nl4)) {
@@ -105,6 +126,13 @@ export function readRegistry(
 }
 
 const ROLE_PRECEDENCE = { primary: 0, twin: 1, mirror: 2 } as const;
+
+/**
+ * Owner-audience rows carry no datum (identification only, T-OWN-2): a stage is relative to its gauge zero (LOCAL),
+ * and a level is in its source's datum (P5c): SPW `Habs`/`Habs_sonde` in m DNG (= TAW), the AGE Esch-Sûre reservoir
+ * in m NN (NG95). An owner level row of a source not listed here fails the registry.
+ */
+export const OWNER_LEVEL_DATUM: Readonly<Record<string, 'DNG' | 'NG95'>> = { 'BE-3': 'DNG', 'LU-2': 'NG95' };
 
 /**
  * The window as hours and smaller only (source.history_window has a CHECK):
@@ -302,7 +330,14 @@ export async function syncRegistry(db: Kysely<DB>, input: RegistryInput): Promis
     for (const row of input.stations) {
       // A station row may narrow its source's audience (validateStations refuses anything wider).
       const narrowed = row.audience === audienceOf.get(row.source) ? null : row.audience;
-      const datum = row.quantity === 'Q' ? null : (('datum' in row ? row.datum : null) ?? 'LOCAL');
+      const datum =
+        row.quantity === 'Q'
+          ? null
+          : 'datum' in row
+            ? (row.datum ?? 'LOCAL')
+            : row.value_kind === 'level'
+              ? (OWNER_LEVEL_DATUM[row.source] ?? null)
+              : 'LOCAL';
       const { rows } = await sql<{ id: number }>`
         INSERT INTO series (station_id, source_id, quantity, value_kind, provider_key, native_unit, to_canonical, datum,
                             native_step, expected_step, staleness_limit, audience, role, active)

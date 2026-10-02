@@ -170,6 +170,13 @@ export function validateStations(
 
 const TwinSide = z.strictObject({ source: SourceId, provider_key: z.string().min(1).max(120) });
 
+const relationCommon = {
+  tolerance: z.number().nonnegative(),
+  unit: z.enum(['cm', 'm³/s']),
+  min_share: z.number().min(0.5).max(1).optional(),
+  max_lag_min: z.number().int().min(0).max(180).multipleOf(5).optional(),
+};
+
 export const Twin = z.strictObject({
   id: z
     .string()
@@ -181,20 +188,19 @@ export const Twin = z.strictObject({
    * `offset`: on equal timestamps, a − b is `expected` within `tolerance`, in the canonical unit (H cm,
    * Q m³/s), for at least `min_share` of the aligned timestamps (default 1: all of them). P5b: the loader
    * also estimates the lag of b against a within ± `max_lag_min` minutes (default 60); a lag other than 0
-   * fails the check.
+   * fails the check. P5c: `constant` is the same with the expected difference detected, not declared: the median
+   * of a − b at shift 0 (two gauge zeros of one gauge whose difference nobody published), reported as the
+   * check's `median_delta`.
    */
-  relation: z.strictObject({
-    kind: z.literal('offset'),
-    expected: z.number(),
-    tolerance: z.number().nonnegative(),
-    unit: z.enum(['cm', 'm³/s']),
-    min_share: z.number().min(0.5).max(1).optional(),
-    max_lag_min: z.number().int().min(0).max(180).multipleOf(5).optional(),
-  }),
+  relation: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('offset'), expected: z.number(), ...relationCommon }),
+    z.strictObject({ kind: z.literal('constant'), ...relationCommon }),
+  ]),
 });
 export type Twin = z.infer<typeof Twin>;
 
-export const TwinsFile = z.strictObject({ twins: z.array(Twin).max(100) });
+/** One twins file (registry/twins.yaml, or a generated registry/twins/<source>.yaml of owner pairs, P5c). */
+export const TwinsFile = z.strictObject({ twins: z.array(Twin).max(300) });
 
 /**
  * A twin names two different registered series of one quantity, with the

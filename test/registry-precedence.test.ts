@@ -14,6 +14,8 @@ import type { Station } from '../packages/contracts/src/index.ts';
 
 const { stations, twins } = readRegistry();
 const published = (r: Station) => r.role === 'primary' && r.audience === 'public';
+/** P5c: what the owner view shows, the public and the owner-audience primaries (A§6: `own_*`, D22). */
+const shownToOwner = (r: Station) => r.role === 'primary' && (r.audience === 'public' || r.audience === 'owner');
 const row = (source: string, code: string, quantity: 'H' | 'Q' = 'H') => {
   const found = stations.filter((r) => r.source === source && r.provider_code === code && r.quantity === quantity);
   if (found.length !== 1) throw new Error(`${source} ${code} ${quantity}: ${found.length} rows`);
@@ -42,20 +44,27 @@ const DISTINCT_GAUGES: readonly { a: string; b: string; why: string }[] = [];
 const NEAR_M = 300;
 
 describe('no physical gauge is published twice', { timeout: 30_000 }, () => {
-  it(`no two public primary series of one quantity from different sources lie within ${NEAR_M} m (unless reviewed)`, () => {
-    const placed = stations.filter((r) => published(r) && r.lon !== null && r.lat !== null);
-    const close: string[] = [];
-    for (let i = 0; i < placed.length; i += 1) {
-      const a = placed[i] as Station;
-      for (let j = i + 1; j < placed.length; j += 1) {
-        const b = placed[j] as Station;
-        if (a.source === b.source || a.quantity !== b.quantity || metres(a, b) > NEAR_M) continue;
-        const pair = [a.id, b.id].sort().join(' ~ ');
-        if (!DISTINCT_GAUGES.some((d) => [d.a, d.b].sort().join(' ~ ') === pair)) close.push(`${pair} (${a.quantity})`);
+  it.each([
+    ['the public view', published],
+    ['the owner view (P5c)', shownToOwner],
+  ] as const)(
+    `%s: no two primary series of one quantity from different sources lie within ${NEAR_M} m (unless reviewed)`,
+    (_, shown) => {
+      const placed = stations.filter((r) => shown(r) && r.lon !== null && r.lat !== null);
+      const close: string[] = [];
+      for (let i = 0; i < placed.length; i += 1) {
+        const a = placed[i] as Station;
+        for (let j = i + 1; j < placed.length; j += 1) {
+          const b = placed[j] as Station;
+          if (a.source === b.source || a.quantity !== b.quantity || metres(a, b) > NEAR_M) continue;
+          const pair = [a.id, b.id].sort().join(' ~ ');
+          if (!DISTINCT_GAUGES.some((d) => [d.a, d.b].sort().join(' ~ ') === pair))
+            close.push(`${pair} (${a.quantity})`);
+        }
       }
-    }
-    expect(close).toEqual([]);
-  });
+      expect(close).toEqual([]);
+    },
+  );
 
   it('a series key is registered once per source, and a station id belongs to one source', () => {
     const keys = stations.map((r) => `${r.source}/${r.provider_key}`);
@@ -129,7 +138,10 @@ describe('the precedence rules of A§7.4 step 6', () => {
   });
 
   it('every twin pair names two registered series, and a public pair has no withheld side', () => {
-    expect(twins.map((t) => t.id).sort()).toEqual([
+    const rowOf = (side: { source: string; provider_key: string }) =>
+      stations.find((s) => s.source === side.source && s.provider_key === side.provider_key);
+    const publicPairs = twins.filter((t) => rowOf(t.a)?.audience === 'public' && rowOf(t.b)?.audience === 'public');
+    expect(publicPairs.map((t) => t.id).sort()).toEqual([
       'basel-ch1-de1-h',
       'chooz-fr3-fr1-h',
       'eijsden-grens-taw-nap',
@@ -138,11 +150,30 @@ describe('the precedence rules of A§7.4 step 6', () => {
       'stadtbredimus-lu1-de1-h',
       'uckange-fr3-fr1-q',
     ]);
-    for (const t of twins) {
-      for (const side of [t.a, t.b]) {
-        const r = stations.find((s) => s.source === side.source && s.provider_key === side.provider_key);
-        expect([t.id, side.provider_key, r?.audience]).toEqual([t.id, side.provider_key, 'public']);
-      }
+    // Every other pair is an owner twin (P5c): one side an owner-audience twin series, the other a public series
+    // (never withheld), so the pair's result can only reach the owner family's twin view.
+    for (const t of twins.filter((x) => !publicPairs.includes(x))) {
+      const sides = [rowOf(t.a), rowOf(t.b)];
+      expect([t.id, sides.map((r) => r?.audience).sort()]).toEqual([t.id, ['owner', 'public']]);
+      const owner = sides.find((r) => r?.audience === 'owner');
+      expect([t.id, owner?.role]).toEqual([t.id, 'twin']);
+    }
+  });
+
+  it('owner twins (P5c): LU-2 is never primary and each LU-2 series is paired with its LU-1 series', () => {
+    const lu2 = stations.filter((r) => r.source === 'LU-2');
+    for (const r of lu2) expect([r.id, r.role, r.audience]).toEqual([r.id, 'twin', 'owner']);
+    for (const r of lu2) {
+      const pair = twins.find((t) => t.b.source === 'LU-2' && t.b.provider_key === r.provider_key);
+      expect([r.id, pair?.a.source]).toEqual([r.id, 'LU-1']);
+    }
+  });
+
+  it('owner station rows identify only: no datum, gauge zero, value, threshold or forecast (invariant 11)', () => {
+    for (const r of stations.filter((x) => x.audience === 'owner')) {
+      for (const key of ['datum', 'gauge_zero', 'value', 'values', 'thresholds', 'forecast'])
+        expect([r.id, key in r]).toEqual([r.id, false]);
+      expect([r.id, r.licence_gate]).toEqual([r.id, 'owner-only']);
     }
   });
 
