@@ -5,6 +5,7 @@ import { type LoadedSpec, loadRegistry } from '../capture/specs.ts';
 import type { DB } from '../db/generated.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { startHeartbeat } from '../heartbeat.ts';
+import { DST_REFUSED } from './adapters.ts';
 import {
   type Coverage,
   computeHealth,
@@ -14,6 +15,7 @@ import {
   type Outage,
   storeChecksums,
 } from './health.ts';
+import { detectLabelOffsets } from './label-offset.ts';
 import { type Backlog, Loader, nothingToLoad } from './pipeline.ts';
 import { parsedOkIn, prune } from './prune.ts';
 import { reconcileRollups } from './reconcile.ts';
@@ -90,10 +92,12 @@ export async function runLoad(
   const { db, close } = openDb(cfg, { max: 3, onError: (code) => logger.error({ code }, 'database connection error') });
   const reader = new ArchiveReader(rawDirOf(env));
   const lag = new LagWindow();
+  const alert = (code: string, fields?: Record<string, string | number>) =>
+    logger.error({ alert: code, ...fields }, 'alert');
   const loader = new Loader({
     db,
     reader,
-    alert: (code, fields) => logger.error({ alert: code, ...fields }, 'alert'),
+    alert,
     info: (msg, fields) => logger.info(fields ?? {}, msg),
     now: () => new Date(),
     onLag: (source, fetchedAt, lagMs) => lag.add(source, fetchedAt, lagMs, new Date()),
@@ -102,6 +106,8 @@ export async function runLoad(
   const apply = env.RWS_PRUNE_APPLY === '1';
   const stopHeartbeat = startHeartbeat();
   logger.info({ prune: apply ? 'apply' : 'dry-run' }, 'load started');
+  // The DST gate (A§7.4 step 2): a spec of an offset-less convention without its DST proof is not loaded.
+  for (const spec of DST_REFUSED) alert('dst_gate', { spec });
 
   let stopped = false;
   let wake: (() => void) | undefined;
@@ -160,6 +166,10 @@ export async function runLoad(
         lastHealth = now.getTime();
       }
       if (await claimNightly(db, now, backlog)) {
+        // Its own failure must not keep the other nightly jobs from running, nor theirs it.
+        await detectLabelOffsets(db, now, alert).catch((err: unknown) => {
+          logger.error({ code: errorCode(err) }, 'label offset detector failed; tomorrow measures the next day');
+        });
         await sql`SELECT ensure_partitions(now(), now() + interval '3 months')`.execute(db);
         const { repaired } = await reconcileRollups(db, now);
         if (repaired > 0) logger.error({ alert: 'rollup_mismatch', repaired }, 'alert');

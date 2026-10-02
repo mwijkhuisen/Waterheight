@@ -601,8 +601,8 @@ describe('newest fetch wins, whatever order the payloads arrive in (review C2, C
   // The fix of a parser, a normaliser or a registry factor: every value of the given series doubles.
   const doubled = (...variants: string[]): Record<string, LoadAdapter> => {
     const real = (LOAD_ADAPTERS['DE-1'] as LoadAdapter).specs['de-1-series'] as SpecLoader;
-    const run: SpecLoader['run'] = (body, ctx) => {
-      const out = real.run(body, ctx);
+    const run: SpecLoader['run'] = async (body, ctx) => {
+      const out = await real.run(body, ctx);
       return variants.includes(ctx.variant) ? { ...out, obs: out.obs.map((o) => ({ ...o, value: o.value * 2 })) } : out;
     };
     return { 'DE-1': { version: 2, specs: { 'de-1-series': { ...real, run } } } };

@@ -81,6 +81,19 @@ export async function storeUnitMismatch(tx: Tx, source: string, at: Date, keys: 
   return new Set(keys);
 }
 
+/**
+ * When the spec's previous loaded payload was fetched (P5b: the start of a re-stating payload's window,
+ * SpecLoader.window): the newest `ok` batch of the spec fetched before this one, within 8 days (an older one
+ * leaves the whole payload to load). The same in the tail and in a replay, so a replay writes what the tail did.
+ */
+export async function previousLoad(db: Kysely<DB>, source: string, spec: string, before: Date): Promise<Date | null> {
+  const { rows } = await sql<{ at: Date | null }>`
+    SELECT max(fetched_at) AS at FROM ingest_batch
+    WHERE source_id = ${source} AND spec_id = ${spec} AND parse_status = 'ok'
+      AND fetched_at < ${before}::timestamptz AND fetched_at >= ${before}::timestamptz - interval '8 days'`.execute(db);
+  return rows[0]?.at ?? null;
+}
+
 /** Buckets are UTC, whatever the session's time zone is. */
 const ORIGIN = sql`timestamptz '2000-01-01 00:00:00+00'`;
 
@@ -308,7 +321,7 @@ export async function upsertObs(
   return { n_new, n_changed: mine.length - n_new, newest, writes: written.length };
 }
 
-export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'older_ignored';
+export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'older_ignored' | 'withheld';
 
 /**
  * The current gauge zero (PNP) of a series. Only the current one is kept up
@@ -318,8 +331,11 @@ export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'older_ignored';
  * newer payload with another value corrects it and one with the same value
  * becomes its holder (a confirmation, not counted), the holding payload itself
  * corrects it when its value now differs (a replay after a fix), and an older
- * payload (a late line, a partial replay) leaves it alone. Changes of series
- * that do not share their source's audience are made but not counted.
+ * payload (a late line, a partial replay) leaves it alone. A zero without a
+ * published validity (P5b: DE-8's `Nullpunkt`) is never overwritten by another
+ * payload: a different value is not written (`withheld`, alerted), because
+ * nothing says from when it holds. Changes of series that do not share their
+ * source's audience are made but not counted.
  */
 export async function applyGaugeZeros(
   tx: Tx,
@@ -362,6 +378,10 @@ export async function applyGaugeZeros(
       if (!now.mine && !now.older) continue;
       if (now.value_m === z.value_m && now.datum === z.datum) {
         if (now.older) confirmed.push(z.id);
+        continue;
+      }
+      if (z.valid_from === null && !now.mine) {
+        note('withheld');
         continue;
       }
       await sql`UPDATE gauge_zero SET value_m = ${z.value_m}, datum = ${z.datum}, batch_id = ${batch}::bigint

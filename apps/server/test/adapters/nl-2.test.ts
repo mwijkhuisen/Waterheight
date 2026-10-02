@@ -253,10 +253,10 @@ describe('NL-2 never yields observation rows', () => {
     expect(out).toEqual({ obs: [], gaugeZeros: [], dropped: discover(collectionOf(name)).dropped, unknown: 0 });
   });
 
-  it('the loader runs it with every recorded and synthetic fixture', () => {
+  it('the loader runs it with every recorded and synthetic fixture', async () => {
     const spec = LOAD_ADAPTERS[SOURCE]?.specs['nl-2-wfs'];
     for (const name of ALL) {
-      const out = spec?.run(rawFixture('NL-2', name).body, {
+      const out = await spec?.run(rawFixture('NL-2', name).body, {
         registry: new Map(),
         fetchedAt: 0,
         variant: '',

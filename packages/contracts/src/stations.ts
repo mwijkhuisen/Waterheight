@@ -37,11 +37,15 @@ const identification = {
   quantity: z.enum(['H', 'Q']),
   river: z.string().min(1).nullable(),
   km: z.strictObject({ system: z.string().min(1), value: z.number() }).nullable(),
-  /** `lake` (P5a: the CH-1 lake cube, e.g. Bodensee) is optional, so the earlier files keep their bytes. */
+  /**
+   * `lake` (P5a: the CH-1 lake cube, e.g. Bodensee) and `reservoir` (P5b: LU-1 Esch-Sûre, a dam reservoir,
+   * absolute level) are optional, so the earlier files keep their bytes.
+   */
   flags: z.strictObject({
     tidal: z.boolean().nullable(),
     impounded: z.boolean().nullable(),
     lake: z.boolean().optional(),
+    reservoir: z.boolean().optional(),
   }),
   /** 1: first-release key gauge; 2: the source's other gauges. */
   tier: z.union([z.literal(1), z.literal(2)]),
@@ -170,12 +174,19 @@ export const Twin = z.strictObject({
     .max(80),
   a: TwinSide,
   b: TwinSide,
-  /** `offset`: on equal timestamps, a − b is `expected` within `tolerance`, in the canonical unit (H cm, Q m³/s). */
+  /**
+   * `offset`: on equal timestamps, a − b is `expected` within `tolerance`, in the canonical unit (H cm,
+   * Q m³/s), for at least `min_share` of the aligned timestamps (default 1: all of them). P5b: the loader
+   * also estimates the lag of b against a within ± `max_lag_min` minutes (default 60); a lag other than 0
+   * fails the check.
+   */
   relation: z.strictObject({
     kind: z.literal('offset'),
     expected: z.number(),
     tolerance: z.number().nonnegative(),
     unit: z.enum(['cm', 'm³/s']),
+    min_share: z.number().min(0.5).max(1).optional(),
+    max_lag_min: z.number().int().min(0).max(180).multipleOf(5).optional(),
   }),
 });
 export type Twin = z.infer<typeof Twin>;
