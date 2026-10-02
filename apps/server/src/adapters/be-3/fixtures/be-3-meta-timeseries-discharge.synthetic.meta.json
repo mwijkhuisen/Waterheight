@@ -1,0 +1,11 @@
+{
+  "spec": "be-3-meta",
+  "source": "BE-3",
+  "synthetic": true,
+  "derived_from": "an archived payload (owner audience: not committed)",
+  "values": "every number, name and string generated, timestamps shifted by one constant whole number of days; keys, structure, identifiers, nulls, -1, 0, 9999.0 and quality codes kept (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "timeseries-1962340",
+  "archive_key": "raw/BE-3/be-3-meta/2026/10/02/045015Z-921a8a6dd6eee1df.zst",
+  "source_sha256": "921a8a6dd6eee1df838bc0876a91b4d85e320ab1a27056fb67634c66538ce734"
+}

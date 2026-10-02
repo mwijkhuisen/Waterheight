@@ -1,0 +1,37 @@
+{
+ "obs": [],
+ "gaugeZeros": [
+  {
+   "series": "5921/H",
+   "value_m": 109.9,
+   "datum": "DNG",
+   "valid_from": "2018-12-31T23:00:00.000Z"
+  },
+  {
+   "series": "8004/H",
+   "value_m": 88.25,
+   "datum": "DNG",
+   "valid_from": "2029-06-14T23:00:00.000Z"
+  },
+  {
+   "series": "8004/H_sonde",
+   "value_m": 88.25,
+   "datum": "DNG",
+   "valid_from": "2029-06-14T23:00:00.000Z"
+  },
+  {
+   "series": "8010/H",
+   "value_m": -1.5,
+   "datum": "DNG",
+   "valid_from": null
+  }
+ ],
+ "dropped": {
+  "unknown_zero_unit": 1,
+  "zero_missing": 1,
+  "conflict": 1,
+  "bad_zero": 1,
+  "zero_unknown": 1
+ },
+ "unknown": 0
+}
