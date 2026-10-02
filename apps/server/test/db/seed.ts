@@ -13,6 +13,14 @@ export const OWNER_CANARY_REAL = CANARIES.owner.real;
 
 const BASIS = `'{"clause": "SECRET-CLAUSE personal use only", "url": "https://example.org/terms", "retrieved": "2026-09-24"}'::jsonb`;
 
+/**
+ * The series that hold the withheld canary, so that a leak of any of them is a grep hit in every sweep (invariant 8):
+ * the withheld series itself; a mirror and a twin (not primary: in neither family); and a series of a public source
+ * that the registry narrows to `off`, the LU-1 case (Bollendorf and Gemünd_Our, whose LfU RLP values the AGE file
+ * republishes: registry/permissions/LU-1.md), so `narrowedOff` stands for it.
+ */
+export const WITHHELD_KEYS = ['withheld', 'narrowedOff', 'mirror', 'twin'] as const;
+
 /** Things that must never be visible through a public view, in any column. */
 export const NEVER_PUBLIC = [
   'LU-4',
@@ -37,6 +45,9 @@ export const NEVER_PUBLIC = [
   'spec-owner',
   OWNER_CANARY_REAL,
   WITHHELD_CANARY_REAL,
+  // The decimal spellings (a double or numeric column prints them), as CANARY_RENDERINGS lists them.
+  CANARIES.owner.text,
+  CANARIES.withheld.text,
 ] as const;
 
 /** Things no owner view may show either: `off` rows, and series that are not primary. */
@@ -49,6 +60,7 @@ export const NEVER_OWNER = [
   'ch.bafu.no-display',
   'OFF-ATTRIBUTION',
   WITHHELD_CANARY_REAL,
+  CANARIES.withheld.text,
 ] as const;
 
 export async function seedAudienceFixture(admin: pg.Client): Promise<Record<string, number>> {
@@ -124,7 +136,8 @@ export async function seedAudienceFixture(admin: pg.Client): Promise<Record<stri
   }
 
   await admin.query(`SELECT ensure_partitions(now() - interval '45 days', now() + interval '10 days')`);
-  const value = (key: string) => (key === 'withheld' ? WITHHELD_CANARY : key === 'ownerCanary' ? OWNER_CANARY : 100);
+  const value = (key: string) =>
+    (WITHHELD_KEYS as readonly string[]).includes(key) ? WITHHELD_CANARY : key === 'ownerCanary' ? OWNER_CANARY : 100;
   for (const [key, id] of Object.entries(ids)) {
     await admin.query(
       `INSERT INTO obs (series_id, ts, value, qc, batch_id)
@@ -156,7 +169,7 @@ export async function seedAudienceFixture(admin: pg.Client): Promise<Record<stri
       ($1, 'LU-4', 'WAAK_OWNER', 350, 'cm', 'operational', tstzrange('2020-01-01', NULL)),
       ($1, 'DE-9', 'OFF_REF', 1, 'cm', 'operational', tstzrange('2020-01-01', NULL)),
       ($2, 'NL-1', 'MHW', 1, 'cm', 'statistical', tstzrange('2020-01-01', NULL)),
-      ($3, 'NL-1', 'MHW', 2, 'cm', 'statistical', tstzrange('2020-01-01', NULL)),
+      ($3, 'NL-1', 'MHW', ${WITHHELD_CANARY}, 'cm', 'statistical', tstzrange('2020-01-01', NULL)),
       ($4, 'CANARY-OWNER', 'CANARY', ${OWNER_CANARY}, 'cm', 'operational', tstzrange('2020-01-01', NULL));
     `,
     [ids.public, ids.onlyOwner, ids.mirror, ids.ownerCanary],
@@ -178,7 +191,7 @@ export async function seedAudienceFixture(admin: pg.Client): Promise<Record<stri
   await run(ids.public, 'DE-2', 201); // an owner run on a public series
   await run(ids.onlyOwner, 'NL-1', 202); // a public run on an owner series
   await run(ids.ownerCanary, 'CANARY-OWNER', OWNER_CANARY);
-  await run(ids.withheld, 'NL-1', WITHHELD_CANARY);
+  for (const key of WITHHELD_KEYS) await run(ids[key], 'NL-1', WITHHELD_CANARY);
 
   await admin.query(
     `

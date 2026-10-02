@@ -408,7 +408,8 @@ describe('the attribution of the fill sources (review SR-1)', () => {
       const api = x.dbAs('rws_api');
       const sources = async () => (await readMeta(api.db, { dataEpochMs: 0, displayStartMs: 0 }, 'dev', AFTER)).sources;
       const all = await sources();
-      expect(all.map((s) => s.id)).toEqual(['CH-1', 'CH-3', 'DE-1', 'FR-1', 'FR-3', 'NL-1']);
+      // P5b: DE-7 and LU-1 are public sources with public series too.
+      expect(all.map((s) => s.id)).toEqual(['CH-1', 'CH-3', 'DE-1', 'DE-7', 'FR-1', 'FR-3', 'LU-1', 'NL-1']);
       // The registry's rows verbatim, the date duty included: FR-3's own text, and CH-3's three (CH-1's wording).
       expect(all.find((s) => s.id === 'FR-3')?.attribution).toEqual([
         {
@@ -424,12 +425,12 @@ describe('the attribution of the fill sources (review SR-1)', () => {
       // A fill source that the public attribution view hides (no display channel, or not public) is never listed.
       await x.t.admin.query(`UPDATE source SET lic_display = false WHERE id = 'FR-3'`);
       await x.t.admin.query(`UPDATE source SET audience = 'off' WHERE id = 'CH-3'`);
-      expect((await sources()).map((s) => s.id)).toEqual(['CH-1', 'DE-1', 'FR-1', 'NL-1']);
+      expect((await sources()).map((s) => s.id)).toEqual(['CH-1', 'DE-1', 'DE-7', 'FR-1', 'LU-1', 'NL-1']);
       // A fill source is listed only beside a source that is listed itself.
       await x.t.admin.query(`UPDATE source SET lic_display = true WHERE id = 'FR-3'`);
-      expect((await sources()).map((s) => s.id)).toEqual(['CH-1', 'DE-1', 'FR-1', 'FR-3', 'NL-1']);
+      expect((await sources()).map((s) => s.id)).toEqual(['CH-1', 'DE-1', 'DE-7', 'FR-1', 'FR-3', 'LU-1', 'NL-1']);
       await x.t.admin.query(`UPDATE series SET active = false WHERE source_id = 'FR-1'`);
-      expect((await sources()).map((s) => s.id)).toEqual(['CH-1', 'DE-1', 'NL-1']);
+      expect((await sources()).map((s) => s.id)).toEqual(['CH-1', 'DE-1', 'DE-7', 'LU-1', 'NL-1']);
     } finally {
       await x.close();
     }
