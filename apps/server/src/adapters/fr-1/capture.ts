@@ -2,7 +2,8 @@ import type { Adapter } from '../../http/types.ts';
 
 // FR-1 Hub'Eau observations_tr (catalogue §2.5): wildcard code_entite over the
 // NL-bound basins plus any explicit Belgian partner codes; a window from the
-// last success − 60 min (at least 75 min, under one month); follow `next`
+// last success − 4 h (at least 4 h, under one month: a value may reach Hub'Eau
+// hours after its own time, #53); follow `next`
 // (a provider-supplied URL, re-checked by the client); 206 is a success.
 
 const utc = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');

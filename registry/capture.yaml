@@ -406,8 +406,10 @@ specs:
       max_expand: 20
     params: { explicit_codes: '' }
     # Results come newest first, so a gap over a day is walked one closed day window per run, oldest
-    # first; the window moves only when its whole walk completed.
-    window: { default: PT75M, max: P29DT23H, overlap: PT60M, min: PT75M, step: P1D }
+    # first; the window moves only when its whole walk completed. date_debut_obs filters on the value's
+    # own time, not on its arrival: the Belgian partners arrive about 2 h late and many French stations
+    # over 75 min, so every run asks from the last success − 4 h (about 19,000 obs; #53).
+    window: { default: PT4H, max: P29DT23H, overlap: PT4H, min: PT4H, step: P1D }
     max_bytes: 16777216
     retention: obs
     validity: { format: json, required: [count, data], count: data, min: 1 }
