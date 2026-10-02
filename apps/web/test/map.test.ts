@@ -8,24 +8,21 @@ import { resolveStyle } from '../src/features/map/resolveStyle.ts';
 // useMapLibre mount, and the run-time step that puts the style on our origin.
 
 describe('acquireProtocol', () => {
-  it('registers once for the first map and removes it with the last', () => {
+  it('registers once for the page and never removes it, so queued tile requests of a removed map still find it (KG-130)', () => {
     const calls: string[] = [];
-    const host = {
-      addProtocol: (scheme: string) => calls.push(`add ${scheme}`),
-      removeProtocol: (scheme: string) => calls.push(`remove ${scheme}`),
-    };
+    const host = { addProtocol: (scheme: string) => calls.push(`add ${scheme}`) };
     const before = protocolUsers();
     const a = acquireProtocol(host, () => 'handler');
     const b = acquireProtocol(host, () => 'handler');
     expect(calls).toEqual(['add pmtiles']);
+    expect(protocolUsers()).toBe(before + 2);
     a();
     a(); // idempotent: a second release of the same map changes nothing
-    expect(calls).toEqual(['add pmtiles']);
+    expect(protocolUsers()).toBe(before + 1);
     b();
-    expect(calls).toEqual(['add pmtiles', 'remove pmtiles']);
     expect(protocolUsers()).toBe(before);
     const c = acquireProtocol(host, () => 'handler');
-    expect(calls).toEqual(['add pmtiles', 'remove pmtiles', 'add pmtiles']);
+    expect(calls).toEqual(['add pmtiles']);
     c();
   });
 });
