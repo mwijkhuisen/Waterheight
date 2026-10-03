@@ -1,5 +1,6 @@
 import { DATUMS } from '@rws/contracts';
 import { z } from 'zod';
+import type { ForecastPart, ForecastRunIn } from './forecast.ts';
 import { QC_MAX } from './qc.ts';
 
 // Canonical rows: what `normalise(records, registry)` returns and the loader
@@ -155,6 +156,10 @@ export type Normalised = {
   classes?: ClassRow[];
   /** P7a: warnings or area classes. */
   warnings?: Warnings;
+  /** P8a: forecast runs (packages/core forecast.ts), stored as immutable bi-temporal runs. */
+  forecasts?: ForecastRunIn[];
+  /** P8a: one file of a run that spans several payloads (LU-3), staged until the run is complete. */
+  forecastPart?: ForecastPart;
 };
 
 /** The observation rows of a Normalised, as one or more arrays (`obsChunks` when the payload set it). */
