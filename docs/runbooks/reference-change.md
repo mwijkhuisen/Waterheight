@@ -1,6 +1,6 @@
 # Runbook: a reference, class, warning or gauge zero changed
 
-**Trigger:** one of the loader alerts `reference_changed`, `reference_removed`, `reference_corrected`, `class_changed`, `warning_changed`, `gauge_zero_changed` or `unmapped_class` (log lines, `docker logs --since 24h rws-load-1 2>&1 | grep '"alert"'`; they do not page). Or a decision that changes what the loader stores: a signed D18 crosswalk, a new NL-4 workbook, an owner threshold change, a BAFU objection (C13).
+**Trigger:** one of the loader alerts `reference_changed`, `reference_removed`, `reference_corrected`, `class_changed`, `warning_changed`, `gauge_zero_changed`, `unmapped_class`, `geometry_too_big`, `texts_too_big` or `cap_closes_full` (log lines, `docker logs --since 24h rws-load-1 2>&1 | grep '"alert"'`; they do not page). Or a decision that changes what the loader stores: a signed D18 crosswalk, a new NL-4 workbook, an owner threshold change, a BAFU objection (C13).
 
 P7a (`PHASES.md` §22, A§6 "P7a reality") stores thresholds, provider classes and warnings with validity ranges and classifies nothing: P7b reads the rows. Every alert carries `source`, `spec` and a count `n` only. **It never carries a value, a threshold or provider text** (invariant 11), so the alert alone does not say what changed: the rows do.
 
@@ -12,10 +12,12 @@ Nothing here is edited by hand in the database. A wrong row is corrected by a fi
 |---|---|---|---|
 | `reference_changed` | A payload stated a different value (or unit, period, basis) for a stored key; the old range was closed at the later of the provider's `valid_from` and the fetch time, and a new one opened | WSV or LANUK published new characteristic values; BAFU moved a `wl_*` bound; AGE changed an LU-4 level; a new BE-3 period of record | §2 |
 | `reference_removed` | A payload that states a series in full (`refScope`: DE-1 metadata, CH-2, FR-5 `CruesHistoriques`, DE-7 `pegel_stationen.txt`, LU-4) no longer states a stored kind; its range was closed at the fetch time | The provider dropped a value (LU-4 set a level to 0 = undefined; WSV removed a Marke) | §2; a provider fault if many series at once |
-| `reference_corrected` | A replay of the payload that holds a row, after a parser or normaliser fix, changed the row in place | You just replayed after a fix (§6) | §2 |
-| `class_changed` | A station's class code, label or level differs from its latest stored one (CH-1 `dangerLevel`, DE-6 `lhpClass`, BE-3 `NIVCRU`) | A flood, or the day after one | §3 |
-| `warning_changed` | A new, changed or ended warning area (DE-6 alert, FR-5 section, CH-5 section, LU-5 message) | A warning was issued, raised or ended | §3 |
-| `gauge_zero_changed` | A newer payload states another zero for a validity that already has one (dated or not); the stored zero ends at the fetch time and a new one opens (R-072 closed) | A gauge was re-levelled, or a typo was corrected | §4 |
+| `reference_corrected` | A replay of the payload that holds a row, after a parser or normaliser fix, changed the row in place (its opener stays `batch_id`), or re-opened a key that the same payload had closed | You just replayed after a fix (§6) | §2 |
+| `class_changed` | A station's class code, label or level differs from its latest stored one (CH-1 `dangerLevel`, DE-6 `lhpClass`, BE-3 `NIVCRU`), or a newer payload states another class for the same instant (it replaces the stored one in place; an older payload changes nothing) | A flood, or the day after one; a state that re-classifies a gauge without a new reading | §3 |
+| `warning_changed` | A new, changed or ended warning area (DE-6 alert, FR-5 section, CH-5 section, LU-5 message). A changed name, geometry or text at the same level is no change: it is refreshed in place | A warning was issued, raised or ended | §3 |
+| `gauge_zero_changed` | A newer payload states another zero for a validity that already has one (dated or not); the stored zero ends at the fetch time and a new one opens (R-072 closed), at most one a day: while the open range began that UTC day, a newer value corrects it in place (alerted all the same) | A gauge was re-levelled, or a typo was corrected; several a day is a flap (§4) | §4 |
+| `geometry_too_big`, `texts_too_big` | Retained: `n` warning rows were stored without their geometry (over 2 MiB) or their texts (over 60,000 bytes of JSON); the level is stored. The object is kept (`n_skipped`) | Never so far: the largest real CAP file is 38 KB | §3 |
+| `cap_closes_full` | The LU-5 map of held closings (`app_meta` `cap_closes:LU-5`, 2,000 identifiers within 60 days of the message being loaded) could not take this payload's closings; they were applied to the rows already stored but not held for a target that arrives later | A replay of a very long stretch, or a hostile feed | §3 |
 | `unmapped_class` | `n` provider classes or levels are not in `packages/core/src/crosswalk.ts` (DE-6 station or alert, CH-1, CH-5, FR-5, LU-5, BE-3). They are counted in `n_skipped`, kept in the archive (the pruner keeps the object) and not stored | The provider added a class | §5 |
 
 `reference_changed` on a `source_id` of an owner source (LU-4, BE-3) is read on the owner view only (§8).
@@ -56,7 +58,13 @@ WHERE source_id = 'DE-6' ORDER BY lower(valid) DESC LIMIT 20"
 
 A new class during a flood is the system working. Two things are not normal: a class that flaps every payload (a parser reading a changing field: compare two archived payloads), and a source with no change for weeks in a flood (the spec stopped: `scripts/verify-prod.sh <domain> --interval` checks `interval DE-6`, which needs about 30 minutes). A station whose every series is `off` takes no class (the off-station rule); a class for an unknown station id is counted in `n_skipped`.
 
-For LU-5 a Cancel closes the rows of the messages it references at its `sent` time; a Cancel that arrives before its target waits in `app_meta` `cap_closes:LU-5` (2,000 identifiers at most, KG-175).
+For LU-5 a Cancel closes the rows of the messages it references at its `sent` time; a Cancel that arrives before its target waits in `app_meta` `cap_closes:LU-5` (2,000 identifiers at most, an identifier over 200 characters skipped, a closing sent more than 60 days before or after the message being loaded forgotten, KG-175). After `cap_closes_full`, replay `lu-5-cap` in shorter stretches (`replay.md`): the map holds what one stretch needs.
+
+A snapshot payload (DE-6 alerts, FR-5, CH-5) closes an area it no longer lists. An area it lists but whose row was withheld (`conflict`, `unmapped_class`) stays as stored. A changed CH-5 level at an unchanged `valid_from` (the bulletin's) ends the old level at the payload's `produced_at` and opens the new one there, so both stay in the history. An FR-5 map that lists fewer than 75 % of our sections, or a CH-5 map of fewer than 80, is `too_few_areas` drift (`schema-drift.md`): a cut answer closes nothing.
+
+At one instant the newest payload wins: a DE-6 or CH-1 class that a newer payload states for the same `ts` replaces the stored one in place (`class_changed`), and that payload holds the row (`batch_id`). DE-6 stamps a class with the feature's `timestamp` (the reading the state classified), not with the collection's `updated`.
+
+`geometry_too_big` and `texts_too_big` keep the warning's level and leave the field out; LU-5 rows over 48 KiB of texts lose their descriptions, then their instructions, already in the adapter (`texts_trimmed`, counted only). Read the archived payload (`schema-drift.md` §2); a real flood alert that large is news for the issue tracker, never a reason to edit the row.
 
 ## 4. A gauge zero changed
 
@@ -67,7 +75,7 @@ FROM gauge_zero g JOIN series s ON s.id = g.series_id
 WHERE s.source_id = 'DE-7' AND s.provider_key = '<provider key>' ORDER BY lower(g.valid)"
 ```
 
-A re-levelled gauge is a real change. The history keeps both zeros; the station detail (P10) derives a height above a datum only from the zero in force. A zero that changes back and forth, or by about a metre or a factor, is a typo or a wrong unit: read the payload. `gauge_zero_withheld` and `gauge_zero_older_ignored` do not exist any more.
+A re-levelled gauge is a real change. The history keeps both zeros; the station detail (P10) derives a height above a datum only from the zero in force. A zero that changes back and forth, or by about a metre or a factor, is a typo or a wrong unit: read the payload. A flapping zero adds at most one range a day (the day's range is corrected in place by the later statements), so the table stays small while you look. `gauge_zero_withheld` and `gauge_zero_older_ignored` do not exist any more.
 
 ## 5. `unmapped_class`: a provider class the crosswalk lacks
 
@@ -98,6 +106,8 @@ D18 is unsigned: `level_norm` is the catalogue §4.9 default (KG-163, R-082). Wh
    ```
 
    List any stale rows in the PR and do not edit them by hand.
+
+**Retention.** A CH-1 or CH-2 payload that opened a class row or a reference range is promoted to forever, but of one spec and UTC day only the first 24 such payloads (`PROMOTE_PER_DAY` in `load/prune.ts`) beside the daily copy: a flapping class or threshold cannot keep every payload (T-REF-7). The pruner is a dry run until the owner enables it.
 
 Replays of the **reference** specs after a parser fix: `--source DE-1 --spec de-1-meta`, `--source DE-7 --spec de-7-pegeldaten` (slow: it holds the two-million-row seed), `--source CH-2 --spec ch-2-pq`, `--source FR-5 --spec fr-5-stations`, `--source LU-4 --spec lu-4-pages`, `--source BE-3 --spec be-3-refs`, each from the day of the first wrong payload. A no-op replay changes nothing.
 
