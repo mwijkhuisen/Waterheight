@@ -333,7 +333,7 @@ jobs:
           # P4b: the data routes through Caddy, their Cache-Control per age class, and noindex on every kind of path.
           # P6b: the page's bundle carries the river-network licence text (no rivers data is installed in CI).
           for check in 'api meta' 'api stations' 'api snapshot now' 'api snapshot 6h' 'api snapshot 3d' 'api openapi' \
-            'api params' 'noindex' 'rivers attribution'; do
+            'api params' 'noindex' 'rivers attribution' 'api states' 'class coverage'; do
             grep -qE "^PASS $check " "$RUNNER_TEMP/verify-prod.txt" || { echo "verify-prod: no PASS for $check" >&2; exit 1; }
           done
 

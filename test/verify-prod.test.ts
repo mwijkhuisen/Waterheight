@@ -36,6 +36,7 @@ import {
   checkBuild,
   checkBytes,
   checkCapture,
+  checkClassCoverage,
   checkCoverage,
   checkFresh,
   checkHeaders,
@@ -62,6 +63,7 @@ import {
   checkRiversTiles,
   checkSnapshot,
   checkSourceHealth,
+  checkStates,
   checkStations,
   checkTier1,
   checkTileFile,
@@ -386,6 +388,8 @@ describe('freshness, soak and capacity', () => {
       'api snapshot now',
       'api snapshot 6h',
       'api snapshot 3d',
+      'api states',
+      'class coverage',
       'api openapi',
       'api params',
       'noindex',
@@ -458,6 +462,7 @@ const sourcesDoc = (over: Partial<HealthSources> = {}): HealthSources => ({
   quarantined_batches: [],
   twins: [],
   owner_sources: { healthy: 5, total: 6 },
+  classification: null,
   ...over,
 });
 const page = (doc: unknown, over: Partial<Page> = {}): Page => ({
@@ -1713,6 +1718,9 @@ const snapshotDoc = (ms: number, ages: Record<number, number> = { 1: 600, 3: 120
       value: 1234,
       qc: 0,
       ageSeconds,
+      state: 'no_ref',
+      basis: null,
+      section: false,
     })),
   });
 const apiPage = (doc: unknown, cache: string, over: Partial<Page> = {}): Page =>
@@ -1952,6 +1960,99 @@ describe('api snapshot', () => {
         ok: false,
         detail: 'no server time from /api/v1/meta',
       });
+  });
+});
+
+describe('api states and class coverage (P7b)', () => {
+  const BASIS = { source: 'DE-1', kind: 'operational', measure: 'stage', ref: 'MNW/MHW', label: 'WSV MNW 2010-2020' };
+  const AREA = { source: 'FR-5', kind: 'area', measure: 'area', ref: 'x', label: 'Vigicrues' };
+  const val = (over: Record<string, unknown> = {}) => ({
+    series: 1,
+    ts: '2026-10-02T11:50:00Z',
+    value: 1,
+    qc: 0,
+    ageSeconds: 600,
+    state: 'normal',
+    basis: BASIS,
+    section: false,
+    ...over,
+  });
+  const snap = (...values: unknown[]) => Snapshot.parse({ t: '2026-10-02T12:00:00Z', values });
+  const raw = (...values: unknown[]) => ({ t: '2026-10-02T12:00:00Z', values }) as unknown as Snapshot;
+
+  it('counts classed, section and no_ref values', () => {
+    expect(
+      checkStates(
+        snap(
+          val(),
+          val({ series: 2, state: 'high', basis: AREA, section: true }),
+          val({ series: 3, state: 'no_ref', basis: null }),
+        ),
+      ),
+    ).toEqual({ check: 'api states', ok: true, detail: '3 values, 2 classed, 1 by section, 1 no_ref' });
+  });
+
+  it('passes with no values and fails without a snapshot', () => {
+    expect(checkStates(snap()).ok).toBe(true);
+    expect(checkStates(undefined).ok).toBe(false);
+  });
+
+  it.each([
+    ['a basis with no_ref', val({ state: 'no_ref' })],
+    ['no basis with a state', val({ basis: null })],
+    ['a section without an area basis', val({ section: true })],
+    ['an area basis without section', val({ basis: AREA })],
+    [
+      'a section with an area beside it',
+      val({ state: 'high', basis: AREA, section: true, area: { state: 'high', basis: AREA } }),
+    ],
+    ['nap and zero together', val({ nap: { m: 1, pm: 0.1 }, zero: { m: 1, datum: 'IGN69' } })],
+  ])('fails on %s', (_, v) => {
+    expect(checkStates(raw(v))).toMatchObject({ ok: false });
+  });
+
+  it('never prints a hostile label', () => {
+    const r = checkStates(raw(val({ basis: { ...BASIS, label: '<img onerror=x>' }, section: true })));
+    expect(r.detail).not.toContain('img');
+  });
+
+  it('owner leak and owner ids catch an owner basis source in a snapshot or health body', () => {
+    const body = JSON.stringify({ values: [val({ basis: { ...BASIS, source: 'LU-4' } })] });
+    expect(checkOwnerLeak({ '/api/v1/snapshot now': body }, leakTerms(registry)).ok).toBe(false);
+    expect(checkOwnerIds({ '/api/v1/snapshot now': body }, ['LU-4']).ok).toBe(false);
+  });
+
+  const share = (stations: number, classed: number) => ({
+    stations,
+    classed,
+    ratio: stations === 0 ? null : classed / stations,
+  });
+  it('class coverage prints numbers and country codes', () => {
+    const classification = {
+      t: '2026-10-02T12:00:00Z',
+      mode: 'state',
+      tier1: share(10, 7),
+      first_release: share(10, 7),
+      countries: [{ country: 'DE', tier1: share(4, 3), first_release: share(4, 3) }],
+    } as HealthSources['classification'];
+    expect(checkClassCoverage(sourcesDoc({ classification }))).toEqual({
+      check: 'class coverage',
+      ok: true,
+      detail: 'tier-1 70.0%, mode state; DE 3/4',
+    });
+  });
+
+  it('class coverage passes with no stations and fails when null or absent', () => {
+    const empty = {
+      t: '2026-10-02T12:00:00Z',
+      mode: 'dh',
+      tier1: share(0, 0),
+      first_release: share(0, 0),
+      countries: [],
+    } as HealthSources['classification'];
+    expect(checkClassCoverage(sourcesDoc({ classification: empty }))).toMatchObject({ ok: true });
+    expect(checkClassCoverage(sourcesDoc())).toMatchObject({ ok: false });
+    expect(checkClassCoverage(undefined)).toMatchObject({ ok: false });
   });
 });
 

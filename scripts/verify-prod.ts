@@ -1207,6 +1207,41 @@ export function checkSnapshot(ask: SnapshotAsk, r: ApiRead<Snapshot> | undefined
     : miss(check, r.problems.join('; '));
 }
 
+/** P7b: every value of the "now" snapshot carries a state and a basis (null exactly for no_ref); counts only in the detail. */
+export function checkStates(snapshot: Snapshot | undefined): Result {
+  if (snapshot === undefined) return miss('api states', 'no valid "now" snapshot');
+  const problems = new Set<string>();
+  let classed = 0;
+  let sections = 0;
+  let noRef = 0;
+  for (const v of snapshot.values) {
+    if (v.state === 'no_ref') noRef++;
+    else classed++;
+    if ((v.basis === null) !== (v.state === 'no_ref')) problems.add('a basis that does not match no_ref');
+    if (v.section) {
+      sections++;
+      if (v.basis?.kind !== 'area' || v.basis.measure !== 'area') problems.add('a section without an area basis');
+      if (v.area !== undefined) problems.add('a section with an area beside it');
+    } else if (v.basis?.kind === 'area') problems.add('an area basis without section');
+    if (v.nap !== undefined && v.zero !== undefined) problems.add('nap and zero together');
+  }
+  return problems.size === 0
+    ? pass(
+        'api states',
+        `${snapshot.values.length} values, ${classed} classed, ${sections} by section, ${noRef} no_ref`,
+      )
+    : miss('api states', [...problems].join('; '));
+}
+
+/** P7b: /api/v1/health/sources carries the classification coverage; numbers and country codes only. */
+export function checkClassCoverage(doc: HealthSources | undefined): Result {
+  const c = doc?.classification;
+  if (c === undefined || c === null) return miss('class coverage', 'classification is null or absent');
+  const ratio = c.tier1.ratio === null ? 'none' : `${(c.tier1.ratio * 100).toFixed(1)}%`;
+  const countries = c.countries.map((k) => `${k.country} ${k.tier1.classed}/${k.tier1.stations}`).join(', ');
+  return pass('class coverage', `tier-1 ${ratio}, mode ${c.mode}${countries === '' ? '' : `; ${countries}`}`);
+}
+
 export function checkOpenapi(r: ApiRead<{ openapi: '3.1.0' }>): Result {
   return r.data !== undefined && r.problems.length === 0
     ? pass('api openapi', `200, ${OPENAPI_CACHE}, openapi 3.1.0`)
@@ -1477,6 +1512,8 @@ export const CHECKS = [
     (a) =>
       `api snapshot ${a.name}: GET /api/v1/snapshot?t= at the 10-minute floor of the server's own now${a.back === 0 ? '' : ` - ${a.name}`} (from /meta, never this clock) is 200, the Snapshot contract with t as asked, Cache-Control exactly "${a.cache}"`,
   ),
+  'api states: every value of the "now" snapshot has a state; basis is null exactly for no_ref; section only with an area basis and no area beside it; nap and zero never both (counts only; no values is a PASS)',
+  'class coverage: /api/v1/health/sources has a non-null classification (tier-1 ratio, mode, classed/stations per country; no stations is a PASS)',
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
   'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter"} with Cache-Control: no-store',
   `noindex: ${NOINDEX_PATHS.join(', ')} each answer (the 404s of /api and /tiles too) with X-Robots-Tag: noindex`,
@@ -1642,6 +1679,8 @@ async function main(argv: string[]): Promise<number> {
       checkStations(stationsRead),
       checkOwnerStations(stationsRead, new Set(ownerStationIds(readRegistry().stations))),
       ...SNAPSHOT_ASKS.map((ask) => checkSnapshot(ask, snapReads.get(ask.name))),
+      checkStates(snapReads.get('now')?.data),
+      checkClassCoverage(sources.data),
       checkOpenapi(readApi(await api('/api/v1/openapi.json'), OpenApi31, OPENAPI_CACHE)),
       checkApiParams(await api('/api/v1/meta?x=1')),
       checkNoindex(noindex),
