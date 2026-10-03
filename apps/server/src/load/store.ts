@@ -325,6 +325,8 @@ export async function upsertObs(
 
 export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'changed';
 
+const utcDay = (ms: number) => Math.floor(ms / 86_400_000);
+
 /**
  * The current gauge zero (PNP) of a series. Only the current one is kept up
  * to date (the history of zeros is P7): a newer validFrom closes the stored
@@ -338,8 +340,13 @@ export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'changed';
  * date, an earlier one, or none, as DE-8's `Nullpunkt` and an FR-1 zero without
  * `date_debut_ref_alti_station`) ends the stored zero at its own fetch time and
  * opens a new range from there (`changed`, alerted); before P7a the dated case
- * was corrected in place and the dateless one withheld. Changes of series that
- * do not share their source's audience are made but not counted.
+ * was corrected in place and the dateless one withheld. At most one range a
+ * day comes from such a change (review SR-5): while the open range began on the
+ * fetch's own UTC day (or later), a newer payload with another value corrects
+ * it in place (`changed` all the same), so a zero that flaps A→B→A adds one
+ * row a day, not one per payload; a range of an earlier day is never touched.
+ * Changes of series that do not share their source's audience are made but not
+ * counted.
  */
 export async function applyGaugeZeros(
   tx: Tx,
@@ -399,8 +406,8 @@ export async function applyGaugeZeros(
     } else if (now.mine) {
       await rewrite();
       note('corrected');
-    } else if (now.valid_from !== null && fetchedAt.getTime() <= Date.parse(now.valid_from)) {
-      // Fetched in the instant its range began: there is no time to close; the newer payload's value wins.
+    } else if (now.valid_from !== null && utcDay(fetchedAt.getTime()) <= utcDay(Date.parse(now.valid_from))) {
+      // The open range began this UTC day (or begins later): the newer payload's value wins in place.
       await rewrite();
       note('changed');
     } else {

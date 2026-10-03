@@ -111,7 +111,10 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * ProcesType, compartment or grouping; `datum_mismatch` (P5a): a CH value that
  * contradicts its series' declared level or relative stage; `unmapped_class`
  * (P7a): a provider class or alert level the crosswalk (packages/core
- * crosswalk.ts) does not have, loaded by a replay once it is a reviewed row.
+ * crosswalk.ts) does not have, loaded by a replay once it is a reviewed row;
+ * `geometry_too_big` and `texts_too_big` (P7a review SR-2): a warning row
+ * whose geometry or texts the loader left out because they are over its byte
+ * bound (WARNING_BYTES), so that no size CHECK quarantines a flood warning.
  */
 export const RETAINED = [
   'unit_mismatch',
@@ -122,7 +125,31 @@ export const RETAINED = [
   'registered_dropped',
   'datum_mismatch',
   'unmapped_class',
+  'geometry_too_big',
+  'texts_too_big',
 ] as const;
+
+/** The bytes the loader stores of a warning's geometry and of its texts (`warning_area.texts` holds 64 KiB). */
+export const WARNING_BYTES = { geometry: 2 * 1024 * 1024, texts: 60_000 } as const;
+
+/**
+ * A warning row keeps its level whatever the size of its presentation: a geometry or texts over WARNING_BYTES is
+ * left out of the row and counted (`geometry_too_big`, `texts_too_big`; RETAINED), so no size CHECK fails the
+ * payload's transaction (P7a review SR-2). PostgreSQL prints jsonb with a space after each `:` and `,`, which
+ * the margin under 65,536 covers.
+ */
+export function boundWarnings(n: Normalised): void {
+  for (const r of n.warnings?.rows ?? []) {
+    if (r.geometry !== null && Buffer.byteLength(r.geometry) > WARNING_BYTES.geometry) {
+      r.geometry = null;
+      n.dropped.geometry_too_big = (n.dropped.geometry_too_big ?? 0) + 1;
+    }
+    if (r.texts !== undefined && Buffer.byteLength(JSON.stringify(r.texts)) > WARNING_BYTES.texts) {
+      delete r.texts;
+      n.dropped.texts_too_big = (n.dropped.texts_too_big ?? 0) + 1;
+    }
+  }
+}
 
 /** A payload is tried at most this often; the next pass quarantines it without reading it. */
 export const MAX_TRIES = 2;
@@ -588,16 +615,18 @@ export class Loader {
       if (s !== undefined && !s.off) refScope.add(s.id);
     }
     const classes = result.classes ?? [];
+    boundWarnings(result);
     const warningRows = result.warnings?.rows.length ?? 0;
     let nObs = 0;
     for (const part of obsParts(result)) nObs += part.filter((r) => counted(r.series)).length;
-    const n_rows =
+    // Class rows count once the loader knows which stations take them (review CR-12).
+    const n_rows_base =
       nObs +
       result.gaugeZeros.filter((z) => zeroIds.get(z.series)?.sameAudience === true).length +
       fill.length +
       refs.filter((r) => r.counted).length +
-      classes.length +
       warningRows;
+    let n_rows = n_rows_base;
     // Values a registry or parser change could still load: the pruner keeps this object until a replay stores them.
     const n_skipped_base =
       result.unknown +
@@ -610,6 +639,7 @@ export class Loader {
     let refChanges: Changes = {};
     let warnChanges: Changes = {};
     let classChanged = 0;
+    let closesFull = false;
     let units: Set<string> | undefined;
     const before = health && { newestTs: health.newestTs, lastNewData: health.lastNewData };
     await commit(async (tx) => {
@@ -632,11 +662,13 @@ export class Loader {
           : await upsertObs(tx, fill, fillRegistry, state.id, fetchedAt, true);
       zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, zeroIds, state.id, fetchedAt);
       const refsApplied = await applyReferences(tx, line.source, refs, refScope, state.id, fetchedAt);
-      const cls = await applyClasses(tx, line.source, classes, state.id);
+      const cls = await applyClasses(tx, line.source, classes, state.id, fetchedAt);
       const warn = await applyWarnings(tx, line.source, result.warnings, state.id, fetchedAt);
       refChanges = refsApplied.changes;
       warnChanges = warn.changes;
       classChanged = cls.changed;
+      closesFull = warn.full;
+      n_rows = n_rows_base + cls.kept;
       n_skipped = n_skipped_base + cls.unknown;
       if (result.unitMismatch !== undefined) {
         units = await storeUnitMismatch(tx, line.source, fetchedAt, result.unitMismatch);
@@ -708,6 +740,7 @@ export class Loader {
     if (classChanged > 0) this.deps.alert('class_changed', { ...ids, n: classChanged });
     const warned = (warnChanges.new ?? 0) + (warnChanges.changed ?? 0) + (warnChanges.removed ?? 0);
     if (warned > 0) this.deps.alert('warning_changed', { ...ids, n: warned });
+    if (closesFull) this.deps.alert('cap_closes_full', { ...ids, n: 1 });
     if (result.unknown > 0) this.deps.info?.('series not in the registry', { ...ids, n: result.unknown });
     return outcome;
   }

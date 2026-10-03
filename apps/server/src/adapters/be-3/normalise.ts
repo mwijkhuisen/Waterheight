@@ -53,7 +53,7 @@ import type { LayerItem, Table, ValuesItem } from './parse.ts';
 //  - references (P7a, `be-3-refs`): the weekly values of the percentile series `Cmd.POR.P05…P95`, `Med`, `Mean` (the
 //    relative ones, to the gauge zero: statistical, kinds P05, P10, P15, MEDIAN, MOYEN, P85, P90, P95; SPW's P90 is
 //    the level exceeded 10 % of the time, so the percentiles are `non_exceedance`, the mean has no convention) and
-//    `Cmd.ReferenceFlood.Top3` (historical, TOP3_1…TOP3_3 by value, the event's UTC day as the label), on the series
+//    `Cmd.ReferenceFlood.Top3` (historical, TOP3_1…TOP3_3 by value, the event's day in station time as the label), on the series
 //    `<station_no>/<stationparameter_no>`, in the registry's unit (m ×100 → cm, m³/s as is). A series' kinds are
 //    spread over several payloads (100 ts_ids a call), so no payload states a series in full: no `refScope`, and a
 //    kind SPW withdraws is not closed;
@@ -363,7 +363,12 @@ const PERCENTILES: ReadonlyMap<string, { kind: string; convention: 'non_exceedan
   ['Cmd.POR.P95', { kind: 'P95', convention: 'non_exceedance' }],
 ]);
 const TOP3 = 'Cmd.ReferenceFlood.Top3';
-const day = (ts: number) => toIso(ts).slice(0, 10);
+/**
+ * The calendar day of an instant in SPW's station time (STATION_OFFSET, a fixed UTC+01:00): the period of record
+ * starts at local midnight (1999-01-01T00:00+01:00 is 1998-12-31T23:00Z), so its UTC day would be the day before
+ * (review CR-10); an event's day is read the same way.
+ */
+const day = (ts: number) => toIso(ts + 3_600_000).slice(0, 10);
 
 /**
  * `getTimeseriesValues` of `be-3-refs` stage 2: the percentile values and the reference floods as references of the

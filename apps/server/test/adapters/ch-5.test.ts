@@ -5,7 +5,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { lv95ToWgs84, normaliseWarnings } from '../../src/adapters/ch-5/normalise.ts';
-import { MAX_FEATURES, parseWarnings } from '../../src/adapters/ch-5/parse.ts';
+import { MAX_FEATURES, MIN_FEATURES, parseWarnings } from '../../src/adapters/ch-5/parse.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
 // CH-5 BAFU flood-danger sections: parse + normalise of real recorded payloads equal the committed golden files
@@ -103,12 +103,16 @@ describe('synthetic payload [U]: a flood', () => {
   it('a river at level 4 and a region at level 5 (hand-built from the real German map): levels 5 and 5 on the common scale', () => {
     const out = run('ch-5-warn-flood.synthetic');
     expect(digest(out)).toEqual(golden('ch-5-warn-flood.synthetic', digest(out)));
-    expect(rowsOf(out).map((r) => [r.area_key, r.level_raw, r.level])).toEqual([
+    expect(rowsOf(out)).toHaveLength(93);
+    const pick = new Set(['river:2135', 'hydro_region:47', 'lake:2208', 'hydro_region:53']);
+    expect(rowsOf(out).flatMap((r) => (pick.has(r.area_key) ? [[r.area_key, r.level_raw, r.level]] : []))).toEqual([
       ['river:2135', '4', LEVEL_NORM.extreme],
       ['hydro_region:47', '5', LEVEL_NORM.extreme],
       ['lake:2208', '1', LEVEL_NORM.normal],
       ['hydro_region:53', '0', null],
     ]);
+    // Every other section as published (level 1, the one region at 0).
+    expect(rowsOf(out).filter((r) => r.level === LEVEL_NORM.extreme)).toHaveLength(2);
   });
 });
 
@@ -174,7 +178,7 @@ describe('rules', () => {
     return 'no drift';
   };
 
-  it('a level the crosswalk lacks is dropped unmapped; a key stated twice is withheld', () => {
+  it('a level the crosswalk lacks is dropped unmapped; a key stated twice is withheld; both stay listed (kept)', () => {
     const doc = de();
     doc.features[0].properties.level = 7;
     doc.features[2].properties.key = doc.features[1].properties.key;
@@ -182,6 +186,19 @@ describe('rules', () => {
     const out = norm(doc);
     expect(out.dropped).toEqual({ unmapped_class: 1, conflict: 2 });
     expect(rowsOf(out)).toHaveLength(93 - 3);
+    // The payload lists them, so their stored ranges stay as they are (review CR-5).
+    const key = (i: number) => `${doc.features[i].properties.kind}:${doc.features[i].properties.key}`;
+    expect(out.warnings?.mode === 'snapshot' && out.warnings.kept).toEqual([key(0), key(1)]);
+  });
+
+  it('a map of fewer than MIN_FEATURES sections is not the whole map: drift too_few_areas (review SR-6)', () => {
+    const doc = de();
+    doc.features = doc.features.slice(0, MIN_FEATURES);
+    expect(code(() => parseWarnings(text(doc)))).toBe('no drift');
+    doc.features = doc.features.slice(0, MIN_FEATURES - 1);
+    expect(code(() => parseWarnings(text(doc)))).toBe('too_few_areas');
+    doc.features = [];
+    expect(code(() => parseWarnings(text(doc)))).toBe('too_few_areas');
   });
 
   it('a kind and a key may repeat across kinds (river:1 and lake:1 are two areas)', () => {
@@ -259,6 +276,20 @@ describe('property', () => {
   it('a valid map with any properties: drift or rows, and every stored geometry is finite WGS84', () => {
     const doc = JSON.parse(body('ch-5-warn-flood.synthetic').toString('utf8'));
     const feature = doc.features[0];
+    // The other sections as published but with a short line each: a map of fewer than MIN_FEATURES is drift, and the
+    // property is about the first feature.
+    const others = doc.features.slice(1).map((g: object) => ({
+      ...g,
+      geometry: {
+        type: 'MultiLineString',
+        coordinates: [
+          [
+            [2_600_000, 1_200_000],
+            [2_600_100, 1_200_100],
+          ],
+        ],
+      },
+    }));
     fc.assert(
       fc.property(
         fc.dictionary(fc.string({ maxLength: 12 }), fc.jsonValue(), { maxKeys: 5 }),
@@ -266,12 +297,13 @@ describe('property', () => {
         (extra, level) => {
           const f = { ...feature, properties: { ...feature.properties, ...extra, level } };
           try {
-            const out = normaliseWarnings(parseWarnings(text({ ...doc, features: [f] })), {
+            const out = normaliseWarnings(parseWarnings(text({ ...doc, features: [f, ...others] })), {
               fetchedAt: Date.parse('2026-10-03T06:09:00Z'),
               variant: 'de',
             });
+            // The first number of each geometry, a line's or a polygon's.
             for (const r of rowsOf(out))
-              expect(Number.isFinite(JSON.parse(r.geometry ?? '[]').coordinates[0][0][0])).toBe(true);
+              expect(Number.isFinite(JSON.parse(r.geometry ?? '[]').coordinates.flat(3)[0])).toBe(true);
           } catch (err) {
             expect(err).toBeInstanceOf(SchemaDrift);
           }

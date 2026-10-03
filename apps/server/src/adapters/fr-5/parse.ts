@@ -68,11 +68,33 @@ const Properties = z.strictObject({
 type Properties = z.infer<typeof Properties>;
 
 const Geometry = z.strictObject({
-  type: z.enum(['LineString', 'MultiLineString', 'Polygon', 'MultiPolygon']),
-  // Bounded by the node cap of the document; the coordinates are stored as published.
+  type: z.enum(['LineString', 'MultiLineString']),
+  // Bounded by the node cap of the document; checked by `lines` and stored as published.
   coordinates: z.array(z.unknown()),
 });
 export type Geometry = z.infer<typeof Geometry>;
+
+/** A WGS84 position [lon, lat] (every recorded one has two numbers). */
+const position = (p: unknown) =>
+  Array.isArray(p) &&
+  p.length === 2 &&
+  typeof p[0] === 'number' &&
+  typeof p[1] === 'number' &&
+  Number.isFinite(p[0]) &&
+  Number.isFinite(p[1]) &&
+  Math.abs(p[0]) <= 180 &&
+  Math.abs(p[1]) <= 90;
+const line = (l: unknown) => Array.isArray(l) && l.length >= 2 && l.every(position);
+
+/**
+ * The geometry as GeoJSON nests it (every recorded section is a MultiLineString): a LineString of positions, a
+ * MultiLineString of at least one such line. Anything else is drift `bad_geometry`, never stored (review SR-3).
+ */
+function checkGeometry(g: Geometry, at: string): Geometry {
+  const ok = g.type === 'LineString' ? line(g.coordinates) : g.coordinates.length > 0 && g.coordinates.every(line);
+  if (!ok) throw new SchemaDrift('bad_geometry', at);
+  return g;
+}
 
 const Feature = z.strictObject({
   type: z.literal('Feature'),
@@ -127,7 +149,8 @@ export function parseVigilance(body: Uint8Array): Vigilance {
   const sections = doc.features.map((element, i): Section => {
     const f = parseStrict(Feature, element, ['features', i]);
     const p = properties(f.properties, `features.${i}.properties`);
-    return { code: p.CdEntCru, name: p.lbentcru, level: p.NivInfViCr, geometry: f.geometry };
+    const geometry = f.geometry === null ? null : checkGeometry(f.geometry, `features.${i}.geometry`);
+    return { code: p.CdEntCru, name: p.lbentcru, level: p.NivInfViCr, geometry };
   });
   return { at: doc.DtHrInfoVigiCru ?? null, sections };
 }

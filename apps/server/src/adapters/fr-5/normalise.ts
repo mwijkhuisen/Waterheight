@@ -21,7 +21,10 @@ import type { Floods, Links, Vigilance } from './parse.ts';
 //    offset) or, for a capture that has none (the 2023 Wayback body was cut before it), at the fetch time. Only
 //    the sections of our table (registry/vigicrues-sections.yaml) are kept: the loader hands their codes in, and
 //    the rest of France is `out_of_scope`. The geometry is the feature's own WGS84 GeoJSON, as published. A
-//    section's level reaches its stations through that table (P7b), not here;
+//    section's level reaches its stations through that table (P7b), not here. A map that lists fewer than
+//    MIN_SHARE of our sections is not the whole map (an empty or cut answer would close them all): drift
+//    `too_few_areas` (review SR-6). A section listed twice or at a level the crosswalk lacks is `kept`: the map
+//    lists it, so its stored range stays as it is;
 //  - station.json: the historical floods (`CruesHistoriques`) of a station, as references of its FR-1 primary
 //    stage series, `CRUE_<8 hex of sha256(LbUsuel)>`, ValHauteur m × 100 → cm, historical (never classifies);
 //  - TronEntVigiCru and the territory documents store nothing: they feed the daily drift report of the table.
@@ -34,6 +37,12 @@ export type VigilanceContext = {
   /** The section codes of registry/vigicrues-sections.yaml. */
   sections: ReadonlySet<string>;
 };
+
+/**
+ * Our sections a vigilance map must list (of the 56: 42). Every live map lists all 337 sections of France; the
+ * trimmed P1a fixture lists 45 of ours, a cut-off 2023 Wayback capture none.
+ */
+export const MIN_SHARE = 0.75;
 
 const count = (out: Normalised, code: string, n = 1) => {
   out.dropped[code] = (out.dropped[code] ?? 0) + n;
@@ -56,7 +65,10 @@ export function normaliseVigilance(v: Vigilance, ctx: VigilanceContext): Normali
   const at = toIso(atMs);
   const copies = new Map<string, number>();
   for (const s of v.sections) copies.set(s.code, (copies.get(s.code) ?? 0) + 1);
+  const ours = [...ctx.sections].filter((code) => copies.has(code)).length;
+  if (ours < MIN_SHARE * ctx.sections.size) throw new SchemaDrift('too_few_areas');
   const rows: WarningRow[] = [];
+  const kept = new Set<string>();
   for (const s of v.sections) {
     if (!ctx.sections.has(s.code)) {
       count(out, 'out_of_scope');
@@ -65,11 +77,13 @@ export function normaliseVigilance(v: Vigilance, ctx: VigilanceContext): Normali
     // One area, one row: a section the map lists twice is withheld (RETAINED, alerted), as a duplicate anywhere.
     if ((copies.get(s.code) ?? 0) > 1) {
       count(out, 'conflict');
+      kept.add(s.code);
       continue;
     }
     const level = levelOf(SOURCE, 'section', String(s.level));
     if (level === undefined) {
       count(out, 'unmapped_class');
+      kept.add(s.code);
       continue;
     }
     rows.push({
@@ -84,7 +98,7 @@ export function normaliseVigilance(v: Vigilance, ctx: VigilanceContext): Normali
       issued_at: null,
     });
   }
-  out.warnings = { mode: 'snapshot', at, rows };
+  out.warnings = { mode: 'snapshot', at, rows, ...(kept.size > 0 ? { kept: [...kept] } : {}) };
   return out;
 }
 

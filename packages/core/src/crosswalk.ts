@@ -58,7 +58,9 @@ export const CROSSWALK: readonly CrosswalkRow[] = [
     ['5', 'extreme'],
     ['6', 'extreme'],
   ]),
-  // BAFU danger level (LINDAS dangerLevel): discharge, lakes level; `undefined` is cube.link/Undefined, never 1.
+  // BAFU danger level (LINDAS dangerLevel): discharge, lakes level; `undefined` is cube.link/Undefined, never 1. The
+  // basis `discharge` is the river case only: a lake station's class (and a `masl` station's WL rows below) is a
+  // level reference, so P7b takes the basis from the station's series, not from this row (review CR-9, KG-176).
   ...rows('CH-1', 'danger', 'discharge', 'public', [
     ['1', 'normal'],
     ['2', 'elevated'],
@@ -152,6 +154,7 @@ export const REFERENCE_ROLES: readonly ReferenceRole[] = [
   ref('DE-7', 'LANUV_INFO_1', '>=', 'elevated', 'stage'),
   ref('DE-7', 'LANUV_INFO_2', '>=', 'high', 'stage'),
   ref('DE-7', 'LANUV_INFO_3', '>=', 'extreme', 'stage'),
+  // `discharge` for a river; a lake (`masl`) station's WL rows are on its level series (see CH-1 above).
   ref('CH-2', 'WL2', '>=', 'elevated', 'discharge'),
   ref('CH-2', 'WL3', '>=', 'high', 'discharge'),
   ref('CH-2', 'WL4', '>=', 'extreme', 'discharge'),

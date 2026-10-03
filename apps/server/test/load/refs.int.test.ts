@@ -2,10 +2,10 @@ import type { ClassRow, GaugeZeroRow, WarningRow, Warnings } from '@rws/core';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VIEWS } from '../../src/db/audience.ts';
-import { parsedOkIn } from '../../src/load/prune.ts';
+import { PROMOTE_PER_DAY, parsedOkIn } from '../../src/load/prune.ts';
 import { applyClasses, applyReferences, applyWarnings, closesKey, type ResolvedRef } from '../../src/load/refs.ts';
 import { applyGaugeZeros, openBatch, readMeta, seriesOf, type Tx } from '../../src/load/store.ts';
-import { type Harness, harness, KAUB_W } from './harness.ts';
+import { EMMERICH_W, type Harness, harness, KAUB_W } from './harness.ts';
 
 // P7a: the validity ranges of references, gauge zeros, classes and warnings (load/refs.ts, store.ts), straight
 // against PostgreSQL 18 as rws_load: a change closes a range and opens one, nothing is overwritten by another
@@ -22,16 +22,16 @@ beforeAll(async () => {
 afterAll(() => h.close());
 
 const tx = <T>(fn: (tx: Tx) => Promise<T>) => h.load.db.transaction().execute(fn);
-/** An ok batch of `source` fetched at `at` (its id). */
-const batch = (source: string, at: string) =>
+/** An ok batch of `source` (and `spec`) fetched at `at` (its id). */
+const batch = (source: string, at: string, spec = 'p7a-test') =>
   tx(async (t) => {
     n += 1;
     const state = await openBatch(
       t,
       {
         source,
-        spec: 'p7a-test',
-        key: `raw/${source}/p7a-test/2026/10/03/${String(n).padStart(6, '0')}.zst`,
+        spec,
+        key: `raw/${source}/${spec}/2026/10/03/${String(n).padStart(6, '0')}.zst`,
         sha256: null,
         fetchedAt: new Date(at),
         status: 200,
@@ -155,6 +155,36 @@ describe('reference_value validity ranges', () => {
     // Kaub is a public DE-1 series, so the owner family shows the owner source's row on it.
     expect(await as('rws_owner_api', VIEWS.owner.reference)).toBe(1);
   });
+
+  it('a correcting replay keeps the opener; the newest payload re-opens a key its own replay states again (review CR-2)', async () => {
+    const em = await h.seriesId(EMMERICH_W);
+    const nnw = (value: number) =>
+      ref({ series: EMMERICH_W, id: em, kind: 'NNW', value, semantics: 'historical', period: null, basis_label: null });
+    const rows = async () =>
+      (
+        await h.t.admin.query<{ value: number; hi: Date | null; batch: string }>(
+          `SELECT value, upper(valid) AS hi, batch_id::text AS batch FROM reference_value
+           WHERE series_id = $1 AND kind = 'NNW' ORDER BY lower(valid) NULLS FIRST`,
+          [em],
+        )
+      ).rows.map((r) => [r.value, r.hi?.toISOString() ?? null, r.batch]);
+    const replay = (b: string, at: string, stated: ResolvedRef[]) =>
+      tx((t) => applyReferences(t, 'DE-1', stated, new Set([em]), b, new Date(at)));
+    const first = await apply('DE-1', '2026-10-02T04:20:00Z', [nnw(10)], [em]);
+    const second = await apply('DE-1', '2026-10-03T04:20:00Z', [nnw(10)], [em]);
+    // The newest statement's replay after a parser fix corrects the value in place; the opener stays the opener.
+    expect((await replay(second.batch, '2026-10-03T04:20:00Z', [nnw(11)])).changes).toEqual({ corrected: 1 });
+    expect(await rows()).toEqual([[11, null, first.batch]]);
+    // A newer payload no longer states it: closed. Its own replay states it again: open again, in place.
+    const third = await apply('DE-1', '2026-10-04T04:20:00Z', [], [em]);
+    expect(third.changes).toEqual({ removed: 1 });
+    expect(await rows()).toEqual([[11, '2026-10-04T04:20:00.000Z', first.batch]]);
+    expect((await replay(third.batch, '2026-10-04T04:20:00Z', [nnw(11)])).changes).toEqual({ corrected: 1 });
+    expect(await rows()).toEqual([[11, null, first.batch]]);
+    // And its replay that states nothing closes it once more; the same replay again writes nothing.
+    expect((await replay(third.batch, '2026-10-04T04:20:00Z', [])).changes).toEqual({ removed: 1 });
+    expect((await replay(third.batch, '2026-10-04T04:20:00Z', [])).writes).toBe(0);
+  });
 });
 
 describe('gauge_zero history (P7a, R-072): nothing is overwritten by another payload', () => {
@@ -191,6 +221,21 @@ describe('gauge_zero history (P7a, R-072): nothing is overwritten by another pay
     expect(await applyZero('2026-10-03T12:00:00Z', zero())).toEqual({});
     expect((await zerosOf()).length).toBe(2);
   });
+
+  it('a value that flaps A→B→A adds at most one range a day (review SR-5); a range of an earlier day is never touched', async () => {
+    // 10-06: B, then A and B again in the same UTC day: the day's range is corrected in place, each a change.
+    expect(await applyZero('2026-10-06T04:20:00Z', zero({ value_m: 67.75 }))).toEqual({ changed: 1 });
+    expect(await applyZero('2026-10-06T10:20:00Z', zero({ value_m: 67.7 }))).toEqual({ changed: 1 });
+    expect(await applyZero('2026-10-06T16:20:00Z', zero({ value_m: 67.75 }))).toEqual({ changed: 1 });
+    expect(await zerosOf()).toEqual([
+      [67.669, '2019-10-31T23:00:00.000Z', '2026-10-04T04:20:00.000Z'],
+      [67.7, '2026-10-04T04:20:00.000Z', '2026-10-06T04:20:00.000Z'],
+      [67.75, '2026-10-06T04:20:00.000Z', null],
+    ]);
+    // The next day's change opens a range again.
+    expect(await applyZero('2026-10-07T04:20:00Z', zero({ value_m: 67.7 }))).toEqual({ changed: 1 });
+    expect((await zerosOf()).length).toBe(4);
+  });
 });
 
 describe('class_obs on change', () => {
@@ -202,30 +247,84 @@ describe('class_obs on change', () => {
     level: 2,
     ...over,
   });
-  const station = async () => {
+  const station = async (key = KAUB_W) => {
     const { rows } = await h.t.admin.query<{ id: string }>(
       'SELECT station_id AS id FROM series WHERE provider_key = $1',
-      [KAUB_W],
+      [key],
     );
     return rows[0]?.id as string;
   };
+  const fetched = new Map<string, string>();
+  const classBatch = async (at: string, spec = 'p7a-test') => {
+    const b = await batch('DE-6', at, spec);
+    fetched.set(b, at);
+    return b;
+  };
+  const put = (b: string, rows: ClassRow[]) =>
+    tx((t) => applyClasses(t, 'DE-6', rows, b, new Date(fetched.get(b) as string)));
+  const classesOf = async (id: string) =>
+    (
+      await h.t.admin.query<{ ts: Date; code: string; batch: string }>(
+        `SELECT ts, provider_code AS code, batch_id::text AS batch FROM class_obs
+         WHERE subject_id = $1 AND source_id = 'DE-6' ORDER BY ts`,
+        [id],
+      )
+    ).rows.map((r) => [r.ts.toISOString(), r.code, r.batch]);
 
   it('stores a class once, then only its changes; a replay writes nothing; an unknown station is counted', async () => {
     const id = await station();
-    const b1 = await batch('DE-6', '2026-10-02T10:08:00Z');
-    expect(await tx((t) => applyClasses(t, 'DE-6', [cls({ station: id })], b1))).toMatchObject({ new: 1, writes: 1 });
-    const b2 = await batch('DE-6', '2026-10-02T10:18:00Z');
-    const same = cls({ station: id, ts: '2026-10-02T10:15:00.000Z' });
-    expect(await tx((t) => applyClasses(t, 'DE-6', [same], b2))).toMatchObject({ writes: 0 });
-    const b3 = await batch('DE-6', '2026-10-02T10:28:00Z');
+    const b1 = await classBatch('2026-10-02T10:08:00Z');
+    expect(await put(b1, [cls({ station: id })])).toMatchObject({ new: 1, kept: 1, writes: 1 });
+    const b2 = await classBatch('2026-10-02T10:18:00Z');
+    expect(await put(b2, [cls({ station: id, ts: '2026-10-02T10:15:00.000Z' })])).toMatchObject({ writes: 0 });
+    const b3 = await classBatch('2026-10-02T10:28:00Z');
     const up = cls({ station: id, ts: '2026-10-02T10:25:00.000Z', code: 'RP:1', level: 3 });
-    expect(await tx((t) => applyClasses(t, 'DE-6', [up], b3))).toMatchObject({ changed: 1, writes: 1 });
-    expect(await tx((t) => applyClasses(t, 'DE-6', [up], b3))).toMatchObject({ writes: 0 });
-    expect(await tx((t) => applyClasses(t, 'DE-6', [cls({ station: 'de.wsv.nowhere' })], b3))).toMatchObject({
-      unknown: 1,
-      writes: 0,
-    });
+    expect(await put(b3, [up])).toMatchObject({ changed: 1, writes: 1 });
+    expect(await put(b3, [up])).toMatchObject({ writes: 0 });
+    expect(await put(b3, [cls({ station: 'de.wsv.nowhere' })])).toMatchObject({ unknown: 1, kept: 0, writes: 0 });
     expect(await h.count('class_obs')).toBe(2);
+  });
+
+  it('another batch, same instant, other class (review CR-1): the newer payload wins, an older one is ignored, in either order', async () => {
+    // Three payloads state one stale feature timestamp: class 1, then 2 (the state re-classifies), then 1 again.
+    const { rows: picked } = await h.t.admin.query<{ id: string }>(
+      `SELECT DISTINCT station_id AS id FROM series WHERE source_id = 'DE-1' AND active AND audience IS NULL AND provider_key <> $1
+       ORDER BY station_id LIMIT 6`,
+      [KAUB_W],
+    );
+    const ts = '2026-10-03T09:00:00.000Z';
+    const at = ['2026-10-03T09:08:00Z', '2026-10-03T09:18:00Z', '2026-10-03T09:28:00Z'];
+    const codes = ['RP:1', 'RP:2', 'RP:1'];
+    const orders = [
+      [0, 1, 2],
+      [2, 1, 0],
+      [0, 2, 1],
+      [1, 0, 2],
+      [1, 2, 0],
+      [2, 0, 1],
+    ];
+    for (const [i, order] of orders.entries()) {
+      const id = picked[i]?.id as string;
+      const bs: string[] = [];
+      for (const a of at) bs.push(await classBatch(a, `p7a-class-${i}`));
+      const results = [];
+      for (const k of order) {
+        const code = codes[k] as string;
+        results.push(await put(bs[k] as string, [cls({ station: id, ts, code, level: code === 'RP:1' ? 3 : 4 })]));
+      }
+      // Whatever the order: one row, the newest payload's class, held by the newest payload.
+      expect([i, await classesOf(id)]).toEqual([i, [[ts, 'RP:1', bs[2]]]]);
+      if (i === 0) {
+        // In fetch order: the first class, a change in place, a change back (each a `class_changed`).
+        expect(results.map((r) => [r.new, r.changed])).toEqual([
+          [1, 0],
+          [0, 1],
+          [0, 1],
+        ]);
+      }
+      // Newest first: the two older payloads write nothing.
+      if (i === 1) expect(results.map((r) => r.writes)).toEqual([1, 0, 0]);
+    }
   });
 });
 
@@ -311,6 +410,105 @@ describe('warning_area', () => {
     );
     expect(replay.writes).toBe(0);
   });
+
+  it('snapshot: a level change at an unchanged provider valid_from closes at the payload time, history kept (review CR-3)', async () => {
+    // CH-5-shaped: the bulletin's valid_from and valid_until stay while the level is raised.
+    const bulletin = '2026-10-04T06:00:00.000Z';
+    const until = '2026-10-06T06:00:00.000Z';
+    const sec = (level: number, level_raw: string) =>
+      area({ area_key: 'river:2135', name: 'Aare', valid_from: bulletin, valid_to: until, level, level_raw });
+    expect(
+      (await warn('CH-5', '2026-10-04T06:12:00Z', snap('2026-10-04T06:10:00.000Z', [sec(3, '2')]))).changes,
+    ).toEqual({ new: 1 });
+    const at = '2026-10-04T12:10:00.000Z';
+    expect((await warn('CH-5', '2026-10-04T12:12:00Z', snap(at, [sec(4, '3')]))).changes).toEqual({ changed: 1 });
+    // The same level again: a confirmation of the new range.
+    expect(
+      (await warn('CH-5', '2026-10-04T12:22:00Z', snap('2026-10-04T12:20:00.000Z', [sec(4, '3')]))).changes,
+    ).toEqual({});
+    expect(await areasOf('CH-5', 'river:2135')).toEqual([
+      ['2', bulletin, at],
+      ['3', at, until],
+    ]);
+  });
+
+  it('snapshot: a new name, geometry or text at the same level is refreshed in place (review CR-4)', async () => {
+    const t1 = '2026-10-04T08:00:00.000Z';
+    const t2 = '2026-10-04T08:10:00.000Z';
+    const line = (y: number) =>
+      JSON.stringify({
+        type: 'LineString',
+        coordinates: [
+          [8, y],
+          [8.1, y],
+        ],
+      });
+    const alert = (at: string, name: string, y: number, headline: string) =>
+      area({
+        area_key: 'HE_1',
+        name,
+        geometry: line(y),
+        texts: { de: { headline } },
+        level: 4,
+        level_raw: '4',
+        valid_from: at,
+      });
+    await warn('DE-6', '2026-10-04T08:02:00Z', snap(t1, [alert(t1, 'Lahn', 50, 'Hochwasser')]));
+    const again = await warn(
+      'DE-6',
+      '2026-10-04T08:12:00Z',
+      snap(t2, [alert(t2, 'Lahn-Dill', 50.5, 'Hochwasser an der Lahn')]),
+    );
+    expect(again.changes).toEqual({});
+    const { rows } = await h.t.admin.query<{ name: string; g: string; texts: unknown; lo: Date }>(
+      `SELECT name, geometry_geojson AS g, texts, lower(valid) AS lo FROM warning_area
+       WHERE source_id = 'DE-6' AND area_key = 'HE_1'`,
+    );
+    expect(rows.map((r) => [r.name, r.g, r.texts, r.lo.toISOString()])).toEqual([
+      ['Lahn-Dill', line(50.5), { de: { headline: 'Hochwasser an der Lahn' } }, t1],
+    ]);
+  });
+
+  it('snapshot: an area the payload lists but withholds (kept) stays as stored (review CR-5)', async () => {
+    const t1 = '2026-10-05T08:00:00.000Z';
+    await warn(
+      'FR-5',
+      '2026-10-05T08:02:00Z',
+      snap(t1, [area({ area_key: 'SA9', level: 3, level_raw: '2', valid_from: t1 })]),
+    );
+    const held = await warn('FR-5', '2026-10-05T08:32:00Z', {
+      mode: 'snapshot',
+      at: '2026-10-05T08:30:00.000Z',
+      rows: [],
+      kept: ['SA9'],
+    });
+    expect(held.changes).toEqual({});
+    expect(await areasOf('FR-5', 'SA9')).toEqual([['2', t1, null]]);
+    const gone = await warn('FR-5', '2026-10-05T09:02:00Z', snap('2026-10-05T09:00:00.000Z', []));
+    expect(gone.changes).toEqual({ removed: 1 });
+  });
+
+  it('message: the held closings take any identifier, forget those 60 days from the message, and report a full map (review SR-4)', async () => {
+    const message = (sent: string, cancels: string[]): Warnings => ({ mode: 'message', sent, rows: [], cancels });
+    const closes = async () =>
+      Object.keys((await readMeta<Record<string, string>>(h.load.db, closesKey('LU-5'))) ?? {});
+    // `__proto__` is a key like any other; an identifier longer than a stored provider_ref names nothing.
+    const first = await warn(
+      'LU-5',
+      '2026-09-30T14:07:00Z',
+      message('2025-12-01T00:00:00.000Z', ['__proto__', 'x'.repeat(201)]),
+    );
+    expect(first.full).toBe(false);
+    // The red alert's closing of 2025-09-09 is more than 60 days before 2025-12-01: forgotten.
+    expect(await closes()).toEqual(['__proto__']);
+    // An earlier message loaded later (the seed loads newest first) keeps a closing 16 days after it.
+    await warn('LU-5', '2026-09-30T14:07:30Z', message('2025-11-15T00:00:00.000Z', ['LU-Alert.b']));
+    expect(await closes()).toEqual(['__proto__', 'LU-Alert.b']);
+    const many = Array.from({ length: 2000 }, (_, i) => `LU-Alert.${i}`);
+    const full = await warn('LU-5', '2026-09-30T14:08:00Z', message('2025-12-02T00:00:00.000Z', many));
+    expect(full.full).toBe(true);
+    expect(await closes()).toEqual(['__proto__', 'LU-Alert.b']);
+  });
 });
 
 describe('the forever promotion of a payload that opened a class or a reference (A§7.2)', () => {
@@ -325,5 +523,29 @@ describe('the forever promotion of a payload that opened a class or a reference 
     expect(rows.some((r) => r.opener)).toBe(true);
     expect(rows.some((r) => !r.opener)).toBe(true);
     for (const r of rows) expect([r.key, ok.has(r.key)]).toEqual([r.key, !r.opener]);
+  });
+
+  it('a class that flaps promotes only the first PROMOTE_PER_DAY payloads of its spec and day (review SR-1)', async () => {
+    const { rows: st } = await h.t.admin.query<{ id: string }>(
+      'SELECT station_id AS id FROM series WHERE provider_key = $1',
+      [KAUB_W],
+    );
+    const station = st[0]?.id as string;
+    const ids: string[] = [];
+    for (let i = 0; i < PROMOTE_PER_DAY + 6; i += 1) {
+      const at = new Date(Date.parse('2026-10-03T00:00:00Z') + i * 600_000);
+      const b = await batch('DE-6', at.toISOString(), 'p7a-flap');
+      const code = i % 2 === 0 ? 'RP:2' : 'RP:1';
+      const row = { station, ts: at.toISOString(), code, label: null, level: i % 2 === 0 ? 4 : 3 };
+      expect(await tx((t) => applyClasses(t, 'DE-6', [row], b, at))).toMatchObject({ writes: 1 });
+      ids.push(b);
+    }
+    const { rows } = await h.t.admin.query<{ key: string }>(
+      'SELECT archive_key AS key FROM ingest_batch WHERE id = ANY($1::bigint[]) ORDER BY archive_key',
+      [ids],
+    );
+    const keys = rows.map((r) => r.key);
+    const ok = await parsedOkIn(h.load.db)(keys);
+    expect(keys.filter((k) => ok.has(k))).toEqual(keys.slice(PROMOTE_PER_DAY));
   });
 });

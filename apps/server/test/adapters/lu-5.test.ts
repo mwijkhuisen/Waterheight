@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { type Normalised, SchemaDrift } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { normalise } from '../../src/adapters/lu-5/normalise.ts';
+import { MAX_TEXTS_BYTES, normalise } from '../../src/adapters/lu-5/normalise.ts';
 import { MAX_CHARS, parseCap, parseList } from '../../src/adapters/lu-5/parse.ts';
 import type { LoadContext } from '../../src/load/adapters.ts';
 import { ADAPTER } from '../../src/load/wire/lu-5.ts';
@@ -259,6 +259,35 @@ describe('what normalise drops, and when', () => {
   it('an effective time is optional: the message is valid from its sent', () => {
     const out = go(moselle.replaceAll(/<effective>[^<]*<\/effective>/g, ''));
     expect(rows(out)[0]?.valid_from).toBe('2026-02-13T08:56:31.000Z');
+  });
+
+  it('an effective or expires more than 30 days after sent drops the area as future (review SR-7)', () => {
+    const expires = (to: string) => moselle.replaceAll(/<expires>[^<]*<\/expires>/g, `<expires>${to}</expires>`);
+    expect(rows(go(expires('2026-03-15T09:56:31+01:00')))).toHaveLength(1);
+    const late = go(expires('2026-03-15T09:56:32+01:00'));
+    expect([rows(late), late.dropped]).toEqual([[], { future: 1 }]);
+    const effective = go(
+      moselle.replaceAll(/<effective>[^<]*<\/effective>/g, '<effective>2026-04-01T00:00:00+01:00</effective>'),
+    );
+    expect([rows(effective), effective.dropped]).toEqual([[], { future: 1 }]);
+  });
+
+  it('texts over MAX_TEXTS_BYTES lose every description, whole, and are counted texts_trimmed (review SR-2)', () => {
+    const long = moselle.replaceAll(
+      /<description>[^<]*<\/description>/g,
+      `<description>${'€'.repeat(8000)}</description>`,
+    );
+    const out = go(long);
+    expect(out.dropped).toEqual({ texts_trimmed: 1 });
+    const texts = rows(out)[0]?.texts ?? {};
+    expect(Object.keys(texts).length).toBeGreaterThan(1);
+    for (const t of Object.values(texts)) {
+      expect(t.description).toBeUndefined();
+      expect(t.headline).toBeDefined();
+    }
+    expect(Buffer.byteLength(JSON.stringify(texts))).toBeLessThanOrEqual(MAX_TEXTS_BYTES);
+    // The real file is far under the bound: nothing is left out.
+    expect(go(moselle).dropped).toEqual({});
   });
 });
 

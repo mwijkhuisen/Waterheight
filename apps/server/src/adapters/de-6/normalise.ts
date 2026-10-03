@@ -22,8 +22,15 @@ import type { Alerts, StationFeature, Stations } from './parse.ts';
 //    (`RP:0`, `SL:0`); the operator's own -1 / none only when no other state has a class;
 //  - code `<STATE>:<class>`, class `-1`…`4` or `none` (key absent or null: "Ohne Hochwasser-Einstufung", not an
 //    error); level from the crosswalk (scale `station`), never from the alert scale;
-//  - time: TIME below for a feature's `timestamp`; `updated` (true UTC, fixed +01:00) for a feature without one;
-//  - alerts: every area of the payload is a snapshot at `updated` (scale `alert`: "1", "2", "4", "5", "6").
+//  - time: TIME below for a feature's `timestamp`; `updated` (true UTC, fixed +01:00) for a feature without one.
+//    The class is stamped with the instant of the reading the state classified, not with `updated` (review CR-1):
+//    it lines up with that station's values, a stale gauge does not look current, and the loader lets a newer
+//    payload's class replace an older one's at the same instant (newest fetch wins), so a state that re-classifies
+//    without a new reading still lands; the replaced class stays in the archive (DE-6 is kept forever);
+//  - a feature id twice is a `conflict` (each copy counted, RETAINED): which copy is meant is unknown, so neither
+//    is read, and a station with such a feature takes no class from that payload; an alert area twice likewise;
+//  - alerts: every area of the payload is a snapshot at `updated` (scale `alert`: "1", "2", "4", "5", "6"); an area
+//    whose row is withheld (`conflict`, `unmapped_class`) is `kept`, so its stored range stays as it is.
 
 export const SOURCE = 'DE-6';
 
@@ -99,23 +106,28 @@ export function normaliseStations(doc: Stations, table: LhpTable, fetchedAt: num
   const count = counter(dropped);
   const updated = updatedOf(doc.updated);
   const entries = new Map(table.stations.map((e) => [e.lhp, e]));
+  const copies = new Map<string, number>();
+  for (const f of doc.features) copies.set(f.id, (copies.get(f.id) ?? 0) + 1);
+  const twice = (id: string) => (copies.get(id) ?? 0) > 1;
   const seen = new Map<string, StationFeature>();
   for (const f of doc.features) {
     if (!entries.has(f.id)) count('not_registered');
-    else if (seen.has(f.id)) count('conflict');
+    else if (twice(f.id)) count('conflict');
     else seen.set(f.id, f);
   }
-  // The table's order is the output's order: one group per station, its members in the table's order.
-  const groups = new Map<string, { feature: StationFeature; state: string; operator: boolean }[]>();
+  // The table's order is the output's order: one group per station, its members in the table's order; a station
+  // with a feature in conflict is withheld (null).
+  const groups = new Map<string, { feature: StationFeature; state: string; operator: boolean }[] | null>();
   for (const e of table.stations) {
+    if (twice(e.lhp)) groups.set(e.station, null);
     const feature = seen.get(e.lhp);
-    if (feature === undefined) continue;
-    const group = groups.get(e.station) ?? [];
-    group.push({ feature, state: e.state, operator: e.operator });
-    groups.set(e.station, group);
+    const group = groups.get(e.station);
+    if (feature === undefined || group === null) continue;
+    groups.set(e.station, [...(group ?? []), { feature, state: e.state, operator: e.operator }]);
   }
   const classes: ClassRow[] = [];
   for (const [station, group] of groups) {
+    if (group === null) continue;
     // The operating state's own feature, else (it is not in this answer) the first one.
     const base = group.find((g) => g.operator) ?? (group[0] as (typeof group)[number]);
     let chosen = base;
@@ -157,7 +169,8 @@ export function normaliseStations(doc: Stations, table: LhpTable, fetchedAt: num
  * The alerts of one `/data/alerts` answer: a snapshot at `updated` that states every alerted area (an empty one
  * closes them all). An area is its feature id; the alert carries no time of its own (catalogue §0.4), so its
  * validity starts at `updated` and has no end. A class the alert scale does not know ("3" has no meaning) is
- * dropped `unmapped_class` (alerted, kept for a replay); a feature id twice is `conflict` (the first stands).
+ * dropped `unmapped_class` (alerted, kept for a replay); a feature id twice is `conflict` (neither copy stands).
+ * Either way the area is `kept`: the payload lists it, so its stored range is not closed.
  * A snapshot more than 15 minutes ahead of the fetch states nothing (`future`).
  */
 export function normaliseAlerts(doc: Alerts, fetchedAt: number): Normalised {
@@ -169,17 +182,20 @@ export function normaliseAlerts(doc: Alerts, fetchedAt: number): Normalised {
     return { ...emptyNormalised(), dropped };
   }
   const at = toIso(updated);
-  const ids = new Set<string>();
+  const copies = new Map<string, number>();
+  for (const f of doc.features) copies.set(f.id, (copies.get(f.id) ?? 0) + 1);
   const rows: WarningRow[] = [];
+  const kept = new Set<string>();
   for (const f of doc.features) {
-    if (ids.has(f.id)) {
+    if ((copies.get(f.id) ?? 0) > 1) {
       count('conflict');
+      kept.add(f.id);
       continue;
     }
-    ids.add(f.id);
     const level = levelOf(SOURCE, 'alert', f.properties.lhpClass);
     if (level === undefined) {
       count('unmapped_class');
+      kept.add(f.id);
       continue;
     }
     rows.push({
@@ -195,5 +211,9 @@ export function normaliseAlerts(doc: Alerts, fetchedAt: number): Normalised {
       issued_at: null,
     });
   }
-  return { ...emptyNormalised(), dropped, warnings: { mode: 'snapshot', at, rows } };
+  return {
+    ...emptyNormalised(),
+    dropped,
+    warnings: { mode: 'snapshot', at, rows, ...(kept.size > 0 ? { kept: [...kept] } : {}) },
+  };
 }

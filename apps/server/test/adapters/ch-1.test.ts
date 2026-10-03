@@ -169,6 +169,14 @@ describe('danger levels → classes (P7a)', () => {
     expect(norm([row(UNDEFINED_LEVEL)]).classes?.[0]).toMatchObject({ code: 'undefined', level: null });
   });
 
+  it('a level the crosswalk lacks is unmapped_class, never "no class" (review CR-6)', () => {
+    // The parser reads 1…5 only; a parsed observation with another level reaches the crosswalk check.
+    const [o] = parseCube(Buffer.from(`${HEADER.join(',')}\n${row('1')}\n`));
+    const out = normaliseCube([{ ...(o as Observation), dangerLevel: 6 }], base);
+    expect(out.classes).toBeUndefined();
+    expect(out.dropped).toEqual({ unmapped_class: 1 });
+  });
+
   it('a station without a registered series, and a future time give no class; a superseded row is not stated', () => {
     expect(norm([row('1', '999999')]).classes).toBeUndefined();
     expect(norm([row('1', '2289', '2026-09-23T21:20:00+01:00')]).classes).toBeUndefined();

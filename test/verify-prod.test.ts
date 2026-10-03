@@ -2833,12 +2833,15 @@ describe('owner ids and interval DE-6 (P7a)', () => {
       'de-6-alerts': ls === null ? null : at(ls),
     });
 
-  it('owner ids: whole ids in string values only', () => {
+  it('owner ids: whole ids in string values and object keys', () => {
     const ids = ['BE-3', 'LU-4'];
-    const ok = { '/h': JSON.stringify({ sources: [{ id: 'DE-1', note: 'BE-33 and XBE-3' }] }) };
+    const ok = { '/h': JSON.stringify({ sources: [{ id: 'DE-1', note: 'BE-33 and XBE-3', 'XBE-3': 1 }] }) };
     expect(checkOwnerIds(ok, ids)).toMatchObject({ check: 'owner ids', ok: true });
     const bad = { '/h': JSON.stringify({ sources: [{ id: 'DE-1', nested: ['x', 'LU-4'] }] }) };
     expect(checkOwnerIds(bad, ids)).toMatchObject({ ok: false, detail: /\/h: LU-4/ });
+    // A key is scanned too (review SR-9): `{"BE-3": …}` names the source as plainly as a value would.
+    const keyed = { '/h': JSON.stringify({ by_source: { 'DE-1': 2, 'BE-3': 1 } }) };
+    expect(checkOwnerIds(keyed, ids)).toMatchObject({ ok: false, detail: /\/h: BE-3/ });
   });
 
   it('samples without waiting and passes with fresh, advancing successes', async () => {

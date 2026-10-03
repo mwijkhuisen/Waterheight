@@ -76,7 +76,7 @@ export type ClassRow = z.infer<typeof ClassRow>;
 export const WarningRow = z.strictObject({
   area_key: z.string().min(1).max(120),
   name: z.string().max(500).nullable(),
-  /** GeoJSON geometry, serialised; bounded by the adapter's caps. */
+  /** GeoJSON geometry, serialised; bounded by the adapter's caps (the loader stores at most 2 MiB). */
   geometry: z
     .string()
     .max(4 * 1024 * 1024)
@@ -96,11 +96,13 @@ export type WarningRow = z.infer<typeof WarningRow>;
 
 /**
  * P7a: how a payload's warnings relate to what is stored. `snapshot`: the payload states every area of its source
- * at `at` (DE-6 alerts, FR-5 sections, CH-5 sections), so an area it no longer lists is closed. `message`: each
- * payload is one message (CAP): a later message for an area caps the earlier one, `cancels` close referenced ones.
+ * at `at` (DE-6 alerts, FR-5 sections, CH-5 sections), so an area it no longer lists is closed; `kept` names the
+ * areas it lists but whose row the adapter withheld (a conflict, an unmapped level), which stay as stored (review
+ * CR-5). `message`: each payload is one message (CAP): a later message for an area caps the earlier one, `cancels`
+ * close referenced ones.
  */
 export type Warnings =
-  | { mode: 'snapshot'; at: string; rows: WarningRow[] }
+  | { mode: 'snapshot'; at: string; rows: WarningRow[]; kept?: string[] }
   | { mode: 'message'; sent: string; rows: WarningRow[]; cancels: string[] };
 
 /** How a series is declared in the registry: the only source of unit, factor and steps. */

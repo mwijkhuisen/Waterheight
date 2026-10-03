@@ -862,7 +862,7 @@ describe('references (P7a, be-3-refs)', () => {
     expect(top('L6640/Q').map((r) => r.kind)).toEqual(['TOP3_1', 'TOP3_2']);
     expect(top('L8000/H')).toEqual([]);
     expect(top('L8000/Q').map((r) => r.kind)).toEqual(['TOP3_1']);
-    // The floods are by value, highest first, and carry the event's UTC day.
+    // The floods are by value, highest first, and carry the event's day in SPW's station time (UTC+01:00).
     const h = top('L6640/H');
     expect(h.map((r) => r.value)).toEqual([...h.map((r) => r.value)].sort((a, b) => b - a));
     for (const r of h) expect(r.basis_label).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -893,8 +893,9 @@ describe('references (P7a, be-3-refs)', () => {
         unit: 'cm',
         semantics: 'statistical',
         convention,
-        // The period starts on the UTC day of the value's stamp and has no end.
-        period: ['2003-04-05', null],
+        // The period starts on the day of the value's stamp in SPW's station time (local midnight, 23:00Z the day
+        // before) and has no end (review CR-10).
+        period: ['2003-04-06', null],
         season_from_md: 101,
         season_to_md: 1231,
         priority: 0,
@@ -902,7 +903,8 @@ describe('references (P7a, be-3-refs)', () => {
         valid_from: null,
       });
     }
-    expect(one('Cmd.POR.P05', 1.5, '2003-04-06T00:30:00.000+01:00')?.period).toEqual(['2003-04-05', null]);
+    expect(one('Cmd.POR.P05', 1.5, '2003-04-06T00:30:00.000+01:00')?.period).toEqual(['2003-04-06', null]);
+    expect(one('Cmd.POR.P05', 1.5, '2003-04-05T22:59:59.000Z')?.period).toEqual(['2003-04-05', null]);
   });
 
   it('Top3: highest first whatever the order, ties by time, at most three, a gap or a future flood counted', () => {
@@ -980,7 +982,7 @@ describe('references (P7a, be-3-refs)', () => {
         ['2004-04-05T23:00:00.000Z', 2],
       ]),
     ]);
-    expect(two.references?.map((r) => [r.value, r.period])).toEqual([[200, ['2004-04-05', null]]]);
+    expect(two.references?.map((r) => [r.value, r.period])).toEqual([[200, ['2004-04-06', null]]]);
     expect(two.dropped).toEqual({ superseded: 1 });
   });
 

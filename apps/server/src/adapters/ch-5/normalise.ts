@@ -80,16 +80,20 @@ export function normaliseWarnings(doc: Collected, ctx: Context): Normalised {
   const keyOf = (s: Collected['sections'][number]) => `${s.properties.kind}:${s.properties.key}`;
   for (const s of doc.sections) copies.set(keyOf(s), (copies.get(keyOf(s)) ?? 0) + 1);
   const rows: WarningRow[] = [];
+  // An area the payload lists but whose row is withheld stays as stored (review CR-5).
+  const kept = new Set<string>();
   for (const s of doc.sections) {
     const p = s.properties;
     if ((copies.get(keyOf(s)) ?? 0) > 1) {
       // One area, one row: a key the payload states twice is withheld (RETAINED, alerted).
       count(out, 'conflict');
+      kept.add(keyOf(s));
       continue;
     }
     const level = levelOf(SOURCE, 'section', String(p.level));
     if (level === undefined) {
       count(out, 'unmapped_class');
+      kept.add(keyOf(s));
       continue;
     }
     rows.push({
@@ -104,6 +108,6 @@ export function normaliseWarnings(doc: Collected, ctx: Context): Normalised {
       issued_at: null,
     });
   }
-  out.warnings = { mode: 'snapshot', at: toIso(at), rows };
+  out.warnings = { mode: 'snapshot', at: toIso(at), rows, ...(kept.size > 0 ? { kept: [...kept] } : {}) };
   return out;
 }

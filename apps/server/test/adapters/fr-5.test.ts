@@ -7,6 +7,7 @@ import { parse } from 'yaml';
 import {
   driftReport,
   floodKind,
+  MIN_SHARE,
   normaliseLinks,
   normaliseStation,
   normaliseVigilance,
@@ -102,9 +103,8 @@ describe('golden files (real payloads): the vigilance map', () => {
     // Levels 1, 2 and 3 as published (2023-12-11).
     expect(new Set(rowsOf(out).map((r) => r.level_raw))).toEqual(new Set(['1', '2', '3']));
     expect(rowsOf(out).find((r) => r.area_key === 'AD1')).toMatchObject({ name: 'Adour amont - Echez', level: 2 });
-    // The real table keeps only the sections it knows; the others are out of scope.
-    const real = vigilance('fr-5-vigilance-wayback');
-    expect(rowsOf(real).length + (real.dropped.out_of_scope ?? 0)).toBe(37);
+    // Against the real table the cut-off capture lists none of our sections: not a whole map (review SR-6).
+    expect(() => vigilance('fr-5-vigilance-wayback')).toThrowError(expect.objectContaining({ code: 'too_few_areas' }));
   });
 
   it('the old and the current key casing give the same warning rows', () => {
@@ -182,6 +182,53 @@ describe('the vigilance map: rules', () => {
     const out = run(doc);
     expect(out.dropped).toEqual({ conflict: 2, out_of_scope: 1 });
     expect(rowsOf(out)).toHaveLength(56 - 1 - 1);
+    // The map lists it: its stored range stays as it is (review CR-5).
+    expect(out.warnings?.mode === 'snapshot' && out.warnings.kept).toEqual([doc.features[0].properties.CdEntCru]);
+  });
+
+  it('a map that lists fewer than MIN_SHARE of our sections is drift too_few_areas, an empty one too (review SR-6)', () => {
+    const doc = archive();
+    const need = Math.ceil(MIN_SHARE * SECTIONS.size);
+    doc.features = doc.features.slice(0, need);
+    expect(rowsOf(run(doc))).toHaveLength(need);
+    doc.features = doc.features.slice(0, need - 1);
+    expect(() => run(doc)).toThrowError(expect.objectContaining({ code: 'too_few_areas' }));
+    doc.features = [];
+    expect(() => run(doc)).toThrowError(expect.objectContaining({ code: 'too_few_areas' }));
+  });
+
+  it('a geometry that is not a LineString or MultiLineString of finite WGS84 positions is drift (review SR-3)', () => {
+    const geometryDrift = (g: unknown) => {
+      const doc = archive();
+      doc.features[0].geometry = g;
+      return drift(doc);
+    };
+    const [p, q] = [
+      [6.6, 49],
+      [6.7, 49.1],
+    ];
+    const line = (coordinates: unknown) => ({ type: 'LineString', coordinates });
+    const multi = (coordinates: unknown) => ({ type: 'MultiLineString', coordinates });
+    expect(geometryDrift(line([p, q]))).toBe('no drift');
+    expect(geometryDrift(multi([[p, q]]))).toBe('no drift');
+    const bad = [
+      multi([]),
+      multi([[p]]),
+      multi([p, q]),
+      line([[p, q]]),
+      line([[181, 49], q]),
+      line([[6.6, 91], q]),
+      line([[6.6, 49, 100], q]),
+      line([['6.6', 49], q]),
+    ];
+    for (const g of bad) expect([g, geometryDrift(g)]).toEqual([g, 'bad_geometry']);
+    // A number past the double range parses to Infinity: not finite.
+    const doc = archive();
+    const raw = text(doc)
+      .toString('utf8')
+      .replace(/"coordinates":\[\[\[[-0-9.]+/, '"coordinates":[[[1e400');
+    expect(() => parseVigilance(Buffer.from(raw))).toThrowError(expect.objectContaining({ code: 'bad_geometry' }));
+    expect(geometryDrift({ type: 'Polygon', coordinates: [] })).toBe('invalid_value');
   });
 
   it('the map time: absent means the fetch time, a future one (more than 15 minutes ahead) and a bad one are drift', () => {

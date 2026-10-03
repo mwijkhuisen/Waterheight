@@ -519,10 +519,25 @@ describe('wl_1..wl_4 → WL2..WL5 on the CH-1 primary series (P7a)', () => {
   it('a station CH-1 does not register has no target (no row, no scope); without the CH-1 registry nothing is emitted', () => {
     const n = out([station('2437', { key: '999999' })]);
     expect([n.references, n.refScope]).toEqual([undefined, undefined]);
+    // Counted when it states a threshold (review CR-7), not when it states none.
+    expect(n.dropped.no_target).toBe(1);
+    const empty = out([station('2437', { key: '999999', wl_1: null, wl_2: null, wl_3: null, wl_4: null })]);
+    expect(empty.dropped.no_target).toBeUndefined();
     const { refRegistries: _, ...bare } = c;
     const none = normaliseFeatures([station('2437')], bare);
     expect([none.references, none.refScope]).toEqual([undefined, undefined]);
     expect(none.obs.length).toBeGreaterThan(0);
+  });
+
+  it('a threshold is converted by the unit it is published in, never by the target series factor (review CR-7)', () => {
+    // A CH-1 Q series declared in l/s (to_canonical 0.001): a threshold published in m³/s is still m³/s.
+    const decl = ch1.get('2437/Q');
+    if (decl === undefined) throw new Error('no 2437/Q');
+    const litres = new Map([
+      ['CH-1', new Map([...ch1, ['2437/Q', { ...decl, native_unit: 'l/s', to_canonical: 0.001 }]])],
+    ]);
+    const n = out([station('2437')], { refRegistries: litres });
+    expect(kinds(n, '2437/Q')?.map((r) => r.value)).toEqual([6.15, 11.45, 15.6, 21.1]);
   });
 
   it('threshold_customer is not stored', () => {

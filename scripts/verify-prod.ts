@@ -652,7 +652,7 @@ export function checkOwnerLeak(bodies: Readonly<Record<string, string>>, terms: 
     : miss('owner leak', `found in ${found.join('; ')}`);
 }
 
-/** P7a: no owner-audience source ID as a whole word in any string value of the public health documents. */
+/** P7a: no owner-audience source ID as a whole word in any string value or object key of the public health documents. */
 export function checkOwnerIds(bodies: Readonly<Record<string, string>>, ids: readonly string[]): Result {
   const strings = (doc: unknown): string[] =>
     typeof doc === 'string'
@@ -660,7 +660,7 @@ export function checkOwnerIds(bodies: Readonly<Record<string, string>>, ids: rea
       : Array.isArray(doc)
         ? doc.flatMap(strings)
         : typeof doc === 'object' && doc !== null
-          ? Object.values(doc).flatMap(strings)
+          ? Object.entries(doc).flatMap(([key, value]) => [key, ...strings(value)])
           : [];
   const found = Object.entries(bodies).flatMap(([label, body]) => {
     const hits = [...new Set(strings(parseJson(body)).flatMap((v) => leaks(v, ids)))];
@@ -1321,7 +1321,7 @@ export const CHECKS = [
   `tiles 416: GET on the current basemap file without Range, and with Range: ${TILE_416_REQUESTS[1][1].range}, is 416 and not immutable (only one explicit range is served)`,
   `map assets: GET ${MAP_ASSET_PATH} (a pinned glyph range of the web image) is 200 with Cache-Control exactly "${TILE_CACHE}"`,
   `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body`,
-  'owner ids: no owner-audience source ID of registry/sources.yaml as a whole word in a string value of /api/v1/health or health/sources',
+  'owner ids: no owner-audience source ID of registry/sources.yaml as a whole word in a string value or object key of /api/v1/health or health/sources',
   `interval DE-6: (--interval, slow: ${DE6_SAMPLES} samples of /status/capture.json ${DE6_GAP_MS / 60_000} min apart, about 30 min) ${DE6_SPECS.join(' and ')} have a last_success at most ${DE6_MAX_AGE_S} s before that sample's generated_at in every sample (a missing spec or null last_success is a FAIL) and it advanced; without the flag the check is N/A (skipped)`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
   ...TWIN_IDS.map(

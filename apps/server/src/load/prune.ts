@@ -15,6 +15,8 @@ import { parseLine } from './pipeline.ts';
 //    threshold state (dangerLevel, wl_1..wl_4) and are kept until P7 parses it;
 //  - it is not the daily promoted copy: the first object of each spec and UTC
 //    day of a mixed source stays forever;
+//  - P7a: it did not open a class row or a reference range, unless 24 payloads
+//    of its spec and UTC day that did come before it (PROMOTE_PER_DAY);
 //  - the loader parsed it successfully and stored everything a registry change
 //    could still add (an ingest_batch row with status ok and n_skipped 0);
 //  - its own line and every `dup_of` line that points at it are older than the
@@ -36,6 +38,12 @@ export const MIXED_SOURCES: ReadonlySet<string> = new Set(['CH-1', 'CH-2']);
  * (parsedOkIn), beside the daily copy of MIXED_SOURCES.
  */
 export const KEEP_UNTIL_PARSED: ReadonlySet<string> = new Set();
+/**
+ * Of the payloads of one source, spec and UTC day that opened a class row or a reference range, the first this many
+ * (by archive key, which sorts by fetch time) are promoted; the others follow the obs policy, so a class or a
+ * threshold that flaps (a provider bug) cannot keep every payload forever (P7a review SR-1).
+ */
+export const PROMOTE_PER_DAY = 24;
 
 const DAY_MS = 86_400_000;
 
@@ -134,16 +142,24 @@ export async function* prunePlan(
 /**
  * The archive keys among `keys` whose batch loaded `ok` and stored every value it carried. A batch that opened a
  * class row or a reference range (P7a: a CH-1 payload whose dangerLevel changed, a CH-2 payload whose wl_*
- * changed) is never among them: that payload is promoted to the forever class (A§7.2). `batch_id` of both tables
- * is the opener; a confirmation moves only `seen_*` (load/refs.ts).
+ * changed) is among them only past the first PROMOTE_PER_DAY such batches of its source, spec and UTC day among
+ * `keys`: those are promoted to the forever class (A§7.2). `batch_id` of a reference range is its opener (a
+ * confirmation moves only `seen_*`), of a class row the newest payload that stated it at its instant (load/refs.ts).
  */
 export function parsedOkIn(db: Kysely<DB>): ParsedOk {
   return async (keys) => {
     const { rows } = await sql<{ archive_key: string }>`
-      SELECT b.archive_key FROM ingest_batch b
-      WHERE b.archive_key = ANY(${keys}::text[]) AND b.parse_status = 'ok' AND b.n_skipped = 0
-        AND NOT EXISTS (SELECT 1 FROM class_obs c WHERE c.batch_id = b.id)
-        AND NOT EXISTS (SELECT 1 FROM reference_value r WHERE r.batch_id = b.id)`.execute(db);
+      SELECT archive_key FROM (
+        SELECT b.archive_key, o.opener,
+               count(*) FILTER (WHERE o.opener) OVER (
+                 PARTITION BY b.source_id, b.spec_id, substring(b.archive_key FROM '^raw/[^/]+/[^/]+/([0-9/]{10})/')
+                 ORDER BY b.archive_key) AS nth
+        FROM ingest_batch b
+        CROSS JOIN LATERAL (
+          SELECT EXISTS (SELECT 1 FROM class_obs c WHERE c.batch_id = b.id)
+                 OR EXISTS (SELECT 1 FROM reference_value r WHERE r.batch_id = b.id) AS opener) o
+        WHERE b.archive_key = ANY(${keys}::text[]) AND b.parse_status = 'ok' AND b.n_skipped = 0) x
+      WHERE NOT opener OR nth > ${PROMOTE_PER_DAY}`.execute(db);
     return new Set(rows.map((r) => r.archive_key));
   };
 }

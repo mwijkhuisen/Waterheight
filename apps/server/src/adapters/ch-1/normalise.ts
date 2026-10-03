@@ -114,7 +114,10 @@ export function normaliseCube(observations: readonly Observation[], ctx: Context
     const station = (ctx.registry.get(`${id}/W`) ?? ctx.registry.get(`${id}/Q`))?.station;
     if (station !== undefined && !isFuture(ts, ctx.fetchedAt) && ts >= ctx.fetchedAt - MAX_AGE_MS) {
       const code = o.dangerLevel === null ? 'undefined' : String(o.dangerLevel);
-      out.classes.push({ station, ts: toIso(ts), code, label: null, level: levelOf(SOURCE, 'danger', code) ?? null });
+      const level = levelOf(SOURCE, 'danger', code);
+      // A code the crosswalk lacks is never stored as "no class" (review CR-6).
+      if (level === undefined) count(out, 'unmapped_class');
+      else out.classes.push({ station, ts: toIso(ts), code, label: null, level });
     }
   }
   if (out.classes?.length === 0) delete out.classes;

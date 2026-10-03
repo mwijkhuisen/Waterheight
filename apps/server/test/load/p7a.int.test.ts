@@ -270,9 +270,9 @@ describe('P7a through the loader', { timeout: 300_000 }, () => {
         retention: 'forever',
         ...(source === 'CH-1' ? { method: 'POST' as const } : {}),
       });
-    // A class is keyed by the observation's own time: the shipped dl-changed copy keeps the recorded `time`, so it
-    // opens no class row (a restatement of the same instant is not a change over time). The same cube read at a
-    // later instant does.
+    // A class is keyed by the observation's own time. The shipped dl-changed copy keeps the recorded `time`: a newer
+    // payload's class at the same instant replaces the stored one in place (newest fetch wins, review CR-1). The
+    // same cube read at a later instant opens a row.
     const shift = (body: Buffer, time: string) =>
       Buffer.from(body.toString('utf8').replaceAll('2026-09-30T12:40:00+01:00', time));
     const dl = shift(SYN('ch-1-lindas-dl-changed', 'CH-1'), '2026-10-04T08:40:00+01:00');
@@ -303,9 +303,10 @@ describe('P7a through the loader', { timeout: 300_000 }, () => {
     ]);
     // The off Rhone station takes no reference, changed or not.
     expect(await ranges('CH-2', '2269/Q', 'WL3')).toEqual([]);
-    // 2043 Berlingen: dl 1, then 3 (the changed cube), then 1 again.
+    // 2043 Berlingen: dl 1 at the recorded instant, replaced by 3 (the changed copy, fetched later), then 1 again at a
+    // later instant.
     const berlingen = await q("SELECT provider_code FROM class_obs WHERE subject_id = 'ch.bafu.2043' ORDER BY ts");
-    expect(berlingen.map((r) => r.provider_code)).toEqual(['1', '3', '1']);
+    expect(berlingen.map((r) => r.provider_code)).toEqual(['3', '1']);
     expect(h.alerts.map((a) => a.code).sort()).toEqual([
       'class_changed',
       'class_changed',
@@ -324,9 +325,10 @@ describe('P7a through the loader', { timeout: 300_000 }, () => {
     // CH-2: the first load (opened), the Lonza edit (opened nothing), the 12000 l/s body (opened), its repeat
     // (nothing), the original again (opened).
     expect(await listed('CH-2')).toEqual([false, true, false, true, false]);
-    // CH-1: the first load (opened), the shipped copy at the recorded instant (nothing), the changed cube at a
-    // later instant (opened), its repeat (nothing), dl 1 again (opened).
-    expect(await listed('CH-1')).toEqual([false, true, false, true, false]);
+    // CH-1: the first load (its rows now held by the newer copy of the same instant), the shipped copy at the
+    // recorded instant (holds every class of that instant, Berlingen's changed), the changed cube at a later instant
+    // (nothing new: the same classes), its repeat (nothing), dl 1 again (opened).
+    expect(await listed('CH-1')).toEqual([true, false, true, true, false]);
   });
 
   it('LU-4 (owner): references only in the owner view, a changed orange level is a new range, alerts hold counts only', async () => {

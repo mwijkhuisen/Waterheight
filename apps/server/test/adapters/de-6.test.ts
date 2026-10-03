@@ -277,15 +277,16 @@ describe('station classes', () => {
     expect(perlCode(perl({ RP_26100102: 3 }))).toBe('RP:3');
   });
 
-  it('the worst class is taken among 0…4 only: -1 and none never beat a class, and a duplicate feature id is a conflict', () => {
+  it('the worst class is taken among 0…4 only: -1 and none never beat a class; a duplicate feature id withholds the station', () => {
     const doc = perl({ SL_26100102: 0, RP_26100102: -1, SL_26100101: null });
     expect(perlCode(doc)).toBe('SL:0');
     const twice = perl({ SL_26100102: 0, RP_26100102: -1 });
     const first = twice.features[0] as Stations['features'][number];
     twice.features.push(structuredClone({ ...first, properties: { ...first.properties, lhpClass: 4 } }));
     const out = normaliseStations(twice, perlTable, fetchedAt('de-6-stations-perl.synthetic'));
-    expect(out.dropped).toEqual({ conflict: 1 });
-    expect(stationRow(out, PERL)?.code).toBe('SL:0');
+    // Which copy is meant is unknown: both are counted, and Perl takes no class from this payload (review CR-12).
+    expect(out.dropped).toEqual({ conflict: 2 });
+    expect(stationRow(out, PERL)).toBeUndefined();
   });
 
   it('a class the crosswalk does not know is dropped unmapped_class (retained); a station is only in the table', () => {
@@ -357,13 +358,12 @@ describe('alerts', () => {
     );
   });
 
-  it('a class "3" is unmapped (no row), a feature id twice is a conflict (the first stands)', () => {
+  it('a class "3" is unmapped (no row), a feature id twice is a conflict (neither copy stands); both stay listed', () => {
     const out = alertsOf('de-6-alerts-class3.synthetic');
-    expect(out.dropped).toEqual({ unmapped_class: 1, conflict: 1 });
-    expect(out.warnings?.rows.map((r) => [r.area_key, r.level_raw, r.level])).toEqual([
-      ['HE_104', '4', 4],
-      ['RP_29', '2', 3],
-    ]);
+    expect(out.dropped).toEqual({ unmapped_class: 1, conflict: 2 });
+    expect(out.warnings?.rows.map((r) => [r.area_key, r.level_raw, r.level])).toEqual([['RP_29', '2', 3]]);
+    // The payload lists them: their stored ranges are not closed (review CR-5).
+    expect(out.warnings?.mode === 'snapshot' && out.warnings.kept).toEqual(['HE_104', 'TH_04']);
   });
 
   it('an alerts payload ahead of the fetch states nothing', () => {

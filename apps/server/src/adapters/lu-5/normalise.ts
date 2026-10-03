@@ -28,7 +28,11 @@ import type { CapAlert, CapInfo } from './parse.ts';
 //    not a coordinate, a ring under 4 points or a ring that is not closed is `bad_polygon` drift, never repaired;
 //  - an Update and a Cancel name the messages they replace in `<references>` (`sender,identifier,sent` triples
 //    separated by spaces): their identifiers are `cancels`; a Cancel has no info and so no rows;
-//  - a `sent` more than 15 minutes after the fetch is dropped (`future`), invariant 4.
+//  - a `sent` more than 15 minutes after the fetch is dropped (`future`), invariant 4; an area whose `effective` or
+//    `expires` is more than 30 days after `sent` is dropped `future` too (a flood alert lasts days; review SR-7);
+//  - the texts of a row stay under MAX_TEXTS_BYTES of JSON (the stored column holds 64 KiB): when they do not, every
+//    block's `description`, then every `instruction`, is left out, never cut inside, and `texts_trimmed` counts the
+//    row (review SR-2).
 
 export const SOURCE = 'LU-5';
 export const TIME: TimeConvention = { kind: 'iso-offset' };
@@ -37,6 +41,10 @@ const SENDER = '[AGE]';
 const SCALE = 'zone';
 const MAX_REFERENCES = 50;
 const BASE_LANGUAGE = 'fr-FR';
+/** Of a row's texts as JSON: 8 blocks of 500 + 8,000 + 8,000 characters could reach about 400 KB. */
+export const MAX_TEXTS_BYTES = 48 * 1024;
+/** How far after `sent` an area's `effective` or `expires` may lie. */
+const MAX_AHEAD_MS = 30 * 86_400_000;
 
 export type Context = { fetchedAt: number };
 
@@ -82,6 +90,21 @@ function geometry(polygons: string[]): string | null {
       ? { type: 'Polygon', coordinates: rings }
       : { type: 'MultiPolygon', coordinates: rings.map((r) => [r]) },
   );
+}
+
+/** The texts of one row within MAX_TEXTS_BYTES: the longest optional fields go first, whole and in every block. */
+function bounded(
+  texts: Record<string, Record<string, string>>,
+  out: Normalised,
+): Record<string, Record<string, string>> {
+  const size = () => Buffer.byteLength(JSON.stringify(texts));
+  if (size() <= MAX_TEXTS_BYTES) return texts;
+  out.dropped.texts_trimmed = (out.dropped.texts_trimmed ?? 0) + 1;
+  for (const field of ['description', 'instruction']) {
+    for (const t of Object.values(texts)) delete t[field];
+    if (size() <= MAX_TEXTS_BYTES) break;
+  }
+  return texts;
 }
 
 /** The identifiers of a `<references>` text. */
@@ -132,6 +155,12 @@ export function normalise(alert: CapAlert, ctx: Context): Normalised {
         out.dropped.unmapped_class = (out.dropped.unmapped_class ?? 0) + 1;
         continue;
       }
+      const effective = base.effective === undefined ? sent : Math.max(sent, instant(base.effective));
+      const expires = base.expires === undefined ? null : instant(base.expires);
+      if (effective > sent + MAX_AHEAD_MS || (expires !== null && expires > sent + MAX_AHEAD_MS)) {
+        out.dropped.future = (out.dropped.future ?? 0) + 1;
+        continue;
+      }
       const texts: NonNullable<WarningRow['texts']> = {};
       for (const b of blocks) {
         const t: Record<string, string> = {};
@@ -147,11 +176,11 @@ export function normalise(alert: CapAlert, ctx: Context): Normalised {
         level,
         level_raw: raw,
         label_raw: param(base, 'name') ?? base.headline ?? null,
-        texts,
+        texts: bounded(texts, out),
         // Never before the message itself: an Update keeps the original alert's `effective`, and its level holds only
         // from when it was sent (the original's row holds until then).
-        valid_from: toIso(base.effective === undefined ? sent : Math.max(sent, instant(base.effective))),
-        valid_to: base.expires === undefined ? null : toIso(instant(base.expires)),
+        valid_from: toIso(effective),
+        valid_to: expires === null ? null : toIso(expires),
         issued_at: sentIso,
         ref: alert.identifier,
       });

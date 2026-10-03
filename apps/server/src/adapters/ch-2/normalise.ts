@@ -30,8 +30,10 @@ import type { Properties } from './parse.ts';
 //  - factor from the registry row (`l/s` ×0.001), qc "raw";
 //  - `wl_1..wl_4` are the lower bounds of BAFU danger levels 2–5 (P7a): references WL2..WL5 on the CH-1 PRIMARY
 //    series of the same station (`target: 'CH-1'`): discharge (m³/s, l/s ÷ 1000) for a river, the level (m ü.M.
-//    → cm) for a `masl` station. A unit that does not fit the target is `unit_mismatch`; every target series of a
-//    station in the payload is in `refScope`. `threshold_customer` is not stored.
+//    → cm) for a `masl` station, converted by the unit the value is published in (m³/s ×1, l/s ×0.001, m ü.M. ×100).
+//    A unit that does not fit the target is `unit_mismatch`; a station with thresholds whose CH-1 series the
+//    registry lacks is `no_target` (counted, review CR-7); every target series of a station in the payload is in
+//    `refScope`. `threshold_customer` is not stored.
 
 export const SOURCE = 'CH-2';
 export const TIME: TimeConvention = { kind: 'iso-offset' };
@@ -79,6 +81,13 @@ export function unitValue(raw: string, expect: Unit): number | null {
   return v.n;
 }
 
+/** A threshold's published unit → the factor to cm or m³/s (never the target series' own factor). */
+const WL_FACTOR: ReadonlyMap<string, number> = new Map([
+  ['m³/s', 1],
+  ['l/s', 0.001],
+  ['m ü.M.', 100],
+]);
+
 /** wl_1..wl_4 → WL2..WL5 (the lower bounds of BAFU danger levels 2–5). */
 const WL = ['wl_1', 'wl_2', 'wl_3', 'wl_4'] as const;
 
@@ -87,20 +96,23 @@ function thresholds(p: Properties, ctx: Context, out: Normalised): void {
   if (ch1 === undefined) return;
   // A `masl` station states its thresholds as a level, the others as a discharge.
   const target = ch1.get(`${p.key}/${p.metric === 'masl' ? 'W' : 'Q'}`);
-  if (target === undefined) return;
+  if (target === undefined) {
+    if (WL.some((name) => split(p[name] ?? '') !== null)) count(out, 'no_target');
+    return;
+  }
   out.refScope?.push({ target: 'CH-1', series: target.key });
   WL.forEach((name, i) => {
     const v = split(p[name] ?? '');
     if (v === null) return;
-    let canonical: number;
-    if (target.quantity === 'Q' && (v.unit === 'm³/s' || v.unit === 'l/s')) {
-      canonical = scale(target.to_canonical, v.unit === 'l/s' ? v.n / 1000 : v.n);
-    } else if (target.quantity === 'H' && target.value_kind === 'level' && v.unit === 'm ü.M.') {
-      canonical = scale(target.to_canonical, v.n);
-    } else {
+    const fits =
+      target.quantity === 'Q'
+        ? v.unit === 'm³/s' || v.unit === 'l/s'
+        : target.value_kind === 'level' && v.unit === 'm ü.M.';
+    if (!fits) {
       count(out, 'unit_mismatch');
       return;
     }
+    const canonical = scale(WL_FACTOR.get(v.unit) as number, v.n);
     out.references?.push({
       series: target.key,
       target: 'CH-1',

@@ -1,4 +1,4 @@
-import { boundedJson, type JsonCaps, parseStrict } from '@rws/core';
+import { boundedJson, type JsonCaps, parseStrict, SchemaDrift } from '@rws/core';
 import { z } from 'zod';
 
 // CH-5 BAFU hydrodaten flood-danger sections (`hydro_warn_levels_{de,en}.geojson`, catalogue §2.7): one feature per
@@ -10,6 +10,11 @@ import { z } from 'zod';
 /** 33,961 values in the recorded payloads (about 6x). */
 export const CAPS: JsonCaps = { maxNodes: 200_000, maxDepth: 12 };
 export const MAX_FEATURES = 500;
+/**
+ * Every recorded map lists 93 sections. Fewer than this is not the whole map, which would close every area it
+ * leaves out: drift `too_few_areas` (review SR-6).
+ */
+export const MIN_FEATURES = 80;
 
 const text = (max: number) => z.string().max(max);
 
@@ -74,6 +79,7 @@ export function parseWarnings(body: Uint8Array): Collected {
     Collection,
     boundedJson(Buffer.from(body.buffer, body.byteOffset, body.byteLength).toString('utf8'), CAPS),
   );
+  if (doc.features.length < MIN_FEATURES) throw new SchemaDrift('too_few_areas');
   return {
     producedAt: doc.meta.produced_at,
     sections: doc.features.map((element, i) => {
