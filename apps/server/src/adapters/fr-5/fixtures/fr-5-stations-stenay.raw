@@ -1,0 +1,60 @@
+{
+    "CdStationHydro": "B315002001",
+    "LbStationHydro": "Stenay",
+    "LbCoursEau": "Meuse",
+    "CdStationHydroAncienRef": "0",
+    "CoordStationHydro": {
+        "CoordXStationHydro": "857893",
+        "CoordYStationHydro": "6934955"
+    },
+    "CdCommune": "55502",
+    "Evenement": [],
+    "VigilanceCrues": {
+        "StationPrevision": true,
+        "Photo": "t",
+        "ZoomInitial": "3",
+        "PereBoitEntVigiCru": {
+            "CdEntVigiCru": "2",
+            "Link": "services/bulletin.json?CdEntVigiCru=2"
+        },
+        "CruesHistoriques": [
+            {
+                "LbUsuel": "Crue de février 2002",
+                "ValHauteur": 3.36,
+                "ValDebit": 0
+            },
+            {
+                "LbUsuel": "Crue de février 2013",
+                "ValHauteur": 3.29,
+                "ValDebit": 0
+            }
+        ],
+        "StationsBassin": [
+            {
+                "CdStationHydro": "B301001001",
+                "LbStationHydro": "Belleville-sur-Meuse",
+                "LbCoursEau": "Meuse",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B301001001"
+            },
+            {
+                "CdStationHydro": "B301001002",
+                "LbStationHydro": "Verdun [Pont Chaussée]",
+                "LbCoursEau": "Meuse",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B301001002"
+            }
+        ],
+        "FluxDonnees": {
+            "Observations": {
+                "Hauteurs": "services/observations.json/index.php?CdStationHydro=B315002001\u0026FormatDate=iso",
+                "Debits": "services/observations.json/index.php?CdStationHydro=B315002001\u0026FormatDate=iso\u0026GrdSerie=Q"
+            },
+            "Previsions": {
+                "Hauteurs": "services/previsions.json/index.php?CdStationHydro=B315002001\u0026FormatDate=iso",
+                "Debits": "services/previsions.json/index.php?CdStationHydro=B315002001\u0026FormatDate=iso\u0026GrdSimul=Q"
+            }
+        }
+    },
+    "VersionFlux": "Beta 0.3k"
+}

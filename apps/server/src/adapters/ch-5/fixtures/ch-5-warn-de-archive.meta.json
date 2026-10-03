@@ -1,0 +1,14 @@
+{
+  "spec": "ch-5-warn",
+  "variant": "de",
+  "source": "CH-5",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/CH-5/ch-5-warn/2026/10/03/060900Z-39f87a8241e26853.zst",
+  "recorded_at": "2026-10-03T06:09:00Z",
+  "status": 200,
+  "url": "https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_warn_levels_de.geojson",
+  "bytes": 275573,
+  "source_sha256": "39f87a8241e26853eae452275f715979b97443bf3b2654cc245fc8d47425345c",
+  "trimmed": false
+}

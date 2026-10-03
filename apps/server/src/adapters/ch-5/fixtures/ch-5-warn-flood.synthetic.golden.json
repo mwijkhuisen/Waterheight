@@ -1,0 +1,56 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "warnings": {
+  "mode": "snapshot",
+  "at": "2026-10-03T05:52:38.233Z",
+  "rows": [
+   {
+    "area_key": "river:2135",
+    "name": "Aare - Bern, Schönau",
+    "geometry": "sha256:0afa6ef8fe92e7735a539d0b0937748cc1ff1b6d4274f583c6a7970110d0b497:2437",
+    "level": 5,
+    "level_raw": "4",
+    "label_raw": "Aare von Mündung Gürbe bis Mündung Saane",
+    "valid_from": "2026-10-03T06:00:00.000Z",
+    "valid_to": "2026-10-05T09:00:00.000Z",
+    "issued_at": null
+   },
+   {
+    "area_key": "hydro_region:47",
+    "name": "Alpstein",
+    "geometry": "sha256:ab817f4d07aa0715130787d4ed13b06e9b800854cef72ba3dda30bc36510d05a:2044",
+    "level": 5,
+    "level_raw": "5",
+    "label_raw": "Alpstein",
+    "valid_from": "2026-10-03T06:00:00.000Z",
+    "valid_to": "2026-10-05T09:00:00.000Z",
+    "issued_at": null
+   },
+   {
+    "area_key": "lake:2208",
+    "name": "Bielersee - Ligerz, Klein Twann",
+    "geometry": "sha256:2479931d19ae1c036736b7980255b0d5cfbda8a355de7e92fb02097179819176:2672",
+    "level": 2,
+    "level_raw": "1",
+    "label_raw": "Bielersee",
+    "valid_from": "2026-10-03T06:00:00.000Z",
+    "valid_to": "2026-10-05T09:00:00.000Z",
+    "issued_at": null
+   },
+   {
+    "area_key": "hydro_region:53",
+    "name": "Freiberge",
+    "geometry": "sha256:8c403036d119594c9d98d1bc76479bd61e01135157ec595ff0a0544913a981c4:1852",
+    "level": null,
+    "level_raw": "0",
+    "label_raw": "Freiberge",
+    "valid_from": "2026-10-03T06:00:00.000Z",
+    "valid_to": "2026-10-05T09:00:00.000Z",
+    "issued_at": null
+   }
+  ]
+ }
+}

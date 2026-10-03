@@ -1,0 +1,14 @@
+{
+  "spec": "fr-5-sections",
+  "variant": "section/SA16",
+  "source": "FR-5",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/FR-5/fr-5-sections/2026/10/02/022556Z-92ffc7d5a3c07f58.zst",
+  "recorded_at": "2026-10-02T02:25:56Z",
+  "status": 200,
+  "url": "https://www.vigicrues.gouv.fr/services/TronEntVigiCru.json?CdEntVigiCru=SA16&TypEntVigiCru=8",
+  "bytes": 3959,
+  "source_sha256": "92ffc7d5a3c07f587fb3c0724df1b6458c7194923cec8ae070ec561570ba3f4a",
+  "trimmed": false
+}

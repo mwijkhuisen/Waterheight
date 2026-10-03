@@ -1,0 +1,13 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "references": [],
+ "refScope": [
+  {
+   "target": "FR-1",
+   "series": "B720000001/H"
+  }
+ ]
+}

@@ -1,0 +1,44 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "references": [
+  {
+   "series": "B315002001/H",
+   "target": "FR-1",
+   "kind": "CRUE_FA4A8E46",
+   "value": 336,
+   "unit": "cm",
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "Crue de février 2002",
+   "valid_from": null
+  },
+  {
+   "series": "B315002001/H",
+   "target": "FR-1",
+   "kind": "CRUE_C3111706",
+   "value": 329,
+   "unit": "cm",
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "Crue de février 2013",
+   "valid_from": null
+  }
+ ],
+ "refScope": [
+  {
+   "target": "FR-1",
+   "series": "B315002001/H"
+  }
+ ]
+}

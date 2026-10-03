@@ -1,0 +1,11 @@
+# Reviewed corrections to registry/vigicrues-sections.yaml (FR-5, catalogue §2.5, C38). Hand-written; the sections
+# file is generated from the TronEntVigiCru documents and is never edited by hand.
+#
+# An entry moves one Vigicrues station (its Sandre code, as in the sections file) to another river section
+# (`section`: a section code of the sections file) or to none (`section: null`: no section level reaches it), with
+# the reason in `reason`. The loader applies the entries when it reads the table (load/tables.ts `vigicruesSections`);
+# a station that is not in the sections file has no effect. Example:
+#
+#   overrides:
+#     - { vigicrues: B540001001, section: LO17, reason: "the Tron document lists it under a section that does not flood it" }
+overrides: []
