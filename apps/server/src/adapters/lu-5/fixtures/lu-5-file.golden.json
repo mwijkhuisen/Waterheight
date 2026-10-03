@@ -1,0 +1,14 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {
+  "other_sender": 1
+ },
+ "unknown": 0,
+ "warnings": {
+  "mode": "message",
+  "sent": "2026-09-29T13:26:08.000Z",
+  "rows": [],
+  "cancels": []
+ }
+}

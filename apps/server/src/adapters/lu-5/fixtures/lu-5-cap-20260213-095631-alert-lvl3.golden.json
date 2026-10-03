@@ -1,0 +1,39 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "warnings": {
+  "mode": "message",
+  "sent": "2026-02-13T08:56:31.000Z",
+  "rows": [
+   {
+    "area_key": "Moselle",
+    "name": "Moselle",
+    "geometry": "{\"type\":\"Polygon\",\"coordinates\":[[[6.370399,49.448726],[6.359471999999999,49.452262999999995],[6.353851,49.462579],[6.3541669999999995,49.502358],[6.3427299999999995,49.529900999999995],[6.348339999999999,49.540586],[6.367372,49.554626999999996],[6.3469619999999995,49.565664],[6.344710999999999,49.576253],[6.360982,49.586479999999995],[6.3618879999999995,49.594184999999996],[6.370283,49.602717999999996],[6.379294,49.607524],[6.3896749999999995,49.608751],[6.408752,49.624088],[6.424174,49.651841],[6.412322,49.660959999999996],[6.4197809999999995,49.674659],[6.435728,49.683327],[6.450924,49.698113],[6.474438999999999,49.706747],[6.4922509999999996,49.719283],[6.507477,49.721920999999995],[6.520435,49.713367],[6.518571,49.708289],[6.505941,49.703196999999996],[6.48891,49.690005],[6.468906,49.683944],[6.448195999999999,49.665999],[6.454103,49.659509],[6.453319,49.651351999999996],[6.4316059999999995,49.613448999999996],[6.407166999999999,49.594716],[6.389374999999999,49.589385],[6.396616,49.577639999999995],[6.385635,49.56813],[6.394563,49.561783],[6.395764,49.553624],[6.3902209999999995,49.544197999999994],[6.370837,49.529818999999996],[6.381618,49.504422],[6.380712,49.466876],[6.3841969999999995,49.457105],[6.379500999999999,49.450941],[6.370399,49.448726]]]}",
+    "level": 3,
+    "level_raw": "ALERT_LVL_3",
+    "label_raw": "Vigilance jaune inondations Moselle",
+    "texts": {
+     "fr-FR": {
+      "headline": "Inondations sur la Moselle",
+      "description": "<p>La Moselle est classée en vigilance jaune inondations à partir de 13.02.2026 10:00 jusqu’à 15.02.2026 10:00. La vigilance peut être adaptée ou prolongée en fonction de l&#39;évolution de la situation.</p><p></p><p>Les niveaux d&#39;eau de la Moselle continuent d&#39;augmenter et devraient dépasser la « cote de vigilance jaune » de 530 cm à l&#39;échelle de Stadtbredimus (Remich : 452 cm) vendredi soir. Le niveau maximal sera atteint samedi soir et se situera probablement autour du niveau de 560 à l&#39;échelle de Stadtbredimus.</p><p></p><p>Actualisation en cas de changement de la situation.</p><p></p><p><strong>Prenez vos précautions et renseignez-vous sur les comportements à adopter.</strong></p><p><strong>Pour plus d’informations, les niveaux d’eau actuels et les prévisions des niveaux d&#39;eau veuillez consulter le site « inondations.lu » et suivre attentivement les informations fournies dans les bulletins de crues éventuellement disponibles.</strong></p>"
+     },
+     "de": {
+      "headline": "Hochwasser an der Mosel",
+      "description": "<p>Die Mosel befindet sich in der Wachsamkeitsstufe gelb für Hochwasser vom 13.02.2026 10:00 bis 15.02.2026 10:00. Die Wachsamkeitsstufe kann in Abhängigkeit von der weiteren Entwicklung der Situation angepasst oder verlängert werden.</p><p></p><p class=\"ql-align-justify\">Die Wasserstände an der Mosel steigen weiter an und werden die „Cote de vigilance jaune“ von 530 cm am Pegel Stadtbredimus (Remich: 452 cm) voraussichtlich am Freitagabend überschreiten. Der Höchststand im Bereich von wahrscheinlich um 560 cm am Pegel Stadtbredimus wird am Samstagabend erwartet.</p><p class=\"ql-align-justify\"></p><p>Aktualisierung bei Änderung der Lage.</p><p></p><p><strong>Bitte treffen Sie die nötigen Vorkehrungen und informieren Sie sich über die zu beachtenden Verhaltenshinweise. Für weitere Informationen, die aktuellen und vorhergesagten Wasserstände, begeben Sie sich bitte auf die Seite &quot;inondations.lu&quot; und verfolgen Sie aufmerksam die Informationen in den gegebenenfalls veröffentlichten Hochwasserlageberichten.</strong></p>"
+     },
+     "en-US": {
+      "headline": "Floods on the Moselle",
+      "description": "<p>The Moselle has been placed under awareness level yellow floods from 13.02.2026 10:00 to 15.02.2026 10:00. The awareness level can be adapted or extended depending on the evolution of the situation.</p><p></p><p>Water levels on the Moselle continue to rise and will exceed the ‘Cote de vigilance jaune’ of 530 cm at the Stadtbredimus gauge (Remich: 452 cm) on Friday evening. Highest levels will situate around the level of 560 cm at the Stadtbredimus gauge on Saturday evening.</p><p></p><p>Update if the situation changes.</p><p></p><p><strong>Please take precautions and inform yourself on the right behaviour to adopt.</strong></p><p><strong>For further information, measured and forecasted water levels, please visit the &#39;inondations.lu&#39; website and follow attentively the information provided in the eventually published flood reports.</strong></p>"
+     }
+    },
+    "valid_from": "2026-02-13T09:00:00.000Z",
+    "valid_to": "2026-02-15T09:00:00.000Z",
+    "issued_at": "2026-02-13T08:56:31.000Z",
+    "ref": "LU-Alert.1770972991.4367.0"
+   }
+  ],
+  "cancels": []
+ }
+}

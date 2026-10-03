@@ -1,0 +1,133 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0">
+  <identifier>LU-Alert.1771053505.4373.0</identifier>
+  <sender>[AGE]</sender>
+  <sent>2026-02-14T08:18:25+01:00</sent>
+  <status>Actual</status>
+  <msgType>Alert</msgType>
+  <scope>Public</scope>
+  <code>IN_ZONE</code>
+  <info>
+    <language>fr-FR</language>
+    <category>Env</category>
+    <event>Inondation</event>
+    <urgency>Unknown</urgency>
+    <severity>Unknown</severity>
+    <certainty>Unknown</certainty>
+    <eventCode>
+      <valueName>LU_Alert</valueName>
+      <value>FLOOD</value>
+    </eventCode>
+    <effective>2026-02-14T16:00:00+01:00</effective>
+    <expires>2026-02-15T00:00:00+01:00</expires>
+    <senderName>LU</senderName>
+    <headline>Inondations sur la Moselle</headline>
+    <description>&lt;p&gt;Information/Fin de crue&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;Les niveaux d&amp;#39;eau de la Moselle ont atteint leur maximum. Ils sont actuellement en baisse et se situent prochainement à nouveau sous la « cote de vigilance jaune ».&lt;/p&gt;&lt;p&gt;La baisse des niveaux d&amp;#39;eau continuera dimanche.&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;La vigilance inondations pour la Moselle a été levée. Actuellement pas de risque de crue.&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;&lt;strong&gt;Suivez la situation, d&amp;#39;éventuels changements des vigilances et d&amp;#39;autres vigilances en cours.&lt;/strong&gt;&lt;/p&gt;</description>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:name</valueName>
+      <value>Information inondations Moselle</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:cb-eu-level</valueName>
+      <value>ALERT_LVL_4</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:zone-name</valueName>
+      <value>AGE Zone Moselle</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:canal</valueName>
+      <value>Website channel</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:id-canal</valueName>
+      <value>2</value>
+    </parameter>
+    <area>
+      <areaDesc>Moselle</areaDesc>
+      <polygon>49.448726,6.370399 49.452262999999995,6.359471999999999 49.462579,6.353851 49.502358,6.3541669999999995 49.529900999999995,6.3427299999999995 49.540586,6.348339999999999 49.554626999999996,6.367372 49.565664,6.3469619999999995 49.576253,6.344710999999999 49.586479999999995,6.360982 49.594184999999996,6.3618879999999995 49.602717999999996,6.370283 49.607524,6.379294 49.608751,6.3896749999999995 49.624088,6.408752 49.651841,6.424174 49.660959999999996,6.412322 49.674659,6.4197809999999995 49.683327,6.435728 49.698113,6.450924 49.706747,6.474438999999999 49.719283,6.4922509999999996 49.721920999999995,6.507477 49.713367,6.520435 49.708289,6.518571 49.703196999999996,6.505941 49.690005,6.48891 49.683944,6.468906 49.665999,6.448195999999999 49.659509,6.454103 49.651351999999996,6.453319 49.613448999999996,6.4316059999999995 49.594716,6.407166999999999 49.589385,6.389374999999999 49.577639999999995,6.396616 49.56813,6.385635 49.561783,6.394563 49.553624,6.395764 49.544197999999994,6.3902209999999995 49.529818999999996,6.370837 49.504422,6.381618 49.466876,6.380712 49.457105,6.3841969999999995 49.450941,6.379500999999999 49.448726,6.370399</polygon>
+    </area>
+  </info>
+  <info>
+    <language>de</language>
+    <category>Env</category>
+    <event>Hochwasser</event>
+    <urgency>Unknown</urgency>
+    <severity>Unknown</severity>
+    <certainty>Unknown</certainty>
+    <eventCode>
+      <valueName>LU_Alert</valueName>
+      <value>FLOOD</value>
+    </eventCode>
+    <effective>2026-02-14T16:00:00+01:00</effective>
+    <expires>2026-02-15T00:00:00+01:00</expires>
+    <senderName>LU</senderName>
+    <headline>Hochwasser an der Mosel</headline>
+    <description>&lt;p&gt;Information/Hochwasserrückgang&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;Die Wasserstände an der Mosel haben ihren Höchststand erreicht. Die Wasserstände fallen und befinden sich bald erneut unter der „Cote de vigilance jaune. Am Sonntag sind weiter fallende Wasserstände zu erwarten.&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;Die Wachsamkeitsstufe für Hochwasser für die Mosel ist aufgehoben worden. Aktuell kein Risiko für Hochwasser.&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;&lt;strong&gt;Verfolgen Sie die Situation, mögliche Änderungen der Wachsamkeitsstufen und mögliche weitere aktive Warnungen.&lt;/strong&gt;&lt;/p&gt;</description>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:name</valueName>
+      <value>Information inondations Moselle</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:cb-eu-level</valueName>
+      <value>ALERT_LVL_4</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:zone-name</valueName>
+      <value>AGE Zone Moselle</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:canal</valueName>
+      <value>Website channel</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:id-canal</valueName>
+      <value>2</value>
+    </parameter>
+    <area>
+      <areaDesc>Moselle</areaDesc>
+      <polygon>49.448726,6.370399 49.452262999999995,6.359471999999999 49.462579,6.353851 49.502358,6.3541669999999995 49.529900999999995,6.3427299999999995 49.540586,6.348339999999999 49.554626999999996,6.367372 49.565664,6.3469619999999995 49.576253,6.344710999999999 49.586479999999995,6.360982 49.594184999999996,6.3618879999999995 49.602717999999996,6.370283 49.607524,6.379294 49.608751,6.3896749999999995 49.624088,6.408752 49.651841,6.424174 49.660959999999996,6.412322 49.674659,6.4197809999999995 49.683327,6.435728 49.698113,6.450924 49.706747,6.474438999999999 49.719283,6.4922509999999996 49.721920999999995,6.507477 49.713367,6.520435 49.708289,6.518571 49.703196999999996,6.505941 49.690005,6.48891 49.683944,6.468906 49.665999,6.448195999999999 49.659509,6.454103 49.651351999999996,6.453319 49.613448999999996,6.4316059999999995 49.594716,6.407166999999999 49.589385,6.389374999999999 49.577639999999995,6.396616 49.56813,6.385635 49.561783,6.394563 49.553624,6.395764 49.544197999999994,6.3902209999999995 49.529818999999996,6.370837 49.504422,6.381618 49.466876,6.380712 49.457105,6.3841969999999995 49.450941,6.379500999999999 49.448726,6.370399</polygon>
+    </area>
+  </info>
+  <info>
+    <language>en-US</language>
+    <category>Env</category>
+    <event>Flood</event>
+    <urgency>Unknown</urgency>
+    <severity>Unknown</severity>
+    <certainty>Unknown</certainty>
+    <eventCode>
+      <valueName>LU_Alert</valueName>
+      <value>FLOOD</value>
+    </eventCode>
+    <effective>2026-02-14T16:00:00+01:00</effective>
+    <expires>2026-02-15T00:00:00+01:00</expires>
+    <senderName>LU</senderName>
+    <headline>Floods on the Moselle</headline>
+    <description>&lt;p&gt;Information/End of floods&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;Water levels on the Moselle have reached their peak. Water levels are falling and are soon once again below the ‘Cote de vigilance jaune’.&lt;/p&gt;&lt;p&gt;Water levels are expected to continue falling on Sunday.&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;The awareness level floods for the Moselle has been cancelled. Currently no risk of floods.&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;&lt;strong&gt;Follow the situation, possible changes in awareness levels and possible other active warnings.&lt;/strong&gt;&lt;/p&gt;</description>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:name</valueName>
+      <value>Information inondations Moselle</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:cb-eu-level</valueName>
+      <value>ALERT_LVL_4</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:zone-name</valueName>
+      <value>AGE Zone Moselle</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:canal</valueName>
+      <value>Website channel</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:id-canal</valueName>
+      <value>2</value>
+    </parameter>
+    <area>
+      <areaDesc>Moselle</areaDesc>
+      <polygon>49.448726,6.370399 49.452262999999995,6.359471999999999 49.462579,6.353851 49.502358,6.3541669999999995 49.529900999999995,6.3427299999999995 49.540586,6.348339999999999 49.554626999999996,6.367372 49.565664,6.3469619999999995 49.576253,6.344710999999999 49.586479999999995,6.360982 49.594184999999996,6.3618879999999995 49.602717999999996,6.370283 49.607524,6.379294 49.608751,6.3896749999999995 49.624088,6.408752 49.651841,6.424174 49.660959999999996,6.412322 49.674659,6.4197809999999995 49.683327,6.435728 49.698113,6.450924 49.706747,6.474438999999999 49.719283,6.4922509999999996 49.721920999999995,6.507477 49.713367,6.520435 49.708289,6.518571 49.703196999999996,6.505941 49.690005,6.48891 49.683944,6.468906 49.665999,6.448195999999999 49.659509,6.454103 49.651351999999996,6.453319 49.613448999999996,6.4316059999999995 49.594716,6.407166999999999 49.589385,6.389374999999999 49.577639999999995,6.396616 49.56813,6.385635 49.561783,6.394563 49.553624,6.395764 49.544197999999994,6.3902209999999995 49.529818999999996,6.370837 49.504422,6.381618 49.466876,6.380712 49.457105,6.3841969999999995 49.450941,6.379500999999999 49.448726,6.370399</polygon>
+    </area>
+  </info>
+</alert>

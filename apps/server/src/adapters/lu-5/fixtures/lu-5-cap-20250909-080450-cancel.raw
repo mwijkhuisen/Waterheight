@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0">
+  <identifier>LU-Alert.1757397890.4026.1</identifier>
+  <sender>[AGE]</sender>
+  <sent>2025-09-09T08:04:50+02:00</sent>
+  <status>Actual</status>
+  <msgType>Cancel</msgType>
+  <scope>Public</scope>
+  <code>CANCEL</code>
+  <references>[AGE],LU-Alert.1757366107.4026.0,2025-09-08T23:15:07+02:00</references>
+</alert>
