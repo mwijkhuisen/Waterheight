@@ -825,6 +825,8 @@ CREATE TABLE public.reference_value (
     basis_label text,
     valid tstzrange NOT NULL,
     batch_id bigint,
+    seen_at timestamp with time zone,
+    seen_batch bigint,
     CONSTRAINT reference_value_kind_check CHECK ((kind ~ '^[A-Z0-9_]{1,40}$'::text)),
     CONSTRAINT reference_value_percentile_convention_check CHECK ((percentile_convention = ANY (ARRAY['exceedance'::text, 'non_exceedance'::text]))),
     CONSTRAINT reference_value_season_from CHECK (((((season_from_md / 100) >= 1) AND ((season_from_md / 100) <= 12)) AND ((((season_from_md)::integer % 100) >= 1) AND (((season_from_md)::integer % 100) <=
@@ -1048,7 +1050,13 @@ CREATE TABLE public.warning_area (
     valid tstzrange NOT NULL,
     issued_at timestamp with time zone,
     batch_id bigint,
+    provider_ref text,
+    texts jsonb,
+    seen_at timestamp with time zone,
+    seen_batch bigint,
     CONSTRAINT warning_area_level_norm_check CHECK (((level_norm >= 1) AND (level_norm <= 5))),
+    CONSTRAINT warning_area_provider_ref_check CHECK ((length(provider_ref) <= 200)),
+    CONSTRAINT warning_area_texts_check CHECK ((octet_length((texts)::text) <= 65536)),
     CONSTRAINT warning_area_valid_check CHECK ((NOT isempty(valid)))
 );
 
@@ -1868,11 +1876,26 @@ ALTER TABLE ONLY public.twin
 
 
 --
+-- Name: warning_area warning_area_no_overlap; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warning_area
+    ADD CONSTRAINT warning_area_no_overlap EXCLUDE USING gist (source_id WITH =, area_key WITH =, valid WITH &&);
+
+
+--
 -- Name: warning_area warning_area_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.warning_area
     ADD CONSTRAINT warning_area_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: class_obs_batch; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_obs_batch ON public.class_obs USING btree (batch_id);
 
 
 --
@@ -1925,6 +1948,13 @@ CREATE INDEX obs_ts_brin ON ONLY public.obs USING brin (ts);
 
 
 --
+-- Name: reference_value_batch; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX reference_value_batch ON public.reference_value USING btree (batch_id);
+
+
+--
 -- Name: series_station; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1936,6 +1966,13 @@ CREATE INDEX series_station ON public.series USING btree (station_id);
 --
 
 CREATE INDEX station_alias_station ON public.station_alias USING btree (station_id);
+
+
+--
+-- Name: warning_area_batch; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX warning_area_batch ON public.warning_area USING btree (batch_id);
 
 
 --
@@ -2212,4 +2249,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261003000006'),
     ('20261003000007'),
     ('20261014000001'),
-    ('20261014000002');
+    ('20261014000002'),
+    ('20261021000001');
