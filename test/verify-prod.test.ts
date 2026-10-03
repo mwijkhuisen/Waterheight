@@ -39,6 +39,7 @@ import {
   checkHealth,
   checkHealthParams,
   checkInterval,
+  checkIntervalDe6,
   checkLabelOffset,
   checkLoaderLag,
   checkMapAsset,
@@ -46,6 +47,7 @@ import {
   checkNoindex,
   checkOpenapi,
   checkOwnerHealth,
+  checkOwnerIds,
   checkOwnerLeak,
   checkOwnerSources,
   checkOwnerStations,
@@ -94,6 +96,7 @@ import {
   SNAPSHOT_ASKS,
   type SnapshotAsk,
   STATIONS_CACHE,
+  sampleCapture,
   snapshotAt,
   soak,
   staleSpecs,
@@ -2812,5 +2815,59 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     // The file servers' roots: the status copy, the tiles and the site; never the parent /srv/rws.
     const roots = [...site.matchAll(/^\s+root \* (\S+)$/gm)].map((m) => m[1]);
     expect(new Set(roots)).toEqual(new Set(['/srv/rws/public/ops', '/srv/rws/tiles', '/srv/www']));
+  });
+});
+
+describe('owner ids and interval DE-6 (P7a)', () => {
+  const doc = (generated_at: string, ok: Record<string, string | null>) =>
+    ({
+      generated_at,
+      specs: Object.entries(ok).map(([spec, last_success]) => ({ source: 'DE-6', spec, last_success })),
+      days: [],
+      seeds: [],
+    }) as unknown as CaptureStatus;
+  const at = (min: number) => new Date(Date.UTC(2026, 9, 3, 12, min)).toISOString();
+  const both = (gen: number, ls: number | null) =>
+    doc(at(gen), {
+      'de-6-stations': ls === null ? null : at(ls),
+      'de-6-alerts': ls === null ? null : at(ls),
+    });
+
+  it('owner ids: whole ids in string values only', () => {
+    const ids = ['BE-3', 'LU-4'];
+    const ok = { '/h': JSON.stringify({ sources: [{ id: 'DE-1', note: 'BE-33 and XBE-3' }] }) };
+    expect(checkOwnerIds(ok, ids)).toMatchObject({ check: 'owner ids', ok: true });
+    const bad = { '/h': JSON.stringify({ sources: [{ id: 'DE-1', nested: ['x', 'LU-4'] }] }) };
+    expect(checkOwnerIds(bad, ids)).toMatchObject({ ok: false, detail: /\/h: LU-4/ });
+  });
+
+  it('samples without waiting and passes with fresh, advancing successes', async () => {
+    const sleeps: number[] = [];
+    const docs = [both(0, -5), both(15, 10), both(30, 25)];
+    const samples = await sampleCapture(
+      async () => docs.shift(),
+      async (ms) => void sleeps.push(ms),
+    );
+    expect(sleeps).toEqual([900_000, 900_000]);
+    expect(checkIntervalDe6(samples)).toMatchObject({ ok: true, detail: /de-6-stations 300\/300\/300 s/ });
+  });
+
+  it.each([
+    ['too old', [both(0, -5), both(15, 3), both(30, 25)], /sample 2 is 720 s old/],
+    ['not advancing', [both(0, -5), both(15, -5), both(30, -5)], /did not advance/],
+    ['null last_success', [both(0, null), both(15, 10), both(30, 25)], /no last_success/],
+    [
+      'spec missing',
+      [doc(at(0), { 'de-6-stations': at(0) }), both(15, 10), both(30, 25)],
+      /de-6-alerts: sample 1 has no such spec/,
+    ],
+    ['unreadable', [undefined, both(15, 10), both(30, 25)], /unreadable/],
+  ])('interval DE-6 fails: %s', (_n, samples, re) => {
+    expect(checkIntervalDe6(samples)).toMatchObject({ check: 'interval DE-6', ok: false, detail: re });
+  });
+
+  it('the --dry-run list names both', () => {
+    for (const name of ['owner ids', 'interval DE-6'])
+      expect(CHECKS.filter((c) => c.startsWith(`${name}:`))).toHaveLength(1);
   });
 });

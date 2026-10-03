@@ -30,6 +30,7 @@
 //   scripts/verify-prod.sh <domain> --soak       + the 72 h soak: >= 99% per source, the
 //                                                seed coverage, the byte baseline, the drill,
 //                                                every twin pair over 7 days (TWIN_IDS)
+//   scripts/verify-prod.sh <domain> --interval   + interval DE-6: 3 samples of capture.json 15 min apart (about 30 min)
 //   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--out FILE]
 //                                                docs/capacity.md from >= 2 complete days
 //   scripts/verify-prod.sh <domain> --dry-run    list the checks; no network
@@ -651,6 +652,75 @@ export function checkOwnerLeak(bodies: Readonly<Record<string, string>>, terms: 
     : miss('owner leak', `found in ${found.join('; ')}`);
 }
 
+/** P7a: no owner-audience source ID as a whole word in any string value of the public health documents. */
+export function checkOwnerIds(bodies: Readonly<Record<string, string>>, ids: readonly string[]): Result {
+  const strings = (doc: unknown): string[] =>
+    typeof doc === 'string'
+      ? [doc]
+      : Array.isArray(doc)
+        ? doc.flatMap(strings)
+        : typeof doc === 'object' && doc !== null
+          ? Object.values(doc).flatMap(strings)
+          : [];
+  const found = Object.entries(bodies).flatMap(([label, body]) => {
+    const hits = [...new Set(strings(parseJson(body)).flatMap((v) => leaks(v, ids)))];
+    return hits.length === 0 ? [] : [`${label}: ${hits.join(', ')}`];
+  });
+  return found.length === 0
+    ? pass('owner ids', `none of ${ids.length} owner source IDs in ${Object.keys(bodies).join(', ')}`)
+    : miss('owner ids', `found in ${found.join('; ')}`);
+}
+
+/** P7a: DE-6 is fetched at least every 10 minutes (manifest), judged on three samples of /status/capture.json. */
+export const DE6_SPECS = ['de-6-stations', 'de-6-alerts'] as const;
+export const DE6_MAX_AGE_S = 10 * 60 + 60;
+export const DE6_SAMPLES = 3;
+export const DE6_GAP_MS = 15 * 60_000;
+
+/** Reads capture.json `n` times, `gapMs` apart; the reader and the sleeper are injected so tests do not wait. */
+export async function sampleCapture(
+  read: () => Promise<CaptureStatus | undefined>,
+  sleep: (ms: number) => Promise<void>,
+  n = DE6_SAMPLES,
+  gapMs = DE6_GAP_MS,
+): Promise<(CaptureStatus | undefined)[]> {
+  const out: (CaptureStatus | undefined)[] = [];
+  for (let i = 0; i < n; i += 1) {
+    if (i > 0) await sleep(gapMs);
+    out.push(await read());
+  }
+  return out;
+}
+
+export function checkIntervalDe6(samples: readonly (CaptureStatus | undefined)[]): Result {
+  const check = 'interval DE-6';
+  const problems: string[] = [];
+  const ages: string[] = [];
+  for (const spec of DE6_SPECS) {
+    const ageS: number[] = [];
+    const successes: number[] = [];
+    for (const [i, doc] of samples.entries()) {
+      const st = doc?.specs.find((x) => x.spec === spec);
+      const n = i + 1;
+      if (doc === undefined) problems.push(`${spec}: sample ${n} unreadable`);
+      else if (st === undefined) problems.push(`${spec}: sample ${n} has no such spec`);
+      else if (st.last_success === null) problems.push(`${spec}: sample ${n} has no last_success`);
+      else {
+        const ls = Date.parse(st.last_success);
+        successes.push(ls);
+        const age = Math.round((Date.parse(doc.generated_at) - ls) / 1000);
+        ageS.push(age);
+        if (age > DE6_MAX_AGE_S) problems.push(`${spec}: sample ${n} is ${age} s old, over ${DE6_MAX_AGE_S}`);
+      }
+    }
+    const [first, last] = [successes[0], successes[successes.length - 1]];
+    if (first !== undefined && last !== undefined && !(last > first))
+      problems.push(`${spec}: last_success did not advance`);
+    ages.push(`${spec} ${ageS.join('/')} s`);
+  }
+  return problems.length === 0 ? pass(check, `ages ${ages.join(', ')}`) : miss(check, problems.join('; '));
+}
+
 /** P5c: BE-3, LU-2, LU-3 and LU-4 at least are owner sources (DE-2 and DE-3 are too): fewer means a source went missing. */
 export const OWNER_SOURCES_MIN = 4;
 /**
@@ -1251,6 +1321,8 @@ export const CHECKS = [
   `tiles 416: GET on the current basemap file without Range, and with Range: ${TILE_416_REQUESTS[1][1].range}, is 416 and not immutable (only one explicit range is served)`,
   `map assets: GET ${MAP_ASSET_PATH} (a pinned glyph range of the web image) is 200 with Cache-Control exactly "${TILE_CACHE}"`,
   `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body`,
+  'owner ids: no owner-audience source ID of registry/sources.yaml as a whole word in a string value of /api/v1/health or health/sources',
+  `interval DE-6: (--interval, slow: ${DE6_SAMPLES} samples of /status/capture.json ${DE6_GAP_MS / 60_000} min apart, about 30 min) ${DE6_SPECS.join(' and ')} have a last_success at most ${DE6_MAX_AGE_S} s before that sample's generated_at in every sample (a missing spec or null last_success is a FAIL) and it advanced; without the flag the check is N/A (skipped)`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
   ...TWIN_IDS.map(
     (id) =>
@@ -1261,16 +1333,19 @@ export const CHECKS = [
 
 function usage(): never {
   console.error(
-    'usage: scripts/verify-prod.sh <domain> [--soak | --capacity [--owner-bytes-per-day N] [--out FILE]] [--dry-run]',
+    'usage: scripts/verify-prod.sh <domain> [--soak | --capacity [--owner-bytes-per-day N] [--out FILE]] [--interval] [--dry-run]',
   );
   process.exit(64);
 }
+
+const pageBody = (page: Page | string | undefined) => (typeof page === 'object' ? page.body : '');
 
 async function main(argv: string[]): Promise<number> {
   const net: Net = {};
   let domain = '';
   let mode: 'default' | 'soak' | 'capacity' = 'default';
   let dry = false;
+  let interval = false;
   let out: string | undefined;
   let ownerBytes: number | null = null;
   for (let i = 0; i < argv.length; i += 1) {
@@ -1279,6 +1354,7 @@ async function main(argv: string[]): Promise<number> {
     if (a === '--soak') mode = 'soak';
     else if (a === '--capacity') mode = 'capacity';
     else if (a === '--dry-run') dry = true;
+    else if (a === '--interval') interval = true;
     else if (a === '--out') out = next();
     else if (a === '--owner-bytes-per-day') ownerBytes = Number(next());
     else if (a === '--resolve') net.resolve = next();
@@ -1361,6 +1437,10 @@ async function main(argv: string[]): Promise<number> {
       checkInterval(sources.data, 'DE-7'),
       checkOwnerSources(sources, ownerSourceIds(registry)),
       checkOwnerHealth(sources),
+      checkOwnerIds(
+        { [HEALTH_PATHS[0]]: pageBody(healthPage), [HEALTH_PATHS[1]]: pageBody(sourcesPage) },
+        ownerSourceIds(registry),
+      ),
     );
 
     // The P4b data API through Caddy (A§9.2). The snapshots ask for the server's own "now" from /meta, never this clock.
@@ -1412,7 +1492,7 @@ async function main(argv: string[]): Promise<number> {
       for (const [label, headers] of TILE_416_REQUESTS) refused[label] = await tile(`/tiles/${current.file}`, headers);
     results.push(checkTiles404(missing), checkTiles416(current, refused), checkMapAsset(await tile(MAP_ASSET_PATH)));
 
-    const body = (page: Page | string | undefined) => (typeof page === 'object' ? page.body : '');
+    const body = pageBody;
     results.push(
       checkOwnerLeak(
         {
@@ -1427,6 +1507,20 @@ async function main(argv: string[]): Promise<number> {
         },
         leakTerms(registry),
       ),
+    );
+    results.push(
+      interval
+        ? checkIntervalDe6(
+            await sampleCapture(
+              async () => {
+                const f = await statusFile(domain, 'capture.json', net);
+                const p = f.page && CaptureStatus.safeParse(parseJson(f.page.body));
+                return p?.success ? p.data : undefined;
+              },
+              (ms) => new Promise((r) => setTimeout(r, ms)),
+            ),
+          )
+        : { check: 'interval DE-6', ok: 'n/a', detail: 'skipped: slow (about 30 min); pass --interval' },
     );
   } else if (mode === 'soak') {
     if (cap?.success && opsDoc?.success) {

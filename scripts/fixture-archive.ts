@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import type { ManifestLine } from '../apps/server/src/archive/manifest.ts';
 import { Archive, sha256 } from '../apps/server/src/archive/writer.ts';
 
 // Builds a small raw archive from the recorded DE-1, NL-1, NL-2, FR-1, FR-3,
-// CH-1, CH-2, CH-3, DE-7, DE-8, LU-1 and LU-6 fixtures,
+// CH-1, CH-2, CH-3, DE-7, DE-8, LU-1 and LU-6 fixtures and the P7a ones,
 // written by the recorder's own Archive class (real zstd objects, real
 // manifest lines). The loader tests and the CI end-to-end run load it;
 // nothing is fetched.
@@ -325,6 +325,117 @@ export async function buildNrwLuFixtureArchive(rawDir: string): Promise<Manifest
   return lines;
 }
 
+/**
+ * P7a: the reference, class and warning payloads (the recorded DE-1 meta, the DE-6 stations and test alerts, the
+ * CH-1 lake cube with its dangerLevel, the CH-2 wl subset, the CH-5 and FR-5 warnings, the FR-5 station and Tron
+ * documents, the DE-7 pegeldaten blocks) and, from `lu5Names`, the 24 [AGE] CAP files of LU-5 newest first, as the
+ * seed fetched them. The variant is the recorder's; `fr-5-tron` is a `fr-5-sections` expansion child.
+ */
+export const P7A_FIXTURES: readonly {
+  source: string;
+  spec: string;
+  name: string;
+  variant: string;
+  retention: 'obs' | 'forever';
+  method?: 'POST';
+  seed?: true;
+  url?: string;
+}[] = [
+  { source: 'DE-1', spec: 'de-1-meta', name: 'de-1-meta', variant: '', retention: 'forever' },
+  { source: 'DE-6', spec: 'de-6-stations', name: 'de-6-stations', variant: '', retention: 'forever' },
+  { source: 'DE-6', spec: 'de-6-stations', name: 'de-6-stations-class3', variant: 'default', retention: 'forever' },
+  { source: 'DE-6', spec: 'de-6-alerts', name: 'de-6-alerts-test', variant: '', retention: 'forever' },
+  {
+    source: 'CH-1',
+    spec: 'ch-1-lindas',
+    name: 'ch-1-lindas-lake',
+    variant: 'lake',
+    method: 'POST',
+    retention: 'forever',
+  },
+  { source: 'CH-2', spec: 'ch-2-pq', name: 'ch-2-pq-relative', variant: 'default', retention: 'forever' },
+  { source: 'CH-5', spec: 'ch-5-warn', name: 'ch-5-warn-de-archive', variant: 'de', retention: 'forever' },
+  { source: 'CH-5', spec: 'ch-5-warn', name: 'ch-5-warn-en-archive', variant: 'en', retention: 'forever' },
+  { source: 'FR-5', spec: 'fr-5-vigilance', name: 'fr-5-vigilance-archive', variant: 'default', retention: 'forever' },
+  {
+    source: 'FR-5',
+    spec: 'fr-5-stations',
+    name: 'fr-5-stations-charleville',
+    variant: 'B540001001',
+    retention: 'forever',
+  },
+  {
+    source: 'FR-5',
+    spec: 'fr-5-sections',
+    name: 'fr-5-tron',
+    variant: 'section/LO18',
+    retention: 'forever',
+    url: 'https://www.vigicrues.gouv.fr/services/TronEntVigiCru.json?CdEntVigiCru=LO18&TypEntVigiCru=8',
+  },
+  {
+    source: 'DE-7',
+    spec: 'de-7-pegeldaten',
+    name: 'de-7-pegeldaten-blocks',
+    variant: 'default',
+    retention: 'forever',
+    seed: true,
+  },
+];
+
+/** The real [AGE] CAP files of LU-5 (no synthetic one), newest message first: the order of the seed's fetches. */
+export const lu5Names = (): string[] =>
+  readdirSync(fixtureDir('LU-5'))
+    .filter((f) => /^lu-5-cap-\d{8}-\d{6}-.*\.raw$/.test(f) && !f.includes('.synthetic.'))
+    .map((f) => f.slice(0, -'.raw'.length))
+    .sort()
+    .reverse();
+
+/**
+ * The P7a payloads at their recorded times. `skip` names fixtures an archive already holds (the CI run builds the
+ * DE-1, CH-1 and CH-2 ones above). Returns the lines written.
+ */
+export async function buildP7aFixtureArchive(
+  rawDir: string,
+  skip: ReadonlySet<string> = new Set(),
+): Promise<ManifestLine[]> {
+  const archive = new Archive(rawDir);
+  const lines: ManifestLine[] = [];
+  const meta = (name: string, source: string) =>
+    JSON.parse(readFileSync(new URL(`${name}.meta.json`, fixtureDir(source)), 'utf8')) as {
+      variant?: string;
+      seed?: true;
+    };
+  const all = [
+    ...P7A_FIXTURES,
+    ...lu5Names().map((name) => ({
+      source: 'LU-5',
+      spec: 'lu-5-cap',
+      name,
+      variant: meta(name, 'LU-5').variant ?? '',
+      retention: 'forever' as const,
+      seed: true as const,
+    })),
+  ];
+  for (const f of all) {
+    if (skip.has(f.name)) continue;
+    const { body, at, url } = recorded(f.name, f.source);
+    lines.push(
+      await writePayload(archive, {
+        source: f.source,
+        spec: f.spec,
+        variant: f.variant,
+        at,
+        body,
+        url: ('url' in f && f.url) || url || `https://example.org/${f.name}`,
+        retention: f.retention,
+        ...('method' in f && f.method ? { method: f.method } : {}),
+        ...('seed' in f && f.seed ? { seed: true as const } : {}),
+      }),
+    );
+  }
+  return lines;
+}
+
 if (import.meta.main) {
   const dir = process.argv[2];
   if (dir === undefined || process.argv.length !== 3) {
@@ -337,6 +448,7 @@ if (import.meta.main) {
       ...(await buildNlFixtureArchive(dir)),
       ...(await buildFrChFixtureArchive(dir)),
       ...(await buildNrwLuFixtureArchive(dir)),
+      ...(await buildP7aFixtureArchive(dir, new Set(['de-1-meta', 'ch-1-lindas-lake', 'ch-2-pq-relative']))),
     ];
     const payloads = lines.filter((l) => l.key !== null).length;
     console.log(`fixture-archive: ${lines.length} manifest lines (${payloads} payloads) written to ${dir}`);
