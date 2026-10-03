@@ -1,0 +1,12 @@
+# Installed by bootstrap.sh, enabled by the owner after the first manual run (not on bootstrap's enable list).
+[Unit]
+Description=rws: install the river files of the newest signed geo release, monthly
+
+[Timer]
+# The 5th of every month at 05:40 UTC, after geo.yml's run on the 3rd (and clear of the 03:40 reboot window).
+OnCalendar=*-*-05 05:40:00 UTC
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

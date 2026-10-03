@@ -1,0 +1,32 @@
+[
+  {
+    "station_no": "52020051",
+    "site_no": "100",
+    "water": null
+  },
+  {
+    "station_no": "39105193",
+    "site_no": "100",
+    "water": null
+  },
+  {
+    "station_no": "2763190000100",
+    "site_no": "100",
+    "water": "Ruhr"
+  },
+  {
+    "station_no": "104",
+    "site_no": "100",
+    "water": "Rhein"
+  },
+  {
+    "station_no": "2842000000100",
+    "site_no": "100",
+    "water": "Beeckbach"
+  },
+  {
+    "station_no": "45100100",
+    "site_no": "102",
+    "water": "Weser"
+  }
+]

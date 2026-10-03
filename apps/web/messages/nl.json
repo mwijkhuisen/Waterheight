@@ -73,5 +73,9 @@
   "sources_heading": "Bronnen",
   "osm_credit": "© OpenStreetMap contributors",
   "protomaps_credit": "Protomaps",
-  "notices_link": "Licenties van gebruikte software"
+  "notices_link": "Licenties van gebruikte software",
+  "rivers_licence_lead": "Het rivierennetwerk is afgeleid van OpenStreetMap en wordt aangeboden onder de",
+  "rivers_licence_link": "Open Database License 1.0 (ODbL)",
+  "rivers_collective": "De meetgegevens van de stations vormen een afzonderlijke verzameling (collective database) en vallen niet onder de ODbL.",
+  "rivers_download": "Download het rivierennetwerk (GeoJSON, ODbL)"
 }

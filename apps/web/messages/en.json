@@ -73,5 +73,9 @@
   "sources_heading": "Sources",
   "osm_credit": "© OpenStreetMap contributors",
   "protomaps_credit": "Protomaps",
-  "notices_link": "Third-party software licences"
+  "notices_link": "Third-party software licences",
+  "rivers_licence_lead": "The river network is derived from OpenStreetMap and offered under the",
+  "rivers_licence_link": "Open Database License 1.0 (ODbL)",
+  "rivers_collective": "The station measurements are a separate collective database and are not covered by the ODbL.",
+  "rivers_download": "Download the river network (GeoJSON, ODbL)"
 }

@@ -193,6 +193,8 @@ install -d -m 0755 -o 65532 -g 65532 /srv/rws/public/status
 # The basemap (P3): the promote job's directory, Caddy serves it read-only; .staging is the fetch job's.
 install -d -m 0755 -o 65532 -g 65532 /srv/rws/tiles
 install -d -m 0700 -o 65532 -g 65532 /srv/rws/tiles/.staging
+# The river files (P6b): root's, written only by rws-rivers-refresh; Caddy mounts exactly these two read-only.
+install -d -m 0755 -o 0 -g 0 /srv/rws/public/data /srv/rws/public/data/v1 /srv/rws/public/data/v1/rivers /srv/rws/public/downloads
 # The parent is root's: its subdirectories are bind-mounted one by one, and a uid-65532 owner could swap db/ for a link.
 install -d -m 0700 -o 0 -g 0 /srv/rws/backup
 install -d -m 0700 -o 65532 -g 65532 /srv/rws/backup/cache /srv/rws/backup/drill
@@ -576,6 +578,17 @@ rws_compose --profile jobs config --format json | jq -e "$shape" >/dev/null ||
   fail "the basemap jobs or caddy's tiles mount do not have the shape T-WEB-1 needs (deploy/compose.yaml)"
 [[ $(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/srv/rws/tiles"}}{{.RW}}{{end}}{{end}}' rws-caddy-1) == false ]] ||
   fail "caddy mounts /srv/rws/tiles read-write, or not at all"
+# P6b: the two river directories read-only, and never all of /srv/rws/public (capture's status lives there).
+# shellcheck disable=SC2016 # a jq program, not shell
+rivers_shape='[.services.caddy.volumes[] | select(.target | startswith("/srv/rws/public"))] as $v
+  | ($v | map(.target) | sort) == ["/srv/rws/public/data/v1/rivers", "/srv/rws/public/downloads", "/srv/rws/public/ops"]
+  and ($v | all(.source == .target and .read_only == true))'
+rws_compose config --format json | jq -e "$rivers_shape" >/dev/null ||
+  fail "caddy's /srv/rws/public mounts are not exactly ops, data/v1/rivers and downloads, read-only (deploy/compose.yaml)"
+for m in /srv/rws/public/data/v1/rivers /srv/rws/public/downloads; do
+  [[ $(docker inspect -f "{{range .Mounts}}{{if eq .Destination \"$m\"}}{{.RW}}{{end}}{{end}}" rws-caddy-1) == false ]] ||
+    fail "caddy mounts $m read-write, or not at all"
+done
 # The same from inside the real containers (distroless: node is the probe).
 fs_probe='const fs = require("fs"); const r = [];
 try { fs.writeFileSync("/tiles/e2e-probe", "x"); r.push("tiles:wrote"); } catch (e) { r.push("tiles:" + e.code); }

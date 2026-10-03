@@ -1,5 +1,5 @@
 // The fetch targets of the river-network pipeline (P6a; invariant 1): registry/geo-sources.yaml, strictly
-// validated. Every URL is https on one of three hosts. CLI:
+// validated. Every URL is https on one of four hosts. CLI:
 //
 //   node tools/geo/rivernet/sources.ts --ids                  # the region ids, one per line
 //   node tools/geo/rivernet/sources.ts --selection <dir>      # <dir>/relations.txt and <dir>/qids.txt for osmium
@@ -10,7 +10,12 @@ import { z } from 'zod';
 import { validateRivers } from '../../../packages/contracts/src/rivers.ts';
 
 export const ROOT = join(import.meta.dirname, '..', '..', '..');
-export const ALLOWED_HOSTS = ['download.geofabrik.de', 'image.discomap.eea.europa.eu', 'query.wikidata.org'] as const;
+export const ALLOWED_HOSTS = [
+  'download.geofabrik.de',
+  'image.discomap.eea.europa.eu',
+  'query.wikidata.org',
+  'www.hochwasserportal.nrw',
+] as const;
 
 const Url = z.url().refine((s) => {
   try {
@@ -52,6 +57,7 @@ export const Sources = z
       max_minutes: Bytes,
     }),
     wikidata: z.strictObject({ sparql_url: Url, max_requests: Bytes }),
+    nrw_stations: z.strictObject({ url: Url, max_bytes: Bytes }),
     canal_traps: z.array(CanalTrap),
   })
   .refine(

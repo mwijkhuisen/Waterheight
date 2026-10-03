@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { sql } from 'kysely';
 import { type DbConfig, dbConfig, errorCode, openDb } from '../db/pool.ts';
-import { RegistryError, readRegistry, syncRegistry } from './registry-sync.ts';
+import { RegistryError, readRegistry, readRiverRegistry, syncRegistry } from './registry-sync.ts';
 
 // The one-shot `migrate` role (A§11.2): dbmate applies db/migrations, then the
 // partitions from the first seeds onward are created and the registry is
@@ -73,9 +73,9 @@ export async function runMigrate(
     const made = await sql<{ n: number }>`
       SELECT ensure_partitions(${DATA_FLOOR}::timestamptz, now() + interval '3 months') AS n`.execute(db);
     log(`migrate: ${made.rows[0]?.n ?? 0} partition(s) created`);
-    const synced = await syncRegistry(db, readRegistry());
+    const synced = await syncRegistry(db, readRegistry(), readRiverRegistry());
     log(
-      `migrate: registry synced (${synced.sources} sources, ${synced.stations} stations, ${synced.series} series, ${synced.deactivated} deactivated, ${synced.twins} twins, ${synced.references} NL-4 class bounds)`,
+      `migrate: registry synced (${synced.sources} sources, ${synced.stations} stations, ${synced.series} series, ${synced.deactivated} deactivated, ${synced.twins} twins, ${synced.references} NL-4 class bounds, ${synced.reaches} reaches, ${synced.rivernetUnknown} rivernet stations unknown)`,
     );
     return 0;
   } catch (err) {

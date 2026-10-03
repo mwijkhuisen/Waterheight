@@ -1,0 +1,15 @@
+# Installed by bootstrap.sh, never enabled by it (the timer is the owner's to enable). Runs as root: it writes /srv/rws and reads /var/lib/rws.
+[Unit]
+Description=rws: install the river files of the newest signed geo release
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rws-rivers-refresh
+TimeoutStartSec=30min
+UMask=0077
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=full
+NoNewPrivileges=yes

@@ -291,3 +291,19 @@ Do this on the VPS that already runs the P2b release. No new secret, `rws.env` s
    ```
 3. Run the first refresh and enable the timer: `docs/runbooks/basemap.md` §3 to §7 (a dry run, an older build, then the newest, so that current and previous both exist; the `[owner]` criterion of P3 asks for its log and the sha256 comparison).
 4. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `tiles manifest`, `tiles <file>` (four after the second run), `tiles previous`, `tiles 404`, `tiles 416` and `map assets`.
+
+## Later: the release with the river overlay (P6b; owner)
+
+Do this on the VPS that already runs the P3 (or a later) release. No new secret, `rws.env` setting, healthchecks check or migration, and no new egress for any container: the release brings two read-only Caddy mounts in `compose.yaml` (`/srv/rws/public/data/v1/rivers` and `/srv/rws/public/downloads`), Caddy's `/tiles/rivers-<ver>.pmtiles`, `/data/v1/rivers/` and `/downloads/` routes, the registry sync of the rivers, reaches and station river fields in `migrate`, and new host files (`rws-rivers-refresh`, `rws-rivers-refresh.service` and `.timer`, a changed `bootstrap.sh`). There is no special order (the normal `rws-update` deploy works; Docker creates the two mounted directories as root 0755 if they do not exist yet); these steps follow it.
+
+1. Approve the `promote` job for the P6b release. `rws-update` deploys it within 5 minutes; the `migrate` log line ends with `709 reaches, 0 rivernet stations unknown`. **Check:** `sudo docker compose -p rws ps` (caddy, capture, watchdog, db, load and api healthy). `scripts/verify-prod.sh <domain>` shows `rivers attribution` as PASS and `rivers manifest`, `rivers tiles`, `rivers reaches` and `rivers download` as FAIL until the first refresh (step 4): expected.
+2. Until you run the release's bootstrap, `rws-update` pings `update` `/fail` with `host_files_changed`. Run it as in "a new release with changed host files" above, from the verified release directory, twice; the second run must say "0 change(s)". It links `rws-rivers-refresh` into `/usr/local/bin`, installs the service and the timer (the timer is **not** enabled) and creates `/srv/rws/public/data`, `/srv/rws/public/data/v1`, `/srv/rws/public/data/v1/rivers`, `/srv/rws/public/downloads` (0755 root) and `/var/lib/rws/rivers` (0700 root). **Check:**
+
+   ```bash
+   command -v rws-rivers-refresh
+   stat -c '%n %a %U:%G' /srv/rws/public/data/v1/rivers /srv/rws/public/downloads /var/lib/rws/rivers   # 755 root, 755 root, 700 root
+   systemctl is-enabled rws-rivers-refresh.timer                                                     # disabled
+   ```
+3. Dispatch `geo.yml` on `main` once (`docs/runbooks/geo-refresh.md` §2): it publishes the first `geo-YYYY-MM-DD` release with the river overlay, the reaches file and the ODbL download, each signed.
+4. Run the first refresh and decide on the timer: `docs/runbooks/geo-refresh.md`, "Serving the rivers (P6b)" (a dry run, one real run, then `sudo systemctl enable --now rws-rivers-refresh.timer` when you are satisfied).
+5. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `rivers manifest`, `rivers tiles`, `rivers reaches`, `rivers download` and `rivers attribution`.

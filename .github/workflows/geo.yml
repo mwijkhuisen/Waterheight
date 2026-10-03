@@ -4,12 +4,14 @@
 #   rivernet-fixture  builds the osmium tool image, re-exports the committed fixture PBF and compares it byte for
 #                     byte with the committed exports, then builds the fixture graph twice and compares sha256
 #                     (every event; offline once the image is built, the image build downloads three source tarballs
-#                     from codeload.github.com and Debian packages from apt).
+#                     from codeload.github.com and Debian packages from apt). P6b: also the outputs (reaches json,
+#                     download, tiles input, snap report) and the tiles, twice, with the determinism and leak checks.
 #   rivernet-build    downloads the 16 Geofabrik extracts (download.geofabrik.de) one at a time, filters, merges and
-#                     builds the graph, then runs the EU-Hydro agreement check (the EU-Hydro MapServer). Schedule and
-#                     dispatch only; uploads two artifacts (geo-assets and rivernet-fixture).
-#   rivernet-publish  main only: signs the assets keyless (Sigstore) and publishes the `geo-<date>` release through
-#                     the GitHub API. The only job with a write token; it has no checkout and runs no repository code.
+#                     builds the graph, then runs the EU-Hydro agreement check (the EU-Hydro MapServer), the P6b outputs
+#                     and the tiles. Schedule and dispatch only; uploads two artifacts (geo-assets and rivernet-fixture).
+#   rivernet-publish  main only: reads and checks VERSION, signs the assets keyless (Sigstore) and publishes the
+#                     `geo-YYYY-MM-DD` release (the date of VERSION) through the GitHub API. The only job with a
+#                     write token; it has no checkout and runs no repository code.
 # Same hardening as ci.yml: top-level permissions {}, contents: read, harden-runner first,
 # persist-credentials: false, no expressions inside run: (values come in through env:), actions pinned to full
 # SHAs. No caches (owner decision of 2026-10-02): Geofabrik rebuilds every -latest file daily and a PR run must
@@ -27,6 +29,13 @@ on:
       - pnpm-lock.yaml
       - registry/rivers.yaml
       - registry/geo-sources.yaml
+      - registry/stations/**
+      - registry/rivernet.yaml
+      - registry/snap-overrides.yaml
+      - registry/sources.yaml
+      - registry/seed/de-7-waters.csv
+      - packages/contracts/**
+      - scripts/gen-rivernet.ts
       - .github/workflows/geo.yml
   schedule:
     - cron: '23 4 3 * *'
@@ -120,6 +129,50 @@ jobs:
             [[ $a == "$b" ]] || { echo "not byte-identical: $f" >&2; exit 1; }
             echo "$f $a"
           done
+      - name: Outputs and tiles, twice; determinism, size and leak checks
+        run: |
+          set -euo pipefail
+          ver=20261001
+          for n in 1 2; do
+            node tools/geo/rivernet/outputs.ts --graph "$RUNNER_TEMP/build$n" --version "$ver" \
+              --out "$RUNNER_TEMP/p6b$n" --nonpublic "$RUNNER_TEMP/nonpublic$n.txt"
+            tools/geo/rivernet/tiles.sh build "$RUNNER_TEMP/p6b$n/rivers.geojsonseq" "$RUNNER_TEMP/p6b$n/rivers-$ver.pmtiles"
+            tools/geo/rivernet/tiles.sh decode "$RUNNER_TEMP/p6b$n/rivers-$ver.pmtiles" "$RUNNER_TEMP/p6b$n/decoded.json"
+          done
+          {
+            echo '### Outputs and tiles (fixture)'
+            echo
+          } >>"$GITHUB_STEP_SUMMARY"
+          for f in "reaches-$ver.json" "rivers-$ver.geojson.gz" snap-report.json rivers.geojsonseq decoded.json; do
+            a=$(sha256sum "$RUNNER_TEMP/p6b1/$f" | cut -d' ' -f1)
+            b=$(sha256sum "$RUNNER_TEMP/p6b2/$f" | cut -d' ' -f1)
+            [[ $a == "$b" ]] || { echo "not identical: $f" >&2; exit 1; }
+            echo "- $f: $(stat -c %s "$RUNNER_TEMP/p6b1/$f") bytes, sha256 $a" >>"$GITHUB_STEP_SUMMARY"
+          done
+          t="rivers-$ver.pmtiles"
+          if cmp -s "$RUNNER_TEMP/p6b1/$t" "$RUNNER_TEMP/p6b2/$t"; then same=identical; else same=DIFFERENT; fi
+          echo "- $t: $(stat -c %s "$RUNNER_TEMP/p6b1/$t") bytes, sha256 $(sha256sum "$RUNNER_TEMP/p6b1/$t" | cut -d' ' -f1); the two runs are byte-$same (reported only; the decoded tiles are compared)" >>"$GITHUB_STEP_SUMMARY"
+          echo "pmtiles bytes of the two runs: $same"
+          (($(stat -c %s "$RUNNER_TEMP/p6b1/$t") < 30000000)) || { echo "$t is 30 MB or more" >&2; exit 1; }
+          # No id of a station that is not public occurs in any public output. The list is never uploaded.
+          [[ -s $RUNNER_TEMP/nonpublic1.txt ]] || { echo "empty non-public list" >&2; exit 1; }
+          gzip -dc "$RUNNER_TEMP/p6b1/rivers-$ver.geojson.gz" >"$RUNNER_TEMP/p6b1/download.json"
+          if grep -F -f "$RUNNER_TEMP/nonpublic1.txt" "$RUNNER_TEMP/p6b1/decoded.json" "$RUNNER_TEMP/p6b1/reaches-$ver.json" \
+            "$RUNNER_TEMP/p6b1/download.json" "$RUNNER_TEMP/p6b1/snap-report.json" >/dev/null; then
+            echo "a non-public station id occurs in a public output" >&2
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP"/nonpublic?.txt "$RUNNER_TEMP/p6b1/download.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: geo-fixture-outputs
+          path: |
+            ${{ runner.temp }}/p6b1/reaches-20261001.json
+            ${{ runner.temp }}/p6b1/rivers-20261001.geojson.gz
+            ${{ runner.temp }}/p6b1/rivers-20261001.pmtiles
+            ${{ runner.temp }}/p6b1/snap-report.json
+          retention-days: 7
+          if-no-files-found: error
 
   rivernet-build:
     name: rivernet build
@@ -176,15 +229,27 @@ jobs:
           RWS_DOMAIN: ${{ vars.RWS_DOMAIN }}
           RWS_CONTACT_EMAIL: ${{ vars.RWS_CONTACT_EMAIL }}
         run: node tools/geo/rivernet/euhydro.ts --dir "$RUNNER_TEMP/out/assets"
+      - name: Outputs and tiles
+        run: |
+          set -euo pipefail
+          VER=$(date -u +%Y%m%d)
+          a=$RUNNER_TEMP/out/assets
+          node tools/geo/rivernet/outputs.ts --graph "$a" --version "$VER" --out "$a"
+          tools/geo/rivernet/tiles.sh build "$a/rivers.geojsonseq" "$a/rivers-$VER.pmtiles"
+          rm -f "$a/rivers.geojsonseq" # the tiles input is not an asset
+          (($(stat -c %s "$a/rivers-$VER.pmtiles") < 30000000)) || { echo "rivers-$VER.pmtiles is 30 MB or more" >&2; exit 1; }
       - name: Checksums and summary
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/out/assets"
-          sha256sum river_graph.json reaches.geojson qa-report.json >SHA256SUMS
+          VER=$(tr -d '\n' <VERSION)
+          [[ $VER =~ ^[0-9]{8}$ ]] || { echo "bad VERSION" >&2; exit 1; }
+          assets=(river_graph.json reaches.geojson qa-report.json "rivers-$VER.pmtiles" "reaches-$VER.json" "rivers-$VER.geojson.gz" snap-report.json VERSION)
+          sha256sum "${assets[@]}" >SHA256SUMS
           {
             echo '### Graph pipeline'
             echo
-            for f in river_graph.json reaches.geojson qa-report.json; do echo "- $f: $(stat -c %s "$f") bytes"; done
+            for f in "${assets[@]}"; do echo "- $f: $(stat -c %s "$f") bytes"; done
             echo "- agreement_pct: $(jq -r '(.euhydro.agreement_pct | tonumber?) // "n/a"' qa-report.json)"
           } >>"$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -194,6 +259,11 @@ jobs:
             ${{ runner.temp }}/out/assets/river_graph.json
             ${{ runner.temp }}/out/assets/reaches.geojson
             ${{ runner.temp }}/out/assets/qa-report.json
+            ${{ runner.temp }}/out/assets/rivers-*.pmtiles
+            ${{ runner.temp }}/out/assets/reaches-*.json
+            ${{ runner.temp }}/out/assets/rivers-*.geojson.gz
+            ${{ runner.temp }}/out/assets/snap-report.json
+            ${{ runner.temp }}/out/assets/VERSION
             ${{ runner.temp }}/out/assets/SHA256SUMS
           retention-days: 14
           if-no-files-found: error
@@ -218,13 +288,18 @@ jobs:
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.1.3
-      - name: Check, sign and verify the four assets
+      - name: Check, sign and verify the nine assets
         working-directory: geo-assets
         run: |
           set -euo pipefail
-          [[ $(ls | wc -l) -eq 4 ]] || { echo "unexpected artifact contents" >&2; exit 1; }
+          [[ -f VERSION ]] || { echo "no VERSION" >&2; exit 1; }
+          VER=$(tr -d '\n' <VERSION)
+          [[ $VER =~ ^[0-9]{8}$ ]] || { echo "bad VERSION" >&2; exit 1; }
+          ASSETS=(river_graph.json reaches.geojson qa-report.json "rivers-$VER.pmtiles" "reaches-$VER.json" "rivers-$VER.geojson.gz" snap-report.json VERSION SHA256SUMS)
+          [[ $(ls | wc -l) -eq ${#ASSETS[@]} ]] || { echo "unexpected artifact contents" >&2; exit 1; }
+          for f in "${ASSETS[@]}"; do [[ -f $f ]] || { echo "missing $f" >&2; exit 1; }; done
           sha256sum -c SHA256SUMS
-          for f in river_graph.json reaches.geojson qa-report.json SHA256SUMS; do
+          for f in "${ASSETS[@]}"; do
             cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
             cosign verify-blob --bundle "$f.sigstore.json" \
               --certificate-identity https://github.com/mwijkhuisen/Waterheight/.github/workflows/geo.yml@refs/heads/main \
@@ -238,13 +313,15 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          TAG="geo-$(date -u +%F)"
-          ASSETS="river_graph.json reaches.geojson qa-report.json SHA256SUMS"
+          VER=$(tr -d '\n' <VERSION)
+          [[ $VER =~ ^[0-9]{8}$ ]] || { echo "bad VERSION" >&2; exit 1; }
+          TAG="geo-${VER:0:4}-${VER:4:2}-${VER:6:2}"
+          ASSETS="river_graph.json reaches.geojson qa-report.json rivers-$VER.pmtiles reaches-$VER.json rivers-$VER.geojson.gz snap-report.json VERSION SHA256SUMS"
           export TAG ASSETS
           # The releases list includes drafts; a draft is found by tag name here, not by `gh release view`.
           mapfile -t found < <(gh api "repos/$GH_REPO/releases" --paginate -q '.[] | select(.tag_name == env.TAG) | .id')
           if ((${#found[@]} > 0)); then
-            # Only a complete release counts: exactly the four assets and their four bundles, each one uploaded.
+            # Only a complete release counts: exactly the nine assets and their nine bundles, each one uploaded.
             complete=$(gh api "repos/$GH_REPO/releases/${found[0]}" -q '
               ([.assets[] | {name, state}] | sort_by(.name)) ==
               ([env.ASSETS | split(" ")[] | (., . + ".sigstore.json") | {name: ., state: "uploaded"}] | sort_by(.name))')
@@ -263,5 +340,5 @@ jobs:
           fi
           gh release create "$TAG" --draft --target "$GITHUB_SHA" --latest=false --title "$TAG" \
             --notes "River graph derived from OpenStreetMap data, ODbL 1.0, © OpenStreetMap contributors. Built by the geo.yml run $RUN_URL" \
-            river_graph.json reaches.geojson qa-report.json SHA256SUMS ./*.sigstore.json
+            $ASSETS ./*.sigstore.json
           gh release edit "$TAG" --draft=false --latest=false

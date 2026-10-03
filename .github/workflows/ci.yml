@@ -319,7 +319,7 @@ jobs:
           # capture cannot succeed without internet in CI and the loaded data is a recorded fixture, so
           # only the checks that need fresh production data may fail.
           if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" |
-            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner health) '; then
+            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner health|rivers manifest|rivers tiles|rivers reaches|rivers download) '; then
             echo "verify-prod failed a check other than the ones that need live data" >&2
             exit 1
           fi
@@ -331,8 +331,9 @@ jobs:
           grep -qE '^PASS health [^A-Za-z]' "$RUNNER_TEMP/verify-prod.txt"
           grep -qE '^PASS health params ' "$RUNNER_TEMP/verify-prod.txt"
           # P4b: the data routes through Caddy, their Cache-Control per age class, and noindex on every kind of path.
+          # P6b: the page's bundle carries the river-network licence text (no rivers data is installed in CI).
           for check in 'api meta' 'api stations' 'api snapshot now' 'api snapshot 6h' 'api snapshot 3d' 'api openapi' \
-            'api params' 'noindex'; do
+            'api params' 'noindex' 'rivers attribution'; do
             grep -qE "^PASS $check " "$RUNNER_TEMP/verify-prod.txt" || { echo "verify-prod: no PASS for $check" >&2; exit 1; }
           done
 
@@ -396,7 +397,7 @@ jobs:
       - name: Serve it through the real Caddy image and site.caddy (HTTPS on localhost; api:8080 is the runner)
         run: |
           set -euo pipefail
-          node apps/web/e2e/prepare-tiles.ts "$RUNNER_TEMP/tiles"
+          node apps/web/e2e/prepare-tiles.ts "$RUNNER_TEMP/tiles" "$RUNNER_TEMP/rivers" "$RUNNER_TEMP/downloads"
           mkdir -p "$RUNNER_TEMP/ops"
           docker run -d --name e2e-caddy -p 127.0.0.1:443:443 --add-host=api:host-gateway \
             -e RWS_DOMAIN=localhost -e RWS_CONTACT_EMAIL=ci@rivierstanden.example \
@@ -404,6 +405,8 @@ jobs:
             -v "$PWD/deploy/web/site.caddy:/etc/caddy/site.caddy:ro" \
             -v "$PWD/apps/web/dist-e2e:/srv/www:ro" \
             -v "$RUNNER_TEMP/tiles:/srv/rws/tiles:ro" \
+            -v "$RUNNER_TEMP/rivers:/srv/rws/public/data/v1/rivers:ro" \
+            -v "$RUNNER_TEMP/downloads:/srv/rws/public/downloads:ro" \
             -v "$RUNNER_TEMP/ops:/srv/rws/public/ops:ro" \
             "$CADDY_IMAGE" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
           for _ in $(seq 1 30); do

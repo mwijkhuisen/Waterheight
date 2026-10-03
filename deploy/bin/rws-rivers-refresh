@@ -1,0 +1,240 @@
+#!/usr/bin/env bash
+# rws-rivers-refresh (rws-rivers-refresh.timer, monthly; P6b, issue #21; A§9.1, A§11.2).
+# Installs the river files of a signed `geo-YYYY-MM-DD` release: the PMTiles
+# overlay (served as /tiles/rivers-<ver>.pmtiles from the rivers directory), the reaches file
+# (/data/v1/rivers/reaches-<ver>.json) and the ODbL download
+# (/downloads/rivers-<ver>.geojson.gz), and then the manifest the web reads
+# (/data/v1/rivers/manifest.json). A host script, no container, no compose:
+# everything it downloads is checked before anything outside its work
+# directory changes, in this order:
+#   1. SHA256SUMS and VERSION: cosign verify-blob against GEO_IDENTITY (the
+#      geo.yml workflow on main) and the Actions issuer; VERSION is exactly 8
+#      digits and a newline;
+#   2. the three file names are derived from VERSION only, never from the
+#      release listing or from SHA256SUMS; each file is verified by cosign too;
+#   3. the sha256 of each equals its one line of SHA256SUMS;
+#   4. content: the PMTiles magic and version 3, gzip -t, the reaches file's
+#      schema_version and version.
+# All three go into root-owned directories under /srv/rws/public (the overlay
+# beside the reaches file, which Caddy serves as /tiles/rivers-<ver>.pmtiles):
+# root never writes into /srv/rws/tiles, which the basemap-promote job (uid
+# 65532) owns, so no link that job swaps in can redirect a root write.
+# Installed names are immutable (root:root 0644, a temp name and a rename into
+# the served directory); an existing name with other bytes, or that is not a
+# regular file (a symlink included), stops the run. At
+# most the current and the previous version stay; --rollback swaps them.
+# Never touches /srv/rws/owner, tiles/manifest.json, tiles/.staging or the
+# tiles/ at all.
+#
+# bootstrap.sh installs the timer but does not enable it: the owner runs a dry
+# run and one real run by hand, then enables the timer. Its own lock (never the
+# deploy one); a second run while one runs logs it and exits 0. No
+# healthchecks.io ping (the slug set is closed): a failed run is a failed unit.
+#
+# Usage: rws-rivers-refresh [--dry-run] [--tag geo-YYYY-MM-DD] | --rollback
+#   (none)            the newest published geo-YYYY-MM-DD release, only if its
+#                     VERSION is newer than current and not the previous one
+#                     (a rollback stays until a --tag run)
+#   --tag TAG         that release instead (any signed version)
+#   --dry-run         fetch and verify only; prints what it would install
+#   --rollback        current and previous swap (files re-checked first)
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+readonly GEO_IDENTITY='https://github.com/mwijkhuisen/Waterheight/.github/workflows/geo.yml@refs/heads/main'
+readonly GEO_TAG_RE='^geo-[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+# Overridable for the offline tests, like RWS_RELEASES_URL.
+RWS_GEO_API_URL=${RWS_GEO_API_URL:-https://api.github.com/repos/mwijkhuisen/Waterheight/releases?per_page=30}
+
+DRY_RUN=0 # only --dry-run turns it on, never the environment
+
+usage() {
+  echo "usage: rws-rivers-refresh [--dry-run] [--tag geo-YYYY-MM-DD] | --rollback" >&2
+  exit 64
+}
+
+tag='' rollback=0
+while (($#)); do
+  case $1 in
+    --dry-run) DRY_RUN=1 ;;
+    --rollback) rollback=1 ;;
+    --tag)
+      [[ ${2:-} =~ $GEO_TAG_RE ]] || usage
+      tag=$2
+      shift
+      ;;
+    *) usage ;;
+  esac
+  shift
+done
+((!rollback)) || [[ -z $tag && $DRY_RUN == 0 ]] || usage
+
+data_dir=$RWS_SRV/public/data/v1/rivers
+dl_dir=$RWS_SRV/public/downloads
+manifest=$data_dir/manifest.json
+work=$RWS_STATE_DIR/rivers/work
+for d in "$data_dir" "$dl_dir" "$RWS_STATE_DIR/rivers"; do
+  [[ -d $d ]] || die "$d is missing: run deploy/host/bootstrap.sh from the release that brings this script"
+done
+
+exec 9>"$(lockfile rws-rivers)"
+if ! flock -n 9; then
+  log "another rivers refresh is still running: nothing to do"
+  exit 0
+fi
+
+tmpfile=''
+trap 'rm -rf -- "$work"; [[ -z $tmpfile ]] || rm -f -- "$tmpfile"' EXIT
+
+# entry <name>: the manifest entry of a file, from the verified bytes in $work.
+entry() {
+  jq -n --arg f "$1" --arg s "$(sha256sum "$work/$1" | cut -d' ' -f1)" --argjson b "$(stat -c %s "$work/$1")" \
+    '{file: $f, sha256: $s, bytes: $b}'
+}
+
+# The manifest as installed, or empty; a malformed one stops the run.
+old=''
+if [[ -e $manifest ]]; then
+  jq -e '.schema_version == 1 and (.current.version | test("^[0-9]{8}$"))' "$manifest" >/dev/null 2>&1 ||
+    die "$manifest is not a valid rivers manifest: fix or remove it by hand"
+  old=$(jq -c . "$manifest")
+fi
+
+# write_manifest <current json> <previous json or null>
+write_manifest() {
+  jq -n --argjson c "$1" --argjson p "$2" '{schema_version: 1, current: $c, previous: $p}' | write_atomic "$manifest" 0644
+}
+
+if ((rollback)); then
+  [[ -n $old && $(jq -r '.previous | type' <<<"$old") == object ]] || die "no previous version to roll back to"
+  prev=$(jq -c .previous <<<"$old")
+  pv=$(jq -r '.version | strings' <<<"$prev")
+  [[ $pv =~ ^[0-9]{8}$ ]] || die "previous version: its version is not 8 digits"
+  for kind in tiles reaches download; do
+    case $kind in
+      tiles) dir=$data_dir want=rivers-$pv.pmtiles ;;
+      reaches) dir=$data_dir want=reaches-$pv.json ;;
+      *) dir=$dl_dir want=rivers-$pv.geojson.gz ;;
+    esac
+    name=$(jq -r ".$kind.file" <<<"$prev")
+    # The manifest is root's, but a name is still checked against its one exact form before it is opened.
+    [[ $name == "$want" ]] || die "previous version: its $kind file is not $want"
+    [[ ! -L $dir/$name ]] || die "previous version: $name is a symlink"
+    [[ -f $dir/$name ]] || die "previous version: $name is missing"
+    [[ $(sha256sum "$dir/$name" | cut -d' ' -f1) == "$(jq -r ".$kind.sha256" <<<"$prev")" ]] ||
+      die "previous version: $name does not match its recorded sha256"
+  done
+  write_manifest "$prev" "$(jq -c .current <<<"$old")"
+  log "rivers rolled back to $(jq -r .version <<<"$prev")"
+  exit 0
+fi
+
+# ---- the tag
+tag_given=$tag
+if [[ -z $tag ]]; then
+  fetch "$RWS_GEO_API_URL" "$RWS_STATE_DIR/rivers/releases.json" 4194304 || die "the release list could not be fetched"
+  tag=$(jq -r --arg re "$GEO_TAG_RE" '[.[] | select(.draft == false and .prerelease == false and (.tag_name | test($re))) | .tag_name] | sort | last // empty' \
+    "$RWS_STATE_DIR/rivers/releases.json") || die "the release list is not valid JSON"
+  rm -f -- "$RWS_STATE_DIR/rivers/releases.json"
+  [[ $tag =~ $GEO_TAG_RE ]] || die "no published geo-YYYY-MM-DD release found"
+fi
+base=$RWS_RELEASES_URL/download/$tag
+
+rm -rf -- "$work"
+mkdir -m 0700 -- "$work"
+
+# get <name> <cap>: the asset and its bundle, then cosign.
+get() {
+  fetch "$base/$1" "$work/$1" "$2" || die "$tag: download of $1 failed"
+  fetch "$base/$1.sigstore.json" "$work/$1.sigstore.json" 1048576 || die "$tag: download of $1.sigstore.json failed"
+  cosign verify-blob --bundle "$work/$1.sigstore.json" \
+    --certificate-identity "$GEO_IDENTITY" --certificate-oidc-issuer "$RWS_ISSUER" \
+    "$work/$1" >/dev/null 2>&1 || die "$tag: $1 is not signed by $GEO_IDENTITY"
+}
+
+get SHA256SUMS 65536
+get VERSION 65536
+ver=$(cat "$work/VERSION")
+[[ $ver =~ ^[0-9]{8}$ ]] || die "$tag: VERSION is not 8 digits and a newline"
+cmp -s "$work/VERSION" <(printf '%s\n' "$ver") || die "$tag: VERSION is not 8 digits and a newline"
+
+if [[ -n $old && $(jq -r .current.version <<<"$old") == "$ver" ]]; then
+  log "version $ver is already current: nothing to do"
+  exit 0
+fi
+# The automatic path never goes back: a version older than current is refused (a stale or manipulated release
+# list), and the previous version, which a --rollback made previous, is left for a --tag run. --tag installs any
+# signed version.
+if [[ -n $old && -z $tag_given ]]; then
+  cur_ver=$(jq -r .current.version <<<"$old")
+  ((10#$ver > 10#$cur_ver)) || die "$tag: version $ver is older than the current $cur_ver: refusing a downgrade (use --tag)"
+  if [[ $(jq -r '.previous.version // empty' <<<"$old") == "$ver" ]]; then
+    log "version $ver is the previous version (rolled back from): left alone until a --tag run"
+    exit 0
+  fi
+fi
+
+tiles_name=rivers-$ver.pmtiles reaches_name=reaches-$ver.json dl_name=rivers-$ver.geojson.gz
+get "$tiles_name" 67108864
+get "$reaches_name" 33554432
+get "$dl_name" 134217728
+
+for name in "$tiles_name" "$reaches_name" "$dl_name"; do
+  [[ $(awk -v n="$name" 'NF == 2 && $2 == n' "$work/SHA256SUMS" | wc -l) == 1 ]] || die "$tag: SHA256SUMS has not exactly one line for $name"
+  sum=$(sha256sum "$work/$name" | cut -d' ' -f1)
+  grep -qxF -- "$sum  $name" "$work/SHA256SUMS" || die "$tag: $name does not match SHA256SUMS"
+done
+[[ $(head -c 7 "$work/$tiles_name") == PMTiles && $(od -An -tu1 -j7 -N1 "$work/$tiles_name" | tr -d ' ') == 3 ]] ||
+  die "$tag: $tiles_name is not a PMTiles v3 archive"
+gzip -t "$work/$dl_name" || die "$tag: $dl_name is not valid gzip"
+jq -e --arg v "$ver" '.schema_version == 1 and .version == $v' "$work/$reaches_name" >/dev/null 2>&1 ||
+  die "$tag: $reaches_name has another schema_version or version"
+
+if ((DRY_RUN)); then
+  log "dry run: $tag (version $ver) verified; would install $data_dir/$tiles_name, $data_dir/$reaches_name, $dl_dir/$dl_name and the manifest"
+  exit 0
+fi
+
+# Immutable names: the same bytes are a no-op, other bytes stop the run.
+for pair in "$data_dir/$tiles_name" "$data_dir/$reaches_name" "$dl_dir/$dl_name"; do
+  ! [[ -L $pair || ( -e $pair && ! -f $pair ) ]] || die "${pair##*/} exists and is not a regular file: refusing"
+  [[ ! -e $pair ]] || cmp -s "$pair" "$work/${pair##*/}" || die "${pair##*/} exists with other bytes: refusing to replace an immutable name"
+done
+install_one() { # <name> <dir>
+  local dest=$2/$1
+  [[ -e $dest ]] && return 0
+  tmpfile=$(mktemp "$2/.$1.XXXXXX")
+  cp -- "$work/$1" "$tmpfile"
+  chmod 0644 "$tmpfile"
+  ((EUID != 0)) || chown 0:0 "$tmpfile"
+  mv -T -- "$tmpfile" "$dest"
+  tmpfile=''
+}
+install_one "$tiles_name" "$data_dir"
+install_one "$reaches_name" "$data_dir"
+install_one "$dl_name" "$dl_dir"
+
+cur=$(jq -n --arg v "$ver" --arg t "$tag" --arg now "$(now_iso)" \
+  --argjson tiles "$(entry "$tiles_name")" --argjson reaches "$(entry "$reaches_name")" \
+  --argjson dl "$(entry "$dl_name")" \
+  '{version: $v, tag: $t, installed_at: $now, tiles: $tiles, reaches: $reaches, download: $dl}')
+prev=null
+[[ -z $old ]] || prev=$(jq -c .current <<<"$old")
+write_manifest "$cur" "$prev"
+log "rivers $ver installed from $tag"
+
+# Prune: only the exact names of this script, neither current nor previous.
+keep=" $ver $(jq -r '.version // empty' <<<"$prev") "
+prune() { # <dir> <regex with one group for the version>
+  local f v
+  for f in "$1"/*; do
+    [[ -f $f ]] || continue
+    [[ ${f##*/} =~ $2 ]] || continue
+    v=${BASH_REMATCH[1]}
+    [[ $keep == *" $v "* ]] || { rm -f -- "$f" && log "pruned ${f##*/}"; }
+  done
+}
+prune "$data_dir" '^rivers-([0-9]{8})\.pmtiles$'
+prune "$data_dir" '^reaches-([0-9]{8})\.json$'
+prune "$dl_dir" '^rivers-([0-9]{8})\.geojson\.gz$'

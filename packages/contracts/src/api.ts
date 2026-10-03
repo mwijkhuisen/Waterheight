@@ -205,3 +205,36 @@ export const Series = z.discriminatedUnion('res', [
   z.strictObject({ ...span, res: z.enum(['1h', '1d']), points: z.array(BucketPoint).max(MAX_POINTS) }),
 ]);
 export type Series = z.infer<typeof Series>;
+
+// /data/v1/rivers/manifest.json (P6b): the river files that are served, written
+// by deploy/bin/rws-rivers-refresh after it verified a signed geo-<date>
+// release. The web reads the download name from it; `previous` is the version
+// a rollback returns to.
+const RiversFileEntry = (pattern: RegExp) =>
+  z.strictObject({
+    file: z.string().regex(pattern),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    bytes: z.number().int().positive(),
+  });
+export const RiversRelease = z
+  .strictObject({
+    version: z.string().regex(/^[0-9]{8}$/),
+    tag: z.string().regex(/^geo-[0-9]{4}-[0-9]{2}-[0-9]{2}$/),
+    installed_at: iso,
+    tiles: RiversFileEntry(/^rivers-[0-9]{8}\.pmtiles$/),
+    reaches: RiversFileEntry(/^reaches-[0-9]{8}\.json$/),
+    download: RiversFileEntry(/^rivers-[0-9]{8}\.geojson\.gz$/),
+  })
+  .refine(
+    (r) =>
+      r.tiles.file === `rivers-${r.version}.pmtiles` &&
+      r.reaches.file === `reaches-${r.version}.json` &&
+      r.download.file === `rivers-${r.version}.geojson.gz`,
+    'file names must carry the version',
+  );
+export const RiversManifest = z.strictObject({
+  schema_version: z.literal(1),
+  current: RiversRelease,
+  previous: RiversRelease.nullable(),
+});
+export type RiversManifest = z.infer<typeof RiversManifest>;

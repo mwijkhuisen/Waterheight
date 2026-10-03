@@ -9,6 +9,17 @@
 #   parent_river_id  the river it flows into, or for a delta branch the one it splits from
 #   km_direction     how the official km count (downstream, upstream = from the mouth, none known)
 #   evidence         where the relation and Wikidata ids come from (never guessed)
+#   nl_entry        (P6b, five rivers only) where the river enters the Netherlands: id, NL/EN name, `at` [lon, lat] and
+#                   `max_m`; the entry node is the node of the river's own edges nearest `at` within `max_m`, and
+#                   km_to_nl_entry is measured to it. A tributary that joins inside NL has none (Rur, Niers, Berkel).
+#                   Border points the repository does not give are marked [U] in the evidence
+#   flags           (P6b) stretches of a river that are tidal or impounded (catalogue §4.7 items 6-7): kind, optional
+#                   `from` / `to` [lon, lat] on the river (absent = the river's start / end), evidence. [U] marks a bound
+#                   the repository does not settle
+#   joins           (P6b, top level) a reviewed routing-only connection where an OSM relation ends short (KG-161): never
+#                   drawn, never published as geometry
+#   travel_times    (P6b, top level) sourced RANGES only (catalogue §3.7), between two registered stations; indicative,
+#                   never an ETA, never a single "about" value
 version: 1
 rivers:
   - id: rhine
@@ -26,6 +37,18 @@ rivers:
     wikidata: Q584
     parent_river_id: null
     km_direction: downstream
+    nl_entry:
+      id: lobith
+      name_nl: "Lobith"
+      name_en: "Lobith"
+      at: [6.1024, 51.8495]
+      max_m: 500
+      evidence: "The main Rhine entry gauge: NL-1 lobith.bovenrijn.tolkamer (51.8495, 6.1024), catalogue §3.1 row 30 (rkm 862.0). Measured on the fixture 2026-10-01: nearest node of this river 266 m (n2831497214), nearest edge 110 m."
+    flags:
+      - kind: impounded
+        from: [7.529275, 47.711059]
+        to: [8.116902, 48.852149]
+        evidence: "catalogue §4.7 item 6 (Upper Rhine barrages, Kembs to Iffezheim). From the DE-1 gauge Rheinweiler (23300130, km 186.2, catalogue §3.1 row 8) to Iffezheim (23500600, km 336.2, row 12); the Kembs barrage itself has no gauge in the registry, so the range starts at the first gauge inside the stretch [U]."
     evidence: "catalogue §5.3 relation; Wikidata Q584 (P402 123924; P403 Q1693 North Sea), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: waal
     name_nl: "Waal"
@@ -59,6 +82,10 @@ rivers:
     wikidata: Q1152951
     parent_river_id: pannerdensch-kanaal
     km_direction: downstream
+    flags:
+      - kind: impounded
+        from: [5.810635, 51.96584]
+        evidence: "Weir-controlled Nederrijn-Lek: the RWS pairs driel.boven/.beneden and amerongen.boven/.beneden (catalogue §3.1, Nederrijn-Lek row). From Driel to the end of the river; the weir positions are inferred from the pair names [U]."
     evidence: "Wikidata Q1152951 (P402 12233572; P403 Q1143852 Lek), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); splits from the Pannerdensch Kanaal at the IJsselkop"
   - id: lek
     name_nl: "Lek"
@@ -70,6 +97,13 @@ rivers:
     wikidata: Q1143852
     parent_river_id: nederrijn
     km_direction: downstream
+    flags:
+      - kind: impounded
+        to: [5.1352, 51.9895]
+        evidence: "Weir-controlled Nederrijn-Lek: hagestein.boven/.beneden (catalogue §3.1, Nederrijn-Lek row); the Lek above the Hagestein weir; inferred from the pair names [U]."
+      - kind: tidal
+        from: [5.1315, 51.993]
+        evidence: "Lower Rhine-Meuse delta, catalogue §4.7 item 7; docs/sources/research/nl-rws.md §6 names Krimpen as tidal (krimpenaandelek.lek is on this river). The tidal limit is not stated in the repository; the Hagestein weir (hagestein.beneden) is the working bound [U]."
     evidence: "Wikidata Q1143852 (P402 7463845; P403 Nieuwe Maas), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: ijssel
     name_nl: "IJssel"
@@ -94,6 +128,25 @@ rivers:
     wikidata: Q41986
     parent_river_id: null
     km_direction: downstream
+    nl_entry:
+      id: eijsden
+      name_nl: "Eijsden"
+      name_en: "Eijsden"
+      at: [5.682, 50.758]
+      max_m: 1000
+      evidence: "The Meuse entry gauge: NL-1 eijsden.grens (50.758, 5.682), catalogue §3.3 item 21 (\"The Meuse entry gauge\", rkm 2.56). Measured on the fixture: nearest node of this river 496 m (n7011694964, downstream of the gauge), nearest edge 8 m."
+    flags:
+      - kind: impounded
+        from: [4.782579717, 50.089049099]
+        to: [5.680889, 50.759639]
+        evidence: "catalogue §4.7 item 6 (Walloon Meuse). From the FR-1 gauge Chooz Trou du Diable (B720000001, \"Last French station\", catalogue §3.3 item 6; Givet has none, Chooz is the border proxy) to Lixhe (NL-1 lixhebiefaval, \"the last weir before NL\", item 20)."
+      - kind: impounded
+        from: [5.691, 50.8724]
+        to: [5.455, 51.81]
+        evidence: "Weir-controlled Dutch Meuse, Borgharen to Lith. Evidence: the RWS gauge pairs upstream/downstream of a weir in the registry (maastricht.borgharen.maas.beneden, linne.stuw.beneden, roermond.boven, belfeld.boven, sambeek.boven/.beneden, grave.boven/.beneden, lith.boven/.beneden; catalogue §3.3 items 23-32). The weir positions are inferred from those names [U]."
+      - kind: tidal
+        from: [5.4329, 51.810386]
+        evidence: "Lower Rhine-Meuse delta (catalogue §4.7 item 7; docs/sources/research/nl-rws.md §6 names the delta as tidal). The tidal limit on the Meuse is not stated in the repository; Lith (lith.beneden, below the Lith weir) is the working bound [U]."
     evidence: "catalogue §5.3 relation; Wikidata Q41986 (P402 1075197; P403 Q1693 North Sea), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); RWS Meuse rkm count up downstream (Eijsden-grens 2.56, Venlo 107.47)"
   - id: scheldt
     name_nl: "Schelde"
@@ -107,6 +160,17 @@ rivers:
     wikidata: Q37620
     parent_river_id: null
     km_direction: none
+    nl_entry:
+      id: scheldt-border
+      name_nl: "Scheldtgrens"
+      name_en: "Scheldt border"
+      at: [4.2181537, 51.3739032]
+      max_m: 100
+      evidence: "The Scheldt where it leaves Belgium. The repository gives no border coordinate: catalogue §3.4 puts Prosperpolder tij \"at the NL border\" (RWS prosperpolder at 51.3400, 4.2659). This is the graph node n1765149111 where OSM splits the Scheldt (w742699628 | w425143378), 2.7 km above the end of the relation at Bath (RWS rilland.bath, 397 m from it). It is 5 km from Prosperpolder along the graph, so the exact border is [U]."
+    flags:
+      - kind: tidal
+        from: [3.7447119, 51.0455777]
+        evidence: "Zeeschelde and Western Scheldt, catalogue §4.7 item 7 and §3.4 (Gentbrugge tij zes58a, Gent, is the first tidal Zeeschelde gauge; the Leie joins at Gent). From = the Scheldt node nearest the end of the graph Lys edges at Gent (n1480779216), measured 1.3 km; the exact tidal limit is [U]."
     evidence: "catalogue §5.3 relation; Wikidata Q37620 (P402 324288; P403 Q1693 North Sea), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); French and Belgian PK are unverified"
   - id: moselle
     name_nl: "Moezel"
@@ -121,18 +185,36 @@ rivers:
     wikidata: Q1667
     parent_river_id: rhine
     km_direction: upstream
+    flags:
+      - kind: impounded
+        evidence: "catalogue §4.7 item 6 and §3.2 (\"The river is impounded with lock OP/UP pairs\"): the whole river in scope; the unimpounded upper French reach is not separated [U]."
     evidence: "catalogue §5.3 relation; Wikidata Q1667 (P402 390416; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up from the mouth (Koblenz 1.3, Perl 241.8)"
   - id: ems
     name_nl: "Eems"
     name_en: "Ems"
     names:
       DE-1: ["EMS"]
+      DE-7: ["Ems"]
     aliases: ["Eems"]
     osm_relation_id: 370068
     osm_way_name: null
     wikidata: Q1648
     parent_river_id: null
     km_direction: downstream
+    nl_entry:
+      id: dollard
+      name_nl: "Dollard"
+      name_en: "Dollard"
+      at: [7.0134682, 53.3244411]
+      max_m: 100
+      evidence: "The Ems where it reaches the Dollard estuary (catalogue §3.5; NL-1 delfzijl and nieuwestatenzijl.dollard are the Dutch gauges). The repository gives no border coordinate: this is the graph node n4799615929 where the Ems edges w1036690416 and w487506679 meet, 5.5 km east of Delfzijl at the mouth of the Dollard; the exact border is [U]."
+    flags:
+      - kind: impounded
+        to: [7.317135, 53.041915]
+        evidence: "catalogue §4.7 item 6 (upper Ems). Everything above Herbrum; the Herbrum Hafendamm gauge (DE-1 3770030) is at the tidal limit (docs/sources/research/de-pegelonline.md)."
+      - kind: tidal
+        from: [7.317135, 53.041915]
+        evidence: "Ems below Herbrum and the Dollard: catalogue §4.7 item 7; \"Herbrum Hafendamm ... At the tidal limit\", §3.5 and docs/sources/research/de-pegelonline.md (tidal from Herbrum/Papenburg)."
     evidence: "catalogue §5.3 relation; Wikidata Q1648 (P402 370068; P403 Q218377 Dollart), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); two km systems (upper Ems/DEK 96-235, tidal Ems from Papenburg 0.39), both up downstream; rejected Q895958 (mouth Eder)"
   - id: dortmund-ems-kanal
     name_nl: "Dortmund-Eemskanaal"
@@ -157,6 +239,9 @@ rivers:
     wikidata: Q1670
     parent_river_id: rhine
     km_direction: upstream
+    flags:
+      - kind: impounded
+        evidence: "catalogue §4.7 item 6; the whole river in scope."
     evidence: "catalogue §5.3 relation; Wikidata Q1670 (P402 412876; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up from the mouth"
   - id: neckar
     name_nl: "Neckar"
@@ -169,6 +254,9 @@ rivers:
     wikidata: Q1673
     parent_river_id: rhine
     km_direction: upstream
+    flags:
+      - kind: impounded
+        evidence: "catalogue §4.7 item 6; catalogue §3.1 (most Neckar gauges are lock \"Schleuse UP\" gauges); the whole river in scope."
     evidence: "catalogue §5.3 relation; Wikidata Q1673 (P402 123881; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up from the mouth"
   - id: sambre
     name_nl: "Samber"
@@ -182,6 +270,9 @@ rivers:
     wikidata: Q208267
     parent_river_id: meuse
     km_direction: none
+    flags:
+      - kind: impounded
+        evidence: "catalogue §4.7 item 6 (Walloon Meuse and Sambre; the FR-1 names are \"La Sambre Canalisée\"); the whole river in scope."
     evidence: "catalogue §5.3 relation; Wikidata Q208267 (P402 1600647; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: ourthe
     name_nl: "Ourthe"
@@ -197,7 +288,8 @@ rivers:
   - id: rur
     name_nl: "Roer"
     name_en: "Rur"
-    names: {}
+    names:
+      DE-7: ["Rur"]
     aliases: ["Roer", "Rur"]
     osm_relation_id: 384594
     osm_way_name: null
@@ -210,12 +302,16 @@ rivers:
     name_en: "Lahn"
     names:
       DE-1: ["LAHN"]
+      DE-7: ["Lahn"]
     aliases: []
     osm_relation_id: 412935
     osm_way_name: null
     wikidata: Q103148
     parent_river_id: rhine
     km_direction: downstream
+    flags:
+      - kind: impounded
+        evidence: "catalogue §4.7 item 6; the whole river in scope."
     evidence: "catalogue §5.3 relation; Wikidata Q103148 (P402 412935; P403 Q584 Rhine), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up downstream (Marburg -38.7, Lahnstein 136)"
   - id: saar
     name_nl: "Saar"
@@ -230,11 +326,15 @@ rivers:
     wikidata: Q153972
     parent_river_id: moselle
     km_direction: upstream
+    flags:
+      - kind: impounded
+        evidence: "catalogue §4.7 item 6 and §3.2 (\"The Saar is impounded\")."
     evidence: "catalogue §5.3 relation; Wikidata Q153972 (P402 390393; P403 Q1667 Moselle), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); DE-1 km count up from the mouth"
   - id: sieg
     name_nl: "Sieg"
     name_en: "Sieg"
-    names: {}
+    names:
+      DE-7: ["Sieg"]
     aliases: []
     osm_relation_id: 409090
     osm_way_name: null
@@ -247,6 +347,7 @@ rivers:
     name_en: "Ruhr"
     names:
       DE-1: ["RUHR"]
+      DE-7: ["Ruhr"]
     aliases: []
     osm_relation_id: 364754
     osm_way_name: null
@@ -257,7 +358,8 @@ rivers:
   - id: lippe
     name_nl: "Lippe"
     name_en: "Lippe"
-    names: {}
+    names:
+      DE-7: ["Lippe"]
     aliases: []
     osm_relation_id: 379691
     osm_way_name: null
@@ -422,7 +524,8 @@ rivers:
   - id: erft
     name_nl: "Erft"
     name_en: "Erft"
-    names: {}
+    names:
+      DE-7: ["Erft"]
     aliases: []
     osm_relation_id: 408032
     osm_way_name: null
@@ -528,7 +631,8 @@ rivers:
   - id: niers
     name_nl: "Niers"
     name_en: "Niers"
-    names: {}
+    names:
+      DE-7: ["Niers"]
     aliases: []
     osm_relation_id: 406674
     osm_way_name: null
@@ -539,18 +643,27 @@ rivers:
   - id: vechte
     name_nl: "Overijsselse Vecht"
     name_en: "Vechte"
-    names: {}
+    names:
+      DE-7: ["Vechte"]
     aliases: ["Vecht", "Vechte", "Overijsselse Vecht"]
     osm_relation_id: 409101
     osm_way_name: null
     wikidata: Q168904
     parent_river_id: null
     km_direction: none
+    nl_entry:
+      id: vecht-border
+      name_nl: "Vechtgrens"
+      name_en: "Vecht border"
+      at: [6.698485, 52.620833]
+      max_m: 300
+      evidence: "The Vecht where it enters the Netherlands. The border crossing has no coordinate in the repository (docs/sources/research/nl-rws.md: De Haandrik, the border entry, is historic only and has none). Proxy: the first current NL-1 gauge, holtheme.vecht (Hardenberg, catalogue §3.6 item 5; 52.6208, 6.6985). Measured on the fixture: nearest node 74 m (n639343048), nearest edge 63 m. The border lies upstream of it [U]."
     evidence: "Wikidata Q168904 (P402 409101; P403 Q231763 Zwarte Water), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: dinkel
     name_nl: "Dinkel"
     name_en: "Dinkel"
-    names: {}
+    names:
+      DE-7: ["Dinkel"]
     aliases: []
     osm_relation_id: 410700
     osm_way_name: null
@@ -561,7 +674,8 @@ rivers:
   - id: berkel
     name_nl: "Berkel"
     name_en: "Berkel"
-    names: {}
+    names:
+      DE-7: ["Berkel"]
     aliases: []
     osm_relation_id: 407949
     osm_way_name: null
@@ -572,7 +686,8 @@ rivers:
   - id: oude-ijssel
     name_nl: "Oude IJssel"
     name_en: "Oude IJssel"
-    names: {}
+    names:
+      DE-7: ["Issel"]
     aliases: ["Issel"]
     osm_relation_id: 423096
     osm_way_name: null
@@ -678,7 +793,8 @@ rivers:
   - id: schwalm
     name_nl: "Swalm"
     name_en: "Schwalm"
-    names: {}
+    names:
+      DE-7: ["Schwalm"]
     aliases: ["Swalm", "Schwalm"]
     osm_relation_id: 4744973
     osm_way_name: null
@@ -689,7 +805,8 @@ rivers:
   - id: wurm
     name_nl: "Worm"
     name_en: "Wurm"
-    names: {}
+    names:
+      DE-7: ["Wurm"]
     aliases: ["Worm", "Wurm"]
     osm_relation_id: 384602
     osm_way_name: null
@@ -781,3 +898,52 @@ excluded:
   - name: "Voer"
     wikidata: Q540657
     reason: "No relation or way carries wikidata=Q540657 in the extract (geo.yml run 37061144664). Nominatim (2026-10-02, q Voer, layer natural, bounded to 5.68-5.92 E, 50.70-50.80 N around Voeren and Eijsden) finds five waterway=stream ways named Voer in Voeren (307446181, 867058350, 41420346, 549778722, 1298076436), none with a wikidata tag, and no relation; unbounded (countrycodes be,nl) it finds the Voer at Leuven (Q3562063, a Dijle tributary). The rules refuse a name-only selection. D21 river, resolve by hand for P13"
+joins:
+  - river: scheldt
+    at: [3.2870075, 50.2241826]
+    to_river: scheldt
+    max_m: 600
+    reason: "KG-161: the Scheldt has a gap between the sink n958071562 of its upper component (3.2870, 50.2242) and the source n2092817137 of the lower one (3.2939, 50.2263), 541 m apart (measured on the fixture 2026-10-01; the next node upstream of the sink, n2092816941, is 63 m back, no other Scheldt node lies within 1.5 km). The FR-1 Escaut gauges (Iwuy E131000202, Maulde E240041101) lie upstream of it, so their path to the Scheldt border needs it"
+travel_times:
+  - from_station: de.wsv.2790020
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    h: [1, 8]
+    basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Emmerich to Lobith: observed spread 1-8 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: de.wsv.2770040
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    h: [6, 19]
+    basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Wesel to Lobith: observed spread 6-19 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: de.wsv.2770010
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    h: [13, 27]
+    basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Duisburg-Ruhrort to Lobith: observed spread 13-27 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: de.wsv.2750010
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    h: [11, 34]
+    basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Düsseldorf to Lobith: observed spread 11-34 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: de.wsv.2730010
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    h: [22, 46]
+    basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Köln to Lobith: observed spread 22-46 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: de.wsv.2710080
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    h: [24, 49]
+    basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Bonn to Lobith: observed spread 24-49 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: de.wsv.27100400
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    h: [28, 48]
+    basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Andernach to Lobith: observed spread 28-48 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
