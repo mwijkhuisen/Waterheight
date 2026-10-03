@@ -24,6 +24,9 @@ export default defineConfig({
         // P7b: the classifier and the class crosswalk (packages/core/test).
         'packages/core/src/classify.ts',
         'packages/core/src/crosswalk.ts',
+        // P8a: the forecast run model (encoding, bounds, identity) and the DE-2 run schedule.
+        'packages/core/src/forecast.ts',
+        'packages/core/src/de2-schedule.ts',
       ],
       reporter: ['text'],
       thresholds: { lines: 90, perFile: true },
