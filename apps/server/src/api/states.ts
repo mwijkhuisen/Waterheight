@@ -63,7 +63,8 @@ type WarningRow = {
   area_key: string;
   name: string | null;
   level_raw: string | null;
-  geometry: string | null;
+  /** md5 of the stored geometry, for the sources whose areas attach by polygon; null otherwise. */
+  geom_md5: string | null;
 };
 
 export type SeriesState = {
@@ -77,9 +78,9 @@ export type SeriesState = {
 
 export type StateRead = { t: number; series: SeriesState[]; stations: StationRow[]; publicSeries: Set<number> };
 
-// ponytail: attachments of a polygon area are cached per family, warning row and station count (a registry sync
-// changes the count); the map is cleared when it passes CACHE_MAX. A warning row never changes its geometry in place
-// for long (presentation follows the newest statement), so a stale entry lives at most until the row closes.
+// The stations an area attaches to, cached per family and station count (a registry sync changes the count) and,
+// for a polygon, per md5 of the stored geometry (P7a refreshes a geometry in place), so a polygon is parsed once.
+// ponytail: the map is cleared when it passes CACHE_MAX entries.
 const CACHE_MAX = 5_000;
 const attached = new Map<string, string[]>();
 
@@ -108,52 +109,85 @@ export async function readStates(
 ): Promise<StateRead> {
   const V = VIEWS[family];
   const at = new Date(t).toISOString();
-  const rows = await snapshot(db, async (tx) => ({
-    series: (
-      await sql<SeriesRow>`
-        SELECT id, station_id, source_id, quantity, value_kind, datum,
-               (EXTRACT(EPOCH FROM staleness_limit) * 1000)::bigint::float8 AS staleness_ms, audience::text AS audience
-        FROM ${sql.table(V.series)} WHERE active ORDER BY id`.execute(tx)
-    ).rows,
-    stations: (
+  const rows = await snapshot(db, async (tx) => {
+    const stations = (
       await sql<StationRow>`SELECT id, country, lon, lat, tier, flags FROM ${sql.table(V.station)} ORDER BY id`.execute(
         tx,
       )
-    ).rows,
-    obs: (
-      await sql<ObsRow>`SELECT series_id, ts, value, qc FROM ${sql.id(OBS_AT[family])}(${at}::timestamptz)`.execute(tx)
-    ).rows,
-    refs: (
-      await sql<RefRow>`
-        SELECT series_id, source_id, kind, value, unit, percentile_convention,
-               to_char(lower(period), 'YYYY-MM-DD') AS p_from, to_char(upper(period) - 1, 'YYYY-MM-DD') AS p_to,
-               season_from_md, season_to_md, priority, basis_label
-        FROM ${sql.table(V.reference)} WHERE valid @> ${at}::timestamptz`.execute(tx)
-    ).rows,
-    classes: (
-      await sql<ClassRow>`
-        SELECT DISTINCT ON (subject_id, source_id) subject_id, source_id, provider_code
-        FROM ${sql.table(V.class)} WHERE subject_type = 'station' AND ts <= ${at}::timestamptz
-        ORDER BY subject_id, source_id, ts DESC`.execute(tx)
-    ).rows,
-    warnings: (
+    ).rows;
+    const warnings = (
       await sql<WarningRow>`
         SELECT id::text AS id, source_id, area_key, name, level_raw,
                CASE WHEN source_id IN ('LU-5', 'DE-6', 'DE-10') OR area_key LIKE 'hydro\\_region:%'
-                    THEN geometry_geojson END AS geometry
+                    THEN md5(geometry_geojson) END AS geom_md5
         FROM ${sql.table(V.warning)} WHERE valid @> ${at}::timestamptz ORDER BY id`.execute(tx)
-    ).rows,
-    health: opts.current
-      ? (
-          await sql<{ source_id: string; last_fetch_ok: Date | null }>`
-            SELECT source_id, last_fetch_ok FROM ${sql.table(V.sourceHealth)}`.execute(tx)
-        ).rows
-      : [],
-    zeros: (
-      await sql<{ series_id: number; value_m: number; datum: Datum }>`
-        SELECT series_id, value_m, datum FROM ${sql.table(V.gaugeZero)} WHERE valid @> ${at}::timestamptz`.execute(tx)
-    ).rows,
-  }));
+    ).rows;
+    // The stations each area attaches to; a polygon not seen before is read and parsed once.
+    if (attached.size > CACHE_MAX) attached.clear();
+    const keyOf = (w: WarningRow) =>
+      `${family}:${stations.length}:${w.geom_md5 === null ? `${w.source_id}:${w.area_key}` : w.geom_md5}`;
+    const missing = warnings.filter((w) => w.geom_md5 !== null && !attached.has(keyOf(w))).map((w) => w.id);
+    const geometry = new Map(
+      missing.length === 0
+        ? []
+        : (
+            await sql<{ id: string; geometry_geojson: string | null }>`
+              SELECT id::text AS id, geometry_geojson FROM ${sql.table(V.warning)}
+              WHERE id = ANY(${missing}::bigint[])`.execute(tx)
+          ).rows.map((g) => [g.id, g.geometry_geojson]),
+    );
+    const areas = warnings.map((w) => {
+      const key = keyOf(w);
+      let ids = attached.get(key);
+      if (ids === undefined) {
+        ids = attachArea(
+          { source: w.source_id, key: w.area_key, geometry: parseGeometry(geometry.get(w.id) ?? null) },
+          stations,
+          opts.sections,
+        );
+        attached.set(key, ids);
+      }
+      return { w, ids };
+    });
+    return {
+      stations,
+      areas,
+      series: (
+        await sql<SeriesRow>`
+          SELECT id, station_id, source_id, quantity, value_kind, datum,
+                 (EXTRACT(EPOCH FROM staleness_limit) * 1000)::bigint::float8 AS staleness_ms, audience::text AS audience
+          FROM ${sql.table(V.series)} WHERE active ORDER BY id`.execute(tx)
+      ).rows,
+      obs: (
+        await sql<ObsRow>`SELECT series_id, ts, value, qc FROM ${sql.id(OBS_AT[family])}(${at}::timestamptz)`.execute(
+          tx,
+        )
+      ).rows,
+      refs: (
+        await sql<RefRow>`
+          SELECT series_id, source_id, kind, value, unit, percentile_convention,
+                 to_char(lower(period), 'YYYY-MM-DD') AS p_from, to_char(upper(period) - 1, 'YYYY-MM-DD') AS p_to,
+                 season_from_md, season_to_md, priority, basis_label
+          FROM ${sql.table(V.reference)} WHERE valid @> ${at}::timestamptz`.execute(tx)
+      ).rows,
+      classes: (
+        await sql<ClassRow>`
+          SELECT DISTINCT ON (subject_id, source_id) subject_id, source_id, provider_code
+          FROM ${sql.table(V.class)} WHERE subject_type = 'station' AND ts <= ${at}::timestamptz
+          ORDER BY subject_id, source_id, ts DESC`.execute(tx)
+      ).rows,
+      health: opts.current
+        ? (
+            await sql<{ source_id: string; last_fetch_ok: Date | null }>`
+              SELECT source_id, last_fetch_ok FROM ${sql.table(V.sourceHealth)}`.execute(tx)
+          ).rows
+        : [],
+      zeros: (
+        await sql<{ series_id: number; value_m: number; datum: Datum }>`
+          SELECT series_id, value_m, datum FROM ${sql.table(V.gaugeZero)} WHERE valid @> ${at}::timestamptz`.execute(tx)
+      ).rows,
+    };
+  });
 
   const lastOk = new Map(rows.health.map((h) => [h.source_id, h.last_fetch_ok?.getTime() ?? null]));
   const fresh = (source: string) => {
@@ -195,18 +229,7 @@ export async function readStates(
     ]);
   }
   const areasOf = new Map<string, AreaIn[]>();
-  if (attached.size > CACHE_MAX) attached.clear();
-  for (const w of rows.warnings) {
-    const key = `${family}:${w.id}:${rows.stations.length}`;
-    let ids = attached.get(key);
-    if (ids === undefined) {
-      ids = attachArea(
-        { source: w.source_id, key: w.area_key, geometry: parseGeometry(w.geometry) },
-        rows.stations,
-        opts.sections,
-      );
-      attached.set(key, ids);
-    }
+  for (const { w, ids } of rows.areas) {
     for (const id of ids) {
       areasOf.set(id, [
         ...(areasOf.get(id) ?? []),
