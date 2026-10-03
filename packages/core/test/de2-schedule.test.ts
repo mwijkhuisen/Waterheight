@@ -46,6 +46,17 @@ describe('the DE-2 schedule', () => {
     expect(de2Late(at('2026-10-12T10:00:00Z'), at('2026-10-12T05:00:00Z'), 450)).toBeNull();
   });
 
+  it('past the look-back each newly missed due day is still named, never a capped day (review F1)', () => {
+    const old = at('2026-09-22T05:00:00Z'); // a Tuesday, 20 days before Monday 2026-10-12
+    // Monday 15:00 Berlin: Monday's deadline passed
+    expect(de2Late(at('2026-10-12T13:00:00Z'), old, 450)).toBe('2026-10-12');
+    // the Tuesday after, 15:00 Berlin: Tuesday
+    expect(de2Late(at('2026-10-13T13:00:00Z'), old, 450)).toBe('2026-10-13');
+    // Tuesday 09:00 Berlin: Tuesday's deadline has not passed, so Monday is still the latest
+    expect(de2Late(at('2026-10-13T07:00:00Z'), old, 450)).toBe('2026-10-12');
+    expect(de2Superseded(run('2026-09-22T05:00:00Z'), at('2026-10-13T07:00:00Z'), 450)).toBe(true);
+  });
+
   it('a run past a missed deadline is not current: "no forecast", never the held run', () => {
     const friday = run('2026-10-09T05:00:00Z');
     const superseded = (r: typeof friday, now: number) => de2Superseded(r, now, 450);

@@ -215,6 +215,14 @@ describe('forecast_run_late (DE-2)', { timeout: 300_000 }, () => {
     expect((await detail('LU-3'))?.detail.forecast).toMatchObject({ series: 1, current: 0, late: null });
     expect((await detail('DE-2'))?.detail.forecast).toMatchObject({ late: '2026-10-31' });
   });
+
+  it('weeks without a run still alert each newly missed working day (review F1)', async () => {
+    const before = alerts.length;
+    // The newest DE-2 run is of 2026-10-30, 17 days before Monday 2026-11-16 (15:00 Berlin), then Tuesday.
+    await health(Date.parse('2026-11-16T14:00:00Z'));
+    await health(Date.parse('2026-11-17T14:00:00Z'));
+    expect(alerts.slice(before).map((a) => a.fields.day)).toEqual(['2026-11-16', '2026-11-17']);
+  });
 });
 
 describe('the public health document', { timeout: 300_000 }, () => {

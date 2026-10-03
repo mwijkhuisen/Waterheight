@@ -63,19 +63,19 @@ export function de2Due(date: string, ruhrortCm: number | null, holidays: readonl
   return workday || (ruhrortCm !== null && ruhrortCm < RUHRORT_LOW_CM);
 }
 
-/** The due days after the date of `issued` whose deadline is at or before `now`, oldest first. */
-function missed(issued: number, now: number, ruhrortCm: number | null, holidays: readonly string[]): string[] {
-  const out: string[] = [];
+/**
+ * The latest due day whose deadline is at or before `now`, walking back from today to the day after the date of
+ * `issued`, or to LOOK_DAYS before today when that is later, or null. It never names a capped day (review F1), so
+ * after weeks without a run each newly missed due day is still named.
+ */
+function lastMissed(issued: number, now: number, ruhrortCm: number | null, holidays: readonly string[]): string | null {
   const today = Temporal.PlainDate.from(berlinDate(now));
-  let d = Temporal.PlainDate.from(berlinDate(issued)).add({ days: 1 });
-  for (let i = 0; Temporal.PlainDate.compare(d, today) <= 0; i++, d = d.add({ days: 1 })) {
-    if (i >= LOOK_DAYS) {
-      out.push(d.toString());
-      break;
-    }
-    if (de2Due(d.toString(), ruhrortCm, holidays) && de2Deadline(d.toString()) <= now) out.push(d.toString());
-  }
-  return out;
+  const after = Temporal.PlainDate.from(berlinDate(issued)).add({ days: 1 });
+  const floor = today.subtract({ days: LOOK_DAYS });
+  const stop = Temporal.PlainDate.compare(after, floor) > 0 ? after : floor;
+  for (let d = today; Temporal.PlainDate.compare(d, stop) >= 0; d = d.subtract({ days: 1 }))
+    if (de2Due(d.toString(), ruhrortCm, holidays) && de2Deadline(d.toString()) <= now) return d.toString();
+  return null;
 }
 
 /** The latest due day whose deadline passed without a newer run than `latestIssued`, or null (the alert's day). */
@@ -85,15 +85,20 @@ export function de2Late(
   ruhrortCm: number | null,
   holidays: readonly string[] = DE2_HOLIDAYS,
 ): string | null {
-  return missed(latestIssued, now, ruhrortCm, holidays).at(-1) ?? null;
+  return lastMissed(latestIssued, now, ruhrortCm, holidays);
 }
 
-/** For `isCurrent`: a DE-2 run is superseded once a due day after its own day has passed its deadline. */
+/**
+ * For `isCurrent`: a DE-2 run is superseded once a due day after its own day has passed its deadline, and always once
+ * its own day is more than LOOK_DAYS before today.
+ */
 export function de2Superseded(
   run: CurrentRun,
   now: number,
   ruhrortCm: number | null,
   holidays: readonly string[] = DE2_HOLIDAYS,
 ): boolean {
-  return missed(run.issued, now, ruhrortCm, holidays).length > 0;
+  const stale = Temporal.PlainDate.from(berlinDate(run.issued)).add({ days: LOOK_DAYS });
+  if (Temporal.PlainDate.compare(stale, Temporal.PlainDate.from(berlinDate(now))) < 0) return true;
+  return lastMissed(run.issued, now, ruhrortCm, holidays) !== null;
 }
