@@ -1,0 +1,88 @@
+# Golden placement list for P6b (test/rivernet-golden.yaml): hand-checked expectations, one per station.
+#   station          registry station id
+#   river            expected river id, or null (not placed on a river)
+#   rule             override | name | official_km | canal | unsnapped (SNAP_RULES in packages/contracts/src/rivernet.ts)
+#   km_official      exact expected official km (DE-1 row, or the RWS rkm of snap-overrides.yaml), or null
+#   nl_entry_node    expected entry id of rivers.yaml (nl_entry.id): the nearest entry downstream (positive km_to_nl_entry),
+#                    else upstream (negative, the station lies inside NL below it), else null (no path to an entry)
+#   reason           the evidence: catalogue row, registry water_name, override
+# nl_entry_node was derived on the committed fixture (tools/geo/fixtures, OSM 2026-10-01) with the Scheldt join of
+# registry/rivers.yaml, by a longest-distance search over the graph edges from the nearest edge of the station's river;
+# stations on a river with no downstream or upstream entry (the Lys, which stops at Gent) are null.
+version: 1
+stations:
+  - { station: nl.rws.antwerpen, river: scheldt, rule: override, km_official: null, nl_entry_node: scheldt-border, reason: "catalogue §0.6: Zeeschelde at Antwerpen; override to scheldt" }
+  - { station: nl.rws.lixhebiefaval, river: meuse, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 and §3.3 item 20: Meuse at Lixhe (last weir before NL); override to meuse" }
+  - { station: nl.rws.maaseik, river: meuse, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6: Grensmaas at Maaseik; override to meuse (no RWS rkm is listed for it)" }
+  - { station: nl.rws.herenlaak, river: meuse, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6: Grensmaas at Maaseik-Herenlaak; override to meuse with max_m 1000 (723 m from the drawn Meuse)" }
+  - { station: nl.rws.lanaken, river: meuse, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 and §3.3 item 24: Grensmaas at Lanaken; override to meuse (no RWS rkm is listed for it)" }
+  - { station: nl.rws.smeermaas.zuidwillemsvaart, river: null, rule: canal, km_official: null, nl_entry_node: null, reason: "catalogue §0.6: Zuid-Willemsvaart intake, a canal transfer; rule canal, never the Meuse (a canal trap)" }
+  - { station: nl.rws.kanne, river: null, rule: unsnapped, km_official: null, nl_entry_node: null, reason: "catalogue §0.6 and §10 R9 (C7): \"Jeker/Geer or canal; UNVERIFIED which\"; unsnapped, no river assumed" }
+  - { station: fr.sandre.B400101101, river: chiers, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Chiers at Athus (Messancy); registry water_name \"La Chiers\" 975 m from the edge, override with max_m 1500" }
+  - { station: fr.sandre.B422431101, river: chiers, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Chiers at Torgny; registry water_name \"La Chiers\" (names.FR-1 of chiers); 6 m from the edge" }
+  - { station: fr.sandre.B423000102, river: ton, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Ton at Harnoncourt; registry water_name \"Le Thon\" (names.FR-1 of ton)" }
+  - { station: fr.sandre.B610000201, river: semois, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Semois at Membre; registry water_name \"La Semoy\" (names.FR-1 of semois)" }
+  - { station: fr.sandre.B610000301, river: semois, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Semois at Tintigny; registry water_name \"La Semoy\" (names.FR-1 of semois)" }
+  - { station: fr.sandre.B610000401, river: semois, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Semois at Chiny; registry water_name \"La Semoy\" (names.FR-1 of semois)" }
+  - { station: fr.sandre.B610000601, river: semois, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Semois at Bouillon; registry water_name \"La Semoy\" (names.FR-1 of semois)" }
+  - { station: fr.sandre.B610000701, river: semois, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Semois at Sainte-Marie; registry water_name \"La Semoy\" (names.FR-1 of semois)" }
+  - { station: fr.sandre.B610000801, river: null, rule: unsnapped, km_official: null, nl_entry_node: null, reason: "catalogue §0.6 Semois at Straimont (Q only); registry water_name \"La Semoy\" but 5.6 km from the Semois edge: override unsnapped [U]" }
+  - { station: fr.sandre.B713000101, river: viroin, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Viroin at Treignes; FR-1 publishes no water name, override to viroin from the station name" }
+  - { station: fr.sandre.B713000201, river: viroin, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Viroin at Couvin; FR-1 publishes no water name, override to viroin from the station name" }
+  - { station: fr.sandre.B713000301, river: viroin, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Viroin at Nismes; FR-1 publishes no water name, override to viroin from the station name" }
+  - { station: fr.sandre.B732201101, river: houille, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Houille at Felenne; registry water_name \"La Houille\"" }
+  - { station: fr.sandre.D022000101, river: thure, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Thure at Bersillies-l'Abbaye; registry water_name \"rivière la thure\"" }
+  - { station: fr.sandre.D022000201, river: hante, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Hante at Beaumont; registry water_name \"Hante\"" }
+  - { station: fr.sandre.D022000301, river: hante, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §0.6 Hante at Wiheries; registry water_name \"Hante\"" }
+  - { station: fr.sandre.E182702501, river: trouille, rule: name, km_official: null, nl_entry_node: scheldt-border, reason: "catalogue §0.6 Trouille at Givry; registry water_name \"Trouille\"" }
+  - { station: fr.sandre.E381126601, river: lys, rule: name, km_official: null, nl_entry_node: null, reason: "catalogue §0.6 and §3.4 Lys at Menen-Ropswalle; registry water_name \"La Lys\"; the Lys never reaches the Scheldt in the graph (KG-161, ends at Gent), so no entry path" }
+  - { station: ch.bafu.2289, river: rhine, rule: name, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.1 row 6 Basel Rheinhalle; CH-1 water_name \"Rhein\"; Swiss gauges have no official km" }
+  - { station: de.wsv.23300130, river: rhine, rule: name, km_official: 186.2, nl_entry_node: lobith, reason: "catalogue §3.1 row 8 Rheinweiler, Restrhein beside the Grand Canal d'Alsace (a canal trap, never an edge); DE-1 water_name RHEIN, km 186.2, 2 m from the Rhine edge" }
+  - { station: de.wsv.23700200, river: rhine, rule: name, km_official: 362.327, nl_entry_node: lobith, reason: "catalogue §3.1 row 13 Maxau, km 362.327" }
+  - { station: de.wsv.25700100, river: rhine, rule: name, km_official: 546.23, nl_entry_node: lobith, reason: "catalogue §3.1 row 20 Kaub, km 546.23" }
+  - { station: de.wsv.25900700, river: rhine, rule: name, km_official: 591.49, nl_entry_node: lobith, reason: "catalogue §3.1 row 21 Koblenz, km 591.49" }
+  - { station: de.wsv.2730010, river: rhine, rule: name, km_official: 688, nl_entry_node: lobith, reason: "catalogue §3.1 row 24 Köln, km 688.0" }
+  - { station: de.wsv.2790020, river: rhine, rule: name, km_official: 851.9, nl_entry_node: lobith, reason: "catalogue §3.1 row 29 Emmerich, km 851.9, the last German gauge" }
+  - { station: nl.rws.lobith.bovenrijn.tolkamer, river: rhine, rule: override, km_official: 862, nl_entry_node: lobith, reason: "catalogue §3.1 row 30: Lobith, rkm 862.0, the Rhine entry gauge; override to rhine with that km (Rijn-km (RWS))" }
+  - { station: nl.rws.nijmegen.waal, river: waal, rule: override, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.1 Waal row: nijmegen.waal; override to waal (no RWS rkm is listed)" }
+  - { station: nl.rws.pannerden.pannerdenschkanaal, river: pannerdensch-kanaal, rule: override, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.1 Pannerdensch Kanaal row; override to pannerdensch-kanaal" }
+  - { station: nl.rws.driel.beneden, river: nederrijn, rule: override, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.1 Nederrijn-Lek row: driel.beneden; override to nederrijn" }
+  - { station: nl.rws.hagestein.beneden, river: lek, rule: override, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.1 Nederrijn-Lek row: hagestein.beneden; override to lek" }
+  - { station: nl.rws.kampen.ijssel, river: ijssel, rule: override, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.1 IJssel row: kampen.ijssel; override to ijssel; reached by path through the Pannerdensch Kanaal (KG-156)" }
+  - { station: nl.rws.rilland.bath, river: scheldt, rule: override, km_official: null, nl_entry_node: scheldt-border, reason: "catalogue §3.4 Western Scheldt: rilland.bath; override to scheldt, 397 m from the end of the relation; below the Scheldt border, so a negative km" }
+  - { station: nl.rws.holtheme.vecht, river: vechte, rule: override, km_official: null, nl_entry_node: vecht-border, reason: "catalogue §3.6 item 5: holtheme.vecht, the first current RWS gauge on the Vecht; override to vechte" }
+  - { station: fr.sandre.A850061001, river: moselle, rule: name, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.2 row 6 Uckange, most downstream French Moselle station; FR-1 water_name \"La Moselle\"; no official km on it" }
+  - { station: de.wsv.26100100, river: moselle, rule: name, km_official: 241.8, nl_entry_node: lobith, reason: "catalogue §3.2 row 7 Perl, km 241.8" }
+  - { station: de.wsv.26500100, river: moselle, rule: name, km_official: 195.3, nl_entry_node: lobith, reason: "catalogue §3.2 row 13 Trier UP, km 195.3" }
+  - { station: de.wsv.24900108, river: main, rule: name, km_official: 12.213, nl_entry_node: lobith, reason: "catalogue §3.1 Main block: Raunheim, km 12.213, nearest to the mouth" }
+  - { station: fr.sandre.B720000001, river: meuse, rule: name, km_official: null, nl_entry_node: eijsden, reason: "catalogue §3.3 item 6: Chooz Trou du Diable, the last French station; FR-1 water_name \"La Meuse\"" }
+  - { station: nl.rws.eijsden.grens, river: meuse, rule: override, km_official: 2.56, nl_entry_node: eijsden, reason: "catalogue §3.3 item 21: the Meuse entry gauge, rkm 2.56 (Maas-km (RWS))" }
+  - { station: nl.rws.maastricht.sintpieter, river: meuse, rule: override, km_official: 10.8, nl_entry_node: eijsden, reason: "catalogue §3.3 item 22: rkm 10.80" }
+  - { station: nl.rws.maastricht.borgharen.maas.beneden, river: meuse, rule: override, km_official: 16, nl_entry_node: eijsden, reason: "catalogue §3.3 item 23: Borgharen Dorp, rkm 16.00" }
+  - { station: nl.rws.venlo, river: meuse, rule: override, km_official: 107.47, nl_entry_node: eijsden, reason: "catalogue §3.3 item 28: rkm 107.47" }
+  - { station: nl.rws.megen.maas, river: meuse, rule: override, km_official: 190.75, nl_entry_node: eijsden, reason: "catalogue §3.3 item 31: rkm 190.75" }
+  - { station: nl.rws.lith.beneden, river: meuse, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §3.3 item 32: Lith dorp; no RWS rkm is listed, so none is given" }
+  - { station: fr.sandre.E131000202, river: scheldt, rule: name, km_official: null, nl_entry_node: scheldt-border, reason: "catalogue §3.4: Iwuy; FR-1 water_name \"L'Escaut Canalisée\"; upstream of the 541 m Scheldt gap (KG-161), so its path to the Scheldt border needs the reviewed join" }
+  - { station: fr.sandre.E240041101, river: scheldt, rule: name, km_official: null, nl_entry_node: scheldt-border, reason: "catalogue §3.4: Maulde, the BE border near Mortagne; FR-1 water_name \"L'Escaut Canalisée\"; upstream of the Scheldt gap (KG-161)" }
+  - { station: be.spw.8702, river: meuse, rule: name, km_official: null, nl_entry_node: eijsden, reason: "owner (BE-3): Chooz DGH 8702, catalogue §3.3 item 6; BE-3 water_name \"Haute Meuse (amont Dinant)\" through the waters table of snap-overrides.yaml" }
+  - { station: be.spw.8067, river: meuse, rule: name, km_official: null, nl_entry_node: eijsden, reason: "owner (BE-3): Anseremme Monia 8067, catalogue §3.3 item 8; BE-3 water_name \"Haute Meuse (amont Dinant)\" through the waters table of snap-overrides.yaml" }
+  - { station: be.spw.8059, river: meuse, rule: name, km_official: null, nl_entry_node: eijsden, reason: "owner (BE-3): Dinant 8059, catalogue §3.3 item 9; BE-3 water_name \"Haute Meuse (aval Dinant)\" through the waters table of snap-overrides.yaml" }
+  - { station: be.spw.8001, river: meuse, rule: name, km_official: null, nl_entry_node: eijsden, reason: "owner (BE-3): Namur 8001, catalogue §3.3 item 11; BE-3 water_name \"Haute Meuse (aval Dinant)\" through the waters table of snap-overrides.yaml" }
+  - { station: be.spw.7141, river: meuse, rule: name, km_official: null, nl_entry_node: eijsden, reason: "owner (BE-3): Huy 7141, catalogue §3.3 item 13; BE-3 water_name \"Meuse moyenne\" through the waters table of snap-overrides.yaml" }
+  - { station: be.spw.7102, river: meuse, rule: name, km_official: null, nl_entry_node: eijsden, reason: "owner (BE-3): Liège 7102, catalogue §3.3 item 17; BE-3 water_name \"Meuse moyenne\" through the waters table of snap-overrides.yaml" }
+  - { station: be.spw.5451, river: meuse, rule: name, km_official: null, nl_entry_node: eijsden, reason: "owner (BE-3): Visé 5451, catalogue §3.3 item 19; BE-3 water_name \"Basse Meuse\" through the waters table of snap-overrides.yaml" }
+  - { station: be.spw.5436, river: meuse, rule: name, km_official: null, nl_entry_node: eijsden, reason: "owner (BE-3): Lixhe Aval 5436, catalogue §3.3 item 20; BE-3 water_name \"Basse Meuse\" through the waters table of snap-overrides.yaml" }
+  - { station: de.wsv.3770030, river: ems, rule: override, km_official: 213.07, nl_entry_node: dollard, reason: "DE-1 water_name DEK, but de-pegelonline.md and catalogue §3.5: Herbrum Hafendamm, Ems at the tidal limit; override to ems; the DE-1 km 213.07 stays (DEK-km)" }
+  - { station: de.wsv.3770040, river: ems, rule: override, km_official: 217.86, nl_entry_node: dollard, reason: "DE-1 water_name DEK, but Rhede is on the Ems at the tidal limit (de-pegelonline.md); override to ems; DE-1 km 217.86 (DEK-km)" }
+  - { station: de.wsv.3790010, river: ems, rule: name, km_official: 0.39, nl_entry_node: dollard, reason: "catalogue §3.5 Papenburg, km 0.39 (tidal Ems system); DE-1 water_name EMS" }
+  - { station: de.wsv.23800557, river: neckar, rule: official_km, km_official: 117.435, nl_entry_node: lobith, reason: "catalogue §2.2 \"35 basin stations have no coordinates\": Horkheim Schleuse UP, NECKAR-km 117.435, bracketed by Neckarsulm Wehr UP (107) and Horkheim Wehr UP (119.8), both with coordinates, on the same river and km system" }
+  - { station: lu.age.remich, river: moselle, rule: override, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.2 row 8: SN_Remich on the Moselle; AGE publishes no water body, override to moselle" }
+  - { station: lu.age.wasserbillig, river: moselle, rule: override, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.2 row 12: Wasserbillig (Moselle), 51 m from the Sauer but the table puts it on the Moselle; override to moselle" }
+  - { station: lu.age.bollendorf, river: sauer, rule: override, km_official: null, nl_entry_node: lobith, reason: "catalogue §3.2 Sauer block: Bollendorf 15 (LfU RLP, audience off, withheld); it is placed like any other" }
+  - { station: lu.age.petange, river: chiers, rule: override, km_official: null, nl_entry_node: eijsden, reason: "catalogue §3.3 item 2: Pétange 33 on the upper Chiers" }
+  - { station: lu.age.wiltz, river: null, rule: unsnapped, km_official: null, nl_entry_node: null, reason: "catalogue §3.2: Wiltz 38 is on the Wiltz, a Sauer tributary and not a curated river" }
+  - { station: lu.age.perl, river: null, rule: unsnapped, km_official: null, nl_entry_node: null, reason: "no coordinates in the AGE source and no km; the same gauge as DE-1 Perl 26100100, which is placed" }
+  - { station: nl.rws.hoekvanholland, river: null, rule: unsnapped, km_official: null, nl_entry_node: null, reason: "Nieuwe Waterweg: not a river of rivers.yaml; 16.6 km from the nearest Rhine edge" }
+  - { station: nl.rws.hansweert, river: null, rule: unsnapped, km_official: null, nl_entry_node: null, reason: "catalogue §3.4 Western Scheldt: beyond the end of the Scheldt relation at Bath" }
+  - { station: fr.sandre.E201000501, river: null, rule: unsnapped, km_official: null, nl_entry_node: null, reason: "KG-160: \"Rivière Scarpe\", the upper Scarpe, is not in the graph" }
+  - { station: fr.sandre.E363121001, river: lys, rule: override, km_official: null, nl_entry_node: null, reason: "FR-1 publishes no water name; \"[La Lys] à Saint-Venant - VNF\"; override to lys; no entry path (KG-161)" }
