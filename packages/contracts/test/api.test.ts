@@ -309,8 +309,8 @@ describe('Snapshot state and basis', () => {
     expect(b({ ref: 'x'.repeat(201) })).toBe(false);
     for (const kind of BASIS_KINDS) expect(b({ kind }), kind).toBe(true);
     expect(b({ kind: 'owner' })).toBe(false);
-    for (const measure of ['stage', 'discharge', 'area']) expect(b({ measure }), measure).toBe(true);
-    expect(b({ measure: 'level' })).toBe(false);
+    for (const measure of ['stage', 'level', 'discharge', 'area']) expect(b({ measure }), measure).toBe(true);
+    expect(b({ measure: 'volume' })).toBe(false);
     for (const source of ['CANARY-OWNER', 'owner', 'de-1', 'DE-', 'XX-1', 'DE-100'])
       expect(b({ source }), source).toBe(false);
   });

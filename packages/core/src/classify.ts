@@ -20,8 +20,9 @@ import { QC } from './qc.ts';
 // < extreme`, with the basis it was taken from. No I/O: the server reads the rows valid at t through one view family
 // and hands them in. The rules are written out in docs/classification.md (generated from crosswalk.ts):
 // - every source of evidence gives an interval on low..extreme and, where it decides, a point level;
-// - candidates are taken in the priority operational > statistical > provider class; each narrows the interval
-//   when it agrees with it and is skipped when it does not (the higher priority wins);
+// - candidates are taken in the priority operational > statistical > provider class, and within operational the
+//   agency's gauge class before its thresholds; each narrows the interval when it agrees with it and is skipped
+//   when it does not (the higher priority wins);
 // - the state is the interval when one level is left, else the first point inside it, else no_ref: a station
 //   without a deciding reference is never given a guess (no neighbour, default or interpolated threshold);
 // - an area class (a section, region or zone) colours the value only where no gauge state exists, with
@@ -72,16 +73,26 @@ export type SeriesIn = {
   impounded: boolean;
 };
 
+/** What a state measures: a stage, an absolute level (a lake, a NAP level series), a discharge or an area. */
+export type Measure = Basis | 'level';
+
 export type BasisOut = {
   source: string;
   kind: Group;
-  /** What the state measures: the series' quantity for a gauge state (KG-185), `area` for a section state. */
-  measure: Basis;
+  /** What the state measures: the series' own quantity for a gauge state (KG-185), `area` for a section state. */
+  measure: Measure;
   /** Our code: the reference kinds used (`MNW/MHW`), the class code (`RP:0`), the NL-4 stem or the area key. */
   ref: string;
-  /** "WSV MNW 2010–2020", "LHP RP:0", "RWS Waterinfo: Licht verhoogd (>200cm)": may hold provider text, inert. */
+  /** "WSV MNW 2010–2020", "LHP RP:0", "Licht verhoogd (>200cm)" (NL-4): may hold provider text, inert. */
   label: string;
 };
+
+/** The contract's maxima of a basis (StateBasis): longer provider text is cut, never a failed snapshot (SR-6). */
+const LABEL_MAX = 700;
+const REF_MAX = 200;
+/** A text cut to `max` UTF-16 units, without a lone high surrogate at the cut. */
+const cut = (s: string, max: number) => (s.length <= max ? s : s.slice(0, max).replace(/[\uD800-\uDBFF]$/, ''));
+const bounded = (b: BasisOut): BasisOut => ({ ...b, ref: cut(b.ref, REF_MAX), label: cut(b.label, LABEL_MAX) });
 
 export type Classified = {
   state: State;
@@ -131,7 +142,7 @@ function setCandidate(
   used: readonly Used[],
   all: readonly RefIn[],
   v: number,
-  measure: Basis,
+  measure: Measure,
   skipLow: boolean,
 ): Cand | null {
   const first = used[0] as Used;
@@ -205,15 +216,18 @@ export function monthDay(t: number): number {
 export const inSeason = (md: number, from: number, to: number) =>
   from <= to ? md >= from && md <= to : md >= from || md <= to;
 
-/** The NL-4 stem of a workbook label: the label without its bracketed bound. */
-export const nl4Stem = (label: string) => label.replace(/\s*\(.*$/, '').trim();
+/** The NL-4 stem of a workbook label: the label without its bracketed bound (cut at the first `(`). */
+export const nl4Stem = (label: string) => {
+  const i = label.indexOf('(');
+  return (i < 0 ? label : label.slice(0, i)).trim();
+};
 
 /**
  * The NL-4 display class of a value (provider class): the classes valid at t whose season contains t, their
  * `NL4_FROM` and `NL4_TO` rows paired by (season, priority); a class holds [From, To) (KG-083); where bands overlap
  * the lowest Priority wins; a band with neither bound never matches; an unknown stem decides nothing.
  */
-function nl4Candidate(refs: readonly RefIn[], v: number, t: number, measure: Basis): Cand | null {
+function nl4Candidate(refs: readonly RefIn[], v: number, t: number, measure: Measure): Cand | null {
   const md = monthDay(t);
   const bands = new Map<string, { from?: number; to?: number; label: string; priority: number }>();
   for (const r of refs) {
@@ -242,12 +256,13 @@ function nl4Candidate(refs: readonly RefIn[], v: number, t: number, measure: Bas
     lo: l,
     hi: l,
     point: l,
-    basis: { source: 'NL-4', kind: 'provider_class', measure, ref: stem, label: `${AGENCY['NL-4']}: ${best.label}` },
+    // The workbook label only: basis.source names RWS Waterinfo, and the web adds the legend's disclaimer (C39).
+    basis: { source: 'NL-4', kind: 'provider_class', measure, ref: stem, label: best.label },
   };
 }
 
 /** The candidate of a gauge class (LHP, BAFU), or null for no_ref and unknown codes. */
-function classCandidate(c: ClassIn, measure: Basis): Cand | null {
+function classCandidate(c: ClassIn, measure: Measure): Cand | null {
   const scale = CLASS_SCALE[c.source];
   if (scale === undefined) return null;
   const row = crosswalkRow(c.source, scale, c.code.replace(/^[A-Z]{2}:/, ''));
@@ -279,9 +294,17 @@ const ORDER: readonly Group[] = ['operational', 'statistical', 'provider_class']
 export function classify(s: SeriesIn, family: Family): Classified {
   const visible = (source: string) => family === 'owner' || !OWNER_ONLY_SOURCES.has(source);
   const unit = s.quantity === 'H' ? 'cm' : 'm³/s';
-  const measure: Basis = s.quantity === 'H' ? 'stage' : 'discharge';
+  const measure: Measure = s.quantity === 'Q' ? 'discharge' : s.valueKind === 'level' ? 'level' : 'stage';
   const refs = s.refs.filter((r) => visible(r.source) && r.unit === unit);
   const cands: Cand[] = [];
+  // The agency's published gauge class first: within the operational group it outranks our own comparison of the
+  // value with the agency's thresholds (§4.9), which can lag it (DE-7 hourly against LHP every 10 minutes) or
+  // disagree at a boundary (BAFU danger level 2 with Q under WL2).
+  for (const c of s.classes) {
+    if (!c.fresh || !visible(c.source)) continue;
+    const cand = classCandidate(c, measure);
+    if (cand) cands.push(cand);
+  }
   if (s.value !== null) {
     const v = s.value;
     const sets = new Map<string, Used[]>();
@@ -300,13 +323,8 @@ export function classify(s: SeriesIn, family: Family): Classified {
     const nl4 = nl4Candidate(refs, v, s.t, measure);
     if (nl4) cands.push(nl4);
   }
-  for (const c of s.classes) {
-    if (!c.fresh || !visible(c.source)) continue;
-    const cand = classCandidate(c, measure);
-    if (cand) cands.push(cand);
-  }
-  // Operational references before operational classes (both use the agency's own thresholds; ours use the value
-  // at t), then statistics, then display classes. D12: a tidal reach is classed from operational sources only.
+  // Operational classes, then operational reference sets (the order they were pushed in), then statistics, then
+  // display classes. D12: a tidal reach is classed from operational sources only.
   const ordered = ORDER.flatMap((g) => cands.filter((c) => c.group === g)).filter(
     (c) => !s.tidal || c.group === 'operational',
   );
@@ -338,10 +356,17 @@ export function classify(s: SeriesIn, family: Family): Classified {
     const [lo, hi] = range;
     level = lo === hi ? lo : (ordered.find((c) => c.point !== null && c.point >= lo && c.point <= hi)?.point ?? null);
   }
-  const gauge =
-    level === null
-      ? null
-      : (ordered.find((c) => c.point === level)?.basis ?? puller?.basis ?? (narrowed as Cand).basis);
+  // The basis: the first candidate whose point is the state; after a collapse that no point names, both decisive
+  // candidates ("AGE < orange / AGE HQ10": the one that narrowed the interval and the one that moved it to the edge).
+  let gauge: BasisOut | null = null;
+  if (level !== null) {
+    const b = (narrowed as Cand).basis;
+    gauge =
+      ordered.find((c) => c.point === level)?.basis ??
+      (puller === null
+        ? b
+        : { ...b, ref: `${b.ref}/${puller.basis.ref}`, label: `${b.label} / ${puller.basis.label}` });
+  }
 
   let area: Classified['area'] = null;
   for (const a of s.areas) {
@@ -350,13 +375,13 @@ export function classify(s: SeriesIn, family: Family): Classified {
     if (l === null || (area !== null && n(l) <= n(area.state))) continue;
     area = {
       state: l,
-      basis: {
+      basis: bounded({
         source: a.source,
         kind: 'area',
         measure: 'area',
         ref: a.key,
         label: `${AGENCY[a.source] ?? a.source} ${a.name ?? a.key}`,
-      },
+      }),
     };
   }
   const flags = {
@@ -366,7 +391,7 @@ export function classify(s: SeriesIn, family: Family): Classified {
     impounded: s.impounded,
   };
   if (level !== null && gauge !== null) {
-    return { state: LEVEL_AT[level] as Level, basis: gauge, section: false, area, flags };
+    return { state: LEVEL_AT[level] as Level, basis: bounded(gauge), section: false, area, flags };
   }
   if (area !== null) return { state: area.state, basis: area.basis, section: true, area: null, flags };
   return { state: 'no_ref', basis: null, section: false, area: null, flags };

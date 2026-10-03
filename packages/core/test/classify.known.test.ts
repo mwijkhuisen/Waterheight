@@ -184,6 +184,35 @@ describe('priority', () => {
     }
   });
 
+  // Review CR-1: within the operational group the agency's published class comes before our comparison of the value
+  // with its thresholds.
+  const WL = [ref('CH-2', 'WL2', 820, { unit: 'm³/s' }), ref('CH-2', 'WL3', 1000, { unit: 'm³/s' })];
+  const bafu = (value: number, code: string) =>
+    classify(series({ quantity: 'Q', valueKind: null, value, refs: WL, classes: [cls('CH-1', code)] }), 'public');
+
+  it("a gauge class beats the same agency's thresholds: BAFU danger level 2 with Q under WL2 is elevated", () => {
+    const r = bafu(500, '2');
+    expect(r.state).toBe('elevated');
+    expect(r.basis).toEqual({ source: 'CH-1', kind: 'operational', measure: 'discharge', ref: '2', label: 'BAFU 2' });
+  });
+
+  it('BAFU danger level 1 with Q at or above WL2: the class wins, the WL set collapses to its edge: normal', () => {
+    for (const q of [820, 900, 1200]) {
+      const r = bafu(q, '1');
+      expect(r.state, String(q)).toBe('normal');
+      expect(r.basis, String(q)).toMatchObject({ source: 'CH-1', ref: '1', label: 'BAFU 1' });
+    }
+    // Without the class the WL set decides.
+    expect(classify(series({ quantity: 'Q', valueKind: null, value: 900, refs: WL }), 'public').state).toBe('elevated');
+  });
+
+  it('LHP NW:1 with a LANUK value still under Info 1 (DE-7 hourly, LHP every 10 minutes) is elevated', () => {
+    const refs = [ref('DE-7', 'LANUV_INFO_1', 100), ref('DE-7', 'LANUV_INFO_2', 200)];
+    const r = classify(series({ value: 90, refs, classes: [cls('DE-6', 'NW:1')] }), 'public');
+    expect(r.state).toBe('elevated');
+    expect(r.basis).toEqual({ source: 'DE-6', kind: 'operational', measure: 'stage', ref: 'NW:1', label: 'LHP NW:1' });
+  });
+
   it('statistics beat an NL-4 display class', () => {
     const refs = [
       ref('DE-1', 'MHW', 100),
@@ -223,6 +252,7 @@ describe('tidal and impounded series', () => {
   it('impounded level series are not affected', () => {
     const r = classify(series({ value: 9, valueKind: 'level', impounded: true, refs: KAUB }), 'public');
     expect(r.state).toBe('low');
+    expect(r.basis?.measure).toBe('level');
   });
 });
 
@@ -287,6 +317,22 @@ describe('areas', () => {
     expect(classify(series({ areas: [area('XX-9', '1')] }), 'public').state).toBe('no_ref');
   });
 
+  it('provider text over the contract is cut: label 700, ref 200 characters (review SR-6)', () => {
+    const name = 'x'.repeat(2_000);
+    const key = 'k'.repeat(2_000);
+    const alone = classify(series({ areas: [area('LU-5', 'ALERT_LVL_2', { key, name })] }), 'public');
+    expect(alone.state).toBe('high');
+    expect(alone.basis?.label).toBe(`LU-Alert ${name}`.slice(0, 700));
+    expect(alone.basis?.ref).toBe(key.slice(0, 200));
+    const beside = classify(series({ value: 9, refs: KAUB, areas: [area('FR-5', '3', { key, name })] }), 'public');
+    expect(beside.area?.basis.label).toHaveLength(700);
+    expect(beside.area?.basis.ref).toHaveLength(200);
+    // A cut never leaves half a surrogate pair.
+    const emoji = classify(series({ areas: [area('LU-5', 'ALERT_LVL_2', { name: '🌊'.repeat(1_000) })] }), 'public');
+    expect(emoji.basis?.label).toHaveLength(699);
+    expect(emoji.basis?.label.isWellFormed()).toBe(true);
+  });
+
   it('a gauge no_ref (a class that decides nothing) leaves the area as the state', () => {
     const r = classify(series({ classes: [cls('DE-6', 'RP:-1')], areas: [area('FR-5', '2')] }), 'public');
     expect(r).toMatchObject({ state: 'elevated', section: true });
@@ -343,20 +389,25 @@ describe('NL-4 display classes', () => {
     expect(nl4(99999, LEGEND).state).toBe('extreme');
   });
 
-  it('basis: kind provider_class, ref the stem, label with the agency and the full workbook label', () => {
+  it('basis: kind provider_class, ref the stem, label the full workbook label (source NL-4 names the agency)', () => {
     expect(nl4(250, LEGEND).basis).toEqual({
       source: 'NL-4',
       kind: 'provider_class',
       measure: 'stage',
       ref: 'Licht verhoogd',
-      label: 'RWS Waterinfo: Licht verhoogd (>200cm)',
+      label: 'Licht verhoogd (>200cm)',
     });
   });
 
-  it('measure follows the series: discharge for a Q series', () => {
+  it('measure follows the series: discharge for a Q series, level for a level series, stage for a stage', () => {
     const refs = LEGEND.map((r) => ({ ...r, unit: 'm³/s' }));
     const r = classify(series({ quantity: 'Q', valueKind: null, value: 250, refs }), 'public');
     expect(r.basis?.measure).toBe('discharge');
+    expect(classify(series({ valueKind: 'level', value: 250, refs: LEGEND }), 'public').basis?.measure).toBe('level');
+    expect(classify(series({ valueKind: 'stage', value: 250, refs: LEGEND }), 'public').basis?.measure).toBe('stage');
+    // A BAFU danger level on a lake (its class reaches the H level series): level (review CR-3).
+    const lake = classify(series({ valueKind: 'level', value: 43_000, classes: [cls('CH-1', '1')] }), 'public');
+    expect(lake.basis).toMatchObject({ source: 'CH-1', measure: 'level' });
   });
 
   it('overlapping bands: the lowest priority number wins', () => {
@@ -426,10 +477,14 @@ describe('NL-4 display classes', () => {
     expect(nl4(5, [ref('NL-4', 'NL4_FROM', 0), ref('NL-4', 'NL4_TO', 10)]).state).toBe('no_ref');
   });
 
-  it('nl4Stem drops the bracketed bound only', () => {
+  it('nl4Stem drops the bracketed bound only: everything from the first "(" on', () => {
     expect(nl4Stem('Licht verhoogd (>1015cm)')).toBe('Licht verhoogd');
     expect(nl4Stem('Hoogwater / Stormvloed (>300cm)')).toBe('Hoogwater / Stormvloed');
     expect(nl4Stem('Geen klasse-indeling')).toBe('Geen klasse-indeling');
+    expect(nl4Stem('  Normaal(0 tot 100cm) (x)')).toBe('Normaal');
+    expect(nl4Stem('Hoogwater (>300\ncm)')).toBe('Hoogwater');
+    // Linear (CodeQL js/polynomial-redos): a long run of spaces without a bracket.
+    expect(nl4Stem(`a${' '.repeat(100_000)}b`)).toBe(`a${' '.repeat(100_000)}b`);
   });
 });
 
@@ -455,6 +510,25 @@ describe('owner rows in the public family', () => {
     const c = [cls('BE-3', 't3/alert')];
     expect(classify(series({ classes: c }), 'public').state).toBe('no_ref');
     expect(classify(series({ classes: c }), 'owner').state).toBe('no_ref');
+  });
+
+  it('a collapse that no point names: both decisive candidates in the basis (review CR-2)', () => {
+    // Below AGE orange (low..elevated, "AGE < orange") with HQ10 passed (high): elevated, which neither names alone.
+    const refs = [...lu4, ref('LU-4', 'HQ10', 50), ref('LU-4', 'HQ50', 300)];
+    const r = classify(series({ value: 90, refs }), 'owner');
+    expect(r.state).toBe('elevated');
+    expect(r.basis).toEqual({
+      source: 'LU-4',
+      kind: 'operational',
+      measure: 'stage',
+      ref: 'LU4_ORANGE/HQ10',
+      label: 'AGE < orange / AGE HQ10',
+    });
+    // Where the state is a candidate's own point, that candidate alone (the first one).
+    expect(classify(series({ value: 150, refs }), 'owner').basis).toMatchObject({
+      ref: 'LU4_ORANGE',
+      label: 'AGE orange',
+    });
   });
 
   it('owner rows do not disturb a public state', () => {

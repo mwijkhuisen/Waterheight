@@ -424,9 +424,9 @@
   "basis": {
    "source": "NL-4",
    "kind": "provider_class",
-   "measure": "stage",
+   "measure": "level",
    "ref": "Verlaagd",
-   "label": "RWS Waterinfo: Verlaagd (<720cm)"
+   "label": "Verlaagd (<720cm)"
   },
   "section": false,
   "area": null,
@@ -455,7 +455,7 @@
    "kind": "provider_class",
    "measure": "discharge",
    "ref": "Verlaagd",
-   "label": "RWS Waterinfo: Verlaagd (<1000m3/s)"
+   "label": "Verlaagd (<1000m3/s)"
   },
   "section": false,
   "area": null,
@@ -477,9 +477,9 @@
   "basis": {
    "source": "NL-4",
    "kind": "provider_class",
-   "measure": "stage",
+   "measure": "level",
    "ref": "Normaal",
-   "label": "RWS Waterinfo: Normaal (4390 - 4610cm)"
+   "label": "Normaal (4390 - 4610cm)"
   },
   "section": false,
   "area": null,
@@ -527,11 +527,11 @@
   "value": 116.641,
   "state": "normal",
   "basis": {
-   "source": "CH-2",
+   "source": "CH-1",
    "kind": "operational",
    "measure": "discharge",
-   "ref": "WL2",
-   "label": "BAFU < WL2"
+   "ref": "1",
+   "label": "BAFU 1"
   },
   "section": false,
   "area": null,
@@ -574,11 +574,11 @@
   "value": 324.996,
   "state": "normal",
   "basis": {
-   "source": "CH-2",
+   "source": "CH-1",
    "kind": "operational",
    "measure": "discharge",
-   "ref": "WL2",
-   "label": "BAFU < WL2"
+   "ref": "1",
+   "label": "BAFU 1"
   },
   "section": false,
   "area": null,
@@ -598,11 +598,11 @@
   "value": 340.204,
   "state": "normal",
   "basis": {
-   "source": "CH-2",
+   "source": "CH-1",
    "kind": "operational",
    "measure": "discharge",
-   "ref": "WL2",
-   "label": "BAFU < WL2"
+   "ref": "1",
+   "label": "BAFU 1"
   },
   "section": false,
   "area": null,
@@ -622,11 +622,11 @@
   "value": 42914.8,
   "state": "normal",
   "basis": {
-   "source": "CH-2",
+   "source": "CH-1",
    "kind": "operational",
-   "measure": "stage",
-   "ref": "WL2",
-   "label": "BAFU < WL2"
+   "measure": "level",
+   "ref": "1",
+   "label": "BAFU 1"
   },
   "section": false,
   "area": null,
@@ -651,11 +651,11 @@
   "value": 41318,
   "state": "normal",
   "basis": {
-   "source": "CH-2",
+   "source": "CH-1",
    "kind": "operational",
-   "measure": "stage",
-   "ref": "WL2",
-   "label": "BAFU < WL2"
+   "measure": "level",
+   "ref": "1",
+   "label": "BAFU 1"
   },
   "section": false,
   "area": null,

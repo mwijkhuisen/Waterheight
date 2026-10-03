@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { H_DESCRIPTION, Q_DESCRIPTION } from '../apps/server/src/adapters/nl-4/normalise.ts';
 import { readThresholds } from '../apps/server/src/load/thresholds.ts';
-import { BASIS_KINDS, SourcesFile, STATES, StationsFile } from '../packages/contracts/src/index.ts';
+import { BASIS_KINDS, SourcesFile, STATES, StateBasis, StationsFile } from '../packages/contracts/src/index.ts';
 import {
   CLASS_WINDOW_MIN,
   CROSSWALK,
@@ -11,7 +11,10 @@ import {
   type Group,
   LEVEL_NORM,
   LEVELS,
+  type Measure,
+  nl4Stem,
   PERMISSION_REQUIRED,
+  REFERENCE_ROLES,
 } from '../packages/core/src/index.ts';
 
 // Pins between the classifier's constants and the files they restate (P7b): a constant in core that no file or
@@ -31,6 +34,27 @@ describe('contracts and core agree', () => {
     expect(same).toBe(true);
     expect([...BASIS_KINDS]).toEqual(['operational', 'statistical', 'provider_class', 'area']);
     for (const r of CROSSWALK) expect(BASIS_KINDS).toContain(r.group);
+  });
+
+  it('the measures of StateBasis are the Measure of the classifier (both ways, and by value)', () => {
+    type Measures = StateBasis['measure'];
+    const same: [Measure] extends [Measures] ? ([Measures] extends [Measure] ? true : never) : never = true;
+    expect(same).toBe(true);
+    expect([...StateBasis.shape.measure.options].sort()).toEqual(['area', 'discharge', 'level', 'stage']);
+  });
+});
+
+describe('REFERENCE_ROLES', () => {
+  it('every (source, group) with a classifying kind has exactly one set form (review CR-11)', () => {
+    // setCandidate takes the form of a set's first role: a second form in one set would depend on row order.
+    const forms = new Map<string, Set<string | null>>();
+    for (const r of REFERENCE_ROLES) {
+      if (r.op === null) continue;
+      const key = `${r.source} ${r.group}`;
+      forms.set(key, (forms.get(key) ?? new Set()).add(r.form));
+    }
+    expect(forms.size).toBeGreaterThanOrEqual(10);
+    expect([...forms].filter(([, f]) => f.size !== 1 || f.has(null)).map(([key]) => key)).toEqual([]);
   });
 });
 
@@ -98,11 +122,10 @@ describe('NL-4 stems on registered series', () => {
   const rows = readThresholds(read('registry/thresholds/nl-4.csv')).rows.filter((r) =>
     keys.has(`${r.description}\n${r.code}`),
   );
-  const stem = (label: string) => label.replace(/\s*\(.*$/, '').trim();
 
   it('every stem is a crosswalk row of NL-4', () => {
     expect(rows.length).toBeGreaterThan(100);
-    const missing = [...new Set(rows.map((r) => stem(r.label)))].filter(
+    const missing = [...new Set(rows.map((r) => nl4Stem(r.label)))].filter(
       (s) => crosswalkRow('NL-4', 'stem', s) === undefined,
     );
     expect(missing).toEqual([]);
@@ -111,10 +134,13 @@ describe('NL-4 stems on registered series', () => {
   it('within one series and season set, a larger workbook order never maps to a higher level', () => {
     const sets = new Map<string, { order: number; stem: string; level: number }[]>();
     for (const r of rows) {
-      const row = crosswalkRow('NL-4', 'stem', stem(r.label));
+      const row = crosswalkRow('NL-4', 'stem', nl4Stem(r.label));
       if (row === undefined || row.level === 'no_ref') continue;
       const key = `${r.code}\n${r.description}\n${r.from_md}\n${r.to_md}`;
-      sets.set(key, [...(sets.get(key) ?? []), { order: r.order, stem: stem(r.label), level: LEVEL_NORM[row.level] }]);
+      sets.set(key, [
+        ...(sets.get(key) ?? []),
+        { order: r.order, stem: nl4Stem(r.label), level: LEVEL_NORM[row.level] },
+      ]);
     }
     expect(sets.size).toBeGreaterThan(50);
     const bad: string[] = [];

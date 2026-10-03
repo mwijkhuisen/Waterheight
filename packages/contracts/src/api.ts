@@ -180,11 +180,14 @@ export const BASIS_KINDS = ['operational', 'statistical', 'provider_class', 'are
 export const StateBasis = z.strictObject({
   source: HealthSourceId,
   kind: z.enum(BASIS_KINDS),
-  /** What the state measures: stage or discharge at the gauge, or an area (a section, region or zone). */
-  measure: z.enum(['stage', 'discharge', 'area']),
+  /**
+   * What the state measures: the series' own quantity at the gauge (a stage, an absolute level such as a lake or a
+   * NAP level series, a discharge), or an area (a section, region or zone).
+   */
+  measure: z.enum(['stage', 'level', 'discharge', 'area']),
   /** Our code: the reference kinds used (`MNW/MHW`), the class code (`RP:0`), the NL-4 stem or the area key. */
   ref: Text(200),
-  /** "WSV MNW 2010–2020", "RWS Waterinfo: Licht verhoogd (>200cm)": untrusted text, data only. */
+  /** "WSV MNW 2010–2020", "Licht verhoogd (>200cm)" (NL-4): untrusted text, data only. */
   label: Text(700),
 });
 export type StateBasis = z.infer<typeof StateBasis>;

@@ -4,7 +4,7 @@ import { parse } from 'yaml';
 import { H_DESCRIPTION, Q_DESCRIPTION } from '../apps/server/src/adapters/nl-4/normalise.ts';
 import { readThresholds } from '../apps/server/src/load/thresholds.ts';
 import { LabelFile, StationsFile } from '../packages/contracts/src/index.ts';
-import { CROSSWALK, REFERENCE_ROLES } from '../packages/core/src/index.ts';
+import { CROSSWALK, nl4Stem, REFERENCE_ROLES } from '../packages/core/src/index.ts';
 
 const root = new URL('..', import.meta.url);
 
@@ -109,7 +109,7 @@ describe('registry/labels', () => {
     const stems = new Set(
       readThresholds(readFileSync(new URL('registry/thresholds/nl-4.csv', root), 'utf8'))
         .rows.filter((r) => keys.has(`${r.description}\n${r.code}`))
-        .map((r) => r.label.replace(/\s*\(.*$/, '').trim()),
+        .map((r) => nl4Stem(r.label)),
     );
     expect(stems.size).toBeGreaterThanOrEqual(15);
     const missing = [...stems].filter((stem) => !has('NL-4', 'stem', stem));
