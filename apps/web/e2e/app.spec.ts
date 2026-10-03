@@ -143,11 +143,11 @@ async function expectNoSeriousAxe(page: Page, scope?: string) {
   await settled(page);
   // Since P5a the table lists about 1,130 series (rows about 88 px tall) and the page is far taller than the 32,767 px a
   // browser can hit-test: axe leaves the colour contrast of every row below that (from about row 370) undecided.
-  // Every row has the same markup and styles; the first 250 (about 22,000 px) are checked (KG-129: P10 pages or
-  // virtualises the table).
+  // Every row has the same markup and styles; the first 200 are checked (KG-129: P10 pages or virtualises the table).
+  // P6b: the DE-7 rows now show their water body, rows grew taller, and WebKit left rows from 238 on undecided.
   const axe = new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
-    .exclude('tbody > tr:nth-child(n+251)');
+    .exclude('tbody > tr:nth-child(n+201)');
   const result = await (scope === undefined ? axe : axe.include(scope)).analyze();
   expect(result.passes.length, 'axe ran its rules').toBeGreaterThan(10);
   /** Each node by its selector, its markup and axe's own reason, so a failure in CI can be diagnosed from the log. */
@@ -200,6 +200,7 @@ test('NL is the default: language, heading, banner, disclaimer, and t is now', a
   await expect(page.getByText('Geen officiële waarschuwingsdienst', { exact: true })).toBeVisible();
   // The sources come from /meta, each in its own language.
   await expect(page.locator('footer h2')).toHaveText('Bronnen');
+  await expect(page.locator('footer')).toContainText('vallen niet onder de ODbL');
   await expect(page.locator('footer li[lang="nl"]')).not.toHaveCount(0);
   await expect(page.locator('footer li[lang="de"]')).not.toHaveCount(0);
   // The date duty of FR-1, FR-3 (Etalab) and CH-1, CH-3 (BAFU): the date of t, never the registry's placeholder; and
