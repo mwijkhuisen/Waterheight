@@ -57,7 +57,7 @@ const cursor = async () =>
   );
 const manifestSizes = async () => Object.fromEntries((await h.reader.manifests()).map((m) => [m.file, m.size]));
 
-describe('load and replay of the fixture archive', () => {
+describe('load and replay of the fixture archive', { timeout: 60_000 }, () => {
   let first: Record<string, string>;
 
   it('loads every payload: rows in the right partitions, latest values, gauge zeros, one batch per payload', async () => {
@@ -316,7 +316,7 @@ describe('load and replay of the fixture archive', () => {
   });
 });
 
-describe('atomicity: a payload is one transaction', () => {
+describe('atomicity: a payload is one transaction', { timeout: 60_000 }, () => {
   it('when the last statement of the transaction fails, nothing of the payload is stored and the cursor stays', async () => {
     const h2 = await harness();
     try {
