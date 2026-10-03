@@ -35,6 +35,8 @@ let h: Harness;
 let app: ReturnType<typeof createApp>;
 const id: Record<string, number> = {};
 const station: Record<string, string> = {};
+/** The FR-5 section seeded at vigilance 2 (a real code of registry/vigicrues-sections.yaml). */
+let frSection = '';
 
 type Row = Record<string, unknown>;
 const q = async <R extends pg.QueryResultRow = Row>(text: string, args: unknown[] = []): Promise<R[]> =>
@@ -313,6 +315,28 @@ beforeAll(async () => {
      VALUES ('CH-5', $1, 'Test section', 3, '2', tstzrange('2026-10-01T00:00:00Z', NULL))`,
     [`river:${riverNumber}`],
   );
+  // Review CR-7: an FR-5 vigilance (level 2) on a real section of registry/vigicrues-sections.yaml, no geometry; a
+  // public FR-1 stage station of that section and one of another section, each with a value below.
+  const sections = vigicruesSections();
+  const frRows = await q<{ id: number; station_id: string }>(
+    `SELECT e.series_id AS id, e.station_id FROM series_eff e JOIN series s ON s.id = e.series_id
+     WHERE e.source_id = 'FR-1' AND e.audience = 'public' AND e.role = 'primary' AND s.quantity = 'H'
+       AND s.value_kind = 'stage' AND s.active AND e.series_id <> $1 AND e.station_id = ANY($2)
+     ORDER BY e.series_id`,
+    [id.fr, [...sections.keys()]],
+  );
+  const frIn = frRows[0];
+  if (frIn === undefined) throw new Error('no FR-1 stage station in a Vigicrues section');
+  frSection = sections.get(frIn.station_id) as string;
+  const frOther = frRows.find((r) => sections.get(r.station_id) !== frSection);
+  if (frOther === undefined) throw new Error('no FR-1 stage station in a second Vigicrues section');
+  id.frIn = frIn.id;
+  id.frOther = frOther.id;
+  await a.query(
+    `INSERT INTO warning_area (source_id, area_key, name, level_norm, level_raw, valid)
+     VALUES ('FR-5', $1, 'Test vigilance', 3, '2', tstzrange('2026-10-01T00:00:00Z', NULL))`,
+    [frSection],
+  );
   await a.query(
     `INSERT INTO gauge_zero (series_id, value_m, datum, valid, batch_id) VALUES
        ($1, 78.0, 'NHN', tstzrange('2020-01-01', NULL), 1), ($2, 101.5, 'IGN69', tstzrange('2020-01-01', NULL), 1)`,
@@ -331,6 +355,8 @@ beforeAll(async () => {
     ['area', 100, 100],
     ['nl', 100, 250],
     ['fr', 150, 150],
+    ['frIn', 120, 120],
+    ['frOther', 130, 130],
     ['diekirch', 200, 330],
     ['be', 20, 50],
     ['canaryOwner', CANARIES.owner.value, CANARIES.owner.value],
@@ -341,7 +367,7 @@ beforeAll(async () => {
     await obs(id[key] as number, MY_OBS.cur, cur);
   }
   const fresh5 = new Date(T_NOW - 5 * 60_000);
-  for (const source of ['DE-1', 'DE-6', 'CH-1', 'CH-5', 'LU-5', 'LU-4', 'BE-3', 'NL-1', 'FR-1', 'LU-1']) {
+  for (const source of ['DE-1', 'DE-6', 'CH-1', 'CH-5', 'LU-5', 'LU-4', 'BE-3', 'NL-1', 'FR-1', 'FR-5', 'LU-1']) {
     await fetched(source, fresh5);
   }
 
@@ -361,7 +387,7 @@ beforeAll(async () => {
 
 afterAll(() => h.close());
 
-const mine = () => ['kaub', 'chq', 'area', 'nl', 'fr', 'diekirch'].map((k) => id[k] as number);
+const mine = () => ['kaub', 'chq', 'area', 'nl', 'fr', 'frIn', 'frOther', 'diekirch'].map((k) => id[k] as number);
 const ownerOnly = () => ['be', 'canaryOwner', 'canaryWithheld'].map((k) => id[k] as number);
 
 describe('snapshot against SQL and the classifier', { timeout: 60_000 }, () => {
@@ -406,6 +432,25 @@ describe('snapshot against SQL and the classifier', { timeout: 60_000 }, () => {
     expect(sec).toMatchObject({ state: 'elevated', section: true });
     expect(sec?.basis).toMatchObject({ source: 'CH-5', kind: 'area' });
     expect(valueIn(cur, id.diekirch as number)).toMatchObject({ state: 'no_ref', basis: null });
+  });
+
+  it('FR-5 through the section table: a station of the section takes its vigilance, one of another does not', async () => {
+    for (const at of [NOW, PAST]) {
+      const { snap } = await snapshotAt(at);
+      const inside = valueIn(snap, id.frIn as number);
+      expect(inside, at.toISOString()).toMatchObject({ state: 'elevated', section: true });
+      expect(inside?.basis).toEqual({
+        source: 'FR-5',
+        kind: 'area',
+        measure: 'area',
+        ref: frSection,
+        label: 'Vigicrues Test vigilance',
+      });
+      expect(inside?.area).toBeUndefined();
+      const other = valueIn(snap, id.frOther as number);
+      expect(other, at.toISOString()).toMatchObject({ state: 'no_ref', basis: null, section: false });
+      expect(other?.area).toBeUndefined();
+    }
   });
 
   it('gauge zeros: a DE-1 stage under NHN gets nap; an FR-1 stage under IGN69 gets zero and never nap', async () => {
