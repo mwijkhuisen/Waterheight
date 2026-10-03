@@ -6,6 +6,7 @@ import { normalise, withReferences } from '../../adapters/lu-4/normalise.ts';
 import { parsePage } from '../../adapters/lu-4/parse.ts';
 import { REGISTRY_DIR, readSeed } from '../../capture/specs.ts';
 import type { DstProof, LoadAdapter } from '../adapters.ts';
+import { lu3Seed } from './lu-3.ts';
 
 // P7a: the loader wiring of LU-4 (its specs, its time convention and, for a gated convention, its DST proof),
 // merged into load/adapters.ts. A wiring file may use the guards and the registry tables; the adapter stays pure.
@@ -51,6 +52,11 @@ export const ADAPTER: LoadAdapter = {
         if (station === undefined) throw new SchemaDrift('bad_variant');
         // Positions are not stored from LU-4 (LU-6 holds them): an empty map, so no point is looked up.
         const out = normalise(parsePage(body), { station, positions: new Map() });
+        // P8a: a page that states another forecast limit than the LU-3 seed (`limit_h`) is counted, never stored: the
+        // display limit is the seed's, and the owner reads the change in the batch's drop counts.
+        const limit = lu3Seed().get(out.record.forecast_slug);
+        if (limit !== undefined && limit !== null && out.record.forecast_limit_h !== limit)
+          out.dropped.forecast_limit_drift = 1;
         return withReferences(out, ctx.refRegistries ?? new Map(), t.twins);
       },
     },
