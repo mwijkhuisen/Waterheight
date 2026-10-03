@@ -283,11 +283,13 @@ export async function applyWarnings(
           ${textsOf(r)}::jsonb, ${fetchedAt}::timestamptz, ${batch}::bigint)`.execute(tx);
   // Presentation follows the newest statement in place (review CR-4); an unchanged geometry or text keeps its
   // stored value, so a confirmation rewrites no large field.
+  // A null geometry or absent texts (left out for size by the loader, or not published) keeps what is stored.
   const present = (r: WarningRow) =>
     sql`name = ${r.name},
-        geometry_geojson = CASE WHEN geometry_geojson IS DISTINCT FROM ${r.geometry}::text THEN ${r.geometry}::text
-                                ELSE geometry_geojson END,
-        texts = CASE WHEN texts IS DISTINCT FROM ${textsOf(r)}::jsonb THEN ${textsOf(r)}::jsonb ELSE texts END`;
+        geometry_geojson = CASE WHEN ${r.geometry}::text IS NOT NULL AND geometry_geojson IS DISTINCT FROM ${r.geometry}::text
+                                THEN ${r.geometry}::text ELSE geometry_geojson END,
+        texts = CASE WHEN ${textsOf(r)}::jsonb IS NOT NULL AND texts IS DISTINCT FROM ${textsOf(r)}::jsonb
+                     THEN ${textsOf(r)}::jsonb ELSE texts END`;
 
   if (w.mode === 'snapshot') {
     const at = new Date(w.at);

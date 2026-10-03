@@ -74,14 +74,11 @@ const Geometry = z.strictObject({
 });
 export type Geometry = z.infer<typeof Geometry>;
 
-/** A WGS84 position [lon, lat] (every recorded one has two numbers). */
+/** A WGS84 position [lon, lat] or, as RFC 7946 allows, [lon, lat, altitude] (every recorded one has two numbers). */
 const position = (p: unknown) =>
   Array.isArray(p) &&
-  p.length === 2 &&
-  typeof p[0] === 'number' &&
-  typeof p[1] === 'number' &&
-  Number.isFinite(p[0]) &&
-  Number.isFinite(p[1]) &&
+  (p.length === 2 || p.length === 3) &&
+  p.every((x) => typeof x === 'number' && Number.isFinite(x)) &&
   Math.abs(p[0]) <= 180 &&
   Math.abs(p[1]) <= 90;
 const line = (l: unknown) => Array.isArray(l) && l.length >= 2 && l.every(position);

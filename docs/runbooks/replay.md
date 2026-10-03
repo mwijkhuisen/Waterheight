@@ -252,13 +252,13 @@ The loader of the releases before P7a stored no reference, class or warning, and
    ```bash
    for a in "DE-1 de-1-meta" "DE-6 de-6-stations" "DE-6 de-6-alerts" "FR-5 fr-5-vigilance" "FR-5 fr-5-sections" \
             "FR-5 fr-5-stations" "CH-5 ch-5-warn" "LU-5 lu-5-cap" "CH-1 ch-1-lindas" "CH-2 ch-2-pq" \
-            "DE-7 de-7-pegeldaten" "LU-4 lu-4-pages"; do
+            "DE-7 de-7-pegeldaten" "LU-4 lu-4-pages" "BE-3 be-3-meta"; do
      set -- $a
      rwsc run --rm --no-deps -T load replay --source $1 --spec $2 --from <first day> --to <today> --dry-run
    done
    ```
 
-   `ch-1-lindas` and `ch-2-pq` are read every 10 minutes since P1, so their count is large; their references and classes change rarely, but only a replay reads them. `de-7-pegeldaten` holds the two-million-row seed (§8 step 3: one slow payload). LU-5 holds the 833-file seed. `be-3-refs` is not replayed: it did not exist before the deploy; its first run is Tuesday 05:20 UTC after the deploy (KG-165), and the tail loads it.
+   `ch-1-lindas` and `ch-2-pq` are read every 10 minutes since P1, so their count is large; their references and classes change rarely, but only a replay reads them. `de-7-pegeldaten` holds the two-million-row seed (§8 step 3: one slow payload). LU-5 holds the 833-file seed. `be-3-meta` is replayed for the NIVCRU classes of its station list (its gauge zeros are confirmations). `be-3-refs` is not replayed: it did not exist before the deploy; its first run is Tuesday 05:20 UTC after the deploy (KG-165), and the tail loads it.
 3. Run it again without `--dry-run`. Expect `"quarantined":0`. The `n_new` of a class, warning or reference spec counts observations, so it is 0 for most of them; the proof is the rows: for example `SELECT source_id, count(*) FROM reference_value GROUP BY 1`, `class_obs` and `warning_area` likewise. The alerts `reference_changed`, `class_changed` and `warning_changed` fire **during a replay too**, one line per payload and code: count them before you read them as news (§5 step 5). `unmapped_class` and the other retained codes keep a batch's `n_skipped` above 0 until the crosswalk or the registry has the row (`docs/runbooks/reference-change.md` §5).
 4. Run each command a second time: `"n_new":0,"n_changed":0` and no new row in the three tables.
 5. Check `scripts/verify-prod.sh <domain> --interval` (the DE-6 interval takes about 30 minutes) and the default run, which now includes `owner ids`: the public health documents must name no owner source.

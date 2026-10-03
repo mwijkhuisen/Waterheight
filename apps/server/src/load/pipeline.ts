@@ -128,29 +128,40 @@ export const RETAINED = [
   'geometry_too_big',
   'texts_too_big',
   'bad_text',
+  'reference_out_of_range',
 ] as const;
 
 const NUL = String.fromCharCode(0);
-const hasNul = (v: unknown): boolean =>
-  typeof v === 'string' ? v.includes(NUL) : typeof v === 'object' && v !== null && Object.values(v).some(hasNul);
+/** A text PostgreSQL cannot store: U+0000 (text and jsonb) or a lone surrogate (jsonb refuses `\ud800`). */
+const badString = (s: string) => s.includes(NUL) || !s.isWellFormed();
+const badText = (v: unknown): boolean =>
+  typeof v === 'string'
+    ? badString(v)
+    : typeof v === 'object' && v !== null && Object.entries(v).some(([key, value]) => badString(key) || badText(value));
+/** A reference value is a `real`: beyond this it is a provider typo, not a level (and past 3.4e38 an insert error). */
+const REFERENCE_MAX = 1e9;
 
 /**
- * PostgreSQL text and jsonb cannot hold U+0000, which JSON can carry: a reference, class or warning row with it in any
- * text is withheld and counted (`bad_text`, RETAINED: alerted, the object kept for a replay), so provider text never
- * fails the payload's transaction. A withheld snapshot area stays as stored, as a dropped one does (review CR-5).
+ * Rows PostgreSQL cannot store never fail the payload's transaction (round-2 review M1, M2): a reference, class or
+ * warning row with U+0000 or a lone surrogate in any text is withheld as `bad_text`, a reference whose value is
+ * beyond ±1e9 as `reference_out_of_range` (both RETAINED: alerted, the object kept for a replay). A withheld snapshot area stays
+ * as stored, as a dropped one does (review CR-5).
  */
-export function dropNul(n: Normalised): void {
-  const keep = <T>(rows: T[]): T[] => {
-    const kept = rows.filter((r) => !hasNul(r));
-    if (kept.length < rows.length) n.dropped.bad_text = (n.dropped.bad_text ?? 0) + rows.length - kept.length;
+export function dropUnstorable(n: Normalised): void {
+  const keep = <T>(rows: T[], bad: (r: T) => boolean, code: string): T[] => {
+    const kept = rows.filter((r) => !bad(r));
+    if (kept.length < rows.length) n.dropped[code] = (n.dropped[code] ?? 0) + rows.length - kept.length;
     return kept;
   };
-  if (n.references) n.references = keep(n.references);
-  if (n.classes) n.classes = keep(n.classes);
+  if (n.references) {
+    n.references = keep(n.references, badText, 'bad_text');
+    n.references = keep(n.references, (r) => !(Math.abs(r.value) <= REFERENCE_MAX), 'reference_out_of_range');
+  }
+  if (n.classes) n.classes = keep(n.classes, badText, 'bad_text');
   const w = n.warnings;
   if (w === undefined) return;
-  const withheld = w.rows.filter(hasNul).flatMap((r) => (r.area_key.includes(NUL) ? [] : [r.area_key]));
-  w.rows = keep(w.rows);
+  const withheld = w.rows.filter(badText).flatMap((r) => (badString(r.area_key) ? [] : [r.area_key]));
+  w.rows = keep(w.rows, badText, 'bad_text');
   if (w.mode === 'snapshot' && withheld.length > 0) w.kept = [...(w.kept ?? []), ...withheld];
 }
 
@@ -160,8 +171,10 @@ export const WARNING_BYTES = { geometry: 2 * 1024 * 1024, texts: 60_000 } as con
 /**
  * A warning row keeps its level whatever the size of its presentation: a geometry or texts over WARNING_BYTES is
  * left out of the row and counted (`geometry_too_big`, `texts_too_big`; RETAINED), so no size CHECK fails the
- * payload's transaction (P7a review SR-2). PostgreSQL prints jsonb with a space after each `:` and `,`, which
- * the margin under 65,536 covers.
+ * payload's transaction (P7a review SR-2). PostgreSQL prints jsonb with a space after each `:` and `,`: the margin
+ * of 5,536 bytes under 65,536 covers about 2,700 key/value pairs, far beyond what any adapter emits (LU-5 at most
+ * 8 blocks of 3 fields, DE-6 one headline); an adapter with many more keys sizes its texts itself. A left-out field
+ * keeps what the row stored (refs.ts `present`).
  */
 export function boundWarnings(n: Normalised): void {
   for (const r of n.warnings?.rows ?? []) {
@@ -608,7 +621,7 @@ export class Loader {
       return setAside('quarantined', 'adapter_error');
     }
 
-    dropNul(result);
+    dropUnstorable(result);
     // Gap-fill rows go only into an active primary series of the fill source that is not withheld; a key that
     // source does not register is unknown (a registry change could still load it), any other is dropped.
     const fill: ObsRow[] = [];

@@ -211,6 +211,8 @@ describe('the vigilance map: rules', () => {
     const multi = (coordinates: unknown) => ({ type: 'MultiLineString', coordinates });
     expect(geometryDrift(line([p, q]))).toBe('no drift');
     expect(geometryDrift(multi([[p, q]]))).toBe('no drift');
+    // RFC 7946 allows an altitude as a third element (round-2 review): not drift.
+    expect(geometryDrift(line([[6.6, 49, 100], q]))).toBe('no drift');
     const bad = [
       multi([]),
       multi([[p]]),
@@ -218,7 +220,7 @@ describe('the vigilance map: rules', () => {
       line([[p, q]]),
       line([[181, 49], q]),
       line([[6.6, 91], q]),
-      line([[6.6, 49, 100], q]),
+      line([[6.6, 49, 100, 1], q]),
       line([['6.6', 49], q]),
     ];
     for (const g of bad) expect([g, geometryDrift(g)]).toEqual([g, 'bad_geometry']);

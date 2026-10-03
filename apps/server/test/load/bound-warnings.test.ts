@@ -1,6 +1,6 @@
 import { emptyNormalised, type Normalised, type WarningRow } from '@rws/core';
 import { describe, expect, it } from 'vitest';
-import { boundWarnings, dropNul, RETAINED, WARNING_BYTES } from '../../src/load/pipeline.ts';
+import { boundWarnings, dropUnstorable, RETAINED, WARNING_BYTES } from '../../src/load/pipeline.ts';
 
 // P7a review SR-2: a warning row keeps its level whatever the size of its geometry or texts; an oversized field is
 // left out and counted under a RETAINED code, so a size CHECK never fails a flood warning's transaction.
@@ -48,7 +48,7 @@ describe('boundWarnings', () => {
   });
 });
 
-describe('dropNul', () => {
+describe('dropUnstorable', () => {
   const NUL = String.fromCharCode(0);
   it('withholds a reference, class or warning row with U+0000 in any text (PostgreSQL cannot store it), counted as bad_text', () => {
     const n: Normalised = {
@@ -63,12 +63,47 @@ describe('dropNul', () => {
         rows: [row({ texts: { de: { headline: `x${NUL}` } } }), row({ area_key: 'Sud' })],
       },
     };
-    dropNul(n);
+    dropUnstorable(n);
     expect(n.classes?.map((c) => c.station)).toEqual(['de.wsv.2']);
     expect(n.warnings?.rows.map((r) => r.area_key)).toEqual(['Sud']);
     // The withheld area stays as stored: a snapshot does not close what it stated.
     expect(n.warnings).toMatchObject({ kept: ['Moselle'] });
     expect(n.dropped).toEqual({ bad_text: 2 });
     expect(RETAINED).toContain('bad_text');
+  });
+});
+
+describe('dropUnstorable: lone surrogates, keys and reference values (round-2 review M1, M2)', () => {
+  it('withholds a text with a lone surrogate or a bad key, and a reference beyond ±1e9 or not finite', () => {
+    const ref = (value: number, basis_label: string | null = null) => ({
+      series: 'k/W',
+      kind: 'MNW',
+      value,
+      unit: 'cm' as const,
+      semantics: 'statistical' as const,
+      convention: null,
+      period: null,
+      season_from_md: 101,
+      season_to_md: 1231,
+      priority: 0,
+      basis_label,
+      valid_from: null,
+    });
+    const lone = String.fromCharCode(0xd800);
+    const n: Normalised = {
+      ...emptyNormalised(),
+      references: [ref(65), ref(1e39), ref(Number.NaN), ref(66, `x${lone}`)],
+      warnings: {
+        mode: 'message',
+        sent: '2026-02-13T08:56:31.000Z',
+        rows: [row({ texts: { [`de${lone}`]: { headline: 'x' } } }), row({ area_key: 'Sud' })],
+        cancels: [],
+      },
+    };
+    dropUnstorable(n);
+    expect(n.references?.map((r) => r.value)).toEqual([65]);
+    expect(n.warnings?.rows.map((r) => r.area_key)).toEqual(['Sud']);
+    expect(n.dropped).toEqual({ bad_text: 2, reference_out_of_range: 2 });
+    expect(RETAINED).toContain('reference_out_of_range');
   });
 });
