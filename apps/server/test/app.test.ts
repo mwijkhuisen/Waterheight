@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DisplayWindow } from '../src/api/window.ts';
 import { createApp } from '../src/app.ts';
+import { OBS_AT, VIEWS } from '../src/db/audience.ts';
 import { openApiDb } from '../src/main.ts';
 import { fakeDb } from './api/fake-db.ts';
 
@@ -99,6 +100,7 @@ describe('the data routes when the database fails', () => {
       db: dead.db,
       window: window as unknown as DisplayWindow,
       now: () => new Date('2026-10-01T12:00:00Z'),
+      sections: new Map(),
       log: { error: ((o: unknown) => lines.push(o)) as never },
     });
     try {
@@ -126,10 +128,10 @@ describe('the in-flight cap of the data routes', () => {
       release = r;
     });
     let waiting = 0;
-    // A snapshot (a statement with an instant) waits; the fixed reads of /meta and /stations find no rows at once
-    // (/meta binds only the fill-source lists).
+    // A snapshot waits at its read of the observations at t (the state read asks series and stations first, empty);
+    // the fixed reads of /meta and /stations find no rows at once.
     const db = fakeDb(async (q) => {
-      if (q.parameters.some((p) => p instanceof Date)) {
+      if (q.sql.includes(OBS_AT.public)) {
         waiting += 1;
         await held;
       }
@@ -140,6 +142,7 @@ describe('the in-flight cap of the data routes', () => {
       db,
       window: window as unknown as DisplayWindow,
       now: () => new Date('2026-10-01T12:00:00Z'),
+      sections: new Map(),
     });
     const path = (i: number) =>
       `/api/v1/snapshot?t=${new Date(Date.parse('2026-10-01T00:00:00Z') + i * 600_000).toISOString()}`;
@@ -163,5 +166,26 @@ describe('the in-flight cap of the data routes', () => {
     release();
     expect((await Promise.all([...first, joined])).map((r) => r.status)).toEqual(Array(65).fill(200));
     expect((await app.request(path(64))).status).toBe(200);
+  });
+});
+
+describe('/api/v1/health/sources when the coverage cannot be computed', () => {
+  it('answers 200 with classification null and logs one fixed code', async () => {
+    const lines: unknown[] = [];
+    const db = fakeDb(async (q) => {
+      if (q.sql.includes(VIEWS.public.class)) throw Object.assign(new Error('provider text'), { code: '57014' });
+      if (q.sql.includes('healthy')) return { rows: [{ healthy: 0, total: 0 }] };
+      return { rows: [] };
+    });
+    const app = createApp({
+      db,
+      now: () => new Date('2026-10-01T12:00:00Z'),
+      sections: new Map(),
+      log: { error: ((o: unknown) => lines.push(o)) as never },
+    });
+    const res = await app.request('/api/v1/health/sources');
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { classification: unknown }).classification).toBeNull();
+    expect(lines).toEqual([{ code: '57014', route: 'classification' }]);
   });
 });

@@ -187,6 +187,30 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
     expect(expected).toContain('DE-1');
   });
 
+  it('classification (P7b): a coverage of the public tier-1 stations only, the mode follows the 60 % rule', async () => {
+    const doc = HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources')));
+    const c = doc.classification;
+    if (c === null) throw new Error('no classification');
+    const tier1 = async (view: string) =>
+      (await admin(`SELECT country, count(*)::int AS n FROM ${view} WHERE tier = 1 GROUP BY 1 ORDER BY 1`)) as {
+        country: string;
+        n: number;
+      }[];
+    const publicStations = await tier1(VIEWS.public.station);
+    const publicTotal = publicStations.reduce((a, r) => a + r.n, 0);
+    expect(publicTotal).toBeGreaterThan(0);
+    expect(c.tier1.stations).toBe(publicTotal);
+    expect(c.countries.map((x) => [x.country, x.tier1.stations])).toEqual(publicStations.map((r) => [r.country, r.n]));
+    // The owner stations are in the base table and in no public view: they inflate nothing.
+    const base = (await tier1('station')).reduce((a, r) => a + r.n, 0);
+    expect(base).toBeGreaterThan(publicTotal);
+    expect(c.first_release.stations).toBeLessThanOrEqual(c.tier1.stations);
+    // The registry's reference rows classify some of them; the mode follows the 60 % rule of D10.
+    expect(c.tier1.classed).toBeLessThanOrEqual(c.tier1.stations);
+    expect(c.mode).toBe(c.tier1.ratio !== null && c.tier1.ratio >= 0.6 ? 'state' : 'dh');
+    expect(c.t).toBe('2026-09-29T13:40:00.000Z');
+  });
+
   it('label_offset (P5b): null unless the loader wrote one, then its six fields and nothing else', async () => {
     const offset = async (id: string) => {
       const doc = HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources')));
@@ -449,6 +473,7 @@ describe('failures', () => {
     expect((await app.request('/api/v1/health/sources')).status).toBe(503);
     expect(logged).toEqual([
       { level: 50, code: 'ECONNREFUSED', route: '/api/v1/health', msg: 'health unavailable' },
+      { level: 50, code: 'ECONNREFUSED', route: 'classification', msg: 'coverage unavailable' },
       { level: 50, code: 'ECONNREFUSED', route: '/api/v1/health/sources', msg: 'health unavailable' },
     ]);
     expect(JSON.stringify(logged)).not.toMatch(/127\.0\.0\.1|nobody|secret|nowhere/);
