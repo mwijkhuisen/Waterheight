@@ -1,0 +1,28 @@
+{
+ "classes": [
+  {
+   "station": "de.lanuk.2721330000100",
+   "ts": "2027-03-28T00:55:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2721490000100",
+   "ts": "2027-03-28T01:00:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2725910000100",
+   "ts": "2027-03-28T02:20:00.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  }
+ ],
+ "dropped": {
+  "dst_gap": 2
+ }
+}

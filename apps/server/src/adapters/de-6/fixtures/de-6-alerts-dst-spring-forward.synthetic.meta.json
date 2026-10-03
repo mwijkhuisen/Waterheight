@@ -1,0 +1,12 @@
+{
+  "spec": "de-6-alerts",
+  "source": "DE-6",
+  "synthetic": true,
+  "recorded_at": "2027-03-28T01:01:00Z",
+  "status": 200,
+  "content_type": "application/geo+json; charset=UTF-8",
+  "url": "https://api.hochwasserzentralen.de/public/v1/data/alerts",
+  "bytes": 3529,
+  "trimmed": false,
+  "note": "[U] Hand-made from de-6-alerts-test.raw (as de-6-alerts-dst-fall-back). The spring-forward night of 2027-03-28: updated 02:00 CET = 01:00Z, the first instant of summer time (fetched 01:01Z)."
+}
