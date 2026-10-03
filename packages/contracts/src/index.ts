@@ -7,4 +7,5 @@ export * from './openapi.ts';
 export * from './registry.ts';
 export * from './rivers.ts';
 export * from './stations.ts';
+export * from './tables.ts';
 export * from './units.ts';

@@ -10,6 +10,7 @@ export function registryOf(source: string): Registry {
   const out = new Map<string, SeriesDecl>();
   for (const r of rows) {
     out.set(r.provider_key, {
+      station: r.id,
       key: r.provider_key,
       quantity: r.quantity,
       native_unit: r.native_unit,
