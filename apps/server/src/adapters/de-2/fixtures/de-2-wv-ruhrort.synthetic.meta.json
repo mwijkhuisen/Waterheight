@@ -5,7 +5,7 @@
   "derived_from": "an archived payload (owner audience: not committed)",
   "values": "every number, name and string generated, timestamps shifted by one constant whole number of days; keys, structure, identifiers, nulls, -1, 0, 9999.0 and quality codes kept (scripts/synthesize-fixture.ts)",
   "status": 200,
-  "variant": "665be0fe-5e38-43f6-8b04-02a93bdbeeb4",
-  "archive_key": "raw/DE-2/de-2-wv/2026/09/30/121200Z-4c592ebcd6a16969.zst",
-  "source_sha256": "4c592ebcd6a169699a2f43d413f8ce1c0ddac76a5f173ea5f81aaeebb88cef7c"
+  "variant": "c0f51e35-d0e8-4318-afaf-c5fcbc29f4c1",
+  "archive_key": "raw/DE-2/de-2-wv/2026/10/03/071200Z-67dfb39d9ea39489.zst",
+  "source_sha256": "67dfb39d9ea39489bc8ced9d830bff1caccb0812e769502c3b82ed98683e45c2"
 }
