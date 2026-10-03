@@ -1,8 +1,8 @@
 // The class crosswalk (catalogue §4.9; ADR-0009): provider classes and alert levels onto the common scale
-// no_ref < low < normal < elevated < high < extreme. P7a: the DRAFT, the §4.9 proposal as it stands while the
-// owner's sign-off (D18) is open; a row marked `flag` deviates from or adds to §4.9 and waits for D18. The
-// loader stores `level_norm` from it (1 low … 5 extreme, null no_ref) beside the provider's raw code and label,
-// so a changed row is an edit here plus a replay of the class and warning specs (docs/runbooks/reference-change.md).
+// no_ref < low < normal < elevated < high < extreme: the §4.9 table as the owner signed it (D18, 2026-10-03). A row
+// marked `flag` deviates from or adds to §4.9 and was decided in D18 as it stands here. The loader stores `level_norm`
+// from it (1 low … 5 extreme, null no_ref) beside the provider's raw code and label, so a changed row is an edit
+// here plus a replay of the class and warning specs (docs/runbooks/reference-change.md).
 // P7b extends it (thresholds, priority, gauge vs area) and generates docs/classification.md from it.
 
 export const LEVELS = ['low', 'normal', 'elevated', 'high', 'extreme'] as const;
@@ -26,7 +26,7 @@ export type CrosswalkRow = {
   level: Level | 'no_ref';
   basis: Basis;
   audience: 'public' | 'owner';
-  /** Why the row deviates from or extends the §4.9 proposal (open for D18). */
+  /** Why the row deviates from or extends the §4.9 proposal (decided in D18). */
   flag?: string;
 };
 

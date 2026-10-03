@@ -86,9 +86,9 @@ A re-levelled gauge is a real change. The history keeps both zeros; the station 
 
 ## 6. Changing the crosswalk (D18) or a label, and the replays
 
-D18 is unsigned: `level_norm` is the catalogue §4.9 default (KG-172, R-086). When the owner signs, or changes a row:
+D18 was signed on 2026-10-03, as P7a built it (PHASES §6.1): `level_norm` is the signed table. When the owner changes a row:
 
-1. Edit `packages/core/src/crosswalk.ts` (the flagged rows: Stormvloed, HQ5, Marke I to III, GlW, CH-5 level 0, `NIVCRU`, the LHP alert "2" colour, Obernau and Kalkofen-neu) and the labels; update the goldens (`UPDATE_GOLDEN=1`, review each) and bump the adapter `version` of the changed sources in `apps/server/src/load/adapters.ts`.
+1. Edit `packages/core/src/crosswalk.ts` and the labels; update the goldens (`UPDATE_GOLDEN=1`, review each) and bump the adapter `version` of the changed sources in `apps/server/src/load/adapters.ts`.
 2. Deploy. `migrate` changes nothing.
 3. Replay the class and warning specs from the first day of the archive (use `rwsc` from `replay.md` §2; count first with `--dry-run`). References are stored without a level, so only these change:
 

@@ -756,7 +756,7 @@ GET https://api.hochwasserzentralen.de/public/v1/data/stations?format=json&state
   - The frontend endpoints `/webservices/get_lagepegel.php` and `get_lagepegel_archiv.php` returned empty bodies; do not use them.
 - (P7a, 2026-10-03, from the recorded payloads and the owner's export:)
   - **Perl is `26100102` in the LHP**, not `26100100` as in PEGELONLINE, so the numeric rule alone does not find it; the duplicate rule needs a curated alias. No recording holds a second Saarland Perl entry with class −1 (the text above says one): the committed Perl case is a synthetic fixture.
-  - **Bavaria numbers its Main gauges apart** from the Hessian service (Kleinheubach `BY_24064003`, Obernau `BY_24070006`). The Hessian Kleinheubach is 625 m from the Bavarian one and is not grouped; Obernau is operated by Bavaria. **Kalkofen neu** (Lahn) is listed by HE and RP, a duplicate this section does not name; the class is taken from RP. Both choices await the D18 sign-off.
+  - **Bavaria numbers its Main gauges apart** from the Hessian service (Kleinheubach `BY_24064003`, Obernau `BY_24070006`). The Hessian Kleinheubach is 625 m from the Bavarian one and is not grouped; Obernau is operated by Bavaria. **Kalkofen neu** (Lahn) is listed by HE and RP, a duplicate this section does not name; the class is taken from RP. D18 (2026-10-03) confirmed both.
   - **The alert legend "2" (Vorwarnung) is hatched** (`cssStyle`) and has no single colour. The alert `lhpClass` is a string in "1", "2", "4", "5", "6" (the test server holds 1, 2, 4 and 5); an alert class "3" does not exist and is dropped as unmapped.
   - `stateClassName` can hold HTML entities (`&#60;`); it is stored verbatim and never rendered as HTML. The live stations payload held 1,588 to 1,589 features. The test server's stations (2024-01-25) hold classes 0 (1,199), 1 (32), 2 (14), 3 (1) and −1 (13), and three features have no `timestamp`.
 
@@ -1955,11 +1955,13 @@ Target scale (§4.7): `no-ref` (grey), `low`, `normal`, `elevated`, `high`, `ext
 | NL-4 RWS Waterinfo legend (display classes, **not** alert levels) | "Verlaagd…", "Laagwater", "Verlaagde afvoer" | low | stage or discharge | Match on the label stem and the class order, not on the full text (labels embed the bound, e.g. "Licht verhoogd (>200cm)") |
 | | "Normaal…", "Normale…", "Streefpeil…" | normal | | |
 | | "Licht verhoogd…", "Verhoogd(e)…" | elevated | | "Licht verhoogd" at Lobith is > 4,450 m³/s, below the WMCN warning start (Lobith 14.00 m NAP, rising above 15.00 m); treat it as elevated but not as a warning (the 14/15 m figures come from an IKSR page seen only in a search summary) |
-| | "Hoog(water)…", "Hoge afvoer…" | high | | |
-| | "Extreem…", "Stormvloed…" | extreme | | "Stormvloed" is a coastal label |
+| | "Hoog(water)…", "Hoge afvoer…", "Stormvloed…" | high | | "Stormvloed" is a coastal label; the workbook ranks it at order 2 with Hoogwater, below Extreem (D18, 2026-10-03) |
+| | "Extreem…" | extreme | | |
 | BE-3 SPW, FR-1 Hub'Eau | – | no-ref (or low/normal from our own percentiles later) | – | No machine-readable thresholds |
 
 **Rule for LHP duplicates** (gap item 6, re-checked live): 9 name-and-river duplicates exist, 4 of them with conflicting classes. Worms is RP 0 and HE −1; Perl is SL 0, RP −1 and a second SL entry −1; Kaub and Mainz appear under HE and RP; Kleinheubach and Obernau under BY and HE; Havelberg under BB and ST (both 0). Rule: **group features by the numeric part of the id and by position (< 500 m); take the class from the state that operates the gauge** (for WSV gauges: the state whose flood centre issues the Meldestufen for it, e.g. RP for Worms, Mainz, Kaub and Perl); if that state reports −1 or nothing, use the **worst other class** and show its provenance ("class from LHP/HE").
+
+**D18, signed by the owner on 2026-10-03:** this table as proposed, with the rows the P7a build flagged decided as built: NL-4 "Stormvloed" is `high` (RWS ranks it at order 2 with Hoogwater, below Extreem), not extreme; LU-4 HQ5, DE-1 Hochwassermarken I to III and GlW, and BE-3 `NIVCRU` are shown and never classify; CH-5 level 0 ("Keine Gefahrenstufe") is `no_ref`; the LHP operating state of Obernau is BY and of Kalkofen-neu RP; the LHP alert "2" (Vorwarnung, `elevated`) is drawn hatched in P10, with no colour stored. The table in force is `packages/core/src/crosswalk.ts`.
 
 ---
 
@@ -2595,7 +2597,7 @@ Each item is marked **Resolved** (with the evidence) or **Flagged** (needs a dec
 28. WRIJ, Vechtstromen, Waterschap Limburg: whether an official feed exists or can be arranged; the Nexus timestamp semantics.
 29. Travel times: Maxau → Lobith, Trier → Koblenz, Chooz → Borgharen and Namur → Eijsden have no primary tables; calibrate from our own data.
 30. Map: the `@protomaps/basemaps` 5.7.2 × v4 tiles compatibility; CDN caching of range requests; OpenFreeMap build retention; VersaTiles and CARTO terms; the EuroGlobalMap licence; Overpass access; Belgian and French river-km systems.
-31. **Class crosswalk sign-off** (§4.9), including whether RWS "Licht verhoogd" counts as `elevated`.
+31. **Class crosswalk sign-off** (§4.9), including whether RWS "Licht verhoogd" counts as `elevated`. *Answered 2026-10-03 (D18): §4.9 as proposed, "Licht verhoogd" = `elevated`.*
 32. **Austria and Liechtenstein** (Alpine Rhine inflows, Bodensee at Bregenz): in scope or not? Not researched.
 
 ---
