@@ -340,6 +340,28 @@ describe('rws_load (the loader)', () => {
     expect(await sqlState(load, 'SELECT count(*) FROM forecast_run')).toBe('ok');
   });
 
+  it('cannot rewrite a forecast value or a run’s identity: UPDATE only of the four merge columns (review SEC-3)', async () => {
+    expect(await sqlState(load, 'UPDATE forecast_value SET value = 0 WHERE false')).toBe('42501');
+    expect(await sqlState(load, 'UPDATE forecast_value SET flags = 0 WHERE false')).toBe('42501');
+    // nor through a monthly partition (they carry no grant: reached through the parent only)
+    await t.admin.query('SELECT ensure_partitions(now(), now())');
+    const { rows } = await t.admin.query<{ part: string }>(
+      `SELECT c.relname AS part FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
+       WHERE i.inhparent = 'forecast_value'::regclass ORDER BY 1 LIMIT 1`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(await sqlState(load, `UPDATE "${rows[0]?.part}" SET flags = 0 WHERE false`)).toBe('42501');
+    for (const col of ['series_id', 'source_id', 'last_valid', 'kind', 'step', 'issued_inferred', 'batch_id'])
+      expect(await sqlState(load, `UPDATE forecast_run SET ${col} = ${col} WHERE false`), col).toBe('42501');
+    expect(
+      await sqlState(
+        load,
+        `UPDATE forecast_run SET fetched_at = fetched_at, issued_at = issued_at, first_valid = first_valid,
+                                 content_hash = content_hash WHERE false`,
+      ),
+    ).toBe('ok');
+  });
+
   it('cannot delete observations, rewrite the revision log, or read the reader views', async () => {
     expect(await sqlState(load, 'DELETE FROM obs')).toBe('42501');
     expect(await sqlState(load, 'TRUNCATE obs')).toBe('42501');

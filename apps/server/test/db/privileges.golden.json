@@ -14,14 +14,14 @@
     },
     "forecast_run": {
       "rws_backup": "SELECT",
-      "rws_load": "SELECT,INSERT,UPDATE"
+      "rws_load": "SELECT,INSERT"
     },
     "forecast_run_id_seq": {
       "rws_load": "USAGE"
     },
     "forecast_value": {
       "rws_backup": "SELECT",
-      "rws_load": "SELECT,INSERT,UPDATE"
+      "rws_load": "SELECT,INSERT"
     },
     "gauge_zero": {
       "rws_backup": "SELECT",
