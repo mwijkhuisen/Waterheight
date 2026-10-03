@@ -1,9 +1,10 @@
 // Turns payloads the owner exported from the production raw archive (Action D2;
 // the read-only export command is in the P5a PR) into adapter fixtures:
 //
-//   node scripts/import-fixtures.ts [--p5b] <export dir>
+//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a] <export dir>
 //
-// (`--p5b`: the P5b export and its rules, `IMPORTS_P5B`; without it the P5a list.)
+// (`--p5b`: the P5b export and its rules, `IMPORTS_P5B`; `--p7a`: `IMPORTS_P7A`; `--p8a`: the NL-1 forecast captures
+// of `IMPORTS_P8A`, whole bodies; without a flag the P5a list.)
 //
 // The export holds `<name>.raw` (the archived body) and `<name>.line.json` (its
 // manifest line). Each payload listed below is copied to
@@ -27,7 +28,7 @@ const root = join(import.meta.dirname, '..');
 type Doc = Record<string, unknown>;
 type Import = {
   name: string;
-  source: 'FR-1' | 'FR-3' | 'CH-1' | 'CH-3';
+  source: 'FR-1' | 'FR-3' | 'CH-1' | 'CH-3' | 'NL-1';
   fixture: string;
   keep?: number;
   /** FR-1 only: keep the last n rows instead of the first. */
@@ -47,6 +48,9 @@ export const TRIM: Readonly<Record<Import['source'], (doc: Doc, n: number, last:
   },
   'CH-1': () => {
     throw new Error('CH-1 bodies are imported whole');
+  },
+  'NL-1': () => {
+    throw new Error('NL-1 bodies are imported whole');
   },
   'CH-3': (doc, n) => {
     for (const trace of (doc.plot as Doc).data as Doc[]) {
@@ -346,6 +350,42 @@ export const IMPORTS_P7A: readonly {
   { name: 'de-6-stations-flood', source: 'DE-6', fixture: 'de-6-stations-class3', rule: 'whole' },
 ];
 
+/**
+ * P8a (Action D2, export of 2026-10-03, `p8a-export.sh`): the NL-1 forecast captures P8a imports, every body whole
+ * (a forecast capture is a run without its leading values, so a cut would break the tail relation the loader merges
+ * by). Lobith Q (spec `nl-1-fc-1h`): the captures of 2026-10-01T04:25Z and 05:25Z (the last two of the run ending
+ * 2026-10-02T05:00Z: the second is the tail of the first) and of 06:25Z and 07:25Z (the first two of the next run, which
+ * differs from the old one on its whole overlap). Driel beneden H (spec `nl-1-fc-3h-0`): 2026-10-01T03:45Z (last of
+ * the old run), 06:45Z (first of the new one) and 09:45Z (its tail). Alblasserdam H (`nl-1-fc-3h-0`, 2026-10-01T00:45Z):
+ * 288 values, every one quality code 99 (the all-gap list), a location the registry does not hold.
+ */
+export const IMPORTS_P8A: readonly { name: string; source: 'NL-1'; fixture: string }[] = [
+  {
+    name: 'nl-1-fc-lobith.bovenrijn.tolkamer-Q-0017',
+    source: 'NL-1',
+    fixture: 'nl-1-fc-1h-lobith-q-20261001t0425z',
+  },
+  {
+    name: 'nl-1-fc-lobith.bovenrijn.tolkamer-Q-0018',
+    source: 'NL-1',
+    fixture: 'nl-1-fc-1h-lobith-q-20261001t0525z',
+  },
+  {
+    name: 'nl-1-fc-lobith.bovenrijn.tolkamer-Q-0019',
+    source: 'NL-1',
+    fixture: 'nl-1-fc-1h-lobith-q-20261001t0625z',
+  },
+  {
+    name: 'nl-1-fc-lobith.bovenrijn.tolkamer-Q-0020',
+    source: 'NL-1',
+    fixture: 'nl-1-fc-1h-lobith-q-20261001t0725z',
+  },
+  { name: 'nl-1-fc-driel.beneden-H-0006', source: 'NL-1', fixture: 'nl-1-fc-3h-0-driel-beneden-h-20261001t0345z' },
+  { name: 'nl-1-fc-driel.beneden-H-0007', source: 'NL-1', fixture: 'nl-1-fc-3h-0-driel-beneden-h-20261001t0645z' },
+  { name: 'nl-1-fc-driel.beneden-H-0008', source: 'NL-1', fixture: 'nl-1-fc-3h-0-driel-beneden-h-20261001t0945z' },
+  { name: 'nl-1-fc-novalue', source: 'NL-1', fixture: 'nl-1-fc-3h-0-alblasserdam-h-novalue' },
+];
+
 /** The FR-5 territories whose sections reach the rivers into the Netherlands (catalogue §2.5). */
 export const FR5_TERRITORIES = ['2', '3', '29'] as const;
 
@@ -366,7 +406,7 @@ export function cutP7a(
   };
 }
 
-function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a'): void {
+function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a'): void {
   type Entry = {
     name: string;
     source: string;
@@ -376,7 +416,8 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a'): void {
     rule?: string;
     n?: number;
   };
-  const list: readonly Entry[] = mode === 'p5b' ? IMPORTS_P5B : mode === 'p7a' ? IMPORTS_P7A : IMPORTS;
+  const list: readonly Entry[] =
+    mode === 'p5b' ? IMPORTS_P5B : mode === 'p7a' ? IMPORTS_P7A : mode === 'p8a' ? IMPORTS_P8A : IMPORTS;
   for (const { name, source, fixture, keep, last, rule, n } of list) {
     const raw = readFileSync(join(dir, `${name}.raw`));
     const line = JSON.parse(readFileSync(join(dir, `${name}.line.json`), 'utf8')) as Line;
@@ -411,10 +452,10 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a'): void {
 
 if (import.meta.main) {
   const flag = process.argv[2];
-  const mode = flag === '--p5b' ? 'p5b' : flag === '--p7a' ? 'p7a' : 'p5a';
+  const mode = flag === '--p5b' ? 'p5b' : flag === '--p7a' ? 'p7a' : flag === '--p8a' ? 'p8a' : 'p5a';
   const dir = process.argv[mode === 'p5a' ? 2 : 3];
   if (dir === undefined) {
-    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a] <export dir>');
+    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a] <export dir>');
     process.exitCode = 64;
   } else main(dir, mode);
 }
