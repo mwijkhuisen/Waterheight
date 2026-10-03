@@ -22,7 +22,7 @@ import {
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { TtlCache } from './cache.ts';
-import { classCoverage, readStates } from './states.ts';
+import { classCoverage, readStates, type StaticCache } from './states.ts';
 import { coded, iso, snapshot, validated } from './util.ts';
 
 // GET /api/v1/health and GET /api/v1/health/sources (A§9.2). The loader
@@ -167,14 +167,14 @@ export async function readHealth(db: Kysely<DB>, now: Date): Promise<Health> {
 async function publicCoverage(
   db: Kysely<DB>,
   now: Date,
-  sections: ReadonlyMap<string, string>,
-  log: HealthDeps['log'],
+  deps: Pick<HealthDeps, 'sections' | 'log' | 'cache'>,
 ): Promise<ClassCoverage | null> {
   try {
     const t = floorBucket(now.getTime());
-    return classCoverage(await readStates(db, 'public', t, { now: now.getTime(), current: true, sections }));
+    const opts = { now: now.getTime(), current: true, sections: deps.sections, cache: deps.cache };
+    return classCoverage(await readStates(db, 'public', t, opts));
   } catch (err) {
-    log?.error({ code: errorCode(err), route: 'classification' }, 'coverage unavailable');
+    deps.log?.error({ code: errorCode(err), route: 'classification' }, 'coverage unavailable');
     return null;
   }
 }
@@ -182,9 +182,9 @@ async function publicCoverage(
 export async function readSources(
   db: Kysely<DB>,
   now: Date,
-  deps: Pick<HealthDeps, 'sections' | 'log'> = { sections: new Map(), log: undefined },
+  deps: Pick<HealthDeps, 'sections' | 'log' | 'cache'> = { sections: new Map(), log: undefined },
 ): Promise<HealthSources> {
-  const classification = await publicCoverage(db, now, deps.sections, deps.log);
+  const classification = await publicCoverage(db, now, deps);
   const { rows, batches, twins, owner, l } = await snapshot(db, async (tx) => ({
     rows: await sources(tx),
     batches: await quarantinedBatches(tx),
@@ -247,6 +247,8 @@ export type HealthDeps = {
   log: Pick<Logger, 'error'> | undefined;
   /** The FR-5 station → section map, for the coverage report. */
   sections: ReadonlyMap<string, string>;
+  /** The classification's static rows, shared with the data routes; none in tests that read fresh. */
+  cache?: StaticCache;
 };
 
 /**

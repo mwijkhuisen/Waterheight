@@ -495,7 +495,7 @@ describe('the families are one template', () => {
     const { api: ownApi, ...ownDisplay } = OWN;
     for (const k of Object.keys(pubDisplay) as (keyof typeof pubDisplay)[]) pairs.push([pubDisplay[k], ownDisplay[k]]);
     for (const k of Object.keys(pubApi) as (keyof typeof pubApi)[]) pairs.push([pubApi[k], ownApi[k]]);
-    expect(pairs).toHaveLength(22);
+    expect(pairs).toHaveLength(23);
     for (const [pub, own] of pairs) {
       const d = await def(pub);
       // The meta pair holds the two display-window instants and no audience data, so it has no filter.

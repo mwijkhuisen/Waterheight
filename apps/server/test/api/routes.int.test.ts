@@ -516,11 +516,13 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     );
     expect(new Set(all.map((r) => r.text)).size).toBe(1);
     expect(all.map((r) => r.status)).toEqual(Array.from({ length: 20 }, () => 200));
+    // One computation: the classification's static rows (registry, references, zeros: kept per family for a
+    // minute) and the rows at t, one transaction each.
     const asked = connect.mock.calls.length;
-    expect(asked).toBe(1);
-    // Another key opens its own query.
+    expect(asked).toBe(2);
+    // Another key opens its own query; the static rows are kept.
     await get(app, '/api/v1/snapshot?t=2026-10-25T12:10:00Z');
-    expect(connect.mock.calls.length).toBe(2);
+    expect(connect.mock.calls.length).toBe(3);
   });
 
   it('/series holds [from, to), floors both to the grid, and answers each resolution with its own fields', async () => {

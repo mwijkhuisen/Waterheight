@@ -8,6 +8,7 @@ import { errorCode } from '../db/pool.ts';
 import { readMeta, readSeries, readSnapshot, readStations } from './data.ts';
 import { Busy, Lru } from './lru.ts';
 import { agePolicy, type CachePolicy, noQuery, Refused, seriesParams, snapshotParams } from './params.ts';
+import type { StaticCache } from './states.ts';
 import { coded, validated } from './util.ts';
 import type { DisplayWindow, Window } from './window.ts';
 
@@ -29,6 +30,8 @@ export type ApiDeps = {
   window: DisplayWindow | undefined;
   /** The FR-5 station → section map (registry/vigicrues-sections.yaml), loaded at boot. */
   sections: ReadonlyMap<string, string>;
+  /** The rows of the classification that change only with the registry or a reference, per family. */
+  cache: StaticCache;
 };
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
@@ -129,7 +132,7 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
     return {
       key: `snapshot|${t}`,
       policy: agePolicy(t, now),
-      read: (db) => readSnapshot(db, t, { now, sections: deps.sections }),
+      read: (db) => readSnapshot(db, t, { now, sections: deps.sections, cache: deps.cache }),
     };
   });
 

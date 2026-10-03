@@ -1,10 +1,10 @@
 import { floorBucket, MAX_POINTS, type Meta, type Series, type Snapshot, type Stations } from '@rws/contracts';
 import { type Kysely, sql } from 'kysely';
-import { OBS_AT, VIEWS } from '../db/audience.ts';
+import { VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { FILLED_BY } from '../load/adapters.ts';
 import type { SeriesParams } from './params.ts';
-import { readStates, snapshotValues } from './states.ts';
+import { readStates, type StaticCache, snapshotValues } from './states.ts';
 import { iso, snapshot } from './util.ts';
 import type { Window } from './window.ts';
 
@@ -170,7 +170,7 @@ export async function readStations(db: Kysely<DB>): Promise<Stations> {
 export async function readSnapshot(
   db: Kysely<DB>,
   t: number,
-  opts: { now: number; sections: ReadonlyMap<string, string> },
+  opts: { now: number; sections: ReadonlyMap<string, string>; cache: StaticCache },
 ): Promise<Snapshot> {
   const read = await readStates(db, 'public', t, { ...opts, current: t >= floorBucket(opts.now) });
   return { t: iso(new Date(t)), values: snapshotValues(read) };

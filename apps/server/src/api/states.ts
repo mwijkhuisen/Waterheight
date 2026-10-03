@@ -57,6 +57,70 @@ type RefRow = {
   basis_label: string | null;
 };
 type ClassRow = { subject_id: string; source_id: string; provider_code: string | null };
+type ZeroRow = { series_id: number; value_m: number; datum: Datum };
+/** A row with its validity range, filtered by t in the process (`valid @> t` cannot use an index through a view). */
+type Ranged<T> = T & { v_from: Date | null; v_to: Date | null; from_inc: boolean; to_inc: boolean };
+/** The rows that change only with the registry or a reference: read once per family and TTL. */
+type Static = { stations: StationRow[]; series: SeriesRow[]; refs: Ranged<RefRow>[]; zeros: Ranged<ZeroRow>[] };
+
+const validAt = (r: Ranged<object>, t: number) =>
+  (r.v_from === null || (r.from_inc ? t >= r.v_from.getTime() : t > r.v_from.getTime())) &&
+  (r.v_to === null || (r.to_inc ? t <= r.v_to.getTime() : t < r.v_to.getTime()));
+
+const RANGE = sql`lower(valid) AS v_from, upper(valid) AS v_to, lower_inc(valid) AS from_inc, upper_inc(valid) AS to_inc`;
+
+function readStatic(db: Kysely<DB>, family: ChannelAudience): Promise<Static> {
+  const V = VIEWS[family];
+  return snapshot(db, async (tx) => ({
+    stations: (
+      await sql<StationRow>`SELECT id, country, lon, lat, tier, flags FROM ${sql.table(V.station)} ORDER BY id`.execute(
+        tx,
+      )
+    ).rows,
+    series: (
+      await sql<SeriesRow>`
+        SELECT id, station_id, source_id, quantity, value_kind, datum,
+               (EXTRACT(EPOCH FROM staleness_limit) * 1000)::bigint::float8 AS staleness_ms, audience::text AS audience
+        FROM ${sql.table(V.series)} WHERE active ORDER BY id`.execute(tx)
+    ).rows,
+    refs: (
+      await sql<Ranged<RefRow>>`
+        SELECT series_id, source_id, kind, value, unit, percentile_convention,
+               to_char(lower(period), 'YYYY-MM-DD') AS p_from, to_char(upper(period) - 1, 'YYYY-MM-DD') AS p_to,
+               season_from_md, season_to_md, priority, basis_label, ${RANGE}
+        FROM ${sql.table(V.reference)}`.execute(tx)
+    ).rows,
+    zeros: (
+      await sql<Ranged<ZeroRow>>`SELECT series_id, value_m, datum, ${RANGE} FROM ${sql.table(V.gaugeZero)}`.execute(tx)
+    ).rows,
+  }));
+}
+
+/**
+ * The static rows of each family, shared by the routes of one app for `ttlMs` (60 s in production): a registry sync
+ * or a changed reference reaches the states within a minute, and a cold /snapshot reads only what depends on t
+ * (A§8 Q1, the classes and the warnings at t, the source health). A failed read is not kept.
+ */
+export class StaticCache {
+  readonly #ttlMs: number;
+  readonly #now: () => number;
+  readonly #entries = new Map<ChannelAudience, { at: number; value: Promise<Static> }>();
+  constructor(ttlMs: number, now: () => number) {
+    this.#ttlMs = ttlMs;
+    this.#now = now;
+  }
+  get(db: Kysely<DB>, family: ChannelAudience): Promise<Static> {
+    const now = this.#now();
+    const hit = this.#entries.get(family);
+    if (hit !== undefined && now - hit.at < this.#ttlMs) return hit.value;
+    const value = readStatic(db, family);
+    this.#entries.set(family, { at: now, value });
+    value.catch(() => {
+      if (this.#entries.get(family)?.value === value) this.#entries.delete(family);
+    });
+    return value;
+  }
+}
 type WarningRow = {
   id: string;
   source_id: string;
@@ -105,16 +169,13 @@ export async function readStates(
   db: Kysely<DB>,
   family: ChannelAudience,
   t: number,
-  opts: { now: number; current: boolean; sections: ReadonlyMap<string, string> },
+  opts: { now: number; current: boolean; sections: ReadonlyMap<string, string>; cache?: StaticCache | undefined },
 ): Promise<StateRead> {
   const V = VIEWS[family];
   const at = new Date(t).toISOString();
+  const fixed = await (opts.cache?.get(db, family) ?? readStatic(db, family));
+  const { stations } = fixed;
   const rows = await snapshot(db, async (tx) => {
-    const stations = (
-      await sql<StationRow>`SELECT id, country, lon, lat, tier, flags FROM ${sql.table(V.station)} ORDER BY id`.execute(
-        tx,
-      )
-    ).rows;
     const warnings = (
       await sql<WarningRow>`
         SELECT id::text AS id, source_id, area_key, name, level_raw,
@@ -150,25 +211,11 @@ export async function readStates(
       return { w, ids };
     });
     return {
-      stations,
       areas,
-      series: (
-        await sql<SeriesRow>`
-          SELECT id, station_id, source_id, quantity, value_kind, datum,
-                 (EXTRACT(EPOCH FROM staleness_limit) * 1000)::bigint::float8 AS staleness_ms, audience::text AS audience
-          FROM ${sql.table(V.series)} WHERE active ORDER BY id`.execute(tx)
-      ).rows,
       obs: (
         await sql<ObsRow>`SELECT series_id, ts, value, qc FROM ${sql.id(OBS_AT[family])}(${at}::timestamptz)`.execute(
           tx,
         )
-      ).rows,
-      refs: (
-        await sql<RefRow>`
-          SELECT series_id, source_id, kind, value, unit, percentile_convention,
-                 to_char(lower(period), 'YYYY-MM-DD') AS p_from, to_char(upper(period) - 1, 'YYYY-MM-DD') AS p_to,
-                 season_from_md, season_to_md, priority, basis_label
-          FROM ${sql.table(V.reference)} WHERE valid @> ${at}::timestamptz`.execute(tx)
       ).rows,
       classes: (
         await sql<ClassRow>`
@@ -182,12 +229,11 @@ export async function readStates(
               SELECT source_id, last_fetch_ok FROM ${sql.table(V.sourceHealth)}`.execute(tx)
           ).rows
         : [],
-      zeros: (
-        await sql<{ series_id: number; value_m: number; datum: Datum }>`
-          SELECT series_id, value_m, datum FROM ${sql.table(V.gaugeZero)} WHERE valid @> ${at}::timestamptz`.execute(tx)
-      ).rows,
     };
   });
+  const series = fixed.series;
+  const refs = fixed.refs.filter((r) => validAt(r, t));
+  const zeros = fixed.zeros.filter((z) => validAt(z, t));
 
   const lastOk = new Map(rows.health.map((h) => [h.source_id, h.last_fetch_ok?.getTime() ?? null]));
   const fresh = (source: string) => {
@@ -196,13 +242,13 @@ export async function readStates(
     return ok !== null && opts.now - ok <= (CLASS_WINDOW_MIN[source] ?? 45) * 60_000;
   };
 
-  const stationOf = new Map(rows.stations.map((s) => [s.id, s]));
+  const stationOf = new Map(stations.map((s) => [s.id, s]));
   const seriesOf = new Map<string, SeriesRow[]>();
-  for (const s of rows.series) seriesOf.set(s.station_id, [...(seriesOf.get(s.station_id) ?? []), s]);
+  for (const s of series) seriesOf.set(s.station_id, [...(seriesOf.get(s.station_id) ?? []), s]);
   const obsOf = new Map(rows.obs.map((o) => [o.series_id, o]));
-  const zeroOf = new Map(rows.zeros.map((z) => [z.series_id, z]));
+  const zeroOf = new Map(zeros.map((z) => [z.series_id, z]));
   const refsOf = new Map<number, RefIn[]>();
-  for (const r of rows.refs) {
+  for (const r of refs) {
     const list = refsOf.get(r.series_id) ?? [];
     list.push({
       source: r.source_id,
@@ -238,7 +284,7 @@ export async function readStates(
     }
   }
 
-  const series: SeriesState[] = rows.series.map((s) => {
+  const states: SeriesState[] = series.map((s) => {
     const st = stationOf.get(s.station_id);
     const o = obsOf.get(s.id);
     const z = zeroOf.get(s.id);
@@ -279,8 +325,8 @@ export async function readStates(
       height,
     };
   });
-  const publicSeries = new Set(rows.series.filter((s) => s.audience === 'public').map((s) => s.id));
-  return { t, series, stations: rows.stations, publicSeries };
+  const publicSeries = new Set(series.filter((s) => s.audience === 'public').map((s) => s.id));
+  return { t, series: states, stations, publicSeries };
 }
 
 /** The snapshot's values: the series with a value at t, with their state, basis and detail-view height. */
