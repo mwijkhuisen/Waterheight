@@ -2190,3 +2190,13 @@ A combined round-2 review of the round-1 fix diff (Fable, high: approve and pass
 | R2-3 | Rows sharing one polygon fetched it once per row | One fetch per geometry digest |
 | R2-4 | "700 characters" | The cut counts UTF-16 code units, never inside a surrogate pair (doc, threat model) |
 
+### Production check (2026-10-03)
+
+`scripts/verify-prod.sh rk.wijkhuisen.info` on the installed release (`api build` 640110961fe5…, the merge of PR #73) passed both P7b `[agent-prod]` criteria and P7a's, and KG-196 is closed:
+- **`api states`:** every value of the "now" snapshot has a state and, unless `no_ref`, a basis. The run at about 16:00Z had 1,149 values: 888 classed, 412 of them by section, and 261 `no_ref`. The run at 16:33Z had 1,350 values.
+- **`class coverage`:** the report is published per country. Of the tier-1 stations with a public series, 80.4 % (119 of 148) have a state: BE 1/1, CH 17/17, DE 43/50, FR 30/39, LU 0/10, NL 28/31.
+- **D10:** 32 of the 119 classed stations are classed by a section only (Vigicrues green, LU-Alert), so gauge classes cover 87 of 148 (58.8 %). The default map mode is therefore `dh`, just under the 60 % of D10. Luxembourg has no public reference (LU-4 is owner view only).
+- **`interval DE-6`** (P7a): `de-6-stations` and `de-6-alerts` were 210, 510 and 210 s old in three samples 15 minutes apart, under the 660 s limit.
+- **Owner isolation:** the owner checks passed on the new snapshot bodies.
+- **Other FAILs:** the same runs failed checks outside P7, and none of them is P7's. `health FR-1`, `fresh FR-1`, `freshness` and `loader lag` were transient after the deploy restart and passed at 16:33Z. `interval CH-1` is expected for 24 h after a restart (KG-125). The known low-water `tier-1` and `belgian set` results remain. `owner_specs` was 8 of 9, most likely `be-3-refs` before its first weekly run (KG-174).
+
