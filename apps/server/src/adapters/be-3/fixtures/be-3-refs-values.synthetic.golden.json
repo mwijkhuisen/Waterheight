@@ -1,0 +1,279 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "references": [
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "P05",
+   "value": 837.1,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "P10",
+   "value": 645.8,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "P15",
+   "value": 759.1,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "MEDIAN",
+   "value": 903.2,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "MOYEN",
+   "value": 427.7,
+   "semantics": "statistical",
+   "convention": null,
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "P85",
+   "value": 796.4,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "P90",
+   "value": 204.1,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "P95",
+   "value": 840.9,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "TOP3_1",
+   "value": 852.5,
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "basis_label": "2008-01-24"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "TOP3_2",
+   "value": 849.2,
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "basis_label": "1998-11-28"
+  },
+  {
+   "series": "L6640/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "TOP3_3",
+   "value": 469.6,
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "basis_label": "2015-12-21"
+  },
+  {
+   "series": "L6640/Q",
+   "unit": "m³/s",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "TOP3_1",
+   "value": 823.529,
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "basis_label": "2008-01-24"
+  },
+  {
+   "series": "L6640/Q",
+   "unit": "m³/s",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "TOP3_2",
+   "value": 429.477,
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "basis_label": "1998-11-28"
+  },
+  {
+   "series": "L8000/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "P05",
+   "value": 22.2,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L8000/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "P10",
+   "value": 109.2,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L8000/H",
+   "unit": "cm",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "P15",
+   "value": 581.5,
+   "semantics": "statistical",
+   "convention": "non_exceedance",
+   "period": [
+    "2003-12-07",
+    null
+   ],
+   "basis_label": "SPW"
+  },
+  {
+   "series": "L8000/Q",
+   "unit": "m³/s",
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "valid_from": null,
+   "kind": "TOP3_1",
+   "value": 791.999,
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "basis_label": "2026-06-21"
+  }
+ ]
+}

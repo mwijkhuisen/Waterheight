@@ -37,6 +37,8 @@ export const ValuesItem = z.strictObject({
   ts_path: text(200).optional(),
   station_no: text(40).optional(),
   stationparameter_no: text(40).optional(),
+  /** P7a: the reference calls name the series by its shortname (`Cmd.POR.P05`, `Cmd.ReferenceFlood.Top3`). */
+  ts_shortname: text(80).optional(),
   ts_unitsymbol: text(20).optional(),
   rows: text(12).optional(),
   columns: text(200),

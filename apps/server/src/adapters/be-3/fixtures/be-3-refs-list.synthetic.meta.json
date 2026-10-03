@@ -1,0 +1,8 @@
+{
+  "spec": "be-3-refs",
+  "source": "BE-3",
+  "synthetic": true,
+  "derived_from": "hand-made: the getTimeseriesList table of the weekly refs root (header row of its returnfields, 129 series over the nine shortnames at 14 stations; identifiers only, ts_ids and eleven station numbers made up)",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

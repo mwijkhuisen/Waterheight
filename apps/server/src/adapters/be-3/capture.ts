@@ -1,6 +1,6 @@
 import type { Adapter } from '../../http/types.ts';
 import { tableRecords } from '../_shared/kiwis/parse.ts';
-import { valuesRequests } from '../_shared/kiwis/request.ts';
+import { referenceRequests, valuesRequests } from '../_shared/kiwis/request.ts';
 
 // BE-3 SPW KiWIS (catalogue §2.4): the catch-up seed (`be-3-catchup`, P5c). Its root is a group's series list, the
 // ts_path → ts_id resolution of this run (never a wildcard listing); stage 2 is getTimeseriesValues for every
@@ -13,8 +13,46 @@ export const PARAMETERS: ReadonlySet<string> = new Set(['H', 'H_sonde', 'Habs', 
 
 const TS_ID = /^\d{1,12}$/;
 
+/** P7a (`be-3-refs`): the exact shortnames the weekly list asks for; a row of another name is never fetched. */
+export const REFERENCE_SHORTNAMES: ReadonlySet<string> = new Set([
+  'Cmd.POR.P05',
+  'Cmd.POR.P10',
+  'Cmd.POR.P15',
+  'Cmd.POR.Med',
+  'Cmd.POR.Mean',
+  'Cmd.POR.P85',
+  'Cmd.POR.P90',
+  'Cmd.POR.P95',
+  'Cmd.ReferenceFlood.Top3',
+]);
+
+/** The ts_ids of a `be-3-refs` list: digits only, from the rows that name an expected shortname and parameter. */
+function referenceIds(doc: unknown): string[] {
+  const ids = tableRecords(doc)
+    .filter((r) => REFERENCE_SHORTNAMES.has(String(r.ts_shortname)) && PARAMETERS.has(String(r.stationparameter_no)))
+    .map((r) => String(r.ts_id))
+    .filter((id) => TS_ID.test(id));
+  return [...new Set(ids)].sort((a, b) => Number(a) - Number(b));
+}
+
 export const adapter: Adapter = {
   expand({ req, doc, seen, seed, window, checkUrl }) {
+    // P7a: the weekly reference list (`be-3-refs`) is told apart from the catch-up's lists by its ts_shortname filter,
+    // which only the registry URL can carry. Stage 2 is the values of its ts_ids, named by the batch's first id.
+    if (new URL(req.url).searchParams.has('ts_shortname')) {
+      let ids: string[];
+      try {
+        ids = referenceIds(doc);
+      } catch {
+        return { reqs: [] };
+      }
+      const reqs = [];
+      for (const r of referenceRequests(req.url, ids, { variant: (batch) => `refs/${batch[0]}` })) {
+        const url = checkUrl(r.url);
+        if (url !== null) reqs.push({ ...r, url });
+      }
+      return { reqs };
+    }
     // Only the seed has a window to catch up; a list that is not one is drift for the loader, not a request plan.
     if (!seed || window === null) return { reqs: [] };
     let rows: ReturnType<typeof tableRecords>;

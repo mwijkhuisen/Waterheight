@@ -1,0 +1,9 @@
+{
+  "spec": "be-3-refs",
+  "source": "BE-3",
+  "synthetic": true,
+  "derived_from": "the structure of the live recon of 2026-10-03 (getTimeseriesValues with metadata, Timestamp and Value; owner audience: not committed), items rebuilt over the nine shortnames, a Top3 with three, two, one and no flood",
+  "values": "every number, name and string generated, timestamps shifted by one constant whole number of days; keys, structure, identifiers, nulls, -1, 0, 9999.0 and quality codes kept (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "refs/241001010"
+}

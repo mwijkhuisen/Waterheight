@@ -33,5 +33,35 @@
   "bad_zero": 1,
   "zero_unknown": 1
  },
- "unknown": 0
+ "unknown": 0,
+ "classes": [
+  {
+   "station": "be.spw.5921",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "t1/Normal",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.8001",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "t3/Normal",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.8004",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "t4/Normal",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L8470",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "t2/Normal",
+   "label": null,
+   "level": null
+  }
+ ]
 }

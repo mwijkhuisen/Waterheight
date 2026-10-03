@@ -1,9 +1,12 @@
 import {
+  type ClassRow,
   emptyNormalised,
   isFuture,
+  levelOf,
   type Normalised,
   parseInstant,
   QC,
+  type ReferenceRow,
   type Registry,
   rangeBit,
   SchemaDrift,
@@ -46,7 +49,16 @@ import type { LayerItem, Table, ValuesItem } from './parse.ts';
 //    by `9999.0` or `0.0` (`zero_unknown`; no Walloon gauge lies at sea level) and one without a datum system by the
 //    unit `---` or an empty one (`zero_datum_unknown`), all counted, none stored or alerted. The start of validity,
 //    `station_gauge_datum_from`, is epoch milliseconds (negative before 1970; 0 means none); an ISO date or
-//    date-time with an offset is read too (a date alone starts at local midnight of SPW's fixed UTC+01:00).
+//    date-time with an offset is read too (a date alone starts at local midnight of SPW's fixed UTC+01:00);
+//  - references (P7a, `be-3-refs`): the weekly values of the percentile series `Cmd.POR.P05…P95`, `Med`, `Mean` (the
+//    relative ones, to the gauge zero: statistical, kinds P05, P10, P15, MEDIAN, MOYEN, P85, P90, P95; SPW's P90 is
+//    the level exceeded 10 % of the time, so the percentiles are `non_exceedance`, the mean has no convention) and
+//    `Cmd.ReferenceFlood.Top3` (historical, TOP3_1…TOP3_3 by value, the event's UTC day as the label), on the series
+//    `<station_no>/<stationparameter_no>`, in the registry's unit (m ×100 → cm, m³/s as is). A series' kinds are
+//    spread over several payloads (100 ts_ids a call), so no payload states a series in full: no `refScope`, and a
+//    kind SPW withdraws is not closed;
+//  - NIVCRU (P7a): the `NIVCRU` attribute of a station (`t<n>/<state>`, empty = none) is a provider class of the
+//    station, stored raw (≤ 40 characters, else `bad_value`), its meaning unknown (level null).
 
 export const SOURCE = 'BE-3';
 export const TIME: TimeConvention = { kind: 'iso-offset' };
@@ -256,7 +268,7 @@ function validFrom(cell: string | number | null | undefined): string | null {
  * The daily `getStationList`: the published gauge zero of every registered stage series (H, H_sonde). Habs series
  * are absolute and need none. A station listed twice gives no zero (`conflict`); no value is ever inferred.
  */
-export function normaliseStations(rows: Table, ctx: { registry: Registry }): Normalised {
+export function normaliseStations(rows: Table, ctx: { registry: Registry; fetchedAt: number }): Normalised {
   const out = emptyNormalised();
   const first = rows[0];
   if (first !== undefined && !REQUIRED.every((c) => Object.hasOwn(first, c))) throw new SchemaDrift('kiwis_columns');
@@ -301,6 +313,140 @@ export function normaliseStations(rows: Table, ctx: { registry: Registry }): Nor
     }
     const from = validFrom(row.station_gauge_datum_from);
     for (const decl of decls) out.gaugeZeros.push({ series: decl.key, value_m: m, datum: 'DNG', valid_from: from });
+  }
+  classesOf(rows, byStation, ctx, out);
+  return out;
+}
+
+const NIVCRU_MAX = 40;
+
+/** The NIVCRU class of every registered station that states one (the list has no timestamp: the fetch time). */
+function classesOf(
+  rows: Table,
+  byStation: ReadonlyMap<string, Table>,
+  ctx: { registry: Registry; fetchedAt: number },
+  out: Normalised,
+) {
+  if (rows[0] === undefined || !Object.hasOwn(rows[0], 'NIVCRU')) return;
+  const stationOf = new Map<string, string>();
+  for (const [key, decl] of ctx.registry) {
+    if (decl.station !== undefined) stationOf.set(key.split('/')[0] as string, decl.station);
+  }
+  const ts = toIso(ctx.fetchedAt);
+  const classes: ClassRow[] = [];
+  out.classes = classes;
+  for (const no of [...byStation.keys()].sort()) {
+    const group = byStation.get(no) ?? [];
+    const station = stationOf.get(no);
+    const code = text(group[0]?.NIVCRU);
+    // A station listed twice has no single class (the zero path counted the conflict).
+    if (station === undefined || group.length !== 1 || code === '') continue;
+    if (code.length > NIVCRU_MAX || /[\p{Cc}\p{Cf}]/u.test(code)) {
+      count(out, 'bad_value');
+      continue;
+    }
+    const level = levelOf(SOURCE, 'nivcru', code);
+    if (level === undefined) count(out, 'unmapped_class');
+    else classes.push({ station, ts, code, label: null, level });
+  }
+}
+
+/** The `Cmd.*` shortnames of `be-3-refs` → the reference kind, its semantics and its convention. */
+const PERCENTILES: ReadonlyMap<string, { kind: string; convention: 'non_exceedance' | null }> = new Map([
+  ['Cmd.POR.P05', { kind: 'P05', convention: 'non_exceedance' }],
+  ['Cmd.POR.P10', { kind: 'P10', convention: 'non_exceedance' }],
+  ['Cmd.POR.P15', { kind: 'P15', convention: 'non_exceedance' }],
+  ['Cmd.POR.Med', { kind: 'MEDIAN', convention: 'non_exceedance' }],
+  ['Cmd.POR.Mean', { kind: 'MOYEN', convention: null }],
+  ['Cmd.POR.P85', { kind: 'P85', convention: 'non_exceedance' }],
+  ['Cmd.POR.P90', { kind: 'P90', convention: 'non_exceedance' }],
+  ['Cmd.POR.P95', { kind: 'P95', convention: 'non_exceedance' }],
+]);
+const TOP3 = 'Cmd.ReferenceFlood.Top3';
+const day = (ts: number) => toIso(ts).slice(0, 10);
+
+/**
+ * `getTimeseriesValues` of `be-3-refs` stage 2: the percentile values and the reference floods as references of the
+ * registered series. The series is named by the item's metadata (station, parameter, shortname, unit), never by its
+ * position; a registered key, a known shortname and the registry's unit are required, else the item is counted.
+ */
+export function normaliseReferences(items: readonly ValuesItem[], ctx: Context): Normalised {
+  const out = emptyNormalised();
+  const refs: ReferenceRow[] = [];
+  out.references = refs;
+  for (const item of items) {
+    const { station_no: no, stationparameter_no: parameter, ts_shortname: shortname } = item;
+    if (no === undefined || parameter === undefined || shortname === undefined)
+      throw new SchemaDrift('kiwis_no_metadata');
+    const decl = ctx.registry.get(keyOf(no, parameter));
+    if (decl === undefined) {
+      out.unknown += 1;
+      continue;
+    }
+    const percentile = PERCENTILES.get(shortname);
+    if (percentile === undefined && shortname !== TOP3) {
+      count(out, 'unknown_shortname');
+      continue;
+    }
+    if (item.ts_unitsymbol === undefined || unitOf(item.ts_unitsymbol) !== decl.native_unit) {
+      count(out, 'unit_mismatch', item.data.length);
+      continue;
+    }
+    const columns = columnsOf(item);
+    const time = columns.get('Timestamp');
+    const value = columns.get('Value');
+    if (time === undefined || value === undefined) throw new SchemaDrift('kiwis_columns');
+    const points: { ts: number; value: number }[] = [];
+    for (const row of item.data) {
+      if (row.length !== columns.size) throw new SchemaDrift('kiwis_row_width');
+      const [t, v] = [row[time] ?? null, row[value] ?? null];
+      if (t === null || v === null) {
+        count(out, 'gap');
+        continue;
+      }
+      if (typeof v !== 'number') throw new SchemaDrift('bad_value');
+      const ts = instant(t);
+      if (isFuture(ts, ctx.fetchedAt)) count(out, 'future');
+      else points.push({ ts, value: scale(decl.to_canonical, v) });
+    }
+    const unit = decl.quantity === 'H' ? 'cm' : 'm³/s';
+    const base = {
+      series: decl.key,
+      unit,
+      season_from_md: 101,
+      season_to_md: 1231,
+      priority: 0,
+      valid_from: null,
+    } as const;
+    if (percentile !== undefined) {
+      // One value for the period of record; if an answer ever holds more, the newest stands.
+      points.sort((a, b) => a.ts - b.ts);
+      const last = points.pop();
+      count(out, 'superseded', points.length);
+      if (last !== undefined)
+        refs.push({
+          ...base,
+          kind: percentile.kind,
+          value: last.value,
+          semantics: 'statistical',
+          convention: percentile.convention,
+          period: [day(last.ts), null],
+          basis_label: 'SPW',
+        });
+    } else {
+      points.sort((a, b) => b.value - a.value || a.ts - b.ts);
+      count(out, 'extra_flood', Math.max(0, points.length - 3));
+      for (const [i, p] of points.slice(0, 3).entries())
+        refs.push({
+          ...base,
+          kind: `TOP3_${i + 1}`,
+          value: p.value,
+          semantics: 'historical',
+          convention: null,
+          period: null,
+          basis_label: day(p.ts),
+        });
+    }
   }
   return out;
 }

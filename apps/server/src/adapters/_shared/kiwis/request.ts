@@ -116,6 +116,57 @@ export function valuesRequests(
   return out;
 }
 
+/** The span a reference call asks (P7a: a percentile or flood list covers a whole period of record). */
+const REFERENCE_SPAN = { from: '1900-01-01T00:00:00Z', to: '2028-01-01T00:00:00Z' } as const;
+
+/**
+ * P7a: getTimeseriesValues over the whole period of record for reference series (one value per percentile, a few per
+ * flood list), batches of at most `MAX_IDS` ts_ids in the order given, every call within the value limit (a series
+ * states at most `perSeries` values). The metadata names the series by station, parameter, shortname and unit, so a
+ * value never depends on the order of an answer. `variant` names each call by its ts_ids.
+ */
+export function referenceRequests(
+  base: string,
+  tsIds: readonly string[],
+  opts: { variant: (ids: readonly string[]) => string; perSeries?: number },
+): Req[] {
+  for (const id of tsIds) if (!TS_ID.test(id)) throw new RangeError('a ts_id is not a number');
+  const perSeries = opts.perSeries ?? 3;
+  if (!(Number.isInteger(perSeries) && perSeries >= 1 && perSeries * MAX_IDS <= MAX_VALUES)) {
+    throw new RangeError('perSeries is out of range');
+  }
+  const src = new URL(base);
+  const datasource = src.searchParams.get('datasource');
+  if (datasource === null || !/^\d{1,3}$/.test(datasource)) throw new RangeError('the base URL names no datasource');
+  const out: Req[] = [];
+  for (let b = 0; b < tsIds.length; b += MAX_IDS) {
+    const ids = tsIds.slice(b, b + MAX_IDS);
+    const query = [
+      ['service', 'kisters'],
+      ['type', 'queryServices'],
+      ['datasource', datasource],
+      ['request', 'getTimeseriesValues'],
+      ['format', 'json'],
+      ['ts_id', ids.join(',')],
+      ['from', REFERENCE_SPAN.from],
+      ['to', REFERENCE_SPAN.to],
+      ['timezone', 'UTC'],
+      ['returnfields', 'Timestamp,Value'],
+      ['metadata', 'true'],
+      ['md_returnfields', 'station_no,stationparameter_no,ts_shortname,ts_unitsymbol'],
+    ]
+      .map(([k, v]) => `${k}=${enc(v as string)}`)
+      .join('&');
+    out.push({
+      url: `${src.origin}${src.pathname}?${query}`,
+      method: 'GET',
+      variant: opts.variant(ids),
+      timeout: 'normal',
+    });
+  }
+  return out;
+}
+
 /**
  * What a KiWIS URL of ours must never do (catalogue §2.4): use the frontend's `/services/kiwcp/`, list with a
  * wildcard, ask for values in any time zone but UTC, or name `river_name` as a returnfield (HTTP 500 there).
