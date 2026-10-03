@@ -229,10 +229,19 @@ describe('rivernet sync', { timeout: 120_000 }, () => {
     await sync(n);
     expect(await q('SELECT seq FROM reach')).toEqual([{ seq: 1 }]);
     expect((await q(`SELECT reach_id FROM station WHERE id = '${down}'`))[0]).toEqual({ reach_id: null });
-    // Without a rivernet file every reach goes, with every reference.
-    await sync(null);
-    expect(await q('SELECT 1 FROM reach')).toEqual([]);
-    expect(await q('SELECT 1 FROM station WHERE reach_id IS NOT NULL')).toEqual([]);
+    // Without a rivernet file the reaches stay, and so do every station's reach, entry km and entry node.
+    const kept = async () =>
+      JSON.stringify([
+        await q('SELECT * FROM reach ORDER BY id'),
+        await q('SELECT id, reach_id, km_to_nl_entry, nl_entry_node FROM station ORDER BY id'),
+      ]);
+    const before = await kept();
+    const res = await sync(null);
+    expect(await kept()).toBe(before);
+    expect(res.reaches).toBe(1);
+    expect((await q(`SELECT r.seq FROM station s JOIN reach r ON r.id = s.reach_id WHERE s.id = '${up}'`))[0]).toEqual({
+      seq: 1,
+    });
   });
 
   it('the public station view holds exactly the ids the placement calls public', async () => {

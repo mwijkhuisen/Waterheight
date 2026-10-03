@@ -133,7 +133,7 @@ export function place(
       .map((p) => ({ station: p.id, placement: p.placement as Placement })),
     kmAt,
   );
-  for (const p of placed) if (p.placement !== null) p.reach = reachOf(p.placement);
+  for (const p of placed) if (p.placement !== null) p.reach = reachOf(p.placement, p.river as string);
 
   // Flags: a reach of river r inside a curated stretch of r (by its midpoint's km_graph); a bound is the nearest
   // point of r's line to the curated coordinate, at most 2 km away.

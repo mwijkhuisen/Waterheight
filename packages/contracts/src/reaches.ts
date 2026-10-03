@@ -9,10 +9,17 @@ import { z } from 'zod';
 // the registry, the health documents or the canaries.
 //
 // Reach ids are `<river>.<seq>` (seq in graph order along the river) and hold
-// within one build only (KG-162): the database keys the same reach by
-// (river_id, seq). A reach starts and ends at a confluence, a bifurcation, a
-// change of river or a public station; `upstream`/`downstream` carry the
-// topology, so no OSM node or edge id is published here.
+// within one build only (KG-162): a new graph renumbers `seq`. The database
+// keys its reaches by (river_id, seq) too, but they mirror the committed
+// fixture build (`registry/rivernet.yaml`), not a release (KG-164), so nothing
+// may join `station.reach_id` or a database reach to a release file: within a
+// file, use its own `reach_id`s. A reach starts and ends at a confluence, a
+// bifurcation, a change of river or a public station; `upstream`/`downstream`
+// carry the topology, so no OSM node or edge id is published here. A station's
+// `reach_id` is the reach starting at its position (the one ending there only
+// at a sink). Public stations at one position share that reach; the
+// alphabetically first of them is its `up_station_id` (and the
+// `down_station_id` of the reaches ending there).
 
 export const REACHES_SCHEMA_VERSION = 1;
 export const RIVERS_VERSION_RE = /^[0-9]{8}$/;

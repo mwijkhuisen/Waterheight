@@ -69,7 +69,7 @@ export function cutReaches(
   net: Network,
   cuts: readonly Cut[],
   kmAt: (river: string, p: Placement) => number,
-): { reaches: BuiltReach[]; reachOf: (p: Placement) => string } {
+): { reaches: BuiltReach[]; reachOf: (p: Placement, river: string) => string } {
   // 1. Pieces: every edge split at the public stations on it.
   const offsetsByEdge = new Map<string, number[]>();
   const stationsAt = new Map<string, string[]>();
@@ -209,12 +209,22 @@ export function cutReaches(
 
   const reachOfPiece = new Map<Piece, string>();
   for (const r of reaches) for (const p of r.pieces) reachOfPiece.set(p, r.id);
-  // The reach downstream of a placement (the piece that starts at or contains it); at the very end of its
-  // edge, the reach ending there.
-  const reachOf = (p: Placement) => {
+  const riverOfReach = new Map(reaches.map((r) => [r.id, r.river]));
+  // One convention: a placed station's reach is the reach starting at its position (the piece that starts at
+  // or contains it). At the very end of its edge that is a reach starting at the edge's end node: one of the
+  // station's own river if several start there, else the smallest id. Only at a sink (no piece starts there,
+  // a join's start included) is it the reach ending there. Co-located public stations therefore share one
+  // reach, and the alphabetically first of them is that reach's up_station (and the down_station of the
+  // reaches ending there).
+  const reachOf = (p: Placement, river: string) => {
     const list = piecesOf.get(p.edge) as Piece[];
-    const piece = list.find((x) => x.start <= p.offset_m && p.offset_m < x.end) ?? (list.at(-1) as Piece);
-    return reachOfPiece.get(piece) as string;
+    const inside = list.find((x) => x.start <= p.offset_m && p.offset_m < x.end);
+    if (inside !== undefined) return reachOfPiece.get(inside) as string;
+    const last = list.at(-1) as Piece;
+    const next = [...new Set((outPieces.get(last.to) ?? []).map((x) => reachOfPiece.get(x) as string))].sort(
+      (a, b) => Number(riverOfReach.get(b) === river) - Number(riverOfReach.get(a) === river) || byString(a, b),
+    );
+    return next[0] ?? (reachOfPiece.get(last) as string);
   };
   return { reaches, reachOf };
 }

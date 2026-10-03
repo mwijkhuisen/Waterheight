@@ -21,7 +21,7 @@ import { readStations } from './stations.ts';
 //   reaches-<ver>.json       public reaches in graph order, public stations with km (ReachesFile)
 //   rivers-<ver>.geojson.gz  the ODbL download: one line per reach, names, flags; no station data
 //   rivers.geojsonseq        the same lines for tippecanoe (rivers-<ver>.pmtiles; not an asset)
-//   snap-report.json         public stations per id; owner and off stations only as counts
+//   snap-report.json         public stations per id; counts per rule of public-audience stations only
 //   VERSION
 // Only public stations appear in them (invariants 8, 11): owner and off
 // stations got a reach in the placement but split nothing and are left out.
@@ -141,12 +141,13 @@ export function downloadText(placed: Placed, rivers: RiversFile, version: string
 }
 
 export function snapReport(placed: Placed, version: string, osmStamp: string): string {
-  const counts: Record<string, Record<string, number>> = { public: {}, owner: {}, off: {} };
+  // Counts per rule of the shown stations and of the public-audience ones not shown (mirrors, sources without
+  // `display`); owner and off stations are not counted at all, so the report does not depend on them.
+  const counts: Record<string, Record<string, number>> = { public: {}, public_not_shown: {} };
   for (const s of placed.stations) {
-    const group = s.public ? 'public' : s.audience === 'public' ? 'public_not_shown' : s.audience;
-    const c = counts[group] ?? {};
+    if (s.audience !== 'public') continue;
+    const c = counts[s.public ? 'public' : 'public_not_shown'] as Record<string, number>;
     c[s.rule] = (c[s.rule] ?? 0) + 1;
-    counts[group] = c;
   }
   return canonicalJson(
     {

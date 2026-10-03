@@ -151,6 +151,8 @@ export function snapStations(net: Network, stations: readonly StationInput[], ov
 /**
  * A station without coordinates, between two anchors of the same river and
  * km system that bracket its official km: linear along the anchors' path.
+ * Anchors are stations of audience public only (mirrors included), so no
+ * owner or off row moves a public placement (T-GEO-9).
  */
 function placeByKm(
   net: Network,
@@ -164,7 +166,7 @@ function placeByKm(
   if (river === null || s.km === null) return none;
   const km = s.km;
   const anchors = stations
-    .filter((a) => a.km !== null && a.km.system === km.system)
+    .filter((a) => a.audience === 'public' && a.km !== null && a.km.system === km.system)
     .map((a) => ({ a, snap: snaps.get(a.id) }))
     .filter(
       (x): x is { a: StationInput; snap: Snap & { placement: Placement } } =>

@@ -218,6 +218,8 @@ describe('snapStations', () => {
       station('de.t.4', null, { river_hint: 'alpha', km: km(25) }), // above the upper anchor
       station('de.t.5', null, { river_hint: 'alpha' }), // no km
       station('de.t.6', null, { river_hint: 'alpha', km: { system: 'OTHER', value: 15 } }), // no anchor in that system
+      // an owner gauge with km and coordinates is never an anchor: de.t.3 stays midway between the public two
+      station('be.t.7', on(1, 0.9), { river_hint: 'alpha', km: km(12), audience: 'owner', public: false }),
     ];
     const s = snapStations(net, st, overrides());
     const cum = new Map<string, number>();
@@ -334,6 +336,31 @@ describe('reaches through place()', () => {
     expect(p.reaches[0]?.downstream).toEqual(['alpha.2']);
     expect(p.reaches[1]?.upstream).toEqual(['alpha.1']);
     expect(p.stations[0]?.reach).toBe('alpha.2');
+  });
+
+  it('gives a station at the end of an edge the reach starting there, and only at a sink the one ending there', () => {
+    const p = place(A, none, [pub('de.t.1', chainNode(1)), pub('de.t.2', chainNode(4))], overrides());
+    const [mid, sink] = p.stations;
+    // both are placed at the very end of their edge (a node tie goes to the smaller edge id)
+    expect(mid?.placement).toMatchObject({ edge: 'a1', offset_m: A[0]?.length_m });
+    expect(sink?.placement).toMatchObject({ edge: 'a4', offset_m: A[3]?.length_m });
+    expect(p.reaches.map((x) => [x.id, x.up_station, x.down_station])).toEqual([
+      ['alpha.1', null, 'de.t.1'],
+      ['alpha.2', 'de.t.1', 'de.t.2'],
+    ]);
+    expect(mid?.reach).toBe('alpha.2');
+    expect(sink?.reach).toBe('alpha.2');
+  });
+
+  it('prefers the reach of its own river where several start at its node, whatever the ids', () => {
+    // zeta forks at zn1 into zeta (z2) and alpha (a1): alpha.1 sorts before zeta.2, yet a zeta station keeps zeta.
+    const Z = chain('z', 2, ['zeta']);
+    const branch = edge('a1', 'zn1', 'an1', ['alpha'], [chainNode(1), [5.03, 51.02]]);
+    const two = riversFile([river({ id: 'alpha' }), river({ id: 'zeta' })]);
+    const p = place([...Z, branch], two, [station('de.t.1', chainNode(1), { river_hint: 'zeta' })], overrides());
+    expect(p.stations[0]?.placement).toMatchObject({ edge: 'z1', offset_m: Z[0]?.length_m });
+    expect(p.stations[0]?.reach).toBe('zeta.2');
+    expect(p.reaches.find((r) => r.id === 'alpha.1')?.up_station).toBe('de.t.1');
   });
 
   it('numbers the reaches of a river in km order, whatever the station order', () => {

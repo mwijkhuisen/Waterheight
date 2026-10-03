@@ -57,13 +57,14 @@ const outputs = (p: Placed) => {
   return dir;
 };
 const read = (dir: string, name: string) => readFileSync(join(dir, name), 'utf8');
-/** The three files a public reader gets (snap-report holds counts of owner stations, so it differs by design). */
+/** The four files a public reader gets. */
 const publicBytes = (p: Placed) => {
   const dir = outputs(p);
   return {
     reaches: read(dir, `reaches-${VERSION}.json`),
     download: gunzipSync(readFileSync(join(dir, `rivers-${VERSION}.geojson.gz`))).toString('utf8'),
     tiles: read(dir, 'rivers.geojsonseq'),
+    snap: read(dir, 'snap-report.json'),
   };
 };
 const full = publicBytes(placed);
@@ -376,6 +377,77 @@ describe('monotone chainage per river sequence', () => {
       min: 5,
       dir: -1,
     },
+    {
+      name: 'Saar, Hermelange to Schoden UP',
+      river: 'saar',
+      first: 'fr.sandre.A902101050',
+      last: 'de.wsv.26400750',
+      min: 25,
+      dir: -1,
+      allow: {
+        'de.wsv.26400840>de.wsv.26400730':
+          'Schoden SKA (SAAR-km 7.19, 54 m off the line) is placed by name 99 m above Schoden UP (7.7). At the ' +
+          "Schoden gauges OSM's Saar relation r390393 forks: the graph follows its main_stream, the old loop past " +
+          'the weir (ways 794750744 and 10157530), not the side_stream past the Kanzem locks (way 5136722 and ' +
+          'others), and the SAAR-km run shorter: Schoden UP to the mouth is 7.7 km published against 12.49 km of ' +
+          'graph, while Serrig UP to Schoden UP is 10.5 against 10.74. A by_km override cannot place SKA: no ' +
+          'SAAR-km anchor lies below it (override_unplaced)',
+        'de.wsv.26400730>de.wsv.26400750':
+          "Schoden OP (no coordinates) is placed by its km 7.69 between SKA and UP (above). The provider's OP km is " +
+          '0.01 below its UP 7.7; every other Saar pair has OP above UP (Güdingen 93.08/92.94, Saarbrücken ' +
+          '82.71/82.24, Lisdorf 66.27/65.9, Rehlingen 54.21/53.9, Mettlach 31.5/30.9, Serrig 18.55/18.2)',
+      },
+    },
+    {
+      name: 'Main, Trunstadt to Raunheim',
+      river: 'main',
+      first: 'de.wsv.24300202',
+      last: 'de.wsv.24900108',
+      min: 13,
+      dir: -1,
+    },
+    {
+      name: 'Neckar, Plochingen to Mannheim',
+      river: 'neckar',
+      first: 'de.wsv.23800100',
+      last: 'de.wsv.23800900',
+      min: 40,
+      dir: -1,
+    },
+    {
+      name: 'Lahn, Feudingen to Lahnstein',
+      river: 'lahn',
+      first: 'de.lanuk.2581119000100',
+      last: 'de.wsv.25800800',
+      min: 25,
+      dir: 1,
+    },
+    {
+      name: 'Ruhr, Wiemeringhausen to the Ruhrwehr',
+      river: 'ruhr',
+      first: 'de.lanuk.2761137900100',
+      last: 'de.wsv.27600090',
+      min: 10,
+      dir: -1,
+    },
+    {
+      name: 'Ems, Espeln to Dukegat',
+      river: 'ems',
+      first: 'de.lanuk.3111900000300',
+      last: 'de.wsv.3990020',
+      min: 25,
+      dir: 1,
+      allow: {
+        'de.wsv.3500015>de.wsv.3500031':
+          'Wachendorf (EMS-km 96.71) lies 54 m from the Ems at 52.5457 N, between Lingen-Darme (196.2, 52.4966 N) ' +
+          'and Dalum (212.04, 52.5956 N): its published km is out of line with both (catalogue §2.2 quotes it as the ' +
+          'low end of the upper Ems/DEK system, 96 to 235). By its km it would be bracketed by the tidal 65.69 and ' +
+          'Greven 102.177, 63 km upstream of its coordinates',
+        'de.wsv.3730010>de.wsv.3790010':
+          'The tidal lower Ems restarts its km at Papenburg (0.39) under the same label EMS-km (PEGELONLINE) ' +
+          '(catalogue §2.2, §3.5); Versen Wehrdurchstich (234.78) is the last gauge of the upper numbering',
+      },
+    },
   ];
   for (const c of cases) {
     it(`${c.name}: km_graph rises, km_to_nl_entry falls, km_official follows the river`, SLOW, () => {
@@ -402,14 +474,20 @@ describe('monotone chainage per river sequence', () => {
       for (const s of seq)
         if (s.km_official !== null)
           systems.set(s.km_official_system as string, [...(systems.get(s.km_official_system as string) ?? []), s]);
+      // A step the provider publishes against the river is listed in `allow` with its evidence (kept as
+      // published, never changed); any other inverted step fails, and so does a listed step that no longer occurs.
+      const allow: Record<string, string> = c.allow ?? {};
+      const used = new Set<string>();
       for (const [system, list] of systems)
         for (let i = 1; i < list.length; i++) {
           const a = list[i - 1] as PlacedStation;
           const b = list[i] as PlacedStation;
-          if (((b.km_official as number) - (a.km_official as number)) * c.dir < 0)
-            problems.push(`${system} ${a.id} ${a.km_official} -> ${b.id} ${b.km_official}`);
+          if (((b.km_official as number) - (a.km_official as number)) * c.dir >= 0) continue;
+          if (`${a.id}>${b.id}` in allow) used.add(`${a.id}>${b.id}`);
+          else problems.push(`${system} ${a.id} ${a.km_official} -> ${b.id} ${b.km_official}`);
         }
       expect(problems).toEqual([]);
+      expect(Object.keys(allow).filter((k) => !used.has(k))).toEqual([]);
     });
   }
 });
@@ -527,6 +605,8 @@ describe('owner and off audiences', () => {
 
   it('keeps every non-public station id, owner name and canary out of every public output', SLOW, () => {
     expect(nonPublic.length).toBeGreaterThan(500);
+    // the snap report counts public-audience stations only: no owner or off group, not even as a count
+    expect(Object.keys(JSON.parse(snap).counts)).toEqual(['public', 'public_not_shown']);
     expect(secrets.length).toBeGreaterThan(20);
     for (const [what, text] of texts) {
       expect(

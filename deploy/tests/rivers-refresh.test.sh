@@ -356,6 +356,51 @@ mv "$data/reaches-$v1.json" "$C/moved.json"; ln -s "$C/moved.json" "$data/reache
 run --rollback; expect_rc 1
 expect_grep 'is a symlink' "$C/out"
 
+case_ "--rollback refuses a previous file name other than its exact form, and a previous version that is not 8 digits"
+for bad in '.previous.tiles.file = "../../tiles/manifest.json"' '.previous.reaches.file = "reaches-'"$v2"'.json"' \
+  '.previous.download.file = "rivers-'"$v1"'.geojson.gz.x"' '.previous.version = "../x"' '.previous.version = 20261101'; do
+  setup
+  mkgeo "$t1" "$v1"; mkgeo "$t2" "$v2"
+  listing "$t1"; run; listing "$t1" "$t2"; run; expect_rc 0
+  jq "$bad" "$data/manifest.json" >"$C/m" && cp "$C/m" "$data/manifest.json"
+  before=$(snap)
+  run --rollback; expect_rc 1
+  expect_grep 'previous version: (its (tiles|reaches|download) file is not|its version is not 8 digits)' "$C/out"
+  [[ $before == "$(snap)" ]] || fail "a refused rollback changed the tree ($bad)"
+done
+
+case_ "after a rollback the automatic path leaves the rolled-back version alone; --tag installs it again"
+setup
+mkgeo "$t1" "$v1"; mkgeo "$t2" "$v2"
+listing "$t1"; run; listing "$t1" "$t2"; run; expect_rc 0
+run --rollback; expect_rc 0
+before=$(snap); : >"$FIX/calls"
+run; expect_rc 0
+expect_grep "version $v2 is the previous version" "$C/out"
+[[ $before == "$(snap)" ]] || fail "the automatic run changed the tree after a rollback"
+! grep -q "rivers-$v2" "$FIX/calls" || fail "downloaded an asset of the previous version"
+run --tag "$t2"; expect_rc 0
+valid_manifest
+[[ $(jq -r '.current.version + " " + .previous.version' "$data/manifest.json") == "$v2 $v1" ]] || fail "--tag did not reinstall"
+
+case_ "the automatic path refuses a version older than current (a downgrade); --tag may install it"
+setup
+mkgeo "$t1" "$v1"; mkgeo "$t2" "$v2"; mkgeo "$t3" "$v3"
+listing "$t2"; run; expect_rc 0
+listing "$t1"
+before=$(snap)
+run; expect_rc 1
+expect_grep "version $v1 is older than the current $v2: refusing a downgrade" "$C/out"
+[[ $before == "$(snap)" ]] || fail "a refused downgrade changed the tree"
+absent "$data/rivers-$v1.pmtiles" "$data/reaches-$v1.json" "$dl/rivers-$v1.geojson.gz"
+run --dry-run; expect_rc 1
+run --tag "$t1"; expect_rc 0
+valid_manifest
+[[ $(jq -r '.current.version + " " + .previous.version' "$data/manifest.json") == "$v1 $v2" ]] || fail "--tag downgrade"
+# a newer version is still taken automatically after a --tag downgrade
+listing "$t1" "$t3"; run; expect_rc 0
+[[ $(jq -r '.current.version + " " + .previous.version' "$data/manifest.json") == "$v3 $v1" ]] || fail "newer after downgrade"
+
 case_ "--dry-run fetches and verifies but writes nothing outside the work directory"
 setup
 mkgeo "$t1" "$v1"; listing "$t1"

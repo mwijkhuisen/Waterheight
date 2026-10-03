@@ -328,6 +328,8 @@ export async function syncRegistry(
       const river = rn?.river ?? rowRiver;
       const kmValue = rn?.km_official ?? km?.value ?? null;
       const kmSystem = rn?.km_official_system ?? km?.system ?? null;
+      // Without a rivernet file (net null) the columns only that file gives (reach_id, km_to_nl_entry,
+      // nl_entry_node) keep their stored values; otherwise reach_id is set again below.
       const role = (['primary', 'twin', 'mirror'] as const).find((r) => rows.some((x) => x.role === r)) ?? 'mirror';
       const source = one(
         rows.map((r) => r.source),
@@ -373,8 +375,12 @@ export async function syncRegistry(
           name = EXCLUDED.name, water_name = EXCLUDED.water_name, country = EXCLUDED.country, lon = EXCLUDED.lon,
           lat = EXCLUDED.lat, operator_provider_id = EXCLUDED.operator_provider_id, river_id = EXCLUDED.river_id,
           km_official = EXCLUDED.km_official, km_system = EXCLUDED.km_system, flags = EXCLUDED.flags,
-          tier = EXCLUDED.tier, reach_id = NULL, km_to_nl_entry = EXCLUDED.km_to_nl_entry,
-          nl_entry_node = EXCLUDED.nl_entry_node`.execute(tx);
+          tier = EXCLUDED.tier,
+          reach_id = CASE WHEN ${net === null}::boolean THEN station.reach_id END,
+          km_to_nl_entry = CASE WHEN ${net === null}::boolean THEN station.km_to_nl_entry
+                                ELSE EXCLUDED.km_to_nl_entry END,
+          nl_entry_node = CASE WHEN ${net === null}::boolean THEN station.nl_entry_node
+                               ELSE EXCLUDED.nl_entry_node END`.execute(tx);
       await sql`
         INSERT INTO station_alias (station_id, source_id, provider_code, role, precedence)
         VALUES (${id}, ${source}, ${first.provider_code}, ${role}, ${ROLE_PRECEDENCE[role]})
@@ -406,15 +412,17 @@ export async function syncRegistry(
           WHERE station.id = ${s.id} AND reach.river_id = ${s.reach.slice(0, s.reach.lastIndexOf('.'))}
             AND reach.seq = ${Number(s.reach.slice(s.reach.lastIndexOf('.') + 1))}`.execute(tx);
       }
-    }
-    if (rivers !== undefined) {
-      // Reaches that left the file: drop every reference, then the rows (reach ids are an identity, never reused).
-      const keep = (net?.reaches ?? []).map((r) => `${r.river}.${r.seq}`);
+      // Reaches that left the file: drop every reference, then the rows. The rows mirror the committed fixture
+      // build: `<river>.<seq>` is renumbered by a new graph, so a reach row is no identity across builds and
+      // nothing may join it, or station.reach_id, to a release file (KG-164). Without a rivernet file the
+      // reaches and every station's reach stay as they are.
+      const keep = net.reaches.map((r) => `${r.river}.${r.seq}`);
       const stale = sql`SELECT id FROM reach WHERE NOT ((river_id || '.' || seq) = ANY(${keep}::text[]))`;
       await sql`UPDATE station SET reach_id = NULL WHERE reach_id IN (${stale})`.execute(tx);
       await sql`DELETE FROM reach WHERE id IN (${stale})`.execute(tx);
-      reaches = Number((await sql<{ n: string }>`SELECT count(*) AS n FROM reach`.execute(tx)).rows[0]?.n ?? 0);
     }
+    if (rivers !== undefined)
+      reaches = Number((await sql<{ n: string }>`SELECT count(*) AS n FROM reach`.execute(tx)).rows[0]?.n ?? 0);
 
     const kept: number[] = [];
     const idOf = new Map<string, number>();

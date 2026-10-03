@@ -32,8 +32,10 @@
 # healthchecks.io ping (the slug set is closed): a failed run is a failed unit.
 #
 # Usage: rws-rivers-refresh [--dry-run] [--tag geo-YYYY-MM-DD] | --rollback
-#   (none)            the newest published geo-YYYY-MM-DD release
-#   --tag TAG         that release instead
+#   (none)            the newest published geo-YYYY-MM-DD release, only if its
+#                     VERSION is newer than current and not the previous one
+#                     (a rollback stays until a --tag run)
+#   --tag TAG         that release instead (any signed version)
 #   --dry-run         fetch and verify only; prints what it would install
 #   --rollback        current and previous swap (files re-checked first)
 set -euo pipefail
@@ -107,9 +109,17 @@ write_manifest() {
 if ((rollback)); then
   [[ -n $old && $(jq -r '.previous | type' <<<"$old") == object ]] || die "no previous version to roll back to"
   prev=$(jq -c .previous <<<"$old")
+  pv=$(jq -r '.version | strings' <<<"$prev")
+  [[ $pv =~ ^[0-9]{8}$ ]] || die "previous version: its version is not 8 digits"
   for kind in tiles reaches download; do
-    case $kind in tiles | reaches) dir=$data_dir ;; *) dir=$dl_dir ;; esac
+    case $kind in
+      tiles) dir=$data_dir want=rivers-$pv.pmtiles ;;
+      reaches) dir=$data_dir want=reaches-$pv.json ;;
+      *) dir=$dl_dir want=rivers-$pv.geojson.gz ;;
+    esac
     name=$(jq -r ".$kind.file" <<<"$prev")
+    # The manifest is root's, but a name is still checked against its one exact form before it is opened.
+    [[ $name == "$want" ]] || die "previous version: its $kind file is not $want"
     [[ ! -L $dir/$name ]] || die "previous version: $name is a symlink"
     [[ -f $dir/$name ]] || die "previous version: $name is missing"
     [[ $(sha256sum "$dir/$name" | cut -d' ' -f1) == "$(jq -r ".$kind.sha256" <<<"$prev")" ]] ||
@@ -121,6 +131,7 @@ if ((rollback)); then
 fi
 
 # ---- the tag
+tag_given=$tag
 if [[ -z $tag ]]; then
   fetch "$RWS_GEO_API_URL" "$RWS_STATE_DIR/rivers/releases.json" 4194304 || die "the release list could not be fetched"
   tag=$(jq -r --arg re "$GEO_TAG_RE" '[.[] | select(.draft == false and .prerelease == false and (.tag_name | test($re))) | .tag_name] | sort | last // empty' \
@@ -151,6 +162,17 @@ cmp -s "$work/VERSION" <(printf '%s\n' "$ver") || die "$tag: VERSION is not 8 di
 if [[ -n $old && $(jq -r .current.version <<<"$old") == "$ver" ]]; then
   log "version $ver is already current: nothing to do"
   exit 0
+fi
+# The automatic path never goes back: a version older than current is refused (a stale or manipulated release
+# list), and the previous version, which a --rollback made previous, is left for a --tag run. --tag installs any
+# signed version.
+if [[ -n $old && -z $tag_given ]]; then
+  cur_ver=$(jq -r .current.version <<<"$old")
+  ((10#$ver > 10#$cur_ver)) || die "$tag: version $ver is older than the current $cur_ver: refusing a downgrade (use --tag)"
+  if [[ $(jq -r '.previous.version // empty' <<<"$old") == "$ver" ]]; then
+    log "version $ver is the previous version (rolled back from): left alone until a --tag run"
+    exit 0
+  fi
 fi
 
 tiles_name=rivers-$ver.pmtiles reaches_name=reaches-$ver.json dl_name=rivers-$ver.geojson.gz
