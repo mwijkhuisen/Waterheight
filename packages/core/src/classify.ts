@@ -100,6 +100,11 @@ export type Classified = {
   section: boolean;
   area: { state: Level; basis: BasisOut } | null;
   flags: { stale: boolean; suspect: boolean; tidal: boolean; impounded: boolean };
+  /**
+   * Every source whose row shaped the state, its basis (both parts of a two-part basis) or the area beside it: not
+   * served, it lets the public boundary check sources a label only names (review R2-2).
+   */
+  sources: readonly string[];
 };
 
 /** QC bits that make a value suspect (A§6): provider-suspect, our range, spike and frozen checks. */
@@ -390,11 +395,15 @@ export function classify(s: SeriesIn, family: Family): Classified {
     tidal: s.tidal,
     impounded: s.impounded,
   };
+  const areaSources = area === null ? [] : [area.basis.source];
   if (level !== null && gauge !== null) {
-    return { state: LEVEL_AT[level] as Level, basis: bounded(gauge), section: false, area, flags };
+    const sources = [gauge.source, ...(puller === null ? [] : [puller.basis.source]), ...areaSources];
+    return { state: LEVEL_AT[level] as Level, basis: bounded(gauge), section: false, area, flags, sources };
   }
-  if (area !== null) return { state: area.state, basis: area.basis, section: true, area: null, flags };
-  return { state: 'no_ref', basis: null, section: false, area: null, flags };
+  if (area !== null) {
+    return { state: area.state, basis: area.basis, section: true, area: null, flags, sources: areaSources };
+  }
+  return { state: 'no_ref', basis: null, section: false, area: null, flags, sources: [] };
 }
 
 /**

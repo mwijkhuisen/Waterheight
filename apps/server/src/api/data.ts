@@ -185,6 +185,8 @@ export function publicSnapshot(read: StateRead): Snapshot {
   const values = snapshotValues(read);
   const owner = (source: string | undefined) => source !== undefined && OWNER_ONLY_SOURCES.has(source);
   if (values.some((v) => owner(v.basis?.source) || owner(v.area?.basis.source))) throw coded('owner_basis');
+  // Every source behind a served state, the second part of a two-part basis included (review R2-2).
+  if (read.series.some((s) => s.obs !== null && s.classified.sources.some(owner))) throw coded('owner_basis');
   return { t: iso(new Date(read.t)), values };
 }
 

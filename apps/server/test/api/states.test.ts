@@ -23,6 +23,7 @@ const gauge = (source = 'DE-1'): Classified => ({
   section: false,
   area: null,
   flags: FLAGS,
+  sources: [source],
 });
 const section = (source = 'FR-5'): Classified => ({
   state: 'normal',
@@ -30,8 +31,9 @@ const section = (source = 'FR-5'): Classified => ({
   section: true,
   area: null,
   flags: FLAGS,
+  sources: [source],
 });
-const none: Classified = { state: 'no_ref', basis: null, section: false, area: null, flags: FLAGS };
+const none: Classified = { state: 'no_ref', basis: null, section: false, area: null, flags: FLAGS, sources: [] };
 
 /** A read of one series per entry: [station, country, classified]; every station is tier 1 and public. */
 function read(entries: [string, 'DE' | 'FR', Classified][]): StateRead {
@@ -129,6 +131,21 @@ describe('publicSnapshot fails closed on an owner-only source (review SR-5)', ()
         expect(errorCode(thrown)).toBe('owner_basis');
         expect(String((thrown as Error).message)).not.toContain(source);
       }
+    });
+
+    it(`a ${source} row that only the second part of a two-part basis names throws owner_basis (review R2-2)`, () => {
+      const twoPart: Classified = {
+        ...gauge('DE-7'),
+        basis: { ...basis('DE-7'), ref: 'x/HQ10', label: 'LANUK x / other HQ10' },
+        sources: ['DE-7', source],
+      };
+      let thrown: unknown;
+      try {
+        publicSnapshot(read([['a', 'DE', twoPart]]));
+      } catch (err) {
+        thrown = err;
+      }
+      expect(errorCode(thrown)).toBe('owner_basis');
     });
   }
 });

@@ -193,24 +193,29 @@ export async function readStates(
     // seen before is read and parsed once.
     const { attached } = fixed;
     const keyOf = (w: WarningRow) => w.geom_md5 ?? `${w.source_id}:${w.area_key}`;
-    const missing = warnings.filter((w) => w.geom_md5 !== null && !attached.has(w.geom_md5)).map((w) => w.id);
+    // One row per geometry not seen before: rows sharing a polygon (one LU-5 zone in several alerts) fetch it once.
+    const missing = [
+      ...new Map(
+        warnings.flatMap((w) => (w.geom_md5 !== null && !attached.has(w.geom_md5) ? [[w.geom_md5, w.id]] : [])),
+      ).values(),
+    ];
     const geometry = new Map(
       missing.length === 0
         ? []
         : (
-            await sql<{ id: string; geometry_geojson: string | null }>`
-              SELECT id::text AS id, geometry_geojson FROM ${sql.table(V.warning)}
+            await sql<{ md5: string; geometry_geojson: string | null }>`
+              SELECT md5(geometry_geojson) AS md5, geometry_geojson FROM ${sql.table(V.warning)}
               WHERE id = ANY(${missing}::bigint[])`.execute(tx)
-          ).rows.map((g) => [g.id, g.geometry_geojson]),
+          ).rows.map((g) => [g.md5, g.geometry_geojson]),
     );
     const areas = warnings.map((w) => {
       const key = keyOf(w);
       const known = attached.get(key);
       if (known !== undefined) return { w, ids: known };
       // A polygon is attached only from the geometry this read fetched; without it nothing is kept (review SR-2).
-      if (w.geom_md5 !== null && !geometry.has(w.id)) return { w, ids: [] };
+      if (w.geom_md5 !== null && !geometry.has(w.geom_md5)) return { w, ids: [] };
       const ids = attachArea(
-        { source: w.source_id, key: w.area_key, geometry: parseGeometry(geometry.get(w.id) ?? null) },
+        { source: w.source_id, key: w.area_key, geometry: parseGeometry(geometry.get(w.geom_md5 ?? '') ?? null) },
         stations,
         opts.sections,
       );
