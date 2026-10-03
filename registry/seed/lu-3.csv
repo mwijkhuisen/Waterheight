@@ -1,14 +1,18 @@
 # The 11 AGE-computed forecast stations (catalogue §2.6), slugs as the site derives them; each answered 200 in the
 # research run and the build smoke. Not fetched: perl, stadtbredimus, wasserbillig (LfU RLP-computed; §0.8).
-slug
-bigonville
-bissen
-dasbourg
-diekirch
-ettelbruck-alzette
-ettelbruck-wark
-gemund-our
-hesperange
-kautenbach
-mersch
-rosport
+# limit_h: the hours of forecast the AGE site shows for the station (24 or 48), read from the LU-4 pages' `forecastsLimit`
+# (owner decision 2, P8a). Display metadata like the slug, no water value: a run is stored whole and the forecast builder
+# cuts it after first_valid + limit_h. Empty: no LU-4 page states one (gemund-our: LfU RLP, not fetched). The LU-4 loader
+# counts `forecast_limit_drift` when a page states another limit. Not a variant key of the capture spec.
+slug,limit_h
+bigonville,24
+bissen,24
+dasbourg,24
+diekirch,24
+ettelbruck-alzette,24
+ettelbruck-wark,24
+gemund-our,
+hesperange,24
+kautenbach,24
+mersch,24
+rosport,48

@@ -6,6 +6,16 @@ import { ArchiveError, type ArchiveReader, type RawLine } from '../archive/reade
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
+import {
+  applyForecasts,
+  type CheckedRun,
+  checkForecasts,
+  checkPart,
+  type ForecastWritten,
+  forecastDecl,
+  type ResolvedRun,
+  stagePart,
+} from './forecasts.ts';
 import { labelOffsetsOf } from './label-offset.ts';
 import { applyClasses, applyReferences, applyWarnings, type Changes, type ResolvedRef } from './refs.ts';
 import {
@@ -115,6 +125,11 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * `geometry_too_big` and `texts_too_big` (P7a review SR-2): a warning row
  * whose geometry or texts the loader left out because they are over its byte
  * bound (WARNING_BYTES), so that no size CHECK quarantines a flood warning.
+ * P8a: `beyond_horizon`, a forecast value past its provider's horizon (packages/core checkRun);
+ * `before_window` (review SEC-1), a forecast value more than two days before its run's issue (else fetch) time;
+ * `incomplete_run`, a staged LU-3 group whose five files never all arrived (evicted or expired); `combine_drift`,
+ * a staged group that its combiner refused; `run_mismatch` and `step_mismatch`, a complete LU-3 group whose files
+ * disagree on their times or are not one hour apart (the whole run is withheld, as for an incomplete one).
  */
 export const RETAINED = [
   'unit_mismatch',
@@ -129,6 +144,12 @@ export const RETAINED = [
   'texts_too_big',
   'bad_text',
   'reference_out_of_range',
+  'beyond_horizon',
+  'before_window',
+  'incomplete_run',
+  'combine_drift',
+  'run_mismatch',
+  'step_mismatch',
 ] as const;
 
 const NUL = String.fromCharCode(0);
@@ -603,6 +624,7 @@ export class Loader {
         : await previousLoad(this.deps.db, line.source, line.spec, fetchedAt);
     const labelOffsets = spec.labelOffsets === true ? await labelOffsetsOf(this.deps.db, line.source) : undefined;
     let result: Normalised;
+    let checked: CheckedRun[];
     try {
       result = await spec.run(body, {
         registry,
@@ -615,6 +637,9 @@ export class Loader {
         ...(previous === null || spec.window === undefined ? {} : { since: previous.getTime() - spec.window }),
         ...(labelOffsets === undefined ? {} : { labelOffsets }),
       });
+      // P8a: every forecast run passes the core bounds before anything is stored (drift quarantines the payload).
+      checked = checkForecasts(result.forecasts, line.source, fetchedAt.getTime(), result.dropped);
+      if (result.forecastPart !== undefined) checkPart(result.forecastPart);
     } catch (err) {
       if (err instanceof SchemaDrift) return setAside('quarantined', err.code, err.path);
       // A parser bug must not stall the loader either; the payload stays in the archive for a replay.
@@ -653,6 +678,24 @@ export class Loader {
       const s = refRegistry(k.target)?.get(k.series);
       if (s !== undefined && !s.off) refScope.add(s.id);
     }
+    // P8a: a forecast run attaches to a primary series of its own source or of a `refTarget` source (DE-2 → DE-1,
+    // LU-3 → LU-1); a withheld (`off`) series takes none, a key no registry has is unknown. Every stored point
+    // counts in the batch, whatever the series' audience (review C10: a DE-1 series is not DE-2's audience).
+    const resolveRuns = (runs: readonly CheckedRun[], dropped: Record<string, number>, unknown: Set<string>) => {
+      const out: ResolvedRun[] = [];
+      for (const r of runs) {
+        const s = refRegistry(r.target)?.get(r.series);
+        if (s === undefined) unknown.add(`${r.target ?? line.source}\n${r.series}`);
+        else if (s.off) continue;
+        else if (s.role !== 'primary') dropped.forecast_not_primary = (dropped.forecast_not_primary ?? 0) + 1;
+        else out.push({ seriesId: s.id, run: r.run });
+      }
+      return out;
+    };
+    const forecastUnknown = new Set<string>();
+    const forecasts = resolveRuns(checked, result.dropped, forecastUnknown);
+    const headDrops = forecastDecl(line.source)?.headDrops ?? false;
+    const points = (runs: readonly ResolvedRun[]) => runs.reduce((n, r) => n + r.run.points.length, 0);
     const classes = result.classes ?? [];
     boundWarnings(result);
     const warningRows = result.warnings?.rows.length ?? 0;
@@ -664,13 +707,15 @@ export class Loader {
       result.gaugeZeros.filter((z) => zeroIds.get(z.series)?.sameAudience === true).length +
       fill.length +
       refs.filter((r) => r.counted).length +
-      warningRows;
+      warningRows +
+      points(forecasts);
     let n_rows = n_rows_base;
     // Values a registry or parser change could still load: the pruner keeps this object until a replay stores them.
     const n_skipped_base =
       result.unknown +
       fillUnknown.size +
       refUnknown.size +
+      forecastUnknown.size +
       RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
     let n_skipped = n_skipped_base;
     let outcome: Outcome = { kind: 'loaded', n_rows, n_new: 0, n_changed: 0 };
@@ -703,12 +748,23 @@ export class Loader {
       const refsApplied = await applyReferences(tx, line.source, refs, refScope, state.id, fetchedAt);
       const cls = await applyClasses(tx, line.source, classes, state.id, fetchedAt);
       const warn = await applyWarnings(tx, line.source, result.warnings, state.id, fetchedAt);
+      const fw = await applyForecasts(tx, line.source, forecasts, state.id, fetchedAt, headDrops);
+      const staged = await this.stage(tx, line, spec, result, refRegistry, state.id, fetchedAt);
+      const fc: ForecastWritten = {
+        n_new: fw.n_new + staged.written.n_new,
+        n_changed: fw.n_changed + staged.written.n_changed,
+        writes: fw.writes + staged.written.writes,
+        ambiguous: fw.ambiguous + staged.written.ambiguous,
+        collision: fw.collision + staged.written.collision,
+      };
+      if (fc.ambiguous > 0) result.dropped.forecast_ambiguous = (result.dropped.forecast_ambiguous ?? 0) + fc.ambiguous;
+      if (fc.collision > 0) result.dropped.forecast_collision = (result.dropped.forecast_collision ?? 0) + fc.collision;
       refChanges = refsApplied.changes;
       warnChanges = warn.changes;
       classChanged = cls.changed;
       closesFull = warn.full;
-      n_rows = n_rows_base + cls.kept;
-      n_skipped = n_skipped_base + cls.unknown;
+      n_rows = n_rows_base + cls.kept + staged.rows;
+      n_skipped = n_skipped_base + cls.unknown + staged.skipped;
       if (result.unitMismatch !== undefined) {
         units = await storeUnitMismatch(tx, line.source, fetchedAt, result.unitMismatch);
       }
@@ -729,17 +785,19 @@ export class Loader {
         opened(refChanges) +
         cls.new +
         cls.changed +
-        opened(warnChanges);
+        opened(warnChanges) +
+        fc.n_new;
       const n_changed =
         written.n_changed +
         filled.n_changed +
         (zeroChanges.corrected ?? 0) +
         corrected(refChanges) +
-        corrected(warnChanges);
+        corrected(warnChanges) +
+        fc.n_changed;
       outcome = { kind: 'loaded', n_rows, n_new, n_changed };
       // A replay that changes nothing leaves the batch exactly as the first load wrote it.
       const changed =
-        written.writes + filled.writes + zeroWrites + refsApplied.writes + cls.writes + warn.writes > 0 ||
+        written.writes + filled.writes + zeroWrites + refsApplied.writes + cls.writes + warn.writes + fc.writes > 0 ||
         state.skipped !== n_skipped;
       if (!state.existed || changed || state.previous !== 'ok') {
         await closeBatch(tx, state.id, batch, { status: 'ok', n_rows, n_new, n_changed, n_skipped, error: null });
@@ -782,6 +840,70 @@ export class Loader {
     if (closesFull) this.deps.alert('cap_closes_full', { ...ids, n: 1 });
     if (result.unknown > 0) this.deps.info?.('series not in the registry', { ...ids, n: result.unknown });
     return outcome;
+  }
+
+  /**
+   * P8a: stages a part of a run that spans several payloads (LU-3: one percentile file) inside the payload's
+   * transaction, and stores the run once its group is complete (`SpecLoader.combine`), with the fetch time of the
+   * group's earliest part. A part of an unknown series is counted, of a withheld (`off`) one is not staged (Gemünd).
+   * The counts it adds to `result.dropped` (evicted or refused groups, the combined runs' drops) are returned too.
+   */
+  private async stage(
+    tx: Tx,
+    line: ManifestLine,
+    spec: SpecLoader,
+    result: Normalised,
+    refRegistry: (target: string | undefined) => ReadonlyMap<string, SeriesRow> | undefined,
+    batch: string,
+    fetchedAt: Date,
+  ): Promise<{ written: ForecastWritten; rows: number; skipped: number }> {
+    const none: ForecastWritten = { n_new: 0, n_changed: 0, writes: 0, ambiguous: 0, collision: 0 };
+    const part = result.forecastPart;
+    if (part === undefined || spec.combine === undefined) return { written: none, rows: 0, skipped: 0 };
+    const s = refRegistry(part.target)?.get(part.series);
+    if (s === undefined) return { written: none, rows: 0, skipped: 1 };
+    if (s.off || s.role !== 'primary') return { written: none, rows: 0, skipped: 0 };
+    const add = (code: string, n: number) => {
+      if (n > 0) result.dropped[code] = (result.dropped[code] ?? 0) + n;
+    };
+    const before = RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
+    const { complete, evicted } = await stagePart(
+      tx,
+      line.source,
+      part,
+      spec.combine.parts,
+      fetchedAt,
+      this.deps.now(),
+    );
+    add('incomplete_run', evicted);
+    let written = none;
+    let rows = 0;
+    const unknown = new Set<string>();
+    if (complete !== null) {
+      const at = Math.min(...complete.map((p) => p.fetchedAt));
+      const dropped: Record<string, number> = {};
+      let runs: CheckedRun[] = [];
+      try {
+        const combined = spec.combine.run(complete);
+        for (const [code, n] of Object.entries(combined.dropped)) dropped[code] = (dropped[code] ?? 0) + n;
+        runs = checkForecasts(combined.runs, line.source, at, dropped);
+      } catch (err) {
+        if (!(err instanceof SchemaDrift)) throw err;
+        dropped.combine_drift = (dropped.combine_drift ?? 0) + 1;
+      }
+      for (const [code, n] of Object.entries(dropped)) add(code, n);
+      const resolved: ResolvedRun[] = [];
+      for (const r of runs) {
+        const t = refRegistry(r.target)?.get(r.series);
+        if (t === undefined) unknown.add(`${r.target ?? line.source}\n${r.series}`);
+        else if (!t.off && t.role === 'primary') resolved.push({ seriesId: t.id, run: r.run });
+      }
+      rows = resolved.reduce((n, r) => n + r.run.points.length, 0);
+      const headDrops = forecastDecl(line.source)?.headDrops ?? false;
+      written = await applyForecasts(tx, line.source, resolved, batch, new Date(at), headDrops);
+    }
+    const after = RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
+    return { written, rows, skipped: after - before + unknown.size };
   }
 
   /**

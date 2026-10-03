@@ -13,7 +13,7 @@ import { repoRoot } from './catalogue.ts';
 import { server } from './msw.setup.ts';
 import { zip } from './zip.ts';
 
-// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1; P5b: eight specs). The
+// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1; P8a: nine specs). The
 // recorded fixtures stand in for the live providers; nothing here reaches the network.
 
 type Spec = (typeof SPECS)[number];
@@ -30,6 +30,7 @@ const fixtureDir = (source: string) => join(repoRoot, 'apps/server/src/adapters'
 const BODY: Record<Spec, Buffer> = {
   'de-1-basin': readFileSync(join(fixtureDir('de-1'), 'de-1-basin.raw')),
   'nl-1-obs-key': readFileSync(join(fixtureDir('nl-1'), 'nl-1-obs-key.raw')),
+  'nl-1-fc-1h': readFileSync(join(fixtureDir('nl-1'), 'nl-1-fc-1h.raw')),
   'nl-2-wfs': readFileSync(join(fixtureDir('nl-2'), 'nl-2-wfs.raw')),
   'fr-1-obs': readFileSync(join(fixtureDir('fr-1'), 'fr-1-obs.raw')),
   'ch-1-lindas': readFileSync(join(fixtureDir('ch-1'), 'ch-1-lindas.raw')),
@@ -44,6 +45,7 @@ const NOW = new Date(
   Math.max(
     recordedAt('de-1', 'de-1-basin'),
     recordedAt('nl-1', 'nl-1-obs-key'),
+    recordedAt('nl-1', 'nl-1-fc-1h'),
     recordedAt('nl-2', 'nl-2-wfs'),
     recordedAt('fr-1', 'fr-1-obs'),
     recordedAt('ch-1', 'ch-1-lindas'),
@@ -77,6 +79,7 @@ const answer =
 const GOOD: Record<Spec, Answer> = {
   'de-1-basin': answer(BODY['de-1-basin']),
   'nl-1-obs-key': answer(BODY['nl-1-obs-key']),
+  'nl-1-fc-1h': answer(BODY['nl-1-fc-1h']),
   'nl-2-wfs': answer(BODY['nl-2-wfs']),
   'fr-1-obs': answer(BODY['fr-1-obs']),
   'ch-1-lindas': answer(BODY['ch-1-lindas'], 200, 'text/csv;charset=UTF-8'),
@@ -90,9 +93,13 @@ type Seen = { method: string; host: string; path: string; userAgent: string | nu
 /** Runs the check against msw with the real client; every spec answers with its fixture unless overridden. */
 async function run(answers: Partial<Record<Spec, Answer>> = {}, now = NOW) {
   const seen: Seen[] = [];
+  /** The request bodies in order (the NL-1 POSTs name their location and ProcesType in theirs). */
+  const bodies: string[] = [];
+  const groups = Map.groupBy(targets, (t) => `${t.method} ${t.pattern}`);
   server.use(
-    ...targets.map((t) =>
-      http[t.method === 'POST' ? 'post' : 'get'](t.pattern, ({ request }) => {
+    ...[...groups.values()].map((group) => {
+      const first = group[0] as (typeof targets)[number];
+      return http[first.method === 'POST' ? 'post' : 'get'](first.pattern, async ({ request }) => {
         const url = new URL(request.url);
         seen.push({
           method: request.method,
@@ -101,15 +108,21 @@ async function run(answers: Partial<Record<Spec, Answer>> = {}, now = NOW) {
           userAgent: request.headers.get('user-agent'),
           apiKey: request.headers.has('x-api-key'),
         });
+        const body = request.method === 'POST' ? await request.clone().text() : '';
+        bodies.push(body);
+        // The forecast spec of NL-1 asks for ProcesType verwachting, the observation specs for meting.
+        const forecast = body.includes('"ProcesType":"verwachting"');
+        const t = group.find((x) => x.id.includes('-fc-') === forecast) ?? first;
         return (answers[t.id as Spec] ?? GOOD[t.id as Spec])();
-      }),
-    ),
+      });
+    }),
   );
   const client = testClient(Object.fromEntries(capture.hosts), { userAgent: UA });
   const report = await check({ fetch: (source, req, opts) => client.fetch(source, req, opts), now });
   return {
     report,
     seen,
+    bodies,
     codes: Object.fromEntries(report.results.map((r) => [r.spec, r.code])) as Record<Spec, string>,
   };
 }
@@ -123,11 +136,12 @@ const nl1 = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => 
 
 // Each run parses the whole registry (about 2,000 series since P5b) and eight payloads: seconds on a CI runner.
 describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
-  it('passes DE-1, NL-1, NL-2, FR-1, CH-1, CH-2, DE-7 and LU-1 through the loader parse: all eight ok', async () => {
+  it('passes DE-1, NL-1 (observations and forecasts), NL-2, FR-1, CH-1, CH-2, DE-7 and LU-1 through the loader parse: all nine ok', async () => {
     const { codes, report } = await run();
     expect(codes).toEqual({
       'de-1-basin': 'ok',
       'nl-1-obs-key': 'ok',
+      'nl-1-fc-1h': 'ok',
       'nl-2-wfs': 'ok',
       'fr-1-obs': 'ok',
       'ch-1-lindas': 'ok',
@@ -137,17 +151,18 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
     });
     expect(report.at).toBe(NOW.toISOString());
     expect(reportLines(report)).toBe(
-      'de-1-basin ok\nnl-1-obs-key ok\nnl-2-wfs ok\nfr-1-obs ok\nch-1-lindas ok\nch-2-pq ok\nde-7-messwerte ok\nlu-1-csv ok',
+      'de-1-basin ok\nnl-1-obs-key ok\nnl-1-fc-1h ok\nnl-2-wfs ok\nfr-1-obs ok\nch-1-lindas ok\nch-2-pq ok\nde-7-messwerte ok\nlu-1-csv ok',
     );
   });
 
-  it('sends exactly the eight registry targets, with the contact User-Agent and no API key', async () => {
+  it('sends exactly the nine registry targets, with the contact User-Agent and no API key', async () => {
     const { seen } = await run();
     expect(seen).toEqual(
       targets.map((t) => ({ method: t.method, host: t.host, path: t.path, userAgent: UA, apiKey: false })),
     );
     expect(targets.map((t) => `${t.method} ${t.host}${t.path}`)).toEqual([
       'GET www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json',
+      'POST ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen',
       'POST ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen',
       'GET geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs',
       'GET hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr',
@@ -156,8 +171,8 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
       'GET www.hochwasserportal.nrw/data/downloads/messwerte.zip',
       'GET inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv',
     ]);
-    expect(targets).toHaveLength(8);
-    expect(seen).toHaveLength(8);
+    expect(targets).toHaveLength(9);
+    expect(seen).toHaveLength(9);
   });
 
   it('asks inondations.public.lu without a query string (its robots.txt says Disallow: /*?*)', () => {
@@ -177,7 +192,89 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
     const { codes, seen } = await run({ 'fr-1-obs': answer(JSON.stringify(doc)) });
     expect(codes['fr-1-obs']).toBe('ok');
     expect(seen.filter((r) => r.host === 'hubeau.eaufrance.fr')).toHaveLength(1);
-    expect(seen).toHaveLength(8);
+    expect(seen).toHaveLength(9);
+  });
+});
+
+/** The NL-1 forecast fixture with a change to its parsed JSON. */
+const forecast = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => void): Answer => {
+  const doc = JSON.parse(BODY['nl-1-fc-1h'].toString('utf8'));
+  change(doc);
+  return answer(JSON.stringify(doc));
+};
+
+describe('the NL-1 forecast probe (P8a)', { timeout: 90_000 }, () => {
+  it('asks the registered row lobith.bovenrijn.tolkamer/Q, not the first (stale) row of the seed', async () => {
+    // The POST bodies, in the order of the specs: nl-1-obs-key, then nl-1-fc-1h.
+    const bodies = (await run()).bodies.filter((b) => b !== '');
+    const spec = capture.specs.find((x) => x.id === 'nl-1-fc-1h');
+    // The seed's first 1h row is arnhem.nederrijn/Q, which RWS serves as gaps.
+    expect(spec?.rows[0]).toMatchObject({ code: 'arnhem.nederrijn', quantity: 'Q', tier: '1h' });
+    const sent = JSON.parse(bodies[1] ?? '{}') as {
+      Locatie: { Code: string };
+      AquoPlusWaarnemingMetadata: { AquoMetadata: { Grootheid: { Code: string }; ProcesType: string } };
+    };
+    expect(sent.Locatie.Code).toBe('lobith.bovenrijn.tolkamer');
+    expect(sent.AquoPlusWaarnemingMetadata.AquoMetadata).toMatchObject({
+      Grootheid: { Code: 'Q' },
+      ProcesType: 'verwachting',
+    });
+    // The observation spec before it still asks its own first row.
+    expect(JSON.parse(bodies[0] ?? '{}').AquoPlusWaarnemingMetadata.AquoMetadata.ProcesType).toBe('meting');
+  });
+
+  it('counts the forecast points as rows: every value a gap leaves nothing, so no_rows', async () => {
+    const { codes } = await run({
+      'nl-1-fc-1h': forecast((doc) => {
+        for (const list of doc.WaarnemingenLijst)
+          for (const m of list.MetingenLijst as { WaarnemingMetadata: { Kwaliteitswaardecode: string } }[])
+            m.WaarnemingMetadata.Kwaliteitswaardecode = '99';
+      }),
+    });
+    expect(codes['nl-1-fc-1h']).toBe('no_rows');
+    expect(codes['nl-1-obs-key']).toBe('ok');
+  });
+
+  it('a method other than RWSM-F232, or a process type that is not verwachting, is the adapter’s drift code', async () => {
+    const method = await run({
+      'nl-1-fc-1h': forecast((doc) => {
+        for (const list of doc.WaarnemingenLijst)
+          (list.AquoMetadata as { WaardeBepalingsMethode: { Code: string } }).WaardeBepalingsMethode.Code = 'RWSM-F999';
+      }),
+    });
+    expect(method.codes['nl-1-fc-1h']).toBe('forecast_method');
+    const process = await run({
+      'nl-1-fc-1h': forecast((doc) => {
+        for (const list of doc.WaarnemingenLijst) (list.AquoMetadata as { ProcesType: string }).ProcesType = 'meting';
+      }),
+    });
+    expect(process.codes['nl-1-fc-1h']).toBe('forecast_process');
+  });
+
+  it('a location the registry does not hold is unknown_series; a unit other than the declared one is unit_mismatch', async () => {
+    const nowhere = await run({
+      'nl-1-fc-1h': forecast((doc) => {
+        for (const list of doc.WaarnemingenLijst) (list.Locatie as { Code: string }).Code = 'nowhere.at.all';
+      }),
+    });
+    expect(nowhere.codes['nl-1-fc-1h']).toBe('unknown_series');
+    const unit = await run({
+      'nl-1-fc-1h': forecast((doc) => {
+        for (const list of doc.WaarnemingenLijst)
+          (list.AquoMetadata as { Eenheid: { Code: string } }).Eenheid.Code = 'cm';
+      }),
+    });
+    expect(unit.codes['nl-1-fc-1h']).toBe('unit_mismatch');
+  });
+
+  it('a value past the horizon is beyond_horizon: the pipeline’s run checks apply to the probe', async () => {
+    const far = await run({
+      'nl-1-fc-1h': forecast((doc) => {
+        const list = doc.WaarnemingenLijst[0] as { MetingenLijst: { Tijdstip: string }[] };
+        (list.MetingenLijst.at(-1) as { Tijdstip: string }).Tijdstip = '2026-10-04T12:00:00.000+01:00';
+      }),
+    });
+    expect(far.codes['nl-1-fc-1h']).toBe('beyond_horizon');
   });
 });
 
@@ -305,7 +402,7 @@ describe('what a drifted provider turns into', { timeout: 30_000 }, () => {
     const value = await run({ 'de-7-messwerte': zipped(messwerte(['2768898001;2026-09-29T12:59:00.000+01:00;EVIL'])) });
     expect(value.codes['de-7-messwerte']).toMatch(/^[a-z0-9_]+ at line\.\d+$/);
     expect(JSON.stringify(value.report)).not.toContain('EVIL');
-    // The other seven specs are untouched.
+    // The other eight specs are untouched.
     expect(value.codes['lu-1-csv']).toBe('ok');
     expect(value.codes['ch-2-pq']).toBe('ok');
   });
@@ -404,7 +501,7 @@ describe('what a drifted provider turns into', { timeout: 30_000 }, () => {
   });
 });
 
-describe('the report is a list of fixed lines and nothing else', { timeout: 30_000 }, () => {
+describe('the report is a list of fixed lines and nothing else', { timeout: 90_000 }, () => {
   const hostile = [
     'ok\n@everyone',
     '`code`',
@@ -464,6 +561,7 @@ describe('the report is a list of fixed lines and nothing else', { timeout: 30_0
       await run(),
       await run({
         'nl-1-obs-key': nasty,
+        'nl-1-fc-1h': nasty,
         'nl-2-wfs': nasty,
         'de-1-basin': nasty,
         'fr-1-obs': nasty,
@@ -622,9 +720,9 @@ describe('the workflow', () => {
       expect(Math.min(Math.abs(minute - f), 60 - Math.abs(minute - f))).toBeGreaterThanOrEqual(5);
   });
 
-  it('says eight requests, never three or six', () => {
-    expect(text).toContain('Eight live requests');
-    expect(text).not.toMatch(/\b(three|six)\b/i);
+  it('says nine requests, never three, six or eight', () => {
+    expect(text).toContain('Nine live requests');
+    expect(text).not.toMatch(/\b(three|six|eight)\b/i);
   });
 
   it('writes issues in the report job only, and that job has no contents permission and no checkout', () => {

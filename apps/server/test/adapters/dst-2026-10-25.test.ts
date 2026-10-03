@@ -15,7 +15,10 @@ import { rawFixture, registryOf } from './registry.ts';
 // The switch: `PENDING` lists the sources whose payload has not been imported yet. The test fails if a pending
 // source already has its fixture, or a source no longer pending lacks it, so the set can be neither forgotten
 // nor skipped silently. Remove a source from PENDING in the change that adds its fixture.
-export const PENDING: readonly string[] = ['DE-1', 'NL-1', 'NL-2', 'FR-1', 'CH-1', 'DE-7', 'LU-1'];
+//
+// P8a added the NL-1 forecast spec (key 'NL-1 forecast'): a `verwachting` capture fetched before 2026-10-24T23:50Z
+// (a forecast reaches 48 h ahead, so it holds the whole night), whose run is checked like an observation series.
+export const PENDING: readonly string[] = ['DE-1', 'NL-1', 'NL-1 forecast', 'NL-2', 'FR-1', 'CH-1', 'DE-7', 'LU-1'];
 
 const FROM = Date.parse('2026-10-25T00:00:00Z');
 const TO = Date.parse('2026-10-25T03:00:00Z');
@@ -25,7 +28,9 @@ const TO = Date.parse('2026-10-25T03:00:00Z');
  * 00:00Z and 03:00Z must lie on the step's grid, once, with none missing (NL-2, a snapshot of latest values:
  * each instant at most 70 minutes before the payload's fetch and never after it, A§7.4 step 2).
  */
-const SET: Readonly<Record<string, { fixture: string; spec: string; series: string; stepMin: number }>> = {
+const SET: Readonly<
+  Record<string, { fixture: string; spec: string; series: string; stepMin: number; source?: string; forecast?: true }>
+> = {
   'DE-1': {
     fixture: 'de-1-series-dst-2026-10-25',
     spec: 'de-1-series',
@@ -36,6 +41,14 @@ const SET: Readonly<Record<string, { fixture: string; spec: string; series: stri
     fixture: 'nl-1-obs-key-dst-2026-10-25',
     spec: 'nl-1-obs-key',
     series: 'lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007',
+    stepMin: 10,
+  },
+  'NL-1 forecast': {
+    source: 'NL-1',
+    forecast: true,
+    fixture: 'nl-1-fc-1h-dst-2026-10-25',
+    spec: 'nl-1-fc-1h',
+    series: 'lobith.bovenrijn.tolkamer/Q/NVT/other:F230',
     stepMin: 10,
   },
   'NL-2': {
@@ -50,20 +63,23 @@ const SET: Readonly<Record<string, { fixture: string; spec: string; series: stri
   'LU-1': { fixture: 'lu-1-csv-dst-2026-10-25', spec: 'lu-1-csv', series: 'Diekirch', stepMin: 15 },
 };
 
-const fixtureUrl = (source: string) =>
-  new URL(`../../src/adapters/${source.toLowerCase()}/fixtures/${SET[source]?.fixture}.raw`, import.meta.url);
+/** The source of a set entry (its key, but for the NL-1 forecast spec). */
+const sourceOf = (key: string) => SET[key]?.source ?? key;
+const fixtureUrl = (key: string) =>
+  new URL(`../../src/adapters/${sourceOf(key).toLowerCase()}/fixtures/${SET[key]?.fixture}.raw`, import.meta.url);
 
 describe('the real DST set of 2026-10-25', () => {
-  it('lists the seven sources of issue #20, and the pending switch matches the fixtures on disk', () => {
-    expect(Object.keys(SET).sort()).toEqual(['CH-1', 'DE-1', 'DE-7', 'FR-1', 'LU-1', 'NL-1', 'NL-2']);
-    for (const source of Object.keys(SET)) {
-      expect([source, existsSync(fixtureUrl(source))]).toEqual([source, !PENDING.includes(source)]);
+  it('lists the seven sources of issue #20 and the NL-1 forecast spec, and the pending switch matches the fixtures on disk', () => {
+    expect(Object.keys(SET).sort()).toEqual(['CH-1', 'DE-1', 'DE-7', 'FR-1', 'LU-1', 'NL-1', 'NL-1 forecast', 'NL-2']);
+    for (const key of Object.keys(SET)) {
+      expect([key, existsSync(fixtureUrl(key))]).toEqual([key, !PENDING.includes(key)]);
     }
   });
 
-  for (const source of Object.keys(SET).filter((s) => !PENDING.includes(s))) {
-    it(`${source}: exact UTC instants through the repeated hour`, async () => {
-      const { fixture, spec, series, stepMin } = SET[source] as (typeof SET)[string];
+  for (const key of Object.keys(SET).filter((k) => !PENDING.includes(k))) {
+    it(`${key}: exact UTC instants through the repeated hour`, async () => {
+      const source = sourceOf(key);
+      const { fixture, spec, series, stepMin, forecast } = SET[key] as (typeof SET)[string];
       const { body, meta } = rawFixture(source, fixture);
       const fetchedAt = Date.parse(meta.recorded_at);
       const run = LOAD_ADAPTERS[source]?.specs[spec]?.run;
@@ -74,9 +90,11 @@ describe('the real DST set of 2026-10-25', () => {
         variant: source === 'DE-1' ? series : '',
         unitMismatch: new Set(),
       });
-      const ts = [...obsParts(out)]
-        .flat()
-        .filter((r) => r.series === series)
+      const ts = (
+        forecast === true
+          ? (out.forecasts ?? []).filter((r) => r.series === series).flatMap((r) => r.points)
+          : [...obsParts(out)].flat().filter((r) => r.series === series)
+      )
         .map((r) => Date.parse(r.ts))
         .filter((t) => t >= FROM && t < TO);
       if (source === 'NL-2') {

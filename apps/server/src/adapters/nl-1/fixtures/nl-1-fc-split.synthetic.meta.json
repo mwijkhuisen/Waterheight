@@ -1,0 +1,13 @@
+{
+  "spec": "nl-1-fc-1h",
+  "variant": "",
+  "source": "NL-1",
+  "synthetic": true,
+  "recorded_at": "2026-10-01T05:25:00Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 21703,
+  "trimmed": false,
+  "note": "Hand-made from the real Lobith Q and Driel beneden H captures of 2026-10-01 (real structure, generated values): Lobith Q split into two lists (the second in reverse order, overlapping the first by two instants with the same values), a code 99 gap in each, a quality code 25, and a Driel beneden H list in the same response. The real export holds no split list and no code 99 under a registered series [U]."
+}

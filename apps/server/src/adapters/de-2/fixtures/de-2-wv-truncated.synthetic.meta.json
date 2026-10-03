@@ -1,0 +1,8 @@
+{
+  "spec": "de-2-wv",
+  "source": "DE-2",
+  "synthetic": true,
+  "derived_from": "hand-made: a run that ends after 13 forecast points and has no estimate (the level is above the forecastable range)",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

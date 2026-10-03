@@ -1,5 +1,14 @@
-import { createHash } from 'node:crypto';
-import { parseInstant, SchemaDrift, type TimeConvention, TimeError, toIso } from '@rws/core';
+import {
+  FORECAST_FLAGS,
+  type ForecastRunIn,
+  parseInstant,
+  parseStrict,
+  SchemaDrift,
+  type StagedPart,
+  type TimeConvention,
+  TimeError,
+  toIso,
+} from '@rws/core';
 import { z } from 'zod';
 import type { Percentile } from './parse.ts';
 
@@ -14,17 +23,18 @@ import type { Percentile } from './parse.ts';
 //    fetched until C4/C11 (catalogue §0.8); their floors below are tested on synthetic files only;
 //  - unit: cm above the gauge zero, kept as published (no rounding, no conversion); a null value is a gap
 //    (`gap`), never 0;
-//  - no issue time: a file states none and AGE keeps no archive. The run is keyed by (series, first_valid,
-//    content_hash), the issue time is the fetch time and says so (`issued_inferred: true`); a run is the five
-//    percentile files of one station, which must agree on the series, the first step and every valid time
-//    (`incomplete_run`, `run_mismatch`; `step_mismatch` when the steps are not one hour apart);
-//  - p30 and p70 keep their names: P8a loads a run into forecast_run, which has no p30/p70 columns yet. Percentiles
-//    that cross (NOT p10 ≤ p30 ≤ p50 ≤ p70 ≤ p90) are flagged `order`, never reordered or relabelled;
+//  - no issue time: a file states none and AGE keeps no archive. The run states no `issuedAt`, so the loader infers it
+//    from the earliest of its five files (`issued_inferred`); a run is the five percentile files of one station,
+//    which must agree on the series, the first step and every valid time (`incomplete_run`, `run_mismatch`;
+//    `step_mismatch` when the steps are not one hour apart). The loader keys it by (series, first valid time, hash);
+//  - one run is a `quantiles` run of the LU-1 series (`target` LU-1) with p10, p30, p50, p70 and p90 per step, the
+//    `value` column holding p50. Percentiles that cross (NOT p10 ≤ p30 ≤ p50 ≤ p70 ≤ p90) get the forecast flag
+//    ORDER, never reordered or relabelled;
 //  - Moselle floor (§2.6): below a set level the model draws a flat line (Perl's p10 = p50 = p90 = 250.0 while the
-//    river stood near 212 cm). A step where any percentile is at or below the station's floor is flagged
-//    `below_floor` ("below forecastable range");
-//  - display limit: the site shows only the first 24 or 48 hours per station (LU-4 `forecastsLimit`); the run
-//    keeps every step and carries the limit for the owner view to respect (`display_limit_h`, null when unknown).
+//    river stood near 212 cm). A step where any percentile is at or below the station's floor gets the forecast
+//    flag BELOW_FLOOR ("below forecastable range"); the values stay as published;
+//  - display limit: the site shows only the first 24 or 48 hours per station (LU-4 `forecastsLimit`). The run keeps
+//    every step; the limit is display metadata (registry/seed/lu-3.csv `limit_h`) that the forecast builder applies.
 
 export const SOURCE = 'LU-3';
 export const TIME: TimeConvention = { kind: 'iso-offset' };
@@ -53,30 +63,26 @@ export type Part = {
   values: { ts: string; value: number }[];
 };
 
-const Flag = z.enum(['order', 'below_floor']);
 const Iso = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-const num = z.number();
 
-export const ForecastRun = z.strictObject({
+/**
+ * A staged part as it comes back from the loader's app_meta JSON: strict, because the staging row is data a bug or a
+ * hand edit could have changed, and `combineStaged` must refuse it (SchemaDrift, counted `combine_drift`).
+ */
+export const PartData = z.strictObject({
   series: z.string().min(1).max(200),
   slug: z.string().min(1).max(100),
+  percentile: z.union([z.literal(10), z.literal(30), z.literal(50), z.literal(70), z.literal(90)]),
   first_valid: Iso,
-  content_hash: z.string().regex(/^[0-9a-f]{64}$/),
-  issued_at: Iso,
-  issued_inferred: z.literal(true),
-  step: z.literal('PT1H'),
-  display_limit_h: z.union([z.literal(24), z.literal(48)]).nullable(),
   values: z
-    .array(z.strictObject({ ts: Iso, p10: num, p30: num, p50: num, p70: num, p90: num, flags: z.array(Flag).max(2) }))
+    .array(z.strictObject({ ts: Iso, value: z.number() }))
     .min(1)
     .max(500),
 });
-export type ForecastRun = z.infer<typeof ForecastRun>;
 
 export type PartContext = { variant: string; keyOf: (slug: string) => string | undefined };
 export type PartResult = { part: Part | null; dropped: Record<string, number>; unknown: number };
-export type RunContext = { fetchedAt: number; displayLimitH: 24 | 48 | null };
-export type RunResult = { run: ForecastRun | null; dropped: Record<string, number> };
+export type RunResult = { run: ForecastRunIn | null; dropped: Record<string, number> };
 
 const count = (dropped: Record<string, number>, code: string, n = 1) => {
   dropped[code] = (dropped[code] ?? 0) + n;
@@ -123,7 +129,7 @@ export function normalisePart(file: Percentile, ctx: PartContext): PartResult {
 }
 
 /** The five percentile parts of one station → one run; null (counted) when they are not one run. */
-export function combineRun(parts: readonly Part[], ctx: RunContext): RunResult {
+export function combineRun(parts: readonly Part[]): RunResult {
   const out: RunResult = { run: null, dropped: {} };
   const five = PERCENTILES.map((p) => parts.find((x) => x.percentile === p)).filter((x): x is Part => x !== undefined);
   if (parts.length !== PERCENTILES.length || five.length !== PERCENTILES.length) {
@@ -149,7 +155,7 @@ export function combineRun(parts: readonly Part[], ctx: RunContext): RunResult {
     return out;
   }
   const floor = Object.hasOwn(FLOORS, head.slug) ? FLOORS[head.slug] : undefined;
-  const values = head.values.map((v, i) => {
+  const points = head.values.map((v, i) => {
     const [p10, p30, p50, p70, p90] = five.map((p) => (p.values[i] as { value: number }).value) as [
       number,
       number,
@@ -158,24 +164,36 @@ export function combineRun(parts: readonly Part[], ctx: RunContext): RunResult {
       number,
     ];
     const all = [p10, p30, p50, p70, p90];
-    const flags: ('order' | 'below_floor')[] = [];
-    if (all.some((x, j) => j > 0 && x < (all[j - 1] as number))) flags.push('order');
-    if (floor !== undefined && all.some((x) => x <= floor)) flags.push('below_floor');
-    return { ts: v.ts, p10, p30, p50, p70, p90, flags };
+    let flags = 0;
+    if (all.some((x, j) => j > 0 && x < (all[j - 1] as number))) flags |= FORECAST_FLAGS.ORDER;
+    if (floor !== undefined && all.some((x) => x <= floor)) flags |= FORECAST_FLAGS.BELOW_FLOOR;
+    return { ts: v.ts, value: p50, p10, p30, p50, p70, p90, flags };
   });
-  const content_hash = createHash('sha256')
-    .update(JSON.stringify(five.map((p) => p.values.map((v) => v.value))))
-    .digest('hex');
   out.run = {
+    target: 'LU-1',
     series: head.series,
-    slug: head.slug,
-    first_valid: head.first_valid,
-    content_hash,
-    issued_at: toIso(ctx.fetchedAt),
-    issued_inferred: true,
-    step: 'PT1H',
-    display_limit_h: ctx.displayLimitH,
-    values,
+    kind: 'quantiles',
+    stepMs: HOUR_MS,
+    issuedAt: null,
+    providerSegmentEnd: null,
+    points,
   };
   return out;
+}
+
+/**
+ * The loader's staged files of one group (`SpecLoader.combine`): each `data` is checked as a `Part` (a mismatch is
+ * SchemaDrift) and must name the percentile of its slot, then `combineRun`. At most one run.
+ */
+export function combineStaged(staged: readonly StagedPart[]): {
+  runs: ForecastRunIn[];
+  dropped: Record<string, number>;
+} {
+  const parts = staged.map((s) => {
+    const part = parseStrict(PartData, s.data, [s.part]);
+    if (String(part.percentile) !== s.part) throw new SchemaDrift('part_mismatch', s.part);
+    return part;
+  });
+  const { run, dropped } = combineRun(parts);
+  return { runs: run === null ? [] : [run], dropped };
 }

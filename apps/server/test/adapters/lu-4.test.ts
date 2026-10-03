@@ -639,7 +639,9 @@ describe('references (P7a: the page as reference rows of the LU-1, LU-2 and twin
     expect(JSON.stringify(out)).not.toMatch(/Vigilance|jaune|142\.37/);
     expect(out.gaugeZeros).toEqual([]);
     expect(out.obs).toEqual([]);
-    expect(out.dropped).toEqual({ undefined_hq: 1 });
+    // (P8a: this generated page states 48 hours where registry/seed/lu-3.csv has Mersch at 24, so the limit drift
+    // of the wiring is counted; lu-3-wire.test.ts holds the cases of that count.)
+    expect(out.dropped).toEqual({ undefined_hq: 1, forecast_limit_drift: 1 });
     // The scope is every target series, so a level the page stops stating is closed.
     expect(out.refScope).toEqual(
       [...new Set(rows.map((r) => `${r.target}\n${r.series}`))].map((k) => ({

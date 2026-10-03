@@ -2,6 +2,7 @@ export * from './api.ts';
 export * from './baseline.ts';
 export * from './basemap.ts';
 export * from './canaries.ts';
+export * from './forecast.ts';
 export * from './health.ts';
 export * from './openapi.ts';
 export * from './reaches.ts';

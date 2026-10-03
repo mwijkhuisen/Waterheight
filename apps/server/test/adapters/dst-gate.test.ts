@@ -16,6 +16,7 @@ import { TIME as CH2 } from '../../src/adapters/ch-2/normalise.ts';
 import { TIME as CH3 } from '../../src/adapters/ch-3/normalise.ts';
 import { TIME as CH5 } from '../../src/adapters/ch-5/normalise.ts';
 import { TIME as DE1 } from '../../src/adapters/de-1/normalise.ts';
+import { TIME as DE2 } from '../../src/adapters/de-2/normalise.ts';
 import { TIME as DE6 } from '../../src/adapters/de-6/normalise.ts';
 import { TIME as DE7 } from '../../src/adapters/de-7/normalise.ts';
 import { TIME as FR1 } from '../../src/adapters/fr-1/normalise.ts';
@@ -42,6 +43,7 @@ const declared: Readonly<Record<string, TimeConvention | null>> = {
   'CH-3': CH3,
   'CH-5': CH5,
   'DE-1': DE1,
+  'DE-2': DE2,
   'DE-6': DE6,
   'DE-7': DE7,
   'DE-8': null,

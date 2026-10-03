@@ -1,0 +1,11 @@
+{
+  "spec": "de-2-wv",
+  "source": "DE-2",
+  "synthetic": true,
+  "derived_from": "an archived payload (owner audience: not committed)",
+  "values": "every number, name and string generated, timestamps shifted by one constant whole number of days; keys, structure, identifiers, nulls, -1, 0, 9999.0 and quality codes kept (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "1d26e504-7f9e-480a-b52c-5932be6549ab",
+  "archive_key": "raw/DE-2/de-2-wv/2026/10/03/071200Z-304beb774afc39c5.zst",
+  "source_sha256": "304beb774afc39c5add171ba65c3763c8b285283c8290b5a0725ad96aafe1f2e"
+}

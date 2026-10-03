@@ -1,0 +1,14 @@
+{
+  "spec": "nl-1-fc-1h",
+  "variant": "lobith.bovenrijn.tolkamer/Q",
+  "source": "NL-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/NL-1/nl-1-fc-1h/2026/10/01/072500Z-0aafa416422408ff.zst",
+  "recorded_at": "2026-10-01T07:25:00Z",
+  "status": 200,
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 80798,
+  "source_sha256": "0aafa416422408ff56e4163e70fd1b5407f4ce9e0d08724ff17156ce92df12e9",
+  "trimmed": false
+}

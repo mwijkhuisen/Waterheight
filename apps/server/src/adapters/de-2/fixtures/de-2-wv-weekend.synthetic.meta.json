@@ -1,0 +1,8 @@
+{
+  "spec": "de-2-wv",
+  "source": "DE-2",
+  "synthetic": true,
+  "derived_from": "hand-made: a run initialized on a Saturday (a weekend run is published only while Duisburg-Ruhrort is below 4 m), 25 forecast and 24 estimate points",
+  "values": "every value generated (no archived payload)",
+  "status": 200
+}

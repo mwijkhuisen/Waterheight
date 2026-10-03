@@ -2,8 +2,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import type { ManifestLine } from '../apps/server/src/archive/manifest.ts';
 import { Archive, sha256 } from '../apps/server/src/archive/writer.ts';
 
-// Builds a small raw archive from the recorded DE-1, NL-1, NL-2, FR-1, FR-3,
-// CH-1, CH-2, CH-3, DE-7, DE-8, LU-1 and LU-6 fixtures and the P7a ones,
+// Builds a small raw archive from the recorded DE-1, NL-1 (observations and,
+// since P8a, forecast captures), NL-2, FR-1, FR-3, CH-1, CH-2, CH-3, DE-7,
+// DE-8, LU-1 and LU-6 fixtures and the P7a ones,
 // written by the recorder's own Archive class (real zstd objects, real
 // manifest lines). The loader tests and the CI end-to-end run load it;
 // nothing is fetched.
@@ -191,6 +192,52 @@ export async function buildNlFixtureArchive(rawDir: string): Promise<ManifestLin
   });
   await archive.append(line);
   lines.push(line);
+  return lines;
+}
+
+/**
+ * P8a: the NL-1 forecast captures, one POST per gauge and quantity at its recorded time, `retention: forever` as the
+ * specs say: the P1a recording of the 1-hour spec (the run of 2026-09-29) and the real captures exported from the
+ * production archive on 2026-10-01 (Lobith Q: the last two of one run and the first two of the next; Driel beneden
+ * H: the last capture of one run, the first of the next and its tail; Alblasserdam H: an all-gap list at a location the
+ * registry does not hold). A capture is a run without its leading values, so the replay of this archive must hold
+ * five runs of two series in any order (apps/server/test/load/nl-1-forecast.int.test.ts).
+ */
+export const NL_FORECAST_FIXTURES: readonly { spec: string; name: string; variant: string }[] = [
+  { spec: 'nl-1-fc-1h', name: 'nl-1-fc-1h', variant: 'lobith.bovenrijn.tolkamer/Q' },
+  { spec: 'nl-1-fc-1h', name: 'nl-1-fc-1h-lobith-q-20261001t0425z', variant: 'lobith.bovenrijn.tolkamer/Q' },
+  { spec: 'nl-1-fc-1h', name: 'nl-1-fc-1h-lobith-q-20261001t0525z', variant: 'lobith.bovenrijn.tolkamer/Q' },
+  { spec: 'nl-1-fc-1h', name: 'nl-1-fc-1h-lobith-q-20261001t0625z', variant: 'lobith.bovenrijn.tolkamer/Q' },
+  { spec: 'nl-1-fc-1h', name: 'nl-1-fc-1h-lobith-q-20261001t0725z', variant: 'lobith.bovenrijn.tolkamer/Q' },
+  { spec: 'nl-1-fc-3h-0', name: 'nl-1-fc-3h-0-driel-beneden-h-20261001t0345z', variant: 'driel.beneden/H' },
+  { spec: 'nl-1-fc-3h-0', name: 'nl-1-fc-3h-0-driel-beneden-h-20261001t0645z', variant: 'driel.beneden/H' },
+  { spec: 'nl-1-fc-3h-0', name: 'nl-1-fc-3h-0-driel-beneden-h-20261001t0945z', variant: 'driel.beneden/H' },
+  { spec: 'nl-1-fc-3h-0', name: 'nl-1-fc-3h-0-alblasserdam-h-novalue', variant: 'alblasserdam/H' },
+];
+
+/** The NL-1 forecast captures at their recorded times, in `order` (default: as listed). Returns the lines written. */
+export async function buildNlForecastFixtureArchive(
+  rawDir: string,
+  order: readonly number[] = NL_FORECAST_FIXTURES.map((_, i) => i),
+): Promise<ManifestLine[]> {
+  const archive = new Archive(rawDir);
+  const lines: ManifestLine[] = [];
+  for (const i of order) {
+    const f = NL_FORECAST_FIXTURES[i] as (typeof NL_FORECAST_FIXTURES)[number];
+    const { body, at, url } = recorded(f.name, 'NL-1');
+    lines.push(
+      await writePayload(archive, {
+        source: 'NL-1',
+        spec: f.spec,
+        variant: f.variant,
+        at,
+        body,
+        url,
+        method: 'POST',
+        retention: 'forever',
+      }),
+    );
+  }
   return lines;
 }
 
@@ -446,6 +493,7 @@ if (import.meta.main) {
     const lines = [
       ...(await buildFixtureArchive(dir)),
       ...(await buildNlFixtureArchive(dir)),
+      ...(await buildNlForecastFixtureArchive(dir)),
       ...(await buildFrChFixtureArchive(dir)),
       ...(await buildNrwLuFixtureArchive(dir)),
       ...(await buildP7aFixtureArchive(dir, new Set(['de-1-meta', 'ch-1-lindas-lake', 'ch-2-pq-relative']))),

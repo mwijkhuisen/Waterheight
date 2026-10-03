@@ -12,6 +12,8 @@ import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
 import type { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
 import {
   basemapAssetsPath,
+  type ForecastCoverage,
+  ForecastReaches,
   Health,
   HealthSources,
   Meta,
@@ -38,6 +40,8 @@ import {
   checkCapture,
   checkClassCoverage,
   checkCoverage,
+  checkForecastCoverage,
+  checkForecastNl1,
   checkFresh,
   checkHeaders,
   checkHealth,
@@ -77,6 +81,8 @@ import {
   DE7_SPEC,
   entryScript,
   expectedHeaders,
+  FORECAST_NL1_CURRENT_MIN,
+  FORECAST_NL1_MAX_AGE_S,
   FRESH_MAX_AGE_BY_SOURCE,
   FRESH_MAX_AGE_S,
   freshLimit,
@@ -102,6 +108,7 @@ import {
   type Page,
   PMTILES_MAGIC,
   RIVERS_DOWNLOAD_RANGE,
+  reachIds,
   readApi,
   readRiversManifest,
   readSnapshot,
@@ -390,6 +397,8 @@ describe('freshness, soak and capacity', () => {
       'api snapshot 3d',
       'api states',
       'class coverage',
+      'forecast NL-1',
+      'forecast coverage',
       'api openapi',
       'api params',
       'noindex',
@@ -450,6 +459,7 @@ const de1 = (over: Partial<SourceRow> = {}): SourceRow => ({
   coverage: null,
   min_interval_s: [],
   label_offset: null,
+  forecast: null,
   partitions: [{ partition: '2026-10', md5: 'a'.repeat(32), rows: 9000 }],
   partitions_at: ago(60_000),
   ...over,
@@ -463,6 +473,7 @@ const sourcesDoc = (over: Partial<HealthSources> = {}): HealthSources => ({
   twins: [],
   owner_sources: { healthy: 5, total: 6 },
   classification: null,
+  forecast_coverage: null,
   ...over,
 });
 const page = (doc: unknown, over: Partial<Page> = {}): Page => ({
@@ -2054,6 +2065,146 @@ describe('api states and class coverage (P7b)', () => {
     expect(checkClassCoverage(sourcesDoc({ classification: empty }))).toMatchObject({ ok: true });
     expect(checkClassCoverage(sourcesDoc())).toMatchObject({ ok: false });
     expect(checkClassCoverage(undefined)).toMatchObject({ ok: false });
+  });
+});
+
+describe('forecast NL-1 and forecast coverage (P8a)', () => {
+  const run = (over: Partial<NonNullable<SourceRow['forecast']>> = {}) => ({
+    issued_at: ago(6 * 3600_000),
+    run_age_s: 6 * 3600,
+    series: 71,
+    current: 71,
+    late: null,
+    ...over,
+  });
+  const nl = (forecast: SourceRow['forecast']) => sourcesDoc({ sources: [de1(), nl1({ forecast })] });
+
+  it('forecast NL-1 passes for a run within a day and a bit, whatever its hour of the day, and prints numbers only', () => {
+    expect(checkForecastNl1(nl(run()))).toEqual({
+      check: 'forecast NL-1',
+      ok: true,
+      detail: `71 of 71 series have a current run, the newest was issued 6.0 h ago (${ago(6 * 3600_000)})`,
+    });
+    // RWS issues one run a day: 20 hours since the newest series' run is the normal worst case, not a failure.
+    expect(checkForecastNl1(nl(run({ run_age_s: 20 * 3600 })))).toMatchObject({ ok: true });
+    expect(FORECAST_NL1_MAX_AGE_S).toBe(30 * 3600);
+  });
+
+  it('forecast NL-1 fails with no run, an old run, too few current series, no series, no NL-1 or no document', () => {
+    expect(checkForecastNl1(nl(null))).toMatchObject({ ok: false, detail: 'NL-1 has stored no forecast run yet' });
+    expect(checkForecastNl1(nl(run({ run_age_s: FORECAST_NL1_MAX_AGE_S + 1 })))).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('over 30 h old'),
+    });
+    const few = Math.ceil(71 * FORECAST_NL1_CURRENT_MIN) - 1;
+    expect(checkForecastNl1(nl(run({ current: few })))).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('current run'),
+    });
+    expect(checkForecastNl1(nl(run({ series: 0, current: 0 })))).toMatchObject({ ok: false });
+    expect(checkForecastNl1(sourcesDoc())).toMatchObject({ ok: false, detail: expect.stringContaining('not listed') });
+    expect(checkForecastNl1(undefined)).toMatchObject({ ok: false });
+  });
+
+  const ids = reachIds();
+  const reach = (id: string, over: Partial<ForecastCoverage['reaches'][number]> = {}) => ({
+    id,
+    names: { nl: id, en: id },
+    stations: 2,
+    covered: 1,
+    sources: ['NL-1'],
+    no_official_forecast: false,
+    after_permission: [],
+    none_publishes: [],
+    ...over,
+  });
+  const coverage = (over: Partial<ForecastCoverage> = {}, reaches = ids.map((id) => reach(id))): ForecastCoverage => ({
+    t: '2026-10-03T12:00:00.000Z',
+    total: { stations: reaches.length * 2, covered: reaches.length },
+    countries: [{ country: 'NL', stations: reaches.length * 2, covered: reaches.length }],
+    reaches,
+    other: { stations: 0, covered: 0 },
+    ...over,
+  });
+  const owners = ownerSourceIds(registry);
+
+  it('the text of every reach row (names, agencies) holds no owner term: the owner leak check cannot trip on it', () => {
+    const rows = ForecastReaches.parse(
+      parse(readFileSync(join(repoRoot, 'registry/forecast-reaches.yaml'), 'utf8'), { maxAliasCount: 0 }),
+    ).reaches;
+    const text = JSON.stringify(rows.map((r) => [r.id, r.names, r.after_permission, r.none_publishes]));
+    expect(leaks(text, ownerTerms(registry))).toEqual([]);
+    expect(leaks(text, ['BfG'])).toEqual([]);
+  });
+
+  it('the reach ids are the 15 rows of registry/forecast-reaches.yaml, in order', () => {
+    expect(ids).toHaveLength(15);
+    expect(ids[0]).toBe('swiss-rhine-aare');
+    expect(ids.at(-1)).toBe('ems-vecht');
+  });
+
+  it('forecast coverage passes on a report of the registry rows and prints counts only', () => {
+    const c = coverage();
+    const none = reach('x', { no_official_forecast: true, sources: [], after_permission: ['LfU RLP'] });
+    const withNone = coverage(
+      {},
+      ids.map((id, i) => (i === 2 ? { ...none, id } : reach(id))),
+    );
+    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: c }), owners)).toEqual({
+      check: 'forecast coverage',
+      ok: true,
+      detail:
+        '15 of 30 first-release stations have a current run, 15 reaches (0 with no official forecast), 0 stations in no reach',
+    });
+    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: withNone }), owners).detail).toContain(
+      '(1 with no official forecast)',
+    );
+    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: withNone }), owners).ok).toBe(true);
+  });
+
+  it('forecast coverage fails when null or absent, with other reaches, or with a bare no-forecast reach', () => {
+    expect(checkForecastCoverage(sourcesDoc(), owners)).toMatchObject({ ok: false });
+    expect(checkForecastCoverage(undefined, owners)).toMatchObject({ ok: false });
+    const fewer = coverage(
+      {},
+      ids.slice(1).map((id) => reach(id)),
+    );
+    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: fewer }), owners).detail).toContain(
+      'not those of registry/forecast-reaches.yaml',
+    );
+    const bare = coverage(
+      {},
+      ids.map((id, i) => (i === 0 ? reach(id, { no_official_forecast: true, sources: [] }) : reach(id))),
+    );
+    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: bare }), owners).detail).toContain(
+      'say nothing of what could change it',
+    );
+  });
+
+  it('forecast coverage fails on any owner source ID, in a value or a key, and on BfG, and passes on AGE and SPW', () => {
+    const named = (id: string) =>
+      coverage(
+        {},
+        ids.map((r, i) => (i === 3 ? reach(r, { sources: [id] }) : reach(r))),
+      );
+    for (const id of ['DE-2', 'DE-3', 'LU-3', 'LU-4', 'LU-2', 'BE-3']) {
+      expect(owners, id).toContain(id);
+      const r = checkForecastCoverage(sourcesDoc({ forecast_coverage: named(id) }), owners);
+      expect(r.ok, id).toBe(false);
+      expect(r.detail, id).toContain(id);
+    }
+    const agency = coverage(
+      {},
+      ids.map((r, i) => (i === 3 ? reach(r, { after_permission: ['BfG'] }) : reach(r))),
+    );
+    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: agency }), owners)).toMatchObject({ ok: false });
+    const allowed = coverage(
+      {},
+      ids.map((r, i) =>
+        i === 3 ? reach(r, { after_permission: ['AGE', 'LfU RLP'], none_publishes: ['SPW'] }) : reach(r),
+      ),
+    );
+    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: allowed }), owners)).toMatchObject({ ok: true });
   });
 });
 

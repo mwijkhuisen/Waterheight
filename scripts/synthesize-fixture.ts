@@ -96,7 +96,9 @@ export const VERBATIM: Readonly<Record<string, Readonly<Record<string, RegExp>>>
     stationPath: /^https:\/\/[a-z.]{1,60}(?:\/[a-z]{1,40}){0,8}\.html$/,
     legend: /^HQ\d{1,4}$/,
   },
-  'DE-2': {},
+  // P8a: a DE-2 point's `type` is the provider's two-word enumeration (forecast, or estimate beyond 48 h); without it
+  // every `type` would become `synthetic-<n>` and the strict parse of the fixture would fail.
+  'DE-2': { type: /^(?:forecast|estimate)$/ },
   'DE-3': {},
 };
 

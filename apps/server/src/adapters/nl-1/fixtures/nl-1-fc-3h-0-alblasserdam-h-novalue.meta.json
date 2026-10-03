@@ -1,0 +1,14 @@
+{
+  "spec": "nl-1-fc-3h-0",
+  "variant": "alblasserdam/H",
+  "source": "NL-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/NL-1/nl-1-fc-3h-0/2026/10/01/004500Z-075dcd12c8b9542c.zst",
+  "recorded_at": "2026-10-01T00:45:00Z",
+  "status": 200,
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 88037,
+  "source_sha256": "075dcd12c8b9542c174067ab5e23ed4ea4d7692b00adc59ee98c5ddf3ec3e769",
+  "trimmed": false
+}

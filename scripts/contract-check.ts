@@ -1,15 +1,15 @@
-// Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a, P5b): one payload each of DE-1, NL-1,
-// NL-2, FR-1, CH-1, CH-2, DE-7 and LU-1 is fetched live and run through the exact code the loader uses
-// (validity, strict parse, normalise). A provider that changed its format or moved its host (the
-// RWS CTD switch on 2026-11-05) turns the night red; .github/workflows/contract-check.yml files
-// the issue.
+// Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a, P5b, P8a): one payload each of DE-1, NL-1
+// (observations and, since P8a, forecasts), NL-2, FR-1, CH-1, CH-2, DE-7 and LU-1 is fetched live and run through
+// the exact code the loader uses (validity, strict parse, normalise, and for forecasts the run checks). A provider
+// that changed its format or moved its host (the RWS CTD switch on 2026-11-05) turns the night red;
+// .github/workflows/contract-check.yml files the issue.
 //
 //   RWS_DOMAIN=… RWS_CONTACT_EMAIL=… node scripts/contract-check.ts [--out <file>]
 //
 // Targets come only from registry/capture.yaml (invariant 1): no argument names a URL or a host.
-// Eight requests at most (one per spec, the first row of each; FR-1 only its first page, never `next`),
-// one after the other, through the SSRF-guarded client with the contact User-Agent and no secret
-// header (no RWS API key ever leaves CI). It does not refuse under CI. BAFU asks LINDAS users for
+// Nine requests at most (one per spec, the first row of each unless `ROW` names another registry row; FR-1 only
+// its first page, never `next`), one after the other, through the SSRF-guarded client with the contact
+// User-Agent and no secret header (no RWS API key ever leaves CI). It does not refuse under CI. BAFU asks LINDAS users for
 // at most one download per 10 minutes: the workflow runs at 03:29, midway between the recorder's
 // CH-1 fetches (minutes 4, 14, 24, 34, …), so ours never comes within 5 minutes of one. The AGE file
 // of LU-1 is asked without a query string (inondations.public.lu robots.txt: Disallow: /*?*); DE-7 is
@@ -27,6 +27,7 @@ import { loadRegistry } from '../apps/server/src/capture/specs.ts';
 import { Client, type FetchOptions, METADATA_TIMEOUT_MS, TOTAL_TIMEOUT_MS } from '../apps/server/src/http/client.ts';
 import type { FetchResult, Req } from '../apps/server/src/http/types.ts';
 import { LOAD_ADAPTERS } from '../apps/server/src/load/adapters.ts';
+import { checkForecasts } from '../apps/server/src/load/forecasts.ts';
 import { RETAINED } from '../apps/server/src/load/pipeline.ts';
 import { declarationsOf, readRegistry } from '../apps/server/src/load/registry-sync.ts';
 import { obsParts } from '../packages/core/src/canonical.ts';
@@ -35,6 +36,7 @@ import { SchemaDrift } from '../packages/core/src/errors.ts';
 export const SPECS = [
   'de-1-basin',
   'nl-1-obs-key',
+  'nl-1-fc-1h',
   'nl-2-wfs',
   'fr-1-obs',
   'ch-1-lindas',
@@ -67,10 +69,21 @@ const coded = (prefix: string, reason: unknown, fallback: string) => {
 
 type Stations = ReturnType<typeof readRegistry>['stations'];
 
+/**
+ * A spec whose first registry row is not the one to probe: the row fields to find among the spec's own registry
+ * rows (a target still comes only from the registry). The first 1h forecast row, arnhem.nederrijn/Q, is a series RWS
+ * serves stale (gaps only); Lobith Q is registered and live.
+ */
+const ROW: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'nl-1-fc-1h': { code: 'lobith.bovenrijn.tolkamer', quantity: 'Q' },
+};
+
 /** The one code of a spec: `ok` or what went wrong. Throws only on a bug or a registry that does not load. */
 async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRegistry>, stations: Stations) {
   const spec = capture.specs.find((s) => s.id === id);
-  const row = spec?.rows[0];
+  const want = Object.hasOwn(ROW, id) ? ROW[id] : undefined;
+  const row =
+    want === undefined ? spec?.rows[0] : spec?.rows.find((r) => Object.entries(want).every(([k, v]) => r[k] === v));
   if (spec === undefined || row === undefined) return 'no_spec';
   const adapter = Object.hasOwn(LOAD_ADAPTERS, spec.source) ? LOAD_ADAPTERS[spec.source] : undefined;
   const loader = adapter !== undefined && Object.hasOwn(adapter.specs, id) ? adapter.specs[id] : undefined;
@@ -104,9 +117,13 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
         ? {}
         : { refRegistries: new Map(loader.refTarget.map((t) => [t, declarationsOf(stations, t)] as const)) }),
     });
-    const withheld = RETAINED.find((code) => (out.dropped[code] ?? 0) > 0);
+    // The run bounds of the loader's pipeline (drift throws into the catch below): a forecast the loader would
+    // quarantine or drop points of must turn the night red.
+    const dropped = { ...out.dropped };
+    const runs = checkForecasts(out.forecasts, spec.source, deps.now.getTime(), dropped);
+    const withheld = RETAINED.find((code) => (dropped[code] ?? 0) > 0);
     if (withheld !== undefined) return withheld;
-    // NL-1's first row (Lobith) is registered: an unknown series means the payload names it otherwise.
+    // The probed NL-1 row (Lobith) is registered: an unknown series means the payload names it otherwise.
     if (spec.source === 'NL-1' && out.unknown > 0) return 'unknown_series';
     // Parsed, yet nothing came out of a source with registered series (every value a gap, stale or too old;
     // a renamed process type or compartment is registered_dropped above). NL-2 has none: it stores no observation.
@@ -116,6 +133,8 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
       (out.classes?.length ?? 0) +
       (out.warnings?.rows.length ?? 0);
     for (const part of obsParts(out)) rows += part.length;
+    // Forecast points count as rows: a run attached to a series of the registry, however short.
+    for (const r of runs) rows += r.run.points.length;
     return registry.size > 0 && rows === 0 ? 'no_rows' : 'ok';
   } catch (err) {
     // SchemaDrift.message is `<code>` or `<code> at <sanitised path>`; the wire check below has the last word.

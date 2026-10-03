@@ -77,7 +77,9 @@ export interface ForecastValue {
   p05: number | null;
   p10: number | null;
   p25: number | null;
+  p30: number | null;
   p50: number | null;
+  p70: number | null;
   p75: number | null;
   p90: number | null;
   p95: number | null;

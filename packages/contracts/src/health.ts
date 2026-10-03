@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HealthSourceId } from './api.ts';
+import { ForecastCoverage } from './forecast.ts';
 
 // The public health documents (A§9.2 `GET /health` and `GET /health/sources`;
 // PHASES P2a). They describe public-audience sources only: owner-audience
@@ -165,6 +166,21 @@ export const HealthSources = z.strictObject({
             decided_day: z.iso.date().nullable(),
           })
           .nullable(),
+        /**
+         * Forecast runs (P8a), for a source that has stored some: when the newest run was issued (the provider's
+         * time, else our first fetch), its age, the series that have a run, how many of them have a current one
+         * (it still reaches now) and, for a source with a run schedule (DE-2), the Europe/Berlin day a due run
+         * missed its deadline. A late or stale run never changes the source's status. null for a source with none.
+         */
+        forecast: z
+          .strictObject({
+            issued_at: iso,
+            run_age_s: count,
+            series: count,
+            current: count,
+            late: z.iso.date().nullable(),
+          })
+          .nullable(),
         partitions: z.array(Partition).max(240),
         partitions_at: iso.nullable(),
       }),
@@ -203,6 +219,8 @@ export const HealthSources = z.strictObject({
   owner_sources: z.strictObject({ healthy: count, total: count }),
   /** The classification coverage of the public family (P7b; D10), null when it could not be computed. */
   classification: ClassCoverage.nullable(),
+  /** The forecast coverage of the public family (P8a; catalogue §0.5), null when it could not be computed. */
+  forecast_coverage: ForecastCoverage.nullable(),
 });
 export type HealthSources = z.infer<typeof HealthSources>;
 

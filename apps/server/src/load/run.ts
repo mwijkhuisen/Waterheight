@@ -6,6 +6,7 @@ import type { DB } from '../db/generated.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { startHeartbeat } from '../heartbeat.ts';
 import { DST_REFUSED } from './adapters.ts';
+import { pruneStagedParts } from './forecasts.ts';
 import {
   type Coverage,
   computeHealth,
@@ -163,8 +164,11 @@ export async function runLoad(
           now,
           outages,
           coverage,
+          alert,
         });
         for (const twin of await checkTwins(db, now)) logger.error({ alert: 'twin_breach', twin }, 'alert');
+        // P8a: a staged LU-3 group whose five files never all arrived (a count only, never a value).
+        for (const [source, n] of await pruneStagedParts(db, now)) alert('incomplete_run', { source, n });
         lastHealth = now.getTime();
       }
       if (await claimNightly(db, now, backlog)) {

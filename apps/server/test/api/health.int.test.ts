@@ -477,6 +477,7 @@ describe('failures', () => {
     expect(logged).toEqual([
       { level: 50, code: 'ECONNREFUSED', route: '/api/v1/health', msg: 'health unavailable' },
       { level: 50, code: 'ECONNREFUSED', route: 'classification', msg: 'coverage unavailable' },
+      { level: 50, code: 'ECONNREFUSED', route: 'forecast', msg: 'coverage unavailable' },
       { level: 50, code: 'ECONNREFUSED', route: '/api/v1/health/sources', msg: 'health unavailable' },
     ]);
     expect(JSON.stringify(logged)).not.toMatch(/127\.0\.0\.1|nobody|secret|nowhere/);

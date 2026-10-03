@@ -110,6 +110,18 @@ export const OWNER_ONLY_VIEWS = { privateBasis: 'own_private_basis' } as const;
  */
 export const OBS_AT = { public: 'pub_obs_at', owner: 'own_obs_at' } as const satisfies Record<ChannelAudience, string>;
 
+/**
+ * "The latest forecast run as of T" (A§8 Q2, P8a), one set-returning function per family:
+ * `SELECT * FROM <name>($asof, $t)` gives, per (series, source), the latest run issued and fetched at or before
+ * `asof`, only if it reaches `t` (never an older run that reaches further, never another source's), with its value
+ * step-held at `t`; `t` before `asof` gives nothing. It applies the family's audience, role and display-channel
+ * filters to the series and to the run's own source, like the forecast views.
+ */
+export const FORECAST_AT = { public: 'pub_forecast_at', owner: 'own_forecast_at' } as const satisfies Record<
+  ChannelAudience,
+  string
+>;
+
 /** Which effective audiences a family's rows may have. */
 export const FAMILY_AUDIENCES = {
   public: ['public'],

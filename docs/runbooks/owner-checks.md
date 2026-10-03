@@ -129,7 +129,7 @@ gh run list --workflow contract-check --limit 1
 ```
 
 - [ ] both variables are listed;
-- [ ] the run is green (eight requests since P5b, scheduled at 03:29 UTC: `de-1-basin`, `nl-1-obs-key`, `nl-2-wfs`, `fr-1-obs`, `ch-1-lindas`, `ch-2-pq`, `de-7-messwerte`, `lu-1-csv`; six until P5b and three until P5a), or its issue "Contract drift: the nightly live check failed" names a real drift (`docs/runbooks/schema-drift.md` §7; `fetch_*` on all eight specs points at the runner: R-057).
+- [ ] the run is green (nine requests since P8a, scheduled at 03:29 UTC: `de-1-basin`, `nl-1-obs-key`, `nl-1-fc-1h`, `nl-2-wfs`, `fr-1-obs`, `ch-1-lindas`, `ch-2-pq`, `de-7-messwerte`, `lu-1-csv`; eight until P8a, six until P5b and three until P5a), or its issue "Contract drift: the nightly live check failed" names a real drift (`docs/runbooks/schema-drift.md` §7; `fetch_*` on all nine specs points at the runner: R-057). `nl-1-fc-1h` probes Lobith Q (`lobith.bovenrijn.tolkamer/Q`, a registered series) through the loader's forecast path; no owner source is probed.
 
 ## 10. The 7-day twin soak (P2b)
 

@@ -3,6 +3,7 @@ import {
   type ChannelAudience,
   FAMILY_AUDIENCES,
   FAMILY_ROLES,
+  FORECAST_AT,
   familyViews,
   INGEST_BATCH_COLUMNS,
   OBS_AT,
@@ -24,8 +25,9 @@ import {
 //
 // Production has applied the first views migration, so its text never changes.
 // A view added later goes into a generated migration of its own (LATER); a
-// change to the body of an existing view would need a migration that replaces
-// it (none so far).
+// changed body goes into a migration that replaces the view (P8a: the forecast
+// value views gained p30 and p70, FORECAST_MIGRATION), while the first
+// migration keeps the frozen body it was applied with.
 
 export const VIEWS_MIGRATION = new URL('../db/migrations/20261003000006_views.sql', import.meta.url);
 
@@ -118,8 +120,10 @@ WHERE ${sourceVisible('cs', p)}
 SELECT r.id, r.series_id, r.source_id, r.issued_at, r.issued_inferred, r.first_valid, r.last_valid, r.fetched_at,
        r.kind, r.step, r.provider_segment_end${forecastRunFrom(p)}`,
 
+  // P8a: p30 and p70 appended (CREATE OR REPLACE VIEW only adds columns at the end).
   forecastValue: (p: Params) => `
-SELECT v.run_id, v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p50, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags
+SELECT v.run_id, v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p50, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags,
+       v.p30, v.p70
 FROM forecast_value v
 WHERE EXISTS (SELECT 1${forecastRunFrom(p).replaceAll('\n', '\n  ')}
     AND r.id = v.run_id)`,
@@ -177,6 +181,16 @@ FROM ingest_batch b
 JOIN source s ON s.id = b.source_id
 WHERE ${audienceIn('s.audience', p.audience)}`,
 } satisfies Record<keyof Omit<(typeof VIEWS)['public'], 'api'>, (p: Params) => string>;
+
+/** The forecast value views as the first views migration created them: frozen, because that migration never changes. */
+const forecastValueV1 = (p: Params) => `
+SELECT v.run_id, v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p50, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags
+FROM forecast_value v
+WHERE EXISTS (SELECT 1${forecastRunFrom(p).replaceAll('\n', '\n  ')}
+    AND r.id = v.run_id)`;
+
+/** The body a view had in the first views migration. */
+const firstBody = (logical: keyof typeof BODY) => (logical === 'forecastValue' ? forecastValueV1 : BODY[logical]);
 
 const SERIES_EFF = `
 -- The effective audience and licence channels of every series: its source's
@@ -245,11 +259,11 @@ export function viewsMigration(): string {
     const { api, ...display } = family;
     for (const [logical, name] of Object.entries(display) as [keyof typeof BODY, string][]) {
       if (logical in LATER) continue;
-      up.push(view(name, BODY[logical]({ audience, api: false })));
+      up.push(view(name, firstBody(logical)({ audience, api: false })));
       names.push(name);
     }
     for (const [logical, name] of Object.entries(api) as [keyof typeof api, string][]) {
-      up.push(view(name, BODY[logical]({ audience, api: true })));
+      up.push(view(name, firstBody(logical)({ audience, api: true })));
       names.push(name);
     }
   }
@@ -359,9 +373,109 @@ DROP VIEW ${VIEWS.public[logical]};
 `;
 }
 
+export const FORECAST_MIGRATION = new URL('../db/migrations/20261106000002_views_forecast.sql', import.meta.url);
+
+const FORECAST_COLUMNS =
+  'v.value, v.p05, v.p10, v.p25, v.p30, v.p50, v.p70, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags';
+
+/**
+ * A§8 Q2 as a function (see FORECAST_AT in audience.ts), built like `obsAt`: per (series, source) the latest run
+ * known as of `p_asof` (issued, and fetched, at or before it; ties by fetched_at, then id), and only THEN required to
+ * reach `p_t`; the value is step-held at the run's greatest valid time at or before `p_t`. It never falls back to an
+ * older run that reaches further and never mixes sources. The pairs come from a loose index scan (a recursive
+ * walk over forecast_run_asof), each run from one backward step on it, each value from one backward step on the
+ * value partition that holds it. The family's audience, role and display-channel filters apply to the series AND
+ * to the run's own source, as in the views.
+ */
+const forecastAt = (name: string, p: Params) => `CREATE FUNCTION ${name}(p_asof timestamptz, p_t timestamptz)
+RETURNS TABLE (run_id bigint, series_id int, source_id text, issued_at timestamptz, issued_inferred boolean,
+               fetched_at timestamptz, first_valid timestamptz, last_valid timestamptz, kind text, step interval,
+               provider_segment_end timestamptz, valid_ts timestamptz, value real, p05 real, p10 real, p25 real,
+               p30 real, p50 real, p70 real, p75 real, p90 real, p95 real, vmin real, vmax real, flags int2)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+SET TimeZone = 'UTC'
+ROWS 300
+AS $$
+  WITH RECURSIVE pairs AS (
+    (SELECT r.series_id, r.source_id FROM public.forecast_run r ORDER BY r.series_id, r.source_id LIMIT 1)
+    UNION ALL
+    SELECT n.series_id, n.source_id
+    FROM pairs p
+    CROSS JOIN LATERAL (
+      SELECT r.series_id, r.source_id
+      FROM public.forecast_run r
+      WHERE (r.series_id, r.source_id) > (p.series_id, p.source_id)
+      ORDER BY r.series_id, r.source_id
+      LIMIT 1) n
+  )
+  SELECT r.id, r.series_id, r.source_id, r.issued_at, r.issued_inferred, r.fetched_at, r.first_valid, r.last_valid,
+         r.kind, r.step, r.provider_segment_end, v.valid_ts, ${FORECAST_COLUMNS}
+  FROM pairs p
+  JOIN public.series_eff e ON e.series_id = p.series_id
+  JOIN public.source fs ON fs.id = p.source_id
+  CROSS JOIN LATERAL (
+    SELECT r.id, r.series_id, r.source_id, r.issued_at, r.issued_inferred, r.fetched_at, r.first_valid,
+           r.last_valid, r.kind, r.step, r.provider_segment_end
+    FROM public.forecast_run r
+    WHERE r.series_id = p.series_id AND r.source_id = p.source_id
+      AND COALESCE(r.issued_at, r.fetched_at) <= p_asof AND r.fetched_at <= p_asof
+    ORDER BY COALESCE(r.issued_at, r.fetched_at) DESC, r.fetched_at DESC, r.id DESC
+    LIMIT 1) r
+  CROSS JOIN LATERAL (
+    SELECT v.valid_ts, ${FORECAST_COLUMNS}
+    FROM public.forecast_value v
+    WHERE v.run_id = r.id AND v.valid_ts >= r.first_valid AND v.valid_ts <= p_t
+    ORDER BY v.valid_ts DESC
+    LIMIT 1) v
+  WHERE p_t >= p_asof AND r.first_valid <= p_t AND r.last_valid >= p_t
+    AND ${seriesVisible('e', p)}
+    AND ${sourceVisible('fs', p)}
+$$;
+REVOKE ALL ON FUNCTION ${name}(timestamptz, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION ${name}(timestamptz, timestamptz) TO ${FAMILY_ROLES[p.audience].join(', ')};`;
+
+/** P8a: the forecast value views with p30 and p70, and the two Q2 functions; down restores the frozen bodies. */
+export function forecastMigration(): string {
+  const up: string[] = [];
+  const down: string[] = [];
+  const restore: string[] = [];
+  for (const audience of ['public', 'owner'] as const) {
+    for (const api of [false, true]) {
+      const name = api ? VIEWS[audience].api.forecastValue : VIEWS[audience].forecastValue;
+      up.push(
+        `CREATE OR REPLACE VIEW ${name} WITH (security_barrier = true) AS${BODY.forecastValue({ audience, api })};`,
+      );
+      down.push(`DROP VIEW ${name};`);
+      restore.push(view(name, forecastValueV1({ audience, api })));
+      restore.push(`GRANT SELECT ON ${name} TO ${FAMILY_ROLES[audience].join(', ')};`);
+    }
+  }
+  for (const audience of ['public', 'owner'] as const)
+    up.push(forecastAt(FORECAST_AT[audience], { audience, api: false }));
+  return `-- GENERATED by scripts/gen-views.ts from apps/server/src/db/audience.ts. Do not edit:
+-- change the generator and run it again (CI fails on a difference).
+--
+-- P8a: the forecast value views gain p30 and p70 (appended; the views keep their
+-- grants), and A§8 Q2 becomes one "latest run as of T" function per family,
+-- SECURITY DEFINER like the observation functions, EXECUTE for the family only.
+
+-- migrate:up
+${up.join('\n\n')}
+
+-- migrate:down
+DROP FUNCTION ${FORECAST_AT.owner}(timestamptz, timestamptz);
+DROP FUNCTION ${FORECAST_AT.public}(timestamptz, timestamptz);
+${down.join('\n')}
+
+${restore.join('\n\n')}
+`;
+}
+
 if (import.meta.main) {
   const files: [URL, string][] = [
     [VIEWS_MIGRATION, viewsMigration()],
+    [FORECAST_MIGRATION, forecastMigration()],
     ...(Object.entries(LATER) as [keyof typeof LATER, URL][]).map(([l, url]): [URL, string] => [
       url,
       laterMigration(l),

@@ -38,6 +38,7 @@ const source = {
   coverage: null,
   min_interval_s: [],
   label_offset: null,
+  forecast: null,
   partitions: [{ partition: '2026-09', md5: 'a'.repeat(32), rows: 1234 }],
   partitions_at: ago(60_000),
 };
@@ -48,6 +49,7 @@ const sources = (over: Record<string, unknown> = {}) => ({
   twins: [],
   owner_sources: { healthy: 5, total: 6 },
   classification: null,
+  forecast_coverage: null,
   ...over,
 });
 
@@ -158,6 +160,49 @@ describe('ClassCoverage', () => {
     expect(ok({ ...coverage, mode: 'dh' })).toBe(true);
     expect(ok({ ...coverage, mode: 'map' })).toBe(false);
     expect(ok({ ...coverage, t: '2026-10-05T12:00:00+02:00' })).toBe(false);
+  });
+});
+
+describe('the forecast fields of HealthSources (P8a)', () => {
+  const run = { issued_at: ago(3_600_000), run_age_s: 3600, series: 71, current: 70, late: null };
+  const ok = (over: Record<string, unknown>) =>
+    HealthSources.safeParse(sources({ sources: [{ ...source, ...over }] })).success;
+
+  it('forecast is required per source: null or the five fields and nothing else', () => {
+    expect(ok({ forecast: run })).toBe(true);
+    expect(ok({ forecast: { ...run, late: '2026-10-05' } })).toBe(true);
+    const { forecast: _, ...without } = source;
+    expect(HealthSources.safeParse(sources({ sources: [without] })).success).toBe(false);
+    expect(ok({ forecast: { ...run, x: 1 } })).toBe(false);
+    expect(ok({ forecast: { ...run, series: -1 } })).toBe(false);
+    expect(ok({ forecast: { ...run, run_age_s: 1.5 } })).toBe(false);
+    expect(ok({ forecast: { ...run, late: '2026-10-05T12:00:00Z' } })).toBe(false);
+    expect(ok({ forecast: { ...run, issued_at: '2026-10-05T12:00:00+02:00' } })).toBe(false);
+  });
+
+  it('forecast_coverage is required in HealthSources, null or a full report', () => {
+    const reach = {
+      id: 'ems-vecht',
+      names: { nl: 'Eems, Vecht', en: 'Ems, Vecht' },
+      stations: 4,
+      covered: 3,
+      sources: ['NL-1'],
+      no_official_forecast: false,
+      after_permission: [],
+      none_publishes: ['NLWKN'],
+    };
+    const report = {
+      t: ago(0),
+      total: { stations: 5, covered: 3 },
+      countries: [{ country: 'NL', stations: 5, covered: 3 }],
+      reaches: [reach],
+      other: { stations: 1, covered: 0 },
+    };
+    expect(HealthSources.safeParse(sources({ forecast_coverage: report })).success).toBe(true);
+    expect(HealthSources.safeParse(sources({ forecast_coverage: null })).success).toBe(true);
+    const { forecast_coverage: _, ...missing } = sources();
+    expect(HealthSources.safeParse(missing).success).toBe(false);
+    expect(HealthSources.safeParse(sources({ forecast_coverage: { ...report, x: 1 } })).success).toBe(false);
   });
 });
 

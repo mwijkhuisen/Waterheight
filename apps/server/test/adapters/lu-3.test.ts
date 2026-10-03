@@ -1,24 +1,35 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { StationsFile } from '@rws/contracts';
-import { SchemaDrift } from '@rws/core';
+import {
+  type CanonRun,
+  checkRun,
+  encodeRun,
+  FORECAST_FLAGS,
+  FORECAST_SOURCES,
+  type ForecastRunIn,
+  SchemaDrift,
+  type StagedPart,
+} from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { slugOf } from '../../src/adapters/_shared/age/slug.ts';
 import {
   combineRun,
+  combineStaged,
   FLOORS,
-  ForecastRun,
   type Level,
   normalisePart,
   type Part,
+  PartData,
   type PartResult,
   PERCENTILES,
   TIME,
   variantOf,
 } from '../../src/adapters/lu-3/normalise.ts';
 import { parsePercentile } from '../../src/adapters/lu-3/parse.ts';
+import { REGISTRY_DIR, readSeed } from '../../src/capture/specs.ts';
 import { goldenUrl, rawFixture } from './registry.ts';
 
 // LU-3 AGE percentile forecasts (owner audience, catalogue §2.6): parse + normalise of the hand-made synthetic
@@ -45,9 +56,23 @@ const partOf = (name: string, variant: string) =>
 const partsOf = (station: string) =>
   PERCENTILES.map((p) => partOf(fixture(station, p), `${station}/${p}`).part as Part);
 const FETCHED = Date.parse('2030-03-30T21:20:00Z');
-const RUN = { fetchedAt: FETCHED, displayLimitH: 48 } as const;
 const at = (i: number) => new Date(Date.parse('2030-03-01T00:00:00Z') + i * 3_600_000).toISOString();
-const sha = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
+const { ORDER, BELOW_FLOOR } = FORECAST_FLAGS;
+/** A fetch 105 minutes after the run's first step, as AGE serves it (inside the core bounds on both sides). */
+const fetchOf = (run: ForecastRunIn | null | undefined) =>
+  run?.points[0] === undefined ? FETCHED : Date.parse(run.points[0].ts) + 105 * 60_000;
+/** What the loader's pipeline does to a run before it stores it: the core bounds (nothing dropped, no drift). */
+function checked(run: ForecastRunIn | null | undefined, fetchedAt = fetchOf(run)): CanonRun {
+  expect(run).toBeTruthy();
+  const out = checkRun(run as ForecastRunIn, fetchedAt, FORECAST_SOURCES['LU-3']);
+  expect(out.dropped).toEqual({});
+  return out.run as CanonRun;
+}
+/** The content the server hashes (`runHash` is sha256 over this encoding). */
+const sha = (run: CanonRun) => createHash('sha256').update(encodeRun(run)).digest('hex');
+/** The files of one station as the loader stages them: through the app_meta JSON round trip. */
+const staged = (parts: readonly Part[], fetchedAt = FETCHED): StagedPart[] =>
+  parts.map((p) => ({ part: String(p.percentile), fetchedAt, data: JSON.parse(JSON.stringify(p)) }));
 
 /** A part built by hand: the values from 2030-03-01T00:00Z, hourly. */
 const mk = (slug: string, percentile: Level, values: number[], series = slug): Part => ({
@@ -90,38 +115,47 @@ describe('golden files (synthetic: owner audience)', () => {
     expect(p10.values).toHaveLength(46);
     // 01:00+01:00 is 00:00Z and the next label, 03:00+02:00, is 01:00Z: no step is lost or doubled.
     expect(p10.values.slice(3, 5).map((v) => v.ts)).toEqual(['2030-03-31T00:00:00.000Z', '2030-03-31T01:00:00.000Z']);
-    const { run, dropped } = combineRun(parts, RUN);
+    const { run, dropped } = combineRun(parts);
     expect(dropped).toEqual({});
-    expect(ForecastRun.parse(run)).toEqual(run);
-    expect(run?.values.every((v) => v.flags.length === 0)).toBe(true);
+    // One quantiles run of the LU-1 series, no issue time (the loader infers it), no provider segment.
     expect(run).toMatchObject({
+      target: 'LU-1',
       series: 'Diekirch',
-      slug: 'diekirch',
-      first_valid: '2030-03-30T21:00:00.000Z',
-      issued_at: '2030-03-30T21:20:00.000Z',
-      issued_inferred: true,
-      step: 'PT1H',
-      display_limit_h: 48,
+      kind: 'quantiles',
+      stepMs: 3_600_000,
+      issuedAt: null,
+      providerSegmentEnd: null,
     });
-    // The run key is (series, first_valid, content_hash): the hash of the five value arrays in percentile order.
-    expect(run?.content_hash).toBe(sha(parts.map((p) => p.values.map((v) => v.value))));
-    // Values as published: the first p10 value of the file.
-    expect(run?.values[0]).toMatchObject({ ts: '2030-03-30T21:00:00.000Z', p10: 135.2 });
+    expect(run?.points).toHaveLength(46);
+    expect(run?.points.every((v) => v.flags === 0)).toBe(true);
+    // Values as published: the first p10 value of the file; `value` is p50.
+    expect(run?.points[0]).toMatchObject({ ts: '2030-03-30T21:00:00.000Z', p10: 135.2 });
+    for (const v of run?.points ?? []) expect(v.value).toBe(v.p50);
+    // The core bounds accept it as it stands (horizon 48 h, hourly quantiles).
+    expect(checked(run).points).toHaveLength(46);
   });
 
   it('the Perl run: below_floor where any percentile is at or below 250, values untouched', () => {
-    const { run, dropped } = combineRun(partsOf('perl'), { fetchedAt: FETCHED, displayLimitH: null });
+    const { run, dropped } = combineRun(partsOf('perl'));
     expect(dropped).toEqual({});
-    expect(ForecastRun.parse(run)).toEqual(run);
-    expect(run?.display_limit_h).toBeNull();
-    const flagged = run?.values.map((v) => v.flags.includes('below_floor')) ?? [];
+    expect(checked(run).points).toHaveLength(46);
+    const flagged = run?.points.map((v) => (v.flags & BELOW_FLOOR) !== 0) ?? [];
     // Flat floor for 18 steps in every percentile, p10 stays on it until step 19.
     expect(flagged.indexOf(false)).toBe(20);
     expect(flagged.slice(0, 20).every(Boolean)).toBe(true);
     expect(flagged.slice(20).some(Boolean)).toBe(false);
-    expect(run?.values[0]).toMatchObject({ p10: 250, p30: 250, p50: 250, p70: 250, p90: 250, flags: ['below_floor'] });
-    expect(run?.values[19]).toMatchObject({ p10: 250, p30: 257, p50: 262, p70: 268, p90: 277 });
-    expect(run?.values.some((v) => v.flags.includes('order'))).toBe(false);
+    expect(run?.points[0]).toMatchObject({
+      value: 250,
+      p10: 250,
+      p30: 250,
+      p50: 250,
+      p70: 250,
+      p90: 250,
+      flags: BELOW_FLOOR,
+    });
+    expect(run?.points[19]).toMatchObject({ p10: 250, p30: 257, p50: 262, p70: 268, p90: 277, flags: BELOW_FLOOR });
+    expect(run?.points[20]?.flags).toBe(0);
+    expect(run?.points.some((v) => (v.flags & ORDER) !== 0)).toBe(false);
   });
 
   it('the P1 capture fixture (15-minute steps, generated) still parses: it is a validity fixture', () => {
@@ -144,10 +178,7 @@ describe('rules (synthetic)', () => {
   });
 
   it('every slug of registry/seed/lu-3.csv is an LU-1 station slug and a fixed point of slugOf', () => {
-    const slugs = root('registry/seed/lu-3.csv')
-      .split('\n')
-      .filter((l) => l !== '' && !l.startsWith('#'))
-      .slice(1);
+    const slugs = readSeed(REGISTRY_DIR, 'lu-3').map((r) => r.slug as string);
     expect(slugs).toHaveLength(11);
     for (const slug of slugs) {
       expect([slug, stations.some((s) => s.id === `lu.age.${slug}`)]).toEqual([slug, true]);
@@ -263,12 +294,12 @@ describe('rules (synthetic)', () => {
   it('a run is exactly one part of each of the five percentiles', () => {
     const rows = [[1, 2, 3, 4, 5]];
     const parts = five('diekirch', rows);
-    expect(combineRun(parts, RUN).run).not.toBeNull();
-    expect(combineRun([], RUN)).toEqual({ run: null, dropped: { incomplete_run: 1 } });
-    expect(combineRun(parts.slice(0, 4), RUN).dropped).toEqual({ incomplete_run: 1 });
-    expect(combineRun([...parts, parts[0] as Part], RUN).dropped).toEqual({ incomplete_run: 1 });
+    expect(combineRun(parts).run).not.toBeNull();
+    expect(combineRun([])).toEqual({ run: null, dropped: { incomplete_run: 1 } });
+    expect(combineRun(parts.slice(0, 4)).dropped).toEqual({ incomplete_run: 1 });
+    expect(combineRun([...parts, parts[0] as Part]).dropped).toEqual({ incomplete_run: 1 });
     // Five parts, one percentile twice and one missing.
-    expect(combineRun([...parts.slice(0, 4), parts[0] as Part], RUN).dropped).toEqual({ incomplete_run: 1 });
+    expect(combineRun([...parts.slice(0, 4), parts[0] as Part]).dropped).toEqual({ incomplete_run: 1 });
   });
 
   it('parts of two series, two first steps or other valid times are no run', () => {
@@ -291,7 +322,7 @@ describe('rules (synthetic)', () => {
         ],
       }),
     ];
-    for (const b of bad) expect(combineRun(b, RUN)).toEqual({ run: null, dropped: { run_mismatch: 1 } });
+    for (const b of bad) expect(combineRun(b)).toEqual({ run: null, dropped: { run_mismatch: 1 } });
   });
 
   it('steps that are not one hour apart are no PT1H run', () => {
@@ -303,10 +334,10 @@ describe('rules (synthetic)', () => {
       [1, 2, 3, 4, 5],
       [2, 3, 4, 5, 6],
     ]).map(skip);
-    expect(combineRun(parts, RUN)).toEqual({ run: null, dropped: { step_mismatch: 1 } });
+    expect(combineRun(parts)).toEqual({ run: null, dropped: { step_mismatch: 1 } });
   });
 
-  it('crossing percentiles are flagged `order` and never reordered; p30 and p70 keep their names', () => {
+  it('crossing percentiles get the ORDER flag and are never reordered; p30 and p70 keep their names', () => {
     const { run } = combineRun(
       five('diekirch', [
         [100, 110, 120, 130, 140],
@@ -314,44 +345,111 @@ describe('rules (synthetic)', () => {
         [100, 110, 120, 130, 125],
         [150, 110, 120, 130, 140],
       ]),
-      RUN,
     );
-    expect(run?.values.map((v) => v.flags)).toEqual([[], ['order'], ['order'], ['order']]);
-    expect(run?.values[1]).toMatchObject({ p10: 100, p30: 130, p50: 120, p70: 140, p90: 150 });
-    expect(run?.values[3]).toMatchObject({ p10: 150, p30: 110 });
-    expect(ForecastRun.parse(run)).toEqual(run);
+    expect(run?.points.map((v) => v.flags)).toEqual([0, ORDER, ORDER, ORDER]);
+    expect(run?.points[1]).toMatchObject({ value: 120, p10: 100, p30: 130, p50: 120, p70: 140, p90: 150 });
+    expect(run?.points[3]).toMatchObject({ p10: 150, p30: 110 });
+    expect(checked(run).points).toHaveLength(4);
   });
 
-  it('equal percentiles are in order; a changed value changes the run key', () => {
+  it('equal percentiles are in order; a changed value changes the run bytes, the fetch time is no part of them', () => {
     const rows = [
       [100, 100, 100, 100, 100],
       [101, 102, 103, 104, 105],
     ];
-    const a = combineRun(five('diekirch', rows), RUN).run;
-    const b = combineRun(five('diekirch', [rows[0] as number[], [101, 102, 103, 104, 106]]), RUN).run;
-    expect(a?.values.map((v) => v.flags)).toEqual([[], []]);
-    expect(a?.content_hash).not.toBe(b?.content_hash);
-    expect(a?.first_valid).toBe(b?.first_valid);
-    // The fetch time is no part of the key.
-    expect(combineRun(five('diekirch', rows), { ...RUN, fetchedAt: FETCHED + 3_600_000 }).run?.content_hash).toBe(
-      a?.content_hash,
-    );
+    const a = checked(combineRun(five('diekirch', rows)).run);
+    const b = checked(combineRun(five('diekirch', [rows[0] as number[], [101, 102, 103, 104, 106]])).run);
+    expect(a.points.map((v) => v.flags)).toEqual([0, 0]);
+    expect(sha(a)).not.toBe(sha(b));
+    expect(a.points[0]?.ms).toBe(b.points[0]?.ms);
+    // The same parts staged at another fetch time are the same run (no issue time: the loader infers it).
+    const later = combineStaged(staged(five('diekirch', rows), FETCHED + 3_600_000)).runs[0];
+    expect(sha(checked(later))).toBe(sha(a));
   });
 
   it('Moselle floors: perl 250, stadtbredimus 260, wasserbillig 220; an AGE station has none', () => {
     const rows = [[200, 230, 250, 260, 270]];
-    const flags = (slug: string, r = rows) => combineRun(five(slug, r), RUN).run?.values.map((v) => v.flags);
-    expect(flags('perl')).toEqual([['below_floor']]);
-    expect(flags('stadtbredimus')).toEqual([['below_floor']]);
-    expect(flags('wasserbillig')).toEqual([['below_floor']]);
-    expect(flags('wasserbillig', [[221, 230, 250, 260, 270]])).toEqual([[]]);
-    expect(flags('wasserbillig', [[220, 230, 250, 260, 270]])).toEqual([['below_floor']]);
-    expect(flags('perl', [[251, 252, 253, 254, 255]])).toEqual([[]]);
-    expect(flags('perl', [[250, 252, 253, 254, 255]])).toEqual([['below_floor']]);
-    // Both flags at once, in this order.
-    expect(flags('perl', [[260, 240, 270, 280, 290]])).toEqual([['order', 'below_floor']]);
-    expect(flags('diekirch')).toEqual([[]]);
-    expect(flags('constructor')).toEqual([[]]);
+    const flags = (slug: string, r = rows) => combineRun(five(slug, r)).run?.points.map((v) => v.flags);
+    expect(flags('perl')).toEqual([BELOW_FLOOR]);
+    expect(flags('stadtbredimus')).toEqual([BELOW_FLOOR]);
+    expect(flags('wasserbillig')).toEqual([BELOW_FLOOR]);
+    expect(flags('wasserbillig', [[221, 230, 250, 260, 270]])).toEqual([0]);
+    expect(flags('wasserbillig', [[220, 230, 250, 260, 270]])).toEqual([BELOW_FLOOR]);
+    expect(flags('perl', [[251, 252, 253, 254, 255]])).toEqual([0]);
+    expect(flags('perl', [[250, 252, 253, 254, 255]])).toEqual([BELOW_FLOOR]);
+    // Both flags at once: two bits of one mask.
+    expect(flags('perl', [[260, 240, 270, 280, 290]])).toEqual([ORDER | BELOW_FLOOR]);
+    expect(flags('diekirch')).toEqual([0]);
+    expect(flags('constructor')).toEqual([0]);
+  });
+
+  it('a gap in all five files at the first step starts the run one step later; a gap in one file is no run', () => {
+    // The synthetic gap file: a null first step, then hourly values. Five copies state the same steps.
+    const file = parsePercentile(rawFixture('LU-3', 'lu-3-percentile-gap.synthetic').body);
+    const out = (p: Level) => normalisePart(file, { variant: `diekirch/${p}`, keyOf });
+    expect(out(10)).toEqual(golden('lu-3-percentile-gap.synthetic', out(10)));
+    expect(out(10).dropped).toEqual({ gap: 1 });
+    const parts = PERCENTILES.map((p) => out(p).part as Part);
+    expect(parts[0]?.first_valid).toBe('2030-02-28T23:00:00.000Z');
+    expect(parts[0]?.values[0]?.ts).toBe('2030-03-01T00:00:00.000Z');
+    const { run, dropped } = combineRun(parts);
+    expect(dropped).toEqual({});
+    expect(run?.points[0]?.ts).toBe('2030-03-01T00:00:00.000Z');
+    // One file with another gap than the rest: the five do not state the same steps.
+    const short = { ...(parts[2] as Part), values: (parts[2] as Part).values.slice(1) };
+    expect(combineRun(parts.map((p, i) => (i === 2 ? short : p)))).toEqual({
+      run: null,
+      dropped: { run_mismatch: 1 },
+    });
+  });
+});
+
+describe('combineStaged (the loader hands the staged parts back through app_meta JSON)', () => {
+  const diekirch = () => partsOf('diekirch');
+
+  it('five staged parts are the run combineRun makes of the parts, in any staging order', () => {
+    const { runs, dropped } = combineStaged(staged(diekirch()));
+    expect(dropped).toEqual({});
+    expect(runs).toEqual([combineRun(diekirch()).run]);
+    expect(combineStaged(staged(diekirch()).reverse())).toEqual({ runs, dropped });
+  });
+
+  it('an incomplete group (four files) is no run, counted incomplete_run; the loader normally never asks', () => {
+    expect(combineStaged(staged(diekirch().slice(0, 4)))).toEqual({ runs: [], dropped: { incomplete_run: 1 } });
+    expect(combineStaged([])).toEqual({ runs: [], dropped: { incomplete_run: 1 } });
+  });
+
+  it('files that are not one run are no run (counted), whatever the staging says', () => {
+    const parts = diekirch();
+    const p50 = parts[2] as Part;
+    const cut = parts.map((p, i) => (i === 2 ? { ...p50, values: p50.values.slice(1) } : p));
+    expect(combineStaged(staged(cut))).toEqual({ runs: [], dropped: { run_mismatch: 1 } });
+  });
+
+  it('a staged part that is no Part, or states another percentile than its slot, is drift', () => {
+    const code = (fn: () => unknown) => {
+      try {
+        fn();
+      } catch (err) {
+        expect(err).toBeInstanceOf(SchemaDrift);
+        return (err as SchemaDrift).code;
+      }
+      return 'no throw';
+    };
+    const good = staged(diekirch());
+    const data = good[1]?.data as object;
+    const bad = (patch: Partial<StagedPart>) => combineStaged(good.map((p, j) => (j === 1 ? { ...p, ...patch } : p)));
+    expect(PartData.safeParse(good[0]?.data).success).toBe(true);
+    expect(code(() => bad({ data: null }))).toBe('invalid_type');
+    expect(code(() => bad({ data: 'x' }))).toBe('invalid_type');
+    expect(code(() => bad({ data: { ...data, extra: 1 } }))).toBe('unrecognized_keys');
+    expect(code(() => bad({ data: { ...data, series: '' } }))).toBe('too_small');
+    expect(code(() => bad({ data: { ...data, percentile: 20 } }))).toBe('invalid_union');
+    expect(code(() => bad({ data: { ...data, values: [] } }))).toBe('too_small');
+    expect(code(() => bad({ data: { ...data, first_valid: '2030-03-01T00:00:00Z' } }))).toBe('invalid_format');
+    expect(code(() => bad({ data: { ...data, values: [{ ts: at(0), value: '1' }] } }))).toBe('invalid_type');
+    // The slot says 50 but the data is the p30 file.
+    expect(code(() => bad({ part: '50' }))).toBe('part_mismatch');
   });
 });
 
@@ -375,24 +473,24 @@ describe('the archive-derived fixtures (fixtures:synth: real structure, generate
     });
   }
 
-  it('the five parts combine into one run: 5 percentiles per step, a 64-hex content hash', () => {
+  it('the five parts combine into one run: 5 percentiles per step, accepted by the core bounds', () => {
     const all = PERCENTILES.map((p) => partOf(archive(p), `diekirch/${p}`).part as Part);
     const newest = Math.max(
       ...PERCENTILES.flatMap((p) => rawFixture('LU-3', archive(p)).body.toString('utf8').match(STAMP) ?? []).map((s) =>
         Date.parse(s),
       ),
     );
-    const { run, dropped } = combineRun(all, { fetchedAt: newest + 600_000, displayLimitH: 48 });
-    // Which steps carry an `order` flag is whatever the generated values give; only the shape of the run is asserted.
+    const { run, dropped } = combineRun(all);
+    // Which steps carry an ORDER flag is whatever the generated values give; only the shape of the run is asserted.
     expect(dropped).toEqual({});
     expect(run).not.toBeNull();
-    expect(ForecastRun.parse(run)).toEqual(run);
-    expect(run?.content_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(run?.series).toBe(keyOf('diekirch'));
-    expect(run?.values).toHaveLength((all[0] as Part).values.length);
-    for (const v of run?.values ?? []) {
-      for (const k of ['p10', 'p30', 'p50', 'p70', 'p90'] as const) expect(Number.isFinite(v[k])).toBe(true);
+    expect(run?.points).toHaveLength((all[0] as Part).values.length);
+    for (const v of run?.points ?? []) {
+      for (const k of ['value', 'p10', 'p30', 'p50', 'p70', 'p90'] as const) expect(Number.isFinite(v[k])).toBe(true);
     }
+    // The run passes the core bounds at the fetch time of the newest file (+ 10 minutes), nothing dropped.
+    expect(sha(checked(run, newest + 600_000))).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 
@@ -402,21 +500,22 @@ describe('property and fuzz', () => {
   const steps = fc.array(tuple, { minLength: 1, maxLength: 40 });
   const sorted = (t: number[]) => t.every((x, i) => i === 0 || x >= (t[i - 1] as number));
 
-  it('`order` exactly when a step is not p10 ≤ p30 ≤ p50 ≤ p70 ≤ p90, values unchanged', () => {
+  it('ORDER exactly when a step is not p10 ≤ p30 ≤ p50 ≤ p70 ≤ p90, values unchanged, `value` is p50', () => {
     fc.assert(
       fc.property(steps, (rows) => {
-        const { run, dropped } = combineRun(five('diekirch', rows), RUN);
+        const { run, dropped } = combineRun(five('diekirch', rows));
         expect(dropped).toEqual({});
-        expect(ForecastRun.parse(run)).toEqual(run);
-        expect(run?.values.map((v) => v.flags.includes('order'))).toEqual(rows.map((r) => !sorted(r)));
-        expect(run?.values.map((v) => [v.p10, v.p30, v.p50, v.p70, v.p90])).toEqual(rows);
-        expect(run?.values.some((v) => v.flags.includes('below_floor'))).toBe(false);
+        expect(checked(run).points).toHaveLength(rows.length);
+        expect(run?.points.map((v) => (v.flags & ORDER) !== 0)).toEqual(rows.map((r) => !sorted(r)));
+        expect(run?.points.map((v) => [v.p10, v.p30, v.p50, v.p70, v.p90])).toEqual(rows);
+        expect(run?.points.map((v) => v.value)).toEqual(rows.map((r) => r[2]));
+        expect(run?.points.some((v) => (v.flags & BELOW_FLOOR) !== 0)).toBe(false);
       }),
       { numRuns: 300 },
     );
   });
 
-  it('a sorted set is never `order`; `below_floor` exactly when any value is at or below the floor', () => {
+  it('a sorted set is never ORDER; BELOW_FLOOR exactly when any value is at or below the floor', () => {
     fc.assert(
       fc.property(
         steps,
@@ -424,13 +523,36 @@ describe('property and fuzz', () => {
         (rows, slug) => {
           const floor = FLOORS[slug] as number;
           const ordered = rows.map((r) => [...r].sort((a, b) => a - b));
-          const { run } = combineRun(five(slug, ordered), RUN);
-          expect(run?.values.map((v) => v.flags.includes('order'))).toEqual(ordered.map(() => false));
-          expect(run?.values.map((v) => v.flags.includes('below_floor'))).toEqual(
+          const { run } = combineRun(five(slug, ordered));
+          expect(run?.points.map((v) => (v.flags & ORDER) !== 0)).toEqual(ordered.map(() => false));
+          expect(run?.points.map((v) => (v.flags & BELOW_FLOOR) !== 0)).toEqual(
             ordered.map((r) => r.some((x) => x <= floor)),
           );
         },
       ),
+      { numRuns: 300 },
+    );
+  });
+
+  it('the staged JSON round trip never changes the run', () => {
+    fc.assert(
+      fc.property(steps, fc.constantFrom('diekirch', 'perl'), (rows, slug) => {
+        const parts = five(slug, rows);
+        expect(combineStaged(staged(parts))).toEqual({ runs: [combineRun(parts).run], dropped: {} });
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it('arbitrary staged data throws only SchemaDrift', () => {
+    fc.assert(
+      fc.property(fc.jsonValue(), fc.constantFrom('10', '30', '50', '70', '90'), (data, part) => {
+        try {
+          combineStaged([{ part, fetchedAt: FETCHED, data }]);
+        } catch (err) {
+          expect(err).toBeInstanceOf(SchemaDrift);
+        }
+      }),
       { numRuns: 300 },
     );
   });

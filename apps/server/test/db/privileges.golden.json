@@ -14,14 +14,14 @@
     },
     "forecast_run": {
       "rws_backup": "SELECT",
-      "rws_load": "SELECT,INSERT,UPDATE"
+      "rws_load": "SELECT,INSERT"
     },
     "forecast_run_id_seq": {
       "rws_load": "USAGE"
     },
     "forecast_value": {
       "rws_backup": "SELECT",
-      "rws_load": "SELECT,INSERT,UPDATE"
+      "rws_load": "SELECT,INSERT"
     },
     "gauge_zero": {
       "rws_backup": "SELECT",
@@ -341,8 +341,15 @@
       "rws_load",
       "rws_migrator"
     ],
+    "own_forecast_at(timestamp with time zone,timestamp with time zone)": [
+      "rws_owner_api"
+    ],
     "own_obs_at(timestamp with time zone)": [
       "rws_owner_api"
+    ],
+    "pub_forecast_at(timestamp with time zone,timestamp with time zone)": [
+      "rws_api",
+      "rws_publish"
     ],
     "pub_obs_at(timestamp with time zone)": [
       "rws_api",
