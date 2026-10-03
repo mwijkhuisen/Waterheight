@@ -1,8 +1,15 @@
-import { emptyNormalised, type ForecastRunIn, type StagedPart } from '@rws/core';
+import {
+  type CanonRun,
+  checkRun,
+  emptyNormalised,
+  FORECAST_SOURCES,
+  type ForecastRunIn,
+  type StagedPart,
+} from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writePayload } from '../../../../scripts/fixture-archive.ts';
 import type { LoadAdapter } from '../../src/load/adapters.ts';
-import { pruneStagedParts } from '../../src/load/forecasts.ts';
+import { pruneStagedParts, runHash } from '../../src/load/forecasts.ts';
 import { replay } from '../../src/load/replay.ts';
 import { readMeta } from '../../src/load/store.ts';
 import { type Harness, harness, KAUB_W } from './harness.ts';
@@ -277,6 +284,36 @@ describe('forecast runs through the loader', { timeout: 300_000 }, () => {
     });
     expect(h.alerts.slice(before)).toEqual([
       { code: 'before_window', fields: { source: 'DE-2', spec: 'de-2-wv', n: 1 } },
+    ]);
+  });
+
+  it('an extension whose key another source already holds changes nothing and counts a collision (review F3)', async () => {
+    const run3 = steps('2026-09-30T05:20:00Z', 20, 500);
+    await put('NL-1', 'nl-1-fc-1h', 'lobith/Q', '2026-09-30T06:25:00Z', { series: LOBITH_Q, points: run3.slice(6) });
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    // Another source's run already holds the key the full capture would extend the stored run to.
+    const full = checkRun(
+      toRun({ series: LOBITH_Q, points: run3 }, STEP, 'deterministic'),
+      Date.parse('2026-09-30T05:25:00Z'),
+      FORECAST_SOURCES['NL-1'],
+    ).run as CanonRun;
+    await q(
+      `INSERT INTO forecast_run (series_id, source_id, issued_at, issued_inferred, first_valid, last_valid, fetched_at,
+                                 content_hash, kind)
+       SELECT s.id, 'DE-2', $2, false, $2, $3, $2, $4, 'deterministic' FROM series s
+       WHERE s.provider_key = $1 AND s.source_id = 'NL-1'`,
+      [LOBITH_Q, run3[0]?.[0], run3.at(-1)?.[0], runHash(full)],
+    );
+    await put('NL-1', 'nl-1-fc-1h', 'lobith/Q', '2026-09-30T05:25:00Z', { series: LOBITH_Q, points: run3 });
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    expect((await batches('nl-1-fc-1h')).at(-1)).toMatchObject({ parse_status: 'ok', n_new: 0, n_changed: 0 });
+    const stored = (await runsOf(LOBITH_Q, 'NL-1')).filter((r) => (r.last_valid as Date) < new Date('2026-10-01'));
+    expect(stored).toEqual([
+      expect.objectContaining({
+        first_valid: new Date('2026-09-30T06:20:00Z'),
+        fetched_at: new Date('2026-09-30T06:25:00Z'),
+        n: 14,
+      }),
     ]);
   });
 });

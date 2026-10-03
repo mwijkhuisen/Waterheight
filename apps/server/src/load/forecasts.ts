@@ -190,8 +190,21 @@ export async function applyForecasts(
       out.writes++;
       continue;
     }
-    if (d.kind === 'extend') await insertValues(tx, d.id, d.add);
     const extended = d.kind === 'extend';
+    if (extended) {
+      // The unique key omits the source: another run (another source's) may already hold the extended key. Nothing
+      // changes then, as for an insert that meets it (review F3: never a class-23 error that quarantines the payload).
+      const { rows: held } = await sql`
+        SELECT 1 FROM forecast_run
+        WHERE series_id = ${seriesId} AND first_valid = ${first} AND content_hash = ${hash} AND id <> ${d.id}::bigint`.execute(
+        tx,
+      );
+      if (held.length > 0) {
+        out.collision++;
+        continue;
+      }
+      await insertValues(tx, d.id, d.add);
+    }
     const { rows } = await sql<{ id: string }>`
       UPDATE forecast_run
       SET fetched_at = LEAST(fetched_at, ${fetchedAt}),
