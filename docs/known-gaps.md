@@ -33,7 +33,7 @@ KG-145 and KG-146 are closed by this PR (rows in the P5c section: the owner's de
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-196 | classification | `[agent-prod]`: coverage per country and markers with a basis or `no_ref` are judged on production data only after the deploy: `verify-prod` `api states` and `class coverage` (the CI `deploy` job runs them on the empty database), the `classification.mode` and the per-country ratios in `/api/v1/health/sources` (D10: `state` iff the tier-1 ratio is at least 0.6), and P7a's `[agent-prod]` DE-6 interval check | `scripts/verify-prod.sh <domain>` after the release; the owner reads the report | open |
+| KG-196 | classification | `[agent-prod]`: coverage per country and markers with a basis or `no_ref` are judged on production data only after the deploy: `verify-prod` `api states` and `class coverage` (the CI `deploy` job runs them on the empty database), the `classification.mode` and the per-country ratios in `/api/v1/health/sources` (D10: `state` iff the tier-1 ratio is at least 0.6), and P7a's `[agent-prod]` DE-6 interval check | Ran on rk.wijkhuisen.info on 2026-10-03 against the installed release (`api build` 640110961fe5…): `api states` PASS (1,149 values at about 16:00Z, 1,350 at 16:33Z, every one with a basis or `no_ref`), `class coverage` PASS (tier-1 80.4 %, 32 of them by section; mode `dh`), `owner leak` and `owner ids` PASS, `interval DE-6` PASS (ages 210, 510 and 210 s in three samples 15 minutes apart); issue #22 ticked with the evidence | closed (2026-10-03) |
 
 ### Known limits
 
