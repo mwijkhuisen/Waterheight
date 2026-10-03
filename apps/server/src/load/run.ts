@@ -164,6 +164,7 @@ export async function runLoad(
           now,
           outages,
           coverage,
+          alert,
         });
         for (const twin of await checkTwins(db, now)) logger.error({ alert: 'twin_breach', twin }, 'alert');
         // P8a: a staged LU-3 group whose five files never all arrived (a count only, never a value).

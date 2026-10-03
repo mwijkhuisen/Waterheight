@@ -1,4 +1,4 @@
-import { QC } from '@rws/core';
+import { de2Late, de2Superseded, FORECAST_SOURCES, isCurrent, QC, RUHRORT_W } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import type { DB } from '../db/generated.ts';
 import { type Intervals, lock } from './store.ts';
@@ -38,7 +38,21 @@ export type HealthInputs = {
   outages?: ReadonlyMap<string, Outage>;
   /** Q7 since each tier-1 series' first data (findCoverage). */
   coverage?: ReadonlyMap<string, Coverage>;
+  /** The loader's alert sink (P8a: `forecast_run_late`, once per due day); without it nothing is raised. */
+  alert?: (code: string, fields: Record<string, string | number>) => void;
 };
+
+/** What `detail.forecast` holds for a source that has stored forecast runs (P8a; C9). */
+export type ForecastDetail = {
+  issued_at: string;
+  run_age_s: number;
+  series: number;
+  current: number;
+  late: string | null;
+};
+
+/** app_meta key of the last due day `forecast_run_late` was raised for (DE-2); the day, so one alert per due day. */
+const LATE_KEY = 'forecast_late:DE-2';
 
 export type Coverage = {
   from: string;
@@ -186,6 +200,61 @@ export function minIntervals(state: Intervals, now: Date): { spec: string; secon
     .sort((a, b) => a.spec.localeCompare(b.spec));
 }
 
+/**
+ * The forecast detail of each source that has stored runs (P8a; C9): per series the latest run known now (the same
+ * order as the Q2 function: issue time, then fetch time, then id), the newest issue time, how many series have a
+ * run that still reaches now (a DE-2 run only while its schedule has not superseded it) and, for DE-2, the due day
+ * whose deadline passed without a newer run. Over every non-`off` series of the source whatever its audience: a DE-2
+ * run sits on a public DE-1 series, so the audience test of the other numbers (SAME_AUDIENCE) would drop it.
+ */
+// ponytail: one top-1 index probe per series and forecast source (about 2,600 × 3 a minute through
+// forecast_run_asof); add a per-source summary written by applyForecasts if sources or series multiply.
+export async function forecastDetails(db: Kysely<DB>, now: Date): Promise<Map<string, ForecastDetail>> {
+  const nowMs = now.getTime();
+  const { rows } = await sql<{ source_id: string; issued: Date; last_valid: Date }>`
+    SELECT fs.id AS source_id, r.issued, r.last_valid
+    FROM source fs
+    CROSS JOIN series s
+    CROSS JOIN LATERAL (
+      SELECT COALESCE(r.issued_at, r.fetched_at) AS issued, r.last_valid
+      FROM forecast_run r
+      WHERE r.series_id = s.id AND r.source_id = fs.id AND r.fetched_at <= ${now}::timestamptz
+      ORDER BY COALESCE(r.issued_at, r.fetched_at) DESC, r.fetched_at DESC, r.id DESC
+      LIMIT 1) r
+    WHERE fs.id = ANY(${Object.keys(FORECAST_SOURCES)}::text[])`.execute(db);
+  // Ruhrort's latest stage, for the DE-2 weekend rule (null: unknown, so a weekend or holiday is not due).
+  const ruhrort = rows.some((r) => r.source_id === 'DE-2')
+    ? ((
+        await sql<{ value: number }>`
+          SELECT l.value FROM series s JOIN obs_latest l ON l.series_id = s.id
+          WHERE s.source_id = 'DE-1' AND s.provider_key = ${RUHRORT_W}
+            AND l.ts > ${now}::timestamptz - s.staleness_limit`.execute(db)
+      ).rows[0]?.value ?? null)
+    : null;
+  const bySource = new Map<string, { issued: number; lastValid: number }[]>();
+  for (const r of rows)
+    bySource.set(r.source_id, [
+      ...(bySource.get(r.source_id) ?? []),
+      { issued: r.issued.getTime(), lastValid: r.last_valid.getTime() },
+    ]);
+  const out = new Map<string, ForecastDetail>();
+  for (const [source, runs] of bySource) {
+    const issued = Math.max(...runs.map((r) => r.issued));
+    const superseded =
+      source === 'DE-2'
+        ? (x: { source: string; lastValid: number; issued: number }, n: number) => de2Superseded(x, n, ruhrort)
+        : undefined;
+    out.set(source, {
+      issued_at: new Date(issued).toISOString(),
+      run_age_s: Math.max(0, Math.floor((nowMs - issued) / 1000)),
+      series: runs.length,
+      current: runs.filter((r) => isCurrent({ source, ...r }, nowMs, nowMs, superseded)).length,
+      late: source === 'DE-2' ? de2Late(nowMs, issued, ruhrort) : null,
+    });
+  }
+  return out;
+}
+
 type Tier1 = { total: number; fresh: number; provider_stale: number };
 
 /**
@@ -271,6 +340,8 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
     tierOf.set(r.source_id, t);
   }
   const gapOf = new Map(gaps.rows.map((r) => [r.source_id, r.missing]));
+  const forecasts = await forecastDetails(db, inputs.now);
+  const raised: [string, Record<string, string | number>][] = [];
   const intervals = await sql<{ key: string; value: Intervals }>`
     SELECT key, value FROM app_meta WHERE key LIKE 'intervals:%'`.execute(db);
   const intervalsOf = new Map(intervals.rows.map((r) => [r.key.slice('intervals:'.length), r.value]));
@@ -317,6 +388,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
         ...(src.has_series ? { missing_buckets_24h: gapOf.get(src.id) ?? 0 } : {}),
         ...(src.has_series && outageOf.has(src.id) ? { outage: outageOf.get(src.id) } : {}),
         ...(inputs.coverage?.has(src.id) ? { coverage: inputs.coverage.get(src.id) } : {}),
+        ...(forecasts.has(src.id) ? { forecast: forecasts.get(src.id) } : {}),
         min_interval_s: minIntervals(intervalsOf.get(src.id) ?? { last: {}, hours: {} }, inputs.now),
       };
       // `partitions` inside detail is written by the checksum job; this update keeps it.
@@ -328,9 +400,22 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
           quarantine_count = EXCLUDED.quarantine_count,
           lag_p95 = EXCLUDED.lag_p95,
           status = EXCLUDED.status,
-          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage' - 'coverage' - 'min_interval_s')
+          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage' - 'coverage' - 'min_interval_s' - 'forecast')
                    || EXCLUDED.detail,
           updated_at = EXCLUDED.updated_at`.execute(tx);
+      // P8a: a due DE-2 run that missed its deadline raises `forecast_run_late` once per due day (the day is
+      // remembered in app_meta; a run that arrives late clears `late`, a later missed day is another alert).
+      const late = forecasts.get(src.id)?.late ?? null;
+      if (late !== null) {
+        const { rows } = await sql<{ day: string | null }>`
+          SELECT value #>> '{}' AS day FROM app_meta WHERE key = ${LATE_KEY}`.execute(tx);
+        if (rows[0]?.day !== late) {
+          await sql`
+            INSERT INTO app_meta (key, value, updated_at) VALUES (${LATE_KEY}, ${JSON.stringify(late)}::jsonb, ${inputs.now})
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`.execute(tx);
+          raised.push(['forecast_run_late', { source: src.id, day: late }]);
+        }
+      }
     }
     const loader = {
       computed_at: inputs.now.toISOString(),
@@ -343,6 +428,8 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
       INSERT INTO app_meta (key, value, updated_at) VALUES ('loader', ${JSON.stringify(loader)}::jsonb, ${inputs.now})
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`.execute(tx);
   });
+  // After the commit, so an alert never names a day whose marker was rolled back.
+  for (const [code, fields] of raised) inputs.alert?.(code, fields);
 }
 
 /**

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DisplayWindow } from '../src/api/window.ts';
 import { createApp } from '../src/app.ts';
-import { OBS_AT, VIEWS } from '../src/db/audience.ts';
+import { FORECAST_AT, OBS_AT, VIEWS } from '../src/db/audience.ts';
 import { openApiDb } from '../src/main.ts';
 import { fakeDb } from './api/fake-db.ts';
 
@@ -187,5 +187,26 @@ describe('/api/v1/health/sources when the coverage cannot be computed', () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as { classification: unknown }).classification).toBeNull();
     expect(lines).toEqual([{ code: '57014', route: 'classification' }]);
+  });
+
+  it('answers 200 with forecast_coverage null and logs one fixed code when only the forecast report fails', async () => {
+    const lines: unknown[] = [];
+    const db = fakeDb(async (q) => {
+      if (q.sql.includes(FORECAST_AT.public)) throw Object.assign(new Error('provider text'), { code: '57014' });
+      if (q.sql.includes('healthy')) return { rows: [{ healthy: 0, total: 0 }] };
+      return { rows: [] };
+    });
+    const app = createApp({
+      db,
+      now: () => new Date('2026-10-01T12:00:00Z'),
+      sections: new Map(),
+      log: { error: ((o: unknown) => lines.push(o)) as never },
+    });
+    const res = await app.request('/api/v1/health/sources');
+    expect(res.status).toBe(200);
+    const doc = (await res.json()) as { forecast_coverage: unknown; classification: unknown };
+    expect(doc.forecast_coverage).toBeNull();
+    expect(doc.classification).not.toBeNull();
+    expect(lines).toEqual([{ code: '57014', route: 'forecast' }]);
   });
 });

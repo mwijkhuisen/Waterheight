@@ -1,5 +1,6 @@
 import {
   type ClassCoverage,
+  type ForecastCoverage,
   floorBucket,
   Health,
   HealthSources,
@@ -22,6 +23,7 @@ import {
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { TtlCache } from './cache.ts';
+import { forecastCoverage } from './forecast.ts';
 import { classCoverage, readStates, type StaticCache } from './states.ts';
 import { coded, iso, snapshot, validated } from './util.ts';
 
@@ -128,6 +130,15 @@ const Detail = z.object({
       decided_day: z.string().nullable(),
     })
     .optional(),
+  forecast: z
+    .object({
+      issued_at: z.string(),
+      run_age_s: z.number(),
+      series: z.number(),
+      current: z.number(),
+      late: z.string().nullable(),
+    })
+    .optional(),
   partitions: z.record(z.string(), z.object({ md5: z.string(), rows: z.number() })).optional(),
   partitions_at: z.string().optional(),
 });
@@ -179,12 +190,30 @@ async function publicCoverage(
   }
 }
 
+/**
+ * The public forecast coverage (P8a; catalogue §0.5), from the public family only, beside the health document like
+ * the classification: a failure gives null and a logged fixed code, never a 503 of the whole document.
+ */
+async function publicForecastCoverage(
+  db: Kysely<DB>,
+  now: Date,
+  deps: Pick<HealthDeps, 'log'>,
+): Promise<ForecastCoverage | null> {
+  try {
+    return await forecastCoverage(db, 'public', now.getTime());
+  } catch (err) {
+    deps.log?.error({ code: errorCode(err), route: 'forecast' }, 'coverage unavailable');
+    return null;
+  }
+}
+
 export async function readSources(
   db: Kysely<DB>,
   now: Date,
   deps: Pick<HealthDeps, 'sections' | 'log' | 'cache'> = { sections: new Map(), log: undefined },
 ): Promise<HealthSources> {
   const classification = await publicCoverage(db, now, deps);
+  const forecast_coverage = await publicForecastCoverage(db, now, deps);
   const { rows, batches, twins, owner, l } = await snapshot(db, async (tx) => ({
     rows: await sources(tx),
     batches: await quarantinedBatches(tx),
@@ -211,6 +240,7 @@ export async function readSources(
         coverage: detail.coverage ?? null,
         min_interval_s: detail.min_interval_s ?? [],
         label_offset: detail.label_offset ?? null,
+        forecast: detail.forecast ?? null,
         partitions: Object.entries(detail.partitions ?? {})
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([partition, p]) => ({ partition, md5: p.md5, rows: p.rows })),
@@ -237,6 +267,7 @@ export async function readSources(
     })),
     owner_sources: { healthy: owner.healthy, total: owner.total },
     classification,
+    forecast_coverage,
   });
 }
 

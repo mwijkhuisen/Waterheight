@@ -47,6 +47,7 @@ import { isIP, type LookupFunction } from 'node:net';
 import { join } from 'node:path';
 import { connect as tlsConnect } from 'node:tls';
 import { gunzipSync, constants as zlibConstants } from 'node:zlib';
+import { parse as parseYaml } from 'yaml';
 import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
@@ -56,6 +57,7 @@ import {
   CANARIES,
   CANARY_RENDERINGS,
   checkReaches,
+  ForecastReaches,
   floorBucket,
   Health,
   HealthSources,
@@ -1248,6 +1250,84 @@ export function checkClassCoverage(doc: HealthSources | undefined): Result {
   );
 }
 
+/**
+ * P8a: the newest NL-1 forecast run, at most this many seconds old. RWS issues ONE run a day (a series' new run is
+ * first seen between 05:25 and 08:45 UTC and every run ends at 05:00 UTC two days later; the owner's D2 export of
+ * 2026-10-03), so the newest run across the series is up to about 21 hours old, never 7: 30 hours is a day of
+ * slack. The currency of each series is judged by `current` instead.
+ */
+export const FORECAST_NL1_MAX_AGE_S = 30 * 3600;
+/** P8a: at least this share of the NL-1 series with a run have a current one (the run still reaches now). */
+export const FORECAST_NL1_CURRENT_MIN = 0.9;
+
+/**
+ * P8a: NL-1 forecast runs are flowing: `/api/v1/health/sources` lists NL-1 with a `forecast` whose newest run is at
+ * most `FORECAST_NL1_MAX_AGE_S` old and of whose series at least `FORECAST_NL1_CURRENT_MIN` have a current run.
+ * Needs live capture (the CI deploy job lets it fail). Numbers only.
+ */
+export function checkForecastNl1(doc: HealthSources | undefined): Result {
+  const check = 'forecast NL-1';
+  if (doc === undefined) return noDocument(check, 'health/sources');
+  const s = sourceOf(doc, 'NL-1');
+  if (s === undefined) return miss(check, 'NL-1 is not listed in /api/v1/health/sources');
+  const f = s.forecast;
+  if (f === null) return miss(check, 'NL-1 has stored no forecast run yet');
+  const hours = (f.run_age_s / 3600).toFixed(1);
+  const detail = `${f.current} of ${f.series} series have a current run, the newest was issued ${hours} h ago (${f.issued_at})`;
+  const problems: string[] = [];
+  if (f.run_age_s > FORECAST_NL1_MAX_AGE_S)
+    problems.push(`the newest run is over ${FORECAST_NL1_MAX_AGE_S / 3600} h old`);
+  if (f.series === 0 || f.current / f.series < FORECAST_NL1_CURRENT_MIN)
+    problems.push(`under ${FORECAST_NL1_CURRENT_MIN * 100}% of the series have a current run`);
+  return problems.length === 0 ? pass(check, detail) : miss(check, `${detail}; ${problems.join('; ')}`);
+}
+
+/** The ids of the reach rows of registry/forecast-reaches.yaml, in order: the public coverage report has exactly these. */
+export const reachIds = (): string[] =>
+  ForecastReaches.parse(
+    parseYaml(readFileSync(join(root, 'registry/forecast-reaches.yaml'), 'utf8'), { maxAliasCount: 0 }),
+  ).reaches.map((r) => r.id);
+
+/**
+ * P8a: /api/v1/health/sources carries the public forecast coverage (catalogue §0.5): present, one entry for each
+ * reach row of registry/forecast-reaches.yaml in order, a reach without a visible source says what could change it
+ * (`after_permission` or `none_publishes`), and no owner-audience source ID (nor `BfG`, the agency behind DE-2 and
+ * DE-3) appears anywhere in it. It needs no fresh data, so it must PASS on the CI fixture data. Counts only.
+ */
+export function checkForecastCoverage(
+  doc: HealthSources | undefined,
+  ownerIds: readonly string[],
+  expectedIds: readonly string[] = reachIds(),
+): Result {
+  const check = 'forecast coverage';
+  if (doc === undefined) return noDocument(check, 'health/sources');
+  const c = doc.forecast_coverage;
+  if (c === null) return miss(check, 'forecast_coverage is null (the report could not be computed)');
+  const problems: string[] = [];
+  const ids = c.reaches.map((r) => r.id);
+  if (ids.join() !== expectedIds.join())
+    problems.push('the reaches are not those of registry/forecast-reaches.yaml, in order');
+  const bare = c.reaches.filter(
+    (r) => r.no_official_forecast && r.after_permission.length + r.none_publishes.length === 0,
+  ).length;
+  if (bare > 0) problems.push(`${bare} reaches with no official forecast say nothing of what could change it`);
+  const strings = (v: unknown): string[] =>
+    typeof v === 'string'
+      ? [v]
+      : Array.isArray(v)
+        ? v.flatMap(strings)
+        : typeof v === 'object' && v !== null
+          ? Object.entries(v).flatMap(([key, value]) => [key, ...strings(value)])
+          : [];
+  const found = [...new Set(strings(c).flatMap((t) => leaks(t, [...ownerIds, 'BfG'])))];
+  if (found.length > 0) problems.push(`names an owner source or agency: ${found.join(', ')}`);
+  const none = c.reaches.filter((r) => r.no_official_forecast).length;
+  const detail =
+    `${c.total.covered} of ${c.total.stations} first-release stations have a current run, ` +
+    `${c.reaches.length} reaches (${none} with no official forecast), ${c.other.stations} stations in no reach`;
+  return problems.length === 0 ? pass(check, detail) : miss(check, `${detail}; ${problems.join('; ')}`);
+}
+
 export function checkOpenapi(r: ApiRead<{ openapi: '3.1.0' }>): Result {
   return r.data !== undefined && r.problems.length === 0
     ? pass('api openapi', `200, ${OPENAPI_CACHE}, openapi 3.1.0`)
@@ -1520,6 +1600,8 @@ export const CHECKS = [
   ),
   'api states: every value of the "now" snapshot has a state; basis is null exactly for no_ref; section only with an area basis and no area beside it; nap and zero never both (counts only; no values is a PASS)',
   'class coverage: /api/v1/health/sources has a non-null classification (tier-1 ratio, how many are classed by a section only, mode, classed/stations per country; no stations is a PASS)',
+  `forecast NL-1: /api/v1/health/sources lists NL-1 with a forecast whose newest run was issued at most ${FORECAST_NL1_MAX_AGE_S / 3600} h ago (RWS issues one run a day, so not the 7 h of the issue) and of whose series at least ${FORECAST_NL1_CURRENT_MIN * 100}% have a current run; needs live capture (numbers only)`,
+  'forecast coverage: /api/v1/health/sources has a non-null forecast_coverage with one entry per reach row of registry/forecast-reaches.yaml in order, each reach without a visible source states after_permission or none_publishes, and no owner-audience source ID or BfG appears in it (needs no fresh data; counts only)',
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
   'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter"} with Cache-Control: no-store',
   `noindex: ${NOINDEX_PATHS.join(', ')} each answer (the 404s of /api and /tiles too) with X-Robots-Tag: noindex`,
@@ -1687,6 +1769,8 @@ async function main(argv: string[]): Promise<number> {
       ...SNAPSHOT_ASKS.map((ask) => checkSnapshot(ask, snapReads.get(ask.name))),
       checkStates(snapReads.get('now')?.data),
       checkClassCoverage(sources.data),
+      checkForecastNl1(sources.data),
+      checkForecastCoverage(sources.data, ownerSourceIds(registry)),
       checkOpenapi(readApi(await api('/api/v1/openapi.json'), OpenApi31, OPENAPI_CACHE)),
       checkApiParams(await api('/api/v1/meta?x=1')),
       checkNoindex(noindex),

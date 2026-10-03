@@ -1,0 +1,125 @@
+# The forecast reach matrix (P8a; catalogue §0.5 "Forecast coverage per river: first release versus after each
+# permission"): the 15 rows of that table, in its order. Read by apps/server/src/api/forecast.ts (the coverage
+# report of each audience family) and pinned row by row to the catalogue by test/forecast-reaches.test.ts.
+#   id, names     a stable slug; names.en is the catalogue's first cell verbatim, names.nl its Dutch form
+#   match         which first-release stations the row takes: `rivers` (river ids of registry/rivers.yaml) and/or
+#                 `countries`; with `rivers`, `km_min` (inclusive) and `km_max` (exclusive) bound the operator's km
+#                 (station.km_official, in the Rhine's own km: Maxau is 362.3). A row matches when any entry does; a
+#                 station falls into the FIRST row it matches, else into `other` (pinned by the test)
+#   sources       the sources that fill the row without a permission: the table's "First release" column plus the
+#                 owner view of §0.5 (LU-3 fills Sauer / Sûre, Our; DE-3 joins DE-2 on the Rhine Maxau → Emmerich).
+#                 A family lists only the ones whose audience it can see: the public report never names an owner
+#                 source (invariant 11), so a row whose sources are all owner ones is `no_official_forecast` there
+#   after_permission  the agencies whose permission would add forecasts (the "After a permission" column)
+#   none_publishes    the agencies of the "Not available" column (they publish none, or none we may use); the
+#                 "longer RWS fan forecasts" of the Dutch Rhine branches are a product, not an agency, and are left out
+# There is no `stations` override: a station belongs to a row by its river, country and km alone (C14). `wark`, `wied`
+# and `nette` are no river of registry/rivers.yaml, so no station carries them as its river.
+version: 1
+reaches:
+  - id: swiss-rhine-aare
+    names: { nl: "Zwitserse Rijn en Aare", en: "Swiss Rhine and Aare" }
+    match:
+      - { countries: [CH] }
+    sources: [CH-4]
+    after_permission: []
+    none_publishes: []
+  - id: upper-rhine
+    names: { nl: "Boven-Rijn Bazel → Maxau", en: "Upper Rhine Basel → Maxau" }
+    match:
+      - { rivers: [rhine], countries: [DE], km_max: 362.3 }
+      - { rivers: [rhine], countries: [FR] }
+    sources: []
+    after_permission: [LUBW]
+    none_publishes: []
+  - id: rhine-maxau-emmerich
+    names: { nl: "Rijn Maxau → Emmerich", en: "Rhine Maxau → Emmerich" }
+    match:
+      - { rivers: [rhine], countries: [DE], km_min: 362.3, km_max: 852 }
+    sources: [DE-2, DE-3]
+    after_permission: [LfU RLP]
+    none_publishes: []
+  - id: dutch-rhine-branches
+    names: { nl: "Nederlandse Rijntakken", en: "Dutch Rhine branches" }
+    match:
+      - { rivers: [rhine, waal, nederrijn, lek, ijssel, pannerdensch-kanaal], countries: [NL] }
+    sources: [NL-1]
+    after_permission: []
+    none_publishes: []
+  - id: mosel-fr
+    names: { nl: "Moezel (FR)", en: "Mosel (FR)" }
+    match:
+      - { rivers: [moselle], countries: [FR] }
+    sources: [FR-4]
+    after_permission: []
+    none_publishes: []
+  - id: mosel-lu-de
+    names: { nl: "Moezel (LU/DE)", en: "Mosel (LU/DE)" }
+    match:
+      - { rivers: [moselle], countries: [LU, DE] }
+    sources: []
+    after_permission: [LfU RLP, AGE]
+    none_publishes: []
+  - id: sauer-our
+    names: { nl: "Sauer / Sûre, Our", en: "Sauer / Sûre, Our" }
+    match:
+      - { rivers: [sauer, our, alzette] }
+    sources: [LU-3]
+    after_permission: [LfU RLP, AGE]
+    none_publishes: []
+  - id: saar
+    names: { nl: "Saar", en: "Saar" }
+    match:
+      - { rivers: [saar] }
+    sources: [FR-4]
+    after_permission: [LfU RLP]
+    none_publishes: [Saarland]
+  - id: nahe-ahr-lahn-sieg
+    names: { nl: "Nahe, Ahr, Kyll, Prüm, Lahn, Sieg, Wied, Nette", en: "Nahe, Ahr, Kyll, Prüm, Lahn, Sieg, Wied, Nette" }
+    match:
+      - { rivers: [nahe, ahr, kyll, prum, lahn, sieg] }
+    sources: []
+    after_permission: [LfU RLP, HLNUG]
+    none_publishes: []
+  - id: main-neckar
+    names: { nl: "Main, Neckar", en: "Main, Neckar" }
+    match:
+      - { rivers: [main, neckar] }
+    sources: []
+    after_permission: [HLNUG, LUBW]
+    none_publishes: [Bavarian HND]
+  - id: meuse-fr
+    names: { nl: "Maas (FR)", en: "Meuse (FR)" }
+    match:
+      - { rivers: [meuse], countries: [FR] }
+    sources: [FR-4]
+    after_permission: []
+    none_publishes: []
+  - id: meuse-wallonia
+    names: { nl: "Maas (Wallonië)", en: "Meuse (Wallonia)" }
+    match:
+      - { rivers: [meuse], countries: [BE] }
+    sources: []
+    after_permission: []
+    none_publishes: [SPW]
+  - id: grensmaas-dutch-meuse
+    names: { nl: "Grensmaas en Nederlandse Maas", en: "Grensmaas and Dutch Meuse" }
+    match:
+      - { rivers: [meuse], countries: [NL] }
+    sources: [NL-1]
+    after_permission: [HIC]
+    none_publishes: []
+  - id: scheldt-leie-dender
+    names: { nl: "Schelde, Leie, Dender, Zeeschelde", en: "Scheldt, Leie, Dender, Zeeschelde" }
+    match:
+      - { rivers: [scheldt, lys, dender] }
+    sources: [NL-1]
+    after_permission: [HIC, VMM]
+    none_publishes: []
+  - id: ems-vecht
+    names: { nl: "Eems, Vecht", en: "Ems, Vecht" }
+    match:
+      - { rivers: [ems, vechte] }
+    sources: [NL-1]
+    after_permission: []
+    none_publishes: [NLWKN]

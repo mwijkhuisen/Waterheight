@@ -31,6 +31,21 @@ const MY_OBS = { cur: '2026-10-26T11:50:00Z', past: '2026-10-20T11:50:00Z' };
 const LU4_VALUES = ['313.7', '417.9', '351.3'];
 const FORBIDDEN = ['LU-4', 'BE-3', 'AGE ', 'SPW', ...LU4_VALUES, ...CANARY_RENDERINGS];
 
+/**
+ * P8a: the public forecast coverage names agencies, not sources: the one that would provide a reach's forecast after a
+ * permission and the one that publishes none (catalogue §0.5: "SPW for the Walloon Meuse"; review C12). Those two lists
+ * leave the sweep; everything else of the health document stays checked (apps/server/test/api/forecast.int.test.ts holds
+ * the coverage block to no owner source id).
+ */
+const withoutAgencies = (text: string): string => {
+  const doc = JSON.parse(text) as { forecast_coverage?: { reaches?: Record<string, unknown>[] } | null };
+  for (const r of doc.forecast_coverage?.reaches ?? []) {
+    delete r.after_permission;
+    delete r.none_publishes;
+  }
+  return JSON.stringify(doc);
+};
+
 let h: Harness;
 let app: ReturnType<typeof createApp>;
 const id: Record<string, number> = {};
@@ -517,7 +532,7 @@ describe('per audience (invariant 11)', { timeout: 60_000 }, () => {
       JSON.stringify(snapshotValues(read)),
       (await snapshotAt(NOW)).text,
       (await snapshotAt(PAST)).text,
-      (await get('/api/v1/health/sources')).text,
+      withoutAgencies((await get('/api/v1/health/sources')).text),
     ];
     for (const text of texts) for (const f of FORBIDDEN) expect(text.includes(f), f).toBe(false);
     for (const key of ownerOnly()) expect(read.series.find((s) => s.series === key)).toBeUndefined();
