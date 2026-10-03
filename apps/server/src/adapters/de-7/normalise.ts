@@ -5,6 +5,7 @@ import {
   type ObsRow,
   parseInstant,
   QC,
+  type ReferenceRow,
   type Registry,
   rangeBit,
   SchemaDrift,
@@ -13,7 +14,7 @@ import {
   TimeError,
   toIso,
 } from '@rws/core';
-import type { Readings } from './parse.ts';
+import type { Readings, StationThresholds } from './parse.ts';
 
 // DE-7 LANUK NRW → canonical rows (catalogue §2.3, §4.2, §4.4, §4.5). Declared here, never inferred per row:
 //  - series: `<station_no>/W` (W only: NRW publishes no real-time Q); unit and factor from the registry
@@ -151,5 +152,66 @@ export function normalise(r: Readings, ctx: Context): Normalised {
       yield chunk;
     }
   };
+  return out;
+}
+
+const THRESHOLDS: readonly [(t: StationThresholds) => number, string, ReferenceRow['semantics'], string][] = [
+  [(t) => t.mnw, 'LANUV_MNW', 'statistical', 'LANUK MNW'],
+  [(t) => t.mw, 'LANUV_MW', 'statistical', 'LANUK MW'],
+  [(t) => t.mhw, 'LANUV_MHW', 'statistical', 'LANUK MHW'],
+  [(t) => t.info[0], 'LANUV_INFO_1', 'operational', 'LANUK Informationsstufe 1'],
+  [(t) => t.info[1], 'LANUV_INFO_2', 'operational', 'LANUK Informationsstufe 2'],
+  [(t) => t.info[2], 'LANUV_INFO_3', 'operational', 'LANUK Informationsstufe 3'],
+];
+
+/**
+ * `pegel_stationen.txt` → reference rows (P7a): the LANUK thresholds (cm above the gauge zero) of every registered
+ * station; an empty cell is no row. Every registered station of the file is in `refScope`, so a threshold LANUK
+ * withdraws is closed. A station the registry lacks is `unknown`, a placeholder number `placeholder`, a number
+ * listed twice `conflict` (its rows are withheld).
+ */
+export function normaliseThresholds(rows: readonly StationThresholds[], ctx: Pick<Context, 'registry'>): Normalised {
+  const out = emptyNormalised();
+  out.references = [];
+  out.refScope = [];
+  const seen = new Set<string>();
+  const clash = new Set<string>();
+  for (const t of rows) (seen.has(t.station) ? clash : seen).add(t.station);
+  const unknown = new Set<string>();
+  for (const t of rows) {
+    if (PLACEHOLDERS.has(t.station)) {
+      count(out, 'placeholder');
+      continue;
+    }
+    if (clash.has(t.station)) {
+      count(out, 'conflict');
+      continue;
+    }
+    const decl = ctx.registry.get(keyOf(t.station));
+    if (decl === undefined) {
+      unknown.add(t.station);
+      continue;
+    }
+    out.refScope.push({ series: decl.key });
+    for (const [pick, kind, semantics, label] of THRESHOLDS) {
+      const raw = pick(t);
+      if (Number.isNaN(raw)) continue;
+      out.references.push({
+        series: decl.key,
+        kind,
+        value: scale(decl.to_canonical, raw),
+        unit: 'cm',
+        semantics,
+        convention: null,
+        period: null,
+        season_from_md: 101,
+        season_to_md: 1231,
+        priority: 0,
+        basis_label: label,
+        valid_from: null,
+      });
+    }
+  }
+  out.unknown = unknown.size;
   return out;
 }

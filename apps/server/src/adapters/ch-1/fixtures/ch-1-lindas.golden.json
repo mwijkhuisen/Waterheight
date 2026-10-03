@@ -2262,5 +2262,1351 @@
   "superseded": 6,
   "too_old": 2
  },
- "unknown": 0
+ "unknown": 0,
+ "classes": [
+  {
+   "station": "ch.bafu.2009",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2011",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2016",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2018",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2019",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2020",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2024",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2029",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2030",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2033",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2034",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2041",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2044",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2053",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2056",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2063",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2068",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2070",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2078",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2079",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2084",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2085",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2086",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2087",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2091",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2099",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2102",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2104",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2105",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2106",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2109",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2110",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2112",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2116",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2117",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2119",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2122",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2125",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2126",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2132",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2135",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2139",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2141",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2143",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2150",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2151",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2152",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2155",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2156",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2159",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2160",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2161",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2167",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2170",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2174",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2176",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2179",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2181",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2185",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2187",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2199",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2200",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2202",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2203",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2205",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2206",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2210",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2215",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2219",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2232",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2243",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2244",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2247",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2251",
+   "ts": "2026-09-29T13:00:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2252",
+   "ts": "2026-09-29T13:00:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2256",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2262",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2263",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2265",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2268",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2276",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2282",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2283",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2288",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2289",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2290",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2300",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2303",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2304",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2305",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2307",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2308",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2312",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2319",
+   "ts": "2026-09-29T13:00:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2321",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2327",
+   "ts": "2026-09-29T13:00:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2329",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2342",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2343",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2346",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2347",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2349",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2351",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2352",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2353",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2355",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2356",
+   "ts": "2026-09-28T23:00:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2364",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2366",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2368",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2369",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2370",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2371",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2372",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2374",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2378",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2384",
+   "ts": "2026-09-29T13:00:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2386",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2387",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2403",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2404",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2409",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2410",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2412",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2414",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2415",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2416",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2417",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2418",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2419",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2420",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2426",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2430",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2432",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2433",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2434",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2436",
+   "ts": "2026-09-29T13:00:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2437",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2446",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2447",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2450",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2457",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2458",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2461",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2467",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2468",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2471",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2473",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2474",
+   "ts": "2026-09-29T13:00:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2475",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2477",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2478",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2480",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2481",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2485",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2486",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2487",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2488",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2490",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2491",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2492",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2493",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2494",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2497",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2498",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2499",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2500",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2602",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2603",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2604",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2605",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2606",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2607",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2608",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2609",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2610",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2612",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2615",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2617",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2620",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2629",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2630",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2631",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2632",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2634",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2635",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2636",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.2639",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2640",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2646",
+   "ts": "2026-09-29T13:00:00.000Z",
+   "code": "1",
+   "label": null,
+   "level": 2
+  },
+  {
+   "station": "ch.bafu.2650",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "ch.bafu.520",
+   "ts": "2026-09-29T12:55:00.000Z",
+   "code": "undefined",
+   "label": null,
+   "level": null
+  }
+ ]
 }

@@ -1,0 +1,12 @@
+{
+  "spec": "ch-2-pq",
+  "source": "CH-2",
+  "synthetic": true,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/octet-stream",
+  "url": "https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson",
+  "bytes": 10333,
+  "trimmed": false,
+  "note": "Copy of ch-2-pq-relative.raw with one edit: wl_2 of station 2269 is \"55 m³/s\" instead of \"50 m³/s\". Everything else is byte for byte the real recording. The adapter test reads it (a changed threshold in normalise's output); 2269 (Lonza) is a Rhone station whose CH-1 series are off for scope, so the loader stores nothing for it: the end-to-end test (test/load/p7a.int.test.ts) derives its own change on 2437."
+}

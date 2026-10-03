@@ -1,6 +1,7 @@
 import {
   emptyNormalised,
   isFuture,
+  levelOf,
   type Normalised,
   parseInstant,
   QC,
@@ -32,8 +33,10 @@ import type { Observation } from './parse.ts';
 //  - sentinel: an exact 0 at a level series is BAFU's "no value" (2602
 //    Domat/Ems froze at W = 0.0 on 2026-10-01), dropped as `sentinel` before
 //    that guard; a relative gauge's 0 is a reading;
-//  - qc "raw" (BAFU: raw, unverified data); the danger level and the
-//    temperature are not stored (classes are P7).
+//  - qc "raw" (BAFU: raw, unverified data); the temperature is not stored;
+//  - the danger level is a provider class of the station (P7a): code '1'..'5' or
+//    'undefined' (the cube's Undefined IRI, parsed to null), level from the
+//    crosswalk, stored per station of the registered series (W or Q).
 
 export const SOURCE = 'CH-1';
 export const TIME: TimeConvention = { kind: 'fixed-offset', offset: '+01:00' };
@@ -88,6 +91,7 @@ function row(decl: SeriesDecl | undefined, ts: number, raw: number | null, ctx: 
 
 export function normaliseCube(observations: readonly Observation[], ctx: Context): Normalised {
   const out = emptyNormalised();
+  out.classes = [];
   const latest = new Map<string, { ts: number; o: Observation | null }>();
   for (const o of observations) {
     const ts = instant(o.time);
@@ -107,6 +111,12 @@ export function normaliseCube(observations: readonly Observation[], ctx: Context
     if (o === null) continue;
     row(ctx.registry.get(`${id}/W`), ts, o.w, ctx, out);
     row(ctx.registry.get(`${id}/Q`), ts, o.q, ctx, out);
+    const station = (ctx.registry.get(`${id}/W`) ?? ctx.registry.get(`${id}/Q`))?.station;
+    if (station !== undefined && !isFuture(ts, ctx.fetchedAt) && ts >= ctx.fetchedAt - MAX_AGE_MS) {
+      const code = o.dangerLevel === null ? 'undefined' : String(o.dangerLevel);
+      out.classes.push({ station, ts: toIso(ts), code, label: null, level: levelOf(SOURCE, 'danger', code) ?? null });
+    }
   }
+  if (out.classes?.length === 0) delete out.classes;
   return out;
 }

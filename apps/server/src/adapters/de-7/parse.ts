@@ -1,4 +1,4 @@
-import { SchemaDrift } from '@rws/core';
+import { SchemaDrift, scanCsv } from '@rws/core';
 
 // DE-7 LANUK NRW (catalogue §2.3): `messwerte.txt` in `messwerte.zip` (7 days) and `pegel_messwerte.txt`
 // in `pegeldaten.zip` (2 months), the same format:
@@ -125,4 +125,62 @@ export function parseText(text: string, member: Member, opts: { ascii: boolean }
   if (lines.at(-1) === '') lines.pop();
   for (const l of lines) sink.line(l.replace(/\r$/, ''));
   return sink.end();
+}
+
+// `pegel_stationen.txt` (pegeldaten.zip, UTF-8, `;`, CRLF): the station master with LANUK's thresholds, in cm above
+// the gauge zero as strings ("110.0"), empty = none. It has no site_no column; the registry decides which stations load.
+
+export const STATIONS_HEADER =
+  'station_latitude;station_longitude;station_name;station_no;catchment_no;catchment_name;LANUV_Info_1;LANUV_Info_2;LANUV_Info_3;LANUV_MNW;LANUV_MW;LANUV_MHW;station_carteasting;station_cartnorthing;CATCHMENT_SIZE;DIST_TO_CONFL';
+
+/** Rows of the station file: 254 on 2026-09-30. */
+export const MAX_STATION_ROWS = 1_000;
+/** The member is read whole, so it has a byte cap (load/adapters.ts): 1,011 bytes in the trimmed fixture, about 50 KB whole. */
+export const STATIONS_MAX_BYTES = 1024 * 1024;
+
+const THRESHOLD = /^-?\d{1,5}(?:\.\d{1,3})?$/;
+
+/** The columns this reader keeps: the station number and the six thresholds (NaN = none). */
+export type StationThresholds = {
+  station: string;
+  info: [number, number, number];
+  mnw: number;
+  mw: number;
+  mhw: number;
+};
+
+export function parseStationFile(body: Uint8Array): StationThresholds[] {
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(body).replace(/^\uFEFF/, '');
+  } catch {
+    throw new SchemaDrift('encoding');
+  }
+  const { header, rows } = scanCsv(text, { delimiter: ';', maxRows: MAX_STATION_ROWS, extraField: false });
+  if (header.join(';') !== STATIONS_HEADER) throw new SchemaDrift('csv_header');
+  const col = (name: string) => header.indexOf(name);
+  const [no, i1, i2, i3, mnw, mw, mhw] = [
+    'station_no',
+    'LANUV_Info_1',
+    'LANUV_Info_2',
+    'LANUV_Info_3',
+    'LANUV_MNW',
+    'LANUV_MW',
+    'LANUV_MHW',
+  ].map(col) as number[];
+  const num = (raw: string): number => {
+    if (raw === '') return Number.NaN;
+    if (!THRESHOLD.test(raw)) throw new SchemaDrift('bad_value');
+    return Number(raw);
+  };
+  return rows.map((r) => {
+    if (!STATION.test(r[no as number] as string)) throw new SchemaDrift('station_no');
+    return {
+      station: r[no as number] as string,
+      info: [num(r[i1 as number] as string), num(r[i2 as number] as string), num(r[i3 as number] as string)],
+      mnw: num(r[mnw as number] as string),
+      mw: num(r[mw as number] as string),
+      mhw: num(r[mhw as number] as string),
+    };
+  });
 }

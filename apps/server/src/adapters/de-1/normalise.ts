@@ -6,6 +6,7 @@ import {
   type Normalised,
   parseInstant,
   QC,
+  type ReferenceRow,
   type Registry,
   rangeBit,
   SchemaDrift,
@@ -175,11 +176,97 @@ export function normaliseSeries(points: readonly Measurement[], ctx: Context): N
   return out;
 }
 
-/** The daily metadata `stations.json`: the current gauge zero (PNP) of every registered series that has one. */
+type RefKind = { kind: string; semantics: ReferenceRow['semantics']; dated: 'period' | 'valid_from' | 'occurrence' };
+
+// PEGELONLINE characteristic values (catalogue §2.2, C22): `NW` and `HW` are extremes of the statistical period
+// (Kaub NW 25, HW 719), never NNW or HHW. `TuGLW` is a fairway depth, not a level. Declared, never inferred.
+const REF_KINDS: ReadonlyMap<string, RefKind> = new Map([
+  ['MNW', { kind: 'MNW', semantics: 'statistical', dated: 'period' }],
+  ['MW', { kind: 'MW', semantics: 'statistical', dated: 'period' }],
+  ['MHW', { kind: 'MHW', semantics: 'statistical', dated: 'period' }],
+  ['NW', { kind: 'NW', semantics: 'historical', dated: 'period' }],
+  ['HW', { kind: 'HW', semantics: 'historical', dated: 'period' }],
+  ['NNW', { kind: 'NNW', semantics: 'historical', dated: 'occurrence' }],
+  ['HHW', { kind: 'HHW', semantics: 'historical', dated: 'occurrence' }],
+  ['HSW', { kind: 'HSW', semantics: 'operational', dated: 'valid_from' }],
+  ['M_I', { kind: 'MARKE_I', semantics: 'operational', dated: 'valid_from' }],
+  ['M_II', { kind: 'MARKE_II', semantics: 'operational', dated: 'valid_from' }],
+  ['M_III', { kind: 'MARKE_III', semantics: 'operational', dated: 'valid_from' }],
+  ['GlW', { kind: 'GLW', semantics: 'statistical', dated: 'valid_from' }],
+]);
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const day = (raw: string): string => {
+  if (!DAY.test(raw) || Number.isNaN(Date.parse(raw))) throw new SchemaDrift('bad_period');
+  return raw;
+};
+
+/** The reference rows of one W series' characteristic values; stage values only, in cm. */
+function references(decl: SeriesDecl, series: Station['timeseries'][number], out: Normalised): void {
+  for (const cv of series.characteristicValues ?? []) {
+    if (cv.shortname === 'TuGLW') {
+      count(out, 'not_a_level');
+      continue;
+    }
+    const k = REF_KINDS.get(cv.shortname);
+    if (k === undefined) {
+      count(out, 'unknown_kind');
+      continue;
+    }
+    if (cv.unit !== 'cm' || decl.native_unit !== 'cm') {
+      count(out, 'unit_mismatch');
+      continue;
+    }
+    const period =
+      cv.timespanStart !== undefined && cv.timespanEnd !== undefined
+        ? ([day(cv.timespanStart), day(cv.timespanEnd)] as [string, string])
+        : null;
+    // The provider has typos (a validFrom in the year 0007): that is a value without a stated start, not drift.
+    let from: string | null = null;
+    if (cv.validFrom !== undefined) {
+      try {
+        from = validFrom(cv.validFrom);
+      } catch (err) {
+        if (!(err instanceof SchemaDrift)) throw err;
+        count(out, 'bad_valid_from');
+      }
+    }
+    const occ = cv.occurrences?.length ? ` (${cv.occurrences.join(', ')})` : '';
+    out.references?.push({
+      series: decl.key,
+      kind: k.kind,
+      value: cv.value,
+      unit: 'cm',
+      semantics: k.semantics,
+      convention: null,
+      period,
+      season_from_md: 101,
+      season_to_md: 1231,
+      priority: 0,
+      basis_label: `${cv.longname.trim()}${occ}`.slice(0, 500),
+      valid_from: from,
+    });
+  }
+}
+
+/**
+ * The daily metadata `stations.json`: the current gauge zero (PNP) of every registered series that has one, and
+ * the reference values (characteristic values) of every registered W series; every W series of the payload is
+ * in `refScope`, so a kind the provider drops is closed.
+ */
 export function normaliseMeta(stations: readonly Station[], ctx: Context): Normalised {
   const out = emptyNormalised();
+  out.references = [];
+  out.refScope = [];
   for (const station of stations) {
     for (const series of station.timeseries) {
+      if (series.shortname === 'W') {
+        const w = ctx.registry.get(`${station.uuid}/W`);
+        if (w !== undefined) {
+          out.refScope.push({ series: w.key });
+          references(w, series, out);
+        }
+      }
       if (!QUANTITY.has(series.shortname) || series.gaugeZero === undefined) continue;
       const decl = ctx.registry.get(`${station.uuid}/${series.shortname}`);
       if (decl === undefined) continue;
@@ -196,5 +283,7 @@ export function normaliseMeta(stations: readonly Station[], ctx: Context): Norma
       });
     }
   }
+  if (out.references?.length === 0) delete out.references;
+  if (out.refScope?.length === 0) delete out.refScope;
   return out;
 }

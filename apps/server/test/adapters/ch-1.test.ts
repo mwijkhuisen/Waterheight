@@ -46,7 +46,7 @@ describe('golden files (real payloads)', () => {
       { series: '2289/Q', ts: '2026-09-29T13:20:00.000Z', value: 340.204, qc: QC.RAW },
     ]);
     expect(find(out, '2473/W')[0]).toMatchObject({ value: 40692.7, qc: QC.RAW });
-    // Only the stored fields: no danger level and no temperature in a row.
+    // Only the stored fields: the danger level is a class of the station, not a column of a row.
     for (const r of out.obs) expect(Object.keys(r).sort()).toEqual(['qc', 'series', 'ts', 'value']);
   });
 
@@ -120,6 +120,73 @@ describe('golden files (real payloads)', () => {
   });
 });
 
+describe('danger levels → classes (P7a)', () => {
+  const classes = (out: Normalised) => out.classes ?? [];
+
+  it('the river cube: one class per registered station kept (192 of 199), the code is the cube level, level from the crosswalk', () => {
+    const out = run('ch-1-lindas');
+    expect(classes(out)).toHaveLength(192);
+    expect(new Set(classes(out).map((c) => c.station)).size).toBe(192);
+    expect(new Set(classes(out).map((c) => `${c.code}:${c.level}`))).toEqual(new Set(['1:2', 'undefined:null']));
+    expect(classes(out).every((c) => c.label === null)).toBe(true);
+    // The station is the registry's station of the series (W or Q), at the observation instant (+01:00 → UTC).
+    expect(classes(out).find((c) => c.station === 'ch.bafu.2289')).toEqual({
+      station: 'ch.bafu.2289',
+      ts: '2026-09-29T13:20:00.000Z',
+      code: '1',
+      label: null,
+      level: 2,
+    });
+    // The destroyed station 2269 re-states 2025-05-28: too old for a class as for a value.
+    expect(classes(out).some((c) => c.station === 'ch.bafu.2269')).toBe(false);
+  });
+
+  it('the Undefined IRI is code `undefined` with level null, never 1; the lake cube has both', () => {
+    const out = run('ch-1-lindas-lake');
+    const byStation = new Map(classes(out).map((c) => [c.station, c]));
+    expect(byStation.get('ch.bafu.2074')).toMatchObject({ code: 'undefined', level: null });
+    expect(byStation.get('ch.bafu.2043')).toMatchObject({ code: '1', level: 2 });
+    expect(classes(out)).toHaveLength(34);
+  });
+
+  const at = Date.parse('2026-09-23T19:50:00Z');
+  const base: Context = { registry, fetchedAt: at };
+  const row = (dl: string, id = '2289', time = '2026-09-23T20:40:00+01:00') =>
+    [id, 'Basel', '', time, '340.204', '244.782', '', dl, ''].join(',');
+  const norm = (rows: string[], c: Context = base) =>
+    normaliseCube(parseCube(Buffer.from(`${HEADER.join(',')}\n${rows.join('\n')}\n`)), c);
+
+  it('1…5 map by the crosswalk (the CH-1 danger scale), empty is `undefined`', () => {
+    const levels = [1, 2, 3, 4, 5].map((n) => norm([row(String(n))]).classes?.[0]);
+    expect(levels.map((c) => [c?.code, c?.level])).toEqual([
+      ['1', 2],
+      ['2', 3],
+      ['3', 4],
+      ['4', 5],
+      ['5', 5],
+    ]);
+    expect(norm([row('')]).classes?.[0]).toMatchObject({ code: 'undefined', level: null });
+    expect(norm([row(UNDEFINED_LEVEL)]).classes?.[0]).toMatchObject({ code: 'undefined', level: null });
+  });
+
+  it('a station without a registered series, and a future time give no class; a superseded row is not stated', () => {
+    expect(norm([row('1', '999999')]).classes).toBeUndefined();
+    expect(norm([row('1', '2289', '2026-09-23T21:20:00+01:00')]).classes).toBeUndefined();
+    const out = norm([row('1', '2289', '2026-09-23T20:30:00+01:00'), row('3', '2289', '2026-09-23T20:40:00+01:00')]);
+    expect(out.classes?.map((c) => [c.ts, c.code])).toEqual([['2026-09-23T19:40:00.000Z', '3']]);
+  });
+
+  it('the synthetic copy with one changed danger level differs in exactly that class (promotion test input)', () => {
+    const before = run('ch-1-lindas-lake');
+    const after = run('ch-1-lindas-dl-changed.synthetic');
+    expect(after.obs).toEqual(before.obs);
+    const diff = classes(after).filter((c, i) => JSON.stringify(c) !== JSON.stringify(classes(before)[i]));
+    expect(diff).toEqual([
+      { station: 'ch.bafu.2043', ts: '2026-09-30T11:40:00.000Z', code: '3', label: null, level: 4 },
+    ]);
+  });
+});
+
 describe('synthetic payloads [U]', () => {
   const at = Date.parse('2026-09-23T19:50:00Z');
   const base: Context = { registry, fetchedAt: at };
@@ -148,6 +215,7 @@ describe('synthetic payloads [U]', () => {
         { series: '2289/W', ts: '2026-09-23T19:40:00.000Z', value: 24478.2, qc: QC.RAW },
         { series: '2289/Q', ts: '2026-09-23T19:40:00.000Z', value: 340.204, qc: QC.RAW },
       ],
+      classes: [{ station: 'ch.bafu.2289', ts: '2026-09-23T19:40:00.000Z', code: '1', label: null, level: 2 }],
       gaugeZeros: [],
       dropped: {},
       unknown: 0,
@@ -220,7 +288,7 @@ describe('synthetic payloads [U]', () => {
   it('an empty discharge or level gives no row (a lake has no Q); a row with neither gives none and counts nothing', () => {
     expect(norm([line({ q: '' })])).toMatchObject({ obs: [{ series: '2289/W' }], dropped: {} });
     expect(norm([line({ w: '' })])).toMatchObject({ obs: [{ series: '2289/Q' }], dropped: {} });
-    expect(norm([line({ q: '', w: '' })])).toEqual({ obs: [], gaugeZeros: [], dropped: {}, unknown: 0 });
+    expect(norm([line({ q: '', w: '' })])).toMatchObject({ obs: [], dropped: {}, unknown: 0 });
   });
 
   it('a station the registry does not know is counted once per value, never registered', () => {

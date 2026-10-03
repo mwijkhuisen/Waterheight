@@ -14,12 +14,14 @@ import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 // scripts/trim-fixtures.ts (the metas record the rule and the source hash).
 
 const registry = registryOf('CH-2');
+const ch1 = registryOf('CH-1');
+const refRegistries = new Map([['CH-1', ch1]]);
 /** The rule of scripts/trim-fixtures.ts as its meta states it, written again here as the oracle. */
 const keep = (p: { key: string; metric: string }) =>
   ['2384', '2283', '2282', '2269'].includes(p.key) || p.metric === 'discharge_ls';
 
 function ctx(name: string): Context {
-  return { registry, fetchedAt: Date.parse(rawFixture('CH-2', name).meta.recorded_at) };
+  return { registry, fetchedAt: Date.parse(rawFixture('CH-2', name).meta.recorded_at), refRegistries };
 }
 
 function golden(name: string, actual: Normalised): Normalised {
@@ -444,6 +446,100 @@ describe('synthetic payloads [U]', () => {
     expect(forward.slice(0, 2)).toEqual(['2016/W', '2016/Q']);
     expect(norm([...fs].reverse()).obs.map((r) => r.series)).toEqual(forward);
     expect(forward.indexOf('2282/W')).toBeLessThan(forward.indexOf('2289/W'));
+  });
+});
+
+describe('wl_1..wl_4 → WL2..WL5 on the CH-1 primary series (P7a)', () => {
+  const real = features('ch-2-pq');
+  const station = (key: string, o: Partial<Properties> = {}): Properties => ({
+    ...structuredClone(real.find((f) => f.key === key) as Properties),
+    ...o,
+  });
+  const c: Context = { registry, fetchedAt: Date.parse('2026-09-30T12:00:00Z'), refRegistries };
+  const out = (fs: Properties[], extra: Partial<Context> = {}) => normaliseFeatures(fs, { ...c, ...extra });
+  const kinds = (n: Normalised, series: string) => n.references?.filter((r) => r.series === series);
+
+  it('a river: the Q series of CH-1, m³/s as is, target CH-1, operational, no period', () => {
+    const n = out([station('2437')]);
+    expect(kinds(n, '2437/Q')?.map((r) => [r.kind, r.value, r.unit])).toEqual([
+      ['WL2', 6.15, 'm³/s'],
+      ['WL3', 11.45, 'm³/s'],
+      ['WL4', 15.6, 'm³/s'],
+      ['WL5', 21.1, 'm³/s'],
+    ]);
+    for (const r of n.references ?? []) {
+      expect(r).toMatchObject({
+        target: 'CH-1',
+        semantics: 'operational',
+        convention: null,
+        period: null,
+        valid_from: null,
+      });
+      expect([r.season_from_md, r.season_to_md, r.priority]).toEqual([101, 1231, 0]);
+    }
+    expect(n.refScope).toEqual([{ target: 'CH-1', series: '2437/Q' }]);
+  });
+
+  it('the l/s stations are divided by 1000 (2206: 1450 l/s is 1.45 m³/s)', () => {
+    const n = out(features('ch-2-pq').filter((f) => f.metric === 'discharge_ls'));
+    expect(kinds(n, '2206/Q')?.map((r) => r.value)).toEqual([1.45, 2.9, 4.05, 5.55]);
+    expect(n.dropped.unit_mismatch).toBeUndefined();
+    expect(Math.min(...(n.references ?? []).map((r) => r.value))).toBeGreaterThan(0);
+  });
+
+  it('a lake: the W level series of CH-1, m ü.M. × 100 in cm (2031: 724.10 m ü.M. is 72,410 cm)', () => {
+    const n = out([station('2031')]);
+    expect(kinds(n, '2031/W')?.map((r) => [r.kind, r.value, r.unit])).toEqual([
+      ['WL2', 72410, 'cm'],
+      ['WL3', 72445, 'cm'],
+      ['WL4', 72500, 'cm'],
+      ['WL5', 72525, 'cm'],
+    ]);
+    // A masl station with a discharge sensor too (2446): the thresholds are levels, so they sit on its W series.
+    expect(kinds(out([station('2446')]), '2446/W')).toHaveLength(4);
+    expect(out([station('2446')]).references?.some((r) => r.series === '2446/Q')).toBe(false);
+  });
+
+  it('a unit that does not fit the target is unit_mismatch (counted, no row); the scope still names the target', () => {
+    const n = out([station('2437', { wl_2: '724.10 m ü.M.', wl_3: '5 l/s', wl_4: '1 m' })]);
+    expect(kinds(n, '2437/Q')?.map((r) => r.kind)).toEqual(['WL2', 'WL4']);
+    expect(n.dropped).toMatchObject({ unit_mismatch: 2 });
+    // A lake with a discharge threshold, and a relative-stage gauge with a level threshold.
+    expect(out([station('2031', { wl_1: '5 m³/s' })]).dropped).toMatchObject({ unit_mismatch: 1 });
+    expect(out([station('2283', { metric: 'masl', wl_1: '5 m ü.M.' })]).dropped).toMatchObject({ unit_mismatch: 1 });
+    expect(() => out([station('2437', { wl_1: 'garbage' })])).toThrow(SchemaDrift);
+  });
+
+  it('empty thresholds give no row; the target stays in the scope so a withdrawn threshold is closed', () => {
+    const n = out([station('2437', { wl_1: null, wl_2: null, wl_3: null, wl_4: null })]);
+    expect(n.references).toBeUndefined();
+    expect(n.refScope).toEqual([{ target: 'CH-1', series: '2437/Q' }]);
+  });
+
+  it('a station CH-1 does not register has no target (no row, no scope); without the CH-1 registry nothing is emitted', () => {
+    const n = out([station('2437', { key: '999999' })]);
+    expect([n.references, n.refScope]).toEqual([undefined, undefined]);
+    const { refRegistries: _, ...bare } = c;
+    const none = normaliseFeatures([station('2437')], bare);
+    expect([none.references, none.refScope]).toEqual([undefined, undefined]);
+    expect(none.obs.length).toBeGreaterThan(0);
+  });
+
+  it('threshold_customer is not stored', () => {
+    const plain = out([station('2437')]);
+    expect(out([station('2437', { threshold_customer: '12 m³/s' })])).toEqual(plain);
+  });
+
+  it('the synthetic copy with one changed wl_2 differs in exactly that reference (promotion test input)', () => {
+    const before = run('ch-2-pq-relative');
+    const after = run('ch-2-pq-wl-changed.synthetic');
+    expect(after.obs).toEqual(before.obs);
+    const diff = (after.references ?? []).filter(
+      (r, i) => JSON.stringify(r) !== JSON.stringify(before.references?.[i]),
+    );
+    expect(diff).toEqual([expect.objectContaining({ series: '2269/Q', kind: 'WL3', value: 55 })]);
+    expect(before.references?.find((r) => r.series === '2269/Q' && r.kind === 'WL3')?.value).toBe(50);
+    expect(after.refScope).toEqual(before.refScope);
   });
 });
 
