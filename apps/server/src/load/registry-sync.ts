@@ -1,10 +1,14 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
+  type RivernetFile,
+  type RiversFile,
   type Source,
   type Station,
   type Twin,
   validateRegistry,
+  validateRivernet,
+  validateRivers,
   validateStations,
   validateTwins,
   WithholdingRecord,
@@ -125,6 +129,26 @@ export function readRegistry(
   return { sources: registry.sources, providers: registry.providers, stations, twins: twins.twins, thresholds };
 }
 
+/**
+ * registry/rivers.yaml and the generated registry/rivernet.yaml (P6b), for `migrate` only: readRegistry feeds capture
+ * and load, which a stale generated file must never stop. rivernet is null when the file does not exist.
+ */
+export function readRiverRegistry(dir: URL = REGISTRY_DIR): { rivers: RiversFile; rivernet: RivernetFile | null } {
+  const yaml = (name: string) => parse(readFileSync(new URL(name, dir), 'utf8'));
+  const rivers = validateRivers(yaml('rivers.yaml'));
+  const problems = rivers.problems.map((p) => `rivers.yaml: ${p}`);
+  let rivernet: RivernetFile | null = null;
+  if (existsSync(new URL('rivernet.yaml', dir))) {
+    const r = validateRivernet(yaml('rivernet.yaml'));
+    problems.push(...r.problems.map((p) => `rivernet.yaml: ${p}`));
+    rivernet = r.rivernet ?? null;
+  }
+  if (problems.length > 0 || rivers.rivers === undefined) {
+    throw new RegistryError(`registry is not valid:\n${problems.slice(0, 20).join('\n')}`);
+  }
+  return { rivers: rivers.rivers, rivernet };
+}
+
 const ROLE_PRECEDENCE = { primary: 0, twin: 1, mirror: 2 } as const;
 
 /**
@@ -172,6 +196,9 @@ export type SyncResult = {
   deactivated: number;
   twins: number;
   references: number;
+  /** P6b: reach rows after the sync, and rivernet stations the registry does not know (0 without `rivers`). */
+  reaches: number;
+  rivernetUnknown: number;
 };
 
 /** A reference_value row of an NL-4 class bound. */
@@ -210,7 +237,13 @@ function nl4Bounds(input: RegistryInput, idOf: ReadonlyMap<string, number>): Bou
 }
 
 /** One transaction: either the whole registry is in the database, or the previous one still is. */
-export async function syncRegistry(db: Kysely<DB>, input: RegistryInput): Promise<SyncResult> {
+export async function syncRegistry(
+  db: Kysely<DB>,
+  input: RegistryInput,
+  rivers?: { rivers: RiversFile; rivernet: RivernetFile | null },
+): Promise<SyncResult> {
+  const net = rivers?.rivernet ?? null;
+  const netStation = new Map((net?.stations ?? []).map((s) => [s.id, s]));
   const providerOf = new Map(input.sources.map((s) => [s.id, s.provider]));
   const audienceOf = new Map(input.sources.map((s) => [s.id, s.audience]));
   return db.transaction().execute(async (tx) => {
@@ -259,7 +292,23 @@ export async function syncRegistry(db: Kysely<DB>, input: RegistryInput): Promis
 
     const byStation = new Map<string, Station[]>();
     for (const row of input.stations) byStation.set(row.id, [...(byStation.get(row.id) ?? []), row]);
-    for (const river of new Set(input.stations.flatMap((r) => (r.river === null ? [] : [r.river])))) {
+    if (rivers !== undefined) {
+      for (const r of rivers.rivers.rivers) {
+        const names = JSON.stringify({ nl: r.name_nl, en: r.name_en, sources: r.names });
+        await sql`
+          INSERT INTO river (id, names, osm_relation_id, wikidata)
+          VALUES (${r.id}, ${names}::jsonb, ${r.osm_relation_id}, ${r.wikidata})
+          ON CONFLICT (id) DO UPDATE SET names = EXCLUDED.names, osm_relation_id = EXCLUDED.osm_relation_id,
+                                         wikidata = EXCLUDED.wikidata`.execute(tx);
+      }
+      // Self-FK: parents only after every river exists.
+      for (const r of rivers.rivers.rivers) {
+        await sql`UPDATE river SET parent_river_id = ${r.parent_river_id} WHERE id = ${r.id}`.execute(tx);
+      }
+    }
+    const stubRivers = new Set(input.stations.flatMap((r) => (r.river === null ? [] : [r.river])));
+    for (const s of netStation.values()) if (s.river !== null) stubRivers.add(s.river);
+    for (const river of stubRivers) {
       await sql`INSERT INTO river (id) VALUES (${river}) ON CONFLICT (id) DO NOTHING`.execute(tx);
     }
     for (const [id, rows] of byStation) {
@@ -269,6 +318,16 @@ export async function syncRegistry(db: Kysely<DB>, input: RegistryInput): Promis
         'km',
         id,
       );
+      const rn = netStation.get(id);
+      // The station rows must agree on their river either way; the placement's river wins where it has one.
+      const rowRiver = one(
+        rows.map((r) => r.river),
+        'river',
+        id,
+      );
+      const river = rn?.river ?? rowRiver;
+      const kmValue = rn?.km_official ?? km?.value ?? null;
+      const kmSystem = rn?.km_official_system ?? km?.system ?? null;
       const role = (['primary', 'twin', 'mirror'] as const).find((r) => rows.some((x) => x.role === r)) ?? 'mirror';
       const source = one(
         rows.map((r) => r.source),
@@ -277,7 +336,7 @@ export async function syncRegistry(db: Kysely<DB>, input: RegistryInput): Promis
       );
       await sql`
         INSERT INTO station (id, name, water_name, country, lon, lat, operator_provider_id, river_id, km_official,
-                             km_system, flags, tier)
+                             km_system, flags, tier, reach_id, km_to_nl_entry, nl_entry_node)
         VALUES (${id}, ${one(
           rows.map((r) => r.name),
           'name',
@@ -301,28 +360,60 @@ export async function syncRegistry(db: Kysely<DB>, input: RegistryInput): Promis
                   'lat',
                   id,
                 )}, ${role === 'primary' ? (providerOf.get(source) ?? null) : null},
-                ${one(
-                  rows.map((r) => r.river),
-                  'river',
-                  id,
-                )}, ${km?.value ?? null}, ${km?.system ?? null},
+                ${river}, ${kmValue}, ${kmSystem},
                 ${JSON.stringify(
                   one(
                     rows.map((r) => r.flags),
                     'flags',
                     id,
                   ),
-                )}::jsonb, ${Math.min(...rows.map((r) => r.tier))})
+                )}::jsonb, ${Math.min(...rows.map((r) => r.tier))},
+                NULL, ${rn?.km_to_nl_entry ?? null}, ${rn?.nl_entry_node ?? null})
         ON CONFLICT (id) DO UPDATE SET
           name = EXCLUDED.name, water_name = EXCLUDED.water_name, country = EXCLUDED.country, lon = EXCLUDED.lon,
           lat = EXCLUDED.lat, operator_provider_id = EXCLUDED.operator_provider_id, river_id = EXCLUDED.river_id,
           km_official = EXCLUDED.km_official, km_system = EXCLUDED.km_system, flags = EXCLUDED.flags,
-          tier = EXCLUDED.tier`.execute(tx);
+          tier = EXCLUDED.tier, reach_id = NULL, km_to_nl_entry = EXCLUDED.km_to_nl_entry,
+          nl_entry_node = EXCLUDED.nl_entry_node`.execute(tx);
       await sql`
         INSERT INTO station_alias (station_id, source_id, provider_code, role, precedence)
         VALUES (${id}, ${source}, ${first.provider_code}, ${role}, ${ROLE_PRECEDENCE[role]})
         ON CONFLICT (source_id, provider_code) DO UPDATE SET
           station_id = EXCLUDED.station_id, role = EXCLUDED.role, precedence = EXCLUDED.precedence`.execute(tx);
+    }
+
+    let reaches = 0;
+    let rivernetUnknown = 0;
+    if (net !== null) {
+      rivernetUnknown = net.stations.filter((s) => !byStation.has(s.id)).length;
+      for (const r of net.reaches) {
+        const range = r.travel_time_h === null ? null : `[${r.travel_time_h[0]},${r.travel_time_h[1]}]`;
+        await sql`
+          INSERT INTO reach (river_id, seq, up_station_id, down_station_id, length_km, flags, travel_time_h,
+                             travel_time_source)
+          VALUES (${r.river}, ${r.seq}, ${r.up_station !== null && byStation.has(r.up_station) ? r.up_station : null},
+                  ${r.down_station !== null && byStation.has(r.down_station) ? r.down_station : null}, ${r.length_km},
+                  ${JSON.stringify(r.flags)}::jsonb, ${range}::numrange, ${r.travel_time_source})
+          ON CONFLICT (river_id, seq) DO UPDATE SET
+            up_station_id = EXCLUDED.up_station_id, down_station_id = EXCLUDED.down_station_id,
+            length_km = EXCLUDED.length_km, flags = EXCLUDED.flags, travel_time_h = EXCLUDED.travel_time_h,
+            travel_time_source = EXCLUDED.travel_time_source`.execute(tx);
+      }
+      for (const s of net.stations) {
+        if (s.reach === null || !byStation.has(s.id)) continue;
+        await sql`
+          UPDATE station SET reach_id = reach.id FROM reach
+          WHERE station.id = ${s.id} AND reach.river_id = ${s.reach.slice(0, s.reach.lastIndexOf('.'))}
+            AND reach.seq = ${Number(s.reach.slice(s.reach.lastIndexOf('.') + 1))}`.execute(tx);
+      }
+    }
+    if (rivers !== undefined) {
+      // Reaches that left the file: drop every reference, then the rows (reach ids are an identity, never reused).
+      const keep = (net?.reaches ?? []).map((r) => `${r.river}.${r.seq}`);
+      const stale = sql`SELECT id FROM reach WHERE NOT ((river_id || '.' || seq) = ANY(${keep}::text[]))`;
+      await sql`UPDATE station SET reach_id = NULL WHERE reach_id IN (${stale})`.execute(tx);
+      await sql`DELETE FROM reach WHERE id IN (${stale})`.execute(tx);
+      reaches = Number((await sql<{ n: string }>`SELECT count(*) AS n FROM reach`.execute(tx)).rows[0]?.n ?? 0);
     }
 
     const kept: number[] = [];
@@ -399,6 +490,8 @@ export async function syncRegistry(db: Kysely<DB>, input: RegistryInput): Promis
       deactivated: Number(gone.numAffectedRows ?? 0n),
       twins: input.twins.length,
       references: bounds.length,
+      reaches,
+      rivernetUnknown,
     };
   });
 }
