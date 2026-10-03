@@ -20,6 +20,8 @@ const APPLIED: Readonly<Record<string, string>> = {
   '20261014000002_views_meta.sql': 'a1baa906aaf13227ebebea5a31d818e9721181f33860b05c9df571eb2616ee61',
   '20261021000001_p7a_references.sql': '957110cb4c0247703f9b2eaa22d6e4a8af1fc7e7b0d657a05ff53339a9f5077e',
   '20261024000001_views_gauge_zero.sql': '65776ae93da53ad3a69a760de7efbaec6c2027963c265ef3bbf3db948144fcb9',
+  '20261106000001_p8a_forecasts.sql': '27108a2fcc7a0d5dcdeed10191404b765a007adae83f097055392029ca36b783',
+  '20261106000002_views_forecast.sql': '0212fc612a7a156bf5eee6a74e787e3a18360fefbb6751ddb08a5e4a75d76aca',
 };
 
 const dir = new URL('../db/migrations/', import.meta.url);

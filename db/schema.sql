@@ -100,6 +100,52 @@ $$;
 
 
 --
+-- Name: own_forecast_at(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.own_forecast_at(p_asof timestamp with time zone, p_t timestamp with time zone) RETURNS TABLE(run_id bigint, series_id integer, source_id text, issued_at timestamp with time zone, issued_inferred boolean, fetched_at timestamp with time zone, first_valid timestamp with time zone, last_valid timestamp with time zone, kind text, step interval, provider_segment_end timestamp with time zone, valid_ts timestamp with time zone, value real, p05 real, p10 real, p25 real, p30 real, p50 real, p70 real, p75 real, p90 real, p95 real, vmin real, vmax real, flags smallint)
+    LANGUAGE sql STABLE SECURITY DEFINER ROWS 300
+    SET search_path TO 'pg_catalog', 'pg_temp'
+    SET "TimeZone" TO 'UTC'
+    AS $$
+  WITH RECURSIVE pairs AS (
+    (SELECT r.series_id, r.source_id FROM public.forecast_run r ORDER BY r.series_id, r.source_id LIMIT 1)
+    UNION ALL
+    SELECT n.series_id, n.source_id
+    FROM pairs p
+    CROSS JOIN LATERAL (
+      SELECT r.series_id, r.source_id
+      FROM public.forecast_run r
+      WHERE (r.series_id, r.source_id) > (p.series_id, p.source_id)
+      ORDER BY r.series_id, r.source_id
+      LIMIT 1) n
+  )
+  SELECT r.id, r.series_id, r.source_id, r.issued_at, r.issued_inferred, r.fetched_at, r.first_valid, r.last_valid,
+         r.kind, r.step, r.provider_segment_end, v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p30, v.p50, v.p70, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags
+  FROM pairs p
+  JOIN public.series_eff e ON e.series_id = p.series_id
+  JOIN public.source fs ON fs.id = p.source_id
+  CROSS JOIN LATERAL (
+    SELECT r.id, r.series_id, r.source_id, r.issued_at, r.issued_inferred, r.fetched_at, r.first_valid,
+           r.last_valid, r.kind, r.step, r.provider_segment_end
+    FROM public.forecast_run r
+    WHERE r.series_id = p.series_id AND r.source_id = p.source_id
+      AND COALESCE(r.issued_at, r.fetched_at) <= p_asof AND r.fetched_at <= p_asof
+    ORDER BY COALESCE(r.issued_at, r.fetched_at) DESC, r.fetched_at DESC, r.id DESC
+    LIMIT 1) r
+  CROSS JOIN LATERAL (
+    SELECT v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p30, v.p50, v.p70, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags
+    FROM public.forecast_value v
+    WHERE v.run_id = r.id AND v.valid_ts >= r.first_valid AND v.valid_ts <= p_t
+    ORDER BY v.valid_ts DESC
+    LIMIT 1) v
+  WHERE p_t >= p_asof AND r.first_valid <= p_t AND r.last_valid >= p_t
+    AND e.audience IN ('public', 'owner') AND e.role = 'primary' AND e.lic_display
+    AND fs.audience IN ('public', 'owner') AND fs.lic_display
+$$;
+
+
+--
 -- Name: own_obs_at(timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -119,6 +165,52 @@ CREATE FUNCTION public.own_obs_at(p_t timestamp with time zone) RETURNS TABLE(se
     ORDER BY o.ts DESC
     LIMIT 1) o
   WHERE s.active AND e.audience IN ('public', 'owner') AND e.role = 'primary' AND e.lic_display
+$$;
+
+
+--
+-- Name: pub_forecast_at(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.pub_forecast_at(p_asof timestamp with time zone, p_t timestamp with time zone) RETURNS TABLE(run_id bigint, series_id integer, source_id text, issued_at timestamp with time zone, issued_inferred boolean, fetched_at timestamp with time zone, first_valid timestamp with time zone, last_valid timestamp with time zone, kind text, step interval, provider_segment_end timestamp with time zone, valid_ts timestamp with time zone, value real, p05 real, p10 real, p25 real, p30 real, p50 real, p70 real, p75 real, p90 real, p95 real, vmin real, vmax real, flags smallint)
+    LANGUAGE sql STABLE SECURITY DEFINER ROWS 300
+    SET search_path TO 'pg_catalog', 'pg_temp'
+    SET "TimeZone" TO 'UTC'
+    AS $$
+  WITH RECURSIVE pairs AS (
+    (SELECT r.series_id, r.source_id FROM public.forecast_run r ORDER BY r.series_id, r.source_id LIMIT 1)
+    UNION ALL
+    SELECT n.series_id, n.source_id
+    FROM pairs p
+    CROSS JOIN LATERAL (
+      SELECT r.series_id, r.source_id
+      FROM public.forecast_run r
+      WHERE (r.series_id, r.source_id) > (p.series_id, p.source_id)
+      ORDER BY r.series_id, r.source_id
+      LIMIT 1) n
+  )
+  SELECT r.id, r.series_id, r.source_id, r.issued_at, r.issued_inferred, r.fetched_at, r.first_valid, r.last_valid,
+         r.kind, r.step, r.provider_segment_end, v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p30, v.p50, v.p70, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags
+  FROM pairs p
+  JOIN public.series_eff e ON e.series_id = p.series_id
+  JOIN public.source fs ON fs.id = p.source_id
+  CROSS JOIN LATERAL (
+    SELECT r.id, r.series_id, r.source_id, r.issued_at, r.issued_inferred, r.fetched_at, r.first_valid,
+           r.last_valid, r.kind, r.step, r.provider_segment_end
+    FROM public.forecast_run r
+    WHERE r.series_id = p.series_id AND r.source_id = p.source_id
+      AND COALESCE(r.issued_at, r.fetched_at) <= p_asof AND r.fetched_at <= p_asof
+    ORDER BY COALESCE(r.issued_at, r.fetched_at) DESC, r.fetched_at DESC, r.id DESC
+    LIMIT 1) r
+  CROSS JOIN LATERAL (
+    SELECT v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p30, v.p50, v.p70, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags
+    FROM public.forecast_value v
+    WHERE v.run_id = r.id AND v.valid_ts >= r.first_valid AND v.valid_ts <= p_t
+    ORDER BY v.valid_ts DESC
+    LIMIT 1) v
+  WHERE p_t >= p_asof AND r.first_valid <= p_t AND r.last_valid >= p_t
+    AND e.audience IN ('public') AND e.role = 'primary' AND e.lic_display
+    AND fs.audience IN ('public') AND fs.lic_display
 $$;
 
 
@@ -252,7 +344,9 @@ CREATE TABLE public.forecast_value (
     p95 real,
     vmin real,
     vmax real,
-    flags smallint DEFAULT 0 NOT NULL
+    flags smallint DEFAULT 0 NOT NULL,
+    p30 real,
+    p70 real
 )
 PARTITION BY RANGE (valid_ts);
 
@@ -531,7 +625,9 @@ CREATE VIEW public.own_api_forecast_value WITH (security_barrier='true') AS
     p95,
     vmin,
     vmax,
-    flags
+    flags,
+    p30,
+    p70
    FROM public.forecast_value v
   WHERE (EXISTS ( SELECT 1
            FROM ((public.forecast_run r
@@ -689,7 +785,9 @@ CREATE VIEW public.own_forecast_value WITH (security_barrier='true') AS
     p95,
     vmin,
     vmax,
-    flags
+    flags,
+    p30,
+    p70
    FROM public.forecast_value v
   WHERE (EXISTS ( SELECT 1
            FROM ((public.forecast_run r
@@ -1148,7 +1246,9 @@ CREATE VIEW public.pub_api_forecast_value WITH (security_barrier='true') AS
     p95,
     vmin,
     vmax,
-    flags
+    flags,
+    p30,
+    p70
    FROM public.forecast_value v
   WHERE (EXISTS ( SELECT 1
            FROM ((public.forecast_run r
@@ -1306,7 +1406,9 @@ CREATE VIEW public.pub_forecast_value WITH (security_barrier='true') AS
     p95,
     vmin,
     vmax,
-    flags
+    flags,
+    p30,
+    p70
    FROM public.forecast_value v
   WHERE (EXISTS ( SELECT 1
            FROM ((public.forecast_run r
@@ -1927,6 +2029,20 @@ CREATE INDEX class_obs_batch ON public.class_obs USING btree (batch_id);
 
 
 --
+-- Name: forecast_run_asof; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX forecast_run_asof ON public.forecast_run USING btree (series_id, source_id, COALESCE(issued_at, fetched_at), fetched_at, id);
+
+
+--
+-- Name: forecast_run_merge; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX forecast_run_merge ON public.forecast_run USING btree (series_id, source_id, last_valid);
+
+
+--
 -- Name: forecast_run_source; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2279,4 +2395,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261014000001'),
     ('20261014000002'),
     ('20261021000001'),
-    ('20261024000001');
+    ('20261024000001'),
+    ('20261106000001'),
+    ('20261106000002');
