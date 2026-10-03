@@ -1,8 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { CANARIES, CANARY_RENDERINGS } from '@rws/contracts';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { familyViews, VIEWS } from '../../src/db/audience.ts';
-import { OWNER_CANARY, seedAudienceFixture, WITHHELD_CANARY } from './seed.ts';
+import { FORECAST_AT, familyViews, VIEWS } from '../../src/db/audience.ts';
+import { OWNER_CANARY, OWNER_CANARY_REAL, seedAudienceFixture, WITHHELD_CANARY } from './seed.ts';
 import { createTestDb, LOGIN_ROLES, sqlState, type TestDb, testPassword } from './testdb.ts';
 
 // Roles and privileges (issue #17, A§12.2): real scram-sha-256 logins, so each
@@ -16,6 +17,11 @@ let load: pg.Client;
 
 const PUB = VIEWS.public;
 const OWN = VIEWS.owner;
+
+/** The seeded forecast runs start at the seed's `now()` and reach two days; each holds one point an hour in. */
+const FORECAST_NOW = "now() + interval '70 minutes'";
+const callForecast = (client: pg.Client, fn: string) =>
+  client.query(`SELECT series_id, source_id, value FROM ${fn}(${FORECAST_NOW}, ${FORECAST_NOW}) ORDER BY 1, 2`);
 
 beforeAll(async () => {
   t = await createTestDb();
@@ -70,6 +76,15 @@ describe.each([
       expect(await sqlState(client(), `SELECT 1 FROM ${view} LIMIT 1`), view).toBe('ok');
   });
 
+  it('executes the latest-run forecast function of its own family and not the owner one', async () => {
+    expect(await sqlState(client(), `SELECT 1 FROM ${FORECAST_AT.public}(now(), now())`)).toBe('ok');
+    expect(await sqlState(client(), `SELECT 1 FROM ${FORECAST_AT.owner}(now(), now())`)).toBe('42501');
+    // …and it is no way round the audience: the only run it gets is the public one.
+    expect((await callForecast(client(), FORECAST_AT.public)).rows).toEqual([
+      { series_id: expect.any(Number), source_id: 'NL-1', value: 200 },
+    ]);
+  });
+
   it('cannot INSERT, UPDATE or DELETE, even after switching its read-only default off', async () => {
     // The views are joins (not updatable, 55000) and the role has no write grant on anything (42501).
     const refused = ['42501', '55000'];
@@ -100,6 +115,21 @@ describe.each([
     }
     const { rows } = await client().query(`SELECT count(*)::int AS n FROM ${PUB.obs}`);
     expect((rows[0] as { n: number }).n).toBeGreaterThan(0);
+  });
+
+  it('sees no forecast value of the withheld canary or the owner canary, in any column of any forecast view', async () => {
+    for (const view of [PUB.forecastValue, PUB.api.forecastValue]) {
+      const { rows } = await client().query(
+        `SELECT count(*)::int AS n FROM ${view} WHERE $1::real IN (value, p10, p30, p50, p70, p90) OR $2::real IN (value, p10, p30, p50, p70, p90)`,
+        [WITHHELD_CANARY, OWNER_CANARY],
+      );
+      expect(rows, view).toEqual([{ n: 0 }]);
+      expect(
+        ((await client().query(`SELECT count(*)::int AS n FROM ${view}`)).rows[0] as { n: number }).n,
+      ).toBeGreaterThan(0);
+    }
+    const text = JSON.stringify((await callForecast(client(), FORECAST_AT.public)).rows);
+    for (const canary of CANARY_RENDERINGS) expect(text).not.toContain(canary);
   });
 
   it('cannot become another role', async () => {
@@ -224,6 +254,24 @@ describe('rws_owner_api (owner reader)', () => {
     }
   });
 
+  it('executes the owner latest-run forecast function only, and it shows the owner canary and never the withheld one', async () => {
+    expect(await sqlState(owner, `SELECT 1 FROM ${FORECAST_AT.owner}(now(), now())`)).toBe('ok');
+    expect(await sqlState(owner, `SELECT 1 FROM ${FORECAST_AT.public}(now(), now())`)).toBe('42501');
+    const text = JSON.stringify((await callForecast(owner, FORECAST_AT.owner)).rows);
+    expect(text).toContain(OWNER_CANARY_REAL);
+    expect(text).not.toContain(CANARIES.withheld.real);
+    for (const view of [OWN.forecastValue, OWN.api.forecastValue]) {
+      const { rows } = await owner.query(
+        `SELECT count(*) FILTER (WHERE value = $1::real)::int AS owner_canary,
+                count(*) FILTER (WHERE value = $2::real)::int AS withheld
+         FROM ${view}`,
+        [OWNER_CANARY, WITHHELD_CANARY],
+      );
+      expect((rows[0] as { owner_canary: number }).owner_canary, view).toBeGreaterThan(0);
+      expect((rows[0] as { withheld: number }).withheld, view).toBe(0);
+    }
+  });
+
   it('has a connection limit of 4', async () => {
     const extra: pg.Client[] = [];
     try {
@@ -282,6 +330,14 @@ describe('rws_load (the loader)', () => {
     } finally {
       await load.query('ROLLBACK');
     }
+  });
+
+  it('cannot execute either latest-run forecast function, and writes forecast runs and values only through its own grants', async () => {
+    for (const fn of Object.values(FORECAST_AT))
+      expect(await sqlState(load, `SELECT 1 FROM ${fn}(now(), now())`), fn).toBe('42501');
+    expect(await sqlState(load, 'DELETE FROM forecast_run')).toBe('42501');
+    expect(await sqlState(load, 'DELETE FROM forecast_value')).toBe('42501');
+    expect(await sqlState(load, 'SELECT count(*) FROM forecast_run')).toBe('ok');
   });
 
   it('cannot delete observations, rewrite the revision log, or read the reader views', async () => {

@@ -191,6 +191,45 @@ jobs:
       - name: Q1 and the API (/snapshot cold/warm, /series 14 d raw) on 3,000 series × 60 days, as rws_api
         run: node scripts/bench-q1.ts
 
+  # Its own job (P8a, C8): the seed is 25 M forecast values, and an aggregate that did not need it would gate nothing.
+  bench-q2:
+    name: bench-q2
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rws
+          POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8
+        ports: ['5432:5432']
+        options: >-
+          --shm-size=256m
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/rws?sslmode=disable
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Q2 "latest forecast run as of T" on 296 series × 60 days at twice the volume (about 212k runs, 25 M values), as rws_api
+        run: node scripts/bench-q2.ts
+
   shellcheck:
     name: shellcheck
     runs-on: ubuntu-24.04
@@ -319,7 +358,7 @@ jobs:
           # capture cannot succeed without internet in CI and the loaded data is a recorded fixture, so
           # only the checks that need fresh production data may fail.
           if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" |
-            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner health|rivers manifest|rivers tiles|rivers reaches|rivers download) '; then
+            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner health|forecast NL-1|rivers manifest|rivers tiles|rivers reaches|rivers download) '; then
             echo "verify-prod failed a check other than the ones that need live data" >&2
             exit 1
           fi
@@ -437,7 +476,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [check, integration, dbmate, bench, shellcheck, fresh-start, hook, deploy, e2e]
+    needs: [check, integration, dbmate, bench, bench-q2, shellcheck, fresh-start, hook, deploy, e2e]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
