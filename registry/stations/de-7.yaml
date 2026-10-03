@@ -3,11 +3,13 @@
 # a fixture) and run `node scripts/gen-de7-stations.ts`.
 #   apps/server/src/adapters/de-7/fixtures/de-7-messwerte.raw  recorded_at 2026-09-29T13:43:26Z  sha256 b2a4c46a3f9156b8c5087c45686e947fc08913e2eefe9457876165986c828ba2
 #   apps/server/src/adapters/de-8/fixtures/de-8-stations.raw  recorded_at 2026-09-29T13:43:26Z  sha256 2bbb9795c89e853647ad700ced88e77aec6af6341e8a1ba22d618fe3b505bec4
+#   registry/seed/de-7-waters.csv  recorded_at 2026-10-03  sha256 35c8aa671ea533bc5c74e9a98aa3de320a574adfc9dc47fa545077b8dfab85d6
 #   apps/server/src/adapters/de-8/fixtures/de-8-hydro.raw  recorded_at 2026-10-02T11:11:11Z  sha256 d1a1f4a92aee5f7a0a63ed5cbd85909fa8ed5beaf00f4429a6a9b8b3ddb31a24
 # Which gauges deliver, and each native_step = expected_step (PT5M or PT15M), come from messwerte.txt: the modal gap between
 # the consecutive timestamps of the gauge (any other gap fails the generator). name = station_name verbatim and the WGS84
 # coordinates come from the OpenHygon station file; the hydro file gives the gauge zero (`Nullpunkt`, m on DHHN2016: datum
-# NHN, no validity dates) and the operator (`Betreiber`). expected_threshold_source DE-7 where the station file states
+# NHN, no validity dates) and the operator (`Betreiber`). water_name is the station list's `WTO_OBJECT` (registry/seed/de-7-waters.csv,
+# recorded by tools/geo/rivernet/record-nrw-waters.ts), null where the list names none. expected_threshold_source DE-7 where the station file states
 # LANUV_Info_1 (the warning levels), else none. H is cm above the gauge zero (value_kind stage). staleness_limit PT2H (the
 # capture is hourly while the pruner is a dry run).
 # tier 1 (first_release) = the bold codes of catalogue §3.1, §3.3, §3.5 and §3.6, plus the most downstream NRW gauge
@@ -29,7 +31,7 @@ stations:
     provider_code: "2581119000100"
     provider_key: 2581119000100/W
     name: Feudingen
-    water_name: null
+    water_name: Lahn
     country: DE
     lon: 8.32506497711514
     lat: 50.9387718051163
@@ -63,7 +65,7 @@ stations:
     provider_code: "2721330000100"
     provider_key: 2721330000100/W
     name: Obernetphen
-    water_name: null
+    water_name: Sieg
     country: DE
     lon: 8.11529964654038
     lat: 50.9014356361562
@@ -93,7 +95,7 @@ stations:
     provider_code: "2721390000100"
     provider_key: 2721390000100/W
     name: Weidenau
-    water_name: null
+    water_name: Sieg
     country: DE
     lon: 8.02642797942708
     lat: 50.8940196028321
@@ -127,7 +129,7 @@ stations:
     provider_code: "2721459000100"
     provider_key: 2721459000100/W
     name: Kreuztal
-    water_name: null
+    water_name: Ferndorfbach
     country: DE
     lon: 7.99515976368044
     lat: 50.9587463066317
@@ -161,7 +163,7 @@ stations:
     provider_code: "2721490000100"
     provider_key: 2721490000100/W
     name: Weidenau2
-    water_name: null
+    water_name: Ferndorfbach
     country: DE
     lon: 8.02318000661394
     lat: 50.8956651544937
@@ -195,7 +197,7 @@ stations:
     provider_code: "2721650000100"
     provider_key: 2721650000100/W
     name: Niederdielfen
-    water_name: null
+    water_name: Weiß
     country: DE
     lon: 8.08010173572758
     lat: 50.8631685177533
@@ -229,7 +231,7 @@ stations:
     provider_code: "2721770000200"
     provider_key: 2721770000200/W
     name: Niederschelden
-    water_name: null
+    water_name: Sieg
     country: DE
     lon: 7.96675127633786
     lat: 50.8450973325423
@@ -263,7 +265,7 @@ stations:
     provider_code: "2723830000200"
     provider_key: 2723830000200/W
     name: Morsbach
-    water_name: null
+    water_name: Wisserbach
     country: DE
     lon: 7.74067659549631
     lat: 50.8612855096255
@@ -297,7 +299,7 @@ stations:
     provider_code: "2725910000100"
     provider_key: 2725910000100/W
     name: Eitorf
-    water_name: null
+    water_name: Sieg
     country: DE
     lon: 7.44269205350868
     lat: 50.7769820674819
@@ -331,7 +333,7 @@ stations:
     provider_code: "2726599000100"
     provider_key: 2726599000100/W
     name: Broeleck
-    water_name: null
+    water_name: Bröl
     country: DE
     lon: 7.41602233902996
     lat: 50.8412770378063
@@ -365,7 +367,7 @@ stations:
     provider_code: "2726900000100"
     provider_key: 2726900000100/W
     name: Broel
-    water_name: null
+    water_name: Bröl
     country: DE
     lon: 7.31994147485701
     lat: 50.7860435774019
@@ -399,7 +401,7 @@ stations:
     provider_code: "2727290000100"
     provider_key: 2727290000100/W
     name: Geisbach
-    water_name: null
+    water_name: Hanfbach
     country: DE
     lon: 7.30004059250534
     lat: 50.7659871703976
@@ -433,7 +435,7 @@ stations:
     provider_code: "2727500000100"
     provider_key: 2727500000100/W
     name: Siegburg_Kald.
-    water_name: null
+    water_name: Sieg
     country: DE
     lon: 7.25722749230174
     lat: 50.7976514002733
@@ -467,7 +469,7 @@ stations:
     provider_code: "2727890000100"
     provider_key: 2727890000100/W
     name: Niederpleis
-    water_name: null
+    water_name: Pleisbach
     country: DE
     lon: 7.21571626435187
     lat: 50.7735051718551
@@ -501,7 +503,7 @@ stations:
     provider_code: "2728189000100"
     provider_key: 2728189000100/W
     name: Derschlag
-    water_name: null
+    water_name: Dörspe
     country: DE
     lon: 7.62614220131523
     lat: 51.0077864586589
@@ -535,7 +537,7 @@ stations:
     provider_code: "2728219000100"
     provider_key: 2728219000100/W
     name: Oberagger
-    water_name: null
+    water_name: Steinagger
     country: DE
     lon: 7.66463406342964
     lat: 50.9867574738155
@@ -569,7 +571,7 @@ stations:
     provider_code: "2728849000100"
     provider_key: 2728849000100/W
     name: Hommerich
-    water_name: null
+    water_name: Kürtener Sülz
     country: DE
     lon: 7.28024438843496
     lat: 51.008791137895
@@ -603,7 +605,7 @@ stations:
     provider_code: "2728851100100"
     provider_key: 2728851100100/W
     name: Welzen
-    water_name: null
+    water_name: Sülz
     country: DE
     lon: 7.27826799462681
     lat: 51.0013740000388
@@ -633,7 +635,7 @@ stations:
     provider_code: "2728893000100"
     provider_key: 2728893000100/W
     name: Hoffnungsthal
-    water_name: null
+    water_name: Sülz
     country: DE
     lon: 7.19317553478006
     lat: 50.910724904291
@@ -667,7 +669,7 @@ stations:
     provider_code: "2728930000200"
     provider_key: 2728930000200/W
     name: Lohmar
-    water_name: null
+    water_name: Agger
     country: DE
     lon: 7.20133119562605
     lat: 50.8415732337949
@@ -701,7 +703,7 @@ stations:
     provider_code: "2729100000100"
     provider_key: 2729100000100/W
     name: Menden_1
-    water_name: null
+    water_name: Sieg
     country: DE
     lon: 7.15914416477298
     lat: 50.7978982508198
@@ -735,7 +737,7 @@ stations:
     provider_code: "2736135100100"
     provider_key: 2736135100100/W
     name: Egerpohl
-    water_name: null
+    water_name: Wupper
     country: DE
     lon: 7.4416830541161
     lat: 51.1180201520638
@@ -765,7 +767,7 @@ stations:
     provider_code: "2736510000100"
     provider_key: 2736510000100/W
     name: Kluserbruecke
-    water_name: null
+    water_name: Wupper
     country: DE
     lon: 7.15858651283625
     lat: 51.2556907632542
@@ -799,7 +801,7 @@ stations:
     provider_code: "2736510000300"
     provider_key: 2736510000300/W
     name: Buchenhofen
-    water_name: null
+    water_name: Wupper
     country: DE
     lon: 7.10523234056875
     lat: 51.219711674874
@@ -833,7 +835,7 @@ stations:
     provider_code: "2736633000100"
     provider_key: 2736633000100/W
     name: Remscheid
-    water_name: null
+    water_name: Morsbach
     country: DE
     lon: 7.18510700146521
     lat: 51.2005829987166
@@ -863,7 +865,7 @@ stations:
     provider_code: "2736731000100"
     provider_key: 2736731000100/W
     name: Glueder
-    water_name: null
+    water_name: Wupper
     country: DE
     lon: 7.12160590106856
     lat: 51.1337033893807
@@ -897,7 +899,7 @@ stations:
     provider_code: "2736790000200"
     provider_key: 2736790000200/W
     name: Opladen
-    water_name: null
+    water_name: Wupper
     country: DE
     lon: 6.99453151090942
     lat: 51.0706796709132
@@ -931,7 +933,7 @@ stations:
     provider_code: "2736851000100"
     provider_key: 2736851000100/W
     name: Odenthal
-    water_name: null
+    water_name: Dhünn
     country: DE
     lon: 7.1342709983134
     lat: 51.0600640024905
@@ -961,7 +963,7 @@ stations:
     provider_code: "2736879000200"
     provider_key: 2736879000200/W
     name: Manfort
-    water_name: null
+    water_name: Dhünn
     country: DE
     lon: 7.00737252171577
     lat: 51.0382527468108
@@ -995,7 +997,7 @@ stations:
     provider_code: "2738900000300"
     provider_key: 2738900000300/W
     name: Hilden_1
-    water_name: null
+    water_name: Itter
     country: DE
     lon: 6.92454037261915
     lat: 51.1596719792362
@@ -1029,7 +1031,7 @@ stations:
     provider_code: "2739229000100"
     provider_key: 2739229000100/W
     name: Erkrath
-    water_name: null
+    water_name: Düssel
     country: DE
     lon: 6.91702475174135
     lat: 51.2261439979333
@@ -1063,7 +1065,7 @@ stations:
     provider_code: "2739230000100"
     provider_key: 2739230000100/W
     name: Eigen
-    water_name: null
+    water_name: Düssel
     country: DE
     lon: 6.97620867470712
     lat: 51.2238192392183
@@ -1097,7 +1099,7 @@ stations:
     provider_code: "2741490000200"
     provider_key: 2741490000200/W
     name: Moeschemer-Muehle
-    water_name: null
+    water_name: Eschweiler Bach
     country: DE
     lon: 6.75909723385003
     lat: 50.5710120924997
@@ -1131,7 +1133,7 @@ stations:
     provider_code: "2741500000100"
     provider_key: 2741500000100/W
     name: Arloff
-    water_name: null
+    water_name: Erft
     country: DE
     lon: 6.79224247793326
     lat: 50.5955256030493
@@ -1165,7 +1167,7 @@ stations:
     provider_code: "2741870000100"
     provider_key: 2741870000100/W
     name: Burg_Veynau
-    water_name: null
+    water_name: Veybach
     country: DE
     lon: 6.71804614313651
     lat: 50.6380691291623
@@ -1199,7 +1201,7 @@ stations:
     provider_code: "2742310000100"
     provider_key: 2742310000100/W
     name: Meckenheim
-    water_name: null
+    water_name: Swistbach
     country: DE
     lon: 7.03211099577177
     lat: 50.6158409994335
@@ -1229,7 +1231,7 @@ stations:
     provider_code: "2742510000100"
     provider_key: 2742510000100/W
     name: Morenhoven
-    water_name: null
+    water_name: Swistbach
     country: DE
     lon: 6.95275716249889
     lat: 50.6647274873424
@@ -1263,7 +1265,7 @@ stations:
     provider_code: "2742990000200"
     provider_key: 2742990000200/W
     name: Weilerswist
-    water_name: null
+    water_name: Swistbach
     country: DE
     lon: 6.84601327216434
     lat: 50.7660741638489
@@ -1297,7 +1299,7 @@ stations:
     provider_code: "2743000000100"
     provider_key: 2743000000100/W
     name: Bliesheim
-    water_name: null
+    water_name: Erft
     country: DE
     lon: 6.82576630467525
     lat: 50.7791175838292
@@ -1331,7 +1333,7 @@ stations:
     provider_code: "2744910000100"
     provider_key: 2744910000100/W
     name: Friesheim
-    water_name: null
+    water_name: Rotbach
     country: DE
     lon: 6.77283880268998
     lat: 50.7552192855443
@@ -1365,7 +1367,7 @@ stations:
     provider_code: "2745400000100"
     provider_key: 2745400000100/W
     name: Bliesheim_2
-    water_name: null
+    water_name: Liblarer Mühlengraben
     country: DE
     lon: 6.83530095342122
     lat: 50.7744741442785
@@ -1399,7 +1401,7 @@ stations:
     provider_code: "2746310000100"
     provider_key: 2746310000100/W
     name: Bessenich
-    water_name: null
+    water_name: Neffelbach
     country: DE
     lon: 6.65540143783795
     lat: 50.7179100974879
@@ -1433,7 +1435,7 @@ stations:
     provider_code: "2746790000100"
     provider_key: 2746790000100/W
     name: Langenich
-    water_name: null
+    water_name: Neffelbach
     country: DE
     lon: 6.67291993269335
     lat: 50.8643018307812
@@ -1467,7 +1469,7 @@ stations:
     provider_code: "2747390000100"
     provider_key: 2747390000100/W
     name: Glesch
-    water_name: null
+    water_name: Erft
     country: DE
     lon: 6.5957897422206
     lat: 50.9744192531436
@@ -1501,7 +1503,7 @@ stations:
     provider_code: "2747900000200"
     provider_key: 2747900000200/W
     name: Neubrueck
-    water_name: null
+    water_name: Erft
     country: DE
     lon: 6.6488261703791
     lat: 51.1321658703226
@@ -1535,7 +1537,7 @@ stations:
     provider_code: "2748900000100"
     provider_key: 2748900000100/W
     name: Weckhoven
-    water_name: null
+    water_name: Gillbach
     country: DE
     lon: 6.68902725858913
     lat: 51.1540940657557
@@ -1569,7 +1571,7 @@ stations:
     provider_code: "2751270000100"
     provider_key: 2751270000100/W
     name: Kaarst
-    water_name: null
+    water_name: Nordkanal
     country: DE
     lon: 6.63826292502716
     lat: 51.2166930721171
@@ -1603,7 +1605,7 @@ stations:
     provider_code: "2756500000100"
     provider_key: 2756500000100/W
     name: Ratingen
-    water_name: null
+    water_name: Anger
     country: DE
     lon: 6.81241849817135
     lat: 51.3038182723727
@@ -1637,7 +1639,7 @@ stations:
     provider_code: "2761137900100"
     provider_key: 2761137900100/W
     name: Wiemeringhausen
-    water_name: null
+    water_name: Ruhr
     country: DE
     lon: 8.50203614626339
     lat: 51.2907415410971
@@ -1667,7 +1669,7 @@ stations:
     provider_code: "2761145000400"
     provider_key: 2761145000400/W
     name: Siedlinghausen4
-    water_name: null
+    water_name: Neger
     country: DE
     lon: 8.47053668537178
     lat: 51.2563701982566
@@ -1697,7 +1699,7 @@ stations:
     provider_code: "2761150000100"
     provider_key: 2761150000100/W
     name: Olsberg
-    water_name: null
+    water_name: Ruhr
     country: DE
     lon: 8.4880239917932
     lat: 51.3514046469602
@@ -1731,7 +1733,7 @@ stations:
     provider_code: "2761490000200"
     provider_key: 2761490000200/W
     name: Meschede4
-    water_name: null
+    water_name: Henne
     country: DE
     lon: 8.28385476559774
     lat: 51.3410905950291
@@ -1765,7 +1767,7 @@ stations:
     provider_code: "2761510000100"
     provider_key: 2761510000100/W
     name: Meschede
-    water_name: null
+    water_name: Ruhr
     country: DE
     lon: 8.2802168194208
     lat: 51.3478663431571
@@ -1799,7 +1801,7 @@ stations:
     provider_code: "2761695000100"
     provider_key: 2761695000100/W
     name: Wenholthausen
-    water_name: null
+    water_name: Wenne
     country: DE
     lon: 8.17489307344191
     lat: 51.2942617143435
@@ -1833,7 +1835,7 @@ stations:
     provider_code: "2761759000100"
     provider_key: 2761759000100/W
     name: Oeventrop
-    water_name: null
+    water_name: Ruhr
     country: DE
     lon: 8.13063592830829
     lat: 51.3972707822447
@@ -1867,7 +1869,7 @@ stations:
     provider_code: "2761829000100"
     provider_key: 2761829000100/W
     name: Endorf
-    water_name: null
+    water_name: Waldbach
     country: DE
     lon: 8.03395293403843
     lat: 51.285216561852
@@ -1901,7 +1903,7 @@ stations:
     provider_code: "2761895000100"
     provider_key: 2761895000100/W
     name: Mueschede
-    water_name: null
+    water_name: Röhr
     country: DE
     lon: 7.99189478294104
     lat: 51.4075705060086
@@ -1935,7 +1937,7 @@ stations:
     provider_code: "2761990000200"
     provider_key: 2761990000200/W
     name: Neheim3
-    water_name: null
+    water_name: Ruhr
     country: DE
     lon: 7.95385015419303
     lat: 51.4554530777496
@@ -1969,7 +1971,7 @@ stations:
     provider_code: "2762510000100"
     provider_key: 2762510000100/W
     name: Belecke_1
-    water_name: null
+    water_name: Möhne
     country: DE
     lon: 8.32684773485207
     lat: 51.4883646795912
@@ -2003,7 +2005,7 @@ stations:
     provider_code: "2762510000300"
     provider_key: 2762510000300/W
     name: Belecke3
-    water_name: null
+    water_name: Mühlengraben
     country: DE
     lon: 8.32525782122336
     lat: 51.4906934330961
@@ -2037,7 +2039,7 @@ stations:
     provider_code: "2763190000100"
     provider_key: 2763190000100/W
     name: Bachum
-    water_name: null
+    water_name: Ruhr
     country: DE
     lon: 7.94360016276103
     lat: 51.469883453743
@@ -2071,7 +2073,7 @@ stations:
     provider_code: "2764190000100"
     provider_key: 2764190000100/W
     name: Balve-Garbeck
-    water_name: null
+    water_name: Hönne
     country: DE
     lon: 7.84173509705763
     lat: 51.3100004921951
@@ -2105,7 +2107,7 @@ stations:
     provider_code: "2764511000100"
     provider_key: 2764511000100/W
     name: Balve_Helle
-    water_name: null
+    water_name: Hönne
     country: DE
     lon: 7.87860688596162
     lat: 51.3447821713189
@@ -2139,7 +2141,7 @@ stations:
     provider_code: "2764590000100"
     provider_key: 2764590000100/W
     name: Menden_Oberroedingh
-    water_name: null
+    water_name: Hönne
     country: DE
     lon: 7.84222216461969
     lat: 51.3989037261718
@@ -2173,7 +2175,7 @@ stations:
     provider_code: "2764890000100"
     provider_key: 2764890000100/W
     name: Hemer-Becke
-    water_name: null
+    water_name: Öse
     country: DE
     lon: 7.78843923206292
     lat: 51.4006980242296
@@ -2207,7 +2209,7 @@ stations:
     provider_code: "2764950000100"
     provider_key: 2764950000100/W
     name: Menden_Sauerland
-    water_name: null
+    water_name: Hönne
     country: DE
     lon: 7.77742459583667
     lat: 51.4471457521642
@@ -2241,7 +2243,7 @@ stations:
     provider_code: "2765419000100"
     provider_key: 2765419000100/W
     name: Iserlohn
-    water_name: null
+    water_name: Baarbach
     country: DE
     lon: 7.70062342073925
     lat: 51.4009262209568
@@ -2275,7 +2277,7 @@ stations:
     provider_code: "2765490000100"
     provider_key: 2765490000100/W
     name: Iserlohn-Hennen
-    water_name: null
+    water_name: Baarbach
     country: DE
     lon: 7.66217429642045
     lat: 51.447955399153
@@ -2309,7 +2311,7 @@ stations:
     provider_code: "2765590000100"
     provider_key: 2765590000100/W
     name: Villigst
-    water_name: null
+    water_name: Ruhr
     country: DE
     lon: 7.58109692967365
     lat: 51.4359891419891
@@ -2343,7 +2345,7 @@ stations:
     provider_code: "2766133000100"
     provider_key: 2766133000100/W
     name: Oberkirchen
-    water_name: null
+    water_name: Lenne
     country: DE
     lon: 8.3744441785199
     lat: 51.1585995307239
@@ -2377,7 +2379,7 @@ stations:
     provider_code: "2766199000100"
     provider_key: 2766199000100/W
     name: Kickenbach
-    water_name: null
+    water_name: Lenne
     country: DE
     lon: 8.10040256706432
     lat: 51.1088738165657
@@ -2411,7 +2413,7 @@ stations:
     provider_code: "2766250000100"
     provider_key: 2766250000100/W
     name: Herrntrop
-    water_name: null
+    water_name: Hundem
     country: DE
     lon: 8.10547288346535
     lat: 51.0874564229412
@@ -2445,7 +2447,7 @@ stations:
     provider_code: "2766530000100"
     provider_key: 2766530000100/W
     name: Roenkhausen
-    water_name: null
+    water_name: Lenne
     country: DE
     lon: 7.95459751201957
     lat: 51.2162469045954
@@ -2479,7 +2481,7 @@ stations:
     provider_code: "2766645000100"
     provider_key: 2766645000100/W
     name: Oestertalsperre_Zu
-    water_name: null
+    water_name: Oester
     country: DE
     lon: 7.79687395886576
     lat: 51.160478460391
@@ -2513,7 +2515,7 @@ stations:
     provider_code: "2766930000100"
     provider_key: 2766930000100/W
     name: Altena
-    water_name: null
+    water_name: Lenne
     country: DE
     lon: 7.67610768919347
     lat: 51.2894596539908
@@ -2547,7 +2549,7 @@ stations:
     provider_code: "2768390000100"
     provider_key: 2768390000100/W
     name: Kierspe
-    water_name: null
+    water_name: Volme
     country: DE
     lon: 7.61493360662694
     lat: 51.1398952412185
@@ -2581,7 +2583,7 @@ stations:
     provider_code: "2768529000200"
     provider_key: 2768529000200/W
     name: Jubachtalsperre_Zulauf
-    water_name: null
+    water_name: Jubach
     country: DE
     lon: 7.61639513062989
     lat: 51.1676847954772
@@ -2615,7 +2617,7 @@ stations:
     provider_code: "2768579000100"
     provider_key: 2768579000100/W
     name: Stephansohl
-    water_name: null
+    water_name: Volme
     country: DE
     lon: 7.56521076983689
     lat: 51.2229829378033
@@ -2649,7 +2651,7 @@ stations:
     provider_code: "2768775000100"
     provider_key: 2768775000100/W
     name: Hagen-Ambrock
-    water_name: null
+    water_name: Volme
     country: DE
     lon: 7.5168836775466
     lat: 51.3234137111987
@@ -2683,7 +2685,7 @@ stations:
     provider_code: "2768784000200"
     provider_key: 2768784000200/W
     name: Hagen-Maecking2
-    water_name: null
+    water_name: Hombecke
     country: DE
     lon: 7.48168011976218
     lat: 51.3211640361604
@@ -2717,7 +2719,7 @@ stations:
     provider_code: "2768879100100"
     provider_key: 2768879100100/W
     name: Altenvoerde
-    water_name: null
+    water_name: Ennepe
     country: DE
     lon: 7.36289343398548
     lat: 51.2989340665545
@@ -2747,7 +2749,7 @@ stations:
     provider_code: "2768897000100"
     provider_key: 2768897000100/W
     name: Hagen-Haspe
-    water_name: null
+    water_name: Ennepe
     country: DE
     lon: 7.41867116208264
     lat: 51.348018741571
@@ -2781,7 +2783,7 @@ stations:
     provider_code: "2768898001"
     provider_key: 2768898001/W
     name: Haspertalsperre_Zu
-    water_name: null
+    water_name: Hasper Bach
     country: DE
     lon: 7.43112447623609
     lat: 51.2962668238609
@@ -2811,7 +2813,7 @@ stations:
     provider_code: "2768900000100"
     provider_key: 2768900000100/W
     name: Hagen-Eckesey
-    water_name: null
+    water_name: Volme
     country: DE
     lon: 7.44984079165648
     lat: 51.3852063868549
@@ -2845,7 +2847,7 @@ stations:
     provider_code: "2769169000100"
     provider_key: 2769169000100/W
     name: Wetter_Wengern_1
-    water_name: null
+    water_name: Elbsche
     country: DE
     lon: 7.34184546590278
     lat: 51.4008768251607
@@ -2879,7 +2881,7 @@ stations:
     provider_code: "2769629000100"
     provider_key: 2769629000100/W
     name: Neviges
-    water_name: null
+    water_name: Hardenberger Bach
     country: DE
     lon: 7.08385175265212
     lat: 51.3206715232228
@@ -2913,7 +2915,7 @@ stations:
     provider_code: "2769630000200"
     provider_key: 2769630000200/W
     name: Langenberg_2
-    water_name: null
+    water_name: Deilbach
     country: DE
     lon: 7.12187541284724
     lat: 51.3546157963822
@@ -2947,7 +2949,7 @@ stations:
     provider_code: "2769649000100"
     provider_key: 2769649000100/W
     name: Nierenhof
-    water_name: null
+    water_name: Felderbach
     country: DE
     lon: 7.142058934907
     lat: 51.3658731822172
@@ -2981,7 +2983,7 @@ stations:
     provider_code: "2769720000200"
     provider_key: 2769720000200/W
     name: Essen-Hespertal
-    water_name: null
+    water_name: Hesperbach
     country: DE
     lon: 7.04395176350882
     lat: 51.3682418230445
@@ -3015,7 +3017,7 @@ stations:
     provider_code: "2769720000300"
     provider_key: 2769720000300/W
     name: Essen-Poertingsiepen
-    water_name: null
+    water_name: Hesperbach
     country: DE
     lon: 7.04769233654257
     lat: 51.3961467421677
@@ -3049,7 +3051,7 @@ stations:
     provider_code: "2769800000200"
     provider_key: 2769800000200/W
     name: Essen-Kettwig
-    water_name: null
+    water_name: Rinderbach
     country: DE
     lon: 6.93228547565139
     lat: 51.359102150876
@@ -3083,7 +3085,7 @@ stations:
     provider_code: "2781100000100"
     provider_key: 2781100000100/W
     name: Lippspringe1
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 8.82147042026227
     lat: 51.7805060203075
@@ -3117,7 +3119,7 @@ stations:
     provider_code: "2781610000200"
     provider_key: 2781610000200/W
     name: Altenbeken2
-    water_name: null
+    water_name: Beke
     country: DE
     lon: 8.91826454164804
     lat: 51.7611289781292
@@ -3151,7 +3153,7 @@ stations:
     provider_code: "2781730000200"
     provider_key: 2781730000200/W
     name: Neuhaus1
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 8.73124289817496
     lat: 51.7448905063406
@@ -3185,7 +3187,7 @@ stations:
     provider_code: "2781810000100"
     provider_key: 2781810000100/W
     name: Paderborn1
-    water_name: null
+    water_name: Pader
     country: DE
     lon: 8.75015272631134
     lat: 51.7224807284693
@@ -3219,7 +3221,7 @@ stations:
     provider_code: "2781829000100"
     provider_key: 2781829000100/W
     name: Paderborn2
-    water_name: null
+    water_name: Rothebach
     country: DE
     lon: 8.74420660579735
     lat: 51.7269006975824
@@ -3253,7 +3255,7 @@ stations:
     provider_code: "2782190000100"
     provider_key: 2782190000100/W
     name: Niederalme
-    water_name: null
+    water_name: Alme
     country: DE
     lon: 8.62444587650864
     lat: 51.4600221934526
@@ -3287,7 +3289,7 @@ stations:
     provider_code: "2782330000100"
     provider_key: 2782330000100/W
     name: Multhaeupter Hammer
-    water_name: null
+    water_name: Alme
     country: DE
     lon: 8.59374601750466
     lat: 51.4905190017039
@@ -3321,7 +3323,7 @@ stations:
     provider_code: "2782370000100"
     provider_key: 2782370000100/W
     name: Weine
-    water_name: null
+    water_name: Alme
     country: DE
     lon: 8.52570135223649
     lat: 51.5420202153962
@@ -3355,7 +3357,7 @@ stations:
     provider_code: "2782490000200"
     provider_key: 2782490000200/W
     name: Bueren
-    water_name: null
+    water_name: Afte
     country: DE
     lon: 8.56437633569299
     lat: 51.549498421132
@@ -3389,7 +3391,7 @@ stations:
     provider_code: "2782700000100"
     provider_key: 2782700000100/W
     name: Niederntudorf
-    water_name: null
+    water_name: Alme
     country: DE
     lon: 8.68126349542188
     lat: 51.6410221022876
@@ -3423,7 +3425,7 @@ stations:
     provider_code: "2782846000100"
     provider_key: 2782846000100/W
     name: Herbram_W
-    water_name: null
+    water_name: Schmittwasser
     country: DE
     lon: 8.9157816591281
     lat: 51.6703950311639
@@ -3457,7 +3459,7 @@ stations:
     provider_code: "2782861000100"
     provider_key: 2782861000100/W
     name: Schwaney
-    water_name: null
+    water_name: Ellerbach
     country: DE
     lon: 8.92387439307964
     lat: 51.7166075213851
@@ -3491,7 +3493,7 @@ stations:
     provider_code: "2782890000100"
     provider_key: 2782890000100/W
     name: Nordborchen
-    water_name: null
+    water_name: Altenau
     country: DE
     lon: 8.71833696740506
     lat: 51.6633798722122
@@ -3525,7 +3527,7 @@ stations:
     provider_code: "2782900000200"
     provider_key: 2782900000200/W
     name: Neuhaus2
-    water_name: null
+    water_name: Alme
     country: DE
     lon: 8.70935368754447
     lat: 51.7341206853373
@@ -3559,7 +3561,7 @@ stations:
     provider_code: "2783250000100"
     provider_key: 2783250000100/W
     name: Neuhaus3
-    water_name: null
+    water_name: Thune
     country: DE
     lon: 8.71783033125393
     lat: 51.7658179325201
@@ -3593,7 +3595,7 @@ stations:
     provider_code: "2783310000100"
     provider_key: 2783310000100/W
     name: Sande2
-    water_name: null
+    water_name: Boker Kanal
     country: DE
     lon: 8.68516761607842
     lat: 51.7616259480427
@@ -3627,7 +3629,7 @@ stations:
     provider_code: "2783390000100"
     provider_key: 2783390000100/W
     name: Bentfeld
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 8.63052966291985
     lat: 51.7488430245064
@@ -3661,7 +3663,7 @@ stations:
     provider_code: "2783721000100"
     provider_key: 2783721000100/W
     name: Upsprunge
-    water_name: null
+    water_name: Heder
     country: DE
     lon: 8.60244080926702
     lat: 51.6565079296457
@@ -3695,7 +3697,7 @@ stations:
     provider_code: "2783970000200"
     provider_key: 2783970000200/W
     name: Lippstadt-Nordumflut
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 8.3345855728553
     lat: 51.6768666730993
@@ -3729,7 +3731,7 @@ stations:
     provider_code: "2783970000300"
     provider_key: 2783970000300/W
     name: Lippstadt_1
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 8.33617608600816
     lat: 51.6739264285511
@@ -3763,7 +3765,7 @@ stations:
     provider_code: "2783990000100"
     provider_key: 2783990000100/W
     name: Lippstadt2
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 8.33254144711861
     lat: 51.6722783519136
@@ -3797,7 +3799,7 @@ stations:
     provider_code: "2784133000100"
     provider_key: 2784133000100/W
     name: Siedlingsheide1
-    water_name: null
+    water_name: Haustenbach
     country: DE
     lon: 8.65165000414588
     lat: 51.786571003116
@@ -3827,7 +3829,7 @@ stations:
     provider_code: "2784149100100"
     provider_key: 2784149100100/W
     name: Siedlingsheide2
-    water_name: null
+    water_name: Krollbach
     country: DE
     lon: 8.64706600139223
     lat: 51.7881059986663
@@ -3857,7 +3859,7 @@ stations:
     provider_code: "2784651000100"
     provider_key: 2784651000100/W
     name: Liesborn
-    water_name: null
+    water_name: Liese
     country: DE
     lon: 8.26406524093061
     lat: 51.7142916588542
@@ -3887,7 +3889,7 @@ stations:
     provider_code: "2784700000100"
     provider_key: 2784700000100/W
     name: Cappel
-    water_name: null
+    water_name: Glenne
     country: DE
     lon: 8.29703077651124
     lat: 51.6952065879458
@@ -3921,7 +3923,7 @@ stations:
     provider_code: "2785229000100"
     provider_key: 2785229000100/W
     name: Boekenfoerde_2
-    water_name: null
+    water_name: Gieseler
     country: DE
     lon: 8.3880781276229
     lat: 51.6354094925679
@@ -3955,7 +3957,7 @@ stations:
     provider_code: "2785290000200"
     provider_key: 2785290000200/W
     name: Overhagen
-    water_name: null
+    water_name: Gieseler
     country: DE
     lon: 8.32659707409266
     lat: 51.6489201536234
@@ -3989,7 +3991,7 @@ stations:
     provider_code: "2785710000100"
     provider_key: 2785710000100/W
     name: Hovestadt
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 8.1441578321328
     lat: 51.6596912885462
@@ -4019,7 +4021,7 @@ stations:
     provider_code: "2785790000300"
     provider_key: 2785790000300/W
     name: Kesseler_3
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 8.08938462980605
     lat: 51.6629749795477
@@ -4053,7 +4055,7 @@ stations:
     provider_code: "2786110000100"
     provider_key: 2786110000100/W
     name: Lohne
-    water_name: null
+    water_name: Ahse
     country: DE
     lon: 8.18404825877978
     lat: 51.5895069038018
@@ -4087,7 +4089,7 @@ stations:
     provider_code: "2786330000100"
     provider_key: 2786330000100/W
     name: Oestinghausen
-    water_name: null
+    water_name: Ahse
     country: DE
     lon: 8.09908453869967
     lat: 51.6317135184902
@@ -4117,7 +4119,7 @@ stations:
     provider_code: "2786690000100"
     provider_key: 2786690000100/W
     name: Sueddinker
-    water_name: null
+    water_name: Salzbach
     country: DE
     lon: 7.93233244321486
     lat: 51.6316734045045
@@ -4151,7 +4153,7 @@ stations:
     provider_code: "2786700000100"
     provider_key: 2786700000100/W
     name: Westtuennen
-    water_name: null
+    water_name: Ahse
     country: DE
     lon: 7.86691124067999
     lat: 51.666326520244
@@ -4185,7 +4187,7 @@ stations:
     provider_code: "2787990000100"
     provider_key: 2787990000100/W
     name: Leven
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 7.2975661453282
     lat: 51.7148996927027
@@ -4219,7 +4221,7 @@ stations:
     provider_code: "2788100000100"
     provider_key: 2788100000100/W
     name: Appelhuelsen
-    water_name: null
+    water_name: Stever
     country: DE
     lon: 7.44554739128855
     lat: 51.8854797642977
@@ -4253,7 +4255,7 @@ stations:
     provider_code: "2788330000100"
     provider_key: 2788330000100/W
     name: Senden-Schoelling
-    water_name: null
+    water_name: Stever
     country: DE
     lon: 7.4657060082196
     lat: 51.8399511676683
@@ -4287,7 +4289,7 @@ stations:
     provider_code: "2788630000200"
     provider_key: 2788630000200/W
     name: Selm-Ondrup
-    water_name: null
+    water_name: Funne
     country: DE
     lon: 7.49163814313142
     lat: 51.7078277639366
@@ -4321,7 +4323,7 @@ stations:
     provider_code: "2788730000100"
     provider_key: 2788730000100/W
     name: Olfen-Fuecht.Muehle
-    water_name: null
+    water_name: Stever
     country: DE
     lon: 7.35036470813408
     lat: 51.7215548589128
@@ -4355,7 +4357,7 @@ stations:
     provider_code: "2789100000100"
     provider_key: 2789100000100/W
     name: Haltern
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 7.18656531374791
     lat: 51.7310885600068
@@ -4389,7 +4391,7 @@ stations:
     provider_code: "2789760000100"
     provider_key: 2789760000100/W
     name: Schermbeck2
-    water_name: null
+    water_name: Schermbecker Mühlenbach
     country: DE
     lon: 6.8670356195477
     lat: 51.6895702689953
@@ -4423,7 +4425,7 @@ stations:
     provider_code: "2789770000100"
     provider_key: 2789770000100/W
     name: Schermbeck_1
-    water_name: null
+    water_name: Lippe
     country: DE
     lon: 6.8511256271909
     lat: 51.6738663635594
@@ -4457,7 +4459,7 @@ stations:
     provider_code: "2796300000100"
     provider_key: 2796300000100/W
     name: Marienbaum
-    water_name: null
+    water_name: Kalflack
     country: DE
     lon: 6.38310341529198
     lat: 51.6990638158963
@@ -4491,7 +4493,7 @@ stations:
     provider_code: "2799222000100"
     provider_key: 2799222000100/W
     name: Kranenburg
-    water_name: null
+    water_name: Groesbecker-Bach
     country: DE
     lon: 5.98474713587932
     lat: 51.7766263565848
@@ -4525,7 +4527,7 @@ stations:
     provider_code: "2818100000200"
     provider_key: 2818100000200/W
     name: Suesterseel
-    water_name: null
+    water_name: Rodebach
     country: DE
     lon: 5.93006153792318
     lat: 50.9965428651036
@@ -4559,7 +4561,7 @@ stations:
     provider_code: "2821530000200"
     provider_key: 2821530000200/W
     name: Monschau
-    water_name: null
+    water_name: Rur
     country: DE
     lon: 6.24562071209389
     lat: 50.5545462770086
@@ -4593,7 +4595,7 @@ stations:
     provider_code: "2822190000100"
     provider_key: 2822190000100/W
     name: Nettersheim Urft
-    water_name: null
+    water_name: Urft
     country: DE
     lon: 6.6301982337155
     lat: 50.4926071597845
@@ -4623,7 +4625,7 @@ stations:
     provider_code: "2822291000100"
     provider_key: 2822291000100/W
     name: Nettersheim Genfbach
-    water_name: null
+    water_name: Genfbach
     country: DE
     lon: 6.63478243435377
     lat: 50.4903168355409
@@ -4653,7 +4655,7 @@ stations:
     provider_code: "2822700000200"
     provider_key: 2822700000200/W
     name: Kall-Sportplatz
-    water_name: null
+    water_name: Urft
     country: DE
     lon: 6.55371729861521
     lat: 50.5449290998935
@@ -4687,7 +4689,7 @@ stations:
     provider_code: "2822849000100"
     provider_key: 2822849000100/W
     name: Hellenthal
-    water_name: null
+    water_name: Platißbach
     country: DE
     lon: 6.43302283838656
     lat: 50.4826218611599
@@ -4721,7 +4723,7 @@ stations:
     provider_code: "2822867000200"
     provider_key: 2822867000200/W
     name: Reifferscheid2
-    water_name: null
+    water_name: Reifferscheiderbach
     country: DE
     lon: 6.47563503498385
     lat: 50.4737228695802
@@ -4751,7 +4753,7 @@ stations:
     provider_code: "2822870000100"
     provider_key: 2822870000100/W
     name: Schleiden
-    water_name: null
+    water_name: Olef
     country: DE
     lon: 6.46869931016569
     lat: 50.5248973111433
@@ -4785,7 +4787,7 @@ stations:
     provider_code: "2822900000200"
     provider_key: 2822900000200/W
     name: Gemuend
-    water_name: null
+    water_name: Urft
     country: DE
     lon: 6.49122424079122
     lat: 50.5777081715729
@@ -4819,7 +4821,7 @@ stations:
     provider_code: "2823100000100"
     provider_key: 2823100000100/W
     name: RurbergVA
-    water_name: null
+    water_name: Weidenbach
     country: DE
     lon: 6.35391848157335
     lat: 50.6154871119979
@@ -4853,7 +4855,7 @@ stations:
     provider_code: "2823500000100"
     provider_key: 2823500000100/W
     name: Zerkall
-    water_name: null
+    water_name: Rur
     country: DE
     lon: 6.45253607650631
     lat: 50.6927119472634
@@ -4887,7 +4889,7 @@ stations:
     provider_code: "2823900000100"
     provider_key: 2823900000100/W
     name: Selhausen
-    water_name: null
+    water_name: Rur
     country: DE
     lon: 6.4335638293417
     lat: 50.8596458477977
@@ -4921,7 +4923,7 @@ stations:
     provider_code: "2823900000200"
     provider_key: 2823900000200/W
     name: Altenburg_1
-    water_name: null
+    water_name: Rur
     country: DE
     lon: 6.37349546907149
     lat: 50.897592257549
@@ -4955,7 +4957,7 @@ stations:
     provider_code: "2824300000100"
     provider_key: 2824300000100/W
     name: KornelimuensterW
-    water_name: null
+    water_name: Inde
     country: DE
     lon: 6.18330807681986
     lat: 50.7281514418874
@@ -4989,7 +4991,7 @@ stations:
     provider_code: "2824410000100"
     provider_key: 2824410000100/W
     name: Roetgen_W
-    water_name: null
+    water_name: Vichtbach
     country: DE
     lon: 6.19102115030611
     lat: 50.6499002927958
@@ -5023,7 +5025,7 @@ stations:
     provider_code: "2824450000100"
     provider_key: 2824450000100/W
     name: Mulartshuette
-    water_name: null
+    water_name: Vichtbach
     country: DE
     lon: 6.21006274570596
     lat: 50.6908157844317
@@ -5057,7 +5059,7 @@ stations:
     provider_code: "2824590000400"
     provider_key: 2824590000400/W
     name: Eschweiler
-    water_name: null
+    water_name: Inde
     country: DE
     lon: 6.28785217382789
     lat: 50.8149496709664
@@ -5091,7 +5093,7 @@ stations:
     provider_code: "2824890000300"
     provider_key: 2824890000300/W
     name: Luchem
-    water_name: null
+    water_name: Wehebach
     country: DE
     lon: 6.37167437072283
     lat: 50.8301544838192
@@ -5125,7 +5127,7 @@ stations:
     provider_code: "2824900000200"
     provider_key: 2824900000200/W
     name: Kirchberg1
-    water_name: null
+    water_name: Inde
     country: DE
     lon: 6.35861915809356
     lat: 50.8920485233244
@@ -5159,7 +5161,7 @@ stations:
     provider_code: "2824900000300"
     provider_key: 2824900000300/W
     name: Lamersdorf
-    water_name: null
+    water_name: Inde
     country: DE
     lon: 6.35447389898478
     lat: 50.8522702217965
@@ -5193,7 +5195,7 @@ stations:
     provider_code: "2825190000200"
     provider_key: 2825190000200/W
     name: Juelich-Stadion
-    water_name: null
+    water_name: Rur
     country: DE
     lon: 6.34934730394865
     lat: 50.9248839701203
@@ -5227,7 +5229,7 @@ stations:
     provider_code: "2825330000100"
     provider_key: 2825330000100/W
     name: Linnich
-    water_name: null
+    water_name: Rur
     country: DE
     lon: 6.27489269124098
     lat: 50.9807262498538
@@ -5261,7 +5263,7 @@ stations:
     provider_code: "2825349000100"
     provider_key: 2825349000100/W
     name: Welz
-    water_name: null
+    water_name: Merzbach
     country: DE
     lon: 6.25733225815453
     lat: 50.9617716340703
@@ -5295,7 +5297,7 @@ stations:
     provider_code: "2828100000100"
     provider_key: 2828100000100/W
     name: Kalkofen
-    water_name: null
+    water_name: Wurm
     country: DE
     lon: 6.111791
     lat: 50.782566
@@ -5329,7 +5331,7 @@ stations:
     provider_code: "2828200000200"
     provider_key: 2828200000200/W
     name: Haaren
-    water_name: null
+    water_name: Haarbach
     country: DE
     lon: 6.12923251224248
     lat: 50.7946793539939
@@ -5363,7 +5365,7 @@ stations:
     provider_code: "2828300000200"
     provider_key: 2828300000200/W
     name: Herzogenrath_1
-    water_name: null
+    water_name: Wurm
     country: DE
     lon: 6.09484341510097
     lat: 50.8665180471763
@@ -5397,7 +5399,7 @@ stations:
     provider_code: "2828400000200"
     provider_key: 2828400000200/W
     name: Herzogenrath_2
-    water_name: null
+    water_name: Broicher Bach
     country: DE
     lon: 6.09784077173284
     lat: 50.8665964524833
@@ -5431,7 +5433,7 @@ stations:
     provider_code: "2828890000200"
     provider_key: 2828890000200/W
     name: Honsdorf
-    water_name: null
+    water_name: Beeckfließ
     country: DE
     lon: 6.1817056203796
     lat: 51.0047734375636
@@ -5465,7 +5467,7 @@ stations:
     provider_code: "2828900000200"
     provider_key: 2828900000200/W
     name: Randerath
-    water_name: null
+    water_name: Wurm
     country: DE
     lon: 6.17924180827595
     lat: 51.0150087876064
@@ -5499,7 +5501,7 @@ stations:
     provider_code: "2829100000100"
     provider_key: 2829100000100/W
     name: Stah
-    water_name: null
+    water_name: Rur
     country: DE
     lon: 6.10451262980085
     lat: 51.0978936437795
@@ -5533,7 +5535,7 @@ stations:
     provider_code: "2842000000100"
     provider_key: 2842000000100/W
     name: Baltes
-    water_name: null
+    water_name: Beeckbach
     country: DE
     lon: 6.29168931405696
     lat: 51.1357598353013
@@ -5567,7 +5569,7 @@ stations:
     provider_code: "2843000000100"
     provider_key: 2843000000100/W
     name: Molzmuehle
-    water_name: null
+    water_name: Schwalm
     country: DE
     lon: 6.27328007361769
     lat: 51.1618743625653
@@ -5601,7 +5603,7 @@ stations:
     provider_code: "2847500000100"
     provider_key: 2847500000100/W
     name: Pannenmuehle
-    water_name: null
+    water_name: Schwalm
     country: DE
     lon: 6.22985892748387
     lat: 51.1994486957107
@@ -5635,7 +5637,7 @@ stations:
     provider_code: "2849900000100"
     provider_key: 2849900000100/W
     name: Landesgrenze
-    water_name: null
+    water_name: Schwalm
     country: DE
     lon: 6.08785073407038
     lat: 51.2283157672415
@@ -5669,7 +5671,7 @@ stations:
     provider_code: "2850000000200"
     provider_key: 2850000000200/W
     name: Veert
-    water_name: null
+    water_name: Nierskanal
     country: DE
     lon: 6.30999093397869
     lat: 51.518713182007
@@ -5703,7 +5705,7 @@ stations:
     provider_code: "2861700000100"
     provider_key: 2861700000100/W
     name: Oedt
-    water_name: null
+    water_name: Niers
     country: DE
     lon: 6.3719219367098
     lat: 51.3219542150709
@@ -5737,7 +5739,7 @@ stations:
     provider_code: "2862500000100"
     provider_key: 2862500000100/W
     name: Sassenfeld
-    water_name: null
+    water_name: Nette
     country: DE
     lon: 6.25253239621388
     lat: 51.3107669538538
@@ -5771,7 +5773,7 @@ stations:
     provider_code: "2862790000100"
     provider_key: 2862790000100/W
     name: Haus_Langenfeld
-    water_name: null
+    water_name: Nette
     country: DE
     lon: 6.33641680072098
     lat: 51.3906489186876
@@ -5805,7 +5807,7 @@ stations:
     provider_code: "2863700000100"
     provider_key: 2863700000100/W
     name: Geldern Burgstraße
-    water_name: null
+    water_name: Niers
     country: DE
     lon: 6.31456426918013
     lat: 51.5157151293902
@@ -5835,7 +5837,7 @@ stations:
     provider_code: "2864900000100"
     provider_key: 2864900000100/W
     name: Geldern
-    water_name: null
+    water_name: Gelderner Fleuth
     country: DE
     lon: 6.32931944516806
     lat: 51.523697019394
@@ -5869,7 +5871,7 @@ stations:
     provider_code: "2866500000200"
     provider_key: 2866500000200/W
     name: Kapellen
-    water_name: null
+    water_name: Issumer Fleuth
     country: DE
     lon: 6.35952058304107
     lat: 51.5700786813498
@@ -5903,7 +5905,7 @@ stations:
     provider_code: "2867900000100"
     provider_key: 2867900000100/W
     name: Weeze
-    water_name: null
+    water_name: Niers
     country: DE
     lon: 6.2125255199776
     lat: 51.6264331524888
@@ -5937,7 +5939,7 @@ stations:
     provider_code: "2869500000200"
     provider_key: 2869500000200/W
     name: Goch
-    water_name: null
+    water_name: Niers
     country: DE
     lon: 6.15062410946041
     lat: 51.6839560861143
@@ -5971,7 +5973,7 @@ stations:
     provider_code: "3111900000300"
     provider_key: 3111900000300/W
     name: Espeln
-    water_name: null
+    water_name: Ems
     country: DE
     lon: 8.59517616827883
     lat: 51.8307635125851
@@ -6001,7 +6003,7 @@ stations:
     provider_code: "3113000000100"
     provider_key: 3113000000100/W
     name: Steinhorst
-    water_name: null
+    water_name: Ems
     country: DE
     lon: 8.53374492555832
     lat: 51.8183168676997
@@ -6035,7 +6037,7 @@ stations:
     provider_code: "3119000000200"
     provider_key: 3119000000200/W
     name: Rheda
-    water_name: null
+    water_name: Ems
     country: DE
     lon: 8.29612165799055
     lat: 51.8524978229302
@@ -6069,7 +6071,7 @@ stations:
     provider_code: "3125000000100"
     provider_key: 3125000000100/W
     name: Avenwedde
-    water_name: null
+    water_name: Dalkebach
     country: DE
     lon: 8.49673760221447
     lat: 51.9104864767666
@@ -6103,7 +6105,7 @@ stations:
     provider_code: "3128100000100"
     provider_key: 3128100000100/W
     name: Kaunitz
-    water_name: null
+    water_name: Wapelbach
     country: DE
     lon: 8.55993127001005
     lat: 51.8591682634317
@@ -6137,7 +6139,7 @@ stations:
     provider_code: "3128490000100"
     provider_key: 3128490000100/W
     name: Verl
-    water_name: null
+    water_name: Ölbach
     country: DE
     lon: 8.49961132575918
     lat: 51.8873643834949
@@ -6171,7 +6173,7 @@ stations:
     provider_code: "3132900000100"
     provider_key: 3132900000100/W
     name: Marienfeld_W
-    water_name: null
+    water_name: Lutter
     country: DE
     lon: 8.25540921856881
     lat: 51.9483730876761
@@ -6205,7 +6207,7 @@ stations:
     provider_code: "3134510000100"
     provider_key: 3134510000100/W
     name: Brockhagen
-    water_name: null
+    water_name: Abrooksbach
     country: DE
     lon: 8.30753599281092
     lat: 51.9838690019695
@@ -6235,7 +6237,7 @@ stations:
     provider_code: "3147110000100"
     provider_key: 3147110000100/W
     name: Beelen
-    water_name: null
+    water_name: Axtbach
     country: DE
     lon: 8.10237233064165
     lat: 51.9293411387815
@@ -6265,7 +6267,7 @@ stations:
     provider_code: "3153900000100"
     provider_key: 3153900000100/W
     name: Warendorf
-    water_name: null
+    water_name: Ems
     country: DE
     lon: 8.01397451633642
     lat: 51.955158404288
@@ -6295,7 +6297,7 @@ stations:
     provider_code: "3166000000100"
     provider_key: 3166000000100/W
     name: Versmold_W
-    water_name: null
+    water_name: Hessel
     country: DE
     lon: 8.16073678871651
     lat: 52.0119785767892
@@ -6329,7 +6331,7 @@ stations:
     provider_code: "3169000000100"
     provider_key: 3169000000100/W
     name: Milte
-    water_name: null
+    water_name: Hessel
     country: DE
     lon: 7.94980994083553
     lat: 51.9944892403321
@@ -6363,7 +6365,7 @@ stations:
     provider_code: "3171000000100"
     provider_key: 3171000000100/W
     name: Einen
-    water_name: null
+    water_name: Ems
     country: DE
     lon: 7.89836266779992
     lat: 51.9726287656377
@@ -6397,7 +6399,7 @@ stations:
     provider_code: "3190000000100"
     provider_key: 3190000000100/W
     name: Haskenau
-    water_name: null
+    water_name: Ems
     country: DE
     lon: 7.69215921527999
     lat: 52.032710893412
@@ -6431,7 +6433,7 @@ stations:
     provider_code: "3211000000300"
     provider_key: 3211000000300/W
     name: Ahlen
-    water_name: null
+    water_name: Werse
     country: DE
     lon: 7.91893464821526
     lat: 51.7447846335436
@@ -6465,7 +6467,7 @@ stations:
     provider_code: "3215510000100"
     provider_key: 3215510000100/W
     name: Linnenkamp
-    water_name: null
+    water_name: Werse
     country: DE
     lon: 7.81635397924117
     lat: 51.7908931287717
@@ -6495,7 +6497,7 @@ stations:
     provider_code: "3259000000100"
     provider_key: 3259000000100/W
     name: Albersloh
-    water_name: null
+    water_name: Werse
     country: DE
     lon: 7.72815742167796
     lat: 51.8839138317328
@@ -6529,7 +6531,7 @@ stations:
     provider_code: "3283000000100"
     provider_key: 3283000000100/W
     name: Sendenhorst
-    water_name: null
+    water_name: Angel
     country: DE
     lon: 7.88129669017395
     lat: 51.8335219897634
@@ -6563,7 +6565,7 @@ stations:
     provider_code: "3289100000100"
     provider_key: 3289100000100/W
     name: Wolbeck
-    water_name: null
+    water_name: Angel
     country: DE
     lon: 7.78215944782826
     lat: 51.902658549181
@@ -6597,7 +6599,7 @@ stations:
     provider_code: "3323000000200"
     provider_key: 3323000000200/W
     name: Roxeler
-    water_name: null
+    water_name: Münstersche Aa
     country: DE
     lon: 7.5627965682474
     lat: 51.9537342194829
@@ -6631,7 +6633,7 @@ stations:
     provider_code: "3331000000100"
     provider_key: 3331000000100/W
     name: Greven
-    water_name: null
+    water_name: Ems
     country: DE
     lon: 7.60279241328893
     lat: 52.0943312979099
@@ -6665,7 +6667,7 @@ stations:
     provider_code: "3345000000100"
     provider_key: 3345000000100/W
     name: Westladbergen
-    water_name: null
+    water_name: Glane
     country: DE
     lon: 7.66175966774909
     lat: 52.1429305524634
@@ -6699,7 +6701,7 @@ stations:
     provider_code: "3445900000100"
     provider_key: 3445900000100/W
     name: Hopsten
-    water_name: null
+    water_name: Hopstener Aa
     country: DE
     lon: 7.59959041627852
     lat: 52.3736120047389
@@ -6733,7 +6735,7 @@ stations:
     provider_code: "3448310000600"
     provider_key: 3448310000600/W
     name: Lehen_2
-    water_name: null
+    water_name: Ibbenbürener Aa
     country: DE
     lon: 7.73927336116564
     lat: 52.2613582250638
@@ -6767,7 +6769,7 @@ stations:
     provider_code: "3448390000200"
     provider_key: 3448390000200/W
     name: Hoerstel
-    water_name: null
+    water_name: Ibbenbürener Aa
     country: DE
     lon: 7.58807003959819
     lat: 52.3202965105007
@@ -6801,7 +6803,7 @@ stations:
     provider_code: "4281319000100"
     provider_key: 4281319000100/W
     name: Muesse
-    water_name: null
+    water_name: Eder
     country: DE
     lon: 8.28395231289474
     lat: 51.0495232929869
@@ -6835,7 +6837,7 @@ stations:
     provider_code: "4281334000100"
     provider_key: 4281334000100/W
     name: Aue
-    water_name: null
+    water_name: Preisdorf
     country: DE
     lon: 8.31714019289022
     lat: 51.0499141663201
@@ -6869,7 +6871,7 @@ stations:
     provider_code: "4281490000100"
     provider_key: 4281490000100/W
     name: Raumland
-    water_name: null
+    water_name: Odeborn
     country: DE
     lon: 8.38626857723268
     lat: 51.0314458119621
@@ -6903,7 +6905,7 @@ stations:
     provider_code: "4281591000100"
     provider_key: 4281591000100/W
     name: Beddelhausen
-    water_name: null
+    water_name: Eder
     country: DE
     lon: 8.48773246461162
     lat: 50.999363602564
@@ -6937,7 +6939,7 @@ stations:
     provider_code: "4284170000100"
     provider_key: 4284170000100/W
     name: Medelon_W
-    water_name: null
+    water_name: Orke
     country: DE
     lon: 8.67168170685849
     lat: 51.1692892640687
@@ -6971,7 +6973,7 @@ stations:
     provider_code: "4427000000100"
     provider_key: 4427000000100/W
     name: Bredelar
-    water_name: null
+    water_name: Hoppecke
     country: DE
     lon: 8.76531880326879
     lat: 51.4097736589077
@@ -7005,7 +7007,7 @@ stations:
     provider_code: "4433000000100"
     provider_key: 4433000000100/W
     name: Westheim
-    water_name: null
+    water_name: Diemel
     country: DE
     lon: 8.91409349550607
     lat: 51.4923780187036
@@ -7039,7 +7041,7 @@ stations:
     provider_code: "4449900000100"
     provider_key: 4449900000100/W
     name: Welda
-    water_name: null
+    water_name: Twiste
     country: DE
     lon: 9.11545249033896
     lat: 51.4536430723035
@@ -7073,7 +7075,7 @@ stations:
     provider_code: "4523100000100"
     provider_key: 4523100000100/W
     name: Niesen
-    water_name: null
+    water_name: Nethe
     country: DE
     lon: 9.13800199920433
     lat: 51.6298210016809
@@ -7103,7 +7105,7 @@ stations:
     provider_code: "4526900000100"
     provider_key: 4526900000100/W
     name: Rustenhof
-    water_name: null
+    water_name: Aa
     country: DE
     lon: 9.13454682675516
     lat: 51.7064757846965
@@ -7137,7 +7139,7 @@ stations:
     provider_code: "4528199000100"
     provider_key: 4528199000100/W
     name: Bellersen
-    water_name: null
+    water_name: Brucht
     country: DE
     lon: 9.18369299326232
     lat: 51.7686280012565
@@ -7167,7 +7169,7 @@ stations:
     provider_code: "4528900000100"
     provider_key: 4528900000100/W
     name: Brakel
-    water_name: null
+    water_name: Brucht
     country: DE
     lon: 9.19068561124882
     lat: 51.7133968290795
@@ -7201,7 +7203,7 @@ stations:
     provider_code: "4529500000100"
     provider_key: 4529500000100/W
     name: Ottbergen
-    water_name: null
+    water_name: Nethe
     country: DE
     lon: 9.32156916330323
     lat: 51.708441572318
@@ -7235,7 +7237,7 @@ stations:
     provider_code: "4561310000100"
     provider_key: 4561310000100/W
     name: Himmighausen
-    water_name: null
+    water_name: Emmer
     country: DE
     lon: 9.0274330023099
     lat: 51.8109850047906
@@ -7265,7 +7267,7 @@ stations:
     provider_code: "4564310000100"
     provider_key: 4564310000100/W
     name: Vinsebeck
-    water_name: null
+    water_name: Heubach
     country: DE
     lon: 9.02443699866681
     lat: 51.8532330010246
@@ -7295,7 +7297,7 @@ stations:
     provider_code: "4566900000100"
     provider_key: 4566900000100/W
     name: Blomberg
-    water_name: null
+    water_name: Diestelbach
     country: DE
     lon: 9.10577984670658
     lat: 51.9248306242292
@@ -7329,7 +7331,7 @@ stations:
     provider_code: "4567000000100"
     provider_key: 4567000000100/W
     name: Schieder-Nessenberg
-    water_name: null
+    water_name: Emmer
     country: DE
     lon: 9.13001082124116
     lat: 51.9110050339911
@@ -7363,7 +7365,7 @@ stations:
     provider_code: "4568900000100"
     provider_key: 4568900000100/W
     name: Schieder
-    water_name: null
+    water_name: Niese
     country: DE
     lon: 9.1448490812294
     lat: 51.9140446833005
@@ -7397,7 +7399,7 @@ stations:
     provider_code: "4569300000100"
     provider_key: 4569300000100/W
     name: Schieder-Stausee
-    water_name: null
+    water_name: Emmer
     country: DE
     lon: 9.19333829501301
     lat: 51.9349602234448
@@ -7431,7 +7433,7 @@ stations:
     provider_code: "4589000000100"
     provider_key: 4589000000100/W
     name: Uchtdorf
-    water_name: null
+    water_name: Exter
     country: DE
     lon: 9.09917299421524
     lat: 52.1598674093052
@@ -7461,7 +7463,7 @@ stations:
     provider_code: "4619100000100"
     provider_key: 4619100000100/W
     name: Pottenhausen
-    water_name: null
+    water_name: Werre
     country: DE
     lon: 8.75031578026757
     lat: 52.0166987097841
@@ -7495,7 +7497,7 @@ stations:
     provider_code: "4621900000100"
     provider_key: 4621900000100/W
     name: Vossheide
-    water_name: null
+    water_name: Bega
     country: DE
     lon: 8.95963077548362
     lat: 52.0162113796987
@@ -7529,7 +7531,7 @@ stations:
     provider_code: "4622900000100"
     provider_key: 4622900000100/W
     name: Vossheide_1
-    water_name: null
+    water_name: Passade
     country: DE
     lon: 8.95902943678414
     lat: 52.0103934953406
@@ -7563,7 +7565,7 @@ stations:
     provider_code: "4624900000100"
     provider_key: 4624900000100/W
     name: Liemergrund
-    water_name: null
+    water_name: Ilse
     country: DE
     lon: 8.85023757114521
     lat: 52.0297311532028
@@ -7597,7 +7599,7 @@ stations:
     provider_code: "4627100000200"
     provider_key: 4627100000200/W
     name: Lindemannsheide_neu
-    water_name: null
+    water_name: Bega
     country: DE
     lon: 8.77160189435303
     lat: 52.0533446610801
@@ -7631,7 +7633,7 @@ stations:
     provider_code: "4639000000100"
     provider_key: 4639000000100/W
     name: Ahmsen
-    water_name: null
+    water_name: Werre
     country: DE
     lon: 8.70149395142598
     lat: 52.0910035713765
@@ -7665,7 +7667,7 @@ stations:
     provider_code: "4647000000100"
     provider_key: 4647000000100/W
     name: Brake
-    water_name: null
+    water_name: Aa
     country: DE
     lon: 8.61844088665699
     lat: 52.0705435278514
@@ -7699,7 +7701,7 @@ stations:
     provider_code: "4651000000100"
     provider_key: 4651000000100/W
     name: Herford_2
-    water_name: null
+    water_name: Werre
     country: DE
     lon: 8.67096804421677
     lat: 52.1333769921871
@@ -7733,7 +7735,7 @@ stations:
     provider_code: "4667100000100"
     provider_key: 4667100000100/W
     name: Oberahle
-    water_name: null
+    water_name: Else
     country: DE
     lon: 8.51429971487054
     lat: 52.1886836709341
@@ -7767,7 +7769,7 @@ stations:
     provider_code: "4670000000100"
     provider_key: 4670000000100/W
     name: Loehne
-    water_name: null
+    water_name: Werre
     country: DE
     lon: 8.71016473308627
     lat: 52.1978837778304
@@ -7801,7 +7803,7 @@ stations:
     provider_code: "4714900000100"
     provider_key: 4714900000100/W
     name: Rodenbeck
-    water_name: null
+    water_name: Bastau
     country: DE
     lon: 8.87824325579797
     lat: 52.2822176526977
@@ -7835,7 +7837,7 @@ stations:
     provider_code: "4745000000100"
     provider_key: 4745000000100/W
     name: Bierde
-    water_name: null
+    water_name: Gehle
     country: DE
     lon: 9.04150838517812
     lat: 52.3703166864379
@@ -7869,7 +7871,7 @@ stations:
     provider_code: "4761270000100"
     provider_key: 4761270000100/W
     name: Niedermehnen
-    water_name: null
+    water_name: Großer Dieckfluß
     country: DE
     lon: 8.44402853655572
     lat: 52.4110737484776
@@ -7903,7 +7905,7 @@ stations:
     provider_code: "4761500000100"
     provider_key: 4761500000100/W
     name: Fiestel
-    water_name: null
+    water_name: Große Aue
     country: DE
     lon: 8.55833660889624
     lat: 52.3534238062946
@@ -7937,7 +7939,7 @@ stations:
     provider_code: "9281330000100"
     provider_key: 9281330000100/W
     name: Daemmerwald
-    water_name: null
+    water_name: Issel
     country: DE
     lon: 6.76518490574153
     lat: 51.7383605063958
@@ -7971,7 +7973,7 @@ stations:
     provider_code: "9281700000200"
     provider_key: 9281700000200/W
     name: Isselburg
-    water_name: null
+    water_name: Issel
     country: DE
     lon: 6.47228981191014
     lat: 51.8325725727872
@@ -8005,7 +8007,7 @@ stations:
     provider_code: "9282570000100"
     provider_key: 9282570000100/W
     name: Rhedebruegge
-    water_name: null
+    water_name: Bocholter Aa
     country: DE
     lon: 6.75220116024345
     lat: 51.8277001672316
@@ -8039,7 +8041,7 @@ stations:
     provider_code: "9283215500100"
     provider_key: 9283215500100/W
     name: Südlohn
-    water_name: null
+    water_name: Schlinge
     country: DE
     lon: 6.900707
     lat: 51.945408
@@ -8069,7 +8071,7 @@ stations:
     provider_code: "9284100000100"
     provider_key: 9284100000100/W
     name: Lutum
-    water_name: null
+    water_name: Berkel
     country: DE
     lon: 7.22137486220716
     lat: 51.9840255774692
@@ -8103,7 +8105,7 @@ stations:
     provider_code: "9284300000010"
     provider_key: 9284300000010/W
     name: Gescher
-    water_name: null
+    water_name: Berkel
     country: DE
     lon: 7.07225356261447
     lat: 51.9385488798234
@@ -8137,7 +8139,7 @@ stations:
     provider_code: "9284590000200"
     provider_key: 9284590000200/W
     name: Stadtlohn Schanzring
-    water_name: null
+    water_name: Berkel
     country: DE
     lon: 6.91034737222798
     lat: 51.9947733413438
@@ -8167,7 +8169,7 @@ stations:
     provider_code: "9284730000100"
     provider_key: 9284730000100/W
     name: Ammeloe
-    water_name: null
+    water_name: Berkel
     country: DE
     lon: 6.77442031981168
     lat: 52.0809963646723
@@ -8201,7 +8203,7 @@ stations:
     provider_code: "9285291000100"
     provider_key: 9285291000100/W
     name: Haarmuehle
-    water_name: null
+    water_name: Ahauser Aa
     country: DE
     lon: 6.87356917212441
     lat: 52.1318984588178
@@ -8235,7 +8237,7 @@ stations:
     provider_code: "9286139100100"
     provider_key: 9286139100100/W
     name: Schöppingen
-    water_name: null
+    water_name: Vechte
     country: DE
     lon: 7.21924995746795
     lat: 52.0959944090192
@@ -8265,7 +8267,7 @@ stations:
     provider_code: "9286190000100"
     provider_key: 9286190000100/W
     name: Bilk
-    water_name: null
+    water_name: Vechte
     country: DE
     lon: 7.29442741649772
     lat: 52.2427635011705
@@ -8299,7 +8301,7 @@ stations:
     provider_code: "9286291000300"
     provider_key: 9286291000300/W
     name: Wettringen_B70
-    water_name: null
+    water_name: Steinfurter Aa
     country: DE
     lon: 7.32374570720266
     lat: 52.2149476967827
@@ -8333,7 +8335,7 @@ stations:
     provider_code: "9286410000100"
     provider_key: 9286410000100/W
     name: Legden
-    water_name: null
+    water_name: Dinkel
     country: DE
     lon: 7.08207077397744
     lat: 52.0398444186312
@@ -8367,7 +8369,7 @@ stations:
     provider_code: "9286453000200"
     provider_key: 9286453000200/W
     name: Heek
-    water_name: null
+    water_name: Dinkel
     country: DE
     lon: 7.11685843383786
     lat: 52.1172425112536
@@ -8401,7 +8403,7 @@ stations:
     provider_code: "9286455000200"
     provider_key: 9286455000200/W
     name: Gronau
-    water_name: null
+    water_name: Dinkel
     country: DE
     lon: 7.02467077663036
     lat: 52.2179431471272

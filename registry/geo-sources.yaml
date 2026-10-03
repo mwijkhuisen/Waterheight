@@ -36,6 +36,11 @@ euhydro:
 wikidata:
   sparql_url: https://query.wikidata.org/sparql
   max_requests: 80
+# DE-7 water bodies (P6b): LANUK's station list (about 568 KB, 620 stations) is the only place with `WTO_OBJECT`, the
+# published water body of a station. One GET by tools/geo/rivernet/record-nrw-waters.ts; max_bytes is about 4 times the size.
+nrw_stations:
+  url: https://www.hochwasserportal.nrw/data/internet/stations/stations.json
+  max_bytes: 2359296
 # Canal traps (P6b's snapping tests, catalogue §5.3 step 5): canals that run beside the rivers. They are in the
 # extract and the fixture so that P6b can prove no station snaps to them; the graph builder never makes them edges.
 canal_traps:

@@ -60,10 +60,11 @@ describe('registry/stations/de-7.yaml', { timeout: 30_000 }, () => {
     expect(validateStations(parse(committed), sources).problems).toEqual([]);
   });
 
-  it('names its three inputs with recorded_at and sha256 in the header', () => {
+  it('names its four inputs with recorded_at and sha256 in the header', () => {
     expect(inputs.files.map((f) => f.path)).toEqual([
       'apps/server/src/adapters/de-7/fixtures/de-7-messwerte.raw',
       'apps/server/src/adapters/de-8/fixtures/de-8-stations.raw',
+      'registry/seed/de-7-waters.csv',
       'apps/server/src/adapters/de-8/fixtures/de-8-hydro.raw',
     ]);
     for (const f of inputs.files) {
@@ -78,11 +79,12 @@ describe('registry/stations/de-7.yaml', { timeout: 30_000 }, () => {
       [...inputs.readings.keys()].filter((no) => !PLACEHOLDERS.includes(no)).sort(),
     );
     for (const r of rows) {
+      expect(r.water_name === null || r.water_name.length > 0).toBe(true);
       expect(r).toMatchObject({
         id: `de.lanuk.${r.provider_code}`,
         source: 'DE-7',
         provider_key: `${r.provider_code}/W`,
-        water_name: null,
+        water_name: r.water_name,
         country: 'DE',
         quantity: 'H',
         role: 'primary',
