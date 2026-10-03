@@ -7,6 +7,7 @@ import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
 import { labelOffsetsOf } from './label-offset.ts';
+import { applyClasses, applyReferences, applyWarnings, type Changes, type ResolvedRef } from './refs.ts';
 import {
   type Attempt,
   advanceCursor,
@@ -108,7 +109,9 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * code we cannot read; `conflict`: two values for one instant;
  * `registered_dropped`: a registered RWS series arrived under another
  * ProcesType, compartment or grouping; `datum_mismatch` (P5a): a CH value that
- * contradicts its series' declared level or relative stage.
+ * contradicts its series' declared level or relative stage; `unmapped_class`
+ * (P7a): a provider class or alert level the crosswalk (packages/core
+ * crosswalk.ts) does not have, loaded by a replay once it is a reviewed row.
  */
 export const RETAINED = [
   'unit_mismatch',
@@ -118,6 +121,7 @@ export const RETAINED = [
   'conflict',
   'registered_dropped',
   'datum_mismatch',
+  'unmapped_class',
 ] as const;
 
 /** A payload is tried at most this often; the next pass quarantines it without reading it. */
@@ -521,6 +525,10 @@ export class Loader {
     const registry = await this.registry(line.source);
     const fillRegistry = spec.fill === undefined ? undefined : await this.registry(spec.fill);
     const zeroRegistry = spec.zeroTarget === undefined ? undefined : await this.registry(spec.zeroTarget);
+    const refRegistries =
+      spec.refTarget === undefined
+        ? undefined
+        : new Map(await Promise.all(spec.refTarget.map(async (t) => [t, await this.registry(t)] as const)));
     const unitMismatch = await this.unitMismatch(line.source);
     // A re-stating payload loads from shortly before the previous loaded one (a seed loads whole); read per
     // payload, like the label offsets, which the nightly detector may have changed since the last one.
@@ -538,6 +546,7 @@ export class Loader {
         unitMismatch,
         ...(fillRegistry === undefined ? {} : { fillRegistry }),
         ...(zeroRegistry === undefined ? {} : { zeroRegistry }),
+        ...(refRegistries === undefined ? {} : { refRegistries }),
         ...(previous === null || spec.window === undefined ? {} : { since: previous.getTime() - spec.window }),
         ...(labelOffsets === undefined ? {} : { labelOffsets }),
       });
@@ -562,15 +571,45 @@ export class Loader {
     // its twin series and as a fill row of the FR-1 series of the same key (review CR-6).
     const counted = (key: string) => registry.get(key)?.sameAudience === true;
     const zeroIds = zeroRegistry ?? registry;
+    // P7a: references belong to a series of the payload's own source or of a `refTarget` source; a key no
+    // registry has is unknown (a registry change could still load it), a withheld (`off`) series takes none.
+    const refRegistry = (target: string | undefined) =>
+      target === undefined || target === line.source ? registry : refRegistries?.get(target);
+    const refs: ResolvedRef[] = [];
+    const refUnknown = new Set<string>();
+    for (const r of result.references ?? []) {
+      const s = refRegistry(r.target)?.get(r.series);
+      if (s === undefined) refUnknown.add(`${r.target ?? line.source}\n${r.series}`);
+      else if (!s.off) refs.push({ ...r, id: s.id, counted: s.sameAudience });
+    }
+    const refScope = new Set<number>();
+    for (const k of result.refScope ?? []) {
+      const s = refRegistry(k.target)?.get(k.series);
+      if (s !== undefined && !s.off) refScope.add(s.id);
+    }
+    const classes = result.classes ?? [];
+    const warningRows = result.warnings?.rows.length ?? 0;
     let nObs = 0;
     for (const part of obsParts(result)) nObs += part.filter((r) => counted(r.series)).length;
     const n_rows =
-      nObs + result.gaugeZeros.filter((z) => zeroIds.get(z.series)?.sameAudience === true).length + fill.length;
+      nObs +
+      result.gaugeZeros.filter((z) => zeroIds.get(z.series)?.sameAudience === true).length +
+      fill.length +
+      refs.filter((r) => r.counted).length +
+      classes.length +
+      warningRows;
     // Values a registry or parser change could still load: the pruner keeps this object until a replay stores them.
-    const n_skipped =
-      result.unknown + fillUnknown.size + RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
+    const n_skipped_base =
+      result.unknown +
+      fillUnknown.size +
+      refUnknown.size +
+      RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
+    let n_skipped = n_skipped_base;
     let outcome: Outcome = { kind: 'loaded', n_rows, n_new: 0, n_changed: 0 };
     let zeroChanges: Awaited<ReturnType<typeof applyGaugeZeros>> = {};
+    let refChanges: Changes = {};
+    let warnChanges: Changes = {};
+    let classChanged = 0;
     let units: Set<string> | undefined;
     const before = health && { newestTs: health.newestTs, lastNewData: health.lastNewData };
     await commit(async (tx) => {
@@ -592,16 +631,45 @@ export class Loader {
           ? { n_new: 0, n_changed: 0, writes: 0 }
           : await upsertObs(tx, fill, fillRegistry, state.id, fetchedAt, true);
       zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, zeroIds, state.id, fetchedAt);
+      const refsApplied = await applyReferences(tx, line.source, refs, refScope, state.id, fetchedAt);
+      const cls = await applyClasses(tx, line.source, classes, state.id);
+      const warn = await applyWarnings(tx, line.source, result.warnings, state.id, fetchedAt);
+      refChanges = refsApplied.changes;
+      warnChanges = warn.changes;
+      classChanged = cls.changed;
+      n_skipped = n_skipped_base + cls.unknown;
       if (result.unitMismatch !== undefined) {
         units = await storeUnitMismatch(tx, line.source, fetchedAt, result.unitMismatch);
       }
-      const zeroWrites = (zeroChanges.new ?? 0) + (zeroChanges.corrected ?? 0) + (zeroChanges.superseded ?? 0);
+      const zeroWrites =
+        (zeroChanges.new ?? 0) +
+        (zeroChanges.corrected ?? 0) +
+        (zeroChanges.superseded ?? 0) +
+        (zeroChanges.changed ?? 0);
+      const opened = (c: Changes) => (c.new ?? 0) + (c.changed ?? 0);
+      const corrected = (c: Changes) => (c.corrected ?? 0) + (c.removed ?? 0);
       // The batch's own numbers include its fill rows (their provenance); the source's health does not.
-      const n_new = written.n_new + filled.n_new + (zeroChanges.new ?? 0) + (zeroChanges.superseded ?? 0);
-      const n_changed = written.n_changed + filled.n_changed + (zeroChanges.corrected ?? 0);
+      const n_new =
+        written.n_new +
+        filled.n_new +
+        (zeroChanges.new ?? 0) +
+        (zeroChanges.superseded ?? 0) +
+        (zeroChanges.changed ?? 0) +
+        opened(refChanges) +
+        cls.new +
+        cls.changed +
+        opened(warnChanges);
+      const n_changed =
+        written.n_changed +
+        filled.n_changed +
+        (zeroChanges.corrected ?? 0) +
+        corrected(refChanges) +
+        corrected(warnChanges);
       outcome = { kind: 'loaded', n_rows, n_new, n_changed };
       // A replay that changes nothing leaves the batch exactly as the first load wrote it.
-      const changed = written.writes + filled.writes + zeroWrites > 0 || state.skipped !== n_skipped;
+      const changed =
+        written.writes + filled.writes + zeroWrites + refsApplied.writes + cls.writes + warn.writes > 0 ||
+        state.skipped !== n_skipped;
       if (!state.existed || changed || state.previous !== 'ok') {
         await closeBatch(tx, state.id, batch, { status: 'ok', n_rows, n_new, n_changed, n_skipped, error: null });
       }
@@ -627,10 +695,19 @@ export class Loader {
       const n = result.dropped[code] ?? 0;
       if (n > 0) this.deps.alert(code, { ...ids, n });
     }
-    for (const change of ['corrected', 'superseded', 'older_ignored', 'withheld'] as const) {
+    for (const change of ['corrected', 'superseded', 'changed'] as const) {
       const n = zeroChanges[change] ?? 0;
       if (n > 0) this.deps.alert(`gauge_zero_${change}`, { ...ids, n });
     }
+    // P7a: a changed, removed or corrected reference and a changed class or warning are alerted by count only:
+    // the text names no value (an owner-audience threshold must not reach a log; the details are in the views).
+    for (const change of ['changed', 'removed', 'corrected'] as const) {
+      const n = refChanges[change] ?? 0;
+      if (n > 0) this.deps.alert(`reference_${change}`, { ...ids, n });
+    }
+    if (classChanged > 0) this.deps.alert('class_changed', { ...ids, n: classChanged });
+    const warned = (warnChanges.new ?? 0) + (warnChanges.changed ?? 0) + (warnChanges.removed ?? 0);
+    if (warned > 0) this.deps.alert('warning_changed', { ...ids, n: warned });
     if (result.unknown > 0) this.deps.info?.('series not in the registry', { ...ids, n: result.unknown });
     return outcome;
   }

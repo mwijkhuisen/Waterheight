@@ -29,8 +29,8 @@ const EXPECTED: Record<string, Row> = {
   'FR-4 forecasts': { specs: ['fr-4'], cadence_s: 1800, gate: 'hash', retention: 'forever' },
   'FR-5 vigilance': { specs: ['fr-5-vigilance'], cadence_s: 900, gate: 'field', retention: 'forever' },
   'LU-5 CAP': { specs: ['lu-5-cap'], cadence_s: 300, gate: 'new-resource', retention: 'forever' },
-  'CH-1 LINDAS': { specs: ['ch-1-lindas'], cadence_s: 600, gate: 'hash', retention: 'forever' },
-  'CH-2': { specs: ['ch-2-pq'], cadence_s: 600, gate: 'hash', conditional: 'last-modified', retention: 'forever' },
+  'CH-1 LINDAS': { specs: ['ch-1-lindas'], cadence_s: 600, gate: 'hash', retention: 'obs' },
+  'CH-2': { specs: ['ch-2-pq'], cadence_s: 600, gate: 'hash', conditional: 'last-modified', retention: 'obs' },
   'CH-4': {
     specs: ['ch-4-forecast'],
     cadence_s: 3600,

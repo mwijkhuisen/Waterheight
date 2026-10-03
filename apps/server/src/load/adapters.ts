@@ -2,6 +2,7 @@ import { emptyNormalised, type Normalised, type Registry, SchemaDrift, type Time
 import {
   TIME as BE3_TIME,
   normaliseLayer as normaliseBe3Layer,
+  normaliseReferences as normaliseBe3References,
   normaliseStations as normaliseBe3Stations,
   normaliseValues as normaliseBe3Values,
 } from '../adapters/be-3/normalise.ts';
@@ -19,8 +20,17 @@ import { parsePlot } from '../adapters/ch-3/parse.ts';
 import { driftReport } from '../adapters/de-1/drift.ts';
 import { TIME as DE1_TIME, normaliseBasin, normaliseMeta, normaliseSeries } from '../adapters/de-1/normalise.ts';
 import { JSON_CAPS, parseMeasurements, parseStations } from '../adapters/de-1/parse.ts';
-import { TIME as DE7_TIME, normalise as normaliseDe7 } from '../adapters/de-7/normalise.ts';
-import { type Member as De7Member, lineSink as de7Lines } from '../adapters/de-7/parse.ts';
+import {
+  TIME as DE7_TIME,
+  normalise as normaliseDe7,
+  normaliseThresholds as normaliseDe7Thresholds,
+} from '../adapters/de-7/normalise.ts';
+import {
+  STATIONS_MAX_BYTES as DE7_STATIONS_MAX,
+  type Member as De7Member,
+  lineSink as de7Lines,
+  parseStationFile as parseDe7Stations,
+} from '../adapters/de-7/parse.ts';
 import { driftReport as driftDe8, normaliseHydro } from '../adapters/de-8/normalise.ts';
 import { HYDRO_MEMBER, parseStations as parseDe8Stations, parseHydro } from '../adapters/de-8/parse.ts';
 import {
@@ -44,6 +54,11 @@ import { TIME as NL2_TIME, normalise as normaliseNl2 } from '../adapters/nl-2/no
 import { parseCollection } from '../adapters/nl-2/parse.ts';
 import { checkZip, type Encoding, flatNames, GuardFailure, lineSplitter } from '../http/guards.ts';
 import type { SeriesRow } from './store.ts';
+import * as wireCh5 from './wire/ch-5.ts';
+import * as wireDe6 from './wire/de-6.ts';
+import * as wireFr5 from './wire/fr-5.ts';
+import * as wireLu4 from './wire/lu-4.ts';
+import * as wireLu5 from './wire/lu-5.ts';
 
 // Which archived payloads the loader parses (A§7.4 step 1): adapter by source
 // ID, function by capture spec. A source or spec that is not listed here is
@@ -71,6 +86,8 @@ export type LoadContext = {
   labelOffsets?: { days: Readonly<Record<string, number>> };
   /** P5b: the registry of the spec's `zeroTarget` source (the series that the payload's gauge zeros belong to). */
   zeroRegistry?: Registry;
+  /** P7a: the registries of the spec's `refTarget` sources, by source (the series its references belong to). */
+  refRegistries?: ReadonlyMap<string, Registry>;
 };
 
 /**
@@ -117,6 +134,11 @@ export type SpecLoader = {
   zeroTarget?: string;
   /** P5b: the source's labels are late by an offset measured per day (load/label-offset.ts); passed in the context. */
   labelOffsets?: true;
+  /**
+   * P7a: the sources whose series the payload's references may belong to, besides its own (CH-2 → CH-1,
+   * LU-4 → LU-1 and LU-2, FR-5 → FR-1); a reference row names one by `target`. Its source_id stays the payload's.
+   */
+  refTarget?: readonly string[];
 };
 
 export type LoadAdapter = {
@@ -143,6 +165,8 @@ async function zipMember(
   read: string,
   sink: { line: (text: string) => void } | { bytes: (member: Uint8Array) => void; max: number },
   encoding: Encoding = 'utf-8',
+  /** P7a: a second member read whole in the same pass (DE-7: `pegel_stationen.txt` beside the line-fed data). */
+  whole?: { name: string; max: number; bytes: (member: Uint8Array) => void },
 ): Promise<void> {
   const parts: Uint8Array[] = [];
   let size = 0;
@@ -150,6 +174,18 @@ async function zipMember(
     await checkZip(Buffer.from(body.buffer, body.byteOffset, body.byteLength), {
       names: flatNames(members),
       onMember: (name) => {
+        if (whole !== undefined && name === whole.name) {
+          const chunks: Uint8Array[] = [];
+          let n = 0;
+          return {
+            data: (c: Uint8Array) => {
+              n += c.length;
+              if (n > whole.max) throw new SchemaDrift('zip_member_size');
+              chunks.push(c.slice());
+            },
+            end: () => whole.bytes(Buffer.concat(chunks)),
+          };
+        }
         if (name !== read) return undefined;
         if ('bytes' in sink) {
           return {
@@ -181,6 +217,37 @@ const de7Zip =
     return normaliseDe7(sink.end(), c);
   };
 
+const DE7_PEGELDATEN = [
+  'pegel_messwerte.txt',
+  'pegel_tagesmittelwerte.txt',
+  'pegel_tagesmaxima.txt',
+  'pegel_stationen.txt',
+];
+
+/**
+ * The DE-7 seed and weekly ZIP, one pass: `pegel_messwerte.txt` into the line sink (obs, within the spec's window)
+ * and `pegel_stationen.txt` read whole (the LANUK thresholds as references; the window never drops them).
+ */
+const de7Pegeldaten: SpecLoader['run'] = async (b, c) => {
+  const sink = de7Lines('pegel_messwerte.txt', { ascii: false });
+  let stations: Uint8Array | undefined;
+  await zipMember(b, DE7_PEGELDATEN, 'pegel_messwerte.txt', sink, 'utf-8', {
+    name: 'pegel_stationen.txt',
+    max: DE7_STATIONS_MAX,
+    bytes: (m) => {
+      stations = m;
+    },
+  });
+  if (stations === undefined) throw new SchemaDrift('zip_member_missing');
+  const out = normaliseDe7(sink.end(), c);
+  const th = normaliseDe7Thresholds(parseDe7Stations(stations), c);
+  out.references = th.references ?? [];
+  out.refScope = th.refScope ?? [];
+  out.unknown += th.unknown;
+  for (const [code, n] of Object.entries(th.dropped)) out.dropped[code] = (out.dropped[code] ?? 0) + n;
+  return out;
+};
+
 /** One Vigicrues series (the seed and the twin spec): rows of the FR-3 twin series, and the same rows as FR-1 fill. */
 const fr3Serie: SpecLoader = {
   maxBytes: 4 * MIB,
@@ -196,8 +263,12 @@ const nl1Observations: SpecLoader = {
   run: (b, c) => normaliseNl1(parseWaarnemingen(b), c),
 };
 
+/** P7a: the sources wired in load/wire/ (one file each, so their adapters are built side by side). */
+const WIRED = [wireDe6, wireFr5, wireCh5, wireLu5, wireLu4] as const;
+
 /** Every source the loader can parse; `LOAD_ADAPTERS` is this list after the DST gate. */
 const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
+  ...Object.fromEntries(WIRED.flatMap((w) => (w.ADAPTER === null ? [] : [[w.SOURCE, w.ADAPTER] as const]))),
   'DE-1': {
     version: 1,
     specs: {
@@ -250,7 +321,13 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
   'CH-2': {
     version: 1,
     specs: {
-      'ch-2-pq': { maxBytes: 4 * MIB, needsVariant: false, run: (b, c) => normaliseFeatures(parseFeatures(b), c) },
+      'ch-2-pq': {
+        maxBytes: 4 * MIB,
+        needsVariant: false,
+        run: (b, c) => normaliseFeatures(parseFeatures(b), c),
+        // WL2..WL5 land on the CH-1 primary series of the same station.
+        refTarget: ['CH-1'],
+      },
     },
   },
   // The 40-day seed: gap-fill rows of the CH-1 series only; the station is the seed row (the variant).
@@ -281,7 +358,7 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
     },
   },
   // LANUK NRW W at 15 (some 5) minutes: messwerte.zip holds 7 days, pegeldaten.zip 2 months (the seed and,
-  // weekly, the thresholds of P7; only pegel_messwerte.txt is read). Both re-state what earlier payloads said.
+  // weekly, the thresholds of P7: pegel_messwerte.txt as obs, pegel_stationen.txt as references). Both re-state what earlier payloads said.
   'DE-7': {
     version: 1,
     specs: {
@@ -294,11 +371,7 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       'de-7-pegeldaten': {
         maxBytes: 25 * MIB,
         needsVariant: false,
-        run: de7Zip(
-          ['pegel_messwerte.txt', 'pegel_tagesmittelwerte.txt', 'pegel_tagesmaxima.txt', 'pegel_stationen.txt'],
-          'pegel_messwerte.txt',
-          false,
-        ),
+        run: de7Pegeldaten,
         window: 6 * HOUR,
       },
     },
@@ -360,6 +433,16 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
           return doc.kind === 'list' ? emptyNormalised() : normaliseBe3Values(doc.items, c);
         },
       },
+      // P7a: the weekly percentile and flood-reference lists: the root (the ts_id list) stores nothing, the values
+      // calls state their series by metadata.
+      'be-3-refs': {
+        maxBytes: 2 * MIB,
+        needsVariant: false,
+        run: (b, c) => {
+          const doc = parseBe3Catchup(b);
+          return doc.kind === 'list' ? emptyNormalised() : normaliseBe3References(doc.items, c);
+        },
+      },
       'be-3-meta': {
         maxBytes: 16 * MIB,
         needsVariant: true,
@@ -419,6 +502,7 @@ export const ADAPTER_TIME: Readonly<Record<string, TimeConvention | null>> = {
   'LU-1': LU1_TIME,
   'LU-2': LU2_TIME,
   'LU-6': null,
+  ...Object.fromEntries(WIRED.flatMap((w) => (w.ADAPTER === null ? [] : [[w.SOURCE, w.TIME] as const]))),
 };
 
 /** The conventions that need DST proof before a spec loads (A§7.4 step 2; catalogue §0.3). */
@@ -434,7 +518,9 @@ export const GATED_KINDS: ReadonlySet<TimeConvention['kind']> = new Set([
  * fixtures. apps/server/test/adapters/dst-gate.test.ts runs them against their goldens; a spec without an
  * entry is never loaded.
  */
-export const DST_PROOF: Readonly<Record<string, { fallBack: readonly string[]; springForward: readonly string[] }>> = {
+export type DstProof = { fallBack: readonly string[]; springForward: readonly string[] };
+export const DST_PROOF: Readonly<Record<string, DstProof>> = {
+  ...Object.assign({}, ...WIRED.map((w) => w.PROOF)),
   'nl-2-wfs': {
     fallBack: ['nl-2-wfs-dst-fall-back.synthetic', 'nl-2-wfs-dst-fall-back-first.synthetic'],
     springForward: ['nl-2-wfs-dst-spring-forward.synthetic'],

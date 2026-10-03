@@ -30,8 +30,12 @@ import { parseLine } from './pipeline.ts';
 export const HOT_WINDOW_DAYS = 90;
 /** Mixed payloads (obs plus class or threshold state): one copy per UTC day is promoted to forever. */
 export const MIXED_SOURCES: ReadonlySet<string> = new Set(['CH-1', 'CH-2']);
-/** Kept whole until the phase that parses their class and threshold fields. */
-export const KEEP_UNTIL_PARSED: ReadonlySet<string> = new Set(['CH-1', 'CH-2']);
+/**
+ * Kept whole until the phase that parses their class and threshold fields. Empty since P7a, which parses CH-1's
+ * dangerLevel and CH-2's wl_1..wl_4: a payload whose batch opened a class or threshold row is promoted instead
+ * (parsedOkIn), beside the daily copy of MIXED_SOURCES.
+ */
+export const KEEP_UNTIL_PARSED: ReadonlySet<string> = new Set();
 
 const DAY_MS = 86_400_000;
 
@@ -127,12 +131,19 @@ export async function* prunePlan(
   }
 }
 
-/** The archive keys among `keys` whose batch loaded `ok` and stored every value it carried. */
+/**
+ * The archive keys among `keys` whose batch loaded `ok` and stored every value it carried. A batch that opened a
+ * class row or a reference range (P7a: a CH-1 payload whose dangerLevel changed, a CH-2 payload whose wl_*
+ * changed) is never among them: that payload is promoted to the forever class (A§7.2). `batch_id` of both tables
+ * is the opener; a confirmation moves only `seen_*` (load/refs.ts).
+ */
 export function parsedOkIn(db: Kysely<DB>): ParsedOk {
   return async (keys) => {
     const { rows } = await sql<{ archive_key: string }>`
-      SELECT archive_key FROM ingest_batch
-      WHERE archive_key = ANY(${keys}::text[]) AND parse_status = 'ok' AND n_skipped = 0`.execute(db);
+      SELECT b.archive_key FROM ingest_batch b
+      WHERE b.archive_key = ANY(${keys}::text[]) AND b.parse_status = 'ok' AND b.n_skipped = 0
+        AND NOT EXISTS (SELECT 1 FROM class_obs c WHERE c.batch_id = b.id)
+        AND NOT EXISTS (SELECT 1 FROM reference_value r WHERE r.batch_id = b.id)`.execute(db);
     return new Set(rows.map((r) => r.archive_key));
   };
 }

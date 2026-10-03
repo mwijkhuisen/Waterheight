@@ -299,7 +299,7 @@ describe('the DE-7, DE-8, LU-1 and LU-6 fixtures', { timeout: 60_000 }, () => {
     expect(lu?.unregistered).toEqual(['101', '104', '105', '106', '46', '47', '48', '49']);
   });
 
-  it('another gauge zero for a series that has one without a validity date is withheld, not written (alert gauge_zero_withheld)', async () => {
+  it('another gauge zero for a series that has one without a validity date ends it at its fetch and opens a new range (P7a, alert gauge_zero_changed)', async () => {
     const f = recorded('de-8-hydro', 'DE-8');
     const files = unzipSync(new Uint8Array(f.body));
     expect(Object.keys(files)).toEqual([HYDRO_MEMBER]);
@@ -324,16 +324,21 @@ describe('the DE-7, DE-8, LU-1 and LU-6 fixtures', { timeout: 60_000 }, () => {
       retention: 'forever',
     });
     expect(await h.loader({ now: new Date('2026-10-03T12:00:00Z') }).tick()).toEqual({ lines: 1, loaded: 1 });
-    // Only Stah differs: the others are confirmations.
-    expect(h.alerts).toEqual([{ code: 'gauge_zero_withheld', fields: { source: 'DE-8', spec: 'de-8-hydro', n: 1 } }]);
+    // Only Stah differs: the others are confirmations. Nothing is overwritten (P7a, R-072): the dateless zero ends
+    // at this payload's fetch and the new value holds from there.
+    expect(h.alerts).toEqual([{ code: 'gauge_zero_changed', fields: { source: 'DE-8', spec: 'de-8-hydro', n: 1 } }]);
     const after = (
       await h.t.admin.query(
-        'SELECT g.value_m, g.datum, g.valid, g.batch_id FROM gauge_zero g JOIN series s ON s.id = g.series_id WHERE s.provider_key = $1',
+        `SELECT g.value_m, lower(g.valid) AS lower, upper(g.valid) AS upper FROM gauge_zero g
+         JOIN series s ON s.id = g.series_id WHERE s.provider_key = $1 ORDER BY lower(g.valid) NULLS FIRST`,
         [STAH],
       )
     ).rows;
-    expect(after).toEqual(before);
-    expect(after[0]?.value_m).toBe(29.938);
+    expect(before).toHaveLength(1);
+    expect(after).toEqual([
+      { value_m: 29.938, lower: null, upper: new Date('2026-10-03T11:11:11Z') },
+      { value_m: 30.938, lower: new Date('2026-10-03T11:11:11Z'), upper: null },
+    ]);
   });
 });
 
