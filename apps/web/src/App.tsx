@@ -1,4 +1,4 @@
-import type { Meta } from '@rws/contracts';
+import { type Meta, ODBL_URL } from '@rws/contracts';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
 import { StationsMap } from './features/map/StationsMap.tsx';
@@ -8,7 +8,15 @@ import { StationPanel } from './features/station/StationPanel.tsx';
 import { StationTable } from './features/table/StationTable.tsx';
 import { Timebar } from './features/timebar/Timebar.tsx';
 import { attributionText } from './lib/attribution.ts';
-import { chartSpan, useDebounced, useMeta, useSnapshot, useStations } from './lib/data/api.ts';
+import {
+  chartSpan,
+  downloadHref,
+  useDebounced,
+  useMeta,
+  useRiversManifest,
+  useSnapshot,
+  useStations,
+} from './lib/data/api.ts';
 import { formatDay, quantise, ZONE } from './lib/time/time.ts';
 import { otherLanguageHref } from './lib/url/url.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
@@ -224,6 +232,7 @@ const httpsUrl = (url: string | null): string | undefined => {
  */
 function Footer({ locale, meta, t }: { locale: Locale; meta: Meta | undefined; t: number | undefined }) {
   const date = t === undefined ? undefined : formatDay(t, locale, ZONE);
+  const download = downloadHref(useRiversManifest().data);
   const shown = new Set<string>();
   return (
     <footer className={styles.footer}>
@@ -252,6 +261,16 @@ function Footer({ locale, meta, t }: { locale: Locale; meta: Meta | undefined; t
       <p>
         <a href="https://www.openstreetmap.org/copyright">{m.osm_credit({}, { locale })}</a> ·{' '}
         {m.protomaps_credit({}, { locale })}
+      </p>
+      <p>
+        {m.rivers_licence_lead({}, { locale })} <a href={ODBL_URL}>{m.rivers_licence_link({}, { locale })}</a>.{' '}
+        {m.rivers_collective({}, { locale })}
+        {download !== undefined && (
+          <>
+            {' '}
+            <a href={download}>{m.rivers_download({}, { locale })}</a>
+          </>
+        )}
       </p>
       <p>
         <a href="/third-party-notices.txt">{m.notices_link({}, { locale })}</a>

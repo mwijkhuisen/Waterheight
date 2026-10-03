@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { extname, isAbsolute, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { siteHeaders } from './headers.ts';
-import { prepareTiles } from './prepare-tiles.ts';
+import { prepareRivers, prepareTiles } from './prepare-tiles.ts';
 
 const port = Number(process.env.E2E_PORT ?? 4443);
 const apiPort = Number(process.env.E2E_API_PORT ?? 4480);
@@ -27,6 +27,9 @@ const www = fileURLToPath(new URL('../dist-e2e/', import.meta.url));
 const tmp = mkdtempSync(join(tmpdir(), 'rws-e2e-'));
 const tiles = join(tmp, 'tiles');
 prepareTiles(tiles);
+const riversData = join(tmp, 'rivers');
+const downloads = join(tmp, 'downloads');
+prepareRivers(riversData, downloads);
 execFileSync(
   'openssl',
   [
@@ -39,6 +42,10 @@ execFileSync(
 
 const headers = siteHeaders();
 const TILE = /^\/tiles\/(basemap|planet-z6)-[0-9]{8}\.pmtiles$/;
+/** site.caddy's @tiles_rivers (P6b): the same rule, its own matcher. */
+const RIVER_TILE = /^\/tiles\/rivers-[0-9]{8}\.pmtiles$/;
+const REACHES = /^\/data\/v1\/rivers\/reaches-[0-9]{8}\.json$/;
+const DOWNLOAD = /^\/downloads\/rivers-[0-9]{8}\.geojson\.gz$/;
 /** site.caddy's @one_range: a tile file is served only for this Range (SR-1)... */
 const ONE_RANGE = /^bytes=[0-9]+-[0-9]+$/;
 /** ...and only when none of these is there (SR2-1; an empty header counts as absent, as in Caddy and Go). */
@@ -60,6 +67,7 @@ const TYPES: Record<string, string> = {
   '.pbf': 'application/x-protobuf',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.gz': 'application/gzip',
   '.txt': 'text/plain; charset=utf-8',
   '.md': 'text/plain; charset=utf-8',
 };
@@ -155,13 +163,27 @@ const server = createServer(
     if (path === '/status' || path.startsWith('/status/')) return send(res, 404);
     if (path === '/tiles/manifest.json')
       return serve(res, join(tiles, 'manifest.json'), undefined, 'public, max-age=60');
-    if (TILE.test(path)) {
-      const tile = file(tiles, path.slice('/tiles'.length));
+    if (TILE.test(path) || RIVER_TILE.test(path)) {
+      // The overlay is served from the rivers directory (root-owned), the basemap from the tiles directory.
+      const tile = file(RIVER_TILE.test(path) ? riversData : tiles, path.slice('/tiles'.length));
       if (tile === undefined) return send(res, 404);
       const one = ONE_RANGE.test(range ?? '') && NO_CONDITION.every((h) => !req.headers[h]);
       return one ? serve(res, tile, range, IMMUTABLE) : send(res, 416);
     }
     if (path === '/tiles' || path.startsWith('/tiles/')) return send(res, 404);
+    // P6b: the river data (site.caddy's @rivers_*): exact names, a missing file or anything else a bare 404.
+    if (path === '/data/v1/rivers/manifest.json')
+      return serve(res, join(riversData, 'manifest.json'), undefined, 'public, max-age=60');
+    if (REACHES.test(path)) {
+      const f = file(riversData, path.slice('/data/v1/rivers'.length));
+      return f === undefined ? send(res, 404) : serve(res, f, range, IMMUTABLE);
+    }
+    if (/^\/data\/v1\/rivers(\/|$)/.test(path)) return send(res, 404);
+    if (DOWNLOAD.test(path)) {
+      const f = file(downloads, path.slice('/downloads'.length));
+      return f === undefined ? send(res, 404) : serve(res, f, range, IMMUTABLE);
+    }
+    if (/^\/downloads(\/|$)/.test(path)) return send(res, 404);
     const asset = file(www, path);
     if (path === '/assets' || path.startsWith('/assets/'))
       return asset === undefined ? send(res, 404) : serve(res, asset, range, IMMUTABLE);

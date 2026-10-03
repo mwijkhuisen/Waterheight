@@ -1,0 +1,10 @@
+{
+  "from": "live",
+  "url": "https://www.hochwasserportal.nrw/data/internet/stations/stations.json",
+  "retrieved_on": "2026-10-03",
+  "source_sha256": "a0c4695855bcd40db43ff822b17832e09ae0a8db3c1d7c743143ff7e460f5647",
+  "source_bytes": 568467,
+  "licence": "DL-DE Zero 2.0",
+  "synthetic": false,
+  "trimmed": "first 5 objects in file order, plus the first object with site_no 102, plus the first 3 objects with a non-empty WTO_OBJECT (union, file order); whole objects, values unchanged, re-serialised with JSON.stringify (1-space indent)"
+}

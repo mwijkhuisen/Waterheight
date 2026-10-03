@@ -40,6 +40,7 @@ const root = join(import.meta.dirname, '..');
 export const MESSWERTE_FIXTURE = 'apps/server/src/adapters/de-7/fixtures/de-7-messwerte.raw';
 export const STATIONS_FIXTURE = 'apps/server/src/adapters/de-8/fixtures/de-8-stations.raw';
 export const HYDRO_FIXTURE = 'apps/server/src/adapters/de-8/fixtures/de-8-hydro.raw';
+export const WATERS_CSV = 'registry/seed/de-7-waters.csv';
 export const DE1_REGISTRY = 'registry/stations/de-1.yaml';
 export const OUTPUT = join(root, 'registry/stations/de-7.yaml');
 
@@ -122,6 +123,8 @@ export type Inputs = {
   warns: Map<string, boolean>;
   /** The hydro file (the rows of `NA` aside). */
   hydro: HydroRow[];
+  /** Station number → the published water body (`WTO_OBJECT`; registry/seed/de-7-waters.csv). */
+  waters: Map<string, string>;
   /** The rows of registry/stations/de-1.yaml (WSV gauges): code, name, quantity and WGS84 position. */
   de1: De1Row[];
 };
@@ -202,6 +205,8 @@ function build(inputs: Inputs): Plan {
     if (!inputs.readings.has(no)) throw new Error(`tier-1 station ${no} has no readings`);
   }
 
+  const stray = [...inputs.waters.keys()].filter((no) => !inputs.readings.has(no) || PLACEHOLDERS.has(no));
+  if (stray.length > 0) throw new Error(`${WATERS_CSV}: stations that are not registered: ${stray.join(', ')}`);
   const unlisted = delivering.filter((no) => !master.has(no));
   if (unlisted.length > 0)
     throw new Error(`stations in messwerte.txt that the station file does not list: ${unlisted.join(', ')}`);
@@ -225,7 +230,7 @@ function build(inputs: Inputs): Plan {
       provider_code: no,
       provider_key: `${no}/W`,
       name: label(s.name, `${at} name`),
-      water_name: null,
+      water_name: inputs.waters.get(no) ?? null,
       country: 'DE',
       lon: s.lon,
       lat: s.lat,
@@ -268,7 +273,8 @@ function header(inputs: Inputs, plan: Plan): string {
     '# Which gauges deliver, and each native_step = expected_step (PT5M or PT15M), come from messwerte.txt: the modal gap between',
     '# the consecutive timestamps of the gauge (any other gap fails the generator). name = station_name verbatim and the WGS84',
     '# coordinates come from the OpenHygon station file; the hydro file gives the gauge zero (`Nullpunkt`, m on DHHN2016: datum',
-    '# NHN, no validity dates) and the operator (`Betreiber`). expected_threshold_source DE-7 where the station file states',
+    "# NHN, no validity dates) and the operator (`Betreiber`). water_name is the station list's `WTO_OBJECT` (registry/seed/de-7-waters.csv,",
+    '# recorded by tools/geo/rivernet/record-nrw-waters.ts), null where the list names none. expected_threshold_source DE-7 where the station file states',
     '# LANUV_Info_1 (the warning levels), else none. H is cm above the gauge zero (value_kind stage). staleness_limit PT2H (the',
     '# capture is hourly while the pruner is a dry run).',
     ...comment(
@@ -359,6 +365,18 @@ export async function readInputs(): Promise<Inputs> {
     if (r[3] !== stations[i]?.no) throw new Error(`station file row ${i + 1}: the scans disagree`);
     warns.set(r[3] as string, (r[6] ?? '') !== '');
   }
+  const waterText = readFileSync(join(root, WATERS_CSV));
+  const retrieved = /^# source \S+, retrieved (\d{4}-\d{2}-\d{2}) \(UTC\)/m.exec(waterText.toString('utf8'))?.[1];
+  if (retrieved === undefined) throw new Error(`${WATERS_CSV}: no retrieval date in the header`);
+  files.push({ path: WATERS_CSV, sha256: sha256Of(waterText), recorded_at: retrieved });
+  const waters = new Map<string, string>();
+  const wcsv = scanCsv(waterText.toString('utf8').replace(/^#.*\n/gm, ''), { delimiter: ';', extraField: false });
+  if (wcsv.header.join(';') !== 'station_no;water') throw new Error(`${WATERS_CSV}: unexpected header`);
+  for (const [no, water] of wcsv.rows) {
+    if (no === undefined || water === undefined || waters.has(no))
+      throw new Error(`${WATERS_CSV}: a bad or repeated row`);
+    waters.set(no, label(water, `${WATERS_CSV} ${no}`));
+  }
   const hydro = parseHydro(await readMember(read(HYDRO_FIXTURE), HYDRO_MEMBER));
   const doc = parse(readFileSync(join(root, DE1_REGISTRY), 'utf8')) as { stations?: Obj[] };
   const de1: De1Row[] = (doc.stations ?? []).map((s) => {
@@ -375,7 +393,7 @@ export async function readInputs(): Promise<Inputs> {
     return { code, name, quantity, lon: lon as number | null, lat: lat as number | null };
   });
   if (de1.length === 0) throw new Error(`${DE1_REGISTRY}: no station`);
-  return { files, readings, stations, warns, hydro, de1 };
+  return { files, readings, stations, warns, waters, hydro, de1 };
 }
 
 if (import.meta.main) {

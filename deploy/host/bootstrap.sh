@@ -216,6 +216,13 @@ ensure_dir /srv/rws/owner/status 0750 65532 65532
 # writes it, and the networked basemap job only its .staging subdirectory (T-WEB-1). Before P3 it was root's.
 ensure_dir /srv/rws/tiles 0755 65532 65532
 ensure_dir /srv/rws/tiles/.staging 0700 65532 65532
+# The river files (P6b): written only by rws-rivers-refresh, as root, after it verified a signed geo release; Caddy
+# mounts exactly these two directories read-only, never all of /srv/rws/public. The work directory is root's.
+ensure_dir /srv/rws/public/data 0755 0 0
+ensure_dir /srv/rws/public/data/v1 0755 0 0
+ensure_dir /srv/rws/public/data/v1/rivers 0755 0 0
+ensure_dir /srv/rws/public/downloads 0755 0 0
+ensure_dir /var/lib/rws/rivers 0700 0 0
 # Root's: the backup job mounts only the subdirectories below, and an owner of the parent could swap db/ for a
 # link under root's nightly dump (nothing writes the parent itself).
 ensure_dir /srv/rws/backup 0700 0 0
@@ -419,8 +426,8 @@ if [[ -s /srv/rws/public/ops/ops.json ]]; then
 else
   fix "/srv/rws/public/ops/ops.json" ops_update '.'
 fi
-# The basemap refresh timer is installed with the other units but not enabled here: the owner enables it after the
-# first manual run of rws-basemap-refresh.
+# The basemap and rivers refresh timers are installed with the other units but not enabled here: the owner enables
+# each after the first manual run of rws-basemap-refresh and rws-rivers-refresh.
 for unit in rws-status-copy.path rws-update.timer rws-backup.timer rws-restore-drill.timer rws-tick.timer; do
   enable_now "$unit"
 done

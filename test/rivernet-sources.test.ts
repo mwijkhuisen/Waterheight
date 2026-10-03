@@ -53,6 +53,7 @@ describe('registry/geo-sources.yaml', () => {
     for (const r of s.geofabrik.regions)
       expect(r.url).toMatch(/^https:\/\/download\.geofabrik\.de\/europe\/.*-latest\.osm\.pbf$/);
     expect(s.euhydro.max_minutes).toBe(20);
+    expect(s.nrw_stations.url).toBe('https://www.hochwasserportal.nrw/data/internet/stations/stations.json');
   });
 
   it('names every region url as the index has it', () => {
@@ -80,6 +81,18 @@ describe('registry/geo-sources.yaml', () => {
       ),
     ).toThrow();
     expect(mutated((o) => (o.extra = 1))).toThrow();
+    expect(
+      mutated(
+        (o) => ((o as unknown as { nrw_stations: { url: string } }).nrw_stations.url = 'https://example.org/s.json'),
+      ),
+    ).toThrow();
+    expect(
+      mutated(
+        (o) =>
+          ((o as unknown as { nrw_stations: { url: string } }).nrw_stations.url =
+            'http://www.hochwasserportal.nrw/s.json'),
+      ),
+    ).toThrow();
     expect(
       mutated((o) => (o.canal_traps = [{ name: 'X', osm_relation_id: null, wikidata: null, evidence: 'e' }])),
     ).toThrow();

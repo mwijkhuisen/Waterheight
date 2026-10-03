@@ -1,4 +1,4 @@
-import { Meta, Series, Snapshot, Stations } from '@rws/contracts';
+import { Meta, RiversManifest, Series, Snapshot, Stations } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { quantise, STEP_MS, toUrlT } from '../time/time.ts';
@@ -29,6 +29,24 @@ export const queryClient = new QueryClient({
 
 export const useMeta = () =>
   useQuery({ queryKey: ['meta'], queryFn: ({ signal }) => getJson('/api/v1/meta', Meta, signal), staleTime: 60_000 });
+
+// The river-network download is offered only while the manifest of the installed release parses (P6b); a 404, a
+// network error or a manifest of another shape shows no link and no error.
+export const MANIFEST_PATH = '/data/v1/rivers/manifest.json';
+
+/** The download link of a manifest, or undefined for anything that is not a valid one. */
+export function downloadHref(manifest: unknown): string | undefined {
+  const parsed = RiversManifest.safeParse(manifest);
+  return parsed.success ? `/downloads/${parsed.data.current.download.file}` : undefined;
+}
+
+export const useRiversManifest = () =>
+  useQuery({
+    queryKey: ['rivers-manifest'],
+    queryFn: ({ signal }) => getJson(MANIFEST_PATH, RiversManifest, signal),
+    retry: false,
+    staleTime: 300_000,
+  });
 
 export const useStations = () =>
   useQuery({
