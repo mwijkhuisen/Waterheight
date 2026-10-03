@@ -115,6 +115,12 @@ export type ForecastSource = keyof typeof FORECAST_SOURCES;
 export const MAX_RUN_POINTS = 2000;
 export const MAX_PAYLOAD_RUNS = 50;
 const MAX_ABS = 1e7;
+/**
+ * A valid time more than this before (issue ?? fetch) is dropped as `before_window` (review SEC-1: a stamp years back
+ * would make the loader's partition call create every month in between). NL-1 starts about 10 minutes before its
+ * fetch, LU-3 about 105 minutes, DE-2 at its issue.
+ */
+export const MAX_LEAD_MS = 2 * 24 * HOUR;
 
 /** A run in canonical form: UTC ms, float32 values in FORECAST_COLUMNS order, sorted by valid time. */
 export type CanonPoint = { ms: number; flags: number; v: readonly (number | null)[] };
@@ -148,7 +154,8 @@ export type Checked = { run: CanonRun | null; dropped: Record<string, number> };
  * The bounds every forecast run passes before it is stored: a provider issue time more than 15 minutes after the
  * fetch is drift (`future_issue`), a non-finite or absurd value is drift (`bad_value`), two points at one valid time
  * are drift (the adapter resolves conflicts), a point past (issue ?? fetch) + horizon + 1 h is dropped as
- * `beyond_horizon` (retained and alerted), a point with no value is a `gap`, and a run left without points is none.
+ * `beyond_horizon` and one before (issue ?? fetch) − MAX_LEAD_MS as `before_window` (both retained and alerted), a
+ * point with no value is a `gap`, and a run left without points is none.
  */
 export function checkRun(run: ForecastRunIn, fetchedAtMs: number, decl: ForecastSourceDecl): Checked {
   const dropped: Record<string, number> = {};
@@ -161,6 +168,7 @@ export function checkRun(run: ForecastRunIn, fetchedAtMs: number, decl: Forecast
   const segmentEnd = run.providerSegmentEnd === null ? null : instant(run.providerSegmentEnd, 'bad_segment');
   if (run.stepMs !== null && !(Number.isInteger(run.stepMs) && run.stepMs > 0)) throw new SchemaDrift('bad_step');
   const limit = (issuedAt ?? fetchedAtMs) + decl.horizonMs + HOUR;
+  const floor = (issuedAt ?? fetchedAtMs) - MAX_LEAD_MS;
   const points: CanonPoint[] = [];
   for (const p of run.points) {
     const ms = instant(p.ts, 'bad_time');
@@ -172,6 +180,7 @@ export function checkRun(run: ForecastRunIn, fetchedAtMs: number, decl: Forecast
       return float32(x);
     });
     if (ms > limit) count('beyond_horizon');
+    else if (ms < floor) count('before_window');
     else if (v.every((x) => x === null)) count('gap');
     else points.push({ ms, flags: p.flags, v });
   }

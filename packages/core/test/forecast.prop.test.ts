@@ -48,7 +48,9 @@ const reexpress = (ms: number, quarters: number) => {
   const a = Math.abs(off);
   return `${local}${sign}${String(Math.floor(a / 60)).padStart(2, '0')}:${String(a % 60).padStart(2, '0')}`;
 };
-const canon = (r: ForecastRunIn) => checkRun(r, T0 + 1000 * STEP, NL1).run as CanonRun;
+// fetched 200 steps after T0: every generated point (T0 … T0 + 440 steps) is inside the two days before and the
+// horizon after it
+const canon = (r: ForecastRunIn) => checkRun(r, T0 + 200 * STEP, NL1).run as CanonRun;
 
 describe('the run encoding', () => {
   it('is invariant under offset re-expression and point order', () => {

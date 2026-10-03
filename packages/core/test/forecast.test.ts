@@ -9,6 +9,7 @@ import {
   type ForecastRunIn,
   isCurrent,
   isTail,
+  MAX_LEAD_MS,
   MAX_RUN_POINTS,
   mergeDecision,
   SchemaDrift,
@@ -106,6 +107,19 @@ describe('checkRun', () => {
       checkRun(run([{ ts: new Date(limit).toISOString(), value: 1, flags: 0 }], { issuedAt: issued }), FETCH, NL1)
         .dropped,
     ).toEqual({ beyond_horizon: 1, empty_run: 1 });
+  });
+
+  it('drops points more than two days before the issue time, else the fetch (review SEC-1)', () => {
+    const floor = FETCH - MAX_LEAD_MS;
+    const at = (ms: number, value = 1) => ({ ts: new Date(ms).toISOString(), value, flags: 0 });
+    const out = checkRun(run([at(floor - 60_000), at(floor), at(Date.parse('2016-09-29T14:00Z'))]), FETCH, NL1);
+    expect(out.run?.points.map((p) => p.ms)).toEqual([floor]);
+    expect(out.dropped).toEqual({ before_window: 2 });
+    // a provider issue time moves the floor with it
+    const issued = FETCH - 3 * 3_600_000;
+    expect(
+      checkRun(run([at(issued - MAX_LEAD_MS - 1)], { issuedAt: new Date(issued).toISOString() }), FETCH, NL1).dropped,
+    ).toEqual({ before_window: 1, empty_run: 1 });
   });
 });
 

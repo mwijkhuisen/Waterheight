@@ -126,6 +126,7 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * whose geometry or texts the loader left out because they are over its byte
  * bound (WARNING_BYTES), so that no size CHECK quarantines a flood warning.
  * P8a: `beyond_horizon`, a forecast value past its provider's horizon (packages/core checkRun);
+ * `before_window` (review SEC-1), a forecast value more than two days before its run's issue (else fetch) time;
  * `incomplete_run`, a staged LU-3 group whose five files never all arrived (evicted or expired); `combine_drift`,
  * a staged group that its combiner refused; `run_mismatch` and `step_mismatch`, a complete LU-3 group whose files
  * disagree on their times or are not one hour apart (the whole run is withheld, as for an incomplete one).
@@ -144,6 +145,7 @@ export const RETAINED = [
   'bad_text',
   'reference_out_of_range',
   'beyond_horizon',
+  'before_window',
   'incomplete_run',
   'combine_drift',
   'run_mismatch',

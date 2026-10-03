@@ -253,9 +253,31 @@ describe('forecast runs through the loader', { timeout: 300_000 }, () => {
   });
 
   it('a series no registry has is unknown: counted, kept for a replay, nothing stored', async () => {
-    await put('NL-1', 'nl-1-fc-1h', 'nope/Q', '2026-10-03T05:25:00Z', { series: 'nope/Q/NVT/x', points: RUN1 });
+    await put('NL-1', 'nl-1-fc-1h', 'nope/Q', '2026-10-03T05:25:00Z', {
+      series: 'nope/Q/NVT/x',
+      points: steps('2026-10-03T05:20:00Z', 20, 100),
+    });
     expect(await tick()).toEqual({ lines: 1, loaded: 1 });
     expect((await batches('nl-1-fc-1h')).at(-1)).toMatchObject({ n_rows: 0, n_new: 0, n_skipped: 1 });
+  });
+
+  it('a value more than two days before the issue time is withheld: counted, alerted, the rest stored (review SEC-1)', async () => {
+    const before = h.alerts.length;
+    await put('DE-2', 'de-2-wv', 'kaub', '2026-10-02T05:12:00Z', {
+      target: 'DE-1',
+      series: KAUB_W,
+      issuedAt: '2026-10-02T07:00:00+02:00',
+      points: [['2026-09-29T05:00:00Z', 1], ...steps('2026-10-02T05:00:00Z', 3, 200)],
+    });
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    expect((await batches('de-2-wv')).at(-1)).toMatchObject({ n_rows: 3, n_new: 3, n_skipped: 1 });
+    expect((await runsOf(KAUB_W, 'DE-2')).at(-1)).toMatchObject({
+      first_valid: new Date('2026-10-02T05:00:00Z'),
+      n: 3,
+    });
+    expect(h.alerts.slice(before)).toEqual([
+      { code: 'before_window', fields: { source: 'DE-2', spec: 'de-2-wv', n: 1 } },
+    ]);
   });
 });
 

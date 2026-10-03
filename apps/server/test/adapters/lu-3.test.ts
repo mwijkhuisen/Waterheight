@@ -58,8 +58,11 @@ const partsOf = (station: string) =>
 const FETCHED = Date.parse('2030-03-30T21:20:00Z');
 const at = (i: number) => new Date(Date.parse('2030-03-01T00:00:00Z') + i * 3_600_000).toISOString();
 const { ORDER, BELOW_FLOOR } = FORECAST_FLAGS;
+/** A fetch 105 minutes after the run's first step, as AGE serves it (inside the core bounds on both sides). */
+const fetchOf = (run: ForecastRunIn | null | undefined) =>
+  run?.points[0] === undefined ? FETCHED : Date.parse(run.points[0].ts) + 105 * 60_000;
 /** What the loader's pipeline does to a run before it stores it: the core bounds (nothing dropped, no drift). */
-function checked(run: ForecastRunIn | null | undefined, fetchedAt = FETCHED): CanonRun {
+function checked(run: ForecastRunIn | null | undefined, fetchedAt = fetchOf(run)): CanonRun {
   expect(run).toBeTruthy();
   const out = checkRun(run as ForecastRunIn, fetchedAt, FORECAST_SOURCES['LU-3']);
   expect(out.dropped).toEqual({});
@@ -361,7 +364,7 @@ describe('rules (synthetic)', () => {
     expect(a.points[0]?.ms).toBe(b.points[0]?.ms);
     // The same parts staged at another fetch time are the same run (no issue time: the loader infers it).
     const later = combineStaged(staged(five('diekirch', rows), FETCHED + 3_600_000)).runs[0];
-    expect(sha(checked(later, FETCHED))).toBe(sha(a));
+    expect(sha(checked(later))).toBe(sha(a));
   });
 
   it('Moselle floors: perl 250, stadtbredimus 260, wasserbillig 220; an AGE station has none', () => {
