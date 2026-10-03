@@ -1,0 +1,12 @@
+{
+  "spec": "de-6-stations",
+  "source": "DE-6",
+  "synthetic": true,
+  "recorded_at": "2027-03-28T02:21:00Z",
+  "status": 200,
+  "content_type": "application/geo+json; charset=UTF-8",
+  "url": "https://api.hochwasserzentralen.de/public/v1/data/stations?format=json",
+  "bytes": 4119,
+  "trimmed": false,
+  "note": "[U] Hand-made from de-6-stations.raw (as de-6-stations-dst-fall-back). The spring-forward night of 2027-03-28 (updated 03:20 CET = 02:20Z, fetched 02:21Z): 01:55 = 00:55Z, the times 02:00 and 02:30, which do not exist in Europe/Berlin (dropped dst_gap), 03:00 CEST = 01:00Z, and a feature without timestamp (updated)."
+}

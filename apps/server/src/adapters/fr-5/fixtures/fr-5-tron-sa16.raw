@@ -1,0 +1,81 @@
+{
+    "Scenario": {
+        "Flux": {
+            "Version": "1",
+            "DateRevision": "2019-07-02T10:00:00"
+        },
+        "CodeScenario": "VIC",
+        "VersionScenario": "1.1",
+        "NomScenario": "Référentiels et données de la vigilance crues métropolitaine",
+        "DateHeureCreationFichier": "2026-10-02T02:25:56+00:00",
+        "Emetteur": "1524"
+    },
+    "ListEntVigiCru": [
+        {
+            "CdEntVigiCru": "SA16",
+            "TypEntVigiCru": "8",
+            "LbEntVigiCru": "Rhin courant libre",
+            "CdDistrictEntVigiCru_1": "A renseigner obligatoirement",
+            "DtHrCreatEntVigiCru": "A renseigner obligatoirement",
+            "DtHrMajEntVigiCru": "A renseigner obligatoirement",
+            "StEntVigiCru": "Validé",
+            "CdTCC": "A renseigner obligatoirement",
+            "CdInt": "A renseigner obligatoirement",
+            "aNPlusUn": {
+                "CdEntVigiCruSuperieur": "3",
+                "TypEntVigiCruSuperieur": "5",
+                "Link": "https://www.vigicrues.gouv.fr/services/v1.1/TerEntVigiCru.json?CdEntVigiCru=3\u0026TypEntVigiCru=5"
+            },
+            "aNMoinsUn": [
+                {
+                    "CdEntVigiCruInferieur": "A302009050",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Lauterbourg",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=A302009050\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "A380020001",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Wissembourg [Weiler]",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=A380020001\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "A369011001",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Beinheim",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=A369011001\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "A373020001",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Niederroedern",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=A373020001\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "A355005050",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Plittersdorf",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=A355005050\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "A375005050",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Maxau",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=A375005050\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "A368021001",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Leutenheim",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=A368021001\u0026TypEntVigiCru=7"
+                },
+                {
+                    "CdEntVigiCruInferieur": "A361011001",
+                    "TypEntVigiCruInferieur": "7",
+                    "LbEntVigiCruInferieur": "Gœrsdorf",
+                    "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=A361011001\u0026TypEntVigiCru=7"
+                }
+            ]
+        }
+    ]
+}

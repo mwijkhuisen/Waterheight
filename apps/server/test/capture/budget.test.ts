@@ -74,7 +74,7 @@ describe('request budgets', () => {
     }
   });
 
-  it('BE-3: ≤ 2 value requests per 10 min plus the daily metadata', () => {
+  it('BE-3: ≤ 2 value requests per 10 min plus the daily metadata and the weekly references', () => {
     expect(spec('be-3-values').rows).toHaveLength(2);
     expect(spec('be-3-values').cadence_s).toBe(600);
     expect(spec('be-3-meta').cadence_s).toBe(86400);
@@ -83,7 +83,20 @@ describe('request budgets', () => {
         .filter((s) => s.source === 'BE-3')
         .map((s) => s.id)
         .sort(),
-    ).toEqual(['be-3-catchup', 'be-3-meta', 'be-3-values']);
+    ).toEqual(['be-3-catchup', 'be-3-meta', 'be-3-refs', 'be-3-values']);
+  });
+
+  it('BE-3 references (P7a): weekly, one list plus at most 45 values calls 5 s apart, inside the run deadline', () => {
+    const s = spec('be-3-refs');
+    expect(s.cadence_s).toBe(7 * 86400);
+    expect(s.rows).toHaveLength(1);
+    expect(s.request.max_expand).toBe(45);
+    expect(s.variants?.space_ms).toBeGreaterThanOrEqual(5000);
+    // (1 list + 45 calls) × 5 s is under four minutes a week: 46 requests a week at the most.
+    expect((s.rows.length + s.request.max_expand) * (s.variants?.space_ms ?? 0)).toBeLessThan(
+      0.9 * (s.cadence_s as number) * 1000,
+    );
+    expect(s.rows.length + s.request.max_expand).toBeLessThanOrEqual(46);
   });
 
   it('BE-3 catch-up (P5c): seed only, off-peak, 5 s apart, from the display start, KiWIS call limits', () => {

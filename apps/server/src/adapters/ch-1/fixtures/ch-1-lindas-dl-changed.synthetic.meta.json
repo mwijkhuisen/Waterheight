@@ -1,0 +1,12 @@
+{
+  "spec": "ch-1-lindas",
+  "variant": "lake",
+  "source": "CH-1",
+  "synthetic": true,
+  "recorded_at": "2026-09-30T12:04:00Z",
+  "status": 200,
+  "url": "https://ld.admin.ch/query",
+  "bytes": 6146,
+  "trimmed": false,
+  "note": "Copy of ch-1-lindas-lake.raw with one edit: the danger level (dl) of station 2043 Berlingen is 3 instead of 1. Everything else is byte for byte the real lake cube. Used by the promotion test (a changed class). The loader keys a class on the observation time, so a payload that restates the same instant with another level opens nothing (only that batch corrects its own row): the end-to-end test (test/load/p7a.int.test.ts) shifts the time to make a change."
+}

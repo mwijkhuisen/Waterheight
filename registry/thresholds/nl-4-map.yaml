@@ -1,0 +1,38 @@
+# NL-4 -> NL-1 map (P7a, reviewed). The NL-4 workbook `Code` is the NL-1 `Locatie.Code`: both are RWS DDL codes, so a
+# class row belongs to the registered primary NL-1 series of the same code and quantity (H: a NAP level series, in cm
+# NAP; Q: m3/s), exactly as the registry sync matches them. `none` lists the registered public primary NL-1 series
+# that have no class row in the edition, with the reason; test/registry-nl4-map.test.ts proves the list is exactly
+# that set, so a new series or a new edition without an entry here fails CI.
+edition: "2026-04-15"
+rule: "NL-4 Code = NL-1 Locatie.Code; H classes belong to the NAP level series, Q classes to the discharge series."
+none:
+  - code: antwerpen
+    quantity: H
+    reason: Belgian point served by RWS; the edition has no class row for this code and quantity.
+  - code: hagestein.boven
+    quantity: Q
+    reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
+  - code: herenlaak
+    quantity: H
+    reason: Belgian point (Maaseik, Herenlaak) served by RWS; the edition has no class row for this code and quantity.
+  - code: holtheme.vecht
+    quantity: H
+    reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
+  - code: kanne
+    quantity: Q
+    reason: Belgian point (Kanne) served by RWS; the edition has no class row for this code and quantity.
+  - code: lith.beneden
+    quantity: H
+    reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
+  - code: lixhebiefaval
+    quantity: H
+    reason: Belgian point (Lixhe, Bief Aval) served by RWS; the edition has no class row for this code and quantity.
+  - code: millingenaanderijn
+    quantity: Q
+    reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
+  - code: millingenaanderijn.pannerdensekop
+    quantity: H
+    reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
+  - code: rhenen.grebbeberg
+    quantity: H
+    reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.

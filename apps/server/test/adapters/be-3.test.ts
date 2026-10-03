@@ -1,16 +1,30 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { GaugeZeroRow, type Normalised, ObsRow, QC, type Registry, SchemaDrift, type SeriesDecl } from '@rws/core';
+import {
+  ClassRow,
+  GaugeZeroRow,
+  type Normalised,
+  ObsRow,
+  QC,
+  ReferenceRow,
+  type Registry,
+  SchemaDrift,
+  type SeriesDecl,
+} from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { kiwisUrlProblems, MAX_IDS } from '../../src/adapters/_shared/kiwis/request.ts';
+import { adapter as capture, REFERENCE_SHORTNAMES } from '../../src/adapters/be-3/capture.ts';
 import {
   type Context,
   normaliseLayer,
+  normaliseReferences,
   normaliseStations,
   normaliseValues,
   SOURCE,
   TIME,
 } from '../../src/adapters/be-3/normalise.ts';
 import { parseCatchup, parseLayer, parseTable, parseValues } from '../../src/adapters/be-3/parse.ts';
+import { baseRequest, loadRegistry } from '../../src/capture/specs.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
 // BE-3 SPW KiWIS (owner audience, catalogue §2.4): parse + normalise of the hand-made synthetic payloads equal their
@@ -21,6 +35,7 @@ import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 const series = (key: string, unit: 'm' | 'm³/s', kind: SeriesDecl['value_kind']): [string, SeriesDecl] => [
   key,
   {
+    station: `be.spw.${key.split('/')[0]}`,
     key,
     quantity: unit === 'm' ? 'H' : 'Q',
     native_unit: unit,
@@ -48,6 +63,8 @@ const registry: Registry = new Map([
   level('8007/Habs'),
 ]);
 
+/** The context of the daily station list: the registry and the fetch time (NIVCRU's class time). */
+const stationsCtx = { registry, fetchedAt: Date.parse('2030-01-01T04:50:00Z') };
 const LAYER_AT = '2030-01-01T10:12:00Z';
 const CATCHUP_AT = '2030-01-01T02:30:00Z';
 const ctx = (at: string, extra: Partial<Context> = {}): Context => ({ registry, fetchedAt: Date.parse(at), ...extra });
@@ -67,7 +84,7 @@ const valuesOf = (name: string, extra: Partial<Context> = {}) =>
   normaliseValues(parseValues(body(name)), ctx(CATCHUP_AT, extra));
 const of = (out: Normalised, key: string) => out.obs.filter((r) => r.series === key);
 const stationsOf = (rows: unknown[][], names = ['station_no', 'station_gauge_datum', 'station_gauge_datum_unit']) =>
-  normaliseStations(parseTable(bytes([names, ...rows])), { registry });
+  normaliseStations(parseTable(bytes([names, ...rows])), stationsCtx);
 
 /** A layer item with the md_returnfields of the spec. */
 const layerItem = (over: Record<string, unknown> = {}) => ({
@@ -133,7 +150,7 @@ describe('golden files (synthetic: owner audience)', () => {
   });
 
   it('the stations table: the gauge zero of every registered stage series', () => {
-    const out = normaliseStations(parseTable(body('be-3-stations.synthetic')), { registry });
+    const out = normaliseStations(parseTable(body('be-3-stations.synthetic')), stationsCtx);
     expect(out).toEqual(golden('be-3-stations.synthetic', out));
     expect(out.obs).toEqual([]);
   });
@@ -251,7 +268,7 @@ describe('rules (synthetic)', () => {
   });
 
   it('9999.0 datum → unknown, no conversion: no zero is stored and nothing is guessed', () => {
-    const out = normaliseStations(parseTable(body('be-3-stations.synthetic')), { registry });
+    const out = normaliseStations(parseTable(body('be-3-stations.synthetic')), stationsCtx);
     expect(out.gaugeZeros.some((z) => z.series === 'L8470/H')).toBe(false);
     expect(out.dropped.zero_unknown).toBe(1);
     expect(out.gaugeZeros.some((z) => z.value_m === 9999)).toBe(false);
@@ -263,7 +280,7 @@ describe('rules (synthetic)', () => {
   });
 
   it('a gauge zero is 109.9 m DNG with its start of validity, for every registered stage series of the station', () => {
-    const out = normaliseStations(parseTable(body('be-3-stations.synthetic')), { registry });
+    const out = normaliseStations(parseTable(body('be-3-stations.synthetic')), stationsCtx);
     expect(out.gaugeZeros.find((z) => z.series === '5921/H')).toEqual({
       series: '5921/H',
       value_m: 109.9,
@@ -289,7 +306,7 @@ describe('rules (synthetic)', () => {
   });
 
   it('a gauge zero is withheld when its unit is not DNG, is empty, unreadable or out of −10…1000 m', () => {
-    const out = normaliseStations(parseTable(body('be-3-stations.synthetic')), { registry });
+    const out = normaliseStations(parseTable(body('be-3-stations.synthetic')), stationsCtx);
     expect(out.dropped).toMatchObject({ zero_missing: 1, zero_unknown: 1, conflict: 1, bad_zero: 1 });
     for (const [datum, unit] of [
       ['12.3.4', 'DNG'],
@@ -606,7 +623,7 @@ describe('the archive-derived fixtures (fixtures:synth: real structure, generate
 
   it('be-3-meta-stations.synthetic: a zero in DNG only for a registered stage series', () => {
     const name = 'be-3-meta-stations.synthetic';
-    const out = normaliseStations(parseTable(body(name)), { registry: real });
+    const out = normaliseStations(parseTable(body(name)), { registry: real, fetchedAt: stationsCtx.fetchedAt });
     expect(out).toEqual(golden(name, out));
     expect(out.obs).toEqual([]);
     expect(out.gaugeZeros.length).toBeGreaterThan(0);
@@ -763,7 +780,7 @@ describe('property and fuzz', () => {
     fc.assert(
       fc.property(fc.array(row, { maxLength: 8 }), (rows) => {
         const names = ['station_no', 'station_gauge_datum', 'station_gauge_datum_unit', 'station_gauge_datum_from'];
-        const out = normaliseStations(parseTable(bytes([names, ...rows])), { registry });
+        const out = normaliseStations(parseTable(bytes([names, ...rows])), stationsCtx);
         for (const z of out.gaugeZeros) {
           GaugeZeroRow.parse(z);
           expect(z.datum).toBe('DNG');
@@ -799,5 +816,372 @@ describe('property and fuzz', () => {
       ),
       { numRuns: 300 },
     );
+  });
+});
+
+describe('references (P7a, be-3-refs)', () => {
+  const real = registryOf('BE-3');
+  const REFS_AT = Date.parse('2030-01-08T05:20:00Z');
+  const refsCtx = { registry: real, fetchedAt: REFS_AT };
+  const refs = (items: unknown[], c = refsCtx) => normaliseReferences(parseValues(bytes(items)), c);
+  /** A values item of the weekly refs call (columns Timestamp,Value; metadata with the shortname). */
+  const refItem = (data: unknown[][], over: Record<string, unknown> = {}) => ({
+    ts_id: '900700010',
+    rows: String(data.length),
+    columns: 'Timestamp,Value',
+    data,
+    station_no: 'L6640',
+    stationparameter_no: 'H',
+    ts_shortname: 'Cmd.POR.P05',
+    ts_unitsymbol: 'm',
+    ...over,
+  });
+
+  it('the values of the nine shortnames: percentiles, median, mean and the three floods', () => {
+    const out = normaliseReferences(parseValues(body('be-3-refs-values.synthetic')), refsCtx);
+    expect(out).toEqual(golden('be-3-refs-values.synthetic', out));
+    const rows = out.references ?? [];
+    for (const r of rows) ReferenceRow.parse(r);
+    expect(out.obs).toEqual([]);
+    expect(out.refScope).toBeUndefined();
+    expect(out.gaugeZeros).toEqual([]);
+    // L6640 H: eight statistics, three floods; L6640 Q: two floods; L8000 H: three statistics (no flood: empty);
+    // L8000 Q: one flood.
+    expect(rows.filter((r) => r.series === 'L6640/H' && r.semantics === 'statistical').map((r) => r.kind)).toEqual([
+      'P05',
+      'P10',
+      'P15',
+      'MEDIAN',
+      'MOYEN',
+      'P85',
+      'P90',
+      'P95',
+    ]);
+    const top = (series: string) => rows.filter((r) => r.series === series && r.kind.startsWith('TOP3'));
+    expect(top('L6640/H').map((r) => r.kind)).toEqual(['TOP3_1', 'TOP3_2', 'TOP3_3']);
+    expect(top('L6640/Q').map((r) => r.kind)).toEqual(['TOP3_1', 'TOP3_2']);
+    expect(top('L8000/H')).toEqual([]);
+    expect(top('L8000/Q').map((r) => r.kind)).toEqual(['TOP3_1']);
+    // The floods are by value, highest first, and carry the event's day in SPW's station time (UTC+01:00).
+    const h = top('L6640/H');
+    expect(h.map((r) => r.value)).toEqual([...h.map((r) => r.value)].sort((a, b) => b - a));
+    for (const r of h) expect(r.basis_label).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // H in cm (m × 100), Q in m³/s as published.
+    expect(new Set(rows.filter((r) => r.series.endsWith('/H')).map((r) => r.unit))).toEqual(new Set(['cm']));
+    expect(new Set(rows.filter((r) => r.series.endsWith('/Q')).map((r) => r.unit))).toEqual(new Set(['m³/s']));
+  });
+
+  it('kinds, semantics and conventions: SPW percentiles are non_exceedance, the mean has none, floods are historical', () => {
+    const one = (shortname: string, value = 1.5, time = '2003-04-05T23:00:00.000Z') =>
+      refs([refItem([[time, value]], { ts_shortname: shortname })]).references?.[0];
+    const expected: Record<string, [string, string | null]> = {
+      'Cmd.POR.P05': ['P05', 'non_exceedance'],
+      'Cmd.POR.P10': ['P10', 'non_exceedance'],
+      'Cmd.POR.P15': ['P15', 'non_exceedance'],
+      'Cmd.POR.Med': ['MEDIAN', 'non_exceedance'],
+      'Cmd.POR.Mean': ['MOYEN', null],
+      'Cmd.POR.P85': ['P85', 'non_exceedance'],
+      'Cmd.POR.P90': ['P90', 'non_exceedance'],
+      'Cmd.POR.P95': ['P95', 'non_exceedance'],
+    };
+    expect(Object.keys(expected).sort()).toEqual([...REFERENCE_SHORTNAMES].filter((n) => n.includes('POR')).sort());
+    for (const [shortname, [kind, convention]] of Object.entries(expected)) {
+      expect(one(shortname)).toEqual({
+        series: 'L6640/H',
+        kind,
+        value: 150,
+        unit: 'cm',
+        semantics: 'statistical',
+        convention,
+        // The period starts on the day of the value's stamp in SPW's station time (local midnight, 23:00Z the day
+        // before) and has no end (review CR-10).
+        period: ['2003-04-06', null],
+        season_from_md: 101,
+        season_to_md: 1231,
+        priority: 0,
+        basis_label: 'SPW',
+        valid_from: null,
+      });
+    }
+    expect(one('Cmd.POR.P05', 1.5, '2003-04-06T00:30:00.000+01:00')?.period).toEqual(['2003-04-06', null]);
+    expect(one('Cmd.POR.P05', 1.5, '2003-04-05T22:59:59.000Z')?.period).toEqual(['2003-04-05', null]);
+  });
+
+  it('Top3: highest first whatever the order, ties by time, at most three, a gap or a future flood counted', () => {
+    const out = refs([
+      refItem(
+        [
+          ['2001-01-01T00:00:00.000Z', 2.0],
+          ['2002-02-02T00:00:00.000Z', 4.0],
+          ['2003-03-03T00:00:00.000Z', 3.0],
+          ['2004-04-04T00:00:00.000Z', 1.0],
+          ['2005-05-05T00:00:00.000Z', null],
+          ['2060-01-01T00:00:00.000Z', 9.0],
+          [null, 8.0],
+        ],
+        { ts_shortname: 'Cmd.ReferenceFlood.Top3' },
+      ),
+    ]);
+    expect((out.references ?? []).map((r) => [r.kind, r.value, r.basis_label, r.semantics, r.period])).toEqual([
+      ['TOP3_1', 400, '2002-02-02', 'historical', null],
+      ['TOP3_2', 300, '2003-03-03', 'historical', null],
+      ['TOP3_3', 200, '2001-01-01', 'historical', null],
+    ]);
+    expect(out.dropped).toEqual({ gap: 2, future: 1, extra_flood: 1 });
+    const tie = refs([
+      refItem(
+        [
+          ['2010-01-01T00:00:00.000Z', 3.0],
+          ['2000-01-01T00:00:00.000Z', 3.0],
+        ],
+        { ts_shortname: 'Cmd.ReferenceFlood.Top3' },
+      ),
+    ]);
+    expect((tie.references ?? []).map((r) => r.basis_label)).toEqual(['2000-01-01', '2010-01-01']);
+  });
+
+  it('a series is registered or counted unknown; an unknown shortname, a wrong unit and a gap are counted, nothing stored', () => {
+    const t = '2003-04-05T23:00:00.000Z';
+    expect(refs([refItem([[t, 1]], { station_no: '99999' })])).toMatchObject({ references: [], unknown: 1 });
+    expect(refs([refItem([[t, 1]], { stationparameter_no: 'Habs_sonde' })])).toMatchObject({
+      references: [],
+      unknown: 1,
+    });
+    expect(refs([refItem([[t, 1]], { ts_shortname: 'Cmd.Abs.POR.P05' })])).toMatchObject({
+      references: [],
+      dropped: { unknown_shortname: 1 },
+    });
+    expect(
+      refs([
+        refItem(
+          [
+            [t, 1],
+            [t, 2],
+          ],
+          { ts_unitsymbol: 'cm' },
+        ),
+      ]),
+    ).toMatchObject({
+      references: [],
+      dropped: { unit_mismatch: 2 },
+    });
+    expect(refs([refItem([[t, 1]], { ts_unitsymbol: 'm³/s' })])).toMatchObject({ dropped: { unit_mismatch: 1 } });
+    expect(
+      refs([refItem([[t, 1]], { stationparameter_no: 'Q', ts_unitsymbol: 'm3/s' })]).references?.[0],
+    ).toMatchObject({
+      series: 'L6640/Q',
+      unit: 'm³/s',
+      value: 1,
+    });
+    expect(refs([refItem([[t, null]])])).toMatchObject({ references: [], dropped: { gap: 1 } });
+    expect(refs([refItem([])])).toMatchObject({ references: [], dropped: {} });
+    // If an answer ever holds two values for one percentile, the newest stands.
+    const two = refs([
+      refItem([
+        [t, 1],
+        ['2004-04-05T23:00:00.000Z', 2],
+      ]),
+    ]);
+    expect(two.references?.map((r) => [r.value, r.period])).toEqual([[200, ['2004-04-06', null]]]);
+    expect(two.dropped).toEqual({ superseded: 1 });
+  });
+
+  it('refuses an item without its metadata, a column it cannot find and a row of the wrong width', () => {
+    drift(() => refs([refItem([], { station_no: undefined })]), 'kiwis_no_metadata');
+    drift(() => refs([refItem([], { ts_shortname: undefined })]), 'kiwis_no_metadata');
+    drift(() => refs([refItem([], { columns: 'Timestamp,Quality Code' })]), 'kiwis_columns');
+    drift(() => refs([refItem([['2003-04-05T23:00:00.000Z']])]), 'kiwis_row_width');
+    drift(() => refs([refItem([['2003-04-05T23:00:00.000Z', 'x']])]), 'bad_value');
+    drift(() => refs([refItem([['not a time', 1]])]), 'time_bad_format');
+  });
+
+  it('the stage-1 list is parsed as a list and stores nothing (the wiring returns no rows for it)', () => {
+    const doc = parseCatchup(body('be-3-refs-list.synthetic'));
+    expect(doc.kind).toBe('list');
+    expect(doc.kind === 'list' ? doc.rows.length : 0).toBeGreaterThan(100);
+    const out = golden('be-3-refs-list.synthetic', { kind: doc.kind, n: doc.kind === 'list' ? doc.rows.length : 0 });
+    expect(out).toEqual({ kind: 'list', n: 129 });
+    expect(parseCatchup(body('be-3-refs-values.synthetic')).kind).toBe('values');
+  });
+
+  describe('the capture expansion (ts_ids only from the list, in batches of at most 100)', () => {
+    const spec = loadRegistry().specs.find((x) => x.id === 'be-3-refs');
+    const expand = (doc: unknown, seed = false) => {
+      if (spec === undefined) throw new Error('no be-3-refs spec');
+      const req = baseRequest(spec, spec.rows[0] ?? {});
+      return (
+        capture.expand?.({
+          req,
+          doc,
+          now: new Date('2030-01-08T05:20:00Z'),
+          seen: new Set(),
+          seed,
+          window: null,
+          checkUrl: (raw) => raw,
+        }) ?? { reqs: [] }
+      );
+    };
+    const table = (rows: unknown[][]) => [
+      ['station_no', 'ts_id', 'ts_shortname', 'stationparameter_no', 'ts_unitsymbol'],
+      ...rows,
+    ];
+
+    it('the spec: weekly, owner, exact shortnames, no wildcard, 5 s apart, headroom of 10 calls', () => {
+      expect(spec).toBeDefined();
+      expect(spec?.cron).toBe('20 5 * * 2');
+      expect(spec?.retention).toBe('forever');
+      expect(spec?.variants?.space_ms).toBeGreaterThanOrEqual(5000);
+      const u = new URL(spec?.request.url ?? 'https://x.invalid/');
+      expect(u.searchParams.get('ts_shortname')?.split(',').sort()).toEqual([...REFERENCE_SHORTNAMES].sort());
+      expect(u.searchParams.get('returnfields')).toBe(
+        'station_no,ts_id,ts_shortname,stationparameter_no,ts_unitsymbol',
+      );
+      expect(kiwisUrlProblems(spec?.request.url ?? '')).toEqual([]);
+      // About 3,100 series (recon 2026-10-03: 921 for P05 and Top3; the nine shortnames at the same stations).
+      expect(Math.ceil(3100 / MAX_IDS) + 10).toBeLessThanOrEqual(spec?.request.max_expand ?? 0);
+    });
+
+    it('batches of 100 digits-only ts_ids with the fixed values query, never anything of the list but the ids', () => {
+      const rows = Array.from({ length: 250 }, (_, i) => [`${i}`, `${300000000 + i}`, 'Cmd.POR.P05', 'H', 'm']);
+      const { reqs } = expand(table(rows));
+      expect(reqs).toHaveLength(3);
+      for (const r of reqs) {
+        const u = new URL(r.url);
+        expect(u.hostname).toBe('hydrometrie.wallonie.be');
+        expect(u.searchParams.get('request')).toBe('getTimeseriesValues');
+        expect(u.searchParams.get('timezone')).toBe('UTC');
+        expect(u.searchParams.get('from')).toBe('1900-01-01T00:00:00Z');
+        expect(u.searchParams.get('to')).toBe('2028-01-01T00:00:00Z');
+        expect(u.searchParams.get('returnfields')).toBe('Timestamp,Value');
+        expect(u.searchParams.get('md_returnfields')).toBe('station_no,stationparameter_no,ts_shortname,ts_unitsymbol');
+        expect((u.searchParams.get('ts_id') ?? '').split(',').length).toBeLessThanOrEqual(MAX_IDS);
+        expect(kiwisUrlProblems(r.url)).toEqual([]);
+        expect(r.variant).toMatch(/^refs\/\d+$/);
+      }
+      expect(reqs.map((r) => r.variant)).toEqual(['refs/300000000', 'refs/300000100', 'refs/300000200']);
+    });
+
+    it('a row of another shortname or parameter, a ts_id that is no number and a duplicate are never fetched', () => {
+      const { reqs } = expand(
+        table([
+          ['1', '111', 'Cmd.POR.P05', 'H', 'm'],
+          ['1', '111', 'Cmd.POR.P05', 'H', 'm'],
+          ['1', '222', 'Cmd.Abs.POR.P05', 'H', 'm'],
+          ['1', '333', 'Cmd.POR.*', 'H', 'm'],
+          ['1', '444', 'Cmd.POR.P10', 'QEtimeuse', 'm³/s'],
+          ['1', '55x', 'Cmd.POR.P10', 'H', 'm'],
+          ['1', '666&request=x', 'Cmd.POR.P10', 'H', 'm'],
+          ['1', 777, 'Cmd.ReferenceFlood.Top3', 'Q', 'm³/s'],
+        ]),
+      );
+      expect(reqs.map((r) => new URL(r.url).searchParams.get('ts_id'))).toEqual(['111,777']);
+    });
+
+    it('a document that is no table, or an empty one, plans no request (the loader then sees the drift)', () => {
+      expect(expand({ code: 'x' }).reqs).toEqual([]);
+      expect(expand([]).reqs).toEqual([]);
+      expect(expand(table([])).reqs).toEqual([]);
+    });
+  });
+
+  it('property: any generated values item gives only valid references of the registered series', () => {
+    const shortname = fc.constantFrom(...REFERENCE_SHORTNAMES, 'Cmd.Abs.POR.P05', 'x');
+    const point = fc.tuple(
+      fc.constantFrom('1998-12-31T23:00:00.000Z', '2003-02-17T14:20:00.000Z', '2060-01-01T00:00:00.000Z', null),
+      fc.oneof(fc.double({ min: -50, max: 900, noNaN: true }), fc.constant(null)),
+    );
+    const item = fc.record({
+      ts_id: fc.integer({ min: 1, max: 999_999_999 }).map(String),
+      columns: fc.constant('Timestamp,Value'),
+      data: fc.array(point, { maxLength: 6 }),
+      station_no: fc.constantFrom('L6640', 'L8000', '7141', '1'),
+      stationparameter_no: fc.constantFrom('H', 'Q', 'Habs'),
+      ts_shortname: shortname,
+      ts_unitsymbol: fc.constantFrom('m', 'm³/s', 'cm'),
+    });
+    fc.assert(
+      fc.property(fc.array(item, { maxLength: 8 }), (items) => {
+        const out = refs(items);
+        for (const r of out.references ?? []) {
+          ReferenceRow.parse(r);
+          expect(real.has(r.series)).toBe(true);
+          expect(['cm', 'm³/s']).toContain(r.unit);
+        }
+        expect(out.obs).toEqual([]);
+        expect(out.refScope).toBeUndefined();
+        for (const n of Object.values(out.dropped)) expect(n).toBeGreaterThan(0);
+      }),
+      { numRuns: 300 },
+    );
+  });
+});
+
+describe('NIVCRU (P7a: the station class of the daily station list)', () => {
+  const at = Date.parse('2030-01-01T04:50:00Z');
+  /** Rows of [station_no, NIVCRU] with a valid datum, so that only the class is under test. */
+  const cls = (rows: unknown[][]) =>
+    normaliseStations(
+      parseTable(
+        bytes([
+          ['station_no', 'station_gauge_datum', 'station_gauge_datum_unit', 'NIVCRU'],
+          ...rows.map(([no, code]) => [no, '1.5', 'DNG', code]),
+        ]),
+      ),
+      { registry, fetchedAt: at },
+    );
+
+  it('the synthetic station list: the class code raw, no label, no level; a zero is still read beside it', () => {
+    const out = normaliseStations(parseTable(body('be-3-stations.synthetic')), stationsCtx);
+    expect(out).toEqual(golden('be-3-stations.synthetic', out));
+    for (const c of out.classes ?? []) ClassRow.parse(c);
+    // 9998 is not registered, 8002 and 8010 state none, 8003 is listed twice (no single class).
+    expect((out.classes ?? []).map((c) => [c.station, c.code])).toEqual([
+      ['be.spw.5921', 't1/Normal'],
+      ['be.spw.8001', 't3/Normal'],
+      ['be.spw.8004', 't4/Normal'],
+      ['be.spw.L8470', 't2/Normal'],
+    ]);
+    for (const c of out.classes ?? [])
+      expect([c.ts, c.label, c.level]).toEqual(['2030-01-01T04:50:00.000Z', null, null]);
+    expect(out.gaugeZeros.length).toBeGreaterThan(0);
+  });
+
+  it('the code is stored as published; empty is none; over 40 characters or a control character is bad_value', () => {
+    expect(cls([['8001', 't1/Normal']]).classes).toEqual([
+      { station: 'be.spw.8001', ts: '2030-01-01T04:50:00.000Z', code: 't1/Normal', label: null, level: null },
+    ]);
+    expect(cls([['8001', ' t9/Inondation ']]).classes?.[0]?.code).toBe('t9/Inondation');
+    expect(
+      cls([
+        ['8001', ''],
+        ['8003', null],
+      ]).classes,
+    ).toEqual([]);
+    const long = `t1/${'x'.repeat(38)}`;
+    expect(long).toHaveLength(41);
+    expect(cls([['8001', long]])).toMatchObject({ classes: [], dropped: { bad_value: 1 } });
+    expect(cls([['8001', 't1/\u0007x']])).toMatchObject({ classes: [], dropped: { bad_value: 1 } });
+    expect(cls([['8001', 'x'.repeat(40)]]).classes).toHaveLength(1);
+  });
+
+  it('a list without the NIVCRU column states no class at all', () => {
+    const out = normaliseStations(
+      parseTable(
+        bytes([
+          ['station_no', 'station_gauge_datum', 'station_gauge_datum_unit'],
+          ['8001', '1', 'DNG'],
+        ]),
+      ),
+      stationsCtx,
+    );
+    expect(out.classes).toBeUndefined();
+  });
+
+  it('the archive-derived list: classes only for registered stations, every class a ClassRow', () => {
+    const real = registryOf('BE-3');
+    const out = normaliseStations(parseTable(body('be-3-meta-stations.synthetic')), { registry: real, fetchedAt: at });
+    for (const c of out.classes ?? []) ClassRow.parse(c);
+    const stations = new Set([...real.values()].map((d) => d.station));
+    for (const c of out.classes ?? []) expect(stations.has(c.station)).toBe(true);
   });
 });

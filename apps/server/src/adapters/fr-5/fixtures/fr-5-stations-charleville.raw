@@ -1,0 +1,86 @@
+{
+    "CdStationHydro": "B540001001",
+    "LbStationHydro": "Charleville-Mézières",
+    "LbCoursEau": "Meuse",
+    "CdStationHydroAncienRef": null,
+    "CoordStationHydro": {
+        "CoordXStationHydro": "823706",
+        "CoordYStationHydro": "6963646"
+    },
+    "CdCommune": "08105",
+    "Evenement": [],
+    "VigilanceCrues": {
+        "StationPrevision": true,
+        "Photo": "t",
+        "ZoomInitial": "3",
+        "PereBoitEntVigiCru": {
+            "CdEntVigiCru": "2",
+            "Link": "services/bulletin.json?CdEntVigiCru=2"
+        },
+        "CruesHistoriques": [
+            {
+                "LbUsuel": "Crue de janvier 1991",
+                "ValHauteur": 5.47,
+                "ValDebit": 0
+            },
+            {
+                "LbUsuel": "Crue de février 2002",
+                "ValHauteur": 4.72,
+                "ValDebit": 0
+            },
+            {
+                "LbUsuel": "Crue de mars 2007",
+                "ValHauteur": 4.05,
+                "ValDebit": 0
+            }
+        ],
+        "StationsBassin": [
+            {
+                "CdStationHydro": "B517201001",
+                "LbStationHydro": "Cheveuges",
+                "LbCoursEau": "Bar",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B517201001"
+            },
+            {
+                "CdStationHydro": "B560010101",
+                "LbStationHydro": "Aiglemont",
+                "LbCoursEau": "Meuse",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B560010101"
+            },
+            {
+                "CdStationHydro": "B502001001",
+                "LbStationHydro": "Sedan",
+                "LbCoursEau": "Meuse",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B502001001"
+            },
+            {
+                "CdStationHydro": "B557201001",
+                "LbStationHydro": "Belval",
+                "LbCoursEau": "Sormonne",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B557201001"
+            },
+            {
+                "CdStationHydro": "B532201001",
+                "LbStationHydro": "La Francheville",
+                "LbCoursEau": "Vence",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B532201001"
+            }
+        ],
+        "FluxDonnees": {
+            "Observations": {
+                "Hauteurs": "services/observations.json/index.php?CdStationHydro=B540001001\u0026FormatDate=iso",
+                "Debits": "services/observations.json/index.php?CdStationHydro=B540001001\u0026FormatDate=iso\u0026GrdSerie=Q"
+            },
+            "Previsions": {
+                "Hauteurs": "services/previsions.json/index.php?CdStationHydro=B540001001\u0026FormatDate=iso",
+                "Debits": "services/previsions.json/index.php?CdStationHydro=B540001001\u0026FormatDate=iso\u0026GrdSimul=Q"
+            }
+        }
+    },
+    "VersionFlux": "Beta 0.3k"
+}

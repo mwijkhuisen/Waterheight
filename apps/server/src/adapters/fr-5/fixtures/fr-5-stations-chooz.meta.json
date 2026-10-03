@@ -1,0 +1,14 @@
+{
+  "spec": "fr-5-stations",
+  "variant": "B720000001",
+  "source": "FR-5",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/FR-5/fr-5-stations/2026/09/30/120211Z-a8528f1585161300.zst",
+  "recorded_at": "2026-09-30T12:02:11Z",
+  "status": 200,
+  "url": "https://www.vigicrues.gouv.fr/services/station.json/index.php?CdStationHydro=B720000001",
+  "bytes": 4740,
+  "source_sha256": "a8528f15851613001a0674f80335dea324c350dce8263df29ff4dbb45d8993e1",
+  "trimmed": false
+}

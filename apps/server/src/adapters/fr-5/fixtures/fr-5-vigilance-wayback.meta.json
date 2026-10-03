@@ -1,0 +1,13 @@
+{
+  "spec": "fr-5-vigilance",
+  "source": "FR-5",
+  "synthetic": false,
+  "recorded_at": "2026-10-03T08:42:50Z",
+  "status": 200,
+  "content_type": "application/json; charset=utf-8",
+  "url": "https://web.archive.org/web/20231211164225id_/https://www.vigicrues.gouv.fr/services/1/InfoVigiCru.geojson/",
+  "bytes": 1048576,
+  "from": "trimmed",
+  "source_sha256": "6b50159e58906b2e416cc315b5cd8ada2d5e27e3cb73e631f71943f23dd0dc8b",
+  "trimmed": "the Wayback capture is cut at 1 MiB inside the features: its 37 complete features kept as published, the collection closed with ]} (scripts/fetch-flood-fixtures.ts trimTruncated)"
+}

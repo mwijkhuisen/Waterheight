@@ -115,14 +115,17 @@ describe('plan', () => {
   it('lists only parsed obs objects past the hot window that nothing still refers to', async () => {
     expect(HOT_WINDOW_DAYS).toBe(90);
     const plan = await planOf({ now: NOW });
-    expect(plan).toEqual([key['old-obs'], key['old-obs-2'], key['old-linked-out']].sort());
+    expect(plan).toEqual([key['old-obs'], key['old-obs-2'], key['old-linked-out'], key['ch1-later-that-day']].sort());
   });
 
-  it('keeps CH-1 and CH-2 payloads whole until the phase that parses their class and threshold fields', async () => {
-    expect([...KEEP_UNTIL_PARSED]).toEqual(['CH-1', 'CH-2']);
+  it('keeps nothing whole since P7a parses the CH-1 and CH-2 class and threshold fields; their daily copy stays', async () => {
+    expect([...KEEP_UNTIL_PARSED]).toEqual([]);
     expect([...MIXED_SOURCES]).toEqual(['CH-1', 'CH-2']);
     const plan = await planOf({ now: NOW });
-    for (const name of ['ch1-first-of-day', 'ch1-later-that-day', 'ch2-old']) expect(plan).not.toContain(key[name]);
+    for (const name of ['ch1-first-of-day', 'ch2-old']) expect(plan).not.toContain(key[name]);
+    // A payload whose batch opened a class or threshold row is promoted by parsedOkIn (load/prune-promotion.int).
+    const kept = await planOf({ now: NOW, keepWhole: new Set(['CH-1', 'CH-2']) });
+    expect(kept).not.toContain(key['ch1-later-that-day']);
   });
 
   it('even then, the first copy of each spec and UTC day of a mixed payload is promoted to forever', async () => {
@@ -163,22 +166,23 @@ describe('plan', () => {
 describe('prune', () => {
   it('is a dry run by default: it reports and deletes nothing', async () => {
     const report = await prune(reader, parsedOk, { now: NOW });
-    expect(report).toEqual({ applied: false, candidates: 3, deleted: 0, refused: 1 });
+    expect(report).toEqual({ applied: false, candidates: 4, deleted: 0, refused: 1 });
     for (const name of Object.keys(key)) if (name !== 'old-linked-out') expect(exists(name), name).toBe(true);
   });
 
   it('with apply, deletes exactly the planned objects and refuses a link that points out of raw/', async () => {
     const report = await prune(reader, parsedOk, { now: NOW, apply: true });
-    expect(report).toMatchObject({ applied: true, deleted: 2, refused: 1 });
+    expect(report).toMatchObject({ applied: true, deleted: 3, refused: 1 });
     expect(exists('old-obs')).toBe(false);
     expect(exists('old-obs-2')).toBe(false);
+    // P7a: a parsed CH-1 payload that is neither the day's copy nor a promoted change can go.
+    expect(exists('ch1-later-that-day')).toBe(false);
     for (const name of [
       'old-unparsed',
       'old-forever',
       'recent-obs',
       'old-still-referenced',
       'ch1-first-of-day',
-      'ch1-later-that-day',
       'ch2-old',
       'owner-unparsed',
     ]) {

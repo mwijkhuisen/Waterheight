@@ -1,0 +1,15 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "warnings": {
+  "mode": "message",
+  "sent": "2025-09-08T21:15:29.000Z",
+  "rows": [],
+  "cancels": [
+   "LU-Alert.1757346271.4018.0",
+   "LU-Alert.1757348488.4018.1"
+  ]
+ }
+}

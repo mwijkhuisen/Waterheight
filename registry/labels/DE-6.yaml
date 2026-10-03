@@ -1,0 +1,19 @@
+# DE-6 LHP (Länderübergreifendes Hochwasserportal) labels, keyed by OUR code, never by the provider's prose. Two scales
+# that are never mixed: `station` (the flood class of a gauge, -1…4, or none when the feature has no class) and `alert`
+# (the regional flood alerts of the states: 1, 2, 4, 5, 6; there is no 3). Colours are the LHP legend's own
+# (catalogue §2.3: keep the LHP class colours); the legend draws alert 2 hatched, which one colour cannot state.
+# A station class is a display class of the gauge, not a warning; an alert is issued by a state.
+source: DE-6
+labels:
+  - { scale: station, code: '-1', nl: Geen gegevens, en: No data, color: '#7b7b7b' }
+  - { scale: station, code: none, nl: Geen hoogwaterindeling, en: No flood classification }
+  - { scale: station, code: '0', nl: Geen hoogwater, en: No flood, color: '#7CBD5C' }
+  - { scale: station, code: '1', nl: Klein hoogwater, en: Minor flood, color: '#ffff00' }
+  - { scale: station, code: '2', nl: Middelgroot hoogwater, en: Moderate flood, color: '#ffa500' }
+  - { scale: station, code: '3', nl: Groot hoogwater, en: Major flood, color: '#de0000' }
+  - { scale: station, code: '4', nl: Zeer groot hoogwater, en: Very major flood, color: '#941094' }
+  - { scale: alert, code: '1', nl: Einde van de waarschuwing, en: All clear, color: '#60bf41' }
+  - { scale: alert, code: '2', nl: Voorwaarschuwing, en: Advance warning }
+  - { scale: alert, code: '4', nl: Hoogwater, en: Flood, color: '#fb8c00' }
+  - { scale: alert, code: '5', nl: Groot hoogwater, en: Major flood, color: '#e53935' }
+  - { scale: alert, code: '6', nl: Zeer groot hoogwater, en: Very major flood, color: '#765e9c' }

@@ -27,6 +27,10 @@
    {
     "kind": "HQ100",
     "value_cm": 389
+   },
+   {
+    "kind": "LU4_CRUE_REF",
+    "value_cm": 410
    }
   ],
   "zero": {
@@ -47,7 +51,6 @@
  },
  "dropped": {
   "undefined_hq": 1,
-  "unknown_hq": 1,
   "coordinates_from_lu6": 1
  }
 }

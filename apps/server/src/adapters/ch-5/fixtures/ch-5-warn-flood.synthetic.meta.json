@@ -1,0 +1,11 @@
+{
+  "spec": "ch-5-warn",
+  "variant": "de",
+  "source": "CH-5",
+  "synthetic": true,
+  "note": "hand-built from ch-5-warn-de-archive.raw (archive 2026-10-03), all 93 features as parsed and serialised again: the river Aare - Bern, Schönau (key 2135) set to level 4 and the region Alpstein (key 47) to level 5; meta and every other property (colours, validity) unchanged. Since review round 1 (SR-6) it keeps all 93 features, because a map of fewer than 80 is drift. No real flood payload exists (R2).",
+  "recorded_at": "2026-10-03T06:09:00Z",
+  "status": 200,
+  "url": "https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_warn_levels_de.geojson",
+  "bytes": 252541
+}

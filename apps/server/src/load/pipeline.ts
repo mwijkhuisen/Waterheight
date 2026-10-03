@@ -7,6 +7,7 @@ import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
 import { labelOffsetsOf } from './label-offset.ts';
+import { applyClasses, applyReferences, applyWarnings, type Changes, type ResolvedRef } from './refs.ts';
 import {
   type Attempt,
   advanceCursor,
@@ -108,7 +109,12 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * code we cannot read; `conflict`: two values for one instant;
  * `registered_dropped`: a registered RWS series arrived under another
  * ProcesType, compartment or grouping; `datum_mismatch` (P5a): a CH value that
- * contradicts its series' declared level or relative stage.
+ * contradicts its series' declared level or relative stage; `unmapped_class`
+ * (P7a): a provider class or alert level the crosswalk (packages/core
+ * crosswalk.ts) does not have, loaded by a replay once it is a reviewed row;
+ * `geometry_too_big` and `texts_too_big` (P7a review SR-2): a warning row
+ * whose geometry or texts the loader left out because they are over its byte
+ * bound (WARNING_BYTES), so that no size CHECK quarantines a flood warning.
  */
 export const RETAINED = [
   'unit_mismatch',
@@ -118,7 +124,70 @@ export const RETAINED = [
   'conflict',
   'registered_dropped',
   'datum_mismatch',
+  'unmapped_class',
+  'geometry_too_big',
+  'texts_too_big',
+  'bad_text',
+  'reference_out_of_range',
 ] as const;
+
+const NUL = String.fromCharCode(0);
+/** A text PostgreSQL cannot store: U+0000 (text and jsonb) or a lone surrogate (jsonb refuses `\ud800`). */
+const badString = (s: string) => s.includes(NUL) || !s.isWellFormed();
+const badText = (v: unknown): boolean =>
+  typeof v === 'string'
+    ? badString(v)
+    : typeof v === 'object' && v !== null && Object.entries(v).some(([key, value]) => badString(key) || badText(value));
+/** A reference value is a `real`: beyond this it is a provider typo, not a level (and past 3.4e38 an insert error). */
+const REFERENCE_MAX = 1e9;
+
+/**
+ * Rows PostgreSQL cannot store never fail the payload's transaction (round-2 review M1, M2): a reference, class or
+ * warning row with U+0000 or a lone surrogate in any text is withheld as `bad_text`, a reference whose value is
+ * beyond ±1e9 as `reference_out_of_range` (both RETAINED: alerted, the object kept for a replay). A withheld snapshot area stays
+ * as stored, as a dropped one does (review CR-5).
+ */
+export function dropUnstorable(n: Normalised): void {
+  const keep = <T>(rows: T[], bad: (r: T) => boolean, code: string): T[] => {
+    const kept = rows.filter((r) => !bad(r));
+    if (kept.length < rows.length) n.dropped[code] = (n.dropped[code] ?? 0) + rows.length - kept.length;
+    return kept;
+  };
+  if (n.references) {
+    n.references = keep(n.references, badText, 'bad_text');
+    n.references = keep(n.references, (r) => !(Math.abs(r.value) <= REFERENCE_MAX), 'reference_out_of_range');
+  }
+  if (n.classes) n.classes = keep(n.classes, badText, 'bad_text');
+  const w = n.warnings;
+  if (w === undefined) return;
+  const withheld = w.rows.filter(badText).flatMap((r) => (badString(r.area_key) ? [] : [r.area_key]));
+  w.rows = keep(w.rows, badText, 'bad_text');
+  if (w.mode === 'snapshot' && withheld.length > 0) w.kept = [...(w.kept ?? []), ...withheld];
+}
+
+/** The bytes the loader stores of a warning's geometry and of its texts (`warning_area.texts` holds 64 KiB). */
+export const WARNING_BYTES = { geometry: 2 * 1024 * 1024, texts: 60_000 } as const;
+
+/**
+ * A warning row keeps its level whatever the size of its presentation: a geometry or texts over WARNING_BYTES is
+ * left out of the row and counted (`geometry_too_big`, `texts_too_big`; RETAINED), so no size CHECK fails the
+ * payload's transaction (P7a review SR-2). PostgreSQL prints jsonb with a space after each `:` and `,`: the margin
+ * of 5,536 bytes under 65,536 covers about 2,700 key/value pairs, far beyond what any adapter emits (LU-5 at most
+ * 8 blocks of 3 fields, DE-6 one headline); an adapter with many more keys sizes its texts itself. A left-out field
+ * keeps what the row stored (refs.ts `present`).
+ */
+export function boundWarnings(n: Normalised): void {
+  for (const r of n.warnings?.rows ?? []) {
+    if (r.geometry !== null && Buffer.byteLength(r.geometry) > WARNING_BYTES.geometry) {
+      r.geometry = null;
+      n.dropped.geometry_too_big = (n.dropped.geometry_too_big ?? 0) + 1;
+    }
+    if (r.texts !== undefined && Buffer.byteLength(JSON.stringify(r.texts)) > WARNING_BYTES.texts) {
+      delete r.texts;
+      n.dropped.texts_too_big = (n.dropped.texts_too_big ?? 0) + 1;
+    }
+  }
+}
 
 /** A payload is tried at most this often; the next pass quarantines it without reading it. */
 export const MAX_TRIES = 2;
@@ -521,6 +590,10 @@ export class Loader {
     const registry = await this.registry(line.source);
     const fillRegistry = spec.fill === undefined ? undefined : await this.registry(spec.fill);
     const zeroRegistry = spec.zeroTarget === undefined ? undefined : await this.registry(spec.zeroTarget);
+    const refRegistries =
+      spec.refTarget === undefined
+        ? undefined
+        : new Map(await Promise.all(spec.refTarget.map(async (t) => [t, await this.registry(t)] as const)));
     const unitMismatch = await this.unitMismatch(line.source);
     // A re-stating payload loads from shortly before the previous loaded one (a seed loads whole); read per
     // payload, like the label offsets, which the nightly detector may have changed since the last one.
@@ -538,6 +611,7 @@ export class Loader {
         unitMismatch,
         ...(fillRegistry === undefined ? {} : { fillRegistry }),
         ...(zeroRegistry === undefined ? {} : { zeroRegistry }),
+        ...(refRegistries === undefined ? {} : { refRegistries }),
         ...(previous === null || spec.window === undefined ? {} : { since: previous.getTime() - spec.window }),
         ...(labelOffsets === undefined ? {} : { labelOffsets }),
       });
@@ -547,6 +621,7 @@ export class Loader {
       return setAside('quarantined', 'adapter_error');
     }
 
+    dropUnstorable(result);
     // Gap-fill rows go only into an active primary series of the fill source that is not withheld; a key that
     // source does not register is unknown (a registry change could still load it), any other is dropped.
     const fill: ObsRow[] = [];
@@ -562,15 +637,48 @@ export class Loader {
     // its twin series and as a fill row of the FR-1 series of the same key (review CR-6).
     const counted = (key: string) => registry.get(key)?.sameAudience === true;
     const zeroIds = zeroRegistry ?? registry;
+    // P7a: references belong to a series of the payload's own source or of a `refTarget` source; a key no
+    // registry has is unknown (a registry change could still load it), a withheld (`off`) series takes none.
+    const refRegistry = (target: string | undefined) =>
+      target === undefined || target === line.source ? registry : refRegistries?.get(target);
+    const refs: ResolvedRef[] = [];
+    const refUnknown = new Set<string>();
+    for (const r of result.references ?? []) {
+      const s = refRegistry(r.target)?.get(r.series);
+      if (s === undefined) refUnknown.add(`${r.target ?? line.source}\n${r.series}`);
+      else if (!s.off) refs.push({ ...r, id: s.id, counted: s.sameAudience });
+    }
+    const refScope = new Set<number>();
+    for (const k of result.refScope ?? []) {
+      const s = refRegistry(k.target)?.get(k.series);
+      if (s !== undefined && !s.off) refScope.add(s.id);
+    }
+    const classes = result.classes ?? [];
+    boundWarnings(result);
+    const warningRows = result.warnings?.rows.length ?? 0;
     let nObs = 0;
     for (const part of obsParts(result)) nObs += part.filter((r) => counted(r.series)).length;
-    const n_rows =
-      nObs + result.gaugeZeros.filter((z) => zeroIds.get(z.series)?.sameAudience === true).length + fill.length;
+    // Class rows count once the loader knows which stations take them (review CR-12).
+    const n_rows_base =
+      nObs +
+      result.gaugeZeros.filter((z) => zeroIds.get(z.series)?.sameAudience === true).length +
+      fill.length +
+      refs.filter((r) => r.counted).length +
+      warningRows;
+    let n_rows = n_rows_base;
     // Values a registry or parser change could still load: the pruner keeps this object until a replay stores them.
-    const n_skipped =
-      result.unknown + fillUnknown.size + RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
+    const n_skipped_base =
+      result.unknown +
+      fillUnknown.size +
+      refUnknown.size +
+      RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
+    let n_skipped = n_skipped_base;
     let outcome: Outcome = { kind: 'loaded', n_rows, n_new: 0, n_changed: 0 };
     let zeroChanges: Awaited<ReturnType<typeof applyGaugeZeros>> = {};
+    let refChanges: Changes = {};
+    let warnChanges: Changes = {};
+    let classChanged = 0;
+    let closesFull = false;
     let units: Set<string> | undefined;
     const before = health && { newestTs: health.newestTs, lastNewData: health.lastNewData };
     await commit(async (tx) => {
@@ -592,16 +700,47 @@ export class Loader {
           ? { n_new: 0, n_changed: 0, writes: 0 }
           : await upsertObs(tx, fill, fillRegistry, state.id, fetchedAt, true);
       zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, zeroIds, state.id, fetchedAt);
+      const refsApplied = await applyReferences(tx, line.source, refs, refScope, state.id, fetchedAt);
+      const cls = await applyClasses(tx, line.source, classes, state.id, fetchedAt);
+      const warn = await applyWarnings(tx, line.source, result.warnings, state.id, fetchedAt);
+      refChanges = refsApplied.changes;
+      warnChanges = warn.changes;
+      classChanged = cls.changed;
+      closesFull = warn.full;
+      n_rows = n_rows_base + cls.kept;
+      n_skipped = n_skipped_base + cls.unknown;
       if (result.unitMismatch !== undefined) {
         units = await storeUnitMismatch(tx, line.source, fetchedAt, result.unitMismatch);
       }
-      const zeroWrites = (zeroChanges.new ?? 0) + (zeroChanges.corrected ?? 0) + (zeroChanges.superseded ?? 0);
+      const zeroWrites =
+        (zeroChanges.new ?? 0) +
+        (zeroChanges.corrected ?? 0) +
+        (zeroChanges.superseded ?? 0) +
+        (zeroChanges.changed ?? 0);
+      const opened = (c: Changes) => (c.new ?? 0) + (c.changed ?? 0);
+      const corrected = (c: Changes) => (c.corrected ?? 0) + (c.removed ?? 0);
       // The batch's own numbers include its fill rows (their provenance); the source's health does not.
-      const n_new = written.n_new + filled.n_new + (zeroChanges.new ?? 0) + (zeroChanges.superseded ?? 0);
-      const n_changed = written.n_changed + filled.n_changed + (zeroChanges.corrected ?? 0);
+      const n_new =
+        written.n_new +
+        filled.n_new +
+        (zeroChanges.new ?? 0) +
+        (zeroChanges.superseded ?? 0) +
+        (zeroChanges.changed ?? 0) +
+        opened(refChanges) +
+        cls.new +
+        cls.changed +
+        opened(warnChanges);
+      const n_changed =
+        written.n_changed +
+        filled.n_changed +
+        (zeroChanges.corrected ?? 0) +
+        corrected(refChanges) +
+        corrected(warnChanges);
       outcome = { kind: 'loaded', n_rows, n_new, n_changed };
       // A replay that changes nothing leaves the batch exactly as the first load wrote it.
-      const changed = written.writes + filled.writes + zeroWrites > 0 || state.skipped !== n_skipped;
+      const changed =
+        written.writes + filled.writes + zeroWrites + refsApplied.writes + cls.writes + warn.writes > 0 ||
+        state.skipped !== n_skipped;
       if (!state.existed || changed || state.previous !== 'ok') {
         await closeBatch(tx, state.id, batch, { status: 'ok', n_rows, n_new, n_changed, n_skipped, error: null });
       }
@@ -627,10 +766,20 @@ export class Loader {
       const n = result.dropped[code] ?? 0;
       if (n > 0) this.deps.alert(code, { ...ids, n });
     }
-    for (const change of ['corrected', 'superseded', 'older_ignored', 'withheld'] as const) {
+    for (const change of ['corrected', 'superseded', 'changed'] as const) {
       const n = zeroChanges[change] ?? 0;
       if (n > 0) this.deps.alert(`gauge_zero_${change}`, { ...ids, n });
     }
+    // P7a: a changed, removed or corrected reference and a changed class or warning are alerted by count only:
+    // the text names no value (an owner-audience threshold must not reach a log; the details are in the views).
+    for (const change of ['changed', 'removed', 'corrected'] as const) {
+      const n = refChanges[change] ?? 0;
+      if (n > 0) this.deps.alert(`reference_${change}`, { ...ids, n });
+    }
+    if (classChanged > 0) this.deps.alert('class_changed', { ...ids, n: classChanged });
+    const warned = (warnChanges.new ?? 0) + (warnChanges.changed ?? 0) + (warnChanges.removed ?? 0);
+    if (warned > 0) this.deps.alert('warning_changed', { ...ids, n: warned });
+    if (closesFull) this.deps.alert('cap_closes_full', { ...ids, n: 1 });
     if (result.unknown > 0) this.deps.info?.('series not in the registry', { ...ids, n: result.unknown });
     return outcome;
   }

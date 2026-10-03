@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { StationsFile } from '@rws/contracts';
-import { SchemaDrift, scanCsv } from '@rws/core';
+import { type Normalised as Loaded, ReferenceRow, SchemaDrift, scanCsv } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
@@ -12,7 +12,8 @@ import {
   StationReference,
 } from '../../src/adapters/lu-4/normalise.ts';
 import { type Page, parsePage } from '../../src/adapters/lu-4/parse.ts';
-import { goldenUrl, rawFixture } from './registry.ts';
+import { ADAPTER } from '../../src/load/wire/lu-4.ts';
+import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
 // LU-4 AGE station pages (owner audience; catalogue §2.6, §6.7): parse + normalise of hand-made synthetic pages
 // (invariants 9 and 11: real structure, generated values) equal the committed goldens; only the `data-to-json`
@@ -65,15 +66,16 @@ describe('golden files (synthetic pages, generated values)', () => {
     expect(out).toEqual(golden('lu-4-page-normal.synthetic', out));
     expect(StationReference.parse(out.record)).toEqual(out.record);
     expect(out.record.levels).toEqual({ yellow: 287, orange: 341, red: 393 });
-    // HQ 2, HQ5, HQ10, HQ50, HQ100 as levels in cm; "HQ 20 ans" has value 0 and "Crue de référence" names no HQ.
+    // HQ 2, HQ5, HQ10, HQ50, HQ100 as levels in cm and the reference flood; "HQ 20 ans" has value 0.
     expect(out.record.hq.map((h) => [h.kind, h.value_cm])).toEqual([
       ['HQ2', 301],
       ['HQ5', 322],
       ['HQ10', 340],
       ['HQ50', 371],
       ['HQ100', 389],
+      ['LU4_CRUE_REF', 410],
     ]);
-    expect(out.dropped).toEqual({ undefined_hq: 1, unknown_hq: 1 });
+    expect(out.dropped).toEqual({ undefined_hq: 1 });
     expect(out.record.zero).toEqual({ value_m: 142.37, datum: 'NG95', valid_from: '2011-03-14' });
     expect(out.record.pk_km).toBe(27.4);
     expect(out.record.position).toEqual({ crs: 'EPSG:2169', e: 72155, n: 93410, from: 'page' });
@@ -114,7 +116,7 @@ describe('golden files (synthetic pages, generated values)', () => {
     const point = lu1.find((s) => s.id === 'lu.age.hesperange');
     expect(point?.lon).not.toBeNull();
     expect(out.record.position).toEqual({ lon: point?.lon, lat: point?.lat, from: 'lu-6' });
-    expect(out.dropped).toEqual({ undefined_hq: 1, unknown_hq: 1, coordinates_from_lu6: 1 });
+    expect(out.dropped).toEqual({ undefined_hq: 1, coordinates_from_lu6: 1 });
   });
 
   it('levelsMax all 0 is undefined (null); a zero that is no number, no river km, no date and an empty banner are null', () => {
@@ -232,7 +234,7 @@ describe('rules (synthetic)', () => {
     expect(zero('999.99m').record.zero?.value_m).toBe(999.99);
     expect(zero('223 M nn').record.zero?.value_m).toBe(223);
     expect(zero('').record).toMatchObject({ zero: null });
-    expect(zero('').dropped).toEqual({ unknown_hq: 1, undefined_hq: 1 });
+    expect(zero('').dropped).toEqual({ undefined_hq: 1 });
     for (const bad of ['999.99', '999.99 cm', '999.99 m NG', '0 m NN', '1500 m NN', '-3 m NN', '1.2.3 m NN', 'abc']) {
       const out = zero(bad);
       expect([bad, out.record.zero]).toEqual([bad, null]);
@@ -306,7 +308,7 @@ describe('rules (synthetic)', () => {
       expect([text, at(text).record.position, at(text).dropped]).toEqual([
         text,
         { ...lu6, from: 'lu-6' },
-        { unknown_hq: 1, undefined_hq: 1, coordinates_from_lu6: 1 },
+        { undefined_hq: 1, coordinates_from_lu6: 1 },
       ]);
     // Unparsable: counted, and the LU-6 point stands in; nothing at all when LU-6 has none (Perl).
     expect(at('somewhere').dropped.bad_coordinates).toBe(1);
@@ -563,5 +565,172 @@ describe('property and fuzz', () => {
       }),
       { numRuns: 300 },
     );
+  });
+});
+
+describe('references (P7a: the page as reference rows of the LU-1, LU-2 and twin DE-1 series)', () => {
+  const regs = new Map([
+    ['LU-1', registryOf('LU-1')],
+    ['LU-2', registryOf('LU-2')],
+    ['DE-1', registryOf('DE-1')],
+  ]);
+  const wire = ADAPTER.specs['lu-4-pages'];
+  const path = (fixtureName: string) =>
+    ({
+      'lu-4-page-normal.synthetic': 'alzette/alzette/mersch',
+      'lu-4-page-orange-changed.synthetic': 'alzette/alzette/mersch',
+      'lu-4-page-no-levels.synthetic': 'alzette/alzette/ettelbruck-alzette',
+      'lu-4-pages-stadtbredimus.synthetic': 'moselle/moselle/stadtbredimus',
+      'lu-4-pages-hesperange.synthetic': 'alzette/alzette/hesperange',
+    })[fixtureName] as string;
+  const load = (name: string, variant = path(name)) => {
+    if (wire === undefined) throw new Error('no lu-4-pages loader');
+    return wire.run(new Uint8Array(fixture(name)), {
+      registry: new Map(),
+      fetchedAt: Date.parse('2030-01-01T00:00:00Z'),
+      variant,
+      unitMismatch: new Set(),
+      refRegistries: regs,
+    }) as Loaded;
+  };
+
+  it('the loader wiring: owner source LU-4, a variant per page, the three target registries, no timestamps', () => {
+    expect(wire?.needsVariant).toBe(true);
+    expect(wire?.refTarget).toEqual(['LU-1', 'LU-2', 'DE-1']);
+    expect(wire?.maxBytes).toBe(4 * 1024 * 1024);
+  });
+
+  it('a normal page: yellow, orange, red, six HQ lines and the reference flood on Mersch of LU-1 and of LU-2, in cm', () => {
+    const out = load('lu-4-page-normal.synthetic');
+    const rows = out.references ?? [];
+    for (const r of rows) ReferenceRow.parse(r);
+    const lu1 = rows.filter((r) => r.target === 'LU-1');
+    const lu2 = rows.filter((r) => r.target === 'LU-2');
+    expect(lu1.map((r) => [r.kind, r.value, r.semantics])).toEqual([
+      ['LU4_YELLOW', 287, 'operational'],
+      ['LU4_ORANGE', 341, 'operational'],
+      ['LU4_RED', 393, 'operational'],
+      ['HQ2', 301, 'statistical'],
+      ['HQ5', 322, 'statistical'],
+      ['HQ10', 340, 'statistical'],
+      ['HQ50', 371, 'statistical'],
+      ['HQ100', 389, 'statistical'],
+      ['LU4_CRUE_REF', 410, 'historical'],
+    ]);
+    expect(lu2.map((r) => [r.kind, r.value])).toEqual(lu1.map((r) => [r.kind, r.value]));
+    expect(rows).toHaveLength(18);
+    const keysOf = (source: string, station: string) =>
+      [...(regs.get(source) ?? [])].filter(([, d]) => d.station === station).map(([k]) => k);
+    expect(new Set(rows.map((r) => r.series))).toEqual(
+      new Set([...keysOf('LU-1', 'lu.age.mersch'), ...keysOf('LU-2', 'lu.age-json.mersch')]),
+    );
+    for (const r of rows) {
+      expect([r.unit, r.convention, r.period, r.basis_label, r.valid_from, r.priority]).toEqual([
+        'cm',
+        null,
+        null,
+        'AGE',
+        null,
+        0,
+      ]);
+      expect([r.season_from_md, r.season_to_md]).toEqual([101, 1231]);
+    }
+    // Nothing of the page's labels ("Vigilance jaune", "HQ 20 ans") or of its gauge zero is carried.
+    expect(JSON.stringify(out)).not.toMatch(/Vigilance|jaune|142\.37/);
+    expect(out.gaugeZeros).toEqual([]);
+    expect(out.obs).toEqual([]);
+    expect(out.dropped).toEqual({ undefined_hq: 1 });
+    // The scope is every target series, so a level the page stops stating is closed.
+    expect(out.refScope).toEqual(
+      [...new Set(rows.map((r) => `${r.target}\n${r.series}`))].map((k) => ({
+        target: k.split('\n')[0],
+        series: k.split('\n')[1],
+      })),
+    );
+  });
+
+  it('a Moselle gauge also takes its references on the DE-1 series that twins.yaml pairs with its LU-1 series', () => {
+    const out = load('lu-4-pages-stadtbredimus.synthetic');
+    const rows = out.references ?? [];
+    const de1 = rows.filter((r) => r.target === 'DE-1');
+    expect(new Set(de1.map((r) => r.series))).toEqual(new Set(['dfdf753b-75bd-46f0-8cde-15545be9bfba/W']));
+    expect(de1.length).toBeGreaterThan(0);
+    expect(rows.filter((r) => r.target === 'LU-1').map((r) => r.series)).toContain('SN_Stadtbredimus');
+    expect(rows.filter((r) => r.target === 'LU-2').length).toBeGreaterThan(0);
+    // The same kinds and values on all three.
+    const kv = (t: string) => rows.filter((r) => r.target === t).map((r) => [r.kind, r.value]);
+    expect(kv('DE-1')).toEqual(kv('LU-1'));
+    expect(out.refScope?.map((x) => x.target).sort()).toEqual(['DE-1', 'LU-1', 'LU-2']);
+    // A gauge that is no twin takes none.
+    expect(load('lu-4-page-normal.synthetic').references?.some((r) => r.target === 'DE-1')).toBe(false);
+  });
+
+  it('golden: the page with the orange level changed (341 → 352) differs from the normal page in that level only', () => {
+    const out = run('lu-4-page-orange-changed.synthetic', 'mersch');
+    expect(out).toEqual(golden('lu-4-page-orange-changed.synthetic', out));
+    expect(out.record.levels).toEqual({ yellow: 287, orange: 352, red: 393 });
+  });
+
+  it('a changed orange level changes only LU4_ORANGE', () => {
+    const [a, b] = [load('lu-4-page-normal.synthetic'), load('lu-4-page-orange-changed.synthetic')];
+    const diff = (b.references ?? []).filter((r, i) => JSON.stringify(r) !== JSON.stringify(a.references?.[i]));
+    expect(new Set(diff.map((r) => [r.kind, r.value].join(':')))).toEqual(new Set(['LU4_ORANGE:352']));
+    expect(diff).toHaveLength(2);
+    expect(b.references).toHaveLength(a.references?.length ?? -1);
+    expect(a.refScope).toEqual(b.refScope);
+  });
+
+  it('a page with no levels and no HQ still states its series (scope) and no row; an unregistered gauge states nothing', () => {
+    const none = load('lu-4-page-no-levels.synthetic');
+    expect(none.references).toEqual([]);
+    expect(none.refScope?.length).toBeGreaterThan(0);
+    // Hesperange in a registry without LU-2 and DE-1: only LU-1.
+    const hes = wire?.run(new Uint8Array(fixture('lu-4-pages-hesperange.synthetic')), {
+      registry: new Map(),
+      fetchedAt: 0,
+      variant: path('lu-4-pages-hesperange.synthetic'),
+      unitMismatch: new Set(),
+      refRegistries: new Map([['LU-1', regs.get('LU-1') as never]]),
+    }) as Loaded;
+    expect(new Set(hes.references?.map((r) => r.target))).toEqual(new Set(['LU-1']));
+    const nowhere = wire?.run(new Uint8Array(fixture('lu-4-pages-hesperange.synthetic')), {
+      registry: new Map(),
+      fetchedAt: 0,
+      variant: path('lu-4-pages-hesperange.synthetic'),
+      unitMismatch: new Set(),
+    }) as Loaded;
+    expect(nowhere.references).toEqual([]);
+    expect(nowhere.refScope).toEqual([]);
+  });
+
+  it('a variant that is no seeded page is drift; a page that is no page is drift', () => {
+    expect(code(() => load('lu-4-page-normal.synthetic', 'moselle/moselle/unknown'))).toBe('bad_variant');
+    expect(
+      code(() =>
+        wire?.run(bytes('<html></html>'), {
+          registry: new Map(),
+          fetchedAt: 0,
+          variant: path('lu-4-page-normal.synthetic'),
+          unitMismatch: new Set(),
+        }),
+      ),
+    ).toBe('html_tag');
+  });
+
+  it('the reference flood: "Crue de référence" in any case or accent, once; a second one is duplicate_hq, a zero undefined', () => {
+    const lines = (legends: [string, number][]) =>
+      norm({ newVigilanceList: legends.map(([legend, value]) => ({ legend, value })) }).record.hq;
+    expect(lines([['Crue de référence', 410]])).toEqual([{ kind: 'LU4_CRUE_REF', value_cm: 410 }]);
+    expect(lines([['CRUE DE REFERENCE 2011', 5]])).toEqual([{ kind: 'LU4_CRUE_REF', value_cm: 5 }]);
+    expect(lines([['Crue de référence', 0]])).toEqual([]);
+    expect(
+      norm({
+        newVigilanceList: [
+          { legend: 'Crue de référence', value: 1 },
+          { legend: 'Crue de référence', value: 2 },
+        ],
+      }).dropped,
+    ).toEqual({ duplicate_hq: 1 });
+    expect(lines([['une crue de référence', 3]])).toEqual([]);
   });
 });

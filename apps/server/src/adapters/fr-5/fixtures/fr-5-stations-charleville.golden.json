@@ -1,0 +1,59 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "references": [
+  {
+   "series": "B540001001/H",
+   "target": "FR-1",
+   "kind": "CRUE_5C3A12DF",
+   "value": 547,
+   "unit": "cm",
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "Crue de janvier 1991",
+   "valid_from": null
+  },
+  {
+   "series": "B540001001/H",
+   "target": "FR-1",
+   "kind": "CRUE_FA4A8E46",
+   "value": 472,
+   "unit": "cm",
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "Crue de février 2002",
+   "valid_from": null
+  },
+  {
+   "series": "B540001001/H",
+   "target": "FR-1",
+   "kind": "CRUE_4D306F20",
+   "value": 405,
+   "unit": "cm",
+   "semantics": "historical",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "Crue de mars 2007",
+   "valid_from": null
+  }
+ ],
+ "refScope": [
+  {
+   "target": "FR-1",
+   "series": "B540001001/H"
+  }
+ ]
+}

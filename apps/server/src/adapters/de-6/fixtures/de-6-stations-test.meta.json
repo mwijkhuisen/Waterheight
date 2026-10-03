@@ -1,0 +1,11 @@
+{
+  "spec": "de-6-stations",
+  "source": "DE-6",
+  "synthetic": false,
+  "recorded_at": "2026-10-03T08:42:48Z",
+  "status": 200,
+  "content_type": "application/geo+json; charset=UTF-8",
+  "url": "https://api.hochwasserzentralen.de/public/v1/test/data/stations?format=json",
+  "bytes": 499252,
+  "trimmed": false
+}

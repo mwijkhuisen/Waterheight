@@ -1,0 +1,56 @@
+{
+ "record": {
+  "station": "mersch",
+  "page_id": "Mersch",
+  "levels": {
+   "yellow": 287,
+   "orange": 352,
+   "red": 393
+  },
+  "hq": [
+   {
+    "kind": "HQ2",
+    "value_cm": 301
+   },
+   {
+    "kind": "HQ5",
+    "value_cm": 322
+   },
+   {
+    "kind": "HQ10",
+    "value_cm": 340
+   },
+   {
+    "kind": "HQ50",
+    "value_cm": 371
+   },
+   {
+    "kind": "HQ100",
+    "value_cm": 389
+   },
+   {
+    "kind": "LU4_CRUE_REF",
+    "value_cm": 410
+   }
+  ],
+  "zero": {
+   "value_m": 142.37,
+   "datum": "NG95",
+   "valid_from": "2011-03-14"
+  },
+  "pk_km": 27.4,
+  "forecast_limit_h": 48,
+  "forecast_slug": "mersch",
+  "position": {
+   "crs": "EPSG:2169",
+   "e": 72155,
+   "n": 93410,
+   "from": "page"
+  },
+  "banner": "Generated note <b>not markup</b> & \"quoted\". Station d’alerte (generated).",
+  "operator": "Generated Operator"
+ },
+ "dropped": {
+  "undefined_hq": 1
+ }
+}

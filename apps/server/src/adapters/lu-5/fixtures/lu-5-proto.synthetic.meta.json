@@ -1,0 +1,9 @@
+{
+  "spec": "lu-5-cap",
+  "variant": "file/00000000-0000-4000-8000-000000000000",
+  "source": "LU-5",
+  "synthetic": true,
+  "derived_from": "lu-5-cap-20250908-231529-cancel with an element named __proto__ after <code>",
+  "values": "hostile test input, never fetched",
+  "status": 200
+}

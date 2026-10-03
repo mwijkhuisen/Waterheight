@@ -113,5 +113,84 @@
  "dropped": {
   "zero_datum_unknown": 1
  },
- "unknown": 0
+ "unknown": 0,
+ "classes": [
+  {
+   "station": "be.spw.L5170",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-869",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L5412",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-230",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L5442",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-83",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L6050",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-831",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L6290",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-148",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L6470",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-192",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L6530",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-692",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L6861",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-907",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L6900",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-793",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L6990",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-730",
+   "label": null,
+   "level": null
+  },
+  {
+   "station": "be.spw.L7620",
+   "ts": "2030-01-01T04:50:00.000Z",
+   "code": "synthetic-512",
+   "label": null,
+   "level": null
+  }
+ ]
 }

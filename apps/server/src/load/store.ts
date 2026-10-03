@@ -128,8 +128,9 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
     role: 'primary' | 'twin' | 'mirror';
     lon: number | null;
     lat: number | null;
+    station: string;
   }>`
-    SELECT s.id, s.provider_key AS key, s.quantity, s.native_unit, s.to_canonical, s.value_kind,
+    SELECT s.id, s.station_id AS station, s.provider_key AS key, s.quantity, s.native_unit, s.to_canonical, s.value_kind,
            (EXTRACT(EPOCH FROM s.native_step) * 1000)::double precision AS native_step_ms,
            (EXTRACT(EPOCH FROM s.expected_step) * 1000)::double precision AS expected_step_ms, st.tier,
            LEAST(src.audience, COALESCE(s.audience, src.audience)) = 'off' AS off,
@@ -141,6 +142,7 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
       r.key,
       {
         id: r.id,
+        station: r.station,
         key: r.key,
         quantity: r.quantity,
         native_unit: r.native_unit,
@@ -321,24 +323,30 @@ export async function upsertObs(
   return { n_new, n_changed: mine.length - n_new, newest, writes: written.length };
 }
 
-export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'older_ignored' | 'withheld';
+export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'changed';
+
+const utcDay = (ms: number) => Math.floor(ms / 86_400_000);
 
 /**
  * The current gauge zero (PNP) of a series. Only the current one is kept up
  * to date (the history of zeros is P7): a newer validFrom closes the stored
  * range and opens a new one, an older validFrom is reported and changes
  * nothing. The same validFrom follows the observations' newest fetch wins: a
- * newer payload with another value corrects it and one with the same value
- * becomes its holder (a confirmation, not counted), the holding payload itself
- * corrects it when its value now differs (a replay after a fix), and an older
- * payload (a late line, a partial replay) leaves it alone. A zero without a
- * published validity is never overwritten by another payload, whatever its
- * source (P5b, review CR-2): DE-8's `Nullpunkt` has no date at all, and an
- * FR-1 zero without `date_debut_ref_alti_station` is held the same way. A
- * different value is not written (`withheld`, alerted), because nothing says
- * from when it holds; the holding payload corrects it on its own replay, and a
- * dated zero supersedes it (the history of zeros is P7, R-072). Changes of
- * series that do not share their source's audience are made but not counted.
+ * payload with the same value becomes its holder (a confirmation, not
+ * counted), the holding payload itself corrects it when its value now differs
+ * (a replay after a fix), and an older payload (a late line, a partial replay)
+ * leaves it alone. P7a (R-072): nothing is overwritten by another payload. A
+ * newer payload that states another value without a later validity (the same
+ * date, an earlier one, or none, as DE-8's `Nullpunkt` and an FR-1 zero without
+ * `date_debut_ref_alti_station`) ends the stored zero at its own fetch time and
+ * opens a new range from there (`changed`, alerted); before P7a the dated case
+ * was corrected in place and the dateless one withheld. At most one range a
+ * day comes from such a change (review SR-5): while the open range began on the
+ * fetch's own UTC day (or later), a newer payload with another value corrects
+ * it in place (`changed` all the same), so a zero that flaps A→B→A adds one
+ * row a day, not one per payload; a range of an earlier day is never touched.
+ * Changes of series that do not share their source's audience are made but not
+ * counted.
  */
 export async function applyGaugeZeros(
   tx: Tx,
@@ -373,31 +381,42 @@ export async function applyGaugeZeros(
     };
     const from = sql`${z.valid_from}::timestamptz`;
     const now = current.get(z.id);
+    const same = now !== undefined && now.value_m === z.value_m && now.datum === z.datum;
+    const rewrite = () =>
+      sql`UPDATE gauge_zero SET value_m = ${z.value_m}, datum = ${z.datum}, batch_id = ${batch}::bigint
+          WHERE series_id = ${z.id} AND upper_inf(valid)`.execute(tx);
     if (now === undefined) {
       await sql`INSERT INTO gauge_zero (series_id, value_m, datum, valid, batch_id)
                 VALUES (${z.id}, ${z.value_m}, ${z.datum}, tstzrange(${from}, NULL), ${batch}::bigint)`.execute(tx);
       note('new');
-    } else if (now.valid_from === z.valid_from) {
-      if (!now.mine && !now.older) continue;
-      if (now.value_m === z.value_m && now.datum === z.datum) {
-        if (now.older) confirmed.push(z.id);
-        continue;
-      }
-      if (z.valid_from === null && !now.mine) {
-        note('withheld');
-        continue;
-      }
-      await sql`UPDATE gauge_zero SET value_m = ${z.value_m}, datum = ${z.datum}, batch_id = ${batch}::bigint
-                WHERE series_id = ${z.id} AND upper_inf(valid)`.execute(tx);
-      note('corrected');
-    } else if (z.valid_from !== null && (now.valid_from === null || z.valid_from > now.valid_from)) {
+    } else if (
+      now.valid_from !== z.valid_from &&
+      z.valid_from !== null &&
+      (now.valid_from === null || z.valid_from > now.valid_from)
+    ) {
       await sql`UPDATE gauge_zero SET valid = tstzrange(lower(valid), ${from})
                 WHERE series_id = ${z.id} AND upper_inf(valid)`.execute(tx);
       await sql`INSERT INTO gauge_zero (series_id, value_m, datum, valid, batch_id)
                 VALUES (${z.id}, ${z.value_m}, ${z.datum}, tstzrange(${from}, NULL), ${batch}::bigint)`.execute(tx);
       note('superseded');
+    } else if (!now.mine && !now.older) {
+      // A newer payload holds it: a late line or a partial replay leaves it alone (no news, no alert).
+    } else if (same) {
+      if (now.older) confirmed.push(z.id);
+    } else if (now.mine) {
+      await rewrite();
+      note('corrected');
+    } else if (now.valid_from !== null && utcDay(fetchedAt.getTime()) <= utcDay(Date.parse(now.valid_from))) {
+      // The open range began this UTC day (or begins later): the newer payload's value wins in place.
+      await rewrite();
+      note('changed');
     } else {
-      note('older_ignored');
+      await sql`UPDATE gauge_zero SET valid = tstzrange(lower(valid), ${fetchedAt}::timestamptz)
+                WHERE series_id = ${z.id} AND upper_inf(valid)`.execute(tx);
+      await sql`INSERT INTO gauge_zero (series_id, value_m, datum, valid, batch_id)
+                VALUES (${z.id}, ${z.value_m}, ${z.datum}, tstzrange(${fetchedAt}::timestamptz, NULL),
+                        ${batch}::bigint)`.execute(tx);
+      note('changed');
     }
   }
   if (confirmed.length > 0) {

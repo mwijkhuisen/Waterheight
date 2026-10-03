@@ -1,0 +1,11 @@
+# FR-5 Vigicrues: our reviewed NL and EN text for each section vigilance level (NivInfViCr) and for the historical
+# flood references (CruesHistoriques). Keyed by our code; the provider's own text is stored beside it in the row.
+# Vigicrues vigilance is an official bulletin of the French flood service (SCHAPI), so "waakzaamheid" and
+# "vigilance" are the provider's own word for it.
+source: FR-5
+labels:
+  - { scale: section, code: '1', nl: "Groen: geen bijzondere waakzaamheid vereist", en: "Green: no particular vigilance required" }
+  - { scale: section, code: '2', nl: "Geel: waakzaam, kans op plaatselijke overstromingen of snel stijgend water", en: "Yellow: be aware, risk of local flooding or rapidly rising water" }
+  - { scale: section, code: '3', nl: "Oranje: kans op grote overstromingen met gevolgen voor het dagelijks leven en de veiligheid", en: "Orange: risk of significant flooding affecting daily life and safety" }
+  - { scale: section, code: '4', nl: "Rood: kans op zeer grote overstroming, direct gevaar voor mensen en goederen", en: "Red: risk of major flooding, direct threat to people and property" }
+  - { scale: reference, code: CRUE, nl: "Historisch hoogwater (Vigicrues)", en: "Historical flood (Vigicrues)" }

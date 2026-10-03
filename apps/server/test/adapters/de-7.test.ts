@@ -1,18 +1,31 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { type Normalised, ObsRow, obsParts, QC, type Registry, SchemaDrift, type SeriesDecl } from '@rws/core';
 import fc from 'fast-check';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { CHUNK, type Context, keyOf, normalise, PLACEHOLDERS, TIME } from '../../src/adapters/de-7/normalise.ts';
+import {
+  CHUNK,
+  type Context,
+  keyOf,
+  normalise,
+  normaliseThresholds,
+  PLACEHOLDERS,
+  TIME,
+} from '../../src/adapters/de-7/normalise.ts';
 import {
   HEADER,
   lineSink,
   MAX_LINE,
   MAX_ROWS,
+  MAX_STATION_ROWS,
   MAX_STATIONS,
   MAX_TIMES,
+  parseStationFile,
   parseText,
   type Readings,
+  STATIONS_HEADER,
+  STATIONS_MAX_BYTES,
 } from '../../src/adapters/de-7/parse.ts';
 import { LOAD_ADAPTERS, type LoadContext } from '../../src/load/adapters.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
@@ -27,12 +40,14 @@ const registry = registryOf('DE-7');
 const spec = LOAD_ADAPTERS['DE-7']?.specs['de-7-messwerte'];
 const pegelSpec = LOAD_ADAPTERS['DE-7']?.specs['de-7-pegeldaten'];
 
-type Flat = Pick<Normalised, 'obs' | 'gaugeZeros' | 'dropped' | 'unknown'>;
+type Flat = Pick<Normalised, 'obs' | 'gaugeZeros' | 'dropped' | 'unknown' | 'references' | 'refScope'>;
 const flat = (n: Normalised): Flat => ({
   obs: [...obsParts(n)].flat(),
   gaugeZeros: n.gaugeZeros,
   dropped: n.dropped,
   unknown: n.unknown,
+  ...(n.references === undefined ? {} : { references: n.references }),
+  ...(n.refScope === undefined ? {} : { refScope: n.refScope }),
 });
 
 /** The golden file, one row per line (thousands of rows); equals `JSON.stringify` of the value once parsed. */
@@ -42,7 +57,7 @@ function golden(name: string, actual: Flat): Flat {
     const rows = actual.obs.map((r) => `  ${JSON.stringify(r)}`).join(',\n');
     writeFileSync(
       url,
-      `{\n "obs": [${rows === '' ? '' : `\n${rows}\n `}],\n "gaugeZeros": ${JSON.stringify(actual.gaugeZeros)},\n "dropped": ${JSON.stringify(actual.dropped)},\n "unknown": ${actual.unknown}\n}\n`,
+      `{\n "obs": [${rows === '' ? '' : `\n${rows}\n `}],\n "gaugeZeros": ${JSON.stringify(actual.gaugeZeros)},\n "dropped": ${JSON.stringify(actual.dropped)},\n "unknown": ${actual.unknown}${actual.references === undefined ? '' : `,\n "references": ${JSON.stringify(actual.references)},\n "refScope": ${JSON.stringify(actual.refScope)}`}\n}\n`,
     );
   }
   if (!existsSync(url)) throw new Error(`no golden for ${name}: run with UPDATE_GOLDEN=1 and review it`);
@@ -70,6 +85,8 @@ const refusal = async (p: Promise<unknown>) => {
 };
 
 const NO = '2847500000100';
+/** A pegel_stationen.txt with the real header and the given rows (CRLF). */
+const stationFile = (rows: string[]) => `${[STATIONS_HEADER, ...rows].join('\r\n')}\r\n`;
 const NOW = Date.parse('2026-09-29T13:00:00Z');
 /** A row at `minutes` from NOW, in the provider's spelling (+01:00 all year). */
 const at = (minutes: number) => new Date(NOW + minutes * 60_000 + 3_600_000).toISOString().replace('Z', '+01:00');
@@ -139,7 +156,36 @@ describe('golden files (real payloads)', () => {
     expect(ts[0]).toBeGreaterThanOrEqual(Date.parse('2026-08-16T12:00:00Z'));
     expect(out.dropped.too_old).toBeGreaterThan(0);
     expect(out.dropped.placeholder).toBeGreaterThan(0);
+    // pegel_stationen.txt (6 stations, the same zip): the thresholds of the registered ones, as references.
+    const refs = (key: string) => out.references?.filter((r) => r.series === key).map((r) => [r.kind, r.value]);
+    expect(refs('2829100000100/W')).toEqual([
+      ['LANUV_MNW', 31],
+      ['LANUV_MW', 65],
+      ['LANUV_MHW', 211],
+      ['LANUV_INFO_1', 200],
+      ['LANUV_INFO_2', 245],
+      ['LANUV_INFO_3', 265],
+    ]);
+    expect(out.references?.every((r) => r.unit === 'cm' && r.period === null && r.valid_from === null)).toBe(true);
+    expect(
+      out.references?.filter((r) => r.kind.startsWith('LANUV_INFO')).every((r) => r.semantics === 'operational'),
+    ).toBe(true);
+    expect(out.refScope?.map((r) => r.series)).toContain('2829100000100/W');
     expect(new Set(ts.slice(1).map((t, i) => t - (ts[i] as number)))).toEqual(new Set([900_000]));
+  });
+
+  it('the loader window drops old points of the seed but never the thresholds', async () => {
+    const name = 'de-7-pegeldaten-blocks';
+    const { fetchedAt } = loadCtx(name);
+    const all = (await pegelSpec?.run(rawFixture('DE-7', name).body, loadCtx(name))) as Normalised;
+    const cut = (await pegelSpec?.run(
+      rawFixture('DE-7', name).body,
+      loadCtx(name, { since: fetchedAt }),
+    )) as Normalised;
+    expect(rows(cut).length).toBeLessThan(rows(all).length);
+    expect(cut.dropped.outside_window).toBeGreaterThan(0);
+    expect(cut.references).toEqual(all.references);
+    expect(cut.refScope).toEqual(all.refScope);
   });
 
   it('the header alone (trimmed): no rows, no drift, no chunk', async () => {
@@ -247,7 +293,7 @@ describe('the ZIP guard on the loader path (synthetic attack payloads)', () => {
     const body = zipSync({
       'pegel_messwerte.txt': strToU8(lines),
       'pegel_tagesmittelwerte.txt': strToU8('not a measurement file\r\n'),
-      'pegel_stationen.txt': strToU8('ü;ä\r\n'),
+      'pegel_stationen.txt': strToU8(stationFile([`51;7;Pannenmuehle;${NO};286;Niers;;;;29.0;40.0;90.0;;;1 km²;2 km`])),
     });
     const out = (await pegelSpec?.run(body, {
       registry,
@@ -256,7 +302,21 @@ describe('the ZIP guard on the loader path (synthetic attack payloads)', () => {
       unitMismatch: new Set(),
     })) as Normalised;
     expect(rows(out)).toEqual([{ series: '2847500000100/W', ts: '2026-09-29T12:45:00.000Z', value: 12.5, qc: QC.RAW }]);
-    expect(await run(zip(lines, 'pegel_messwerte.txt'), pegelSpec)).toBe('parsed');
+    expect(out.references?.map((r) => [r.kind, r.value])).toEqual([
+      ['LANUV_MNW', 29],
+      ['LANUV_MW', 40],
+      ['LANUV_MHW', 90],
+    ]);
+    // Both members are needed: the seed without the station file is drift, not a silent loss of the thresholds.
+    expect(await run(zip(lines, 'pegel_messwerte.txt'), pegelSpec)).toBe('zip_member_missing');
+    const both = (st: Uint8Array | string) =>
+      zipSync({
+        'pegel_messwerte.txt': strToU8(lines),
+        'pegel_stationen.txt': typeof st === 'string' ? strToU8(st) : st,
+      });
+    expect(await run(both(stationFile([])), pegelSpec)).toBe('parsed');
+    expect(await run(both(strToU8('x;y\r\n')), pegelSpec)).toBe('csv_header');
+    expect(await run(both(randomBytes(STATIONS_MAX_BYTES + 1)), pegelSpec)).toBe('zip_member_size');
     expect(await run(zipSync({ 'pegel_messwerte.txt': strToU8(lines), 'other.txt': strToU8('x') }), pegelSpec)).toBe(
       'zip_name',
     );
@@ -616,6 +676,69 @@ describe('normalise (declared time convention, drops, window, chunks)', () => {
   it('no kept row at all gives no chunk, and a series with only dropped points leaves none', () => {
     expect([...obsParts(go([row(-15, 'NA')]))]).toEqual([]);
     expect([...obsParts(go([row(16, 1)]))]).toEqual([]);
+  });
+});
+
+describe('pegel_stationen.txt (the LANUK thresholds, P7a)', () => {
+  const st = (info: string, mnw = '', mw = '', mhw = '', no = NO) =>
+    `51.1;6.2;Name;${no};286;Niers;${info};${mnw};${mw};${mhw};;;1 km²;2 km`;
+  const parseRows = (rows: string[]) => parseStationFile(Buffer.from(stationFile(rows)));
+  const code = (fn: () => unknown) => drift(fn)[0];
+
+  it('reads the six thresholds as numbers, an empty cell as none (NaN)', () => {
+    const [r] = parseRows([st('153.0;177.0;198.0', '5.0', '20.0', '108.0')]);
+    expect(r).toEqual({ station: NO, info: [153, 177, 198], mnw: 5, mw: 20, mhw: 108 });
+    const [e] = parseRows([st(';;', '', '20.5')]);
+    expect(e?.info.every(Number.isNaN)).toBe(true);
+    expect([Number.isNaN(e?.mnw), e?.mw]).toEqual([true, 20.5]);
+  });
+
+  it('the header is pinned, the rows are as wide as the header, a value has its shape, the station its digits', () => {
+    expect(code(() => parseStationFile(Buffer.from('a;b\r\n1;2\r\n')))).toBe('csv_header');
+    expect(code(() => parseStationFile(Buffer.from(`${STATIONS_HEADER};x\r\n`)))).toBe('csv_header');
+    expect(code(() => parseRows([`${st(';;')};extra`]))).toBe('csv_width');
+    expect(code(() => parseRows([st('1e3;;')]))).toBe('bad_value');
+    expect(code(() => parseRows([st(';;', 'abc')]))).toBe('bad_value');
+    expect(code(() => parseRows([st(';;', '', '', '', 'x1')]))).toBe('station_no');
+    expect(code(() => parseStationFile(Buffer.alloc(0)))).toBe('csv_empty');
+  });
+
+  it('is UTF-8 (a BOM is tolerated, bytes that are not UTF-8 are encoding drift) and capped at MAX_STATION_ROWS', () => {
+    expect(parseStationFile(Buffer.from(`\uFEFF${stationFile([st(';;')])}`))).toHaveLength(1);
+    expect(code(() => parseStationFile(Buffer.from([0xff, 0xfe])))).toBe('encoding');
+    const many = Array.from({ length: MAX_STATION_ROWS }, (_, i) => st(';;', '', '', '', String(100000 + i)));
+    expect(parseRows(many)).toHaveLength(MAX_STATION_ROWS);
+    expect(code(() => parseRows([...many, st(';;')]))).toBe('csv_rows');
+  });
+
+  it('references: only registered stations, the kinds and semantics are declared, empty cells give no row', () => {
+    const out = normaliseThresholds(
+      parseRows([
+        st('1.0;2.0;3.0', '4', '5', '6'),
+        st(';;', '', '7', '', '9286455000200'),
+        st('9;;', '', '', '', '123456'),
+        st(';;', '', '', '', '999999999999'),
+      ]),
+      { registry },
+    );
+    expect(out.references?.map((r) => [r.series, r.kind, r.semantics, r.value])).toEqual([
+      [`${NO}/W`, 'LANUV_MNW', 'statistical', 4],
+      [`${NO}/W`, 'LANUV_MW', 'statistical', 5],
+      [`${NO}/W`, 'LANUV_MHW', 'statistical', 6],
+      [`${NO}/W`, 'LANUV_INFO_1', 'operational', 1],
+      [`${NO}/W`, 'LANUV_INFO_2', 'operational', 2],
+      [`${NO}/W`, 'LANUV_INFO_3', 'operational', 3],
+      ['9286455000200/W', 'LANUV_MW', 'statistical', 7],
+    ]);
+    // A station with no threshold at all stays in the scope (a withdrawn threshold is closed); unknown and placeholder are counted.
+    expect(out.refScope).toEqual([{ series: `${NO}/W` }, { series: '9286455000200/W' }]);
+    expect([out.unknown, out.dropped]).toEqual([1, { placeholder: 1 }]);
+    expect(out.obs).toEqual([]);
+  });
+
+  it('a station number listed twice is withheld (conflict), not guessed', () => {
+    const out = normaliseThresholds(parseRows([st(';;', '1'), st(';;', '2')]), { registry });
+    expect([out.references, out.refScope, out.dropped]).toEqual([[], [], { conflict: 2 }]);
   });
 });
 

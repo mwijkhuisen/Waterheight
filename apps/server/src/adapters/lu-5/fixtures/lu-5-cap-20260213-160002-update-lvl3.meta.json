@@ -1,0 +1,15 @@
+{
+  "spec": "lu-5-cap",
+  "variant": "file/d1a33b62-4a37-49cb-a9f3-8f79c39838ac",
+  "source": "LU-5",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/LU-5/lu-5-cap/2026/09/30/140626Z-636626c46930b384.zst",
+  "recorded_at": "2026-09-30T14:06:25Z",
+  "seed": true,
+  "status": 200,
+  "url": "https://download.data.public.lu/resources/alertes-du-systeme-lu-alert/20260213-150504/dump-alert.1770994802.xml",
+  "bytes": 11879,
+  "source_sha256": "636626c46930b384d2ebc9fe8928c3dd721aa0154699963a70a1e9cafb3719a6",
+  "trimmed": false
+}

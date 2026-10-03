@@ -2,7 +2,7 @@
   "spec": "be-3-meta",
   "source": "BE-3",
   "synthetic": true,
-  "derived_from": "hand-made: a getStationList table (the structure of the daily metadata call, 65 columns): a datum of 109.9 DNG, 9999.0 (unknown), an mNGF unit, an empty datum, a station listed twice, a decimal comma with a date, a datum out of range, a Habs-only station, an unregistered one and an unreadable start of validity",
+  "derived_from": "hand-made: a getStationList table (the structure of the daily metadata call, 65 columns): a datum of 109.9 DNG, 9999.0 (unknown), an mNGF unit, an empty datum, a station listed twice, a decimal comma with a date, a datum out of range, a Habs-only station, an unregistered one and an unreadable start of validity, and (P7a) a NIVCRU class `t<n>/<state>` on six of the stations (generated codes in the real form)",
   "values": "every value generated (no archived payload)",
   "status": 200
 }

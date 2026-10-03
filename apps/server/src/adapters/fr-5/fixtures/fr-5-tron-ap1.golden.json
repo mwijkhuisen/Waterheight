@@ -1,0 +1,20 @@
+{
+ "links": {
+  "kind": "section",
+  "code": "AP1",
+  "territory": "29",
+  "stations": [
+   "D019223001",
+   "D016221001",
+   "D019801101",
+   "D019801201",
+   "D015850001",
+   "D019701001"
+  ]
+ },
+ "drift": {
+  "unregistered": [],
+  "vanished": [],
+  "changed": []
+ }
+}

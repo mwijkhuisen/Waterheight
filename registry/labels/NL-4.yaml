@@ -1,0 +1,25 @@
+# NL-4 Rijkswaterstaat Waterinfo legend classes: our reviewed NL and EN text for each label stem (the workbook label
+# without its parenthesised bound) that occurs on a registered NL-1 series, typos of the workbook included (Verlagde
+# waterstand). They are display classes of the Waterinfo legend, not alerts: no text calls one a warning.
+source: NL-4
+labels:
+  - { scale: stem, code: Extreem, nl: "Extreem (Waterinfo-klasse)", en: "Extreme (Waterinfo class)" }
+  - { scale: stem, code: Extreem hoogwater, nl: "Extreem hoogwater (Waterinfo-klasse)", en: "Extreme high water (Waterinfo class)" }
+  - { scale: stem, code: Extreme afvoer, nl: "Extreme afvoer (Waterinfo-klasse)", en: "Extreme discharge (Waterinfo class)" }
+  - { scale: stem, code: Hoge afvoer, nl: "Hoge afvoer (Waterinfo-klasse)", en: "High discharge (Waterinfo class)" }
+  - { scale: stem, code: Hoogwater, nl: "Hoogwater (Waterinfo-klasse)", en: "High water (Waterinfo class)" }
+  - { scale: stem, code: Hoogwater / Stormvloed, nl: "Hoogwater / stormvloed (Waterinfo-klasse)", en: "High water / storm surge (Waterinfo class)" }
+  - { scale: stem, code: Stormvloed, nl: "Stormvloed (Waterinfo-klasse)", en: "Storm surge (Waterinfo class)" }
+  - { scale: stem, code: Verhoogd, nl: "Verhoogd (Waterinfo-klasse)", en: "Elevated (Waterinfo class)" }
+  - { scale: stem, code: Verhoogde afvoer, nl: "Verhoogde afvoer (Waterinfo-klasse)", en: "Elevated discharge (Waterinfo class)" }
+  - { scale: stem, code: Verhoogde waterstand, nl: "Verhoogde waterstand (Waterinfo-klasse)", en: "Elevated water level (Waterinfo class)" }
+  - { scale: stem, code: Licht verhoogd, nl: "Licht verhoogd (Waterinfo-klasse)", en: "Slightly elevated (Waterinfo class)" }
+  - { scale: stem, code: Normaal, nl: "Normaal (Waterinfo-klasse)", en: "Normal (Waterinfo class)" }
+  - { scale: stem, code: Normale afvoer, nl: "Normale afvoer (Waterinfo-klasse)", en: "Normal discharge (Waterinfo class)" }
+  - { scale: stem, code: Normale waterstand, nl: "Normale waterstand (Waterinfo-klasse)", en: "Normal water level (Waterinfo class)" }
+  - { scale: stem, code: Laagwater, nl: "Laagwater (Waterinfo-klasse)", en: "Low water (Waterinfo class)" }
+  - { scale: stem, code: Verlaagd, nl: "Verlaagd (Waterinfo-klasse)", en: "Lowered (Waterinfo class)" }
+  - { scale: stem, code: Verlaagde afvoer, nl: "Verlaagde afvoer (Waterinfo-klasse)", en: "Lowered discharge (Waterinfo class)" }
+  - { scale: stem, code: Verlaagde waterstand, nl: "Verlaagde waterstand (Waterinfo-klasse)", en: "Lowered water level (Waterinfo class)" }
+  - { scale: stem, code: Verlagde waterstand, nl: "Verlaagde waterstand (Waterinfo-klasse)", en: "Lowered water level (Waterinfo class)" }
+  - { scale: stem, code: Geen klasse-indeling, nl: "Geen klasse-indeling", en: "No class division" }

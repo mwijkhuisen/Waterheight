@@ -414,6 +414,28 @@ specs:
     retention: forever
     validity: { format: json, count: '', min: 100 }
 
+  # P7a: SPW's reference values, weekly. Stage 1 is one getTimeseriesList by the exact shortnames of the percentiles
+  # (relative to the gauge zero: Cmd.POR.*, never Cmd.Abs.POR.*) and the three reference floods; stage 2 is
+  # getTimeseriesValues for the listed ts_ids, at most 100 a call over 1900-2028 (one value per percentile, up to
+  # three per Top3), built by adapters/be-3/capture.ts from digits-only ts_ids. Live recon 2026-10-03: the list took
+  # 1.4 s (921 series at 331 stations for P05 and Top3 alone, so about 3,100 for the nine shortnames, about 32 value
+  # calls); a wildcard (`Cmd.POR.*`) timed out after 60 s and a ts_path wildcard in a values call answered
+  # TooManyResults: never a wildcard. One list plus about 32 calls 5 s apart a week; max_expand leaves 10 calls spare.
+  - id: be-3-refs
+    source: BE-3
+    version: 1
+    cron: "20 5 * * 2"
+    request:
+      url: https://hydrometrie.wallonie.be/services/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&format=json&request=getTimeseriesList&ts_shortname=Cmd.POR.P05,Cmd.POR.P10,Cmd.POR.P15,Cmd.POR.Med,Cmd.POR.Mean,Cmd.POR.P85,Cmd.POR.P90,Cmd.POR.P95,Cmd.ReferenceFlood.Top3&returnfields=station_no,ts_id,ts_shortname,stationparameter_no,ts_unitsymbol
+      expand: true
+      max_expand: 45
+      expand_validity: { format: json, required: ['0.ts_id', '0.data'], count: '', min: 1 }
+    variants: { space_ms: 5000 }
+    timeout: metadata
+    max_bytes: 2097152
+    retention: forever
+    validity: { format: json, count: '', min: 100 }
+
   # The catch-up (P5c, run once, off-peak): each group's series list (the ts_path → ts_id resolution of this run),
   # then getTimeseriesValues for every H/H_sonde/Habs/Habs_sonde/Q/QADM series of the group from the display start
   # (2026-08-24) to the seed's start, built by adapters/_shared/kiwis: at most 100 ts_ids and 250,000 values a call
@@ -657,7 +679,7 @@ specs:
         }
     variants: { values: [{ cube: river }, { cube: lake }] }
     max_bytes: 4194304
-    retention: forever
+    retention: obs   # P7a: the daily copy and every payload whose dangerLevel changed are kept (load/prune.ts)
     validity: { format: csv, csv: { delimiter: ',', encoding: utf-8 }, required: [id, name, time, dl], min: 20 }
   - id: ch-2-pq
     source: CH-2
@@ -668,7 +690,7 @@ specs:
       url: https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson
     conditional: last-modified
     max_bytes: 4194304
-    retention: forever
+    retention: obs   # P7a: the daily copy and every payload whose wl_1..wl_4 changed are kept (load/prune.ts)
     validity: { format: json, required: [features], count: features, min: 150 }
   - id: ch-3-40d
     source: CH-3

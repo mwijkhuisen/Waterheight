@@ -74,7 +74,8 @@ export const VERBATIM: Readonly<Record<string, Readonly<Record<string, RegExp>>>
     ts_unitsymbol: UNIT,
     ts_path: TS_PATH,
     ts_name: /^\d{1,2}[a-z]?-[A-Za-z]{1,20}(?: [a-z]{1,20})?(?:\.[A-Za-z]{1,20}){0,4}$/,
-    ts_shortname: /^[A-Za-z]{1,20}(?:[.-][A-Za-z]{1,20}){0,6}$/,
+    // A code of words, digits allowed inside a word (`Cmd.POR.P05`, `Cmd.ReferenceFlood.Top3`, `HYear.Cmd.Rel.Abs.P85`).
+    ts_shortname: /^[A-Za-z][A-Za-z0-9]{0,19}(?:[.-][A-Za-z][A-Za-z0-9]{0,19}){0,6}$/,
     columns: COLUMNS,
     rows: COUNT,
     station_gauge_datum_unit: /^(?:[A-Z]{3}|---)$/,

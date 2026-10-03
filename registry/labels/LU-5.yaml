@@ -1,0 +1,10 @@
+# LU-5 LU-Alert (AGE flood vigilance for the zones Nord, Sud and Moselle), keyed by OUR code: the CAP parameter
+# `cb-eu-level` as published. The scale is inverted: ALERT_LVL_1 is the most severe (red) and ALERT_LVL_4 the lowest
+# (information); packages/core/src/crosswalk.ts maps them to levels 5 … 2. The provider issues these as official
+# vigilance levels, the colour names are its own (rouge, orange, jaune); TEST messages are dropped before they are stored.
+source: LU-5
+labels:
+  - { scale: zone, code: ALERT_LVL_1, nl: Rode vigilantie overstromingen, en: Red flood vigilance }
+  - { scale: zone, code: ALERT_LVL_2, nl: Oranje vigilantie overstromingen, en: Orange flood vigilance }
+  - { scale: zone, code: ALERT_LVL_3, nl: Gele vigilantie overstromingen, en: Yellow flood vigilance }
+  - { scale: zone, code: ALERT_LVL_4, nl: Informatie over overstromingen, en: Flood information }

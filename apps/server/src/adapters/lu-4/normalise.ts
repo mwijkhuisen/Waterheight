@@ -1,4 +1,10 @@
-import { parseStrict } from '@rws/core';
+import {
+  type Normalised as CoreNormalised,
+  emptyNormalised,
+  parseStrict,
+  type ReferenceRow,
+  type Registry,
+} from '@rws/core';
 import { z } from 'zod';
 import { slugOf } from '../_shared/age/slug.ts';
 import type { Page } from './parse.ts';
@@ -10,8 +16,9 @@ import type { Page } from './parse.ts';
 //    form `dd.dddddd`) is `valid_from` null, counted `bad_date`; the zero itself is kept;
 //  - levels: `levelsMax` is yellow, orange, red by position, in cm; 0 means not defined → null (almost everywhere
 //    the yellow one);
-//  - HQ: `newVigilanceList` lines whose legend names HQ2, HQ5, HQ10, HQ20, HQ50 or HQ100, as water levels in cm; a
-//    legend that names none is `unknown_hq`, a value 0 is `undefined_hq`, a kind twice keeps its first (`duplicate_hq`);
+//  - HQ: `newVigilanceList` lines whose legend names HQ2, HQ5, HQ10, HQ20, HQ50 or HQ100, as water levels in cm, and
+//    "Crue de référence" (kind LU4_CRUE_REF, the historical flood); a legend that names none is `unknown_hq`, a
+//    value 0 is `undefined_hq`, a kind twice keeps its first (`duplicate_hq`);
 //  - zero: `zeroScale` is metres on NG95 ("999.99 m NN", the tie to NAP), the datum declared here; a string that is
 //    not that (or a value outside 0 … 1000 m) is `bad_zero`;
 //  - river km: `pk`; position: the page's LUREF (EPSG:2169) easting and northing when they lie in Luxembourg
@@ -19,15 +26,19 @@ import type { Page } from './parse.ts';
 //    six digits: `coordinates_from_lu6`), else null. A string that is not "E N" is `bad_coordinates`;
 //  - an empty `zeroScale`, `pk`, `coordinates` or `serviceDate` is a value the page does not state: null, not counted;
 //  - the banner and the operator are untrusted text, trimmed and length-capped, never interpreted.
-// Pure: no I/O. Loading into reference_value is P7a.
+// Pure: no I/O. P7a: `toReferences` maps the record to reference rows (below); the gauge zero is NOT emitted (an
+// owner zero must not sit on a public series).
 
 export const SOURCE = 'LU-4';
 
 export const HQ_KINDS = ['HQ2', 'HQ5', 'HQ10', 'HQ20', 'HQ50', 'HQ100'] as const;
+/** The kind of the "Crue de référence" line: a stored reference kind as it is. */
+export const CRUE_REF = 'LU4_CRUE_REF';
+const LINE_KINDS = [...HQ_KINDS, CRUE_REF] as const;
 const BANNER_MAX = 20_000;
 
 const level = z.number().int().nullable();
-const hq = z.strictObject({ kind: z.enum(HQ_KINDS), value_cm: z.number().int() });
+const hq = z.strictObject({ kind: z.enum(LINE_KINDS), value_cm: z.number().int() });
 const zero = z.strictObject({
   value_m: z.number(),
   datum: z.literal('NG95'),
@@ -46,7 +57,7 @@ export const StationReference = z.strictObject({
   station: z.string().min(1).max(100),
   page_id: z.string().min(1).max(500),
   levels: z.strictObject({ yellow: level, orange: level, red: level }),
-  hq: z.array(hq).max(HQ_KINDS.length),
+  hq: z.array(hq).max(LINE_KINDS.length),
   zero: zero.nullable(),
   pk_km: z.number().nullable(),
   forecast_limit_h: z.union([z.literal(24), z.literal(48)]).nullable(),
@@ -79,6 +90,7 @@ const COORDINATES = new RegExp(
 const DATE = /^(\d{2})\.(\d{2})\.(\d{4})$/;
 const LIMIT = /^h(24|48)$/i;
 const HQ = /HQ\s*(2|5|10|20|50|100)\b/i;
+const CRUE = /^\s*crue\s+de\s+r[ée]f[ée]rence\b/i;
 
 const E_RANGE = [45_000, 110_000] as const;
 const N_RANGE = [55_000, 140_000] as const;
@@ -105,11 +117,12 @@ export function normalise(page: Page, ctx: Context): Normalised {
 
   const hqs: StationReference['hq'] = [];
   for (const line of page.newVigilanceList) {
-    const kind = HQ.exec(line.legend);
+    const hit = HQ.exec(line.legend);
+    const kind = hit !== null ? `HQ${hit[1]}` : CRUE.test(line.legend) ? CRUE_REF : null;
     if (kind === null) count('unknown_hq');
     else if (line.value === 0) count('undefined_hq');
-    else if (hqs.some((h) => h.kind === `HQ${kind[1]}`)) count('duplicate_hq');
-    else hqs.push({ kind: `HQ${kind[1]}` as (typeof HQ_KINDS)[number], value_cm: line.value });
+    else if (hqs.some((h) => h.kind === kind)) count('duplicate_hq');
+    else hqs.push({ kind: kind as (typeof LINE_KINDS)[number], value_cm: line.value });
   }
 
   const date = page.serviceDate.trim();
@@ -176,3 +189,75 @@ export function normalise(page: Page, ctx: Context): Normalised {
     dropped,
   };
 }
+
+/** LU-1 and LU-2 station ids are `<prefix><slug>`; the LU-4 record names the slug. */
+const TARGETS = [
+  ['LU-1', 'lu.age.'],
+  ['LU-2', 'lu.age-json.'],
+] as const;
+
+/**
+ * The record as reference rows (kind LU4_YELLOW/ORANGE/RED operational, HQ2…HQ100 statistical, LU4_CRUE_REF
+ * historical; cm, `basis_label` ours: the provider's label can embed the threshold value, R-077) on the H series of
+ * its station in the LU-1 and LU-2 registries and, where `twinOf` pairs that LU-1 series with a DE-1 one (the
+ * Moselle gauges), on that DE-1 series too. `refScope` is every such series, so a level the page stops stating is
+ * closed. No gauge zero is emitted.
+ */
+export function toReferences(
+  record: StationReference,
+  refRegistries: ReadonlyMap<string, Registry>,
+  twinOf: ReadonlyMap<string, string>,
+): Pick<CoreNormalised, 'references' | 'refScope'> {
+  const targets: { target: string; series: string }[] = [];
+  for (const [source, prefix] of TARGETS) {
+    for (const [key, decl] of refRegistries.get(source) ?? []) {
+      // AGE's levels are cm of stage: never on an absolute level (the Esch-Sûre reservoir is m NN in LU-1).
+      if (decl.quantity !== 'H' || decl.value_kind !== 'stage' || decl.station !== `${prefix}${record.station}`)
+        continue;
+      targets.push({ target: source, series: key });
+      const twin = source === 'LU-1' ? twinOf.get(key) : undefined;
+      if (twin !== undefined && refRegistries.get('DE-1')?.get(twin)?.value_kind === 'stage')
+        targets.push({ target: 'DE-1', series: twin });
+    }
+  }
+  const base = {
+    unit: 'cm',
+    convention: null,
+    period: null,
+    season_from_md: 101,
+    season_to_md: 1231,
+    priority: 0,
+  } as const;
+  const rows: Omit<ReferenceRow, 'series' | 'target'>[] = [];
+  for (const [kind, value] of [
+    ['LU4_YELLOW', record.levels.yellow],
+    ['LU4_ORANGE', record.levels.orange],
+    ['LU4_RED', record.levels.red],
+  ] as const)
+    if (value !== null)
+      rows.push({ ...base, kind, value, semantics: 'operational', basis_label: 'AGE', valid_from: null });
+  for (const h of record.hq)
+    rows.push({
+      ...base,
+      kind: h.kind,
+      value: h.value_cm,
+      semantics: h.kind === CRUE_REF ? 'historical' : 'statistical',
+      basis_label: 'AGE',
+      valid_from: null,
+    });
+  return {
+    references: targets.flatMap((t) => rows.map((r) => ({ ...r, ...t }))),
+    refScope: targets,
+  };
+}
+
+/** Normalised for the loader: the references of `toReferences`, the page's drop counts. */
+export const withReferences = (
+  n: Normalised,
+  refRegistries: ReadonlyMap<string, Registry>,
+  twinOf: ReadonlyMap<string, string>,
+): CoreNormalised => ({
+  ...emptyNormalised(),
+  dropped: n.dropped,
+  ...toReferences(n.record, refRegistries, twinOf),
+});

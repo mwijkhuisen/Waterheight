@@ -1,0 +1,12 @@
+{
+  "spec": "de-6-stations",
+  "source": "DE-6",
+  "synthetic": true,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/geo+json; charset=UTF-8",
+  "url": "https://api.hochwasserzentralen.de/public/v1/data/stations?format=json",
+  "bytes": 3133,
+  "trimmed": false,
+  "note": "[U] Hand-edited from de-6-stations.raw: the real Perl features SL_26100102 (class 0) and RP_26100102 (class -1), plus a copy of the Saarland one with the invented id SL_26100101 and class -1 (catalogue §2.3 names \"a second SL id -1\"; no recording has it). SL_26100101 is in no registry table; the test adds it to the table it passes. Rule: RP operates Perl and says -1, so the worst other class applies: SL:0."
+}

@@ -25,10 +25,13 @@ const ALIAS: Record<string, string> = {
   'nl-1-obs-other': 'nl-1-obs-key',
   // The same Vigicrues request as the seed, for two of its rows (P5a).
   'fr-3-twin': 'fr-3-obs',
+  // P7a: the weekly refs root is the ts_id list; its stage 2 is the values document.
+  'be-3-refs': 'be-3-refs-list',
 };
 /** Stage-2 documents (expand_validity) per spec. */
 export const STAGE2: Record<string, string> = {
   'be-3-catchup': 'be-3-catchup-values',
+  'be-3-refs': 'be-3-refs-values',
   'fr-4': 'fr-4-station',
   'fr-5-sections': 'fr-5-tron',
   'lu-5-cap': 'lu-5-file',

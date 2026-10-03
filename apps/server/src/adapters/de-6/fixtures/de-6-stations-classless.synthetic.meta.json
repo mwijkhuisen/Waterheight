@@ -1,0 +1,12 @@
+{
+  "spec": "de-6-stations",
+  "source": "DE-6",
+  "synthetic": true,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/geo+json; charset=UTF-8",
+  "url": "https://api.hochwasserzentralen.de/public/v1/data/stations?format=json",
+  "bytes": 3238,
+  "trimmed": false,
+  "note": "[U] Hand-edited from de-6-stations.raw (real feature objects, envelope and legend as recorded; only the features kept and their class keys changed): NW_2721330000100 without the lhpClass key, the style and the timestamp (as the 216 class-less live features), NW_2721390000100 with \"lhpClass\": null (never seen live, allowed by the contract: it means no class too), NW_2721459000100 with class -1. Station table gauges, so each one yields a row."
+}

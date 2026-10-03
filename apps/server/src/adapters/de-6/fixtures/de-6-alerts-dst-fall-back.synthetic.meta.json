@@ -1,0 +1,12 @@
+{
+  "spec": "de-6-alerts",
+  "source": "DE-6",
+  "synthetic": true,
+  "recorded_at": "2026-10-25T01:56:00Z",
+  "status": 200,
+  "content_type": "application/geo+json; charset=UTF-8",
+  "url": "https://api.hochwasserzentralen.de/public/v1/data/alerts",
+  "bytes": 2940,
+  "trimmed": false,
+  "note": "[U] Hand-made from de-6-alerts-test.raw (three real alert features, envelope and legend as recorded; only updated changed). Alerts carry no time of their own; the snapshot time is `updated`: 02:55 CET = 01:55Z of the fall-back night of 2026-10-25 (fetched 01:56Z), the second pass of the repeated hour. Replaced by a real payload of that night once archived (issue #55)."
+}

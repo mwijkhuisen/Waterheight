@@ -57,7 +57,7 @@ const cursor = async () =>
   );
 const manifestSizes = async () => Object.fromEntries((await h.reader.manifests()).map((m) => [m.file, m.size]));
 
-describe('load and replay of the fixture archive', () => {
+describe('load and replay of the fixture archive', { timeout: 60_000 }, () => {
   let first: Record<string, string>;
 
   it('loads every payload: rows in the right partitions, latest values, gauge zeros, one batch per payload', async () => {
@@ -316,7 +316,7 @@ describe('load and replay of the fixture archive', () => {
   });
 });
 
-describe('atomicity: a payload is one transaction', () => {
+describe('atomicity: a payload is one transaction', { timeout: 60_000 }, () => {
   it('when the last statement of the transaction fails, nothing of the payload is stored and the cursor stays', async () => {
     const h2 = await harness();
     try {
@@ -731,9 +731,17 @@ describe('newest fetch wins, whatever order the payloads arrive in (review C2, C
     expect(await held(x)).toEqual([{ value_m: 10.521, fetched_at: at('29', '03') }]);
     expect(await held(y)).toEqual([{ value_m: 10.521, fetched_at: at('29', '04') }]);
     expect(await held(z)).toEqual([{ value_m: 9.521, fetched_at: at('30', '05') }]);
-    // Only x's newer payload corrected a zero.
+    // Only x's newer payload changed a zero (P7a: its old value is kept, its range ends at that fetch).
     expect(n.alerts.splice(0)).toEqual([
-      { code: 'gauge_zero_corrected', fields: { source: 'DE-1', spec: 'de-1-meta', n: 1 } },
+      { code: 'gauge_zero_changed', fields: { source: 'DE-1', spec: 'de-1-meta', n: 1 } },
+    ]);
+    const history = await n.t.admin.query(
+      'SELECT value_m, upper(valid) AS upper FROM gauge_zero WHERE series_id = $1 ORDER BY lower(valid)',
+      [await n.seriesId(`${x.uuid}/W`)],
+    );
+    expect(history.rows).toEqual([
+      { value_m: 9.521, upper: at('29', '03') },
+      { value_m: 10.521, upper: null },
     ]);
 
     // A replay of the older day only reverts nothing and alerts nothing.

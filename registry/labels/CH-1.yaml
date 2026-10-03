@@ -1,0 +1,10 @@
+# CH-1 BAFU danger level of a station (LINDAS dangerLevel): our reviewed NL and EN text. `undefined` is the cube's
+# cube.link/Undefined (the station has no danger levels), never level 1.
+source: CH-1
+labels:
+  - { scale: danger, code: '1', nl: "Gevarenniveau 1: geen of gering gevaar", en: "Danger level 1: no or minor danger" }
+  - { scale: danger, code: '2', nl: "Gevarenniveau 2: beperkt gevaar", en: "Danger level 2: moderate danger" }
+  - { scale: danger, code: '3', nl: "Gevarenniveau 3: aanzienlijk gevaar", en: "Danger level 3: considerable danger" }
+  - { scale: danger, code: '4', nl: "Gevarenniveau 4: groot gevaar", en: "Danger level 4: high danger" }
+  - { scale: danger, code: '5', nl: "Gevarenniveau 5: zeer groot gevaar", en: "Danger level 5: very high danger" }
+  - { scale: danger, code: undefined, nl: "Geen gevarenniveaus voor dit station", en: "No danger levels for this station" }

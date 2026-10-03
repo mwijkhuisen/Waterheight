@@ -1,0 +1,10 @@
+# DE-7 LANUK NRW thresholds (pegel_stationen.txt): our reviewed NL and EN text for each reference kind. The
+# Informationsstufen are LANUK's own information levels of a gauge.
+source: DE-7
+labels:
+  - { scale: reference, code: LANUV_MNW, nl: "Gemiddeld laagwater (LANUK MNW)", en: "Mean low water level (LANUK MNW)" }
+  - { scale: reference, code: LANUV_MW, nl: "Gemiddelde waterstand (LANUK MW)", en: "Mean water level (LANUK MW)" }
+  - { scale: reference, code: LANUV_MHW, nl: "Gemiddeld hoogwater (LANUK MHW)", en: "Mean high water level (LANUK MHW)" }
+  - { scale: reference, code: LANUV_INFO_1, nl: "LANUK informatiestand 1", en: "LANUK information level 1" }
+  - { scale: reference, code: LANUV_INFO_2, nl: "LANUK informatiestand 2", en: "LANUK information level 2" }
+  - { scale: reference, code: LANUV_INFO_3, nl: "LANUK informatiestand 3", en: "LANUK information level 3" }

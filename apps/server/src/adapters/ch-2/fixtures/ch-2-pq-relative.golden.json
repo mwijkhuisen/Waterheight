@@ -77,5 +77,277 @@
  "dropped": {
   "too_old": 2
  },
- "unknown": 0
+ "unknown": 0,
+ "references": [
+  {
+   "series": "2206/Q",
+   "target": "CH-1",
+   "kind": "WL2",
+   "value": 1.45,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 2, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2206/Q",
+   "target": "CH-1",
+   "kind": "WL3",
+   "value": 2.9,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 3, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2206/Q",
+   "target": "CH-1",
+   "kind": "WL4",
+   "value": 4.05,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 4, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2206/Q",
+   "target": "CH-1",
+   "kind": "WL5",
+   "value": 5.55,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 5, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2269/Q",
+   "target": "CH-1",
+   "kind": "WL2",
+   "value": 35,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 2, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2269/Q",
+   "target": "CH-1",
+   "kind": "WL3",
+   "value": 50,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 3, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2269/Q",
+   "target": "CH-1",
+   "kind": "WL4",
+   "value": 60,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 4, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2269/Q",
+   "target": "CH-1",
+   "kind": "WL5",
+   "value": 70,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 5, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2414/Q",
+   "target": "CH-1",
+   "kind": "WL2",
+   "value": 3.35,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 2, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2414/Q",
+   "target": "CH-1",
+   "kind": "WL3",
+   "value": 7.05,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 3, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2414/Q",
+   "target": "CH-1",
+   "kind": "WL4",
+   "value": 11.3,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 4, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2414/Q",
+   "target": "CH-1",
+   "kind": "WL5",
+   "value": 18.8,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 5, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2437/Q",
+   "target": "CH-1",
+   "kind": "WL2",
+   "value": 6.15,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 2, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2437/Q",
+   "target": "CH-1",
+   "kind": "WL3",
+   "value": 11.45,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 3, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2437/Q",
+   "target": "CH-1",
+   "kind": "WL4",
+   "value": 15.6,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 4, untere Grenze",
+   "valid_from": null
+  },
+  {
+   "series": "2437/Q",
+   "target": "CH-1",
+   "kind": "WL5",
+   "value": 21.1,
+   "unit": "m³/s",
+   "semantics": "operational",
+   "convention": null,
+   "period": null,
+   "season_from_md": 101,
+   "season_to_md": 1231,
+   "priority": 0,
+   "basis_label": "BAFU Gefahrenstufe 5, untere Grenze",
+   "valid_from": null
+  }
+ ],
+ "refScope": [
+  {
+   "target": "CH-1",
+   "series": "2206/Q"
+  },
+  {
+   "target": "CH-1",
+   "series": "2269/Q"
+  },
+  {
+   "target": "CH-1",
+   "series": "2282/Q"
+  },
+  {
+   "target": "CH-1",
+   "series": "2283/Q"
+  },
+  {
+   "target": "CH-1",
+   "series": "2384/Q"
+  },
+  {
+   "target": "CH-1",
+   "series": "2414/Q"
+  },
+  {
+   "target": "CH-1",
+   "series": "2437/Q"
+  }
+ ]
 }

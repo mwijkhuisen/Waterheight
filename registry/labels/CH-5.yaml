@@ -1,0 +1,10 @@
+# CH-5 BAFU flood-danger sections: our reviewed NL and EN text for each danger level 0-5 (the provider's own text is
+# stored beside it in the row, `label_raw` holds the water body).
+source: CH-5
+labels:
+  - { scale: section, code: '0', nl: "Niveau 0: geen gevarenniveau", en: "Level 0: no danger level" }
+  - { scale: section, code: '1', nl: "Niveau 1: geen of gering gevaar", en: "Level 1: no or minor danger" }
+  - { scale: section, code: '2', nl: "Niveau 2: beperkt gevaar", en: "Level 2: moderate danger" }
+  - { scale: section, code: '3', nl: "Niveau 3: aanzienlijk gevaar", en: "Level 3: considerable danger" }
+  - { scale: section, code: '4', nl: "Niveau 4: groot gevaar", en: "Level 4: high danger" }
+  - { scale: section, code: '5', nl: "Niveau 5: zeer groot gevaar", en: "Level 5: very high danger" }

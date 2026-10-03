@@ -1,0 +1,14 @@
+{
+  "spec": "de-6-stations",
+  "variant": "default",
+  "source": "DE-6",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/DE-6/de-6-stations/2026/10/02/164800Z-c3c65b82fcef096f.zst",
+  "recorded_at": "2026-10-02T16:48:00Z",
+  "status": 200,
+  "url": "https://api.hochwasserzentralen.de/public/v1/data/stations?format=json",
+  "bytes": 615221,
+  "source_sha256": "c3c65b82fcef096f12a9eceeac2e19bfd0e57fceabf0f193a86d15cafa45c682",
+  "trimmed": false
+}

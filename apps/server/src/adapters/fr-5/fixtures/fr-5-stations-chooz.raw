@@ -1,0 +1,129 @@
+{
+    "CdStationHydro": "B720000001",
+    "LbStationHydro": "Chooz [Trou du Diable]",
+    "LbCoursEau": "Meuse",
+    "CdStationHydroAncienRef": null,
+    "CoordStationHydro": {
+        "CoordXStationHydro": "827688",
+        "CoordYStationHydro": "7000411"
+    },
+    "CdCommune": "08122",
+    "Evenement": [],
+    "VigilanceCrues": {
+        "StationPrevision": false,
+        "Photo": "t",
+        "ZoomInitial": "3",
+        "PereBoitEntVigiCru": {
+            "CdEntVigiCru": "2",
+            "Link": "services/bulletin.json?CdEntVigiCru=2"
+        },
+        "CruesHistoriques": [],
+        "StationsBassin": [
+            {
+                "CdStationHydro": "B732201101",
+                "LbStationHydro": "Felenne",
+                "LbCoursEau": "Houille",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B732201101"
+            },
+            {
+                "CdStationHydro": "B732201001",
+                "LbStationHydro": "Landrichamps",
+                "LbCoursEau": "Houille",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B732201001"
+            },
+            {
+                "CdStationHydro": "B720000002",
+                "LbStationHydro": "Chooz [Ile Graviat]",
+                "LbCoursEau": "Meuse",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B720000002"
+            },
+            {
+                "CdStationHydro": "B700001002",
+                "LbStationHydro": "Monthermé [Limnimètre]",
+                "LbCoursEau": "Meuse",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B700001002"
+            },
+            {
+                "CdStationHydro": "B610000601",
+                "LbStationHydro": "Bouillon",
+                "LbCoursEau": "Semoy",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B610000601"
+            },
+            {
+                "CdStationHydro": "B610000401",
+                "LbStationHydro": "Chiny",
+                "LbCoursEau": "Semoy",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B610000401"
+            },
+            {
+                "CdStationHydro": "B611101001",
+                "LbStationHydro": "Haulmé",
+                "LbCoursEau": "Semoy",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B611101001"
+            },
+            {
+                "CdStationHydro": "B610000201",
+                "LbStationHydro": "Membre",
+                "LbCoursEau": "Semoy",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B610000201"
+            },
+            {
+                "CdStationHydro": "B610000701",
+                "LbStationHydro": "Ste-Marie",
+                "LbCoursEau": "Semoy",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B610000701"
+            },
+            {
+                "CdStationHydro": "B610000801",
+                "LbStationHydro": "Straimont",
+                "LbCoursEau": "Semoy",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B610000801"
+            },
+            {
+                "CdStationHydro": "B610000301",
+                "LbStationHydro": "Tintigny",
+                "LbCoursEau": "Semoy",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B610000301"
+            },
+            {
+                "CdStationHydro": "B713000101",
+                "LbStationHydro": "Treignes",
+                "LbCoursEau": "Viroin",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B713000101"
+            },
+            {
+                "CdStationHydro": "B713000201",
+                "LbStationHydro": "Couvin",
+                "LbCoursEau": "Virouin",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B713000201"
+            },
+            {
+                "CdStationHydro": "B713000301",
+                "LbStationHydro": "Nismes",
+                "LbCoursEau": "Virouin",
+                "idspc": "2",
+                "Link": "services/station.json?CdStationHydro=B713000301"
+            }
+        ],
+        "FluxDonnees": {
+            "Observations": {
+                "Hauteurs": "services/observations.json/index.php?CdStationHydro=B720000001\u0026FormatDate=iso",
+                "Debits": "services/observations.json/index.php?CdStationHydro=B720000001\u0026FormatDate=iso\u0026GrdSerie=Q"
+            }
+        }
+    },
+    "VersionFlux": "Beta 0.3k"
+}

@@ -1,0 +1,1106 @@
+{
+ "classes": [
+  {
+   "station": "de.lanuk.2721330000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2721390000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2721459000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2721490000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2725910000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2726599000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2727500000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2728849000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2728851100100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2728893000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2728930000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2729100000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2736135100100",
+   "ts": "2026-09-29T13:25:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2736510000100",
+   "ts": "2026-09-29T13:25:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2736510000300",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2736633000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2736731000100",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2736790000200",
+   "ts": "2026-09-29T13:25:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2736851000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2736879000200",
+   "ts": "2026-09-29T13:25:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2738900000300",
+   "ts": "2026-09-29T13:25:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2739229000100",
+   "ts": "2026-09-29T13:25:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2739230000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2741500000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2741870000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2742310000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2742510000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2742990000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2743000000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2744910000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2746310000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2746790000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2747390000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2747900000200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2756500000100",
+   "ts": "2026-09-29T13:25:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2761145000400",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2761150000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2761510000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2761759000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2763190000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2765590000100",
+   "ts": "2026-09-29T13:20:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2766199000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2766530000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2766930000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2768579000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2768879100100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2768900000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2769720000200",
+   "ts": "2026-09-29T13:25:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2782370000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2782890000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2782900000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2783390000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2783970000300",
+   "ts": "2026-09-29T13:25:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2784133000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2784149100100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2785790000300",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2786330000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2786700000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2787990000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2788100000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2788330000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2788730000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2789100000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2789770000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2821530000200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2822190000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2822291000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2822700000200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2822867000200",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.2822870000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2822900000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2823500000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2823900000200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2824300000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2824450000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2824590000400",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2824900000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2825190000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2828300000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2828900000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2829100000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2850000000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2861700000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2862790000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2863700000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2864900000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2866500000200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2867900000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.2869500000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.3113000000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.3119000000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.3134510000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.3147110000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.3153900000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.3171000000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.3211000000300",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.3215510000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.3259000000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.3289100000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.3331000000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.4427000000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.4433000000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.4449900000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.4523100000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.4528199000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.4529500000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.4564310000100",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "NW:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.lanuk.4567000000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.4651000000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.4667100000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.4670000000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9281330000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9281700000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9282570000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9283215500100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9284100000100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9284590000200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9284730000100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9286139100100",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9286291000300",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9286453000200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.lanuk.9286455000200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.23900200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.24700200",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "BY:0",
+   "label": "Keine Meldestufe",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.24700302",
+   "ts": "2026-09-29T13:15:00.000Z",
+   "code": "BY:0",
+   "label": "Keine Meldestufe",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.24700325",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "HE:none",
+   "label": "Ohne Hochwasser-Einstufung",
+   "level": null
+  },
+  {
+   "station": "de.wsv.24700335",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "HE:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.24700404",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "HE:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.24900108",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "HE:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25100100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25100300",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25300200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25700100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25700600",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "RP:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.wsv.25800100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "HE:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25800200",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "HE:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25800440",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "HE:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25800500",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25800600",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25830056",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "HE:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.25900700",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.26100100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "SL:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.26400670",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "RP:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.wsv.26500100",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.26500150",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "RP:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.wsv.26700400",
+   "ts": "2026-09-29T13:42:46.000Z",
+   "code": "RP:-1",
+   "label": "Derzeit keine Daten",
+   "level": null
+  },
+  {
+   "station": "de.wsv.26700600",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.26900400",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.27100400",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.27100700",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "RP:0",
+   "label": "Kein Hochwasser bzw. &#60; 2-jährliches Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.2710080",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.2730010",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.2750010",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.2770010",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.2770040",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.2790010",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  },
+  {
+   "station": "de.wsv.2790020",
+   "ts": "2026-09-29T13:30:00.000Z",
+   "code": "NW:0",
+   "label": "Kein Hochwasser",
+   "level": 2
+  }
+ ],
+ "dropped": {
+  "not_registered": 1426
+ }
+}

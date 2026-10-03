@@ -99,6 +99,10 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
       fetchedAt: deps.now.getTime(),
       variant: req.variant,
       unitMismatch: new Set(),
+      // P7a: the registries a spec's references belong to (CH-2's thresholds sit on CH-1 series).
+      ...(loader.refTarget === undefined
+        ? {}
+        : { refRegistries: new Map(loader.refTarget.map((t) => [t, declarationsOf(stations, t)] as const)) }),
     });
     const withheld = RETAINED.find((code) => (out.dropped[code] ?? 0) > 0);
     if (withheld !== undefined) return withheld;
@@ -106,7 +110,11 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
     if (spec.source === 'NL-1' && out.unknown > 0) return 'unknown_series';
     // Parsed, yet nothing came out of a source with registered series (every value a gap, stale or too old;
     // a renamed process type or compartment is registered_dropped above). NL-2 has none: it stores no observation.
-    let rows = out.gaugeZeros.length;
+    let rows =
+      out.gaugeZeros.length +
+      (out.references?.length ?? 0) +
+      (out.classes?.length ?? 0) +
+      (out.warnings?.rows.length ?? 0);
     for (const part of obsParts(out)) rows += part.length;
     return registry.size > 0 && rows === 0 ? 'no_rows' : 'ok';
   } catch (err) {

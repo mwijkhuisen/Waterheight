@@ -1,0 +1,12 @@
+{
+  "spec": "de-6-stations",
+  "source": "DE-6",
+  "synthetic": true,
+  "recorded_at": "2026-09-29T13:43:26Z",
+  "status": 200,
+  "content_type": "application/geo+json; charset=UTF-8",
+  "url": "https://api.hochwasserzentralen.de/public/v1/data/stations?format=json",
+  "bytes": 2837,
+  "trimmed": false,
+  "note": "[U] Hand-edited from de-6-stations.raw (the two real Worms features, kept as recorded: the same shape as the real payload, only the other features removed): RP_23900200 class 0, HE_23900200 class -1. Rule of catalogue §4.9: RP operates Worms, so the code is RP:0."
+}

@@ -1,0 +1,12 @@
+{
+  "spec": "de-6-stations",
+  "source": "DE-6",
+  "synthetic": true,
+  "recorded_at": "2026-10-25T00:21:00Z",
+  "status": 200,
+  "content_type": "application/geo+json; charset=UTF-8",
+  "url": "https://api.hochwasserzentralen.de/public/v1/data/stations?format=json",
+  "bytes": 4151,
+  "trimmed": false,
+  "note": "[U] Hand-made from de-6-stations.raw (as de-6-stations-dst-fall-back, other times). The fall-back night of 2026-10-25, answer in the first pass of the repeated hour (updated 01:20 CET = 00:20Z, fetched 00:21Z): no later occurrence fits, so the earlier is taken: 02:15 = 00:15Z, 02:30 = 00:30Z (after updated but within 15 minutes of the fetch, kept), 02:50 = 00:50Z and 03:10 CET = 02:10Z (future, dropped). A time before the repeated hour (01:50 = 23:50Z) is unchanged."
+}

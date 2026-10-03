@@ -14,13 +14,17 @@ import { TIME as BE3 } from '../../src/adapters/be-3/normalise.ts';
 import { TIME as CH1 } from '../../src/adapters/ch-1/normalise.ts';
 import { TIME as CH2 } from '../../src/adapters/ch-2/normalise.ts';
 import { TIME as CH3 } from '../../src/adapters/ch-3/normalise.ts';
+import { TIME as CH5 } from '../../src/adapters/ch-5/normalise.ts';
 import { TIME as DE1 } from '../../src/adapters/de-1/normalise.ts';
+import { TIME as DE6 } from '../../src/adapters/de-6/normalise.ts';
 import { TIME as DE7 } from '../../src/adapters/de-7/normalise.ts';
 import { TIME as FR1 } from '../../src/adapters/fr-1/normalise.ts';
 import { TIME as FR3 } from '../../src/adapters/fr-3/normalise.ts';
+import { TIME as FR5 } from '../../src/adapters/fr-5/normalise.ts';
 import { TIME as LU1 } from '../../src/adapters/lu-1/normalise.ts';
 import { TIME as LU2 } from '../../src/adapters/lu-2/normalise.ts';
 import { TIME as LU3 } from '../../src/adapters/lu-3/normalise.ts';
+import { TIME as LU5 } from '../../src/adapters/lu-5/normalise.ts';
 import { TIME as NL1 } from '../../src/adapters/nl-1/normalise.ts';
 import { TIME as NL2 } from '../../src/adapters/nl-2/normalise.ts';
 
@@ -36,15 +40,19 @@ const declared: Readonly<Record<string, TimeConvention | null>> = {
   'CH-1': CH1,
   'CH-2': CH2,
   'CH-3': CH3,
+  'CH-5': CH5,
   'DE-1': DE1,
+  'DE-6': DE6,
   'DE-7': DE7,
   'DE-8': null,
   'FR-1': FR1,
   'FR-3': FR3,
+  'FR-5': FR5,
   'LU-1': LU1,
   'LU-2': LU2,
   'LU-3': LU3,
   'LU-4': null,
+  'LU-5': LU5,
   'LU-6': null,
   'NL-1': NL1,
   'NL-2': NL2,
@@ -89,12 +97,12 @@ describe('DST gate', () => {
     }
   });
 
-  it('finds the offset-less adapters by their declared convention (today LU-1 and NL-2)', () => {
+  it('finds the offset-less adapters by their declared convention (today DE-6, LU-1 and NL-2)', () => {
     const gated = Object.entries(declared)
       .filter(([, t]) => isGated(t))
       .map(([s]) => s)
       .sort();
-    expect(gated).toEqual(['LU-1', 'NL-2']);
+    expect(gated).toEqual(['DE-6', 'LU-1', 'NL-2']);
   });
 
   it("each loaded source's declared convention is its adapter's TIME (null: no timestamps)", () => {
@@ -129,7 +137,7 @@ describe('DST gate', () => {
 
   it('a proof with a fixture removed fails (the check is not decorative)', () => {
     for (const [id, proof] of Object.entries(DST_PROOF)) {
-      const source = id.startsWith('lu-1') ? 'LU-1' : 'NL-2';
+      const source = id.startsWith('lu-1') ? 'LU-1' : id.startsWith('de-6') ? 'DE-6' : 'NL-2';
       for (const name of [...proof.fallBack, ...proof.springForward]) {
         const without = (url: URL) => !url.pathname.endsWith(`/${name}.raw`) && existsSync(url);
         expect(proofProblems(source, id, proof, without)).toEqual([`${name}.raw: missing`]);
@@ -139,8 +147,12 @@ describe('DST gate', () => {
   });
 
   it('gate() drops a gated spec without proof, and a source without a declared convention, and nothing else', () => {
-    expect(gate(LOAD_ADAPTERS, {}).refused).toEqual(['lu-1-csv', 'nl-2-wfs']);
-    expect(gate(LOAD_ADAPTERS, { 'lu-1-csv': DST_PROOF['lu-1-csv'] }).refused).toEqual(['nl-2-wfs']);
+    expect(gate(LOAD_ADAPTERS, {}).refused).toEqual(['de-6-alerts', 'de-6-stations', 'lu-1-csv', 'nl-2-wfs']);
+    expect(gate(LOAD_ADAPTERS, { 'lu-1-csv': DST_PROOF['lu-1-csv'] }).refused).toEqual([
+      'de-6-alerts',
+      'de-6-stations',
+      'nl-2-wfs',
+    ]);
     const { 'DE-7': _, ...times } = ADAPTER_TIME;
     expect(gate(LOAD_ADAPTERS, DST_PROOF, times).refused).toEqual(['de-7-messwerte', 'de-7-pegeldaten']);
     expect(Object.keys(gate(LOAD_ADAPTERS).adapters)).toEqual(Object.keys(LOAD_ADAPTERS));

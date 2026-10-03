@@ -237,6 +237,82 @@ describe('rules', () => {
     expect(out.obs[0]).toMatchObject({ value: 88888, qc: QC.RAW | QC.RANGE });
   });
 
+  it('C22: Kaub NW 25 and HW 719 are historical period extremes, never NNW or HHW; TuGLW is not a level', () => {
+    const out = normaliseMeta(parseStations(rawFixture('DE-1', 'de-1-meta').body), ctx('de-1-meta'));
+    const kaub = (kind: string) => out.references?.find((r) => r.series === KAUB_W && r.kind === kind);
+    expect(kaub('NW')).toMatchObject({
+      value: 25,
+      unit: 'cm',
+      semantics: 'historical',
+      period: ['2010-11-01', '2020-10-31'],
+      basis_label: 'Niedrigster Tageswasserstand (2018-10-22)',
+    });
+    expect(kaub('HW')).toMatchObject({ value: 719, semantics: 'historical', period: ['2010-11-01', '2020-10-31'] });
+    expect(kaub('NNW')).toMatchObject({
+      value: 25,
+      period: null,
+      basis_label: 'Niedrigster Niedrigwasserstand (2018-10-22)',
+    });
+    expect(kaub('HHW')).toMatchObject({ value: 825, basis_label: 'Höchster Hochwasserstand (1883-01-05)' });
+    expect([kaub('MNW')?.value, kaub('MW')?.value, kaub('MHW')?.value, kaub('HSW')?.value]).toEqual([
+      65, 208, 544, 640,
+    ]);
+    expect(kaub('MNW')).toMatchObject({ semantics: 'statistical', period: ['2010-11-01', '2020-10-31'] });
+    expect(kaub('HSW')).toMatchObject({
+      semantics: 'operational',
+      valid_from: '1949-12-31T23:00:00.000Z',
+      period: null,
+    });
+    expect(kaub('GLW')).toMatchObject({ value: 77, semantics: 'statistical', valid_from: '2022-12-31T23:00:00.000Z' });
+    expect(kaub('MARKE_II')?.value).toBe(640);
+    expect(kaub('TuGLW')).toBeUndefined();
+    expect(out.dropped.not_a_level).toBeGreaterThan(0);
+    expect(out.dropped.unknown_kind).toBeGreaterThan(0);
+    // Every registered W series of the payload is in the scope; Q series have none.
+    expect(out.refScope).toContainEqual({ series: KAUB_W });
+    expect(
+      out.references?.every((r) => r.series.endsWith('/W') && out.refScope?.some((s) => s.series === r.series)),
+    ).toBe(true);
+    const keys = out.references?.map((r) => `${r.series}|${r.kind}`) ?? [];
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('a value in another unit, or on a series that is not in cm, is unit_mismatch; a bad period is drift; a validFrom typo is not', () => {
+    const stations = parseStations(rawFixture('DE-1', 'de-1-meta').body);
+    const kaub = stations.find((s) => s.uuid === KAUB_W.split('/')[0]) as (typeof stations)[number];
+    const only = (cv: Record<string, unknown>[], reg: typeof registry = registry) =>
+      normaliseMeta(
+        [
+          {
+            ...kaub,
+            timeseries: [{ ...(kaub.timeseries.find((t) => t.shortname === 'W') as object), characteristicValues: cv }],
+          },
+        ] as never,
+        { ...base, registry: reg },
+      );
+    const mnw = {
+      shortname: 'MNW',
+      longname: 'x ',
+      unit: 'cm',
+      value: 1,
+      timespanStart: '2010-11-01',
+      timespanEnd: '2020-10-31',
+    };
+    expect(only([{ ...mnw, unit: 'm' }]).dropped).toEqual({ unit_mismatch: 1 });
+    const mNN = new Map(registry);
+    mNN.set(KAUB_W, { ...(registry.get(KAUB_W) as object), native_unit: 'm+NN' } as never);
+    expect(only([mnw], mNN).references).toBeUndefined();
+    expect(only([mnw], mNN).dropped).toMatchObject({ unit_mismatch: 1 });
+    expect(only([mnw], mNN).refScope).toEqual([{ series: KAUB_W }]);
+    expect(() => only([{ ...mnw, timespanEnd: '31.10.2020' }])).toThrow(SchemaDrift);
+    const typo = only([{ shortname: 'M_I', longname: 'Marke_I', unit: 'cm', value: 5, validFrom: '0007-06-01' }]);
+    expect(typo.references?.[0]).toMatchObject({ kind: 'MARKE_I', valid_from: null });
+    expect(typo.dropped).toEqual({ bad_valid_from: 1 });
+    // A value without a period (a missing end) has none; no value at all closes the scope without rows.
+    expect(only([{ ...mnw, timespanEnd: undefined }]).references?.[0]?.period).toBeNull();
+    expect(only([]).refScope).toEqual([{ series: KAUB_W }]);
+  });
+
   it('a gauge-zero unit that names an inherited property is an unknown unit, not a datum', () => {
     const stations = parseStations(rawFixture('DE-1', 'de-1-meta').body);
     const all = normaliseMeta(stations, base).gaugeZeros.length;
@@ -251,7 +327,7 @@ describe('rules', () => {
         }),
       }));
       const out = normaliseMeta(mutated, base);
-      expect([unit, out.dropped]).toEqual([unit, { unknown_zero_unit: 1 }]);
+      expect([unit, out.dropped.unknown_zero_unit]).toEqual([unit, 1]);
       // The rest of the payload still loads.
       expect(out.gaugeZeros).toHaveLength(all - 1);
       for (const z of out.gaugeZeros) expect(['NHN', 'NN', 'LN02']).toContain(z.datum);
@@ -290,9 +366,9 @@ describe('rules', () => {
       [
         { ...station, timeseries: station?.timeseries.map((t) => (t.gaugeZero ? { ...t, gaugeZero } : t)) },
       ] as Parameters<typeof normaliseMeta>[0];
-    expect(normaliseMeta(withZero({ unit: 'm ü. A.', value: 1, validFrom: '2020-01-01' }), base).dropped).toEqual({
-      unknown_zero_unit: 1,
-    });
+    expect(
+      normaliseMeta(withZero({ unit: 'm ü. A.', value: 1, validFrom: '2020-01-01' }), base).dropped.unknown_zero_unit,
+    ).toBe(1);
     expect(() => normaliseMeta(withZero({ unit: 'm. ü. NHN', value: 1, validFrom: '01.01.2020' }), base)).toThrow(
       SchemaDrift,
     );

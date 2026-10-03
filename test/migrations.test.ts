@@ -18,6 +18,7 @@ const APPLIED: Readonly<Record<string, string>> = {
   '20261003000007_grants.sql': '18c8d6c371702d98482851895b198de95b18abeff279127ae0a787e952eba141',
   '20261014000001_display_window.sql': '81295d33360c2b95e5a9982935a08ac8dd32a14c647d92a7f6cf36cee72b5612',
   '20261014000002_views_meta.sql': 'a1baa906aaf13227ebebea5a31d818e9721181f33860b05c9df571eb2616ee61',
+  '20261021000001_p7a_references.sql': '957110cb4c0247703f9b2eaa22d6e4a8af1fc7e7b0d657a05ff53339a9f5077e',
 };
 
 const dir = new URL('../db/migrations/', import.meta.url);

@@ -1,0 +1,14 @@
+{
+  "spec": "fr-5-vigilance",
+  "variant": "default",
+  "source": "FR-5",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/FR-5/fr-5-vigilance/2026/10/03/080200Z-c24b7d580421d622.zst",
+  "recorded_at": "2026-10-03T08:02:00Z",
+  "status": 200,
+  "url": "https://www.vigicrues.gouv.fr/services/InfoVigiCru.geojson",
+  "bytes": 2245691,
+  "source_sha256": "c24b7d580421d62278bf64396a049c4589d81a8276d91a614fe9f267253cb7b5",
+  "trimmed": "the features whose cdensup_1 (the parent territory) is 2, 3, 29, all other keys kept"
+}

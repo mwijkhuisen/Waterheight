@@ -296,16 +296,97 @@ export function cutP5b(
   };
 }
 
-function main(dir: string, p5b: boolean): void {
-  const list = p5b
-    ? IMPORTS_P5B.map((i) => ({ ...i, keep: undefined, last: undefined }))
-    : IMPORTS.map((i) => ({ ...i, rule: undefined, n: undefined }));
+/**
+ * P7a (Action D2, export of 2026-10-03, `p7a-export.sh`): the class, warning and reference payloads P7a imports.
+ * LU-5: every `[AGE]` CAP message since 2025-06 (the flood alerts of 2025-09-08/09, 2025-09-23..25 and
+ * 2026-02-13/14, their Updates and Cancels, and the 2026-02-02 TEST with `<status>Actual</status>`), whole. FR-5:
+ * one InfoVigiCru cut to the sections of territories 2, 3 and 29 (`fr5-territories`), two more TronEntVigiCru
+ * documents (Rhin courant libre, Sambre) and three station.json pages with CruesHistoriques (Charleville-Mézières,
+ * Stenay, Chooz). CH-5: the newest de and en warning maps. DE-6: the first stations payload that had a class of 1 or
+ * more (one BW gauge at 3, 2026-10-02).
+ */
+export const IMPORTS_P7A: readonly {
+  name: string;
+  source: 'LU-5' | 'FR-5' | 'CH-5' | 'DE-6';
+  fixture: string;
+  rule: 'whole' | 'fr5-territories';
+}[] = [
+  { name: 'lu-5-age-24', source: 'LU-5', fixture: 'lu-5-cap-20250908-125233-alert-lvl3', rule: 'whole' },
+  { name: 'lu-5-age-23', source: 'LU-5', fixture: 'lu-5-cap-20250908-174407-cancel', rule: 'whole' },
+  { name: 'lu-5-age-22', source: 'LU-5', fixture: 'lu-5-cap-20250908-174421-alert-lvl2', rule: 'whole' },
+  { name: 'lu-5-age-21', source: 'LU-5', fixture: 'lu-5-cap-20250908-182128-update-lvl3', rule: 'whole' },
+  { name: 'lu-5-age-20', source: 'LU-5', fixture: 'lu-5-cap-20250908-183232-update-lvl2', rule: 'whole' },
+  { name: 'lu-5-age-19', source: 'LU-5', fixture: 'lu-5-cap-20250908-231502-alert-lvl1', rule: 'whole' },
+  { name: 'lu-5-age-18', source: 'LU-5', fixture: 'lu-5-cap-20250908-231507-alert-lvl2', rule: 'whole' },
+  { name: 'lu-5-age-17', source: 'LU-5', fixture: 'lu-5-cap-20250908-231529-cancel', rule: 'whole' },
+  { name: 'lu-5-age-16', source: 'LU-5', fixture: 'lu-5-cap-20250908-231531-cancel', rule: 'whole' },
+  { name: 'lu-5-age-15', source: 'LU-5', fixture: 'lu-5-cap-20250909-080450-cancel', rule: 'whole' },
+  { name: 'lu-5-age-14', source: 'LU-5', fixture: 'lu-5-cap-20250909-080458-update-lvl1', rule: 'whole' },
+  { name: 'lu-5-age-13', source: 'LU-5', fixture: 'lu-5-cap-20250909-080509-alert-lvl4', rule: 'whole' },
+  { name: 'lu-5-age-12', source: 'LU-5', fixture: 'lu-5-cap-20250909-135714-alert-lvl2', rule: 'whole' },
+  { name: 'lu-5-age-11', source: 'LU-5', fixture: 'lu-5-cap-20250909-155418-alert-lvl4', rule: 'whole' },
+  { name: 'lu-5-age-10', source: 'LU-5', fixture: 'lu-5-cap-20250923-154904-alert-lvl3', rule: 'whole' },
+  { name: 'lu-5-age-9', source: 'LU-5', fixture: 'lu-5-cap-20250924-094817-alert-lvl2', rule: 'whole' },
+  { name: 'lu-5-age-8', source: 'LU-5', fixture: 'lu-5-cap-20250924-094922-update-lvl3', rule: 'whole' },
+  { name: 'lu-5-age-7', source: 'LU-5', fixture: 'lu-5-cap-20250924-140001-update-lvl2', rule: 'whole' },
+  { name: 'lu-5-age-6', source: 'LU-5', fixture: 'lu-5-cap-20250925-074208-alert-lvl4', rule: 'whole' },
+  { name: 'lu-5-age-5', source: 'LU-5', fixture: 'lu-5-cap-20260202-095833-alert-test', rule: 'whole' },
+  { name: 'lu-5-age-4', source: 'LU-5', fixture: 'lu-5-cap-20260213-095631-alert-lvl3', rule: 'whole' },
+  { name: 'lu-5-age-3', source: 'LU-5', fixture: 'lu-5-cap-20260213-160002-update-lvl3', rule: 'whole' },
+  { name: 'lu-5-age-2', source: 'LU-5', fixture: 'lu-5-cap-20260214-080016-update-lvl3', rule: 'whole' },
+  { name: 'lu-5-age-1', source: 'LU-5', fixture: 'lu-5-cap-20260214-081825-alert-lvl4', rule: 'whole' },
+  { name: 'fr-5-vigilance-last', source: 'FR-5', fixture: 'fr-5-vigilance-archive', rule: 'fr5-territories' },
+  { name: 'fr-5-sections-28', source: 'FR-5', fixture: 'fr-5-tron-sa16', rule: 'whole' },
+  { name: 'fr-5-sections-37', source: 'FR-5', fixture: 'fr-5-tron-ap1', rule: 'whole' },
+  { name: 'fr-5-stations-4', source: 'FR-5', fixture: 'fr-5-stations-charleville', rule: 'whole' },
+  { name: 'fr-5-stations-6', source: 'FR-5', fixture: 'fr-5-stations-stenay', rule: 'whole' },
+  { name: 'fr-5-stations-1', source: 'FR-5', fixture: 'fr-5-stations-chooz', rule: 'whole' },
+  { name: 'ch-5-de-last', source: 'CH-5', fixture: 'ch-5-warn-de-archive', rule: 'whole' },
+  { name: 'ch-5-en-last', source: 'CH-5', fixture: 'ch-5-warn-en-archive', rule: 'whole' },
+  { name: 'de-6-stations-flood', source: 'DE-6', fixture: 'de-6-stations-class3', rule: 'whole' },
+];
+
+/** The FR-5 territories whose sections reach the rivers into the Netherlands (catalogue §2.5). */
+export const FR5_TERRITORIES = ['2', '3', '29'] as const;
+
+/** The body a P7a rule keeps, and what it says it kept (false: the archived bytes unchanged). */
+export function cutP7a(
+  rule: (typeof IMPORTS_P7A)[number]['rule'],
+  raw: Buffer,
+): { body: Buffer; trimmed: string | false } {
+  if (rule === 'whole') return { body: raw, trimmed: false };
+  // InfoVigiCru: the features whose parent territory (`cdensup_1`, `CdEnSup_1` in the old casing) is one of ours.
+  const doc = JSON.parse(raw.toString('utf8')) as { features: { properties: Record<string, unknown> }[] };
+  doc.features = doc.features.filter((f) =>
+    (FR5_TERRITORIES as readonly unknown[]).includes(f.properties.cdensup_1 ?? f.properties.CdEnSup_1),
+  );
+  return {
+    body: Buffer.from(JSON.stringify(doc)),
+    trimmed: `the features whose cdensup_1 (the parent territory) is ${FR5_TERRITORIES.join(', ')}, all other keys kept`,
+  };
+}
+
+function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a'): void {
+  type Entry = {
+    name: string;
+    source: string;
+    fixture: string;
+    keep?: number;
+    last?: boolean;
+    rule?: string;
+    n?: number;
+  };
+  const list: readonly Entry[] = mode === 'p5b' ? IMPORTS_P5B : mode === 'p7a' ? IMPORTS_P7A : IMPORTS;
   for (const { name, source, fixture, keep, last, rule, n } of list) {
     const raw = readFileSync(join(dir, `${name}.raw`));
     const line = JSON.parse(readFileSync(join(dir, `${name}.line.json`), 'utf8')) as Line;
     if (sha256(raw) !== line.sha256) throw new Error(`${name}: the body is not the archived object (sha256)`);
     const { body, trimmed } =
-      rule === undefined ? cut(source as Import['source'], raw, keep, last === true) : cutP5b(rule, raw, n);
+      mode === 'p7a'
+        ? cutP7a(rule as (typeof IMPORTS_P7A)[number]['rule'], raw)
+        : rule === undefined
+          ? cut(source as Import['source'], raw, keep, last === true)
+          : cutP5b(rule as (typeof IMPORTS_P5B)[number]['rule'], raw, n);
     const meta = {
       spec: line.spec,
       variant: line.variant,
@@ -329,10 +410,11 @@ function main(dir: string, p5b: boolean): void {
 }
 
 if (import.meta.main) {
-  const p5b = process.argv[2] === '--p5b';
-  const dir = process.argv[p5b ? 3 : 2];
+  const flag = process.argv[2];
+  const mode = flag === '--p5b' ? 'p5b' : flag === '--p7a' ? 'p7a' : 'p5a';
+  const dir = process.argv[mode === 'p5a' ? 2 : 3];
   if (dir === undefined) {
-    console.error('usage: node scripts/import-fixtures.ts [--p5b] <export dir>');
+    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a] <export dir>');
     process.exitCode = 64;
-  } else main(dir, p5b);
+  } else main(dir, mode);
 }

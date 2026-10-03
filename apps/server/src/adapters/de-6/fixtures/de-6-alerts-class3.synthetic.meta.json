@@ -1,0 +1,12 @@
+{
+  "spec": "de-6-alerts",
+  "source": "DE-6",
+  "synthetic": true,
+  "recorded_at": "2026-10-03T08:42:48Z",
+  "status": 200,
+  "content_type": "application/geo+json; charset=UTF-8",
+  "url": "https://api.hochwasserzentralen.de/public/v1/data/alerts",
+  "bytes": 4963,
+  "trimmed": false,
+  "note": "[U] Hand-edited from de-6-alerts-test.raw (as de-6-alerts-class6): TH_04 turned into class \"3\" (the alert scale has no 3: unmapped_class), and the feature HE_104 listed twice (conflict). RP_29 is a class \"2\" feature of the test server."
+}

@@ -199,6 +199,8 @@ export interface ReferenceValue {
   priority: Generated<number>;
   season_from_md: Generated<number>;
   season_to_md: Generated<number>;
+  seen_at: Timestamp | null;
+  seen_batch: Int8 | null;
   semantics: string;
   series_id: number;
   source_id: string;
@@ -323,7 +325,11 @@ export interface WarningArea {
   level_norm: number | null;
   level_raw: string | null;
   name: string | null;
+  provider_ref: string | null;
+  seen_at: Timestamp | null;
+  seen_batch: Int8 | null;
   source_id: string;
+  texts: Json | null;
   valid: string;
 }
 
