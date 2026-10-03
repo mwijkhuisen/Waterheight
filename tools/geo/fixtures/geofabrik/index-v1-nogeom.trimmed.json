@@ -1,0 +1,309 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "alsace",
+    "parent": "france",
+    "name": "Alsace",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/france/alsace-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/france/alsace-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/france/alsace-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/france/alsace-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:france:alsace",
+     "updates": "https://download.geofabrik.de/europe/france/alsace-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "baden-wuerttemberg",
+    "parent": "germany",
+    "name": "Baden-Württemberg",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/germany/baden-wuerttemberg-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/germany/baden-wuerttemberg-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/germany/baden-wuerttemberg-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/germany/baden-wuerttemberg-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:germany:baden-wuerttemberg",
+     "updates": "https://download.geofabrik.de/europe/germany/baden-wuerttemberg-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "bayern",
+    "parent": "germany",
+    "name": "Bayern",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/germany/bayern-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/germany/bayern-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/germany/bayern-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/germany/bayern-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:germany:bayern",
+     "updates": "https://download.geofabrik.de/europe/germany/bayern-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "belgium",
+    "parent": "europe",
+    "iso3166-1:alpha2": [
+     "BE"
+    ],
+    "name": "Belgium",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/belgium-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/belgium-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/belgium-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/belgium-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:belgium",
+     "updates": "https://download.geofabrik.de/europe/belgium-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "champagne-ardenne",
+    "parent": "france",
+    "name": "Champagne Ardenne",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/france/champagne-ardenne-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/france/champagne-ardenne-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/france/champagne-ardenne-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/france/champagne-ardenne-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:france:champagne-ardenne",
+     "updates": "https://download.geofabrik.de/europe/france/champagne-ardenne-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "france",
+    "parent": "europe",
+    "iso3166-1:alpha2": [
+     "FR"
+    ],
+    "name": "France",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/france-latest.osm.pbf",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/france-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/france-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:france",
+     "updates": "https://download.geofabrik.de/europe/france-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "germany",
+    "parent": "europe",
+    "iso3166-1:alpha2": [
+     "DE"
+    ],
+    "name": "Germany",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/germany-latest.osm.pbf",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/germany-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/germany-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:germany",
+     "updates": "https://download.geofabrik.de/europe/germany-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "hessen",
+    "parent": "germany",
+    "name": "Hessen",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/germany/hessen-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/germany/hessen-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/germany/hessen-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/germany/hessen-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:germany:hessen",
+     "updates": "https://download.geofabrik.de/europe/germany/hessen-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "lorraine",
+    "parent": "france",
+    "name": "Lorraine",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/france/lorraine-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/france/lorraine-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/france/lorraine-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/france/lorraine-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:france:lorraine",
+     "updates": "https://download.geofabrik.de/europe/france/lorraine-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "luxembourg",
+    "parent": "europe",
+    "iso3166-1:alpha2": [
+     "LU"
+    ],
+    "name": "Luxembourg",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/luxembourg-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/luxembourg-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/luxembourg-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/luxembourg-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:luxembourg",
+     "updates": "https://download.geofabrik.de/europe/luxembourg-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "netherlands",
+    "parent": "europe",
+    "iso3166-1:alpha2": [
+     "NL"
+    ],
+    "name": "Netherlands",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/netherlands-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/netherlands-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/netherlands-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/netherlands-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:netherlands",
+     "updates": "https://download.geofabrik.de/europe/netherlands-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "niedersachsen",
+    "parent": "germany",
+    "name": "Niedersachsen (mit Bremen)",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/germany/niedersachsen-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/germany/niedersachsen-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/germany/niedersachsen-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/germany/niedersachsen-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:germany:niedersachsen",
+     "updates": "https://download.geofabrik.de/europe/germany/niedersachsen-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "nord-pas-de-calais",
+    "parent": "france",
+    "name": "Nord-Pas-de-Calais",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/france/nord-pas-de-calais-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/france/nord-pas-de-calais-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/france/nord-pas-de-calais-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/france/nord-pas-de-calais-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:france:nord-pas-de-calais",
+     "updates": "https://download.geofabrik.de/europe/france/nord-pas-de-calais-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "nordrhein-westfalen",
+    "parent": "germany",
+    "name": "Nordrhein-Westfalen",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/germany/nordrhein-westfalen-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/germany/nordrhein-westfalen-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:germany:nordrhein-westfalen",
+     "updates": "https://download.geofabrik.de/europe/germany/nordrhein-westfalen-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "picardie",
+    "parent": "france",
+    "name": "Picardie",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/france/picardie-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/france/picardie-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/france/picardie-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/france/picardie-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:france:picardie",
+     "updates": "https://download.geofabrik.de/europe/france/picardie-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "rheinland-pfalz",
+    "parent": "germany",
+    "name": "Rheinland-Pfalz",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/germany/rheinland-pfalz-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/germany/rheinland-pfalz-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/germany/rheinland-pfalz-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/germany/rheinland-pfalz-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:germany:rheinland-pfalz",
+     "updates": "https://download.geofabrik.de/europe/germany/rheinland-pfalz-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "saarland",
+    "parent": "germany",
+    "name": "Saarland",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/germany/saarland-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/germany/saarland-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/germany/saarland-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/germany/saarland-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:germany:saarland",
+     "updates": "https://download.geofabrik.de/europe/germany/saarland-updates"
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "switzerland",
+    "parent": "europe",
+    "iso3166-1:alpha2": [
+     "CH"
+    ],
+    "name": "Switzerland",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/switzerland-latest.osm.pbf",
+     "shp": "https://download.geofabrik.de/europe/switzerland-latest-free.shp.zip",
+     "pbf-internal": "https://osm-internal.download.geofabrik.de/europe/switzerland-latest-internal.osm.pbf",
+     "history": "https://osm-internal.download.geofabrik.de/europe/switzerland-internal.osh.pbf",
+     "taginfo": "https://taginfo.geofabrik.de/europe:switzerland",
+     "updates": "https://download.geofabrik.de/europe/switzerland-updates"
+    }
+   }
+  }
+ ]
+}

@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -26,6 +26,8 @@ function scratch(): string {
     'deploy',
   ];
   for (const f of files) cpSync(join(repoRoot, f), join(dir, f));
+  mkdirSync(join(dir, 'tools/geo'), { recursive: true });
+  cpSync(join(repoRoot, 'tools/geo/Dockerfile'), join(dir, 'tools/geo/Dockerfile'));
   for (const d of dirs) {
     cpSync(join(repoRoot, d), join(dir, d), {
       recursive: true,
@@ -118,6 +120,25 @@ describe('check-bom', () => {
     expect(checkBom(dir).join('\n')).toMatch(
       /deploy\/web\/Dockerfile: base image caddy:2\.11\.4-alpine has no installed image row/,
     );
+  });
+
+  it('fails on an unpinned base image in the geo tool Dockerfile', () => {
+    const dir = scratch();
+    edit(
+      dir,
+      'tools/geo/Dockerfile',
+      /^FROM node:26\.10\.0-trixie-slim@sha256:[0-9a-f]{64} AS build/m,
+      'FROM node:26.10.0-trixie-slim AS build',
+    );
+    expect(checkBom(dir).join('\n')).toMatch(
+      /tools\/geo\/Dockerfile: base image node:26\.10\.0-trixie-slim has no installed image row/,
+    );
+  });
+
+  it('fails when the geo tool Dockerfile pins a different osmium-tool than the BOM', () => {
+    const dir = scratch();
+    edit(dir, 'tools/geo/Dockerfile', 'OSMIUM_VERSION=1.19.1', 'OSMIUM_VERSION=1.19.2');
+    expect(checkBom(dir).join('\n')).toMatch(/BOM row osmium-tool: pin e629[0-9a-f]+ with version 1\.19\.1 not found/);
   });
 
   it('fails when a Dockerfile pins a different binary than the BOM', () => {

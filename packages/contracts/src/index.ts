@@ -5,5 +5,6 @@ export * from './canaries.ts';
 export * from './health.ts';
 export * from './openapi.ts';
 export * from './registry.ts';
+export * from './rivers.ts';
 export * from './stations.ts';
 export * from './units.ts';

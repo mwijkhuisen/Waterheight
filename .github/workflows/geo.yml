@@ -1,11 +1,19 @@
-# Basemap style and assets (P3, issue #18; ADR-0016). Runs on a pull request that touches the style
-# generator, the registry's basemap file, the generated styles or the committed glyph and sprite
-# assets (or the lockfile that pins their tools), so it is not a required check: `ci` is.
-# The generated styles must be exactly the generator's output, the offline tests must pass, and the
-# committed assets must be byte for byte what the pinned basemaps-assets commit gives: one
-# download from codeload.github.com, the only networked step. Same hardening as ci.yml: top-level
-# permissions {}, contents: read, harden-runner first, persist-credentials: false, no caches, no
-# expressions inside run: (values come in through env:), actions pinned to full SHAs.
+# Map data for the river graph and the basemap (P3 issue #18, ADR-0016; P6a, ADR-0012). Four jobs:
+#   style             the generated styles and the vendored glyph and sprite assets (pull request; not a required
+#                     check, `ci` is). Networked: one download from codeload.github.com.
+#   rivernet-fixture  builds the osmium tool image, re-exports the committed fixture PBF and compares it byte for
+#                     byte with the committed exports, then builds the fixture graph twice and compares sha256
+#                     (every event; offline once the image is built, the image build downloads three source tarballs
+#                     from codeload.github.com and Debian packages from apt).
+#   rivernet-build    downloads the 16 Geofabrik extracts (download.geofabrik.de) one at a time, filters, merges and
+#                     builds the graph, then runs the EU-Hydro agreement check (the EU-Hydro MapServer). Schedule and
+#                     dispatch only; uploads two artifacts (geo-assets and rivernet-fixture).
+#   rivernet-publish  main only: signs the assets keyless (Sigstore) and publishes the `geo-<date>` release through
+#                     the GitHub API. The only job with a write token; it has no checkout and runs no repository code.
+# Same hardening as ci.yml: top-level permissions {}, contents: read, harden-runner first,
+# persist-credentials: false, no expressions inside run: (values come in through env:), actions pinned to full
+# SHAs. No caches (owner decision of 2026-10-02): Geofabrik rebuilds every -latest file daily and a PR run must
+# never seed a main run. The contact User-Agent comes from the Actions VARIABLES RWS_DOMAIN and RWS_CONTACT_EMAIL.
 name: geo
 
 on:
@@ -17,7 +25,11 @@ on:
       - apps/web/public/assets/map/**
       - package.json
       - pnpm-lock.yaml
+      - registry/rivers.yaml
+      - registry/geo-sources.yaml
       - .github/workflows/geo.yml
+  schedule:
+    - cron: '23 4 3 * *'
   workflow_dispatch:
 
 permissions: {}
@@ -59,3 +71,197 @@ jobs:
         run: node_modules/.bin/vitest run --project unit test/basemap-style.test.ts
       - name: The committed assets are the pinned basemaps-assets commit (one download)
         run: node tools/geo/basemap/fetch-assets.ts --verify
+
+  rivernet-fixture:
+    name: rivernet fixture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read # check out the repository
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Build the tool image (never pushed)
+        run: docker build -t rws-geo-tools:local -f tools/geo/Dockerfile tools/geo
+      - name: The committed exports are the tool image's output for the committed PBF
+        run: tools/geo/rivernet/export-check.sh tools/geo/fixtures
+      - name: The fixture graph builds twice to the same bytes
+        run: |
+          set -euo pipefail
+          fx=tools/geo/fixtures
+          if [[ ! -f $fx/rivernet.osm.pbf ]]; then
+            echo "no fixture yet: nothing to build"
+            exit 0
+          fi
+          ways=$fx/rivernet.ways.geojsonseq
+          rels=$fx/rivernet.relations.opl
+          if [[ -f $ways.gz ]]; then gzip -dc "$ways.gz" >"$RUNNER_TEMP/rivernet.ways.geojsonseq"; ways=$RUNNER_TEMP/rivernet.ways.geojsonseq; fi
+          if [[ -f $rels.gz ]]; then gzip -dc "$rels.gz" >"$RUNNER_TEMP/rivernet.relations.opl"; rels=$RUNNER_TEMP/rivernet.relations.opl; fi
+          for n in 1 2; do
+            node tools/geo/rivernet/build.ts --ways "$ways" --relations "$rels" \
+              --provenance "$fx/rivernet.provenance.json" --out "$RUNNER_TEMP/build$n"
+          done
+          for f in river_graph.json reaches.geojson build-report.json; do
+            a=$(sha256sum "$RUNNER_TEMP/build1/$f" | cut -d' ' -f1)
+            b=$(sha256sum "$RUNNER_TEMP/build2/$f" | cut -d' ' -f1)
+            [[ $a == "$b" ]] || { echo "not byte-identical: $f" >&2; exit 1; }
+            echo "$f $a"
+          done
+
+  rivernet-build:
+    name: rivernet build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    permissions:
+      contents: read # check out the repository
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Disk before the run
+        run: df -h /
+      - name: Build the tool image (never pushed)
+        run: docker build -t rws-geo-tools:local -f tools/geo/Dockerfile tools/geo
+      - name: Download, filter, merge and export the 16 extracts, one at a time
+        env:
+          RWS_DOMAIN: ${{ vars.RWS_DOMAIN }}
+          RWS_CONTACT_EMAIL: ${{ vars.RWS_CONTACT_EMAIL }}
+        run: tools/geo/rivernet/extract.sh "$RUNNER_TEMP/geo" "$RUNNER_TEMP/out"
+      # Uploaded before the build, so that a build failure still leaves the extract to inspect.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rivernet-fixture
+          path: |
+            ${{ runner.temp }}/out/rivernet.osm.pbf
+            ${{ runner.temp }}/out/rivernet.ways.geojsonseq
+            ${{ runner.temp }}/out/rivernet.relations.opl
+            ${{ runner.temp }}/out/rivernet.provenance.json
+          retention-days: 14
+          if-no-files-found: error
+      - name: Build the graph
+        run: |
+          node tools/geo/rivernet/build.ts \
+            --ways "$RUNNER_TEMP/out/rivernet.ways.geojsonseq" \
+            --relations "$RUNNER_TEMP/out/rivernet.relations.opl" \
+            --provenance "$RUNNER_TEMP/out/rivernet.provenance.json" \
+            --out "$RUNNER_TEMP/out/assets"
+      - name: EU-Hydro direction check (QA only, never fails the build)
+        env:
+          RWS_DOMAIN: ${{ vars.RWS_DOMAIN }}
+          RWS_CONTACT_EMAIL: ${{ vars.RWS_CONTACT_EMAIL }}
+        run: node tools/geo/rivernet/euhydro.ts --dir "$RUNNER_TEMP/out/assets"
+      - name: Checksums and summary
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/out/assets"
+          sha256sum river_graph.json reaches.geojson qa-report.json >SHA256SUMS
+          {
+            echo '### Graph pipeline'
+            echo
+            for f in river_graph.json reaches.geojson qa-report.json; do echo "- $f: $(stat -c %s "$f") bytes"; done
+            echo "- agreement_pct: $(jq -r '(.euhydro.agreement_pct | tonumber?) // "n/a"' qa-report.json)"
+          } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: geo-assets
+          path: |
+            ${{ runner.temp }}/out/assets/river_graph.json
+            ${{ runner.temp }}/out/assets/reaches.geojson
+            ${{ runner.temp }}/out/assets/qa-report.json
+            ${{ runner.temp }}/out/assets/SHA256SUMS
+          retention-days: 14
+          if-no-files-found: error
+
+  rivernet-publish:
+    name: rivernet publish
+    needs: rivernet-build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the geo-<date> release
+      id-token: write # keyless cosign signature of every asset
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: geo-assets
+          path: geo-assets
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: Check, sign and verify the four assets
+        working-directory: geo-assets
+        run: |
+          set -euo pipefail
+          [[ $(ls | wc -l) -eq 4 ]] || { echo "unexpected artifact contents" >&2; exit 1; }
+          sha256sum -c SHA256SUMS
+          for f in river_graph.json reaches.geojson qa-report.json SHA256SUMS; do
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+            cosign verify-blob --bundle "$f.sigstore.json" \
+              --certificate-identity https://github.com/mwijkhuisen/Waterheight/.github/workflows/geo.yml@refs/heads/main \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com "$f"
+          done
+      - name: Publish the geo release (never rewritten)
+        working-directory: geo-assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TAG="geo-$(date -u +%F)"
+          ASSETS="river_graph.json reaches.geojson qa-report.json SHA256SUMS"
+          export TAG ASSETS
+          # The releases list includes drafts; a draft is found by tag name here, not by `gh release view`.
+          mapfile -t found < <(gh api "repos/$GH_REPO/releases" --paginate -q '.[] | select(.tag_name == env.TAG) | .id')
+          if ((${#found[@]} > 0)); then
+            # Only a complete release counts: exactly the four assets and their four bundles, each one uploaded.
+            complete=$(gh api "repos/$GH_REPO/releases/${found[0]}" -q '
+              ([.assets[] | {name, state}] | sort_by(.name)) ==
+              ([env.ASSETS | split(" ")[] | (., . + ".sigstore.json") | {name: ., state: "uploaded"}] | sort_by(.name))')
+            [[ $complete == true ]] || { echo "geo release exists with other assets; delete it to republish" >&2; exit 1; }
+            asset=$(gh api "repos/$GH_REPO/releases/${found[0]}" -q '.assets[] | select(.name == "SHA256SUMS") | .id')
+            [[ $asset =~ ^[0-9]+$ ]] || { echo "geo release exists with other assets; delete it to republish" >&2; exit 1; }
+            gh api -H 'Accept: application/octet-stream' "repos/$GH_REPO/releases/assets/$asset" >"$RUNNER_TEMP/existing.SHA256SUMS"
+            if cmp -s "$RUNNER_TEMP/existing.SHA256SUMS" SHA256SUMS; then
+              # An interrupted earlier run can have left the draft: publishing it again changes nothing else.
+              gh api -X PATCH "repos/$GH_REPO/releases/${found[0]}" -F draft=false -f make_latest=false >/dev/null
+              echo "$TAG already published"
+              exit 0
+            fi
+            echo "geo release exists with other assets; delete it to republish" >&2
+            exit 1
+          fi
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --latest=false --title "$TAG" \
+            --notes "River graph derived from OpenStreetMap data, ODbL 1.0, © OpenStreetMap contributors. Built by the geo.yml run $RUN_URL" \
+            river_graph.json reaches.geojson qa-report.json SHA256SUMS ./*.sigstore.json
+          gh release edit "$TAG" --draft=false --latest=false

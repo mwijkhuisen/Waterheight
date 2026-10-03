@@ -1,0 +1,659 @@
+[
+  {
+    "lang": "de",
+    "label": "Ahr",
+    "candidates": [
+      {
+        "qid": "Q153394",
+        "osm_relation": 318372,
+        "mouth_qid": "Q584",
+        "mouth_en": "Rhine",
+        "countries": [
+          "Q183"
+        ],
+        "nl": "Ahr",
+        "en": "Ahr"
+      },
+      {
+        "qid": "Q402635",
+        "osm_relation": null,
+        "mouth_qid": "Q279908",
+        "mouth_en": "Rienz",
+        "countries": [
+          "Q38"
+        ],
+        "nl": "Ahr",
+        "en": "Ahr"
+      }
+    ]
+  },
+  {
+    "lang": "de",
+    "label": "Berkel",
+    "candidates": [
+      {
+        "qid": "Q707763",
+        "osm_relation": null,
+        "mouth_qid": "Q217818",
+        "mouth_en": "IJssel",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Berkel",
+        "en": "Berkel"
+      }
+    ]
+  },
+  {
+    "lang": "nl",
+    "label": "Berkel",
+    "candidates": [
+      {
+        "qid": "Q707763",
+        "osm_relation": null,
+        "mouth_qid": "Q217818",
+        "mouth_en": "IJssel",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Berkel",
+        "en": "Berkel"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Chiers",
+    "candidates": [
+      {
+        "qid": "Q635969",
+        "osm_relation": 1307164,
+        "mouth_qid": "Q41986",
+        "mouth_en": "Meuse",
+        "countries": [
+          "Q142",
+          "Q31",
+          "Q32"
+        ],
+        "nl": "Chiers",
+        "en": "Chiers"
+      }
+    ]
+  },
+  {
+    "lang": "nl",
+    "label": "Dender",
+    "candidates": [
+      {
+        "qid": "Q269407",
+        "osm_relation": 11154751,
+        "mouth_qid": "Q37620",
+        "mouth_en": "Scheldt",
+        "countries": [
+          "Q31"
+        ],
+        "nl": "Dender",
+        "en": "Dender"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Dendre",
+    "candidates": [
+      {
+        "qid": "Q269407",
+        "osm_relation": 11154751,
+        "mouth_qid": "Q37620",
+        "mouth_en": "Scheldt",
+        "countries": [
+          "Q31"
+        ],
+        "nl": "Dender",
+        "en": "Dender"
+      }
+    ]
+  },
+  {
+    "lang": "de",
+    "label": "Dinkel",
+    "candidates": [
+      {
+        "qid": "Q707795",
+        "osm_relation": null,
+        "mouth_qid": "Q168904",
+        "mouth_en": "Vechte",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Dinkel",
+        "en": "Dinkel"
+      }
+    ]
+  },
+  {
+    "lang": "nl",
+    "label": "Dinkel",
+    "candidates": [
+      {
+        "qid": "Q707795",
+        "osm_relation": null,
+        "mouth_qid": "Q168904",
+        "mouth_en": "Vechte",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Dinkel",
+        "en": "Dinkel"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Haine",
+    "candidates": [
+      {
+        "qid": "Q1569447",
+        "osm_relation": null,
+        "mouth_qid": "Q37620",
+        "mouth_en": "Scheldt",
+        "countries": [
+          "Q142",
+          "Q31"
+        ],
+        "nl": "Hene",
+        "en": "Haine"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Houille",
+    "candidates": [
+      {
+        "qid": "Q291144",
+        "osm_relation": null,
+        "mouth_qid": "Q41986",
+        "mouth_en": "Meuse",
+        "countries": [
+          "Q142",
+          "Q31"
+        ],
+        "nl": "Houille",
+        "en": "Houille"
+      }
+    ]
+  },
+  {
+    "lang": "de",
+    "label": "Issel",
+    "candidates": [
+      {
+        "qid": "Q17265564",
+        "osm_relation": null,
+        "mouth_qid": "Q826673",
+        "mouth_en": "Fauerbach",
+        "countries": [
+          "Q183"
+        ],
+        "nl": null,
+        "en": "Issel"
+      },
+      {
+        "qid": "Q181067",
+        "osm_relation": 423096,
+        "mouth_qid": "Q217818",
+        "mouth_en": "IJssel",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Oude IJssel",
+        "en": "Oude IJssel"
+      },
+      {
+        "qid": "Q819319",
+        "osm_relation": 2082663,
+        "mouth_qid": null,
+        "mouth_en": null,
+        "countries": [
+          "Q142"
+        ],
+        "nl": "Issel",
+        "en": "Issel"
+      }
+    ]
+  },
+  {
+    "lang": "de",
+    "label": "Kyll",
+    "candidates": [
+      {
+        "qid": "Q677944",
+        "osm_relation": null,
+        "mouth_qid": "Q1667",
+        "mouth_en": "Moselle",
+        "countries": [
+          "Q183",
+          "Q31"
+        ],
+        "nl": "Kyll",
+        "en": "Kyll"
+      }
+    ]
+  },
+  {
+    "lang": "nl",
+    "label": "Leie",
+    "candidates": [
+      {
+        "qid": "Q10952811",
+        "osm_relation": 354117,
+        "mouth_qid": null,
+        "mouth_en": null,
+        "countries": [
+          "Q191"
+        ],
+        "nl": "Leie",
+        "en": "Leie"
+      },
+      {
+        "qid": "Q208493",
+        "osm_relation": 1201127,
+        "mouth_qid": "Q37620",
+        "mouth_en": "Scheldt",
+        "countries": [
+          "Q142",
+          "Q31"
+        ],
+        "nl": "Leie",
+        "en": "Lys"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Lys",
+    "candidates": [
+      {
+        "qid": "Q1295726",
+        "osm_relation": null,
+        "mouth_qid": "Q1548241",
+        "mouth_en": "Layon",
+        "countries": [
+          "Q142"
+        ],
+        "nl": null,
+        "en": "Lys"
+      },
+      {
+        "qid": "Q1399762",
+        "osm_relation": null,
+        "mouth_qid": "Q675028",
+        "mouth_en": "Dora Baltea",
+        "countries": [
+          "Q38"
+        ],
+        "nl": "Lys",
+        "en": "Lys"
+      },
+      {
+        "qid": "Q208493",
+        "osm_relation": 1201127,
+        "mouth_qid": "Q37620",
+        "mouth_en": "Scheldt",
+        "countries": [
+          "Q142",
+          "Q31"
+        ],
+        "nl": "Leie",
+        "en": "Lys"
+      },
+      {
+        "qid": "Q3269730",
+        "osm_relation": 9481641,
+        "mouth_qid": "Q208174",
+        "mouth_en": "Dordogne",
+        "countries": [
+          "Q142"
+        ],
+        "nl": "Lys",
+        "en": "Lys"
+      },
+      {
+        "qid": "Q522444",
+        "osm_relation": 158995,
+        "mouth_qid": null,
+        "mouth_en": null,
+        "countries": [
+          "Q142"
+        ],
+        "nl": "Lys",
+        "en": "Lys"
+      },
+      {
+        "qid": "Q667543",
+        "osm_relation": 2498086,
+        "mouth_qid": null,
+        "mouth_en": null,
+        "countries": [
+          "Q142"
+        ],
+        "nl": "Lys",
+        "en": "Lys"
+      }
+    ]
+  },
+  {
+    "lang": "de",
+    "label": "Nahe",
+    "candidates": [
+      {
+        "qid": "Q168696",
+        "osm_relation": 406638,
+        "mouth_qid": "Q584",
+        "mouth_en": "Rhine",
+        "countries": [
+          "Q183"
+        ],
+        "nl": "Nahe",
+        "en": "Nahe"
+      },
+      {
+        "qid": "Q564312",
+        "osm_relation": 422706,
+        "mouth_qid": null,
+        "mouth_en": null,
+        "countries": [
+          "Q183"
+        ],
+        "nl": "Nahe",
+        "en": "Nahe"
+      },
+      {
+        "qid": "Q878506",
+        "osm_relation": 5926122,
+        "mouth_qid": "Q320390",
+        "mouth_en": "Schleuse",
+        "countries": [
+          "Q183"
+        ],
+        "nl": "Nahe",
+        "en": "Nahe"
+      }
+    ]
+  },
+  {
+    "lang": "de",
+    "label": "Niers",
+    "candidates": [
+      {
+        "qid": "Q835333",
+        "osm_relation": 406674,
+        "mouth_qid": "Q41986",
+        "mouth_en": "Meuse",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Niers",
+        "en": "Niers"
+      }
+    ]
+  },
+  {
+    "lang": "nl",
+    "label": "Niers",
+    "candidates": [
+      {
+        "qid": "Q835333",
+        "osm_relation": 406674,
+        "mouth_qid": "Q41986",
+        "mouth_en": "Meuse",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Niers",
+        "en": "Niers"
+      }
+    ]
+  },
+  {
+    "lang": "nl",
+    "label": "Oude IJssel",
+    "candidates": [
+      {
+        "qid": "Q181067",
+        "osm_relation": 423096,
+        "mouth_qid": "Q217818",
+        "mouth_en": "IJssel",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Oude IJssel",
+        "en": "Oude IJssel"
+      }
+    ]
+  },
+  {
+    "lang": "nl",
+    "label": "Overijsselse Vecht",
+    "candidates": [
+      {
+        "qid": "Q168904",
+        "osm_relation": 409101,
+        "mouth_qid": "Q231763",
+        "mouth_en": "Zwarte Water",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Overijsselse Vecht",
+        "en": "Vechte"
+      }
+    ]
+  },
+  {
+    "lang": "de",
+    "label": "Prüm",
+    "candidates": [
+      {
+        "qid": "Q253696",
+        "osm_relation": 1108057,
+        "mouth_qid": null,
+        "mouth_en": null,
+        "countries": [
+          "Q183"
+        ],
+        "nl": "Prüm",
+        "en": "Prüm"
+      },
+      {
+        "qid": "Q697718",
+        "osm_relation": null,
+        "mouth_qid": "Q158847",
+        "mouth_en": "Sauer",
+        "countries": [
+          "Q183"
+        ],
+        "nl": "Prüm",
+        "en": "Prüm River"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Scarpe",
+    "candidates": [
+      {
+        "qid": "Q1818615",
+        "osm_relation": 1812718,
+        "mouth_qid": "Q37620",
+        "mouth_en": "Scheldt",
+        "countries": [
+          "Q142"
+        ],
+        "nl": "Scarpe",
+        "en": "Scarpe"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Semois",
+    "candidates": [
+      {
+        "qid": "Q303621",
+        "osm_relation": 1727715,
+        "mouth_qid": "Q41986",
+        "mouth_en": "Meuse",
+        "countries": [
+          "Q142",
+          "Q31"
+        ],
+        "nl": "Semois",
+        "en": "Semois"
+      }
+    ]
+  },
+  {
+    "lang": "nl",
+    "label": "Semois",
+    "candidates": [
+      {
+        "qid": "Q303621",
+        "osm_relation": 1727715,
+        "mouth_qid": "Q41986",
+        "mouth_en": "Meuse",
+        "countries": [
+          "Q142",
+          "Q31"
+        ],
+        "nl": "Semois",
+        "en": "Semois"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Semoy",
+    "candidates": [
+      {
+        "qid": "Q1379645",
+        "osm_relation": 147549,
+        "mouth_qid": null,
+        "mouth_en": null,
+        "countries": [
+          "Q142"
+        ],
+        "nl": "Semoy",
+        "en": "Semoy"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Thon",
+    "candidates": [
+      {
+        "qid": "Q1132776",
+        "osm_relation": 6820135,
+        "mouth_qid": "Q200231",
+        "mouth_en": "Oise",
+        "countries": [
+          "Q142"
+        ],
+        "nl": null,
+        "en": "Thon"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Ton",
+    "candidates": [
+      {
+        "qid": "Q2353066",
+        "osm_relation": null,
+        "mouth_qid": "Q635969",
+        "mouth_en": "Chiers",
+        "countries": [
+          "Q142",
+          "Q31"
+        ],
+        "nl": "Ton",
+        "en": "Ton"
+      },
+      {
+        "qid": "Q327236",
+        "osm_relation": 47050,
+        "mouth_qid": null,
+        "mouth_en": null,
+        "countries": [
+          "Q38"
+        ],
+        "nl": "Ton",
+        "en": "Ton"
+      }
+    ]
+  },
+  {
+    "lang": "nl",
+    "label": "Vecht",
+    "candidates": [
+      {
+        "qid": "Q1897253",
+        "osm_relation": null,
+        "mouth_qid": "Q4121",
+        "mouth_en": "IJsselmeer",
+        "countries": [
+          "Q55"
+        ],
+        "nl": "Vecht",
+        "en": "Vecht"
+      }
+    ]
+  },
+  {
+    "lang": "de",
+    "label": "Vechte",
+    "candidates": [
+      {
+        "qid": "Q168904",
+        "osm_relation": 409101,
+        "mouth_qid": "Q231763",
+        "mouth_en": "Zwarte Water",
+        "countries": [
+          "Q183",
+          "Q55"
+        ],
+        "nl": "Overijsselse Vecht",
+        "en": "Vechte"
+      }
+    ]
+  },
+  {
+    "lang": "fr",
+    "label": "Viroin",
+    "candidates": [
+      {
+        "qid": "Q1818933",
+        "osm_relation": null,
+        "mouth_qid": "Q41986",
+        "mouth_en": "Meuse",
+        "countries": [
+          "Q142",
+          "Q31"
+        ],
+        "nl": "Viroin",
+        "en": "Viroin"
+      }
+    ]
+  }
+]
