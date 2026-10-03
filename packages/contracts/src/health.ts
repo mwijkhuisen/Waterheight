@@ -78,6 +78,34 @@ const SpecId = z
   .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
   .max(80);
 
+const Share = z.strictObject({
+  stations: count,
+  /** Of them, with a state other than no_ref. */
+  classed: count,
+  /** classed / stations; null without stations. */
+  ratio: z.number().min(0).max(1).nullable(),
+});
+
+/**
+ * The classification coverage of one audience family at `t` (PHASES P7b, catalogue gap item 17): per country, the
+ * tier-1 stations with a state other than no_ref, and the first-release stations whose state comes from a source
+ * that needs no permission. `mode` is the default map mode of D10: `state` when at least 60 % of all tier-1
+ * stations are classed, else `dh`. The public report counts public stations only; the owner report has the same
+ * shape and goes to the owner status only (P9a), never to a public response.
+ */
+export const ClassCoverage = z.strictObject({
+  t: iso,
+  mode: z.enum(['state', 'dh']),
+  tier1: Share,
+  first_release: Share,
+  countries: z
+    .array(
+      z.strictObject({ country: z.enum(['NL', 'DE', 'BE', 'FR', 'LU', 'CH']), tier1: Share, first_release: Share }),
+    )
+    .max(6),
+});
+export type ClassCoverage = z.infer<typeof ClassCoverage>;
+
 export const HealthSources = z.strictObject({
   generated_at: iso.nullable(),
   sources: z
@@ -169,6 +197,8 @@ export const HealthSources = z.strictObject({
     )
     .max(100),
   owner_sources: z.strictObject({ healthy: count, total: count }),
+  /** The classification coverage of the public family (P7b; D10), null when it could not be computed. */
+  classification: ClassCoverage.nullable(),
 });
 export type HealthSources = z.infer<typeof HealthSources>;
 

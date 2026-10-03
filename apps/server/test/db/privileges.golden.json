@@ -98,6 +98,10 @@
       "rws_backup": "SELECT",
       "rws_owner_api": "SELECT"
     },
+    "own_gauge_zero": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
     "own_ingest_batch": {
       "rws_backup": "SELECT",
       "rws_owner_api": "SELECT"
@@ -200,6 +204,11 @@
       "rws_publish": "SELECT"
     },
     "pub_forecast_value": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_gauge_zero": {
       "rws_api": "SELECT",
       "rws_backup": "SELECT",
       "rws_publish": "SELECT"

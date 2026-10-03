@@ -27,6 +27,8 @@ export type ApiDeps = {
   build: string;
   /** The display window; until it is loaded the routes that need it answer 503. */
   window: DisplayWindow | undefined;
+  /** The FR-5 station → section map (registry/vigicrues-sections.yaml), loaded at boot. */
+  sections: ReadonlyMap<string, string>;
 };
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
@@ -124,7 +126,11 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
   route('/api/v1/snapshot', 'snapshot', Snapshot, (c) => {
     const now = deps.now().getTime();
     const t = snapshotParams(c.req.url, now, window().displayStartMs);
-    return { key: `snapshot|${t}`, policy: agePolicy(t, now), read: (db) => readSnapshot(db, t) };
+    return {
+      key: `snapshot|${t}`,
+      policy: agePolicy(t, now),
+      read: (db) => readSnapshot(db, t, { now, sections: deps.sections }),
+    };
   });
 
   route('/api/v1/series/:id', 'series', Series, (c) => {
