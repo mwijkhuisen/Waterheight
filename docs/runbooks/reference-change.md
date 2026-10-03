@@ -2,7 +2,7 @@
 
 **Trigger:** one of the loader alerts `reference_changed`, `reference_removed`, `reference_corrected`, `class_changed`, `warning_changed`, `gauge_zero_changed`, `unmapped_class`, `geometry_too_big`, `texts_too_big` or `cap_closes_full` (log lines, `docker logs --since 24h rws-load-1 2>&1 | grep '"alert"'`; they do not page). Or a decision that changes what the loader stores: a signed D18 crosswalk, a new NL-4 workbook, an owner threshold change, a BAFU objection (C13).
 
-P7a (`PHASES.md` §22, A§6 "P7a reality") stores thresholds, provider classes and warnings with validity ranges and classifies nothing: P7b reads the rows. Every alert carries `source`, `spec` and a count `n` only. **It never carries a value, a threshold or provider text** (invariant 11), so the alert alone does not say what changed: the rows do.
+P7a (`PHASES.md` §23, A§6 "P7a reality") stores thresholds, provider classes and warnings with validity ranges and classifies nothing: P7b reads the rows. Every alert carries `source`, `spec` and a count `n` only. **It never carries a value, a threshold or provider text** (invariant 11), so the alert alone does not say what changed: the rows do.
 
 Nothing here is edited by hand in the database. A wrong row is corrected by a fix in a PR and a replay (`replay.md`), never by SQL.
 
@@ -42,9 +42,9 @@ Then decide:
 | A real publication (the provider's page or the new payload says so) | Nothing. The old range is history, the new one is current |
 | Many series change at once, or a value with a wrong factor (cm against m, l/s against m³/s) | A parser or normaliser bug. Read one archived payload (`schema-drift.md` §2), fix in a PR with a fixture and a golden, bump the adapter `version` in `load/adapters.ts`, deploy, then replay the spec (§6). The replay corrects the rows that the replayed payloads hold in place (`reference_corrected`) |
 | A kind removed by one source on many series | Check the payload (a truncated list?). A truncated payload would have been a quarantine (`schema-drift.md`); if it parsed, ask the provider |
-| BE-3 withdrew a kind (a percentile) | BE-3 has no `refScope` (KG-171), so nothing is closed and the old range stays open. Judge it in the owner view (§8) |
+| BE-3 withdrew a kind (a percentile) | BE-3 has no `refScope` (KG-180), so nothing is closed and the old range stays open. Judge it in the owner view (§8) |
 
-A parser-fix replay by a payload that is not the key's newest statement opens a new range instead of editing (KG-174). A range is never deleted.
+A parser-fix replay by a payload that is not the key's newest statement opens a new range instead of editing (KG-183). A range is never deleted.
 
 ## 3. A class or warning changed
 
@@ -59,7 +59,7 @@ WHERE source_id = 'DE-6' ORDER BY lower(valid) DESC LIMIT 20"
 
 A new class during a flood is the system working. Two things are not normal: a class that flaps every payload (a parser reading a changing field: compare two archived payloads), and a source with no change for weeks in a flood (the spec stopped: `scripts/verify-prod.sh <domain> --interval` checks `interval DE-6`, which needs about 30 minutes). A station whose every series is `off` takes no class (the off-station rule); a class for an unknown station id is counted in `n_skipped`.
 
-For LU-5 a Cancel closes the rows of the messages it references at its `sent` time; a Cancel that arrives before its target waits in `app_meta` `cap_closes:LU-5` (2,000 identifiers at most, an identifier over 200 characters skipped, a closing sent more than 60 days before or after the message being loaded forgotten, KG-175). After `cap_closes_full`, replay `lu-5-cap` in shorter stretches (`replay.md`): the map holds what one stretch needs.
+For LU-5 a Cancel closes the rows of the messages it references at its `sent` time; a Cancel that arrives before its target waits in `app_meta` `cap_closes:LU-5` (2,000 identifiers at most, an identifier over 200 characters skipped, a closing sent more than 60 days before or after the message being loaded forgotten, KG-184). After `cap_closes_full`, replay `lu-5-cap` in shorter stretches (`replay.md`): the map holds what one stretch needs.
 
 A snapshot payload (DE-6 alerts, FR-5, CH-5) closes an area it no longer lists. An area it lists but whose row was withheld (`conflict`, `unmapped_class`) stays as stored. A changed CH-5 level at an unchanged `valid_from` (the bulletin's) ends the old level at the payload's `produced_at` and opens the new one there, so both stay in the history. An FR-5 map that lists fewer than 75 % of our sections, or a CH-5 map of fewer than 80, is `too_few_areas` drift (`schema-drift.md`): a cut answer closes nothing.
 
@@ -86,7 +86,7 @@ A re-levelled gauge is a real change. The history keeps both zeros; the station 
 
 ## 6. Changing the crosswalk (D18) or a label, and the replays
 
-D18 is unsigned: `level_norm` is the catalogue §4.9 default (KG-163, R-082). When the owner signs, or changes a row:
+D18 is unsigned: `level_norm` is the catalogue §4.9 default (KG-172, R-086). When the owner signs, or changes a row:
 
 1. Edit `packages/core/src/crosswalk.ts` (the flagged rows: Stormvloed, HQ5, Marke I to III, GlW, CH-5 level 0, `NIVCRU`, the LHP alert "2" colour, Obernau and Kalkofen-neu) and the labels; update the goldens (`UPDATE_GOLDEN=1`, review each) and bump the adapter `version` of the changed sources in `apps/server/src/load/adapters.ts`.
 2. Deploy. `migrate` changes nothing.
@@ -100,7 +100,7 @@ D18 is unsigned: `level_norm` is the catalogue §4.9 default (KG-163, R-082). Wh
    ```
 
    `BE-3` (`NIVCRU` has no level) and `LU-4` need no replay for a level change. For a change of a **label** only the label file changes and no replay is needed.
-4. Run each command a second time: `"n_new":0,"n_changed":0` and no new batch. A replay corrects the rows that the replayed payloads hold; a row that a newer payload has superseded keeps the level it was stored with (KG-174). Check:
+4. Run each command a second time: `"n_new":0,"n_changed":0` and no new batch. A replay corrects the rows that the replayed payloads hold; a row that a newer payload has superseded keeps the level it was stored with (KG-183). Check:
 
    ```bash
    sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -Atc "SELECT source_id, level_norm, count(*) FROM warning_area GROUP BY 1, 2 ORDER BY 1, 2"
@@ -121,9 +121,9 @@ The NL-4 rows are written by `migrate`, not by the loader: `node scripts/convert
 These are rows of `source_id` LU-4 and BE-3: the owner views show them, the public views never do. Read them on `owner.<domain>` over WireGuard, or with `rws_owner_api`; **never paste a value, a threshold, a percentile or a `NIVCRU` text into an issue, a PR, a chat, a log or a commit message**. The alerts name only the source, the spec and `n`.
 
 - LU-4: AGE changed a level or a flood return period, or set a level to 0 (no row, `reference_removed`). A change is a new range; nothing else to do. `bad_variant` (a page path that `registry/seed/lu-4.csv` does not map) is a registry change (`owner-drift.md`).
-- BE-3: `be-3-refs` runs weekly (Tuesday 05:20 UTC). A new period of record changes every percentile (`reference_changed` with a large `n`) and is normal after SPW recomputes. A kind SPW withdraws is never closed (KG-171).
-- Neither source stores a gauge zero from these payloads (KG-172).
+- BE-3: `be-3-refs` runs weekly (Tuesday 05:20 UTC). A new period of record changes every percentile (`reference_changed` with a large `n`) and is normal after SPW recomputes. A kind SPW withdraws is never closed (KG-180).
+- Neither source stores a gauge zero from these payloads (KG-181).
 
 ## 9. A BAFU objection (C13)
 
-C13 is unanswered; silence by 2026-10-31 keeps CH-2 and CH-5 public. If BAFU objects to public use, the owner decides in a follow-up PR: CH-2 and CH-5 move to `audience: owner` (a `registry/permissions/<ID>.md` record, CODEOWNERS applies), CH-6 (the open geo.admin.ch class layers; `data.geo.admin.ch` is a catalogue §6.7 host) gets a capture spec, an adapter and an allowlist entry, and a replay loads what CH-6 states. Only a request to stop fetching ends the capture. Until then nothing changes (KG-164).
+C13 is unanswered; silence by 2026-10-31 keeps CH-2 and CH-5 public. If BAFU objects to public use, the owner decides in a follow-up PR: CH-2 and CH-5 move to `audience: owner` (a `registry/permissions/<ID>.md` record, CODEOWNERS applies), CH-6 (the open geo.admin.ch class layers; `data.geo.admin.ch` is a catalogue §6.7 host) gets a capture spec, an adapter and an allowlist entry, and a replay loads what CH-6 states. Only a request to stop fetching ends the capture. Until then nothing changes (KG-173).
