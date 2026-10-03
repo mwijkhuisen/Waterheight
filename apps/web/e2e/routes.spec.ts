@@ -219,3 +219,73 @@ test('/third-party-notices.txt is plain text and names maplibre-gl@6.11.1', asyn
   expect(await res.text()).toContain('maplibre-gl@6.11.1');
   expectSiteHeaders(res);
 });
+
+// P6b: the river files that rws-rivers-refresh installs (prepare-tiles.ts writes the e2e release 20261003).
+const RIVERS = '20261003';
+const IMMUTABLE = 'public, max-age=31536000, immutable';
+
+test('the rivers manifest is JSON, cached 60 s, and names the three files of the release', async ({ request }) => {
+  const res = await request.get('/data/v1/rivers/manifest.json');
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toMatch(JSON_TYPE);
+  expect(res.headers()['cache-control']).toBe('public, max-age=60');
+  const m = await res.json();
+  expect(m.current.version).toBe(RIVERS);
+  expect(m.current.tiles.file).toBe(`rivers-${RIVERS}.pmtiles`);
+  expect(m.previous).toBeNull();
+  expectSiteHeaders(res);
+});
+
+test('the reaches file is immutable JSON; any other path under /data/v1/rivers is a bare 404', async ({ request }) => {
+  const res = await request.get(`/data/v1/rivers/reaches-${RIVERS}.json`);
+  expect(res.status()).toBe(200);
+  expect(res.headers()['cache-control']).toBe(IMMUTABLE);
+  expect((await res.json()).version).toBe(RIVERS);
+  expectSiteHeaders(res);
+  for (const path of [
+    '/data/v1/rivers/reaches-20269999.json',
+    '/data/v1/rivers/',
+    '/data/v1/rivers',
+    '/data/v1/rivers/Manifest.json',
+    '/data/v1/rivers/x.txt',
+  ]) {
+    const miss = await request.get(path);
+    expect(miss.status(), path).toBe(404);
+    expect(miss.headers()['cache-control'], path).toBeUndefined();
+    expectSiteHeaders(miss);
+  }
+});
+
+test('the river tiles take one range like the basemap tiles: 206 immutable, no range 416, a miss 404', async ({
+  request,
+}) => {
+  const path = `/tiles/rivers-${RIVERS}.pmtiles`;
+  const ok = await request.get(path, { headers: { Range: 'bytes=0-15' } });
+  expect(ok.status()).toBe(206);
+  expect(ok.headers()['cache-control']).toBe(IMMUTABLE);
+  expect((await ok.body()).subarray(0, 7).toString('latin1')).toBe('PMTiles');
+  expectSiteHeaders(ok);
+  expect((await request.get(path)).status()).toBe(416);
+  expect((await request.get(path, { headers: { Range: 'bytes=0-' } })).status()).toBe(416);
+  const miss = await request.get('/tiles/rivers-20269999.pmtiles', { headers: { Range: 'bytes=0-15' } });
+  expect(miss.status()).toBe(404);
+  expect(miss.headers()['cache-control']).toBeUndefined();
+});
+
+test('the ODbL download is gzip data: application/gzip, no Content-Encoding, immutable; the rest of /downloads is 404', async ({
+  request,
+}) => {
+  const res = await request.get(`/downloads/rivers-${RIVERS}.geojson.gz`);
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toBe('application/gzip');
+  expect(res.headers()['content-encoding']).toBeUndefined();
+  expect(res.headers()['cache-control']).toBe(IMMUTABLE);
+  const body = await res.body();
+  expect([body[0], body[1]]).toEqual([0x1f, 0x8b]);
+  expectSiteHeaders(res);
+  for (const path of ['/downloads/rivers-20269999.geojson.gz', '/downloads/', '/downloads', '/downloads/x.gz']) {
+    const miss = await request.get(path);
+    expect(miss.status(), path).toBe(404);
+    expect(miss.headers()['cache-control'], path).toBeUndefined();
+  }
+});

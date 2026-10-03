@@ -23,7 +23,10 @@
 //                                                basemap tiles (P3: the manifest, a Range
 //                                                read of every listed file, the 404s, the
 //                                                416 for no Range or two ranges) and
-//                                                the pinned map assets, and no
+//                                                the pinned map assets, the rivers (P6b: the
+//                                                manifest, the overlay by Range, the reaches
+//                                                file, the ODbL download and its attribution
+//                                                in the page's script), and no
 //                                                owner source, spec, host, canary or
 //                                                private_basis in /status/* or any /api/v1
 //                                                body above
@@ -42,6 +45,7 @@ import { request as httpsRequest } from 'node:https';
 import { isIP, type LookupFunction } from 'node:net';
 import { join } from 'node:path';
 import { connect as tlsConnect } from 'node:tls';
+import { gunzipSync, constants as zlibConstants } from 'node:zlib';
 import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
@@ -50,11 +54,16 @@ import {
   BACKLOG_MAX_AGE_S,
   CANARIES,
   CANARY_RENDERINGS,
+  checkReaches,
   floorBucket,
   Health,
   HealthSources,
   LAG_DEGRADED_S,
   Meta,
+  ODBL_LICENCE,
+  OSM_ATTRIBUTION,
+  ReachesFile,
+  RiversManifest,
   Snapshot,
   Stations,
 } from '../packages/contracts/src/index.ts';
@@ -852,6 +861,157 @@ export function checkMapAsset(page: Page | string): Result {
   return problems.length === 0 ? pass(check, `${MAP_ASSET_PATH}: 200, immutable`) : miss(check, problems.join('; '));
 }
 
+// ---------------------------------------------------------------- the rivers (P6b)
+
+export const RIVERS_MANIFEST_PATH = '/data/v1/rivers/manifest.json';
+/** The first bytes of the ODbL download that are read, gunzipped: the header comes before the features. */
+export const RIVERS_DOWNLOAD_RANGE = 'bytes=0-65535';
+/** The gzip download is gzip data, never a transfer coding: Caddy must not encode it, whatever the client offers. */
+export const RIVERS_DOWNLOAD_HEADERS = { 'accept-encoding': 'gzip, zstd' } as const;
+
+export type RiversRead = { manifest?: RiversManifest; problems: string[] };
+
+/** `/data/v1/rivers/manifest.json`: 200, JSON, `Cache-Control` exactly max-age=60 and a `RiversManifest` (strict). */
+export function readRiversManifest(page: Page | string): RiversRead {
+  const r = readApi(page, RiversManifest, MANIFEST_CACHE);
+  return r.data === undefined ? { problems: r.problems } : { manifest: r.data, problems: r.problems };
+}
+
+export function checkRiversManifest(r: RiversRead): Result {
+  const m = r.manifest;
+  return m !== undefined && r.problems.length === 0
+    ? pass(
+        'rivers manifest',
+        `200, ${MANIFEST_CACHE}, current ${m.current.version} (${m.current.tag}), previous ${m.previous?.version ?? 'none'}`,
+      )
+    : miss('rivers manifest', r.problems.join('; ') || 'no valid manifest');
+}
+
+/** The overlay: a 16-byte Range of `/tiles/<manifest tiles file>` is 206, immutable, not encoded, PMTiles v3. */
+export function checkRiversTiles(m: RiversManifest | undefined, page: Page | string | undefined): Result {
+  const check = 'rivers tiles';
+  if (m === undefined) return miss(check, 'no valid manifest');
+  if (page === undefined || typeof page === 'string') return miss(check, page ?? 'not asked');
+  const f = m.current.tiles;
+  const problems: string[] = [];
+  if (page.status !== 206) problems.push(`status ${page.status}, want 206`);
+  const range = page.headers['content-range'];
+  if (range !== `bytes 0-15/${f.bytes}`) problems.push(`content-range ${show(range)}, want bytes 0-15/${f.bytes}`);
+  const cache = page.headers['cache-control'];
+  if (cache !== TILE_CACHE) problems.push(`cache-control ${show(cache)}`);
+  const encoding = page.headers['content-encoding'];
+  if (encoding !== undefined) problems.push(`content-encoding ${show(encoding)}`);
+  if (!page.body.startsWith(PMTILES_MAGIC)) problems.push('not a PMTiles v3 file');
+  return problems.length === 0
+    ? pass(check, `${f.file}: 206, bytes 0-15/${f.bytes}, immutable, no Content-Encoding, PMTiles v3`)
+    : miss(check, problems.join('; '));
+}
+
+/**
+ * The reaches file of the current release: 200, immutable JSON, the `ReachesFile` contract with `checkReaches`
+ * clean, the manifest's version, and every station of it a station of `/api/v1/stations` (a station the public API
+ * does not list is one the public site must not name). The leak half is the `owner leak` check (the body is in it).
+ */
+export function checkRiversReaches(
+  m: RiversManifest | undefined,
+  page: Page | string | undefined,
+  stationIds: ReadonlySet<string> | undefined,
+): Result {
+  const check = 'rivers reaches';
+  if (m === undefined) return miss(check, 'no valid manifest');
+  const r = readApi(page ?? 'not asked', ReachesFile, TILE_CACHE);
+  if (r.data === undefined) return miss(check, r.problems.join('; '));
+  const problems = [...r.problems];
+  const f = r.data;
+  const inconsistent = checkReaches(f);
+  if (inconsistent.length > 0) problems.push(`${inconsistent.length} inconsistencies (first: ${inconsistent[0]})`);
+  if (f.version !== m.current.version) problems.push(`version ${f.version}, the manifest says ${m.current.version}`);
+  if (stationIds === undefined) problems.push('no valid /api/v1/stations to compare with');
+  else {
+    const unknown = f.stations.filter((st) => !stationIds.has(st.id)).length;
+    if (unknown > 0) problems.push(`${unknown} of ${f.stations.length} stations are not in /api/v1/stations`);
+  }
+  return problems.length === 0
+    ? pass(check, `${m.current.reaches.file}: ${f.reaches.length} reaches, ${f.stations.length} stations, all public`)
+    : miss(check, problems.join('; '));
+}
+
+/**
+ * What the first bytes of the download say, gunzipped (a truncated stream is fine: only what inflated is read): the
+ * OSM attribution and the licence are keys that come before `"features"`.
+ */
+export function downloadHeader(bytes: Buffer): { text: string; problems: string[] } {
+  try {
+    const text = gunzipSync(bytes, { finishFlush: zlibConstants.Z_SYNC_FLUSH }).toString('utf8');
+    return { text, problems: [] };
+  } catch {
+    return { text: '', problems: ['the first bytes do not inflate as gzip'] };
+  }
+}
+
+/**
+ * The ODbL download (HEAD, then a 64 KiB Range): `application/gzip`, no `Content-Encoding`, immutable, the manifest's
+ * length; and the gunzipped start holds `"attribution": "© OpenStreetMap contributors"` and `"licence": "ODbL-1.0"`
+ * before `"features"`.
+ */
+export function checkRiversDownload(
+  m: RiversManifest | undefined,
+  head: Page | string | undefined,
+  part: Page | string | undefined,
+): Result {
+  const check = 'rivers download';
+  if (m === undefined) return miss(check, 'no valid manifest');
+  if (head === undefined || typeof head === 'string') return miss(check, `HEAD: ${head ?? 'not asked'}`);
+  if (part === undefined || typeof part === 'string') return miss(check, `Range: ${part ?? 'not asked'}`);
+  const f = m.current.download;
+  const problems: string[] = [];
+  if (head.status !== 200) problems.push(`HEAD status ${head.status}, want 200`);
+  if (head.headers['content-type'] !== 'application/gzip')
+    problems.push(`content-type ${show(head.headers['content-type'])}, want application/gzip`);
+  if (head.headers['content-encoding'] !== undefined)
+    problems.push(`content-encoding ${show(head.headers['content-encoding'])}`);
+  if (head.headers['cache-control'] !== TILE_CACHE)
+    problems.push(`cache-control ${show(head.headers['cache-control'])}`);
+  if (head.headers['content-length'] !== String(f.bytes))
+    problems.push(`content-length ${show(head.headers['content-length'])}, want ${f.bytes}`);
+  if (part.status !== 206 && part.status !== 200) problems.push(`Range status ${part.status}, want 206`);
+  if (part.headers['content-encoding'] !== undefined)
+    problems.push(`Range content-encoding ${show(part.headers['content-encoding'])}`);
+  const { text, problems: inflate } = downloadHeader(part.bytes ?? Buffer.alloc(0));
+  problems.push(...inflate);
+  if (inflate.length === 0) {
+    const features = text.indexOf('"features"');
+    const attribution = new RegExp(`"attribution"\\s*:\\s*"${OSM_ATTRIBUTION}"`).exec(text);
+    const licence = new RegExp(`"licence"\\s*:\\s*"${ODBL_LICENCE.replace('.', '\\.')}"`).exec(text);
+    if (features < 0) problems.push('no "features" key in the first 64 KiB');
+    if (attribution === null || (features >= 0 && attribution.index > features))
+      problems.push('no OSM attribution before "features"');
+    if (licence === null || (features >= 0 && licence.index > features))
+      problems.push(`no licence ${ODBL_LICENCE} before "features"`);
+  }
+  return problems.length === 0
+    ? pass(
+        check,
+        `${f.file}: application/gzip, no Content-Encoding, immutable, ${f.bytes} bytes; attribution and ${ODBL_LICENCE} before "features"`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/** The first `/assets/*.js` the page references (the entry chunk). */
+export const entryScript = (html: string): string | undefined =>
+  /<script[^>]*\ssrc="(\/assets\/[^"]+\.js)"/.exec(html)?.[1];
+
+/** The page's own script names the ODbL (the footer text of the river network, P6b): a plain substring. */
+export function checkRiversAttribution(script: Page | string | undefined): Result {
+  const check = 'rivers attribution';
+  if (script === undefined) return miss(check, 'the page references no script');
+  if (typeof script === 'string') return miss(check, script);
+  if (script.status !== 200) return miss(check, `script status ${script.status}`);
+  return script.body.includes('ODbL')
+    ? pass(check, 'the entry script of the page names the ODbL')
+    : miss(check, 'the entry script of the page does not name the ODbL');
+}
+
 // ---------------------------------------------------------------- data API (P4b)
 
 /** Cache-Control of the fixed data routes (A§9.2), compared exactly. */
@@ -1081,7 +1241,8 @@ export function checkBelgianSet(
 // ---------------------------------------------------------------- network
 
 type Net = { resolve?: string; ca?: Buffer };
-export type Page = { status: number; headers: Record<string, string | undefined>; body: string };
+/** `bytes` is the body as received (a gzip download cannot go through the utf8 `body`). */
+export type Page = { status: number; headers: Record<string, string | undefined>; body: string; bytes?: Buffer };
 
 function lookupFor(net: Net): LookupFunction | undefined {
   if (net.resolve === undefined) return undefined;
@@ -1091,14 +1252,19 @@ function lookupFor(net: Net): LookupFunction | undefined {
     options.all ? cb(null, [{ address, family }]) : cb(null, address, family)) as unknown as LookupFunction;
 }
 
-function get(url: string, net: Net, headers: Readonly<Record<string, string>> = {}): Promise<Page> {
+function get(
+  url: string,
+  net: Net,
+  headers: Readonly<Record<string, string>> = {},
+  method: 'GET' | 'HEAD' = 'GET',
+): Promise<Page> {
   const u = new URL(url);
   const request = u.protocol === 'https:' ? httpsRequest : httpRequest;
   return new Promise((resolve, reject) => {
     const req = request(
       u,
       {
-        method: 'GET',
+        method,
         headers: { 'user-agent': 'rivierstanden-verify-prod', ...headers },
         timeout: 20_000,
         ...(net.ca === undefined ? {} : { ca: net.ca }),
@@ -1115,7 +1281,8 @@ function get(url: string, net: Net, headers: Readonly<Record<string, string>> = 
         res.on('end', () => {
           const headers: Record<string, string | undefined> = {};
           for (const [k, v] of Object.entries(res.headers)) headers[k] = Array.isArray(v) ? v.join(', ') : v;
-          resolve({ status: res.statusCode ?? 0, headers, body: Buffer.concat(chunks).toString('utf8') });
+          const bytes = Buffer.concat(chunks);
+          resolve({ status: res.statusCode ?? 0, headers, body: bytes.toString('utf8'), bytes });
         });
         res.on('error', reject);
       },
@@ -1127,8 +1294,13 @@ function get(url: string, net: Net, headers: Readonly<Record<string, string>> = 
 }
 
 /** A page, or the error text when the request itself failed: the checks report it instead of crashing. */
-const tryGet = (url: string, net: Net, headers?: Readonly<Record<string, string>>): Promise<Page | string> =>
-  get(url, net, headers).catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
+const tryGet = (
+  url: string,
+  net: Net,
+  headers?: Readonly<Record<string, string>>,
+  method?: 'GET' | 'HEAD',
+): Promise<Page | string> =>
+  get(url, net, headers, method).catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
 
 /** TLS on one address: a certificate valid for the domain, days left. */
 function tlsOn(domain: string, address: string, net: Net): Promise<{ days: number } | { error: string }> {
@@ -1250,7 +1422,12 @@ export const CHECKS = [
   `tiles 404: ${TILES_404_PATHS.join(', ')} are 404 and none is marked immutable`,
   `tiles 416: GET on the current basemap file without Range, and with Range: ${TILE_416_REQUESTS[1][1].range}, is 416 and not immutable (only one explicit range is served)`,
   `map assets: GET ${MAP_ASSET_PATH} (a pinned glyph range of the web image) is 200 with Cache-Control exactly "${TILE_CACHE}"`,
-  `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body`,
+  `rivers manifest: GET ${RIVERS_MANIFEST_PATH} is 200 with Cache-Control exactly "${MANIFEST_CACHE}" and a body the strict RiversManifest contract accepts`,
+  `rivers tiles: GET /tiles/<the manifest's tiles file> with Range: ${TILE_HEADERS.range} is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
+  `rivers reaches: GET /data/v1/rivers/<the manifest's reaches file> is 200 JSON with Cache-Control exactly "${TILE_CACHE}", the ReachesFile contract, checkReaches clean, the manifest's version, and every station of it a station of /api/v1/stations (the file's body is also in owner leak)`,
+  `rivers download: HEAD /downloads/<the manifest's download file> is 200 application/gzip with no Content-Encoding, ${TILE_CACHE} and the manifest's length; a Range of ${RIVERS_DOWNLOAD_RANGE}, gunzipped (truncation tolerated), shows "attribution": "${OSM_ATTRIBUTION}" and "licence": "${ODBL_LICENCE}" before "features"`,
+  'rivers attribution: the entry script that / references contains the string ODbL (the footer text, P6b)',
+  `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
   ...TWIN_IDS.map(
     (id) =>
@@ -1412,6 +1589,36 @@ async function main(argv: string[]): Promise<number> {
       for (const [label, headers] of TILE_416_REQUESTS) refused[label] = await tile(`/tiles/${current.file}`, headers);
     results.push(checkTiles404(missing), checkTiles416(current, refused), checkMapAsset(await tile(MAP_ASSET_PATH)));
 
+    // P6b: the rivers (A§9.1). The names come from the manifest only; the leak grep below reads their bodies too.
+    const riversPage = await tile(RIVERS_MANIFEST_PATH);
+    const rivers = readRiversManifest(riversPage);
+    const cur = rivers.manifest?.current;
+    const reachesPage = cur === undefined ? undefined : await tile(`/data/v1/rivers/${cur.reaches.file}`);
+    const downloadPath = cur === undefined ? undefined : `/downloads/${cur.download.file}`;
+    const stationIds =
+      stationsRead.data === undefined ? undefined : new Set(stationsRead.data.stations.map((st) => st.id));
+    const entry = entryScript(
+      await tryGet(`https://${domain}/`, net).then((p) => (typeof p === 'string' ? '' : p.body)),
+    );
+    results.push(
+      checkRiversManifest(rivers),
+      checkRiversTiles(
+        rivers.manifest,
+        cur === undefined ? undefined : await tile(`/tiles/${cur.tiles.file}`, TILE_HEADERS),
+      ),
+      checkRiversReaches(rivers.manifest, reachesPage, stationIds),
+      checkRiversDownload(
+        rivers.manifest,
+        downloadPath === undefined
+          ? undefined
+          : await tryGet(`https://${domain}${downloadPath}`, net, RIVERS_DOWNLOAD_HEADERS, 'HEAD'),
+        downloadPath === undefined
+          ? undefined
+          : await tile(downloadPath, { ...RIVERS_DOWNLOAD_HEADERS, range: RIVERS_DOWNLOAD_RANGE }),
+      ),
+      checkRiversAttribution(entry === undefined ? undefined : await tile(entry)),
+    );
+
     const body = (page: Page | string | undefined) => (typeof page === 'object' ? page.body : '');
     results.push(
       checkOwnerLeak(
@@ -1421,6 +1628,8 @@ async function main(argv: string[]): Promise<number> {
           [HEALTH_PATHS[1]]: body(sourcesPage),
           '/api/v1/meta': body(metaPage),
           '/api/v1/stations': body(stationsPage),
+          [RIVERS_MANIFEST_PATH]: body(riversPage),
+          '/data/v1/rivers/reaches': body(reachesPage),
           ...Object.fromEntries(
             SNAPSHOT_ASKS.map((ask) => [`/api/v1/snapshot ${ask.name}`, body(snapPages[ask.name])]),
           ),

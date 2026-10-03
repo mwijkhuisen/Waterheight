@@ -58,10 +58,14 @@ services:
     # serve any file it can read) and the tiles directory, which only
     # basemap-promote writes (no network; it moves only checked regular files
     # into it, so there is no link for Caddy to follow; the networked `basemap`
-    # job gets only its .staging subdirectory; T-WEB-1).
+    # job gets only its .staging subdirectory; T-WEB-1) and (P6b) the two river
+    # directories that only rws-rivers-refresh writes, as root, from a verified
+    # signed release. Never all of /srv/rws/public: that holds capture's status.
     volumes:
       - /srv/rws/public/ops:/srv/rws/public/ops:ro
       - /srv/rws/tiles:/srv/rws/tiles:ro
+      - /srv/rws/public/data/v1/rivers:/srv/rws/public/data/v1/rivers:ro
+      - /srv/rws/public/downloads:/srv/rws/public/downloads:ro
       - caddy_data:/data
       - caddy_config:/config
     networks: [public, edge]

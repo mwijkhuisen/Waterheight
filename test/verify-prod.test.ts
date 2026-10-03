@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { Counters } from '../apps/server/src/capture/runner.ts';
@@ -14,6 +15,8 @@ import {
   Health,
   HealthSources,
   Meta,
+  type ReachesFile,
+  type RiversManifest,
   Snapshot,
   Stations,
   validateBasemap,
@@ -50,6 +53,11 @@ import {
   checkOwnerSources,
   checkOwnerStations,
   checkReplay,
+  checkRiversAttribution,
+  checkRiversDownload,
+  checkRiversManifest,
+  checkRiversReaches,
+  checkRiversTiles,
   checkSnapshot,
   checkSourceHealth,
   checkStations,
@@ -63,6 +71,7 @@ import {
   DE7_BYTES_MAX,
   DE7_INTERVAL_MIN_S,
   DE7_SPEC,
+  entryScript,
   expectedHeaders,
   FRESH_MAX_AGE_BY_SOURCE,
   FRESH_MAX_AGE_S,
@@ -88,7 +97,9 @@ import {
   PARAM_CASES,
   type Page,
   PMTILES_MAGIC,
+  RIVERS_DOWNLOAD_RANGE,
   readApi,
+  readRiversManifest,
   readSnapshot,
   readTilesManifest,
   SNAPSHOT_ASKS,
@@ -392,6 +403,11 @@ describe('freshness, soak and capacity', () => {
       'tiles previous',
       'tiles 404',
       'map assets',
+      'rivers manifest',
+      'rivers tiles',
+      'rivers reaches',
+      'rivers download',
+      'rivers attribution',
       ...TWIN_IDS.map((id) => `twin ${id}`),
     ])
       expect(r.stdout, name).toMatch(new RegExp(`^${name}:`, 'm'));
@@ -2713,7 +2729,13 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       at('\thandle @api_other {'),
       at('\thandle @tiles_manifest {'),
       at('\thandle @tiles_files {'),
+      at('\thandle @tiles_rivers {'),
       at('\thandle @tiles {'),
+      at('\thandle @rivers_manifest {'),
+      at('\thandle @rivers_reaches {'),
+      at('\thandle @rivers_other {'),
+      at('\thandle @rivers_download {'),
+      at('\thandle @downloads_other {'),
       at('\thandle @dotfiles {'),
       at('\thandle @assets {'),
       at('\thandle @assets_miss {'),
@@ -2741,6 +2763,104 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       expect(dot.test(path), path).toBe(true);
     for (const path of ['/', '/index.html', '/en/', '/assets/main-Bj_Syg2T.js', MAP_ASSET_PATH, '/assets/x.y.js'])
       expect(dot.test(decodeURIComponent(path)), path).toBe(false);
+  });
+
+  it('keeps the rivers routes (P6b) exact, immutable where dated, and every other path under them a 404', () => {
+    // A separate matcher: P3's regex stays as it was (the test above), the same rules for the river tiles.
+    const riversExpr = /expression `\{path\}\.matches\('(.+)'\)`/.exec(block('@tiles_rivers'))?.[1];
+    expect(riversExpr).toBe('^/tiles/rivers-[0-9]{8}\\\\.pmtiles$');
+    expect(rules('handle @tiles_rivers')).toEqual([
+      'handle @tiles_rivers {',
+      `@one_range_rivers expression \`${ONE_RANGE}\``,
+      'handle @one_range_rivers {',
+      IMMUTABLE,
+      'uri strip_prefix /tiles',
+      'root * /srv/rws/public/data/v1/rivers',
+      'file_server',
+      '}',
+      'handle {',
+      'respond 416',
+      '}',
+    ]);
+    expect(lines(block('@tiles_rivers'))).toEqual(
+      expect.arrayContaining([
+        'method GET HEAD',
+        'root /srv/rws/public/data/v1/rivers',
+        'try_files /{http.request.uri.path.file}',
+      ]),
+    );
+    expect(rules('handle @rivers_manifest')).toEqual([
+      'handle @rivers_manifest {',
+      `header Cache-Control "${MANIFEST_CACHE}"`,
+      'uri strip_prefix /data/v1/rivers',
+      'root * /srv/rws/public/data/v1/rivers',
+      'file_server',
+    ]);
+    expect(lines(block('@rivers_manifest'))).toEqual(
+      expect.arrayContaining([
+        'method GET HEAD',
+        "expression `{path} == '/data/v1/rivers/manifest.json'`",
+        'try_files /manifest.json',
+      ]),
+    );
+    expect(rules('handle @rivers_reaches')).toEqual([
+      'handle @rivers_reaches {',
+      IMMUTABLE,
+      'uri strip_prefix /data/v1/rivers',
+      'root * /srv/rws/public/data/v1/rivers',
+      'file_server',
+    ]);
+    // The download is gzip data: its own Content-Type and no Content-Encoding anywhere (encode skips application/gzip).
+    expect(rules('handle @rivers_download')).toEqual([
+      'handle @rivers_download {',
+      IMMUTABLE,
+      'header Content-Type "application/gzip"',
+      'uri strip_prefix /downloads',
+      'root * /srv/rws/public/downloads',
+      'file_server',
+    ]);
+    expect(
+      site
+        .split('\n')
+        .filter((l) => !l.trim().startsWith('#'))
+        .join('\n'),
+    ).not.toMatch(/Content-Encoding/i);
+    expect(site).toContain('\n\t@rivers_other path_regexp ^/data/v1/rivers(/|$)\n');
+    expect(rules('handle @rivers_other')).toEqual(['handle @rivers_other {', 'respond 404']);
+    expect(site).toContain('\n\t@downloads_other path_regexp ^/downloads(/|$)\n');
+    expect(rules('handle @downloads_other')).toEqual(['handle @downloads_other {', 'respond 404']);
+    // Nothing else of /data/v1 is claimed (P9 owns it), and no route mounts all of /srv/rws/public.
+    const code = site
+      .split('\n')
+      .filter((l) => !l.trim().startsWith('#'))
+      .join('\n');
+    expect(code).not.toMatch(/\/data\/v1\/(?!rivers)/);
+    expect(code).not.toMatch(/root \* \/srv\/rws\/public\s*$/m);
+    const reaches = new RegExp(
+      /expression `\{path\}\.matches\('(\^\/data\/v1\/rivers\/reaches-.+)'\)`/
+        .exec(block('@rivers_reaches'))?.[1]
+        ?.replaceAll('\\\\', '\\') ?? '(?!)',
+    );
+    const dl = new RegExp(
+      /expression `\{path\}\.matches\('(\^\/downloads\/.+)'\)`/
+        .exec(block('@rivers_download'))?.[1]
+        ?.replaceAll('\\\\', '\\') ?? '(?!)',
+    );
+    expect(reaches.test('/data/v1/rivers/reaches-20261101.json')).toBe(true);
+    for (const bad of [
+      '/data/v1/rivers/reaches-2026110.json',
+      '/data/v1/rivers/Reaches-20261101.json',
+      '/data/v1/rivers/reaches-20261101.json.gz',
+      '/data/v1/rivers/../x',
+    ])
+      expect(reaches.test(bad), bad).toBe(false);
+    expect(dl.test('/downloads/rivers-20261101.geojson.gz')).toBe(true);
+    for (const bad of [
+      '/downloads/rivers-20261101.geojson',
+      '/downloads/rivers-20261101xgeojson.gz',
+      '/downloads/x.gz',
+    ])
+      expect(dl.test(bad), bad).toBe(false);
   });
 
   it('keeps encode off the tile files: one encode, scoped by a matcher that excludes /tiles/*', () => {
@@ -2806,11 +2926,238 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
 
   it('has exactly the cache classes no-store, max-age=60, immutable (tile files, assets), no-cache (pages), no browse', () => {
     const cache = [...site.matchAll(/^\s+header Cache-Control "(.*)"$/gm)].map((m) => m[1]);
-    expect(cache).toEqual(['no-store', 'no-store', MANIFEST_CACHE, TILE_CACHE, TILE_CACHE, 'no-cache']);
+    // In file order: the status files, the tiles manifest, the basemap tiles, (P6b) the river tiles, the rivers
+    // manifest, the reaches file and the download, then the assets and the pages.
+    expect(cache).toEqual([
+      'no-store',
+      'no-store',
+      MANIFEST_CACHE,
+      TILE_CACHE,
+      TILE_CACHE,
+      MANIFEST_CACHE,
+      TILE_CACHE,
+      TILE_CACHE,
+      TILE_CACHE,
+      'no-cache',
+    ]);
     const directives = site.split('\n').filter((l) => !l.trim().startsWith('#'));
     expect(directives.join('\n')).not.toMatch(/\bbrowse\b/);
     // The file servers' roots: the status copy, the tiles and the site; never the parent /srv/rws.
     const roots = [...site.matchAll(/^\s+root \* (\S+)$/gm)].map((m) => m[1]);
-    expect(new Set(roots)).toEqual(new Set(['/srv/rws/public/ops', '/srv/rws/tiles', '/srv/www']));
+    expect(new Set(roots)).toEqual(
+      new Set([
+        '/srv/rws/public/ops',
+        '/srv/rws/tiles',
+        '/srv/rws/public/data/v1/rivers',
+        '/srv/rws/public/downloads',
+        '/srv/www',
+      ]),
+    );
+  });
+});
+
+// The rivers (P6b): the pure checks on synthetic answers.
+
+const RV = '20261101';
+const riversEntry = (file: string, bytes: number) => ({ file, sha256: SHA, bytes });
+const riversManifestDoc = (previous = false): RiversManifest => {
+  const rel = (v: string) => ({
+    version: v,
+    tag: 'geo-2026-11-01',
+    installed_at: '2026-11-05T05:40:12Z',
+    tiles: riversEntry(`rivers-${v}.pmtiles`, 6000),
+    reaches: riversEntry(`reaches-${v}.json`, 900),
+    download: riversEntry(`rivers-${v}.geojson.gz`, 120),
+  });
+  return { schema_version: 1, current: rel(RV), previous: previous ? rel('20261001') : null };
+};
+const jsonPage = (doc: unknown, cache: string, over: Partial<Page> = {}): Page => ({
+  status: 200,
+  headers: { 'content-type': 'application/json', 'cache-control': cache },
+  body: typeof doc === 'string' ? doc : JSON.stringify(doc),
+  ...over,
+});
+const reachesDoc = (over: Partial<ReachesFile> = {}): ReachesFile => ({
+  schema_version: 1,
+  version: RV,
+  attribution: '\u00a9 OpenStreetMap contributors',
+  attribution_url: 'https://www.openstreetmap.org/copyright',
+  licence: 'ODbL-1.0',
+  licence_url: 'https://opendatacommons.org/licenses/odbl/1-0/',
+  licence_note: 'The river network is derived from OpenStreetMap.',
+  osm_replication_timestamp: '2026-10-01T20:22:06Z',
+  rivers: [{ id: 'rhine', name_nl: 'Rijn', name_en: 'Rhine', parent_river_id: null, km_direction: 'downstream' }],
+  nl_entry_nodes: [],
+  reaches: [],
+  stations: [
+    {
+      id: 'nl.rws.lobith',
+      river_id: 'rhine',
+      reach_id: null,
+      km_official: null,
+      km_official_system: null,
+      km_graph: null,
+      km_to_nl_entry: null,
+      nl_entry_node: null,
+    },
+  ],
+  travel_times: [],
+  ...over,
+});
+const riversTilesPage = (over: Partial<Page> = {}): Page => ({
+  status: 206,
+  headers: { 'content-range': 'bytes 0-15/6000', 'cache-control': TILE_CACHE },
+  body: `${PMTILES_MAGIC}${'\u0000'.repeat(8)}`,
+  ...over,
+});
+const gz = (text: string): Buffer => gzipSync(Buffer.from(text));
+const downloadHead = (over: Partial<Page> = {}): Page => ({
+  status: 200,
+  headers: { 'content-type': 'application/gzip', 'cache-control': TILE_CACHE, 'content-length': '120' },
+  body: '',
+  ...over,
+});
+const downloadPart = (text: string, over: Partial<Page> = {}): Page => {
+  const bytes = gz(text);
+  return { status: 206, headers: { 'content-type': 'application/gzip' }, body: '', bytes, ...over };
+};
+const GEOJSON_HEAD =
+  '{"type":"FeatureCollection","attribution":"\u00a9 OpenStreetMap contributors","licence":"ODbL-1.0","features":[]}';
+
+describe('verify-prod: the rivers (P6b)', () => {
+  const m = riversManifestDoc();
+
+  it('the manifest passes on 200, exactly max-age=60 and the strict contract; else it names the problem', () => {
+    const ok = readRiversManifest(jsonPage(m, MANIFEST_CACHE));
+    expect(checkRiversManifest(ok)).toEqual({
+      check: 'rivers manifest',
+      ok: true,
+      detail: `200, ${MANIFEST_CACHE}, current ${RV} (geo-2026-11-01), previous none`,
+    });
+    expect(checkRiversManifest(readRiversManifest(jsonPage(riversManifestDoc(true), MANIFEST_CACHE))).detail).toMatch(
+      /previous 20261001$/,
+    );
+    const stale = readRiversManifest(jsonPage(m, TILE_CACHE));
+    expect(stale.manifest).toBeDefined();
+    expect(checkRiversManifest(stale)).toMatchObject({
+      ok: false,
+      detail: `cache-control ${JSON.stringify(TILE_CACHE)}`,
+    });
+    expect(checkRiversManifest(readRiversManifest(jsonPage({ ...m, extra: 1 }, MANIFEST_CACHE))).ok).toBe(false);
+    expect(
+      checkRiversManifest(
+        readRiversManifest(jsonPage({ ...m, current: { ...m.current, version: '20260101' } }, MANIFEST_CACHE)),
+      ).ok,
+    ).toBe(false);
+    expect(checkRiversManifest(readRiversManifest(jsonPage('', MANIFEST_CACHE, { status: 404 }))).ok).toBe(false);
+    expect(checkRiversManifest(readRiversManifest('ECONNRESET'))).toEqual({
+      check: 'rivers manifest',
+      ok: false,
+      detail: 'ECONNRESET',
+    });
+  });
+
+  it('the overlay: 206, Content-Range with the manifest bytes, immutable, no Content-Encoding, PMTiles v3', () => {
+    expect(checkRiversTiles(m, riversTilesPage())).toMatchObject({ check: 'rivers tiles', ok: true });
+    for (const over of [
+      { status: 200 },
+      { headers: { 'content-range': 'bytes 0-15/7', 'cache-control': TILE_CACHE } },
+      { headers: { 'content-range': 'bytes 0-15/6000', 'cache-control': MANIFEST_CACHE } },
+      { headers: { 'content-range': 'bytes 0-15/6000', 'cache-control': TILE_CACHE, 'content-encoding': 'gzip' } },
+      { body: 'NotTiles\u0003' },
+    ])
+      expect(checkRiversTiles(m, riversTilesPage(over)).ok, JSON.stringify(over)).toBe(false);
+    expect(checkRiversTiles(undefined, riversTilesPage()).detail).toBe('no valid manifest');
+    expect(checkRiversTiles(m, 'timeout').detail).toBe('timeout');
+  });
+
+  it('the reaches file: contract, consistency, version and every station public', () => {
+    const ids = new Set(['nl.rws.lobith', 'de.wsv.x']);
+    expect(checkRiversReaches(m, jsonPage(reachesDoc(), TILE_CACHE), ids)).toMatchObject({ ok: true });
+    expect(checkRiversReaches(m, jsonPage(reachesDoc(), MANIFEST_CACHE), ids).ok).toBe(false);
+    expect(checkRiversReaches(m, jsonPage(reachesDoc({ version: '20261001' }), TILE_CACHE), ids).detail).toContain(
+      'the manifest says',
+    );
+    expect(checkRiversReaches(m, jsonPage(reachesDoc(), TILE_CACHE), new Set(['de.wsv.x'])).detail).toBe(
+      '1 of 1 stations are not in /api/v1/stations',
+    );
+    expect(checkRiversReaches(m, jsonPage(reachesDoc(), TILE_CACHE), undefined).ok).toBe(false);
+    const dangling = reachesDoc({ stations: [{ ...reachesDoc().stations[0], river_id: 'nope' } as never] });
+    expect(checkRiversReaches(m, jsonPage(dangling, TILE_CACHE), ids).detail).toMatch(/1 inconsistencies/);
+    expect(checkRiversReaches(m, jsonPage({ ...reachesDoc(), x: 1 }, TILE_CACHE), ids).detail).toMatch(
+      /not the contract document/,
+    );
+    expect(checkRiversReaches(undefined, jsonPage(reachesDoc(), TILE_CACHE), ids).detail).toBe('no valid manifest');
+    expect(checkRiversReaches(m, undefined, ids).ok).toBe(false);
+  });
+
+  it('the download: gzip data without a transfer coding, immutable, attribution and licence before "features"', () => {
+    const range = downloadPart(GEOJSON_HEAD);
+    expect(checkRiversDownload(m, downloadHead(), range)).toMatchObject({ check: 'rivers download', ok: true });
+    expect(RIVERS_DOWNLOAD_RANGE).toBe('bytes=0-65535');
+    const heads: Partial<Page>[] = [
+      { headers: { 'content-type': 'application/octet-stream', 'cache-control': TILE_CACHE, 'content-length': '120' } },
+      {
+        headers: {
+          'content-type': 'application/gzip',
+          'cache-control': TILE_CACHE,
+          'content-length': '120',
+          'content-encoding': 'gzip',
+        },
+      },
+      { headers: { 'content-type': 'application/gzip', 'cache-control': MANIFEST_CACHE, 'content-length': '120' } },
+      { headers: { 'content-type': 'application/gzip', 'cache-control': TILE_CACHE, 'content-length': '5' } },
+      { status: 404 },
+    ];
+    for (const over of heads)
+      expect(checkRiversDownload(m, downloadHead(over), range).ok, JSON.stringify(over)).toBe(false);
+    // The text of the start: attribution and licence must precede "features", and the stream may be cut off.
+    const late =
+      '{"type":"FeatureCollection","features":[],"attribution":"\u00a9 OpenStreetMap contributors","licence":"ODbL-1.0"}';
+    expect(checkRiversDownload(m, downloadHead(), downloadPart(late)).detail).toContain('before "features"');
+    expect(checkRiversDownload(m, downloadHead(), downloadPart('{"features":[]}')).ok).toBe(false);
+    expect(
+      checkRiversDownload(m, downloadHead(), downloadPart(GEOJSON_HEAD.replace('ODbL-1.0', 'CC0-1.0'))).detail,
+    ).toBe('no licence ODbL-1.0 before "features"');
+    const long = gz(`${GEOJSON_HEAD.slice(0, -2)}${',{"type":"Feature"}'.repeat(5000)}]}`);
+    const cut = long.subarray(0, Math.floor(long.length / 2));
+    expect(checkRiversDownload(m, downloadHead(), { ...range, bytes: cut })).toMatchObject({ ok: true });
+    expect(checkRiversDownload(m, downloadHead(), { ...range, bytes: Buffer.from('not gzip') }).detail).toBe(
+      'the first bytes do not inflate as gzip',
+    );
+    expect(checkRiversDownload(m, downloadHead(), { ...range, headers: { 'content-encoding': 'gzip' } }).ok).toBe(
+      false,
+    );
+    expect(checkRiversDownload(m, 'timeout', range).detail).toBe('HEAD: timeout');
+    expect(checkRiversDownload(m, downloadHead(), undefined).ok).toBe(false);
+    expect(checkRiversDownload(undefined, downloadHead(), range).detail).toBe('no valid manifest');
+  });
+
+  it('the attribution: the entry script of the page names the ODbL', () => {
+    expect(entryScript('<html><script type="module" crossorigin src="/assets/index-AbC123.js"></script>')).toBe(
+      '/assets/index-AbC123.js',
+    );
+    expect(entryScript('<html><link rel="modulepreload" href="/assets/x.js">')).toBeUndefined();
+    const js = (body: string, status = 200): Page => ({ status, headers: {}, body });
+    expect(checkRiversAttribution(js('a "ODbL 1.0" b'))).toMatchObject({ check: 'rivers attribution', ok: true });
+    expect(checkRiversAttribution(js('nothing')).ok).toBe(false);
+    expect(checkRiversAttribution(js('ODbL', 404)).ok).toBe(false);
+    expect(checkRiversAttribution(undefined).ok).toBe(false);
+    expect(checkRiversAttribution('timeout').detail).toBe('timeout');
+  });
+
+  it('the rivers bodies are in the owner leak check: a canary in the reaches file fails it', () => {
+    const terms = leakTerms(loadRegistry());
+    const body = JSON.stringify(reachesDoc());
+    expect(checkOwnerLeak({ '/data/v1/rivers/reaches': body }, terms).ok).toBe(true);
+    expect(checkOwnerLeak({ '/data/v1/rivers/reaches': body.replace('Rhine', OWNER_CANARY) }, terms).ok).toBe(false);
+  });
+
+  it('the --dry-run list names the five checks once each', () => {
+    for (const name of ['rivers manifest', 'rivers tiles', 'rivers reaches', 'rivers download', 'rivers attribution'])
+      expect(
+        CHECKS.filter((c) => c.startsWith(`${name}:`)),
+        name,
+      ).toHaveLength(1);
   });
 });
