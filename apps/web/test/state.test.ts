@@ -29,6 +29,9 @@ describe('state text', () => {
 
   it('height: NAP, an unverified zero, or nothing', () => {
     expect(heightText({ nap: { m: 1.234, pm: 0.05 } }, 'en')).toBe('≈ 1.23 m NAP (± 5 cm)');
+    // An exact zero (a level in its own datum) or one that rounds to 0 cm shows no "± 0 cm".
+    expect(heightText({ nap: { m: 1.234, pm: 0 } }, 'nl')).toBe('≈ 1,23 m NAP');
+    expect(heightText({ nap: { m: 1.234, pm: 0.004 } }, 'en')).toBe('≈ 1.23 m NAP');
     expect(heightText({ zero: { m: 12.5, datum: 'IGN69' } }, 'nl')).toBe(
       "peilnul: 12,5 m IGN69 (Hub'Eau-metadata, niet geverifieerd)",
     );

@@ -95,5 +95,6 @@
   "panel_area": "Area class",
   "panel_height": "Height",
   "height_nap": "≈ {m} m NAP (± {pm} cm)",
+  "height_nap_exact": "≈ {m} m NAP",
   "height_zero": "gauge zero: {m} m {datum} (Hub'Eau metadata, unverified)"
 }

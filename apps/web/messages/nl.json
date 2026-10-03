@@ -95,5 +95,6 @@
   "panel_area": "Gebiedsklasse",
   "panel_height": "Hoogte",
   "height_nap": "≈ {m} m NAP (± {pm} cm)",
+  "height_nap_exact": "≈ {m} m NAP",
   "height_zero": "peilnul: {m} m {datum} (Hub'Eau-metadata, niet geverifieerd)"
 }

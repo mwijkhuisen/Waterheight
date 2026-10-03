@@ -16,7 +16,7 @@ const NOW = new Date('2026-10-26T12:00:00Z');
 const RAW_NAME = '<img src=x onerror=alert(1)>';
 const RAW_WATER = '<svg onload=alert(2)>';
 /** The label of the xss station's NL-4 class (its own payload, so the name and water sweeps stay exact). */
-const RAW_BASIS = 'RWS Waterinfo: Licht verhoogd (<img src=y onerror=alert(3)>)';
+const RAW_BASIS = 'Licht verhoogd (<img src=y onerror=alert(3)>)';
 /** The few MapLibre and ECharts calls the tests make inside the page (the e2e build's `window.__rws`). */
 interface HookMap {
   getFeatureState(f: { source: string; id: string }): Record<string, unknown>;

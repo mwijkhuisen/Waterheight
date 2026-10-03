@@ -104,8 +104,7 @@ export function StationPanel({ locale, station, values, t, dataEpoch, chartSpan,
                     <>
                       <dt>{m.panel_area({}, { locale })}</dt>
                       <dd>
-                        {stateWord(value.area.state, locale)}: {basisKind(value.area.basis, locale)},{' '}
-                        {value.area.basis.label}
+                        {stateWord(value.area.state, locale)}: {value.area.basis.label}
                       </dd>
                     </>
                   )}

@@ -41,13 +41,18 @@ export function popupLine(quantity: string, value: Value, locale: Locale): strin
   return parts.join(', ');
 }
 
-/** The detail-view height (D16): "≈ x.xx m NAP (± y cm)", or an unverified gauge zero; null when neither. */
+/**
+ * The detail-view height (D16): "≈ x.xx m NAP (± y cm)", without the "± 0 cm" of an exact zero, or an unverified
+ * gauge zero; null when neither.
+ */
 export function heightText(value: Pick<Value, 'nap' | 'zero'>, locale: Locale): string | null {
-  if (value.nap !== undefined)
-    return m.height_nap(
-      { m: formatNumber(value.nap.m, locale), pm: formatNumber(Math.round(value.nap.pm * 100), locale) },
-      { locale },
-    );
+  if (value.nap !== undefined) {
+    const at = formatNumber(value.nap.m, locale);
+    const pm = Math.round(value.nap.pm * 100);
+    return pm === 0
+      ? m.height_nap_exact({ m: at }, { locale })
+      : m.height_nap({ m: at, pm: formatNumber(pm, locale) }, { locale });
+  }
   if (value.zero !== undefined)
     return m.height_zero({ m: formatNumber(value.zero.m, locale), datum: value.zero.datum }, { locale });
   return null;
