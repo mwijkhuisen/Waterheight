@@ -71,7 +71,7 @@ const SPECS: Spec[] = [
   },
   { why: 'Stah: Info levels 200/245/265, value under MNW 31', build: () => de7Case('de.lanuk.2829100000100') },
   {
-    why: 'Pannenmuehle: no Info levels, only MNW/MW/MHW: above MNW nothing decides, no_ref',
+    why: 'Pannenmuehle: no Info levels, only MNW/MW/MHW: MNW < W < MHW is normal (owner, R-090: MHW classifies)',
     build: () => de7Case('de.lanuk.2847500000100'),
   },
   // NL-1 with the NL-4 Waterinfo classes.

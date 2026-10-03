@@ -296,7 +296,9 @@ export const REFERENCE_ROLES: readonly ReferenceRole[] = [
   ref('DE-7', 'LANUV_INFO_3', '>=', 'extreme', 'operational', 'scale', 'Info 3'),
   ref('DE-7', 'LANUV_MNW', '<=', 'low', 'statistical', 'stats', 'MNW'),
   shown('DE-7', 'LANUV_MW', 'MW'),
-  shown('DE-7', 'LANUV_MHW', 'MHW', { flag: 'not in §4.9: shown, never classifies' }),
+  ref('DE-7', 'LANUV_MHW', '>=', 'elevated', 'statistical', 'stats', 'MHW', {
+    flag: 'owner decision of 2026-10-03 (R-090): as DE-1 MHW; §4.7 lists NRW MNW/MHW as statistical references',
+  }),
   // BAFU wl_1..wl_4: the lower bounds of danger levels 2–5; below WL2 is danger level 1. Discharge for a river; a
   // `masl` lake station's rows sit on its level series (the state's basis follows the series).
   ref('CH-2', 'WL2', '>=', 'elevated', 'operational', 'scale', 'WL2', {}, 'discharge'),
@@ -344,10 +346,11 @@ export const REFERENCE_ROLES: readonly ReferenceRole[] = [
   ref('DE-9', 'MELDESTUFE_1', '>=', 'elevated', 'operational', 'scale', 'Meldestufe 1', GATED),
   ref('DE-9', 'MELDESTUFE_2', '>=', 'high', 'operational', 'scale', 'Meldestufe 2', GATED),
   ref('DE-9', 'MELDESTUFE_3', '>=', 'extreme', 'operational', 'scale', 'Meldestufe 3', GATED),
-  ref('DE-10', 'MW', '<', 'low', 'statistical', 'stats', 'MW', {
+  ref('DE-10', 'MNW', '<=', 'low', 'statistical', 'stats', 'MNW', {
     ...GATED,
-    flag: '§4.9: "< Mittelwasser" and "< mittleres Niedrigwasser" are low; the higher bound (MW) decides',
+    flag: 'owner decision of 2026-10-03 (R-090): "< mittleres Niedrigwasser" is low, as DE-1 and DE-7; MNW..MW is normal',
   }),
+  shown('DE-10', 'MW', 'MW', { ...GATED, flag: '"< Mittelwasser" of the RLP legend: normal, not low (R-090)' }),
   ref('DE-10', 'HW2', '>=', 'elevated', 'statistical', 'stats', 'HW2', GATED),
   ref('DE-10', 'HW10', '>=', 'high', 'statistical', 'stats', 'HW10', GATED),
   ref('DE-10', 'HW20', '>=', 'extreme', 'statistical', 'stats', 'HW20', GATED),

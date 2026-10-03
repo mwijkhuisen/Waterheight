@@ -402,8 +402,14 @@
   "source": "DE-7",
   "t": "2026-09-29T13:30:00.000Z",
   "value": 32.3,
-  "state": "no_ref",
-  "basis": null,
+  "state": "normal",
+  "basis": {
+   "source": "DE-7",
+   "kind": "statistical",
+   "measure": "stage",
+   "ref": "LANUV_MNW/LANUV_MHW",
+   "label": "LANUK MNW/MHW"
+  },
   "section": false,
   "area": null,
   "flags": {

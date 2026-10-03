@@ -14,7 +14,7 @@ Every value gets one state on the scale `no_ref < low < normal < elevated < high
 - **Tidal** reaches (D12) are classed from operational candidates only. **Impounded** stage series skip the statistical low bounds.
 - **Units:** a reference counts only in cm (H) or m³/s (Q).
 - **Per audience:** the public run never uses an owner-view row, even if one is handed in.
-- **Labels:** a basis label is the agency and its reference or class (`WSV MNW 2010–2020`, `LHP RP:0`), the NL-4 workbook label as published (`Licht verhoogd (>200cm)`; the source names RWS Waterinfo and the page adds the legend's disclaimer) or the agency and the area's name. Provider text is inert, and a label is cut at 700 characters, a ref at 200.
+- **Labels:** a basis label is the agency and its reference or class (`WSV MNW 2010–2020`, `LHP RP:0`), the NL-4 workbook label as published (`Licht verhoogd (>200cm)`; the source names RWS Waterinfo and the page adds the legend's disclaimer) or the agency and the area's name. Provider text is inert, and a label is cut at 700 UTF-16 code units, a ref at 200 (never inside a surrogate pair).
 - **Coverage report (D10):** per country, the tier-1 stations with a state other than `no_ref` (`classed`), of them those classed only through an area (`by_section`), and the first-release stations whose state comes from a source that needs no permission. The default map mode is `state` when (classed − by_section) / stations is at least 0.6, else `dh`: Vigicrues green and LU-Alert information exist at all times and do not count. In the owner report an LU-4 or BE-3 basis counts as a source that needs no permission (personal-use terms, catalogue §0.8); the public report never sees them.
 - **Freshness:** for the current bucket a class or area counts only while its source's last successful fetch is recent: DE-6 45 min, CH-1 45 min, FR-5 45 min, LU-5 45 min, CH-5 90 min. An earlier `t` uses the stored rows.
 - **Boundaries:** ≥ is reached at the threshold, ≤ is low at the bound, < is strictly below. NL-4 classes hold [From, To), and the lowest Priority wins where bands overlap.
@@ -129,7 +129,7 @@ Area scales: DE-6 alert, FR-5 section, CH-5 section, LU-5 zone, DE-10 region.
 | DE-7 | LANUV_INFO_3 | ≥ → extreme | stage | operational | scale | public |  |
 | DE-7 | LANUV_MNW | ≤ → low | stage | statistical | stats | public |  |
 | DE-7 | LANUV_MW | shown, never classifies | stage |  |  | public |  |
-| DE-7 | LANUV_MHW | shown, never classifies | stage |  |  | public | not in §4.9: shown, never classifies |
+| DE-7 | LANUV_MHW | ≥ → elevated | stage | statistical | stats | public | owner decision of 2026-10-03 (R-090): as DE-1 MHW; §4.7 lists NRW MNW/MHW as statistical references |
 | CH-2 | WL2 | ≥ → elevated | discharge | operational | scale | public |  |
 | CH-2 | WL3 | ≥ → high | discharge | operational | scale | public |  |
 | CH-2 | WL4 | ≥ → extreme | discharge | operational | scale | public |  |
@@ -155,7 +155,8 @@ Area scales: DE-6 alert, FR-5 section, CH-5 section, LU-5 zone, DE-10 region.
 | DE-9 | MELDESTUFE_1 | ≥ → elevated | stage | operational | scale | gated (P13) |  |
 | DE-9 | MELDESTUFE_2 | ≥ → high | stage | operational | scale | gated (P13) |  |
 | DE-9 | MELDESTUFE_3 | ≥ → extreme | stage | operational | scale | gated (P13) |  |
-| DE-10 | MW | < → low | stage | statistical | stats | gated (P13) | §4.9: "< Mittelwasser" and "< mittleres Niedrigwasser" are low; the higher bound (MW) decides |
+| DE-10 | MNW | ≤ → low | stage | statistical | stats | gated (P13) | owner decision of 2026-10-03 (R-090): "< mittleres Niedrigwasser" is low, as DE-1 and DE-7; MNW..MW is normal |
+| DE-10 | MW | shown, never classifies | stage |  |  | gated (P13) | "< Mittelwasser" of the RLP legend: normal, not low (R-090) |
 | DE-10 | HW2 | ≥ → elevated | stage | statistical | stats | gated (P13) |  |
 | DE-10 | HW10 | ≥ → high | stage | statistical | stats | gated (P13) |  |
 | DE-10 | HW20 | ≥ → extreme | stage | statistical | stats | gated (P13) |  |
