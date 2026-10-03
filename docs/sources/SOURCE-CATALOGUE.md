@@ -607,6 +607,7 @@ Gap filler (hourly and after any outage): `GET …/stations/{uuid}/{W|Q}/measure
   - They exist **for W only**. There is no MQ, MNQ or MHQ.
   - Coverage across 737 W series: MW 383, MNW 376, MHW 375, HHW 325, HSW 127.
   - None exist for the RWS mirrors, the tidal Ems, Mannheim-Neckar or Hattingen.
+  - (P7a, 2026-10-03: the shortnames `NW` ("Niedrigster Tageswasserstand") and `HW` ("Höchster Momentanwasserstand") also occur, with a period and an occurrence date, for example Kaub NW 25 (2010-11-01..2020-10-31, 2018-10-22) and HW 719 (2013-06-05); they are the lowest and highest value of the period, not NNW and HHW (C22). In the recorded metadata 572 characteristic values on 198 W series are stored as references; `TuGLW` is a fairway depth, not a level, and is not stored. Five values carry a `validFrom` in the year 0007, stored without a start. Partial occurrence dates ("1953-04", "2002") are kept verbatim in the basis label.)
 - **`stateMnwMhw`** is `low` (W ≤ MNW), `normal` or `high` (W ≥ MHW), and can also be `unknown`, `commented` or `out-dated`. Across 737 series: unknown 356, normal 219, low 156, out-dated 3, commented 3. `stateNswHsw` is `unknown` for 605. **Q has no state fields.**
 - **Comments** explain gaps. Examples: Emmerich Q *"Abflussermittlung unter W = -1cm aktuell nicht möglich"*; Heidelberg UP Q *"…unter W=221cm nicht möglich"*; Rheinweiler Q *"Abflusswerte im niedrigen Bereich nicht plausibel"*; Mehring AMS W *"Techn. Störung"*.
 - Per series: `GET …/stations/{uuid}/W.json?includeCurrentMeasurement=true&includeCharacteristicValues=true`. For Emmerich this gave gaugeZero 7.998 m ü. NHN (validFrom 2019-11-01), NNW −1 cm (2022-08-18), MNW 51, MW 239, MHW 669, HSW 870, HHW 986 (1926-01-03).
@@ -753,6 +754,11 @@ GET https://api.hochwasserzentralen.de/public/v1/data/stations?format=json&state
   - The ETag changes whenever `updated` ticks (about every minute); `If-None-Match` with the current ETag returns 304 [V gap check]. Earlier note "changes every call" was too strong.
   - Saarland features have `stationLink: null`.
   - The frontend endpoints `/webservices/get_lagepegel.php` and `get_lagepegel_archiv.php` returned empty bodies; do not use them.
+- (P7a, 2026-10-03, from the recorded payloads and the owner's export:)
+  - **Perl is `26100102` in the LHP**, not `26100100` as in PEGELONLINE, so the numeric rule alone does not find it; the duplicate rule needs a curated alias. No recording holds a second Saarland Perl entry with class −1 (the text above says one): the committed Perl case is a synthetic fixture.
+  - **Bavaria numbers its Main gauges apart** from the Hessian service (Kleinheubach `BY_24064003`, Obernau `BY_24070006`). The Hessian Kleinheubach is 625 m from the Bavarian one and is not grouped; Obernau is operated by Bavaria. **Kalkofen neu** (Lahn) is listed by HE and RP, a duplicate this section does not name; the class is taken from RP. Both choices await the D18 sign-off.
+  - **The alert legend "2" (Vorwarnung) is hatched** (`cssStyle`) and has no single colour. The alert `lhpClass` is a string in "1", "2", "4", "5", "6" (the test server holds 1, 2, 4 and 5); an alert class "3" does not exist and is dropped as unmapped.
+  - `stateClassName` can hold HTML entities (`&#60;`); it is stored verbatim and never rendered as HTML. The live stations payload held 1,588 to 1,589 features. The test server's stations (2024-01-25) hold classes 0 (1,199), 1 (32), 2 (14), 3 (1) and −1 (13), and three features have no `timestamp`.
 
 **DE-7 NRW LANUK (Hochwasserportal.NRW, KISTERS WISKI-Web)**
 - Official downloads under `https://www.hochwasserportal.nrw/data/downloads/`:
@@ -1038,6 +1044,12 @@ GET …&request=getTimeseriesValues&ts_id=240759010,250652010,245267010&period=P
 
 **History:** full-resolution series `Cmd.Rel.Abs.Comp` / `Cmd.RunOff.Comp` / `Cmd.Abs.Comp` go back to 1969–2007 depending on the station; the `…Comp-Alarmes` public series start 2019-01-01. Also `h.Mean`, `Day.Mean`, `Month.Mean`, LTV and percentiles. Examples: Visé daily Q July 2021 `["2021-07-14T23:00:00.000Z",2428.024],["2021-07-15T23:00:00.000Z",2742.985]`; Tabreux hourly Q 1980 `["1980-01-01T00:00:00.000Z",46.089,40]`; Tabreux 2021-07-15 level 3.953 m / 113.853 m DNG. The download UI caps requests at 250,000 values ("un peu plus de 2 ans… pour une station") and 365 days of high-resolution data.
 
+**References and classes (P7a, 2026-10-03: a live recon of 5 requests, owner decision; owner payloads stay in `.smoke/`)**
+- The long-term statistics are time series, not metadata: `ts_shortname` **`Cmd.POR.P05`, `P10`, `P15`, `Med`, `Mean`, `P85`, `P90`, `P95`** (POR = period of record) in a **Rel** form (m above the gauge zero) and an **Abs** form (m DNG), and **`Cmd.ReferenceFlood.Top3`**. A POR series holds one value, stamped at the start of its period (1999-01-01 local). POR exists only for `H` (301 series) and `H_sonde` (14); Top3 for `H`, `Q`, `H_sonde`, `QADM` and `Habs_sonde`. `LTV.Day` and `LTV.Month` are day-of-year and monthly climatologies (not read before P14). The recon list held only P05 and Top3 (921 series at 331 stations); the full count is checked after the first run of `be-3-refs`.
+- The percentiles are **non-exceedance**: Huy P95 1.548 m is above the mean 1.305 m.
+- **Do not use wildcards across stations:** `ts_shortname=Cmd.POR.*` over all stations timed out after 60 s, and a `ts_path` wildcard in a `getTimeseriesValues` call answers `TooManyResults` (limit 250,000 values). The list is asked with exact shortnames, then the values for at most 100 `ts_id`s per call.
+- **`NIVCRU`** (the `ca_sta` field of `getStationList`) is a text class of the form `t<n>/<state>` on 177 of 501 stations, and all of them read "Normal" today. Its meaning (a flood-warning stage per station?) is unknown, so it is stored raw with no level.
+
 **Frontend internals (do not use):** `/services/kiwcp/configs/config.json` (1.4 MB), `/services/kiwcp/data/hDayOffsetPub.json` (327 KB, about every 10 min) and `catchments.json`.
 
 **Same name, different place:** "HASTIERE" (8622) is on the Hermeton; DCENN "Dinant" (L8470) is on the Fonds de Leffe; "Stavelot", "Malmedy" and "Daverdisse" exist in both DGH and DCENN. **Key on `site_no`/`station_no`.**
@@ -1174,6 +1186,11 @@ GET https://www.vigicrues.gouv.fr/services/observations.json/index.php?CdStation
 - **Schema drift:** a 2023-12-11 archive of `InfoVigiCru.geojson` uses `LbEntCru`, `AcroEntCru`, `DhCEntCru`, `TypEnSup_1`; today's file uses `lbentcru`, `acroentcru`, `dhcentcru`, `typensup_1`. Parse keys case-insensitively and alarm on drift.
 - Coverage: Vigicrues has 263 stations in the relevant basins (A, B, D, E1–E3). All are in the Hub'Eau catalogue and 259 appeared in Hub'Eau real time. **Hub'Eau is a superset for observations.**
 - Vigicrues Chooz event text: *"Les débits inférieurs à 40 m3/s sont calculés à la station Chooz Trou du Diable"*.
+- (P7a, 2026-10-03, from the recorded payloads and the owner's export:)
+  - `CruesHistoriques` sit under **`VigilanceCrues.CruesHistoriques`** of `station.json` as `[{LbUsuel, ValHauteur (m), ValDebit}]` (`ValDebit` 0 means none), for example Charleville, Stenay and Chooz.
+  - `InfoVigiCru` property keys are lowercase today (`lbentcru`, `acroentcru`, `typensup_1`, …) and mixed case in 2023 (`LbEntCru`, `AcroEntCru`, `TypEnSup_1`, …); the **`id` is a string now and a number in 2023**, and `cdint` is null on 8 of 233 features. A parser must read one case-insensitive map of the known keys and treat any other key as drift.
+  - The Wayback copy of 2023-12-11 is cut at 1 MiB: 37 complete features survive and **the top-level `DtHrInfoVigiCru` is missing** (it came after the cut), so a fixture from it carries no issue time.
+  - The `TronEntVigiCru` documents of territories 2, 3 and 29 give 56 sections and 331 stations (393 section-station links), 233 of them with an FR-1 station id; the French Escaut, Scarpe and Deûle stay without a section.
 
 **FR-6 HydroPortail:** https://www.hydro.eaufrance.fr/ (v3.5, installed 19/05/2026). Pages `/stationhydro/B720000001/fiche` and `/sitehydro/B7200000/fiche`; export UIs `/export/donnees-hydro/station/selection` and `/export/series-hydro/selection`. Whether exports need an account is UNVERIFIED.
 
@@ -1256,6 +1273,7 @@ Esch-Sure,,m,… 314.35        (reservoir, absolute m NN)
 - Level meanings: Information (no risk), Yellow ("Soyez attentifs"), Orange (bulletins at least daily), Red (bulletins at least twice a day).
 - **Archive contents (gap check, all 833 dumps downloaded, 30 MB) [V]:** senders `[ALVA]` 565, `[Meteolux]` 157, `[CGDIS]` 72, **`[AGE]` 25**, `[Police]` 8, `LU-Alert` 5, `[Crise]` 2. The AGE messages are real flood fixtures: 2025-09-08 yellow → orange → **red** (Sud) and yellow → orange (Nord); 2025-09-09 red update, then information; 2025-09-23..25 yellow → orange → information (Sud); 2026-02-13/14 yellow → information (**Moselle**). Pitfalls: **`Cancel` messages carry no `<info>`** (only `<references>[AGE],<identifier>,<sent></references>`), and the **2026-02-02 TEST message has `<status>Actual</status>`**, `cb-eu-level` `TEST` and a headline starting "TEST". Each alert carries fr-FR, de and en-US `info` blocks and an `expires`.
 - Undocumented alternative (not recommended): `https://inondations.public.lu/ctie/lualert?sender=AGE[&status=INPROGRESS]` (`x-totalresult: 710`, history since Jan 2025; its query strings are disallowed by robots.txt).
+- (P7a, 2026-10-03, from 24 real `[AGE]` files:) the `eventCode` `valueName` is **`LU-Alert` in the 2025 files and `LU_Alert` in 2026**. A Cancel has no `<info>` and names its target in `<references>` (`[AGE],<identifier>,<sent>`); an Update references the message it replaces the same way. The real 2026-02-02 TEST carries `<status>Actual</status>`, so a TEST is told only by `cb-eu-level` `TEST` or its headline. The area descriptions are "Sud du Luxembourg", "Nord du Luxembourg" and "Moselle".
 
 **LU-6 geometry**
 - pygeoapi 0.23.4: `https://features.geoportail.lu/collections/655/items?f=json&limit=100`. 51 features with `Nom`, `Etat_de_se`, `Hyperlinks` (station fiche PDF), `Hyperlin_1` (photo) and `Hyperlinks_graph` (always null). bbox filtering works; CORS `*`. No values.
@@ -1340,6 +1358,7 @@ SELECT ?id ?name ?water ?time ?q ?w ?t ?dl ?wkt WHERE {
 
 **CH-5 / CH-6 warnings and classes**
 - CH-5 `hydro_warn_levels_{lang}.geojson`: 93 sections (river, lake, region) with `level`, `valid_from` and `valid_until`; one was issued 07:24 local and valid until 25.09 11:00.
+  - (P7a, 2026-10-03, from the P1a recording and the export of 2026-10-03:) `level` is an **integer 0 to 5**; **level 0 is "Keine Gefahrenstufe"** (no hazard stated), not a danger level. The payload's `meta` holds the legend in de, fr, it and en, the `en` file translates labels and `hydro_body`, and the geometries are **LV95 (EPSG:2056)**; the public map needs WGS84. No real flood payload has been recorded.
 - CH-6 layers:
   - `…_zustand`: 200 features, percentile class 1–5, 0 = no data.
   - `…_gefahren`: 182 features, danger level (178 at level 1, 3 at 0).
@@ -2512,7 +2531,7 @@ Each item is marked **Resolved** (with the evidence) or **Flagged** (needs a dec
 | C19 | deck.gl | map-rivers: add deck.gl 9.4 (`MapboxOverlay`) for animation phases | stack-landscape: "overkill for about 2–3k station points" | **Resolved:** not needed for the MVP station layer (both agree MapLibre `circle` + `feature-state` is enough). Consider it later for animated river paths. MapLibre v6 interop is UNVERIFIED |
 | C20 | Reverse proxy / caching | datum-arch: nginx `limit_req` example; CDN for spikes | stack-landscape: Caddy 2.11.4 (no built-in cache; Souin needs xcaddy) + precomputed static snapshot files. lu.md and ch-bafu: Caddy | **Flagged: a decision.** Facts are in §6.6 |
 | C21 | Response-size cap basis | datum-arch: largest payload about 2.2 MB | nl-rws: catalogue 4.86 MB; de-states: RLP index 2.9 MB, NRW zip → 12.1 MB decompressed | **Resolved:** the 25 MB cap still holds, but size the decompression guard for at least 12.1 MB |
-| C22 | Kaub reference-value names | map-rivers: "NW 25, MW 208, HSW 640, HW 719, GlW 77, M_I 460" | de-pegelonline: the shortnames are GlW, TuGLW, M_I, M_II, HHW, NNW, MNW, MW, MHW, HSW; Kaub MNW/MW/MHW/HSW = 65/208/544/640 | **Flagged.** "NW"/"HW" are not PEGELONLINE shortnames; they are probably NNW = 25 and HHW = 719. Check live before using them |
+| C22 | Kaub reference-value names | map-rivers: "NW 25, MW 208, HSW 640, HW 719, GlW 77, M_I 460" | de-pegelonline: the shortnames are GlW, TuGLW, M_I, M_II, HHW, NNW, MNW, MW, MHW, HSW; Kaub MNW/MW/MHW/HSW = 65/208/544/640 | **Resolved (P7a, 2026-10-03).** "NW" and "HW" **are** PEGELONLINE shortnames, and they are not NNW and HHW. The recorded `de-1-meta` (2026-09-29; the owner's export of 2026-10-03 is equal) states for Kaub `NW` 25 ("Niedrigster Tageswasserstand", `timespanStart` 2010-11-01, `timespanEnd` 2020-10-31, occurrence 2018-10-22) and `HW` 719 ("Höchster Momentanwasserstand", occurrence 2013-06-05); `HHW` is 825 (1883). MNW/MW/MHW/HSW = 65/208/544/640 are confirmed. P7a stores `NW` and `HW` as historical references with their period and never classifies on them |
 | C23 | MapLibre CSP | datum-arch: follow MapLibre docs (`worker-src 'self' blob:`; set a same-origin worker URL if blob is disallowed) | stack-landscape: v6 **removed the CSP bundle** | **Flagged.** Verify the CSP set-up against v6 in staging |
 | C24 | Storage volume | datum-arch: worst case about 23 GB/yr plain PG (4,000 series @ 10 min) | stack-landscape: 8–20 GB/yr plain PG [U] | **Resolved:** the same order of magnitude |
 | C25 | TAW sign | be-flanders: "0 m TAW ≈ NAP −2.33 m" (general knowledge, UNVERIFIED); be-wallonia-lu: DNG about 2.3 m below NAP | datum-arch and nl-rws: H_TAW = H_NAP + 2.33 m (live pairs at 3 stations) | **Resolved:** all consistent, and now verified live |
