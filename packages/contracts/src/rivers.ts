@@ -15,8 +15,41 @@ const Name = z
   .refine((s) => !/[<>]/.test(s), 'name holds < or >')
   .refine((s) => !/[\p{Cc}\p{Cf}]/u.test(s), 'name holds a control or format character');
 const Spelling = z.string().min(1).max(120);
+const Evidence = z.string().min(1).max(500);
+/** WGS84 [lon, lat], as the graph stores coordinates. */
+export const LonLat = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
+// A registry station id (stations.ts), e.g. de.wsv.2790020 or nl.rws.lobith.bovenrijn.tolkamer.
+const StationRef = z.string().regex(/^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$/, 'must be a station id');
 
 export const KM_DIRECTIONS = ['downstream', 'upstream', 'none'] as const;
+
+/**
+ * Where a river enters the Netherlands (P6b): the graph node of this river
+ * nearest to `at`, at most `max_m` away. km_to_nl_entry is measured to it.
+ */
+export const NlEntry = z.strictObject({
+  id: Slug,
+  name_nl: Name,
+  name_en: Name,
+  at: LonLat,
+  max_m: z.number().positive().max(5000),
+  evidence: Evidence,
+});
+export type NlEntry = z.infer<typeof NlEntry>;
+
+export const RIVER_FLAG_KINDS = ['tidal', 'impounded'] as const;
+/**
+ * A stretch of a river with a reach flag (catalogue §4.7 items 6-7): from the
+ * river node nearest `from` (or the river's start) to the one nearest `to`
+ * (or its end), along the river's own km_graph.
+ */
+export const RiverFlag = z.strictObject({
+  kind: z.enum(RIVER_FLAG_KINDS),
+  from: LonLat.optional(),
+  to: LonLat.optional(),
+  evidence: Evidence,
+});
+export type RiverFlag = z.infer<typeof RiverFlag>;
 
 export const River = z.strictObject({
   id: Slug,
@@ -30,14 +63,44 @@ export const River = z.strictObject({
   parent_river_id: Slug.nullable(),
   km_direction: z.enum(KM_DIRECTIONS),
   drop_ways: z.array(z.strictObject({ id: z.number().int().positive(), reason: z.string().min(1) })).optional(),
-  evidence: z.string().min(1).max(500),
+  nl_entry: NlEntry.optional(),
+  flags: z.array(RiverFlag).optional(),
+  evidence: Evidence,
 });
 export type River = z.infer<typeof River>;
+
+/**
+ * A reviewed connection where the OSM relation ends short of its confluence or
+ * has a gap (KG-161): the sink of `river` nearest `at` joins the nearest node of
+ * `to_river` that is not upstream of it, at most `max_m` away. Routing only:
+ * a join is never drawn and never published as geometry.
+ */
+export const Join = z.strictObject({
+  river: Slug,
+  at: LonLat,
+  to_river: Slug,
+  max_m: z.number().positive().max(2000),
+  reason: Evidence,
+});
+export type Join = z.infer<typeof Join>;
+
+/** A sourced travel-time range between two stations (catalogue §3.7): indicative, never an ETA. */
+export const TravelTime = z.strictObject({
+  from_station: StationRef,
+  to_station: StationRef,
+  h: z.tuple([z.number().positive(), z.number().positive()]),
+  basis: z.string().min(1).max(200),
+  source: z.string().min(1).max(300),
+  source_url: z.url({ protocol: /^https$/ }),
+});
+export type TravelTime = z.infer<typeof TravelTime>;
 
 export const RiversFile = z.strictObject({
   version: z.literal(1),
   rivers: z.array(River).min(1),
   excluded: z.array(z.strictObject({ name: z.string().min(1), wikidata: Qid.optional(), reason: z.string().min(1) })),
+  joins: z.array(Join).optional(),
+  travel_times: z.array(TravelTime).optional(),
 });
 export type RiversFile = z.infer<typeof RiversFile>;
 
@@ -83,5 +146,16 @@ export function validateRivers(input: unknown): { problems: string[]; rivers?: R
   }
   const names = new Set(f.rivers.flatMap((r) => [r.name_nl, r.name_en]));
   for (const x of f.excluded) if (names.has(x.name)) problems.push(`excluded: "${x.name}" is also a river name`);
+  const entries = new Set<string>();
+  for (const r of f.rivers) if (r.nl_entry) dup('nl_entry id', entries, r.nl_entry.id, r.id);
+  for (const j of f.joins ?? []) {
+    for (const id of [j.river, j.to_river]) if (!parent.has(id)) problems.push(`joins: unknown river ${id}`);
+  }
+  const pairs = new Set<string>();
+  for (const t of f.travel_times ?? []) {
+    if (!(t.h[0] < t.h[1])) problems.push(`travel_times ${t.from_station}: h must be a range lo < hi`);
+    if (t.from_station === t.to_station) problems.push(`travel_times ${t.from_station}: from and to are the same`);
+    dup('travel_times pair', pairs, `${t.from_station} ${t.to_station}`, 'travel_times');
+  }
   return problems.length > 0 ? { problems } : { problems, rivers: f };
 }
