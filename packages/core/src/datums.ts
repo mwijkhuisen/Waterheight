@@ -51,3 +51,44 @@ export function toNap(datum: Datum, heightM: number): NapHeight {
     source: rel.source,
   };
 }
+
+/** Sources whose gauge zeros come only from Hub'Eau metadata (incl. the §0.6 Belgian partners): never converted (D16). */
+export const HUBEAU_ZERO_SOURCES: ReadonlySet<string> = new Set(['FR-1']);
+/** Datums whose zero is shown as published, unverified, and never converted (C40, D16). */
+const UNVERIFIED_ZERO: ReadonlySet<Datum> = new Set(['IGN69', 'NGF1884']);
+
+export type HeightIn = {
+  /** The series' source. */
+  source: string;
+  quantity: 'H' | 'Q';
+  valueKind: 'stage' | 'level' | null;
+  /** The series' datum (a level's own datum). */
+  datum: Datum | null;
+  /** The canonical value: cm. */
+  valueCm: number;
+  /** The gauge zero valid at t, or null. */
+  zero: { valueM: number; datum: Datum } | null;
+};
+
+/**
+ * The detail view's "≈ x.xx m NAP (± y)" (D16; catalogue §4.1, §4.7(5)): a level in its own datum, a stage as the
+ * gauge zero valid at t plus W/100 in the zero's datum. A French (IGN69, NGF-1884) or Hub'Eau-only zero gives no
+ * height: it is returned as published (`zero`) to be shown as unverified. Discharge, a local or unknown datum and a
+ * stage without a zero give null. Never on the map scale.
+ */
+export function napHeight(
+  h: HeightIn,
+): { nap: { m: number; pm: number } } | { zero: { m: number; datum: Datum } } | null {
+  if (h.quantity !== 'H') return null;
+  if (h.valueKind === 'level') {
+    if (h.datum === null) return null;
+    const r = toNap(h.datum, h.valueCm / 100);
+    return r.converted ? { nap: { m: r.heightM, pm: r.uncertaintyM } } : null;
+  }
+  if (h.zero === null) return null;
+  if (HUBEAU_ZERO_SOURCES.has(h.source) || UNVERIFIED_ZERO.has(h.zero.datum)) {
+    return { zero: { m: h.zero.valueM, datum: h.zero.datum } };
+  }
+  const r = toNap(h.zero.datum, h.zero.valueM + h.valueCm / 100);
+  return r.converted ? { nap: { m: r.heightM, pm: r.uncertaintyM } } : null;
+}
