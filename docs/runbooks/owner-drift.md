@@ -1,14 +1,15 @@
-# Runbook: drift and breaches in the owner sources (SPW BE-3, AGE LU-2, LU-3, LU-4)
+# Runbook: drift and breaches in the owner sources (SPW BE-3, AGE LU-2, LU-3, LU-4, BfG DE-2)
 
 **Trigger:**
 - `scripts/verify-prod.sh <domain>` fails `owner health` (`owner_sources.healthy` is below `owner_sources.total` in `/api/v1/health/sources`), after the CI-only exception for old fixture data (a FAIL of `owner sources` or `owner stations` is a leak or a lost source: invariant 11, not this runbook's drift);
 - a `load` log line with `"alert":"quarantined"`, `unit_mismatch`, `unknown_quality`, `conflict` or `twin_breach` whose `source` is `BE-3` or `LU-2`;
+- (P8a) a `load` log line with `"alert":"forecast_run_late"`, `incomplete_run`, `combine_drift` or `beyond_horizon` whose `source` is `DE-2` or `LU-3`, or the hand check of an LU-3 display limit (`forecast_limit_drift`, §8);
 - the owner status file (`/srv/rws/owner/status/capture.json`) shows an owner spec with a `last_failure_status`, or the catch-up is not done when you expect it (§3);
 - an SPW or AGE change that you know of: a new station, a new series, a renamed file.
 
 Everything here concerns **owner-audience** sources (D22, ADR-0017): their payloads, rows, alerts and twin results exist only on the VPS and in the owner channel (invariant 11). Nothing about them reaches a public page: the public health document counts them in `owner_sources` and lists none, public `quarantined` and the loader's backlog count public sources only, and the watchdog reads the public document, so **an owner source never pages the phone**. You find a problem through `verify-prod.sh`, the loader's log and the owner status. This runbook is for the owner alone; the agents have no production access and never see a payload.
 
-By design (A§7.4 step 5) a payload the strict parser does not recognise is set aside **alone**: its batch becomes `quarantined` with a fixed code, one alert is logged and the cursor moves on. The raw archive keeps it. LU-3 has no loader entry yet (P8a): its payloads are archived and checked by the recorder's validity check only, so its drift shows as a `failed_validity` batch and a failing spec in the owner status, never as a quarantine. LU-4 is loaded since P7a (`lu-4-pages`: references of source LU-4, `reference-change.md` §8), so its drift is a quarantine like BE-3's.
+By design (A§7.4 step 5) a payload the strict parser does not recognise is set aside **alone**: its batch becomes `quarantined` with a fixed code, one alert is logged and the cursor moves on. The raw archive keeps it. LU-3 and DE-2 are loaded since P8a (forecast runs, §8; `replay.md` §11), so their drift is a quarantine like BE-3's; before it, their payloads were archived and checked by the recorder's validity check only, and their drift showed as a `failed_validity` batch and a failing spec in the owner status. LU-4 is loaded since P7a (`lu-4-pages`: references of source LU-4, `reference-change.md` §8), so its drift is a quarantine like BE-3's.
 
 ## 1. What you see
 
@@ -22,12 +23,12 @@ By design (A§7.4 step 5) a payload the strict parser does not recognise is set 
 ```bash
 sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
   "SELECT source_id, status, last_fetch_ok, last_new_data, quarantine_count FROM own_source_health
-   WHERE source_id IN ('BE-3','LU-2','LU-3','LU-4') ORDER BY 1"
+   WHERE source_id IN ('BE-3','LU-2','LU-3','LU-4','DE-2') ORDER BY 1"
 sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
   "SELECT id, spec_id, fetched_at, parse_status, error FROM own_ingest_batch
    WHERE source_id IN ('BE-3','LU-2') AND parse_status <> 'ok' ORDER BY id DESC LIMIT 30"
 sudo docker logs --since 24h rws-load-1 2>&1 | grep -E '"source":"(BE-3|LU-2)"' | grep '"alert"'
-sudo jq '.specs[] | select(.source | test("^(BE-3|LU-[234])$"))' /srv/rws/owner/status/capture.json
+sudo jq '.specs[] | select(.source | test("^(BE-3|DE-2|LU-[234])$"))' /srv/rws/owner/status/capture.json
 ```
 
 To read a payload, take `archive_key` from the batch and read it **on the VPS only** (it is owner data):
@@ -109,7 +110,7 @@ SPW keeps decades, but the layers hold only the latest value per series, so the 
 
 ## 4. Replay owner payloads
 
-The same command as every source (`docs/runbooks/replay.md` §2), with `--source BE-3`, `--source LU-2` or (P7a) `--source LU-4` (LU-3 is refused: no loader entry). The first LU-4 replay after the P7a deploy is `replay.md` §10. **After the P5c deploy** the first replay is `replay.md` §9. Later, replay after:
+The same command as every source (`docs/runbooks/replay.md` §2), with `--source BE-3`, `--source LU-2`, (P7a) `--source LU-4` or (P8a) `--source DE-2` and `--source LU-3` (the forecast runs: §8). The first LU-4 replay after the P7a deploy is `replay.md` §10, the first DE-2 and LU-3 replay after the P8a deploy `replay.md` §11. **After the P5c deploy** the first replay is `replay.md` §9. Later, replay after:
 
 - a parser, normaliser or registry fix that releases withheld values (`unknown_quality`, `unit_mismatch`, `unknown`, `conflict`): from the first day of the affected payloads, `--dry-run` first; a replay never removes a stored point;
 - a regeneration of `registry/stations/be-3.yaml` or `lu-2.yaml` that added series (§6): `unknown` payloads load once the series exist.
@@ -169,7 +170,46 @@ The registry holds **every** series of the two SPW groups (owner decision Q2) an
 - `scripts/verify-prod.sh <domain>`: `owner health` passes (every owner source healthy), `owner sources` passes (at least 4, none listed) and `owner stations` passes (no owner station in `/api/v1/stations`);
 - `own_source_health` of BE-3 and LU-2 has `status` `ok` and a recent `last_new_data`;
 - a second replay prints `"n_new":0,"n_changed":0`;
-- `own_twin_check` has no failing owner pair you have not understood.
+- `own_twin_check` has no failing owner pair you have not understood;
+- (P8a) `own_source_health` of DE-2 and LU-3 has a `detail.forecast` with a recent `issued_at`, and DE-2's `late` is null (§8).
+
+## 8. Forecast runs: DE-2 and LU-3 (P8a)
+
+DE-2 (BfG `WV`, one run a day per station, 7 stations) and LU-3 (AGE percentile files, a new run every hour per station) are loaded as immutable runs into `forecast_run` and `forecast_value` (A§7.4 item 9). A run sits on a public DE-1 or LU-1 series but belongs to the owner source, so it is in the owner views and in no public one: the signals below reach you through the loader's log, `own_source_health` and `own_ingest_batch`, and **nothing pages** (the watchdog reads the public document). The alerts carry the source, the spec or a due day and a count, never a value.
+
+```bash
+sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
+  "SELECT source_id, status, detail->'forecast' AS forecast FROM own_source_health WHERE source_id IN ('DE-2','LU-3')"
+sudo docker logs --since 24h rws-load-1 2>&1 | grep -E '"alert":"(forecast_run_late|incomplete_run|combine_drift|beyond_horizon)"'
+```
+
+`detail.forecast` is `{issued_at, run_age_s, series, current, late}`: the newest issue time across the source's series (for LU-3 the earliest file's fetch time, because AGE states none), its age, the series that have a run, how many of them still have one that reaches now, and for DE-2 the Europe/Berlin day a due run missed its deadline (null when none). The source's `status` never reflects them: DE-2 and LU-3 own no series of their own, so a late or stale run changes no status (A§6).
+
+**DE-2: `forecast_run_late`** (`source` `DE-2`, `day`):
+
+| What it says | Rule |
+|---|---|
+| A run was due by 12:00 Europe/Berlin on `day` and the latest stored run is older than that day. One alert per missed due day (the day is remembered in `app_meta` `forecast_late:DE-2`); a later missed due day is another alert; a run that arrives clears `late` | **Due days:** every Monday to Friday that is not in the committed holiday list (nationwide plus Rhineland-Palatinate, 2026 and 2027), and every other day (weekend, holiday) while Ruhrort's latest stage is below 400 cm. BfG documents the run as weekday-only and for weekends and holidays only below 4 m (catalogue §2.2). With Ruhrort at 400 cm or more, or with no stage in its staleness window, a weekend or holiday is **silent by design**. The list ends 2027-12-31 (KG-198); after it a holiday is treated as a working day and the alert may fire for it |
+
+What to check, in order:
+
+1. **Is the day really due?** Ruhrort's stage (DE-1 `de.wsv.2770010`, W) in the public site or `/api/v1/stations`, and the date against the list in `packages/core/src/de2-schedule.ts` (`DE2_HOLIDAYS`). A holiday the list lacks (after 2027, or one RLP adds) gives a false alert: extend the list in a reviewed PR.
+2. **Did the recorder fetch?** `sudo jq '.specs[] | select(.id == "de-2-wv")' /srv/rws/owner/status/capture.json`: `last_success` should be within the hour (the spec runs at :12). The spec's gate keeps one object per `initialized`, so an unchanged run is a `dup_of` line and no new batch, which is normal while BfG has issued nothing.
+3. **Did a payload quarantine?** `own_ingest_batch` for `de-2-wv` with `parse_status <> 'ok'` (the query of §1 with `'DE-2'`). The codes: `run_mismatch` (the points of a payload state more than one `initialized`), `future_issue` (an `initialized` more than 15 minutes after the fetch), `bad_variant` (the manifest variant is no PEGELONLINE uuid), `time_*`, `bad_value`, `duplicate_ts`, `forecast_points`, `encoding`; the shared ones are in `schema-drift.md` §2. Fix the cause, then replay `--source DE-2 --spec de-2-wv` (`replay.md` §11).
+4. **Is it a flood?** How `WV` behaves above HSW / Marke II is unknown (C6, KG-199): BfG may stop or cap the run. That is "no forecast", never a held run: coverage and `forecast/latest.json` drop a run whose due day has passed, and nothing has to be repaired. A run that ends early (fewer points, no estimate segment) is stored as it is and never extended.
+
+Counted only, with no alert (the loader alerts only the `RETAINED` codes, and no production surface shows the other counters: KG-205): `estimate_mismatch` (a point's `type` and "later than `initialized` + 48 h" disagree; the point is stored and flagged `ESTIMATE` either way, so a moved boundary shows as the flag changing hour in the owner view: BfG moved its segment, so read a payload on the VPS and change `segmentMs` of `FORECAST_SOURCES['DE-2']` in a reviewed PR), `sentinel` (99999), `gap` (a null) and `unknown` (a PEGELONLINE uuid the DE-1 registry does not hold, once per series; that registry is generated by `node scripts/gen-de1-stations.ts` and never hand-edited). **Alerted** (`RETAINED`, counted in `n_skipped` so that the object is kept): `beyond_horizon` (a point later than `initialized` + 96 h + 1 h: BfG lengthened its horizon; change `horizonMs` in a reviewed PR and replay).
+
+**LU-3: staged files and `incomplete_run`, `combine_drift`.** A file is one percentile of one station: the loader stages it in `app_meta` (`forecast_part:LU-3:<slug>`) and stores the run when the five files of that station and UTC fetch hour are in.
+
+| Signal | Meaning | What to do |
+|---|---|---|
+| `incomplete_run` (`source` `LU-3`, `n`) | A staged group never completed: a fifth group evicted it, or the health pass dropped it two hours after it was staged. Nothing is stored for that hour and station | A **partial `dup_of` hour** leaves a group incomplete (one file byte-identical to the previous hour's while the others changed): expected, rare, none in the export of 2026-10-03; a few are no fault. A recurring one for one station: read that station's `lu-3-percentile` batches (variants `<slug>/<p>`) and the spec's failures in the owner status; a file that fails every hour is AGE's. A stream of them across stations means the recorder's 55 files no longer land in one UTC hour (a slow run or an outage at :45): check the spec's timing in the owner status |
+| `combine_drift` (`source` `LU-3`, `n`) | A staged part no longer reads as a part (the strict schema over the staged data failed, or a part names another percentile than its slot). Retained: `n_skipped` counts it and the object is kept | The staging row is loader state: a bug or an edit changed it. Read the batch of the file that completed the group; fix the cause in a release and replay `--source LU-3` (`replay.md` §11) |
+| Alert `run_mismatch` or `step_mismatch` (LU-3) | The five files of a group do not agree on the series or the first step (`run_mismatch`), or their steps are not one hour apart: a **gap in the middle of a file** is dropped as `gap` and so breaks the step (`step_mismatch`). The whole run is dropped; the five files are consumed (KG-200) | Retained (`n_skipped`, so the object stays for a replay) and alerted with `source`, `spec` and `n`; `detail.forecast` of LU-3 then shows `current` below `series` (a station whose newest run no longer reaches now). If a station repeats it, AGE changed a file: read one on the VPS (`sudo zstd -dc …`, §1) and, if the format changed, fix `adapters/lu-3/` with a synthetic fixture (§6 step 5) |
+| `forecast_limit_drift` (`source` LU-4, a `lu-4-pages` payload) | A page states another `forecastsLimit` (`h24` or `h48`) than the seed's `limit_h` of its LU-3 station. Counted only: the seed stays, and no production surface shows the counter (KG-205) | A check you make by hand when AGE redesigns the station pages or the LU-4 capture is read: the page's `forecastsLimit` on the VPS against `registry/seed/lu-3.csv`. If AGE changed a station's display limit, change the `limit_h` of that slug in a reviewed PR (display metadata, no water value; `gemund-our` stays empty) and deploy. Nothing is stored from the page and no replay is needed: the reader cuts a run after `first_valid + limit_h` at read time |
+
+Gemünd (`gemund-our`) stores and stages nothing: its LU-1 series is `off` (withheld in both audiences, `registry/permissions/LU-1.md`), and its file is still fetched, so lifting the withholding (C4 or C11) is a replay of `--source LU-3` from the first day (KG-145 closed). Perl, Stadtbredimus and Wasserbillig (LfU RLP-computed) are neither fetched nor loaded.
 
 ## What not to do
 
