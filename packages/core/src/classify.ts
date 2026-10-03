@@ -152,6 +152,7 @@ function setCandidate(
   let hi = 5;
   let point: number | null = null;
   let decisive: Used[] = [];
+  let below = false; // the value is under the lowest level of a scale: "LANUK < Info 1"
   if (isLow) {
     if (passed.length > 0) return null; // a low bound above a passed threshold: the set contradicts itself
     lo = 1;
@@ -162,15 +163,22 @@ function setCandidate(
     lo = low === undefined ? 1 : 2;
     const top = passed.reduce<Used | undefined>((a, u) => (a === undefined || lvl(u) >= lvl(a) ? u : a), undefined);
     if (top !== undefined) lo = Math.max(lo, lvl(top));
-    const next = above.reduce<Used | undefined>((a, u) => (a === undefined || lvl(u) < lvl(a) ? u : a), undefined);
+    // A threshold above the value with a lower level than one it passed: the set is out of order, no guess.
+    if (top !== undefined && above.some((u) => lvl(u) < lvl(top))) return null;
+    // The next level up caps the interval; a further threshold of the passed level (WL4 and WL5, HQ10 and HQ20)
+    // caps nothing.
+    const next = above
+      .filter((u) => top === undefined || lvl(u) > lvl(top))
+      .reduce<Used | undefined>((a, u) => (a === undefined || lvl(u) < lvl(a) ? u : a), undefined);
     if (next !== undefined) hi = lvl(next) - 1;
-    if (lo > hi) return null; // thresholds out of order: no guess
+    if (lo > hi) return null; // a low bound above the lowest threshold: the set contradicts itself
     if (top !== undefined) {
       point = lvl(top);
       decisive = [top];
     } else if (form === 'scale' && next !== undefined) {
       point = 2;
       decisive = [next];
+      below = true;
     } else if (form === 'stats' && low !== undefined && next !== undefined && lvl(next) === n('elevated')) {
       point = 2;
       decisive = [low, next];
@@ -183,7 +191,7 @@ function setCandidate(
   }
   const period = decisive.find((u) => u.ref.period !== null)?.ref.period ?? null;
   const ref = decisive.map((u) => u.role.kind).join('/');
-  const label = `${AGENCY[source] ?? source} ${decisive.map((u) => u.role.short).join('/')}${years(period)}`;
+  const label = `${AGENCY[source] ?? source} ${below ? '< ' : ''}${decisive.map((u) => u.role.short).join('/')}${years(period)}`;
   return { group, lo, hi, point, basis: { source, kind: group, measure, ref, label } };
 }
 
@@ -302,8 +310,12 @@ export function classify(s: SeriesIn, family: Family): Classified {
   const ordered = ORDER.flatMap((g) => cands.filter((c) => c.group === g)).filter(
     (c) => !s.tidal || c.group === 'operational',
   );
+  // A lower-priority candidate that disagrees is outranked, but it shows which way the value leans: the interval
+  // collapses to its nearest edge. Below AGE orange (low..elevated) with HQ10 passed (high) is elevated, not the
+  // scale's normal, and a later candidate cannot pull it back, so a higher value never gives a lower level.
   let range: [number, number] | null = null;
   let narrowed: Cand | null = null;
+  let puller: Cand | null = null;
   for (const c of ordered) {
     if (range === null) {
       range = [c.lo, c.hi];
@@ -312,7 +324,12 @@ export function classify(s: SeriesIn, family: Family): Classified {
     }
     const lo = Math.max(range[0], c.lo);
     const hi = Math.min(range[1], c.hi);
-    if (lo > hi) continue;
+    if (lo > hi) {
+      const edge = c.lo > range[1] ? range[1] : range[0];
+      if (range[0] !== range[1]) puller ??= c;
+      range = [edge, edge];
+      continue;
+    }
     if (lo !== range[0] || hi !== range[1]) narrowed = c;
     range = [lo, hi];
   }
@@ -321,7 +338,10 @@ export function classify(s: SeriesIn, family: Family): Classified {
     const [lo, hi] = range;
     level = lo === hi ? lo : (ordered.find((c) => c.point !== null && c.point >= lo && c.point <= hi)?.point ?? null);
   }
-  const gauge = level === null ? null : (ordered.find((c) => c.point === level)?.basis ?? (narrowed as Cand).basis);
+  const gauge =
+    level === null
+      ? null
+      : (ordered.find((c) => c.point === level)?.basis ?? puller?.basis ?? (narrowed as Cand).basis);
 
   let area: Classified['area'] = null;
   for (const a of s.areas) {
