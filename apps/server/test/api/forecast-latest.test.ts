@@ -3,6 +3,7 @@ import { FORECAST_FLAG_BITS, ForecastLatest, OwnerForecastLatest } from '@rws/co
 import { FORECAST_FLAGS } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { assertVisible, visibleSources } from '../../src/api/forecast.ts';
 import { AGENCY, buildForecastLatest, lu3Limits, type PointRow, type RunRow } from '../../src/api/forecast-latest.ts';
 
 // The pure builder of forecast/latest.json on hand-made rows (the database read has its own integration test): the
@@ -393,5 +394,17 @@ describe('buildForecastLatest: property', () => {
       }),
       { numRuns: 100 },
     );
+  });
+});
+
+describe('the visibility guard (review SEC-2)', () => {
+  it('passes the family’s own sources and refuses any other with a fixed code', () => {
+    expect(() => assertVisible(['NL-1', 'NL-1'], visibleSources('public'))).not.toThrow();
+    for (const source of ['DE-2', 'DE-3', 'LU-3', 'CANARY-OWNER', 'NL-3'])
+      expect(() => assertVisible(['NL-1', source], visibleSources('public')), source).toThrow(
+        expect.objectContaining({ code: 'owner_source' }),
+      );
+    expect(() => assertVisible(['NL-1', 'DE-2', 'LU-3', 'CANARY-OWNER'], visibleSources('owner'))).not.toThrow();
+    expect(() => assertVisible([], visibleSources('public'))).not.toThrow();
   });
 });

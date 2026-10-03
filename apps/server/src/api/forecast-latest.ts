@@ -4,7 +4,7 @@ import { type Kysely, sql } from 'kysely';
 import { type ChannelAudience, FORECAST_AT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { lu3Seed } from '../load/wire/lu-3.ts';
-import { ruhrortCm } from './forecast.ts';
+import { assertVisible, ruhrortCm, visibleSources } from './forecast.ts';
 import { snapshot, validated } from './util.ts';
 
 // /data/v1/forecast/latest.json (A§9.1; P8a builds and tests the document, P9a writes the file): for ONE audience
@@ -148,15 +148,18 @@ type PointSql = {
 
 /**
  * The document for one family at `now` (UTC ms), in one read-only repeatable-read snapshot and checked against the
- * contract before it is returned (a shape bug is `coded('contract')`, never a silent leak; the public schema refuses the canary's source).
+ * contract before it is returned (a shape bug is `coded('contract')`, never a silent leak; the public schema refuses
+ * only the canary's source, so a run of a source the family cannot see is `coded('owner_source')`, `visible` being
+ * the family's sources from sources.yaml unless a test passes others).
  */
 export async function readForecastLatest(
   db: Kysely<DB>,
   family: ChannelAudience,
   now: number,
-  opts: { limitsH?: ReadonlyMap<string, number> } = {},
+  opts: { limitsH?: ReadonlyMap<string, number>; visible?: ReadonlySet<string> } = {},
 ): Promise<ForecastLatest> {
   const V = VIEWS[family];
+  const visible = opts.visible ?? visibleSources(family);
   const at = new Date(now).toISOString();
   const rows = await snapshot(db, async (tx): Promise<LatestRows & { ruhrort: number | null }> => {
     const runs = (
@@ -165,6 +168,11 @@ export async function readForecastLatest(
                kind, EXTRACT(EPOCH FROM step)::int AS step_s, provider_segment_end
         FROM ${sql.id(FORECAST_AT[family])}(${at}::timestamptz, ${at}::timestamptz)`.execute(tx)
     ).rows;
+    // Fail closed (review SEC-2): the contract cannot tell an owner source from a public one.
+    assertVisible(
+      runs.map((r) => r.source_id),
+      visible,
+    );
     if (runs.length === 0) return { runs: [], points: [], ruhrort: null };
     const stations = new Map(
       (

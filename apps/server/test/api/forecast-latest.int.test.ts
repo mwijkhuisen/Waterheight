@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { CANARIES, CANARY_RENDERINGS, ForecastLatest, OwnerForecastLatest } from '@rws/contracts';
 import { FORECAST_FLAGS, RUHRORT_W } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { RUHRORT_STATION } from '../../src/api/forecast.ts';
+import { RUHRORT_STATION, visibleSources } from '../../src/api/forecast.ts';
 import { readForecastLatest } from '../../src/api/forecast-latest.ts';
 import type { Db } from '../../src/db/pool.ts';
 import { type Harness, harness, KAUB_W } from '../load/harness.ts';
@@ -223,6 +223,13 @@ describe('forecast/latest.json through the database roles', { timeout: 300_000 }
     expect(run?.validTs).toHaveLength(6 * 47);
     expect(run?.validTs[0]).toBe('2026-10-05T06:20:00.000Z');
     expect(run?.value[0]).toBe(1000);
+  });
+
+  it('fails closed when a read returns a run of a source the family cannot see (review SEC-2)', async () => {
+    // The owner reader returns DE-2, LU-3 and canary runs: held to the public family's sources, nothing is built.
+    await expect(
+      readForecastLatest(own.db, 'owner', NOW, { limitsH: LU3_LIMIT, visible: visibleSources('public') }),
+    ).rejects.toMatchObject({ code: 'owner_source' });
   });
 
   it('the owner document also holds the DE-2, LU-3 and canary runs, columnar and cut as the rules say', async () => {

@@ -1,7 +1,7 @@
 import { CANARY_RENDERINGS, ForecastCoverage, HealthSources } from '@rws/contracts';
 import { RUHRORT_W } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { forecastCoverage, RUHRORT_STATION } from '../../src/api/forecast.ts';
+import { forecastCoverage, RUHRORT_STATION, visibleSources } from '../../src/api/forecast.ts';
 import { createApp } from '../../src/app.ts';
 import { readRegistry, readRiverRegistry, syncRegistry } from '../../src/load/registry-sync.ts';
 import { type Harness, harness } from '../load/harness.ts';
@@ -183,6 +183,13 @@ describe('forecastCoverage per family', { timeout: 300_000 }, () => {
     // AGE (a public provider of LU-1) and SPW (the agency that publishes none) are allowed.
     expect(text).toContain('AGE');
     expect(text).toContain('SPW');
+  });
+
+  it('fails closed when a read returns a run of a source the family cannot see (review SEC-2)', async () => {
+    // The owner reader returns DE-2 and LU-3 runs: held to the public family's sources, there is no report.
+    await expect(forecastCoverage(own.db, 'owner', NOW, { visible: visibleSources('public') })).rejects.toMatchObject({
+      code: 'owner_source',
+    });
   });
 
   it('owner: fills Sauer / Sûre, Our (LU-3) and Maxau → Emmerich (DE-2), leaves the Mosel (LU/DE) empty', async () => {

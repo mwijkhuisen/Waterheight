@@ -6,7 +6,7 @@ import { parse } from 'yaml';
 import { REGISTRY_DIR } from '../capture/specs.ts';
 import { type ChannelAudience, FAMILY_AUDIENCES, FORECAST_AT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
-import { iso, snapshot, validated } from './util.ts';
+import { coded, iso, snapshot, validated } from './util.ts';
 
 // The forecast coverage of ONE audience family at "now" (P8a; catalogue §0.5): the first-release stations, how many
 // of them have a current forecast run in the family, per country and per reach row of registry/forecast-reaches.yaml.
@@ -51,6 +51,16 @@ export function visibleSources(family: ChannelAudience): ReadonlySet<string> {
   sourcesFile ??= SourcesFile.parse(yaml('sources.yaml'));
   const audiences: readonly string[] = FAMILY_AUDIENCES[family];
   return new Set(sourcesFile.sources.filter((s) => audiences.includes(s.audience) && s.display).map((s) => s.id));
+}
+
+/**
+ * Fail closed (review SEC-2): every run a family's read returned must be of a source the family can see. The views
+ * and the Q2 function already filter by the run's own source, and neither the coverage nor the forecast/latest.json
+ * contract can tell an owner source from a public one, so this is the check at the boundary: a run of any other
+ * source throws the fixed code `owner_source` (the public coverage is then null, the document is not written).
+ */
+export function assertVisible(sources: Iterable<string>, visible: ReadonlySet<string>): void {
+  for (const s of sources) if (!visible.has(s)) throw coded('owner_source');
 }
 
 /** What a reach row asks of a station: its country, its river (river_id) and the operator's km (km_official). */
@@ -111,6 +121,10 @@ export async function forecastCoverage(
         SELECT series_id, source_id, COALESCE(issued_at, fetched_at) AS issued, last_valid
         FROM ${sql.id(FORECAST_AT[family])}(${at}::timestamptz, ${at}::timestamptz)`.execute(tx)
     ).rows;
+    assertVisible(
+      runs.map((r) => r.source_id),
+      visible,
+    );
     // Only a DE-2 run needs it (the weekend rule): the public family never reads it.
     const ruhrort = runs.some((r) => r.source_id === DE2) ? await ruhrortCm(tx, family, at) : null;
     return { stations, series, runs, ruhrort };
