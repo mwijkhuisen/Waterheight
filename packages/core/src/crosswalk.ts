@@ -187,12 +187,11 @@ export const AREA_SCALE: Readonly<Record<string, string>> = {
   'DE-10': 'region',
 };
 
+const ROW_BY_CODE = new Map(CROSSWALK.map((r) => [`${r.source}\n${r.scale}\n${r.code}`, r]));
+
 /** The row of a provider class: the exact code, else the source's `*` row; undefined when the table lacks it. */
 export function crosswalkRow(source: string, scale: string, code: string): CrosswalkRow | undefined {
-  return (
-    CROSSWALK.find((r) => r.source === source && r.scale === scale && r.code === code) ??
-    CROSSWALK.find((r) => r.source === source && r.scale === scale && r.code === '*')
-  );
+  return ROW_BY_CODE.get(`${source}\n${scale}\n${code}`) ?? ROW_BY_CODE.get(`${source}\n${scale}\n*`);
 }
 
 /**
@@ -356,10 +355,11 @@ export const REFERENCE_ROLES: readonly ReferenceRole[] = [
   ref('DE-10', 'HW100', '>=', 'extreme', 'statistical', 'stats', 'HW100', GATED),
 ];
 
+const ROLE_BY_KIND = new Map(REFERENCE_ROLES.map((r) => [`${r.source}\n${r.kind}`, r]));
+
 /** The role of a stored reference kind (FR-5's CRUE_<hash> rows are CRUE). */
 export function referenceRole(source: string, kind: string): ReferenceRole | undefined {
-  const k = source === 'FR-5' && kind.startsWith('CRUE_') ? 'CRUE' : kind;
-  return REFERENCE_ROLES.find((r) => r.source === source && r.kind === k);
+  return ROLE_BY_KIND.get(`${source}\n${source === 'FR-5' && kind.startsWith('CRUE_') ? 'CRUE' : kind}`);
 }
 
 /** The agency named in a basis label. */

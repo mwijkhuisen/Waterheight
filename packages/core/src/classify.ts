@@ -325,7 +325,7 @@ export function classify(s: SeriesIn, family: Family): Classified {
     const lo = Math.max(range[0], c.lo);
     const hi = Math.min(range[1], c.hi);
     if (lo > hi) {
-      const edge = c.lo > range[1] ? range[1] : range[0];
+      const edge: number = c.lo > range[1] ? range[1] : range[0];
       if (range[0] !== range[1]) puller ??= c;
       range = [edge, edge];
       continue;
