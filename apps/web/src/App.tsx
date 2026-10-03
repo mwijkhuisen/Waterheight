@@ -177,6 +177,7 @@ function Viewer({ locale }: { locale: Locale }) {
                     locale={locale}
                     stations={list}
                     states={states}
+                    values={values}
                     selected={selected}
                     onSelect={open}
                     onClose={close}

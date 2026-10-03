@@ -15,6 +15,8 @@ import { expectClean, instrument, type Log } from './clean.ts';
 const NOW = new Date('2026-10-26T12:00:00Z');
 const RAW_NAME = '<img src=x onerror=alert(1)>';
 const RAW_WATER = '<svg onload=alert(2)>';
+/** The label of the xss station's NL-4 class (its own payload, so the name and water sweeps stay exact). */
+const RAW_BASIS = 'RWS Waterinfo: Licht verhoogd (<img src=y onerror=alert(3)>)';
 /** The few MapLibre and ECharts calls the tests make inside the page (the e2e build's `window.__rws`). */
 interface HookMap {
   getFeatureState(f: { source: string; id: string }): Record<string, unknown>;
@@ -847,8 +849,12 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
     expect(await textHosts(page, 'onload=alert(2)'), `water hosts in the ${view} view`).toEqual(
       view === 'map' ? ['dd', 'option'] : ['dd', 'option', 'td'],
     );
+    // The basis label: the panel's basis row and, on the map, the popup line, as text.
+    expect(await textHosts(page, 'onerror=alert(3)'), `basis hosts in the ${view} view`).toEqual(
+      view === 'map' ? ['dd', 'p'] : ['dd'],
+    );
     await expect(page.locator('img')).toHaveCount(0);
-    await expect(page.locator('img[src="x"]')).toHaveCount(0);
+    await expect(page.locator('img[src="x"], img[src="y"]')).toHaveCount(0);
     await expect(page.locator('svg[onload]')).toHaveCount(0);
     await expect(page.locator('[onerror], [onload]')).toHaveCount(0);
   };
@@ -866,9 +872,43 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
   await sweep('table');
 
   // Nothing was requested for `src=x` (a parsed <img> would have fetched /x), and no dialog opened.
-  expect(s.log.requests.map((u) => new URL(u).pathname).filter((p) => p.endsWith('/x'))).toEqual([]);
+  expect(s.log.requests.map((u) => new URL(u).pathname).filter((p) => p.endsWith('/x') || p.endsWith('/y'))).toEqual(
+    [],
+  );
   await finish(page, s);
 });
+
+// ---------------------------------------------------------------- state and basis (P7b)
+
+for (const [path, kind, state, disclaimer, row] of [
+  ['/?s=nl.e2e.xss', 'Waterstand', 'verhoogd', 'RWS Waterinfo-legenda, geen officiële waarschuwing', 'Grondslag'],
+  ['/en/?s=nl.e2e.xss', 'Water level', 'elevated', 'RWS Waterinfo legend, not an official warning', 'Basis'],
+] as const)
+  test(`the popup and the panel show state and basis: ${path}`, async ({ page, context, baseURL }) => {
+    const s = await start(page, context, baseURL);
+    await open(page, path, kind === 'Waterstand' ? undefined : 'Timeline');
+    await mapReady(page);
+    const line = page.locator('.maplibregl-popup-content > p');
+    await expect(line).toHaveCount(1);
+    await expect(line).toHaveText(`${kind}: ${state}, ${disclaimer}: ${RAW_BASIS}`);
+    expect(await line.textContent()).toContain(RAW_BASIS);
+    if (kind === 'Waterstand') {
+      // A new t replaces the lines in place: the popup, and a keyboard focus on its close button, stay.
+      const content = page.locator('.maplibregl-popup-content');
+      await content.evaluate((el) => el.setAttribute('data-kept', '1'));
+      const next = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/snapshot');
+      await slider(page).focus();
+      await page.keyboard.press('ArrowLeft');
+      await next;
+      await expect(line).toHaveCount(1);
+      await expect(content).toHaveAttribute('data-kept', '1');
+    }
+    const panel = panelOf(page);
+    await expect(panel.locator('dt', { hasText: row })).toBeVisible();
+    await expect(panel.locator('dd', { hasText: RAW_BASIS })).toHaveText(`${disclaimer}: ${RAW_BASIS}`);
+    await expect(panel.locator('dd', { hasText: new RegExp(`^${state}$`) })).toBeVisible();
+    await finish(page, s);
+  });
 
 // ---------------------------------------------------------------- play
 

@@ -38,7 +38,16 @@ const station = (id: string, ids: number[], over: Partial<ApiStation> = {}): Api
 
 const value = (id: number, ageSeconds: number): [number, Snapshot['values'][number]] => [
   id,
-  { series: id, ts: '2026-10-25T01:30:00Z', value: 100, qc: 0, ageSeconds },
+  {
+    series: id,
+    ts: '2026-10-25T01:30:00Z',
+    value: 100,
+    qc: 0,
+    ageSeconds,
+    state: 'no_ref',
+    basis: null,
+    section: false,
+  },
 ];
 
 describe('markerStates', () => {
