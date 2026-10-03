@@ -1,4 +1,12 @@
-import { emptyNormalised, type Normalised, type Registry, SchemaDrift, type TimeConvention } from '@rws/core';
+import {
+  emptyNormalised,
+  type ForecastRunIn,
+  type Normalised,
+  type Registry,
+  SchemaDrift,
+  type StagedPart,
+  type TimeConvention,
+} from '@rws/core';
 import {
   TIME as BE3_TIME,
   normaliseLayer as normaliseBe3Layer,
@@ -55,8 +63,10 @@ import { parseCollection } from '../adapters/nl-2/parse.ts';
 import { checkZip, type Encoding, flatNames, GuardFailure, lineSplitter } from '../http/guards.ts';
 import type { SeriesRow } from './store.ts';
 import * as wireCh5 from './wire/ch-5.ts';
+import * as wireDe2 from './wire/de-2.ts';
 import * as wireDe6 from './wire/de-6.ts';
 import * as wireFr5 from './wire/fr-5.ts';
+import * as wireLu3 from './wire/lu-3.ts';
 import * as wireLu4 from './wire/lu-4.ts';
 import * as wireLu5 from './wire/lu-5.ts';
 
@@ -139,6 +149,15 @@ export type SpecLoader = {
    * LU-4 → LU-1 and LU-2, FR-5 → FR-1); a reference row names one by `target`. Its source_id stays the payload's.
    */
   refTarget?: readonly string[];
+  /**
+   * P8a: a run that spans several payloads (LU-3: the five percentile files of a station). Each payload returns its
+   * `forecastPart`; the loader stages it in app_meta and, once `parts` distinct parts of one group are there, calls
+   * `run` (pure) and stores what it returns with the fetch time of the group's earliest part.
+   */
+  combine?: {
+    parts: number;
+    run: (parts: readonly StagedPart[]) => { runs: ForecastRunIn[]; dropped: Record<string, number> };
+  };
 };
 
 export type LoadAdapter = {
@@ -264,7 +283,7 @@ const nl1Observations: SpecLoader = {
 };
 
 /** P7a: the sources wired in load/wire/ (one file each, so their adapters are built side by side). */
-const WIRED = [wireDe6, wireFr5, wireCh5, wireLu5, wireLu4] as const;
+const WIRED = [wireDe6, wireFr5, wireCh5, wireLu5, wireLu4, wireDe2, wireLu3] as const;
 
 /** Every source the loader can parse; `LOAD_ADAPTERS` is this list after the DST gate. */
 const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
