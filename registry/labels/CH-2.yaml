@@ -1,0 +1,7 @@
+# CH-2 hydrodaten wl_1..wl_4: the lower bounds of BAFU danger levels 2-5 (references WL2..WL5 on the CH-1 series).
+source: CH-2
+labels:
+  - { scale: reference, code: WL2, nl: "Ondergrens gevarenniveau 2 (beperkt gevaar)", en: "Lower bound of danger level 2 (moderate danger)" }
+  - { scale: reference, code: WL3, nl: "Ondergrens gevarenniveau 3 (aanzienlijk gevaar)", en: "Lower bound of danger level 3 (considerable danger)" }
+  - { scale: reference, code: WL4, nl: "Ondergrens gevarenniveau 4 (groot gevaar)", en: "Lower bound of danger level 4 (high danger)" }
+  - { scale: reference, code: WL5, nl: "Ondergrens gevarenniveau 5 (zeer groot gevaar)", en: "Lower bound of danger level 5 (very high danger)" }

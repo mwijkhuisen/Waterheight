@@ -1,0 +1,16 @@
+# BE-3 (SPW KiWIS, owner audience): our text for each reference kind and for the NIVCRU station class, keyed by our
+# code. NIVCRU is stored as published; its meaning is not documented, so the text claims none.
+source: BE-3
+labels:
+  - { scale: reference, code: P05, nl: Waterstand of afvoer die in 5 % van de tijd wordt onderschreden (P05), en: Level or discharge not exceeded 5 % of the time (P05) }
+  - { scale: reference, code: P10, nl: Waterstand of afvoer die in 10 % van de tijd wordt onderschreden (P10), en: Level or discharge not exceeded 10 % of the time (P10) }
+  - { scale: reference, code: P15, nl: Waterstand of afvoer die in 15 % van de tijd wordt onderschreden (P15), en: Level or discharge not exceeded 15 % of the time (P15) }
+  - { scale: reference, code: MEDIAN, nl: Mediaan over de referentieperiode, en: Median over the reference period }
+  - { scale: reference, code: MOYEN, nl: Gemiddelde over de referentieperiode, en: Mean over the reference period }
+  - { scale: reference, code: P85, nl: Waterstand of afvoer die in 85 % van de tijd wordt onderschreden (P85), en: Level or discharge not exceeded 85 % of the time (P85) }
+  - { scale: reference, code: P90, nl: Waterstand of afvoer die in 90 % van de tijd wordt onderschreden (P90), en: Level or discharge not exceeded 90 % of the time (P90) }
+  - { scale: reference, code: P95, nl: Waterstand of afvoer die in 95 % van de tijd wordt onderschreden (P95), en: Level or discharge not exceeded 95 % of the time (P95) }
+  - { scale: reference, code: TOP3_1, nl: Hoogste van de drie referentiehoogwaters (SPW), en: Highest of the three reference floods (SPW) }
+  - { scale: reference, code: TOP3_2, nl: Tweede van de drie referentiehoogwaters (SPW), en: Second of the three reference floods (SPW) }
+  - { scale: reference, code: TOP3_3, nl: Derde van de drie referentiehoogwaters (SPW), en: Third of the three reference floods (SPW) }
+  - { scale: nivcru, code: '*', nl: Overstromingsstatus van SPW zoals gepubliceerd (ruw), en: SPW flood status as published (raw) }

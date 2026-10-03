@@ -1,0 +1,17 @@
+# DE-1 PEGELONLINE characteristic values (reference kinds): our reviewed NL and EN text. C22: NW and HW are the lowest
+# daily and highest instantaneous water level of the statistical period (Kaub NW 25, HW 719), never NNW or HHW, which
+# are the extremes on record. The provider's own longname and dates are stored beside it as the row's basis label.
+source: DE-1
+labels:
+  - { scale: reference, code: MNW, nl: "Gemiddeld laagwater (MNW)", en: "Mean low water level (MNW)" }
+  - { scale: reference, code: MW, nl: "Gemiddelde waterstand (MW)", en: "Mean water level (MW)" }
+  - { scale: reference, code: MHW, nl: "Gemiddeld hoogwater (MHW)", en: "Mean high water level (MHW)" }
+  - { scale: reference, code: HSW, nl: "Hoogste bevaarbare waterstand (HSW)", en: "Highest navigable water level (HSW)" }
+  - { scale: reference, code: MARKE_I, nl: "Scheepvaartmarkering I", en: "Navigation mark I" }
+  - { scale: reference, code: MARKE_II, nl: "Scheepvaartmarkering II", en: "Navigation mark II" }
+  - { scale: reference, code: MARKE_III, nl: "Scheepvaartmarkering III", en: "Navigation mark III" }
+  - { scale: reference, code: GLW, nl: "Gelijkwaardige waterstand (GlW)", en: "Equivalent water level (GlW)" }
+  - { scale: reference, code: NNW, nl: "Laagste laagwaterstand ooit (NNW)", en: "Lowest low water level on record (NNW)" }
+  - { scale: reference, code: HHW, nl: "Hoogste hoogwaterstand ooit (HHW)", en: "Highest high water level on record (HHW)" }
+  - { scale: reference, code: NW, nl: "Laagste daggemiddelde waterstand van de referentieperiode (NW)", en: "Lowest daily water level of the reference period (NW)" }
+  - { scale: reference, code: HW, nl: "Hoogste momentane waterstand van de referentieperiode (HW)", en: "Highest instantaneous water level of the reference period (HW)" }

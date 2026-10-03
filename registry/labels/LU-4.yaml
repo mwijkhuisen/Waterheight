@@ -1,0 +1,14 @@
+# LU-4 (AGE station pages, owner audience): our text for each reference kind, keyed by our code. The provider's own
+# labels ("Cote de vigilance ... <n> cm") can embed the threshold value and are never used here (R-077).
+source: LU-4
+labels:
+  - { scale: reference, code: LU4_YELLOW, nl: Vigilantiepeil geel (AGE), en: Yellow vigilance level (AGE) }
+  - { scale: reference, code: LU4_ORANGE, nl: Vigilantiepeil oranje (AGE), en: Orange vigilance level (AGE) }
+  - { scale: reference, code: LU4_RED, nl: Vigilantiepeil rood (AGE), en: Red vigilance level (AGE) }
+  - { scale: reference, code: HQ2, nl: Waterstand bij een gemiddelde herhalingstijd van 2 jaar (HQ2), en: Water level with a 2-year return period (HQ2) }
+  - { scale: reference, code: HQ5, nl: Waterstand bij een gemiddelde herhalingstijd van 5 jaar (HQ5), en: Water level with a 5-year return period (HQ5) }
+  - { scale: reference, code: HQ10, nl: Waterstand bij een gemiddelde herhalingstijd van 10 jaar (HQ10), en: Water level with a 10-year return period (HQ10) }
+  - { scale: reference, code: HQ20, nl: Waterstand bij een gemiddelde herhalingstijd van 20 jaar (HQ20), en: Water level with a 20-year return period (HQ20) }
+  - { scale: reference, code: HQ50, nl: Waterstand bij een gemiddelde herhalingstijd van 50 jaar (HQ50), en: Water level with a 50-year return period (HQ50) }
+  - { scale: reference, code: HQ100, nl: Waterstand bij een gemiddelde herhalingstijd van 100 jaar (HQ100), en: Water level with a 100-year return period (HQ100) }
+  - { scale: reference, code: LU4_CRUE_REF, nl: Referentieoverstroming (AGE), en: Reference flood (AGE) }
