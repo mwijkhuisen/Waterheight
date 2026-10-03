@@ -86,8 +86,11 @@ describe('registry/labels', () => {
 
   it('every crosswalk row and every reference kind has a label', () => {
     const missing = [
-      ...CROSSWALK.filter((r) => !has(r.source, r.scale, r.code)).map((r) => `${r.source} ${r.scale} ${r.code}`),
-      ...REFERENCE_ROLES.filter((r) => !has(r.source, 'reference', r.kind)).map(
+      // gated rows (BE-1, DE-9, DE-10) need no label yet: their sources are built in P13
+      ...CROSSWALK.filter((r) => !r.gated && !has(r.source, r.scale, r.code)).map(
+        (r) => `${r.source} ${r.scale} ${r.code}`,
+      ),
+      ...REFERENCE_ROLES.filter((r) => !r.gated && !has(r.source, 'reference', r.kind)).map(
         (r) => `${r.source} reference ${r.kind}`,
       ),
     ];
