@@ -3,7 +3,7 @@
 **Trigger:**
 - `scripts/verify-prod.sh <domain>` fails `owner health` (`owner_sources.healthy` is below `owner_sources.total` in `/api/v1/health/sources`), after the CI-only exception for old fixture data (a FAIL of `owner sources` or `owner stations` is a leak or a lost source: invariant 11, not this runbook's drift);
 - a `load` log line with `"alert":"quarantined"`, `unit_mismatch`, `unknown_quality`, `conflict` or `twin_breach` whose `source` is `BE-3` or `LU-2`;
-- (P8a) a `load` log line with `"alert":"forecast_run_late"`, `incomplete_run`, `combine_drift` or `beyond_horizon` whose `source` is `DE-2` or `LU-3`, or the hand check of an LU-3 display limit (`forecast_limit_drift`, §8);
+- (P8a) a `load` log line with `"alert":"forecast_run_late"`, `incomplete_run`, `combine_drift`, `beyond_horizon` or `before_window` whose `source` is `DE-2` or `LU-3`, or the hand check of an LU-3 display limit (`forecast_limit_drift`, §8);
 - the owner status file (`/srv/rws/owner/status/capture.json`) shows an owner spec with a `last_failure_status`, or the catch-up is not done when you expect it (§3);
 - an SPW or AGE change that you know of: a new station, a new series, a renamed file.
 
@@ -180,7 +180,7 @@ DE-2 (BfG `WV`, one run a day per station, 7 stations) and LU-3 (AGE percentile 
 ```bash
 sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
   "SELECT source_id, status, detail->'forecast' AS forecast FROM own_source_health WHERE source_id IN ('DE-2','LU-3')"
-sudo docker logs --since 24h rws-load-1 2>&1 | grep -E '"alert":"(forecast_run_late|incomplete_run|combine_drift|beyond_horizon)"'
+sudo docker logs --since 24h rws-load-1 2>&1 | grep -E '"alert":"(forecast_run_late|incomplete_run|combine_drift|beyond_horizon|before_window)"'
 ```
 
 `detail.forecast` is `{issued_at, run_age_s, series, current, late}`: the newest issue time across the source's series (for LU-3 the earliest file's fetch time, because AGE states none), its age, the series that have a run, how many of them still have one that reaches now, and for DE-2 the Europe/Berlin day a due run missed its deadline (null when none). The source's `status` never reflects them: DE-2 and LU-3 own no series of their own, so a late or stale run changes no status (A§6).
