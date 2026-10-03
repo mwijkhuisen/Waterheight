@@ -1,6 +1,6 @@
 import { emptyNormalised, type Normalised, type WarningRow } from '@rws/core';
 import { describe, expect, it } from 'vitest';
-import { boundWarnings, RETAINED, WARNING_BYTES } from '../../src/load/pipeline.ts';
+import { boundWarnings, dropNul, RETAINED, WARNING_BYTES } from '../../src/load/pipeline.ts';
 
 // P7a review SR-2: a warning row keeps its level whatever the size of its geometry or texts; an oversized field is
 // left out and counted under a RETAINED code, so a size CHECK never fails a flood warning's transaction.
@@ -45,5 +45,30 @@ describe('boundWarnings', () => {
     expect(RETAINED).toEqual(expect.arrayContaining(['geometry_too_big', 'texts_too_big']));
     // The bound leaves room for PostgreSQL's own jsonb rendering under the 65,536-byte CHECK.
     expect(WARNING_BYTES.texts).toBeLessThan(65_536 - 1024);
+  });
+});
+
+describe('dropNul', () => {
+  const NUL = String.fromCharCode(0);
+  it('withholds a reference, class or warning row with U+0000 in any text (PostgreSQL cannot store it), counted as bad_text', () => {
+    const n: Normalised = {
+      ...emptyNormalised(),
+      classes: [
+        { station: 'de.wsv.1', ts: '2026-10-02T10:00:00.000Z', code: 'RP:0', label: `Kein${NUL}`, level: 2 },
+        { station: 'de.wsv.2', ts: '2026-10-02T10:00:00.000Z', code: 'RP:1', label: 'Klein', level: 3 },
+      ],
+      warnings: {
+        mode: 'snapshot',
+        at: '2026-10-02T10:00:00.000Z',
+        rows: [row({ texts: { de: { headline: `x${NUL}` } } }), row({ area_key: 'Sud' })],
+      },
+    };
+    dropNul(n);
+    expect(n.classes?.map((c) => c.station)).toEqual(['de.wsv.2']);
+    expect(n.warnings?.rows.map((r) => r.area_key)).toEqual(['Sud']);
+    // The withheld area stays as stored: a snapshot does not close what it stated.
+    expect(n.warnings).toMatchObject({ kept: ['Moselle'] });
+    expect(n.dropped).toEqual({ bad_text: 2 });
+    expect(RETAINED).toContain('bad_text');
   });
 });

@@ -127,7 +127,32 @@ export const RETAINED = [
   'unmapped_class',
   'geometry_too_big',
   'texts_too_big',
+  'bad_text',
 ] as const;
+
+const NUL = String.fromCharCode(0);
+const hasNul = (v: unknown): boolean =>
+  typeof v === 'string' ? v.includes(NUL) : typeof v === 'object' && v !== null && Object.values(v).some(hasNul);
+
+/**
+ * PostgreSQL text and jsonb cannot hold U+0000, which JSON can carry: a reference, class or warning row with it in any
+ * text is withheld and counted (`bad_text`, RETAINED: alerted, the object kept for a replay), so provider text never
+ * fails the payload's transaction. A withheld snapshot area stays as stored, as a dropped one does (review CR-5).
+ */
+export function dropNul(n: Normalised): void {
+  const keep = <T>(rows: T[]): T[] => {
+    const kept = rows.filter((r) => !hasNul(r));
+    if (kept.length < rows.length) n.dropped.bad_text = (n.dropped.bad_text ?? 0) + rows.length - kept.length;
+    return kept;
+  };
+  if (n.references) n.references = keep(n.references);
+  if (n.classes) n.classes = keep(n.classes);
+  const w = n.warnings;
+  if (w === undefined) return;
+  const withheld = w.rows.filter(hasNul).flatMap((r) => (r.area_key.includes(NUL) ? [] : [r.area_key]));
+  w.rows = keep(w.rows);
+  if (w.mode === 'snapshot' && withheld.length > 0) w.kept = [...(w.kept ?? []), ...withheld];
+}
 
 /** The bytes the loader stores of a warning's geometry and of its texts (`warning_area.texts` holds 64 KiB). */
 export const WARNING_BYTES = { geometry: 2 * 1024 * 1024, texts: 60_000 } as const;
@@ -583,6 +608,7 @@ export class Loader {
       return setAside('quarantined', 'adapter_error');
     }
 
+    dropNul(result);
     // Gap-fill rows go only into an active primary series of the fill source that is not withheld; a key that
     // source does not register is unknown (a registry change could still load it), any other is dropped.
     const fill: ObsRow[] = [];
