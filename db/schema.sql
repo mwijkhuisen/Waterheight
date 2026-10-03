@@ -699,6 +699,20 @@ CREATE VIEW public.own_forecast_value WITH (security_barrier='true') AS
 
 
 --
+-- Name: own_gauge_zero; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.own_gauge_zero WITH (security_barrier='true') AS
+ SELECT z.series_id,
+    z.value_m,
+    z.datum,
+    z.valid
+   FROM (public.gauge_zero z
+     JOIN public.series_eff e ON ((e.series_id = z.series_id)))
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display);
+
+
+--
 -- Name: own_ingest_batch; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -1299,6 +1313,20 @@ CREATE VIEW public.pub_forecast_value WITH (security_barrier='true') AS
              JOIN public.series_eff e ON ((e.series_id = r.series_id)))
              JOIN public.source fs ON ((fs.id = r.source_id)))
           WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (fs.audience = 'public'::public.audience) AND fs.lic_display AND (r.id = v.run_id))));
+
+
+--
+-- Name: pub_gauge_zero; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.pub_gauge_zero WITH (security_barrier='true') AS
+ SELECT z.series_id,
+    z.value_m,
+    z.datum,
+    z.valid
+   FROM (public.gauge_zero z
+     JOIN public.series_eff e ON ((e.series_id = z.series_id)))
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display);
 
 
 --
@@ -2250,4 +2278,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261003000007'),
     ('20261014000001'),
     ('20261014000002'),
-    ('20261021000001');
+    ('20261021000001'),
+    ('20261024000001');

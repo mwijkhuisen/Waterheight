@@ -1919,7 +1919,7 @@ Target scale (§4.7): `no-ref` (grey), `low`, `normal`, `elevated`, `high`, `ext
 | | 4 "Hochwasser" | high | area | |
 | | 5 "Großes Hochwasser", 6 "Sehr großes Hochwasser" | extreme | area | Different numbering from the station scale; never mix them |
 | DE-10 RLP alert region `alertClassId` / station legend | 1 "Keine Informationen" | no-ref | area | |
-| | 2 "Geringe Hochwassergefahr" (≈ MW) | normal | area | Station legend adds "< Mittelwasser" and "< mittleres Niedrigwasser" → `low` |
+| | 2 "Geringe Hochwassergefahr" (≈ MW) | normal | area | Station legend adds "< Mittelwasser" and "< mittleres Niedrigwasser"; owner decision of 2026-10-03 (P7b, R-090): only "< mittleres Niedrigwasser" (W ≤ MNW) is `low`, "< Mittelwasser" is `normal` |
 | | 3 "Mäßige" (HW2) | elevated | area / stage | Return-period based |
 | | 4 "Mittlere" (HW10) | high | area / stage | |
 | | 5 "Hohe" (HW20), 6 "Sehr hohe" (HW50), 7 "Extreme" (HW100) | extreme | area / stage | |
@@ -1947,6 +1947,7 @@ Target scale (§4.7): `no-ref` (grey), `low`, `normal`, `elevated`, `high`, `ext
 | DE-7 NRW `LANUV_Info_1..3` | W ≤ `LANUV_MNW` | low | stage | |
 | | below Info 1 | normal | stage | |
 | | ≥ Info 1 / ≥ Info 2 / ≥ Info 3 | elevated / high / extreme | stage | Info levels exist only at "Infopegel" |
+| | W ≥ `LANUV_MHW` | elevated | stage (statistical) | Owner decision of 2026-10-03 (P7b, R-090): as PEGELONLINE MHW, so a gauge without Info levels is normal between MNW and MHW |
 | DE-9 NLWKN `Meldestufen` 1–3 | below 1 / ≥ 1 / ≥ 2 / ≥ 3 | normal / elevated / high / extreme | stage | Gated |
 | DE-1 PEGELONLINE | W ≤ MNW | low | stage (statistical) | Statistics, not warnings |
 | | MNW < W < MHW | normal | stage | |

@@ -1,9 +1,10 @@
-import type { ApiStation } from '@rws/contracts';
+import type { ApiStation, Snapshot } from '@rws/contracts';
 import type { MapLayerMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { testHook } from '../../lib/testHook.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { popupLine } from '../station/state.ts';
 import styles from './map.module.css';
 import { type MarkerState, SOURCE, showStations } from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
@@ -18,6 +19,7 @@ interface Props {
   locale: Locale;
   stations: readonly ApiStation[];
   states: ReadonlyMap<string, MarkerState>;
+  values: ReadonlyMap<number, Snapshot['values'][number]>;
   selected: ApiStation | undefined;
   onSelect: (id: string | undefined) => void;
   /** The popup's own close button: deselect, and put the focus somewhere that stays. */
@@ -26,7 +28,7 @@ interface Props {
   onFailure: (code: string) => void;
 }
 
-export function StationsMap({ locale, stations, states, selected, onSelect, onClose, onFailure }: Props) {
+export function StationsMap({ locale, stations, states, values, selected, onSelect, onClose, onFailure }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const state = useMapLibre(ref, locale, OPTIONS);
   const [map, setMap] = useState<MapLibreMap | null>(null);
@@ -85,6 +87,21 @@ export function StationsMap({ locale, stations, states, selected, onSelect, onCl
     if (selected?.lon != null && selected.lat != null) map.jumpTo({ center: [selected.lon, selected.lat], zoom: 9 });
   }, [map, selected]);
 
+  // One line per value of the selected station: quantity, state and basis, all as text (P7b).
+  const lines = useMemo(
+    () =>
+      (selected?.series ?? []).flatMap((series) => {
+        const v = values.get(series.id);
+        const quantity = series.quantity === 'H' ? m.quantity_H({}, { locale }) : m.quantity_Q({}, { locale });
+        return v === undefined ? [] : [popupLine(quantity, v, locale)];
+      }),
+    [selected, values, locale],
+  );
+  const linesNow = useRef(lines);
+  linesNow.current = lines;
+  /** The popup's content element while a popup is open: its lines are replaced in place when `t` moves. */
+  const host = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (map === null || selected === undefined || selected.lon === null || selected.lat === null) return;
     const at: [number, number] = [selected.lon, selected.lat];
@@ -99,6 +116,8 @@ export function StationsMap({ locale, stations, states, selected, onSelect, onCl
         .setLngLat(at)
         .setDOMContent(text)
         .addTo(map);
+      host.current = text.parentElement;
+      showLines(host.current, linesNow.current);
       // Only the popup's own close button deselects: MapLibre also fires 'close' when the map itself is removed
       // (switching to the table), and that must keep the selection.
       popup
@@ -109,9 +128,15 @@ export function StationsMap({ locale, stations, states, selected, onSelect, onCl
     });
     return () => {
       removed = true;
+      host.current = null;
       remove?.();
     };
   }, [map, selected]);
+
+  // A new snapshot changes the lines only: the popup and its close button (and the keyboard focus on it) stay.
+  useEffect(() => {
+    if (host.current !== null) showLines(host.current, lines);
+  }, [lines]);
 
   return (
     <>
@@ -119,4 +144,15 @@ export function StationsMap({ locale, stations, states, selected, onSelect, onCl
       <div ref={ref} className={styles.map} />
     </>
   );
+}
+
+/** Replaces the popup's `p` lines, each a text node (the basis label is provider text too). */
+function showLines(host: HTMLElement | null, lines: readonly string[]): void {
+  if (host === null) return;
+  for (const old of host.querySelectorAll(':scope > p')) old.remove();
+  for (const line of lines) {
+    const p = document.createElement('p');
+    p.textContent = line;
+    host.append(p);
+  }
 }

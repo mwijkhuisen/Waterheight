@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { BACKLOG_MAX_AGE_S, Health, HealthSources, LAG_DEGRADED_S, overallStatus } from '../src/health.ts';
+import {
+  BACKLOG_MAX_AGE_S,
+  ClassCoverage,
+  Health,
+  HealthSources,
+  LAG_DEGRADED_S,
+  overallStatus,
+} from '../src/health.ts';
 
 // The public health contract (A§9.2): strict schemas and the overall status.
 
@@ -40,8 +47,18 @@ const sources = (over: Record<string, unknown> = {}) => ({
   quarantined_batches: [],
   twins: [],
   owner_sources: { healthy: 5, total: 6 },
+  classification: null,
   ...over,
 });
+
+const share = { stations: 10, classed: 6, by_section: 2, ratio: 0.6 };
+const coverage = {
+  t: ago(0),
+  mode: 'state',
+  tier1: share,
+  first_release: share,
+  countries: [{ country: 'DE', tier1: share, first_release: share }],
+};
 
 describe('overallStatus', () => {
   it('ok when the loader computed within 5 minutes and nothing is wrong', () => {
@@ -105,6 +122,42 @@ describe('Health', () => {
     expect(Health.safeParse({ ...doc, quarantined: 1.5 }).success).toBe(false);
     expect(Health.safeParse({ ...doc, generated_at: '2026-10-05T12:00:00+02:00' }).success).toBe(false);
     expect(Health.safeParse({ ...doc, generated_at: null }).success).toBe(true);
+  });
+});
+
+describe('ClassCoverage', () => {
+  const ok = (v: unknown) => ClassCoverage.safeParse(v).success;
+  const withShare = (over: Record<string, unknown>) => ({ ...coverage, tier1: { ...share, ...over } });
+
+  it('is required in HealthSources, null or a full report', () => {
+    expect(HealthSources.safeParse(sources({ classification: coverage })).success).toBe(true);
+    expect(HealthSources.safeParse(sources({ classification: null })).success).toBe(true);
+    const { classification: _, ...missing } = sources();
+    expect(HealthSources.safeParse(missing).success).toBe(false);
+    expect(HealthSources.safeParse(sources({ classification: { ...coverage, x: 1 } })).success).toBe(false);
+  });
+
+  it('bounds the ratio, the countries and the enums, and is strict', () => {
+    expect(ok(coverage)).toBe(true);
+    expect(ok(withShare({ stations: 0, classed: 0, ratio: null }))).toBe(true);
+    expect(ok(withShare({ ratio: 0 }))).toBe(true);
+    expect(ok(withShare({ ratio: 1 }))).toBe(true);
+    expect(ok(withShare({ ratio: 1.01 }))).toBe(false);
+    expect(ok(withShare({ ratio: -0.1 }))).toBe(false);
+    expect(ok(withShare({ stations: -1 }))).toBe(false);
+    expect(ok(withShare({ by_section: -1 }))).toBe(false);
+    expect(ok(withShare({ by_section: 1.5 }))).toBe(false);
+    const { by_section: _, ...noSection } = share;
+    expect(ok({ ...coverage, tier1: noSection })).toBe(false);
+    expect(ok(withShare({ x: 1 }))).toBe(false);
+    const c = (country: string) => ({ country, tier1: share, first_release: share });
+    expect(ok({ ...coverage, countries: ['NL', 'DE', 'BE', 'FR', 'LU', 'CH'].map(c) })).toBe(true);
+    expect(ok({ ...coverage, countries: [...['NL', 'DE', 'BE', 'FR', 'LU', 'CH'].map(c), c('NL')] })).toBe(false);
+    expect(ok({ ...coverage, countries: [c('AT')] })).toBe(false);
+    expect(ok({ ...coverage, countries: [{ ...c('NL'), x: 1 }] })).toBe(false);
+    expect(ok({ ...coverage, mode: 'dh' })).toBe(true);
+    expect(ok({ ...coverage, mode: 'map' })).toBe(false);
+    expect(ok({ ...coverage, t: '2026-10-05T12:00:00+02:00' })).toBe(false);
   });
 });
 

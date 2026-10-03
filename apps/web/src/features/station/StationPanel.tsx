@@ -4,6 +4,7 @@ import { formatAge, formatDay, formatLocal } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { Chart } from './Chart.tsx';
+import { basisKind, heightText, stateWord } from './state.ts';
 import styles from './station.module.css';
 import { formatValue, unitLabel } from './value.ts';
 
@@ -82,6 +83,37 @@ export function StationPanel({ locale, station, values, t, dataEpoch, chartSpan,
                   </dd>
                   <dt>{m.age({}, { locale })}</dt>
                   <dd>{formatAge(value.ageSeconds, locale)}</dd>
+                </>
+              )}
+              {value !== undefined && (
+                <>
+                  <dt>{m.panel_state({}, { locale })}</dt>
+                  <dd>
+                    {stateWord(value.state, locale)}
+                    {value.section && ` ${m.section_marker({}, { locale })}`}
+                  </dd>
+                  {value.basis !== null && (
+                    <>
+                      <dt>{m.panel_basis({}, { locale })}</dt>
+                      <dd>
+                        {basisKind(value.basis, locale)}: {value.basis.label}
+                      </dd>
+                    </>
+                  )}
+                  {value.area !== undefined && (
+                    <>
+                      <dt>{m.panel_area({}, { locale })}</dt>
+                      <dd>
+                        {stateWord(value.area.state, locale)}: {value.area.basis.label}
+                      </dd>
+                    </>
+                  )}
+                  {heightText(value, locale) !== null && (
+                    <>
+                      <dt>{m.panel_height({}, { locale })}</dt>
+                      <dd>{heightText(value, locale)}</dd>
+                    </>
+                  )}
                 </>
               )}
               <dt>{m.data_since({}, { locale })}</dt>

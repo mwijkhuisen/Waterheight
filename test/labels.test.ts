@@ -4,7 +4,7 @@ import { parse } from 'yaml';
 import { H_DESCRIPTION, Q_DESCRIPTION } from '../apps/server/src/adapters/nl-4/normalise.ts';
 import { readThresholds } from '../apps/server/src/load/thresholds.ts';
 import { LabelFile, StationsFile } from '../packages/contracts/src/index.ts';
-import { CROSSWALK, REFERENCE_ROLES } from '../packages/core/src/index.ts';
+import { CROSSWALK, nl4Stem, REFERENCE_ROLES } from '../packages/core/src/index.ts';
 
 const root = new URL('..', import.meta.url);
 
@@ -86,8 +86,11 @@ describe('registry/labels', () => {
 
   it('every crosswalk row and every reference kind has a label', () => {
     const missing = [
-      ...CROSSWALK.filter((r) => !has(r.source, r.scale, r.code)).map((r) => `${r.source} ${r.scale} ${r.code}`),
-      ...REFERENCE_ROLES.filter((r) => !has(r.source, 'reference', r.kind)).map(
+      // gated rows (BE-1, DE-9, DE-10) need no label yet: their sources are built in P13
+      ...CROSSWALK.filter((r) => !r.gated && !has(r.source, r.scale, r.code)).map(
+        (r) => `${r.source} ${r.scale} ${r.code}`,
+      ),
+      ...REFERENCE_ROLES.filter((r) => !r.gated && !has(r.source, 'reference', r.kind)).map(
         (r) => `${r.source} reference ${r.kind}`,
       ),
     ];
@@ -106,7 +109,7 @@ describe('registry/labels', () => {
     const stems = new Set(
       readThresholds(readFileSync(new URL('registry/thresholds/nl-4.csv', root), 'utf8'))
         .rows.filter((r) => keys.has(`${r.description}\n${r.code}`))
-        .map((r) => r.label.replace(/\s*\(.*$/, '').trim()),
+        .map((r) => nl4Stem(r.label)),
     );
     expect(stems.size).toBeGreaterThanOrEqual(15);
     const missing = [...stems].filter((stem) => !has('NL-4', 'stem', stem));

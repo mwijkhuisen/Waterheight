@@ -68,6 +68,7 @@ WHERE ${seriesVisible('e', p)}
 /** Views added after VIEWS_MIGRATION, by logical name, and the migration each is generated into. */
 export const LATER = {
   meta: new URL('../db/migrations/20261014000002_views_meta.sql', import.meta.url),
+  gaugeZero: new URL('../db/migrations/20261024000001_views_gauge_zero.sql', import.meta.url),
 } as const;
 
 const ROLLUP_COLUMNS = 'o.series_id, o.bucket, o.vmin, o.vmax, o.vavg, o.vlast, o.n, o.qc_or';
@@ -160,6 +161,13 @@ WHERE ${audienceIn('a.audience', p.audience)} AND a.lic_display
   meta: (_: Params) => `
 SELECT (SELECT (m.value #>> '{}')::timestamptz FROM app_meta m WHERE m.key = 'data_epoch') AS data_epoch,
        (SELECT (m.value #>> '{}')::timestamptz FROM app_meta m WHERE m.key = 'display_start') AS display_start`,
+
+  // P7b: the gauge zeros of the family's visible series, for the detail view's "≈ m NAP" (D16). No batch id.
+  gaugeZero: (p: Params) => `
+SELECT z.series_id, z.value_m, z.datum, z.valid
+FROM gauge_zero z
+JOIN series_eff e ON e.series_id = z.series_id
+WHERE ${seriesVisible('e', p)}`,
 
   // No archive key and no hash: a batch is named by its id.
   ingestBatch: (p: Params) => `

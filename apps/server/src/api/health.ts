@@ -1,4 +1,11 @@
-import { Health, HealthSources, type HealthUnavailable, overallStatus } from '@rws/contracts';
+import {
+  type ClassCoverage,
+  floorBucket,
+  Health,
+  HealthSources,
+  type HealthUnavailable,
+  overallStatus,
+} from '@rws/contracts';
 import type { Hono } from 'hono';
 import { type Kysely, sql } from 'kysely';
 import type { Logger } from 'pino';
@@ -15,6 +22,7 @@ import {
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { TtlCache } from './cache.ts';
+import { classCoverage, readStates, type StaticCache } from './states.ts';
 import { coded, iso, snapshot, validated } from './util.ts';
 
 // GET /api/v1/health and GET /api/v1/health/sources (A§9.2). The loader
@@ -151,7 +159,32 @@ export async function readHealth(db: Kysely<DB>, now: Date): Promise<Health> {
   return validated(Health, { status: overallStatus(body, now), ...body });
 }
 
-export async function readSources(db: Kysely<DB>, now: Date): Promise<HealthSources> {
+/**
+ * The public classification coverage at the current bucket (P7b; D10), from the public family only. It is computed
+ * beside the health document, never inside its transaction: a failure gives null and a logged fixed code, never a
+ * 503 of the whole document.
+ */
+async function publicCoverage(
+  db: Kysely<DB>,
+  now: Date,
+  deps: Pick<HealthDeps, 'sections' | 'log' | 'cache'>,
+): Promise<ClassCoverage | null> {
+  try {
+    const t = floorBucket(now.getTime());
+    const opts = { now: now.getTime(), current: true, sections: deps.sections, cache: deps.cache };
+    return classCoverage(await readStates(db, 'public', t, opts));
+  } catch (err) {
+    deps.log?.error({ code: errorCode(err), route: 'classification' }, 'coverage unavailable');
+    return null;
+  }
+}
+
+export async function readSources(
+  db: Kysely<DB>,
+  now: Date,
+  deps: Pick<HealthDeps, 'sections' | 'log' | 'cache'> = { sections: new Map(), log: undefined },
+): Promise<HealthSources> {
+  const classification = await publicCoverage(db, now, deps);
   const { rows, batches, twins, owner, l } = await snapshot(db, async (tx) => ({
     rows: await sources(tx),
     batches: await quarantinedBatches(tx),
@@ -203,6 +236,7 @@ export async function readSources(db: Kysely<DB>, now: Date): Promise<HealthSour
       failed_7d: t.failed_7d,
     })),
     owner_sources: { healthy: owner.healthy, total: owner.total },
+    classification,
   });
 }
 
@@ -211,6 +245,10 @@ export type HealthDeps = {
   db: Kysely<DB> | undefined;
   now: () => Date;
   log: Pick<Logger, 'error'> | undefined;
+  /** The FR-5 station → section map, for the coverage report. */
+  sections: ReadonlyMap<string, string>;
+  /** The classification's static rows, shared with the data routes; none in tests that read fresh. */
+  cache?: StaticCache;
 };
 
 /**
@@ -248,5 +286,5 @@ export function registerHealth(app: Hono, deps: HealthDeps): void {
     });
   };
   route('/api/v1/health', readHealth);
-  route('/api/v1/health/sources', readSources);
+  route('/api/v1/health/sources', (db, now) => readSources(db, now, deps));
 }

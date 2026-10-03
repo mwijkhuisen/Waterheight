@@ -29,6 +29,8 @@ const DST_VALUES: [string, number][] = [
   ['2026-10-25T12:00:00Z', 333],
   ['2026-10-26T11:50:00Z', 444],
 ];
+/** The basis label of the xss series' NL-4 class: a known stem, then HTML that must stay text. */
+const HOSTILE_BASIS_LABEL = 'Licht verhoogd (<img src=y onerror=alert(3)>)';
 /** Test stations inside the Lobith map fixture (6.04,51.82 – 6.16,51.88): one H series each, a level in cm NAP. */
 const STATIONS = [
   {
@@ -92,6 +94,16 @@ try {
     );
   }
 
+  // A hostile NL-4 class on the xss series: its basis label is its own payload (alert(3)), a different one from the
+  // station's name (alert(1)) and water (alert(2)). The stem "Licht verhoogd" is a known one, so it classifies.
+  await t.admin.query(
+    `INSERT INTO reference_value (series_id, source_id, kind, value, unit, semantics, season_from_md, season_to_md,
+                                  priority, basis_label, valid)
+     SELECT s.id, 'NL-4', k.kind, k.value, 'cm', 'provider_class', 101, 1231, 0, $1, tstzrange('2020-01-01Z', NULL)
+     FROM series s, (VALUES ('NL4_FROM', 100), ('NL4_TO', 1000)) AS k(kind, value) WHERE s.station_id = 'nl.e2e.xss'`,
+    [HOSTILE_BASIS_LABEL],
+  );
+
   // One value per expected step for every series the public views show (registry series and the two test
   // stations with a regular grid): batch_id has no foreign key, so 1 does.
   await t.admin.query(
@@ -151,6 +163,9 @@ try {
   if (!holds('DE-1', () => true) || !holds('NL-1', (id) => !id.startsWith('nl.e2e.')))
     throw new Error('self-check: no registry station of NL-1 or DE-1');
   if (!snapshot.values.some((v) => v.series === xss)) throw new Error('self-check: no value for nl.e2e.xss at NOW');
+  const xssValue = snapshot.values.find((v) => v.series === xss);
+  if (xssValue?.state !== 'elevated' || !xssValue.basis?.label.includes('onerror=alert(3)'))
+    throw new Error('self-check: nl.e2e.xss has no classified value with the hostile basis label');
   if (snapshot.values.some((v) => v.series === gap)) throw new Error('self-check: a value for nl.e2e.gap at NOW');
 
   const listening = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {

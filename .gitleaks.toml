@@ -54,3 +54,11 @@ condition = "AND"
 regexTarget = "secret"
 regexes = ['''^nl-1-obs-key-eijsden-grens-h$''', '''^nl-1-obs-split\.synthetic$''']
 paths = ['''^apps/server/test/load/nl\.int\.test\.ts$''']
+
+[[allowlists]]
+description = "Name of the NL-1 fixture file, listed right after the capture spec id 'nl-1-obs-key' in the P7b classification inputs, not a key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^nl-1-obs-key-eijsden-grens-h$''']
+paths = ['''^apps/server/test/classification/inputs\.ts$''']

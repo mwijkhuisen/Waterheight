@@ -162,6 +162,9 @@ async function insertObs(rows: { id: number; obs: Obs[] }[]) {
   }
 }
 
+/** The seeded series have no reference, class or area: every value is no_ref (the state read is proved in states.int.test.ts). */
+const NO_REF = { state: 'no_ref', basis: null, section: false };
+
 /** The reference: LOCF at T straight from the base tables, written differently from the at-T function. */
 async function reference(seriesIds: number[], atMs = T) {
   const { rows } = await t.admin.query<{ series_id: number; ts: Date; value: number; qc: number }>(
@@ -177,6 +180,7 @@ async function reference(seriesIds: number[], atMs = T) {
     value: r.value,
     qc: r.qc,
     ageSeconds: (atMs - r.ts.getTime()) / SEC,
+    ...NO_REF,
   }));
 }
 
@@ -352,6 +356,7 @@ describe('GET /api/v1/snapshot?t=<now - 1 day> against a direct LOCF computation
         value: want.value,
         qc: want.qc,
         ageSeconds: (T - want.ts) / SEC,
+        ...NO_REF,
       });
     }
     // By number: the three ages the limits are about.
@@ -379,6 +384,7 @@ describe('GET /api/v1/snapshot?t=<now - 1 day> against a direct LOCF computation
       value: 12,
       qc: 1,
       ageSeconds: 0,
+      ...NO_REF,
     });
     expect(byId.get(id('atLimit'))).toEqual({
       series: id('atLimit'),
@@ -386,6 +392,7 @@ describe('GET /api/v1/snapshot?t=<now - 1 day> against a direct LOCF computation
       value: 23,
       qc: 1,
       ageSeconds: 0,
+      ...NO_REF,
     });
     // afterOnly: its first value is 300 s after T, so it is in at T + 10 min with age 300 s.
     expect(byId.get(id('afterOnly'))).toMatchObject({ value: 44, ageSeconds: 300 });

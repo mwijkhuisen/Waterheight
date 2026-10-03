@@ -1,10 +1,12 @@
-import { MAX_POINTS, type Meta, type Series, type Snapshot, type Stations } from '@rws/contracts';
+import { floorBucket, MAX_POINTS, type Meta, type Series, type Snapshot, type Stations } from '@rws/contracts';
+import { OWNER_ONLY_SOURCES } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
-import { OBS_AT, VIEWS } from '../db/audience.ts';
+import { VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { FILLED_BY } from '../load/adapters.ts';
 import type { SeriesParams } from './params.ts';
-import { iso, snapshot } from './util.ts';
+import { readStates, type StateRead, type StaticCache, snapshotValues } from './states.ts';
+import { coded, iso, snapshot } from './util.ts';
 import type { Window } from './window.ts';
 
 // The reads of the public data routes (A§8 Q1, Q4; A§9.2). This process serves
@@ -162,21 +164,30 @@ export async function readStations(db: Kysely<DB>): Promise<Stations> {
   };
 }
 
-/** A§8 Q1 at the quantised `t`: the last observation of every series with ts ≤ t and ts > t − its staleness limit. */
-export async function readSnapshot(db: Kysely<DB>, t: number): Promise<Snapshot> {
-  const at = new Date(t);
-  const { rows } = await sql<{ series_id: number; ts: Date; value: number; qc: number }>`
-    SELECT series_id, ts, value, qc FROM ${sql.id(OBS_AT.public)}(${at}::timestamptz) ORDER BY series_id`.execute(db);
-  return {
-    t: iso(at),
-    values: rows.map((r) => ({
-      series: r.series_id,
-      ts: iso(r.ts),
-      value: r.value,
-      qc: r.qc,
-      ageSeconds: Math.floor((t - r.ts.getTime()) / 1000),
-    })),
-  };
+/**
+ * A§8 Q1 at the quantised `t` (the last observation of every series with ts ≤ t and ts > t − its staleness limit),
+ * each value with its state, basis and detail-view height (P7b, A§8 Q3): the public family only.
+ */
+export async function readSnapshot(
+  db: Kysely<DB>,
+  t: number,
+  opts: { now: number; sections: ReadonlyMap<string, string>; cache: StaticCache },
+): Promise<Snapshot> {
+  return publicSnapshot(await readStates(db, 'public', t, { ...opts, current: t >= floorBucket(opts.now) }));
+}
+
+/**
+ * The public snapshot of a public read. A basis or area basis of an owner-only source (LU-4, BE-3) fails it closed
+ * with the fixed code `owner_basis` (the route answers 503 `unavailable`): the public views drop those rows and
+ * classify() ignores them in the public family, and this is the check at the boundary (review SR-5).
+ */
+export function publicSnapshot(read: StateRead): Snapshot {
+  const values = snapshotValues(read);
+  const owner = (source: string | undefined) => source !== undefined && OWNER_ONLY_SOURCES.has(source);
+  if (values.some((v) => owner(v.basis?.source) || owner(v.area?.basis.source))) throw coded('owner_basis');
+  // Every source behind a served state, the second part of a two-part basis included (review R2-2).
+  if (read.series.some((s) => s.obs !== null && s.classified.sources.some(owner))) throw coded('owner_basis');
+  return { t: iso(new Date(read.t)), values };
 }
 
 type RawRow = { ts: Date; value: number; qc: number };

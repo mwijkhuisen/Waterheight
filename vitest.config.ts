@@ -13,7 +13,7 @@ export default defineConfig({
     // Node 26 enables Web Storage by default and warns in every worker; tests never use it.
     execArgv: ['--no-experimental-webstorage'],
     // `pnpm test:coverage` (issue #17: at least 90% line coverage of every adapter's parse and normalise).
-    // It runs the adapter tests only: under instrumentation the timing tests of the recorder are too slow.
+    // It runs the adapter tests and the core tests only: under instrumentation the timing tests of the recorder are too slow.
     coverage: {
       provider: 'v8',
       include: [
@@ -21,6 +21,9 @@ export default defineConfig({
         'apps/server/src/adapters/*/normalise.ts',
         // P5c: the shared code of a provider or a protocol (the KiWIS client, the AGE slug).
         'apps/server/src/adapters/_shared/*/*.ts',
+        // P7b: the classifier and the class crosswalk (packages/core/test).
+        'packages/core/src/classify.ts',
+        'packages/core/src/crosswalk.ts',
       ],
       reporter: ['text'],
       thresholds: { lines: 90, perFile: true },

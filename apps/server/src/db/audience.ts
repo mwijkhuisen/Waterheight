@@ -30,6 +30,7 @@ export const VIEWS = {
     twinCheck: 'pub_twin_check',
     ingestBatch: 'pub_ingest_batch',
     meta: 'pub_meta',
+    gaugeZero: 'pub_gauge_zero',
     api: {
       series: 'pub_api_series',
       obs: 'pub_api_obs',
@@ -56,6 +57,7 @@ export const VIEWS = {
     twinCheck: 'own_twin_check',
     ingestBatch: 'own_ingest_batch',
     meta: 'own_meta',
+    gaugeZero: 'own_gauge_zero',
     api: {
       series: 'own_api_series',
       obs: 'own_api_obs',
@@ -84,7 +86,8 @@ export type DisplayView =
   | 'sourceHealth'
   | 'twinCheck'
   | 'ingestBatch'
-  | 'meta';
+  | 'meta'
+  | 'gaugeZero';
 export type ApiView = 'series' | 'obs' | 'obs1h' | 'obs1d' | 'forecastRun' | 'forecastValue';
 
 /**

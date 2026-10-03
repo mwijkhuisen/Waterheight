@@ -170,6 +170,28 @@ export type ApiStation = z.infer<typeof ApiStation>;
 export const Stations = z.strictObject({ stations: z.array(ApiStation).max(10_000) });
 export type Stations = z.infer<typeof Stations>;
 
+/** The common ordinal scale (ADR-0009); `no_ref` is a value without a deciding reference, never a guess. */
+export const STATES = ['no_ref', 'low', 'normal', 'elevated', 'high', 'extreme'] as const;
+export type State = (typeof STATES)[number];
+/** The priority group a state was taken from (catalogue §4.7): an area class only where no gauge state exists. */
+export const BASIS_KINDS = ['operational', 'statistical', 'provider_class', 'area'] as const;
+
+/** What a state is based on (P7b): the agency's reference, class or area, with a label that may hold provider text. */
+export const StateBasis = z.strictObject({
+  source: HealthSourceId,
+  kind: z.enum(BASIS_KINDS),
+  /**
+   * What the state measures: the series' own quantity at the gauge (a stage, an absolute level such as a lake or a
+   * NAP level series, a discharge), or an area (a section, region or zone).
+   */
+  measure: z.enum(['stage', 'level', 'discharge', 'area']),
+  /** Our code: the reference kinds used (`MNW/MHW`), the class code (`RP:0`), the NL-4 stem or the area key. */
+  ref: Text(200),
+  /** "WSV MNW 2010–2020", "Licht verhoogd (>200cm)" (NL-4): untrusted text, data only. */
+  label: Text(700),
+});
+export type StateBasis = z.infer<typeof StateBasis>;
+
 export const SnapshotValue = z.strictObject({
   series: SeriesId,
   /** The observation carried forward to `t`: ts ≤ t and ts > t − stalenessLimit. */
@@ -179,6 +201,23 @@ export const SnapshotValue = z.strictObject({
   qc: z.number().int().min(0).max(1023),
   /** t − ts. */
   ageSeconds: count,
+  /** The classified state at `t` (P7b), from public rows only. */
+  state: z.enum(STATES),
+  /** null exactly when the state is no_ref. */
+  basis: StateBasis.nullable(),
+  /** The state comes from an area class (a section, region or zone), not from the gauge: shown with a badge. */
+  section: z.boolean(),
+  /** An area class at the gauge's station, returned beside a gauge state (the gauge class wins). */
+  area: z
+    .strictObject({
+      state: z.enum(STATES.slice(1) as ['low', 'normal', 'elevated', 'high', 'extreme']),
+      basis: StateBasis,
+    })
+    .optional(),
+  /** Detail view only (D16): ≈ m NAP and its uncertainty in m. */
+  nap: z.strictObject({ m: z.number(), pm: z.number().nonnegative() }).optional(),
+  /** A gauge zero as published that is not converted (IGN69, NGF-1884, Hub'Eau metadata): shown as unverified. */
+  zero: z.strictObject({ m: z.number(), datum: z.enum(DATUMS) }).optional(),
 });
 export const Snapshot = z.strictObject({
   /** The quantised instant (UTC, on the 10-minute grid). */

@@ -464,12 +464,30 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     const dstOf = (res: Got) => Snapshot.parse(res.json()).values.filter((v) => v.series === sid('dst'));
     expect(Snapshot.parse(first.json()).t).toBe('2026-10-25T00:30:00.000Z');
     expect(dstOf(first)).toEqual([
-      { series: sid('dst'), ts: '2026-10-25T00:30:00.000Z', value: 111, qc: 2, ageSeconds: 0 },
+      {
+        series: sid('dst'),
+        ts: '2026-10-25T00:30:00.000Z',
+        value: 111,
+        qc: 2,
+        ageSeconds: 0,
+        state: 'no_ref',
+        basis: null,
+        section: false,
+      },
     ]);
     const second = await get(app, '/api/v1/snapshot?t=2026-10-25T02:30%2B01:00');
     expect(Snapshot.parse(second.json()).t).toBe('2026-10-25T01:30:00.000Z');
     expect(dstOf(second)).toEqual([
-      { series: sid('dst'), ts: '2026-10-25T01:30:00.000Z', value: 222, qc: 1, ageSeconds: 0 },
+      {
+        series: sid('dst'),
+        ts: '2026-10-25T01:30:00.000Z',
+        value: 222,
+        qc: 1,
+        ageSeconds: 0,
+        state: 'no_ref',
+        basis: null,
+        section: false,
+      },
     ]);
 
     const fresh = appAt(NOW);
@@ -498,11 +516,13 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     );
     expect(new Set(all.map((r) => r.text)).size).toBe(1);
     expect(all.map((r) => r.status)).toEqual(Array.from({ length: 20 }, () => 200));
+    // One computation: the classification's static rows (registry, references, zeros: kept per family for a
+    // minute) and the rows at t, one transaction each.
     const asked = connect.mock.calls.length;
-    expect(asked).toBe(1);
-    // Another key opens its own query.
+    expect(asked).toBe(2);
+    // Another key opens its own query; the static rows are kept.
     await get(app, '/api/v1/snapshot?t=2026-10-25T12:10:00Z');
-    expect(connect.mock.calls.length).toBe(2);
+    expect(connect.mock.calls.length).toBe(3);
   });
 
   it('/series holds [from, to), floors both to the grid, and answers each resolution with its own fields', async () => {
@@ -848,7 +868,16 @@ describe('on the real clock: channels and canaries', () => {
         keys
           .map(sid)
           .sort((a, b) => a - b)
-          .map((series) => ({ series, ts: iso, value: 100, qc: 1, ageSeconds: 0 })),
+          .map((series) => ({
+            series,
+            ts: iso,
+            value: 100,
+            qc: 1,
+            ageSeconds: 0,
+            state: 'no_ref',
+            basis: null,
+            section: false,
+          })),
       );
       for (const key of HIDDEN)
         expect(

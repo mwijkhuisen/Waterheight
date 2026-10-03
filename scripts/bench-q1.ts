@@ -22,6 +22,63 @@ const LIMIT_MS = 50;
 const RUNS = 30;
 
 const t = await createTestDb();
+
+// P7b: the base tables the classified snapshot reads, at the size production will have and then some. Half the
+// series carry about 4 statistical references (a DE-1 style set), 100 an NL-4 style seasonal pair, a third of the
+// stations a DE-6 station class with a few changes over the days, ~200 warning areas of which 20 are valid
+// throughout (polygons of 300 to 3,000 vertices), a gauge zero for half the series and a fresh fetch per source.
+async function seedClassification(series: number, days: number) {
+  await t.admin.query(`
+    INSERT INTO source (id, provider_id, name, audience, lic_display, lic_api, lic_bulk_export, lic_history_export, capture_enabled)
+      SELECT v, 'bench', 'bench', 'public', true, true, true, true, true FROM unnest(ARRAY['DE-1', 'NL-4', 'DE-6', 'FR-5']) v;`);
+  // Stations spread over a 10 x 5 degree box, so that a polygon holds only a few of them.
+  await t.admin.query(
+    `UPDATE station SET lon = 3 + random() * 10, lat = 48 + random() * 5, tier = CASE WHEN id::text ~ '[05]$' THEN 1 ELSE 2 END`,
+  );
+  await t.admin.query(
+    `INSERT INTO reference_value (series_id, source_id, kind, value, unit, semantics, period, priority, valid)
+     SELECT s.id, 'DE-1', k.kind, k.value + (s.id % 50), 'cm', 'statistical', daterange('2010-11-01', '2020-11-01'), 0,
+            tstzrange(now() - interval '400 days', NULL)
+     FROM series s, (VALUES ('MNW', 65), ('MW', 220), ('MHW', 544), ('HSW', 640)) k(kind, value)
+     WHERE s.id % 2 = 0`,
+  );
+  await t.admin.query(
+    `INSERT INTO reference_value (series_id, source_id, kind, value, unit, semantics, season_from_md, season_to_md, priority, valid)
+     SELECT s.id, 'NL-4', k.kind, k.value + (s.id % 40), 'cm', 'provider_class', k.f, k.t, k.p, tstzrange(now() - interval '400 days', NULL)
+     FROM (SELECT id FROM series ORDER BY id LIMIT 100) s,
+          (VALUES ('NL4_FROM', 150, 101, 1231, 1), ('NL4_TO', 250, 101, 1231, 1),
+                  ('NL4_FROM', 200, 401, 930, 2), ('NL4_TO', 300, 401, 930, 2)) k(kind, value, f, t, p)`,
+  );
+  await t.admin.query(
+    `INSERT INTO class_obs (subject_type, subject_id, ts, source_id, provider_code, provider_label, level_norm, batch_id)
+     SELECT 'station', st.id, now() - make_interval(hours => c * (($1 * 24) / 3)::int / 3), 'DE-6', 'RP:' || ((hashtext(st.id) + c) % 4), 'class', 1, 1
+     FROM (SELECT id FROM station WHERE hashtext(id) % 3 = 0) st, generate_series(0, 2) c`,
+    [days],
+  );
+  const polygon = (n: string) => `json_build_object('type', 'Polygon', 'coordinates', json_build_array((
+      SELECT json_agg(json_build_array(round((cx + r * cos(a))::numeric, 5), round((cy + r * sin(a))::numeric, 5)) ORDER BY i)
+      FROM (SELECT i, 2 * pi() * i / ${n} AS a, r * (0.8 + 0.2 * ((i % ${n}) * 7919 % 10) / 10.0) AS r FROM generate_series(0, ${n}) i) v)))::text`;
+  // 20 valid throughout, 180 that closed earlier; a ring closes on its first vertex (i = 0 and i = n alike).
+  await t.admin.query(
+    `INSERT INTO warning_area (id, source_id, area_key, name, geometry_geojson, level_norm, level_raw, valid, batch_id) OVERRIDING SYSTEM VALUE
+     SELECT g, 'DE-6', 'area:' || g, 'area ' || g,
+            (SELECT ${polygon('n')} FROM (SELECT 3 + random() * 10 AS cx, 48 + random() * 5 AS cy, 0.3 + random() AS r, 300 + (random() * 2700)::int AS n) p),
+            1 + g % 5, (g % 5)::text,
+            CASE WHEN g <= 20 THEN tstzrange(now() - interval '1 year', NULL)
+                 ELSE tstzrange(now() - make_interval(days => 1 + g % ${days}), now() - make_interval(days => g % ${days}) - interval '3 hours') END,
+            1
+     FROM generate_series(1, 200) g`,
+  );
+  await t.admin.query(
+    `INSERT INTO gauge_zero (series_id, value_m, datum, valid, batch_id)
+     SELECT id, (random() * 100)::numeric(8, 3), 'NHN', tstzrange(now() - interval '400 days', NULL), 1 FROM series WHERE id % 2 = 0 AND $1 > 0`,
+    [series],
+  );
+  await t.admin.query(
+    `INSERT INTO source_health (source_id, last_fetch_ok, status) SELECT v, now(), 'ok' FROM unnest(ARRAY['NL-1', 'DE-1', 'NL-4', 'DE-6', 'FR-5']) v`,
+  );
+}
+
 let failed = false;
 try {
   const started = Date.now();
@@ -52,6 +109,7 @@ try {
      CROSS JOIN series s`,
     [DAYS],
   );
+  await seedClassification(SERIES, DAYS);
   await t.admin.query('ANALYZE');
   const { rows: size } = await t.admin.query<{ n: string }>('SELECT count(*) AS n FROM obs');
   console.log(
@@ -188,8 +246,10 @@ try {
       }
     };
     const snapshotProblem = (body: string) => {
-      const n = JSON.parse(body).values.length;
-      return n === SERIES ? undefined : `${n} values, expected ${SERIES}`;
+      const values: { state: string }[] = JSON.parse(body).values;
+      if (values.length !== SERIES) return `${values.length} values, expected ${SERIES}`;
+      // The P7b seed must reach the classifier: some values carry a state.
+      return values.some((v) => v.state !== 'no_ref') ? undefined : 'no value has a state';
     };
     const seriesProblem = (body: string) => {
       const s = JSON.parse(body);

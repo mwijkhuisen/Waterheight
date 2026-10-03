@@ -88,7 +88,7 @@ A re-levelled gauge is a real change. The history keeps both zeros; the station 
 
 D18 was signed on 2026-10-03, as P7a built it (PHASES §6.1): `level_norm` is the signed table. When the owner changes a row:
 
-1. Edit `packages/core/src/crosswalk.ts` and the labels; update the goldens (`UPDATE_GOLDEN=1`, review each) and bump the adapter `version` of the changed sources in `apps/server/src/load/adapters.ts`.
+1. Edit `packages/core/src/crosswalk.ts` (the one table, P7b) and the labels; run `node scripts/gen-classification.ts` (it rewrites `docs/classification.md`; CI fails on a difference); review the golden-state diff (`UPDATE_GOLDEN=1 vitest run apps/server/test/classification`, then read every changed station in `golden-states.golden.json`) and say it in the PR; update the other goldens (`UPDATE_GOLDEN=1`, review each) and bump the adapter `version` of the changed sources in `apps/server/src/load/adapters.ts`.
 2. Deploy. `migrate` changes nothing.
 3. Replay the class and warning specs from the first day of the archive (use `rwsc` from `replay.md` §2; count first with `--dry-run`). References are stored without a level, so only these change:
 
@@ -107,6 +107,10 @@ D18 was signed on 2026-10-03, as P7a built it (PHASES §6.1): `level_norm` is th
    ```
 
    List any stale rows in the PR and do not edit them by hand.
+
+**A user reports a wrong colour or state (P7b).** Ask the snapshot for the station at the instant they saw, `GET /api/v1/snapshot?t=<instant>` (the `t` as `…Z`), and read its value: `state` is the level, `basis` says which candidate decided (`source`, `kind` operational, statistical, provider_class or area, `ref`, `label`, for example "WSV MNW 2010–2020" or "LHP RP:0"), `section: true` means the state is the area's because the gauge had none, and `area` is an area class returned beside a gauge state. A `null` basis is `no_ref`: no candidate decided (a reference of another unit, a tidal or impounded series that skips a source, a class the crosswalk calls `no_ref`, a stale class past its freshness window, or a threshold set that cannot place the value). Then compare `basis.ref` with the row in `docs/classification.md`, and the stored reference or class with the `pub_*` views as `rws_api`; a wrong level in the table is §6, a wrong stored row is §2 or §3, and a stale class is the source's `last_fetch_ok` in `/api/v1/health/sources`. A `ref` with two kinds joined by `/` (and a label with two parts joined by ` / `, "AGE < orange / AGE HQ10") is a collapse: the first candidate narrowed the interval, the second, of lower priority, disagreed and moved the state to the edge nearest to it. The owner's own states are not served before P9.
+
+**How long an old state can be served (P7b review SR-8).** The api keeps each family's stations, series, references, gauge zeros and area attachments for 60 s, and every answer stays in its cache and in the browser for its max-age (`/snapshot`: 60 s for the current bucket, plus `stale-while-revalidate=300`; 600 s within 48 hours; a day for older instants). So a withdrawn series or reference, a registry sync or a corrected row can still be served for up to 60 s plus the answer's max-age. Judge a fix after that, or at an instant nobody has asked for yet.
 
 **Retention.** A CH-1 or CH-2 payload that opened a class row or a reference range is promoted to forever, but of one spec and UTC day only the first 24 such payloads (`PROMOTE_PER_DAY` in `load/prune.ts`) beside the daily copy: a flapping class or threshold cannot keep every payload (T-REF-7). The pruner is a dry run until the owner enables it.
 

@@ -5,6 +5,7 @@ import {
   ApiError,
   ApiStation,
   Attribution,
+  BASIS_KINDS,
   BUCKET_MS,
   floorBucket,
   INSTANT_MAX_LENGTH,
@@ -22,11 +23,13 @@ import {
   Snapshot,
   SnapshotQuery,
   SPAN_CAP_MS,
+  STATES,
   Stations,
 } from '../src/api.ts';
 import { CANARY_RENDERINGS } from '../src/canaries.ts';
 import { HealthUnavailable } from '../src/health.ts';
 import { openApiDocument } from '../src/openapi.ts';
+import { DATUMS } from '../src/units.ts';
 
 // The public read API: its strict answer schemas, the query grammar and the OpenAPI document built from them.
 
@@ -73,7 +76,23 @@ const station = {
   series: [seriesMeta],
 };
 const stations = { stations: [station] };
-const snapshotValue = { series: 12, ts: T, value: 1234.5, qc: 0, ageSeconds: 300 };
+const stateBasis = {
+  source: 'DE-1',
+  kind: 'operational',
+  measure: 'stage',
+  ref: 'MNW/MHW',
+  label: 'WSV MNW 2010–2020',
+};
+const snapshotValue = {
+  series: 12,
+  ts: T,
+  value: 1234.5,
+  qc: 0,
+  ageSeconds: 300,
+  state: 'no_ref',
+  basis: null,
+  section: false,
+};
 const snapshot = { t: T, values: [snapshotValue] };
 const span = { id: 12, from: '2026-11-20T09:00:00.000Z', to: T, truncated: false };
 const rawPoint = { ts: T, value: 12.5, qc: 3 };
@@ -263,6 +282,53 @@ describe('Snapshot', () => {
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY, null, '1', undefined])
       expect(sv({ value }), String(value)).toBe(false);
     expect(sv({ value: -0.5 })).toBe(true);
+  });
+});
+
+describe('Snapshot state and basis', () => {
+  const sv = (over: Record<string, unknown>) => ok(Snapshot, { t: T, values: [{ ...snapshotValue, ...over }] });
+  const classed = { state: 'low', basis: stateBasis };
+
+  it('state is one of the six, basis is a strict object', () => {
+    for (const state of STATES) expect(sv({ state, basis: stateBasis }), state).toBe(true);
+    for (const state of ['LOW', 'critical', '', null, undefined]) expect(sv({ state }), String(state)).toBe(false);
+    expect(sv(classed)).toBe(true);
+    expect(sv({ ...classed, basis: { ...stateBasis, extra: 1 } })).toBe(false);
+    for (const key of Object.keys(stateBasis))
+      expect(sv({ ...classed, basis: without(stateBasis, key) }), key).toBe(false);
+    for (const key of ['state', 'basis', 'section'])
+      expect(ok(Snapshot, { t: T, values: [without(snapshotValue, key)] })).toBe(false);
+  });
+
+  it('bounds the basis: kind, measure, label at 700, ref at 200, an empty text and a source that is not a public id', () => {
+    const b = (over: Record<string, unknown>) => sv({ ...classed, basis: { ...stateBasis, ...over } });
+    expect(b({ label: 'x'.repeat(700) })).toBe(true);
+    expect(b({ label: 'x'.repeat(701) })).toBe(false);
+    expect(b({ label: '' })).toBe(false);
+    expect(b({ ref: 'x'.repeat(200) })).toBe(true);
+    expect(b({ ref: 'x'.repeat(201) })).toBe(false);
+    for (const kind of BASIS_KINDS) expect(b({ kind }), kind).toBe(true);
+    expect(b({ kind: 'owner' })).toBe(false);
+    for (const measure of ['stage', 'level', 'discharge', 'area']) expect(b({ measure }), measure).toBe(true);
+    expect(b({ measure: 'volume' })).toBe(false);
+    for (const source of ['CANARY-OWNER', 'owner', 'de-1', 'DE-', 'XX-1', 'DE-100'])
+      expect(b({ source }), source).toBe(false);
+  });
+
+  it('area takes a state of low or above and a basis; nap and zero are strict', () => {
+    const a = (area: unknown) => sv({ area });
+    expect(a({ state: 'high', basis: { ...stateBasis, kind: 'area', measure: 'area' } })).toBe(true);
+    expect(a({ state: 'no_ref', basis: stateBasis })).toBe(false);
+    expect(a({ state: 'high' })).toBe(false);
+    expect(a({ state: 'high', basis: stateBasis, extra: 1 })).toBe(false);
+    expect(sv({ nap: { m: 1.2, pm: 0 } })).toBe(true);
+    expect(sv({ nap: { m: -1.2, pm: 0.05 } })).toBe(true);
+    expect(sv({ nap: { m: 1.2, pm: -0.01 } })).toBe(false);
+    expect(sv({ nap: { m: 1.2 } })).toBe(false);
+    expect(sv({ nap: { m: 1.2, pm: 0, x: 1 } })).toBe(false);
+    for (const datum of DATUMS) expect(sv({ zero: { m: 3, datum } }), datum).toBe(true);
+    expect(sv({ zero: { m: 3, datum: 'SEA' } })).toBe(false);
+    expect(sv({ zero: { m: 3, datum: 'IGN69', x: 1 } })).toBe(false);
   });
 });
 
