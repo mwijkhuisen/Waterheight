@@ -142,7 +142,7 @@ const deps = () => ({
 const REPLAY = { source: 'NL-1', spec: null, from: '2026-09-29', to: '2026-10-31', dryRun: false } as const;
 
 describe('the expected runs (from the adapter alone)', () => {
-  it('are four runs of two registered series; the all-gap list at an unregistered location is none', () => {
+  it('are five runs of two registered series; the all-gap list at an unregistered location is none', () => {
     expect(EXPECTED.map((e) => [e.series, e.n])).toEqual([
       [DRIEL_H, 153],
       [DRIEL_H, 279],

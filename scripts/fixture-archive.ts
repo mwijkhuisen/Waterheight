@@ -201,7 +201,7 @@ export async function buildNlFixtureArchive(rawDir: string): Promise<ManifestLin
  * production archive on 2026-10-01 (Lobith Q: the last two of one run and the first two of the next; Driel beneden
  * H: the last capture of one run, the first of the next and its tail; Alblasserdam H: an all-gap list at a location the
  * registry does not hold). A capture is a run without its leading values, so the replay of this archive must hold
- * four runs of two series in any order (apps/server/test/load/nl-1-forecast.int.test.ts).
+ * five runs of two series in any order (apps/server/test/load/nl-1-forecast.int.test.ts).
  */
 export const NL_FORECAST_FIXTURES: readonly { spec: string; name: string; variant: string }[] = [
   { spec: 'nl-1-fc-1h', name: 'nl-1-fc-1h', variant: 'lobith.bovenrijn.tolkamer/Q' },

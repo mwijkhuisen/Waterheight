@@ -1600,7 +1600,7 @@ export const CHECKS = [
   ),
   'api states: every value of the "now" snapshot has a state; basis is null exactly for no_ref; section only with an area basis and no area beside it; nap and zero never both (counts only; no values is a PASS)',
   'class coverage: /api/v1/health/sources has a non-null classification (tier-1 ratio, how many are classed by a section only, mode, classed/stations per country; no stations is a PASS)',
-  `forecast NL-1: /api/v1/health/sources lists NL-1 with a forecast whose newest run was issued at most ${FORECAST_NL1_MAX_AGE_S / 3600} h ago (RWS issues one run a day, so not the 7 h of the issue) and of whose series at least ${FORECAST_NL1_CURRENT_MIN * 100}% have a current run; needs live capture (numbers only)`,
+  `forecast NL-1: /api/v1/health/sources lists NL-1 with a forecast whose newest run was issued at most ${FORECAST_NL1_MAX_AGE_S / 3600} h ago (RWS issues one run a day: the criterion is 30 h, owner decision 2026-10-03) and of whose series at least ${FORECAST_NL1_CURRENT_MIN * 100}% have a current run; needs live capture (numbers only)`,
   'forecast coverage: /api/v1/health/sources has a non-null forecast_coverage with one entry per reach row of registry/forecast-reaches.yaml in order, each reach without a visible source states after_permission or none_publishes, and no owner-audience source ID or BfG appears in it (needs no fresh data; counts only)',
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
   'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter"} with Cache-Control: no-store',

@@ -53,7 +53,7 @@ export const ADAPTER: LoadAdapter = {
         // Positions are not stored from LU-4 (LU-6 holds them): an empty map, so no point is looked up.
         const out = normalise(parsePage(body), { station, positions: new Map() });
         // P8a: a page that states another forecast limit than the LU-3 seed (`limit_h`) is counted, never stored: the
-        // display limit is the seed's, and the owner reads the change in the batch's drop counts.
+        // display limit is the seed's (owner decision 2). Counted only, like every code outside RETAINED (KG-205).
         const limit = lu3Seed().get(out.record.forecast_slug);
         if (limit !== undefined && limit !== null && out.record.forecast_limit_h !== limit)
           out.dropped.forecast_limit_drift = 1;
