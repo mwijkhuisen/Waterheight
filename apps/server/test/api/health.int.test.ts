@@ -205,9 +205,12 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
     const base = (await tier1('station')).reduce((a, r) => a + r.n, 0);
     expect(base).toBeGreaterThan(publicTotal);
     expect(c.first_release.stations).toBeLessThanOrEqual(c.tier1.stations);
-    // The registry's reference rows classify some of them; the mode follows the 60 % rule of D10.
+    // The registry's reference rows classify some of them; the mode follows the 60 % rule of D10 on the stations
+    // with a gauge state (review CR-4: section-only states do not count).
     expect(c.tier1.classed).toBeLessThanOrEqual(c.tier1.stations);
-    expect(c.mode).toBe(c.tier1.ratio !== null && c.tier1.ratio >= 0.6 ? 'state' : 'dh');
+    expect(c.tier1.by_section).toBeLessThanOrEqual(c.tier1.classed);
+    const gauge = c.tier1.stations === 0 ? 0 : (c.tier1.classed - c.tier1.by_section) / c.tier1.stations;
+    expect(c.mode).toBe(gauge >= 0.6 ? 'state' : 'dh');
     expect(c.t).toBe('2026-09-29T13:40:00.000Z');
   });
 

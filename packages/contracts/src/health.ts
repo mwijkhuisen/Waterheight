@@ -82,6 +82,8 @@ const Share = z.strictObject({
   stations: count,
   /** Of them, with a state other than no_ref. */
   classed: count,
+  /** Of the classed, those whose only states are section states (an area class, no gauge state). */
+  by_section: count,
   /** classed / stations; null without stations. */
   ratio: z.number().min(0).max(1).nullable(),
 });
@@ -89,9 +91,11 @@ const Share = z.strictObject({
 /**
  * The classification coverage of one audience family at `t` (PHASES P7b, catalogue gap item 17): per country, the
  * tier-1 stations with a state other than no_ref, and the first-release stations whose state comes from a source
- * that needs no permission. `mode` is the default map mode of D10: `state` when at least 60 % of all tier-1
- * stations are classed, else `dh`. The public report counts public stations only; the owner report has the same
- * shape and goes to the owner status only (P9a), never to a public response.
+ * that needs no permission; `by_section` counts those classed only through an area. `mode` is the default map mode
+ * of D10: `state` when at least 60 % of all tier-1 stations have a gauge state ((classed − by_section) / stations;
+ * Vigicrues green and LU-Alert information exist at all times and do not count, review CR-4), else `dh`. The public
+ * report counts public stations only; the owner report has the same shape and goes to the owner status only (P9a),
+ * never to a public response.
  */
 export const ClassCoverage = z.strictObject({
   t: iso,

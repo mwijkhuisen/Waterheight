@@ -1233,13 +1233,19 @@ export function checkStates(snapshot: Snapshot | undefined): Result {
     : miss('api states', [...problems].join('; '));
 }
 
-/** P7b: /api/v1/health/sources carries the classification coverage; numbers and country codes only. */
+/**
+ * P7b: /api/v1/health/sources carries the classification coverage; numbers and country codes only. The detail names
+ * how many of the classed tier-1 stations are classed only by a section (review CR-4: D10's mode leaves them out).
+ */
 export function checkClassCoverage(doc: HealthSources | undefined): Result {
   const c = doc?.classification;
   if (c === undefined || c === null) return miss('class coverage', 'classification is null or absent');
   const ratio = c.tier1.ratio === null ? 'none' : `${(c.tier1.ratio * 100).toFixed(1)}%`;
   const countries = c.countries.map((k) => `${k.country} ${k.tier1.classed}/${k.tier1.stations}`).join(', ');
-  return pass('class coverage', `tier-1 ${ratio}, mode ${c.mode}${countries === '' ? '' : `; ${countries}`}`);
+  return pass(
+    'class coverage',
+    `tier-1 ${ratio} (${c.tier1.by_section} by section), mode ${c.mode}${countries === '' ? '' : `; ${countries}`}`,
+  );
 }
 
 export function checkOpenapi(r: ApiRead<{ openapi: '3.1.0' }>): Result {
@@ -1513,7 +1519,7 @@ export const CHECKS = [
       `api snapshot ${a.name}: GET /api/v1/snapshot?t= at the 10-minute floor of the server's own now${a.back === 0 ? '' : ` - ${a.name}`} (from /meta, never this clock) is 200, the Snapshot contract with t as asked, Cache-Control exactly "${a.cache}"`,
   ),
   'api states: every value of the "now" snapshot has a state; basis is null exactly for no_ref; section only with an area basis and no area beside it; nap and zero never both (counts only; no values is a PASS)',
-  'class coverage: /api/v1/health/sources has a non-null classification (tier-1 ratio, mode, classed/stations per country; no stations is a PASS)',
+  'class coverage: /api/v1/health/sources has a non-null classification (tier-1 ratio, how many are classed by a section only, mode, classed/stations per country; no stations is a PASS)',
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
   'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter"} with Cache-Control: no-store',
   `noindex: ${NOINDEX_PATHS.join(', ')} each answer (the 404s of /api and /tiles too) with X-Robots-Tag: noindex`,

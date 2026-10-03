@@ -1,11 +1,12 @@
 import { floorBucket, MAX_POINTS, type Meta, type Series, type Snapshot, type Stations } from '@rws/contracts';
+import { OWNER_ONLY_SOURCES } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { FILLED_BY } from '../load/adapters.ts';
 import type { SeriesParams } from './params.ts';
-import { readStates, type StaticCache, snapshotValues } from './states.ts';
-import { iso, snapshot } from './util.ts';
+import { readStates, type StateRead, type StaticCache, snapshotValues } from './states.ts';
+import { coded, iso, snapshot } from './util.ts';
 import type { Window } from './window.ts';
 
 // The reads of the public data routes (A§8 Q1, Q4; A§9.2). This process serves
@@ -172,8 +173,19 @@ export async function readSnapshot(
   t: number,
   opts: { now: number; sections: ReadonlyMap<string, string>; cache: StaticCache },
 ): Promise<Snapshot> {
-  const read = await readStates(db, 'public', t, { ...opts, current: t >= floorBucket(opts.now) });
-  return { t: iso(new Date(t)), values: snapshotValues(read) };
+  return publicSnapshot(await readStates(db, 'public', t, { ...opts, current: t >= floorBucket(opts.now) }));
+}
+
+/**
+ * The public snapshot of a public read. A basis or area basis of an owner-only source (LU-4, BE-3) fails it closed
+ * with the fixed code `owner_basis` (the route answers 503 `unavailable`): the public views drop those rows and
+ * classify() ignores them in the public family, and this is the check at the boundary (review SR-5).
+ */
+export function publicSnapshot(read: StateRead): Snapshot {
+  const values = snapshotValues(read);
+  const owner = (source: string | undefined) => source !== undefined && OWNER_ONLY_SOURCES.has(source);
+  if (values.some((v) => owner(v.basis?.source) || owner(v.area?.basis.source))) throw coded('owner_basis');
+  return { t: iso(new Date(read.t)), values };
 }
 
 type RawRow = { ts: Date; value: number; qc: number };

@@ -2022,23 +2022,24 @@ describe('api states and class coverage (P7b)', () => {
     expect(checkOwnerIds({ '/api/v1/snapshot now': body }, ['LU-4']).ok).toBe(false);
   });
 
-  const share = (stations: number, classed: number) => ({
+  const share = (stations: number, classed: number, by_section = 0) => ({
     stations,
     classed,
+    by_section,
     ratio: stations === 0 ? null : classed / stations,
   });
   it('class coverage prints numbers and country codes', () => {
     const classification = {
       t: '2026-10-02T12:00:00Z',
       mode: 'state',
-      tier1: share(10, 7),
+      tier1: share(10, 7, 1),
       first_release: share(10, 7),
       countries: [{ country: 'DE', tier1: share(4, 3), first_release: share(4, 3) }],
     } as HealthSources['classification'];
     expect(checkClassCoverage(sourcesDoc({ classification }))).toEqual({
       check: 'class coverage',
       ok: true,
-      detail: 'tier-1 70.0%, mode state; DE 3/4',
+      detail: 'tier-1 70.0% (1 by section), mode state; DE 3/4',
     });
   });
 

@@ -60,8 +60,18 @@ type ClassRow = { subject_id: string; source_id: string; provider_code: string |
 type ZeroRow = { series_id: number; value_m: number; datum: Datum };
 /** A row with its validity range, filtered by t in the process (`valid @> t` cannot use an index through a view). */
 type Ranged<T> = T & { v_from: Date | null; v_to: Date | null; from_inc: boolean; to_inc: boolean };
-/** The rows that change only with the registry or a reference: read once per family and TTL. */
-type Static = { stations: StationRow[]; series: SeriesRow[]; refs: Ranged<RefRow>[]; zeros: Ranged<ZeroRow>[] };
+/**
+ * The rows that change only with the registry or a reference: read once per family and TTL. `attached` holds the
+ * stations each area attaches to, computed for these `stations` and kept only as long as they are: keyed by the md5
+ * of a polygon's stored geometry (P7a refreshes a geometry in place), else by source and area key.
+ */
+type Static = {
+  stations: StationRow[];
+  series: SeriesRow[];
+  refs: Ranged<RefRow>[];
+  zeros: Ranged<ZeroRow>[];
+  attached: Map<string, string[]>;
+};
 
 const validAt = (r: Ranged<object>, t: number) =>
   (r.v_from === null || (r.from_inc ? t >= r.v_from.getTime() : t > r.v_from.getTime())) &&
@@ -93,13 +103,15 @@ function readStatic(db: Kysely<DB>, family: ChannelAudience): Promise<Static> {
     zeros: (
       await sql<Ranged<ZeroRow>>`SELECT series_id, value_m, datum, ${RANGE} FROM ${sql.table(V.gaugeZero)}`.execute(tx)
     ).rows,
+    attached: new Map(),
   }));
 }
 
 /**
  * The static rows of each family, shared by the routes of one app for `ttlMs` (60 s in production): a registry sync
  * or a changed reference reaches the states within a minute, and a cold /snapshot reads only what depends on t
- * (A§8 Q1, the classes and the warnings at t, the source health). A failed read is not kept.
+ * (A§8 Q1, the classes and the warnings at t, the source health). The area attachments live in the entry and are
+ * renewed with it. A failed read is not kept.
  */
 export class StaticCache {
   readonly #ttlMs: number;
@@ -142,12 +154,6 @@ export type SeriesState = {
 
 export type StateRead = { t: number; series: SeriesState[]; stations: StationRow[]; publicSeries: Set<number> };
 
-// The stations an area attaches to, cached per family and station count (a registry sync changes the count) and,
-// for a polygon, per md5 of the stored geometry (P7a refreshes a geometry in place), so a polygon is parsed once.
-// ponytail: the map is cleared when it passes CACHE_MAX entries.
-const CACHE_MAX = 5_000;
-const attached = new Map<string, string[]>();
-
 const flagOf = (flags: unknown, key: string) =>
   typeof flags === 'object' && flags !== null && (flags as Record<string, unknown>)[key] === true;
 
@@ -183,11 +189,11 @@ export async function readStates(
                     THEN md5(geometry_geojson) END AS geom_md5
         FROM ${sql.table(V.warning)} WHERE valid @> ${at}::timestamptz ORDER BY id`.execute(tx)
     ).rows;
-    // The stations each area attaches to; a polygon not seen before is read and parsed once.
-    if (attached.size > CACHE_MAX) attached.clear();
-    const keyOf = (w: WarningRow) =>
-      `${family}:${stations.length}:${w.geom_md5 === null ? `${w.source_id}:${w.area_key}` : w.geom_md5}`;
-    const missing = warnings.filter((w) => w.geom_md5 !== null && !attached.has(keyOf(w))).map((w) => w.id);
+    // The stations each area attaches to (the static entry's map, or a fresh one without the cache); a polygon not
+    // seen before is read and parsed once.
+    const { attached } = fixed;
+    const keyOf = (w: WarningRow) => w.geom_md5 ?? `${w.source_id}:${w.area_key}`;
+    const missing = warnings.filter((w) => w.geom_md5 !== null && !attached.has(w.geom_md5)).map((w) => w.id);
     const geometry = new Map(
       missing.length === 0
         ? []
@@ -199,15 +205,16 @@ export async function readStates(
     );
     const areas = warnings.map((w) => {
       const key = keyOf(w);
-      let ids = attached.get(key);
-      if (ids === undefined) {
-        ids = attachArea(
-          { source: w.source_id, key: w.area_key, geometry: parseGeometry(geometry.get(w.id) ?? null) },
-          stations,
-          opts.sections,
-        );
-        attached.set(key, ids);
-      }
+      const known = attached.get(key);
+      if (known !== undefined) return { w, ids: known };
+      // A polygon is attached only from the geometry this read fetched; without it nothing is kept (review SR-2).
+      if (w.geom_md5 !== null && !geometry.has(w.id)) return { w, ids: [] };
+      const ids = attachArea(
+        { source: w.source_id, key: w.area_key, geometry: parseGeometry(geometry.get(w.id) ?? null) },
+        stations,
+        opts.sections,
+      );
+      attached.set(key, ids);
       return { w, ids };
     });
     return {
@@ -353,55 +360,61 @@ export function snapshotValues(read: StateRead): Snapshot['values'] {
 }
 
 type Share = ClassCoverage['tier1'];
-const share = (stations: number, classed: number): Share => ({
-  stations,
-  classed,
-  ratio: stations === 0 ? null : classed / stations,
+type Count = { stations: number; classed: number; bySection: number };
+const share = (c: Count): Share => ({
+  stations: c.stations,
+  classed: c.classed,
+  by_section: c.bySection,
+  ratio: c.stations === 0 ? null : c.classed / c.stations,
 });
+const zero = (): Count => ({ stations: 0, classed: 0, bySection: 0 });
+/** Adds one station whose states (other than no_ref) are `states`. */
+const add = (c: Count, states: readonly SeriesState[]) => {
+  c.stations += 1;
+  c.classed += states.length > 0 ? 1 : 0;
+  c.bySection += states.length > 0 && states.every((s) => s.classified.section) ? 1 : 0;
+};
 
 /**
  * The coverage report of one family (catalogue gap item 17; D10): per country, (a) the tier-1 stations with a state
  * other than no_ref, and (b) the first-release stations (tier 1 with a public primary series: the registry's
  * `first_release`, pinned by test/registry-first-release.test.ts) whose state comes from a source that needs no
- * permission. A station counts as classed when any of its series is. `mode` is D10's default map mode.
+ * permission. A station counts as classed when any of its series is, and `by_section` when all of its states are
+ * section states (review CR-4). `mode` is D10's default map mode, judged on the stations with a gauge state. In the
+ * owner report an LU-4 or BE-3 basis counts as a source that needs no permission (personal-use terms, §0.8).
  */
 export function classCoverage(read: StateRead): ClassCoverage {
   const byStation = new Map<string, SeriesState[]>();
   for (const s of read.series) byStation.set(s.station, [...(byStation.get(s.station) ?? []), s]);
-  const count = new Map<string, { t1: number; t1c: number; fr: number; frc: number }>();
-  const all = { t1: 0, t1c: 0, fr: 0, frc: 0 };
+  const count = new Map<string, { t1: Count; fr: Count }>();
+  const all = { t1: zero(), fr: zero() };
   for (const st of read.stations) {
     if (st.tier !== 1) continue;
     const list = byStation.get(st.id) ?? [];
-    const classed = list.some((s) => s.classified.state !== 'no_ref');
-    const firstRelease = list.some((s) => read.publicSeries.has(s.series));
-    const open = list.some(
-      (s) =>
-        s.classified.state !== 'no_ref' &&
-        s.classified.basis !== null &&
-        !PERMISSION_REQUIRED.has(s.classified.basis.source),
+    const states = list.filter((s) => s.classified.state !== 'no_ref');
+    const open = states.filter(
+      (s) => s.classified.basis !== null && !PERMISSION_REQUIRED.has(s.classified.basis.source),
     );
-    const c = count.get(st.country) ?? { t1: 0, t1c: 0, fr: 0, frc: 0 };
+    const firstRelease = list.some((s) => read.publicSeries.has(s.series));
+    const c = count.get(st.country) ?? { t1: zero(), fr: zero() };
     for (const k of [c, all]) {
-      k.t1 += 1;
-      k.t1c += classed ? 1 : 0;
-      k.fr += firstRelease ? 1 : 0;
-      k.frc += firstRelease && open ? 1 : 0;
+      add(k.t1, states);
+      if (firstRelease) add(k.fr, open);
     }
     count.set(st.country, c);
   }
-  const tier1 = share(all.t1, all.t1c);
+  const gauge = all.t1.stations === 0 ? 0 : (all.t1.classed - all.t1.bySection) / all.t1.stations;
   return {
     t: iso(new Date(read.t)),
-    mode: tier1.ratio !== null && tier1.ratio >= 0.6 ? 'state' : 'dh',
-    tier1,
-    first_release: share(all.fr, all.frc),
+    mode: gauge >= 0.6 ? 'state' : 'dh',
+    tier1: share(all.t1),
+    first_release: share(all.fr),
     countries: [...count]
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([country, c]) => ({
         country: country as ClassCoverage['countries'][number]['country'],
-        tier1: share(c.t1, c.t1c),
-        first_release: share(c.fr, c.frc),
+        tier1: share(c.t1),
+        first_release: share(c.fr),
       })),
   };
 }
