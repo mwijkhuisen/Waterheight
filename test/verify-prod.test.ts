@@ -5,7 +5,7 @@ import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { Counters } from '../apps/server/src/capture/runner.ts';
-import { cadenceOf, loadRegistry } from '../apps/server/src/capture/specs.ts';
+import { cadenceOf, loadRegistry, REGISTRY_DIR, readSeed } from '../apps/server/src/capture/specs.ts';
 import type { SpecState } from '../apps/server/src/capture/state.ts';
 import { buildStatus, type CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
@@ -30,9 +30,11 @@ import {
   BELGIAN_MAX_AGE_S,
   BELGIAN_NL1,
   belgianIds,
+  CH4_NO_FORECAST,
   CHECKS,
   COVERAGE_MIN,
   capacity,
+  ch4ExpectedSeries,
   checkApiParams,
   checkBelgianSet,
   checkBuild,
@@ -40,6 +42,7 @@ import {
   checkCapture,
   checkClassCoverage,
   checkCoverage,
+  checkForecastCh4,
   checkForecastCoverage,
   checkForecastNl1,
   checkFresh,
@@ -81,6 +84,7 @@ import {
   DE7_SPEC,
   entryScript,
   expectedHeaders,
+  FORECAST_CH4_MAX_AGE_S,
   FORECAST_NL1_CURRENT_MIN,
   FORECAST_NL1_MAX_AGE_S,
   FRESH_MAX_AGE_BY_SOURCE,
@@ -398,6 +402,7 @@ describe('freshness, soak and capacity', () => {
       'api states',
       'class coverage',
       'forecast NL-1',
+      'forecast CH-4',
       'forecast coverage',
       'api openapi',
       'api params',
@@ -1683,6 +1688,11 @@ const metaDoc = (over: Partial<Meta> = {}): Meta => ({
     { id: 'DE-7', attribution: [] },
     { id: 'LU-1', attribution: [] },
   ],
+  forecastHorizons: [
+    { source: 'CH-4', hours: 48 },
+    { source: 'FR-4', hours: 48 },
+    { source: 'NL-1', hours: 48 },
+  ],
   ...over,
 });
 const seriesDoc = (id: number, source: string, quantity: 'H' | 'Q') => ({
@@ -2205,6 +2215,95 @@ describe('forecast NL-1 and forecast coverage (P8a)', () => {
       ),
     );
     expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: allowed }), owners)).toMatchObject({ ok: true });
+  });
+});
+
+describe('forecast CH-4 (P8b)', () => {
+  const run = (over: Partial<NonNullable<SourceRow['forecast']>> = {}) => ({
+    issued_at: ago(3 * 3600_000),
+    run_age_s: 3 * 3600,
+    series: 28,
+    current: 28,
+    late: null,
+    ...over,
+  });
+  const ch = (forecast: SourceRow['forecast']) => sourcesDoc({ sources: [de1(), de1({ id: 'CH-4', forecast })] });
+
+  it('passes for a run within 12 h and a run on every expected series, and prints numbers only', () => {
+    expect(checkForecastCh4(ch(run()), 28)).toEqual({
+      check: 'forecast CH-4',
+      ok: true,
+      detail: `28 of 28 expected series have a run, the newest was issued 3.0 h ago (${ago(3 * 3600_000)})`,
+    });
+    // BAFU starts a run every 2 to 6 hours and the capture is hourly: 7 h is the worst case, 12 h is the limit.
+    expect(checkForecastCh4(ch(run({ run_age_s: FORECAST_CH4_MAX_AGE_S })), 28)).toMatchObject({ ok: true });
+    expect(FORECAST_CH4_MAX_AGE_S).toBe(12 * 3600);
+    // More series than expected (a station that began to answer) never fails.
+    expect(checkForecastCh4(ch(run({ series: 29 })), 28)).toMatchObject({ ok: true });
+  });
+
+  it('fails on a stale run, on too few series, and says which', () => {
+    const stale = checkForecastCh4(ch(run({ run_age_s: FORECAST_CH4_MAX_AGE_S + 1 })), 28);
+    expect(stale).toMatchObject({ ok: false, detail: expect.stringContaining('the newest run is over 12 h old') });
+    expect(stale.detail).not.toContain('no run');
+    const few = checkForecastCh4(ch(run({ series: 27 })), 28);
+    expect(few).toMatchObject({ ok: false, detail: expect.stringContaining('27 of 28 expected series') });
+    expect(few.detail).toContain('1 expected series have no run');
+    expect(few.detail).not.toContain('old');
+    const both = checkForecastCh4(ch(run({ series: 0, current: 0, run_age_s: 30 * 3600 })), 28);
+    expect(both.detail).toContain('over 12 h old');
+    expect(both.detail).toContain('28 expected series have no run');
+  });
+
+  it('fails with no forecast, no CH-4 or no document', () => {
+    expect(checkForecastCh4(ch(null), 28)).toMatchObject({ ok: false, detail: 'CH-4 has stored no forecast run yet' });
+    expect(checkForecastCh4(sourcesDoc(), 28)).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('not listed'),
+    });
+    expect(checkForecastCh4(undefined, 28)).toMatchObject({ ok: false });
+  });
+
+  it('expects the stations of registry/seed/ch-4.csv with a primary, non-off CH-1 series, less the 404 stations', {
+    timeout: 30_000,
+  }, () => {
+    const seed = readSeed(REGISTRY_DIR, 'ch-4').map((r) => r.id);
+    expect(seed).toHaveLength(54);
+    expect(CH4_NO_FORECAST).toHaveLength(14);
+    expect(new Set(CH4_NO_FORECAST).size).toBe(14);
+    for (const id of CH4_NO_FORECAST) expect(seed, id).toContain(id);
+    // 54 seeded, 15 of them `off` (non-Rhine water bodies, 3 of those are in the 404 list), 11 more with no body.
+    expect(ch4ExpectedSeries()).toBe(28);
+    expect(checkForecastCh4(ch(run({ series: 28 })))).toMatchObject({ ok: true });
+    expect(checkForecastCh4(ch(run({ series: 27 })))).toMatchObject({ ok: false });
+  });
+
+  it('computes the count: Q before W, primary only, never off, no CH-1 series or a 404 station is not counted', () => {
+    const row = (key: string, over: Partial<{ source: string; role: string; audience: string }> = {}) => ({
+      source: 'CH-1',
+      provider_key: key,
+      role: 'primary',
+      audience: 'public',
+      ...over,
+    });
+    const seed = ['2091', '2016', '2018', '2029', '2030', '2034', '2044', '2056', '9999', '2004'].map((id) => ({ id }));
+    const stations = [
+      row('2091/Q'),
+      row('2091/W'), // beside its Q: one station, counted once
+      row('2016/W'), // a lake-style station with W only
+      row('2018/Q', { audience: 'off' }),
+      row('2018/W'), // Q is off: the run would go to Q, so W does not rescue it
+      row('2029/Q', { role: 'secondary' }),
+      row('2030/Q', { source: 'CH-2' }), // another source's series with that key
+      row('2034/Q'),
+      row('2044/Q'),
+      row('2004/W'), // in the 404 list
+    ];
+    // Counted: 2091, 2016, 2034, 2044. Not: 2018 (Q off), 2029 (secondary), 2030 (no CH-1 series), 2056 and 9999
+    // (no row), 2004 (answers 404).
+    expect(ch4ExpectedSeries(seed, stations)).toBe(4);
+    expect(ch4ExpectedSeries([], stations)).toBe(0);
+    expect(ch4ExpectedSeries(seed, [])).toBe(0);
   });
 });
 

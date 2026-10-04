@@ -1282,6 +1282,74 @@ export function checkForecastNl1(doc: HealthSources | undefined): Result {
   return problems.length === 0 ? pass(check, detail) : miss(check, `${detail}; ${problems.join('; ')}`);
 }
 
+/**
+ * P8b: the newest CH-4 forecast run, at most this many seconds old. BAFU starts a new run every 2 to 6 hours and
+ * the capture is hourly, so the newest run is about 7 hours old at worst; 12 hours is slack for a missed capture or
+ * two. `issued_at` is inferred (our first fetch of the run), so it reads younger than BAFU's own issue time, never older.
+ */
+export const FORECAST_CH4_MAX_AGE_S = 12 * 3600;
+/**
+ * P8b (known gap): the seeded CH-4 stations whose `q_forecast` answered 404 every hour of the production archive
+ * (2026-09-30 to 2026-10-04): 13 lake stations (BAFU publishes no forecast plot of a lake level) and 2646. They are
+ * captured and never have a run, so `forecast CH-4` does not expect one.
+ */
+export const CH4_NO_FORECAST: readonly string[] = [
+  '2004',
+  '2022',
+  '2023',
+  '2027',
+  '2032',
+  '2043',
+  '2093',
+  '2101',
+  '2118',
+  '2207',
+  '2208',
+  '2209',
+  '2642',
+  '2646',
+];
+
+/**
+ * P8b: how many CH-1 series should have a CH-4 run: the stations of registry/seed/ch-4.csv whose CH-1 series (`<id>/Q`,
+ * else `<id>/W` for a lake) exists, is primary and is not `audience: off` (an off series stores nothing; 15 of the
+ * 54 seeded stations are on non-Rhine water bodies), less the `CH4_NO_FORECAST` stations. Read from the registry
+ * files at run time, so a seed or scope change moves it.
+ */
+export function ch4ExpectedSeries(
+  seed: readonly Readonly<Record<string, string>>[] = readSeed(REGISTRY_DIR, 'ch-4'),
+  stations: readonly { source: string; provider_key: string; role: string; audience: string }[] = readRegistry()
+    .stations,
+): number {
+  const ch1 = new Map(stations.filter((st) => st.source === 'CH-1').map((st) => [st.provider_key, st]));
+  return seed.filter((row) => {
+    const id = row.id ?? '';
+    const st = ch1.get(`${id}/Q`) ?? ch1.get(`${id}/W`);
+    return st?.role === 'primary' && st.audience !== 'off' && !CH4_NO_FORECAST.includes(id);
+  }).length;
+}
+
+/**
+ * P8b: CH-4 forecast runs are flowing: `/api/v1/health/sources` lists CH-4 with a `forecast` whose newest run is at
+ * most `FORECAST_CH4_MAX_AGE_S` old and that has a run on at least `expected` series (`ch4ExpectedSeries`).
+ * Needs live capture (the CI deploy job lets it fail). Numbers only.
+ */
+export function checkForecastCh4(doc: HealthSources | undefined, expected: number = ch4ExpectedSeries()): Result {
+  const check = 'forecast CH-4';
+  if (doc === undefined) return noDocument(check, 'health/sources');
+  const s = sourceOf(doc, 'CH-4');
+  if (s === undefined) return miss(check, 'CH-4 is not listed in /api/v1/health/sources');
+  const f = s.forecast;
+  if (f === null) return miss(check, 'CH-4 has stored no forecast run yet');
+  const hours = (f.run_age_s / 3600).toFixed(1);
+  const detail = `${f.series} of ${expected} expected series have a run, the newest was issued ${hours} h ago (${f.issued_at})`;
+  const problems: string[] = [];
+  if (f.run_age_s > FORECAST_CH4_MAX_AGE_S)
+    problems.push(`the newest run is over ${FORECAST_CH4_MAX_AGE_S / 3600} h old`);
+  if (f.series < expected) problems.push(`${expected - f.series} expected series have no run`);
+  return problems.length === 0 ? pass(check, detail) : miss(check, `${detail}; ${problems.join('; ')}`);
+}
+
 /** The ids of the reach rows of registry/forecast-reaches.yaml, in order: the public coverage report has exactly these. */
 export const reachIds = (): string[] =>
   ForecastReaches.parse(
@@ -1601,6 +1669,7 @@ export const CHECKS = [
   'api states: every value of the "now" snapshot has a state; basis is null exactly for no_ref; section only with an area basis and no area beside it; nap and zero never both (counts only; no values is a PASS)',
   'class coverage: /api/v1/health/sources has a non-null classification (tier-1 ratio, how many are classed by a section only, mode, classed/stations per country; no stations is a PASS)',
   `forecast NL-1: /api/v1/health/sources lists NL-1 with a forecast whose newest run was issued at most ${FORECAST_NL1_MAX_AGE_S / 3600} h ago (RWS issues one run a day: the criterion is 30 h, owner decision 2026-10-03) and of whose series at least ${FORECAST_NL1_CURRENT_MIN * 100}% have a current run; needs live capture (numbers only)`,
+  `forecast CH-4: /api/v1/health/sources lists CH-4 with a forecast whose newest run was issued at most ${FORECAST_CH4_MAX_AGE_S / 3600} h ago (BAFU starts a run every 2 to 6 hours, the capture is hourly) and that has a run on at least as many series as the registry expects (the seeded stations with a primary, non-off CH-1 series, less the ${CH4_NO_FORECAST.length} whose q_forecast answers 404); needs live capture (numbers only)`,
   'forecast coverage: /api/v1/health/sources has a non-null forecast_coverage with one entry per reach row of registry/forecast-reaches.yaml in order, each reach without a visible source states after_permission or none_publishes, and no owner-audience source ID or BfG appears in it (needs no fresh data; counts only)',
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
   'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter"} with Cache-Control: no-store',
@@ -1770,6 +1839,7 @@ async function main(argv: string[]): Promise<number> {
       checkStates(snapReads.get('now')?.data),
       checkClassCoverage(sources.data),
       checkForecastNl1(sources.data),
+      checkForecastCh4(sources.data),
       checkForecastCoverage(sources.data, ownerSourceIds(registry)),
       checkOpenapi(readApi(await api('/api/v1/openapi.json'), OpenApi31, OPENAPI_CACHE)),
       checkApiParams(await api('/api/v1/meta?x=1')),

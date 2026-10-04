@@ -1,15 +1,17 @@
-// Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a, P5b, P8a): one payload each of DE-1, NL-1
-// (observations and, since P8a, forecasts), NL-2, FR-1, CH-1, CH-2, DE-7 and LU-1 is fetched live and run through
-// the exact code the loader uses (validity, strict parse, normalise, and for forecasts the run checks). A provider
+// Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a, P5b, P8a, P8b): one payload each of DE-1, NL-1
+// (observations and, since P8a, forecasts), NL-2, FR-1, CH-1, CH-2, DE-7, LU-1 and, since P8b, the CH-4 forecast
+// figure of one station and the FR-4 national list is fetched live and run through the exact code the loader uses
+// (validity, strict parse, normalise, and for forecasts the run checks). A provider
 // that changed its format or moved its host (the RWS CTD switch on 2026-11-05) turns the night red;
 // .github/workflows/contract-check.yml files the issue.
 //
 //   RWS_DOMAIN=… RWS_CONTACT_EMAIL=… node scripts/contract-check.ts [--out <file>]
 //
 // Targets come only from registry/capture.yaml (invariant 1): no argument names a URL or a host.
-// Nine requests at most (one per spec, the first row of each unless `ROW` names another registry row; FR-1 only
-// its first page, never `next`), one after the other, through the SSRF-guarded client with the contact
-// User-Agent and no secret header (no RWS API key ever leaves CI). It does not refuse under CI. BAFU asks LINDAS users for
+// Eleven requests at most (one per spec, the first row of each unless `ROW` names another registry row; FR-1 only
+// its first page, never `next`; FR-4 only its national list, never a station), one after the other, through the
+// SSRF-guarded client with the contact User-Agent and no secret header (no RWS API key ever leaves CI). It does
+// not refuse under CI. BAFU asks LINDAS users for
 // at most one download per 10 minutes: the workflow runs at 03:29, midway between the recorder's
 // CH-1 fetches (minutes 4, 14, 24, 34, …), so ours never comes within 5 minutes of one. The AGE file
 // of LU-1 is asked without a query string (inondations.public.lu robots.txt: Disallow: /*?*); DE-7 is
@@ -43,6 +45,8 @@ export const SPECS = [
   'ch-2-pq',
   'de-7-messwerte',
   'lu-1-csv',
+  'ch-4-forecast',
+  'fr-4',
 ] as const;
 
 export type Report = { at: string; results: { spec: string; code: string }[] };
@@ -72,11 +76,19 @@ type Stations = ReturnType<typeof readRegistry>['stations'];
 /**
  * A spec whose first registry row is not the one to probe: the row fields to find among the spec's own registry
  * rows (a target still comes only from the registry). The first 1h forecast row, arnhem.nederrijn/Q, is a series RWS
- * serves stale (gaps only); Lobith Q is registered and live.
+ * serves stale (gaps only); Lobith Q is registered and live. P8b: the first CH-4 row, 2004, is a lake whose forecast
+ * figure answers 404 every hour; 2091 is a river station with a discharge forecast (the station of the fixtures).
  */
-const ROW: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+export const ROW: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   'nl-1-fc-1h': { code: 'lobith.bovenrijn.tolkamer', quantity: 'Q' },
+  'ch-4-forecast': { id: '2091' },
 };
+
+/**
+ * Specs whose runs sit on another source's series (CH-4 on CH-1), so their own source registers no series: a
+ * payload that parses and yields no run is still drift. (FR-4's probe is the national list, which holds no run.)
+ */
+const RUNS_EXPECTED: ReadonlySet<string> = new Set(['ch-4-forecast']);
 
 /** The one code of a spec: `ok` or what went wrong. Throws only on a bug or a registry that does not load. */
 async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRegistry>, stations: Stations) {
@@ -135,7 +147,7 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
     for (const part of obsParts(out)) rows += part.length;
     // Forecast points count as rows: a run attached to a series of the registry, however short.
     for (const r of runs) rows += r.run.points.length;
-    return registry.size > 0 && rows === 0 ? 'no_rows' : 'ok';
+    return (registry.size > 0 || RUNS_EXPECTED.has(id)) && rows === 0 ? 'no_rows' : 'ok';
   } catch (err) {
     // SchemaDrift.message is `<code>` or `<code> at <sanitised path>`; the wire check below has the last word.
     return err instanceof SchemaDrift ? err.message : 'adapter_error';
