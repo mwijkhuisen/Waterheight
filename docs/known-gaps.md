@@ -4,6 +4,12 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P8a follow-up: the NL-1 forecast method per series (PR pending, issue #23)
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-206 | forecasts, health | The 80 `nl-1-fc-1h` payloads production quarantined as `forecast_method` (every maaseik Q capture since 2026-09-30, method `other:F058`) keep NL-1 `degraded` (`computeHealth` counts every quarantined batch) until they are replayed. Two real maaseik Q captures are now goldens (`import-fixtures --p8a-maaseik`, export of 2026-10-03: F058 runs like F232, one a day, 10-minute steps, exact tails) | [owner] the replay of `nl-1-fc-1h` after the deploy (`docs/runbooks/replay.md` §11, "The 80 `forecast_method` quarantines") | open |
+
 ## P8a Forecast runs: NL-1, DE-2 and LU-3 (PR pending, issue #23)
 
 KG-145 and KG-146 are closed by this PR (rows in the P5c section: the owner's decisions 3 and 4 of 2026-10-03), KG-203 is closed by the owner's 30 h wording of the NL-1 criterion, and KG-134 now lists eight pending entries. `PHASES.md` §25 has the evidence.

@@ -305,6 +305,23 @@ The loader of the releases before P8a had no entry for the NL-1 forecast specs, 
 
 A **registry change** that releases values later (KG-197: forecast-only NL-1 stations are registered in a follow-up) is a replay of `nl-1-fc-1h` and `nl-1-fc-3h-0/1/2` from the first day, `--dry-run` first, with the same second pass of 0/0. A fix to a normaliser or parser that changes what a run holds (a value, a flag, an issue time) is different: the content hash changes, so a replay stores the corrected run as a **new run beside the old one**, which stays (a run is immutable and `rws_load` has no DELETE; Q2 orders by issue time, fetch time and then run id, so with equal times the newer row is the one it returns). Decide with the owner before replaying a forecast spec after such a fix, and say so in the PR.
 
+**The 80 `forecast_method` quarantines of 2026-10-03.** The first P8a replay of `nl-1-fc-1h` quarantined 80 payloads as `forecast_method`: maaseik Q is the one forecast series whose method is `other:F058`, not `RWSM-F232` (PHASES §25, "Production replay follow-up"), and every quarantined batch keeps NL-1's health `degraded`. After the release with the fix (the method declared per series) is deployed, replay the spec once; nothing of maaseik Q was stored before, so the replay adds its runs and leaves every other run as it is:
+
+```bash
+rwsc run --rm --no-deps -T load replay --source NL-1 --spec nl-1-fc-1h --from 2026-09-29 --to <today> --dry-run
+rwsc run --rm --no-deps -T load replay --source NL-1 --spec nl-1-fc-1h --from 2026-09-29 --to <today>
+rwsc run --rm --no-deps -T load replay --source NL-1 --spec nl-1-fc-1h --from 2026-09-29 --to <today>
+```
+
+Expect `"quarantined":0` and `"n_new"` above 0 in the first pass (the maaseik Q runs; a quarantined payload that now loads becomes `ok`), and `"n_new":0,"n_changed":0` in the second. Then no NL-1 batch is quarantined any more, and the next health pass (one minute) clears `degraded`:
+
+```bash
+sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
+  "SELECT count(*) FROM ingest_batch WHERE source_id = 'NL-1' AND parse_status = 'quarantined'"
+```
+
+The count must be 0; `scripts/verify-prod.sh <domain>` `health NL-1` passes again. A later method change at RWS no longer quarantines: it counts `unregistered_method` (alerted, `n_skipped`), and the replay after the declaration in `adapters/nl-1/normalise.ts` is changed loads those values.
+
 ## What not to do
 
 - Do not replay to "fix" a value the provider itself corrected: a newer payload already wins, and the older revision is in `obs_revision`.
