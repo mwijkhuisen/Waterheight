@@ -426,16 +426,14 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik'):
     rule?: string;
     n?: number;
   };
-  const list: readonly Entry[] =
-    mode === 'p5b'
-      ? IMPORTS_P5B
-      : mode === 'p7a'
-        ? IMPORTS_P7A
-        : mode === 'p8a'
-          ? IMPORTS_P8A
-          : mode === 'p8a-maaseik'
-            ? IMPORTS_P8A_MAASEIK
-            : IMPORTS;
+  const lists: Record<typeof mode, readonly Entry[]> = {
+    p5a: IMPORTS,
+    p5b: IMPORTS_P5B,
+    p7a: IMPORTS_P7A,
+    p8a: IMPORTS_P8A,
+    'p8a-maaseik': IMPORTS_P8A_MAASEIK,
+  };
+  const list = lists[mode];
   for (const { name, source, fixture, keep, last, rule, n } of list) {
     const raw = readFileSync(join(dir, `${name}.raw`));
     const line = JSON.parse(readFileSync(join(dir, `${name}.line.json`), 'utf8')) as Line;

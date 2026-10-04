@@ -310,7 +310,10 @@ describe('the forecast method per series (maaseik Q: other:F058)', () => {
       AquoMetadataLijst: {
         AquoMetadata_MessageID: number;
         ProcesType: string;
+        Compartiment: { Code: string };
+        Groepering: { Code: string };
         Grootheid: { Code: string };
+        Hoedanigheid: { Code: string };
         WaardeBepalingsMethode: { Code: string };
       }[];
       LocatieLijst: { Locatie_MessageID: number; Code: string }[];
@@ -318,16 +321,26 @@ describe('the forecast method per series (maaseik Q: other:F058)', () => {
     };
     const aquo = new Map(cat.AquoMetadataLijst.map((a) => [a.AquoMetadata_MessageID, a]));
     const loc = new Map(cat.LocatieLijst.map((l) => [l.Locatie_MessageID, l.Code]));
-    const quantity = new Map([
-      ['WATHTE', 'H'],
-      ['Q', 'Q'],
+    // Only the catalogue rows the adapter would attach (review F1): Grootheid → quantity and its Hoedanigheid,
+    // compartment OW, no grouping.
+    const attaches = new Map([
+      ['WATHTE', ['H', 'NAP']],
+      ['Q', ['Q', 'NVT']],
     ]);
     const listed = new Map<string, Set<string>>();
     for (const link of cat.AquoMetadataLocatieLijst) {
       const a = aquo.get(link.AquoMetaData_MessageID);
       const code = loc.get(link.Locatie_MessageID);
-      const qty = quantity.get(a?.Grootheid.Code ?? '');
-      if (a?.ProcesType !== 'verwachting' || code === undefined || qty === undefined) continue;
+      const [qty, datum] = attaches.get(a?.Grootheid.Code ?? '') ?? [];
+      if (
+        a?.ProcesType !== 'verwachting' ||
+        code === undefined ||
+        qty === undefined ||
+        a.Hoedanigheid.Code !== datum ||
+        a.Compartiment.Code !== 'OW' ||
+        a.Groepering.Code !== ''
+      )
+        continue;
       const k = `${code}/${qty}`;
       listed.set(k, new Set([...(listed.get(k) ?? []), a.WaardeBepalingsMethode.Code]));
     }
