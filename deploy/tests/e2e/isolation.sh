@@ -81,7 +81,11 @@ audience=$(outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/runtime-config.
 pass "the public listener never serves owner content for SNI and Host owner.$DOMAIN (refused, or no body); the public /runtime-config.json is {\"audience\":\"public\"} and no public static file carries a canary or private_basis"
 
 # ---- 4. caddy-owner
-docker run --rm --network rws_edge -e RWS_DOMAIN="$DOMAIN" -e OWNER_PW \
-  -v "$here/owner-check.mjs:/check.mjs:ro" --entrypoint /nodejs/bin/node rws-server:ci /check.mjs | tee /ci/owner-check.out
+# caddy-owner's `tls internal` root (its own local CA, in its data volume): the check verifies the certificate
+# against it instead of switching verification off.
+docker exec rws-caddy-owner-1 cat /data/caddy/pki/authorities/local/root.crt >/ci/owner-root.crt
+docker run --rm --network rws_edge -e RWS_DOMAIN="$DOMAIN" -e OWNER_PW -e OWNER_CA=/owner-root.crt \
+  -v "$here/owner-check.mjs:/check.mjs:ro" -v /ci/owner-root.crt:/owner-root.crt:ro \
+  --entrypoint /nodejs/bin/node rws-server:ci /check.mjs | tee /ci/owner-check.out
 [[ $(grep -c '^FAIL' /ci/owner-check.out || true) == 0 ]] || fail "owner-check.mjs"
 pass "caddy-owner (SNI owner.$DOMAIN over rws_edge): $(grep -c '^PASS' /ci/owner-check.out) checks: 401 with both owner headers and no content without or with wrong credentials on every path, 200 with them, {\"audience\":\"owner\"}, and the owner canary in the owner latest.json"

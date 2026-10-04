@@ -1,15 +1,18 @@
 // CI only (deploy/tests/e2e/isolation.sh): run inside the server image on the
-// rws_edge network. Talks to caddy-owner (SNI owner.<domain>, its internal CA,
-// so certificate verification is off) and checks the owner site's gate: every
+// rws_edge network. Talks to caddy-owner (SNI owner.<domain>; the certificate is
+// verified against caddy-owner's own `tls internal` root, OWNER_CA) and checks
+// the owner site's gate: every
 // request without or with wrong credentials is a 401 with both owner headers,
 // and with the right ones the site answers 200 with the same two headers, the
 // owner runtime config and the owner canary in latest.json. The password comes
 // in through OWNER_PW and is never printed.
+import { readFileSync } from 'node:fs';
 import { request } from 'node:https';
 
 const domain = process.env.RWS_DOMAIN;
 const password = process.env.OWNER_PW;
-if (!domain || !password) throw new Error('RWS_DOMAIN and OWNER_PW are required');
+if (!domain || !password || !process.env.OWNER_CA) throw new Error('RWS_DOMAIN, OWNER_PW and OWNER_CA are required');
+const ca = readFileSync(process.env.OWNER_CA);
 const host = `owner.${domain}`;
 const CANARY = /777777\.(777|75)/;
 
@@ -18,7 +21,7 @@ function get(path, auth) {
     const headers = { host };
     if (auth) headers.authorization = `Basic ${Buffer.from(auth).toString('base64')}`;
     const req = request(
-      { host: 'caddy-owner', port: 8443, path, method: 'GET', servername: host, rejectUnauthorized: false, headers },
+      { host: 'caddy-owner', port: 8443, path, method: 'GET', servername: host, ca, headers },
       (res) => {
         const chunks = [];
         res.on('data', (c) => chunks.push(c));

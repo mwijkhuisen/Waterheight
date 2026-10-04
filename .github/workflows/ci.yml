@@ -61,7 +61,8 @@ jobs:
   integration:
     name: integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # P9a's publisher tests (200-run properties, 20 SIGKILLed children) take the suite to about 12 minutes locally.
+    timeout-minutes: 30
     permissions:
       contents: read
     services:
