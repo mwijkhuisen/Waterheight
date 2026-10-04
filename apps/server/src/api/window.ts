@@ -1,7 +1,7 @@
 import { BUCKET_MS } from '@rws/contracts';
 import { type Kysely, sql } from 'kysely';
 import type { Logger } from 'pino';
-import { type MetaRow, VIEWS } from '../db/audience.ts';
+import { type ChannelAudience, type MetaRow, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { coded } from './util.ts';
@@ -15,7 +15,7 @@ export const RETRY_MS = 10_000;
 
 /**
  * The display window of D9 (app_meta `data_epoch` and `display_start`, through
- * the public meta view), held in memory so that validating a request never
+ * the family's meta view: the api's public, a publisher's own), held in memory so that validating a request never
  * asks the database. The api loads it before it listens and refreshes it every
  * 5 minutes, or every 10 seconds while it has never loaded; a failed refresh
  * keeps the last value. Until the first load the routes that need it answer
@@ -27,10 +27,12 @@ export class DisplayWindow {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly db: Kysely<DB>;
   private readonly log: Pick<Logger, 'error'> | undefined;
+  private readonly family: ChannelAudience;
 
-  constructor(db: Kysely<DB>, log?: Pick<Logger, 'error'>) {
+  constructor(db: Kysely<DB>, log?: Pick<Logger, 'error'>, family: ChannelAudience = 'public') {
     this.db = db;
     this.log = log;
+    this.family = family;
   }
 
   get current(): Window | undefined {
@@ -40,7 +42,7 @@ export class DisplayWindow {
   async refresh(): Promise<boolean> {
     try {
       const { rows } = await sql<MetaRow>`
-        SELECT data_epoch, display_start FROM ${sql.table(VIEWS.public.meta)}`.execute(this.db);
+        SELECT data_epoch, display_start FROM ${sql.table(VIEWS[this.family].meta)}`.execute(this.db);
       const row = rows[0];
       if (!row?.data_epoch || !row.display_start) throw coded('no_display_window');
       this.value = {

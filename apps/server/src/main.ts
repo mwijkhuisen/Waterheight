@@ -17,6 +17,7 @@ import { healthy, startHeartbeat } from './heartbeat.ts';
 import { Client } from './http/client.ts';
 import { runMigrate } from './load/migrate.ts';
 import { runLoad, runReplay } from './load/run.ts';
+import { runPublisher } from './publish/index.ts';
 import { runWatchdog } from './watchdog/watchdog.ts';
 
 /** Roles of the single server image (A§4); the command picks one. */
@@ -33,11 +34,11 @@ export const ROLES = [
 ] as const;
 export type Role = (typeof ROLES)[number];
 
-export const EXIT_NOT_IMPLEMENTED = 2;
 export const EXIT_USAGE = 64;
 export { EXIT_CONFIG };
 
 const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; watchdog takes --once or --dry-run;
+  publish takes [--audience public|owner] [--once];
   replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD[THH:MM:SSZ]> --to <YYYY-MM-DD> [--dry-run];
   basemap takes <fetch|promote|rollback> [--build <YYYYMMDD>] [--dry-run])`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
@@ -227,10 +228,24 @@ async function api(env: Readonly<Record<string, string | undefined>>, listen: Li
   });
 }
 
+/** `publish [--audience public|owner] [--once]`, each flag at most once; anything else is a usage error. */
+export function publishArgs(rest: readonly string[]): { family: 'public' | 'owner'; once: boolean } | undefined {
+  let family: 'public' | 'owner' | undefined;
+  let once = false;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i];
+    if (arg === '--once' && !once) once = true;
+    else if (arg === '--audience' && family === undefined && (rest[i + 1] === 'public' || rest[i + 1] === 'owner'))
+      family = rest[++i] as 'public' | 'owner';
+    else return undefined;
+  }
+  return { family: family ?? 'public', once };
+}
+
 /**
- * Resolves with an exit code; `api`, `capture`, `load` and `watchdog` keep
- * running until SIGINT or SIGTERM; `migrate`, `replay` and `basemap` are one-shot.
- * `publish` is a stub until its phase (P9).
+ * Resolves with an exit code; `api`, `capture`, `load`, `publish` and `watchdog`
+ * keep running until SIGINT or SIGTERM; `migrate`, `replay` and `basemap` are
+ * one-shot (and `publish --once`).
  */
 export function run(
   argv: readonly string[],
@@ -241,7 +256,8 @@ export function run(
   const flag = rest.length === 1 ? rest[0] : undefined;
   const dry = (role === 'capture' || role === 'watchdog') && flag === '--dry-run';
   const once = role === 'watchdog' && flag === '--once';
-  const takesArgs = dry || once || role === 'replay' || role === 'basemap';
+  const publish = role === 'publish' ? publishArgs(rest) : undefined;
+  const takesArgs = dry || once || publish !== undefined || role === 'replay' || role === 'basemap';
   if (role === undefined || (rest.length > 0 && !takesArgs) || !(ROLES as readonly string[]).includes(role)) {
     log(USAGE);
     return Promise.resolve(EXIT_USAGE);
@@ -252,6 +268,7 @@ export function run(
   if (role === 'replay') return runReplay(rest, env, log);
   if (role === 'basemap') return runBasemap(rest, env, log);
   if (role === 'watchdog') return runWatchdog(env, dry ? 'dry-run' : once ? 'once' : 'loop', log);
+  if (publish !== undefined) return runPublisher(env, publish.family, publish.once, log);
   if (role === 'capture') {
     if (dry) {
       try {
@@ -262,10 +279,6 @@ export function run(
       }
     }
     return capture(env, log);
-  }
-  if (role !== 'api') {
-    log(`role ${role} is not implemented yet`);
-    return Promise.resolve(EXIT_NOT_IMPLEMENTED);
   }
   const listen = parseListen(env);
   if (typeof listen === 'string') {

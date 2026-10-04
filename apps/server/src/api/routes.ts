@@ -139,12 +139,12 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
   route('/api/v1/meta', 'meta', Meta, (c) => {
     noQuery(c.req.url);
     const w = window();
-    return { key: 'meta', policy: FIXED.meta, read: (db) => readMeta(db, w, deps.build, deps.now()) };
+    return { key: 'meta', policy: FIXED.meta, read: (db) => readMeta(db, 'public', w, deps.build, deps.now()) };
   });
 
   route('/api/v1/stations', 'stations', Stations, (c) => {
     noQuery(c.req.url);
-    return { key: 'stations', policy: FIXED.stations, read: readStations };
+    return { key: 'stations', policy: FIXED.stations, read: (db) => readStations(db, 'public') };
   });
 
   route('/api/v1/snapshot', 'snapshot', Snapshot, (c) => {
@@ -158,7 +158,7 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
         policy: agePolicy(t, now),
         read: (db) => readFutureSnapshot(db, FAMILY, t, opts),
       };
-    return { key: `snapshot|${t}`, policy: agePolicy(t, now), read: (db) => readSnapshot(db, t, opts) };
+    return { key: `snapshot|${t}`, policy: agePolicy(t, now), read: (db) => readSnapshot(db, 'public', t, opts) };
   });
 
   route('/api/v1/series/:id/forecast', 'forecast', SeriesForecast, (c) => {

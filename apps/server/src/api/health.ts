@@ -12,6 +12,7 @@ import { type Kysely, sql } from 'kysely';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import {
+  type ChannelAudience,
   type IngestBatchRow,
   type LoaderRow,
   type OwnerHealthRow,
@@ -59,27 +60,42 @@ type SourceRow = Pick<
 >;
 type BatchRow = Pick<IngestBatchRow, 'id' | 'source_id' | 'spec_id' | 'fetched_at' | 'error'>;
 
-const sources = (tx: Tx) =>
+// The row readers take a family: the routes read 'public'; the publishers' status files their own (P9a).
+export const sourceRows = (tx: Tx, family: ChannelAudience) =>
   sql<SourceRow>`
     SELECT source_id, last_fetch_ok, last_new_data, newest_ts, consecutive_failures, quarantine_count, lag_p95_s,
            status, detail
-    FROM ${sql.table(VIEWS.public.sourceHealth)} ORDER BY source_id LIMIT ${MAX_SOURCES}`
+    FROM ${sql.table(VIEWS[family].sourceHealth)} ORDER BY source_id LIMIT ${MAX_SOURCES}`
     .execute(tx)
     .then((r) => r.rows);
 
-// An aggregate view: always one row; the fallback only satisfies the type.
-const ownerCounts = (tx: Tx) =>
+// An aggregate view of the public family only: always one row; the fallback only satisfies the type.
+export const ownerCounts = (tx: Tx) =>
   sql<OwnerHealthRow>`SELECT healthy, total FROM ${sql.table(PUBLIC_ONLY_VIEWS.ownerHealth)} LIMIT 1`
     .execute(tx)
     .then((r) => r.rows[0] ?? { healthy: 0, total: 0 });
 
-/** Absent until the loader has computed once. */
-const loader = (tx: Tx) =>
+/** Absent until the loader has computed once. The public family only (the owner role cannot read it). */
+export const loaderRow = (tx: Tx) =>
   sql<LoaderRow>`
     SELECT computed_at, backlog_files, backlog_bytes, backlog_age_s, bad_manifest_lines
     FROM ${sql.table(PUBLIC_ONLY_VIEWS.loader)} LIMIT 1`
     .execute(tx)
     .then((r) => r.rows[0]);
+
+/**
+ * The newest loaded_at of the family's batches (P9a: meta.latestFrom, status loader.lastCommit, health
+ * loader.last_commit). The range qual passes the security_barrier view into the ingest_batch_loaded index; an
+ * unbounded max is a scan of every batch, run only when the last hour has none.
+ */
+export const lastCommit = (tx: Tx, family: ChannelAudience, now: Date) =>
+  sql<{ at: Date | null }>`
+    SELECT COALESCE(
+      (SELECT max(loaded_at) FROM ${sql.table(VIEWS[family].ingestBatch)}
+       WHERE loaded_at > ${now}::timestamptz - interval '1 hour'),
+      (SELECT max(loaded_at) FROM ${sql.table(VIEWS[family].ingestBatch)})) AS at`
+    .execute(tx)
+    .then((r) => r.rows[0]?.at ?? null);
 
 const quarantinedBatches = (tx: Tx) =>
   sql<BatchRow>`
@@ -91,11 +107,11 @@ const quarantinedBatches = (tx: Tx) =>
 
 /** The latest check of each twin, with how many of its hourly checks of the last week there are and how many failed. */
 // ponytail: more than MAX_TWINS twins would drop some; the registry has a handful (P2b).
-const latestTwinChecks = (tx: Tx, now: Date) =>
+export const latestTwinChecks = (tx: Tx, family: ChannelAudience, now: Date) =>
   sql<TwinCheckRow & { checks_7d: number; failed_7d: number }>`
     SELECT DISTINCT ON (twin_id) twin_id, window_end, n_aligned, median_delta, max_delta, lag_min, ok,
            (count(*) OVER week)::int AS checks_7d, (count(*) FILTER (WHERE NOT ok) OVER week)::int AS failed_7d
-    FROM ${sql.table(VIEWS.public.twinCheck)}
+    FROM ${sql.table(VIEWS[family].twinCheck)}
     WHERE window_end > ${now}::timestamptz - interval '168 hours'
     WINDOW week AS (PARTITION BY twin_id)
     ORDER BY twin_id, window_end DESC LIMIT ${MAX_TWINS}`
@@ -106,7 +122,7 @@ const latestTwinChecks = (tx: Tx, now: Date) =>
  * source_health.detail as the loader writes it. Read leniently and stripped
  * to the known keys: only these ever leave; the contract then checks the values.
  */
-const Detail = z.object({
+export const Detail = z.object({
   tier1: z.object({ total: z.number(), fresh: z.number(), provider_stale: z.number() }).optional(),
   missing_buckets_24h: z.number().optional(),
   outage: z.object({ from: z.string(), to: z.string(), missing_buckets: z.number() }).optional(),
@@ -145,10 +161,10 @@ const Detail = z.object({
 
 export async function readHealth(db: Kysely<DB>, now: Date): Promise<Health> {
   const { rows, owner, l, twins } = await snapshot(db, async (tx) => ({
-    rows: await sources(tx),
+    rows: await sourceRows(tx, 'public'),
     owner: await ownerCounts(tx),
-    l: await loader(tx),
-    twins: await latestTwinChecks(tx, now),
+    l: await loaderRow(tx),
+    twins: await latestTwinChecks(tx, 'public', now),
   }));
   const of = (status: SourceRow['status']) => rows.filter((r) => r.status === status).length;
   const lags = rows.flatMap((r) => (r.lag_p95_s === null ? [] : [r.lag_p95_s]));
@@ -215,11 +231,11 @@ export async function readSources(
   const classification = await publicCoverage(db, now, deps);
   const forecast_coverage = await publicForecastCoverage(db, now, deps);
   const { rows, batches, twins, owner, l } = await snapshot(db, async (tx) => ({
-    rows: await sources(tx),
+    rows: await sourceRows(tx, 'public'),
     batches: await quarantinedBatches(tx),
-    twins: await latestTwinChecks(tx, now),
+    twins: await latestTwinChecks(tx, 'public', now),
     owner: await ownerCounts(tx),
-    l: await loader(tx),
+    l: await loaderRow(tx),
   }));
   return validated(HealthSources, {
     generated_at: iso(l?.computed_at ?? null),

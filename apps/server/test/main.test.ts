@@ -5,13 +5,26 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { captureEnv, captureUserAgent, readSecret } from '../src/capture/env.ts';
 import { healthy } from '../src/heartbeat.ts';
-import { dryRun, EXIT_CONFIG, EXIT_NOT_IMPLEMENTED, EXIT_USAGE, parseListen, ROLES, run } from '../src/main.ts';
+import { dryRun, EXIT_CONFIG, EXIT_USAGE, parseListen, publishArgs, ROLES, run } from '../src/main.ts';
 
 const quiet = () => {};
 
 describe('role dispatcher', () => {
-  it('the publish role is a stub until P9', async () => {
-    expect(await run(['publish'], {}, quiet)).toBe(EXIT_NOT_IMPLEMENTED);
+  it('publish takes --audience public|owner and --once, each once; it needs database settings: exit 78', async () => {
+    expect(publishArgs([])).toEqual({ family: 'public', once: false });
+    expect(publishArgs(['--once', '--audience', 'owner'])).toEqual({ family: 'owner', once: true });
+    for (const bad of [
+      ['--audience'],
+      ['--audience', 'off'],
+      ['--once', '--once'],
+      ['--audience', 'owner', '--audience', 'public'],
+      ['--dry-run'],
+    ]) {
+      expect(publishArgs(bad), bad.join(' ')).toBeUndefined();
+      expect(await run(['publish', ...bad], {}, quiet)).toBe(EXIT_USAGE);
+    }
+    expect(await run(['publish'], {}, quiet)).toBe(EXIT_CONFIG);
+    expect(await run(['publish', '--audience', 'owner', '--once'], { RWS_DB_HOST: 'db' }, quiet)).toBe(EXIT_CONFIG);
   });
 
   it.each(['load', 'migrate'])('%s refuses to start without database settings: exit 78', async (role) => {
