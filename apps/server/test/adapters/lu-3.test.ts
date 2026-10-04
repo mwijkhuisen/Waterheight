@@ -337,7 +337,7 @@ describe('rules (synthetic)', () => {
     expect(combineRun(parts)).toEqual({ run: null, dropped: { step_mismatch: 1 } });
   });
 
-  it('crossing percentiles get the ORDER flag and are never reordered; p30 and p70 keep their names', () => {
+  it('crossing percentiles get the ORDER flag (checkRun) and are never reordered; p30 and p70 keep their names', () => {
     const { run } = combineRun(
       five('diekirch', [
         [100, 110, 120, 130, 140],
@@ -346,7 +346,8 @@ describe('rules (synthetic)', () => {
         [150, 110, 120, 130, 140],
       ]),
     );
-    expect(run?.points.map((v) => v.flags)).toEqual([0, ORDER, ORDER, ORDER]);
+    expect(run?.points.map((v) => v.flags)).toEqual([0, 0, 0, 0]);
+    expect(checked(run).points.map((v) => v.flags)).toEqual([0, ORDER, ORDER, ORDER]);
     expect(run?.points[1]).toMatchObject({ value: 120, p10: 100, p30: 130, p50: 120, p70: 140, p90: 150 });
     expect(run?.points[3]).toMatchObject({ p10: 150, p30: 110 });
     expect(checked(run).points).toHaveLength(4);
@@ -369,7 +370,7 @@ describe('rules (synthetic)', () => {
 
   it('Moselle floors: perl 250, stadtbredimus 260, wasserbillig 220; an AGE station has none', () => {
     const rows = [[200, 230, 250, 260, 270]];
-    const flags = (slug: string, r = rows) => combineRun(five(slug, r)).run?.points.map((v) => v.flags);
+    const flags = (slug: string, r = rows) => checked(combineRun(five(slug, r)).run).points.map((v) => v.flags);
     expect(flags('perl')).toEqual([BELOW_FLOOR]);
     expect(flags('stadtbredimus')).toEqual([BELOW_FLOOR]);
     expect(flags('wasserbillig')).toEqual([BELOW_FLOOR]);
@@ -506,7 +507,7 @@ describe('property and fuzz', () => {
         const { run, dropped } = combineRun(five('diekirch', rows));
         expect(dropped).toEqual({});
         expect(checked(run).points).toHaveLength(rows.length);
-        expect(run?.points.map((v) => (v.flags & ORDER) !== 0)).toEqual(rows.map((r) => !sorted(r)));
+        expect(checked(run).points.map((v) => (v.flags & ORDER) !== 0)).toEqual(rows.map((r) => !sorted(r)));
         expect(run?.points.map((v) => [v.p10, v.p30, v.p50, v.p70, v.p90])).toEqual(rows);
         expect(run?.points.map((v) => v.value)).toEqual(rows.map((r) => r[2]));
         expect(run?.points.some((v) => (v.flags & BELOW_FLOOR) !== 0)).toBe(false);
@@ -524,7 +525,7 @@ describe('property and fuzz', () => {
           const floor = FLOORS[slug] as number;
           const ordered = rows.map((r) => [...r].sort((a, b) => a - b));
           const { run } = combineRun(five(slug, ordered));
-          expect(run?.points.map((v) => (v.flags & ORDER) !== 0)).toEqual(ordered.map(() => false));
+          expect(checked(run).points.map((v) => (v.flags & ORDER) !== 0)).toEqual(ordered.map(() => false));
           expect(run?.points.map((v) => (v.flags & BELOW_FLOOR) !== 0)).toEqual(
             ordered.map((r) => r.some((x) => x <= floor)),
           );
