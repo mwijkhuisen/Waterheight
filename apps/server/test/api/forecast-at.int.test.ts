@@ -1261,6 +1261,12 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     ]);
     expect(Meta.parse(meta.json()).forecastHorizons).toEqual(forecastHorizons('public'));
     for (const word of OWNER_SOURCES) expect(meta.text, word).not.toContain(word);
+    // The attribution duty of the public forecast sources whose runs sit on CH-1 and FR-1 series (P8b): listed beside
+    // them with their rows; FR-4's text carries the update-date placeholder the page fills.
+    const sources = new Map(Meta.parse(meta.json()).sources.map((s) => [s.id, s.attribution]));
+    expect(sources.get('CH-4')?.length).toBeGreaterThan(0);
+    expect(sources.get('FR-4')?.map((a) => a.text).join(' ')).toContain('VIGICRUES');
+    expect(sources.get('FR-4')?.some((a) => a.needsDate)).toBe(true);
     const doc = (await get(app(), '/api/v1/openapi.json')).json() as {
       paths: Record<string, unknown>;
       components: { schemas: Record<string, unknown> };
