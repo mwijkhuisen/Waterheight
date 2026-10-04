@@ -1,11 +1,13 @@
 import {
   type ApiErrorCode,
+  FORECAST_AHEAD_MS,
   floorBucket,
   INSTANT_MAX_LENGTH,
   instantMs,
   RESOLUTIONS,
   type Resolution,
   SERIES_ID_MAX,
+  SeriesForecastQuery,
   SeriesPath,
   SeriesQuery,
   SnapshotQuery,
@@ -67,12 +69,34 @@ function instant(text: string): number {
   return ms;
 }
 
-/** /snapshot: `t` floored to its 10-minute bucket, within [displayStart, now + skew]. */
+/**
+ * /snapshot: `t` floored to its 10-minute bucket, within [displayStart, now + 48 h] (P8b, D8: after now the snapshot
+ * holds forecasts only). Beyond is `out_of_range` before any query.
+ */
 export function snapshotParams(url: string, nowMs: number, displayStartMs: number): number {
   const ms = instant(parsed(SnapshotQuery, queryOf(url)).t);
   const t = floorBucket(ms);
-  if (ms > nowMs + SKEW_MS || t < displayStartMs) throw new Refused('out_of_range');
+  if (ms > nowMs + FORECAST_AHEAD_MS || t < displayStartMs) throw new Refused('out_of_range');
   return t;
+}
+
+/**
+ * /series/{id}/forecast (P8b): an int4 id; `asof` with the rules of `t`, floored to the grid, within [displayStart,
+ * now + skew]; absent, now floored.
+ */
+export function seriesForecastParams(
+  rawId: string,
+  url: string,
+  nowMs: number,
+  displayStartMs: number,
+): { id: number; asof: number } {
+  const q = parsed(SeriesForecastQuery, queryOf(url));
+  const id = Number(parsed(SeriesPath, { id: rawId }).id);
+  if (id > SERIES_ID_MAX) throw new Refused('bad_parameter');
+  const ms = q.asof === undefined ? nowMs : instant(q.asof);
+  const asof = floorBucket(ms);
+  if (ms > nowMs + SKEW_MS || asof < displayStartMs) throw new Refused('out_of_range');
+  return { id, asof };
 }
 
 export type SeriesParams = { id: number; from: number; to: number; res: Resolution };

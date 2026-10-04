@@ -28,13 +28,22 @@ export const BELOW_FLOOR_LABEL = 'below forecastable range';
 export const FORECAST_MAX_POINTS = 2000;
 const Numbers = z.array(z.number().nullable()).max(FORECAST_MAX_POINTS);
 
-/** The quantile band of a run; `p30` and `p70` are present only where the provider states them (AGE, LU-3). */
+/**
+ * The quantile band of a run: `kind` names the pair the band spans (p10/p90, else BAFU's p25/p75); a column is null
+ * where the provider states none (`p30`/`p70`: AGE; `vmin`/`vmax`: BAFU's ensemble minimum and maximum).
+ */
 const Band = z.strictObject({
-  p10: Numbers,
-  p90: Numbers,
+  kind: z.enum(['p10p90', 'p25p75']),
+  p10: Numbers.nullable(),
+  p90: Numbers.nullable(),
+  p25: Numbers.nullable(),
+  p75: Numbers.nullable(),
   p30: Numbers.nullable(),
   p70: Numbers.nullable(),
+  vmin: Numbers.nullable(),
+  vmax: Numbers.nullable(),
 });
+const BAND_COLUMNS = ['p10', 'p90', 'p25', 'p75', 'p30', 'p70', 'vmin', 'vmax'] as const;
 
 /**
  * The latest run of one series from one source, in columns (one array per field, one entry per valid time, in
@@ -78,11 +87,11 @@ const forecastRun = (source: z.ZodString) =>
       const columns: [string, readonly unknown[] | null][] = [
         ['value', r.value],
         ['flags', r.flags],
-        ['band.p10', r.band?.p10 ?? null],
-        ['band.p90', r.band?.p90 ?? null],
-        ['band.p30', r.band?.p30 ?? null],
-        ['band.p70', r.band?.p70 ?? null],
+        ...BAND_COLUMNS.map((c): [string, readonly unknown[] | null] => [`band.${c}`, r.band?.[c] ?? null]),
       ];
+      const band = r.band;
+      if (band !== null && (band.kind === 'p10p90' ? [band.p10, band.p90] : [band.p25, band.p75]).includes(null))
+        ctx.addIssue({ code: 'custom', message: `a ${band.kind} band holds both of its columns` });
       for (const [name, col] of columns) {
         if (col !== null && col.length !== n)
           ctx.addIssue({ code: 'custom', message: `${name} must have ${n} entries` });
@@ -96,7 +105,7 @@ const forecastRun = (source: z.ZodString) =>
       // A point below the provider's floor carries no number anywhere (never a level).
       for (let i = 0; i < n; i++) {
         if (((r.flags[i] ?? 0) & FORECAST_FLAG_BITS.below_floor) === 0) continue;
-        const numbers = [r.value[i], r.band?.p10[i], r.band?.p90[i], r.band?.p30?.[i], r.band?.p70?.[i]];
+        const numbers = [r.value[i], ...BAND_COLUMNS.map((c) => r.band?.[c]?.[i])];
         if (numbers.some((x) => x !== null && x !== undefined)) {
           ctx.addIssue({ code: 'custom', message: 'a below_floor point must hold no number' });
           break;
@@ -123,6 +132,27 @@ export const ForecastLatest = forecastLatest(CATALOGUE_SOURCE);
 export const OwnerForecastLatest = forecastLatest(OWNER_SOURCE);
 export type ForecastLatest = z.infer<typeof ForecastLatest>;
 export type ForecastRun = ForecastLatest['runs'][number];
+
+// --- Display rules (P8b) -------------------------------------------------------------------------------------------
+
+/**
+ * Which forecast source a series shows when several forecast it (never blended: one source per series and t). The
+ * registry order of sources.yaml (a test holds them equal), in which DE-2 (BfG `WV`, the official forecast) comes
+ * before DE-3 (BfG 14-day quantiles) where both forecast DE-1's stage at Emmerich.
+ */
+export const FORECAST_PRECEDENCE = ['NL-1', 'DE-2', 'DE-3', 'FR-4', 'LU-3', 'CH-4'] as const;
+
+/**
+ * The one run a series shows: of the candidate runs (at most one per source), the first by FORECAST_PRECEDENCE that
+ * `current` accepts (it reaches t, its source's schedule says it was not superseded, its display limit holds). A
+ * source outside the list ranks after every listed one: the owner canary's own run (CANARY-OWNER, owner family only)
+ * shows where no listed source forecasts its series. Undefined: "no forecast".
+ */
+export function pickRun<T extends { source: string }>(runs: readonly T[], current: (run: T) => boolean): T | undefined {
+  const order = FORECAST_PRECEDENCE as readonly string[];
+  const rank = (r: T) => (order.includes(r.source) ? order.indexOf(r.source) : order.length);
+  return [...runs].sort((a, b) => rank(a) - rank(b)).find(current);
+}
 
 // --- The reach matrix and its coverage (P8a; catalogue §0.5) -------------------------------------------------------
 // registry/forecast-reaches.yaml holds the 15 rows of the catalogue's "Forecast coverage per river" table; each

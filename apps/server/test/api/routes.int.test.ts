@@ -261,7 +261,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       // t: range
       ['t before displayStart', `${snap}2026-09-30T23:59:59Z`, 'out_of_range'],
       ['t years before displayStart', `${snap}1999-01-01T00:00:00Z`, 'out_of_range'],
-      ['t 5 min 1 s ahead of now', `${snap}2026-10-26T12:05:01Z`, 'out_of_range'],
+      ['t 48 h 1 s ahead of now (P8b: forecasts reach now + 48 h)', `${snap}2026-10-28T12:00:01Z`, 'out_of_range'],
       ['t in 2099', `${snap}2099-12-31T23:59:59Z`, 'out_of_range'],
       // parameters
       ['an unknown parameter', `${snap}2026-10-25T12:00:00Z&zzfoobar=1`, 'unknown_parameter'],
@@ -622,6 +622,12 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
           attribution: [{ lang: 'nl', text: 'PUBLIC-ATTRIBUTION', url: null, required: false, needsDate: false }],
         },
       ],
+      // P8b: the public forecast sources (no owner source), each capped at 48 hours.
+      forecastHorizons: [
+        { source: 'CH-4', hours: 48 },
+        { source: 'FR-4', hours: 48 },
+        { source: 'NL-1', hours: 48 },
+      ],
     });
     const stored = Object.fromEntries(
       (
@@ -648,6 +654,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       '/api/v1/meta',
       '/api/v1/openapi.json',
       '/api/v1/series/{id}',
+      '/api/v1/series/{id}/forecast',
       '/api/v1/snapshot',
       '/api/v1/stations',
     ]);

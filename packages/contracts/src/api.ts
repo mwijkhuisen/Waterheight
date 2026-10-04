@@ -63,6 +63,10 @@ export const SERIES_ID_MAX = 2_147_483_647;
 
 const Instant = z.string().max(INSTANT_MAX_LENGTH).regex(INSTANT_RE);
 export const SnapshotQuery = z.strictObject({ t: Instant });
+/** `asof` of /series/{id}/forecast: the same instant rules as `t`; absent means now. */
+export const SeriesForecastQuery = z.strictObject({ asof: Instant.optional() });
+/** How far ahead of now `t` may reach (D8): official forecasts only, each source within its own horizon. */
+export const FORECAST_AHEAD_MS = 48 * 3_600_000;
 export const SeriesQuery = z.strictObject({ from: Instant, to: Instant, res: z.enum(RESOLUTIONS).optional() });
 export const SeriesPath = z.strictObject({ id: z.string().regex(SERIES_ID_RE) });
 
@@ -128,6 +132,11 @@ export const Meta = z.strictObject({
   build: z.string().regex(/^(?:[0-9a-f]{40}|dev)$/),
   /** The public sources whose series the display views hold, with their attribution rows. */
   sources: z.array(z.strictObject({ id: HealthSourceId, attribution: z.array(Attribution).max(20) })).max(100),
+  /**
+   * The public forecast sources and how far ahead each may be shown (P8b, D8): its provider horizon capped at 48
+   * hours. A station's own horizon is its current run's end (/series/{id}/forecast).
+   */
+  forecastHorizons: z.array(z.strictObject({ source: HealthSourceId, hours: z.number().int().min(1).max(48) })).max(20),
 });
 export type Meta = z.infer<typeof Meta>;
 
@@ -219,13 +228,101 @@ export const SnapshotValue = z.strictObject({
   /** A gauge zero as published that is not converted (IGN69, NGF-1884, Hub'Eau metadata): shown as unverified. */
   zero: z.strictObject({ m: z.number(), datum: z.enum(DATUMS) }).optional(),
 });
+/** The forecast flag bits (packages/core FORECAST_FLAGS; the observation `qc` is another mask). */
+const FORECAST_FLAG_MASK = 16 | 128 | 256 | 1024;
+const ForecastFlags = z
+  .number()
+  .int()
+  .min(0)
+  .max(FORECAST_FLAG_MASK)
+  .refine((f) => (f & ~FORECAST_FLAG_MASK) === 0, 'unknown flag bit');
+/** Which quantiles a forecast band spans: 10–90 % (RWS, Vigicrues, AGE, BfG 14-day) or 25–75 % (BAFU). */
+export const FORECAST_BAND_KINDS = ['p10p90', 'p25p75'] as const;
+/** Our short agency name of a forecast source (never provider text). */
+const Agency = z
+  .string()
+  .max(40)
+  .regex(/^[A-Za-z][A-Za-z -]*$/);
+const ForecastKind = z.enum(['deterministic', 'quantiles', 'ensemble_summary']);
+
+/**
+ * A series' forecast at a future `t` (P8b, A§9.2): the latest run issued at or before now that covers `t`, one
+ * source per series by precedence (never blended), its value held at the greatest valid time ≤ t (never
+ * interpolated). A series without one is absent ("no forecast").
+ */
+export const SnapshotForecast = z.strictObject({
+  series: SeriesId,
+  source: HealthSourceId,
+  agency: Agency,
+  /** The run's valid time held at `t`. */
+  ts: iso,
+  /** The central value in the series' canonical unit; null when censored or below the provider's floor. */
+  value: z.number().nullable(),
+  flags: ForecastFlags,
+  /** Beyond the provider's own forecast segment (shown as an estimate). */
+  estimate: z.boolean(),
+  /** The time the provider states for the run, else the time we first fetched it (`issuedInferred`). */
+  issuedAt: iso,
+  issuedInferred: z.boolean(),
+  providerSegmentEnd: iso.nullable(),
+  band: z.strictObject({ kind: z.enum(FORECAST_BAND_KINDS), lo: z.number(), hi: z.number() }).nullable(),
+  /** The last instant this series' forecast may be shown: its run's end, capped at now + 48 h. */
+  horizonEnd: iso,
+  /** The state of the forecast value against the agencies' references (never a class or area of the present). */
+  state: z.enum(STATES),
+  basis: StateBasis.nullable(),
+});
+export type SnapshotForecast = z.infer<typeof SnapshotForecast>;
+
 export const Snapshot = z.strictObject({
   /** The quantised instant (UTC, on the 10-minute grid). */
   t: iso,
-  /** Only series with a value in their window; ordered by series. */
+  /** Only series with a value in their window; ordered by series. Empty after now: observations stop at now. */
   values: z.array(SnapshotValue).max(MAX_POINTS),
+  /** Only for `t` after now (P8b): the series with a forecast at `t`, ordered by series. */
+  forecasts: z.array(SnapshotForecast).max(MAX_POINTS).optional(),
 });
 export type Snapshot = z.infer<typeof Snapshot>;
+
+/** At most this many points in one run of /series/{id}/forecast (48 hours at 10 minutes, with the lead-in). */
+export const FORECAST_RUN_MAX_POINTS = 2000;
+
+/**
+ * /series/{id}/forecast?asof= (P8b, A§9.2; api channel): the run current at `asof` (the latest known then that still
+ * reaches it, one source by precedence), its points up to asof + 48 h; null when there is none.
+ */
+export const SeriesForecast = z.strictObject({
+  series: SeriesId,
+  asof: iso,
+  run: z
+    .strictObject({
+      source: HealthSourceId,
+      agency: Agency,
+      issuedAt: iso,
+      issuedInferred: z.boolean(),
+      fetchedAt: iso,
+      providerSegmentEnd: iso.nullable(),
+      kind: ForecastKind,
+      stepSeconds: z.number().int().positive().nullable(),
+      bandKind: z.enum(FORECAST_BAND_KINDS).nullable(),
+      /** The last valid time shown: the run's end, capped at asof + 48 h. */
+      horizonEnd: iso,
+      points: z
+        .array(
+          z.strictObject({
+            ts: iso,
+            value: z.number().nullable(),
+            lo: z.number().nullable(),
+            hi: z.number().nullable(),
+            flags: ForecastFlags,
+          }),
+        )
+        .min(1)
+        .max(FORECAST_RUN_MAX_POINTS),
+    })
+    .nullable(),
+});
+export type SeriesForecast = z.infer<typeof SeriesForecast>;
 
 const RawPoint = z.strictObject({ ts: iso, value: z.number(), qc: z.number().int().min(0).max(1023) });
 const BucketPoint = z.strictObject({

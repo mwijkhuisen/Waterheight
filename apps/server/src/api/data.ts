@@ -4,6 +4,7 @@ import { type Kysely, sql } from 'kysely';
 import { VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { FILLED_BY } from '../load/adapters.ts';
+import { forecastHorizons } from './forecast-at.ts';
 import type { SeriesParams } from './params.ts';
 import { readStates, type StateRead, type StaticCache, snapshotValues } from './states.ts';
 import { coded, iso, snapshot } from './util.ts';
@@ -68,6 +69,7 @@ export async function readMeta(db: Kysely<DB>, window: Window, build: string, no
     displayStart: new Date(window.displayStartMs).toISOString(),
     build,
     sources: [...sources].map(([id, attribution]) => ({ id, attribution })),
+    forecastHorizons: forecastHorizons('public'),
   };
 }
 

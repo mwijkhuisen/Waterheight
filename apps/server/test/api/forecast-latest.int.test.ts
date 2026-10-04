@@ -280,8 +280,8 @@ describe('forecast/latest.json through the database roles', { timeout: 300_000 }
     // the point below the floor: no number anywhere, its flag kept
     expect(lu3?.flags[5]).toBe(FORECAST_FLAGS.BELOW_FLOOR);
     expect(lu3?.value[5]).toBeNull();
-    expect(lu3?.band?.p10[5]).toBeNull();
-    expect(lu3?.band?.p90[5]).toBeNull();
+    expect(lu3?.band?.p10?.[5]).toBeNull();
+    expect(lu3?.band?.p90?.[5]).toBeNull();
     expect(lu3?.value[4]).toBe(54);
     // without a limit nothing is cut
     const free = await readForecastLatest(own.db, 'owner', NOW, { limitsH: new Map() });

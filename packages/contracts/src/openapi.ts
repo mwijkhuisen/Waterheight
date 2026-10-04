@@ -7,6 +7,7 @@ import {
   RESOLUTIONS,
   SERIES_ID_RE,
   Series,
+  SeriesForecast,
   Snapshot,
   Stations,
 } from './api.ts';
@@ -17,7 +18,17 @@ import { Health, HealthSources, HealthUnavailable } from './health.ts';
 // schema the API validates its answers against (z.toJSONSchema; OpenAPI 3.1
 // uses JSON Schema 2020-12). No version of any software appears in it.
 
-const COMPONENTS = { ApiError, Meta, Stations, Snapshot, Series, Health, HealthSources, HealthUnavailable } as const;
+const COMPONENTS = {
+  ApiError,
+  Meta,
+  Stations,
+  Snapshot,
+  Series,
+  SeriesForecast,
+  Health,
+  HealthSources,
+  HealthUnavailable,
+} as const;
 type Component = keyof typeof COMPONENTS;
 
 function jsonSchema(schema: z.ZodType): Record<string, unknown> {
@@ -68,9 +79,9 @@ export function openApiDocument(): Record<string, unknown> {
       ),
       '/api/v1/stations': get('Stations and their series', json('Stations', 'Stations')),
       '/api/v1/snapshot': get(
-        'The value of every series at t, the last observation carried forward within its staleness limit',
+        'The value of every series at t: up to now the last observation carried forward within its staleness limit; after now only official forecasts (`forecasts`), each series from one source',
         json('Snapshot', 'Snapshot'),
-        [instant('t', 'The instant, from displayStart to now.')],
+        [instant('t', 'The instant, from displayStart to now + 48 hours.')],
       ),
       '/api/v1/series/{id}': get(
         'One series over [from, to)',
@@ -85,6 +96,18 @@ export function openApiDocument(): Record<string, unknown> {
             required: false,
             description: 'raw up to 14 days, 1h up to 366 days, 1d up to 3660 days; by default the finest that fits.',
             schema: { type: 'string', enum: [...RESOLUTIONS] },
+          },
+        ],
+        { '404': json('ApiError', 'No such series in the api channel') },
+      ),
+      '/api/v1/series/{id}/forecast': get(
+        'The official forecast run of one series current at asof (one source, never blended)',
+        json('SeriesForecast', 'SeriesForecast'),
+        [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: SERIES_ID_RE.source } },
+          {
+            ...instant('asof', 'What was known at this instant, from displayStart to now; by default now.'),
+            required: false,
           },
         ],
         { '404': json('ApiError', 'No such series in the api channel') },

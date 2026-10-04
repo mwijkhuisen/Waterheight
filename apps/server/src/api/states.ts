@@ -169,80 +169,99 @@ function parseGeometry(text: string | null): unknown {
 /**
  * Every active series of the family at t, classified. `current` marks the current 10-minute bucket: only there is a
  * class or area judged by its source's last successful fetch (CLASS_WINDOW_MIN); for an earlier t the stored rows
- * are the record. `sections` is the FR-5 station → section map (loaded once at boot).
+ * are the record. `sections` is the FR-5 station → section map (loaded once at boot). `forecast` (P8b, a future t)
+ * classifies these values instead of observations, against the references valid at t only: a provider class or an
+ * area warning describes the present, never a forecast, and nothing observed is read past now.
  */
 export async function readStates(
   db: Kysely<DB>,
   family: ChannelAudience,
   t: number,
-  opts: { now: number; current: boolean; sections: ReadonlyMap<string, string>; cache?: StaticCache | undefined },
+  opts: {
+    now: number;
+    current: boolean;
+    sections: ReadonlyMap<string, string>;
+    cache?: StaticCache | undefined;
+    forecast?: ReadonlyMap<number, { ts: number; value: number }>;
+  },
 ): Promise<StateRead> {
   const V = VIEWS[family];
   const at = new Date(t).toISOString();
   const fixed = await (opts.cache?.get(db, family) ?? readStatic(db, family));
   const { stations } = fixed;
-  const rows = await snapshot(db, async (tx) => {
-    const warnings = (
-      await sql<WarningRow>`
+  const forecast = opts.forecast;
+  const rows =
+    forecast !== undefined
+      ? {
+          areas: [],
+          obs: [...forecast].map(
+            ([series_id, f]): ObsRow => ({ series_id, ts: new Date(f.ts), value: f.value, qc: 0 }),
+          ),
+          classes: [],
+          health: [],
+        }
+      : await snapshot(db, async (tx) => {
+          const warnings = (
+            await sql<WarningRow>`
         SELECT id::text AS id, source_id, area_key, name, level_raw,
                CASE WHEN source_id IN ('LU-5', 'DE-6', 'DE-10') OR area_key LIKE 'hydro\\_region:%'
                     THEN md5(geometry_geojson) END AS geom_md5
         FROM ${sql.table(V.warning)} WHERE valid @> ${at}::timestamptz ORDER BY id`.execute(tx)
-    ).rows;
-    // The stations each area attaches to (the static entry's map, or a fresh one without the cache); a polygon not
-    // seen before is read and parsed once.
-    const { attached } = fixed;
-    const keyOf = (w: WarningRow) => w.geom_md5 ?? `${w.source_id}:${w.area_key}`;
-    // One row per geometry not seen before: rows sharing a polygon (one LU-5 zone in several alerts) fetch it once.
-    const missing = [
-      ...new Map(
-        warnings.flatMap((w) => (w.geom_md5 !== null && !attached.has(w.geom_md5) ? [[w.geom_md5, w.id]] : [])),
-      ).values(),
-    ];
-    const geometry = new Map(
-      missing.length === 0
-        ? []
-        : (
-            await sql<{ md5: string; geometry_geojson: string | null }>`
+          ).rows;
+          // The stations each area attaches to (the static entry's map, or a fresh one without the cache); a polygon not
+          // seen before is read and parsed once.
+          const { attached } = fixed;
+          const keyOf = (w: WarningRow) => w.geom_md5 ?? `${w.source_id}:${w.area_key}`;
+          // One row per geometry not seen before: rows sharing a polygon (one LU-5 zone in several alerts) fetch it once.
+          const missing = [
+            ...new Map(
+              warnings.flatMap((w) => (w.geom_md5 !== null && !attached.has(w.geom_md5) ? [[w.geom_md5, w.id]] : [])),
+            ).values(),
+          ];
+          const geometry = new Map(
+            missing.length === 0
+              ? []
+              : (
+                  await sql<{ md5: string; geometry_geojson: string | null }>`
               SELECT md5(geometry_geojson) AS md5, geometry_geojson FROM ${sql.table(V.warning)}
               WHERE id = ANY(${missing}::bigint[])`.execute(tx)
-          ).rows.map((g) => [g.md5, g.geometry_geojson]),
-    );
-    const areas = warnings.map((w) => {
-      const key = keyOf(w);
-      const known = attached.get(key);
-      if (known !== undefined) return { w, ids: known };
-      // A polygon is attached only from the geometry this read fetched; without it nothing is kept (review SR-2).
-      if (w.geom_md5 !== null && !geometry.has(w.geom_md5)) return { w, ids: [] };
-      const ids = attachArea(
-        { source: w.source_id, key: w.area_key, geometry: parseGeometry(geometry.get(w.geom_md5 ?? '') ?? null) },
-        stations,
-        opts.sections,
-      );
-      attached.set(key, ids);
-      return { w, ids };
-    });
-    return {
-      areas,
-      obs: (
-        await sql<ObsRow>`SELECT series_id, ts, value, qc FROM ${sql.id(OBS_AT[family])}(${at}::timestamptz)`.execute(
-          tx,
-        )
-      ).rows,
-      classes: (
-        await sql<ClassRow>`
+                ).rows.map((g) => [g.md5, g.geometry_geojson]),
+          );
+          const areas = warnings.map((w) => {
+            const key = keyOf(w);
+            const known = attached.get(key);
+            if (known !== undefined) return { w, ids: known };
+            // A polygon is attached only from the geometry this read fetched; without it nothing is kept (review SR-2).
+            if (w.geom_md5 !== null && !geometry.has(w.geom_md5)) return { w, ids: [] };
+            const ids = attachArea(
+              { source: w.source_id, key: w.area_key, geometry: parseGeometry(geometry.get(w.geom_md5 ?? '') ?? null) },
+              stations,
+              opts.sections,
+            );
+            attached.set(key, ids);
+            return { w, ids };
+          });
+          return {
+            areas,
+            obs: (
+              await sql<ObsRow>`SELECT series_id, ts, value, qc FROM ${sql.id(OBS_AT[family])}(${at}::timestamptz)`.execute(
+                tx,
+              )
+            ).rows,
+            classes: (
+              await sql<ClassRow>`
           SELECT DISTINCT ON (subject_id, source_id) subject_id, source_id, provider_code
           FROM ${sql.table(V.class)} WHERE subject_type = 'station' AND ts <= ${at}::timestamptz
           ORDER BY subject_id, source_id, ts DESC`.execute(tx)
-      ).rows,
-      health: opts.current
-        ? (
-            await sql<{ source_id: string; last_fetch_ok: Date | null }>`
+            ).rows,
+            health: opts.current
+              ? (
+                  await sql<{ source_id: string; last_fetch_ok: Date | null }>`
               SELECT source_id, last_fetch_ok FROM ${sql.table(V.sourceHealth)}`.execute(tx)
-          ).rows
-        : [],
-    };
-  });
+                ).rows
+              : [],
+          };
+        });
   const series = fixed.series;
   const refs = fixed.refs.filter((r) => validAt(r, t));
   const zeros = fixed.zeros.filter((z) => validAt(z, t));
@@ -306,7 +325,8 @@ export async function readStates(
         valueKind: s.value_kind,
         value: o?.value ?? null,
         qc: o?.qc ?? 0,
-        ageMs: o === undefined ? 0 : t - o.ts.getTime(),
+        // A forecast value is the run's value for t (held within its step): never stale.
+        ageMs: o === undefined || forecast !== undefined ? 0 : t - o.ts.getTime(),
         stalenessMs: s.staleness_ms,
         t,
         refs: refsOf.get(s.id) ?? [],

@@ -28,6 +28,7 @@ const run = (o: Partial<RunRow> & { firstValid: number; lastValid: number }): Ru
   segmentEnd: null,
   ...o,
 });
+const NO_BAND = { p10: null, p90: null, p25: null, p75: null, p30: null, p70: null, vmin: null, vmax: null };
 /** Points every `stepMs` from the run's first valid time to its last; `at` makes the other columns. */
 const points = (
   r: RunRow,
@@ -37,7 +38,7 @@ const points = (
 ): PointRow[] => {
   const out: PointRow[] = [];
   for (let ts = r.firstValid, i = 0; ts <= to; ts += stepMs, i++) {
-    out.push({ run: r.id, ts, value: 100 + i, p10: null, p30: null, p70: null, p90: null, flags: 0, ...at(i) });
+    out.push({ run: r.id, ts, value: 100 + i, ...NO_BAND, flags: 0, ...at(i) });
   }
   return out;
 };
@@ -285,15 +286,15 @@ describe('buildForecastLatest: below the forecastable range', () => {
     expect(x?.flags).toEqual([0, 0, 1024, 1040, 16, 0]);
     for (const i of [2, 3]) {
       expect(x?.value[i]).toBeNull();
-      expect(x?.band?.p10[i]).toBeNull();
-      expect(x?.band?.p90[i]).toBeNull();
+      expect(x?.band?.p10?.[i]).toBeNull();
+      expect(x?.band?.p90?.[i]).toBeNull();
       expect(x?.band?.p30?.[i]).toBeNull();
       expect(x?.band?.p70?.[i]).toBeNull();
     }
     // the neighbours (an order flag is not a floor) keep their numbers
     expect(x?.value[1]).toBe(101);
     expect(x?.value[4]).toBe(104);
-    expect(x?.band?.p90[4]).toBe(114);
+    expect(x?.band?.p90?.[4]).toBe(114);
   });
 
   it('drops the band altogether when every band number is null, and the contract refuses a number under the flag', () => {
@@ -384,7 +385,7 @@ describe('buildForecastLatest: property', () => {
           lastValid: first + 80 * H,
           stepS: 3600,
         });
-        const pts = rows.map((p, i) => ({ run: r.id, ts: first + i * H, p30: null, p70: null, ...p }));
+        const pts = rows.map((p, i) => ({ run: r.id, ts: first + i * H, ...NO_BAND, ...p }));
         const doc = buildForecastLatest(
           { runs: [r], points: pts },
           { now: first + H, ruhrortCm: null, limitsH: new Map([['lu.age.p', limit]]) },
