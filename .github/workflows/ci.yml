@@ -361,7 +361,7 @@ jobs:
           # capture cannot succeed without internet in CI and the loaded data is a recorded fixture, so
           # only the checks that need fresh production data may fail.
           if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" |
-            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner health|forecast NL-1|forecast CH-4|rivers manifest|rivers tiles|rivers reaches|rivers download|static settled|static frames|static lag|static rerender) '; then
+            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner health|forecast NL-1|forecast CH-4|rivers manifest|rivers tiles|rivers reaches|rivers download|static settled|static frames|static series|static lag|static rerender) '; then
             echo "verify-prod failed a check other than the ones that need live data" >&2
             exit 1
           fi
@@ -377,7 +377,7 @@ jobs:
           for check in 'api meta' 'api stations' 'api snapshot now' 'api snapshot 6h' 'api snapshot 3d' 'api openapi' \
             'api params' 'noindex' 'rivers attribution' 'api states' 'class coverage' \
             'static meta' 'static latest' 'static stations' 'static sources' 'static recent' 'static forecast' \
-            'static status' 'static precompressed' 'runtime config'; do
+            'static warnings' 'static status' 'static precompressed' 'runtime config'; do
             grep -qE "^PASS $check " "$RUNNER_TEMP/verify-prod.txt" || { echo "verify-prod: no PASS for $check" >&2; exit 1; }
           done
 

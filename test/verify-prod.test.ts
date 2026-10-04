@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { gzipSync } from 'node:zlib';
+import { gzipSync, zstdCompressSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { Counters } from '../apps/server/src/capture/runner.ts';
@@ -14,6 +14,7 @@ import {
   basemapAssetsPath,
   type ForecastCoverage,
   ForecastReaches,
+  FramesFile,
   Health,
   HealthSources,
   Meta,
@@ -22,10 +23,12 @@ import {
   Snapshot,
   Stations,
   validateBasemap,
+  WarningsFile,
 } from '../packages/contracts/src/index.ts';
 import { TILE_FILE_RE, type TileFile, type TilesManifest } from '../packages/core/src/tiles-manifest.ts';
 import {
   API_SOURCES,
+  type ApiRead,
   BELGIAN_FRESH_PCT,
   BELGIAN_MAX_AGE_S,
   BELGIAN_NL1,
@@ -68,9 +71,24 @@ import {
   checkRiversManifest,
   checkRiversReaches,
   checkRiversTiles,
+  checkRuntimeConfig,
   checkSnapshot,
   checkSourceHealth,
   checkStates,
+  checkStaticForecast,
+  checkStaticFrames,
+  checkStaticLag,
+  checkStaticLatest,
+  checkStaticMeta,
+  checkStaticPrecompressed,
+  checkStaticRecent,
+  checkStaticRerender,
+  checkStaticSeries,
+  checkStaticSettled,
+  checkStaticSources,
+  checkStaticStations,
+  checkStaticStatus,
+  checkStaticWarnings,
   checkStations,
   checkTier1,
   checkTileFile,
@@ -90,6 +108,7 @@ import {
   FRESH_MAX_AGE_BY_SOURCE,
   FRESH_MAX_AGE_S,
   freshLimit,
+  GEOJSON,
   INTERVAL_MIN_S,
   INTERVAL_SPEC,
   leaks,
@@ -111,16 +130,22 @@ import {
   PARAM_CASES,
   type Page,
   PMTILES_MAGIC,
+  RERENDER_MAX_S,
   RIVERS_DOWNLOAD_RANGE,
   reachIds,
   readApi,
   readRiversManifest,
   readSnapshot,
+  readStatic,
   readTilesManifest,
+  recentCandidates,
   SNAPSHOT_ASKS,
   type SnapshotAsk,
+  STATIC_CACHE,
+  STATIC_LAG_MAX_S,
   STATIONS_CACHE,
   sampleCapture,
+  settledAsk,
   snapshotAt,
   soak,
   staleSpecs,
@@ -3640,5 +3665,357 @@ describe('owner ids and interval DE-6 (P7a)', () => {
   it('the --dry-run list names both', () => {
     for (const name of ['owner ids', 'interval DE-6'])
       expect(CHECKS.filter((c) => c.startsWith(`${name}:`))).toHaveLength(1);
+  });
+});
+
+describe('verify-prod: the static publisher (P9a)', () => {
+  const accept = { safeParse: (v: unknown) => ({ success: true as const, data: v as { ok?: number } }) };
+  const refuse = { safeParse: () => ({ success: false as const }) };
+  const file = (doc: unknown, cache: string, type = 'application/json', over: Partial<Page> = {}): Page => ({
+    status: 200,
+    headers: { 'content-type': type, 'cache-control': cache },
+    body: typeof doc === 'string' ? doc : JSON.stringify(doc),
+    ...over,
+  });
+  const live = STATIC_CACHE.live;
+  const rd = (data?: unknown, problems: string[] = []): ApiRead<never> =>
+    ({ ...(data === undefined ? {} : { data }), problems }) as ApiRead<never>;
+  const ok = (name: string, r: { ok: boolean | 'n/a'; check: string }) =>
+    expect(r).toMatchObject({ check: name, ok: true });
+
+  describe('readStatic', () => {
+    it('passes a 200 with its class, its type and the contract', () => {
+      expect(readStatic(file({ ok: 1 }, live), accept, live)).toEqual({ data: { ok: 1 }, problems: [] });
+      expect(
+        readStatic(file({}, STATIC_CACHE.warnings, `${GEOJSON}; charset=utf-8`), accept, STATIC_CACHE.warnings, GEOJSON)
+          .problems,
+      ).toEqual([]);
+    });
+    it.each([
+      ['a wrong Cache-Control', file({}, 'public, max-age=60'), /cache-control "public, max-age=60"/],
+      [
+        'a missing Cache-Control',
+        file({}, live, 'application/json', { headers: { 'content-type': 'application/json' } }),
+        /cache-control ""/,
+      ],
+      ['a wrong Content-Type', file({}, live, 'text/html'), /content-type "text\/html"/],
+      ['application/json for a geojson file', file({}, live, 'application/json'), /content-type/],
+      ['a 404', file({}, live, 'application/json', { status: 404 }), /status 404/],
+      ['a network error', 'timeout', /timeout/],
+    ])('fails %s', (_n, p, re) => {
+      expect(
+        readStatic(p, accept, live, _n.includes('geojson') ? GEOJSON : 'application/json').problems.join(';'),
+      ).toMatch(re);
+    });
+    it('fails the contract and an owner term, but still returns the document for the term', () => {
+      expect(readStatic(file({}, live), refuse, live).problems).toEqual(['not the contract document']);
+      const r = readStatic(file({ note: 'BE-3 here' }, live), accept, live, 'application/json', ['BE-3', 'LU-2']);
+      expect(r.problems).toEqual(['owner term BE-3']);
+      expect(r.data).toBeDefined();
+    });
+    it('takes the real WarningsFile and FramesFile contracts', () => {
+      const w = {
+        type: 'FeatureCollection',
+        schemaVersion: 1,
+        generatedAt: '2026-10-04T10:00:00Z',
+        day: null,
+        features: [],
+        attribution: [],
+      };
+      expect(
+        readStatic(file(w, STATIC_CACHE.warnings, GEOJSON), WarningsFile, STATIC_CACHE.warnings, GEOJSON).problems,
+      ).toEqual([]);
+      expect(
+        readStatic(
+          file({ ...w, day: 'x' }, STATIC_CACHE.warnings, GEOJSON),
+          WarningsFile,
+          STATIC_CACHE.warnings,
+          GEOJSON,
+        ).problems,
+      ).toEqual(['not the contract document']);
+      const f = {
+        schemaVersion: 1,
+        from: '2026-10-04T00:00:00Z',
+        to: '2026-10-04T02:00:00Z',
+        stepSeconds: 3600,
+        series: [1],
+        vlast: [[1, null]],
+        attribution: [],
+      };
+      expect(readStatic(file(f, STATIC_CACHE.slow), FramesFile, STATIC_CACHE.slow).problems).toEqual([]);
+      expect(
+        readStatic(file({ ...f, vlast: [[1]] }, STATIC_CACHE.slow), FramesFile, STATIC_CACHE.slow).problems,
+      ).toEqual(['not the contract document']);
+    });
+  });
+
+  const metaDoc = (over: Record<string, unknown> = {}) =>
+    ({
+      now: '2026-10-04T12:34:56Z',
+      displayStart: '2026-09-01T00:00:00Z',
+      latestFrom: '2026-10-04T12:30:00Z',
+      dayVersions: { '2026-09-20': 2 },
+      sources: API_SOURCES.map((id) => ({ id, attribution: [] })),
+      ...over,
+    }) as never;
+
+  it('static meta: the class, the sources and the day versions', () => {
+    ok('static meta', checkStaticMeta(rd(metaDoc())));
+    expect(checkStaticMeta(rd(metaDoc(), ['cache-control "x"']))).toMatchObject({ ok: false, detail: /cache-control/ });
+    expect(checkStaticMeta(rd(metaDoc({ sources: [] })))).toMatchObject({ ok: false, detail: /NL-1 is not listed/ });
+    expect(checkStaticMeta(rd(undefined, ['not the contract document']))).toMatchObject({ ok: false });
+  });
+
+  it('static latest: the seriesHash is the stations.json one', () => {
+    const st = { seriesHash: 'aaaaaaaaaaaaaaaa', stations: [] } as never;
+    ok('static latest', checkStaticLatest(rd({ seriesHash: 'aaaaaaaaaaaaaaaa', series: [1] } as never), st));
+    expect(checkStaticLatest(rd({ seriesHash: 'bbbbbbbbbbbbbbbb', series: [] } as never), st)).toMatchObject({
+      ok: false,
+      detail: /not stations\.json's/,
+    });
+    expect(checkStaticLatest(rd({ seriesHash: 'aaaaaaaaaaaaaaaa', series: [] } as never), undefined)).toMatchObject({
+      ok: false,
+      detail: /no valid stations\.json/,
+    });
+  });
+
+  it('static stations, sources, forecast: pass or surface the problems', () => {
+    ok('static stations', checkStaticStations(rd({ stations: [] } as never)));
+    expect(checkStaticStations(rd({ stations: [] } as never, ['content-type "x"']))).toMatchObject({ ok: false });
+    ok('static sources', checkStaticSources(rd({ sources: [] } as never)));
+    expect(checkStaticSources(rd({ sources: [] } as never, ['owner term BE-3']))).toMatchObject({
+      ok: false,
+      detail: /owner term BE-3/,
+    });
+    ok('static forecast', checkStaticForecast(rd({ runs: [] } as never)));
+    expect(checkStaticForecast(rd(undefined, ['status 404']))).toMatchObject({ ok: false, detail: /status 404/ });
+  });
+
+  it('static recent: asks the current and the previous bucket, and checks t', () => {
+    const c = recentCandidates('2026-10-04T12:34:56Z');
+    expect(c.map((x) => x.path)).toEqual(['recent/2026-10-04/1230.json', 'recent/2026-10-04/1220.json']);
+    expect(recentCandidates(undefined)).toEqual([]);
+    const t = c[0]?.ms;
+    ok('static recent', checkStaticRecent(rd({ t: '2026-10-04T12:30:00.000Z', series: [] } as never), t));
+    expect(checkStaticRecent(rd({ t: '2026-10-04T12:20:00.000Z', series: [] } as never), t)).toMatchObject({
+      ok: false,
+      detail: /not the bucket asked/,
+    });
+    expect(checkStaticRecent(undefined, undefined)).toMatchObject({ ok: false });
+  });
+
+  describe('settled', () => {
+    it('asks the newest settled day with its version, or none yet', () => {
+      // now 2026-10-04T12:34Z, minus 72 h: 2026-10-01.
+      expect(settledAsk(metaDoc(), 0)).toMatchObject({
+        day: '2026-10-01',
+        version: 1,
+        t: Date.parse('2026-10-01T12:00:00Z'),
+      });
+      expect(settledAsk(metaDoc({ dayVersions: { '2026-10-01': 3 } }), 0)?.version).toBe(3);
+      expect(settledAsk(metaDoc({ dayVersions: { '2026-10-01': 0 } }), 0)?.none).toMatch(/version 0/);
+      expect(settledAsk(metaDoc({ displayStart: '2026-10-04T00:00:00Z' }), 0)?.none).toMatch(
+        /before the display window/,
+      );
+      expect(settledAsk(metaDoc(), 2)?.none).toMatch(/pending/);
+      expect(settledAsk(undefined, 0)).toBeUndefined();
+    });
+    it('passes a valid immutable file, a 404 with a reason, and fails an unexplained 404 or a wrong class', () => {
+      const ask = settledAsk(metaDoc(), 0);
+      expect(checkStaticSettled(ask, undefined)).toMatchObject({ ok: true, detail: /none yet/ });
+      const none = settledAsk(metaDoc({ dayVersions: { '2026-10-01': 0 } }), 0);
+      expect(checkStaticSettled(none, file('', '', 'text/plain', { status: 404 }))).toMatchObject({
+        ok: true,
+        detail: /none yet: day 2026-10-01 has version 0/,
+      });
+      expect(checkStaticSettled(ask, file('', '', 'text/plain', { status: 404 }))).toMatchObject({
+        ok: false,
+        detail: /status 404/,
+      });
+      expect(checkStaticSettled(undefined, undefined)).toMatchObject({ ok: false });
+    });
+  });
+
+  it('static frames: recent, plus the settled day when it has a file', () => {
+    const recent = rd({ series: [1] } as never);
+    const ask = settledAsk(metaDoc(), 0);
+    const bad = file({}, STATIC_CACHE.slow); // not immutable
+    expect(checkStaticFrames(recent, ask, undefined)).toMatchObject({ ok: true, detail: /no settled day yet/ });
+    expect(checkStaticFrames(recent, ask, bad)).toMatchObject({
+      ok: false,
+      detail: /frames\/2026-10-01\/v1\.json: cache-control/,
+    });
+    const none = settledAsk(metaDoc({ dayVersions: { '2026-10-01': 0 } }), 0);
+    expect(checkStaticFrames(recent, none, file('', '', 'text/plain', { status: 404 }))).toMatchObject({
+      ok: true,
+      detail: /settled part: none yet/,
+    });
+    expect(checkStaticFrames(rd(undefined, ['status 404']), none, undefined)).toMatchObject({ ok: false });
+  });
+
+  it('static series: the station asked for is the station served', () => {
+    ok('static series', checkStaticSeries(rd({ station: 'nl.rws.x', series: [] } as never), 'nl.rws.x'));
+    expect(checkStaticSeries(rd({ station: 'nl.rws.y', series: [] } as never), 'nl.rws.x')).toMatchObject({
+      ok: false,
+      detail: /is not nl\.rws\.x/,
+    });
+    expect(checkStaticSeries(undefined, undefined)).toMatchObject({ ok: false });
+  });
+
+  it('static warnings: latest, and yesterday when it exists', () => {
+    const latest = rd({ features: [] } as never);
+    const day = '2026-10-03';
+    const dated = {
+      type: 'FeatureCollection',
+      schemaVersion: 1,
+      generatedAt: '2026-10-04T00:00:00Z',
+      day,
+      features: [],
+      attribution: [],
+    };
+    ok('static warnings', checkStaticWarnings(latest, undefined));
+    ok('static warnings', checkStaticWarnings(latest, { day, page: file('', '', 'text/plain', { status: 404 }) }));
+    ok('static warnings', checkStaticWarnings(latest, { day, page: file(dated, STATIC_CACHE.immutable) }));
+    expect(checkStaticWarnings(latest, { day, page: file(dated, STATIC_CACHE.warnings) })).toMatchObject({
+      ok: false,
+      detail: /2026-10-03: cache-control/,
+    });
+    expect(checkStaticWarnings(rd(undefined, ['content-type "application/json"']), undefined)).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it('static status: the class, the contract and no owner source', () => {
+    const doc = { sources: [{ id: 'DE-1' }], ownerSources: { healthy: 6, total: 6 } } as never;
+    ok('static status', checkStaticStatus(rd(doc)));
+    expect(
+      checkStaticStatus(rd({ sources: [{ id: 'BE-3' }], ownerSources: { healthy: 0, total: 0 } } as never)),
+    ).toMatchObject({ ok: false, detail: /owner source/ });
+    expect(checkStaticStatus(rd(doc, ['cache-control "public, max-age=60"']))).toMatchObject({ ok: false });
+  });
+
+  describe('precompressed', () => {
+    const body = Buffer.from('{"a":1}');
+    const id = file(body.toString(), live, 'application/json', { bytes: body });
+    const enc = (e: 'zstd' | 'gzip', bytes: Buffer, over: Record<string, string | undefined> = {}): Page => ({
+      status: 200,
+      headers: { 'content-encoding': e, vary: 'Accept-Encoding', ...over },
+      body: '',
+      bytes,
+    });
+    const good = { zstd: enc('zstd', zstdCompressSync(body)), gzip: enc('gzip', gzipSync(body)) };
+    it('passes both encodings that decompress to the identity bytes', () => {
+      ok('static precompressed', checkStaticPrecompressed(id, good));
+    });
+    it.each([
+      [
+        'no Content-Encoding',
+        { ...good, gzip: enc('gzip', gzipSync(body), { 'content-encoding': undefined }) },
+        /gzip: content-encoding null/,
+      ],
+      ['no Vary', { ...good, zstd: enc('zstd', zstdCompressSync(body), { vary: undefined }) }, /zstd: vary null/],
+      [
+        'a body that differs',
+        { ...good, gzip: enc('gzip', gzipSync(Buffer.from('{"a":2}'))) },
+        /gzip: the decompressed body differs/,
+      ],
+      [
+        'a body that does not decompress',
+        { ...good, zstd: enc('zstd', Buffer.from('nope')) },
+        /zstd: the body does not decompress/,
+      ],
+      ['a failed request', { ...good, zstd: 'timeout' }, /zstd: timeout/],
+    ])('fails %s', (_n, got, re) => {
+      expect(checkStaticPrecompressed(id, got)).toMatchObject({ ok: false, detail: re });
+    });
+  });
+
+  describe('lag and rerender', () => {
+    const hl = (last_commit: string | null) => ({ loader: { last_commit } }) as never;
+    it('lag: at most 120 s, none yet without a commit', () => {
+      const m = metaDoc({ latestFrom: '2026-10-04T12:00:00Z' });
+      expect(checkStaticLag(hl(null), m)).toMatchObject({ ok: true, detail: /none yet/ });
+      ok('static lag', checkStaticLag(hl('2026-10-04T12:02:00Z'), m));
+      expect(checkStaticLag(hl(`2026-10-04T12:0${Math.floor((STATIC_LAG_MAX_S + 1) / 60)}:01Z`), m)).toMatchObject({
+        ok: false,
+        detail: /121 s behind/,
+      });
+      ok('static lag', checkStaticLag(hl('2026-10-04T11:59:00Z'), m));
+      expect(checkStaticLag(hl('2026-10-04T12:00:00Z'), metaDoc({ latestFrom: null }))).toMatchObject({
+        ok: false,
+        detail: /no latestFrom/,
+      });
+      expect(checkStaticLag(undefined, m)).toMatchObject({ ok: false });
+    });
+    it('rerender: under 60 s, none yet when null', () => {
+      const st = (d: unknown) => rd({ publisher: { lastDayRender: d } } as never);
+      expect(checkStaticRerender(st(null))).toMatchObject({ ok: true, detail: /none yet/ });
+      ok(
+        'static rerender',
+        checkStaticRerender(st({ day: '2026-10-01', version: 1, seconds: RERENDER_MAX_S - 1, at: 'x' })),
+      );
+      expect(
+        checkStaticRerender(st({ day: '2026-10-01', version: 1, seconds: RERENDER_MAX_S, at: 'x' })),
+      ).toMatchObject({ ok: false, detail: /took 60 s/ });
+      expect(checkStaticRerender(rd(undefined, ['status 404']))).toMatchObject({ ok: false });
+    });
+  });
+
+  it('runtime config: exactly {"audience":"public"}, application/json, no-cache', () => {
+    const rc = (body: string, over: Partial<Page> = {}) => file(body, 'no-cache', 'application/json', over);
+    ok('runtime config', checkRuntimeConfig(rc('{"audience":"public"}')));
+    expect(checkRuntimeConfig(rc('{"audience":"owner"}'))).toMatchObject({
+      ok: false,
+      detail: /not \{"audience":"public"\}/,
+    });
+    expect(checkRuntimeConfig(file('{"audience":"public"}', 'public, max-age=60'))).toMatchObject({
+      ok: false,
+      detail: /cache-control/,
+    });
+    expect(checkRuntimeConfig(file('{"audience":"public"}', 'no-cache', 'text/html'))).toMatchObject({
+      ok: false,
+      detail: /content-type/,
+    });
+    expect(checkRuntimeConfig(rc('', { status: 404 }))).toMatchObject({ ok: false, detail: /status 404/ });
+    expect(checkRuntimeConfig('timeout')).toMatchObject({ ok: false });
+  });
+
+  it('the --dry-run list names each check once, and every name ci.yml requires is one of them', () => {
+    const names = [
+      'static meta',
+      'static latest',
+      'static stations',
+      'static sources',
+      'static recent',
+      'static settled',
+      'static frames',
+      'static forecast',
+      'static series',
+      'static warnings',
+      'static status',
+      'static precompressed',
+      'static lag',
+      'static rerender',
+      'runtime config',
+    ];
+    for (const n of names)
+      expect(
+        CHECKS.filter((c) => c.startsWith(`${n}:`)),
+        n,
+      ).toHaveLength(1);
+    const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+    const required = /for check in ([^;]*?); do/s.exec(ci.slice(ci.indexOf("'api meta'") - 20))?.[1] ?? '';
+    for (const n of required
+      .match(/'([^']+)'/g)
+      ?.map((x) => x.slice(1, -1))
+      .filter((x) => x.startsWith('static') || x === 'runtime config') ?? [])
+      expect(names).toContain(n);
+  });
+
+  it('the owner-leak check also sees a public static body', () => {
+    const terms = leakTerms(loadRegistry());
+    expect(
+      checkOwnerLeak({ '/data/v1/meta.json': '{"a":1}', '/data/v1/status.json': `{"x":"${OWNER_CANARY}"}` }, terms),
+    ).toMatchObject({ ok: false, detail: /status\.json/ });
   });
 });

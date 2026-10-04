@@ -46,7 +46,7 @@ import { request as httpsRequest } from 'node:https';
 import { isIP, type LookupFunction } from 'node:net';
 import { join } from 'node:path';
 import { connect as tlsConnect } from 'node:tls';
-import { gunzipSync, constants as zlibConstants } from 'node:zlib';
+import { gunzipSync, constants as zlibConstants, zstdDecompressSync } from 'node:zlib';
 import { parse as parseYaml } from 'yaml';
 import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
@@ -57,19 +57,36 @@ import {
   CANARIES,
   CANARY_RENDERINGS,
   checkReaches,
+  DAY_MS,
+  dayOf,
+  dayStartMs,
   ForecastReaches,
+  FramesFile,
   floorBucket,
+  framesPath,
   Health,
   HealthSources,
   LAG_DEGRADED_S,
+  LatestFile,
   Meta,
   ODBL_LICENCE,
   OSM_ATTRIBUTION,
   ReachesFile,
   RiversManifest,
+  recentPath,
+  SETTLE_MS,
   Snapshot,
+  SnapshotFile,
+  StaticForecastLatest,
+  StaticMeta,
+  StaticStations,
+  StationRecent,
   Stations,
+  settledPath,
+  WarningsFile,
 } from '../packages/contracts/src/index.ts';
+import { StaticSources } from '../packages/contracts/src/static-owner.ts';
+import { StatusFile } from '../packages/contracts/src/status.ts';
 import {
   parseTilesManifest,
   type TileFile,
@@ -374,7 +391,7 @@ const parseJson = (text: string): unknown => {
 // ---------------------------------------------------------------- health API (P2a)
 
 type Contract<T> = { safeParse(input: unknown): { success: true; data: T } | { success: false } };
-type ApiRead<T> = { data?: T; problems: string[] };
+export type ApiRead<T> = { data?: T; problems: string[] };
 
 /**
  * One answer of an api route: 200, JSON, `Cache-Control` (`max-age=30`, the
@@ -1508,6 +1525,324 @@ export function checkBelgianSet(
     : miss(check, detail);
 }
 
+// ---------------------------------------------------------------- static publisher (P9a)
+
+/** Cache-Control per class of /data/v1 (plan §4.1, deploy/web/site.caddy), compared exactly. */
+export const STATIC_CACHE = {
+  live: 'public, max-age=60, stale-while-revalidate=300',
+  recent: 'public, max-age=300, stale-while-revalidate=600',
+  slow: 'public, max-age=300',
+  immutable: 'public, max-age=31536000, immutable',
+  warnings: 'public, max-age=60',
+  status: 'public, max-age=30',
+} as const;
+export const GEOJSON = 'application/geo+json';
+/** meta.latestFrom may trail the loader's newest commit by this much (C18). */
+export const STATIC_LAG_MAX_S = 120;
+/** A settled day renders in under this (C23; [agent-prod] only, CI has no settled day). */
+export const RERENDER_MAX_S = 60;
+export const RUNTIME_CONFIG_BODY = '{"audience":"public"}';
+
+/**
+ * One answer of a /data/v1 file: 200, exactly `cache`, the media type `type`, the contract and no owner term in the
+ * body. `data` is set whenever the body is the contract document, whatever else is wrong.
+ */
+export function readStatic<T>(
+  page: Page | string,
+  schema: Contract<T>,
+  cache: string,
+  type = 'application/json',
+  terms: readonly string[] = [],
+): ApiRead<T> {
+  if (typeof page === 'string') return { problems: [page] };
+  const problems: string[] = [];
+  if (page.status !== 200) problems.push(`status ${page.status}`);
+  const sent = (page.headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase();
+  if (sent !== type) problems.push(`content-type ${JSON.stringify(page.headers['content-type'] ?? '')}`);
+  if (page.headers['cache-control'] !== cache)
+    problems.push(`cache-control ${JSON.stringify(page.headers['cache-control'] ?? '')}`);
+  const parsed = schema.safeParse(parseJson(page.body));
+  if (!parsed.success) problems.push('not the contract document');
+  const hits = leaks(page.body, terms);
+  if (hits.length > 0) problems.push(`owner term ${hits.join(', ')}`);
+  return parsed.success ? { data: parsed.data, problems } : { problems };
+}
+
+const staticMiss = (check: string, r: ApiRead<unknown>, extra: string[]) =>
+  extra.length === 0 && r.problems.length === 0 ? undefined : miss(check, [...r.problems, ...extra].join('; '));
+
+export function checkStaticMeta(r: ApiRead<StaticMeta>): Result {
+  const extra: string[] = [];
+  for (const id of API_SOURCES)
+    if (r.data !== undefined && !r.data.sources.some((s) => s.id === id)) extra.push(`${id} is not listed in sources`);
+  return (
+    staticMiss('static meta', r, extra) ??
+    pass(
+      'static meta',
+      `200, ${STATIC_CACHE.live}, the StaticMeta contract, latestFrom ${r.data?.latestFrom ?? 'null'}, ${Object.keys(r.data?.dayVersions ?? {}).length} day versions`,
+    )
+  );
+}
+
+/** latest.json carries the seriesHash of stations.json (one source of truth for the series order). */
+export function checkStaticLatest(r: ApiRead<LatestFile>, stations: StaticStations | undefined): Result {
+  const extra: string[] = [];
+  if (stations === undefined) extra.push('no valid stations.json to compare seriesHash with');
+  else if (r.data !== undefined && r.data.seriesHash !== stations.seriesHash)
+    extra.push(`seriesHash ${r.data.seriesHash} is not stations.json's ${stations.seriesHash}`);
+  return (
+    staticMiss('static latest', r, extra) ??
+    pass(
+      'static latest',
+      `200, ${STATIC_CACHE.live}, the LatestFile contract, ${r.data?.series.length} series, seriesHash ${r.data?.seriesHash}`,
+    )
+  );
+}
+
+export function checkStaticStations(r: ApiRead<StaticStations>): Result {
+  return (
+    staticMiss('static stations', r, []) ??
+    pass(
+      'static stations',
+      `200, ${STATIC_CACHE.slow}, the StaticStations contract, ${r.data?.stations.length} stations`,
+    )
+  );
+}
+
+/** Public ids only: the contract refuses an owner id, and no owner id or term may occur anywhere in the body. */
+export function checkStaticSources(r: ApiRead<StaticSources>): Result {
+  return (
+    staticMiss('static sources', r, []) ??
+    pass('static sources', `200, ${STATIC_CACHE.slow}, the StaticSources contract, ${r.data?.sources.length} sources`)
+  );
+}
+
+/** The newest recent file: the current or the previous 10-minute bucket of the server's now. */
+export const recentCandidates = (serverNow: string | undefined): { ms: number; path: string }[] => {
+  const now = Date.parse(serverNow ?? '');
+  if (Number.isNaN(now)) return [];
+  return [0, 1].map((back) => {
+    const ms = floorBucket(now) - back * 600_000;
+    return { ms, path: recentPath(ms) };
+  });
+};
+
+export function checkStaticRecent(r: ApiRead<SnapshotFile> | undefined, t: number | undefined): Result {
+  if (r === undefined || t === undefined) return miss('static recent', 'no meta.now to ask for a bucket');
+  const extra = r.data !== undefined && Date.parse(r.data.t) !== t ? [`t ${r.data.t} is not the bucket asked for`] : [];
+  return (
+    staticMiss('static recent', r, extra) ??
+    pass(
+      'static recent',
+      `200, ${STATIC_CACHE.recent}, the SnapshotFile contract at ${r.data?.t}, ${r.data?.series.length} series`,
+    )
+  );
+}
+
+/** The newest day that is settled at `nowMs` and whether the web may expect a complete file for it. */
+export type SettledAsk = { day: string; version: number; t: number; none?: string };
+export function settledAsk(meta: StaticMeta | undefined, pendingDays: number | undefined): SettledAsk | undefined {
+  if (meta === undefined) return undefined;
+  const now = Date.parse(meta.now);
+  const day = dayOf(now - SETTLE_MS - DAY_MS);
+  const version = meta.dayVersions[day] ?? 1;
+  // Midday of the day, or the first bucket of the display window when it begins later that day.
+  const t = Math.max(dayStartMs(day) + 12 * 3_600_000, Date.parse(meta.displayStart));
+  const ask: SettledAsk = { day, version, t };
+  if (version === 0) ask.none = `day ${day} has version 0 (use the API)`;
+  else if (dayStartMs(day) + DAY_MS <= Date.parse(meta.displayStart))
+    ask.none = `day ${day} ends before the display window`;
+  else if (pendingDays !== undefined && pendingDays > 0)
+    ask.none = `day ${day} is pending (${pendingDays} pending days)`;
+  return ask;
+}
+
+/** A sample of the newest settled day: immutable class; "none yet" (PASS) while no settled day is complete. */
+export function checkStaticSettled(ask: SettledAsk | undefined, page: Page | string | undefined): Result {
+  if (ask === undefined) return miss('static settled', 'no valid meta.json to pick a settled day from');
+  const r = page === undefined ? undefined : readStatic(page, SnapshotFile, STATIC_CACHE.immutable);
+  if (typeof page === 'object' && page.status === 404 && ask.none !== undefined)
+    return pass('static settled', `none yet: ${ask.none}`);
+  if (page === undefined) return pass('static settled', `none yet: ${ask.none ?? 'no sample asked'}`);
+  const extra =
+    r?.data !== undefined && Date.parse(r.data.t) !== ask.t ? [`t ${r.data.t} is not the bucket asked for`] : [];
+  return (
+    staticMiss('static settled', r ?? { problems: [] }, extra) ??
+    pass(
+      'static settled',
+      `200, ${STATIC_CACHE.immutable}, day ${ask.day} v${ask.version} at ${r?.data?.t}, ${r?.data?.series.length} series`,
+    )
+  );
+}
+
+/** frames/recent.json (slow class) and, when a settled day is complete, its frames file (immutable). */
+export function checkStaticFrames(
+  recent: ApiRead<FramesFile>,
+  ask: SettledAsk | undefined,
+  settled: Page | string | undefined,
+): Result {
+  const extra: string[] = [];
+  let tail = 'no settled day yet';
+  if (
+    ask !== undefined &&
+    settled !== undefined &&
+    !(typeof settled === 'object' && settled.status === 404 && ask.none !== undefined)
+  ) {
+    const s = readStatic(settled, FramesFile, STATIC_CACHE.immutable);
+    extra.push(...s.problems.map((p) => `${framesPath(ask.day, ask.version)}: ${p}`));
+    tail = `day ${ask.day} v${ask.version} ${STATIC_CACHE.immutable}`;
+  } else if (ask?.none !== undefined) tail = `settled part: none yet (${ask.none})`;
+  return (
+    staticMiss('static frames', recent, extra) ??
+    pass(
+      'static frames',
+      `200, ${STATIC_CACHE.slow}, the FramesFile contract, ${recent.data?.series.length} series; ${tail}`,
+    )
+  );
+}
+
+export function checkStaticForecast(r: ApiRead<StaticForecastLatest>): Result {
+  return (
+    staticMiss('static forecast', r, []) ??
+    pass('static forecast', `200, ${STATIC_CACHE.slow}, the StaticForecastLatest contract, ${r.data?.runs.length} runs`)
+  );
+}
+
+/** One station's series/{id}/recent.json, the id taken from stations.json. */
+export function checkStaticSeries(r: ApiRead<StationRecent> | undefined, id: string | undefined): Result {
+  if (r === undefined || id === undefined) return miss('static series', 'no station in stations.json to ask for');
+  const extra = r.data !== undefined && r.data.station !== id ? [`station ${r.data.station} is not ${id}`] : [];
+  return (
+    staticMiss('static series', r, extra) ??
+    pass(
+      'static series',
+      `200, ${STATIC_CACHE.slow}, the StationRecent contract of ${id}, ${r.data?.series.length} series`,
+    )
+  );
+}
+
+/** warnings/latest.geojson (application/geo+json, max-age=60) and yesterday's dated file when it exists (immutable). */
+export function checkStaticWarnings(
+  latest: ApiRead<WarningsFile>,
+  yesterday: { day: string; page: Page | string } | undefined,
+): Result {
+  const extra: string[] = [];
+  let tail = 'no dated file yet';
+  if (yesterday !== undefined && !(typeof yesterday.page === 'object' && yesterday.page.status === 404)) {
+    const y = readStatic(yesterday.page, WarningsFile, STATIC_CACHE.immutable);
+    extra.push(...y.problems.map((p) => `${yesterday.day}: ${p}`));
+    if (y.data !== undefined && y.data.day !== yesterday.day) extra.push(`${yesterday.day}: day ${y.data.day}`);
+    tail = `${yesterday.day} ${STATIC_CACHE.immutable}`;
+  }
+  return (
+    staticMiss('static warnings', latest, extra) ??
+    pass(
+      'static warnings',
+      `200, ${STATIC_CACHE.warnings} ${GEOJSON}, ${latest.data?.features.length} features; ${tail}`,
+    )
+  );
+}
+
+/** status.json: max-age=30, the public contract (no owner source id, only the two ownerSources counts). */
+export function checkStaticStatus(r: ApiRead<StatusFile>): Result {
+  const extra =
+    r.data === undefined
+      ? []
+      : [
+          ...(r.data.sources.some((s) => /^(BE-3|LU-[234]|DE-[23])$|^CANARY/.test(s.id))
+            ? ['an owner source is listed']
+            : []),
+        ];
+  return (
+    staticMiss('static status', r, extra) ??
+    pass(
+      'static status',
+      `200, ${STATIC_CACHE.status}, the StatusFile contract, ${r.data?.sources.length} sources, ownerSources ${r.data?.ownerSources.healthy}/${r.data?.ownerSources.total}`,
+    )
+  );
+}
+
+const encodings = { zstd: (b: Buffer) => zstdDecompressSync(b), gzip: (b: Buffer) => gunzipSync(b) } as const;
+
+/** meta.json asked with Accept-Encoding zstd and gzip: Content-Encoding, Vary, and the decompressed bytes equal the identity ones. */
+export function checkStaticPrecompressed(
+  identity: Page | string,
+  got: Readonly<Record<keyof typeof encodings, Page | string>>,
+): Result {
+  const problems: string[] = [];
+  if (typeof identity === 'string' || identity.status !== 200) problems.push('identity: no 200 answer');
+  for (const enc of Object.keys(encodings) as (keyof typeof encodings)[]) {
+    const p = got[enc];
+    if (typeof p === 'string') {
+      problems.push(`${enc}: ${p}`);
+      continue;
+    }
+    if (p.status !== 200) problems.push(`${enc}: status ${p.status}`);
+    if (p.headers['content-encoding'] !== enc)
+      problems.push(`${enc}: content-encoding ${JSON.stringify(p.headers['content-encoding'] ?? null)}`);
+    if (!/(?:^|,\s*)accept-encoding(?:\s*,|$)/i.test(p.headers.vary ?? ''))
+      problems.push(`${enc}: vary ${JSON.stringify(p.headers.vary ?? null)}`);
+    if (typeof identity !== 'string' && p.bytes !== undefined && p.headers['content-encoding'] === enc) {
+      try {
+        if (!encodings[enc](p.bytes).equals(identity.bytes ?? Buffer.from(identity.body)))
+          problems.push(`${enc}: the decompressed body differs from the identity body`);
+      } catch {
+        problems.push(`${enc}: the body does not decompress`);
+      }
+    }
+  }
+  return problems.length === 0
+    ? pass(
+        'static precompressed',
+        'meta.json: zstd and gzip with Content-Encoding, Vary: Accept-Encoding and the identity bytes',
+      )
+    : miss('static precompressed', problems.join('; '));
+}
+
+/** The publisher keeps up with the loader: health.loader.last_commit − meta.latestFrom <= 120 s; no commit yet is a PASS. */
+export function checkStaticLag(health: Health | undefined, meta: StaticMeta | undefined): Result {
+  const check = 'static lag';
+  if (health === undefined) return noDocument(check, 'health');
+  if (health.loader.last_commit === null) return pass(check, 'none yet: the loader has no commit');
+  if (meta === undefined) return noDocument(check, 'static meta');
+  if (meta.latestFrom === null)
+    return miss(check, `the loader committed at ${health.loader.last_commit} and latest.json has no latestFrom`);
+  const lag = (Date.parse(health.loader.last_commit) - Date.parse(meta.latestFrom)) / 1000;
+  return lag <= STATIC_LAG_MAX_S
+    ? pass(
+        check,
+        `latest.json shows data ${Math.max(lag, 0)} s behind the loader's last commit (<= ${STATIC_LAG_MAX_S} s)`,
+      )
+    : miss(check, `latest.json is ${lag} s behind the loader's last commit (limit ${STATIC_LAG_MAX_S} s)`);
+}
+
+/** C23: the last settled day rendered whole in under 60 s; none rendered yet is a PASS. */
+export function checkStaticRerender(r: ApiRead<StatusFile>): Result {
+  const check = 'static rerender';
+  if (r.data === undefined) return noDocument(check, 'status', r);
+  const d = r.data.publisher.lastDayRender;
+  if (d === null) return pass(check, 'none yet: no settled day rendered');
+  return d.seconds < RERENDER_MAX_S
+    ? pass(check, `${d.day} v${d.version} in ${d.seconds} s (< ${RERENDER_MAX_S} s)`)
+    : miss(check, `${d.day} v${d.version} took ${d.seconds} s (limit ${RERENDER_MAX_S} s)`);
+}
+
+/** /runtime-config.json: exactly {"audience":"public"}, application/json, no-cache. */
+export function checkRuntimeConfig(page: Page | string): Result {
+  const check = 'runtime config';
+  if (typeof page === 'string') return miss(check, page);
+  const problems: string[] = [];
+  if (page.status !== 200) problems.push(`status ${page.status}`);
+  if ((page.headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase() !== 'application/json')
+    problems.push(`content-type ${JSON.stringify(page.headers['content-type'] ?? '')}`);
+  if (page.headers['cache-control'] !== 'no-cache')
+    problems.push(`cache-control ${JSON.stringify(page.headers['cache-control'] ?? '')}`);
+  if (page.body.trim() !== RUNTIME_CONFIG_BODY) problems.push('the body is not {"audience":"public"}');
+  return problems.length === 0
+    ? pass(check, `200, no-cache, ${RUNTIME_CONFIG_BODY}`)
+    : miss(check, problems.join('; '));
+}
+
 // ---------------------------------------------------------------- network
 
 type Net = { resolve?: string; ca?: Buffer };
@@ -1702,7 +2037,22 @@ export const CHECKS = [
   `rivers reaches: GET /data/v1/rivers/<the manifest's reaches file> is 200 JSON with Cache-Control exactly "${TILE_CACHE}", the ReachesFile contract, checkReaches clean, the manifest's version, and every station of it a station of /api/v1/stations (the file's body is also in owner leak)`,
   `rivers download: HEAD /downloads/<the manifest's download file> is 200 application/gzip with no Content-Encoding, ${TILE_CACHE} and the manifest's length; a Range of ${RIVERS_DOWNLOAD_RANGE}, gunzipped (truncation tolerated), shows "attribution": "${OSM_ATTRIBUTION}" and "licence": "${ODBL_LICENCE}" before "features"`,
   'rivers attribution: the entry script that / references contains the string ODbL (the footer text, P6b)',
-  `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file`,
+  `static meta: GET /data/v1/meta.json is 200 application/json with Cache-Control exactly "${STATIC_CACHE.live}", the StaticMeta contract, ${API_SOURCES.join(', ')} among the sources, and no owner term in the body`,
+  `static latest: GET /data/v1/latest.json is 200 with "${STATIC_CACHE.live}", the LatestFile contract and the seriesHash of stations.json`,
+  `static stations: GET /data/v1/stations.json is 200 with "${STATIC_CACHE.slow}" and the StaticStations contract`,
+  `static sources: GET /data/v1/sources.json is 200 with "${STATIC_CACHE.slow}" and the public StaticSources contract (no owner source ID, term or private_basis)`,
+  `static recent: the recent file of the current or the previous 10-minute bucket of meta.now is 200 with "${STATIC_CACHE.recent}" and the SnapshotFile contract at that t`,
+  `static settled: a sample of the newest settled day (version from meta.dayVersions, default 1) is 200 with "${STATIC_CACHE.immutable}" and the SnapshotFile contract; none yet (PASS) while version 0, before the display window or while the day is pending`,
+  `static frames: frames/recent.json is 200 with "${STATIC_CACHE.slow}" and the FramesFile contract, and the newest settled day's frames file with "${STATIC_CACHE.immutable}" (none yet for that part is a PASS)`,
+  `static forecast: GET /data/v1/forecast/latest.json is 200 with "${STATIC_CACHE.slow}" and the StaticForecastLatest contract`,
+  `static series: the first station of stations.json has series/<id>/recent.json, 200 with "${STATIC_CACHE.slow}" and the StationRecent contract`,
+  `static warnings: warnings/latest.geojson is 200 ${GEOJSON} with "${STATIC_CACHE.warnings}" and the WarningsFile contract; yesterday's dated file, when it exists, with "${STATIC_CACHE.immutable}"`,
+  `static status: GET /data/v1/status.json is 200 with "${STATIC_CACHE.status}", the public StatusFile contract (public sources, the two ownerSources counts) and no owner term`,
+  'static precompressed: meta.json with Accept-Encoding zstd and with gzip: that Content-Encoding, Vary: Accept-Encoding and a decompressed body equal to the identity body',
+  `static lag: health.loader.last_commit minus meta.latestFrom is at most ${STATIC_LAG_MAX_S} s (no loader commit yet is a PASS)`,
+  `static rerender: status.publisher.lastDayRender.seconds is under ${RERENDER_MAX_S} s (C23; none rendered yet is a PASS)`,
+  `runtime config: GET /runtime-config.json is 200 application/json, Cache-Control no-cache, exactly ${RUNTIME_CONFIG_BODY}`,
+  `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file, and (P9a) every public /data/v1 file fetched by the static checks`,
   'owner ids: no owner-audience source ID of registry/sources.yaml as a whole word in a string value or object key of /api/v1/health or health/sources',
   `interval DE-6: (--interval, slow: ${DE6_SAMPLES} samples of /status/capture.json ${DE6_GAP_MS / 60_000} min apart, about 30 min) ${DE6_SPECS.join(' and ')} have a last_success at most ${DE6_MAX_AGE_S} s before that sample's generated_at in every sample (a missing spec or null last_success is a FAIL) and it advanced; without the flag the check is N/A (skipped)`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
@@ -1909,6 +2259,89 @@ async function main(argv: string[]): Promise<number> {
       checkRiversAttribution(entry === undefined ? undefined : await tile(entry)),
     );
 
+    // P9a: the static publisher's files through Caddy. The terms are checked per file (readStatic) and in the sweep below.
+    const terms = leakTerms(registry);
+    const st = (path: string, headers?: Readonly<Record<string, string>>) =>
+      tryGet(`https://${domain}${path}`, net, headers);
+    const D = '/data/v1/';
+    const staticPages: Record<string, Page | string> = {};
+    const fetchStatic = async (path: string) => (staticPages[`${D}${path}`] = await st(`${D}${path}`));
+    const smeta = readStatic(await fetchStatic('meta.json'), StaticMeta, STATIC_CACHE.live, undefined, terms);
+    const slatest = readStatic(await fetchStatic('latest.json'), LatestFile, STATIC_CACHE.live, undefined, terms);
+    const sstations = readStatic(
+      await fetchStatic('stations.json'),
+      StaticStations,
+      STATIC_CACHE.slow,
+      undefined,
+      terms,
+    );
+    const ssources = readStatic(await fetchStatic('sources.json'), StaticSources, STATIC_CACHE.slow, undefined, terms);
+    let srecent: ApiRead<SnapshotFile> | undefined;
+    let srecentT: number | undefined;
+    for (const c of recentCandidates(smeta.data?.now)) {
+      srecent = readStatic(await fetchStatic(c.path), SnapshotFile, STATIC_CACHE.recent, undefined, terms);
+      srecentT = c.ms;
+      if (srecent.data !== undefined) break;
+    }
+    const sstatus = readStatic(await fetchStatic('status.json'), StatusFile, STATIC_CACHE.status, undefined, terms);
+    const ask = settledAsk(smeta.data, sstatus.data?.publisher.pendingDays);
+    const settledPage = ask === undefined ? undefined : await fetchStatic(settledPath(ask.t, ask.version));
+    const framesRecent = readStatic(
+      await fetchStatic('frames/recent.json'),
+      FramesFile,
+      STATIC_CACHE.slow,
+      undefined,
+      terms,
+    );
+    const framesSettled = ask === undefined ? undefined : await fetchStatic(framesPath(ask.day, ask.version));
+    const firstStation = sstations.data?.stations[0]?.id;
+    const sseries =
+      firstStation === undefined
+        ? undefined
+        : readStatic(
+            await fetchStatic(`series/${firstStation}/recent.json`),
+            StationRecent,
+            STATIC_CACHE.slow,
+            undefined,
+            terms,
+          );
+    const sforecast = readStatic(
+      await fetchStatic('forecast/latest.json'),
+      StaticForecastLatest,
+      STATIC_CACHE.slow,
+      undefined,
+      terms,
+    );
+    const swarn = readStatic(
+      await fetchStatic('warnings/latest.geojson'),
+      WarningsFile,
+      STATIC_CACHE.warnings,
+      GEOJSON,
+      terms,
+    );
+    const yday = dayOf(Date.parse(smeta.data?.now ?? now.toISOString()) - DAY_MS);
+    const ydayPage = await fetchStatic(`warnings/${yday}.json`);
+    const idPage = await st(`${D}meta.json`);
+    const zstdPage = await st(`${D}meta.json`, { 'accept-encoding': 'zstd' });
+    const gzipPage = await st(`${D}meta.json`, { 'accept-encoding': 'gzip' });
+    results.push(
+      checkStaticMeta(smeta),
+      checkStaticLatest(slatest, sstations.data),
+      checkStaticStations(sstations),
+      checkStaticSources(ssources),
+      checkStaticRecent(srecent, srecentT),
+      checkStaticSettled(ask, settledPage),
+      checkStaticFrames(framesRecent, ask, framesSettled),
+      checkStaticForecast(sforecast),
+      checkStaticSeries(sseries, firstStation),
+      checkStaticWarnings(swarn, { day: yday, page: ydayPage }),
+      checkStaticStatus(sstatus),
+      checkStaticPrecompressed(idPage, { zstd: zstdPage, gzip: gzipPage }),
+      checkStaticLag(health.data, smeta.data),
+      checkStaticRerender(sstatus),
+      checkRuntimeConfig(await st('/runtime-config.json')),
+    );
+
     const body = pageBody;
     results.push(
       checkOwnerLeak(
@@ -1920,6 +2353,7 @@ async function main(argv: string[]): Promise<number> {
           '/api/v1/stations': body(stationsPage),
           [RIVERS_MANIFEST_PATH]: body(riversPage),
           '/data/v1/rivers/reaches': body(reachesPage),
+          ...Object.fromEntries(Object.entries(staticPages).map(([path, page]) => [path, body(page)])),
           ...Object.fromEntries(
             SNAPSHOT_ASKS.map((ask) => [`/api/v1/snapshot ${ask.name}`, body(snapPages[ask.name])]),
           ),
