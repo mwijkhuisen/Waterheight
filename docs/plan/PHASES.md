@@ -2354,3 +2354,24 @@ What the P9a build (issue #24, PR "P9a: static publisher") found or settled agai
 **Owner decisions of the plan (2026-10-04, binding for this PR).** The history window is a render-time exclusion, not a bump (plan §9 C5; dormant while every source keeps `history_export`: KG-114, KG-215); `rws_load` still has no DELETE anywhere; the pools are `rws_publish` 3 and `rws_owner_api` 2; `reconcileRollups` has no dirty hook (plan §9 C9: a rollup repair is a bug that raises an alert, KG-220); `static rerender` is [agent-prod] only (plan §9 C23).
 
 **[U] list.** KG-210 (a dated warnings file is frozen), KG-211 (owner-mode presentation in the web is #25), KG-212 (the owner site is off in production until P12a, which also generates `owner_basic_auth`), KG-213 (the owner site mounts no basemap tiles), KG-214 (DE-6 Stand has no history before P9a), KG-215 (a no-history series is in no file but `latest.json`), KG-216 (the stand-in is a 404 before the first publish), KG-217 (the publisher heartbeat is liveness, not success), KG-218 (the precompressed sibling window), KG-219 (the owner status has no loader backlog), KG-220 (a rollup repair does not re-render frames), KG-221 (the e2e stand-in renders one settled day), KG-222 (the `static rerender` and `static lag` checks and the settled size wait for production). Updated: KG-202 (the owner `forecast/latest.json` is now written; the owner API is P9b), KG-114 (the static files carry the rule). Threat model 4.35, no new risk-register entry: a flood of dirty rows only costs re-renders, bounded to one settled day a cycle and a 35 s budget (T-PUB-2).
+
+### Review round 1 (2026-10-04)
+
+Code review (Sonnet): approve, minors CR-1 to CR-6 and nits CR-7 to CR-9. Security review (Fable): pass with follow-ups, lows SEC-1 to SEC-5 and two informational notes. CI of the first push: `deploy` stopped on a readonly variable in the new `run.sh` step, `integration` hit its 15-minute limit, CodeQL flagged the owner check's switched-off certificate verification.
+
+| Finding | Fix |
+|---|---|
+| CR-1 | A hot step that fails in a cycle (stations, latest, forecast, dirty, recent, station files) sets `meta.degraded` (`cycle.int.test.ts`) |
+| CR-2 | Recent buckets and station files fail one at a time: the rest of the list is still written (`cycle.int.test.ts`) |
+| CR-3 | A series that becomes visible with data older than 48 h bumps every settled day, reason `registry` (`publish-tail.int.test.ts`) |
+| CR-4 | `writeAtomic` fsyncs every directory `mkdir` created, so a marker never names a day directory a power loss took back |
+| CR-5 | The vacuous kill assertion is gone; the injected rename fault is the deterministic proof of a crash between write and rename |
+| CR-6 | The compose e2e asks `/api/v1/snapshot` for a past t with the api stopped: 200, `X-Degraded: 1`, `no-store`, latest.json |
+| SEC-1 | The public site's 502, 503 and 504 error route repeats the A§12.2 headers and never names Caddy (the stand-in and every other path) |
+| SEC-2 | A station-level dirty touch takes the widest effective audience of that station's series (`dirtyEntriesOf`, `dirty.test.ts`) |
+| SEC-3 | `rws-tick` removes every link in the two www trees and fails the tree's check with `links` (`backup.test.sh`); T-PUB-1 reworded |
+| SEC-4, SEC-6, SEC-7 | The `/data/v1` comment names the canonical path; the owner's error answers carry HSTS; the runbook covers a narrowing deploy |
+| SEC-5 | The CI throw-away owner password is hashed from stdin |
+| CI | `run.sh` passes `DOMAIN` through `env`; `owner-check.mjs` verifies caddy-owner's certificate against its `tls internal` root; the `integration` job may take 30 minutes |
+
+CR-7 to CR-9 are accepted (KG-223). Threat model 4.36.

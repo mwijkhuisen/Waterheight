@@ -32,7 +32,7 @@ sudo ls /srv/rws/public/www/.state | grep 2026-09-20          # settled-2026-09-
 sudo rm /srv/rws/public/www/.state/settled-2026-09-20-v1.done
 ```
 
-A new version appears by itself when the registry or a correction changes the day's data (`meta.dayVersions`; the old version's files stay, immutable). `FAIL static rerender` (the last day render took 60 s or more): look at `status.json` `publisher.lastDayRender` and the host load.
+A new version appears by itself when a correction older than 48 h or a registry change reaches the day (`meta.dayVersions`). Each version's files are immutable; a superseded version is deleted one hour after its successor completed (`meta.json` meanwhile names the newest complete one), or at once when the registry *narrowed* the day (a series gone or its history export off): then `meta.dayVersions` says 0 for each such day until it is re-rendered, one day per cycle, and the web reads those days from the API. A deploy that narrows a series therefore shifts settled-day traffic to `/api/v1/snapshot` for about one minute per settled day (about 45 minutes; `status.json` `publisher.pendingDays` counts down). A series that becomes visible with data older than 48 h bumps every settled day too (reason `registry`). `FAIL static rerender` (the last day render took 60 s or more): look at `status.json` `publisher.lastDayRender` and the host load.
 
 ## 3. Full rebuild
 
@@ -52,7 +52,7 @@ sudo docker compose -p rws up -d publish
 
 ## 5. Disk
 
-The settled and frames files grow about 3 to 4 GB a year (plain files plus their `.zst` and `.gz` siblings are counted by `du`, `status.json` `publisher.settledBytes` counts the plain ones). The recent files are bounded (about 72 h).
+The settled and frames files grow about 3 to 4 GB a year (not yet measured in production); `status.json` `publisher.settledBytes` counts every file under `settled/` and `frames/`, the `.zst` and `.gz` siblings included, as `du` does. The recent files are bounded (about 72 h).
 
 ```bash
 curl -s https://<domain>/data/v1/status.json | jq '.publisher.settledBytes'
@@ -60,6 +60,10 @@ sudo du -sh /srv/rws/public/www/v1/{recent,settled,frames,series}
 ```
 
 `/srv/rws/public/www` is rebuildable from the database (§3), so it is the first thing to empty in an emergency (`docs/runbooks/disk-full.md`); the web then uses the API.
+
+## 6. A link in a tree
+
+The publishers never make a link (their temp files are `O_EXCL|O_NOFOLLOW`, then renamed). `rws-tick` removes any link it finds under `/srv/rws/public/www` or `/srv/rws/owner/www` every ten minutes, logs `removed N link(s) under …` and fails `publisher` or `owner-publisher` with `links`. Treat it as code running in that publisher: stop the service (`docker compose stop publish`), keep the container's logs, rebuild the tree (§3) from a fresh release, and look at what changed (`docs/threat-model.md` T-PUB-1).
 
 ## After this release
 

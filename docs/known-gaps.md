@@ -14,6 +14,7 @@ KG-202 and KG-114 are updated by this PR (their rows stay in the older sections 
 |---|---|---|---|---|
 | KG-212 | deploy, owner | The owner site (`caddy-owner`, `deploy/compose.owner.yaml`) is not in production: the overlay is used by the CI deploy job only, the owner publisher writes its files, and nothing serves them until WireGuard (P12a). `owner_basic_auth` is generated in P12a, not by `bootstrap.sh`; without it `caddy-owner` does not start (by design: it fails closed) | [owner] P12a | open [U] |
 | KG-222 | agent-prod | The `static rerender` and `static lag` checks of `verify-prod.sh` PASS with "none yet" in CI and mean something only in production (a settled day's render time, the lag between `meta.latestFrom` and `loader.last_commit`); the settled size (about 45 KB a snapshot, 3–4 GB a year, A§11.4) is an estimate until `status.json` `settledBytes` shows it | [agent-prod] after the deploy | open [U] |
+| KG-223 | publish | Review round 1's accepted nits: `meta.json` is written after the cycle's settled-day render, so a long render delays it (CR-7; within the watchdog's 5 min); each station file reads the family's series facts again (CR-8; the 35 s budget spreads a sweep over cycles); a browser whose cached `meta.json` and `latest.json` straddle a bucket boundary reads that bucket from the API once (CR-9; fail-safe). | Revisit with P12's load test | open |
 
 ### Known limits
 
