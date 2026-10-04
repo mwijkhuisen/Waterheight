@@ -34,13 +34,14 @@ function publisher(b: Base, mode: { budgetMs: number; settledPerCycle: number; s
 
 /**
  * One complete cycle with a fixed clock and no budget: every recent bucket, every station and every pending settled
- * day. Any failing step throws. The library entry of the tests and the e2e stand-in; production has no clock flag.
+ * day (or the newest `settledDays` of them; the rest stay 0 in meta, read from the API). Any failing step throws. The
+ * library entry of the tests and the e2e stand-in; production has no clock flag.
  */
 export async function publishOnce(
   db: Kysely<DB>,
   family: ChannelAudience,
   dir: string,
-  opts: { now: number; render?: Renderers; inputs?: string; build?: string },
+  opts: { now: number; render?: Renderers; inputs?: string; build?: string; settledDays?: number },
 ): Promise<void> {
   const base: Base = {
     db,
@@ -55,7 +56,7 @@ export async function publishOnce(
   };
   await publisher(base, {
     budgetMs: Number.POSITIVE_INFINITY,
-    settledPerCycle: Number.POSITIVE_INFINITY,
+    settledPerCycle: opts.settledDays ?? Number.POSITIVE_INFINITY,
     strict: true,
   }).cycle();
 }

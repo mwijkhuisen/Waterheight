@@ -85,6 +85,11 @@ export type CoverageDeps = {
   reaches?: ForecastReaches;
   /** The sources the family can see; sources.yaml's by default. */
   visible?: ReadonlySet<string>;
+  /**
+   * P9a: the public share of an owner read (the owner status file, whose role cannot read the public family): only
+   * public series and runs of the sources the public family can see count, and each reach lists only those.
+   */
+  publicSplit?: boolean;
 };
 
 /**
@@ -104,6 +109,7 @@ export async function forecastCoverage(
   const V = VIEWS[family];
   const reaches = (deps.reaches ?? forecastReaches()).reaches;
   const visible = deps.visible ?? visibleSources(family);
+  const counted = deps.publicSplit === true ? visibleSources('public') : visible;
   const at = new Date(now).toISOString();
   const read = await snapshot(db, async (tx) => {
     const stations = (
@@ -132,13 +138,16 @@ export async function forecastCoverage(
 
   const current = new Set<number>();
   for (const r of read.runs) {
+    if (!counted.has(r.source_id)) continue;
     const run = { source: r.source_id, lastValid: r.last_valid.getTime(), issued: r.issued.getTime() };
     const superseded =
       r.source_id === DE2 ? (x: typeof run, n: number) => de2Superseded(x, n, read.ruhrort) : undefined;
     if (isCurrent(run, now, now, superseded)) current.add(r.series_id);
   }
   const seriesOf = new Map<string, SeriesRow[]>();
-  for (const s of read.series) seriesOf.set(s.station_id, [...(seriesOf.get(s.station_id) ?? []), s]);
+  for (const s of read.series)
+    if (deps.publicSplit !== true || s.audience === 'public')
+      seriesOf.set(s.station_id, [...(seriesOf.get(s.station_id) ?? []), s]);
 
   const tally = () => ({ stations: 0, covered: 0 });
   const total = tally();
@@ -163,7 +172,7 @@ export async function forecastCoverage(
     total,
     countries: [...byCountry].sort(([a], [b]) => (a < b ? -1 : 1)).map(([country, c]) => ({ country, ...c })),
     reaches: reaches.map((r, i) => {
-      const sources = r.sources.filter((id) => visible.has(id));
+      const sources = r.sources.filter((id) => counted.has(id));
       return {
         id: r.id,
         names: r.names,

@@ -146,7 +146,7 @@ export async function readStations(db: Kysely<DB>, family: ChannelAudience): Pro
       await sql<SeriesRow>`
         SELECT id, station_id, source_id, quantity, value_kind, native_unit, datum,
                EXTRACT(EPOCH FROM expected_step)::int AS expected_step_s,
-               EXTRACT(EPOCH FROM staleness_limit)::int AS staleness_s
+               EXTRACT(EPOCH FROM staleness_limit)::float8 AS staleness_s
         FROM ${sql.table(v.series)} WHERE active ORDER BY station_id, id`.execute(tx)
     ).rows,
     since: (

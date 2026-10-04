@@ -55,6 +55,7 @@ import {
   type Version,
   versionOf,
 } from './plan.ts';
+import { type AttributionRow, attributionRows } from './render/attribution.ts';
 import type { Output } from './write.ts';
 
 // P9a: one publisher loop per family (A§9.1), at most once a minute. It only reads (invariant 2): the family's views
@@ -76,6 +77,10 @@ export type RenderCtx = {
   cache: StaticCache;
   /** status.json's read-only input directory: public the root-checked ops copy (/srv/ops), owner capture's (/srv/capture). */
   inputs: string | undefined;
+  /** The family's attribution rows, read once a cycle (render/attribution.ts `attributionFor`). */
+  attribution: readonly AttributionRow[];
+  /** Fixed codes only: a renderer that degrades a part to null says why here. */
+  log?: Pick<Logger, 'error'>;
 };
 
 export type DayRender = { day: string; version: number; seconds: number; at: string };
@@ -224,6 +229,8 @@ export class Publisher {
       sections: d.sections,
       cache: d.cache,
       inputs: d.inputs,
+      attribution: await attributionRows(d.db, d.family),
+      log: d.log,
     };
 
     // Every bucket of the unsettled days is a file; a new one is queued once, a settled day's are dropped.
