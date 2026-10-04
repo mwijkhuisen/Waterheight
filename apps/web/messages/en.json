@@ -106,6 +106,7 @@
   "forecast_word": "forecast",
   "forecast_estimate": "estimate",
   "forecast_estimate_note": "estimate: beyond the part the source forecasts itself",
+  "forecast_bafu_note": "BAFU forecast: the median of a set of model runs; the band shows where the middle half of them lies (25–75 %). Warnings for small and medium rivers are issued by the cantons.",
   "forecast_issued": "{agency}, issued {time}",
   "forecast_fetched": "{agency}, fetched {time}",
   "forecast_below_floor": "below the forecastable range",

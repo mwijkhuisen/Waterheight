@@ -106,6 +106,7 @@
   "forecast_word": "verwachting",
   "forecast_estimate": "schatting",
   "forecast_estimate_note": "schatting: na het deel dat de bron zelf voorspelt",
+  "forecast_bafu_note": "BAFU-verwachting: de mediaan van een reeks modelberekeningen; de band toont waar de middelste helft ervan ligt (25–75 %). Waarschuwingen voor kleine en middelgrote rivieren geven de kantons.",
   "forecast_issued": "{agency}, uitgegeven {time}",
   "forecast_fetched": "{agency}, opgehaald {time}",
   "forecast_below_floor": "onder het voorspelbare bereik",

@@ -63,6 +63,16 @@ describe('checkRun', () => {
     expect(c.issuedAt).toBeNull();
   });
 
+  it('refuses a provider issue time more than 30 days before the fetch (review SEC-1 of P8b)', () => {
+    const at = (days: number) => new Date(FETCH - days * 24 * 3_600_000).toISOString();
+    const points = steps('2026-09-29T14:00Z', 2);
+    expect(codeOf(() => checkRun(run(points, { issuedAt: at(30) }), FETCH, FORECAST_SOURCES['FR-4']))).toBe('none');
+    expect(codeOf(() => checkRun(run(points, { issuedAt: at(31) }), FETCH, FORECAST_SOURCES['FR-4']))).toBe(
+      'stale_issue',
+    );
+    expect(codeOf(() => checkRun(run(points, { issuedAt: '1970-01-01T00:00:00Z' }), FETCH, NL1))).toBe('stale_issue');
+  });
+
   it('refuses a provider issue time more than 15 minutes after the fetch', () => {
     const at = (min: number) => new Date(FETCH + min * 60_000).toISOString();
     expect(codeOf(() => checkRun(run(steps('2026-09-29T14:00Z', 2), { issuedAt: at(16) }), FETCH, NL1))).toBe(

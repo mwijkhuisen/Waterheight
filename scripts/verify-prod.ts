@@ -1329,13 +1329,24 @@ export function ch4ExpectedSeries(
   }).length;
 }
 
+/** CH-4's audience in registry/sources.yaml (C13: public unless BAFU objects, then owner). */
+let ch4AudienceCache: string | undefined;
+export const ch4Audience = (): string =>
+  (ch4AudienceCache ??= readRegistry().sources.find((s) => s.id === 'CH-4')?.audience ?? 'off');
+
 /**
  * P8b: CH-4 forecast runs are flowing: `/api/v1/health/sources` lists CH-4 with a `forecast` whose newest run is at
  * most `FORECAST_CH4_MAX_AGE_S` old and that has a run on at least `expected` series (`ch4ExpectedSeries`).
- * Needs live capture (the CI deploy job lets it fail). Numbers only.
+ * Needs live capture (the CI deploy job lets it fail). Numbers only. After a C13 objection (CH-4 no longer public, a
+ * reviewed registry change) public health holds no CH-4: the check passes and says why (review F2).
  */
-export function checkForecastCh4(doc: HealthSources | undefined, expected: number = ch4ExpectedSeries()): Result {
+export function checkForecastCh4(
+  doc: HealthSources | undefined,
+  expected: number = ch4ExpectedSeries(),
+  audience: string = ch4Audience(),
+): Result {
   const check = 'forecast CH-4';
+  if (audience !== 'public') return pass(check, `CH-4 is ${audience} in the registry (C13): not in public health`);
   if (doc === undefined) return noDocument(check, 'health/sources');
   const s = sourceOf(doc, 'CH-4');
   if (s === undefined) return miss(check, 'CH-4 is not listed in /api/v1/health/sources');

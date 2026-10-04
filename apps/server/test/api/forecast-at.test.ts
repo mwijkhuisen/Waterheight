@@ -250,6 +250,10 @@ describe('heldForecast: how a picked row is shown', () => {
     // no segment end and no flag: a forecast, never an estimate
     expect(shown(row({ segmentEnd: null, point: { ts: NOW + 40 * H } })).estimate).toBe(false);
     expect(shown(de2({ segmentEnd: end })).providerSegmentEnd).toBe(iso(end));
+    // review F4: the segment's last point held at a t past the segment end is an estimate there
+    const last = de2({ segmentEnd: end, point: { ts: end } });
+    expect(heldForecast(last, rules(), SHOWN, end).estimate).toBe(false);
+    expect(heldForecast(last, rules(), SHOWN, end + H).estimate).toBe(true);
   });
 
   it('shows a below-floor point with no value and no band, its flag kept', () => {

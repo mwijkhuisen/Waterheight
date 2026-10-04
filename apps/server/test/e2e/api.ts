@@ -205,7 +205,8 @@ try {
     );
 
   for (const f of FORECASTS) {
-    await t.admin.query(
+    // Every seeded run must exist, the owner canary's included: its absence test proves nothing otherwise (SEC-4).
+    const seeded = await t.admin.query(
       `WITH run AS (
          INSERT INTO forecast_run (series_id, source_id, issued_at, issued_inferred, first_valid, last_valid, fetched_at,
                                    content_hash, kind, step, provider_segment_end)
@@ -220,6 +221,7 @@ try {
             LATERAL (SELECT ($7::float8 + $8::float8 * extract(epoch FROM g - $5::timestamptz) / 3600)::real AS v) x`,
       [f.station, f.source, f.issued, f.fetched, at(f.first), at(f.last), f.base, f.per, f.band, f.segmentEnd],
     );
+    if ((seeded.rowCount ?? 0) === 0) throw new Error(`seed: no ${f.source} run on ${f.station}`);
   }
 
   const opened = openApiDb({ DATABASE_URL: t.urlFor('rws_api') });

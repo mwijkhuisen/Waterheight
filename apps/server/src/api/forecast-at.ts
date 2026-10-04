@@ -112,11 +112,16 @@ export function pickHeld(rows: readonly HeldRow[], t: number, rules: ForecastRul
     });
 }
 
-/** Pure: a picked row as the snapshot shows it (the state comes from the classifier). */
+/**
+ * Pure: a picked row as the snapshot shows it at `t` (default: the held point's own time; the state comes from the
+ * classifier). An estimate is a point flagged ESTIMATE, or a `t` past the provider's segment (review F4 of P8b: the
+ * point held at `t` may be the segment's last).
+ */
 export function heldForecast(
   r: HeldRow,
   rules: ForecastRules,
   state: Pick<SnapshotForecast, 'state' | 'basis'>,
+  t: number = r.point.ts,
 ): SnapshotForecast {
   const p = r.point;
   return {
@@ -126,7 +131,7 @@ export function heldForecast(
     ts: iso(new Date(p.ts)),
     value: below(p) ? null : p.value,
     flags: p.flags,
-    estimate: (p.flags & FORECAST_FLAGS.ESTIMATE) !== 0 || (r.segmentEnd !== null && p.ts > r.segmentEnd),
+    estimate: (p.flags & FORECAST_FLAGS.ESTIMATE) !== 0 || (r.segmentEnd !== null && Math.max(p.ts, t) > r.segmentEnd),
     issuedAt: iso(new Date(r.issued ?? r.fetched)),
     issuedInferred: r.issued === null || r.issuedInferred,
     providerSegmentEnd: r.segmentEnd === null ? null : iso(new Date(r.segmentEnd)),
@@ -254,6 +259,7 @@ export async function readFutureSnapshot(
           r,
           rules,
           values.has(r.series) ? { state: c.state, basis: c.basis } : { state: 'no_ref', basis: null },
+          t,
         ),
       ];
     }),

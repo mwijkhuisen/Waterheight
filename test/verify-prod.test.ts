@@ -2230,38 +2230,49 @@ describe('forecast CH-4 (P8b)', () => {
   const ch = (forecast: SourceRow['forecast']) => sourcesDoc({ sources: [de1(), de1({ id: 'CH-4', forecast })] });
 
   it('passes for a run within 12 h and a run on every expected series, and prints numbers only', () => {
-    expect(checkForecastCh4(ch(run()), 28)).toEqual({
+    expect(checkForecastCh4(ch(run()), 28, 'public')).toEqual({
       check: 'forecast CH-4',
       ok: true,
       detail: `28 of 28 expected series have a run, the newest was issued 3.0 h ago (${ago(3 * 3600_000)})`,
     });
     // BAFU starts a run every 2 to 6 hours and the capture is hourly: 7 h is the worst case, 12 h is the limit.
-    expect(checkForecastCh4(ch(run({ run_age_s: FORECAST_CH4_MAX_AGE_S })), 28)).toMatchObject({ ok: true });
+    expect(checkForecastCh4(ch(run({ run_age_s: FORECAST_CH4_MAX_AGE_S })), 28, 'public')).toMatchObject({ ok: true });
     expect(FORECAST_CH4_MAX_AGE_S).toBe(12 * 3600);
     // More series than expected (a station that began to answer) never fails.
-    expect(checkForecastCh4(ch(run({ series: 29 })), 28)).toMatchObject({ ok: true });
+    expect(checkForecastCh4(ch(run({ series: 29 })), 28, 'public')).toMatchObject({ ok: true });
   });
 
   it('fails on a stale run, on too few series, and says which', () => {
-    const stale = checkForecastCh4(ch(run({ run_age_s: FORECAST_CH4_MAX_AGE_S + 1 })), 28);
+    const stale = checkForecastCh4(ch(run({ run_age_s: FORECAST_CH4_MAX_AGE_S + 1 })), 28, 'public');
     expect(stale).toMatchObject({ ok: false, detail: expect.stringContaining('the newest run is over 12 h old') });
     expect(stale.detail).not.toContain('no run');
-    const few = checkForecastCh4(ch(run({ series: 27 })), 28);
+    const few = checkForecastCh4(ch(run({ series: 27 })), 28, 'public');
     expect(few).toMatchObject({ ok: false, detail: expect.stringContaining('27 of 28 expected series') });
     expect(few.detail).toContain('1 expected series have no run');
     expect(few.detail).not.toContain('old');
-    const both = checkForecastCh4(ch(run({ series: 0, current: 0, run_age_s: 30 * 3600 })), 28);
+    const both = checkForecastCh4(ch(run({ series: 0, current: 0, run_age_s: 30 * 3600 })), 28, 'public');
     expect(both.detail).toContain('over 12 h old');
     expect(both.detail).toContain('28 expected series have no run');
   });
 
   it('fails with no forecast, no CH-4 or no document', () => {
-    expect(checkForecastCh4(ch(null), 28)).toMatchObject({ ok: false, detail: 'CH-4 has stored no forecast run yet' });
-    expect(checkForecastCh4(sourcesDoc(), 28)).toMatchObject({
+    expect(checkForecastCh4(ch(null), 28, 'public')).toMatchObject({
+      ok: false,
+      detail: 'CH-4 has stored no forecast run yet',
+    });
+    expect(checkForecastCh4(sourcesDoc(), 28, 'public')).toMatchObject({
       ok: false,
       detail: expect.stringContaining('not listed'),
     });
-    expect(checkForecastCh4(undefined, 28)).toMatchObject({ ok: false });
+    expect(checkForecastCh4(undefined, 28, 'public')).toMatchObject({ ok: false });
+  });
+
+  it('passes and says why when CH-4 is not public in the registry (a C13 objection, review F2)', () => {
+    expect(checkForecastCh4(undefined, 28, 'owner')).toMatchObject({
+      ok: true,
+      detail: expect.stringContaining('owner'),
+    });
+    expect(checkForecastCh4(sourcesDoc(), 28, 'public')).toMatchObject({ ok: false });
   });
 
   it('expects the stations of registry/seed/ch-4.csv with a primary, non-off CH-1 series, less the 404 stations', {

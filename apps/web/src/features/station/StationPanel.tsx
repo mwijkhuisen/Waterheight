@@ -88,6 +88,10 @@ export function StationPanel({ locale, station, values, forecasts, t, dataEpoch,
                     )}
                   </p>
                   {forecast.estimate && <p className={styles.estimate}>{m.forecast_estimate_note({}, { locale })}</p>}
+                  {/* BAFU recommends explaining how its forecasts read (catalogue §2.7; review SEC-2). */}
+                  {forecast.source === 'CH-4' && (
+                    <p className={styles.estimate}>{m.forecast_bafu_note({}, { locale })}</p>
+                  )}
                 </>
               )
             ) : value === undefined ? (

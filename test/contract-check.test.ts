@@ -306,6 +306,18 @@ const figure = (change: (doc: { plot: { data: { name: string; x: unknown[]; y: u
 };
 
 describe('the CH-4 and FR-4 probes (P8b)', { timeout: 90_000 }, () => {
+  it('probes public sources only: a C13 objection (CH-4 to owner) fails here until the probe goes (review F2)', () => {
+    const sources = (
+      parse(readFileSync(join(repoRoot, 'registry/sources.yaml'), 'utf8')) as {
+        sources: { id: string; audience: string }[];
+      }
+    ).sources;
+    for (const id of SPECS) {
+      const source = capture.specs.find((x) => x.id === id)?.source;
+      expect([id, sources.find((x) => x.id === source)?.audience]).toEqual([id, 'public']);
+    }
+  });
+
   it('asks the registered station 2091, not the first seed row (2004, a lake whose figure answers 404)', async () => {
     const spec = capture.specs.find((x) => x.id === 'ch-4-forecast');
     expect(spec?.rows[0]).toMatchObject({ id: '2004' });
