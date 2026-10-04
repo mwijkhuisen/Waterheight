@@ -1,0 +1,9 @@
+{
+  "spec": "ch-4-forecast",
+  "source": "CH-4",
+  "synthetic": true,
+  "derived_from": "ch-4-forecast-2091-20260930t1635z",
+  "edit": "the trace at position 3 is named Mediana instead of Median (the Italian name); every value is the real one",
+  "status": 200,
+  "variant": "2091"
+}

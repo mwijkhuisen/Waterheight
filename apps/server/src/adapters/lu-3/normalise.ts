@@ -163,9 +163,9 @@ export function combineRun(parts: readonly Part[]): RunResult {
       number,
       number,
     ];
+    // The quantile order flag is the loader's, for every source (packages/core checkRun).
     const all = [p10, p30, p50, p70, p90];
     let flags = 0;
-    if (all.some((x, j) => j > 0 && x < (all[j - 1] as number))) flags |= FORECAST_FLAGS.ORDER;
     if (floor !== undefined && all.some((x) => x <= floor)) flags |= FORECAST_FLAGS.BELOW_FLOOR;
     return { ts: v.ts, value: p50, p10, p30, p50, p70, p90, flags };
   });

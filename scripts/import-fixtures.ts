@@ -1,10 +1,11 @@
 // Turns payloads the owner exported from the production raw archive (Action D2;
 // the read-only export command is in the P5a PR) into adapter fixtures:
 //
-//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik] <export dir>
+//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b] <export dir>
 //
 // (`--p5b`: the P5b export and its rules, `IMPORTS_P5B`; `--p7a`: `IMPORTS_P7A`; `--p8a`: the NL-1 forecast captures
-// of `IMPORTS_P8A`, whole bodies; without a flag the P5a list.)
+// of `IMPORTS_P8A`, whole bodies; `--p8a-maaseik`: the maaseik Q captures of `IMPORTS_P8A_MAASEIK`; `--p8b`: the
+// CH-4 and FR-4 forecasts of `IMPORTS_P8B`, whole bodies; without a flag the P5a list.)
 //
 // The export holds `<name>.raw` (the archived body) and `<name>.line.json` (its
 // manifest line). Each payload listed below is copied to
@@ -387,6 +388,21 @@ export const IMPORTS_P8A: readonly { name: string; source: 'NL-1'; fixture: stri
 ];
 
 /**
+ * P8b (Action D2, export of 2026-10-04): whole archived forecast bodies. CH-4 Rheinfelden (2091, Q): the last capture
+ * of the run starting 2026-09-30T11:00+02:00 and the first of the next one (15:00+02:00); 2602 (2026-10-04): a run
+ * whose measured trace has 17 points instead of 25. FR-4 (captured 2026-09-30, before #39 limited the stations to the
+ * NL-bound basins: none is NL-bound, KG-176): L800001020 H and Q (hourly, 40 values) and Y210002001 H (one value).
+ */
+export const IMPORTS_P8B: readonly { name: string; source: 'CH-4' | 'FR-4'; fixture: string }[] = [
+  { name: 'ch-4-2091-0004', source: 'CH-4', fixture: 'ch-4-forecast-2091-20260930t1535z' },
+  { name: 'ch-4-2091-0005', source: 'CH-4', fixture: 'ch-4-forecast-2091-20260930t1635z' },
+  { name: 'ch-4-newest-0039', source: 'CH-4', fixture: 'ch-4-forecast-2602-20261004t0535z' },
+  { name: 'fr-4-station-0373', source: 'FR-4', fixture: 'fr-4-station-l800001020-h-20260930t1620z' },
+  { name: 'fr-4-station-0409', source: 'FR-4', fixture: 'fr-4-station-l800001020-q-20260930t1620z' },
+  { name: 'fr-4-station-0009', source: 'FR-4', fixture: 'fr-4-station-y210002001-h-20260930t1220z' },
+];
+
+/**
  * P8a follow-up (Action D2, export of 2026-10-03, `p8a-maaseik.sh`): two whole maaseik Q captures of `nl-1-fc-1h`, the
  * one forecast series RWS publishes under method other:F058 (the recorded catalogue; 195 series use RWSM-F232). The
  * captures of 2026-10-01T05:25Z (the last of a run) and 06:25Z (the first of the next one).
@@ -416,7 +432,7 @@ export function cutP7a(
   };
 }
 
-function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik'): void {
+function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' | 'p8b'): void {
   type Entry = {
     name: string;
     source: string;
@@ -432,6 +448,7 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik'):
     p7a: IMPORTS_P7A,
     p8a: IMPORTS_P8A,
     'p8a-maaseik': IMPORTS_P8A_MAASEIK,
+    p8b: IMPORTS_P8B,
   };
   const list = lists[mode];
   for (const { name, source, fixture, keep, last, rule, n } of list) {
@@ -468,11 +485,17 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik'):
 
 if (import.meta.main) {
   const flag = process.argv[2];
-  const modes = { '--p5b': 'p5b', '--p7a': 'p7a', '--p8a': 'p8a', '--p8a-maaseik': 'p8a-maaseik' } as const;
+  const modes = {
+    '--p5b': 'p5b',
+    '--p7a': 'p7a',
+    '--p8a': 'p8a',
+    '--p8a-maaseik': 'p8a-maaseik',
+    '--p8b': 'p8b',
+  } as const;
   const mode = flag !== undefined && Object.hasOwn(modes, flag) ? modes[flag as keyof typeof modes] : 'p5a';
   const dir = process.argv[mode === 'p5a' ? 2 : 3];
   if (dir === undefined) {
-    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik] <export dir>');
+    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b] <export dir>');
     process.exitCode = 64;
   } else main(dir, mode);
 }

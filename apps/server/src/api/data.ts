@@ -1,9 +1,10 @@
 import { floorBucket, MAX_POINTS, type Meta, type Series, type Snapshot, type Stations } from '@rws/contracts';
-import { OWNER_ONLY_SOURCES } from '@rws/core';
+import { FORECAST_SOURCES, OWNER_ONLY_SOURCES } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
-import { FILLED_BY } from '../load/adapters.ts';
+import { FILLED_BY, LOAD_ADAPTERS } from '../load/adapters.ts';
+import { forecastHorizons } from './forecast-at.ts';
 import type { SeriesParams } from './params.ts';
 import { readStates, type StateRead, type StaticCache, snapshotValues } from './states.ts';
 import { coded, iso, snapshot } from './util.ts';
@@ -27,13 +28,30 @@ type AttributionRow = {
   needs_date: boolean | null;
 };
 
-const FILL_TARGETS = [...FILLED_BY].flatMap(([target, fills]) => fills.map(() => target));
-const FILL_SOURCES = [...FILLED_BY].flatMap(([, fills]) => fills);
+/**
+ * The forecast sources whose runs sit on another source's series (P8b: CH-4 on CH-1, FR-4 on FR-1; DE-2, DE-3 and
+ * LU-3 too, but they are owner audience and the public attribution view holds no row of theirs), by that source.
+ */
+const FORECAST_ON: [string, string][] = Object.entries(LOAD_ADAPTERS).flatMap(([source, adapter]) =>
+  Object.hasOwn(FORECAST_SOURCES, source)
+    ? [...new Set(Object.values(adapter.specs).flatMap((s) => s.refTarget ?? []))].map((t): [string, string] => [
+        t,
+        source,
+      ])
+    : [],
+);
+const PAIRS = [
+  ...[...FILLED_BY].flatMap(([target, fills]) => fills.map((f): [string, string] => [target, f])),
+  ...FORECAST_ON,
+];
+const FILL_TARGETS = PAIRS.map(([target]) => target);
+const FILL_SOURCES = PAIRS.map(([, source]) => source);
 
 /**
  * The public sources that have an active display series, each with its attribution rows verbatim, and the sources
- * whose rows fill a listed source's series (FILLED_BY: FR-3 for FR-1, CH-3 for CH-1; review SR-1) as their own
- * entries, read through the same family's attribution view: a fill source the view does not show is not listed.
+ * whose rows fill a listed source's series (FILLED_BY: FR-3 for FR-1, CH-3 for CH-1; review SR-1) or whose forecast
+ * runs sit on it (P8b: CH-4, FR-4, whose attribution is due where their forecasts are shown) as their own entries,
+ * read through the same family's attribution view: a source the view does not show is not listed.
  */
 export async function readMeta(db: Kysely<DB>, window: Window, build: string, now: Date): Promise<Meta> {
   const { rows } = await sql<AttributionRow>`
@@ -68,6 +86,7 @@ export async function readMeta(db: Kysely<DB>, window: Window, build: string, no
     displayStart: new Date(window.displayStartMs).toISOString(),
     build,
     sources: [...sources].map(([id, attribution]) => ({ id, attribution })),
+    forecastHorizons: forecastHorizons('public'),
   };
 }
 

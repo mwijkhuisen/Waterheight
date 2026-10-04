@@ -2,7 +2,7 @@ import { type Meta, ODBL_URL } from '@rws/contracts';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
 import { StationsMap } from './features/map/StationsMap.tsx';
-import { markerStates } from './features/map/stationLayer.ts';
+import { forecastStates, markerStates } from './features/map/stationLayer.ts';
 import { hasWebGL2 } from './features/map/webgl.ts';
 import { StationPanel } from './features/station/StationPanel.tsx';
 import { StationTable } from './features/table/StationTable.tsx';
@@ -15,8 +15,10 @@ import {
   useMeta,
   useRiversManifest,
   useSnapshot,
+  useStationHorizon,
   useStations,
 } from './lib/data/api.ts';
+import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
 import { formatDay, quantise, ZONE } from './lib/time/time.ts';
 import { otherLanguageHref } from './lib/url/url.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
@@ -24,13 +26,12 @@ import { m } from './paraglide/messages.js';
 import type { Locale } from './paraglide/runtime.js';
 
 // One page per language (NL at /, EN at /en/): the map or the table of the
-// DE-1 and NL-1 stations at the instant `?t=`, the station `?s=` in a panel.
+// DE-1 and NL-1 stations at the instant `?t=`, the station `?s=` in a panel. After now (P8b) the timeline
+// reaches into the forecast, as far as the selected station's forecast does (at most 48 h).
 // The language link is a full page load that keeps t and s, so <html lang>
 // always matches the page (A§10).
 
 const PAGES = new Set(['/', '/index.html', '/en/', '/en/index.html']);
-/** The API refuses a `t` more than 5 minutes ahead of its clock. */
-const SKEW_MS = 5 * 60_000;
 const FETCH_DEBOUNCE_MS = 150;
 
 export function App({ locale }: { locale: Locale }) {
@@ -64,20 +65,26 @@ function Viewer({ locale }: { locale: Locale }) {
   const [mapFailed, setMapFailed] = useState(false);
   const [view, setView] = useState<'map' | 'table'>('map');
 
+  // `now` is the page's now: the API's clock at the load (or this browser's, if behind it), never ahead of it,
+  // so the "now" of the page is a t whose snapshot holds observations; `serverNow` is the API's clock itself.
   const range = useMemo(() => {
     if (meta.data === undefined) return undefined;
     const start = Date.parse(meta.data.displayStart);
-    const now = Date.parse(meta.data.now);
-    const end = quantise(Math.min(Date.now(), now + SKEW_MS));
-    return { start, end: Math.max(start, end), epoch: Date.parse(meta.data.dataEpoch), now };
+    const serverNow = Date.parse(meta.data.now);
+    const now = Math.max(start, quantise(Math.min(Date.now(), serverNow)));
+    return { start, now, epoch: Date.parse(meta.data.dataEpoch), serverNow, ahead: meta.data.forecastHorizons };
   }, [meta.data]);
-  // A `t` outside [displayStart, now] is treated as no `t`: now.
-  const t = range && (url.t !== undefined && url.t >= range.start && url.t <= range.end ? url.t : range.end);
   const list = useMemo(
     () => [...(stations.data?.stations ?? [])].sort((a, b) => a.name.localeCompare(b.name, locale)),
     [stations.data, locale],
   );
   const selected = url.s === undefined ? undefined : list.find((st) => st.id === url.s);
+  // The slider reaches now + min(48 h, the selected station's horizon): without a selection (or until the
+  // horizon is known) the largest horizon of /meta. A `t` beyond it is clamped to it; a `t` before the first day
+  // or more than 48 h after now is treated as no `t`: now.
+  const horizon = useStationHorizon(selected);
+  const end = range && sliderEnd(range.now, globalEnd(range.now, range.ahead), horizon);
+  const t = range && end !== undefined ? pageT(url.t, range.start, range.now, end) : undefined;
 
   // The data follows `t` once it has settled: a drag or a held key asks only for where it stops.
   const settled = useDebounced(t, FETCH_DEBOUNCE_MS);
@@ -87,7 +94,17 @@ function Viewer({ locale }: { locale: Locale }) {
   // Not after a failed request: the alert says so, and a dimmed page would stay unreadable (review round 2).
   const loading = !current && !snapshot.isError;
   const values = useMemo(() => new Map((snapshot.data?.values ?? []).map((v) => [v.series, v])), [snapshot.data]);
-  const states = useMemo(() => markerStates(list, values), [list, values]);
+  // The answer for a t after now holds forecasts instead of values (P8b): what is on screen follows the answer, so
+  // the marker, panel and table never mix the two.
+  const forecasts = useMemo(
+    () =>
+      snapshot.data?.forecasts === undefined ? undefined : new Map(snapshot.data.forecasts.map((f) => [f.series, f])),
+    [snapshot.data],
+  );
+  const states = useMemo(
+    () => (forecasts === undefined ? markerStates(list, values) : forecastStates(list, forecasts)),
+    [list, values, forecasts],
+  );
 
   const setT = useCallback((next: number) => setUrl({ t: next }), [setUrl]);
   const select = useCallback((id: string | undefined) => setUrl({ s: id }), [setUrl]);
@@ -124,7 +141,7 @@ function Viewer({ locale }: { locale: Locale }) {
         </a>
       </header>
       <main className={styles.main}>
-        {range === undefined || t === undefined || stations.data === undefined ? (
+        {range === undefined || end === undefined || t === undefined || stations.data === undefined ? (
           meta.isError || stations.isError ? (
             <p role="alert">{m.data_unavailable({}, { locale })}</p>
           ) : (
@@ -132,7 +149,16 @@ function Viewer({ locale }: { locale: Locale }) {
           )
         ) : (
           <>
-            <Timebar locale={locale} t={t} start={range.start} end={range.end} epoch={range.epoch} onChange={setT} />
+            <Timebar
+              locale={locale}
+              t={t}
+              start={range.start}
+              now={range.now}
+              end={end}
+              noForecast={horizon === null}
+              epoch={range.epoch}
+              onChange={setT}
+            />
             <div className={styles.controls}>
               {canMap && (
                 <fieldset className={styles.toggle}>
@@ -178,6 +204,7 @@ function Viewer({ locale }: { locale: Locale }) {
                     stations={list}
                     states={states}
                     values={values}
+                    forecasts={forecasts}
                     selected={selected}
                     onSelect={open}
                     onClose={close}
@@ -188,6 +215,7 @@ function Viewer({ locale }: { locale: Locale }) {
                     locale={locale}
                     stations={list}
                     values={values}
+                    forecasts={forecasts}
                     t={t}
                     selected={selected?.id}
                     onSelect={open}
@@ -200,9 +228,10 @@ function Viewer({ locale }: { locale: Locale }) {
                   locale={locale}
                   station={selected}
                   values={values}
+                  forecasts={forecasts}
                   t={t}
                   dataEpoch={range.epoch}
-                  chartSpan={chartSpan(settled ?? t, range.start, range.now)}
+                  chartSpan={chartSpan(settled ?? t, range.start, range.serverNow)}
                   focus={focusPanel}
                   onClose={close}
                 />
@@ -211,7 +240,11 @@ function Viewer({ locale }: { locale: Locale }) {
           </>
         )}
       </main>
-      <Footer locale={locale} meta={meta.data} t={t} />
+      <Footer
+        locale={locale}
+        meta={meta.data}
+        t={t === undefined || range === undefined ? t : Math.min(t, range.now)}
+      />
     </>
   );
 }

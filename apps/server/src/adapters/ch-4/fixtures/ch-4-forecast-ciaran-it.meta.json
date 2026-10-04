@@ -1,0 +1,14 @@
+{
+  "spec": "ch-4-forecast",
+  "source": "CH-4",
+  "synthetic": false,
+  "recorded_at": "2026-10-04T06:59:46Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://web.archive.org/web/20231102103317id_/https://www.hydrodaten.admin.ch/plots/q_forecast/2020_q_forecast_it.json",
+  "bytes": 29357,
+  "source_sha256": "eeadd056baf13f29c49dde72e54b81ab6b2ee0768fd298ad9045ae7c79b893ca",
+  "wayback": true,
+  "note": "a third-party Wayback capture of storm Ciaran (2023-11-02), the _it figure of station 2020 (Ticino, Bellinzona), never a golden; the archive serves it gzip-encoded and fetch decodes that, so this file is the plain JSON; its trace names are Italian (a test-only layout table reads them)",
+  "trimmed": false
+}

@@ -1,4 +1,13 @@
-import { type ApiErrorCode, Meta, openApiDocument, Series, Snapshot, Stations } from '@rws/contracts';
+import {
+  type ApiErrorCode,
+  floorBucket,
+  Meta,
+  openApiDocument,
+  Series,
+  SeriesForecast,
+  Snapshot,
+  Stations,
+} from '@rws/contracts';
 import type { Context, Hono } from 'hono';
 import type { Kysely } from 'kysely';
 import type { Logger } from 'pino';
@@ -6,14 +15,23 @@ import type { z } from 'zod';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { readMeta, readSeries, readSnapshot, readStations } from './data.ts';
+import { readFutureSnapshot, readSeriesForecast } from './forecast-at.ts';
 import { Busy, Lru } from './lru.ts';
-import { agePolicy, type CachePolicy, noQuery, Refused, seriesParams, snapshotParams } from './params.ts';
+import {
+  agePolicy,
+  type CachePolicy,
+  noQuery,
+  Refused,
+  seriesForecastParams,
+  seriesParams,
+  snapshotParams,
+} from './params.ts';
 import type { StaticCache } from './states.ts';
 import { coded, validated } from './util.ts';
 import type { DisplayWindow, Window } from './window.ts';
 
-// The public data routes of the api role (A§9.2; PHASES P4a): /api/v1/meta,
-// /stations, /snapshot, /series/{id} and /openapi.json, plus the rules of the
+// The public data routes of the api role (A§9.2; PHASES P4a, P8b): /api/v1/meta,
+// /stations, /snapshot, /series/{id}, /series/{id}/forecast and /openapi.json, plus the rules of the
 // whole /api/v1 tree: GET and HEAD only, no CORS headers, fixed error bodies
 // with no-store. A request is validated completely before anything asks the
 // database; an answer is checked against its contract before it is cached or
@@ -35,11 +53,14 @@ export type ApiDeps = {
 };
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
-const FIXED: Readonly<Record<'meta' | 'stations' | 'openapi', CachePolicy>> = {
+const FIXED: Readonly<Record<'meta' | 'stations' | 'openapi' | 'forecast', CachePolicy>> = {
   meta: { header: 'public, max-age=60', ttlMs: 60_000 },
   stations: { header: 'public, max-age=300', ttlMs: 300_000 },
   openapi: { header: 'public, max-age=300', ttlMs: 300_000 },
+  forecast: { header: 'public, max-age=300', ttlMs: 300_000 },
 };
+/** This process serves the public family only: a constant, never request input (the owner API of P9 is its own). */
+const FAMILY = 'public';
 // The in-process cache: bounded by entries and bytes; at most 64 distinct keys computed at once, and the two fixed
 // keys never refused (a flood of /series or /snapshot keys must not take /meta and /stations down).
 const LRU_ENTRIES = 2048;
@@ -129,10 +150,28 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
   route('/api/v1/snapshot', 'snapshot', Snapshot, (c) => {
     const now = deps.now().getTime();
     const t = snapshotParams(c.req.url, now, window().displayStartMs);
+    const opts = { now, sections: deps.sections, cache: deps.cache };
+    // After now: forecasts only, as known at now's bucket (part of the key, so a cached answer never outlives it).
+    if (t > now)
+      return {
+        key: `snapshot|${t}|${floorBucket(now)}`,
+        policy: agePolicy(t, now),
+        read: (db) => readFutureSnapshot(db, FAMILY, t, opts),
+      };
+    return { key: `snapshot|${t}`, policy: agePolicy(t, now), read: (db) => readSnapshot(db, t, opts) };
+  });
+
+  route('/api/v1/series/:id/forecast', 'forecast', SeriesForecast, (c) => {
+    const p = seriesForecastParams(c.req.param('id') ?? '', c.req.url, deps.now().getTime(), window().displayStartMs);
     return {
-      key: `snapshot|${t}`,
-      policy: agePolicy(t, now),
-      read: (db) => readSnapshot(db, t, { now, sections: deps.sections, cache: deps.cache }),
+      key: `forecast|${p.id}|${p.asof}`,
+      policy: FIXED.forecast,
+      read: async (db) => {
+        const answer = await readSeriesForecast(db, FAMILY, p.id, p.asof);
+        // Unknown, inactive and api-channel-off answer the same; a 404 is never cached.
+        if (answer === undefined) throw new Refused('not_found', 404);
+        return answer;
+      },
     };
   });
 

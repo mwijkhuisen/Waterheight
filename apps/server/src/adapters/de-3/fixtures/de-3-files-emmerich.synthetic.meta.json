@@ -1,0 +1,9 @@
+{
+  "spec": "de-3-files",
+  "source": "DE-3",
+  "synthetic": true,
+  "derived_from": "the structure of an archived payload (owner audience: not committed)",
+  "values": "every number and station name generated, the issue date and the publication limit generated, the dates from a clock (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "14-Tage-Vorhersage/Emmerich_Quantile_2790020.csv"
+}

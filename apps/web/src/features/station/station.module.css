@@ -62,3 +62,9 @@
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+/* An estimate is said in words next to the value, as strongly as the value itself (never only a fainter marker). */
+.estimate {
+  margin: 0.15rem 0 0;
+  font-weight: 600;
+}

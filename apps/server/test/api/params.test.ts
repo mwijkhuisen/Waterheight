@@ -6,6 +6,7 @@ import {
   queryOf,
   Refused,
   SKEW_MS,
+  seriesForecastParams,
   seriesParams,
   snapshotParams,
   TO_AHEAD_MS,
@@ -269,17 +270,41 @@ describe('snapshotParams: the 10-minute grid and the window', () => {
     expect(snap('t=2026-03-29T03:30:00%2B02:00')).toBe(Date.parse('2026-03-29T01:30:00Z'));
   });
 
-  it('accepts t up to now + 5 minutes and refuses one second more', () => {
-    expect(SKEW_MS).toBe(5 * 60_000);
-    expect(snap(`t=${iso(NOW + SKEW_MS)}`)).toBe(floorBucket(NOW + SKEW_MS));
-    expect(snapOutcome(`t=${iso(NOW + SKEW_MS + 1000)}`)).toBe('out_of_range');
+  it('accepts t up to now + 48 hours (P8b: forecasts) and refuses one second more, before any query', () => {
+    const H48 = 48 * 3_600_000;
+    expect(snap(`t=${iso(NOW + SKEW_MS + 1000)}`)).toBe(floorBucket(NOW + SKEW_MS + 1000));
+    expect(snap(`t=${iso(NOW + H48)}`)).toBe(floorBucket(NOW + H48));
+    expect(snapOutcome(`t=${iso(NOW + H48 + 1000)}`)).toBe('out_of_range');
     expect(snapOutcome('t=2030-01-01T00:00:00Z')).toBe('out_of_range');
   });
 
-  it('the skew is on the instant the client sent, so it may name the next bucket', () => {
+  it('the bound is on the instant the client sent, so it may name the bucket it starts', () => {
     const now = Date.parse('2026-11-20T12:36:00Z');
-    expect(snap('t=2026-11-20T12:41:00Z', now)).toBe(Date.parse('2026-11-20T12:40:00Z'));
-    expect(snapOutcome('t=2026-11-20T12:41:01Z', now)).toBe('out_of_range');
+    expect(snap('t=2026-11-22T12:36:00Z', now)).toBe(Date.parse('2026-11-22T12:30:00Z'));
+    expect(snapOutcome('t=2026-11-22T12:36:01Z', now)).toBe('out_of_range');
+  });
+});
+
+describe('seriesForecastParams (P8b): asof with the rules of t, within [displayStart, now + skew]', () => {
+  const fc = (id: string, query: string, now = NOW, start = START) =>
+    seriesForecastParams(id, `${BASE}/series/${id}/forecast${query === '' ? '' : `?${query}`}`, now, start);
+  const fcOutcome = (id: string, query: string, now = NOW, start = START) => outcome(() => fc(id, query, now, start));
+
+  it('defaults asof to now floored, floors a given one, and refuses one past now + skew or before displayStart', () => {
+    expect(fc('7', '')).toEqual({ id: 7, asof: floorBucket(NOW) });
+    expect(fc('7', 'asof=2026-11-20T10:05:00Z')).toEqual({ id: 7, asof: Date.parse('2026-11-20T10:00:00Z') });
+    expect(fc('7', `asof=${iso(NOW + SKEW_MS)}`).asof).toBe(floorBucket(NOW + SKEW_MS));
+    expect(fcOutcome('7', `asof=${iso(NOW + SKEW_MS + 1000)}`)).toBe('out_of_range');
+    expect(fcOutcome('7', 'asof=2026-08-23T23:59:59Z', NOW, Date.parse('2026-08-24T00:00:00Z'))).toBe('out_of_range');
+  });
+
+  it('is strict: an unknown or repeated key, a bad instant or id is a 400', () => {
+    expect(fcOutcome('7', 't=2026-11-20T10:00:00Z')).toBe('unknown_parameter');
+    expect(fcOutcome('7', 'asof=2026-11-20T10:00:00Z&asof=2026-11-20T10:00:00Z')).toBe('repeated_parameter');
+    expect(fcOutcome('7', 'asof=yesterday')).toBe('bad_parameter');
+    expect(fcOutcome('7', 'asof=2026-11-20T10:00:00')).toBe('bad_parameter');
+    expect(fcOutcome('0', '')).toBe('bad_parameter');
+    expect(fcOutcome('2147483648', '')).toBe('bad_parameter');
   });
 
   it('the floored t must not be before displayStart', () => {

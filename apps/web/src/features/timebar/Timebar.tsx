@@ -13,9 +13,12 @@ import type { Locale } from '../../paraglide/runtime.js';
 import styles from './timebar.module.css';
 
 // The time selector (A§10 features/timebar, D11): a date, a time in
-// Amsterdam's clock, and a scrubber over [displayStart, now] in 10-minute UTC
-// steps. Every change becomes one quantised UTC instant; the page puts it in
-// `?t=`. On 2026-10-25 the repeated hour has two instants (02:30 CEST = 00:30Z,
+// Amsterdam's clock, and a scrubber over [displayStart, end] in 10-minute UTC
+// steps. `end` is now, or (P8b, D8) now plus the forecast horizon of the selected
+// station, at most 48 h: the part after the "now" marker is forecast, said in the
+// label, in the value text of the slider and in a note, never by the marker alone.
+// Every change becomes one quantised UTC instant; the page puts it in `?t=`.
+// On 2026-10-25 the repeated hour has two instants (02:30 CEST = 00:30Z,
 // 02:30 CET = 01:30Z), and both are reachable by the time input (a choice
 // appears) and by the scrubber. The date and time fields are the user's while
 // they have the focus: a value is taken once it is complete and inside the
@@ -36,12 +39,17 @@ interface Props {
   locale: Locale;
   t: number;
   start: number;
+  /** The page's now: the last instant with observations; the marker on the track. */
+  now: number;
+  /** The last instant the slider reaches: now, or the end of the forecast. */
   end: number;
+  /** The selected station has no forecast at all: the track ends at now, and a note says why. */
+  noForecast: boolean;
   epoch: number;
   onChange: (t: number) => void;
 }
 
-export function Timebar({ locale, t, start, end, epoch, onChange }: Props) {
+export function Timebar({ locale, t, start, now, end, noForecast, epoch, onChange }: Props) {
   const id = useId();
   const [missing, setMissing] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -50,7 +58,9 @@ export function Timebar({ locale, t, start, end, epoch, onChange }: Props) {
   latest.current = t;
   const local = amsterdam(t);
   const twins = localInstants(local.date, local.time);
-  const valueText = formatLocal(t, locale);
+  const forecast = t > now;
+  const time = formatLocal(t, locale);
+  const valueText = forecast ? m.slider_forecast_text({ time }, { locale }) : time;
   const first = amsterdam(start).date;
   const last = amsterdam(end).date;
   const dateRef = useRef<HTMLInputElement>(null);
@@ -111,14 +121,23 @@ export function Timebar({ locale, t, start, end, epoch, onChange }: Props) {
   };
 
   const span = end - start;
-  const epochAt = span > 0 ? Math.min(100, Math.max(0, ((epoch - start) / span) * 100)) : 0;
+  const at = (ms: number) => (span > 0 ? Math.min(100, Math.max(0, ((ms - start) / span) * 100)) : 0);
+  const epochAt = at(epoch);
+  const nowAt = at(now);
+  const note =
+    end > now
+      ? m.forecast_range_note({ time: formatLocal(end, locale) }, { locale })
+      : noForecast
+        ? m.forecast_station_none_note({}, { locale })
+        : undefined;
   return (
     <section className={styles.timebar} aria-labelledby={`${id}-h`}>
       <h2 id={`${id}-h`} className={styles.heading}>
         {m.timebar_heading({}, { locale })}
       </h2>
       <p className={styles.current}>
-        <time dateTime={new Date(t).toISOString()}>{valueText}</time>
+        <time dateTime={new Date(t).toISOString()}>{time}</time>
+        {forecast && <span className={styles.badge}>{m.timebar_forecast({}, { locale })}</span>}
       </p>
       <div className={styles.fields}>
         <label>
@@ -177,15 +196,29 @@ export function Timebar({ locale, t, start, end, epoch, onChange }: Props) {
           value={t}
           aria-label={m.slider_label({}, { locale })}
           aria-valuetext={valueText}
-          aria-describedby={`${id}-epoch`}
+          aria-describedby={note === undefined ? `${id}-epoch` : `${id}-epoch ${id}-forecast`}
           onChange={(e) => go(Number(e.currentTarget.value))}
           onKeyDown={keys}
         />
         <span className={styles.epoch} style={{ left: `${epochAt}%` }} aria-hidden="true" />
+        {/* The "now" marker: a tick above the track and its word; the forecast part is to its right. */}
+        <span className={styles.nowTick} style={{ left: `${nowAt}%` }} aria-hidden="true" />
+        <span
+          className={styles.nowLabel}
+          style={{ left: `${nowAt}%`, transform: `translateX(-${nowAt}%)` }}
+          aria-hidden="true"
+        >
+          {m.now_marker({}, { locale })}
+        </span>
       </div>
       <p id={`${id}-epoch`} className={styles.note}>
         {m.epoch_note({ date: formatDay(epoch, locale) }, { locale })}
       </p>
+      {note !== undefined && (
+        <p id={`${id}-forecast`} className={styles.note}>
+          {note}
+        </p>
+      )}
       {/* At a bound a button stays focusable and does nothing (aria-disabled): a disabled one would drop the focus. */}
       <div className={styles.buttons}>
         <button type="button" aria-disabled={t <= start} onClick={() => t > start && go(t - STEP_MS)}>
@@ -197,7 +230,7 @@ export function Timebar({ locale, t, start, end, epoch, onChange }: Props) {
         <button type="button" aria-disabled={t >= end} onClick={() => t < end && go(t + STEP_MS)}>
           {m.step_forward({}, { locale })}
         </button>
-        <button type="button" aria-disabled={t >= end} onClick={() => t < end && go(end)}>
+        <button type="button" aria-disabled={t === now} onClick={() => t !== now && go(now)}>
           {m.to_now({}, { locale })}
         </button>
       </div>

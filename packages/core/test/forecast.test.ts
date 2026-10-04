@@ -1,3 +1,4 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
   type CanonRun,
@@ -12,6 +13,7 @@ import {
   MAX_LEAD_MS,
   MAX_RUN_POINTS,
   mergeDecision,
+  orderBroken,
   SchemaDrift,
   type StoredRun,
 } from '../src/index.ts';
@@ -59,6 +61,16 @@ describe('checkRun', () => {
     expect(c.points.map((p) => p.ms)).toEqual([Date.parse('2026-09-29T14:40Z'), Date.parse('2026-09-29T14:50Z')]);
     expect(c.points[1]?.v[0]).toBe(Math.fround(0.1));
     expect(c.issuedAt).toBeNull();
+  });
+
+  it('refuses a provider issue time more than 30 days before the fetch (review SEC-1 of P8b)', () => {
+    const at = (days: number) => new Date(FETCH - days * 24 * 3_600_000).toISOString();
+    const points = steps('2026-09-29T14:00Z', 2);
+    expect(codeOf(() => checkRun(run(points, { issuedAt: at(30) }), FETCH, FORECAST_SOURCES['FR-4']))).toBe('none');
+    expect(codeOf(() => checkRun(run(points, { issuedAt: at(31) }), FETCH, FORECAST_SOURCES['FR-4']))).toBe(
+      'stale_issue',
+    );
+    expect(codeOf(() => checkRun(run(points, { issuedAt: '1970-01-01T00:00:00Z' }), FETCH, NL1))).toBe('stale_issue');
   });
 
   it('refuses a provider issue time more than 15 minutes after the fetch', () => {
@@ -120,6 +132,68 @@ describe('checkRun', () => {
     expect(
       checkRun(run([at(issued - MAX_LEAD_MS - 1)], { issuedAt: new Date(issued).toISOString() }), FETCH, NL1).dropped,
     ).toEqual({ before_window: 1, empty_run: 1 });
+  });
+});
+
+describe('quantile order and censored points (P8b)', () => {
+  const { ORDER, CENSORED } = FORECAST_FLAGS;
+  const one = (p: Record<string, number | null>, flags = 0) =>
+    checkRun(run([{ ts: '2026-09-29T14:00Z', flags, ...p }], { kind: 'quantiles' }), FETCH, NL1);
+  const flagsOf = (p: Record<string, number | null>, flags = 0) => one(p, flags).run?.points[0]?.flags;
+
+  it('sets ORDER when present quantiles decrease or p50 leaves [vmin, vmax]; values are kept as published', () => {
+    expect(flagsOf({ p10: 1, p50: 2, p90: 3 })).toBe(0);
+    expect(flagsOf({ p10: 1, p50: 1, p90: 1 })).toBe(0);
+    expect(flagsOf({ p10: 2, p50: 1, p90: 3 })).toBe(ORDER);
+    expect(flagsOf({ p05: 5, p95: 4 })).toBe(ORDER);
+    expect(flagsOf({ p25: 1, p30: 3, p70: 2 })).toBe(ORDER);
+    expect(flagsOf({ vmin: 1, p50: 2, vmax: 3 })).toBe(0);
+    expect(flagsOf({ vmin: 3, p50: 2, vmax: 4 })).toBe(ORDER);
+    expect(flagsOf({ vmin: 1, p50: 5, vmax: 4 })).toBe(ORDER);
+    expect(flagsOf({ vmin: 5, vmax: 4 })).toBe(ORDER);
+    expect(flagsOf({ value: 9, p25: 1, p75: 2 })).toBe(0);
+    expect(flagsOf({ p10: 2, p50: 1 }, ORDER)).toBe(ORDER);
+    expect(one({ p10: 2, p50: 1, p90: 3 }).run?.points[0]?.v.slice(2, 6)).toEqual([2, null, null, 1]);
+  });
+
+  it('keeps a point with no value when the provider censored it (DE-3 `---`); without CENSORED it is a gap', () => {
+    expect(one({ p50: null }, CENSORED).run?.points[0]).toMatchObject({ flags: CENSORED });
+    expect(one({ p50: null }).dropped).toEqual({ gap: 1, empty_run: 1 });
+  });
+
+  it('property: ORDER is set exactly when a present pair is inverted; the values are byte-identical', () => {
+    const cols = ['p05', 'p10', 'p25', 'p30', 'p50', 'p70', 'p75', 'p90', 'p95', 'vmin', 'vmax'] as const;
+    const cell = fc.option(fc.integer({ min: -1000, max: 1000 }), { nil: null });
+    fc.assert(
+      fc.property(fc.tuple(...cols.map(() => cell)), fc.boolean(), (cells, pre) => {
+        const p = Object.fromEntries(cols.map((c, i) => [c, cells[i] ?? null]));
+        if (cells.every((x) => x === null)) return;
+        const out = one(p, pre ? ORDER : 0).run?.points[0];
+        const q = cells.slice(0, 9).filter((x) => x !== null) as number[];
+        const [lo, mid, hi] = [p.vmin ?? null, p.p50 ?? null, p.vmax ?? null];
+        const inverted =
+          q.some((x, i) => q.slice(i + 1).some((y) => y < x)) ||
+          (lo !== null && mid !== null && lo > mid) ||
+          (mid !== null && hi !== null && mid > hi) ||
+          (lo !== null && hi !== null && lo > hi);
+        expect(((out?.flags ?? 0) & ORDER) !== 0).toBe(inverted || pre);
+        expect(out?.v.slice(1)).toEqual(
+          cols
+            .map((c) => p[c] ?? null)
+            .slice(0, 4)
+            .concat([
+              p.p50 ?? null,
+              p.p70 ?? null,
+              p.p75 ?? null,
+              p.p90 ?? null,
+              p.p95 ?? null,
+              p.vmin ?? null,
+              p.vmax ?? null,
+            ]),
+        );
+        expect(orderBroken(out?.v ?? [])).toBe(inverted);
+      }),
+    );
   });
 });
 

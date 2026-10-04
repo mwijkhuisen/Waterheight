@@ -1,0 +1,13 @@
+{
+  "spec": "fr-4",
+  "variant": "A443064001/H",
+  "source": "FR-4",
+  "synthetic": true,
+  "recorded_at": "2026-10-02T11:20:06Z",
+  "status": 200,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=A443064001&TypEntVigiCru=7&FormatDate=iso&GrdSimul=H",
+  "bytes": 8481,
+  "trimmed": false,
+  "note": "Hand-made from the real station body fr-4-station-l800001020-h-20260930t1620z.raw (real structure, generated values and strings): a run of 40 hourly points for the FR-1 series A443064001/H, produced 2026-10-02T10:52:05+02:00, labelled +02:00 as the v1.1 route does. The real export holds no station that FR-1 registers [U, KG-176]. Pair of fr-4-station-a443064001-h-legacy.synthetic."
+}

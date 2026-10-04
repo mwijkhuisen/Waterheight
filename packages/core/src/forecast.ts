@@ -72,7 +72,8 @@ export type ForecastSourceDecl = {
   horizonMs: number;
   /** Where the provider's own forecast segment ends (DE-2: 48 h; estimate beyond), null when it has none. */
   segmentMs: number | null;
-  stepMs: number;
+  /** The provider's step; null when it has none (FR-4: the step differs from run to run). */
+  stepMs: number | null;
   kind: ForecastKind;
   /**
    * Successive captures of one run drop its leading values (NL-1 asks T−10 min … T+48 h each hour): a capture
@@ -108,6 +109,34 @@ export const FORECAST_SOURCES = {
     kind: 'quantiles',
     headDrops: false,
   },
+  // P8b. CH-4 BAFU: about 115 h ahead; lake levels in metres above sea level (LN02), spelt both ways by BAFU.
+  'CH-4': {
+    units: { 'm³/s': ['Q', 1], 'm3/s': ['Q', 1], 'l/s': ['Q', 0.001], 'm ü. M.': ['H', 100], 'm ü.M.': ['H', 100] },
+    horizonMs: 120 * HOUR,
+    segmentMs: null,
+    stepMs: HOUR,
+    kind: 'ensemble_summary',
+    headDrops: false,
+  },
+  // FR-4 Vigicrues: its own units (metres of stage, m³/s), never FR-1's millimetres and l/s. Runs reach 72 h ahead
+  // of DtProdSimul with irregular steps (10 min, 1 h, gaps of half a day; archive 2026-09-30/10-01).
+  'FR-4': {
+    units: { m: ['H', 100], 'm3/s': ['Q', 1] },
+    horizonMs: 72 * HOUR,
+    segmentMs: null,
+    stepMs: null,
+    kind: 'quantiles',
+    headDrops: false,
+  },
+  // DE-3 BfG 14-day forecast: daily means, one row per day.
+  'DE-3': {
+    units: { cm: ['H', 1] },
+    horizonMs: 15 * 24 * HOUR,
+    segmentMs: null,
+    stepMs: 24 * HOUR,
+    kind: 'quantiles',
+    headDrops: false,
+  },
 } as const satisfies Record<string, ForecastSourceDecl>;
 export type ForecastSource = keyof typeof FORECAST_SOURCES;
 
@@ -121,6 +150,12 @@ const MAX_ABS = 1e7;
  * fetch, LU-3 about 105 minutes, DE-2 at its issue.
  */
 export const MAX_LEAD_MS = 2 * 24 * HOUR;
+/**
+ * A provider-stated issue time more than this before the fetch is drift (`stale_issue`, review SEC-1 of P8b): a stale
+ * or epoch-zero stamp would otherwise move the run's valid-time bounds with it into the past. FR-4's `DtProdSimul`
+ * was at most a day before its fetch in the archive.
+ */
+export const MAX_ISSUE_AGE_MS = 30 * 24 * HOUR;
 
 /** A run in canonical form: UTC ms, float32 values in FORECAST_COLUMNS order, sorted by valid time. */
 export type CanonPoint = { ms: number; flags: number; v: readonly (number | null)[] };
@@ -150,12 +185,35 @@ const instant = (raw: string, code: string): number => {
 
 export type Checked = { run: CanonRun | null; dropped: Record<string, number> };
 
+/** The quantile columns in the order their values may not decrease (A§6). */
+const ORDERED = ['p05', 'p10', 'p25', 'p30', 'p50', 'p70', 'p75', 'p90', 'p95'].map((c) =>
+  FORECAST_COLUMNS.indexOf(c as ForecastColumn),
+);
+const [P50, VMIN, VMAX] = (['p50', 'vmin', 'vmax'] as const).map((c) => FORECAST_COLUMNS.indexOf(c)) as [
+  number,
+  number,
+  number,
+];
+
+/**
+ * The quantile order check of every source (A§6, FORECAST_FLAGS.ORDER): the present columns among p05 … p95 do not
+ * decrease, and vmin ≤ p50 ≤ vmax where present. Over the stored (float32) values; the values are never reordered.
+ */
+export function orderBroken(v: readonly (number | null)[]): boolean {
+  const q = ORDERED.map((i) => v[i] as number | null).filter((x) => x !== null);
+  if (q.some((x, i) => i > 0 && x < (q[i - 1] as number))) return true;
+  const [lo, mid, hi] = [v[VMIN], v[P50], v[VMAX]] as (number | null)[];
+  if (mid === null || mid === undefined) return lo != null && hi != null && lo > hi;
+  return (lo != null && lo > mid) || (hi != null && mid > hi);
+}
+
 /**
  * The bounds every forecast run passes before it is stored: a provider issue time more than 15 minutes after the
- * fetch is drift (`future_issue`), a non-finite or absurd value is drift (`bad_value`), two points at one valid time
+ * fetch is drift (`future_issue`), one more than MAX_ISSUE_AGE_MS before it too (`stale_issue`), a non-finite or absurd value is drift (`bad_value`), two points at one valid time
  * are drift (the adapter resolves conflicts), a point past (issue ?? fetch) + horizon + 1 h is dropped as
  * `beyond_horizon` and one before (issue ?? fetch) − MAX_LEAD_MS as `before_window` (both retained and alerted), a
- * point with no value is a `gap`, and a run left without points is none.
+ * point with no value is a `gap` unless it is CENSORED, a point whose quantiles are out of order gets ORDER
+ * (`orderBroken`), and a run left without points is none.
  */
 export function checkRun(run: ForecastRunIn, fetchedAtMs: number, decl: ForecastSourceDecl): Checked {
   const dropped: Record<string, number> = {};
@@ -165,6 +223,7 @@ export function checkRun(run: ForecastRunIn, fetchedAtMs: number, decl: Forecast
   if (run.points.length > MAX_RUN_POINTS) throw new SchemaDrift('forecast_points');
   const issuedAt = run.issuedAt === null ? null : instant(run.issuedAt, 'bad_issue');
   if (issuedAt !== null && issuedAt > fetchedAtMs + FUTURE_SLACK_MS) throw new SchemaDrift('future_issue');
+  if (issuedAt !== null && issuedAt < fetchedAtMs - MAX_ISSUE_AGE_MS) throw new SchemaDrift('stale_issue');
   const segmentEnd = run.providerSegmentEnd === null ? null : instant(run.providerSegmentEnd, 'bad_segment');
   if (run.stepMs !== null && !(Number.isInteger(run.stepMs) && run.stepMs > 0)) throw new SchemaDrift('bad_step');
   const limit = (issuedAt ?? fetchedAtMs) + decl.horizonMs + HOUR;
@@ -179,10 +238,11 @@ export function checkRun(run: ForecastRunIn, fetchedAtMs: number, decl: Forecast
       if (!Number.isFinite(x) || Math.abs(x) > MAX_ABS) throw new SchemaDrift('bad_value');
       return float32(x);
     });
+    // A point with no value is a gap, unless the provider censored it (DE-3 `---`: above its forecastable range).
     if (ms > limit) count('beyond_horizon');
     else if (ms < floor) count('before_window');
-    else if (v.every((x) => x === null)) count('gap');
-    else points.push({ ms, flags: p.flags, v });
+    else if (v.every((x) => x === null) && (p.flags & FORECAST_FLAGS.CENSORED) === 0) count('gap');
+    else points.push({ ms, flags: orderBroken(v) ? p.flags | FORECAST_FLAGS.ORDER : p.flags, v });
   }
   points.sort((a, b) => a.ms - b.ms);
   if (points.some((p, i) => i > 0 && p.ms === (points[i - 1] as CanonPoint).ms)) throw new SchemaDrift('duplicate_ts');

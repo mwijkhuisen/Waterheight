@@ -1,0 +1,13 @@
+{
+  "spec": "fr-4",
+  "variant": "A443064001/H",
+  "source": "FR-4",
+  "synthetic": true,
+  "recorded_at": "2026-10-02T11:50:08Z",
+  "status": 200,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=A443064001&TypEntVigiCru=7&FormatDate=iso&GrdSimul=H",
+  "bytes": 8445,
+  "trimmed": false,
+  "note": "The run of fr-4-station-a443064001-h-v11.synthetic as the legacy route labels it (+00:00, the same instants), with another Scenario.DateHeureCreationFichier and comment. Both give the same canonical run and hash."
+}

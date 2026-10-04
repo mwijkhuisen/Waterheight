@@ -22,9 +22,11 @@
 //            format kept, so the time grid, the order and the offsets stay as they were;
 //   random   every other number (magnitude, integer or decimal kept), the digits of a string that is a number with
 //            at most a unit ("999.99 m NN"), and every other string becomes synthetic-<n>; in a text file every
-//            comment line and the station line are generated whole, the first line with cells must be the `Datum`
-//            header (kept), every data cell that is a number gets new digits (the `Datum` column new dates), and any
-//            other non-empty cell is refused.
+//            comment line and the station line are generated whole (P8b: a comment line that is one of the fixed
+//            lines of COMMENT_LINES keeps its words, and the digits of its value groups, the issue date and the
+//            publication limit, are generated), the first line with cells must be the `Datum` header (kept), every
+//            data cell that is a number gets new digits (the `Datum` column new dates), a `---` cell (BfG: not
+//            published) stays, and any other non-empty cell is refused.
 // Both forms end with the leak scan (P5c review SR-2): a leaf of the source outside the kept places, a string of at
 // least four characters anywhere in the output outside them, or a number (or numeric string) of at least two
 // significant digits other than -1, 0 and 9999 at its own place, is refused, and so are output bytes equal to the
@@ -102,6 +104,23 @@ export const VERBATIM: Readonly<Record<string, Readonly<Record<string, RegExp>>>
   'DE-3': {},
 };
 
+/**
+ * P8b: the fixed comment lines of a text file, by source: lines that carry no value but the structure the adapter
+ * checks (BfG DE-3, catalogue §2.2: five `#` lines, in this order). A comment line that matches the pattern at its
+ * place keeps its words; the digits of each capture group (the issue date, the publication limit of a station) are
+ * generated, never the source's. The other digits (the forecast days, the offset) are structure. Any other comment
+ * line is generated whole, as before.
+ */
+export const COMMENT_LINES: Readonly<Record<string, readonly RegExp[]>> = {
+  'DE-3': [
+    /^# Probabilistische Wasserstandsvorhersage vom (\d{4}-\d{2}-\d{2}) GMT\+1$/d,
+    /^# Quelle: Bundesanstalt fuer Gewaesserkunde <[^<>\s;]{1,64}>$/d,
+    /^# Vorhersagetage \d{1,2} - \d{1,3} Tagesmittelwerte$/d,
+    /^# Keine Veroeffentlichung von Werten > (\d{1,5}) cm \(Wert '---'\)$/d,
+    /^# !{4} Zeitstempel Beginn des Zeitschritts !{4}$/d,
+  ],
+};
+
 /** A KiWIS `Quality Code` cell keeps only a code of SPW's `getQualityCodes` (catalogue §2.4) or -1 "missing". */
 const QUALITY_CODE = /^(?:-1|0|40|80|120|16[0-5]|200|205|210|253)$/;
 /** A KiWIS table's header cell: a returnfield name, never a number, a time or a value (P5c review R2-SR-2). */
@@ -124,7 +143,14 @@ const DAY_MS = 86_400_000;
 export const VALUE_WITH_UNIT =
   /(?<![\p{L}\d.,/_])\d+(?:[.,]\d+)?\s*(?:cm|mm|m|m³\/s|m3\/s|l\/s|%)(?![\p{L}\d]|\.[\p{L}\d])/iu;
 
-type Ctx = { rnd: () => number; days: number; names: number; keep: number; verbatim: ReadonlyMap<string, RegExp> };
+type Ctx = {
+  rnd: () => number;
+  days: number;
+  names: number;
+  keep: number;
+  verbatim: ReadonlyMap<string, RegExp>;
+  comments: readonly RegExp[];
+};
 
 const seedOf = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest().readUInt32BE(0);
 
@@ -138,7 +164,14 @@ function newCtx(source: string, keep: number, body: Uint8Array): Ctx {
     return seed / 2 ** 32;
   };
   const days = 1000 + (seedOf(`days:${source}`) % 1001);
-  return { rnd, days, names: 0, keep, verbatim: new Map(Object.entries(VERBATIM[source] ?? {})) };
+  return {
+    rnd,
+    days,
+    names: 0,
+    keep,
+    verbatim: new Map(Object.entries(VERBATIM[source] ?? {})),
+    comments: COMMENT_LINES[source] ?? [],
+  };
 }
 
 const significant = (n: number) =>
@@ -328,11 +361,35 @@ const TEXT_HEADER = /^Datum(?:;(?:\d{1,2}%|[A-Z][A-Za-z]{0,31}))+$/;
 const TEXT_NUMBER = new RegExp(String.raw`^\s*[-+]?\d+(?:[.,]\d+)*(?:e[-+]?\d+)?(?: ?${UNITS})?\s*$`, 'i');
 const CR = (line: string) => (line.endsWith('\r') ? '\r' : '');
 
-/** The cells of a text file's lines, by leafKey (the `Datum` header aside: it is kept by rule). */
-function textLeaves(text: string): Set<string> {
+/** The match of a comment line (without its CR) with the source's fixed comment line, or null. */
+const knownComment = (c: Ctx, line: string): RegExpExecArray | null => {
+  for (const re of c.comments) {
+    const m = re.exec(line);
+    if (m !== null) return m;
+  }
+  return null;
+};
+
+/** The line of a fixed comment: its words kept, the digits of each capture group new (never the source's). */
+function keepComment(c: Ctx, line: string): string | null {
+  const body = line.replace(/\r$/, '');
+  const m = knownComment(c, body);
+  if (m === null) return null;
+  let out = '';
+  let at = 0;
+  for (const span of (m.indices ?? []).slice(1)) {
+    if (span === undefined) continue;
+    out += body.slice(at, span[0]) + fakeDigits(c, body.slice(span[0], span[1]));
+    at = span[1];
+  }
+  return `${out}${body.slice(at)}${CR(line)}`;
+}
+
+/** The cells of a text file's lines, by leafKey (the `Datum` header and the fixed comment lines aside: kept by rule). */
+function textLeaves(c: Ctx, text: string): Set<string> {
   const acc = new Set<string>();
   for (const [l, line] of text.split('\n').entries())
-    if (!TEXT_HEADER.test(line.replace(/\r$/, '')))
+    if (!TEXT_HEADER.test(line.replace(/\r$/, '')) && knownComment(c, line.replace(/\r$/, '')) === null)
       for (const [i, cell] of line.split(';').entries()) {
         const k = leafKey(cell, `/${l}/${i}`);
         if (k !== null) acc.add(k);
@@ -341,10 +398,11 @@ function textLeaves(text: string): Set<string> {
 }
 
 /**
- * Text files (BfG CSV; P5c review R2-SR-5): a comment line is generated whole; a line without cells (the station
- * line) is generated; the first line with cells must be the `Datum` header and is kept; in the data lines after it
- * every cell that is a number (with at most an allowed unit) gets new digits, the dates of the `Datum` column come
- * from a clock, an empty cell stays, and any other cell (a second header among them) is refused, never kept.
+ * Text files (BfG CSV; P5c review R2-SR-5): a comment line is generated whole (P8b: except a fixed one of
+ * COMMENT_LINES, whose value digits are generated); a line without cells (the station line) is generated; the first
+ * line with cells must be the `Datum` header and is kept; in the data lines after it every cell that is a number
+ * (with at most an allowed unit) gets new digits, the dates of the `Datum` column come from a clock, an empty cell
+ * and a `---` stay, and any other cell (a second header among them) is refused, never kept.
  */
 function scrambleText(c: Ctx, text: string): string {
   let clock = Date.parse('2030-01-01T00:00:00Z');
@@ -352,7 +410,7 @@ function scrambleText(c: Ctx, text: string): string {
   return text
     .split('\n')
     .map((line) => {
-      if (line.startsWith('#')) return `# ${fakeName(c)}${CR(line)}`;
+      if (line.startsWith('#')) return keepComment(c, line) ?? `# ${fakeName(c)}${CR(line)}`;
       if (line.trim() === '') return line;
       if (!line.includes(';')) return `${fakeString(c, line.trim())}${CR(line)}`;
       if (!header) {
@@ -370,7 +428,8 @@ function scrambleText(c: Ctx, text: string): string {
             return `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}.${d.getUTCFullYear()} 00:00`;
           }
           if (TEXT_NUMBER.test(cell)) return fakeDigits(c, cell);
-          if (cell.trim() === '') return cell;
+          // BfG's "not published" (a level above the station's limit): the marker, not a value.
+          if (cell.trim() === '' || cell.trim() === '---') return cell;
           throw new Refusal(1, 'a text cell is neither a number, a date nor empty');
         })
         .join(';');
@@ -415,7 +474,7 @@ function generate(c: Ctx, format: string, body: Uint8Array): { out: Buffer; leak
     case 'text': {
       const text = Buffer.from(body).toString('latin1');
       const fake = scrambleText(c, text);
-      return { out: Buffer.from(fake), leaked: scan(textLeaves(text), textLeaves(fake)) };
+      return { out: Buffer.from(fake), leaked: scan(textLeaves(c, text), textLeaves(c, fake)) };
     }
   }
   throw new Refusal(64, `format ${format} not supported`);

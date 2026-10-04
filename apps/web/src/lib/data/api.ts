@@ -1,6 +1,7 @@
-import { Meta, RiversManifest, Series, Snapshot, Stations } from '@rws/contracts';
-import { keepPreviousData, QueryClient, useQuery } from '@tanstack/react-query';
+import { type ApiStation, Meta, RiversManifest, Series, SeriesForecast, Snapshot, Stations } from '@rws/contracts';
+import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { stationHorizon } from '../forecast.ts';
 import { quantise, STEP_MS, toUrlT } from '../time/time.ts';
 
 // The P4a API, read through relative paths only, so the same build can later
@@ -68,6 +69,35 @@ export const useSnapshot = (t: number | undefined) =>
     enabled: t !== undefined,
     placeholderData: keepPreviousData,
     staleTime: 60_000,
+  });
+
+/**
+ * The run of one series that is current now (its horizon: the end of the slider, D8). The answer does not depend on
+ * `t`, so it is fetched once per series and kept for as long as the API caches it. A series the API does not offer
+ * (404: not in the api channel) has no forecast, like one without a run.
+ */
+const forecastQuery = (id: number) => ({
+  queryKey: ['forecast', id],
+  queryFn: ({ signal }: { signal: AbortSignal }) =>
+    getJson(`/api/v1/series/${id}/forecast`, SeriesForecast, signal).catch((e: unknown) => {
+      if (e instanceof HttpError && e.status === 404) return null;
+      throw e;
+    }),
+  staleTime: 300_000,
+});
+
+/**
+ * The horizon of the selected station as an instant: the latest end among the runs of its series; `null` when none
+ * has a run; `undefined` with no station, while the answers are on their way or when one failed (the page then keeps
+ * the global end, and the snapshot says per station what it has).
+ */
+export const useStationHorizon = (station: ApiStation | undefined): number | null | undefined =>
+  useQueries({
+    queries: (station?.series ?? []).map((s) => forecastQuery(s.id)),
+    combine: (results) =>
+      results.length === 0 || results.some((r) => r.isPending || r.isError)
+        ? undefined
+        : stationHorizon(results.map((r) => r.data ?? null)),
   });
 
 /** One series over [from, to), raw. The id comes only from the /stations answer. */

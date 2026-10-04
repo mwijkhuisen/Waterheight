@@ -102,7 +102,10 @@ async function press(page: Page, key: string, expectedT: string, valueTextEnd: R
   await expect(after).toHaveValue(ms(`${expectedT.slice(0, 16)}:00Z`));
   // The <time> element and the slider say the same, in UTC and in words.
   await expect(page.locator('time').first()).toHaveAttribute('datetime', `${expectedT.slice(0, 16)}:00.000Z`);
-  await expect(page.locator('time').first()).toHaveText((await after.getAttribute('aria-valuetext')) ?? '');
+  // (after now the slider's text adds "(verwachting)" to the time shown beside it)
+  await expect(page.locator('time').first()).toHaveText(
+    ((await after.getAttribute('aria-valuetext')) ?? '').replace(/ \(verwachting\)$/, ''),
+  );
 }
 
 /** Counts every URL the page writes (replaceState) in `window.__urls`; added before the page loads. */
@@ -289,7 +292,8 @@ test('the slider and the buttons update ?t= and the marker states', async ({ pag
   await expect(now).toHaveAttribute('aria-disabled', 'true');
   await expect(now).not.toHaveAttribute('disabled');
   await expect(now).toBeFocused();
-  await expect(page.getByRole('button', { name: '10 minuten vooruit' })).toHaveAttribute('aria-disabled', 'true');
+  // The timeline goes on after now (P8b: no station is selected, so it reaches the largest horizon of /meta).
+  await expect(page.getByRole('button', { name: '10 minuten vooruit' })).toHaveAttribute('aria-disabled', 'false');
   await page.keyboard.press('Enter');
   await expect(now).toBeFocused();
   expect(tParam(page)).toBe('2026-10-26T12:00Z');
@@ -357,8 +361,10 @@ test('the slider and the station list work from the keyboard alone', async ({ pa
   await press(page, 'PageDown', '2026-10-26T11:00Z', /12:00 CET$/);
   await press(page, 'PageUp', '2026-10-26T12:00Z', /13:00 CET$/);
   await press(page, 'Home', '2026-08-24T00:00Z', /02:00 CEST$/);
-  await press(page, 'End', '2026-10-26T12:00Z', /13:00 CET$/);
-  await expect(slider(page)).toBeFocused();
+  // End is the end of the track: after now, the forecast part (now + 48 h with no station selected), and "Nu" comes back.
+  await press(page, 'End', '2026-10-28T12:00Z', /13:00 CET \(verwachting\)$/);
+  await page.getByRole('button', { name: 'Nu', exact: true }).click();
+  await expect.poll(() => tParam(page)).toBe('2026-10-26T12:00Z');
 
   // The station list: a first station by ArrowDown, then another by typing its name.
   await stationList(page).focus();
@@ -420,8 +426,11 @@ test('a held key asks the API only where it stops: one series request, few snaps
   const s = await start(page, context, baseURL);
   await open(page, '/?t=2026-10-24T12:00Z&s=nl.e2e.dst');
   await settled(page);
+  // The station's forecast (its horizon, P8b) is asked once, whatever t does; it is not a series of the chart.
   const asked = (route: string) =>
-    s.log.requests.map((u) => new URL(u)).filter((u) => u.pathname.startsWith(`/api/v1/${route}`));
+    s.log.requests
+      .map((u) => new URL(u))
+      .filter((u) => u.pathname.startsWith(`/api/v1/${route}`) && !u.pathname.endsWith('/forecast'));
   const before = { series: asked('series').length, snapshot: asked('snapshot').length };
   expect(before.series).toBe(1);
 

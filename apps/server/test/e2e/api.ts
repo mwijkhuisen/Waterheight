@@ -8,7 +8,7 @@
 //
 // Usage: env DATABASE_URL=<superuser url> [HOST=127.0.0.1] [PORT=4480] node apps/server/test/e2e/api.ts
 import { serve } from '@hono/node-server';
-import { Snapshot, Stations } from '@rws/contracts';
+import { CANARIES, CANARY_RENDERINGS, SeriesForecast, Snapshot, Stations } from '@rws/contracts';
 import { DisplayWindow } from '../../src/api/window.ts';
 import { createApp } from '../../src/app.ts';
 import { type Db, type DbConfig, dbConfig, openDb } from '../../src/db/pool.ts';
@@ -45,6 +45,72 @@ const STATIONS = [
   { id: 'nl.e2e.gap', name: 'E2E gap', water: 'E2E', lon: 6.07, lat: 51.84, step: '10 min', stale: '90 min' },
   { id: 'nl.e2e.dst', name: 'E2E DST', water: 'E2E', lon: 6.13, lat: 51.86, step: '15 min', stale: '45 min' },
 ];
+
+const HOUR = 3_600_000;
+const at = (hours: number) => new Date(NOW.getTime() + hours * HOUR).toISOString();
+/**
+ * Synthetic forecast runs (P8b), hourly from `first` to `last` (hours from NOW), the value base + per × hour index:
+ * - nl.e2e.xss: an NL-1 run whose issue time is inferred (fetched at NOW - 2 h), with a 10-90 % band; the provider's
+ *   own segment ends at NOW + 12 h, so later points are estimates; it reaches NOW + 30 h (shorter than 48 h).
+ *   At NOW + 2 h the value is 340 (band 320-365), at NOW + 20 h an estimate (430, band 410-455). Its basis label is the
+ *   hostile one of the NL-4 class above, as text.
+ * - nl.e2e.dst: an NL-1 run with a stated issue time (NOW - 3 h), no band, reaching NOW + 20 h: 420 at NOW + 2 h.
+ * - the registry station Lobith: a run on its H series only (NOW + 40 h), so its Q series reads "no forecast" in the
+ *   same panel (a station with two series, one of them forecast).
+ * - nl.e2e.gap: NO public run. It carries an owner-canary run (source CANARY-OWNER, the constant 777777.777) up to
+ *   NOW + 36 h: the public views never show it, so the station reads "no forecast" and the canary appears nowhere.
+ */
+const LOBITH = 'nl.rws.lobith.bovenrijn.tolkamer';
+const FORECASTS = [
+  {
+    station: 'nl.e2e.xss',
+    source: 'NL-1',
+    issued: null,
+    fetched: at(-2),
+    first: -2,
+    last: 30,
+    base: 320,
+    per: 5,
+    band: true,
+    segmentEnd: at(12),
+  },
+  {
+    station: 'nl.e2e.dst',
+    source: 'NL-1',
+    issued: at(-3),
+    fetched: at(-3 + 1 / 6),
+    first: -3,
+    last: 20,
+    base: 410,
+    per: 2,
+    band: false,
+    segmentEnd: null,
+  },
+  {
+    station: LOBITH,
+    source: 'NL-1',
+    issued: null,
+    fetched: at(-1),
+    first: -1,
+    last: 40,
+    base: 100,
+    per: 1,
+    band: false,
+    segmentEnd: null,
+  },
+  {
+    station: 'nl.e2e.gap',
+    source: 'CANARY-OWNER',
+    issued: null,
+    fetched: at(-1),
+    first: -1,
+    last: 36,
+    base: CANARIES.owner.value,
+    per: 0,
+    band: false,
+    segmentEnd: null,
+  },
+] as const;
 
 if (!process.env.DATABASE_URL) {
   console.error(
@@ -138,6 +204,26 @@ try {
        FROM obs GROUP BY 1, 2`,
     );
 
+  for (const f of FORECASTS) {
+    // Every seeded run must exist, the owner canary's included: its absence test proves nothing otherwise (SEC-4).
+    const seeded = await t.admin.query(
+      `WITH run AS (
+         INSERT INTO forecast_run (series_id, source_id, issued_at, issued_inferred, first_valid, last_valid, fetched_at,
+                                   content_hash, kind, step, provider_segment_end)
+         SELECT s.id, $2, COALESCE($3::timestamptz, $4::timestamptz), $3::timestamptz IS NULL, $5::timestamptz,
+                $6::timestamptz, $4::timestamptz, decode(md5($1 || $2 || $4::text), 'hex'),
+                CASE WHEN $9::boolean THEN 'quantiles' ELSE 'deterministic' END, interval '1 hour', $10::timestamptz
+         FROM series s WHERE s.station_id = $1 AND s.quantity = 'H' AND s.role = 'primary'
+         RETURNING id)
+       INSERT INTO forecast_value (run_id, valid_ts, value, p10, p90, flags)
+       SELECT run.id, g, v, CASE WHEN $9::boolean THEN v - 20 END, CASE WHEN $9::boolean THEN v + 25 END, 0
+       FROM run, generate_series($5::timestamptz, $6::timestamptz, interval '1 hour') g,
+            LATERAL (SELECT ($7::float8 + $8::float8 * extract(epoch FROM g - $5::timestamptz) / 3600)::real AS v) x`,
+      [f.station, f.source, f.issued, f.fetched, at(f.first), at(f.last), f.base, f.per, f.band, f.segmentEnd],
+    );
+    if ((seeded.rowCount ?? 0) === 0) throw new Error(`seed: no ${f.source} run on ${f.station}`);
+  }
+
   const opened = openApiDb({ DATABASE_URL: t.urlFor('rws_api') });
   if (typeof opened === 'string') throw new Error(opened);
   api = opened;
@@ -167,6 +253,33 @@ try {
   if (xssValue?.state !== 'elevated' || !xssValue.basis?.label.includes('onerror=alert(3)'))
     throw new Error('self-check: nl.e2e.xss has no classified value with the hostile basis label');
   if (snapshot.values.some((v) => v.series === gap)) throw new Error('self-check: a value for nl.e2e.gap at NOW');
+
+  // P8b: at NOW + 2 h the public runs answer (the xss one with its band and its inferred issue time, the dst one
+  // with a stated one), the gap station has none, and the owner canary run on it appears in no public answer.
+  const dst = seriesOf('nl.e2e.dst');
+  const plus2 = await get(`/api/v1/snapshot?t=${at(2).slice(0, 16)}Z`);
+  const ahead = Snapshot.parse(plus2);
+  const held = (id: number | undefined) => ahead.forecasts?.find((f) => f.series === id);
+  if (
+    ahead.values.length > 0 ||
+    held(xss)?.value !== 340 ||
+    held(xss)?.band?.hi !== 365 ||
+    held(xss)?.issuedInferred !== true
+  )
+    throw new Error('self-check: the future snapshot has no forecast of nl.e2e.xss');
+  if (held(dst)?.value !== 420 || held(dst)?.issuedInferred !== false)
+    throw new Error('self-check: the future snapshot has no forecast of nl.e2e.dst');
+  if (held(gap) !== undefined) throw new Error('self-check: a public forecast for nl.e2e.gap');
+  const lobith = stations.find((st) => st.id === LOBITH);
+  const [lobithH, lobithQ] = ['H', 'Q'].map((q) => lobith?.series.find((x) => x.quantity === q)?.id);
+  if (held(lobithH)?.value !== 103 || lobithQ === undefined || held(lobithQ) !== undefined)
+    throw new Error('self-check: Lobith has a forecast for H only');
+  const gapForecast = SeriesForecast.parse(await get(`/api/v1/series/${gap}/forecast`));
+  const xssForecast = SeriesForecast.parse(await get(`/api/v1/series/${xss}/forecast`));
+  if (gapForecast.run !== null) throw new Error('self-check: a public run for nl.e2e.gap');
+  if (xssForecast.run?.horizonEnd !== at(30)) throw new Error('self-check: nl.e2e.xss does not end at NOW + 30 h');
+  const everything = JSON.stringify([plus2, gapForecast, xssForecast]);
+  if (CANARY_RENDERINGS.some((c) => everything.includes(c))) throw new Error('self-check: a canary in a public answer');
 
   const listening = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
     const s = serve({ fetch: app.fetch, ...listen }, () => resolve(s));

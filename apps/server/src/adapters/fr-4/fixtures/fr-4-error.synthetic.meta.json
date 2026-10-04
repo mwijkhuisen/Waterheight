@@ -1,0 +1,13 @@
+{
+  "spec": "fr-4",
+  "variant": "A443064001/H",
+  "source": "FR-4",
+  "synthetic": true,
+  "recorded_at": "2026-10-02T11:20:06Z",
+  "status": 200,
+  "content_type": "application/json;charset=UTF-8",
+  "url": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=A443064001&TypEntVigiCru=7&FormatDate=iso&GrdSimul=H",
+  "bytes": 76,
+  "trimmed": false,
+  "note": "Hand-made: the HTTP-200 error body of the Vigicrues services (an error_msg and a code 400). The real export holds none; the wording is invented, the adapter keys on error_msg [U]."
+}

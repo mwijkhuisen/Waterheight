@@ -4,16 +4,17 @@ import { join } from 'node:path';
 import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { requestFor } from '../apps/server/src/capture/adapters.ts';
 import { captureUserAgent } from '../apps/server/src/capture/env.ts';
 import { loadRegistry } from '../apps/server/src/capture/specs.ts';
 import { testClient } from '../apps/server/test/helpers.ts';
 import { SchemaDrift } from '../packages/core/src/errors.ts';
-import { check, LINE_SOURCE, type Report, reportLines, SPECS } from '../scripts/contract-check.ts';
+import { check, LINE_SOURCE, type Report, ROW, reportLines, SPECS } from '../scripts/contract-check.ts';
 import { repoRoot } from './catalogue.ts';
 import { server } from './msw.setup.ts';
 import { zip } from './zip.ts';
 
-// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1; P8a: nine specs). The
+// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1; P8b: eleven specs). The
 // recorded fixtures stand in for the live providers; nothing here reaches the network.
 
 type Spec = (typeof SPECS)[number];
@@ -37,6 +38,8 @@ const BODY: Record<Spec, Buffer> = {
   'ch-2-pq': readFileSync(join(fixtureDir('ch-2'), 'ch-2-pq.raw')),
   'de-7-messwerte': readFileSync(join(fixtureDir('de-7'), 'de-7-messwerte.raw')),
   'lu-1-csv': readFileSync(join(fixtureDir('lu-1'), 'lu-1-csv.raw')),
+  'ch-4-forecast': readFileSync(join(fixtureDir('ch-4'), 'ch-4-forecast.raw')),
+  'fr-4': readFileSync(join(fixtureDir('fr-4'), 'fr-4.raw')),
 };
 /** The fixtures were recorded together on 2026-09-29: a minute later, no value is old or in the future. */
 const recordedAt = (source: string, spec: string) =>
@@ -52,6 +55,8 @@ const NOW = new Date(
     recordedAt('ch-2', 'ch-2-pq'),
     recordedAt('de-7', 'de-7-messwerte'),
     recordedAt('lu-1', 'lu-1-csv'),
+    recordedAt('ch-4', 'ch-4-forecast'),
+    recordedAt('fr-4', 'fr-4'),
   ) + 60_000,
 );
 
@@ -59,7 +64,12 @@ const capture = loadRegistry();
 const targets = SPECS.map((id) => {
   const spec = capture.specs.find((s) => s.id === id);
   if (spec === undefined) throw new Error(`no spec ${id}`);
-  const url = new URL(spec.request.url);
+  // The request the check sends: the spec's first row, or the row `ROW` names (the CH-4 URL names its station).
+  const want = Object.hasOwn(ROW, id) ? ROW[id] : undefined;
+  const row =
+    want === undefined ? spec.rows[0] : spec.rows.find((r) => Object.entries(want).every(([k, v]) => r[k] === v));
+  if (row === undefined) throw new Error(`no row of ${id}`);
+  const url = new URL(requestFor(spec, row, NOW).url);
   return {
     id,
     source: spec.source,
@@ -86,6 +96,8 @@ const GOOD: Record<Spec, Answer> = {
   'ch-2-pq': answer(BODY['ch-2-pq'], 200, 'application/octet-stream'),
   'de-7-messwerte': answer(BODY['de-7-messwerte'], 200, 'application/zip'),
   'lu-1-csv': answer(BODY['lu-1-csv'], 200, 'text/csv'),
+  'ch-4-forecast': answer(BODY['ch-4-forecast']),
+  'fr-4': answer(BODY['fr-4'], 200, 'application/json;charset=UTF-8'),
 };
 
 type Seen = { method: string; host: string; path: string; userAgent: string | null; apiKey: boolean };
@@ -95,12 +107,15 @@ async function run(answers: Partial<Record<Spec, Answer>> = {}, now = NOW) {
   const seen: Seen[] = [];
   /** The request bodies in order (the NL-1 POSTs name their location and ProcesType in theirs). */
   const bodies: string[] = [];
+  /** The query string of each request in order (the FR-4 list is asked for its national root only). */
+  const queries: string[] = [];
   const groups = Map.groupBy(targets, (t) => `${t.method} ${t.pattern}`);
   server.use(
     ...[...groups.values()].map((group) => {
       const first = group[0] as (typeof targets)[number];
       return http[first.method === 'POST' ? 'post' : 'get'](first.pattern, async ({ request }) => {
         const url = new URL(request.url);
+        queries.push(url.search);
         seen.push({
           method: request.method,
           host: url.host,
@@ -123,6 +138,7 @@ async function run(answers: Partial<Record<Spec, Answer>> = {}, now = NOW) {
     report,
     seen,
     bodies,
+    queries,
     codes: Object.fromEntries(report.results.map((r) => [r.spec, r.code])) as Record<Spec, string>,
   };
 }
@@ -134,9 +150,9 @@ const nl1 = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => 
   return answer(JSON.stringify(doc));
 };
 
-// Each run parses the whole registry (about 2,000 series since P5b) and eight payloads: seconds on a CI runner.
+// Each run parses the whole registry (about 2,000 series since P5b) and eleven payloads: seconds on a CI runner.
 describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
-  it('passes DE-1, NL-1 (observations and forecasts), NL-2, FR-1, CH-1, CH-2, DE-7 and LU-1 through the loader parse: all nine ok', async () => {
+  it('passes DE-1, NL-1 (observations and forecasts), NL-2, FR-1, CH-1, CH-2, DE-7, LU-1, the CH-4 figure and the FR-4 list through the loader parse: all eleven ok', async () => {
     const { codes, report } = await run();
     expect(codes).toEqual({
       'de-1-basin': 'ok',
@@ -148,14 +164,16 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
       'ch-2-pq': 'ok',
       'de-7-messwerte': 'ok',
       'lu-1-csv': 'ok',
+      'ch-4-forecast': 'ok',
+      'fr-4': 'ok',
     });
     expect(report.at).toBe(NOW.toISOString());
     expect(reportLines(report)).toBe(
-      'de-1-basin ok\nnl-1-obs-key ok\nnl-1-fc-1h ok\nnl-2-wfs ok\nfr-1-obs ok\nch-1-lindas ok\nch-2-pq ok\nde-7-messwerte ok\nlu-1-csv ok',
+      'de-1-basin ok\nnl-1-obs-key ok\nnl-1-fc-1h ok\nnl-2-wfs ok\nfr-1-obs ok\nch-1-lindas ok\nch-2-pq ok\nde-7-messwerte ok\nlu-1-csv ok\nch-4-forecast ok\nfr-4 ok',
     );
   });
 
-  it('sends exactly the nine registry targets, with the contact User-Agent and no API key', async () => {
+  it('sends exactly the eleven registry targets, with the contact User-Agent and no API key', async () => {
     const { seen } = await run();
     expect(seen).toEqual(
       targets.map((t) => ({ method: t.method, host: t.host, path: t.path, userAgent: UA, apiKey: false })),
@@ -170,9 +188,11 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
       'GET www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson',
       'GET www.hochwasserportal.nrw/data/downloads/messwerte.zip',
       'GET inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv',
+      'GET www.hydrodaten.admin.ch/plots/q_forecast/2091_q_forecast_de.json',
+      'GET www.vigicrues.gouv.fr/services/v1.1/prevision.json',
     ]);
-    expect(targets).toHaveLength(9);
-    expect(seen).toHaveLength(9);
+    expect(targets).toHaveLength(11);
+    expect(seen).toHaveLength(11);
   });
 
   it('asks inondations.public.lu without a query string (its robots.txt says Disallow: /*?*)', () => {
@@ -192,7 +212,7 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
     const { codes, seen } = await run({ 'fr-1-obs': answer(JSON.stringify(doc)) });
     expect(codes['fr-1-obs']).toBe('ok');
     expect(seen.filter((r) => r.host === 'hubeau.eaufrance.fr')).toHaveLength(1);
-    expect(seen).toHaveLength(9);
+    expect(seen).toHaveLength(11);
   });
 });
 
@@ -275,6 +295,120 @@ describe('the NL-1 forecast probe (P8a)', { timeout: 90_000 }, () => {
       }),
     });
     expect(far.codes['nl-1-fc-1h']).toBe('beyond_horizon');
+  });
+});
+
+/** The CH-4 smoke recording (station 2091) with a change to its parsed JSON. */
+const figure = (change: (doc: { plot: { data: { name: string; x: unknown[]; y: unknown[] }[] } }) => void): Answer => {
+  const doc = JSON.parse(BODY['ch-4-forecast'].toString('utf8'));
+  change(doc);
+  return answer(JSON.stringify(doc));
+};
+
+describe('the CH-4 and FR-4 probes (P8b)', { timeout: 90_000 }, () => {
+  it('probes public sources only: a C13 objection (CH-4 to owner) fails here until the probe goes (review F2)', () => {
+    const sources = (
+      parse(readFileSync(join(repoRoot, 'registry/sources.yaml'), 'utf8')) as {
+        sources: { id: string; audience: string }[];
+      }
+    ).sources;
+    for (const id of SPECS) {
+      const source = capture.specs.find((x) => x.id === id)?.source;
+      expect([id, sources.find((x) => x.id === source)?.audience]).toEqual([id, 'public']);
+    }
+  });
+
+  it('asks the registered station 2091, not the first seed row (2004, a lake whose figure answers 404)', async () => {
+    const spec = capture.specs.find((x) => x.id === 'ch-4-forecast');
+    expect(spec?.rows[0]).toMatchObject({ id: '2004' });
+    expect(spec?.rows.some((r) => r.id === '2091')).toBe(true);
+    expect(ROW['ch-4-forecast']).toEqual({ id: '2091' });
+    const { seen, codes } = await run();
+    expect(seen.map((r) => r.path)).toContain('/plots/q_forecast/2091_q_forecast_de.json');
+    expect(seen.filter((r) => r.path.includes('q_forecast'))).toHaveLength(1);
+    expect(codes['ch-4-forecast']).toBe('ok');
+  });
+
+  it('asks the FR-4 national list once and follows no station of it', async () => {
+    const list = JSON.parse(BODY['fr-4'].toString('utf8')) as { ListEntVigiCru: unknown[] };
+    expect(list.ListEntVigiCru.length).toBeGreaterThan(0);
+    const { seen, queries, codes } = await run();
+    expect(seen.filter((r) => r.host === 'www.vigicrues.gouv.fr')).toEqual([
+      {
+        method: 'GET',
+        host: 'www.vigicrues.gouv.fr',
+        path: '/services/v1.1/prevision.json',
+        userAgent: UA,
+        apiKey: false,
+      },
+    ]);
+    expect(queries.at(-1)).toBe('?FormatDate=iso&GrdSimul=H');
+    expect(queries.join('\n')).not.toContain('CdEntVigiCru');
+    expect(codes['fr-4']).toBe('ok');
+  });
+
+  it('a figure with a renamed or reordered trace is ch4_layout, a new key in the document is unrecognized_keys', async () => {
+    const renamed = await run({
+      'ch-4-forecast': figure((doc) => {
+        (doc.plot.data[3] as { name: string }).name = 'Mediana';
+      }),
+    });
+    expect(renamed.codes['ch-4-forecast']).toBe('ch4_layout at data.3');
+    const swapped = await run({
+      'ch-4-forecast': figure((doc) => {
+        doc.plot.data = [0, 1, 3, 2, 4].map((i) => doc.plot.data[i] as (typeof doc.plot.data)[number]);
+      }),
+    });
+    expect(swapped.codes['ch-4-forecast']).toMatch(/^ch4_layout at data\.\d$/);
+    const extra = await run({
+      'ch-4-forecast': figure((doc) => {
+        (doc as Record<string, unknown>).EVIL_PROVIDER_KEY = 1;
+      }),
+    });
+    expect(extra.codes['ch-4-forecast']).toMatch(/^unrecognized_keys/);
+    expect(JSON.stringify(extra.report)).not.toContain('EVIL_PROVIDER_KEY');
+    expect(extra.codes['fr-4']).toBe('ok');
+  });
+
+  it('a figure with an empty median yields no run: no_rows (CH-4 has no registry of its own to say so)', async () => {
+    const { codes } = await run({
+      'ch-4-forecast': figure((doc) => {
+        for (const t of doc.plot.data) {
+          t.x = [];
+          t.y = [];
+        }
+      }),
+    });
+    expect(codes['ch-4-forecast']).toBe('no_rows');
+  });
+
+  it('a run past the 120 h horizon of CH-4 is beyond_horizon: the pipeline’s run checks apply to the probe', async () => {
+    const far = await run({
+      'ch-4-forecast': figure((doc) => {
+        for (const i of [0, 1, 3]) {
+          const t = doc.plot.data[i] as { x: string[] };
+          t.x[t.x.length - 1] = '2026-10-20T00:00:00.000+02:00';
+        }
+        // The band polygon repeats the median's x values (forward, then back, then the first again).
+        const band = doc.plot.data[2] as { x: string[] };
+        const n = (doc.plot.data[3] as { x: string[] }).x.length;
+        band.x[n - 1] = '2026-10-20T00:00:00.000+02:00';
+        band.x[n] = '2026-10-20T00:00:00.000+02:00';
+      }),
+    });
+    expect(far.codes['ch-4-forecast']).toBe('beyond_horizon');
+  });
+
+  it('an extra key in a listed FR-4 station, or an HTTP-200 error body, is a fixed code and carries no provider text', async () => {
+    const doc = JSON.parse(BODY['fr-4'].toString('utf8'));
+    doc.ListEntVigiCru[0].EVIL_PROVIDER_KEY = 1;
+    const drift = await run({ 'fr-4': answer(JSON.stringify(doc)) });
+    expect(drift.codes['fr-4']).toMatch(/^unrecognized_keys at /);
+    expect(JSON.stringify(drift.report)).not.toContain('EVIL_PROVIDER_KEY');
+    const error = await run({ 'fr-4': answer('{"error_msg":"PROVIDER-SECRET-TEXT","code":400}') });
+    expect(error.codes['fr-4']).toMatch(/^invalid_[a-z_]+$/);
+    expect(JSON.stringify(error.report)).not.toContain('PROVIDER-SECRET-TEXT');
+    expect(error.codes['ch-4-forecast']).toBe('ok');
   });
 });
 
@@ -402,7 +536,7 @@ describe('what a drifted provider turns into', { timeout: 30_000 }, () => {
     const value = await run({ 'de-7-messwerte': zipped(messwerte(['2768898001;2026-09-29T12:59:00.000+01:00;EVIL'])) });
     expect(value.codes['de-7-messwerte']).toMatch(/^[a-z0-9_]+ at line\.\d+$/);
     expect(JSON.stringify(value.report)).not.toContain('EVIL');
-    // The other eight specs are untouched.
+    // The other ten specs are untouched.
     expect(value.codes['lu-1-csv']).toBe('ok');
     expect(value.codes['ch-2-pq']).toBe('ok');
   });
@@ -569,6 +703,8 @@ describe('the report is a list of fixed lines and nothing else', { timeout: 90_0
         'ch-2-pq': nasty,
         'de-7-messwerte': nasty,
         'lu-1-csv': nasty,
+        'ch-4-forecast': nasty,
+        'fr-4': nasty,
       }),
       await run({
         'nl-2-wfs': () => HttpResponse.error(),
@@ -594,6 +730,8 @@ describe('the report is a list of fixed lines and nothing else', { timeout: 90_0
         'hydrodaten',
         'hochwasserportal',
         'inondations',
+        'vigicrues',
+        'q_forecast',
       ])
         expect(text).not.toContain(secret);
       for (const name of stationNames) expect(text).not.toContain(name as string);
@@ -720,9 +858,10 @@ describe('the workflow', () => {
       expect(Math.min(Math.abs(minute - f), 60 - Math.abs(minute - f))).toBeGreaterThanOrEqual(5);
   });
 
-  it('says nine requests, never three, six or eight', () => {
-    expect(text).toContain('Nine live requests');
-    expect(text).not.toMatch(/\b(three|six|eight)\b/i);
+  it('says eleven requests, never three, six, eight or nine', () => {
+    expect(text).toContain('Eleven live requests');
+    expect(text).not.toMatch(/\b(three|six|eight|nine)\b/i);
+    expect(SPECS).toHaveLength(11);
   });
 
   it('writes issues in the report job only, and that job has no contents permission and no checkout', () => {

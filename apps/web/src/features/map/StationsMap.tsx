@@ -1,9 +1,10 @@
-import type { ApiStation, Snapshot } from '@rws/contracts';
+import type { ApiStation, Snapshot, SnapshotForecast } from '@rws/contracts';
 import type { MapLayerMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { testHook } from '../../lib/testHook.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { forecastLine } from '../station/forecast.ts';
 import { popupLine } from '../station/state.ts';
 import styles from './map.module.css';
 import { type MarkerState, SOURCE, showStations } from './stationLayer.ts';
@@ -20,6 +21,8 @@ interface Props {
   stations: readonly ApiStation[];
   states: ReadonlyMap<string, MarkerState>;
   values: ReadonlyMap<number, Snapshot['values'][number]>;
+  /** After now (P8b): the forecasts at t by series; undefined for a t up to now. */
+  forecasts: ReadonlyMap<number, SnapshotForecast> | undefined;
   selected: ApiStation | undefined;
   onSelect: (id: string | undefined) => void;
   /** The popup's own close button: deselect, and put the focus somewhere that stays. */
@@ -28,7 +31,17 @@ interface Props {
   onFailure: (code: string) => void;
 }
 
-export function StationsMap({ locale, stations, states, values, selected, onSelect, onClose, onFailure }: Props) {
+export function StationsMap({
+  locale,
+  stations,
+  states,
+  values,
+  forecasts,
+  selected,
+  onSelect,
+  onClose,
+  onFailure,
+}: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const state = useMapLibre(ref, locale, OPTIONS);
   const [map, setMap] = useState<MapLibreMap | null>(null);
@@ -77,7 +90,12 @@ export function StationsMap({ locale, stations, states, values, selected, onSele
 
   useEffect(() => {
     if (map === null) return;
-    for (const [id, s] of states) map.setFeatureState({ source: SOURCE, id }, { ...s, selected: id === selected?.id });
+    // Feature state merges: the forecast keys are always written, so a return to a t up to now clears them.
+    for (const [id, s] of states)
+      map.setFeatureState(
+        { source: SOURCE, id },
+        { forecast: false, estimate: false, ...s, selected: id === selected?.id },
+      );
   }, [map, states, selected]);
 
   // A deep link with a station opens the map on it.
@@ -87,15 +105,18 @@ export function StationsMap({ locale, stations, states, values, selected, onSele
     if (selected?.lon != null && selected.lat != null) map.jumpTo({ center: [selected.lon, selected.lat], zoom: 9 });
   }, [map, selected]);
 
-  // One line per value of the selected station: quantity, state and basis, all as text (P7b).
+  // One line per value of the selected station: quantity, state and basis, all as text (P7b). After now (P8b) one
+  // line per series: its forecast with the agency and the issue time, or "no forecast"; a hollow or grey marker
+  // is never the only cue.
   const lines = useMemo(
     () =>
       (selected?.series ?? []).flatMap((series) => {
-        const v = values.get(series.id);
         const quantity = series.quantity === 'H' ? m.quantity_H({}, { locale }) : m.quantity_Q({}, { locale });
+        if (forecasts !== undefined) return [forecastLine(quantity, forecasts.get(series.id), series, locale)];
+        const v = values.get(series.id);
         return v === undefined ? [] : [popupLine(quantity, v, locale)];
       }),
-    [selected, values, locale],
+    [selected, values, forecasts, locale],
   );
   const linesNow = useRef(lines);
   linesNow.current = lines;

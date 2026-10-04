@@ -51,6 +51,7 @@ const meta = {
   displayStart: '2026-08-24T00:00:00.000Z',
   build: 'a'.repeat(40),
   sources: [{ id: 'NL-1', attribution: [attribution] }],
+  forecastHorizons: [{ source: 'NL-1', hours: 48 }],
 };
 const seriesMeta = {
   id: 12,
@@ -560,7 +561,7 @@ describe('openApiDocument', () => {
       schema: Record<string, unknown>;
     };
 
-  it('is OpenAPI 3.1.0 with exactly the seven public paths, each a GET', () => {
+  it('is OpenAPI 3.1.0 with exactly the eight public paths, each a GET', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths).sort()).toEqual(
       [
@@ -569,6 +570,7 @@ describe('openApiDocument', () => {
         '/api/v1/meta',
         '/api/v1/openapi.json',
         '/api/v1/series/{id}',
+        '/api/v1/series/{id}/forecast',
         '/api/v1/snapshot',
         '/api/v1/stations',
       ].sort(),
@@ -584,6 +586,7 @@ describe('openApiDocument', () => {
         'Stations',
         'Snapshot',
         'Series',
+        'SeriesForecast',
         'Health',
         'HealthSources',
         'HealthUnavailable',

@@ -1,0 +1,14 @@
+{
+  "spec": "fr-4",
+  "variant": "Y210002001/H",
+  "source": "FR-4",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/FR-4/fr-4/2026/09/30/122006Z-b935adb98407c896.zst",
+  "recorded_at": "2026-09-30T12:20:06Z",
+  "status": 200,
+  "url": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=Y210002001&TypEntVigiCru=7&FormatDate=iso&GrdSimul=H",
+  "bytes": 957,
+  "source_sha256": "b935adb98407c896896024a449cdd7237db81a1de8d4ef10f8a0db8cfb345358",
+  "trimmed": false
+}

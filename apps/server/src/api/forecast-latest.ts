@@ -45,16 +45,13 @@ export type RunRow = {
   stepS: number | null;
   segmentEnd: number | null;
 };
-export type PointRow = {
-  run: string;
-  ts: number;
-  value: number | null;
-  p10: number | null;
-  p30: number | null;
-  p70: number | null;
-  p90: number | null;
-  flags: number;
-};
+/** The band columns a point may carry (BAND_OF picks the pair a run's band spans). */
+export const BAND_COLUMNS = ['p10', 'p90', 'p25', 'p75', 'p30', 'p70', 'vmin', 'vmax'] as const;
+export type BandColumn = (typeof BAND_COLUMNS)[number];
+export type PointRow = { run: string; ts: number; value: number | null; flags: number } & Record<
+  BandColumn,
+  number | null
+>;
 export type LatestRows = { runs: readonly RunRow[]; points: readonly PointRow[] };
 export type LatestOpts = {
   now: number;
@@ -87,9 +84,10 @@ export function buildForecastLatest(rows: LatestRows, opts: LatestOpts): Forecas
     const points = (byRun.get(r.id) ?? []).filter((p) => p.ts <= end).sort((a, b) => a.ts - b.ts);
     if (points.length === 0) continue;
     const floor = (p: PointRow) => (p.flags & FORECAST_FLAGS.BELOW_FLOOR) !== 0;
-    const column = (k: 'value' | 'p10' | 'p30' | 'p70' | 'p90') => points.map((p) => (floor(p) ? null : p[k]));
-    const [p10, p90, p30, p70] = [column('p10'), column('p90'), column('p30'), column('p70')];
+    const column = (k: 'value' | BandColumn) => points.map((p) => (floor(p) ? null : p[k]));
     const some = (c: (number | null)[]) => c.some((x) => x !== null);
+    const cols = Object.fromEntries(BAND_COLUMNS.map((k) => [k, column(k)])) as Record<BandColumn, (number | null)[]>;
+    const kind = some(cols.p10) && some(cols.p90) ? 'p10p90' : some(cols.p25) && some(cols.p75) ? 'p25p75' : null;
     runs.push({
       series: r.series,
       source: r.source,
@@ -102,7 +100,16 @@ export function buildForecastLatest(rows: LatestRows, opts: LatestOpts): Forecas
       stepSeconds: r.stepS,
       validTs: points.map((p) => iso(p.ts)),
       value: column('value'),
-      band: some(p10) || some(p90) ? { p10, p90, p30: some(p30) ? p30 : null, p70: some(p70) ? p70 : null } : null,
+      band:
+        kind === null
+          ? null
+          : {
+              kind,
+              ...(Object.fromEntries(BAND_COLUMNS.map((k) => [k, some(cols[k]) ? cols[k] : null])) as Record<
+                BandColumn,
+                (number | null)[] | null
+              >),
+            },
       flags: points.map((p) => p.flags),
     });
   }
@@ -135,16 +142,10 @@ type RunSql = {
   step_s: number | null;
   provider_segment_end: Date | null;
 };
-type PointSql = {
-  run: string;
-  valid_ts: Date;
-  value: number | null;
-  p10: number | null;
-  p30: number | null;
-  p70: number | null;
-  p90: number | null;
-  flags: number;
-};
+type PointSql = { run: string; valid_ts: Date; value: number | null; flags: number } & Record<
+  BandColumn,
+  number | null
+>;
 
 /**
  * The document for one family at `now` (UTC ms), in one read-only repeatable-read snapshot and checked against the
@@ -185,7 +186,8 @@ export async function readForecastLatest(
     const from = new Date(Math.min(...runs.map((r) => r.first_valid.getTime())));
     const points = (
       await sql<PointSql>`
-        SELECT run_id::text AS run, valid_ts, value, p10, p30, p70, p90, flags FROM ${sql.table(V.forecastValue)}
+        SELECT run_id::text AS run, valid_ts, value, p10, p90, p25, p75, p30, p70, vmin, vmax, flags
+        FROM ${sql.table(V.forecastValue)}
         WHERE run_id = ANY(${runs.map((r) => r.id)}::bigint[]) AND valid_ts >= ${from}::timestamptz
           AND valid_ts <= ${new Date(now + HORIZON_MS)}::timestamptz
         ORDER BY run_id, valid_ts`.execute(tx)

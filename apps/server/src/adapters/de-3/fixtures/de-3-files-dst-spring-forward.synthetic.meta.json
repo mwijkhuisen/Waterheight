@@ -1,0 +1,9 @@
+{
+  "spec": "de-3-files",
+  "source": "DE-3",
+  "synthetic": true,
+  "derived_from": "hand-made from a synthetic file of the real structure: 14 daily rows from 2027-03-23 to 2027-04-05, the spring-forward of 2027-03-28 inside them; the labels are CET all year (a fixed +01:00), so no UTC day is repeated or missing",
+  "values": "every value generated; the dates rewritten by hand",
+  "status": 200,
+  "variant": "14-Tage-Vorhersage/Koblenz_Quantile_25900700.csv"
+}

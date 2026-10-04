@@ -2,7 +2,8 @@
   "spec": "de-3-files",
   "source": "DE-3",
   "synthetic": true,
-  "derived_from": "the structure of a live payload recorded 2026-09-29 (owner audience: not committed)",
-  "values": "every value, name, id and timestamp generated (scripts/synthesize-fixture.ts)",
-  "status": 200
+  "derived_from": "the structure of an archived payload (owner audience: not committed)",
+  "values": "every number and station name generated, the issue date and the publication limit generated, the dates from a clock (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "14-Tage-Vorhersage/Koeln_Quantile_2730010.csv"
 }
