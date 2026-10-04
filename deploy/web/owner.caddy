@@ -148,6 +148,7 @@ owner.{$RWS_DOMAIN}:8443 {
 	# (error routes do not get the site header block) and no body.
 	handle_errors {
 		header {
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
 			X-Content-Type-Options "nosniff"
 			X-Robots-Tag "noindex, nofollow"
 			Cache-Control "private, no-store"

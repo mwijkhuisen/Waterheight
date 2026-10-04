@@ -3003,20 +3003,28 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     // The dead-upstream half (a dial failure or a timeout is a Caddy error): scoped to /api/v1/snapshot, never a
     // site-wide error page (C19, KG-107).
     expect(site.match(/\n\thandle_errors /g)).toHaveLength(1);
+    // An error route gets no site header block: it repeats the A§12.2 set byte for byte (review SEC-1), and any
+    // other 502, 503 or 504 answers its status without naming Caddy.
+    const siteHeaders = rules('header').slice(1);
+    expect(siteHeaders).toContain('X-Robots-Tag "noindex"');
     expect(rules('handle_errors 502 503 504')).toEqual([
       'handle_errors 502 503 504 {',
+      'header {',
+      ...siteHeaders,
+      '}',
       "@snapshot_down expression `{http.request.orig_uri.path} == '/api/v1/snapshot'`",
       'handle @snapshot_down {',
       'header X-Degraded "1"',
       'header Cache-Control "no-store"',
-      'header X-Content-Type-Options "nosniff"',
-      'header -Server',
       'rewrite * /latest.json',
       'root * /srv/rws/public/www/v1',
       'file_server {',
       'precompressed zstd gzip',
       'status 200',
       '}',
+      '}',
+      'handle {',
+      'respond {err.status_code}',
       '}',
     ]);
   });

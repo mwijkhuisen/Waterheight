@@ -448,6 +448,24 @@ run rws-tick --dry-run
 expect_grep "dry-run: ping owner-publisher/fail" "$C/out"
 expect_no_grep "owner-publisher" "$FIX/pings"
 
+case_ "tick: a link in a publisher's tree is removed and fails that tree's check; a dry run keeps it (P9a, SEC-3)"
+setup
+mkdir -p "$RWS_SRV/public/www/v1/recent" "$RWS_SRV/owner/www/v1"
+echo '{}' >"$RWS_SRV/public/www/v1/meta.json"
+ln -s /etc/hostname "$RWS_SRV/public/www/v1/recent/1210.json"
+run rws-tick --dry-run
+expect_rc 0
+expect_grep "dry-run: would remove 1 link\(s\) under $RWS_SRV/public/www" "$C/out"
+[[ -L $RWS_SRV/public/www/v1/recent/1210.json ]] || fail "the dry run removed the link"
+run rws-tick
+expect_rc 0
+expect_grep "removed 1 link\(s\) under $RWS_SRV/public/www" "$C/out"
+expect_grep "/publisher/fail links$" "$FIX/pings"
+expect_no_grep "owner-publisher/fail links" "$FIX/pings"
+expect_no_grep "hostname" "$C/out"
+[[ ! -e $RWS_SRV/public/www/v1/recent/1210.json && -f $RWS_SRV/public/www/v1/meta.json ]] ||
+  fail "the link was not removed, or a regular file was"
+
 case_ "status copy: capture.json published 0644; a symlink, a non-contract and an oversize file refused; a copy past the cap cut off"
 setup
 mkdir -p "$RWS_SRV/public/status"
