@@ -108,7 +108,8 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
       const b = f.basis[i];
       if ((b === null) !== (f.state[i] === 'no_ref'))
         ctx.addIssue({ code: 'custom', message: 'basis is null exactly when the state is no_ref' });
-      if ((b ?? 0) >= f.bases.length || (f.area[i]?.basis ?? 0) >= f.bases.length)
+      const area = f.area[i]?.basis;
+      if ((b != null && b >= f.bases.length) || (area !== undefined && area >= f.bases.length))
         ctx.addIssue({ code: 'custom', message: 'a basis index past bases' });
     }
   };
