@@ -2,8 +2,8 @@
   "spec": "de-3-files",
   "source": "DE-3",
   "synthetic": true,
-  "derived_from": "the structure of an archived payload (owner audience: not committed)",
+  "derived_from": "a synthetic file of the real structure under a variant whose PEGELONLINE number DE-1 does not register",
   "values": "every number and station name generated, the issue date and the publication limit generated, the dates from a clock (scripts/synthesize-fixture.ts)",
   "status": 200,
-  "variant": "14-Tage-Vorhersage/Koeln_Quantile_2730010.csv"
+  "variant": "14-Tage-Vorhersage/Oestrich_Quantile_9999999.csv"
 }

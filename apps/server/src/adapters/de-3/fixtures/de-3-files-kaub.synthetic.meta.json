@@ -5,5 +5,5 @@
   "derived_from": "the structure of an archived payload (owner audience: not committed)",
   "values": "every number and station name generated, the issue date and the publication limit generated, the dates from a clock (scripts/synthesize-fixture.ts)",
   "status": 200,
-  "variant": "14-Tage-Vorhersage/Koeln_Quantile_2730010.csv"
+  "variant": "14-Tage-Vorhersage/Kaub_Quantile_25700100.csv"
 }

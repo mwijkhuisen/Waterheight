@@ -459,6 +459,58 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
       expect([file, refusalOf(() => synthesize('DE-3', 'text', Buffer.from(file, 'latin1')))]).toEqual([file, 1]);
   });
 
+  it('a BfG file (P8b): the five fixed comment lines keep their words and get a new issue date and limit; `---` stays; any other comment is generated whole', () => {
+    const head = [
+      '# Probabilistische Wasserstandsvorhersage vom 2026-10-01 GMT+1',
+      '# Quelle: Bundesanstalt fuer Gewaesserkunde <vorhersage@bafg.de>',
+      '# Vorhersagetage 1 - 14 Tagesmittelwerte',
+      "# Keine Veroeffentlichung von Werten > 777 cm (Wert '---')",
+      '# !!!! Zeitstempel Beginn des Zeitschritts !!!!',
+    ];
+    const file = (rows: string[], first = head) =>
+      Buffer.from([...first, 'Mijn Pegel ', 'Datum;5%;10%;95%', ...rows, ''].join('\r\n'), 'latin1');
+    const out = synthesize('DE-3', 'text', file(['02.10.2026 00:00;-12;34;---', '03.10.2026 00:00;---;---;---']))
+      .toString('latin1')
+      .split('\r\n');
+    // The words and the fixed digits (the forecast days, the offset) stay; the date and the limit are new digits.
+    expect(out[0]).toMatch(/^# Probabilistische Wasserstandsvorhersage vom \d{4}-\d{2}-\d{2} GMT\+1$/);
+    expect(out[0]).not.toContain('2026-10-01');
+    expect([out[1], out[2], out[4]]).toEqual([head[1], head[2], head[4]]);
+    expect(out[3]).toMatch(/^# Keine Veroeffentlichung von Werten > \d{3} cm \(Wert '---'\)$/);
+    expect(out[3]).not.toContain('777');
+    expect(out[5]).toMatch(/^synthetic-\d+$/);
+    expect(out[6]).toBe('Datum;5%;10%;95%');
+    // A number is generated, `---` (not published) stays and is no number.
+    const [one, two] = out.slice(7, 9).map((l) => l.split(';'));
+    expect([one?.[1], one?.[2]]).not.toContain('-12');
+    expect(one?.[1]).toMatch(/^-\d{2}$/);
+    expect(one?.[3]).toBe('---');
+    expect(two?.slice(1)).toEqual(['---', '---', '---']);
+    // The limit of a station is never given back, whatever the other values (the seed is the payload's).
+    for (let i = 0; i < 25; i += 1) {
+      const line = synthesize('DE-3', 'text', file([`02.10.2026 00:00;${i};${i + 7};---`]))
+        .toString('latin1')
+        .split('\r\n')[3];
+      expect(line).not.toContain('777');
+    }
+    // Any other comment line is generated whole: another offset, an address with a space, an extra line, another source.
+    const other = [
+      '# Probabilistische Wasserstandsvorhersage vom 2026-10-01 GMT+2',
+      '# Quelle: Bundesanstalt fuer Gewaesserkunde <a b>',
+      '# Mijn opmerking 999',
+      ...head.slice(2),
+    ];
+    const generated = synthesize('DE-3', 'text', file([], other)).toString('latin1').split('\r\n');
+    expect(generated.slice(0, 3).every((l) => /^# synthetic-\d+$/.test(l))).toBe(true);
+    expect(synthesize('LU-3', 'text', file([])).toString('latin1').split('\r\n')[1]).toMatch(/^# synthetic-\d+$/);
+    // `---` is the only non-number cell that stays.
+    for (const cell of ['--', '----', '-', '---x', 'x---'])
+      expect([cell, refusalOf(() => synthesize('DE-3', 'text', file([`02.10.2026 00:00;${cell}`], head)))]).toEqual([
+        cell,
+        1,
+      ]);
+  });
+
   describe('the leak scan', () => {
     it('refuses a string of the source that appears in the output, wherever it appears', () => {
       // The first generated name is synthetic-1: a source that already says so would get its own text back.

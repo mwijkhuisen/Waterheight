@@ -1,0 +1,9 @@
+{
+  "spec": "de-3-files",
+  "source": "DE-3",
+  "synthetic": true,
+  "derived_from": "hand-made from a synthetic file of the real structure: 14 daily rows from 2026-10-20 to 2026-11-02, the fall-back of 2026-10-25 inside them; the labels are CET all year (a fixed +01:00), so no UTC day is repeated or missing",
+  "values": "every value generated; the dates rewritten by hand",
+  "status": 200,
+  "variant": "14-Tage-Vorhersage/Duesseldorf_Quantile_2750010.csv"
+}

@@ -1,0 +1,9 @@
+{
+  "spec": "de-3-files",
+  "source": "DE-3",
+  "synthetic": true,
+  "derived_from": "hand-made from a synthetic file of the real structure: cells replaced by `---` (a level above the station's limit): the 95 % cell of one row, the 90 and 95 % cells of the next, 75 to 95 % of the next, 25 to 95 % of the next, then three rows of only `---`, and one 60 % cell alone (a column the adapter drops)",
+  "values": "every number and station name generated, the issue date and the publication limit generated, the dates from a clock (scripts/synthesize-fixture.ts)",
+  "status": 200,
+  "variant": "14-Tage-Vorhersage/Duisburg-Ruhrort_Quantile_2770010.csv"
+}
