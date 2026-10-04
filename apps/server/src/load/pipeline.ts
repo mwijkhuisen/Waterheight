@@ -38,6 +38,7 @@ import {
   type SeriesRow,
   seriesOf,
   setBatchAside,
+  storeProviderUpdated,
   storeUnitMismatch,
   type Tx,
   unitMismatchOf,
@@ -799,6 +800,7 @@ export class Loader {
       );
       const cls = await applyClasses(tx, line.source, classes, state.id, fetchedAt, touches.class);
       const warn = await applyWarnings(tx, line.source, result.warnings, state.id, fetchedAt, touches.warning);
+      if (result.providerUpdated !== undefined) await storeProviderUpdated(tx, line.source, result.providerUpdated);
       const fw = await applyForecasts(tx, line.source, forecasts, state.id, fetchedAt, headDrops, touches.forecast);
       const staged = await this.stage(tx, line, spec, result, refRegistry, state.id, fetchedAt, touches.forecast);
       // P9a: what the publishers render again, and the settled days this payload revised (under the loader lock).

@@ -11,6 +11,7 @@ import type { DB } from '../../src/db/generated.ts';
 import { type Db, dbConfig, openDb } from '../../src/db/pool.ts';
 import { computeHealth, LagWindow, storeChecksums } from '../../src/load/health.ts';
 import { Loader } from '../../src/load/pipeline.ts';
+import { storeProviderUpdated } from '../../src/load/store.ts';
 import { type Harness, harness } from '../load/harness.ts';
 
 // GET /api/v1/health and /api/v1/health/sources against a real database, read as
@@ -131,7 +132,15 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
       status: 'ok',
       generated_at: NOW.toISOString(),
       // The three DE-1 lines were loaded 34 s after their fetch; no other source has a lag sample.
-      loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
+      loader: {
+        lag_p95_s: 34,
+        backlog_files: 0,
+        backlog_bytes: 0,
+        backlog_age_s: null,
+        bad_manifest_lines: 0,
+        // P9a: the newest loaded_at of the public batches (the DE-1 lines above).
+        last_commit: expect.stringMatching(/Z$/),
+      },
       sources: expect.objectContaining({ ok: 1, degraded: 0, down: 0 }),
       // Six captured owner sources: LU-3 answered, LU-4 only ever failed, the others were not fetched.
       owner_sources: { healthy: 1, total: 6 },
@@ -414,6 +423,30 @@ describe('caching and load', () => {
       HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources'))).generated_at,
     ).toBeNull();
     await computeHealth(h.load.db, inputs);
+  });
+
+  it('last_commit is the newest loaded_at of the public batches', async () => {
+    const [row] = await admin(
+      `SELECT max(b.loaded_at) AS at FROM ingest_batch b JOIN source s ON s.id = b.source_id WHERE s.audience = 'public'`,
+    );
+    const doc = Health.parse(await json(await appAt().app.request('/api/v1/health')));
+    expect(doc.loader.last_commit).toBe(row.at.toISOString());
+  });
+
+  it('the health pass keeps the provider update the loader stored, and only a newer one replaces it', async () => {
+    const store = (at: string) =>
+      h.load.db.transaction().execute(async (tx) => {
+        await storeProviderUpdated(tx, 'DE-1', at);
+      });
+    await store('2026-09-29T13:00:00.000Z');
+    await store('2026-09-29T12:00:00.000Z');
+    await computeHealth(h.load.db, inputs);
+    const stored = async () =>
+      (await admin(`SELECT detail ->> 'provider_updated' AS at FROM source_health WHERE source_id = 'DE-1'`))[0].at;
+    expect(await stored()).toBe('2026-09-29T13:00:00.000Z');
+    await store('2026-09-29T13:30:00.000Z');
+    expect(await stored()).toBe('2026-09-29T13:30:00.000Z');
+    await admin(`UPDATE source_health SET detail = detail - 'provider_updated' WHERE source_id = 'DE-1'`);
   });
 
   it('the loader backlog, its age and damaged manifest lines are shown as numbers', async () => {

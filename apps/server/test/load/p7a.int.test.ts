@@ -57,6 +57,13 @@ describe('P7a through the loader', { timeout: 300_000 }, () => {
     for (const a of h.alerts) expect(Object.keys(a.fields).sort()).toEqual(['n', 'source', 'spec']);
   });
 
+  it('DE-6 keeps the newest provider `updated` in source_health.detail (the "Stand" date)', async () => {
+    const [row] = await q("SELECT detail ->> 'provider_updated' AS at FROM source_health WHERE source_id = 'DE-6'");
+    expect(row?.at).toBe('2026-10-03T08:42:47.000Z');
+    // A source without `updated` (DE-1) gets none.
+    expect(await q("SELECT 1 FROM source_health WHERE source_id = 'DE-1' AND detail ? 'provider_updated'")).toEqual([]);
+  });
+
   it('reference_value: DE-1 Kaub (C22), DE-7 LANUV, CH-2 wl on the CH-1 series, FR-5 floods on the FR-1 stage', async () => {
     const mnw = await ranges('DE-1', `${KAUB}/W`, 'MNW');
     expect(mnw).toEqual([{ value: 65, lo: null, hi: null }]);

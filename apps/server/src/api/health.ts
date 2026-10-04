@@ -160,11 +160,12 @@ export const Detail = z.object({
 });
 
 export async function readHealth(db: Kysely<DB>, now: Date): Promise<Health> {
-  const { rows, owner, l, twins } = await snapshot(db, async (tx) => ({
+  const { rows, owner, l, twins, commit } = await snapshot(db, async (tx) => ({
     rows: await sourceRows(tx, 'public'),
     owner: await ownerCounts(tx),
     l: await loaderRow(tx),
     twins: await latestTwinChecks(tx, 'public', now),
+    commit: await lastCommit(tx, 'public', now),
   }));
   const of = (status: SourceRow['status']) => rows.filter((r) => r.status === status).length;
   const lags = rows.flatMap((r) => (r.lag_p95_s === null ? [] : [r.lag_p95_s]));
@@ -177,6 +178,7 @@ export async function readHealth(db: Kysely<DB>, now: Date): Promise<Health> {
       backlog_bytes: Number(l?.backlog_bytes ?? 0),
       backlog_age_s: l?.backlog_age_s ?? null,
       bad_manifest_lines: l?.bad_manifest_lines ?? 0,
+      last_commit: iso(commit),
     },
     sources: { ok: of('ok'), degraded: of('degraded'), down: of('down'), unknown: of('unknown'), total: rows.length },
     owner_sources: { healthy: owner.healthy, total: owner.total },

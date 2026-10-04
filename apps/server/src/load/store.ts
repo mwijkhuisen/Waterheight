@@ -612,3 +612,17 @@ export async function applyFetchHealth(tx: Tx, source: string, f: FetchFold): Pr
     await writeMeta(tx, key, foldIntervals(state, f.starts));
   }
 }
+
+/**
+ * P9a: the newest provider `updated` instant of a source (DE-6's "Stand" date) in source_health.detail
+ * `provider_updated`, under the loader lock. Only a newer value replaces it; the health pass keeps the key (it strips
+ * named keys only). A source the registry does not know gets no row.
+ */
+export async function storeProviderUpdated(tx: Tx, source: string, at: string): Promise<void> {
+  await sql`
+    INSERT INTO source_health AS h (source_id, detail)
+    SELECT s.id, jsonb_build_object('provider_updated', ${at}::text) FROM source s WHERE s.id = ${source}
+    ON CONFLICT (source_id) DO UPDATE SET detail = jsonb_set(h.detail, '{provider_updated}', to_jsonb(${at}::text))
+    WHERE h.detail ->> 'provider_updated' IS NULL
+       OR (h.detail ->> 'provider_updated')::timestamptz < ${at}::timestamptz`.execute(tx);
+}

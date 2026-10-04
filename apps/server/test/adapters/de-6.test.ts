@@ -80,6 +80,10 @@ describe('golden files (real payloads)', () => {
     const out = stationsOf('de-6-stations');
     expect(classesOf(out)).toEqual(golden('de-6-stations', classesOf(out)));
     expect(stationsDoc('de-6-stations').features).toHaveLength(1589);
+    expect(out.providerUpdated).toBe(new Date(stationsDoc('de-6-stations').updated).toISOString());
+    // A future `updated` is never stored as the provider's Stand date.
+    const ahead = { ...stationsDoc('de-6-stations'), updated: '2099-01-01T00:00:00+01:00' };
+    expect(normaliseStations(ahead, table, fetchedAt('de-6-stations')).providerUpdated).toBeUndefined();
     expect(out.classes).toHaveLength(157);
     // 163 table features, so the other 1,426 are not our stations.
     expect(out.dropped).toEqual({ not_registered: 1426 });
@@ -125,6 +129,8 @@ describe('golden files (real payloads)', () => {
     expect(warningsOf(out)).toEqual(golden('de-6-alerts', warningsOf(out)));
     // Raw: "updated": "2026-09-29T14:42:46+01:00" (true UTC with a fixed +01:00 all year).
     expect(out.warnings).toEqual({ mode: 'snapshot', at: '2026-09-29T13:42:46.000Z', rows: [] });
+    // P9a: `updated` (true UTC) is carried for the licence's "Stand" date.
+    expect(out.providerUpdated).toBe('2026-09-29T13:42:46.000Z');
     expect(out.dropped).toEqual({});
   });
 
