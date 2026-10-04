@@ -1,0 +1,14 @@
+{
+  "spec": "nl-1-fc-1h",
+  "variant": "maaseik/Q",
+  "source": "NL-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/NL-1/nl-1-fc-1h/2026/10/01/062500Z-f2ea2d3e56224d06.zst",
+  "recorded_at": "2026-10-01T06:25:00Z",
+  "status": 200,
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 82732,
+  "source_sha256": "f2ea2d3e56224d06d7d84bcebec6e4ccfbf34c3fd1ede0ec0a2d6697ecf0bce6",
+  "trimmed": false
+}

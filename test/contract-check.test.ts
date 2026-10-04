@@ -235,14 +235,14 @@ describe('the NL-1 forecast probe (P8a)', { timeout: 90_000 }, () => {
     expect(codes['nl-1-obs-key']).toBe('ok');
   });
 
-  it('a method other than RWSM-F232, or a process type that is not verwachting, is the adapter’s drift code', async () => {
+  it('a method other than the series’ declared one is unregistered_method; a process type that is not verwachting is drift', async () => {
     const method = await run({
       'nl-1-fc-1h': forecast((doc) => {
         for (const list of doc.WaarnemingenLijst)
           (list.AquoMetadata as { WaardeBepalingsMethode: { Code: string } }).WaardeBepalingsMethode.Code = 'RWSM-F999';
       }),
     });
-    expect(method.codes['nl-1-fc-1h']).toBe('forecast_method');
+    expect(method.codes['nl-1-fc-1h']).toBe('unregistered_method');
     const process = await run({
       'nl-1-fc-1h': forecast((doc) => {
         for (const list of doc.WaarnemingenLijst) (list.AquoMetadata as { ProcesType: string }).ProcesType = 'meting';
