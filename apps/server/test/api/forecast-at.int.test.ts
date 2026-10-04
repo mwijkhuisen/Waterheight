@@ -1265,7 +1265,12 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     // them with their rows; FR-4's text carries the update-date placeholder the page fills.
     const sources = new Map(Meta.parse(meta.json()).sources.map((s) => [s.id, s.attribution]));
     expect(sources.get('CH-4')?.length).toBeGreaterThan(0);
-    expect(sources.get('FR-4')?.map((a) => a.text).join(' ')).toContain('VIGICRUES');
+    expect(
+      sources
+        .get('FR-4')
+        ?.map((a) => a.text)
+        .join(' '),
+    ).toContain('VIGICRUES');
     expect(sources.get('FR-4')?.some((a) => a.needsDate)).toBe(true);
     const doc = (await get(app(), '/api/v1/openapi.json')).json() as {
       paths: Record<string, unknown>;
