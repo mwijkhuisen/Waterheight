@@ -1,13 +1,18 @@
 // Opt-in, run by hand once (P7a): the flood-state fixtures of catalogue §0.4 that no capture recorded, because
-// every source was at low water when the recorder started. Three fixed targets, never from input: the LHP test
-// server (the January 2024 flood, frozen: station classes 1–3, alert classes 1/2/4/5) and the Wayback capture of
-// Vigicrues' InfoVigiCru of 2023-12-11 (sections at levels 2 and 3, the old key casing). One request each, the
-// project User-Agent, refused under CI; a redirect is followed only to the same https host, at most 3 times, and the
-// body is read as a stream that stops at MAX_BYTES (`fetchCapped`, review SR-8); the bodies become committed
+// every source was at low water when the recorder started. Four fixed targets, never from input: the LHP test
+// server (the January 2024 flood, frozen: station classes 1–3, alert classes 1/2/4/5), the Wayback capture of
+// Vigicrues' InfoVigiCru of 2023-12-11 (sections at levels 2 and 3, the old key casing) and, from P8b, the Wayback
+// capture of BAFU's `2020_q_forecast_it.json` of 2023-11-02 (storm Ciarán, Ticino at Bellinzona). One request each,
+// the project User-Agent, refused under CI; a redirect is followed only to the same https host, at most 3 times, and
+// the body is read as a stream that stops at MAX_BYTES (`fetchCapped`, review SR-8); the bodies become committed
 // fixtures with provenance.
-//   node scripts/fetch-flood-fixtures.ts --contact <e-mail> --info-url <url> --yes
-// The Wayback body is cut at 1 MiB by the archive: `wayback` keeps its complete features and closes the
-// collection (`trimTruncated`, the rule its meta names); the untrimmed body stays in the git-ignored .smoke/.
+//   node scripts/fetch-flood-fixtures.ts [--only <fixture>] --contact <e-mail> --info-url <url> --yes
+// `--only` fetches that one target (a fixture name of TARGETS) and nothing else.
+// The InfoVigiCru body is cut at 1 MiB by the archive: its `trim: 'features'` keeps the complete features and closes
+// the collection (`trimTruncated`, the rule its meta names); the untrimmed body stays in the git-ignored .smoke/.
+// The BAFU capture is committed as fetched (P8b; never a golden): the archive serves it gzip-encoded and `fetch`
+// decodes that transport encoding, so the file is the plain JSON. The CH-4 test reads it with a test-only Italian
+// layout table.
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,7 +21,20 @@ import { userAgent } from '../apps/server/src/capture/env.ts';
 const root = new URL('..', import.meta.url).pathname;
 const MAX_BYTES = 4 * 1024 * 1024;
 
-export const TARGETS = [
+type Target = {
+  fixture: string;
+  source: string;
+  spec: string;
+  url: string;
+  /** A third-party Wayback capture (not recorded by us). */
+  wayback: boolean;
+  /** `features`: a GeoJSON capture the archive cut inside its features; the complete ones are kept (`trimTruncated`). */
+  trim?: 'features';
+  /** Said in the meta of a capture kept whole. */
+  note?: string;
+};
+
+export const TARGETS: readonly Target[] = [
   {
     fixture: 'de-6-stations-test',
     source: 'DE-6',
@@ -37,8 +55,17 @@ export const TARGETS = [
     spec: 'fr-5-vigilance',
     url: 'https://web.archive.org/web/20231211164225id_/https://www.vigicrues.gouv.fr/services/1/InfoVigiCru.geojson/',
     wayback: true,
+    trim: 'features',
   },
-] as const;
+  {
+    fixture: 'ch-4-forecast-ciaran-it',
+    source: 'CH-4',
+    spec: 'ch-4-forecast',
+    url: 'https://web.archive.org/web/20231102103317id_/https://www.hydrodaten.admin.ch/plots/q_forecast/2020_q_forecast_it.json',
+    wayback: true,
+    note: 'a third-party Wayback capture of storm Ciaran (2023-11-02), the _it figure of station 2020 (Ticino, Bellinzona), never a golden; the archive serves it gzip-encoded and fetch decodes that, so this file is the plain JSON; its trace names are Italian (a test-only layout table reads them)',
+  },
+];
 
 const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 const MAX_REDIRECTS = 3;
@@ -118,15 +145,14 @@ export function trimTruncated(text: string): { body: string; kept: number } {
   return { body: `${text.slice(0, lastEnd)}]}`, kept };
 }
 
-function args(argv: string[]): { contact: string | undefined; infoUrl: string | undefined; yes: boolean } {
-  const out: { contact: string | undefined; infoUrl: string | undefined; yes: boolean } = {
-    contact: undefined,
-    infoUrl: undefined,
-    yes: false,
-  };
+export type Args = { contact: string | undefined; infoUrl: string | undefined; yes: boolean; only: string | undefined };
+
+export function args(argv: string[]): Args {
+  const out: Args = { contact: undefined, infoUrl: undefined, yes: false, only: undefined };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--contact') out.contact = argv[++i];
     else if (argv[i] === '--info-url') out.infoUrl = argv[++i];
+    else if (argv[i] === '--only') out.only = argv[++i];
     else if (argv[i] === '--yes') out.yes = true;
   }
   return out;
@@ -137,13 +163,16 @@ async function main(): Promise<number> {
     console.error('refused under CI: this script makes live requests');
     return 64;
   }
-  const { contact, infoUrl, yes } = args(process.argv.slice(2));
-  if (contact === undefined || infoUrl === undefined || !yes) {
-    console.error('usage: node scripts/fetch-flood-fixtures.ts --contact <e-mail> --info-url <url> --yes');
+  const { contact, infoUrl, yes, only } = args(process.argv.slice(2));
+  const targets = only === undefined ? TARGETS : TARGETS.filter((t) => t.fixture === only);
+  if (contact === undefined || infoUrl === undefined || !yes || targets.length === 0) {
+    console.error(
+      'usage: node scripts/fetch-flood-fixtures.ts [--only <fixture>] --contact <e-mail> --info-url <url> --yes',
+    );
     return 64;
   }
   const ua = userAgent(infoUrl, contact);
-  for (const t of TARGETS) {
+  for (const t of targets) {
     const res = await fetchCapped(t.url, { 'user-agent': ua, accept: 'application/json, application/geo+json' });
     const raw = res.body;
     console.log(`${t.fixture}: ${res.status} ${raw.length} B`);
@@ -160,9 +189,16 @@ async function main(): Promise<number> {
       url: t.url,
       bytes: raw.length,
     };
-    if (!t.wayback) {
+    if (t.trim === undefined) {
       writeFileSync(join(dir, `${t.fixture}.raw`), raw);
-      writeFileSync(join(dir, `${t.fixture}.meta.json`), `${JSON.stringify({ ...base, trimmed: false }, null, 2)}\n`);
+      // A Wayback capture kept whole is a third-party recording: it says so, and is never a golden.
+      const extra = t.wayback
+        ? { source_sha256: sha256(raw), wayback: true, ...(t.note === undefined ? {} : { note: t.note }) }
+        : {};
+      writeFileSync(
+        join(dir, `${t.fixture}.meta.json`),
+        `${JSON.stringify({ ...base, ...extra, trimmed: false }, null, 2)}\n`,
+      );
       continue;
     }
     mkdirSync(join(root, '.smoke'), { recursive: true });

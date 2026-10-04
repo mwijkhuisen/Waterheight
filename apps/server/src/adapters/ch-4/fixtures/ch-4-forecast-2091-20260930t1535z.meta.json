@@ -1,0 +1,14 @@
+{
+  "spec": "ch-4-forecast",
+  "variant": "2091",
+  "source": "CH-4",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/CH-4/ch-4-forecast/2026/09/30/153510Z-ccef740669739e0f.zst",
+  "recorded_at": "2026-09-30T15:35:10Z",
+  "status": 200,
+  "url": "https://www.hydrodaten.admin.ch/plots/q_forecast/2091_q_forecast_de.json",
+  "bytes": 29253,
+  "source_sha256": "ccef740669739e0ff1dcb9906731953a61dd46767ba18d2949f53d311629b8fe",
+  "trimmed": false
+}

@@ -1,10 +1,11 @@
 // Turns payloads the owner exported from the production raw archive (Action D2;
 // the read-only export command is in the P5a PR) into adapter fixtures:
 //
-//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a] <export dir>
+//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8b] <export dir>
 //
 // (`--p5b`: the P5b export and its rules, `IMPORTS_P5B`; `--p7a`: `IMPORTS_P7A`; `--p8a`: the NL-1 forecast captures
-// of `IMPORTS_P8A`, whole bodies; without a flag the P5a list.)
+// of `IMPORTS_P8A`, whole bodies; `--p8b`: the CH-4 and FR-4 forecasts of `IMPORTS_P8B`, whole bodies; without a
+// flag the P5a list.)
 //
 // The export holds `<name>.raw` (the archived body) and `<name>.line.json` (its
 // manifest line). Each payload listed below is copied to
@@ -386,6 +387,21 @@ export const IMPORTS_P8A: readonly { name: string; source: 'NL-1'; fixture: stri
   { name: 'nl-1-fc-novalue', source: 'NL-1', fixture: 'nl-1-fc-3h-0-alblasserdam-h-novalue' },
 ];
 
+/**
+ * P8b (Action D2, export of 2026-10-04): whole archived forecast bodies. CH-4 Rheinfelden (2091, Q): the last capture
+ * of the run starting 2026-09-30T11:00+02:00 and the first of the next one (15:00+02:00); 2602 (2026-10-04): a run
+ * whose measured trace has 17 points instead of 25. FR-4 (captured 2026-09-30, before #39 limited the stations to the
+ * NL-bound basins: none is NL-bound, KG-176): L800001020 H and Q (hourly, 40 values) and Y210002001 H (one value).
+ */
+export const IMPORTS_P8B: readonly { name: string; source: 'CH-4' | 'FR-4'; fixture: string }[] = [
+  { name: 'ch-4-2091-0004', source: 'CH-4', fixture: 'ch-4-forecast-2091-20260930t1535z' },
+  { name: 'ch-4-2091-0005', source: 'CH-4', fixture: 'ch-4-forecast-2091-20260930t1635z' },
+  { name: 'ch-4-newest-0039', source: 'CH-4', fixture: 'ch-4-forecast-2602-20261004t0535z' },
+  { name: 'fr-4-station-0373', source: 'FR-4', fixture: 'fr-4-station-l800001020-h-20260930t1620z' },
+  { name: 'fr-4-station-0409', source: 'FR-4', fixture: 'fr-4-station-l800001020-q-20260930t1620z' },
+  { name: 'fr-4-station-0009', source: 'FR-4', fixture: 'fr-4-station-y210002001-h-20260930t1220z' },
+];
+
 /** The FR-5 territories whose sections reach the rivers into the Netherlands (catalogue §2.5). */
 export const FR5_TERRITORIES = ['2', '3', '29'] as const;
 
@@ -406,7 +422,7 @@ export function cutP7a(
   };
 }
 
-function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a'): void {
+function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8b'): void {
   type Entry = {
     name: string;
     source: string;
@@ -417,7 +433,15 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a'): void {
     n?: number;
   };
   const list: readonly Entry[] =
-    mode === 'p5b' ? IMPORTS_P5B : mode === 'p7a' ? IMPORTS_P7A : mode === 'p8a' ? IMPORTS_P8A : IMPORTS;
+    mode === 'p5b'
+      ? IMPORTS_P5B
+      : mode === 'p7a'
+        ? IMPORTS_P7A
+        : mode === 'p8a'
+          ? IMPORTS_P8A
+          : mode === 'p8b'
+            ? IMPORTS_P8B
+            : IMPORTS;
   for (const { name, source, fixture, keep, last, rule, n } of list) {
     const raw = readFileSync(join(dir, `${name}.raw`));
     const line = JSON.parse(readFileSync(join(dir, `${name}.line.json`), 'utf8')) as Line;
@@ -452,10 +476,11 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a'): void {
 
 if (import.meta.main) {
   const flag = process.argv[2];
-  const mode = flag === '--p5b' ? 'p5b' : flag === '--p7a' ? 'p7a' : flag === '--p8a' ? 'p8a' : 'p5a';
+  const mode =
+    flag === '--p5b' ? 'p5b' : flag === '--p7a' ? 'p7a' : flag === '--p8a' ? 'p8a' : flag === '--p8b' ? 'p8b' : 'p5a';
   const dir = process.argv[mode === 'p5a' ? 2 : 3];
   if (dir === undefined) {
-    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a] <export dir>');
+    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8b] <export dir>');
     process.exitCode = 64;
   } else main(dir, mode);
 }
