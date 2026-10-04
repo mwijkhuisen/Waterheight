@@ -8,7 +8,12 @@ import {
   lastValid,
 } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildNlForecastFixtureArchive, NL_FORECAST_FIXTURES, recorded } from '../../../../scripts/fixture-archive.ts';
+import {
+  buildNlForecastFixtureArchive,
+  NL_FORECAST_FIXTURES,
+  recorded,
+  writePayload,
+} from '../../../../scripts/fixture-archive.ts';
 import { normaliseForecast } from '../../src/adapters/nl-1/normalise.ts';
 import { parseWaarnemingen } from '../../src/adapters/nl-1/parse.ts';
 import { runHash } from '../../src/load/forecasts.ts';
@@ -249,6 +254,43 @@ describe('the load order shows in the batches', { timeout: 300_000 }, () => {
         [153, 153, 0, 0],
       ],
     });
+  });
+});
+
+describe('the forecast method per series (maaseik Q: other:F058)', { timeout: 300_000 }, () => {
+  beforeAll(async () => {
+    h = await harness();
+  }, 120_000);
+  afterAll(() => h.close());
+
+  it('loads a maaseik Q list under other:F058 as a run; under RWSM-F232 the batch is ok, its values skipped and alerted', async () => {
+    const { body, at, url } = recorded('nl-1-fc-1h-maaseik-q-20261001t0525z', 'NL-1');
+    const wrong = Buffer.from(body.toString('utf8').replaceAll('"other:F058"', '"RWSM-F232"'));
+    expect(wrong.equals(body)).toBe(false);
+    const put = (b: Buffer, when: Date) =>
+      writePayload(h.archive, {
+        source: 'NL-1',
+        spec: 'nl-1-fc-1h',
+        variant: 'maaseik/Q',
+        at: when,
+        body: b,
+        url,
+        method: 'POST',
+        retention: 'forever',
+      });
+    await put(body, at);
+    await put(wrong, new Date(at.getTime() + 3_600_000));
+    expect(await h.loader({ now: NOW }).tick()).toEqual({ lines: 2, loaded: 2 });
+    expect(await batches('nl-1-fc-1h')).toEqual([
+      { n_rows: 143, n_new: 143, n_changed: 0, n_skipped: 0, parse_status: 'ok' },
+      { n_rows: 0, n_new: 0, n_changed: 0, n_skipped: 143, parse_status: 'ok' },
+    ]);
+    expect(await stored()).toMatchObject([{ series: 'maaseik/Q/NVT/other:F006', points: expect.any(Array) }]);
+    expect((await stored())[0]?.points).toHaveLength(143);
+    expect(h.alerts.filter((a) => a.code === 'quarantined')).toEqual([]);
+    expect(h.alerts.filter((a) => a.code === 'unregistered_method')).toEqual([
+      { code: 'unregistered_method', fields: expect.objectContaining({ source: 'NL-1', spec: 'nl-1-fc-1h', n: 143 }) },
+    ]);
   });
 });
 

@@ -1,7 +1,7 @@
 // Turns payloads the owner exported from the production raw archive (Action D2;
 // the read-only export command is in the P5a PR) into adapter fixtures:
 //
-//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a] <export dir>
+//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik] <export dir>
 //
 // (`--p5b`: the P5b export and its rules, `IMPORTS_P5B`; `--p7a`: `IMPORTS_P7A`; `--p8a`: the NL-1 forecast captures
 // of `IMPORTS_P8A`, whole bodies; without a flag the P5a list.)
@@ -386,6 +386,16 @@ export const IMPORTS_P8A: readonly { name: string; source: 'NL-1'; fixture: stri
   { name: 'nl-1-fc-novalue', source: 'NL-1', fixture: 'nl-1-fc-3h-0-alblasserdam-h-novalue' },
 ];
 
+/**
+ * P8a follow-up (Action D2, export of 2026-10-03, `p8a-maaseik.sh`): two whole maaseik Q captures of `nl-1-fc-1h`, the
+ * one forecast series RWS publishes under method other:F058 (the recorded catalogue; 195 series use RWSM-F232). The
+ * captures of 2026-10-01T05:25Z (the last of a run) and 06:25Z (the first of the next one).
+ */
+export const IMPORTS_P8A_MAASEIK: readonly { name: string; source: 'NL-1'; fixture: string }[] = [
+  { name: 'nl-1-fc-1h-maaseik-q-0018', source: 'NL-1', fixture: 'nl-1-fc-1h-maaseik-q-20261001t0525z' },
+  { name: 'nl-1-fc-1h-maaseik-q-0019', source: 'NL-1', fixture: 'nl-1-fc-1h-maaseik-q-20261001t0625z' },
+];
+
 /** The FR-5 territories whose sections reach the rivers into the Netherlands (catalogue §2.5). */
 export const FR5_TERRITORIES = ['2', '3', '29'] as const;
 
@@ -406,7 +416,7 @@ export function cutP7a(
   };
 }
 
-function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a'): void {
+function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik'): void {
   type Entry = {
     name: string;
     source: string;
@@ -417,7 +427,15 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a'): void {
     n?: number;
   };
   const list: readonly Entry[] =
-    mode === 'p5b' ? IMPORTS_P5B : mode === 'p7a' ? IMPORTS_P7A : mode === 'p8a' ? IMPORTS_P8A : IMPORTS;
+    mode === 'p5b'
+      ? IMPORTS_P5B
+      : mode === 'p7a'
+        ? IMPORTS_P7A
+        : mode === 'p8a'
+          ? IMPORTS_P8A
+          : mode === 'p8a-maaseik'
+            ? IMPORTS_P8A_MAASEIK
+            : IMPORTS;
   for (const { name, source, fixture, keep, last, rule, n } of list) {
     const raw = readFileSync(join(dir, `${name}.raw`));
     const line = JSON.parse(readFileSync(join(dir, `${name}.line.json`), 'utf8')) as Line;
@@ -452,10 +470,11 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a'): void {
 
 if (import.meta.main) {
   const flag = process.argv[2];
-  const mode = flag === '--p5b' ? 'p5b' : flag === '--p7a' ? 'p7a' : flag === '--p8a' ? 'p8a' : 'p5a';
+  const modes = { '--p5b': 'p5b', '--p7a': 'p7a', '--p8a': 'p8a', '--p8a-maaseik': 'p8a-maaseik' } as const;
+  const mode = flag !== undefined && Object.hasOwn(modes, flag) ? modes[flag as keyof typeof modes] : 'p5a';
   const dir = process.argv[mode === 'p5a' ? 2 : 3];
   if (dir === undefined) {
-    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a] <export dir>');
+    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik] <export dir>');
     process.exitCode = 64;
   } else main(dir, mode);
 }
