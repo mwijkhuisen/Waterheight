@@ -1,0 +1,23 @@
+{
+ "forecasts": [
+  {
+   "target": "FR-1",
+   "series": "Y210002001/H",
+   "kind": "quantiles",
+   "stepMs": null,
+   "issuedAt": "2026-09-30T11:53:02.000Z",
+   "providerSegmentEnd": null,
+   "points": [
+    {
+     "ts": "2026-09-30T13:17:00.000Z",
+     "flags": 0,
+     "value": 420,
+     "p10": 360,
+     "p50": 420,
+     "p90": 500
+    }
+   ]
+  }
+ ],
+ "dropped": {}
+}

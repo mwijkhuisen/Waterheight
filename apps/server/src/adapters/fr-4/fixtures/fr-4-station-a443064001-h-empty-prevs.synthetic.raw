@@ -1,0 +1,23 @@
+{
+    "Scenario": {
+        "Flux": {
+            "Version": "1beta",
+            "DateRevision": "2019-07-08T10:00:00"
+        },
+        "CodeScenario": "VIC",
+        "VersionScenario": "1.1",
+        "NomScenario": "Référentiels et données de la vigilance crues métropolitaine",
+        "DateHeureCreationFichier": "2026-10-02T11:20:07+00:00",
+        "Emetteur": "1524"
+    },
+    "Simul": {
+        "CdEntVigiCru": "A443064001",
+        "TypEntVigiCru": "7",
+        "LbEntVigiCru": "Station d'essai",
+        "Link": "https://www.vigicrues.gouv.fr/services/v1.1/StaEntVigiCru.json?CdEntVigiCru=A443064001\u0026TypEntVigiCru=7",
+        "GrdSimul": "H",
+        "DtProdSimul": "2026-10-02T10:52:05+02:00",
+        "CommentSimul": "",
+        "Prevs": []
+    }
+}

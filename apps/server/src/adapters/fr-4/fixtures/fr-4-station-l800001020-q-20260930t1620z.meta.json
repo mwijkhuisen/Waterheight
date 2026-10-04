@@ -1,0 +1,14 @@
+{
+  "spec": "fr-4",
+  "variant": "L800001020/Q",
+  "source": "FR-4",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/FR-4/fr-4/2026/09/30/162111Z-9bcddacc3cafc437.zst",
+  "recorded_at": "2026-09-30T16:20:52Z",
+  "status": 200,
+  "url": "https://www.vigicrues.gouv.fr/services/v1.1/prevision.json?CdEntVigiCru=L800001020&TypEntVigiCru=7&FormatDate=iso&GrdSimul=Q",
+  "bytes": 8735,
+  "source_sha256": "9bcddacc3cafc4378b6e72b0637e231277fc798fcd06aabdf28924034696b37e",
+  "trimmed": false
+}
