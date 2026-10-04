@@ -1,0 +1,13 @@
+# Global options of the owner site (P9a; plan decision 2). The site is in
+# owner.caddy. caddy-owner is a second container of the web image
+# (deploy/compose.owner.yaml): it has no ACME account, no port 80 and no
+# published port (WireGuard-only from P12a). Its certificate is its own
+# internal CA's (`tls internal`, kept in /data); the CA is never installed into
+# a trust store here (skip_install_trust).
+{
+	admin off
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+import /etc/caddy/owner.caddy

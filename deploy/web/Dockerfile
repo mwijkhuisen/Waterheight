@@ -20,6 +20,6 @@ RUN cp /usr/bin/caddy /usr/bin/caddy.plain \
   && mv /usr/bin/caddy.plain /usr/bin/caddy \
   && mkdir -p /data/access /config \
   && chown -R 65533:65533 /data /config
-COPY deploy/web/Caddyfile deploy/web/site.caddy /etc/caddy/
+COPY deploy/web/Caddyfile deploy/web/site.caddy deploy/web/Caddyfile.owner deploy/web/owner.caddy /etc/caddy/
 COPY --from=build /src/apps/web/dist /srv/www
 USER 65533:65533

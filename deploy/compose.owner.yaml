@@ -1,0 +1,50 @@
+# The owner site overlay (P9a; plan decision 2, A§11.1 and A§11.5 deviation).
+# Used with `-f deploy/compose.yaml -f deploy/compose.owner.yaml`: by the CI
+# deploy job's run.sh, and in production only from P12a (WireGuard-only). While
+# production runs compose.yaml alone, no owner site, owner secret or owner mount
+# exists in the public stack, and a missing owner_basic_auth file cannot take
+# the public Caddy down (caddy-owner itself fails closed without it).
+#
+# caddy-owner is the web image with its own Caddyfile (Caddyfile.owner):
+# basic_auth at the site level, the §12.2 headers plus `private, no-store` and
+# `noindex, nofollow` on every response, no published port (P12a binds it to the
+# WireGuard address). It mounts only the owner publisher's served tree (v1,
+# read-only); never anything of /srv/rws/public.
+services:
+  caddy-owner:
+    image: ${RWS_WEB_IMAGE:?}
+    command: [caddy, run, --config, /etc/caddy/Caddyfile.owner, --adapter, caddyfile]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    user: "65533:65533"
+    group_add: ["61010"]
+    environment:
+      RWS_DOMAIN: ${RWS_DOMAIN:?}
+    secrets: [owner_basic_auth]
+    volumes:
+      - /srv/rws/owner/www/v1:/srv/rws/owner/www/v1:ro
+      - caddy_owner_data:/data
+      - caddy_owner_config:/config
+    networks: [edge]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+secrets:
+  owner_basic_auth:
+    file: /etc/rws/secrets/owner_basic_auth
+
+volumes:
+  caddy_owner_data:
+  caddy_owner_config:

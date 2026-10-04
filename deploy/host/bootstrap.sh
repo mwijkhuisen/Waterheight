@@ -31,13 +31,17 @@ readonly LIB=/usr/local/lib/rws
 # Secret groups: a file secret keeps its host owner in the container, so each is
 # root:<gid> 0440 and only its consumer gets that gid (compose.yaml group_add).
 # The db_* passwords (P2a): db (the superuser's, read by initdb only), migrate,
-# load and api; db_rws_publish and db_rws_owner_api have no consumer before P9.
+# load and api; db_rws_publish (the publisher) and db_rws_owner_api (publish-owner,
+# P9a; api-owner later) are read by P9a services. owner_basic_auth (P9a, gid 61010,
+# group rws-ownerauth) is the owner site's `owner <bcrypt>` line, read only by
+# caddy-owner (deploy/compose.owner.yaml, used in production from P12a): this
+# script creates the empty file and never fills it.
 readonly -A SECRET_GID=(['hc_ping_key']=61001 ['rws_x_api_key']=61002 ['restic_password']=61003 ['s3_credentials']=61003
   ['db_postgres']=61004 ['db_rws_migrator']=61005 ['db_rws_load']=61006 ['db_rws_publish']=61007
-  ['db_rws_api']=61008 ['db_rws_owner_api']=61009)
+  ['db_rws_api']=61008 ['db_rws_owner_api']=61009 ['owner_basic_auth']=61010)
 readonly -A GROUP_GID=(['rws-hc']=61001 ['rws-rwskey']=61002 ['rws-backup']=61003
   ['rws-dbpostgres']=61004 ['rws-dbmigrator']=61005 ['rws-dbload']=61006 ['rws-dbpublish']=61007
-  ['rws-dbapi']=61008 ['rws-dbownerapi']=61009)
+  ['rws-dbapi']=61008 ['rws-dbownerapi']=61009 ['rws-ownerauth']=61010)
 readonly DB_SECRETS=(db_postgres db_rws_migrator db_rws_load db_rws_publish db_rws_api db_rws_owner_api)
 
 case ${1:-} in
@@ -223,6 +227,17 @@ ensure_dir /srv/rws/public/data/v1 0755 0 0
 ensure_dir /srv/rws/public/data/v1/rivers 0755 0 0
 ensure_dir /srv/rws/public/downloads 0755 0 0
 ensure_dir /var/lib/rws/rivers 0700 0 0
+# The static publisher's trees (P9a): /srv/rws/<audience>/www is the one directory the publisher (uid 65532, no
+# network) writes. v1 is what Caddy serves (the only part it mounts, read-only: the .tmp and .state directories
+# sit on the same filesystem so rename is atomic, but no Caddy sees them). Created here so Docker never makes a
+# bind source as root; ensure_dir also repairs a root-owned one it already made. The public tree is separate from
+# public/data/v1/rivers above (root's, T-GEO-7); the owner tree is mounted only by publish-owner and caddy-owner.
+for aud in public owner; do
+  ensure_dir "/srv/rws/$aud/www" 0755 65532 65532
+  ensure_dir "/srv/rws/$aud/www/v1" 0755 65532 65532
+  ensure_dir "/srv/rws/$aud/www/.tmp" 0700 65532 65532
+  ensure_dir "/srv/rws/$aud/www/.state" 0700 65532 65532
+done
 # Root's: the backup job mounts only the subdirectories below, and an owner of the parent could swap db/ for a
 # link under root's nightly dump (nothing writes the parent itself).
 ensure_dir /srv/rws/backup 0700 0 0

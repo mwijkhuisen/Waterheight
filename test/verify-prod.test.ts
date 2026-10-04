@@ -441,7 +441,14 @@ const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
 const health = (over: Partial<Health> = {}): Health => ({
   status: 'ok',
   generated_at: ago(60_000),
-  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
+  loader: {
+    lag_p95_s: 34,
+    backlog_files: 0,
+    backlog_bytes: 0,
+    backlog_age_s: null,
+    bad_manifest_lines: 0,
+    last_commit: null,
+  },
   sources: { ok: 10, degraded: 0, down: 0, unknown: 2, total: 12 },
   owner_sources: { healthy: 5, total: 6 },
   quarantined: 0,
@@ -2936,20 +2943,57 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
 
   it('proxies GET and HEAD under /api/v1/ to the api: a 1 KB body cap, no Via, no Server, no other upstream (P4b)', () => {
     expect(rules('@api')).toEqual(['@api {', 'method GET HEAD', `expression ${API_PATH}`]);
+    // A client's own address headers never reach the api (SR-4): Caddy sets X-Forwarded-For itself. Only Caddy sets
+    // X-Degraded (P9a): /api/v1/snapshot alone has the stand-in for an upstream 502, 503 or 504 answer.
+    const proxy = ['header_up -Forwarded', 'header_up -X-Real-IP', 'header_down -Server', 'header_down -X-Degraded'];
     expect(rules('handle @api')).toEqual([
       'handle @api {',
       'request_body {',
       'max_size 1KB',
       '}',
       'header -Via',
+      "@snapshot expression `{path} == '/api/v1/snapshot'`",
+      'handle @snapshot {',
       'reverse_proxy api:8080 {',
-      // A client's own address headers never reach the api (SR-4): Caddy sets X-Forwarded-For itself.
-      'header_up -Forwarded',
-      'header_up -X-Real-IP',
-      'header_down -Server',
+      ...proxy,
+      '@upstream_5xx status 502 503 504',
+      'handle_response @upstream_5xx {',
+      'header X-Degraded "1"',
+      'header Cache-Control "no-store"',
+      'rewrite * /latest.json',
+      'root * /srv/rws/public/www/v1',
+      'file_server {',
+      'precompressed zstd gzip',
+      '}',
+      '}',
+      '}',
+      '}',
+      'handle {',
+      'reverse_proxy api:8080 {',
+      ...proxy,
+      '}',
       '}',
     ]);
-    expect([...site.matchAll(/^\s+reverse_proxy (\S+)/gm)].map((m) => m[1])).toEqual(['api:8080']);
+    expect([...site.matchAll(/^\s+reverse_proxy (\S+)/gm)].map((m) => m[1])).toEqual(['api:8080', 'api:8080']);
+    // The dead-upstream half (a dial failure or a timeout is a Caddy error): scoped to /api/v1/snapshot, never a
+    // site-wide error page (C19, KG-107).
+    expect(site.match(/\n\thandle_errors /g)).toHaveLength(1);
+    expect(rules('handle_errors 502 503 504')).toEqual([
+      'handle_errors 502 503 504 {',
+      "@snapshot_down expression `{http.request.orig_uri.path} == '/api/v1/snapshot'`",
+      'handle @snapshot_down {',
+      'header X-Degraded "1"',
+      'header Cache-Control "no-store"',
+      'header X-Content-Type-Options "nosniff"',
+      'header -Server',
+      'rewrite * /latest.json',
+      'root * /srv/rws/public/www/v1',
+      'file_server {',
+      'precompressed zstd gzip',
+      'status 200',
+      '}',
+      '}',
+    ]);
   });
 
   it('answers any method but GET and HEAD with 405 and Allow before every route, any other /api path with 404', () => {
@@ -3292,23 +3336,35 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
 
   it('has exactly the cache classes no-store, max-age=60, immutable (tile files, assets), no-cache (pages), no browse', () => {
     const cache = [...site.matchAll(/^\s+header Cache-Control "(.*)"$/gm)].map((m) => m[1]);
-    // In file order: the status files, the tiles manifest, the basemap tiles, (P6b) the river tiles, the rivers
-    // manifest, the reaches file and the download, then the assets and the pages.
+    // In file order: the status files, (P9a) /runtime-config.json and the degraded stand-in's two halves, the tiles
+    // manifest, the basemap tiles, (P6b) the river tiles, the rivers manifest, the reaches file and the download,
+    // (P9a) the static publisher's classes (live, recent, slow, immutable, warnings, status), then the assets and the
+    // pages.
     expect(cache).toEqual([
       'no-store',
       'no-store',
+      'no-cache',
+      'no-store',
+      'no-store',
       MANIFEST_CACHE,
       TILE_CACHE,
       TILE_CACHE,
       MANIFEST_CACHE,
       TILE_CACHE,
       TILE_CACHE,
+      'public, max-age=60, stale-while-revalidate=300',
+      'public, max-age=300, stale-while-revalidate=600',
+      'public, max-age=300',
+      TILE_CACHE,
+      'public, max-age=60',
+      'public, max-age=30',
       TILE_CACHE,
       'no-cache',
     ]);
     const directives = site.split('\n').filter((l) => !l.trim().startsWith('#'));
     expect(directives.join('\n')).not.toMatch(/\bbrowse\b/);
-    // The file servers' roots: the status copy, the tiles and the site; never the parent /srv/rws.
+    // The file servers' roots: the status copy, the tiles, the site and (P9a) the publisher's tree, whose `/v1` path
+    // is all Caddy mounts of it (never its .tmp or .state); never the parent /srv/rws.
     const roots = [...site.matchAll(/^\s+root \* (\S+)$/gm)].map((m) => m[1]);
     expect(new Set(roots)).toEqual(
       new Set([
@@ -3316,6 +3372,8 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
         '/srv/rws/tiles',
         '/srv/rws/public/data/v1/rivers',
         '/srv/rws/public/downloads',
+        '/srv/rws/public/www',
+        '/srv/rws/public/www/v1',
         '/srv/www',
       ]),
     );

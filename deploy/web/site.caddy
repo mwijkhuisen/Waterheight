@@ -1,10 +1,11 @@
 # The public site (A§12.2; issue #16 P1b). Every A§12.2 header, noindex until
 # the public launch (P12), /healthz, the two coarse status files, (P2a, P4b) the
-# api under /api/v1/, (P3) the basemap tiles and the immutable assets, and
-# (P4b) the web app with its fallback for app routes. No CORS headers, no owner
-# site (P9; WireGuard-only from P12a). scripts/verify-prod.ts compares these
-# headers with A§12.2 byte for byte; the header block also applies to the
-# proxied responses.
+# api under /api/v1/, (P3) the basemap tiles and the immutable assets, (P4b) the
+# web app with its fallback for app routes, and (P9a) the static publisher's
+# files under /data/v1/ with /runtime-config.json. No CORS headers, no owner
+# site: that is deploy/web/owner.caddy in its own container (compose.owner.yaml;
+# WireGuard-only from P12a). scripts/verify-prod.ts compares these headers with
+# A§12.2 byte for byte; the header block also applies to the proxied responses.
 {$RWS_DOMAIN} {
 	header {
 		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp"
@@ -83,6 +84,14 @@
 		respond 404
 	}
 
+	# Which audience this site shows (P9a): the web app reads it once. The owner
+	# site (owner.caddy) answers {"audience":"owner"} from its own container.
+	handle /runtime-config.json {
+		header Content-Type "application/json"
+		header Cache-Control "no-cache"
+		respond `{"audience":"public"}` 200
+	}
+
 	# The api (P2a: its two health paths; P4b: everything under /api/v1/). GET
 	# or HEAD only (@write above), any query: the api validates every parameter
 	# and answers its own 400s and JSON 404s (A§9.2). The expression compares the
@@ -106,15 +115,67 @@
 		}
 		# Deferred like the site block: nothing names the upstream software.
 		header -Via
-		# The api reads no client address today. Caddy sets X-Forwarded-For
-		# itself, and a client's Forwarded and X-Real-IP are dropped. Other
-		# client-address headers (True-Client-IP, X-Client-IP, …) still pass,
-		# so a per-client limit (P9b) keys only on Caddy's X-Forwarded-For or
-		# the socket, never on another header.
-		reverse_proxy api:8080 {
-			header_up -Forwarded
-			header_up -X-Real-IP
-			header_down -Server
+		# The degraded stand-in (P9a, A§9.1), for /api/v1/snapshot only: when the
+		# api is down the map still gets the newest snapshot as a static file.
+		# Two cases, two mechanisms (Caddy 2.11.4, measured): an upstream 502, 503
+		# or 504 *response* (the api answers 503 itself) is caught only by
+		# handle_response inside the proxy, a dead upstream (a dial failure is a
+		# 502, a timeout a 504) only by handle_errors below. Both serve latest.json
+		# (the file the publisher writes last-but-one each cycle) with status 200,
+		# X-Degraded: 1 and no-store; the web app then shows its banner. Any other
+		# /api path keeps the plain proxy: copy_response inside handle_response
+		# would drop the upstream's headers (Content-Type, Retry-After), and a
+		# site-wide handle_errors would also change file_server 404s (KG-107).
+		# header_down -X-Degraded: only this site sets it, never the upstream.
+		@snapshot expression `{path} == '/api/v1/snapshot'`
+		handle @snapshot {
+			reverse_proxy api:8080 {
+				header_up -Forwarded
+				header_up -X-Real-IP
+				header_down -Server
+				header_down -X-Degraded
+				@upstream_5xx status 502 503 504
+				handle_response @upstream_5xx {
+					header X-Degraded "1"
+					header Cache-Control "no-store"
+					rewrite * /latest.json
+					root * /srv/rws/public/www/v1
+					file_server {
+						precompressed zstd gzip
+					}
+				}
+			}
+		}
+		handle {
+			# The api reads no client address today. Caddy sets X-Forwarded-For
+			# itself, and a client's Forwarded and X-Real-IP are dropped. Other
+			# client-address headers (True-Client-IP, X-Client-IP, …) still pass,
+			# so a per-client limit (P9b) keys only on Caddy's X-Forwarded-For or
+			# the socket, never on another header.
+			reverse_proxy api:8080 {
+				header_up -Forwarded
+				header_up -X-Real-IP
+				header_down -Server
+				header_down -X-Degraded
+			}
+		}
+	}
+	# The dead-upstream half of the stand-in. Error routes get no site header
+	# block and would show `Server: Caddy`, so the route sets what it needs, and
+	# file_server must be told to answer 200, not the error's status.
+	handle_errors 502 503 504 {
+		@snapshot_down expression `{http.request.orig_uri.path} == '/api/v1/snapshot'`
+		handle @snapshot_down {
+			header X-Degraded "1"
+			header Cache-Control "no-store"
+			header X-Content-Type-Options "nosniff"
+			header -Server
+			rewrite * /latest.json
+			root * /srv/rws/public/www/v1
+			file_server {
+				precompressed zstd gzip
+				status 200
+			}
 		}
 	}
 	handle @api_other {
@@ -220,7 +281,8 @@
 	# TTL, it changes on every refresh), the dated reaches file and the dated ODbL
 	# download (immutable). Exact, case-sensitive matches with a file matcher, so
 	# a missing file is a 404 without Cache-Control; everything else under
-	# /data/v1/rivers and /downloads is a 404. The rest of /data/v1/ is P9's.
+	# /data/v1/rivers and /downloads is a 404. The rest of /data/v1/ is the
+	# static publisher's (below).
 	# The download is gzip data, not a compressed transfer: application/gzip and
 	# never a Content-Encoding (it is not in encode's default types, and the
 	# gunzipped first bytes are what verify-prod reads with a Range).
@@ -274,6 +336,117 @@
 	@downloads_other path_regexp ^/downloads(/|$)
 	handle @downloads_other {
 		respond 404
+	}
+
+	# The static publisher's files (P9a, A§9.1): precomputed, precompressed
+	# (.zst and .gz beside each file; file_server picks by Accept-Encoding, sets
+	# Content-Encoding and Vary, and encode leaves an encoded response alone), from
+	# the one directory the publisher writes, mounted read-only at
+	# /srv/rws/public/www/v1 (its .tmp and .state are not mounted). Inside the
+	# /data/v1 route the prefix /data is stripped, so /data/v1/x is the file
+	# /srv/rws/public/www/v1/x. Then one exact, case-sensitive matcher per cache
+	# class on the path as sent, each with a file matcher: a file that does not
+	# exist, a .zst or .gz name, a dot segment, a directory and any other
+	# /data/v1 path is a 404 with no Cache-Control and no listing. Short classes
+	# revalidate; a settled day, its frames file and a dated warnings file never
+	# change under their name: immutable. (`uri` runs before the inner handles.)
+	@data path_regexp ^/data/v1(/|$)
+	handle @data {
+		uri strip_prefix /data
+		@data_live {
+			method GET HEAD
+			expression `{path} == '/v1/meta.json' || {path} == '/v1/latest.json'`
+			file {
+				root /srv/rws/public/www
+				try_files {path}
+			}
+		}
+		handle @data_live {
+			header Cache-Control "public, max-age=60, stale-while-revalidate=300"
+			root * /srv/rws/public/www
+			file_server {
+				precompressed zstd gzip
+			}
+		}
+		@data_recent {
+			method GET HEAD
+			expression `{path}.matches('^/v1/recent/[0-9]{4}-[0-9]{2}-[0-9]{2}/[0-9]{4}\\.json$')`
+			file {
+				root /srv/rws/public/www
+				try_files {path}
+			}
+		}
+		handle @data_recent {
+			header Cache-Control "public, max-age=300, stale-while-revalidate=600"
+			root * /srv/rws/public/www
+			file_server {
+				precompressed zstd gzip
+			}
+		}
+		@data_slow {
+			method GET HEAD
+			expression `{path} in ['/v1/stations.json', '/v1/sources.json', '/v1/frames/recent.json', '/v1/forecast/latest.json'] || {path}.matches('^/v1/series/[a-z]{2}\\.[a-z0-9-]+\\.[A-Za-z0-9_-][A-Za-z0-9._-]{0,70}/recent\\.json$')`
+			file {
+				root /srv/rws/public/www
+				try_files {path}
+			}
+		}
+		handle @data_slow {
+			header Cache-Control "public, max-age=300"
+			root * /srv/rws/public/www
+			file_server {
+				precompressed zstd gzip
+			}
+		}
+		@data_immutable {
+			method GET HEAD
+			expression `{path}.matches('^/v1/(settled/[0-9]{4}-[0-9]{2}-[0-9]{2}/v[1-9][0-9]{0,5}/[0-9]{4}|frames/[0-9]{4}-[0-9]{2}-[0-9]{2}/v[1-9][0-9]{0,5}|warnings/[0-9]{4}-[0-9]{2}-[0-9]{2})\\.json$')`
+			file {
+				root /srv/rws/public/www
+				try_files {path}
+			}
+		}
+		handle @data_immutable {
+			header Cache-Control "public, max-age=31536000, immutable"
+			root * /srv/rws/public/www
+			file_server {
+				precompressed zstd gzip
+			}
+		}
+		@data_warnings {
+			method GET HEAD
+			expression `{path} == '/v1/warnings/latest.geojson'`
+			file {
+				root /srv/rws/public/www
+				try_files {path}
+			}
+		}
+		handle @data_warnings {
+			header Cache-Control "public, max-age=60"
+			header Content-Type "application/geo+json"
+			root * /srv/rws/public/www
+			file_server {
+				precompressed zstd gzip
+			}
+		}
+		@data_status {
+			method GET HEAD
+			expression `{path} == '/v1/status.json'`
+			file {
+				root /srv/rws/public/www
+				try_files {path}
+			}
+		}
+		handle @data_status {
+			header Cache-Control "public, max-age=30"
+			root * /srv/rws/public/www
+			file_server {
+				precompressed zstd gzip
+			}
+		}
+		handle {
+			respond 404
+		}
 	}
 
 	# No dotfile from the web root or /assets: a path with a segment that

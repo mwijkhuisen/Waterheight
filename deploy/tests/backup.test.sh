@@ -429,6 +429,25 @@ run rws-tick --dry-run
 expect_grep "dry-run: table inet rws is missing" "$C/out"
 expect_eq "$(grep -c "^nft -f $RWS_ETC/nftables.conf$" "$FIX/calls")" 1
 
+case_ "tick: the owner publisher's meta.json mtime is its heartbeat: fresh pings, old fails, missing sends nothing (P9a)"
+setup
+run rws-tick
+expect_no_grep "owner-publisher" "$FIX/pings"
+mkdir -p "$RWS_SRV/owner/www/v1"
+echo '{"canary":"never read"}' >"$RWS_SRV/owner/www/v1/meta.json"
+run rws-tick
+expect_rc 0
+expect_grep "/owner-publisher ok$" "$FIX/pings"
+expect_no_grep "never read" "$C/out"
+: >"$FIX/pings"
+touch -d '-6 minutes' "$RWS_SRV/owner/www/v1/meta.json"
+run rws-tick
+expect_grep "/owner-publisher/fail stale$" "$FIX/pings"
+: >"$FIX/pings"
+run rws-tick --dry-run
+expect_grep "dry-run: ping owner-publisher/fail" "$C/out"
+expect_no_grep "owner-publisher" "$FIX/pings"
+
 case_ "status copy: capture.json published 0644; a symlink, a non-contract and an oversize file refused; a copy past the cap cut off"
 setup
 mkdir -p "$RWS_SRV/public/status"

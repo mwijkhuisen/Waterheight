@@ -18,6 +18,13 @@ describe('e2e job pins', () => {
     expect(/:v([0-9.]+)-/.exec(image)?.[1]).toBe(pkg.devDependencies['@playwright/test']);
   });
 
+  it('hands the deploy job the same Playwright image (P9a: run.sh drives degraded.spec.ts in it)', () => {
+    const all = [...ci.matchAll(/^\s+PLAYWRIGHT_IMAGE: (\S+)$/gm)].map((m) => m[1]);
+    expect(all.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(all).size).toBe(1);
+    expect(ci).toContain('sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/e2e/run.sh');
+  });
+
   it('serves the e2e build with the Caddy image the web image is built from', () => {
     const from = /^FROM (caddy:\S+)$/m.exec(read('deploy/web/Dockerfile'))?.[1];
     expect(from).toBeDefined();
