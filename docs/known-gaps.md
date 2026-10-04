@@ -12,14 +12,20 @@ KG-176, KG-150, KG-204, KG-202, KG-173 and KG-117 are updated by this PR (their 
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-206 | forecasts, data source | CH-4: the 13 lake stations (`m ü.M.`: 2004, 2022, 2023, 2027, 2032, 2043, 2093, 2101, 2118, 2207, 2208, 2209, 2642) and 2646 of the 54 seeded stations answer 404 on `q_forecast` every hour (2026-09-30 to 10-04), so they are captured and never have a run. Of the other 40, 12 sit on CH-1 series that are `audience: "off"` (non-Rhine water bodies, the P5a scope), so 28 series are expected to store a run (`ch4ExpectedSeries()` in `scripts/verify-prod.ts`; the P8 expectation of 55 stations is not met). The lake mapping (`m ü. M.`, a W series in centimetres) is declared and tested on synthetic figures only | [owner] A follow-up issue finds BAFU's lake forecast path or confirms there is none (owner decision of 2026-10-04); then the seed, the capture spec and `CH4_NO_FORECAST` follow, and a replay (`replay.md` §12) | open [U] |
-| KG-207 | forecasts, licence | DE-3 (BfG 14-day quantiles) is owner audience: its runs are in the owner family only and no public output shows them. Its public display waits for D4 and P13 (#28). The 16 six-week files of `registry/seed/de-3.csv` are captured and load nothing: they stay in the raw archive | [owner] D4 and P13 | open [U] |
+| KG-207 | forecasts, data source | CH-4: the 13 lake stations (`m ü.M.`: 2004, 2022, 2023, 2027, 2032, 2043, 2093, 2101, 2118, 2207, 2208, 2209, 2642) and 2646 of the 54 seeded stations answer 404 on `q_forecast` every hour (2026-09-30 to 10-04), so they are captured and never have a run. Of the other 40, 12 sit on CH-1 series that are `audience: "off"` (non-Rhine water bodies, the P5a scope), so 28 series are expected to store a run (`ch4ExpectedSeries()` in `scripts/verify-prod.ts`; the P8 expectation of 55 stations is not met). The lake mapping (`m ü. M.`, a W series in centimetres) is declared and tested on synthetic figures only | [owner] A follow-up issue finds BAFU's lake forecast path or confirms there is none (owner decision of 2026-10-04); then the seed, the capture spec and `CH4_NO_FORECAST` follow, and a replay (`replay.md` §12) | open [U] |
+| KG-208 | forecasts, licence | DE-3 (BfG 14-day quantiles) is owner audience: its runs are in the owner family only and no public output shows them. Its public display waits for D4 and P13 (#28). The 16 six-week files of `registry/seed/de-3.csv` are captured and load nothing: they stay in the raw archive | [owner] D4 and P13 | open [U] |
 
 ### Known limits
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-208 | web | The edges of the forecast slider: the station chart has no forecast band (#25); the map after now has no state palette, so the state is only in words (the P10 legend); a page left open for long can show the "Verwachting / Forecast" badge over an observation snapshot until it is reloaded (KG-117); a station none of whose series is in the api channel, or none of whose series has a run, ends the slider at now (a 404 of `/series/{id}/forecast` is "no run") although the display channel might hold a forecast | #25 (the chart band), P10 (the legend, the live mode), P9 (the owner API) | open |
+| KG-209 | web | The edges of the forecast slider: the station chart has no forecast band (#25); the map after now has no state palette, so the state is only in words (the P10 legend); a page left open for long can show the "Verwachting / Forecast" badge over an observation snapshot until it is reloaded (KG-117); a station none of whose series is in the api channel, or none of whose series has a run, ends the slider at now (a 404 of `/series/{id}/forecast` is "no run") although the display channel might hold a forecast | #25 (the chart band), P10 (the legend, the live mode), P9 (the owner API) | open |
+
+## P8a follow-up: the NL-1 forecast method per series (PR pending, issue #23)
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-206 | forecasts, health | The 80 `nl-1-fc-1h` payloads production quarantined as `forecast_method` (every maaseik Q capture since 2026-09-30, method `other:F058`) keep NL-1 `degraded` (`computeHealth` counts every quarantined batch) until they are replayed. Two real maaseik Q captures are now goldens (`import-fixtures --p8a-maaseik`, export of 2026-10-03: F058 runs like F232, one a day, 10-minute steps, exact tails) | [owner] the replay of `nl-1-fc-1h` after the deploy (`docs/runbooks/replay.md` §11, "The 80 `forecast_method` quarantines") | open |
 
 ## P8a Forecast runs: NL-1, DE-2 and LU-3 (PR pending, issue #23)
 

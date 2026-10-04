@@ -18,7 +18,7 @@ import {
 } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { type Context, normaliseForecast } from '../../src/adapters/nl-1/normalise.ts';
+import { type Context, forecastMethod, normaliseForecast } from '../../src/adapters/nl-1/normalise.ts';
 import { parseWaarnemingen, type Waarnemingen } from '../../src/adapters/nl-1/parse.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
@@ -298,13 +298,111 @@ describe('synthetic payloads [U]', () => {
   });
 });
 
+describe('the forecast method per series (maaseik Q: other:F058)', () => {
+  const MAASEIK_Q = 'maaseik/Q/NVT/other:F006';
+  // Real captures (the owner's export of 2026-10-03, `import-fixtures --p8a-maaseik`): the last of a run and the first
+  // of the next.
+  const MAASEIK = 'nl-1-fc-1h-maaseik-q-20261001t0525z';
+  const MAASEIK_NEXT = 'nl-1-fc-1h-maaseik-q-20261001t0625z';
+
+  it('the declared method of every forecast series of the seed is the one the recorded catalogue lists for it', () => {
+    const cat = JSON.parse(rawFixture('NL-1', 'nl-1-catalogue').body.toString('utf8')) as {
+      AquoMetadataLijst: {
+        AquoMetadata_MessageID: number;
+        ProcesType: string;
+        Compartiment: { Code: string };
+        Groepering: { Code: string };
+        Grootheid: { Code: string };
+        Hoedanigheid: { Code: string };
+        WaardeBepalingsMethode: { Code: string };
+      }[];
+      LocatieLijst: { Locatie_MessageID: number; Code: string }[];
+      AquoMetadataLocatieLijst: { AquoMetaData_MessageID: number; Locatie_MessageID: number }[];
+    };
+    const aquo = new Map(cat.AquoMetadataLijst.map((a) => [a.AquoMetadata_MessageID, a]));
+    const loc = new Map(cat.LocatieLijst.map((l) => [l.Locatie_MessageID, l.Code]));
+    // Only the catalogue rows the adapter would attach (review F1): Grootheid → quantity and its Hoedanigheid,
+    // compartment OW, no grouping.
+    const attaches = new Map([
+      ['WATHTE', ['H', 'NAP']],
+      ['Q', ['Q', 'NVT']],
+    ]);
+    const listed = new Map<string, Set<string>>();
+    for (const link of cat.AquoMetadataLocatieLijst) {
+      const a = aquo.get(link.AquoMetaData_MessageID);
+      const code = loc.get(link.Locatie_MessageID);
+      const [qty, datum] = attaches.get(a?.Grootheid.Code ?? '') ?? [];
+      if (
+        a?.ProcesType !== 'verwachting' ||
+        code === undefined ||
+        qty === undefined ||
+        a.Hoedanigheid.Code !== datum ||
+        a.Compartiment.Code !== 'OW' ||
+        a.Groepering.Code !== ''
+      )
+        continue;
+      const k = `${code}/${qty}`;
+      listed.set(k, new Set([...(listed.get(k) ?? []), a.WaardeBepalingsMethode.Code]));
+    }
+    const seed = readFileSync(new URL('../../../../registry/seed/nl-1-forecast.csv', import.meta.url), 'utf8')
+      .split('\n')
+      .filter((l) => l !== '' && !l.startsWith('#'))
+      .slice(1)
+      .map((l) => l.split(','));
+    expect(seed).toHaveLength(196);
+    const methods = new Map<string, number>();
+    for (const [code, qty] of seed as [string, 'H' | 'Q'][]) {
+      const declared = forecastMethod(code, qty);
+      expect([code, qty, [...(listed.get(`${code}/${qty}`) ?? [])]]).toEqual([code, qty, [declared]]);
+      methods.set(declared, (methods.get(declared) ?? 0) + 1);
+    }
+    expect(Object.fromEntries(methods)).toEqual({ 'RWSM-F232': 195, 'other:F058': 1 });
+    expect(forecastMethod('maaseik', 'Q')).toBe('other:F058');
+    expect(forecastMethod('maaseik', 'H')).toBe('RWSM-F232');
+  });
+
+  it('real maaseik Q captures under other:F058 equal their goldens: a run on the registered series, then the next one', () => {
+    expect(registry.has(MAASEIK_Q)).toBe(true);
+    const out = run(MAASEIK);
+    expect(out).toEqual(golden(MAASEIK, out));
+    expect([out.dropped, out.unknown]).toEqual([{}, 0]);
+    expect(runsOf(out).map((r) => [r.series, r.points.length, r.stepMs])).toEqual([[MAASEIK_Q, 143, 10 * MIN]]);
+    // First raw value "2026-10-01T06:20:00.000+01:00" (16 m³/s), last "2026-10-02T06:00:00.000+01:00" (7 m³/s).
+    expect(runsOf(out)[0]?.points[0]).toEqual({ ts: '2026-10-01T05:20:00.000Z', value: 16, flags: 0 });
+    expect(runsOf(out)[0]?.points.at(-1)).toEqual({ ts: '2026-10-02T05:00:00.000Z', value: 7, flags: 0 });
+    expect(canon(MAASEIK).points).toHaveLength(143);
+    const next = run(MAASEIK_NEXT);
+    expect(next).toEqual(golden(MAASEIK_NEXT, next));
+    expect(runsOf(next).map((r) => [r.series, r.points.length])).toEqual([[MAASEIK_Q, 287]]);
+    // The next day's run ends a day later: never the tail of the earlier capture.
+    expect(isTail(canon(MAASEIK), canon(MAASEIK_NEXT))).toBe(false);
+  });
+
+  it('the same list under RWSM-F232 is unregistered_method; a maaseik stage list takes RWSM-F232 and refuses F058', () => {
+    const n = (lists(MAASEIK)[0] as Waarnemingen).metingen.length;
+    const f232 = recode(lists(MAASEIK), 'maaseik', { WaardeBepalingsMethode: 'RWSM-F232' });
+    expect(normaliseForecast(f232, ctx(MAASEIK))).toEqual({
+      obs: [],
+      gaugeZeros: [],
+      dropped: { unregistered_method: n },
+      unknown: 0,
+      forecasts: [],
+    });
+    const h = lists(D0645);
+    const stage = (WaardeBepalingsMethode: string) =>
+      normaliseForecast(recode(h, 'maaseik', { WaardeBepalingsMethode }), ctx(D0645));
+    expect(runsOf(stage('RWSM-F232')).map((r) => r.series)).toEqual(['maaseik/WATHTE/NAP/other:F007']);
+    expect(stage('other:F058').dropped).toEqual({ unregistered_method: (h[0] as Waarnemingen).metingen.length });
+  });
+});
+
 describe('what a forecast list is, and what is only counted', () => {
   const base = ctx(Q0525);
   const q = lists(Q0525);
   const h = lists(D0645);
   const norm = (l: readonly Waarnemingen[], c: Context = base) => normaliseForecast(l, c);
 
-  it('only ProcesType verwachting and method RWSM-F232 are read: any other list is drift of the whole payload', () => {
+  it('only ProcesType verwachting is read: a list of any other ProcesType is drift of the whole payload', () => {
     const code = (l: readonly Waarnemingen[]) => {
       try {
         norm(l);
@@ -320,18 +418,46 @@ describe('what a forecast list is, and what is only counted', () => {
         'forecast_process',
       ]);
     }
-    for (const WaardeBepalingsMethode of ['other:F230', 'RWSM-F233', '']) {
-      expect([
-        WaardeBepalingsMethode,
-        code(recode(q, 'lobith.bovenrijn.tolkamer', { WaardeBepalingsMethode })),
-      ]).toEqual([WaardeBepalingsMethode, 'forecast_method']);
-    }
     // One wrong list among good ones fails the payload, and it does not matter which comes first.
     const bad = recode(h, 'driel.beneden', { ProcesType: 'meting' });
     expect(code([...q, ...bad])).toBe('forecast_process');
     expect(code([...bad, ...q])).toBe('forecast_process');
     // Before anything is stored a wrong list is drift even under a location the registry does not hold.
     expect(code(recode(q, 'nowhere', { ProcesType: 'meting' }))).toBe('forecast_process');
+  });
+
+  it('the method is declared per series: a list under another method is unregistered_method, never drift, and the rest loads', () => {
+    const n = (q[0] as Waarnemingen).metingen.length;
+    for (const WaardeBepalingsMethode of ['other:F230', 'RWSM-F233', 'other:F058', 'constructor', '']) {
+      expect([
+        WaardeBepalingsMethode,
+        norm(recode(q, 'lobith.bovenrijn.tolkamer', { WaardeBepalingsMethode })),
+      ]).toEqual([
+        WaardeBepalingsMethode,
+        { obs: [], gaugeZeros: [], dropped: { unregistered_method: n }, unknown: 0, forecasts: [] },
+      ]);
+    }
+    // The payload's other lists still load, in either order.
+    const bad = recode(q, 'lobith.bovenrijn.tolkamer', { WaardeBepalingsMethode: 'RWSM-F233' });
+    for (const l of [
+      [...bad, ...h],
+      [...h, ...bad],
+    ]) {
+      const out = norm(l);
+      expect(out.dropped).toEqual({ unregistered_method: n });
+      expect(runsOf(out).map((r) => r.series)).toEqual([DRIEL_H]);
+    }
+    // A series the registry does not attach to stays unknown whatever its method (the method is never asked).
+    expect(norm(recode(q, 'nowhere', { WaardeBepalingsMethode: 'other:F058' }))).toMatchObject({
+      dropped: {},
+      unknown: 1,
+    });
+    // The method comes before the unit, as for observations.
+    expect(
+      norm(recode(q, 'lobith.bovenrijn.tolkamer', { WaardeBepalingsMethode: 'x', Eenheid: 'cm' })).dropped,
+    ).toEqual({
+      unregistered_method: n,
+    });
   });
 
   it('a time with another offset is drift', () => {

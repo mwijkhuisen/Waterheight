@@ -135,8 +135,9 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
                     : null;
     if (reason !== null) {
       // A series we store that now arrives under another ProcesType, compartment or grouping is withheld and
-      // reported (review F3 of P2b). A forecast comes under its own method (RWSM-F232), a tide or a HW/LW
-      // extreme under a grouping or a method of its own: never a registered key, and a plain count.
+      // reported (review F3 of P2b). A forecast comes under ProcesType `verwachting` and a method of its own
+      // (RWSM-F232, other:F058), a tide or a HW/LW extreme under a grouping or a method of its own: never a
+      // registered key, and a plain count.
       const registered =
         decl !== undefined && (reason === 'process' || reason === 'compartment' || reason === 'grouping');
       count(out, registered ? 'registered_dropped' : reason, n);
@@ -212,10 +213,15 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
 // An `OphalenWaarnemingen` response of ProcesType `verwachting` (specs nl-1-fc-*, A§7.4 item 9, catalogue §2.1):
 // RWS issues one run a day and a capture asks T−10 min … T+48 h, so a capture is a run without its leading values
 // (the loader's merge, packages/core mergeDecision, knows that: FORECAST_SOURCES['NL-1'].headDrops). Declared here:
-//  - only method RWSM-F232 under ProcesType `verwachting`; any other list is drift of the whole payload;
+//  - only ProcesType `verwachting`; a list of any other ProcesType is drift of the whole payload;
 //  - series: a list attaches to the one registered series of `<code>/WATHTE/NAP/` (H) or `<code>/Q/NVT/` (Q) of the
 //    registry, whatever its observation method; no such series, or two, is `unknown` (counted once; the object is
-//    kept for a replay after a registry change). The TAW twin and every other datum never attach;
+//    kept for a replay after a registry change), whatever its method. The TAW twin and every other datum never
+//    attach;
+//  - method: declared per series, as for observations (`FORECAST_METHODS`): a list that would attach but carries
+//    another method is not the forecast we declared, so its values are `unregistered_method` (retained: counted,
+//    alerted, kept for a replay) and the payload's other lists still load. Checked after the attachment, so an
+//    unregistered series stays `unknown`, and before the unit, as the observations do;
 //  - units: from FORECAST_SOURCES (cm for H, m3/s for Q), never from the observation series; another unit, or the
 //    unit of the other quantity, is `unit_mismatch` (retained);
 //  - time: the fixed +01:00 of `TIME`; no `isFuture` and no age limit (a forecast is in the future by nature);
@@ -227,7 +233,15 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
 // The lists of one series are merged and sorted by time; a list left without a value is no run.
 
 const FORECAST = FORECAST_SOURCES['NL-1'];
+/**
+ * The forecast method of each series, keyed `<Locatie.Code>/<H|Q>`: the recorded catalogue (nl-1-catalogue.raw,
+ * 2026-09-29) lists exactly one `verwachting` method per row of registry/seed/nl-1-forecast.csv, RWSM-F232 for 195
+ * and other:F058 for maaseik Q alone (test/adapters/nl-1-forecast.test.ts pins this map to the catalogue).
+ */
 const FORECAST_METHOD = 'RWSM-F232';
+const FORECAST_METHODS: ReadonlyMap<string, string> = new Map([['maaseik/Q', 'other:F058']]);
+export const forecastMethod = (code: string, quantity: 'H' | 'Q') =>
+  FORECAST_METHODS.get(`${code}/${quantity}`) ?? FORECAST_METHOD;
 /** Grootheid → its quantity and the Hoedanigheid whose registered series it attaches to. */
 const FORECAST_SERIES: ReadonlyMap<string, { quantity: 'H' | 'Q'; datum: string }> = new Map([
   ['WATHTE', { quantity: 'H', datum: 'NAP' }],
@@ -252,7 +266,6 @@ export function normaliseForecast(lists: readonly Waarnemingen[], ctx: Context):
 
   for (const { aquo, locatie, metingen } of lists) {
     if (aquo.ProcesType !== 'verwachting') throw new SchemaDrift('forecast_process');
-    if (aquo.WaardeBepalingsMethode.Code !== FORECAST_METHOD) throw new SchemaDrift('forecast_method');
     const combination = `${locatie.Code}/${aquo.Grootheid.Code}/${aquo.Hoedanigheid.Code}`;
     const what = FORECAST_SERIES.get(aquo.Grootheid.Code);
     const keys = byCombination.get(combination);
@@ -265,6 +278,10 @@ export function normaliseForecast(lists: readonly Waarnemingen[], ctx: Context):
       key === undefined
     ) {
       unknown.add(combination);
+      continue;
+    }
+    if (aquo.WaardeBepalingsMethode.Code !== forecastMethod(locatie.Code, what.quantity)) {
+      count(out, 'unregistered_method', metingen.length);
       continue;
     }
     const unit = FORECAST_UNITS.get(aquo.Eenheid.Code);
