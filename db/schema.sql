@@ -702,7 +702,10 @@ CREATE VIEW public.own_api_series WITH (security_barrier='true') AS
     s.expected_step,
     s.staleness_limit,
     s.active,
-    e.audience
+    e.audience,
+    e.lic_api,
+    e.lic_history_export,
+    e.history_window
    FROM (public.series s
      JOIN public.series_eff e ON ((e.series_id = s.id)))
   WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api);
@@ -744,6 +747,53 @@ CREATE VIEW public.own_class WITH (security_barrier='true') AS
   WHERE ((cs.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND cs.lic_display AND ((c.subject_type = 'area'::text) OR (EXISTS ( SELECT 1
            FROM public.series_eff e
           WHERE ((e.station_id = c.subject_id) AND (e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display)))));
+
+
+--
+-- Name: own_day_version; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.own_day_version WITH (security_barrier='true') AS
+ SELECT (j.key)::date AS day,
+    ((j.value ->> 'v'::text))::integer AS version,
+    (j.value ->> 'reason'::text) AS reason,
+    ((j.value ->> 'at'::text))::timestamp with time zone AS at
+   FROM (public.app_meta m
+     CROSS JOIN LATERAL jsonb_each(m.value) j(key, value))
+  WHERE (m.key = 'day_versions:owner'::text);
+
+
+--
+-- Name: publish_dirty; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.publish_dirty (
+    id bigint NOT NULL,
+    family text NOT NULL,
+    kind text NOT NULL,
+    from_ts timestamp with time zone NOT NULL,
+    to_ts timestamp with time zone NOT NULL,
+    stations text[] DEFAULT '{}'::text[] NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT publish_dirty_check CHECK ((to_ts >= from_ts)),
+    CONSTRAINT publish_dirty_family_check CHECK ((family = ANY (ARRAY['public'::text, 'owner'::text]))),
+    CONSTRAINT publish_dirty_kind_check CHECK ((kind = ANY (ARRAY['obs'::text, 'forecast'::text, 'reference'::text, 'class'::text, 'warning'::text, 'gauge_zero'::text])))
+);
+
+
+--
+-- Name: own_dirty; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.own_dirty WITH (security_barrier='true') AS
+ SELECT id,
+    kind,
+    from_ts,
+    to_ts,
+    stations,
+    created_at
+   FROM public.publish_dirty d
+  WHERE (family = 'owner'::text);
 
 
 --
@@ -998,10 +1048,43 @@ CREATE VIEW public.own_series WITH (security_barrier='true') AS
     s.expected_step,
     s.staleness_limit,
     s.active,
-    e.audience
+    e.audience,
+    e.lic_api,
+    e.lic_history_export,
+    e.history_window
    FROM (public.series s
      JOIN public.series_eff e ON ((e.series_id = s.id)))
   WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display);
+
+
+--
+-- Name: provider; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.provider (
+    id text NOT NULL,
+    name text NOT NULL,
+    country text NOT NULL,
+    contact text,
+    terms_url text,
+    CONSTRAINT provider_id_check CHECK ((id ~ '^[a-z][a-z0-9-]*$'::text))
+);
+
+
+--
+-- Name: own_source; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.own_source WITH (security_barrier='true') AS
+ SELECT s.id,
+    s.name,
+    pr.name AS provider,
+    s.licence_kind,
+    pr.terms_url,
+    s.audience
+   FROM (public.source s
+     JOIN public.provider pr ON ((pr.id = s.provider_id)))
+  WHERE ((s.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND s.lic_display);
 
 
 --
@@ -1194,20 +1277,6 @@ CREATE VIEW public.own_warning WITH (security_barrier='true') AS
 
 
 --
--- Name: provider; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.provider (
-    id text NOT NULL,
-    name text NOT NULL,
-    country text NOT NULL,
-    contact text,
-    terms_url text,
-    CONSTRAINT provider_id_check CHECK ((id ~ '^[a-z][a-z0-9-]*$'::text))
-);
-
-
---
 -- Name: pub_api_forecast_run; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -1323,7 +1392,10 @@ CREATE VIEW public.pub_api_series WITH (security_barrier='true') AS
     s.expected_step,
     s.staleness_limit,
     s.active,
-    e.audience
+    e.audience,
+    e.lic_api,
+    e.lic_history_export,
+    e.history_window
    FROM (public.series s
      JOIN public.series_eff e ON ((e.series_id = s.id)))
   WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api);
@@ -1365,6 +1437,35 @@ CREATE VIEW public.pub_class WITH (security_barrier='true') AS
   WHERE ((cs.audience = 'public'::public.audience) AND cs.lic_display AND ((c.subject_type = 'area'::text) OR (EXISTS ( SELECT 1
            FROM public.series_eff e
           WHERE ((e.station_id = c.subject_id) AND (e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display)))));
+
+
+--
+-- Name: pub_day_version; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.pub_day_version WITH (security_barrier='true') AS
+ SELECT (j.key)::date AS day,
+    ((j.value ->> 'v'::text))::integer AS version,
+    (j.value ->> 'reason'::text) AS reason,
+    ((j.value ->> 'at'::text))::timestamp with time zone AS at
+   FROM (public.app_meta m
+     CROSS JOIN LATERAL jsonb_each(m.value) j(key, value))
+  WHERE (m.key = 'day_versions:public'::text);
+
+
+--
+-- Name: pub_dirty; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.pub_dirty WITH (security_barrier='true') AS
+ SELECT id,
+    kind,
+    from_ts,
+    to_ts,
+    stations,
+    created_at
+   FROM public.publish_dirty d
+  WHERE (family = 'public'::text);
 
 
 --
@@ -1594,10 +1695,29 @@ CREATE VIEW public.pub_series WITH (security_barrier='true') AS
     s.expected_step,
     s.staleness_limit,
     s.active,
-    e.audience
+    e.audience,
+    e.lic_api,
+    e.lic_history_export,
+    e.history_window
    FROM (public.series s
      JOIN public.series_eff e ON ((e.series_id = s.id)))
   WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display);
+
+
+--
+-- Name: pub_source; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.pub_source WITH (security_barrier='true') AS
+ SELECT s.id,
+    s.name,
+    pr.name AS provider,
+    s.licence_kind,
+    pr.terms_url,
+    s.audience
+   FROM (public.source s
+     JOIN public.provider pr ON ((pr.id = s.provider_id)))
+  WHERE ((s.audience = 'public'::public.audience) AND s.lic_display);
 
 
 --
@@ -1682,6 +1802,25 @@ CREATE VIEW public.pub_warning WITH (security_barrier='true') AS
    FROM (public.warning_area w
      JOIN public.source ws ON ((ws.id = w.source_id)))
   WHERE ((ws.audience = 'public'::public.audience) AND ws.lic_display);
+
+
+--
+-- Name: publish_dirty_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.publish_dirty_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: publish_dirty_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.publish_dirty_id_seq OWNED BY public.publish_dirty.id;
 
 
 --
@@ -1779,6 +1918,13 @@ ALTER TABLE public.warning_area ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY
     NO MAXVALUE
     CACHE 1
 );
+
+
+--
+-- Name: publish_dirty id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.publish_dirty ALTER COLUMN id SET DEFAULT nextval('public.publish_dirty_id_seq'::regclass);
 
 
 --
@@ -1899,6 +2045,14 @@ ALTER TABLE ONLY public.obs
 
 ALTER TABLE ONLY public.provider
     ADD CONSTRAINT provider_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: publish_dirty publish_dirty_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.publish_dirty
+    ADD CONSTRAINT publish_dirty_pkey PRIMARY KEY (id);
 
 
 --
@@ -2054,6 +2208,13 @@ CREATE INDEX forecast_run_source ON public.forecast_run USING btree (source_id);
 --
 
 CREATE INDEX ingest_batch_fetched ON public.ingest_batch USING btree (fetched_at);
+
+
+--
+-- Name: ingest_batch_loaded; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ingest_batch_loaded ON public.ingest_batch USING btree (loaded_at);
 
 
 --
@@ -2398,4 +2559,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261024000001'),
     ('20261106000001'),
     ('20261106000002'),
-    ('20261106000003');
+    ('20261106000003'),
+    ('20261107000001'),
+    ('20261107000002');

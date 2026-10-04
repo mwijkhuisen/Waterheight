@@ -180,6 +180,16 @@ export interface Provider {
   terms_url: string | null;
 }
 
+export interface PublishDirty {
+  created_at: Generated<Timestamp>;
+  family: string;
+  from_ts: Timestamp;
+  id: Generated<Int8>;
+  kind: string;
+  stations: Generated<string[]>;
+  to_ts: Timestamp;
+}
+
 export interface Reach {
   down_station_id: string | null;
   flags: Generated<Json>;
@@ -350,6 +360,7 @@ export interface DB {
   obs_latest: ObsLatest;
   obs_revision: ObsRevision;
   provider: Provider;
+  publish_dirty: PublishDirty;
   reach: Reach;
   reference_value: ReferenceValue;
   river: River;

@@ -606,7 +606,10 @@ describe('the families are one template', () => {
     def
       .replace(/\((\w+\.audience) = ANY \(ARRAY\['public'::audience, 'owner'::audience\]\)\)/g, '$1 IN <AUDIENCES>')
       .replace(/(\w+\.audience) = ANY \(ARRAY\['public'::audience, 'owner'::audience\]\)/g, '$1 IN <AUDIENCES>')
-      .replace(/(\w+\.audience) = 'public'::audience/g, '$1 IN <AUDIENCES>');
+      .replace(/(\w+\.audience) = 'public'::audience/g, '$1 IN <AUDIENCES>')
+      // P9a: the dirty log and the day versions select their family's rows by a literal, not by an audience set.
+      .replace(/\bfamily = '(?:public|owner)'::text/g, 'family = <FAMILY>')
+      .replace(/'day_versions:(?:public|owner)'::text/g, "'day_versions:<FAMILY>'");
 
   it('every pub/own pair has the same definition except the audience set', async () => {
     const def = async (view: string) =>
@@ -618,11 +621,13 @@ describe('the families are one template', () => {
     const { api: ownApi, ...ownDisplay } = OWN;
     for (const k of Object.keys(pubDisplay) as (keyof typeof pubDisplay)[]) pairs.push([pubDisplay[k], ownDisplay[k]]);
     for (const k of Object.keys(pubApi) as (keyof typeof pubApi)[]) pairs.push([pubApi[k], ownApi[k]]);
-    expect(pairs).toHaveLength(23);
+    expect(pairs).toHaveLength(26);
     for (const [pub, own] of pairs) {
       const d = await def(pub);
-      // The meta pair holds the two display-window instants and no audience data, so it has no filter.
-      if (pub !== PUB.meta) expect(d, pub).toContain('IN <AUDIENCES>');
+      // The meta pair holds the two display-window instants and no audience data, so it has no filter; the dirty and
+      // day-version pairs filter by their family's literal.
+      if (pub === PUB.dirty || pub === PUB.dayVersion) expect(d, pub).toContain('<FAMILY>');
+      else if (pub !== PUB.meta) expect(d, pub).toContain('IN <AUDIENCES>');
       expect(await def(own), `${pub} vs ${own}`).toBe(d);
     }
   });
