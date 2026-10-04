@@ -44,6 +44,28 @@ describe('safeRel', () => {
   ])('refuses %j', (rel) => {
     expect(() => safeRel(rel)).toThrow('unsafe_path');
   });
+  // Unicode and encoding tricks: nothing but the exact ASCII grammar passes (T-PUB-1).
+  it.each([
+    ['a fullwidth dot', '\uFF0E\uFF0E/x.json'],
+    ['a fullwidth dot pair as a segment', 'recent/\uFF0E\uFF0E/1210.json'],
+    ['a percent-encoded traversal', '%2e%2e/x.json'],
+    ['a percent-encoded traversal inside', 'recent/%2e%2e/1210.json'],
+    ['a NUL', 'meta.json\0.png'],
+    ['a NUL ahead of the suffix', 'recent/2026-10-04/1210\0.json'],
+    ['a combining acute accent', 'recent/2026-10-04/12\u03010.json'],
+    ['a combining mark on a station id', 'series/de.wsv.e\u0301/recent.json'],
+    ['a right-to-left override', 'recent/2026-10-04/\u202E0021.json'],
+    ['a right-to-left override in a name', 'meta\u202Enosj.json'],
+    ['a fullwidth digit', 'recent/2026-10-04/\uFF11210.json'],
+    ['an Arabic-Indic digit', 'recent/\u0662026-10-04/1210.json'],
+    ['non-ASCII letters in a station id', 'series/de.wsv.M\u00FCnchen/recent.json'],
+    ['a station id with a Cyrillic a', 'series/de.wsv.\u0430bc/recent.json'],
+    ['a backslash', 'recent\\2026-10-04\\1210.json'],
+    ['a trailing newline', 'meta.json\n'],
+    ['a zero-width space', 'meta\u200B.json'],
+  ])('refuses %s', (_name, rel) => {
+    expect(() => safeRel(rel)).toThrow('unsafe_path');
+  });
 });
 
 describe('writeAtomic and Output', () => {
