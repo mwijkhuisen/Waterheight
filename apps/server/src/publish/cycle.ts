@@ -157,6 +157,8 @@ export const STATIONS_EVERY_MS = 3_600_000;
 const BACKLOG_DEGRADED_S = 15 * 60;
 const BEHIND_DEGRADED_MS = 5 * 60_000;
 const DIRTY_BATCH = 20_000;
+/** The steps whose failure leaves the current data stale: meta.degraded then says so. */
+const HOT_STEPS = ['stations', 'latest', 'forecast', 'dirty', 'recent', 'stations-recent'];
 
 export type CycleDeps = {
   db: Kysely<DB>;
@@ -195,6 +197,8 @@ export class Publisher {
   #lastDayRender: DayRender | null = null;
   #settledBytes: number | undefined;
   readonly #warningDays = new Set<string>();
+  /** The steps that failed in this cycle. */
+  readonly #failed = new Set<string>();
 
   constructor(deps: CycleDeps) {
     this.#d = deps;
@@ -204,6 +208,7 @@ export class Publisher {
   async cycle(): Promise<void> {
     const started = Date.now();
     const d = this.#d;
+    this.#failed.clear();
     const now = d.now();
     const first = this.#cursor === undefined;
     const v = VIEWS[d.family];
@@ -279,21 +284,24 @@ export class Publisher {
 
     // 3. Recent buckets newest first, then station files, within the budget.
     const deadline = started + d.budgetMs;
-    await this.#step('recent', async () => {
-      for (const t of [...this.#buckets].sort((a, b) => b - a)) {
-        if (Date.now() >= deadline) break;
+    // One item failing (review CR-2) is logged and skipped, never the rest of its list: a failed bucket stays queued
+    // (the backlog then shows in meta.degraded), a failed station waits for its next dirty row or the hourly sweep.
+    for (const t of [...this.#buckets].sort((a, b) => b - a)) {
+      if (Date.now() >= deadline) break;
+      await this.#step('recent', async () => {
         await this.#put(c, 'snapshot', recentPath(t), await d.render.snapshot(c, t));
         this.#buckets.delete(t);
-      }
-    });
-    await this.#step('stations-recent', async () => {
-      const known = new Set(stations?.stations.map((s) => s.id) ?? []);
-      for (const id of [...this.#stations].sort()) {
-        if (Date.now() >= deadline) break;
-        if (known.has(id)) await this.#put(c, 'station', `series/${id}/recent.json`, await d.render.station(c, id));
-        this.#stations.delete(id);
-      }
-    });
+      });
+    }
+    const known = new Set(stations?.stations.map((s) => s.id) ?? []);
+    for (const id of [...this.#stations].sort()) {
+      if (Date.now() >= deadline) break;
+      this.#stations.delete(id);
+      if (known.has(id))
+        await this.#step('stations-recent', async () => {
+          await this.#put(c, 'station', `series/${id}/recent.json`, await d.render.station(c, id));
+        });
+    }
     if (this.#buckets.size === 0) this.#behindSince = undefined;
     else this.#behindSince ??= now;
 
@@ -355,9 +363,12 @@ export class Publisher {
     });
     await this.#step('meta', async () => {
       const backlog = d.family === 'public' ? ((await loaderRow(d.db))?.backlog_age_s ?? null) : null;
+      // A hot-path step that failed this cycle makes the file degraded too (review CR-1): meta must not say fresh
+      // while latest.json or the recent buckets are stale.
       const degraded =
         (backlog !== null && backlog > BACKLOG_DEGRADED_S) ||
-        (this.#behindSince !== undefined && now - this.#behindSince > BEHIND_DEGRADED_MS);
+        (this.#behindSince !== undefined && now - this.#behindSince > BEHIND_DEGRADED_MS) ||
+        HOT_STEPS.some((s) => this.#failed.has(s));
       const dayVersions =
         d.family === 'public' ? metaDayVersions(versions, complete, settled) : ownerDayVersions(versions);
       await this.#put(
@@ -384,6 +395,7 @@ export class Publisher {
       await run();
     } catch (err) {
       if (this.#d.strict) throw err;
+      this.#failed.add(name);
       this.#d.log.error({ code: errorCode(err), step: name, family: this.#d.family }, 'publish step failed');
     }
   }

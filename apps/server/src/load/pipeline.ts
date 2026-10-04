@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import { type Normalised, type ObsRow, obsParts, SchemaDrift } from '@rws/core';
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { ManifestLine } from '../archive/manifest.ts';
 import { ArchiveError, type ArchiveReader, type RawLine } from '../archive/reader.ts';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
-import { type DirtyEntry, type DirtyKind, markDirty, narrow, type Touch } from './dirty.ts';
+import { type Audience, type DirtyEntry, type DirtyKind, dirtyEntriesOf, markDirty, type Touch } from './dirty.ts';
 import {
   applyForecasts,
   type CheckedRun,
@@ -255,6 +255,7 @@ export class Loader {
    * area's takes the payload source's.
    */
   private async dirtyEntries(
+    tx: Tx,
     source: string,
     touches: Readonly<Record<DirtyKind, readonly Touch[]>>,
     maps: readonly (ReadonlyMap<string, SeriesRow> | undefined)[],
@@ -263,21 +264,23 @@ export class Loader {
     const own = (await this.owners).has(source) ? 'owner' : 'public';
     const byId = new Map<number, SeriesRow>();
     for (const m of maps) for (const s of m?.values() ?? []) byId.set(s.id, s);
-    const entries: DirtyEntry[] = [];
-    for (const [kind, list] of Object.entries(touches) as [DirtyKind, readonly Touch[]][]) {
-      for (const t of list) {
-        const s = t.series === undefined ? undefined : byId.get(t.series);
-        const station = s?.station ?? t.station;
-        entries.push({
-          kind,
-          audience: s === undefined ? own : narrow(s.audience, own),
-          from: t.from ?? Number.NEGATIVE_INFINITY,
-          to: t.to ?? Number.POSITIVE_INFINITY,
-          stations: station === undefined ? [] : [station],
-        });
-      }
+    // A station touched without one of our series (a class of another source's station): the widest effective
+    // audience of its series, so a public class on an owner-only station dirties the owner family only (review
+    // SEC-2); a station with no series dirties nothing.
+    const loose = new Set<string>();
+    for (const list of Object.values(touches))
+      for (const t of list)
+        if (t.station !== undefined && (t.series === undefined || !byId.has(t.series))) loose.add(t.station);
+    const stationAudience = new Map<string, Audience>();
+    if (loose.size > 0) {
+      const { rows } = await sql<{ station: string; audience: Audience }>`
+        SELECT s.station_id AS station, max(LEAST(src.audience, COALESCE(s.audience, src.audience)))::text AS audience
+        FROM series s JOIN source src ON src.id = s.source_id
+        WHERE s.station_id = ANY(${[...loose]}::text[])
+        GROUP BY s.station_id`.execute(tx);
+      for (const r of rows) stationAudience.set(r.station, r.audience);
     }
-    return entries;
+    return dirtyEntriesOf(own, touches, byId, stationAudience);
   }
 
   private async registry(source: string): Promise<Map<string, SeriesRow>> {
@@ -805,7 +808,7 @@ export class Loader {
       const staged = await this.stage(tx, line, spec, result, refRegistry, state.id, fetchedAt, touches.forecast);
       // P9a: what the publishers render again, and the settled days this payload revised (under the loader lock).
       const maps = [registry, fillRegistry, zeroRegistry, ...(refRegistries?.values() ?? [])];
-      await markDirty(tx, this.deps.now(), await this.dirtyEntries(line.source, touches, maps));
+      await markDirty(tx, this.deps.now(), await this.dirtyEntries(tx, line.source, touches, maps));
       const fc: ForecastWritten = {
         n_new: fw.n_new + staged.written.n_new,
         n_changed: fw.n_changed + staged.written.n_changed,

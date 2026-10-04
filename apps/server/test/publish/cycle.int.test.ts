@@ -3,8 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CANARIES, dayOf } from '@rws/contracts';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { RenderCtx, Renderers } from '../../src/publish/cycle.ts';
+import { StaticCache } from '../../src/api/states.ts';
+import { coded } from '../../src/api/util.ts';
+import { DisplayWindow } from '../../src/api/window.ts';
+import { Publisher, type RenderCtx, type Renderers } from '../../src/publish/cycle.ts';
 import { publishOnce } from '../../src/publish/index.ts';
+import { Output } from '../../src/publish/write.ts';
 import { type Harness, harness } from '../load/harness.ts';
 
 // P9a: the publisher's cycle against the real views with stand-in renderers (the renderers have their own tests):
@@ -227,6 +231,46 @@ describe('publish cycle', { timeout: 120_000 }, () => {
     expect(ls('.state')).toEqual(['settled-2026-10-01-v2.done']);
     expect(read('meta.json').dayVersions).toEqual({ '2026-10-01': 2 });
     await setVersions('public', {});
+  });
+
+  it('skips one failing bucket or station, never the rest; a failing hot step makes meta degraded (CR-1, CR-2)', async () => {
+    const db = h.dbAs('rws_publish');
+    const bad = Date.parse('2026-10-03T12:00:00Z');
+    const errors: Record<string, unknown>[] = [];
+    const render = fake({
+      snapshot: async (_c, t) => {
+        if (t === bad) throw coded('render_failed');
+        return { schemaVersion: 1, t: iso(t), ...columns, attribution };
+      },
+      latest: async () => {
+        throw coded('render_failed');
+      },
+    });
+    const p = new Publisher({
+      db: db.db,
+      family: 'public',
+      out: new Output(dir),
+      render,
+      window: new DisplayWindow(db.db, undefined, 'public'),
+      now: () => NOW,
+      build: 'dev',
+      sections: new Map(),
+      cache: new StaticCache(60_000, () => NOW),
+      inputs: undefined,
+      log: { error: (o: Record<string, unknown>) => errors.push(o) },
+      budgetMs: Number.POSITIVE_INFINITY,
+      settledPerCycle: 1,
+      strict: false,
+    });
+    await p.cycle();
+    const day = ls('v1/recent/2026-10-03').filter((f) => f.endsWith('.json'));
+    expect(day).toHaveLength(143);
+    expect(day).not.toContain('1200.json');
+    expect(ls('v1/recent/2026-10-04').filter((f) => f.endsWith('.json'))).toHaveLength(73);
+    expect(ls('v1')).not.toContain('latest.json');
+    expect(read('meta.json')).toMatchObject({ degraded: true });
+    expect(errors).toContainEqual(expect.objectContaining({ code: 'render_failed', step: 'recent' }));
+    expect(errors).toContainEqual(expect.objectContaining({ code: 'render_failed', step: 'latest' }));
   });
 
   it('refuses a public body that holds a canary rendering; the owner family takes the owner canary only', async () => {

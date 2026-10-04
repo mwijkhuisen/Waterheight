@@ -99,6 +99,25 @@ describe('migrate publish tail', { timeout: 60_000 }, () => {
     expect((await versions('owner'))?.['2026-08-24']).toMatchObject({ v: 3, reason: 'registry' });
   });
 
+  it('an added series with data older than 48 h bumps registry in both families, once (CR-3)', async () => {
+    const { rows } = await h.t.admin.query<{ id: number; station_id: string }>(
+      `INSERT INTO series (station_id, source_id, quantity, value_kind, provider_key, native_unit, to_canonical, datum,
+                           native_step, expected_step, staleness_limit, role, active)
+       SELECT station_id, source_id, quantity, value_kind, 'p9a-widened', native_unit, to_canonical, datum, native_step,
+              expected_step, staleness_limit, 'primary', true
+       FROM series WHERE provider_key = $1 RETURNING id, station_id`,
+      ['1d26e504-7f9e-480a-b52c-5932be6549ab/W'],
+    );
+    const id = (rows[0] as { id: number }).id;
+    await h.t.admin.query(
+      `INSERT INTO obs_1d (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or) VALUES ($1, '2026-09-20', 1, 1, 1, 1, 1, 0)`,
+      [id],
+    );
+    expect((await publishTail(migrator.db, NOW)).bumped).toEqual({ public: 'registry', owner: 'registry' });
+    // Stored now: the next tail bumps nothing (an addition without old data is dirty.int.test.ts's case).
+    expect((await publishTail(migrator.db, NOW)).bumped).toEqual({});
+  });
+
   it('prunes dirty rows older than 3 days', async () => {
     await h.t.admin.query(`
       INSERT INTO publish_dirty (family, kind, from_ts, to_ts, created_at) VALUES

@@ -72,7 +72,7 @@ const common = {
       .nullable(),
     /** Settled days whose current version has no complete render yet. */
     pendingDays: count,
-    /** The bytes under settled/ and frames/ (plain files; the compressed siblings are extra). */
+    /** The bytes of every file under settled/ and frames/, the .zst and .gz siblings included (what `du` counts). */
     settledBytes: count,
   }),
 };

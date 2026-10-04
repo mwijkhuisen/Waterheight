@@ -38,6 +38,40 @@ export const narrow = (a: Audience, b: Audience): Audience => (RANK[a] <= RANK[b
 
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
+/**
+ * A transaction's touches as entries. A series touch takes the series' effective audience narrowed by the payload
+ * source's (`own`); a station touch without one of the payload's series takes the widest effective audience of that
+ * station's series (`stations`; none: off), narrowed the same way (review SEC-2: a public class on an owner-only
+ * station dirties the owner family only); a touch with neither (an area warning) takes `own`.
+ */
+export function dirtyEntriesOf(
+  own: Audience,
+  touches: Readonly<Record<DirtyKind, readonly Touch[]>>,
+  series: ReadonlyMap<number, { station?: string | undefined; audience: Audience }>,
+  stations: ReadonlyMap<string, Audience>,
+): DirtyEntry[] {
+  const entries: DirtyEntry[] = [];
+  for (const [kind, list] of Object.entries(touches) as [DirtyKind, readonly Touch[]][]) {
+    for (const t of list) {
+      const s = t.series === undefined ? undefined : series.get(t.series);
+      const station = s?.station ?? t.station;
+      entries.push({
+        kind,
+        audience:
+          s !== undefined
+            ? narrow(s.audience, own)
+            : t.station !== undefined
+              ? narrow(stations.get(t.station) ?? 'off', own)
+              : own,
+        from: t.from ?? Number.NEGATIVE_INFINITY,
+        to: t.to ?? Number.POSITIVE_INFINITY,
+        stations: station === undefined ? [] : [station],
+      });
+    }
+  }
+  return entries;
+}
+
 /** Raises the version of each day by one (an absent day is version 1), in the caller's transaction. */
 export async function bumpDays(
   tx: Tx,
@@ -124,8 +158,8 @@ export function visibilityChange(old: Visible, cur: Visible): BumpReason | undef
 
 /**
  * migrate's registry bump (§9 C10), under the loader lock after the registry sync: compares each family's visible
- * registry with the stored one and bumps every day from display_start to today − 2 on a change. Pure additions bump
- * nothing (replayed data bumps through markDirty); the first run only stores the map.
+ * registry with the stored one and bumps every day from display_start to today − 2 on a change. Additions bump
+ * nothing unless an added series already holds data older than 48 h; the first run only stores the map.
  */
 export async function registryBump(tx: Tx, now: Date): Promise<Partial<Record<ChannelAudience, BumpReason>>> {
   const nl4 = await digest(
@@ -154,7 +188,22 @@ export async function registryBump(tx: Tx, now: Date): Promise<Partial<Record<Ch
       ),
     };
     const old = await readMeta<Visible>(tx, visibleKey(family));
-    const reason = old === undefined ? undefined : visibilityChange(old, cur);
+    let reason = old === undefined ? undefined : visibilityChange(old, cur);
+    // An added series that already holds data older than 48 h (a widening; review CR-3): its settled days lack it,
+    // and a replay of the same values would change no row, so nothing else would bump them.
+    if (old !== undefined && reason === undefined) {
+      const added = Object.keys(cur.series)
+        .filter((id) => !Object.hasOwn(old.series, id))
+        .map(Number);
+      const { rows: held } =
+        added.length === 0
+          ? { rows: [] }
+          : await sql`
+              SELECT 1 FROM obs_1d
+              WHERE series_id = ANY(${added}::int[]) AND bucket < ${new Date(now.getTime() - BUMP_AGE_MS)}::timestamptz
+              LIMIT 1`.execute(tx);
+      if (held.length > 0) reason = 'registry';
+    }
     if (reason !== undefined) {
       await bumpDays(tx, family, bumpedDays(start, now.getTime(), now.getTime()), reason, now);
       bumped[family] = reason;

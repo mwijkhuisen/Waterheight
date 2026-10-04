@@ -79,13 +79,17 @@ export async function writeAtomic(root: string, rel: string, bytes: Uint8Array):
   const temps: string[] = [];
   try {
     for (const [, b] of variants) temps.push(await temp(root, b));
-    await mkdir(dirname(target), { recursive: true, mode: 0o755 });
+    const made = await mkdir(dirname(target), { recursive: true, mode: 0o755 });
     for (const [i, [path]] of variants.entries()) await rename(temps[i] as string, path);
+    await fsyncDir(dirname(target));
+    // Directories mkdir created (review CR-4): each new entry is durable only once its parent is fsynced, so a
+    // marker written after this never names a day directory a power loss took back.
+    if (made !== undefined)
+      for (let dir = dirname(target); dir !== dirname(made); dir = dirname(dir)) await fsyncDir(dirname(dir));
   } catch (err) {
     await Promise.all(temps.map((t) => unlink(t).catch(() => undefined)));
     throw err;
   }
-  await fsyncDir(dirname(target));
 }
 
 /** A settled day's completion marker in `.state/` (never served). */

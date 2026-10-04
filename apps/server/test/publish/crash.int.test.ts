@@ -85,7 +85,9 @@ describe('a fault between write and rename', { timeout: 300_000 }, () => {
       await expect(run(dir, T2), `fault at rename ${failAt}`).rejects.toThrow('injected');
       hook.rename = undefined;
       expect(n, `the cycle reached rename ${failAt}`).toBeGreaterThanOrEqual(failAt);
-      expect(allParse(dir)).toBeGreaterThanOrEqual(before - 1); // nothing served is half written
+      // Nothing served is half written (allParse throws on a plain file that is not whole JSON): the deterministic
+      // proof of a crash between write and rename; the random kills below add timing coverage (review CR-5).
+      expect(allParse(dir)).toBeGreaterThanOrEqual(before - 1);
       // The next start: every mutable file is written again.
       await run(dir, T2);
       expect(walk(dir).size).toBeGreaterThan(before - 5);
@@ -122,14 +124,12 @@ describe('a process killed at random points', { timeout: 600_000 }, () => {
       return seed / 2 ** 32;
     };
     let killed = 0;
-    let midWrite = 0;
     for (let i = 0; i < 20; i++) {
       const { child, exited } = start();
       await new Promise((r) => setTimeout(r, Math.round(rand() * total * 0.95)));
       child.kill('SIGKILL');
       const { signal } = await exited;
       if (signal === 'SIGKILL') killed++;
-      if (existsSync(join(dir, '.tmp')) && readdirSync(join(dir, '.tmp')).length > 0) midWrite++;
       if (existsSync(join(dir, 'v1'))) allParse(dir); // whatever is served is whole
     }
     expect(killed).toBeGreaterThanOrEqual(15);
@@ -140,7 +140,6 @@ describe('a process killed at random points', { timeout: 600_000 }, () => {
     expect(files.size).toBeGreaterThan(300);
     for (const [rel, text] of files) expect(() => contract('public', rel).parse(JSON.parse(text)), rel).not.toThrow();
     expect(readdirSync(join(dir, '.state')).filter((f) => f.endsWith('.done'))).toEqual(['settled-2026-10-01-v1.done']);
-    expect(midWrite).toBeGreaterThanOrEqual(0);
     dirs = dirs.filter(Boolean);
   });
 });
