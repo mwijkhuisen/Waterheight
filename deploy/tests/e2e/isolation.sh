@@ -53,7 +53,8 @@ got=$(docker exec rws-publish-1 /nodejs/bin/node -e "$probe" /srv/rws/owner/www/
 [[ $got == 'ENOENT ENOENT EROFS' ]] || fail "writes from publish: $got"
 got=$(docker exec rws-publish-owner-1 /nodejs/bin/node -e "$probe" /srv/rws/public/www/v1/isolation-probe /srv/rws/public/isolation-probe /srv/capture/isolation-probe)
 [[ $got == 'ENOENT ENOENT EROFS' ]] || fail "writes from publish-owner: $got"
-got=$(docker exec rws-caddy-owner-1 sh -c 'for p in /srv/rws/owner/www/v1/isolation-probe /srv/rws/public/isolation-probe; do : >"$p" 2>/dev/null && echo wrote || echo refused; done' | tr '\n' ' ')
+# The redirection runs in a subshell: a failed redirection of the special built-in `:` would end sh itself.
+got=$(docker exec rws-caddy-owner-1 sh -c 'for p in /srv/rws/owner/www/v1/isolation-probe /srv/rws/public/isolation-probe; do if (: >"$p") 2>/dev/null; then echo wrote; else echo refused; fi; done' | tr '\n' ' ')
 [[ $got == 'refused refused ' ]] || fail "writes from caddy-owner: $got"
 [[ -z $(find /srv/rws/owner /srv/rws/public -name isolation-probe) ]] || fail "a probe file reached the host"
 pass "write attempts across the roots fail from inside the containers: publish gets ENOENT for the owner paths and EROFS on its ops mount, publish-owner ENOENT for the public paths and EROFS on its capture mount, caddy-owner cannot write at all; no probe file on the host"
@@ -86,6 +87,7 @@ pass "the public listener never serves owner content for SNI and Host owner.$DOM
 docker exec rws-caddy-owner-1 cat /data/caddy/pki/authorities/local/root.crt >/ci/owner-root.crt
 docker run --rm --network rws_edge -e RWS_DOMAIN="$DOMAIN" -e OWNER_PW -e OWNER_CA=/owner-root.crt \
   -v "$here/owner-check.mjs:/check.mjs:ro" -v /ci/owner-root.crt:/owner-root.crt:ro \
-  --entrypoint /nodejs/bin/node rws-server:ci /check.mjs | tee /ci/owner-check.out
+  --entrypoint /nodejs/bin/node rws-server:ci /check.mjs | tee /ci/owner-check.out ||
+  fail "owner-check.mjs exited non-zero (its FAIL lines are above)"
 [[ $(grep -c '^FAIL' /ci/owner-check.out || true) == 0 ]] || fail "owner-check.mjs"
 pass "caddy-owner (SNI owner.$DOMAIN over rws_edge): $(grep -c '^PASS' /ci/owner-check.out) checks: 401 with both owner headers and no content without or with wrong credentials on every path, 200 with them, {\"audience\":\"owner\"}, and the owner canary in the owner latest.json"
