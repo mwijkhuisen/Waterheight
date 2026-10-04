@@ -14,6 +14,15 @@
   font-weight: 600;
 }
 
+/* After now: a word in a box, so the forecast part is named in text and shape, not colour. */
+.badge {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .fields {
   display: flex;
   flex-wrap: wrap;
@@ -40,11 +49,31 @@
 
 .track {
   position: relative;
-  margin-top: 0.75rem;
+  margin-top: 1.75rem;
 }
 
 .track input {
   width: 100%;
+}
+
+/* The "now" marker: a tick above the track and its word; what lies to the right of it is forecast. */
+.nowTick {
+  position: absolute;
+  top: -0.5rem;
+  width: 2px;
+  height: 0.8rem;
+  margin-left: -1px;
+  background: var(--ink);
+  pointer-events: none;
+}
+
+.nowLabel {
+  position: absolute;
+  top: -1.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* The data epoch (D9): a tick under the scrubber; the note below says what it means. */

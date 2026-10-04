@@ -1,16 +1,23 @@
-import type { ApiStation, Snapshot } from '@rws/contracts';
+import type { ApiStation, Snapshot, SnapshotForecast } from '@rws/contracts';
 import type { ExpressionSpecification, GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
 
 // The stations as one `circle` layer whose look comes only from feature-state
 // (the P3 pattern: a new `t` never rebuilds the source). No class colours before
 // P7: a filled marker has a value at t, a lighter one only an old value (carried
 // forward), a hollow one none; the selected one is larger with a dark ring.
+// After now (P8b) the shapes change meaning: a hollow ring is a forecast, a fainter ring an estimate (beyond the
+// part the source forecasts itself), a grey dot no forecast. The panel, popup and table say the same in words.
 
 export const SOURCE = 'stations';
 
 export interface MarkerState {
+  /** A value at t, or after now a forecast at t. */
   has: boolean;
   stale: boolean;
+  /** t is after now: `has` means a forecast. */
+  forecast?: boolean;
+  /** Every forecast of the station is an estimate. */
+  estimate?: boolean;
 }
 
 type Value = Snapshot['values'][number];
@@ -53,7 +60,27 @@ export function markerStates(
   return out;
 }
 
+/** After now, per station: a forecast at t in any series, and whether each one is an estimate. */
+export function forecastStates(
+  stations: readonly ApiStation[],
+  forecasts: ReadonlyMap<number, Pick<SnapshotForecast, 'estimate'>>,
+): Map<string, MarkerState> {
+  const out = new Map<string, MarkerState>();
+  for (const st of stations) {
+    const found = st.series.flatMap((s) => forecasts.get(s.id) ?? []);
+    out.set(st.id, {
+      has: found.length > 0,
+      stale: false,
+      forecast: true,
+      estimate: found.length > 0 && found.every((f) => f.estimate),
+    });
+  }
+  return out;
+}
+
 const state = (key: string): ExpressionSpecification => ['boolean', ['feature-state', key], false];
+/** A station with a forecast at t: a ring. */
+const ring: ExpressionSpecification = ['all', state('forecast'), state('has')];
 
 /** Adds the source and the layer, or only replaces the points when they exist. */
 export function showStations(map: MapLibreMap, stations: readonly ApiStation[]): void {
@@ -70,9 +97,20 @@ export function showStations(map: MapLibreMap, stations: readonly ApiStation[]):
     paint: {
       'circle-radius': ['case', state('selected'), 9, state('has'), 6, 4],
       // BrBG teal (A§10, colour-blind safe): dark = a value at t, light = only an older value; white = none.
-      'circle-color': ['case', state('has'), ['case', state('stale'), '#5ab4ac', '#01665e'], '#ffffff'],
-      'circle-stroke-color': ['case', state('selected'), '#000000', '#525252'],
-      'circle-stroke-width': ['case', state('selected'), 3, 1.5],
+      // After now: no fill and a teal ring = a forecast, grey = none (#767676 is 4.5:1 on white).
+      'circle-color': [
+        'case',
+        state('forecast'),
+        '#767676',
+        state('has'),
+        ['case', state('stale'), '#5ab4ac', '#01665e'],
+        '#ffffff',
+      ],
+      'circle-opacity': ['case', ring, 0, 1],
+      'circle-stroke-color': ['case', state('selected'), '#000000', ring, '#01665e', '#525252'],
+      'circle-stroke-width': ['case', state('selected'), 3, ['all', ring, state('estimate')], 2, ring, 3, 1.5],
+      // A fainter ring still has 3:1 against white (teal at 65 %); the selection ring never fades.
+      'circle-stroke-opacity': ['case', state('selected'), 1, ['all', ring, state('estimate')], 0.65, 1],
     },
   });
 }
