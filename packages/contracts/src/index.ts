@@ -9,6 +9,7 @@ export * from './reaches.ts';
 export * from './registry.ts';
 export * from './rivernet.ts';
 export * from './rivers.ts';
+export * from './static.ts';
 export * from './stations.ts';
 export * from './tables.ts';
 export * from './units.ts';

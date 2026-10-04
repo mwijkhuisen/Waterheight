@@ -10,6 +10,14 @@
     ".": {
       "rws-dist": "./dist/index.js",
       "default": "./src/index.ts"
+    },
+    "./static-owner": {
+      "rws-dist": "./dist/static-owner.js",
+      "default": "./src/static-owner.ts"
+    },
+    "./status": {
+      "rws-dist": "./dist/status.js",
+      "default": "./src/status.ts"
     }
   },
   "dependencies": {
