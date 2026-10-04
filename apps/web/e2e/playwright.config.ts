@@ -7,11 +7,14 @@ import { defineConfig, devices } from '@playwright/test';
 // (.github/workflows/ci.yml job e2e); without it the sandbox test server
 // (server.ts) sends the same site.caddy headers. Both are HTTPS.
 const external = process.env.E2E_BASE_URL;
+// E2E_COMPOSE=1 (P9a): the compose stack of the deploy job is already running at E2E_COMPOSE_URL; only degraded.spec.ts
+// runs, and no web server is started.
+const compose = process.env.E2E_COMPOSE === '1';
 const viewport = { width: 1024, height: 768 };
 
 export default defineConfig({
   testDir: '.',
-  testMatch: /\.spec\.ts$/,
+  testMatch: compose ? /degraded\.spec\.ts$/ : /\.spec\.ts$/,
   timeout: 120_000,
   expect: { timeout: 20_000 },
   retries: 0,
@@ -36,7 +39,7 @@ export default defineConfig({
     },
     { name: 'webkit', use: { ...devices['Desktop Safari'], viewport } },
   ],
-  ...(external === undefined
+  ...(external === undefined && !compose
     ? {
         // P4b: the e2e api (a throw-away database on the PostgreSQL that DATABASE_URL names, a fixed clock) and
         // the stand-in for Caddy that proxies /api/v1/ to it.

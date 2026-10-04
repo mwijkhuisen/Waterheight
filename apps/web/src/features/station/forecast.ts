@@ -1,4 +1,5 @@
-import type { SeriesMeta, SnapshotForecast } from '@rws/contracts';
+import type { SeriesMeta } from '@rws/contracts';
+import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import { formatLocal } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
@@ -52,8 +53,8 @@ export function forecastLine(quantity: string, f: SnapshotForecast | undefined, 
     `${quantity}: ${forecastValue(f, series, locale)}`,
     f.estimate ? m.forecast_estimate({}, { locale }) : m.forecast_word({}, { locale }),
     issueText(f, locale),
-    stateWord(f.state, locale),
   ];
+  if (f.state !== null) parts.push(stateWord(f.state, locale));
   if (f.basis !== null) parts.push(`${basisKind(f.basis, locale)}: ${f.basis.label}`);
   return parts.join(', ');
 }

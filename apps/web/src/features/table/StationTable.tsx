@@ -1,4 +1,5 @@
-import type { ApiStation, Snapshot, SnapshotForecast } from '@rws/contracts';
+import type { ApiStation, Snapshot } from '@rws/contracts';
+import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import { formatAge, formatLocal } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';

@@ -1,6 +1,7 @@
 import { type Meta, ODBL_URL } from '@rws/contracts';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
+import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
 import { StationsMap } from './features/map/StationsMap.tsx';
 import { forecastStates, markerStates } from './features/map/stationLayer.ts';
 import { hasWebGL2 } from './features/map/webgl.ts';
@@ -88,9 +89,11 @@ function Viewer({ locale }: { locale: Locale }) {
 
   // The data follows `t` once it has settled: a drag or a held key asks only for where it stops.
   const settled = useDebounced(t, FETCH_DEBOUNCE_MS);
-  const snapshot = useSnapshot(settled);
+  const snapshot = useSnapshot(settled, meta.data, stations.data?.seriesHash);
   // Until the values of this very `t` are in, the ones on screen are marked as not current (aria-busy, dimmed).
-  const current = snapshot.data !== undefined && t !== undefined && Date.parse(snapshot.data.t) === t;
+  // A stand-in for a dead API is the newest bucket under its own t (the banner says so): it is what there is.
+  const current =
+    snapshot.data !== undefined && t !== undefined && (snapshot.data.standIn || Date.parse(snapshot.data.t) === t);
   // Not after a failed request: the alert says so, and a dimmed page would stay unreadable (review round 2).
   const loading = !current && !snapshot.isError;
   const values = useMemo(() => new Map((snapshot.data?.values ?? []).map((v) => [v.series, v])), [snapshot.data]);
@@ -196,6 +199,11 @@ function Viewer({ locale }: { locale: Locale }) {
               </p>
             )}
             {snapshot.isError && <p role="alert">{m.data_unavailable({}, { locale })}</p>}
+            <DegradedBanner
+              locale={locale}
+              degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}
+              standInAt={snapshot.data?.standIn === true ? Date.parse(snapshot.data.t) : undefined}
+            />
             <div className={loading ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={loading}>
               <div className={styles.view}>
                 {canMap && view === 'map' ? (

@@ -119,5 +119,7 @@
   "forecast_band_p25p75": "25–75 %: {lo}–{hi} {unit}",
   "panel_forecast_state": "State of the forecast",
   "table_caption_forecast": "Forecasts for {time}",
-  "col_forecast": "Forecast"
+  "col_forecast": "Forecast",
+  "degraded_banner": "Data from the server is temporarily out of date or incomplete; values may lag behind.",
+  "degraded_standin": "The server cannot be reached. These are the latest known values, for {time}, not for the chosen time."
 }
