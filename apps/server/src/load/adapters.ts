@@ -66,9 +66,12 @@ import { TIME as NL2_TIME, normalise as normaliseNl2 } from '../adapters/nl-2/no
 import { parseCollection } from '../adapters/nl-2/parse.ts';
 import { checkZip, type Encoding, flatNames, GuardFailure, lineSplitter } from '../http/guards.ts';
 import type { SeriesRow } from './store.ts';
+import * as wireCh4 from './wire/ch-4.ts';
 import * as wireCh5 from './wire/ch-5.ts';
 import * as wireDe2 from './wire/de-2.ts';
+import * as wireDe3 from './wire/de-3.ts';
 import * as wireDe6 from './wire/de-6.ts';
+import * as wireFr4 from './wire/fr-4.ts';
 import * as wireFr5 from './wire/fr-5.ts';
 import * as wireLu3 from './wire/lu-3.ts';
 import * as wireLu4 from './wire/lu-4.ts';
@@ -76,8 +79,7 @@ import * as wireLu5 from './wire/lu-5.ts';
 
 // Which archived payloads the loader parses (A§7.4 step 1): adapter by source
 // ID, function by capture spec. A source or spec that is not listed here is
-// skipped: its payloads stay in the archive, unparsed, until its phase (the
-// forecasts of DE-3, CH-4 and FR-4 wait for P8b; NL-4 is converted offline into
+// skipped: its payloads stay in the archive, unparsed, until its phase (NL-4 is converted offline into
 // registry/thresholds/nl-4.csv, never loaded from the archive).
 
 export type LoadContext = {
@@ -296,7 +298,7 @@ const nl1Forecasts: SpecLoader = {
 };
 
 /** P7a: the sources wired in load/wire/ (one file each, so their adapters are built side by side). */
-const WIRED = [wireDe6, wireFr5, wireCh5, wireLu5, wireLu4, wireDe2, wireLu3] as const;
+const WIRED = [wireDe6, wireFr5, wireCh5, wireLu5, wireLu4, wireDe2, wireLu3, wireCh4, wireFr4, wireDe3] as const;
 
 /** Every source the loader can parse; `LOAD_ADAPTERS` is this list after the DST gate. */
 const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
