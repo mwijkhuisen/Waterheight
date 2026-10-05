@@ -62,6 +62,13 @@ beforeAll(async () => {
   ids = await seedAudienceFixture(t.admin);
   await q(`UPDATE app_meta SET value = to_jsonb($1::text) WHERE key = 'display_start'`, [iso(NOW - 50 * DAY)]);
   await q(`SELECT ensure_partitions(now() - interval '45 days', now() + interval '10 days')`);
+  // The shared seed writes one value per series at the current hour 10 and 40 days back. A snapshot at that hour of
+  // D10 or D40 would then hold a value of a series without history_export (CH-3), which is never immutable (KG-114):
+  // the tests below at fixed hours would depend on the hour they run. Those old values go; the KG-114 block below
+  // writes its own.
+  await q(`
+    DELETE FROM obs WHERE ts < now() - interval '2 days'
+      AND series_id IN (SELECT s.id FROM series s JOIN source src ON src.id = s.source_id WHERE NOT src.lic_history_export)`);
   // A public series with a value at noon of each day under test (history_export on: no cap).
   for (const d of [D40, D10, D9, dayStart(NOW - DAY), dayStart(NOW)])
     await q('INSERT INTO obs (series_id, ts, value, qc, batch_id) VALUES ($1, $2, 100, 1, 1) ON CONFLICT DO NOTHING', [
