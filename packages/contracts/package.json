@@ -11,6 +11,10 @@
       "rws-dist": "./dist/index.js",
       "default": "./src/index.ts"
     },
+    "./api-owner": {
+      "rws-dist": "./dist/api-owner.js",
+      "default": "./src/api-owner.ts"
+    },
     "./static-owner": {
       "rws-dist": "./dist/static-owner.js",
       "default": "./src/static-owner.ts"

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ApiStation,
   Attribution,
+  attributionEntry,
   HealthSourceId,
   MAX_POINTS,
   Meta,
@@ -14,7 +15,7 @@ import { ForecastLatest } from './forecast.ts';
 import { DATUMS } from './units.ts';
 
 // The static files of A§9.1 (P9a): what `publish` writes under /data/v1/ and the web reads first. Every file carries
-// `schemaVersion` 1 and an `attribution` array that lists exactly the sources its body names. Every schema is built
+// `schemaVersion` 1 (stations.json: 2, P9b adds `api` per series) and an `attribution` array that lists exactly the sources its body names. Every schema is built
 // by one factory over the source-id schema, as `forecastLatest(source)` is: the public instances (this module) refuse
 // a canary's source id; the owner instances (static-owner.ts, server only) allow it. This module imports only zod,
 // api.ts, forecast.ts and units.ts: the web bundle takes it, and nothing of the registry, the health documents or
@@ -46,13 +47,6 @@ export const settledPath = (t: number, version: number): string => `settled/${da
 /** `frames/YYYY-MM-DD/v{n}.json`: one settled day's hourly frames. */
 export const framesPath = (day: string, version: number): string => `frames/${day}/v${version}.json`;
 
-/** What a licence asks to be dated (catalogue §1b): an update, a "Stand", a reference date or the retrieval. */
-export const DATE_KINDS = ['update', 'stand', 'reference', 'retrieval'] as const;
-const Lang = z.enum(['nl', 'en', 'de', 'fr']).nullable();
-const HttpsUrl = z
-  .string()
-  .max(500)
-  .regex(/^https:\/\/[^\s]+$/);
 const AREA_STATES = STATES.slice(1) as ['low', 'normal', 'elevated', 'high', 'extreme'];
 /** The first 16 hex digits of the sha256 of stations.json's series ids in order: latest.json must carry the same. */
 export const SeriesHash = z.string().regex(/^[0-9a-f]{16}$/);
@@ -64,17 +58,7 @@ const Coordinates: z.ZodType<unknown> = z.lazy(() => z.array(z.union([z.number()
 export function staticContracts(source: z.ZodString, latest: typeof ForecastLatest) {
   const Basis = StateBasis.extend({ source });
   /** One attribution row of one source in the body, with the date its licence asks for (null when none). */
-  const AttributionEntry = z.strictObject({
-    source,
-    lang: Lang,
-    text: z.string().min(1).max(1000),
-    url: HttpsUrl.nullable(),
-    required: z.boolean(),
-    dateKind: z.enum(DATE_KINDS).nullable(),
-    date: iso.nullable(),
-    /** A date as the licence wants it written (DE-6: `Stand: TT.MM.JJJJ hh:mm`, Europe/Berlin), never provider text. */
-    dateText: z.string().max(60).nullable(),
-  });
+  const AttributionEntry = attributionEntry(source);
   const attribution = z.array(AttributionEntry).max(500);
 
   const column = <T extends z.ZodType>(t: T) => z.array(t).max(MAX_POINTS);
@@ -154,11 +138,12 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
     attribution,
   });
 
-  const StaticSeriesMeta = SeriesMeta.extend({ source });
+  /** `api`: the series is also served by /series (the api channel, lic_api); P10 reads it to choose chart or fallback. */
+  const StaticSeriesMeta = SeriesMeta.extend({ source, api: z.boolean() });
   const StaticStation = ApiStation.extend({ series: z.array(StaticSeriesMeta).min(1).max(20) });
   /** stations.json: the API's /stations; the series of all stations in order define `seriesHash`. */
   const StaticStations = z.strictObject({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     seriesHash: SeriesHash,
     stations: z.array(StaticStation).max(10_000),
     attribution,
@@ -277,8 +262,6 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
 }
 
 const PUBLIC = staticContracts(HealthSourceId, ForecastLatest);
-export const AttributionEntry = PUBLIC.AttributionEntry;
-export type AttributionEntry = z.infer<typeof AttributionEntry>;
 export const SnapshotFile = PUBLIC.SnapshotFile;
 export type SnapshotFile = z.infer<typeof SnapshotFile>;
 export const LatestFile = PUBLIC.LatestFile;

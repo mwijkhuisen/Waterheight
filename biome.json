@@ -9,6 +9,7 @@
       "!scripts/fixtures/boundaries",
       "!apps/server/src/db/generated.ts",
       "!**/*.golden.json",
+      "!packages/contracts/openapi*.json",
       "!apps/web/public/assets/map",
       "!apps/web/src/features/map/styles",
       "!tools/geo/fixtures/*.metadata.json",

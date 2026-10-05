@@ -379,9 +379,21 @@ describe('ApiError', () => {
       'busy',
       'unavailable',
       'internal',
+      'rate_limited',
+      'too_large',
+      'unsupported_type',
     ]);
-    for (const error of API_ERROR_CODES) expect(ApiError.parse({ error })).toEqual({ error });
-    for (const bad of [{}, { error: 'nope' }, { error: '' }, { error: 400 }, { error: 'busy', status: 503 }])
+    for (const error of API_ERROR_CODES)
+      expect(ApiError.parse({ error, attribution: [] })).toEqual({ error, attribution: [] });
+    for (const bad of [
+      {},
+      { error: 'nope', attribution: [] },
+      { error: 'busy' },
+      { error: 'busy', attribution: [{ source: 'NL-1' }] },
+      { error: '' },
+      { error: 400 },
+      { error: 'busy', status: 503 },
+    ])
       expect(ok(ApiError, bad), JSON.stringify(bad)).toBe(false);
   });
 });
@@ -561,10 +573,11 @@ describe('openApiDocument', () => {
       schema: Record<string, unknown>;
     };
 
-  it('is OpenAPI 3.1.0 with exactly the eight public paths, each a GET', () => {
+  it('is OpenAPI 3.1.0 with exactly the nine public paths, each a GET but the beacon, a POST', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths).sort()).toEqual(
       [
+        '/api/v1/beacon',
         '/api/v1/health',
         '/api/v1/health/sources',
         '/api/v1/meta',
@@ -575,7 +588,8 @@ describe('openApiDocument', () => {
         '/api/v1/stations',
       ].sort(),
     );
-    for (const [path, item] of Object.entries(doc.paths)) expect(Object.keys(item), path).toEqual(['get']);
+    for (const [path, item] of Object.entries(doc.paths))
+      expect(Object.keys(item), path).toEqual([path === '/api/v1/beacon' ? 'post' : 'get']);
   });
 
   it('has a component for every answer and every error', () => {
@@ -604,8 +618,9 @@ describe('openApiDocument', () => {
   });
 
   it('every operation answers 200, and the errors are the ApiError body', () => {
-    for (const [path, item] of Object.entries(doc.paths)) expect(item.get?.responses['200'], path).toBeDefined();
-    for (const code of ['400', '405', '503'])
+    for (const [path, item] of Object.entries(doc.paths))
+      if (item.get) expect(item.get.responses['200'], path).toBeDefined();
+    for (const code of ['400', '405', '429', '503'])
       expect(refs(doc.paths['/api/v1/meta']?.get?.responses[code])).toEqual(['#/components/schemas/ApiError']);
     expect(refs(doc.paths['/api/v1/series/{id}']?.get?.responses['404'])).toEqual(['#/components/schemas/ApiError']);
     expect(doc.paths['/api/v1/meta']?.get?.responses['404']).toBeUndefined();
@@ -614,24 +629,28 @@ describe('openApiDocument', () => {
   it('the health routes answer their own 503 body; their 400 and 405 are the ApiError body', () => {
     for (const path of ['/api/v1/health', '/api/v1/health/sources']) {
       const responses = doc.paths[path]?.get?.responses ?? {};
-      expect(refs(responses['503']), path).toEqual(['#/components/schemas/HealthUnavailable']);
+      expect(refs(responses['503']), path).toEqual([
+        '#/components/schemas/HealthUnavailable',
+        '#/components/schemas/ApiError',
+      ]);
       for (const code of ['400', '405'])
         expect(refs(responses[code]), `${path} ${code}`).toEqual(['#/components/schemas/ApiError']);
     }
     for (const path of ['/api/v1/meta', '/api/v1/stations', '/api/v1/snapshot', '/api/v1/series/{id}'])
       expect(refs(doc.paths[path]?.get?.responses['503']), path).toEqual(['#/components/schemas/ApiError']);
     // The schema is exactly the body the health routes send.
-    expect(doc.components.schemas.HealthUnavailable).toEqual({
-      type: 'object',
-      properties: { status: { type: 'string', const: 'down' }, error: { type: 'string', const: 'unavailable' } },
-      required: ['status', 'error'],
-      additionalProperties: false,
-    });
-    expect(HealthUnavailable.parse(JSON.parse('{"status":"down","error":"unavailable"}'))).toEqual({
+    expect(Object.keys((doc.components.schemas.HealthUnavailable as { properties: object }).properties)).toEqual([
+      'status',
+      'error',
+      'attribution',
+    ]);
+    expect(HealthUnavailable.parse(JSON.parse('{"status":"down","error":"unavailable","attribution":[]}'))).toEqual({
       status: 'down',
       error: 'unavailable',
+      attribution: [],
     });
-    expect(ok(HealthUnavailable, { error: 'unavailable' })).toBe(false);
+    expect(ok(HealthUnavailable, { status: 'down', error: 'unavailable' })).toBe(false);
+    expect(ok(HealthUnavailable, { error: 'unavailable', attribution: [] })).toBe(false);
     expect(ok(HealthUnavailable, { status: 'down', error: 'busy' })).toBe(false);
     expect(ok(HealthUnavailable, { status: 'down', error: 'unavailable', detail: 'x' })).toBe(false);
   });

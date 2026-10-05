@@ -1,0 +1,4377 @@
+{
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateKind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "update",
+                        "stand",
+                        "reference",
+                        "retrieval"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateText": {
+                  "anyOf": [
+                    {
+                      "maxLength": 60,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lang": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nl",
+                        "en",
+                        "de",
+                        "fr"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "text": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "maxLength": 500,
+                      "pattern": "^https:\\/\\/[^\\s]+$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "lang",
+                "text",
+                "url",
+                "required",
+                "dateKind",
+                "date",
+                "dateText"
+              ],
+              "type": "object"
+            },
+            "maxItems": 0,
+            "type": "array"
+          },
+          "error": {
+            "enum": [
+              "unknown_parameter",
+              "repeated_parameter",
+              "bad_parameter",
+              "out_of_range",
+              "span_too_long",
+              "not_found",
+              "method_not_allowed",
+              "busy",
+              "unavailable",
+              "internal",
+              "rate_limited",
+              "too_large",
+              "unsupported_type"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "attribution"
+        ],
+        "type": "object"
+      },
+      "Health": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateKind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "update",
+                        "stand",
+                        "reference",
+                        "retrieval"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateText": {
+                  "anyOf": [
+                    {
+                      "maxLength": 60,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lang": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nl",
+                        "en",
+                        "de",
+                        "fr"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "text": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "maxLength": 500,
+                      "pattern": "^https:\\/\\/[^\\s]+$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "lang",
+                "text",
+                "url",
+                "required",
+                "dateKind",
+                "date",
+                "dateText"
+              ],
+              "type": "object"
+            },
+            "maxItems": 0,
+            "type": "array"
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "loader": {
+            "additionalProperties": false,
+            "properties": {
+              "backlog_age_s": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "backlog_bytes": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "backlog_files": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "bad_manifest_lines": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "lag_p95_s": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "last_commit": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "lag_p95_s",
+              "backlog_files",
+              "backlog_bytes",
+              "backlog_age_s",
+              "bad_manifest_lines",
+              "last_commit"
+            ],
+            "type": "object"
+          },
+          "owner_sources": {
+            "additionalProperties": false,
+            "properties": {
+              "healthy": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "healthy",
+              "total"
+            ],
+            "type": "object"
+          },
+          "quarantined": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sources": {
+            "additionalProperties": false,
+            "properties": {
+              "degraded": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "down": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "ok": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "unknown": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "ok",
+              "degraded",
+              "down",
+              "unknown",
+              "total"
+            ],
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "degraded",
+              "down"
+            ],
+            "type": "string"
+          },
+          "twins": {
+            "additionalProperties": false,
+            "properties": {
+              "failing": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "ok": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "ok",
+              "failing"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "status",
+          "generated_at",
+          "loader",
+          "sources",
+          "owner_sources",
+          "quarantined",
+          "twins",
+          "attribution"
+        ],
+        "type": "object"
+      },
+      "HealthSources": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateKind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "update",
+                        "stand",
+                        "reference",
+                        "retrieval"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateText": {
+                  "anyOf": [
+                    {
+                      "maxLength": 60,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lang": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nl",
+                        "en",
+                        "de",
+                        "fr"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "text": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "maxLength": 500,
+                      "pattern": "^https:\\/\\/[^\\s]+$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "lang",
+                "text",
+                "url",
+                "required",
+                "dateKind",
+                "date",
+                "dateText"
+              ],
+              "type": "object"
+            },
+            "maxItems": 500,
+            "type": "array"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "countries": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "country": {
+                          "enum": [
+                            "NL",
+                            "DE",
+                            "BE",
+                            "FR",
+                            "LU",
+                            "CH"
+                          ],
+                          "type": "string"
+                        },
+                        "first_release": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "by_section": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "classed": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "ratio": {
+                              "anyOf": [
+                                {
+                                  "maximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "stations": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "stations",
+                            "classed",
+                            "by_section",
+                            "ratio"
+                          ],
+                          "type": "object"
+                        },
+                        "tier1": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "by_section": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "classed": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "ratio": {
+                              "anyOf": [
+                                {
+                                  "maximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "stations": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "stations",
+                            "classed",
+                            "by_section",
+                            "ratio"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "country",
+                        "tier1",
+                        "first_release"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 6,
+                    "type": "array"
+                  },
+                  "first_release": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "by_section": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "classed": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "ratio": {
+                        "anyOf": [
+                          {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "stations": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "stations",
+                      "classed",
+                      "by_section",
+                      "ratio"
+                    ],
+                    "type": "object"
+                  },
+                  "mode": {
+                    "enum": [
+                      "state",
+                      "dh"
+                    ],
+                    "type": "string"
+                  },
+                  "t": {
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                    "type": "string"
+                  },
+                  "tier1": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "by_section": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "classed": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "ratio": {
+                        "anyOf": [
+                          {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "stations": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "stations",
+                      "classed",
+                      "by_section",
+                      "ratio"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "t",
+                  "mode",
+                  "tier1",
+                  "first_release",
+                  "countries"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "forecast_coverage": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "countries": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "country": {
+                          "enum": [
+                            "NL",
+                            "DE",
+                            "BE",
+                            "FR",
+                            "LU",
+                            "CH"
+                          ],
+                          "type": "string"
+                        },
+                        "covered": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "stations": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "country",
+                        "stations",
+                        "covered"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 6,
+                    "type": "array"
+                  },
+                  "other": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "covered": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "stations": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "stations",
+                      "covered"
+                    ],
+                    "type": "object"
+                  },
+                  "reaches": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "after_permission": {
+                          "items": {
+                            "maxLength": 40,
+                            "minLength": 1,
+                            "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N} .&/-]*$",
+                            "type": "string"
+                          },
+                          "maxItems": 8,
+                          "type": "array"
+                        },
+                        "covered": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "id": {
+                          "pattern": "^[a-z][a-z0-9-]{1,40}$",
+                          "type": "string"
+                        },
+                        "names": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en": {
+                              "maxLength": 80,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "nl": {
+                              "maxLength": 80,
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nl",
+                            "en"
+                          ],
+                          "type": "object"
+                        },
+                        "no_official_forecast": {
+                          "type": "boolean"
+                        },
+                        "none_publishes": {
+                          "items": {
+                            "maxLength": 40,
+                            "minLength": 1,
+                            "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N} .&/-]*$",
+                            "type": "string"
+                          },
+                          "maxItems": 8,
+                          "type": "array"
+                        },
+                        "sources": {
+                          "items": {
+                            "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                            "type": "string"
+                          },
+                          "maxItems": 8,
+                          "type": "array"
+                        },
+                        "stations": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "names",
+                        "stations",
+                        "covered",
+                        "sources",
+                        "no_official_forecast",
+                        "after_permission",
+                        "none_publishes"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 40,
+                    "type": "array"
+                  },
+                  "t": {
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                    "type": "string"
+                  },
+                  "total": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "covered": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "stations": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "stations",
+                      "covered"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "t",
+                  "total",
+                  "countries",
+                  "reaches",
+                  "other"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_sources": {
+            "additionalProperties": false,
+            "properties": {
+              "healthy": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "healthy",
+              "total"
+            ],
+            "type": "object"
+          },
+          "quarantined_batches": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "error": {
+                  "anyOf": [
+                    {
+                      "maxLength": 170,
+                      "pattern": "^[a-z0-9_]{1,40}(?: at [A-Za-z0-9_.?[\\]-]{1,120})?$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "fetched_at": {
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                  "type": "string"
+                },
+                "id": {
+                  "pattern": "^[0-9]{1,19}$",
+                  "type": "string"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "spec": {
+                  "maxLength": 80,
+                  "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "source",
+                "spec",
+                "fetched_at",
+                "error"
+              ],
+              "type": "object"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "consecutive_failures": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "coverage": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "from": {
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                          "type": "string"
+                        },
+                        "gaps": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "from": {
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                                "type": "string"
+                              },
+                              "to": {
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "from",
+                              "to"
+                            ],
+                            "type": "object"
+                          },
+                          "maxItems": 20,
+                          "type": "array"
+                        },
+                        "ratio": {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "series": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "series_below_95": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "ratio",
+                        "series",
+                        "series_below_95",
+                        "gaps"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "forecast": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "current": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "issued_at": {
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                          "type": "string"
+                        },
+                        "late": {
+                          "anyOf": [
+                            {
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "run_age_s": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "series": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "issued_at",
+                        "run_age_s",
+                        "series",
+                        "current",
+                        "late"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "id": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "label_offset": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "day": {
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                          "type": "string"
+                        },
+                        "decided": {
+                          "type": "boolean"
+                        },
+                        "decided_day": {
+                          "anyOf": [
+                            {
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "minutes": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "n_aligned": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "share": {
+                          "anyOf": [
+                            {
+                              "maximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "day",
+                        "decided",
+                        "n_aligned",
+                        "share",
+                        "minutes",
+                        "decided_day"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lag_p95_s": {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "last_fetch_ok": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "last_new_data": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "min_interval_s": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "seconds": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "spec": {
+                        "maxLength": 80,
+                        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "spec",
+                      "seconds"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 50,
+                  "type": "array"
+                },
+                "missing_buckets_24h": {
+                  "anyOf": [
+                    {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "newest_ts": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "outage": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "from": {
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                          "type": "string"
+                        },
+                        "missing_buckets": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "to": {
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "missing_buckets"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "partitions": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "md5": {
+                        "pattern": "^[0-9a-f]{32}$",
+                        "type": "string"
+                      },
+                      "partition": {
+                        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])$",
+                        "type": "string"
+                      },
+                      "rows": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "partition",
+                      "md5",
+                      "rows"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 240,
+                  "type": "array"
+                },
+                "partitions_at": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "quarantined": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "status": {
+                  "enum": [
+                    "ok",
+                    "degraded",
+                    "down",
+                    "unknown"
+                  ],
+                  "type": "string"
+                },
+                "tier1": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "fresh": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "provider_stale": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "total": {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "fresh",
+                        "provider_stale"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "last_fetch_ok",
+                "last_new_data",
+                "newest_ts",
+                "consecutive_failures",
+                "quarantined",
+                "lag_p95_s",
+                "tier1",
+                "missing_buckets_24h",
+                "outage",
+                "coverage",
+                "min_interval_s",
+                "label_offset",
+                "forecast",
+                "partitions",
+                "partitions_at"
+              ],
+              "type": "object"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "twins": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "checks_7d": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "failed_7d": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "id": {
+                  "maxLength": 80,
+                  "pattern": "^[a-z0-9][a-z0-9-]*$",
+                  "type": "string"
+                },
+                "lag_min": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "max_delta": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "median_delta": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "n_aligned": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "window_end": {
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "window_end",
+                "n_aligned",
+                "median_delta",
+                "max_delta",
+                "lag_min",
+                "ok",
+                "checks_7d",
+                "failed_7d"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "sources",
+          "quarantined_batches",
+          "twins",
+          "classification",
+          "forecast_coverage",
+          "owner_sources",
+          "attribution"
+        ],
+        "type": "object"
+      },
+      "HealthUnavailable": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateKind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "update",
+                        "stand",
+                        "reference",
+                        "retrieval"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateText": {
+                  "anyOf": [
+                    {
+                      "maxLength": 60,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lang": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nl",
+                        "en",
+                        "de",
+                        "fr"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "text": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "maxLength": 500,
+                      "pattern": "^https:\\/\\/[^\\s]+$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "lang",
+                "text",
+                "url",
+                "required",
+                "dateKind",
+                "date",
+                "dateText"
+              ],
+              "type": "object"
+            },
+            "maxItems": 0,
+            "type": "array"
+          },
+          "error": {
+            "const": "unavailable",
+            "type": "string"
+          },
+          "status": {
+            "const": "down",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "error",
+          "attribution"
+        ],
+        "type": "object"
+      },
+      "Meta": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateKind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "update",
+                        "stand",
+                        "reference",
+                        "retrieval"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateText": {
+                  "anyOf": [
+                    {
+                      "maxLength": 60,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lang": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nl",
+                        "en",
+                        "de",
+                        "fr"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "text": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "maxLength": 500,
+                      "pattern": "^https:\\/\\/[^\\s]+$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "lang",
+                "text",
+                "url",
+                "required",
+                "dateKind",
+                "date",
+                "dateText"
+              ],
+              "type": "object"
+            },
+            "maxItems": 500,
+            "type": "array"
+          },
+          "build": {
+            "pattern": "^(?:[0-9a-f]{40}|dev)$",
+            "type": "string"
+          },
+          "dataEpoch": {
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "displayStart": {
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "forecastHorizons": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "hours": {
+                  "maximum": 48,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "hours"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "type": "array"
+          },
+          "now": {
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "attribution": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "lang": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "nl",
+                              "en",
+                              "de",
+                              "fr"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "needsDate": {
+                        "type": "boolean"
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "text": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "url": {
+                        "anyOf": [
+                          {
+                            "maxLength": 500,
+                            "pattern": "^https:\\/\\/[^\\s]+$",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "lang",
+                      "text",
+                      "url",
+                      "required",
+                      "needsDate"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 20,
+                  "type": "array"
+                },
+                "id": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "attribution"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          }
+        },
+        "required": [
+          "now",
+          "dataEpoch",
+          "displayStart",
+          "build",
+          "sources",
+          "forecastHorizons",
+          "attribution"
+        ],
+        "type": "object"
+      },
+      "Series": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "attribution": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "date": {
+                      "anyOf": [
+                        {
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "dateKind": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "update",
+                            "stand",
+                            "reference",
+                            "retrieval"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "dateText": {
+                      "anyOf": [
+                        {
+                          "maxLength": 60,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lang": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nl",
+                            "en",
+                            "de",
+                            "fr"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                      "type": "string"
+                    },
+                    "text": {
+                      "maxLength": 1000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "url": {
+                      "anyOf": [
+                        {
+                          "maxLength": 500,
+                          "pattern": "^https:\\/\\/[^\\s]+$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "lang",
+                    "text",
+                    "url",
+                    "required",
+                    "dateKind",
+                    "date",
+                    "dateText"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              "from": {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              "id": {
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "points": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "qc": {
+                      "maximum": 1023,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "ts": {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "ts",
+                    "value",
+                    "qc"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 20000,
+                "type": "array"
+              },
+              "res": {
+                "const": "raw",
+                "type": "string"
+              },
+              "to": {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "from",
+              "to",
+              "truncated",
+              "res",
+              "points",
+              "attribution"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "attribution": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "date": {
+                      "anyOf": [
+                        {
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "dateKind": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "update",
+                            "stand",
+                            "reference",
+                            "retrieval"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "dateText": {
+                      "anyOf": [
+                        {
+                          "maxLength": 60,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lang": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nl",
+                            "en",
+                            "de",
+                            "fr"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                      "type": "string"
+                    },
+                    "text": {
+                      "maxLength": 1000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "url": {
+                      "anyOf": [
+                        {
+                          "maxLength": 500,
+                          "pattern": "^https:\\/\\/[^\\s]+$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "lang",
+                    "text",
+                    "url",
+                    "required",
+                    "dateKind",
+                    "date",
+                    "dateText"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              "from": {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              "id": {
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "points": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "bucket": {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    "n": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "qcOr": {
+                      "maximum": 1023,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "vavg": {
+                      "type": "number"
+                    },
+                    "vlast": {
+                      "type": "number"
+                    },
+                    "vmax": {
+                      "type": "number"
+                    },
+                    "vmin": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "bucket",
+                    "vmin",
+                    "vmax",
+                    "vavg",
+                    "vlast",
+                    "n",
+                    "qcOr"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 20000,
+                "type": "array"
+              },
+              "res": {
+                "enum": [
+                  "1h",
+                  "1d"
+                ],
+                "type": "string"
+              },
+              "to": {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "from",
+              "to",
+              "truncated",
+              "res",
+              "points",
+              "attribution"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "SeriesForecast": {
+        "additionalProperties": false,
+        "properties": {
+          "asof": {
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "attribution": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateKind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "update",
+                        "stand",
+                        "reference",
+                        "retrieval"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateText": {
+                  "anyOf": [
+                    {
+                      "maxLength": 60,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lang": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nl",
+                        "en",
+                        "de",
+                        "fr"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "text": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "maxLength": 500,
+                      "pattern": "^https:\\/\\/[^\\s]+$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "lang",
+                "text",
+                "url",
+                "required",
+                "dateKind",
+                "date",
+                "dateText"
+              ],
+              "type": "object"
+            },
+            "maxItems": 500,
+            "type": "array"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "agency": {
+                    "maxLength": 40,
+                    "pattern": "^[A-Za-z][A-Za-z -]*$",
+                    "type": "string"
+                  },
+                  "bandKind": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "p10p90",
+                          "p25p75"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fetchedAt": {
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                    "type": "string"
+                  },
+                  "horizonEnd": {
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                    "type": "string"
+                  },
+                  "issuedAt": {
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                    "type": "string"
+                  },
+                  "issuedInferred": {
+                    "type": "boolean"
+                  },
+                  "kind": {
+                    "enum": [
+                      "deterministic",
+                      "quantiles",
+                      "ensemble_summary"
+                    ],
+                    "type": "string"
+                  },
+                  "points": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "flags": {
+                          "maximum": 1424,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "hi": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "lo": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "ts": {
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "ts",
+                        "value",
+                        "lo",
+                        "hi",
+                        "flags"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 2000,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "providerSegmentEnd": {
+                    "anyOf": [
+                      {
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                    "type": "string"
+                  },
+                  "stepSeconds": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "source",
+                  "agency",
+                  "issuedAt",
+                  "issuedInferred",
+                  "fetchedAt",
+                  "providerSegmentEnd",
+                  "kind",
+                  "stepSeconds",
+                  "bandKind",
+                  "horizonEnd",
+                  "points"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "series": {
+            "maximum": 2147483647,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "series",
+          "asof",
+          "run",
+          "attribution"
+        ],
+        "type": "object"
+      },
+      "Snapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateKind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "update",
+                        "stand",
+                        "reference",
+                        "retrieval"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateText": {
+                  "anyOf": [
+                    {
+                      "maxLength": 60,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lang": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nl",
+                        "en",
+                        "de",
+                        "fr"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "text": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "maxLength": 500,
+                      "pattern": "^https:\\/\\/[^\\s]+$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "lang",
+                "text",
+                "url",
+                "required",
+                "dateKind",
+                "date",
+                "dateText"
+              ],
+              "type": "object"
+            },
+            "maxItems": 500,
+            "type": "array"
+          },
+          "forecasts": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "agency": {
+                  "maxLength": 40,
+                  "pattern": "^[A-Za-z][A-Za-z -]*$",
+                  "type": "string"
+                },
+                "band": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "hi": {
+                          "type": "number"
+                        },
+                        "kind": {
+                          "enum": [
+                            "p10p90",
+                            "p25p75"
+                          ],
+                          "type": "string"
+                        },
+                        "lo": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "lo",
+                        "hi"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "basis": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "operational",
+                            "statistical",
+                            "provider_class",
+                            "area"
+                          ],
+                          "type": "string"
+                        },
+                        "label": {
+                          "maxLength": 700,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "measure": {
+                          "enum": [
+                            "stage",
+                            "level",
+                            "discharge",
+                            "area"
+                          ],
+                          "type": "string"
+                        },
+                        "ref": {
+                          "maxLength": 200,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "source": {
+                          "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "source",
+                        "kind",
+                        "measure",
+                        "ref",
+                        "label"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "estimate": {
+                  "type": "boolean"
+                },
+                "flags": {
+                  "maximum": 1424,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "horizonEnd": {
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                  "type": "string"
+                },
+                "issuedAt": {
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                  "type": "string"
+                },
+                "issuedInferred": {
+                  "type": "boolean"
+                },
+                "providerSegmentEnd": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "series": {
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "no_ref",
+                    "low",
+                    "normal",
+                    "elevated",
+                    "high",
+                    "extreme"
+                  ],
+                  "type": "string"
+                },
+                "ts": {
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                  "type": "string"
+                },
+                "value": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "series",
+                "source",
+                "agency",
+                "ts",
+                "value",
+                "flags",
+                "estimate",
+                "issuedAt",
+                "issuedInferred",
+                "providerSegmentEnd",
+                "band",
+                "horizonEnd",
+                "state",
+                "basis"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20000,
+            "type": "array"
+          },
+          "t": {
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "ageSeconds": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "area": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "basis": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "operational",
+                            "statistical",
+                            "provider_class",
+                            "area"
+                          ],
+                          "type": "string"
+                        },
+                        "label": {
+                          "maxLength": 700,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "measure": {
+                          "enum": [
+                            "stage",
+                            "level",
+                            "discharge",
+                            "area"
+                          ],
+                          "type": "string"
+                        },
+                        "ref": {
+                          "maxLength": 200,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "source": {
+                          "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "source",
+                        "kind",
+                        "measure",
+                        "ref",
+                        "label"
+                      ],
+                      "type": "object"
+                    },
+                    "state": {
+                      "enum": [
+                        "low",
+                        "normal",
+                        "elevated",
+                        "high",
+                        "extreme"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "basis"
+                  ],
+                  "type": "object"
+                },
+                "basis": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "operational",
+                            "statistical",
+                            "provider_class",
+                            "area"
+                          ],
+                          "type": "string"
+                        },
+                        "label": {
+                          "maxLength": 700,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "measure": {
+                          "enum": [
+                            "stage",
+                            "level",
+                            "discharge",
+                            "area"
+                          ],
+                          "type": "string"
+                        },
+                        "ref": {
+                          "maxLength": 200,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "source": {
+                          "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "source",
+                        "kind",
+                        "measure",
+                        "ref",
+                        "label"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "nap": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "m": {
+                      "type": "number"
+                    },
+                    "pm": {
+                      "minimum": 0,
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "m",
+                    "pm"
+                  ],
+                  "type": "object"
+                },
+                "qc": {
+                  "maximum": 1023,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "section": {
+                  "type": "boolean"
+                },
+                "series": {
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "state": {
+                  "enum": [
+                    "no_ref",
+                    "low",
+                    "normal",
+                    "elevated",
+                    "high",
+                    "extreme"
+                  ],
+                  "type": "string"
+                },
+                "ts": {
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                },
+                "zero": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "datum": {
+                      "enum": [
+                        "NAP",
+                        "TAW",
+                        "NHN",
+                        "NN",
+                        "IGN69",
+                        "NGF1884",
+                        "LN02",
+                        "NG95",
+                        "DNG",
+                        "LOCAL",
+                        "MSL"
+                      ],
+                      "type": "string"
+                    },
+                    "m": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "m",
+                    "datum"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "series",
+                "ts",
+                "value",
+                "qc",
+                "ageSeconds",
+                "state",
+                "basis",
+                "section"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20000,
+            "type": "array"
+          }
+        },
+        "required": [
+          "t",
+          "values",
+          "attribution"
+        ],
+        "type": "object"
+      },
+      "Stations": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateKind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "update",
+                        "stand",
+                        "reference",
+                        "retrieval"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateText": {
+                  "anyOf": [
+                    {
+                      "maxLength": 60,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lang": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nl",
+                        "en",
+                        "de",
+                        "fr"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "text": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "maxLength": 500,
+                      "pattern": "^https:\\/\\/[^\\s]+$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "lang",
+                "text",
+                "url",
+                "required",
+                "dateKind",
+                "date",
+                "dateText"
+              ],
+              "type": "object"
+            },
+            "maxItems": 500,
+            "type": "array"
+          },
+          "stations": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "country": {
+                  "enum": [
+                    "NL",
+                    "DE",
+                    "BE",
+                    "FR",
+                    "LU",
+                    "CH"
+                  ],
+                  "type": "string"
+                },
+                "flags": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "impounded": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "tidal": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tidal",
+                    "impounded"
+                  ],
+                  "type": "object"
+                },
+                "id": {
+                  "maxLength": 80,
+                  "pattern": "^[a-z]{2}\\.[a-z0-9-]+\\.[A-Za-z0-9._-]+$",
+                  "type": "string"
+                },
+                "lat": {
+                  "anyOf": [
+                    {
+                      "maximum": 90,
+                      "minimum": -90,
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lon": {
+                  "anyOf": [
+                    {
+                      "maximum": 180,
+                      "minimum": -180,
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "name": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "series": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "dataSince": {
+                        "anyOf": [
+                          {
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "datum": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "NAP",
+                              "TAW",
+                              "NHN",
+                              "NN",
+                              "IGN69",
+                              "NGF1884",
+                              "LN02",
+                              "NG95",
+                              "DNG",
+                              "LOCAL",
+                              "MSL"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "expectedStepSeconds": {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      "id": {
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "nativeUnit": {
+                        "enum": [
+                          "cm",
+                          "mm",
+                          "m",
+                          "m+NN",
+                          "m+PNP",
+                          "m³/s",
+                          "l/s"
+                        ],
+                        "type": "string"
+                      },
+                      "quantity": {
+                        "enum": [
+                          "H",
+                          "Q"
+                        ],
+                        "type": "string"
+                      },
+                      "source": {
+                        "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                        "type": "string"
+                      },
+                      "stalenessLimitSeconds": {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      },
+                      "unit": {
+                        "enum": [
+                          "cm",
+                          "m³/s"
+                        ],
+                        "type": "string"
+                      },
+                      "valueKind": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "stage",
+                              "level"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "source",
+                      "quantity",
+                      "valueKind",
+                      "unit",
+                      "datum",
+                      "nativeUnit",
+                      "expectedStepSeconds",
+                      "stalenessLimitSeconds",
+                      "dataSince"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 20,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "tier": {
+                  "anyOf": [
+                    {
+                      "const": 1,
+                      "type": "number"
+                    },
+                    {
+                      "const": 2,
+                      "type": "number"
+                    }
+                  ]
+                },
+                "waterName": {
+                  "anyOf": [
+                    {
+                      "maxLength": 200,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "waterName",
+                "country",
+                "lon",
+                "lat",
+                "tier",
+                "flags",
+                "series"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "type": "array"
+          }
+        },
+        "required": [
+          "stations",
+          "attribution"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Unofficial, no SLA. Read-only river levels and discharge for the rivers flowing into the Netherlands. Rate-limited per client (429 with Retry-After). Not an official warning service. Unknown or repeated query parameters are a 400. Every 200 body carries an `attribution` array that lists exactly the sources it names. The owner API (`api-owner`, owner view only) serves the same paths with `audience: \"owner\"`.",
+    "title": "Waterheight public API",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/beacon": {
+      "post": {
+        "description": "No query string. The body is at most 8,192 bytes and the content type one of the three below (parameters ignored).",
+        "requestBody": {
+          "content": {
+            "application/csp-report": {
+              "schema": {
+                "additionalProperties": false,
+                "description": "A legacy CSP violation report: one `csp-report` object of the standard fields, all optional.",
+                "properties": {
+                  "csp-report": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "blocked-uri": {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      "column-number": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "disposition": {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      "document-uri": {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      "effective-directive": {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      "line-number": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "original-policy": {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      "referrer": {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      "script-sample": {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      "source-file": {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      "status-code": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "violated-directive": {
+                        "maxLength": 2000,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "csp-report"
+                ],
+                "type": "object"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "description": "The page's own client error report.",
+                "properties": {
+                  "kind": {
+                    "const": "client_error"
+                  },
+                  "message": {
+                    "maxLength": 2000,
+                    "type": "string"
+                  },
+                  "url": {
+                    "maxLength": 2000,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "message",
+                  "url"
+                ],
+                "type": "object"
+              }
+            },
+            "application/reports+json": {
+              "schema": {
+                "description": "A Reporting API batch: 1 to 20 reports of `type`, `age` (ms), `url`, `user_agent` and a flat `body`.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "age": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "body": {
+                      "additionalProperties": {
+                        "oneOf": [
+                          {
+                            "maxLength": 2000,
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "maxProperties": 30,
+                      "type": "object"
+                    },
+                    "type": {
+                      "maxLength": 64,
+                      "type": "string"
+                    },
+                    "url": {
+                      "maxLength": 2000,
+                      "type": "string"
+                    },
+                    "user_agent": {
+                      "maxLength": 500,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "age",
+                    "url",
+                    "user_agent",
+                    "body"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 20,
+                "minItems": 1,
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Accepted: no body"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only POST is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "POST",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The body is longer than 8,192 bytes"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The content type is none of the three"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The data is unavailable or busy for now",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A browser report (CSP violation, Reporting API batch or a client error): logged with control characters removed and cut, never stored"
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Health"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only GET, HEAD is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "GET, HEAD",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HealthUnavailable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The health documents are unavailable (`HealthUnavailable`) or the server is busy (`ApiError`)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Loader and source health (public sources)"
+      }
+    },
+    "/api/v1/health/sources": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthSources"
+                }
+              }
+            },
+            "description": "HealthSources"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only GET, HEAD is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "GET, HEAD",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HealthUnavailable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiError"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The health documents are unavailable (`HealthUnavailable`) or the server is busy (`ApiError`)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Health per public source"
+      }
+    },
+    "/api/v1/meta": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                }
+              }
+            },
+            "description": "Meta"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only GET, HEAD is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "GET, HEAD",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The data is unavailable or busy for now",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The display window, the build and the public sources with their attribution"
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OpenAPI 3.1"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only GET, HEAD is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "GET, HEAD",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The data is unavailable or busy for now",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "This document"
+      }
+    },
+    "/api/v1/series/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[1-9][0-9]{0,9}$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The start (inclusive), from displayStart. RFC 3339 with an offset (`Z` or `%2B01:00`), at most 32 characters; floored to the 10-minute UTC grid.",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "pattern": "^((?:19|20)[0-9]{2})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The end (exclusive), at most 10 minutes after now. RFC 3339 with an offset (`Z` or `%2B01:00`), at most 32 characters; floored to the 10-minute UTC grid.",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "pattern": "^((?:19|20)[0-9]{2})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "raw up to 14 days, 1h up to 366 days, 1d up to 3660 days; by default the finest that fits.",
+            "in": "query",
+            "name": "res",
+            "required": false,
+            "schema": {
+              "enum": [
+                "raw",
+                "1h",
+                "1d"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The day version from `meta.dayVersions` (absent there means 1). An answer is immutable only when v is current for every day it spans and they are settled; otherwise it is cached for a short time only.",
+            "in": "query",
+            "name": "v",
+            "required": false,
+            "schema": {
+              "pattern": "^[1-9][0-9]{0,5}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Series"
+                }
+              }
+            },
+            "description": "Series"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "No such series in the api channel"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only GET, HEAD is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "GET, HEAD",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The data is unavailable or busy for now",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One series over [from, to)"
+      }
+    },
+    "/api/v1/series/{id}/forecast": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[1-9][0-9]{0,9}$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "What was known at this instant, from displayStart to now; by default now. RFC 3339 with an offset (`Z` or `%2B01:00`), at most 32 characters; floored to the 10-minute UTC grid.",
+            "in": "query",
+            "name": "asof",
+            "required": false,
+            "schema": {
+              "maxLength": 32,
+              "pattern": "^((?:19|20)[0-9]{2})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesForecast"
+                }
+              }
+            },
+            "description": "SeriesForecast"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "No such series in the api channel"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only GET, HEAD is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "GET, HEAD",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The data is unavailable or busy for now",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The official forecast run of one series current at asof (one source, never blended); `v` is not accepted (400)"
+      }
+    },
+    "/api/v1/snapshot": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The instant, from displayStart to now + 48 hours. RFC 3339 with an offset (`Z` or `%2B01:00`), at most 32 characters; floored to the 10-minute UTC grid.",
+            "in": "query",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "pattern": "^((?:19|20)[0-9]{2})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The day version from `meta.dayVersions` (absent there means 1). An answer is immutable only when v is current for every day it spans and they are settled; otherwise it is cached for a short time only.",
+            "in": "query",
+            "name": "v",
+            "required": false,
+            "schema": {
+              "pattern": "^[1-9][0-9]{0,5}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "description": "Snapshot"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only GET, HEAD is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "GET, HEAD",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The data is unavailable or busy for now",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The value of every series at t: up to now the last observation carried forward within its staleness limit; after now only official forecasts (`forecasts`), each series from one source"
+      }
+    },
+    "/api/v1/stations": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stations"
+                }
+              }
+            },
+            "description": "Stations"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only GET, HEAD is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "GET, HEAD",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The data is unavailable or busy for now",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stations and their series"
+      }
+    }
+  }
+}
