@@ -46,6 +46,36 @@ describe('owner site headers', () => {
   });
 });
 
+describe('the owner api routes (P9b)', () => {
+  const code = ownerSite.replaceAll(/#.*$/gm, '');
+  const proxies = [...code.matchAll(/reverse_proxy (\S+) \{/g)];
+
+  it('has the beacon handle: exact POST, 8 KB, before the 405 guard, to api-owner', () => {
+    expect(code).toMatch(/@beacon \{\n\t\tmethod POST\n\t\texpression `\{path\} == '\/api\/v1\/beacon'`\n\t\}/);
+    const beacon = /handle @beacon \{\n\t\trequest_body \{\n\t\t\tmax_size 8KB\n\t\t\}\n([\s\S]*?)\n\t\}\n/.exec(code);
+    expect(beacon?.[1]).toContain('reverse_proxy api-owner:8080 {');
+    expect(code.indexOf('handle @beacon {')).toBeLessThan(code.indexOf('handle @write {'));
+    // The 405 guard itself is unchanged.
+    expect(code).toContain('\t@write not method GET HEAD\n');
+  });
+
+  it('sets X-Rws-Client to the TCP peer on every reverse_proxy, in both sites', () => {
+    expect(proxies.map((m) => m[1])).toEqual(['api-owner:8080', 'api-owner:8080']);
+    for (const site of [ownerSite, publicSite]) {
+      // Up to the first line that is only a closing brace (a nested block of the snapshot proxy comes after the headers).
+      const all = [...site.replaceAll(/#.*$/gm, '').matchAll(/reverse_proxy (\S+) \{\n([\s\S]*?)\n\t*\}\n/g)];
+      expect(all.length).toBe(site === ownerSite ? 2 : 3);
+      for (const m of all) expect(m[2], m[1]).toContain('header_up X-Rws-Client {remote_host}');
+    }
+  });
+
+  it('puts Reporting-Endpoints in the header block of both sites', () => {
+    const line = 'Reporting-Endpoints "csp=\\"/api/v1/beacon\\""';
+    expect(headerBlock(publicSite)).toContain(line);
+    expect(headerBlock(ownerSite)).toContain(line);
+  });
+});
+
 describe('owner site isolation', () => {
   it('gates the whole site with basic_auth at site level, never inside a route', () => {
     // A basic_auth in a route does not gate `handle` blocks (Caddy 2.11.4, measured).
@@ -79,7 +109,47 @@ describe('owner site isolation', () => {
       '/srv/rws/owner/www/v1:/srv/rws/owner/www/v1:ro',
     ]);
     expect(owner?.ports).toBeUndefined();
-    expect(owner?.networks).toEqual(['edge']);
+    expect(owner?.networks).toEqual(['edge', 'owner_edge']);
     expect(owner?.secrets).toEqual(['owner_basic_auth']);
+  });
+
+  it('adds api-owner in the overlay only: the hardening of compose.yaml, one secret, owner_edge and db, no port (P9b C15)', () => {
+    type Svc = Record<string, unknown> & { networks?: string[]; secrets?: string[] };
+    type File = { services: Record<string, Svc>; networks?: Record<string, { internal?: boolean }> };
+    const base = parse(read('deploy/compose.yaml'), { merge: true }) as File;
+    const overlay = parse(read('deploy/compose.owner.yaml'), { merge: true }) as File;
+    expect(base.services['api-owner']).toBeUndefined();
+    expect(read('deploy/compose.yaml').replaceAll(/#.*$/gm, '')).not.toMatch(/api-owner|owner_edge/);
+    const svc = overlay.services['api-owner'] as Svc;
+    // The overlay repeats x-hardening literally (anchors do not cross files): every key of the public api's copy.
+    for (const k of ['read_only', 'tmpfs', 'cap_drop', 'security_opt', 'restart', 'user']) {
+      expect(svc[k], k).toEqual((base.services.api as Svc)[k]);
+    }
+    expect(svc.read_only).toBe(true);
+    expect(svc.cap_drop).toEqual(['ALL']);
+    expect(svc.security_opt).toEqual(['no-new-privileges:true']);
+    expect(svc.user).toBe('65532:65532');
+    expect(svc.image).toBe((base.services.api as Svc).image);
+    expect(svc.command).toEqual(['api', '--audience', 'owner']);
+    // The owner API secret group, as publish-owner's.
+    expect(svc.group_add).toEqual(['61009']);
+    expect(svc.group_add).toEqual(base.services['publish-owner']?.group_add);
+    expect(svc.secrets).toEqual(['db_rws_owner_api']);
+    expect(svc.mem_limit).toBe('256m');
+    expect(svc.cpus).toBe(0.5);
+    expect(svc.pids_limit).toBe(64);
+    expect(svc.ports).toBeUndefined();
+    expect(svc.networks).toEqual(['owner_edge', 'db']);
+    expect(svc.healthcheck).toEqual((base.services.api as Svc).healthcheck);
+    expect(svc.depends_on).toEqual((base.services.api as Svc).depends_on);
+    expect(svc.environment).toEqual((base.services.api as Svc).environment);
+    // owner_edge: internal, joined by caddy-owner and api-owner only; neither the public caddy nor the public api.
+    expect(overlay.networks?.owner_edge?.internal).toBe(true);
+    const joined = [...Object.entries(base.services), ...Object.entries(overlay.services)]
+      .filter(([, s]) => s.networks?.includes('owner_edge'))
+      .map(([name]) => name)
+      .sort();
+    expect(joined).toEqual(['api-owner', 'caddy-owner']);
+    expect(base.networks?.owner_edge).toBeUndefined();
   });
 });

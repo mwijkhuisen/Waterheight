@@ -54,8 +54,21 @@
 #     which this script adds with -f; production uses it only from P12a) refusing
 #     every request without credentials, with both owner headers, and serving the
 #     owner canary with them; and the degraded stand-in: with the api stopped the
-#     map still loads for a future t and shows its banner.
+#     map still loads for a future t and shows its banner;
+#   - (P9b) the owner API: api-owner (the overlay) joins only owner_edge and db, with
+#     caddy-owner the only other member of owner_edge; static files are never rate
+#     limited while the API is (429 with Retry-After); Caddy hands the API the real
+#     peer address (the masked access log never shows a Docker bridge gateway for
+#     the runner); and api-sweep.mjs, the owner canary sweep: every public route,
+#     50 random snapshots, health, openapi, beacons and the static files, each in
+#     identity, gzip and zstd, free of the canary's value, station, source, text and
+#     clause (the owner side shows them), then the api, publish and caddy logs and
+#     the public access log grepped for the same terms.
 # The stack keeps running afterwards for scripts/verify-prod.ts.
+# RWS_E2E_MODE=loadtest (P9b, .github/workflows/loadtest.yml; sudo must preserve it): the same
+# stack with the overlay deploy/tests/loadtest/compose.loadtest.yaml added, up to both
+# publishers' first meta.json; no proof section runs. It writes /ci/loadtest.env, prints
+# "loadtest stack ready" and exits 0 with the stack running (nothing is torn down).
 # Usage: sudo deploy/tests/e2e/run.sh
 set -euo pipefail
 
@@ -66,10 +79,20 @@ e2e=$repo/deploy/tests/e2e
 umask 022
 
 readonly DOMAIN=rivierstanden.example IP4=203.0.114.10 IP6=2a0a:e5c0:ffff::10
+# Extra client addresses in the outside namespace "ext" (P9b): distinct sources for the rate limit proof and the load test.
+# Not private, so the API keys them as themselves (a private peer is the gateway key, a 100x bucket).
+readonly CLIENT_IPS=(203.0.114.11 203.0.114.12 203.0.114.13 203.0.114.14 203.0.114.15 203.0.114.16)
+readonly LOADTEST_OVERLAY=$repo/deploy/tests/loadtest/compose.loadtest.yaml
 readonly DOCKER_APT=5:29.8.1-1~ubuntu.24.04~noble CONTAINERD_APT=2.3.5-1~ubuntu.24.04~noble
 readonly COMPOSE_APT=5.5.1-1~ubuntu.24.04~noble
+# P9b: unset or empty is the normal run, `loadtest` the load-test stack (see the header); anything else is refused.
+mode=${RWS_E2E_MODE:-}
+[[ -z $mode || $mode == loadtest ]] || {
+  echo "::error::e2e: RWS_E2E_MODE must be empty or loadtest"
+  exit 1
+}
 # The Playwright image of the e2e job (ci.yml hands it in; test/e2e-pins.test.ts keeps both jobs on one value).
-: "${PLAYWRIGHT_IMAGE:?set PLAYWRIGHT_IMAGE (ci.yml deploy job)}"
+[[ $mode == loadtest ]] || : "${PLAYWRIGHT_IMAGE:?set PLAYWRIGHT_IMAGE (ci.yml deploy job)}"
 readonly MC_IMAGE=cgr.dev/chainguard/minio-client@sha256:be51ef820151a708a8e140037e3746862a8c1dd5e624f84b404a1d71bcefb167
 # The build image's Node (the job's own node is not on sudo's PATH): runs scripts/fixture-archive.ts.
 readonly NODE_IMAGE=node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1
@@ -105,7 +128,7 @@ on_exit() {
   if ((rc != 0)); then
     echo "::group::diagnostics"
     docker compose -p rws ps -a 2>/dev/null || true
-    for s in caddy capture watchdog db load api publish publish-owner caddy-owner pebble minio; do docker logs --tail 60 "rws-$s-1" 2>&1 | sed "s/^/$s| /" || true; done
+    for s in caddy capture watchdog db load api api-owner publish publish-owner caddy-owner pebble minio; do docker logs --tail 60 "rws-$s-1" 2>&1 | sed "s/^/$s| /" || true; done
     find /srv/rws/tiles -maxdepth 2 -printf '%M %u:%g %s %p\n' 2>&1 | head -n 20 || true
     systemctl status --no-pager rws-status-copy.path rws-status-copy.service 2>&1 | tail -n 20 || true
     nft list ruleset 2>/dev/null | head -n 200 || true
@@ -116,6 +139,7 @@ on_exit() {
 }
 trap on_exit EXIT
 ((EUID == 0)) || fail "run as root"
+[[ $mode != loadtest ]] || [[ -f $LOADTEST_OVERLAY ]] || fail "loadtest mode needs $LOADTEST_OVERLAY (deploy/tests/loadtest/compose.loadtest.yaml)"
 
 # ------------------------------------------------------------------ Docker
 step "Docker Engine 29.8.1 and Compose 5.5.1 from Docker's apt repository"
@@ -311,6 +335,13 @@ ip -n ext link set lo up
 ip -n ext link set vext1 up
 ip -n ext route add default via 10.99.0.1
 ip -n ext -6 route add default via fd99::1
+# The extra client addresses live in the outside namespace, not on the host: a host-originated request to a published
+# port is masqueraded to the bridge gateway (Docker's POSTROUTING for local sources), while a request that arrives
+# from outside keeps its source, as a visitor's does. The host routes them back through the veth.
+for a in "${CLIENT_IPS[@]}"; do
+  ip -n ext addr add "$a/32" dev vext1
+  ip route add "$a/32" via 10.99.0.2
+done
 sysctl -qw net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1
 
 step "Host firewall: deploy/host/nftables.conf next to Docker's own tables"
@@ -330,13 +361,15 @@ docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$repo/deploy/compose.ow
   --env-file /etc/rws/rws.env --env-file "$REL/images.env" config -q
 proof "docker compose config -q: deploy/compose.yaml alone (production until P12a) and with the owner overlay deploy/compose.owner.yaml valid with the host settings and image digests"
 # --profile jobs: `config` leaves out services of inactive profiles (the backup job) otherwise.
-docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$e2e/compose.ci.yaml" -f "$repo/deploy/compose.owner.yaml" \
+extra_files=()
+[[ $mode != loadtest ]] || extra_files=(-f "$LOADTEST_OVERLAY")
+docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$e2e/compose.ci.yaml" -f "$repo/deploy/compose.owner.yaml" "${extra_files[@]}" \
   --env-file /etc/rws/rws.env --env-file "$REL/images.env" --profile jobs config >"$REL/compose.yaml"
 grep -q '^  backup:' "$REL/compose.yaml" || fail "the merged compose file has no backup service"
 grep -q '^  migrate:' "$REL/compose.yaml" || fail "the merged compose file has no migrate job"
 grep -q '^  basemap:' "$REL/compose.yaml" || fail "the merged compose file has no basemap job"
 grep -q '^  basemap-promote:' "$REL/compose.yaml" || fail "the merged compose file has no basemap-promote job"
-for s in publish publish-owner caddy-owner; do
+for s in publish publish-owner caddy-owner api-owner; do
   grep -q "^  $s:" "$REL/compose.yaml" || fail "the merged compose file has no $s service"
 done
 set_active prod-ci
@@ -345,6 +378,7 @@ set_active prod-ci
 db_up || fail "db_up (db start, db_prepare or migrate) failed"
 db_up || fail "a second db_up failed"
 psql_su() { rws_compose exec -T db psql -XAtq -v ON_ERROR_STOP=1 -U postgres -d rws -c "$1"; }
+obs_loaded() { [[ $(psql_su 'select count(*) from obs') =~ ^[1-9][0-9]*$ ]]; }
 applied=$(psql_su 'select count(*) from schema_migrations')
 files=$(find "$repo/db/migrations" -maxdepth 1 -name '*.sql' | wc -l)
 [[ $applied == "$files" ]] || fail "schema_migrations has $applied rows, db/migrations $files files"
@@ -356,10 +390,10 @@ notify=$(psql_su 'show max_notify_queue_pages')
 proof "db_up of rws-lib.sh ran twice: db healthy, deploy/postgres/roles.sql and the five passwords over the local socket, the migrate job (dbmate 2.36.0 in the server image, as rws_migrator): $applied of $files migrations applied, every public table owned by rws_owner, max_notify_queue_pages $notify"
 rws_compose up -d --remove-orphans --quiet-pull
 healthy() { [[ $(docker inspect -f '{{.State.Health.Status}}' "rws-$1-1") == healthy ]]; }
-for s in caddy capture watchdog db load api publish publish-owner caddy-owner; do wait_for "$s healthy" 240 healthy "$s"; done
-proof "caddy, capture, watchdog, db, load, api, publish, publish-owner and caddy-owner healthy; the node healthchecks run in distroless (no shell): $(docker inspect -f '{{json .Config.Healthcheck.Test}}' rws-capture-1)"
+for s in caddy capture watchdog db load api api-owner publish publish-owner caddy-owner; do wait_for "$s healthy" 240 healthy "$s"; done
+proof "caddy, capture, watchdog, db, load, api, api-owner, publish, publish-owner and caddy-owner healthy; the node healthchecks run in distroless (no shell): $(docker inspect -f '{{json .Config.Healthcheck.Test}}' rws-capture-1)"
 docker ps -a --filter label=com.docker.compose.project=rws --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
-for s in caddy capture watchdog db load api publish publish-owner caddy-owner; do
+for s in caddy capture watchdog db load api api-owner publish publish-owner caddy-owner; do
   docker inspect -f '{{.Name}} user={{.Config.User}} readonly={{.HostConfig.ReadonlyRootfs}} capdrop={{.HostConfig.CapDrop}} capadd={{.HostConfig.CapAdd}} secopt={{.HostConfig.SecurityOpt}} mem={{.HostConfig.Memory}} cpus={{.HostConfig.NanoCpus}} pids={{.HostConfig.PidsLimit}} restart={{.HostConfig.RestartPolicy.Name}}' "rws-$s-1"
 done
 
@@ -379,6 +413,32 @@ wait_for "the ACME certificate" 240 outside --resolve "$DOMAIN:443:$IP4" "https:
 issuer=$(ip netns exec ext openssl s_client -connect "$IP4:443" -servername "$DOMAIN" </dev/null 2>/dev/null |
   openssl x509 -noout -issuer 2>/dev/null)
 proof "caddy runs as uid 65533 with CapEff=CapPrm=0 (cap_drop ALL, nothing added) and still binds 80/443; it obtained a certificate from Pebble over ACME HTTP-01 through the published port ($issuer)"
+
+# ------------------------------------------------------------------ the load-test stack (P9b)
+if [[ $mode == loadtest ]]; then
+  step "Load-test stack: data loaded, both publishers' first files, /ci/loadtest.env"
+  wait_for "observations from the DE-1 fixture archive" 300 obs_loaded
+  wait_for "/api/v1/health through Caddy" 120 outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/api/v1/health"
+  wait_for "publish's first meta.json" 240 test -s /srv/rws/public/www/v1/meta.json
+  wait_for "publish-owner's first meta.json" 240 test -s /srv/rws/owner/www/v1/meta.json
+  # caddy-owner's own CA, as isolation.sh reads it (it is reachable on rws_edge only; no published port).
+  docker exec rws-caddy-owner-1 cat /data/caddy/pki/authorities/local/root.crt >/ci/owner-root.crt
+  client_ips=$(
+    IFS=,
+    echo "${CLIENT_IPS[*]}"
+  )
+  {
+    echo "RWS_E2E_DOMAIN=$DOMAIN"
+    echo "RWS_E2E_CA=/ci/pki/pebble-root.pem"
+    echo "RWS_E2E_CADDY_IP=$IP4"
+    echo "RWS_E2E_CLIENT_IPS=$client_ips"
+    echo "RWS_E2E_CLIENT_NETNS=ext"
+    echo "RWS_E2E_OWNER_CA=/ci/owner-root.crt"
+  } >/ci/loadtest.env
+  cat /ci/loadtest.env
+  echo "loadtest stack ready"
+  exit 0
+fi
 
 # ------------------------------------------------------------------ firewall from outside
 step "From outside: 80/443 on IPv4 and IPv6 pass, another published port does not"
@@ -487,7 +547,6 @@ got=$(docker exec rws-api-1 /nodejs/bin/node -e "$pg_try")
 proof "db publishes no port (PortBindings empty) and sits only on rws_db (internal); from the api container: rws_api logs in with its secret, a wrong password is refused (28P01), postgres over TCP is rejected by pg_hba (28000); rws_api cannot read the base table obs (42501), its session is read-only (25006) and even a read-write transaction cannot insert (42501)"
 
 step "load turns the DE-1 fixture archive into observations; the api and the pages answer through Caddy"
-obs_loaded() { [[ $(psql_su 'select count(*) from obs') =~ ^[1-9][0-9]*$ ]]; }
 wait_for "observations from the DE-1 fixture archive" 300 obs_loaded
 api_url() { printf 'https://%s%s' "$DOMAIN" "$1"; }
 api_code() {
@@ -519,7 +578,7 @@ api_req /api/v1/stations
 jq -e '.stations | length > 0' /ci/api.body >/dev/null || fail "/api/v1/stations lists no station"
 # The api's own 404 is a fixed JSON body; Caddy's 404 for a wrong-case path has none.
 api_req /api/v1/x
-[[ $api_status == 404 && $(</ci/api.body) == '{"error":"not_found"}' ]] || fail "/api/v1/x: HTTP $api_status, not the api's 404"
+[[ $api_status == 404 && $(</ci/api.body) == '{"error":"not_found","attribution":[]}' ]] || fail "/api/v1/x: HTTP $api_status, not the api's 404"
 [[ $(api_code /API/v1/health) == 404 ]] || fail "/API/v1/health is not a 404"
 [[ $(api_code '/api/v1/health?rws-e2e-unknown=1') == 400 ]] || fail "an unknown parameter is not a 400"
 # Only GET and HEAD, and no request body of any size: a 405 with Allow, a 413.
@@ -549,7 +608,7 @@ headers=$(ip netns exec ext curl -sS -D - -o /dev/null --max-time 10 --cacert /c
   --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health)" | tr -d '\r')
 grep -qi '^content-security-policy: default-src' <<<"$headers" || fail "the api response lacks the site headers"
 ! grep -qiE '^(server|via|access-control-[a-z-]+):' <<<"$headers" || fail "the api response names its software or sends CORS"
-proof "load wrote $(psql_su 'select count(*) from obs') observations from the fixture archive; over TLS through Caddy /api/v1/health answers $(jq -c '{status}' <<<"$health") and /api/v1/health/sources lists DE-1, with the site headers and no Server, Via or CORS header; /api/v1/meta (max-age=60, DE-1 and NL-1 listed) and /api/v1/stations are 200 from the real api; /api/v1/x is the api's {\"error\":\"not_found\"} 404 and /API/v1/health a 404 from Caddy; an unknown parameter is a 400; a POST is a 405 with Allow: GET, HEAD (site headers kept), on /, /en/foo and /assets/no-such-file.js too (no Server), and a GET with a 2048-byte body a 413; /en/no-such-page is the English page (200, Cache-Control: no-cache), /assets/no-such-file and /favicon.ico are 404s"
+proof "load wrote $(psql_su 'select count(*) from obs') observations from the fixture archive; over TLS through Caddy /api/v1/health answers $(jq -c '{status}' <<<"$health") and /api/v1/health/sources lists DE-1, with the site headers and no Server, Via or CORS header; /api/v1/meta (max-age=60, DE-1 and NL-1 listed) and /api/v1/stations are 200 from the real api; /api/v1/x is the api's {\"error\":\"not_found\",\"attribution\":[]} 404 and /API/v1/health a 404 from Caddy; an unknown parameter is a 400; a POST is a 405 with Allow: GET, HEAD (site headers kept), on /, /en/foo and /assets/no-such-file.js too (no Server), and a GET with a 2048-byte body a 413; /en/no-such-page is the English page (200, Cache-Control: no-cache), /assets/no-such-file and /favicon.ico are 404s"
 
 step "load and api: no route out, the hardening flags, only their own secret"
 no_route='const s = require("net").connect({ host: "1.1.1.1", port: 443, timeout: 5000 });
@@ -901,6 +960,114 @@ env DOMAIN="$DOMAIN" IP4="$IP4" "$e2e/isolation.sh"
 proof "isolation.sh: publish and publish-owner each mount only their own audience's tree, no write crosses the roots, the public listener serves no owner content for SNI owner.$DOMAIN, caddy-owner answers 401 with private no-store and noindex nofollow on every path without credentials and 200 with the owner canary with them; the owner canary is in no public static file"
 rws_compose run --rm --no-deps -T watchdog watchdog --once
 proof "watchdog --once with the publisher running: /data/v1/meta.json is fresh, so the publisher check is green too"
+
+# ------------------------------------------------------------------ the owner API and the API limits (P9b)
+step "The owner API (P9b): api-owner only on owner_edge and db, the hardening flags, its own secret"
+# Plan C15: owner_edge is joined by caddy-owner and api-owner alone, so neither the public caddy nor the public api
+# can reach the owner API; the overlay repeats the hardening flags of compose.yaml (test/caddy-owner.test.ts).
+[[ $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' rws-api-owner-1) == 'rws_db rws_owner_edge ' ]] ||
+  fail "api-owner networks: $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' rws-api-owner-1)"
+[[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-api-owner-1) =~ ^(\{\}|null)$ ]] || fail "api-owner publishes a port"
+[[ $(docker network inspect -f '{{.Internal}}' rws_owner_edge) == true ]] || fail "network rws_owner_edge is not internal"
+members=$(docker network inspect -f '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' rws_owner_edge | grep . | sort | tr '\n' ' ')
+[[ $members == 'rws-api-owner-1 rws-caddy-owner-1 ' ]] || fail "rws_owner_edge members: $members"
+st=$(docker exec rws-api-owner-1 /nodejs/bin/node -e "$read_status")
+grep -qP '^Uid:\t65532\t' <<<"$st" || fail "api-owner does not run as uid 65532"
+grep -qP '^CapEff:\t0000000000000000$' <<<"$st" || fail "api-owner has an effective capability"
+grep -qP '^NoNewPrivs:\t1$' <<<"$st" || fail "api-owner may gain privileges"
+[[ $(docker inspect -f '{{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.Memory}} {{.HostConfig.PidsLimit}} {{.HostConfig.NanoCpus}}' rws-api-owner-1) == 'true [ALL] 268435456 64 500000000' ]] ||
+  fail "api-owner: read-only root, cap_drop ALL, 256m, 64 pids, 0.5 cpus"
+[[ $(docker exec rws-api-owner-1 /nodejs/bin/node -e "$list_secrets") == db_rws_owner_api ]] || fail "api-owner sees other secrets"
+if docker exec rws-api-1 /nodejs/bin/node -e 'const s = require("net").connect({ host: "api-owner", port: 8080, timeout: 3000 });
+s.on("connect", () => process.exit(1)); s.on("timeout", () => process.exit(0)); s.on("error", () => process.exit(0));'; then :; else
+  fail "the public api reached api-owner"
+fi
+if docker exec rws-caddy-1 wget -q -T 3 -O /dev/null http://api-owner:8080/healthz 2>/dev/null; then
+  fail "the public caddy reached api-owner"
+fi
+docker exec rws-caddy-owner-1 wget -q -T 5 -O /dev/null http://api-owner:8080/healthz || fail "caddy-owner cannot reach api-owner"
+proof "api-owner (the overlay's service) is on rws_owner_edge (internal) and rws_db only, publishes no port, runs as uid 65532 with CapEff 0, NoNewPrivs 1, a read-only root, 256m, 64 pids, 0.5 cpus and only db_rws_owner_api; rws_owner_edge holds exactly api-owner and caddy-owner; the public api and the public caddy cannot reach it, caddy-owner can"
+
+step "API limits (P9b): the API is rate limited per client, static files never are"
+# 203.0.114.11 is a public-looking source address in the outside namespace: the API keys it as itself (a private
+# peer such as the namespace's own 10.99.0.2 is the gateway key, a 100x bucket). One config file of 300 URLs, 30 in parallel.
+burst() { # <path> <out file>: 300 GETs from 203.0.114.11 in a burst; one line "<status> <retry-after>" each
+  local cfg=/ci/burst.cfg i
+  : >"$cfg"
+  for i in $(seq 300); do printf 'url = "https://%s%s"\n' "$DOMAIN" "$1" >>"$cfg"; done
+  ip netns exec ext curl -sS -o /dev/null --parallel --parallel-max 30 --max-time 60 --cacert /ci/pki/pebble-root.pem \
+    --interface "${CLIENT_IPS[0]}" --resolve "$DOMAIN:443:$IP4" -w '%{http_code} %header{retry-after}\n' -K "$cfg" >"$2"
+}
+burst /api/v1/meta /ci/burst-api.out
+[[ $(wc -l </ci/burst-api.out) == 300 ]] || fail "the API burst answered $(wc -l </ci/burst-api.out) of 300 requests"
+limited=$(grep -c '^429 ' /ci/burst-api.out || true)
+ok_api=$(grep -c '^200 ' /ci/burst-api.out || true)
+((limited >= 1)) || fail "300 GETs of /api/v1/meta in a burst from one client were never limited (general bucket 30/s, burst 120)"
+((limited + ok_api == 300)) || fail "the API burst answered something but 200 and 429: $(cut -d' ' -f1 /ci/burst-api.out | sort | uniq -c | tr '\n' ' ')"
+grep -qE '^429 [1-9][0-9]*$' /ci/burst-api.out || fail "a 429 of the API burst has no whole-seconds Retry-After"
+! grep -E '^429 ' /ci/burst-api.out | grep -qvE '^429 [1-9][0-9]*$' || fail "a 429 of the API burst has a bad Retry-After"
+# At once, from the same client, with its API bucket empty: static files answer every request.
+burst /data/v1/meta.json /ci/burst-static.out
+[[ $(wc -l </ci/burst-static.out) == 300 ]] || fail "the static burst answered $(wc -l </ci/burst-static.out) of 300 requests"
+[[ $(grep -c '^200 $' /ci/burst-static.out || true) == 300 ]] ||
+  fail "static files were limited or refused: $(cut -d' ' -f1 /ci/burst-static.out | sort | uniq -c | tr '\n' ' ')"
+proof "from one client (203.0.114.11, in the outside namespace), 300 GETs of /api/v1/meta in a burst: $ok_api answered 200 and $limited were 429 with a whole-seconds Retry-After (general bucket 30/s, burst 120); at once after, 300 GETs of /data/v1/meta.json: all 300 answered 200, no 429 and no Retry-After (static files are served by Caddy and never meet the limiter)"
+
+step "The client address behind Docker (P9b, C7): the masked access log shows the runner, never a bridge gateway"
+# Requests from three sources, each to its own marker path (the app fallback answers 200 for a path without a dot);
+# Caddy's log masks addresses to /24 and /48, which still tells a client from a bridge gateway.
+c7_expect=()
+outside -o /dev/null --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/c7-probe-ns4"
+c7_expect+=("/c7-probe-ns4 10.99.0.0")
+outside -o /dev/null --interface "${CLIENT_IPS[1]}" --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/c7-probe-pub4"
+c7_expect+=("/c7-probe-pub4 203.0.114.0")
+# From the host itself (informational, not asserted: a local source is masqueraded to the gateway by Docker, which a
+# visitor never is; it shows what a host-side client such as Playwright or k6 on the host would be to the limiter).
+curl -fsS -o /dev/null --cacert /ci/pki/pebble-root.pem --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/c7-probe-host" || true
+if [[ $ipv6_result == ok ]]; then
+  outside -o /dev/null --resolve "$DOMAIN:443:[$IP6]" "https://$DOMAIN/c7-probe-ns6"
+  c7_expect+=("/c7-probe-ns6 fd99::")
+fi
+# From a container on a Docker bridge (informational: its peer is whatever Docker shows Caddy; nothing fails here).
+docker run --rm --network rws_public -e "C7_IP=$IP4" -e "C7_DOMAIN=$DOMAIN" -v /ci/pki/pebble-root.pem:/pebble-root.pem:ro \
+  --entrypoint /nodejs/bin/node rws-server:ci -e 'require("https").get({ host: process.env.C7_IP, servername: process.env.C7_DOMAIN,
+  headers: { host: process.env.C7_DOMAIN }, path: "/c7-probe-ctr", ca: require("fs").readFileSync("/pebble-root.pem"), timeout: 10000 },
+  (r) => { r.resume(); r.on("end", () => console.log("container probe: HTTP " + r.statusCode)); }).on("error", (e) => console.log("container probe: " + e.code));' ||
+  true
+sleep 2
+docker exec rws-caddy-1 cat /data/access/access.log >/ci/access-c7.log
+seen=$(jq -r 'select((.request.uri // "") | startswith("/c7-probe-")) | "\(.request.uri) \(.request.remote_ip) \(.request.client_ip)"' /ci/access-c7.log | sort -u)
+echo "masked peers Caddy logged (marker path, remote_ip, client_ip):"
+echo "$seen"
+bridge_re='^(172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|fd7a:7773:|fe80:|127\.|::1)'
+for e in "${c7_expect[@]}"; do
+  path=${e% *} want=${e#* }
+  got=$(grep -F "$path " <<<"$seen" | head -n 1)
+  [[ -n $got ]] || fail "no access log line for $path"
+  read -r _ remote client <<<"$got"
+  if [[ $remote =~ $bridge_re || $client =~ $bridge_re ]]; then
+    fail "C7: public traffic from the runner ($path) reached Caddy as a Docker bridge gateway ($remote / $client masked): the per-client limiter would key every client as unknown-gw (see the lines above)"
+  fi
+  [[ $remote == "$want" && $client == "$want" ]] || fail "C7: $path was logged as $remote / $client, expected the runner's own prefix $want"
+done
+proof "Caddy's masked access log (IPv4 /24, IPv6 /48) shows the runner's own prefixes, never a Docker bridge gateway: $(for e in "${c7_expect[@]}"; do echo -n "${e% *}=${e#* } "; done); the host itself was logged as: $(grep -F '/c7-probe-host ' <<<"$seen" | cut -d' ' -f2 | head -n 1 || true), a container on rws_public as: $(grep -F '/c7-probe-ctr ' <<<"$seen" | cut -d' ' -f2 | head -n 1 || true)"
+
+step "The owner canary sweep (P9b): every public output, every encoding; the owner outputs; the logs"
+docker exec rws-caddy-owner-1 cat /data/caddy/pki/authorities/local/root.crt >/ci/owner-root.crt
+sweep_run=(docker run --rm --network rws_edge -e RWS_DOMAIN="$DOMAIN" -e OWNER_PW -e PUBLIC_CA=/pebble-root.pem -e OWNER_CA=/owner-root.crt
+  -v "$e2e/api-sweep.mjs:/sweep.mjs:ro" -v /ci/pki/pebble-root.pem:/pebble-root.pem:ro -v /ci/owner-root.crt:/owner-root.crt:ro)
+"${sweep_run[@]}" --entrypoint /nodejs/bin/node rws-server:ci /sweep.mjs | tee /ci/api-sweep.out ||
+  fail "api-sweep.mjs exited non-zero (its FAIL lines are above)"
+[[ $(grep -c '^FAIL' /ci/api-sweep.out || true) == 0 ]] || fail "api-sweep.mjs"
+grep -q '^PASS api-sweep$' /ci/api-sweep.out || fail "api-sweep.mjs did not finish"
+# The logs of the run: api, publish and caddy (the compose logs) and the public access log, for the same terms.
+install -d -m 0755 /ci/logs
+for s in api publish caddy; do rws_compose logs --no-color --no-log-prefix "$s" >"/ci/logs/$s.log" 2>&1; done
+docker exec rws-caddy-1 cat /data/access/access.log >/ci/logs/access.log
+[[ -s /ci/logs/access.log && -s /ci/logs/api.log && -s /ci/logs/publish.log && -s /ci/logs/caddy.log ]] || fail "an empty log in /ci/logs"
+"${sweep_run[@]}" -v /ci/logs:/logs:ro --entrypoint /nodejs/bin/node rws-server:ci /sweep.mjs --logs /logs/api.log /logs/publish.log /logs/caddy.log /logs/access.log |
+  tee /ci/api-sweep-logs.out || fail "the owner canary is in a log of the run (path and term index above)"
+proof "api-sweep.mjs: $(grep '^public:' /ci/api-sweep.out); $(grep '^owner:' /ci/api-sweep.out); the owner canary's value (both renderings), station, source id, key, attribution text, private_basis clause and name (read from /app/registry at run time) are in no public byte, in identity, gzip or zstd, attribution arrays included, and the owner API shows the canary in /snapshot, /series/{id} and /series/{id}/forecast with its source in the attribution; $(grep '^logs:' /ci/api-sweep-logs.out)"
 
 step "Degraded: the api stopped, a future t still shows the map and the banner (P9a)"
 rws_compose stop api

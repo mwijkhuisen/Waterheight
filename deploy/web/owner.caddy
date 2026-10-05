@@ -26,6 +26,7 @@ owner.{$RWS_DOMAIN}:8443 {
 		Permissions-Policy "geolocation=(), camera=(), microphone=()"
 		Cross-Origin-Opener-Policy "same-origin"
 		Cross-Origin-Resource-Policy "same-origin"
+		Reporting-Endpoints "csp=\"/api/v1/beacon\""
 		X-Robots-Tag "noindex, nofollow"
 		Cache-Control "private, no-store"
 		-Server
@@ -57,6 +58,24 @@ owner.{$RWS_DOMAIN}:8443 {
 		not path /data/v1/*
 	}
 	encode @compressible zstd gzip
+
+	# The beacon (P9b), as on the public site: exact POST, 8 KB, before the 405.
+	@beacon {
+		method POST
+		expression `{path} == '/api/v1/beacon'`
+	}
+	handle @beacon {
+		request_body {
+			max_size 8KB
+		}
+		header -Via
+		reverse_proxy api-owner:8080 {
+			header_up -Forwarded
+			header_up -X-Real-IP
+			header_up X-Rws-Client {remote_host}
+			header_down -Server
+		}
+	}
 
 	@write not method GET HEAD
 	handle @write {
@@ -113,6 +132,7 @@ owner.{$RWS_DOMAIN}:8443 {
 		reverse_proxy api-owner:8080 {
 			header_up -Forwarded
 			header_up -X-Real-IP
+			header_up X-Rws-Client {remote_host}
 			header_down -Server
 		}
 	}

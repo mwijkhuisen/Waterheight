@@ -15,6 +15,7 @@
 		Permissions-Policy "geolocation=(), camera=(), microphone=()"
 		Cross-Origin-Opener-Policy "same-origin"
 		Cross-Origin-Resource-Policy "same-origin"
+		Reporting-Endpoints "csp=\"/api/v1/beacon\""
 		X-Robots-Tag "noindex"
 		-Server
 	}
@@ -48,6 +49,30 @@
 
 	# The User-Agent of every capture request names https://<domain>/over.
 	redir /over / 308
+
+	# The beacon (P9b, A§9.2): the one POST of the site, for CSP and Reporting API
+	# reports. Exact method and path, compared as sent (an expression, not a path
+	# matcher, which folds case: /API/v1/beacon and every other POST stay the 405
+	# below), placed before it. The body is capped at 8 KB here, as in the api; a
+	# 413 from this cap carries no site headers (KG-107). X-Rws-Client is the TCP
+	# peer, set here and replacing a client's value: the api keys its rate limit on it.
+	@beacon {
+		method POST
+		expression `{path} == '/api/v1/beacon'`
+	}
+	handle @beacon {
+		request_body {
+			max_size 8KB
+		}
+		header -Via
+		reverse_proxy api:8080 {
+			header_up -Forwarded
+			header_up -X-Real-IP
+			header_up X-Rws-Client {remote_host}
+			header_down -Server
+			header_down -X-Degraded
+		}
+	}
 
 	# Only GET and HEAD, on every route (SR-3): any other method is this 405,
 	# with Allow and the site headers. file_server's own 405 (the pages, the
@@ -132,6 +157,7 @@
 			reverse_proxy api:8080 {
 				header_up -Forwarded
 				header_up -X-Real-IP
+				header_up X-Rws-Client {remote_host}
 				header_down -Server
 				header_down -X-Degraded
 				@upstream_5xx status 502 503 504
@@ -147,14 +173,14 @@
 			}
 		}
 		handle {
-			# The api reads no client address today. Caddy sets X-Forwarded-For
-			# itself, and a client's Forwarded and X-Real-IP are dropped. Other
-			# client-address headers (True-Client-IP, X-Client-IP, …) still pass,
-			# so a per-client limit (P9b) keys only on Caddy's X-Forwarded-For or
-			# the socket, never on another header.
+			# The api keys its per-client rate limit on X-Rws-Client alone, which
+			# Caddy sets to the TCP peer (replacing a client's value; no
+			# trusted_proxies). Other client-address headers (True-Client-IP,
+			# X-Client-IP, X-Forwarded-For, …) are never read.
 			reverse_proxy api:8080 {
 				header_up -Forwarded
 				header_up -X-Real-IP
+				header_up X-Rws-Client {remote_host}
 				header_down -Server
 				header_down -X-Degraded
 			}
@@ -175,6 +201,7 @@
 			Permissions-Policy "geolocation=(), camera=(), microphone=()"
 			Cross-Origin-Opener-Policy "same-origin"
 			Cross-Origin-Resource-Policy "same-origin"
+			Reporting-Endpoints "csp=\"/api/v1/beacon\""
 			X-Robots-Tag "noindex"
 			-Server
 		}
