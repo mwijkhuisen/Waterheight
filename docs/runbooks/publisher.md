@@ -6,6 +6,8 @@
 
 The publisher (`publish`, role `rws_publish`) writes the public files under `/srv/rws/public/www/v1` (`/data/v1/...`, served by Caddy read-only); `publish-owner` (role `rws_owner_api`) writes `/srv/rws/owner/www/v1`. Each cycle ends with `meta.json`, so a fresh `meta.json` means the cycle finished. Where a file is missing or `meta.dayVersions` says 0, the web reads the API instead, so a publisher outage degrades the site and does not stop it.
 
+The API that answers where no file exists (its limits, 429 and 503 answers, saturation and the owner API) has its own runbook: `docs/runbooks/api.md`.
+
 ## 1. The publisher, the loader or Caddy?
 
 ```bash
