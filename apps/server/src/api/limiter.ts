@@ -12,7 +12,7 @@ export const BUCKETS: Readonly<Record<RateClass, Bucket>> = {
   heavy: { rate: 5, burst: 20 },
   beacon: { rate: 1, burst: 10 },
 };
-/** Every client's beacons together (C14): one log line per report, so a many-source flood is capped too. */
+/** Every client's beacons together (C14): one log line per request, so a many-source flood is capped too. */
 // ponytail: one bucket for every client's beacons, so a flood from many sources caps the log at 20 lines a second
 // but can also crowd out honest reports meanwhile; per-/48 buckets if that is ever seen.
 export const BEACON_GLOBAL: Bucket = { rate: 20, burst: 100 };

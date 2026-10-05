@@ -8,7 +8,7 @@ import { failure, refuse } from './routes.ts';
 // dropped. No database, no CORS, nothing reflected: the answer is a 204 with no body. Every string that reaches the
 // log is provider-style untrusted text: control, format and line-separator characters are removed and it is cut at
 // 200 characters; the client address and every header stay out of the line. Caddy answers 413 first in production
-// (request_body 8 KB); this is the same cap for a direct caller.
+// (request_body 8 KiB); this is the same cap for a direct caller.
 
 export type BeaconDeps = { log: Pick<Logger, 'info'> | undefined };
 

@@ -26,7 +26,7 @@
 #   - the watchdog's probe through DNS and TLS passes;
 #   - (P2a) the database path of rws-lib.sh (db_up: db healthy, roles and
 #     passwords over its socket, migrate) runs twice without a change; db
-#     publishes no port and sits only on the internal db network; pg_hba lets
+#     publishes no port and sits only on the internal db and owner_db networks; pg_hba lets
 #     rws_api in with its password and refuses a wrong one and the superuser
 #     over TCP; rws_api can neither read a base table nor insert; load turns
 #     the DE-1 fixture archive into observations; /api/v1/health and
@@ -522,7 +522,8 @@ proof "a file bind mount (as Compose mounts file secrets): an in-place write (su
 step "db: no port, internal network only; pg_hba and the rws_api grants from inside the api container"
 [[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-db-1) =~ ^(\{\}|null)$ ]] || fail "db publishes a port"
 nets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' rws-db-1)
-[[ $nets == 'rws_db ' ]] || fail "db networks: $nets"
+# The owner overlay adds owner_db for api-owner alone (P9b review F1); both are internal.
+[[ $nets == 'rws_db rws_owner_db ' ]] || fail "db networks: $nets"
 [[ $(docker network inspect -f '{{.Internal}}' rws_db) == true ]] || fail "network rws_db is not internal"
 # node-postgres from the api image itself; the password comes from the container's
 # own secret file, never from this script's argv. Prints the SQLSTATE of each try.
@@ -544,7 +545,7 @@ const tryq = async (user, password, sql) => {
 ].join(" ")))();'
 got=$(docker exec rws-api-1 /nodejs/bin/node -e "$pg_try")
 [[ $got == 'ok login:28P01 login:28000 sql:42501 sql:25006 sql:42501' ]] || fail "pg_hba and grants: $got"
-proof "db publishes no port (PortBindings empty) and sits only on rws_db (internal); from the api container: rws_api logs in with its secret, a wrong password is refused (28P01), postgres over TCP is rejected by pg_hba (28000); rws_api cannot read the base table obs (42501), its session is read-only (25006) and even a read-write transaction cannot insert (42501)"
+proof "db publishes no port (PortBindings empty) and sits only on rws_db and rws_owner_db (both internal); from the api container: rws_api logs in with its secret, a wrong password is refused (28P01), postgres over TCP is rejected by pg_hba (28000); rws_api cannot read the base table obs (42501), its session is read-only (25006) and even a read-write transaction cannot insert (42501)"
 
 step "load turns the DE-1 fixture archive into observations; the api and the pages answer through Caddy"
 wait_for "observations from the DE-1 fixture archive" 300 obs_loaded

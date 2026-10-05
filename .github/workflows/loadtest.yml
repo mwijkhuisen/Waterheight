@@ -54,11 +54,8 @@ jobs:
         run: |
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      # run.sh installs nftables and zstd itself, with Docker.
       - run: pnpm install --frozen-lockfile
-      - name: Host tools the stack needs (Ubuntu's signed repository)
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq nftables zstd >/dev/null
       - name: The stack (Docker 29.8.1, firewall, Pebble, compose, both publishers' first meta.json), left running
         env:
           RWS_E2E_MODE: loadtest
