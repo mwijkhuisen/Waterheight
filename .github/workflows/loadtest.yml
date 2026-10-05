@@ -1,0 +1,143 @@
+# Load test (issue #24, P9b; PHASES §28): k6 against the real compose stack on a CI runner, with a synthetic seed.
+# 300 requests/s of static files (meta 30 %, latest 40 %, recent 20 %, settled 10 %) and 30 requests/s of the API
+# (snapshot 50 %, meta 20 %, stations 10 %, series 10 %, forecast 10 %) for 2 minutes, from 6 k6 processes on 6
+# distinct local addresses, so the API's per-client limiter works as it does in production and is never disabled.
+# p95 under 200 ms and not one failed request (a 429 counts) or the job fails.
+# Hardening as in ci.yml: top-level permissions {}, contents: read, harden-runner first, persist-credentials: false,
+# no caches, no secrets, no expressions inside run: (values come in through env:), actions pinned to full SHAs, and
+# the k6 release tarball checked against a pinned sha256 (the BOM row: k6, binary).
+name: loadtest
+
+on:
+  pull_request:
+    paths:
+      - apps/server/**
+      - packages/contracts/**
+      - deploy/**
+      - .github/workflows/loadtest.yml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: loadtest-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  loadtest:
+    name: loadtest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      K6_VERSION: 1.8.1
+      K6_SHA256: b02cd649a0e391576909502e9b7760d3fb9e1fd14d179e3da18ee4a185f4c583
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The seed script is plain Node (type stripping), with no dependency: no pnpm install.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: The stack (Docker 29.8.1, firewall, Pebble, compose, both publishers' first meta.json), left running
+        env:
+          RWS_E2E_MODE: loadtest
+        run: sudo --preserve-env=RWS_E2E_MODE deploy/tests/e2e/run.sh | tee "$RUNNER_TEMP/stack.log"
+      - name: The stack's coordinates (domain, CA, Caddy address, six client addresses, the client namespace)
+        run: |
+          set -euo pipefail
+          grep -q '^loadtest stack ready' "$RUNNER_TEMP/stack.log"
+          sudo cat /ci/loadtest.env >"$RUNNER_TEMP/loadtest.env"
+          set -a; . "$RUNNER_TEMP/loadtest.env"; set +a
+          IFS=, read -r -a ips <<<"$RWS_E2E_CLIENT_IPS"
+          ((${#ips[@]} == 6)) || { echo "expected 6 client addresses, got ${#ips[@]}" >&2; exit 1; }
+      - name: Seed three days of synthetic observations for every public primary series (psql in the db container)
+        run: |
+          set -euo pipefail
+          # The db service has no superuser over TCP; the script pipes its SQL to psql inside the container.
+          sudo "$(command -v node)" scripts/seed-loadtest.ts
+          date +%s >"$RUNNER_TEMP/seeded"
+      - name: Wait for the publishers to render the seed
+        run: |
+          set -euo pipefail
+          set -a; . "$RUNNER_TEMP/loadtest.env"; set +a
+          seeded=$(cat "$RUNNER_TEMP/seeded")
+          # From the client namespace, as k6 runs: the host's own traffic would reach Caddy through the bridge.
+          get() { sudo ip netns exec "$RWS_E2E_CLIENT_NETNS" curl -fsS --max-time 20 --cacert "$RWS_E2E_CA" \
+            --resolve "$RWS_E2E_DOMAIN:443:$RWS_E2E_CADDY_IP" "https://$RWS_E2E_DOMAIN/data/v1/meta.json"; }
+          # Two different generatedAt values after the seed: the second cycle started after the rows were there.
+          last=''; n=0
+          for _ in $(seq 1 90); do
+            if meta=$(get); then
+              gen=$(jq -r .generatedAt <<<"$meta")
+              if (($(date -d "$gen" +%s) >= seeded)) && [[ $gen != "$last" ]]; then last=$gen; n=$((n + 1)); fi
+              ((n >= 2)) && break
+            fi
+            sleep 5
+          done
+          ((n >= 2)) || { echo "the public publisher did not render after the seed" >&2; exit 1; }
+          # The seeded settled days are re-rendered as version 2, newest first, one a cycle. Waiting is best effort:
+          # without one, k6 falls back to recent files for its settled share and says so in the summary.
+          for _ in $(seq 1 60); do
+            if [[ $(get | jq '[.dayVersions[]] | any(. >= 2)') == true ]]; then echo "a settled day is complete"; exit 0; fi
+            sleep 5
+          done
+          echo "::warning::no settled day was complete after 5 minutes; the settled share falls back to recent"
+      - name: k6 (release tarball, sha256-checked)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/k6.tgz" "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz"
+          echo "$K6_SHA256  $RUNNER_TEMP/k6.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/k6.tgz" -C "$RUNNER_TEMP" --strip-components=1 --wildcards '*/k6'
+          "$RUNNER_TEMP/k6" version
+      # The six addresses live on vext1 inside the namespace `ext` (not on a host interface): from the host, traffic
+      # would reach Caddy masqueraded as the bridge gateway, which the limiter keys as one shared client. So k6 runs
+      # in the namespace (the filesystem is shared), as root, one process per address.
+      - name: Load, 6 k6 clients on 6 local addresses in the client namespace for 2 minutes (TLS verified against the e2e root)
+        run: |
+          set -euo pipefail
+          set -a; . "$RUNNER_TEMP/loadtest.env"; set +a
+          out=$RUNNER_TEMP/loadtest
+          mkdir -p "$out"
+          IFS=, read -r -a ips <<<"$RWS_E2E_CLIENT_IPS"
+          pids=()
+          for i in "${!ips[@]}"; do
+            sudo ip netns exec "$RWS_E2E_CLIENT_NETNS" env SSL_CERT_FILE="$RWS_E2E_CA" BASE="https://$RWS_E2E_DOMAIN" \
+              CADDY_IP="$RWS_E2E_CADDY_IP" CLIENT="$i" OUT_DIR="$out" \
+              "$RUNNER_TEMP/k6" run --quiet --no-color --local-ips "${ips[$i]}" deploy/tests/loadtest/k6.js \
+              >"$out/k6-$i.log" 2>&1 &
+            pids+=($!)
+          done
+          rc=0
+          for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
+          for i in "${!ips[@]}"; do echo "== client $i (${ips[$i]})"; tail -n 20 "$out/k6-$i.log"; done
+          exit "$rc"
+      - name: The summaries in the job summary
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in "$RUNNER_TEMP"/loadtest/summary-*.txt; do
+            { echo '```'; cat "$f"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: k6-summary
+          path: ${{ runner.temp }}/loadtest/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Caddy's and the api's logs
+        if: failure()
+        run: |
+          sudo docker logs rws-caddy-1 2>&1 | tail -n 60 || true
+          sudo docker logs rws-api-1 2>&1 | tail -n 60 || true
