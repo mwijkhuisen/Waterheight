@@ -122,13 +122,15 @@ WHERE ${sourceVisible('cs', p)}
 SELECT r.id, r.series_id, r.source_id, r.issued_at, r.issued_inferred, r.first_valid, r.last_valid, r.fetched_at,
        r.kind, r.step, r.provider_segment_end${forecastRunFrom(p)}`,
 
-  // P8a: p30 and p70 appended (CREATE OR REPLACE VIEW only adds columns at the end).
+  // P8a: p30 and p70 appended (CREATE OR REPLACE VIEW only adds columns at the end). P9b: the history rule on the
+  // valid time, as on every observation view (HISTORY_MIGRATION; the P8a body is frozen as forecastValueV2).
   forecastValue: (p: Params) => `
 SELECT v.run_id, v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p50, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags,
        v.p30, v.p70
 FROM forecast_value v
 WHERE EXISTS (SELECT 1${forecastRunFrom(p).replaceAll('\n', '\n  ')}
-    AND r.id = v.run_id)`,
+    AND r.id = v.run_id
+    AND ${historyAllowed('e', 'v.valid_ts')})`,
 
   warning: (p: Params) => `
 SELECT w.id, w.source_id, w.area_key, w.name, w.geometry_geojson, w.level_norm, w.level_raw, w.label_raw, w.valid,
@@ -208,6 +210,14 @@ WHERE ${audienceIn('s.audience', p.audience)}`,
 /** The forecast value views as the first views migration created them: frozen, because that migration never changes. */
 const forecastValueV1 = (p: Params) => `
 SELECT v.run_id, v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p50, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags
+FROM forecast_value v
+WHERE EXISTS (SELECT 1${forecastRunFrom(p).replaceAll('\n', '\n  ')}
+    AND r.id = v.run_id)`;
+
+/** The forecast value views as P8a's FORECAST_MIGRATION created them (p30, p70 appended): frozen, like V1. */
+const forecastValueV2 = (p: Params) => `
+SELECT v.run_id, v.valid_ts, v.value, v.p05, v.p10, v.p25, v.p50, v.p75, v.p90, v.p95, v.vmin, v.vmax, v.flags,
+       v.p30, v.p70
 FROM forecast_value v
 WHERE EXISTS (SELECT 1${forecastRunFrom(p).replaceAll('\n', '\n  ')}
     AND r.id = v.run_id)`;
@@ -421,7 +431,11 @@ const FORECAST_COLUMNS =
  * value partition that holds it. The family's audience, role and display-channel filters apply to the series AND
  * to the run's own source, as in the views.
  */
-const forecastAt = (name: string, p: Params) => `CREATE FUNCTION ${name}(p_asof timestamptz, p_t timestamptz)
+const forecastAt = (
+  name: string,
+  p: Params,
+  v: 'v2' | 'history' = 'v2',
+) => `CREATE${v === 'v2' ? '' : ' OR REPLACE'} FUNCTION ${name}(p_asof timestamptz, p_t timestamptz)
 RETURNS TABLE (run_id bigint, series_id int, source_id text, issued_at timestamptz, issued_inferred boolean,
                fetched_at timestamptz, first_valid timestamptz, last_valid timestamptz, kind text, step interval,
                provider_segment_end timestamptz, valid_ts timestamptz, value real, p05 real, p10 real, p25 real,
@@ -464,7 +478,7 @@ AS $$
     LIMIT 1) v
   WHERE p_t >= p_asof AND r.first_valid <= p_t AND r.last_valid >= p_t
     AND ${seriesVisible('e', p)}
-    AND ${sourceVisible('fs', p)}
+    AND ${sourceVisible('fs', p)}${v === 'v2' ? '' : `\n    AND ${historyAllowed('e', 'v.valid_ts')}`}
 $$;
 REVOKE ALL ON FUNCTION ${name}(timestamptz, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION ${name}(timestamptz, timestamptz) TO ${FAMILY_ROLES[p.audience].join(', ')};`;
@@ -477,9 +491,7 @@ export function forecastMigration(): string {
   for (const audience of ['public', 'owner'] as const) {
     for (const api of [false, true]) {
       const name = api ? VIEWS[audience].api.forecastValue : VIEWS[audience].forecastValue;
-      up.push(
-        `CREATE OR REPLACE VIEW ${name} WITH (security_barrier = true) AS${BODY.forecastValue({ audience, api })};`,
-      );
+      up.push(`CREATE OR REPLACE VIEW ${name} WITH (security_barrier = true) AS${forecastValueV2({ audience, api })};`);
       down.push(`DROP VIEW ${name};`);
       restore.push(view(name, forecastValueV1({ audience, api })));
       restore.push(`GRANT SELECT ON ${name} TO ${FAMILY_ROLES[audience].join(', ')};`);
@@ -503,6 +515,52 @@ DROP FUNCTION ${FORECAST_AT.public}(timestamptz, timestamptz);
 ${down.join('\n')}
 
 ${restore.join('\n\n')}
+`;
+}
+
+export const HISTORY_MIGRATION = new URL('../db/migrations/20261108000001_views_history.sql', import.meta.url);
+
+/**
+ * P9b: the history rule (A§6, A§9.2, catalogue §0.7 `history_export`) on the forecast values too: the four forecast
+ * value views and the two Q2 functions are replaced with the same columns and signatures, a value older than its
+ * series' history window needing lic_history_export, as every observation view and the Q1 functions already do.
+ * Down replaces them with the frozen P8a bodies. The grants stay.
+ */
+export function historyMigration(): string {
+  const up: string[] = [];
+  const down: string[] = [];
+  for (const audience of ['public', 'owner'] as const) {
+    for (const api of [false, true]) {
+      const name = api ? VIEWS[audience].api.forecastValue : VIEWS[audience].forecastValue;
+      up.push(
+        `CREATE OR REPLACE VIEW ${name} WITH (security_barrier = true) AS${BODY.forecastValue({ audience, api })};`,
+      );
+      down.push(
+        `CREATE OR REPLACE VIEW ${name} WITH (security_barrier = true) AS${forecastValueV2({ audience, api })};`,
+      );
+    }
+  }
+  for (const audience of ['public', 'owner'] as const) {
+    up.push(forecastAt(FORECAST_AT[audience], { audience, api: false }, 'history'));
+    down.push(
+      forecastAt(FORECAST_AT[audience], { audience, api: false }, 'v2').replace(
+        'CREATE FUNCTION',
+        'CREATE OR REPLACE FUNCTION',
+      ),
+    );
+  }
+  return `-- GENERATED by scripts/gen-views.ts from apps/server/src/db/audience.ts. Do not edit:
+-- change the generator and run it again (CI fails on a difference).
+--
+-- P9b: the history rule on the forecast values: the forecast value views and the two Q2 functions are replaced
+-- (same columns, same signatures, grants kept) so that a value older than its series' history window needs the
+-- history_export channel, as the observation views and functions already require.
+
+-- migrate:up
+${up.join('\n\n')}
+
+-- migrate:down
+${down.join('\n\n')}
 `;
 }
 
@@ -564,6 +622,7 @@ if (import.meta.main) {
     [VIEWS_MIGRATION, viewsMigration()],
     [FORECAST_MIGRATION, forecastMigration()],
     [PUBLISH_MIGRATION, publishMigration()],
+    [HISTORY_MIGRATION, historyMigration()],
     ...(Object.entries(LATER) as [keyof typeof LATER, URL][]).map(([l, url]): [URL, string] => [
       url,
       laterMigration(l),

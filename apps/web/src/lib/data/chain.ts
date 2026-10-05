@@ -1,13 +1,14 @@
 import {
   type ApiStation,
   LatestFile,
-  Meta,
-  Snapshot,
+  type Meta,
+  MetaAnswer,
+  SnapshotAnswer,
   SnapshotFile,
   StaticForecastLatest,
   StaticMeta,
   StaticStations,
-  Stations,
+  StationsAnswer,
   toSnapshot,
 } from '@rws/contracts';
 import { holdForecasts } from '@rws/core/forecast-hold';
@@ -65,7 +66,7 @@ export type WebMeta = Meta & { dayVersions: Record<string, number>; degraded: bo
 export const loadMeta = (f: Fetcher, signal?: AbortSignal): Promise<WebMeta> =>
   staticThenApi<WebMeta>(
     async () => (await getJson(f, `${STATIC}meta.json`, StaticMeta, signal)).data,
-    async () => ({ ...(await getJson(f, '/api/v1/meta', Meta, signal)).data, dayVersions: {}, degraded: false }),
+    async () => ({ ...(await getJson(f, '/api/v1/meta', MetaAnswer, signal)).data, dayVersions: {}, degraded: false }),
     signal,
   );
 
@@ -78,7 +79,7 @@ export const loadStations = (f: Fetcher, signal?: AbortSignal): Promise<WebStati
       return { stations, seriesHash };
     },
     async () => ({
-      stations: (await getJson(f, '/api/v1/stations', Stations, signal)).data.stations,
+      stations: (await getJson(f, '/api/v1/stations', StationsAnswer, signal)).data.stations,
       seriesHash: null,
     }),
     signal,
@@ -116,7 +117,7 @@ async function fromApi(f: Fetcher, t: number, signal?: AbortSignal): Promise<Web
   const res = await f(path, signal);
   if (!res.ok) throw new HttpError(res.status);
   const body: unknown = await res.json();
-  if (res.headers.get('x-degraded') !== '1') return { ...Snapshot.parse(body), standIn: false, degraded: false };
+  if (res.headers.get('x-degraded') !== '1') return { ...SnapshotAnswer.parse(body), standIn: false, degraded: false };
   const latest = LatestFile.safeParse(body);
   const file = latest.success ? latest.data : SnapshotFile.parse(body);
   return { ...toSnapshot(file), standIn: true, degraded: true };

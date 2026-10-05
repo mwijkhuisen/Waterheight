@@ -3,33 +3,38 @@ import {
   ApiError,
   INSTANT_MAX_LENGTH,
   INSTANT_RE,
-  Meta,
+  MetaAnswer,
   RESOLUTIONS,
   SERIES_ID_RE,
-  Series,
-  SeriesForecast,
-  Snapshot,
-  Stations,
+  SeriesAnswer,
+  SeriesForecastAnswer,
+  SnapshotAnswer,
+  StationsAnswer,
+  VERSION_RE,
 } from './api.ts';
-import { Health, HealthSources, HealthUnavailable } from './health.ts';
+import { HealthAnswer, HealthSourcesAnswer, HealthUnavailable } from './health.ts';
 
 // The OpenAPI 3.1 document of the public API (GET /api/v1/openapi.json). The
 // paths are written out here; every body schema is generated from the same Zod
 // schema the API validates its answers against (z.toJSONSchema; OpenAPI 3.1
-// uses JSON Schema 2020-12). No version of any software appears in it.
+// uses JSON Schema 2020-12). No version of any software appears in it. P9b:
+// `packages/contracts/openapi.json` (and `openapi-owner.json`) are the committed
+// snapshots of this builder (scripts/gen-openapi.ts; test/openapi.test.ts).
 
 const COMPONENTS = {
   ApiError,
-  Meta,
-  Stations,
-  Snapshot,
-  Series,
-  SeriesForecast,
-  Health,
-  HealthSources,
+  Meta: MetaAnswer,
+  Stations: StationsAnswer,
+  Snapshot: SnapshotAnswer,
+  Series: SeriesAnswer,
+  SeriesForecast: SeriesForecastAnswer,
+  Health: HealthAnswer,
+  HealthSources: HealthSourcesAnswer,
   HealthUnavailable,
 } as const;
 type Component = keyof typeof COMPONENTS;
+/** The body schemas of one API (P9b): the public ones here, the owner API's in api-owner.ts. */
+export type OpenApiComponents = Readonly<Record<Component, z.ZodType>>;
 
 function jsonSchema(schema: z.ZodType): Record<string, unknown> {
   const { $schema: _, ...rest } = z.toJSONSchema(schema, { target: 'draft-2020-12', unrepresentable: 'throw' });
@@ -37,15 +42,37 @@ function jsonSchema(schema: z.ZodType): Record<string, unknown> {
 }
 
 const ref = (name: Component) => ({ $ref: `#/components/schemas/${name}` });
-const json = (name: Component, description: string) => ({
+const json = (name: Component, description: string, headers?: Record<string, unknown>) => ({
   description,
+  ...(headers === undefined ? {} : { headers }),
   content: { 'application/json': { schema: ref(name) } },
 });
-const ERRORS = {
-  '400': json('ApiError', 'A parameter is unknown, repeated, malformed or out of range'),
-  '405': json('ApiError', 'Only GET and HEAD are allowed'),
-  '503': json('ApiError', 'The data is unavailable for now'),
-} as const;
+const RETRY_AFTER = {
+  'Retry-After': {
+    description: 'Seconds to wait before the request is tried again (an integer, at least 1).',
+    schema: { type: 'integer', minimum: 1 },
+  },
+};
+const ALLOW = (methods: string) => ({
+  Allow: { description: 'The methods this path takes.', schema: { type: 'string', const: methods } },
+});
+/** The error responses every route can give: a fixed code, `attribution: []` and no echo of the request. */
+const errors = (allow = 'GET, HEAD') => ({
+  '400': json('ApiError', 'A parameter is unknown, repeated, malformed or out of range, or the query is too long'),
+  '405': json('ApiError', `Only ${allow} is allowed`, ALLOW(allow)),
+  '429': json('ApiError', 'Too many requests from this client: wait for Retry-After', RETRY_AFTER),
+  '503': json('ApiError', 'The data is unavailable or busy for now', RETRY_AFTER),
+});
+const NOT_FOUND = { '404': json('ApiError', 'No such series in the api channel') };
+
+const VERSION_PARAM = {
+  name: 'v',
+  in: 'query',
+  required: false,
+  description:
+    'The day version from `meta.dayVersions` (absent there means 1). An answer is immutable only when v is current for every day it spans and they are settled; otherwise it is cached for a short time only.',
+  schema: { type: 'string', pattern: VERSION_RE.source },
+};
 
 const instant = (name: string, description: string) => ({
   name,
@@ -55,22 +82,117 @@ const instant = (name: string, description: string) => ({
   schema: { type: 'string', maxLength: INSTANT_MAX_LENGTH, pattern: INSTANT_RE.source },
 });
 
-/** `more` adds responses, or replaces one of ERRORS. */
-const get = (summary: string, ok: ReturnType<typeof json>, parameters: unknown[] = [], more = {}) => ({
-  get: { summary, ...(parameters.length > 0 ? { parameters } : {}), responses: { '200': ok, ...ERRORS, ...more } },
+/** `more` adds responses, or replaces one of the errors. */
+const get = (summary: string, ok: Record<string, unknown>, parameters: unknown[] = [], more = {}) => ({
+  get: { summary, ...(parameters.length > 0 ? { parameters } : {}), responses: { '200': ok, ...errors(), ...more } },
 });
-/** The health routes keep their own 503 body. */
-const HEALTH_503 = { '503': json('HealthUnavailable', 'The health documents are unavailable for now') };
+/** The health routes answer a database failure with their own 503 body, and a busy server with the API's. */
+const HEALTH_503 = {
+  '503': {
+    description: 'The health documents are unavailable (`HealthUnavailable`) or the server is busy (`ApiError`)',
+    headers: RETRY_AFTER,
+    content: { 'application/json': { schema: { oneOf: [ref('HealthUnavailable'), ref('ApiError')] } } },
+  },
+};
 
-/** The document, built once per process. */
-export function openApiDocument(): Record<string, unknown> {
+// POST /api/v1/beacon: three body shapes, written as plain JSON Schema (the server's strict schemas are not imported).
+const text = { type: 'string', maxLength: 2000 };
+const BEACON_BODIES = {
+  'application/csp-report': {
+    schema: {
+      description: 'A legacy CSP violation report: one `csp-report` object of the standard fields, all optional.',
+      type: 'object',
+      additionalProperties: false,
+      required: ['csp-report'],
+      properties: {
+        'csp-report': {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            'document-uri': text,
+            referrer: text,
+            'violated-directive': text,
+            'effective-directive': text,
+            'original-policy': text,
+            disposition: text,
+            'blocked-uri': text,
+            'line-number': { type: 'integer', minimum: 0 },
+            'column-number': { type: 'integer', minimum: 0 },
+            'source-file': text,
+            'status-code': { type: 'integer', minimum: 0 },
+            'script-sample': text,
+          },
+        },
+      },
+    },
+  },
+  'application/reports+json': {
+    schema: {
+      description:
+        'A Reporting API batch: 1 to 20 reports of `type`, `age` (ms), `url`, `user_agent` and a flat `body`.',
+      type: 'array',
+      minItems: 1,
+      maxItems: 20,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['type', 'age', 'url', 'user_agent', 'body'],
+        properties: {
+          type: { type: 'string', maxLength: 64 },
+          age: { type: 'integer', minimum: 0 },
+          url: text,
+          user_agent: { type: 'string', maxLength: 500 },
+          body: {
+            type: 'object',
+            maxProperties: 30,
+            additionalProperties: { oneOf: [text, { type: 'number' }, { type: 'null' }] },
+          },
+        },
+      },
+    },
+  },
+  'application/json': {
+    schema: {
+      description: "The page's own client error report.",
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind', 'message', 'url'],
+      properties: { kind: { const: 'client_error' }, message: text, url: text },
+    },
+  },
+};
+const BEACON = {
+  post: {
+    summary:
+      'A browser report (CSP violation, Reporting API batch or a client error): logged with control characters removed and cut, never stored',
+    description:
+      'No query string. The body is at most 8,192 bytes and the content type one of the three below (parameters ignored).',
+    requestBody: { required: true, content: BEACON_BODIES },
+    responses: {
+      '204': { description: 'Accepted: no body' },
+      ...errors('POST'),
+      '413': json('ApiError', 'The body is longer than 8,192 bytes'),
+      '415': json('ApiError', 'The content type is none of the three'),
+    },
+  },
+};
+
+/** The document of the public API, built once per process. */
+export const openApiDocument = (): Record<string, unknown> => buildOpenApi(COMPONENTS, 'Waterheight public API');
+
+/**
+ * The document over `components`. The owner API passes its own schemas, title and a note on its audience; the public
+ * document names no owner channel (review F7).
+ */
+export function buildOpenApi(components: OpenApiComponents, title: string, note = ''): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Waterheight public API',
+      title,
       version: '1',
       description:
-        'Read-only river levels and discharge for the rivers flowing into the Netherlands. Not an official warning service. Unknown or repeated query parameters are a 400.',
+        'Unofficial, no SLA. Read-only river levels and discharge for the rivers flowing into the Netherlands. Rate-limited per client (429 with Retry-After). Not an official warning service. Unknown or repeated query parameters are a 400. Every 200 body carries an `attribution` array that lists exactly the sources it names.' +
+        note,
     },
     paths: {
       '/api/v1/meta': get(
@@ -81,7 +203,7 @@ export function openApiDocument(): Record<string, unknown> {
       '/api/v1/snapshot': get(
         'The value of every series at t: up to now the last observation carried forward within its staleness limit; after now only official forecasts (`forecasts`), each series from one source',
         json('Snapshot', 'Snapshot'),
-        [instant('t', 'The instant, from displayStart to now + 48 hours.')],
+        [instant('t', 'The instant, from displayStart to now + 48 hours.'), VERSION_PARAM],
       ),
       '/api/v1/series/{id}': get(
         'One series over [from, to)',
@@ -97,11 +219,12 @@ export function openApiDocument(): Record<string, unknown> {
             description: 'raw up to 14 days, 1h up to 366 days, 1d up to 3660 days; by default the finest that fits.',
             schema: { type: 'string', enum: [...RESOLUTIONS] },
           },
+          VERSION_PARAM,
         ],
-        { '404': json('ApiError', 'No such series in the api channel') },
+        NOT_FOUND,
       ),
       '/api/v1/series/{id}/forecast': get(
-        'The official forecast run of one series current at asof (one source, never blended)',
+        'The official forecast run of one series current at asof (one source, never blended); `v` is not accepted (400)',
         json('SeriesForecast', 'SeriesForecast'),
         [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: SERIES_ID_RE.source } },
@@ -110,19 +233,18 @@ export function openApiDocument(): Record<string, unknown> {
             required: false,
           },
         ],
-        { '404': json('ApiError', 'No such series in the api channel') },
+        NOT_FOUND,
       ),
       '/api/v1/health': get('Loader and source health (public sources)', json('Health', 'Health'), [], HEALTH_503),
       '/api/v1/health/sources': get('Health per public source', json('HealthSources', 'HealthSources'), [], HEALTH_503),
-      '/api/v1/openapi.json': {
-        get: {
-          summary: 'This document',
-          responses: { '200': { description: 'OpenAPI 3.1', content: { 'application/json': { schema: {} } } } },
-        },
-      },
+      '/api/v1/openapi.json': get('This document', {
+        description: 'OpenAPI 3.1',
+        content: { 'application/json': { schema: {} } },
+      }),
+      '/api/v1/beacon': BEACON,
     },
     components: {
-      schemas: Object.fromEntries(Object.entries(COMPONENTS).map(([name, schema]) => [name, jsonSchema(schema)])),
+      schemas: Object.fromEntries(Object.entries(components).map(([name, schema]) => [name, jsonSchema(schema)])),
     },
   };
 }

@@ -1,8 +1,8 @@
 import type { StaticMeta } from '@rws/contracts';
 import { readMeta } from '../../api/data.ts';
 import { iso } from '../../api/util.ts';
+import { attributionFor } from '../../attribution.ts';
 import type { MetaInput, RenderCtx } from '../cycle.ts';
-import { attributionFor } from './attribution.ts';
 
 // P9a: meta.json, written last: the API's /meta plus what the cycle knows (day versions, degraded, latestFrom).
 

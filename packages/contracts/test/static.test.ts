@@ -21,6 +21,7 @@ import {
   OwnerSnapshotFile,
   OwnerStaticMeta,
   OwnerStaticSources,
+  OwnerStaticStations,
   OwnerStationRecent,
   OwnerWarningsFile,
   StaticSources,
@@ -103,6 +104,49 @@ describe('snapshot files', () => {
     expect(LatestFile.safeParse(latest).success).toBe(true);
     expect(LatestFile.safeParse({ ...latest, dh1: [null] }).success).toBe(false);
     expect(OwnerLatestFile.safeParse(latest).success).toBe(true);
+  });
+});
+
+describe('stations.json (schemaVersion 2, P9b)', () => {
+  const series = {
+    id: 1,
+    source: 'NL-1',
+    quantity: 'H',
+    valueKind: 'level',
+    unit: 'cm',
+    datum: 'NAP',
+    nativeUnit: 'cm',
+    expectedStepSeconds: 600,
+    stalenessLimitSeconds: 1800,
+    dataSince: null,
+    api: true,
+  };
+  const file = {
+    schemaVersion: 2,
+    seriesHash: '0'.repeat(16),
+    attribution: [],
+    stations: [
+      {
+        id: 'nl.a.b',
+        name: 'A',
+        waterName: null,
+        country: 'NL',
+        lon: 5,
+        lat: 52,
+        tier: 1,
+        flags: { tidal: null, impounded: null },
+        series: [series],
+      },
+    ],
+  };
+  it('carries api per series; version 1 and a missing or non-boolean api are refused', () => {
+    expect(StaticStations.safeParse(file).success).toBe(true);
+    expect(OwnerStaticStations.safeParse(file).success).toBe(true);
+    expect(StaticStations.safeParse({ ...file, schemaVersion: 1 }).success).toBe(false);
+    const without = { ...file, stations: [{ ...file.stations[0], series: [{ ...series, api: undefined }] }] };
+    expect(StaticStations.safeParse(without).success).toBe(false);
+    const wrong = { ...file, stations: [{ ...file.stations[0], series: [{ ...series, api: 'yes' }] }] };
+    expect(StaticStations.safeParse(wrong).success).toBe(false);
   });
 });
 

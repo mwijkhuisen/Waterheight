@@ -5,6 +5,15 @@
 	email {$RWS_CONTACT_EMAIL}
 	# Let's Encrypt only: the CAA record allows no other CA (owner action A4).
 	acme_ca https://acme-v02.api.letsencrypt.org/directory
+	# P9b (review SEC-2): a slow client cannot hold a connection: 10 s for the headers and for a body (the largest
+	# accepted is the beacon's 8 KiB), 2 minutes idle between keep-alive requests.
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 10s
+			idle 2m
+		}
+	}
 }
 
 import /etc/caddy/site.caddy

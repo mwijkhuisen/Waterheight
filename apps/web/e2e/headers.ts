@@ -12,8 +12,10 @@ export function siteHeaders(): [string, string][] {
   if (block === undefined) throw new Error('site.caddy has no header block');
   const out: [string, string][] = [];
   for (const line of block.split('\n')) {
-    const header = /^\t\t([A-Za-z-]+) "([^"]*)"$/.exec(line);
-    if (header?.[1] !== undefined && header[2] !== undefined) out.push([header[1], header[2]]);
+    // A value may hold escaped quotes (Reporting-Endpoints "csp=\"/api/v1/beacon\""): Caddyfile `\"` and `\\`.
+    const header = /^\t\t([A-Za-z-]+) "((?:[^"\\]|\\.)*)"$/.exec(line);
+    if (header?.[1] !== undefined && header[2] !== undefined)
+      out.push([header[1], header[2].replaceAll(/\\(.)/g, '$1')]);
     else if (!/^\t\t-[A-Za-z-]+$/.test(line)) throw new Error(`unexpected header line: ${line}`);
   }
   return out;

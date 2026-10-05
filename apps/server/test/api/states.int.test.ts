@@ -2,8 +2,8 @@ import {
   BUCKET_MS,
   CANARIES,
   CANARY_RENDERINGS,
-  HealthSources,
-  Snapshot,
+  HealthSourcesAnswer,
+  SnapshotAnswer,
   type Snapshot as SnapshotDoc,
 } from '@rws/contracts';
 import { attachArea, CLASS_WINDOW_MIN, classify, classSeries, pointIn, type RefIn, type SeriesIn } from '@rws/core';
@@ -242,7 +242,16 @@ const get = async (path: string) => {
 const snapshotAt = async (t: Date) => {
   const res = await get(`/api/v1/snapshot?t=${t.toISOString()}`);
   expect(res.status).toBe(200);
-  return { text: res.text, snap: Snapshot.parse(res.json) };
+  const { attribution, ...snap } = SnapshotAnswer.parse(res.json);
+  // P9b: the attribution names exactly the sources the body names: its series' sources and the sources of its bases.
+  const owners = await q<{ id: number; source_id: string }>(
+    `SELECT id, source_id FROM series WHERE id = ANY($1::int[])`,
+    [snap.values.map((v) => v.series)],
+  );
+  const named = new Set(owners.map((r) => r.source_id));
+  for (const v of snap.values) for (const b of [v.basis, v.area?.basis]) if (b) named.add(b.source);
+  expect(new Set(attribution.map((a) => a.source))).toEqual(named);
+  return { text: res.text, snap };
 };
 const valueIn = (snap: SnapshotDoc, series: number) => snap.values.find((v) => v.series === series);
 
@@ -598,7 +607,10 @@ describe('coverage per audience', { timeout: 60_000 }, () => {
   it('/health/sources carries the public report and no owner count', async () => {
     const res = await get('/api/v1/health/sources');
     expect(res.status).toBe(200);
-    const doc = HealthSources.parse(res.json);
+    const { attribution, ...doc } = HealthSourcesAnswer.parse(res.json);
+    expect(new Set(attribution.map((a) => a.source))).toEqual(
+      new Set([...doc.sources.map((s) => s.id), ...doc.quarantined_batches.map((x) => x.source)]),
+    );
     const t = Math.floor(T_NOW / BUCKET_MS) * BUCKET_MS;
     const want = classCoverage(await readStates(apiRead(), 'public', t, opts(t, true)));
     expect(doc.classification).toEqual(JSON.parse(JSON.stringify(want)));

@@ -28,10 +28,12 @@ export const API_ERROR_CODES = [
   'busy',
   'unavailable',
   'internal',
+  // P9b: over the client's rate (429), a beacon body over 8 KB (413), a beacon of another content type (415).
+  'rate_limited',
+  'too_large',
+  'unsupported_type',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
-export const ApiError = z.strictObject({ error: z.enum(API_ERROR_CODES) });
-export type ApiError = z.infer<typeof ApiError>;
 
 // --- Parameters ---------------------------------------------------------------
 
@@ -62,12 +64,23 @@ export const SERIES_ID_RE = /^[1-9][0-9]{0,9}$/;
 export const SERIES_ID_MAX = 2_147_483_647;
 
 const Instant = z.string().max(INSTANT_MAX_LENGTH).regex(INSTANT_RE);
-export const SnapshotQuery = z.strictObject({ t: Instant });
+/**
+ * `v` (P9b) of /snapshot and /series/{id}: the client's day version (meta.dayVersions; absent there means 1). An
+ * answer is immutable only when `v` is the current version of every day it spans and each of them is settled.
+ */
+export const VERSION_RE = /^[1-9][0-9]{0,5}$/;
+const Version = z.string().regex(VERSION_RE);
+export const SnapshotQuery = z.strictObject({ t: Instant, v: Version.optional() });
 /** `asof` of /series/{id}/forecast: the same instant rules as `t`; absent means now. */
 export const SeriesForecastQuery = z.strictObject({ asof: Instant.optional() });
 /** How far ahead of now `t` may reach (D8): official forecasts only, each source within its own horizon. */
 export const FORECAST_AHEAD_MS = 48 * 3_600_000;
-export const SeriesQuery = z.strictObject({ from: Instant, to: Instant, res: z.enum(RESOLUTIONS).optional() });
+export const SeriesQuery = z.strictObject({
+  from: Instant,
+  to: Instant,
+  res: z.enum(RESOLUTIONS).optional(),
+  v: Version.optional(),
+});
 export const SeriesPath = z.strictObject({ id: z.string().regex(SERIES_ID_RE) });
 
 const daysIn = (year: number, month: number) => new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -104,130 +117,61 @@ export const floorBucket = (ms: number): number => Math.floor(ms / BUCKET_MS) * 
 
 const SeriesId = z.number().int().min(1).max(SERIES_ID_MAX);
 const Text = (max: number) => z.string().min(1).max(max);
+const HttpsUrl = z
+  .string()
+  .max(500)
+  .regex(/^https:\/\/[^\s]+$/);
+const Lang = z.enum(['nl', 'en', 'de', 'fr']).nullable();
+
+/** What a licence asks to be dated (catalogue §1b): an update, a "Stand", a reference date or the retrieval. */
+export const DATE_KINDS = ['update', 'stand', 'reference', 'retrieval'] as const;
+
+/**
+ * One attribution row of one source named in a body (P9a files, P9b answers), with the date its licence asks for
+ * (null when none). `source` is the family's source-id schema: the public one refuses a canary's spelling.
+ */
+export const attributionEntry = (source: z.ZodString) =>
+  z.strictObject({
+    source,
+    lang: Lang,
+    text: z.string().min(1).max(1000),
+    url: HttpsUrl.nullable(),
+    required: z.boolean(),
+    dateKind: z.enum(DATE_KINDS).nullable(),
+    date: iso.nullable(),
+    /** A date as the licence wants it written (DE-6: `Stand: TT.MM.JJJJ hh:mm`, Europe/Berlin), never provider text. */
+    dateText: z.string().max(60).nullable(),
+  });
+export const AttributionEntry = attributionEntry(HealthSourceId);
+export type AttributionEntry = z.infer<typeof AttributionEntry>;
+
+/**
+ * Every 4xx and 5xx body of the API (P9b): a fixed code and an empty attribution array; nothing of the request is
+ * echoed, so a refusal is the same bytes for everyone.
+ */
+export const ApiError = z.strictObject({
+  error: z.enum(API_ERROR_CODES),
+  attribution: z.array(AttributionEntry).max(0),
+});
+export type ApiError = z.infer<typeof ApiError>;
 
 export const Attribution = z.strictObject({
   /** The language of the text, as the registry has it (null: not stated). */
-  lang: z.enum(['nl', 'en', 'de', 'fr']).nullable(),
+  lang: Lang,
   /** The registry text verbatim. */
   text: Text(1000),
-  url: z
-    .string()
-    .max(500)
-    .regex(/^https:\/\/[^\s]+$/)
-    .nullable(),
+  url: HttpsUrl.nullable(),
   required: z.boolean(),
-  /** The licence asks for a date next to the text (P9b adds it). */
+  /** The licence asks for a date next to the text (the top-level `attribution` carries it). */
   needsDate: z.boolean(),
 });
 export type Attribution = z.infer<typeof Attribution>;
-
-export const Meta = z.strictObject({
-  /** When this answer was made. */
-  now: iso,
-  /** The first production capture (A§7.5, D9). */
-  dataEpoch: iso,
-  /** The earliest instant `t`, `from` may take (D9): app_meta `display_start` rounded up to the 10-minute grid. */
-  displayStart: iso,
-  /** The git commit of the server image, or `dev`. */
-  build: z.string().regex(/^(?:[0-9a-f]{40}|dev)$/),
-  /** The public sources whose series the display views hold, with their attribution rows. */
-  sources: z.array(z.strictObject({ id: HealthSourceId, attribution: z.array(Attribution).max(20) })).max(100),
-  /**
-   * The public forecast sources and how far ahead each may be shown (P8b, D8): its provider horizon capped at 48
-   * hours. A station's own horizon is its current run's end (/series/{id}/forecast).
-   */
-  forecastHorizons: z.array(z.strictObject({ source: HealthSourceId, hours: z.number().int().min(1).max(48) })).max(20),
-});
-export type Meta = z.infer<typeof Meta>;
-
-export const SeriesMeta = z.strictObject({
-  id: SeriesId,
-  source: HealthSourceId,
-  quantity: z.enum(['H', 'Q']),
-  /** H only: `stage` is relative to a gauge zero, `level` is absolute against `datum`. */
-  valueKind: z.enum(['stage', 'level']).nullable(),
-  /** The canonical unit every value is in: H in cm, Q in m³/s. */
-  unit: z.enum(['cm', 'm³/s']),
-  datum: z.enum(DATUMS).nullable(),
-  /** The unit the provider publishes in. */
-  nativeUnit: z.enum(NATIVE_UNITS),
-  expectedStepSeconds: z.number().int().positive(),
-  /** A value is carried forward at most this long (LOCF). */
-  stalenessLimitSeconds: z.number().int().positive(),
-  /** The first UTC day with data in the display channel; null when there is none yet. */
-  dataSince: iso.nullable(),
-});
-export type SeriesMeta = z.infer<typeof SeriesMeta>;
-
-export const ApiStation = z.strictObject({
-  id: z
-    .string()
-    .regex(/^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$/)
-    .max(80),
-  /** Exactly as the operating agency publishes them: untrusted text, data only. */
-  name: Text(200),
-  waterName: Text(200).nullable(),
-  country: z.enum(['NL', 'DE', 'BE', 'FR', 'LU', 'CH']),
-  lon: z.number().min(-180).max(180).nullable(),
-  lat: z.number().min(-90).max(90).nullable(),
-  tier: z.union([z.literal(1), z.literal(2)]),
-  flags: z.strictObject({ tidal: z.boolean().nullable(), impounded: z.boolean().nullable() }),
-  series: z.array(SeriesMeta).min(1).max(20),
-});
-export type ApiStation = z.infer<typeof ApiStation>;
-
-export const Stations = z.strictObject({ stations: z.array(ApiStation).max(10_000) });
-export type Stations = z.infer<typeof Stations>;
 
 /** The common ordinal scale (ADR-0009); `no_ref` is a value without a deciding reference, never a guess. */
 export const STATES = ['no_ref', 'low', 'normal', 'elevated', 'high', 'extreme'] as const;
 export type State = (typeof STATES)[number];
 /** The priority group a state was taken from (catalogue §4.7): an area class only where no gauge state exists. */
 export const BASIS_KINDS = ['operational', 'statistical', 'provider_class', 'area'] as const;
-
-/** What a state is based on (P7b): the agency's reference, class or area, with a label that may hold provider text. */
-export const StateBasis = z.strictObject({
-  source: HealthSourceId,
-  kind: z.enum(BASIS_KINDS),
-  /**
-   * What the state measures: the series' own quantity at the gauge (a stage, an absolute level such as a lake or a
-   * NAP level series, a discharge), or an area (a section, region or zone).
-   */
-  measure: z.enum(['stage', 'level', 'discharge', 'area']),
-  /** Our code: the reference kinds used (`MNW/MHW`), the class code (`RP:0`), the NL-4 stem or the area key. */
-  ref: Text(200),
-  /** "WSV MNW 2010–2020", "Licht verhoogd (>200cm)" (NL-4): untrusted text, data only. */
-  label: Text(700),
-});
-export type StateBasis = z.infer<typeof StateBasis>;
-
-export const SnapshotValue = z.strictObject({
-  series: SeriesId,
-  /** The observation carried forward to `t`: ts ≤ t and ts > t − stalenessLimit. */
-  ts: iso,
-  value: z.number(),
-  /** The QC bitmask (A§6). */
-  qc: z.number().int().min(0).max(1023),
-  /** t − ts. */
-  ageSeconds: count,
-  /** The classified state at `t` (P7b), from public rows only. */
-  state: z.enum(STATES),
-  /** null exactly when the state is no_ref. */
-  basis: StateBasis.nullable(),
-  /** The state comes from an area class (a section, region or zone), not from the gauge: shown with a badge. */
-  section: z.boolean(),
-  /** An area class at the gauge's station, returned beside a gauge state (the gauge class wins). */
-  area: z
-    .strictObject({
-      state: z.enum(STATES.slice(1) as ['low', 'normal', 'elevated', 'high', 'extreme']),
-      basis: StateBasis,
-    })
-    .optional(),
-  /** Detail view only (D16): ≈ m NAP and its uncertainty in m. */
-  nap: z.strictObject({ m: z.number(), pm: z.number().nonnegative() }).optional(),
-  /** A gauge zero as published that is not converted (IGN69, NGF-1884, Hub'Eau metadata): shown as unverified. */
-  zero: z.strictObject({ m: z.number(), datum: z.enum(DATUMS) }).optional(),
-});
 /** The forecast flag bits (packages/core FORECAST_FLAGS; the observation `qc` is another mask). */
 const FORECAST_FLAG_MASK = 16 | 128 | 256 | 1024;
 const ForecastFlags = z
@@ -244,85 +188,8 @@ const Agency = z
   .max(40)
   .regex(/^[A-Za-z][A-Za-z -]*$/);
 const ForecastKind = z.enum(['deterministic', 'quantiles', 'ensemble_summary']);
-
-/**
- * A series' forecast at a future `t` (P8b, A§9.2): the latest run issued at or before now that covers `t`, one
- * source per series by precedence (never blended), its value held at the greatest valid time ≤ t (never
- * interpolated). A series without one is absent ("no forecast").
- */
-export const SnapshotForecast = z.strictObject({
-  series: SeriesId,
-  source: HealthSourceId,
-  agency: Agency,
-  /** The run's valid time held at `t`. */
-  ts: iso,
-  /** The central value in the series' canonical unit; null when censored or below the provider's floor. */
-  value: z.number().nullable(),
-  flags: ForecastFlags,
-  /** Beyond the provider's own forecast segment (shown as an estimate). */
-  estimate: z.boolean(),
-  /** The time the provider states for the run, else the time we first fetched it (`issuedInferred`). */
-  issuedAt: iso,
-  issuedInferred: z.boolean(),
-  providerSegmentEnd: iso.nullable(),
-  band: z.strictObject({ kind: z.enum(FORECAST_BAND_KINDS), lo: z.number(), hi: z.number() }).nullable(),
-  /** The last instant this series' forecast may be shown: its run's end, capped at now + 48 h. */
-  horizonEnd: iso,
-  /** The state of the forecast value against the agencies' references (never a class or area of the present). */
-  state: z.enum(STATES),
-  basis: StateBasis.nullable(),
-});
-export type SnapshotForecast = z.infer<typeof SnapshotForecast>;
-
-export const Snapshot = z.strictObject({
-  /** The quantised instant (UTC, on the 10-minute grid). */
-  t: iso,
-  /** Only series with a value in their window; ordered by series. Empty after now: observations stop at now. */
-  values: z.array(SnapshotValue).max(MAX_POINTS),
-  /** Only for `t` after now (P8b): the series with a forecast at `t`, ordered by series. */
-  forecasts: z.array(SnapshotForecast).max(MAX_POINTS).optional(),
-});
-export type Snapshot = z.infer<typeof Snapshot>;
-
 /** At most this many points in one run of /series/{id}/forecast (48 hours at 10 minutes, with the lead-in). */
 export const FORECAST_RUN_MAX_POINTS = 2000;
-
-/**
- * /series/{id}/forecast?asof= (P8b, A§9.2; api channel): the run current at `asof` (the latest known then that still
- * reaches it, one source by precedence), its points up to asof + 48 h; null when there is none.
- */
-export const SeriesForecast = z.strictObject({
-  series: SeriesId,
-  asof: iso,
-  run: z
-    .strictObject({
-      source: HealthSourceId,
-      agency: Agency,
-      issuedAt: iso,
-      issuedInferred: z.boolean(),
-      fetchedAt: iso,
-      providerSegmentEnd: iso.nullable(),
-      kind: ForecastKind,
-      stepSeconds: z.number().int().positive().nullable(),
-      bandKind: z.enum(FORECAST_BAND_KINDS).nullable(),
-      /** The last valid time shown: the run's end, capped at asof + 48 h. */
-      horizonEnd: iso,
-      points: z
-        .array(
-          z.strictObject({
-            ts: iso,
-            value: z.number().nullable(),
-            lo: z.number().nullable(),
-            hi: z.number().nullable(),
-            flags: ForecastFlags,
-          }),
-        )
-        .min(1)
-        .max(FORECAST_RUN_MAX_POINTS),
-    })
-    .nullable(),
-});
-export type SeriesForecast = z.infer<typeof SeriesForecast>;
 
 const RawPoint = z.strictObject({ ts: iso, value: z.number(), qc: z.number().int().min(0).max(1023) });
 const BucketPoint = z.strictObject({
@@ -341,6 +208,239 @@ export const Series = z.discriminatedUnion('res', [
   z.strictObject({ ...span, res: z.enum(['1h', '1d']), points: z.array(BucketPoint).max(MAX_POINTS) }),
 ]);
 export type Series = z.infer<typeof Series>;
+
+/**
+ * The answer schemas of one family (P9b): `source` is its source-id schema. The public instances below refuse a
+ * canary's spelling; the owner instances (api-owner.ts, server only) allow it. Each data schema is what the readers
+ * return and the publisher reuses; its wire schema (`*Answer`) adds the `attribution` array, which the route merges.
+ */
+export function apiContracts(source: z.ZodString) {
+  const Entry = attributionEntry(source);
+  const attribution = z.array(Entry).max(500);
+
+  const Meta = z.strictObject({
+    /** When this answer was made. */
+    now: iso,
+    /** The first production capture (A§7.5, D9). */
+    dataEpoch: iso,
+    /** The earliest instant `t`, `from` may take (D9): app_meta `display_start` rounded up to the 10-minute grid. */
+    displayStart: iso,
+    /** The git commit of the server image, or `dev`. */
+    build: z.string().regex(/^(?:[0-9a-f]{40}|dev)$/),
+    /** The family's sources whose series the display views hold, with their attribution rows. */
+    sources: z.array(z.strictObject({ id: source, attribution: z.array(Attribution).max(20) })).max(100),
+    /**
+     * The forecast sources and how far ahead each may be shown (P8b, D8): its provider horizon capped at 48 hours.
+     * A station's own horizon is its current run's end (/series/{id}/forecast).
+     */
+    forecastHorizons: z.array(z.strictObject({ source, hours: z.number().int().min(1).max(48) })).max(20),
+  });
+
+  const SeriesMeta = z.strictObject({
+    id: SeriesId,
+    source,
+    quantity: z.enum(['H', 'Q']),
+    /** H only: `stage` is relative to a gauge zero, `level` is absolute against `datum`. */
+    valueKind: z.enum(['stage', 'level']).nullable(),
+    /** The canonical unit every value is in: H in cm, Q in m³/s. */
+    unit: z.enum(['cm', 'm³/s']),
+    datum: z.enum(DATUMS).nullable(),
+    /** The unit the provider publishes in. */
+    nativeUnit: z.enum(NATIVE_UNITS),
+    expectedStepSeconds: z.number().int().positive(),
+    /** A value is carried forward at most this long (LOCF). */
+    stalenessLimitSeconds: z.number().int().positive(),
+    /** The first UTC day with data in the display channel; null when there is none yet. */
+    dataSince: iso.nullable(),
+  });
+
+  const ApiStation = z.strictObject({
+    id: z
+      .string()
+      .regex(/^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$/)
+      .max(80),
+    /** Exactly as the operating agency publishes them: untrusted text, data only. */
+    name: Text(200),
+    waterName: Text(200).nullable(),
+    country: z.enum(['NL', 'DE', 'BE', 'FR', 'LU', 'CH']),
+    lon: z.number().min(-180).max(180).nullable(),
+    lat: z.number().min(-90).max(90).nullable(),
+    tier: z.union([z.literal(1), z.literal(2)]),
+    flags: z.strictObject({ tidal: z.boolean().nullable(), impounded: z.boolean().nullable() }),
+    series: z.array(SeriesMeta).min(1).max(20),
+  });
+
+  const Stations = z.strictObject({ stations: z.array(ApiStation).max(10_000) });
+
+  /** What a state is based on (P7b): the agency's reference, class or area, with a label that may hold provider text. */
+  const StateBasis = z.strictObject({
+    source,
+    kind: z.enum(BASIS_KINDS),
+    /**
+     * What the state measures: the series' own quantity at the gauge (a stage, an absolute level such as a lake or a
+     * NAP level series, a discharge), or an area (a section, region or zone).
+     */
+    measure: z.enum(['stage', 'level', 'discharge', 'area']),
+    /** Our code: the reference kinds used (`MNW/MHW`), the class code (`RP:0`), the NL-4 stem or the area key. */
+    ref: Text(200),
+    /** "WSV MNW 2010–2020", "Licht verhoogd (>200cm)" (NL-4): untrusted text, data only. */
+    label: Text(700),
+  });
+
+  const SnapshotValue = z.strictObject({
+    series: SeriesId,
+    /** The observation carried forward to `t`: ts ≤ t and ts > t − stalenessLimit. */
+    ts: iso,
+    value: z.number(),
+    /** The QC bitmask (A§6). */
+    qc: z.number().int().min(0).max(1023),
+    /** t − ts. */
+    ageSeconds: count,
+    /** The classified state at `t` (P7b), from the family's rows only. */
+    state: z.enum(STATES),
+    /** null exactly when the state is no_ref. */
+    basis: StateBasis.nullable(),
+    /** The state comes from an area class (a section, region or zone), not from the gauge: shown with a badge. */
+    section: z.boolean(),
+    /** An area class at the gauge's station, returned beside a gauge state (the gauge class wins). */
+    area: z
+      .strictObject({
+        state: z.enum(STATES.slice(1) as ['low', 'normal', 'elevated', 'high', 'extreme']),
+        basis: StateBasis,
+      })
+      .optional(),
+    /** Detail view only (D16): ≈ m NAP and its uncertainty in m. */
+    nap: z.strictObject({ m: z.number(), pm: z.number().nonnegative() }).optional(),
+    /** A gauge zero as published that is not converted (IGN69, NGF-1884, Hub'Eau metadata): shown as unverified. */
+    zero: z.strictObject({ m: z.number(), datum: z.enum(DATUMS) }).optional(),
+  });
+
+  /**
+   * A series' forecast at a future `t` (P8b, A§9.2): the latest run issued at or before now that covers `t`, one
+   * source per series by precedence (never blended), its value held at the greatest valid time ≤ t (never
+   * interpolated). A series without one is absent ("no forecast").
+   */
+  const SnapshotForecast = z.strictObject({
+    series: SeriesId,
+    source,
+    agency: Agency,
+    /** The run's valid time held at `t`. */
+    ts: iso,
+    /** The central value in the series' canonical unit; null when censored or below the provider's floor. */
+    value: z.number().nullable(),
+    flags: ForecastFlags,
+    /** Beyond the provider's own forecast segment (shown as an estimate). */
+    estimate: z.boolean(),
+    /** The time the provider states for the run, else the time we first fetched it (`issuedInferred`). */
+    issuedAt: iso,
+    issuedInferred: z.boolean(),
+    providerSegmentEnd: iso.nullable(),
+    band: z.strictObject({ kind: z.enum(FORECAST_BAND_KINDS), lo: z.number(), hi: z.number() }).nullable(),
+    /** The last instant this series' forecast may be shown: its run's end, capped at now + 48 h. */
+    horizonEnd: iso,
+    /** The state of the forecast value against the agencies' references (never a class or area of the present). */
+    state: z.enum(STATES),
+    basis: StateBasis.nullable(),
+  });
+
+  const Snapshot = z.strictObject({
+    /** The quantised instant (UTC, on the 10-minute grid). */
+    t: iso,
+    /** Only series with a value in their window; ordered by series. Empty after now: observations stop at now. */
+    values: z.array(SnapshotValue).max(MAX_POINTS),
+    /** Only for `t` after now (P8b): the series with a forecast at `t`, ordered by series. */
+    forecasts: z.array(SnapshotForecast).max(MAX_POINTS).optional(),
+  });
+
+  /**
+   * /series/{id}/forecast?asof= (P8b, A§9.2; api channel): the run current at `asof` (the latest known then that
+   * still reaches it, one source by precedence), its points up to asof + 48 h; null when there is none.
+   */
+  const SeriesForecast = z.strictObject({
+    series: SeriesId,
+    asof: iso,
+    run: z
+      .strictObject({
+        source,
+        agency: Agency,
+        issuedAt: iso,
+        issuedInferred: z.boolean(),
+        fetchedAt: iso,
+        providerSegmentEnd: iso.nullable(),
+        kind: ForecastKind,
+        stepSeconds: z.number().int().positive().nullable(),
+        bandKind: z.enum(FORECAST_BAND_KINDS).nullable(),
+        /** The last valid time shown: the run's end, capped at asof + 48 h. */
+        horizonEnd: iso,
+        points: z
+          .array(
+            z.strictObject({
+              ts: iso,
+              value: z.number().nullable(),
+              lo: z.number().nullable(),
+              hi: z.number().nullable(),
+              flags: ForecastFlags,
+            }),
+          )
+          .min(1)
+          .max(FORECAST_RUN_MAX_POINTS),
+      })
+      .nullable(),
+  });
+
+  const wire = { attribution };
+  return {
+    AttributionEntry: Entry,
+    attribution,
+    Meta,
+    SeriesMeta,
+    ApiStation,
+    Stations,
+    StateBasis,
+    SnapshotValue,
+    SnapshotForecast,
+    Snapshot,
+    SeriesForecast,
+    MetaAnswer: Meta.extend(wire),
+    StationsAnswer: Stations.extend(wire),
+    SnapshotAnswer: Snapshot.extend(wire),
+    SeriesForecastAnswer: SeriesForecast.extend(wire),
+    SeriesAnswer: z.discriminatedUnion('res', [
+      (Series.options[0] as (typeof Series.options)[0]).extend(wire),
+      (Series.options[1] as (typeof Series.options)[1]).extend(wire),
+    ]),
+  };
+}
+
+const PUBLIC = apiContracts(HealthSourceId);
+export const Meta = PUBLIC.Meta;
+export type Meta = z.infer<typeof Meta>;
+export const SeriesMeta = PUBLIC.SeriesMeta;
+export type SeriesMeta = z.infer<typeof SeriesMeta>;
+export const ApiStation = PUBLIC.ApiStation;
+export type ApiStation = z.infer<typeof ApiStation>;
+export const Stations = PUBLIC.Stations;
+export type Stations = z.infer<typeof Stations>;
+export const StateBasis = PUBLIC.StateBasis;
+export type StateBasis = z.infer<typeof StateBasis>;
+export const SnapshotValue = PUBLIC.SnapshotValue;
+export const SnapshotForecast = PUBLIC.SnapshotForecast;
+export type SnapshotForecast = z.infer<typeof SnapshotForecast>;
+export const Snapshot = PUBLIC.Snapshot;
+export type Snapshot = z.infer<typeof Snapshot>;
+export const SeriesForecast = PUBLIC.SeriesForecast;
+export type SeriesForecast = z.infer<typeof SeriesForecast>;
+/** The wire schemas of the public API: the data and the `attribution` of exactly the sources the body names. */
+export const MetaAnswer = PUBLIC.MetaAnswer;
+export type MetaAnswer = z.infer<typeof MetaAnswer>;
+export const StationsAnswer = PUBLIC.StationsAnswer;
+export type StationsAnswer = z.infer<typeof StationsAnswer>;
+export const SnapshotAnswer = PUBLIC.SnapshotAnswer;
+export type SnapshotAnswer = z.infer<typeof SnapshotAnswer>;
+export const SeriesAnswer = PUBLIC.SeriesAnswer;
+export type SeriesAnswer = z.infer<typeof SeriesAnswer>;
+export const SeriesForecastAnswer = PUBLIC.SeriesForecastAnswer;
+export type SeriesForecastAnswer = z.infer<typeof SeriesForecastAnswer>;
 
 // /data/v1/rivers/manifest.json (P6b): the river files that are served, written
 // by deploy/bin/rws-rivers-refresh after it verified a signed geo-<date>

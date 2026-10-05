@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { HealthSourceId } from './api.ts';
+import { AttributionEntry, attributionEntry, HealthSourceId } from './api.ts';
 import { ForecastCoverage } from './forecast.ts';
 
 // The public health documents (A§9.2 `GET /health` and `GET /health/sources`;
@@ -59,7 +59,12 @@ export const Health = z.strictObject({
 export type Health = z.infer<typeof Health>;
 
 /** The 503 body of both health routes (no database, or it failed); never cached. */
-export const HealthUnavailable = z.strictObject({ status: z.literal('down'), error: z.literal('unavailable') });
+export const HealthUnavailable = z.strictObject({
+  status: z.literal('down'),
+  error: z.literal('unavailable'),
+  /** Every error body carries an empty attribution array (P9b, owner decision 2026-10-05). */
+  attribution: z.array(AttributionEntry).max(0),
+});
 export type HealthUnavailable = z.infer<typeof HealthUnavailable>;
 
 const Tier1 = z.strictObject({ total: count, fresh: count, provider_stale: count });
@@ -113,118 +118,152 @@ export const ClassCoverage = z.strictObject({
 });
 export type ClassCoverage = z.infer<typeof ClassCoverage>;
 
-export const HealthSources = z.strictObject({
-  generated_at: iso.nullable(),
-  sources: z
-    .array(
-      z.strictObject({
-        id: HealthSourceId,
-        status: SourceStatus,
-        last_fetch_ok: iso.nullable(),
-        last_new_data: iso.nullable(),
-        newest_ts: iso.nullable(),
-        consecutive_failures: count,
-        quarantined: count,
-        lag_p95_s: z.number().nonnegative().nullable(),
-        tier1: Tier1.nullable(),
-        missing_buckets_24h: count.nullable(),
-        /**
-         * The last gap in the source's loaded payloads within 168 hours (a capture outage or drill), and Q7 over
-         * it: expected buckets still without data, over the tier-1 series that had data in the day before it.
-         */
-        outage: z.strictObject({ from: iso, to: iso, missing_buckets: count }).nullable(),
-        /**
-         * Q7 since the seed (P5a): over the tier-1 series, from each one's first hour with data (the seed's first
-         * day, or the data epoch), the share of expected buckets that hold a value, the series below 95 %, and the
-         * newest gaps between loaded payloads (each longer than max(3 × the capture cadence, 30 min)).
-         */
-        coverage: z
-          .strictObject({
-            from: iso,
-            ratio: z.number().min(0).max(1),
-            series: count,
-            series_below_95: count,
-            gaps: z.array(z.strictObject({ from: iso, to: iso })).max(20),
-          })
-          .nullable(),
-        /**
-         * The shortest gap between two requests of one capture spec and variant in the last 24 hours, from the
-         * manifest's fetch start times (P5a; BAFU asks LINDAS users for at most one download per 10 minutes).
-         */
-        min_interval_s: z.array(z.strictObject({ spec: SpecId, seconds: count })).max(50),
-        /**
-         * LU-1 only (P5b): the latest UTC day the label offset was measured against the DE-1 Perl twin, whether
-         * that day decided it (review CR-4: a quiet day on the impounded Perl reach may not), over how many
-         * informative instants and, when it decided, their share that agreed; and the offset in force, in minutes,
-         * with the latest day that decided it (null before the first). null for every other source.
-         */
-        label_offset: z
-          .strictObject({
-            day: z.iso.date(),
-            decided: z.boolean(),
-            n_aligned: count,
-            share: z.number().min(0).max(1).nullable(),
-            minutes: z.number().nullable(),
-            decided_day: z.iso.date().nullable(),
-          })
-          .nullable(),
-        /**
-         * Forecast runs (P8a), for a source that has stored some: when the newest run was issued (the provider's
-         * time, else our first fetch), its age, the series that have a run, how many of them have a current one
-         * (it still reaches now) and, for a source with a run schedule (DE-2), the Europe/Berlin day a due run
-         * missed its deadline. A late or stale run never changes the source's status. null for a source with none.
-         */
-        forecast: z
-          .strictObject({
-            issued_at: iso,
-            run_age_s: count,
-            series: count,
-            current: count,
-            late: z.iso.date().nullable(),
-          })
-          .nullable(),
-        partitions: z.array(Partition).max(240),
-        partitions_at: iso.nullable(),
-      }),
-    )
-    .max(200),
-  quarantined_batches: z
-    .array(
-      z.strictObject({
-        id: z.string().regex(/^[0-9]{1,19}$/),
-        source: HealthSourceId,
-        spec: SpecId,
-        fetched_at: iso,
-        error: BatchError.nullable(),
-      }),
-    )
-    .max(50),
-  twins: z
-    .array(
-      z.strictObject({
-        id: z
-          .string()
-          .regex(/^[a-z0-9][a-z0-9-]*$/)
-          .max(80),
-        window_end: iso,
-        n_aligned: count,
-        median_delta: z.number().nullable(),
-        max_delta: z.number().nullable(),
-        lag_min: z.number().nullable(),
-        ok: z.boolean(),
-        /** The hourly checks of the last 168 hours, and how many of them failed. */
-        checks_7d: count,
-        failed_7d: count,
-      }),
-    )
-    .max(100),
+/**
+ * /health/sources of one family: `source` is its source-id schema (the owner instance, api-owner.ts, allows the
+ * canary's spelling). The public one adds `owner_sources`, two counts and nothing else; the owner one lists every
+ * source of its family.
+ */
+export const healthSources = (source: z.ZodString) =>
+  z.strictObject({
+    generated_at: iso.nullable(),
+    sources: z
+      .array(
+        z.strictObject({
+          id: source,
+          status: SourceStatus,
+          last_fetch_ok: iso.nullable(),
+          last_new_data: iso.nullable(),
+          newest_ts: iso.nullable(),
+          consecutive_failures: count,
+          quarantined: count,
+          lag_p95_s: z.number().nonnegative().nullable(),
+          tier1: Tier1.nullable(),
+          missing_buckets_24h: count.nullable(),
+          /**
+           * The last gap in the source's loaded payloads within 168 hours (a capture outage or drill), and Q7 over
+           * it: expected buckets still without data, over the tier-1 series that had data in the day before it.
+           */
+          outage: z.strictObject({ from: iso, to: iso, missing_buckets: count }).nullable(),
+          /**
+           * Q7 since the seed (P5a): over the tier-1 series, from each one's first hour with data (the seed's first
+           * day, or the data epoch), the share of expected buckets that hold a value, the series below 95 %, and the
+           * newest gaps between loaded payloads (each longer than max(3 × the capture cadence, 30 min)).
+           */
+          coverage: z
+            .strictObject({
+              from: iso,
+              ratio: z.number().min(0).max(1),
+              series: count,
+              series_below_95: count,
+              gaps: z.array(z.strictObject({ from: iso, to: iso })).max(20),
+            })
+            .nullable(),
+          /**
+           * The shortest gap between two requests of one capture spec and variant in the last 24 hours, from the
+           * manifest's fetch start times (P5a; BAFU asks LINDAS users for at most one download per 10 minutes).
+           */
+          min_interval_s: z.array(z.strictObject({ spec: SpecId, seconds: count })).max(50),
+          /**
+           * LU-1 only (P5b): the latest UTC day the label offset was measured against the DE-1 Perl twin, whether
+           * that day decided it (review CR-4: a quiet day on the impounded Perl reach may not), over how many
+           * informative instants and, when it decided, their share that agreed; and the offset in force, in minutes,
+           * with the latest day that decided it (null before the first). null for every other source.
+           */
+          label_offset: z
+            .strictObject({
+              day: z.iso.date(),
+              decided: z.boolean(),
+              n_aligned: count,
+              share: z.number().min(0).max(1).nullable(),
+              minutes: z.number().nullable(),
+              decided_day: z.iso.date().nullable(),
+            })
+            .nullable(),
+          /**
+           * Forecast runs (P8a), for a source that has stored some: when the newest run was issued (the provider's
+           * time, else our first fetch), its age, the series that have a run, how many of them have a current one
+           * (it still reaches now) and, for a source with a run schedule (DE-2), the Europe/Berlin day a due run
+           * missed its deadline. A late or stale run never changes the source's status. null for a source with none.
+           */
+          forecast: z
+            .strictObject({
+              issued_at: iso,
+              run_age_s: count,
+              series: count,
+              current: count,
+              late: z.iso.date().nullable(),
+            })
+            .nullable(),
+          partitions: z.array(Partition).max(240),
+          partitions_at: iso.nullable(),
+        }),
+      )
+      .max(200),
+    quarantined_batches: z
+      .array(
+        z.strictObject({
+          id: z.string().regex(/^[0-9]{1,19}$/),
+          source,
+          spec: SpecId,
+          fetched_at: iso,
+          error: BatchError.nullable(),
+        }),
+      )
+      .max(50),
+    twins: z
+      .array(
+        z.strictObject({
+          id: z
+            .string()
+            .regex(/^[a-z0-9][a-z0-9-]*$/)
+            .max(80),
+          window_end: iso,
+          n_aligned: count,
+          median_delta: z.number().nullable(),
+          max_delta: z.number().nullable(),
+          lag_min: z.number().nullable(),
+          ok: z.boolean(),
+          /** The hourly checks of the last 168 hours, and how many of them failed. */
+          checks_7d: count,
+          failed_7d: count,
+        }),
+      )
+      .max(100),
+    /** The classification coverage of the family (P7b; D10), null when it could not be computed. */
+    classification: ClassCoverage.nullable(),
+    /** The forecast coverage of the family (P8a; catalogue §0.5), null when it could not be computed. */
+    forecast_coverage: ForecastCoverage.nullable(),
+  });
+
+export const HealthSources = healthSources(HealthSourceId).extend({
   owner_sources: z.strictObject({ healthy: count, total: count }),
-  /** The classification coverage of the public family (P7b; D10), null when it could not be computed. */
-  classification: ClassCoverage.nullable(),
-  /** The forecast coverage of the public family (P8a; catalogue §0.5), null when it could not be computed. */
-  forecast_coverage: ForecastCoverage.nullable(),
 });
 export type HealthSources = z.infer<typeof HealthSources>;
+
+/**
+ * The wire schemas of the public health routes (P9b): the data and the `attribution` of exactly the sources the body
+ * names. /health names none (counts only), so its array is empty.
+ */
+export const HealthAnswer = Health.extend({ attribution: z.array(AttributionEntry).max(0) });
+export type HealthAnswer = z.infer<typeof HealthAnswer>;
+export const HealthSourcesAnswer = HealthSources.extend({ attribution: z.array(AttributionEntry).max(500) });
+export type HealthSourcesAnswer = z.infer<typeof HealthSourcesAnswer>;
+
+/**
+ * /health of the owner API (P9b, A§9.3): the owner family's sources as counts, its quarantined payloads and twins.
+ * No loader backlog (the loader view is public-only, KG-219) and no owner count: every source is listed.
+ */
+export const ownerHealth = (source: z.ZodString) =>
+  z.strictObject({
+    audience: z.literal('owner'),
+    status: HealthStatus,
+    /** The newest source health the loader wrote for this family; null before its first pass. */
+    generated_at: iso.nullable(),
+    sources: z.strictObject({ ok: count, degraded: count, down: count, unknown: count, total: count }),
+    quarantined: count,
+    twins: z.strictObject({ ok: count, failing: count }),
+    attribution: z.array(attributionEntry(source)).max(0),
+  });
 
 /**
  * The overall status of a health document (without its `status`). `down`: the

@@ -10,6 +10,16 @@
 # `noindex, nofollow` on every response, no published port (P12a binds it to the
 # WireGuard address). It mounts only the owner publisher's served tree (v1,
 # read-only); never anything of /srv/rws/public.
+#
+# api-owner (P9b, plan C15) is the owner API: the same server image as `api` with
+# `--audience owner` (role rws_owner_api over the owner views only, a pool of 2).
+# It sits on the internal network owner_edge, which only caddy-owner and
+# api-owner join, and reaches the database over owner_db, which only api-owner
+# and db join (review F1: on the shared `db` network the public api could open
+# api-owner:8080). The public caddy and the public api share no network with
+# it, so neither can reach it. pg_hba's `samenet` covers both db networks. Compose anchors do not cross files, so the
+# hardening flags of compose.yaml (x-hardening) are repeated here literally, and
+# test/caddy-owner.test.ts holds the two copies together.
 services:
   caddy-owner:
     image: ${RWS_WEB_IMAGE:?}
@@ -30,7 +40,7 @@ services:
       - /srv/rws/owner/www/v1:/srv/rws/owner/www/v1:ro
       - caddy_owner_data:/data
       - caddy_owner_config:/config
-    networks: [edge]
+    networks: [edge, owner_edge]
     mem_limit: 128m
     cpus: 0.5
     pids_limit: 128
@@ -40,6 +50,55 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  api-owner:
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    image: ${RWS_SERVER_IMAGE:?}
+    command: [api, --audience, owner]
+    user: "65532:65532"
+    group_add: ["61009"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+      RWS_DB_HOST: db
+      RWS_DB_PORT: "5432"
+      RWS_DB_NAME: rws
+    secrets: [db_rws_owner_api]
+    networks: [owner_edge, owner_db]
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "/nodejs/bin/node", "/app/apps/server/dist/main.js", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # The database joins owner_db for api-owner alone (the list keeps its own `db`).
+  db:
+    networks: [db, owner_db]
+
+networks:
+  # caddy-owner and api-owner only (C15); internal, so no route out either.
+  owner_edge:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-owner-edge
+  # api-owner and db only (review F1).
+  owner_db:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-owner-db
 
 secrets:
   owner_basic_auth:

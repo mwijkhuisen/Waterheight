@@ -64,6 +64,7 @@ const health = (over: Record<string, unknown> = {}) => ({
   owner_sources: { healthy: 5, total: 6 },
   quarantined: 0,
   twins: { ok: 0, failing: 0 },
+  attribution: [],
   ...over,
 });
 
@@ -318,7 +319,11 @@ describe('the load check (P2a)', () => {
 
   it.each<[string, Got, string[]]>([
     ['the request fails', { error: 'timeout' }, ['load_unreachable']],
-    ['a 503', { status: 503, body: Buffer.from('{"status":"down","error":"unavailable"}') }, ['load_unreachable']],
+    [
+      'a 503',
+      { status: 503, body: Buffer.from('{"status":"down","error":"unavailable","attribution":[]}') },
+      ['load_unreachable'],
+    ],
     ['a 502 from the proxy', { status: 502, body: Buffer.from('<html>bad gateway</html>') }, ['load_unreachable']],
     ['not JSON', { status: 200, body: Buffer.from('<html>') }, ['load_contract']],
     ['off-contract', ok(health({ version: '1.2.3' })), ['load_contract']],

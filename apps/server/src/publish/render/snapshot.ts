@@ -1,9 +1,10 @@
 import type { Snapshot, SnapshotFile, StateBasis } from '@rws/contracts';
+import { valueSources } from '../../api/answer.ts';
 import { publicSnapshot } from '../../api/data.ts';
 import { readStates, snapshotValues } from '../../api/states.ts';
+import { attributionFor } from '../../attribution.ts';
 import type { RenderCtx } from '../cycle.ts';
 import { historyExcluded } from '../plan.ts';
-import { attributionFor } from './attribution.ts';
 import { readFacts, type SeriesFacts } from './series.ts';
 
 // P9a: a recent/ or settled/ bucket file (the same function: a settled file is a pure function of the data at t, no
@@ -44,7 +45,13 @@ export function columns(t: string, values: Snapshot['values']): Columns {
 
 /** The sources a body names: its series' and every basis. */
 export const sourcesOf = (c: Columns, facts: ReadonlyMap<number, SeriesFacts>): Set<string> =>
-  new Set([...c.series.flatMap((s) => facts.get(s)?.source ?? []), ...c.bases.map((b) => b.source)]);
+  new Set([
+    ...c.series.flatMap((s, i) => {
+      const source = facts.get(s)?.source;
+      return source === undefined ? [] : valueSources(source, c.qc[i] ?? 0);
+    }),
+    ...c.bases.map((b) => b.source),
+  ]);
 
 /** The values of the bucket at `t` as the API's /snapshot gives them (the public family keeps the owner-basis check). */
 export async function readValues(c: RenderCtx, t: number, current: boolean): Promise<Snapshot['values']> {

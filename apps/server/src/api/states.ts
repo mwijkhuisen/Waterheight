@@ -13,6 +13,7 @@ import {
   type RefIn,
 } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
+import { type AttributionRow, attributionRows, type SourceDate, sourceDates } from '../attribution.ts';
 import { type ChannelAudience, OBS_AT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { iso, snapshot } from './util.ts';
@@ -65,12 +66,19 @@ type Ranged<T> = T & { v_from: Date | null; v_to: Date | null; from_inc: boolean
  * stations each area attaches to, computed for these `stations` and kept only as long as they are: keyed by the md5
  * of a polygon's stored geometry (P7a refreshes a geometry in place), else by source and area key.
  */
-type Static = {
+export type Static = {
   stations: StationRow[];
   series: SeriesRow[];
   refs: Ranged<RefRow>[];
   zeros: Ranged<ZeroRow>[];
   attached: Map<string, string[]>;
+  /** P9b: the family's visible sources (its source view): a body naming any other fails closed. */
+  sources: Set<string>;
+  /** P9b: the family's attribution rows and the dates their licences ask for now (the API's `attribution`). */
+  attribution: AttributionRow[];
+  dates: Map<string, SourceDate>;
+  /** P9b (KG-114): the active series without lic_history_export, with their history window in ms (0 when none). */
+  history: Map<number, number>;
 };
 
 const validAt = (r: Ranged<object>, t: number) =>
@@ -104,7 +112,27 @@ function readStatic(db: Kysely<DB>, family: ChannelAudience): Promise<Static> {
       await sql<Ranged<ZeroRow>>`SELECT series_id, value_m, datum, ${RANGE} FROM ${sql.table(V.gaugeZero)}`.execute(tx)
     ).rows,
     attached: new Map(),
+    ...(await readLicences(tx, family)),
   }));
+}
+
+/** The P9b part of the static rows: sources, attribution, licence dates and the history windows. */
+async function readLicences(
+  tx: Kysely<DB>,
+  family: ChannelAudience,
+): Promise<Pick<Static, 'sources' | 'attribution' | 'dates' | 'history'>> {
+  const V = VIEWS[family];
+  const attribution = await attributionRows(tx, family);
+  const sources = await sql<{ id: string }>`SELECT id FROM ${sql.table(V.source)}`.execute(tx);
+  const history = await sql<{ id: number; window_ms: number | null }>`
+    SELECT id, (EXTRACT(EPOCH FROM history_window) * 1000)::float8 AS window_ms
+    FROM ${sql.table(V.series)} WHERE active AND NOT lic_history_export`.execute(tx);
+  return {
+    sources: new Set(sources.rows.map((r) => r.id)),
+    attribution,
+    dates: await sourceDates(tx, family, attribution),
+    history: new Map(history.rows.map((r) => [r.id, Math.max(0, r.window_ms ?? 0)])),
+  };
 }
 
 /**

@@ -44,7 +44,7 @@ function fake(over: Partial<Renderers> = {}): Renderers {
       return await body(c, ...a);
     };
   return {
-    stations: log('stations', () => ({ schemaVersion: 1, seriesHash: '0'.repeat(16), stations: [], attribution })),
+    stations: log('stations', () => ({ schemaVersion: 2, seriesHash: '0'.repeat(16), stations: [], attribution })),
     latest: log('latest', (c) => ({
       body: {
         schemaVersion: 1,

@@ -1,23 +1,24 @@
 import type { ForecastLatest, ForecastRun, StationRecent } from '@rws/contracts';
 import { MAX_POINTS, pickRun } from '@rws/contracts';
 import { type Kysely, sql } from 'kysely';
+import { valueSources } from '../../api/answer.ts';
 import { readForecastLatest } from '../../api/forecast-latest.ts';
 import { iso } from '../../api/util.ts';
+import { attributionFor } from '../../attribution.ts';
 import { type ChannelAudience, VIEWS } from '../../db/audience.ts';
 import type { DB } from '../../db/generated.ts';
 import type { RenderCtx } from '../cycle.ts';
 import { type HistoryFacts, historyExcluded } from '../plan.ts';
-import { attributionFor } from './attribution.ts';
 
 // P9a (§4.4): the series facts every renderer shares (the family's active display series with the channel facts that
 // decide which file may carry one, §9 C5) and series/{station}/recent.json.
 
-export type SeriesFacts = HistoryFacts & { id: number; station: string; source: string };
+export type SeriesFacts = HistoryFacts & { id: number; station: string; source: string; lic_api: boolean };
 
 /** The family's active series by id, with the history facts of the series view (effective, appended by M2). */
 export async function readFacts(db: Kysely<DB>, family: ChannelAudience): Promise<Map<number, SeriesFacts>> {
   const { rows } = await sql<SeriesFacts>`
-    SELECT id, station_id AS station, source_id AS source, lic_history_export,
+    SELECT id, station_id AS station, source_id AS source, lic_api, lic_history_export,
            EXTRACT(EPOCH FROM history_window)::float8 AS history_window_s,
            EXTRACT(EPOCH FROM staleness_limit)::float8 AS staleness_s
     FROM ${sql.table(VIEWS[family].series)} WHERE active ORDER BY id`.execute(db);
@@ -103,7 +104,14 @@ export async function renderStation(c: RenderCtx, id: string): Promise<StationRe
     });
   }
   const sources = new Set(
-    series.flatMap((s) => [s.source, ...(s.run ? [s.run.source] : []), ...s.references.map((r) => r.source)]),
+    series.flatMap((s) => [
+      ...valueSources(
+        s.source,
+        s.qc.reduce((or, q) => or | q, 0),
+      ),
+      ...(s.run ? [s.run.source] : []),
+      ...s.references.map((r) => r.source),
+    ]),
   );
   return {
     schemaVersion: 1,

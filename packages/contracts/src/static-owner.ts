@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { HealthSourceId } from './api.ts';
+import { AttributionEntry, DATE_KINDS, HealthSourceId } from './api.ts';
 import { OwnerForecastLatest } from './forecast.ts';
-import { AttributionEntry, DATE_KINDS, staticContracts } from './static.ts';
+import { staticContracts } from './static.ts';
 
 // Server only (P9a): the owner family's static files (A§9.3) and both families' sources.json. The web never imports
 // this module (`@rws/contracts/static-owner`, not re-exported from the index), so neither the canary's id spelling

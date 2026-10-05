@@ -1,8 +1,8 @@
 import { StaticCache } from '../../src/api/states.ts';
+import { attributionRows } from '../../src/attribution.ts';
 import type { ChannelAudience } from '../../src/db/audience.ts';
 import type { Db } from '../../src/db/pool.ts';
 import type { RenderCtx } from '../../src/publish/cycle.ts';
-import { attributionRows } from '../../src/publish/render/attribution.ts';
 
 // P9a S2: a render context over a role's real connection (rws_publish / rws_owner_api), for the sources, status and
 // warnings tests.

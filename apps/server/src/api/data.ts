@@ -4,21 +4,18 @@ import { type Kysely, sql } from 'kysely';
 import { type ChannelAudience, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { FILLED_BY, LOAD_ADAPTERS } from '../load/adapters.ts';
+import { channelViews } from './channels.ts';
 import { forecastHorizons } from './forecast-at.ts';
 import type { SeriesParams } from './params.ts';
 import { readStates, type StateRead, type StaticCache, snapshotValues } from './states.ts';
 import { coded, iso, snapshot } from './util.ts';
 import type { Window } from './window.ts';
 
-// The reads of the public data routes (A§8 Q1, Q4; A§9.2). The API serves the
-// public family only: every name comes from VIEWS / OBS_AT (audience.ts) of the
-// family its caller names (the routes always 'public'; the publishers their own,
-// P9a), nothing in a request selects a view, and every value is a bound
-// parameter. /meta, /stations and /snapshot read the display channel; /series
-// reads the api channel (lic_api; values older than the history window need
+// The reads of the data routes (A§8 Q1, Q4; A§9.2). Every name comes from VIEWS / OBS_AT (audience.ts) of the
+// family its caller names (each api process its own, fixed at start; the publishers theirs, P9a), nothing in a
+// request selects a view, and every value is a bound parameter. /meta, /stations and /snapshot read the display
+// channel; /series reads the api channel through channelViews (lic_api; values older than the history window need
 // lic_history_export, applied inside the views).
-
-const V = VIEWS.public;
 
 type AttributionRow = {
   source_id: string;
@@ -228,16 +225,21 @@ type BucketRow = { bucket: Date; vmin: number; vmax: number; vavg: number; vlast
  * A§8 Q4 over [from, to) in the api channel; undefined when the series is not in it (unknown, or lic_api off)
  * or is inactive, as /stations and /snapshot show only active series.
  */
-export async function readSeries(db: Kysely<DB>, p: SeriesParams): Promise<Series | undefined> {
+export async function readSeries(
+  db: Kysely<DB>,
+  family: ChannelAudience,
+  p: Pick<SeriesParams, 'id' | 'from' | 'to' | 'res'>,
+): Promise<Series | undefined> {
+  const V = channelViews(family, 'api');
   const from = new Date(p.from);
   const to = new Date(p.to);
   const span = { id: p.id, from: iso(from), to: iso(to) };
   return snapshot(db, async (tx) => {
-    const known = await sql`SELECT 1 FROM ${sql.table(V.api.series)} WHERE id = ${p.id} AND active`.execute(tx);
+    const known = await sql`SELECT 1 FROM ${sql.table(V.series)} WHERE id = ${p.id} AND active`.execute(tx);
     if (known.rows.length === 0) return undefined;
     if (p.res === 'raw') {
       const { rows } = await sql<RawRow>`
-        SELECT ts, value, qc FROM ${sql.table(V.api.obs)}
+        SELECT ts, value, qc FROM ${sql.table(V.obs)}
         WHERE series_id = ${p.id} AND ts >= ${from}::timestamptz AND ts < ${to}::timestamptz
         ORDER BY ts LIMIT ${MAX_POINTS + 1}`.execute(tx);
       return {
@@ -248,7 +250,7 @@ export async function readSeries(db: Kysely<DB>, p: SeriesParams): Promise<Serie
       };
     }
     const { rows } = await sql<BucketRow>`
-      SELECT bucket, vmin, vmax, vavg, vlast, n, qc_or FROM ${sql.table(p.res === '1h' ? V.api.obs1h : V.api.obs1d)}
+      SELECT bucket, vmin, vmax, vavg, vlast, n, qc_or FROM ${sql.table(p.res === '1h' ? V.obs1h : V.obs1d)}
       WHERE series_id = ${p.id} AND bucket >= ${from}::timestamptz AND bucket < ${to}::timestamptz
       ORDER BY bucket LIMIT ${MAX_POINTS + 1}`.execute(tx);
     return {

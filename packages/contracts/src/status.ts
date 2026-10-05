@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { HealthSourceId } from './api.ts';
+import { AttributionEntry, HealthSourceId } from './api.ts';
 import { ForecastCoverage } from './forecast.ts';
 import { ClassCoverage, SourceStatus } from './health.ts';
-import { AttributionEntry, DAY_RE } from './static.ts';
+import { DAY_RE } from './static.ts';
 import { OwnerAttributionEntry, OwnerSourceId } from './static-owner.ts';
 
 // Server only (P9a): /data/v1/status.json (A§11.3), which absorbs /status/capture.json and /status/ops.json. Coarse:

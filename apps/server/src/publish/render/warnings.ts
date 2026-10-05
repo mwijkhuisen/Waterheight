@@ -1,9 +1,8 @@
 import { DAY_MS, dayStartMs, WarningsFile } from '@rws/contracts';
 import { sql } from 'kysely';
+import { attributionFor, sourceDates } from '../../attribution.ts';
 import { VIEWS } from '../../db/audience.ts';
 import type { RenderCtx } from '../cycle.ts';
-import { attributionFor } from './attribution.ts';
-import { sourceDates } from './dates.ts';
 
 // P9a (A§9.1): warnings/latest.geojson (the areas valid now) and warnings/YYYY-MM-DD.json (the areas valid at any
 // time of an ended UTC day, written once). One GeoJSON feature per area row; every text is the provider's and is

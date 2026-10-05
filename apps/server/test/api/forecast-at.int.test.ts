@@ -1,4 +1,12 @@
-import { CANARIES, CANARY_RENDERINGS, Meta, SeriesForecast, Snapshot } from '@rws/contracts';
+import {
+  CANARIES,
+  CANARY_RENDERINGS,
+  MetaAnswer,
+  SeriesForecast,
+  SeriesForecastAnswer,
+  Snapshot,
+  SnapshotAnswer,
+} from '@rws/contracts';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { forecastCoverage, visibleSources } from '../../src/api/forecast.ts';
@@ -1052,6 +1060,32 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
       json: () => JSON.parse(text) as unknown,
     };
   };
+  /** P9b: every answer's attribution names exactly the sources its body names (the series' sources, a run's, a basis'). */
+  const seriesSources = async (ids: number[]) =>
+    (await q<{ source_id: string }>(`SELECT DISTINCT source_id FROM series WHERE id = ANY($1::int[])`, [ids])).map(
+      (r) => r.source_id,
+    );
+  const sameSources = (attribution: { source: string }[], named: string[]) =>
+    expect(new Set(attribution.map((a) => a.source))).toEqual(new Set(named));
+  /** A snapshot answer without its attribution, which is checked here. */
+  const snapBody = async (res: Got) => {
+    const { attribution, ...body } = SnapshotAnswer.parse(res.json());
+    const forecasts = body.forecasts ?? [];
+    const series = [...body.values.map((v) => v.series), ...forecasts.map((f) => f.series)];
+    const bases = [...body.values.flatMap((v) => [v.basis, v.area?.basis]), ...forecasts.map((f) => f.basis)];
+    sameSources(attribution, [
+      ...(await seriesSources(series)),
+      ...forecasts.map((f) => f.source),
+      ...bases.flatMap((b) => (b ? [b.source] : [])),
+    ]);
+    return body;
+  };
+  /** A /series/{id}/forecast answer without its attribution. */
+  const forecastBody = async (res: Got) => {
+    const { attribution, ...body } = SeriesForecastAnswer.parse(res.json());
+    sameSources(attribution, [...(await seriesSources([body.series])), ...(body.run ? [body.run.source] : [])]);
+    return body;
+  };
   const snapshot = (when: string) => `/api/v1/snapshot?t=${when}`;
   const forecast = (series: number, query = '') => `/api/v1/series/${series}/forecast${query}`;
 
@@ -1064,7 +1098,11 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
       for (const a of [app(), noDb()])
         for (const when of beyond) {
           const res = await get(a, snapshot(when));
-          expect([res.status, res.text, res.cache], when).toEqual([400, '{"error":"out_of_range"}', 'no-store']);
+          expect([res.status, res.text, res.cache], when).toEqual([
+            400,
+            '{"error":"out_of_range","attribution":[]}',
+            'no-store',
+          ]);
         }
       expect(connect).not.toHaveBeenCalled();
       expect(query).not.toHaveBeenCalled();
@@ -1073,7 +1111,7 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     }
     // a valid future t with no database is not a refusal of the request: the service is unavailable
     const down = await get(noDb(), snapshot('2026-10-05T12:00:00Z'));
-    expect([down.status, down.text, down.cache]).toEqual([503, '{"error":"unavailable"}', 'no-store']);
+    expect([down.status, down.text, down.cache]).toEqual([503, '{"error":"unavailable","attribution":[]}', 'no-store']);
   });
 
   it('answers a future t with the forecasts, no observation and the short cache of the current bucket', async () => {
@@ -1082,7 +1120,7 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     expect(res.status).toBe(200);
     expect(res.cache).toBe('public, max-age=60, stale-while-revalidate=300');
     expect(res.headers.get('content-type')).toBe('application/json');
-    const body = Snapshot.parse(res.json());
+    const body = await snapBody(res);
     expect(body.t).toBe('2026-10-05T09:30:00.000Z');
     expect(body.values).toEqual([]);
     expect(body.forecasts?.length).toBeGreaterThan(0);
@@ -1090,13 +1128,13 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     // exactly now + 48 h is accepted, a CH-4 series is still forecast there
     const edge = await get(app(), snapshot('2026-10-07T09:00:00Z'));
     expect(edge.status).toBe(200);
-    expect(Snapshot.parse(edge.json()).forecasts?.some((f) => f.series === id.chq)).toBe(true);
+    expect((await snapBody(edge)).forecasts?.some((f) => f.series === id.chq)).toBe(true);
     // and a t in the current bucket is the present: the observation snapshot, with no `forecasts` key
     for (const when of ['2026-10-05T09:00:00Z', '2026-10-05T09:09:59Z']) {
       const present = await get(app(), snapshot(when));
       expect(present.status, when).toBe(200);
       expect('forecasts' in (present.json() as object), when).toBe(false);
-      expect(Snapshot.parse(present.json()).t).toBe('2026-10-05T09:00:00.000Z');
+      expect((await snapBody(present)).t).toBe('2026-10-05T09:00:00.000Z');
     }
   });
 
@@ -1105,7 +1143,8 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     for (const when of ['2026-10-05T08:00:00Z', '2026-10-04T09:00:00Z', '2026-10-01T00:00:00Z']) {
       const res = await get(app(), snapshot(when));
       expect(res.status, when).toBe(200);
-      expect(Object.keys(res.json() as object).sort(), when).toEqual(['t', 'values']);
+      expect(Object.keys(res.json() as object).sort(), when).toEqual(['attribution', 't', 'values']);
+      await snapBody(res);
     }
   });
 
@@ -1116,7 +1155,7 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     try {
       clock = T('2026-10-05T09:00:00Z');
       const first = await get(a, path);
-      expect(Snapshot.parse(first.json()).forecasts?.find((f) => f.series === id.lobithQ)?.value).toBe(1020);
+      expect((await snapBody(first)).forecasts?.find((f) => f.series === id.lobithQ)?.value).toBe(1020);
       const asked = connect.mock.calls.length;
       expect(asked).toBeGreaterThan(0);
       // the rest of its minute: the cached answer, no query
@@ -1126,7 +1165,7 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
       // 09:20: Lobith's run B is known, and the same URL answers from it
       clock = T('2026-10-05T09:20:00Z');
       const next = await get(a, path);
-      expect(Snapshot.parse(next.json()).forecasts?.find((f) => f.series === id.lobithQ)).toMatchObject({
+      expect((await snapBody(next)).forecasts?.find((f) => f.series === id.lobithQ)).toMatchObject({
         value: 2003,
         issuedAt: '2026-10-05T09:20:00.000Z',
       });
@@ -1143,17 +1182,14 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     expect(res.status).toBe(200);
     expect(res.cache).toBe('public, max-age=300');
     expect(res.headers.get('content-type')).toBe('application/json');
-    const body = SeriesForecast.parse(res.json());
+    const body = await forecastBody(res);
     expect(body).toMatchObject({ series: id.lobithQ, asof: iso(NOW) });
     expect(body.run).toMatchObject({ source: 'NL-1', fetchedAt: '2026-10-05T06:25:00.000Z' });
     expect(body.run?.points).toHaveLength(6 * 47);
     // a series with no run answers 200 with `run: null`, not a 404
     const none = await get(app(), forecast(id.noRun as number));
-    expect([none.status, none.text, none.cache]).toEqual([
-      200,
-      JSON.stringify({ series: id.noRun, asof: iso(NOW), run: null }),
-      'public, max-age=300',
-    ]);
+    expect([none.status, none.cache]).toEqual([200, 'public, max-age=300']);
+    expect(await forecastBody(none)).toEqual({ series: id.noRun, asof: iso(NOW), run: null });
     // HEAD answers like GET without a body
     const head = await get(app(), forecast(id.lobithQ as number), { method: 'HEAD' });
     expect([head.status, head.text, head.cache]).toEqual([200, '', 'public, max-age=300']);
@@ -1163,15 +1199,18 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     clock = T('2026-10-05T09:25:00Z');
     try {
       const a = app();
-      const run = async (query: string) =>
-        SeriesForecast.parse((await get(a, forecast(id.lobithQ as number, query))).json());
+      const run = async (query: string) => forecastBody(await get(a, forecast(id.lobithQ as number, query)));
       expect((await run('')).run?.fetchedAt).toBe('2026-10-05T09:20:00.000Z');
       expect((await run('')).asof).toBe('2026-10-05T09:20:00.000Z');
       expect((await run('?asof=2026-10-05T09:00:00Z')).run?.fetchedAt).toBe('2026-10-05T06:25:00.000Z');
       expect((await run('?asof=2026-10-05T09:19:59Z')).run?.fetchedAt).toBe('2026-10-05T06:25:00.000Z');
       expect(await run('?asof=2026-10-05T06:00:00Z')).toMatchObject({ asof: '2026-10-05T06:00:00.000Z', run: null });
       const before = await get(a, forecast(id.lobithQ as number, '?asof=2026-09-30T00:00:00Z'));
-      expect([before.status, before.text, before.cache]).toEqual([400, '{"error":"out_of_range"}', 'no-store']);
+      expect([before.status, before.text, before.cache]).toEqual([
+        400,
+        '{"error":"out_of_range","attribution":[]}',
+        'no-store',
+      ]);
     } finally {
       clock = NOW;
     }
@@ -1196,7 +1235,11 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
       ];
       for (const [label, path, code] of cases) {
         const res = await get(app(), path);
-        expect([res.status, res.text, res.cache], label).toEqual([400, JSON.stringify({ error: code }), 'no-store']);
+        expect([res.status, res.text, res.cache], label).toEqual([
+          400,
+          JSON.stringify({ error: code, attribution: [] }),
+          'no-store',
+        ]);
       }
       expect(connect).not.toHaveBeenCalled();
     } finally {
@@ -1208,7 +1251,7 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     clock = NOW;
     const zalt = id.zaltbommel as number;
     const notFound = (res: Got) =>
-      expect([res.status, res.text, res.cache]).toEqual([404, '{"error":"not_found"}', 'no-store']);
+      expect([res.status, res.text, res.cache]).toEqual([404, '{"error":"not_found","attribution":[]}', 'no-store']);
     notFound(await get(app(), forecast(2_147_483_647)));
     notFound(await get(app(), forecast(999_999)));
     // the owner canary's series and the withheld one are not in the public api channel
@@ -1242,10 +1285,8 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     clock = NOW;
     for (const key of ['emmerich', 'koeln', 'diekirch']) {
       const res = await get(app(), forecast(id[key] as number));
-      expect([res.status, res.text], key).toEqual([
-        200,
-        JSON.stringify({ series: id[key], asof: iso(NOW), run: null }),
-      ]);
+      expect(res.status, key).toBe(200);
+      expect(await forecastBody(res), key).toEqual({ series: id[key], asof: iso(NOW), run: null });
       expect(res.text).not.toContain('777777');
     }
   });
@@ -1254,16 +1295,19 @@ describe('the HTTP routes', { timeout: 120_000 }, () => {
     clock = NOW;
     const meta = await get(app(), '/api/v1/meta');
     expect(meta.status).toBe(200);
-    expect(Meta.parse(meta.json()).forecastHorizons).toEqual([
+    const { attribution, ...metaBody } = MetaAnswer.parse(meta.json());
+    expect(metaBody.forecastHorizons).toEqual([
       { source: 'CH-4', hours: 48 },
       { source: 'FR-4', hours: 48 },
       { source: 'NL-1', hours: 48 },
     ]);
-    expect(Meta.parse(meta.json()).forecastHorizons).toEqual(forecastHorizons('public'));
+    expect(metaBody.forecastHorizons).toEqual(forecastHorizons('public'));
+    // P9b: the meta attribution names exactly the listed sources and the forecast sources.
+    sameSources(attribution, [...metaBody.sources.map((s) => s.id), ...metaBody.forecastHorizons.map((f) => f.source)]);
     for (const word of OWNER_SOURCES) expect(meta.text, word).not.toContain(word);
     // The attribution duty of the public forecast sources whose runs sit on CH-1 and FR-1 series (P8b): listed beside
     // them with their rows; FR-4's text carries the update-date placeholder the page fills.
-    const sources = new Map(Meta.parse(meta.json()).sources.map((s) => [s.id, s.attribution]));
+    const sources = new Map(metaBody.sources.map((s) => [s.id, s.attribution]));
     expect(sources.get('CH-4')?.length).toBeGreaterThan(0);
     expect(
       sources

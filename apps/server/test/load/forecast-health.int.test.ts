@@ -1,4 +1,4 @@
-import { HealthSources } from '@rws/contracts';
+import { HealthSourcesAnswer } from '@rws/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.ts';
 import { computeHealth, forecastDetails, type HealthInputs } from '../../src/load/health.ts';
@@ -234,7 +234,11 @@ describe('the public health document', { timeout: 300_000 }, () => {
       const res = await app.request('/api/v1/health/sources');
       expect(res.status).toBe(200);
       const text = await res.text();
-      const doc = HealthSources.parse(JSON.parse(text));
+      const { attribution, ...doc } = HealthSourcesAnswer.parse(JSON.parse(text));
+      // P9b: the attribution names exactly the sources the document names.
+      expect(new Set(attribution.map((a) => a.source))).toEqual(
+        new Set([...doc.sources.map((s) => s.id), ...doc.quarantined_batches.map((q) => q.source)]),
+      );
       expect(doc.sources.find((s) => s.id === 'NL-1')?.forecast).toMatchObject({ series: 3, late: null });
       expect(doc.sources.map((s) => s.id)).not.toContain('DE-2');
       expect(doc.sources.map((s) => s.id)).not.toContain('LU-3');

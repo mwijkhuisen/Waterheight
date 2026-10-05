@@ -11,6 +11,7 @@ import { type CurrentRun, de2Superseded, FORECAST_FLAGS, FORECAST_SOURCES, isCur
 import { type Kysely, sql } from 'kysely';
 import { type ChannelAudience, FORECAST_AT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
+import { channelViews } from './channels.ts';
 import { assertVisible, ruhrortCm, visibleSources } from './forecast.ts';
 import { AGENCY, BAND_COLUMNS, type BandColumn, lu3Limits } from './forecast-latest.ts';
 import { readStates, type StaticCache } from './states.ts';
@@ -284,7 +285,7 @@ export async function readSeriesForecast(
   asof: number,
   opts: { visible?: ReadonlySet<string>; limitsH?: ReadonlyMap<string, number> } = {},
 ): Promise<SeriesForecast | undefined> {
-  const V = VIEWS[family].api;
+  const V = channelViews(family, 'api');
   const at = new Date(asof);
   return snapshot(db, async (tx) => {
     const known = (

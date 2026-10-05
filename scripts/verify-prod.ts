@@ -48,6 +48,7 @@ import { join } from 'node:path';
 import { connect as tlsConnect } from 'node:tls';
 import { gunzipSync, constants as zlibConstants, zstdDecompressSync } from 'node:zlib';
 import { parse as parseYaml } from 'yaml';
+import { ROUTES } from '../apps/server/src/api/channels.ts';
 import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
@@ -64,24 +65,30 @@ import {
   FramesFile,
   floorBucket,
   framesPath,
-  Health,
-  HealthSources,
+  type Health,
+  HealthAnswer,
+  type HealthSources,
+  HealthSourcesAnswer,
+  isSettled,
   LAG_DEGRADED_S,
   LatestFile,
-  Meta,
+  type Meta,
+  MetaAnswer,
   ODBL_LICENCE,
   OSM_ATTRIBUTION,
   ReachesFile,
   RiversManifest,
   recentPath,
   SETTLE_MS,
-  Snapshot,
+  type Snapshot,
+  SnapshotAnswer,
   SnapshotFile,
   StaticForecastLatest,
   StaticMeta,
   StaticStations,
   StationRecent,
-  Stations,
+  type Stations,
+  StationsAnswer,
   settledPath,
   WarningsFile,
 } from '../packages/contracts/src/index.ts';
@@ -149,6 +156,7 @@ export const HEADER_NAMES = [
   'Permissions-Policy',
   'Cross-Origin-Opener-Policy',
   'Cross-Origin-Resource-Policy',
+  'Reporting-Endpoints',
 ] as const;
 /** Seed coverage of the soak criterion (issue #16): days covered, or files for LU-5. */
 export const SEED_MIN: Record<string, { days?: number; files?: number }> = {
@@ -437,8 +445,8 @@ export const PARAM_CASES: readonly (readonly [string, number])[] = [
 ];
 /** The fixed body of each refusal (`{"error": <code>}`, nothing of the request echoed). */
 const REFUSAL_BODY: Readonly<Record<number, string>> = {
-  400: '{"error":"unknown_parameter"}',
-  404: '{"error":"not_found"}',
+  400: '{"error":"unknown_parameter","attribution":[]}',
+  404: '{"error":"not_found","attribution":[]}',
 };
 
 export function checkHealthParams(got: Readonly<Record<string, Page | string>>): Result {
@@ -1223,7 +1231,7 @@ export function readSnapshot(ask: SnapshotAsk, ms: number, page: Page | string):
   // bucket since /meta was answered (the Date header shows it), "now" is already a past instant.
   const served = typeof page === 'string' ? Number.NaN : Date.parse(page.headers.date ?? '');
   const cache = ask.name === 'now' && floorBucket(served) > ms ? SNAPSHOT_ASKS[1].cache : ask.cache;
-  const r = readApi(page, Snapshot, cache);
+  const r = readApi(page, SnapshotAnswer, cache);
   return r.data !== undefined && Date.parse(r.data.t) !== ms
     ? { ...r, problems: [...r.problems, 't is not the instant asked for'] }
     : r;
@@ -1858,6 +1866,272 @@ export function checkRuntimeConfig(page: Page | string): Result {
     : miss(check, problems.join('; '));
 }
 
+// ---------------------------------------------------------------- sweeps (P9b)
+
+/**
+ * The owner-canary sweeps (issue #24, P9b [agent-prod]): every public API route and a sample of the settled files,
+ * each fetched as identity, gzip and zstd and read as the client reads it, grepped for what must never appear in a
+ * public body: the owner and withheld canary in every rendering, the owner canary's station id and source id, every
+ * owner source id, spec id and owner-only host (the hosts a public source shares are no term: staticLeakTerms).
+ * `sources.json` and `status.json` listing no owner source is `static sources` and `static status` (the contract
+ * refuses an owner id and readStatic greps the body), so no sweep repeats it.
+ */
+export const SWEEP_ENCODINGS = ['identity', 'gzip', 'zstd'] as const;
+export type SweepEncoding = (typeof SWEEP_ENCODINGS)[number];
+/** The owner canary's station and source ids (apps/server `syncOwnerCanary`; the value renderings are CANARY_RENDERINGS). */
+export const SWEEP_EXTRA_TERMS = ['nl.canary.owner', 'CANARY-OWNER'] as const;
+/** C16: all of a run's requests come from one IP, so two heavy requests (the 5/s bucket) start at least this far apart. */
+export const SWEEP_PACE_MS = 250;
+/** One Retry-After is waited out per request, at most this long, and at most this many times in one sweep (C16). */
+export const SWEEP_RETRY_MAX_S = 30;
+export const SWEEP_MAX_RETRIES = 5;
+/** The series ids the API routes are asked for (the first series of each source, in source order) and the settled samples. */
+export const SWEEP_MAX_SERIES = 20;
+export const SWEEP_SETTLED_SNAPSHOTS = 20;
+export const SWEEP_SETTLED_FRAMES = 10;
+const SWEEP_HOUR_MS = 3_600_000;
+
+export const sweepTerms = (registry: Registry): string[] =>
+  [...new Set([...staticLeakTerms(registry), ...SWEEP_EXTRA_TERMS])].sort();
+
+/** A page as a client reads it: a gzip or zstd body inflated; undefined when it does not decompress. */
+export function decodedBody(page: Page): string | undefined {
+  const enc = (page.headers['content-encoding'] ?? 'identity').trim().toLowerCase();
+  if (enc === 'identity') return page.body;
+  const decode = enc === 'gzip' || enc === 'zstd' ? encodings[enc] : undefined;
+  if (decode === undefined) return undefined;
+  try {
+    return decode(page.bytes ?? Buffer.from(page.body)).toString('utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+/** The terms found in a page's decoded body; problems when it cannot be decoded or was not the encoding asked for. */
+export function grepPage(label: string, page: Page, enc: SweepEncoding, terms: readonly string[]): string[] {
+  const body = decodedBody(page);
+  if (body === undefined) return [`${label} (${enc}): the body does not decompress`];
+  const sent = (page.headers['content-encoding'] ?? 'identity').trim().toLowerCase();
+  const out: string[] = [];
+  if (enc === 'identity' && sent !== 'identity') out.push(`${label} (identity): content-encoding ${sent}`);
+  for (const t of leaks(body, terms)) out.push(`${label} (${enc}): found ${t}`);
+  return out;
+}
+
+export type SweepAsk = { label: string; path: string; heavy: boolean };
+export type SweepIo = {
+  get: (path: string, headers: Readonly<Record<string, string>>) => Promise<Page | string>;
+  sleep: (ms: number) => Promise<void>;
+  /** A monotonic clock in ms. */
+  now: () => number;
+};
+
+/**
+ * One GET per call with `Accept-Encoding: enc`. A heavy request starts at least `paceMs` after the previous heavy one;
+ * a 429 waits out its Retry-After (an integer of seconds, else 2; at most SWEEP_RETRY_MAX_S) and asks once more, as long
+ * as the sweep has retries left.
+ */
+export function pacedGet(io: SweepIo, paceMs = SWEEP_PACE_MS) {
+  let lastHeavy = Number.NEGATIVE_INFINITY;
+  let retries = 0;
+  const once = async (ask: SweepAsk, enc: SweepEncoding) => {
+    if (ask.heavy) {
+      const wait = lastHeavy + paceMs - io.now();
+      if (wait > 0) await io.sleep(wait);
+      lastHeavy = io.now();
+    }
+    return io.get(ask.path, { 'accept-encoding': enc });
+  };
+  return async (ask: SweepAsk, enc: SweepEncoding): Promise<Page | string> => {
+    const page = await once(ask, enc);
+    if (typeof page === 'string' || page.status !== 429 || retries >= SWEEP_MAX_RETRIES) return page;
+    retries += 1;
+    const header = Number(page.headers['retry-after']);
+    const seconds = Number.isInteger(header) && header >= 1 ? Math.min(header, SWEEP_RETRY_MAX_S) : 2;
+    await io.sleep(seconds * 1000);
+    return once(ask, enc);
+  };
+}
+
+const instantParam = (ms: number) => `${new Date(ms).toISOString().slice(0, 16)}Z`;
+
+/**
+ * The requests of the api sweep, from the route table: every non-planned GET route of `ROUTES`, with the series ids
+ * of `/api/v1/stations` (the first series of each source, at most SWEEP_MAX_SERIES) and the instants of the server's
+ * own clock (`meta.now`): now, 6 hours and 3 days back, 6 hours ahead (a forecast-only snapshot), and a short raw span
+ * of each series. A route this function does not know is `undefined` in its place, so a new route fails the check
+ * until the sweep asks for it.
+ */
+export function sweepAsks(stations: Stations, serverNow: string): { asks: SweepAsk[]; unknown: string[] } | undefined {
+  const now = Date.parse(serverNow);
+  if (Number.isNaN(now)) return undefined;
+  const firstOf = new Map<string, number>();
+  for (const st of stations.stations)
+    for (const s of st.series) if (!firstOf.has(s.source)) firstOf.set(s.source, s.id);
+  const ids = [...firstOf.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, id]) => id)
+    .slice(0, SWEEP_MAX_SERIES);
+  const t = floorBucket(now);
+  const asks: SweepAsk[] = [];
+  const unknown: string[] = [];
+  const add = (path: string, heavy: boolean) => asks.push({ label: path, path, heavy });
+  for (const route of ROUTES) {
+    if (route.planned || route.method !== 'GET') continue;
+    switch (route.path) {
+      case '/api/v1/meta':
+      case '/api/v1/stations':
+      case '/api/v1/health':
+      case '/api/v1/health/sources':
+      case '/api/v1/openapi.json':
+        add(route.path, route.rate === 'heavy');
+        break;
+      case '/api/v1/snapshot':
+        for (const at of [t, t - 6 * SWEEP_HOUR_MS, t - 72 * SWEEP_HOUR_MS, t + 6 * SWEEP_HOUR_MS])
+          add(`${route.path}?t=${instantParam(at)}`, route.rate === 'heavy');
+        break;
+      case '/api/v1/series/:id':
+        for (const id of ids)
+          add(
+            `/api/v1/series/${id}?from=${instantParam(t - 3 * SWEEP_HOUR_MS)}&to=${instantParam(t)}&res=raw`,
+            route.rate === 'heavy',
+          );
+        break;
+      case '/api/v1/series/:id/forecast':
+        for (const id of ids) add(`/api/v1/series/${id}/forecast`, route.rate === 'heavy');
+        break;
+      default:
+        unknown.push(route.path);
+    }
+  }
+  return { asks, unknown };
+}
+
+/** The statuses a sweep tolerates: 200, and the 404 an api-off series answers on the series routes. */
+const sweepStatusOk = (path: string, status: number) =>
+  status === 200 || (status === 404 && path.startsWith('/api/v1/series/'));
+
+export type SweepOutcome = { requests: number; problems: string[] };
+
+/** Every ask in every encoding, read and grepped; a network error, a 5xx, a 429 that stayed, or a term is a problem. */
+export async function runApiSweep(
+  asks: readonly SweepAsk[],
+  fetchOne: (ask: SweepAsk, enc: SweepEncoding) => Promise<Page | string>,
+  terms: readonly string[],
+): Promise<SweepOutcome> {
+  const out: SweepOutcome = { requests: 0, problems: [] };
+  for (const ask of asks)
+    for (const enc of SWEEP_ENCODINGS) {
+      const page = await fetchOne(ask, enc);
+      out.requests += 1;
+      if (typeof page === 'string') out.problems.push(`${ask.label} (${enc}): ${page}`);
+      else {
+        if (!sweepStatusOk(ask.path, page.status)) out.problems.push(`${ask.label} (${enc}): status ${page.status}`);
+        out.problems.push(...grepPage(ask.label, page, enc, terms));
+      }
+    }
+  return out;
+}
+
+export function checkApiSweep(
+  asked: ReturnType<typeof sweepAsks> | undefined,
+  outcome: SweepOutcome | undefined,
+  nTerms: number,
+): Result {
+  const check = 'api sweep';
+  if (asked === undefined || outcome === undefined)
+    return miss(check, 'no valid /api/v1/meta and /api/v1/stations to take the instants and series ids from');
+  const problems = [
+    ...asked.unknown.map((p) => `no sweep for the route ${p}`),
+    ...(asked.asks.length === 0 ? ['no request to make'] : []),
+    ...outcome.problems,
+  ];
+  return problems.length === 0
+    ? pass(
+        check,
+        `${asked.asks.length} paths in ${SWEEP_ENCODINGS.join(', ')} (${outcome.requests} requests), none of ${nTerms} owner and canary terms in any decoded body`,
+      )
+    : miss(check, problems.slice(0, 12).join('; ') + (problems.length > 12 ? `; ${problems.length - 12} more` : ''));
+}
+
+/**
+ * The settled files to sample, deterministic in `meta`: the days from the display window to the newest settled day whose
+ * version is not 0 (an absent day is version 1), SWEEP_SETTLED_SNAPSHOTS snapshots spread over them and frames files of
+ * up to SWEEP_SETTLED_FRAMES of the days. Paths are relative to /data/v1/.
+ */
+export function settledSample(meta: StaticMeta): { snapshots: string[]; frames: string[] } {
+  const now = Date.parse(meta.now);
+  const last = dayStartMs(dayOf(now - SETTLE_MS - DAY_MS));
+  const days: { day: string; version: number }[] = [];
+  for (let d = dayStartMs(dayOf(Date.parse(meta.displayStart))); d <= last && days.length < 5000; d += DAY_MS) {
+    const day = dayOf(d);
+    const version = meta.dayVersions[day] ?? 1;
+    if (version > 0 && isSettled(day, now)) days.push({ day, version });
+  }
+  if (days.length === 0) return { snapshots: [], frames: [] };
+  const start = Date.parse(meta.displayStart);
+  const snapshots = new Set<string>();
+  for (let i = 0; i < SWEEP_SETTLED_SNAPSHOTS * 3 && snapshots.size < SWEEP_SETTLED_SNAPSHOTS; i += 1) {
+    const d = days[Math.floor((i * days.length) / SWEEP_SETTLED_SNAPSHOTS) % days.length];
+    if (d === undefined) continue;
+    // A bucket of the day (a step of 41 buckets visits all 144 of them), never before the display window.
+    const t = dayStartMs(d.day) + ((i * 41) % 144) * 600_000;
+    if (t >= start) snapshots.add(settledPath(t, d.version));
+  }
+  const frames = days
+    .filter((_, i) => i % Math.max(1, Math.ceil(days.length / SWEEP_SETTLED_FRAMES)) === 0)
+    .slice(0, SWEEP_SETTLED_FRAMES)
+    .map((d) => framesPath(d.day, d.version));
+  return { snapshots: [...snapshots], frames };
+}
+
+/** The settled sweep: `n/a` while no settled day is complete or none of the files is served (C16). */
+export function checkSettledSweep(
+  sample: { snapshots: string[]; frames: string[] } | undefined,
+  outcome: (SweepOutcome & { found: number }) | undefined,
+  nTerms: number,
+): Result {
+  const check = 'settled sweep';
+  if (sample === undefined) return miss(check, 'no valid meta.json to take the settled days from');
+  if (sample.snapshots.length + sample.frames.length === 0)
+    return { check, ok: 'n/a', detail: 'no complete settled day in meta.dayVersions (none, or all version 0)' };
+  if (outcome === undefined) return miss(check, 'not run');
+  if (outcome.problems.length > 0)
+    return miss(check, outcome.problems.slice(0, 12).join('; ') + (outcome.problems.length > 12 ? '; more' : ''));
+  if (outcome.found === 0)
+    return {
+      check,
+      ok: 'n/a',
+      detail: `none of ${sample.snapshots.length + sample.frames.length} sampled files is served yet`,
+    };
+  return pass(
+    check,
+    `${outcome.found} of ${sample.snapshots.length} settled snapshots and ${sample.frames.length} frames files served, in ${SWEEP_ENCODINGS.join(', ')}, none of ${nTerms} owner and canary terms in any decoded body`,
+  );
+}
+
+/** Fetches the sampled files in every encoding: a 404 is a file not rendered (static settled judges that), the rest is read. */
+export async function runSettledSweep(
+  sample: { snapshots: string[]; frames: string[] },
+  fetchOne: (path: string, enc: SweepEncoding) => Promise<Page | string>,
+  terms: readonly string[],
+): Promise<SweepOutcome & { found: number }> {
+  const out = { requests: 0, problems: [] as string[], found: 0 };
+  for (const path of [...sample.snapshots, ...sample.frames])
+    for (const enc of SWEEP_ENCODINGS) {
+      const page = await fetchOne(path, enc);
+      out.requests += 1;
+      if (typeof page === 'string') out.problems.push(`${path} (${enc}): ${page}`);
+      else if (page.status === 404) continue;
+      else if (page.status !== 200) out.problems.push(`${path} (${enc}): status ${page.status}`);
+      else {
+        if (enc === 'identity') out.found += 1;
+        out.problems.push(...grepPage(path, page, enc, terms));
+      }
+    }
+  return out;
+}
+
 // ---------------------------------------------------------------- network
 
 type Net = { resolve?: string; ca?: Buffer };
@@ -2001,7 +2275,7 @@ export const CHECKS = [
   'freshness: every public spec succeeded within 3 × cadence_s',
   'owner_specs: fresh = total',
   'health: GET /api/v1/health is 200 JSON with Cache-Control max-age=30, the Health contract document, status not down',
-  'health params: ?x=1 on /api/v1/health and /api/v1/health/sources is 400 {"error":"unknown_parameter"}; /api/v1/ and /api/v1/x are the api\'s 404 {"error":"not_found"}',
+  'health params: ?x=1 on /api/v1/health and /api/v1/health/sources is 400 {"error":"unknown_parameter","attribution":[]}; /api/v1/ and /api/v1/x are the api\'s 404 {"error":"not_found","attribution":[]}',
   'health DE-1: /api/v1/health/sources is the contract document and lists DE-1 with status ok',
   'tier-1 DE-1: >= 95% of the tier-1 series are fresh (provider-stale ones are named and never make it a PASS)',
   `loader lag: loader.lag_p95_s is not null and < ${LAG_DEGRADED_S} s, and loader.backlog_age_s < ${BACKLOG_MAX_AGE_S} s (a stall fails it)`,
@@ -2033,7 +2307,7 @@ export const CHECKS = [
   `forecast CH-4: /api/v1/health/sources lists CH-4 with a forecast whose newest run was issued at most ${FORECAST_CH4_MAX_AGE_S / 3600} h ago (BAFU starts a run every 2 to 6 hours, the capture is hourly) and that has a run on at least as many series as the registry expects (the seeded stations with a primary, non-off CH-1 series, less the ${CH4_NO_FORECAST.length} whose q_forecast answers 404); needs live capture (numbers only)`,
   'forecast coverage: /api/v1/health/sources has a non-null forecast_coverage with one entry per reach row of registry/forecast-reaches.yaml in order, each reach without a visible source states after_permission or none_publishes, and no owner-audience source ID or BfG appears in it (needs no fresh data; counts only)',
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
-  'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter"} with Cache-Control: no-store',
+  'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter","attribution":[]} with Cache-Control: no-store',
   `noindex: ${NOINDEX_PATHS.join(', ')} each answer (the 404s of /api and /tiles too) with X-Robots-Tag: noindex`,
   ...['DE-1', 'NL-1', 'FR-1', 'CH-1', 'DE-7', 'LU-1'].map(
     (id) =>
@@ -2069,6 +2343,8 @@ export const CHECKS = [
   `runtime config: GET /runtime-config.json is 200 application/json, Cache-Control no-cache, exactly ${RUNTIME_CONFIG_BODY}`,
   `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file, and (P9a) every public /data/v1 file fetched by the static checks`,
   'owner ids: no owner-audience source ID of registry/sources.yaml as a whole word in a string value or object key of /api/v1/health or health/sources',
+  `api sweep: every non-planned GET route of the route table (meta, stations, snapshot at now, -6 h, -3 d and +6 h of /meta's now, series over a raw 3 h span and series forecast for the first series of each source, at most ${SWEEP_MAX_SERIES}, health, health/sources, openapi) fetched with Accept-Encoding ${SWEEP_ENCODINGS.join(', ')} (compressed bodies inflated): no owner or withheld canary rendering, nl.canary.owner, CANARY-OWNER, owner source ID, spec ID or owner-only host in any body, no 5xx; heavy routes at least ${SWEEP_PACE_MS} ms apart and one Retry-After honoured per 429 (all of a CI run's requests share one IP)`,
+  `settled sweep: ${SWEEP_SETTLED_SNAPSHOTS} settled snapshots and frames files of up to ${SWEEP_SETTLED_FRAMES} days sampled deterministically from meta.dayVersions (absent day = version 1, 0 = skipped), each in ${SWEEP_ENCODINGS.join(', ')} and grepped as the api sweep (a 404 is a file not rendered yet: static settled judges that); N/A while no settled day is complete or none of the files is served`,
   `interval DE-6: (--interval, slow: ${DE6_SAMPLES} samples of /status/capture.json ${DE6_GAP_MS / 60_000} min apart, about 30 min) ${DE6_SPECS.join(' and ')} have a last_success at most ${DE6_MAX_AGE_S} s before that sample's generated_at in every sample (a missing spec or null last_success is a FAIL) and it advanced; without the flag the check is N/A (skipped)`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
   ...TWIN_IDS.map(
@@ -2161,8 +2437,8 @@ async function main(argv: string[]): Promise<number> {
     // The P2a health API (A§9.2). Every request has a fixed path; a network error is a FAIL, never a crash.
     const api = (path: string) => tryGet(`https://${domain}${path}`, net);
     const [healthPage, sourcesPage] = [await api(HEALTH_PATHS[0]), await api(HEALTH_PATHS[1])];
-    const health = readApi(healthPage, Health);
-    const sources = readApi(sourcesPage, HealthSources);
+    const health = readApi(healthPage, HealthAnswer);
+    const sources = readApi(sourcesPage, HealthSourcesAnswer);
     const probes: Record<string, Page | string> = {};
     for (const [path] of PARAM_CASES) probes[path] = await api(path);
     results.push(
@@ -2192,9 +2468,9 @@ async function main(argv: string[]): Promise<number> {
 
     // The P4b data API through Caddy (A§9.2). The snapshots ask for the server's own "now" from /meta, never this clock.
     const metaPage = await api('/api/v1/meta');
-    const metaRead = readApi(metaPage, Meta, META_CACHE);
+    const metaRead = readApi(metaPage, MetaAnswer, META_CACHE);
     const stationsPage = await api('/api/v1/stations');
-    const stationsRead = readApi(stationsPage, Stations, STATIONS_CACHE);
+    const stationsRead = readApi(stationsPage, StationsAnswer, STATIONS_CACHE);
     const snapPages: Record<string, Page | string> = {};
     const snapReads = new Map<string, ApiRead<Snapshot>>();
     for (const ask of SNAPSHOT_ASKS) {
@@ -2358,6 +2634,27 @@ async function main(argv: string[]): Promise<number> {
       checkRuntimeConfig(await st('/runtime-config.json')),
     );
 
+    // P9b: the owner-canary sweeps. Both read as the client reads: identity, gzip and zstd, compressed bodies inflated.
+    const sweep = sweepTerms(registry);
+    const apiNow = metaRead.data?.now;
+    const asked =
+      apiNow === undefined || stationsRead.data === undefined ? undefined : sweepAsks(stationsRead.data, apiNow);
+    const sweepIo: SweepIo = {
+      get: (path, headers) => tryGet(`https://${domain}${path}`, net, headers),
+      sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+      now: () => performance.now(),
+    };
+    const apiOutcome = asked === undefined ? undefined : await runApiSweep(asked.asks, pacedGet(sweepIo), sweep);
+    const sample = smeta.data === undefined ? undefined : settledSample(smeta.data);
+    const settledOutcome =
+      sample === undefined || sample.snapshots.length + sample.frames.length === 0
+        ? undefined
+        : await runSettledSweep(sample, (path, enc) => st(`${D}${path}`, { 'accept-encoding': enc }), sweep);
+    results.push(
+      checkApiSweep(asked, apiOutcome, sweep.length),
+      checkSettledSweep(sample, settledOutcome, sweep.length),
+    );
+
     const body = pageBody;
     results.push(
       checkOwnerLeak(
@@ -2400,7 +2697,7 @@ async function main(argv: string[]): Promise<number> {
       results.push(...s.results);
       console.log(s.report.join('\n'));
     }
-    const twinSources = readApi(await tryGet(`https://${domain}${HEALTH_PATHS[1]}`, net), HealthSources);
+    const twinSources = readApi(await tryGet(`https://${domain}${HEALTH_PATHS[1]}`, net), HealthSourcesAnswer);
     for (const id of TWIN_IDS) results.push(checkTwin(twinSources, now, id));
   } else if (cap?.success) {
     const c = capacity(cap.data, registry, now.toISOString().slice(0, 10), ownerBytes);

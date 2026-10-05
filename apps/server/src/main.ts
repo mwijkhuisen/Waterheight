@@ -1,5 +1,8 @@
 import { serve } from '@hono/node-server';
 import { type Logger, pino } from 'pino';
+import { Limiter } from './api/limiter.ts';
+import { DEFAULT_PERMITS, permitsFrom, Semaphore } from './api/semaphore.ts';
+import { DayVersions } from './api/versions.ts';
 import { DisplayWindow } from './api/window.ts';
 import { createApp } from './app.ts';
 import { Archive } from './archive/writer.ts';
@@ -12,6 +15,7 @@ import { startRecorder } from './capture/scheduler.ts';
 import { seedRecords, startSeeds } from './capture/seeds.ts';
 import { loadRegistry } from './capture/specs.ts';
 import { removeStaleTmp, StateStore } from './capture/state.ts';
+import { type ChannelAudience, DB_ROLE } from './db/audience.ts';
 import { type Db, dbConfig, openDb } from './db/pool.ts';
 import { healthy, startHeartbeat } from './heartbeat.ts';
 import { Client } from './http/client.ts';
@@ -38,7 +42,7 @@ export const EXIT_USAGE = 64;
 export { EXIT_CONFIG };
 
 const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; watchdog takes --once or --dry-run;
-  publish takes [--audience public|owner] [--once];
+  api takes [--audience public|owner]; publish takes [--audience public|owner] [--once];
   replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD[THH:MM:SSZ]> --to <YYYY-MM-DD> [--dry-run];
   basemap takes <fetch|promote|rollback> [--build <YYYYMMDD>] [--dry-run])`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
@@ -170,16 +174,21 @@ async function capture(
   });
 }
 
-/** The api role's pool (A§9.2): the role's CONNECTION LIMIT of 12 leaves room for a deploy's overlap. */
-export const API_POOL_MAX = 10;
+/**
+ * The api roles' pools (A§9.2, A§9.3): `rws_api`'s CONNECTION LIMIT of 12 leaves room for a deploy's overlap;
+ * `rws_owner_api` has 4, of which the owner publisher takes 2 (P9a), so the owner api takes the other 2.
+ */
+export const API_POOL = { public: 10, owner: 2 } as const satisfies Record<ChannelAudience, number>;
+export const API_POOL_MAX = API_POOL.public;
 
-/** The api role's database: `rws_api` with a pool of API_POOL_MAX, or an error text. */
+/** An api role's database: its family's role (`rws_api`, `rws_owner_api`) with its pool, or an error text. */
 export function openApiDb(
   env: Readonly<Record<string, string | undefined>>,
   onError?: (code: string) => void,
+  family: ChannelAudience = 'public',
 ): Db | string {
-  const cfg = dbConfig(env, 'rws_api');
-  return typeof cfg === 'string' ? cfg : openDb(cfg, { max: API_POOL_MAX, ...(onError ? { onError } : {}) });
+  const cfg = dbConfig(env, DB_ROLE[family].api);
+  return typeof cfg === 'string' ? cfg : openDb(cfg, { max: API_POOL[family], ...(onError ? { onError } : {}) });
 }
 
 /** The build id the image carries (`RWS_BUILD`, its git commit); anything else is `dev`. */
@@ -188,37 +197,73 @@ export function buildId(env: Readonly<Record<string, string | undefined>>): stri
   return /^[0-9a-f]{40}$/.test(build) ? build : 'dev';
 }
 
+/** `api [--audience public|owner]`, at most once; anything else is a usage error. */
+export function apiArgs(rest: readonly string[]): { family: ChannelAudience } | undefined {
+  if (rest.length === 0) return { family: 'public' };
+  if (rest.length === 2 && rest[0] === '--audience' && (rest[1] === 'public' || rest[1] === 'owner'))
+    return { family: rest[1] };
+  return undefined;
+}
+
 /**
- * The api role: `/healthz`, the public data routes and the two health routes.
- * It logs in as `rws_api` with a pool of 10 and loads the display window before
- * it listens; without database settings it still starts (`/healthz` must
- * answer, and the other routes answer 503).
+ * The api roles: `/healthz`, the data routes, the beacon and the two health routes of one family (P9b: `api` the
+ * public one as `rws_api` with a pool of 10, `api --audience owner` the owner's as `rws_owner_api` with a pool of 2).
+ * It loads the display window and the day versions before it listens; without database settings it still starts
+ * (`/healthz` must answer, and the other routes answer 503). The per-client limiter is always on here.
  */
-async function api(env: Readonly<Record<string, string | undefined>>, listen: Listen, log: (line: string) => void) {
-  const logger = pino({ base: { role: 'api' } });
-  const db = openApiDb(env, (code) => logger.error({ code }, 'pool error'));
+async function api(
+  env: Readonly<Record<string, string | undefined>>,
+  listen: Listen,
+  log: (line: string) => void,
+  family: ChannelAudience,
+) {
+  const permits = permitsFrom(env.RWS_API_DB_CONCURRENCY, DEFAULT_PERMITS[family]);
+  if (permits === undefined) {
+    log('RWS_API_DB_CONCURRENCY must be a whole number from 1 to 64');
+    return EXIT_USAGE;
+  }
+  const logger = pino({ base: { role: family === 'owner' ? 'api-owner' : 'api' } });
+  const db = openApiDb(env, (code) => logger.error({ code }, 'pool error'), family);
   if (typeof db === 'string') log(`api: no database (${db}): the data and health routes answer 503`);
   const pool = typeof db === 'string' ? undefined : db;
   const stopHeartbeat = startHeartbeat();
   // Loaded before the server listens, so validating a request never asks the database.
-  const window = pool === undefined ? undefined : new DisplayWindow(pool.db, logger);
-  if (window !== undefined) {
+  const window = pool === undefined ? undefined : new DisplayWindow(pool.db, logger, family);
+  const versions = pool === undefined ? undefined : new DayVersions(pool.db, family, logger);
+  if (window !== undefined && versions !== undefined) {
     await window.refresh();
     window.start();
+    await versions.refresh();
+    versions.start();
   }
+  // Fixed codes only: the limiter never logs an address (a collapsed peer is a deployment fault, C7).
+  // The owner API's peer is always the owner's WireGuard address (a private one): its key is `unknown-gw` by design, so
+  // only the public API reports one (review SEC-4).
+  const limiter = new Limiter(
+    family === 'public' ? { onGateway: () => logger.error({ code: 'limiter_gateway_key' }, 'limiter') } : {},
+  );
   return new Promise<number>((resolve) => {
     const app = createApp({
+      family,
       log: logger,
+      beaconLog: logger,
       build: buildId(env),
-      ...(pool === undefined || window === undefined ? {} : { db: pool.db, window }),
+      semaphore: new Semaphore({ permits }),
+      limiter,
+      ...(pool === undefined || window === undefined || versions === undefined
+        ? {}
+        : { db: pool.db, window, versions }),
     });
-    const server = serve({ fetch: app.fetch, ...listen }, (info) => {
+    // Behind Caddy's own read timeouts (10 s), a request that still trickles is cut here too (review SEC-2).
+    const serverOptions = { requestTimeout: 30_000, headersTimeout: 10_000 };
+    const server = serve({ fetch: app.fetch, ...listen, serverOptions }, (info) => {
       log(`api listening on ${info.address}:${info.port}`);
     });
     const stop = () =>
       server.close(() => {
         stopHeartbeat();
         window?.stop();
+        versions?.stop();
         const done = () => resolve(0);
         if (pool === undefined) done();
         else void pool.close().then(done, done);
@@ -257,7 +302,9 @@ export function run(
   const dry = (role === 'capture' || role === 'watchdog') && flag === '--dry-run';
   const once = role === 'watchdog' && flag === '--once';
   const publish = role === 'publish' ? publishArgs(rest) : undefined;
-  const takesArgs = dry || once || publish !== undefined || role === 'replay' || role === 'basemap';
+  const apiFamily = role === 'api' ? apiArgs(rest) : undefined;
+  const takesArgs =
+    dry || once || publish !== undefined || apiFamily !== undefined || role === 'replay' || role === 'basemap';
   if (role === undefined || (rest.length > 0 && !takesArgs) || !(ROLES as readonly string[]).includes(role)) {
     log(USAGE);
     return Promise.resolve(EXIT_USAGE);
@@ -285,7 +332,7 @@ export function run(
     log(listen);
     return Promise.resolve(EXIT_USAGE);
   }
-  return api(env, listen, log);
+  return api(env, listen, log, apiFamily?.family ?? 'public');
 }
 
 if (import.meta.main) {

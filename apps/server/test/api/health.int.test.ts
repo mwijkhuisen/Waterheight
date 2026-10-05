@@ -1,4 +1,11 @@
-import { CANARIES, CANARY_RENDERINGS, Health, HealthSources } from '@rws/contracts';
+import {
+  CANARIES,
+  CANARY_RENDERINGS,
+  type Health,
+  HealthAnswer,
+  type HealthSources,
+  HealthSourcesAnswer,
+} from '@rws/contracts';
 import { Kysely, PostgresDialect } from 'kysely';
 import { pino } from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -61,6 +68,20 @@ function appAt(at = 60_000) {
   return { app, clock, seen, logged };
 }
 const json = async (res: Response) => JSON.parse(await res.text()) as unknown;
+/** P9b: the wire documents. /health carries `attribution: []` (the schema pins it empty); /health/sources names exactly
+ *  the sources the document names, each with its attribution rows. The data is returned without `attribution`. */
+const healthDoc = (wire: unknown): Health => {
+  const { attribution, ...doc } = HealthAnswer.parse(wire);
+  expect(attribution).toEqual([]);
+  return doc;
+};
+const sourcesDoc = (wire: unknown): HealthSources => {
+  const { attribution, ...doc } = HealthSourcesAnswer.parse(wire);
+  expect(new Set(attribution.map((a) => a.source))).toEqual(
+    new Set([...doc.sources.map((s) => s.id), ...doc.quarantined_batches.map((q) => q.source)]),
+  );
+  return doc;
+};
 const admin = async (text: string, values: unknown[] = []) => (await h.t.admin.query(text, values)).rows;
 
 const OWNER_IDS = ['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3', 'CANARY-OWNER'];
@@ -122,12 +143,12 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
       expect(res.headers.get('cache-control')).toBe('public, max-age=30');
       expect([...res.headers.keys()].sort()).toEqual(['cache-control', 'content-type']);
       const doc = await json(res);
-      expect((path.endsWith('sources') ? HealthSources : Health).safeParse(doc).success, path).toBe(true);
+      expect((path.endsWith('sources') ? HealthSourcesAnswer : HealthAnswer).safeParse(doc).success, path).toBe(true);
     }
   });
 
   it('/health: ok, the loader lag, and the public sources counted; the owner sources are two counts', async () => {
-    const doc = Health.parse(await json(await appAt().app.request('/api/v1/health')));
+    const doc = healthDoc(await json(await appAt().app.request('/api/v1/health')));
     expect(doc).toEqual({
       status: 'ok',
       generated_at: NOW.toISOString(),
@@ -152,7 +173,7 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
   });
 
   it('/health/sources: DE-1 with its tier-1 numbers, freshness and a partition checksum', async () => {
-    const doc = HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources')));
+    const doc = sourcesDoc(await json(await appAt().app.request('/api/v1/health/sources')));
     const de1 = doc.sources.find((s) => s.id === 'DE-1');
     expect(de1).toMatchObject({
       status: 'ok',
@@ -186,7 +207,7 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
   });
 
   it('lists exactly the public sources that have health rows', async () => {
-    const doc = HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources')));
+    const doc = sourcesDoc(await json(await appAt().app.request('/api/v1/health/sources')));
     const expected = (
       await admin(
         `SELECT h.source_id FROM source_health h JOIN source s ON s.id = h.source_id WHERE s.audience = 'public' ORDER BY 1`,
@@ -197,7 +218,7 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
   });
 
   it('classification (P7b): a coverage of the public tier-1 stations only, the mode follows the 60 % rule', async () => {
-    const doc = HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources')));
+    const doc = sourcesDoc(await json(await appAt().app.request('/api/v1/health/sources')));
     const c = doc.classification;
     if (c === null) throw new Error('no classification');
     const tier1 = async (view: string) =>
@@ -225,7 +246,7 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
 
   it('label_offset (P5b): null unless the loader wrote one, then its six fields and nothing else', async () => {
     const offset = async (id: string) => {
-      const doc = HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources')));
+      const doc = sourcesDoc(await json(await appAt().app.request('/api/v1/health/sources')));
       return doc.sources.find((s) => s.id === id)?.label_offset;
     };
     expect(await offset('DE-1')).toBeNull();
@@ -270,7 +291,7 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
         expect(res.status, `${path}${query}`).toBe(400);
         expect(res.headers.get('cache-control')).toBe('no-store');
         const text = await res.text();
-        expect(text).toBe('{"error":"unknown_parameter"}');
+        expect(text).toBe('{"error":"unknown_parameter","attribution":[]}');
       }
     }
     // A rejected request never reaches the database.
@@ -282,8 +303,8 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
 describe('owner isolation (invariant 11) and the withheld canary', () => {
   it('seeded owner health, an owner quarantined batch and both canaries change no public byte', async () => {
     const read = async () => [
-      Health.parse(await json(await appAt().app.request('/api/v1/health'))),
-      HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources'))),
+      healthDoc(await json(await appAt().app.request('/api/v1/health'))),
+      sourcesDoc(await json(await appAt().app.request('/api/v1/health/sources'))),
     ];
     const [healthBefore, sourcesBefore] = (await read()) as [Health, HealthSources];
     // Owner canary station and series (owner source), the withheld canary (a series of NL-1 narrowed to off) and an
@@ -355,8 +376,9 @@ describe('owner isolation (invariant 11) and the withheld canary', () => {
     );
     await computeHealth(h.load.db, inputs);
     const { app } = appAt();
-    const health = Health.parse(await json(await app.request('/api/v1/health')));
-    const sources = HealthSources.parse(await json(await app.request('/api/v1/health/sources')));
+    const health = healthDoc(await json(await app.request('/api/v1/health')));
+    const sourcesWire = await json(await app.request('/api/v1/health/sources'));
+    const sources = sourcesDoc(sourcesWire);
     expect(health).toMatchObject({ status: 'degraded', quarantined: 1, sources: { degraded: 1 } });
     expect(sources.sources.find((s) => s.id === 'DE-1')).toMatchObject({ status: 'degraded', quarantined: 1 });
     expect(sources.quarantined_batches).toEqual([
@@ -368,7 +390,7 @@ describe('owner isolation (invariant 11) and the withheld canary', () => {
         error: 'unrecognized_keys at [0].foo',
       },
     ]);
-    const text = JSON.stringify(sources);
+    const text = JSON.stringify(sourcesWire);
     for (const term of NEVER) expect(text, term).not.toContain(term);
     await admin(`DELETE FROM ingest_batch WHERE parse_status = 'quarantined'`);
     await computeHealth(h.load.db, inputs);
@@ -389,7 +411,7 @@ describe('caching and load', () => {
     const sources = await (await app.request('/api/v1/health/sources')).text();
     const askedBoth = seen.queries;
     expect(askedBoth).toBeGreaterThan(asked);
-    expect(HealthSources.parse(JSON.parse(sources)).sources.find((s) => s.id === 'DE-1')?.consecutive_failures).toBe(3);
+    expect(sourcesDoc(JSON.parse(sources)).sources.find((s) => s.id === 'DE-1')?.consecutive_failures).toBe(3);
     await app.request('/api/v1/health/sources');
     expect(seen.queries).toBe(askedBoth);
     clock.now = new Date(clock.now.getTime() + 1);
@@ -409,19 +431,17 @@ describe('caching and load', () => {
 
   it('a loader that has not computed for over 5 minutes is down (still HTTP 200)', async () => {
     const at = (ms: number) => appAt(ms).app.request('/api/v1/health');
-    expect(Health.parse(await json(await at(300_000))).status).toBe('ok');
+    expect(healthDoc(await json(await at(300_000))).status).toBe('ok');
     const late = await at(300_001);
     expect(late.status).toBe(200);
-    expect(Health.parse(await json(late)).status).toBe('down');
+    expect(healthDoc(await json(late)).status).toBe('down');
   });
 
   it('down before the loader has ever computed', async () => {
     await admin(`DELETE FROM app_meta WHERE key = 'loader'`);
-    const doc = Health.parse(await json(await appAt().app.request('/api/v1/health')));
+    const doc = healthDoc(await json(await appAt().app.request('/api/v1/health')));
     expect(doc).toMatchObject({ status: 'down', generated_at: null, loader: { backlog_files: 0, backlog_bytes: 0 } });
-    expect(
-      HealthSources.parse(await json(await appAt().app.request('/api/v1/health/sources'))).generated_at,
-    ).toBeNull();
+    expect(sourcesDoc(await json(await appAt().app.request('/api/v1/health/sources'))).generated_at).toBeNull();
     await computeHealth(h.load.db, inputs);
   });
 
@@ -429,7 +449,7 @@ describe('caching and load', () => {
     const [row] = await admin(
       `SELECT max(b.loaded_at) AS at FROM ingest_batch b JOIN source s ON s.id = b.source_id WHERE s.audience = 'public'`,
     );
-    const doc = Health.parse(await json(await appAt().app.request('/api/v1/health')));
+    const doc = healthDoc(await json(await appAt().app.request('/api/v1/health')));
     expect(doc.loader.last_commit).toBe(row.at.toISOString());
   });
 
@@ -451,7 +471,7 @@ describe('caching and load', () => {
 
   it('the loader backlog, its age and damaged manifest lines are shown as numbers', async () => {
     await computeHealth(h.load.db, { ...inputs, backlog: { files: 2, bytes: 4096, age_s: 30 }, badLines: 3 });
-    const doc = Health.parse(await json(await appAt().app.request('/api/v1/health')));
+    const doc = healthDoc(await json(await appAt().app.request('/api/v1/health')));
     expect(doc).toMatchObject({
       status: 'ok',
       loader: { backlog_files: 2, backlog_bytes: 4096, backlog_age_s: 30, bad_manifest_lines: 3 },
@@ -461,7 +481,7 @@ describe('caching and load', () => {
 
   it('a stalled loader (a line unconsumed for 15 minutes) makes the document degraded, though health is fresh', async () => {
     await computeHealth(h.load.db, { ...inputs, backlog: { files: 1, bytes: 812, age_s: 900 } });
-    const doc = Health.parse(await json(await appAt().app.request('/api/v1/health')));
+    const doc = healthDoc(await json(await appAt().app.request('/api/v1/health')));
     expect(doc).toMatchObject({ status: 'degraded', generated_at: NOW.toISOString(), loader: { backlog_age_s: 900 } });
     await computeHealth(h.load.db, inputs);
   });
@@ -504,7 +524,7 @@ describe('failures', () => {
       expect(res.status).toBe(503);
       expect(res.headers.get('cache-control')).toBe('no-store');
       expect(res.headers.get('content-type')).toBe('application/json');
-      expect(await res.text()).toBe('{"status":"down","error":"unavailable"}');
+      expect(await res.text()).toBe('{"status":"down","error":"unavailable","attribution":[]}');
     }
     expect((await app.request('/api/v1/health/sources')).status).toBe(503);
     expect(logged).toEqual([
@@ -524,7 +544,7 @@ describe('failures', () => {
     const { app, logged } = appAt();
     const res = await app.request('/api/v1/health/sources');
     expect(res.status).toBe(503);
-    expect(await res.text()).toBe('{"status":"down","error":"unavailable"}');
+    expect(await res.text()).toBe('{"status":"down","error":"unavailable","attribution":[]}');
     expect(logged).toEqual([
       { level: 50, code: 'contract', route: '/api/v1/health/sources', msg: 'health unavailable' },
     ]);
@@ -540,7 +560,7 @@ describe('failures', () => {
     for (const path of ['/api/v1/health', '/api/v1/health/sources']) {
       const res = await app.request(path);
       expect(res.status).toBe(503);
-      expect(await res.text()).toBe('{"status":"down","error":"unavailable"}');
+      expect(await res.text()).toBe('{"status":"down","error":"unavailable","attribution":[]}');
     }
   });
 });

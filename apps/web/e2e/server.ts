@@ -59,6 +59,9 @@ const NO_CACHE = 'no-cache';
 /** site.caddy's @api: the path as sent, under /api/v1/, with no dot segment. */
 const API = (path: string) => path.startsWith('/api/v1/') && !path.includes('/.');
 const BODY_MAX = 1024;
+/** site.caddy's @beacon (P9b): POST on exactly this path, a body of at most 8 KB. */
+const BEACON = '/api/v1/beacon';
+const BEACON_MAX = 8192;
 /** Hop-by-hop and naming headers that Caddy's reverse_proxy does not pass on (A§12.2: no Server, no Via). */
 const DROP = new Set(['connection', 'keep-alive', 'transfer-encoding', 'server', 'via', 'date']);
 const TYPES: Record<string, string> = {
@@ -116,23 +119,34 @@ function serve(res: ServerResponse, path: string, range: string | undefined, cac
   createReadStream(path).pipe(res);
 }
 
-/** GET or HEAD to the e2e api, as Caddy's reverse_proxy does; the site headers stay on top. */
-function proxy(req: IncomingMessage, res: ServerResponse) {
+/**
+ * A request to the e2e api, as Caddy's reverse_proxy does: GET and HEAD (body cap 1 KB) and the beacon's POST (8 KB,
+ * its body and type passed on); `X-Rws-Client` is the TCP peer, never a client's value (P9b); the site headers stay on
+ * top.
+ */
+function proxy(req: IncomingMessage, res: ServerResponse, max = BODY_MAX) {
   const chunks: Buffer[] = [];
   let size = 0;
   req.on('data', (c: Buffer) => {
     size += c.length;
-    if (size <= BODY_MAX) chunks.push(c);
+    if (size <= max) chunks.push(c);
   });
   req.on('end', () => {
-    if (size > BODY_MAX) return send(res, 413);
+    if (size > max) return send(res, 413);
+    const body = Buffer.concat(chunks);
+    const type = req.headers['content-type'];
     const up = httpRequest(
       {
         host: '127.0.0.1',
         port: apiPort,
         method: req.method,
         path: req.url,
-        headers: { accept: req.headers.accept ?? '*/*' },
+        headers: {
+          accept: req.headers.accept ?? '*/*',
+          'x-rws-client': req.socket.remoteAddress ?? '',
+          ...(req.method === 'POST' ? { 'content-length': String(body.length) } : {}),
+          ...(req.method === 'POST' && type !== undefined ? { 'content-type': type } : {}),
+        },
       },
       (answer) => {
         for (const [name, value] of Object.entries(answer.headers))
@@ -142,7 +156,7 @@ function proxy(req: IncomingMessage, res: ServerResponse) {
       },
     );
     up.on('error', () => send(res, 502));
-    up.end();
+    up.end(req.method === 'POST' ? body : undefined);
   });
 }
 
@@ -159,7 +173,9 @@ const server = createServer(
     }
     // Node joins repeated Range fields with ", ", as Caddy's placeholder joins them with ",": either fails ONE_RANGE.
     const range = req.headers.range;
-    // site.caddy's @write, before every route.
+    // site.caddy's @beacon, then its @write, before every route (the beacon's path as sent, case and all).
+    if (req.method === 'POST' && new URL(req.url ?? '/', 'https://localhost').pathname === BEACON)
+      return proxy(req, res, BEACON_MAX);
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { allow: 'GET, HEAD' });
     if (API(path)) return proxy(req, res);
     if (/^\/api(\/|$)/i.test(path)) return send(res, 404);

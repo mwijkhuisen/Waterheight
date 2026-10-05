@@ -1,0 +1,9 @@
+# CI only: the overlay deploy/tests/e2e/run.sh merges onto deploy/compose.yaml for RWS_E2E_MODE=loadtest
+# (.github/workflows/loadtest.yml). Never part of a deployment.
+#
+# It changes nothing today. The seed (scripts/seed-loadtest.ts) needs the database superuser, which pg_hba.conf lets
+# in only on the db container's own socket (a published port could never reach it: the db network is internal and
+# every TCP rule is for one role on the compose network), so the script pipes SQL to `psql` inside the container
+# with `docker exec` and no port is published. A load-test-only change of a service (a resource limit, a log level)
+# belongs here, so that the production compose files and the other e2e modes stay as they are.
+services: {}

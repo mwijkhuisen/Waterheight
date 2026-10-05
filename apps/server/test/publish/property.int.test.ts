@@ -5,9 +5,9 @@ import fc from 'fast-check';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readSnapshot } from '../../src/api/data.ts';
 import { StaticCache } from '../../src/api/states.ts';
+import { attributionRows } from '../../src/attribution.ts';
 import { vigicruesSections } from '../../src/load/tables.ts';
 import type { RenderCtx } from '../../src/publish/cycle.ts';
-import { attributionRows } from '../../src/publish/render/attribution.ts';
 import { RENDERERS } from '../../src/publish/render/index.ts';
 import { type Harness, harness } from '../load/harness.ts';
 
