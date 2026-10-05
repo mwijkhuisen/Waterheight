@@ -1,5 +1,6 @@
 import type { ClassRow, ReferenceRow, WarningRow, Warnings } from '@rws/core';
 import { sql } from 'kysely';
+import type { Touch } from './dirty.ts';
 import { readMeta, type Tx, writeMeta } from './store.ts';
 
 // P7a: references, classes and warnings with validity ranges (A§6; PHASES P7a). Nothing is overwritten by
@@ -68,9 +69,13 @@ export async function applyReferences(
   scope: ReadonlySet<number>,
   batch: string,
   fetchedAt: Date,
+  touched: Touch[] = [],
 ): Promise<{ changes: Changes; writes: number }> {
   const changes: Changes = {};
   let writes = 0;
+  // P9a: a series' states change from the start of what was written on (to now).
+  const touch = (series: number, from: Date | string | null) =>
+    touched.push({ series, from: from === null ? null : new Date(from).getTime() });
   const ids = [...new Set([...rows.map((r) => r.id), ...scope])];
   if (ids.length === 0) return { changes, writes };
   const { rows: stored } = await sql<Stored>`
@@ -112,11 +117,13 @@ export async function applyReferences(
     if (cur === undefined) {
       await insert(r, r.valid_from);
       note('new', r.counted);
+      touch(r.id, r.valid_from);
     } else if (cur.mine) {
       // This payload is the key's newest statement: its replay after a parser fix corrects the range in place.
       if (sameRef(cur, r) && cur.hi === null) continue;
       await rewrite(r, cur.lo);
       note('corrected', r.counted);
+      touch(r.id, cur.lo);
     } else if (!cur.newer) {
       note('older_ignored', r.counted);
       continue;
@@ -124,6 +131,7 @@ export async function applyReferences(
       // The key was closed (no longer stated) by an earlier payload: it re-opens from this fetch on.
       await insert(r, cur.hi > fetchedAt ? cur.hi : fetchedAt);
       note('new', r.counted);
+      touch(r.id, cur.hi > fetchedAt ? cur.hi : fetchedAt);
     } else if (sameRef(cur, r)) {
       await sql`UPDATE reference_value SET seen_at = ${fetchedAt}::timestamptz, seen_batch = ${batch}::bigint
                 WHERE ${where(r, cur.lo)}`.execute(tx);
@@ -134,7 +142,9 @@ export async function applyReferences(
       if (cur.lo !== null && lo <= cur.lo) {
         // Fetched in the instant the range began: there is no time to close; the newer payload's tuple wins.
         await rewrite(r, cur.lo);
+        touch(r.id, cur.lo);
       } else {
+        touch(r.id, lo);
         await sql`UPDATE reference_value SET valid = tstzrange(lower(valid), ${lo}::timestamptz)
                   WHERE ${where(r, cur.lo)}`.execute(tx);
         await insert(r, lo);
@@ -156,6 +166,7 @@ export async function applyReferences(
                 AND priority = ${cur.priority} AND upper_inf(valid)`.execute(tx);
     // Removal counts like a change of a series of the same audience; scope holds only resolved series.
     changes.removed = (changes.removed ?? 0) + 1;
+    touch(cur.series_id, fetchedAt);
     writes += 1;
   }
   return { changes, writes };
@@ -176,6 +187,7 @@ export async function applyClasses(
   rows: readonly ClassRow[],
   batch: string,
   fetchedAt: Date,
+  touched: Touch[] = [],
 ): Promise<{ new: number; changed: number; unknown: number; kept: number; writes: number }> {
   if (rows.length === 0) return { new: 0, changed: 0, unknown: 0, kept: 0, writes: 0 };
   // One row per station and instant (the last stated), so one statement never touches a row twice.
@@ -192,7 +204,7 @@ export async function applyClasses(
   const unknown = stations.filter((s) => !known.some((k) => k.id === s)).length;
   if (kept.length === 0) return { new: 0, changed: 0, unknown, kept: 0, writes: 0 };
   // `wins`: this payload is the holder's own replay or newer than it, by (fetched_at, batch id) as for observations.
-  const { rows: written } = await sql<{ kind: 'new' | 'changed' | 'held' }>`
+  const { rows: written } = await sql<{ kind: 'new' | 'changed' | 'held'; station: string; ts: Date }>`
     WITH v AS (
       SELECT * FROM unnest(${kept.map((r) => r.station)}::text[], ${kept.map((r) => r.ts)}::timestamptz[],
                            ${kept.map((r) => r.code)}::text[], ${kept.map((r) => r.label)}::text[],
@@ -218,11 +230,13 @@ export async function applyClasses(
       FROM prev p
       WHERE c.subject_type = 'station' AND c.subject_id = p.station AND c.source_id = ${source} AND c.ts = p.ts
         AND p.pts = p.ts AND p.wins AND (p.differs OR p.pb IS DISTINCT FROM ${batch}::bigint)
-      RETURNING p.differs
+      RETURNING p.differs, p.station, p.ts
     )
-    SELECT CASE WHEN prev.pts IS NULL THEN 'new' ELSE 'changed' END AS kind
+    SELECT CASE WHEN prev.pts IS NULL THEN 'new' ELSE 'changed' END AS kind, ins.subject_id AS station, ins.ts
     FROM ins JOIN prev ON prev.station = ins.subject_id AND prev.ts = ins.ts
-    UNION ALL SELECT CASE WHEN differs THEN 'changed' ELSE 'held' END FROM upd`.execute(tx);
+    UNION ALL SELECT CASE WHEN differs THEN 'changed' ELSE 'held' END, station, ts FROM upd`.execute(tx);
+  // P9a: a station's class holds from its row's instant until the next row (to now, conservatively).
+  for (const w of written) if (w.kind !== 'held') touched.push({ station: w.station, from: w.ts.getTime() });
   const n = (k: string) => written.filter((w) => w.kind === k).length;
   return { new: n('new'), changed: n('changed'), unknown, kept: kept.length, writes: written.length };
 }
@@ -266,10 +280,13 @@ export async function applyWarnings(
   w: Warnings | undefined,
   batch: string,
   fetchedAt: Date,
+  touched: Touch[] = [],
 ): Promise<{ changes: Changes; writes: number; full: boolean }> {
   const changes: Changes = {};
   let writes = 0;
   if (w === undefined) return { changes, writes, full: false };
+  // P9a: an area's level changes the states of its stations from the start of what was written on (to now).
+  const touch = (from: Date) => touched.push({ from: from.getTime() });
   const note = (c: RefChange) => {
     changes[c] = (changes[c] ?? 0) + 1;
   };
@@ -320,6 +337,7 @@ export async function applyWarnings(
           RETURNING id`.execute(tx);
         if (fixed.length === 0) continue;
         note('corrected');
+        touch(cur.lo);
       } else if (cur !== undefined && !cur.newer) {
         note('older_ignored');
         continue;
@@ -328,7 +346,12 @@ export async function applyWarnings(
         if (hi !== null && hi <= lo) continue;
         await insert(r, lo, hi);
         note('new');
+        touch(lo);
       } else if (sameArea(cur, r)) {
+        // A provider's own end that moves changes the states from the earlier of the two ends on.
+        const end = hi !== null && hi <= cur.lo ? cur.hi : hi;
+        if ((end?.getTime() ?? null) !== (cur.hi?.getTime() ?? null))
+          touch(end === null || cur.hi === null ? ((end ?? cur.hi) as Date) : end < cur.hi ? end : cur.hi);
         // A confirmation: presentation follows it, and a provider that states its own end (CH-5) may move it.
         await sql`UPDATE warning_area SET seen_at = ${fetchedAt}::timestamptz, seen_batch = ${batch}::bigint,
                     ${present(r)},
@@ -345,6 +368,7 @@ export async function applyWarnings(
                       label_raw = ${r.label_raw}, ${present(r)},
                       seen_at = ${fetchedAt}::timestamptz, seen_batch = ${batch}::bigint
                     WHERE id = ${cur.id}::bigint`.execute(tx);
+          touch(cur.lo);
         } else {
           const closes = cur.hi === null || cur.hi > start;
           const opens = hi === null || hi > start;
@@ -355,6 +379,7 @@ export async function applyWarnings(
                       WHERE id = ${cur.id}::bigint`.execute(tx);
           }
           if (opens) await insert(r, start, hi);
+          touch(start);
         }
         note('changed');
       }
@@ -369,6 +394,7 @@ export async function applyWarnings(
                   seen_at = ${fetchedAt}::timestamptz, seen_batch = ${batch}::bigint
                 WHERE id = ${cur.id}::bigint`.execute(tx);
       note('removed');
+      touch(at);
       writes += 1;
     }
     return { changes, writes, full: false };
@@ -395,6 +421,7 @@ export async function applyWarnings(
         RETURNING id`.execute(tx);
       if (ended.length > 0) {
         note('removed');
+        touch(sent);
         writes += 1;
       }
     }
@@ -431,6 +458,7 @@ export async function applyWarnings(
                 AND (upper_inf(valid) OR upper(valid) > ${lo}::timestamptz)`.execute(tx);
     await insert(r, lo, hi);
     note('new');
+    touch(lo);
     writes += 1;
   }
   return { changes, writes, full };

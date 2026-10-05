@@ -21,6 +21,7 @@ import {
 } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import type { DB } from '../db/generated.ts';
+import type { Touch } from './dirty.ts';
 import { lock, readMeta, type Tx, writeMeta } from './store.ts';
 
 // P8a: forecast runs into forecast_run / forecast_value (A§6, A§7.4 item 9, ADR-0010). A run is immutable: the
@@ -158,6 +159,7 @@ export async function applyForecasts(
   batch: string,
   fetchedAt: Date,
   headDrops: boolean,
+  touched: Touch[] = [],
 ): Promise<ForecastWritten> {
   const out: ForecastWritten = { n_new: 0, n_changed: 0, writes: 0, ambiguous: 0, collision: 0 };
   for (const { seriesId, run } of runs) {
@@ -188,6 +190,8 @@ export async function applyForecasts(
       await insertValues(tx, id, run.points);
       out.n_new += run.points.length;
       out.writes++;
+      // P9a: the station's recent.json carries the latest run (forecast/latest.json is written every cycle).
+      touched.push({ series: seriesId, from: first.getTime(), to: first.getTime() });
       continue;
     }
     const extended = d.kind === 'extend';
@@ -218,6 +222,7 @@ export async function applyForecasts(
       out.n_changed++;
       out.writes++;
     }
+    if (rows.length > 0 || extended) touched.push({ series: seriesId, from: first.getTime(), to: first.getTime() });
     if (extended) out.n_new += d.add.length;
   }
   return out;

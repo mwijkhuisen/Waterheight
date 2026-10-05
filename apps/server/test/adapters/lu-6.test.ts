@@ -41,6 +41,8 @@ const seriesRows = (): ReadonlyMap<string, SeriesRow> =>
         tier: 2,
         off: false,
         sameAudience: true,
+        audience: 'public' as const,
+        staleness_ms: 0,
         role: 'primary' as const,
         lon: p.lon,
         lat: p.lat,

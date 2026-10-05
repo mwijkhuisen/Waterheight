@@ -1,5 +1,6 @@
-import type { ApiStation, SeriesMeta, Snapshot, SnapshotForecast } from '@rws/contracts';
+import type { ApiStation, SeriesMeta, Snapshot } from '@rws/contracts';
 import { useEffect, useId, useRef } from 'react';
+import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import { formatAge, formatDay, formatLocal } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
@@ -190,8 +191,12 @@ function ForecastFacts({
           <dd>{band}</dd>
         </>
       )}
-      <dt>{m.panel_forecast_state({}, { locale })}</dt>
-      <dd>{stateWord(forecast.state, locale)}</dd>
+      {forecast.state !== null && (
+        <>
+          <dt>{m.panel_forecast_state({}, { locale })}</dt>
+          <dd>{stateWord(forecast.state, locale)}</dd>
+        </>
+      )}
       {forecast.basis !== null && (
         <>
           <dt>{m.panel_basis({}, { locale })}</dt>

@@ -119,5 +119,7 @@
   "forecast_band_p25p75": "25–75 %: {lo}–{hi} {unit}",
   "panel_forecast_state": "Toestand van de verwachting",
   "table_caption_forecast": "Verwachtingen voor {time}",
-  "col_forecast": "Verwachting"
+  "col_forecast": "Verwachting",
+  "degraded_banner": "Gegevens van de server zijn tijdelijk niet actueel of onvolledig; de waarden kunnen achterlopen.",
+  "degraded_standin": "De server is niet bereikbaar. Dit zijn de laatst bekende waarden, voor {time}, niet voor het gekozen tijdstip."
 }

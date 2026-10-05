@@ -15,7 +15,14 @@ const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
 
 const base = (over: Partial<Omit<Health, 'status'>> = {}): Omit<Health, 'status'> => ({
   generated_at: ago(60_000),
-  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
+  loader: {
+    lag_p95_s: 34,
+    backlog_files: 0,
+    backlog_bytes: 0,
+    backlog_age_s: null,
+    bad_manifest_lines: 0,
+    last_commit: null,
+  },
   sources: { ok: 10, degraded: 0, down: 0, unknown: 2, total: 12 },
   owner_sources: { healthy: 5, total: 6 },
   quarantined: 0,

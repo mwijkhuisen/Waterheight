@@ -24,7 +24,7 @@ The order that gets capture live fastest:
 | **A3** | The VPS: EU, 4 vCPU, 8 GB, ≥ 200 GB NVMe, IPv4 + IPv6, **Debian 13 amd64**. Provider snapshots weekly, provider firewall 22 from your IPs if static, console access tested, your SSH key installed (FIDO2 `sk-ed25519` recommended) | `ssh root@<ip> 'grep VERSION_CODENAME /etc/os-release; dpkg --print-architecture; nproc; free -g; df -h /; ip -br a'` shows trixie, amd64, 4, ~8, ≥ 200G and a global IPv4 and IPv6 |
 | **A4** | DNS: `A` and `AAAA` → the VPS; `CAA 0 issue "letsencrypt.org"`; DNSSEC if offered | `dig +short A <domain>`; `dig +short AAAA <domain>`; `dig +short CAA <domain>` |
 | **A5** | The EU S3 bucket, created **with Object Lock** (COMPLIANCE, 30 days), versioning on, reachable on port 443. Two keys: the **VPS key** with `deploy/host/s3-vps-key-policy.json` (replace `RWS_BUCKET`), and a **workstation key** for `restic forget --prune`. The restic repository password is generated and kept offline (password manager + paper) | The provider console shows versioning and the default retention. After step 6: `sudo /usr/local/lib/rws/deploy/tests/object-lock-prune.sh` prints five PASS lines |
-| **A6** | healthchecks.io: an account, a project with e-mail and phone/push integrations, and the project's **ping key** and an **API key** (read-write) | Step 7 creates the 16 checks; the project page lists them |
+| **A6** | healthchecks.io: an account, a project with e-mail and phone/push integrations, and the project's **ping key** and an **API key** (read-write) | Step 7 creates the 18 checks from P9a; the project page lists them |
 | **A7** | The secrets on the VPS (step 3): four you fill, and from P2a six database passwords that `bootstrap.sh` generates | `sudo ls -l /etc/rws/secrets` |
 | **B2** | GitHub environment `production`: required reviewer = you, deployment branch = `main`, **no secrets** | `scripts/gh-settings.sh --check` (from a checkout) |
 | **B4** | After the first release: set the three GHCR packages `waterheight/server`, `web` and `backup` to **public** (Package settings → Change visibility) | `curl -s 'https://ghcr.io/token?scope=repository:mwijkhuisen/waterheight/server:pull' \| grep -q '"token"' && echo public` |
@@ -128,7 +128,7 @@ sudo rws-deploy "$(sudo cat /var/lib/rws/current)"  # db_prepare sets the new pa
 sudo docker restart rws-api-1                       # the consumer reads its secret at start
 ```
 
-`db_rws_migrator` is read by the migrate job on every deploy: nothing to restart. `db_postgres` is used only when the cluster is first created, so rotating it changes nothing: leave it. `db_rws_publish` and `db_rws_owner_api` have no consumer before P9. Check that the consumer is healthy again: `sudo docker compose -p rws ps`.
+`db_rws_migrator` is read by the migrate job on every deploy: nothing to restart. `db_postgres` is used only when the cluster is first created, so rotating it changes nothing: leave it. `db_rws_publish` is read by `publish` and `db_rws_owner_api` by `publish-owner` (P9a; and `api-owner` from P9b): restart them after a rotation (`sudo docker restart rws-publish-1 rws-publish-owner-1`). Check that the consumer is healthy again: `sudo docker compose -p rws ps`.
 
 ## 4. Fill `/etc/rws/rws.env`
 
@@ -180,13 +180,13 @@ sudo /usr/local/lib/rws/deploy/tests/object-lock-prune.sh   # the VPS key cannot
 ## 7. Healthchecks (A6), from your workstation
 
 ```bash
-deploy/bin/rws-hc-sync --dry-run                        # the 16 checks it will create
+deploy/bin/rws-hc-sync --dry-run                        # the 18 checks it will create
 deploy/bin/rws-hc-sync --key-file ~/secure/hc_api_key   # create or update them
 ```
 
 Keep the API key off the VPS: it can delete the checks that watch the VPS. If you run it on the VPS instead, delete `/etc/rws/secrets/hc_api_key` afterwards.
 
-**Check:** the project lists 16 checks. After 10 minutes, `cap-*`, `update`, `watchdog`, `cert` and `disk` are green, and `backup` turns green at the next :17. From P2a, `load` (the watchdog pings it from `/api/v1/health`) turns green within 5 minutes of a release that serves the endpoint; until then it is not pinged.
+**Check:** the project lists 18 checks. After 10 minutes, `cap-*`, `update`, `watchdog`, `cert` and `disk` are green, and `backup` turns green at the next :17. From P2a, `load` (the watchdog pings it from `/api/v1/health`) turns green within 5 minutes of a release that serves the endpoint; until then it is not pinged. From P9a, `publisher` (the watchdog, from the age of `/data/v1/meta.json`) and `owner-publisher` (`rws-tick`, from the mtime of the owner `meta.json` only) turn green within 10 minutes of a release with the publishers; a 404 or a missing file is "not deployed" and sends nothing.
 
 ## 8. From outside
 
@@ -240,7 +240,7 @@ Do this on the VPS that already runs a P1b release. The installed P1b `rws-updat
 
    `load` now replays everything since P1 by itself: its cursor starts at the first manifest day. Watch `loader.backlog_bytes` fall to 0 (`/api/v1/health`); while it is above 0, `verify-prod.sh` fails `replay DE-1`. During this first catch-up the oldest unconsumed line is older than 15 minutes, so the healthchecks `load` check fails with `load_backlog`, `verify-prod.sh` fails `loader lag` and `/api/v1/health` is `degraded`: expected, and it clears once the backlog is 0 (KG-069). If `loader.backlog_age_s` stops falling while `backlog_bytes` stays above 0, the loader is stalled: `docs/runbooks/schema-drift.md` §6.
 
-6. Create the `load` check on healthchecks.io, from your workstation: `deploy/bin/rws-hc-sync --key-file ~/secure/hc_api_key` (16 checks; step 7 above).
+6. Create the `load` check on healthchecks.io, from your workstation: `deploy/bin/rws-hc-sync --key-file ~/secure/hc_api_key` (18 checks from P9a; step 7 above).
 7. Start the timer again:
 
    ```bash

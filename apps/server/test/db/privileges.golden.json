@@ -90,6 +90,14 @@
       "rws_backup": "SELECT",
       "rws_owner_api": "SELECT"
     },
+    "own_day_version": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_dirty": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
     "own_forecast_run": {
       "rws_backup": "SELECT",
       "rws_owner_api": "SELECT"
@@ -135,6 +143,10 @@
       "rws_owner_api": "SELECT"
     },
     "own_series": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
+    "own_source": {
       "rws_backup": "SELECT",
       "rws_owner_api": "SELECT"
     },
@@ -194,6 +206,16 @@
       "rws_publish": "SELECT"
     },
     "pub_class": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_day_version": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_dirty": {
       "rws_api": "SELECT",
       "rws_backup": "SELECT",
       "rws_publish": "SELECT"
@@ -263,6 +285,11 @@
       "rws_backup": "SELECT",
       "rws_publish": "SELECT"
     },
+    "pub_source": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
     "pub_source_health": {
       "rws_api": "SELECT",
       "rws_backup": "SELECT",
@@ -282,6 +309,13 @@
       "rws_api": "SELECT",
       "rws_backup": "SELECT",
       "rws_publish": "SELECT"
+    },
+    "publish_dirty": {
+      "rws_backup": "SELECT",
+      "rws_load": "INSERT"
+    },
+    "publish_dirty_id_seq": {
+      "rws_load": "USAGE"
     },
     "reach": {
       "rws_backup": "SELECT",

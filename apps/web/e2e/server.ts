@@ -40,6 +40,9 @@ execFileSync(
   { stdio: 'ignore' },
 );
 
+// P9a: the publisher's output (apps/server/test/e2e/api.ts writes it before it listens): `v1/` is /data/v1/. CI's real
+// Caddy serves the same directory (ci.yml job e2e); this stand-in serves any file of it with a short cache.
+const published = join(process.env.E2E_PUBLISH_DIR ?? join(tmpdir(), 'rws-e2e-publish'), 'v1');
 const headers = siteHeaders();
 const TILE = /^\/tiles\/(basemap|planet-z6)-[0-9]{8}\.pmtiles$/;
 /** site.caddy's @tiles_rivers (P6b): the same rule, its own matcher. */
@@ -64,6 +67,7 @@ const TYPES: Record<string, string> = {
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json',
+  '.geojson': 'application/geo+json',
   '.pbf': 'application/x-protobuf',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
@@ -179,6 +183,12 @@ const server = createServer(
       return f === undefined ? send(res, 404) : serve(res, f, range, IMMUTABLE);
     }
     if (/^\/data\/v1\/rivers(\/|$)/.test(path)) return send(res, 404);
+    if (path === '/runtime-config.json')
+      return send(res, 200, { 'content-type': 'application/json', 'cache-control': NO_CACHE }, '{"audience":"public"}');
+    if (path.startsWith('/data/v1/')) {
+      const f = /\/\./.test(path) ? undefined : file(published, path.slice('/data/v1'.length));
+      return f === undefined ? send(res, 404) : serve(res, f, range, 'public, max-age=60');
+    }
     if (DOWNLOAD.test(path)) {
       const f = file(downloads, path.slice('/downloads'.length));
       return f === undefined ? send(res, 404) : serve(res, f, range, IMMUTABLE);

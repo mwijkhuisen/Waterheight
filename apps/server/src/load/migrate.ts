@@ -1,20 +1,26 @@
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { sql } from 'kysely';
+import { type Kysely, sql } from 'kysely';
+import type { DB } from '../db/generated.ts';
 import { type DbConfig, dbConfig, errorCode, openDb } from '../db/pool.ts';
+import { syncOwnerCanary } from './canary.ts';
+import { DATA_FLOOR, registryBump } from './dirty.ts';
 import { RegistryError, readRegistry, readRiverRegistry, syncRegistry } from './registry-sync.ts';
+import { lock } from './store.ts';
 
 // The one-shot `migrate` role (A§11.2): dbmate applies db/migrations, then the
 // partitions from the first seeds onward are created and the registry is
-// synced. It logs in as rws_migrator, which acts as the object owner. The
+// synced; then, in one transaction under the loader lock (P9a), the owner
+// canary is kept, the publishers' registry bump is made and the dirty log is
+// pruned. It logs in as rws_migrator, which acts as the object owner. The
 // database URL is built here, in the process, from the file secret: it is
 // never in the environment of the container, a command line or a log.
 
 const run = promisify(execFile);
 
 /** The first UTC month that may hold data: the P1 seeds reach back to about 2026-08-24 (A§7.5). */
-export const DATA_FLOOR = '2026-08-01T00:00:00Z';
+export { DATA_FLOOR };
 
 const MIGRATIONS = fileURLToPath(new URL('../../../../db/migrations', import.meta.url));
 
@@ -77,6 +83,10 @@ export async function runMigrate(
     log(
       `migrate: registry synced (${synced.sources} sources, ${synced.stations} stations, ${synced.series} series, ${synced.deactivated} deactivated, ${synced.twins} twins, ${synced.references} NL-4 class bounds, ${synced.reaches} reaches, ${synced.rivernetUnknown} rivernet stations unknown)`,
     );
+    const tail = await publishTail(db);
+    log(
+      `migrate: publish tail (${tail.canaries} owner canary source(s), public bump ${tail.bumped.public ?? 'none'}, owner bump ${tail.bumped.owner ?? 'none'}, ${tail.pruned} dirty row(s) pruned)`,
+    );
     return 0;
   } catch (err) {
     // A RegistryError names registry rows (our own reviewed text); a database error is reduced to its code.
@@ -85,4 +95,16 @@ export async function runMigrate(
   } finally {
     await close();
   }
+}
+
+/** The P9a tail: canary, registry bump (it reads the canary's series) and the 3-day prune of publish_dirty (§9 C4). */
+export async function publishTail(db: Kysely<DB>, now = new Date()) {
+  return db.transaction().execute(async (tx) => {
+    await lock(tx);
+    const canaries = await syncOwnerCanary(tx);
+    const bumped = await registryBump(tx, now);
+    const pruned = await sql`
+      DELETE FROM publish_dirty WHERE created_at < ${now}::timestamptz - interval '3 days'`.execute(tx);
+    return { canaries, bumped, pruned: Number(pruned.numAffectedRows ?? 0n) };
+  });
 }

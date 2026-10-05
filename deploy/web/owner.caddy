@@ -1,0 +1,165 @@
+# The owner site (P9a; A§11.1 and A§11.5 as amended; invariant 11). Used by the
+# owner alone, never shared; reached only over WireGuard from P12a. Everything is
+# behind basic_auth, with no exception: the SPA, /runtime-config.json, /data/v1,
+# /api/v1 and every error. Cache-Control "private, no-store" and
+# X-Robots-Tag "noindex, nofollow" are on every response, the 401 and 404 too.
+# The A§12.2 headers are the public site's (test/caddy-owner.test.ts compares
+# the two blocks: only those two differ).
+#
+# basic_auth sits at the SITE level, not inside a route: Caddy orders `handle`
+# before `route`, so a basic_auth in a route would not gate the handle blocks
+# (measured on Caddy 2.11.4: 200 without credentials). The credential file is a
+# Docker secret holding one line, `owner <bcrypt hash>`; Caddy refuses to start
+# without it, so the site fails closed. /data/v1 is the owner publisher's tree,
+# mounted read-only at /srv/rws/owner/www/v1; the app is the same /srv/www as
+# the public site's. /api/v1 goes to api-owner (P9b adds it: a 502 until then).
+# Not mounted here: the basemap tiles, the river files and the status files of
+# the public site; nothing of /srv/rws/public.
+owner.{$RWS_DOMAIN}:8443 {
+	tls internal
+
+	header {
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), camera=(), microphone=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		X-Robots-Tag "noindex, nofollow"
+		Cache-Control "private, no-store"
+		-Server
+		defer
+	}
+
+	basic_auth {
+		import /run/secrets/owner_basic_auth
+	}
+
+	# Masked addresses like the public log; never the credentials.
+	log {
+		output file /data/access/owner-access.log {
+			roll_interval 24h
+			roll_keep 15
+			roll_keep_for 336h
+		}
+		format filter {
+			request>remote_ip ip_mask 24 48
+			request>client_ip ip_mask 24 48
+			request>headers>X-Forwarded-For ip_mask 24 48
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+			wrap json
+		}
+	}
+
+	@compressible {
+		not path /data/v1/*
+	}
+	encode @compressible zstd gzip
+
+	@write not method GET HEAD
+	handle @write {
+		header Allow "GET, HEAD"
+		respond 405
+	}
+
+	handle /runtime-config.json {
+		header Content-Type "application/json"
+		respond `{"audience":"owner"}` 200
+	}
+
+	# The owner publisher's files, precompressed, any class: private, no-store.
+	# Only the files the publisher writes (a regular name per segment); a missing
+	# file, a .zst or .gz name, a dot segment, a directory is a 404.
+	@data path_regexp ^/data/v1(/|$)
+	handle @data {
+		uri strip_prefix /data
+		@data_file {
+			method GET HEAD
+			expression `{path}.matches('^/v1/[a-z0-9-]+(/[A-Za-z0-9][A-Za-z0-9._-]{0,80})*\\.(json|geojson)$') && !{path}.contains('/.')`
+			file {
+				root /srv/rws/owner/www
+				try_files {path}
+			}
+		}
+		handle @data_file {
+			@geo path *.geojson
+			header @geo Content-Type "application/geo+json"
+			root * /srv/rws/owner/www
+			file_server {
+				precompressed zstd gzip
+			}
+		}
+		handle {
+			respond 404
+		}
+	}
+
+	# The owner api (P9b). Same rules as the public site's @api.
+	@api {
+		method GET HEAD
+		expression `{path}.startsWith('/api/v1/') && !{path}.contains('/.')`
+	}
+	@api_other {
+		path /api /api/*
+		not expression `{path}.startsWith('/api/v1/') && !{path}.contains('/.')`
+	}
+	handle @api {
+		request_body {
+			max_size 1KB
+		}
+		header -Via
+		reverse_proxy api-owner:8080 {
+			header_up -Forwarded
+			header_up -X-Real-IP
+			header_down -Server
+		}
+	}
+	handle @api_other {
+		respond 404
+	}
+
+	@dotfiles path_regexp /\.
+	handle @dotfiles {
+		respond 404
+	}
+
+	# The pages, the assets and the app routes, as on the public site.
+	handle {
+		root * /srv/www
+		@app_en {
+			path_regexp ^/en/
+			not file {path} {path}/
+			not path_regexp \.[^/]*$
+		}
+		@app {
+			not file {path} {path}/
+			not path_regexp \.[^/]*$
+		}
+		rewrite @app_en /en/index.html
+		rewrite @app /index.html
+		@missing not file {path} {path}/
+		respond @missing 404
+		file_server
+	}
+
+	# The 401 of basic_auth and every other error carry the same two headers
+	# (error routes do not get the site header block) and no body.
+	handle_errors {
+		header {
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			X-Robots-Tag "noindex, nofollow"
+			Cache-Control "private, no-store"
+			-Server
+		}
+		respond {err.status_code}
+	}
+}
+
+# Container healthcheck only: loopback inside the container, never published.
+http://127.0.0.1:8082 {
+	bind 127.0.0.1
+	respond /healthz 200
+}

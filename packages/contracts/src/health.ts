@@ -44,6 +44,8 @@ export const Health = z.strictObject({
     /** How old the oldest manifest line the loader has not consumed is (seconds); null when there is none. */
     backlog_age_s: z.number().nonnegative().nullable(),
     bad_manifest_lines: count,
+    /** The newest loaded_at over the public batches (P9a; meta.latestFrom is compared with it); null before any. */
+    last_commit: iso.nullable(),
   }),
   /** Public sources only. */
   sources: z.strictObject({ ok: count, degraded: count, down: count, unknown: count, total: count }),

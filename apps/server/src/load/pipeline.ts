@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { type Normalised, type ObsRow, obsParts, SchemaDrift } from '@rws/core';
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { ManifestLine } from '../archive/manifest.ts';
 import { ArchiveError, type ArchiveReader, type RawLine } from '../archive/reader.ts';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
+import { type Audience, type DirtyEntry, type DirtyKind, dirtyEntriesOf, markDirty, type Touch } from './dirty.ts';
 import {
   applyForecasts,
   type CheckedRun,
@@ -37,6 +38,7 @@ import {
   type SeriesRow,
   seriesOf,
   setBatchAside,
+  storeProviderUpdated,
   storeUnitMismatch,
   type Tx,
   unitMismatchOf,
@@ -218,6 +220,8 @@ export const STALL_ALERT_MS = 15 * 60_000;
 export class Loader {
   private readonly deps: LoadDeps;
   private readonly series = new Map<string, Map<string, SeriesRow>>();
+  /** The owner-audience sources, read once (the registry changes only at a deploy). */
+  private owners: Promise<Set<string>> | undefined;
   private readonly units = new Map<string, Set<string>>();
   /** What app_meta `load_attempt` says, once read (null: no line in flight). */
   private attempt: Attempt | undefined | null;
@@ -243,6 +247,40 @@ export class Loader {
     return adapter === undefined || loader === undefined
       ? undefined
       : { spec: loader, adapterVersion: adapter.version };
+  }
+
+  /**
+   * P9a: a payload's touches as dirty entries. A series' change takes its effective audience narrowed by the
+   * payload source's (an owner reference or run on a public series is the owner family's alone); a station's or an
+   * area's takes the payload source's.
+   */
+  private async dirtyEntries(
+    tx: Tx,
+    source: string,
+    touches: Readonly<Record<DirtyKind, readonly Touch[]>>,
+    maps: readonly (ReadonlyMap<string, SeriesRow> | undefined)[],
+  ): Promise<DirtyEntry[]> {
+    this.owners ??= ownerSources(this.deps.db);
+    const own = (await this.owners).has(source) ? 'owner' : 'public';
+    const byId = new Map<number, SeriesRow>();
+    for (const m of maps) for (const s of m?.values() ?? []) byId.set(s.id, s);
+    // A station touched without one of our series (a class of another source's station): the widest effective
+    // audience of its series, so a public class on an owner-only station dirties the owner family only (review
+    // SEC-2); a station with no series dirties nothing.
+    const loose = new Set<string>();
+    for (const list of Object.values(touches))
+      for (const t of list)
+        if (t.station !== undefined && (t.series === undefined || !byId.has(t.series))) loose.add(t.station);
+    const stationAudience = new Map<string, Audience>();
+    if (loose.size > 0) {
+      const { rows } = await sql<{ station: string; audience: Audience }>`
+        SELECT s.station_id AS station, max(LEAST(src.audience, COALESCE(s.audience, src.audience)))::text AS audience
+        FROM series s JOIN source src ON src.id = s.source_id
+        WHERE s.station_id = ANY(${[...loose]}::text[])
+        GROUP BY s.station_id`.execute(tx);
+      for (const r of rows) stationAudience.set(r.station, r.audience);
+    }
+    return dirtyEntriesOf(own, touches, byId, stationAudience);
   }
 
   private async registry(source: string): Promise<Map<string, SeriesRow>> {
@@ -726,12 +764,21 @@ export class Loader {
     let closesFull = false;
     let units: Set<string> | undefined;
     const before = health && { newestTs: health.newestTs, lastNewData: health.lastNewData };
+    const touches: Record<DirtyKind, Touch[]> = {
+      obs: [],
+      forecast: [],
+      reference: [],
+      class: [],
+      warning: [],
+      gauge_zero: [],
+    };
     await commit(async (tx) => {
+      for (const list of Object.values(touches)) list.length = 0;
       const state = await openBatch(tx, batch, 'ok');
       // A large payload comes in chunks of whole series (Normalised.obsChunks): one upsert each, one batch.
       let written: Written = { n_new: 0, n_changed: 0, newest: null, writes: 0 };
       for (const part of obsParts(result)) {
-        const w = await upsertObs(tx, part, registry, state.id, fetchedAt);
+        const w = await upsertObs(tx, part, registry, state.id, fetchedAt, false, touches.obs);
         written = {
           n_new: written.n_new + w.n_new,
           n_changed: written.n_changed + w.n_changed,
@@ -743,13 +790,25 @@ export class Loader {
       const filled =
         fill.length === 0 || fillRegistry === undefined
           ? { n_new: 0, n_changed: 0, writes: 0 }
-          : await upsertObs(tx, fill, fillRegistry, state.id, fetchedAt, true);
-      zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, zeroIds, state.id, fetchedAt);
-      const refsApplied = await applyReferences(tx, line.source, refs, refScope, state.id, fetchedAt);
-      const cls = await applyClasses(tx, line.source, classes, state.id, fetchedAt);
-      const warn = await applyWarnings(tx, line.source, result.warnings, state.id, fetchedAt);
-      const fw = await applyForecasts(tx, line.source, forecasts, state.id, fetchedAt, headDrops);
-      const staged = await this.stage(tx, line, spec, result, refRegistry, state.id, fetchedAt);
+          : await upsertObs(tx, fill, fillRegistry, state.id, fetchedAt, true, touches.obs);
+      zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, zeroIds, state.id, fetchedAt, touches.gauge_zero);
+      const refsApplied = await applyReferences(
+        tx,
+        line.source,
+        refs,
+        refScope,
+        state.id,
+        fetchedAt,
+        touches.reference,
+      );
+      const cls = await applyClasses(tx, line.source, classes, state.id, fetchedAt, touches.class);
+      const warn = await applyWarnings(tx, line.source, result.warnings, state.id, fetchedAt, touches.warning);
+      if (result.providerUpdated !== undefined) await storeProviderUpdated(tx, line.source, result.providerUpdated);
+      const fw = await applyForecasts(tx, line.source, forecasts, state.id, fetchedAt, headDrops, touches.forecast);
+      const staged = await this.stage(tx, line, spec, result, refRegistry, state.id, fetchedAt, touches.forecast);
+      // P9a: what the publishers render again, and the settled days this payload revised (under the loader lock).
+      const maps = [registry, fillRegistry, zeroRegistry, ...(refRegistries?.values() ?? [])];
+      await markDirty(tx, this.deps.now(), await this.dirtyEntries(tx, line.source, touches, maps));
       const fc: ForecastWritten = {
         n_new: fw.n_new + staged.written.n_new,
         n_changed: fw.n_changed + staged.written.n_changed,
@@ -856,6 +915,7 @@ export class Loader {
     refRegistry: (target: string | undefined) => ReadonlyMap<string, SeriesRow> | undefined,
     batch: string,
     fetchedAt: Date,
+    touched: Touch[] = [],
   ): Promise<{ written: ForecastWritten; rows: number; skipped: number }> {
     const none: ForecastWritten = { n_new: 0, n_changed: 0, writes: 0, ambiguous: 0, collision: 0 };
     const part = result.forecastPart;
@@ -900,7 +960,7 @@ export class Loader {
       }
       rows = resolved.reduce((n, r) => n + r.run.points.length, 0);
       const headDrops = forecastDecl(line.source)?.headDrops ?? false;
-      written = await applyForecasts(tx, line.source, resolved, batch, new Date(at), headDrops);
+      written = await applyForecasts(tx, line.source, resolved, batch, new Date(at), headDrops, touched);
     }
     const after = RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
     return { written, rows, skipped: after - before + unknown.size };

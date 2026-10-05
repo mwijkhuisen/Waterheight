@@ -61,7 +61,8 @@ jobs:
   integration:
     name: integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # P9a's publisher tests (200-run properties, 20 SIGKILLed children) take the suite to about 12 minutes locally.
+    timeout-minutes: 30
     permissions:
       contents: read
     services:
@@ -282,7 +283,8 @@ jobs:
   hook:
     name: hook
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # The install, pnpm check and the whole integration suite (about 17 minutes in CI since P9a's publisher tests).
+    timeout-minutes: 40
     permissions:
       contents: read
     env:
@@ -319,9 +321,12 @@ jobs:
   deploy:
     name: deploy
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
+    env:
+      # P9a: run.sh drives the degraded spec in this image (the same value as the e2e job's; test/e2e-pins.test.ts).
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
@@ -349,8 +354,8 @@ jobs:
         run: |
           for f in deploy/bin/rws-*; do [[ $f == *.sh ]] || sudo ln -sfn "$PWD/$f" "/usr/local/bin/${f##*/}"; done
           systemd-analyze verify --man=no --recursive-errors=no deploy/systemd/*
-      - name: End to end on Docker 29.8.1 (nftables, Pebble ACME, MinIO Object Lock, restic, watchdog)
-        run: sudo deploy/tests/e2e/run.sh
+      - name: End to end on Docker 29.8.1 (nftables, Pebble ACME, MinIO Object Lock, restic, watchdog, publishers, owner site, degraded)
+        run: sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/e2e/run.sh
       - name: scripts/verify-prod.ts against the running stack
         run: |
           node scripts/verify-prod.ts rivierstanden.example --resolve 203.0.114.10 --ca /ci/pki/pebble-root.pem \
@@ -358,7 +363,7 @@ jobs:
           # capture cannot succeed without internet in CI and the loaded data is a recorded fixture, so
           # only the checks that need fresh production data may fail.
           if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" |
-            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner health|forecast NL-1|forecast CH-4|rivers manifest|rivers tiles|rivers reaches|rivers download) '; then
+            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner health|forecast NL-1|forecast CH-4|rivers manifest|rivers tiles|rivers reaches|rivers download|static settled|static frames|static series|static lag|static rerender) '; then
             echo "verify-prod failed a check other than the ones that need live data" >&2
             exit 1
           fi
@@ -372,7 +377,9 @@ jobs:
           # P4b: the data routes through Caddy, their Cache-Control per age class, and noindex on every kind of path.
           # P6b: the page's bundle carries the river-network licence text (no rivers data is installed in CI).
           for check in 'api meta' 'api stations' 'api snapshot now' 'api snapshot 6h' 'api snapshot 3d' 'api openapi' \
-            'api params' 'noindex' 'rivers attribution' 'api states' 'class coverage'; do
+            'api params' 'noindex' 'rivers attribution' 'api states' 'class coverage' \
+            'static meta' 'static latest' 'static stations' 'static sources' 'static recent' 'static forecast' \
+            'static warnings' 'static status' 'static precompressed' 'runtime config'; do
             grep -qE "^PASS $check " "$RUNNER_TEMP/verify-prod.txt" || { echo "verify-prod: no PASS for $check" >&2; exit 1; }
           done
 
@@ -421,10 +428,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: The e2e build (the production pages plus /_spike/ and /en/_spike/)
         run: pnpm -F web build:e2e
-      - name: The e2e api on the runner (seeded throw-away database, fixed clock 2026-10-26T12:00Z)
+      - name: The e2e api on the runner (seeded throw-away database, fixed clock 2026-10-26T12:00Z) and its static files
         env:
           HOST: 0.0.0.0
           PORT: '8080'
+          # P9a: the api's startup runs one full publisher cycle into this directory; Caddy mounts its v1/.
+          E2E_PUBLISH_DIR: ${{ runner.temp }}/publish
         run: |
           node apps/server/test/e2e/api.ts >"$RUNNER_TEMP/e2e-api.log" 2>&1 &
           for _ in $(seq 1 120); do
@@ -447,6 +456,7 @@ jobs:
             -v "$RUNNER_TEMP/rivers:/srv/rws/public/data/v1/rivers:ro" \
             -v "$RUNNER_TEMP/downloads:/srv/rws/public/downloads:ro" \
             -v "$RUNNER_TEMP/ops:/srv/rws/public/ops:ro" \
+            -v "$RUNNER_TEMP/publish/v1:/srv/rws/public/www/v1:ro" \
             "$CADDY_IMAGE" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
           for _ in $(seq 1 30); do
             if curl -fsSk -o /dev/null https://localhost/healthz; then exit 0; fi

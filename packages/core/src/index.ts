@@ -8,6 +8,7 @@ export * from './de2-schedule.ts';
 export * from './downsample.ts';
 export * from './errors.ts';
 export * from './forecast.ts';
+export * from './forecast-hold.ts';
 export * from './html.ts';
 export * from './json.ts';
 export * from './qc.ts';

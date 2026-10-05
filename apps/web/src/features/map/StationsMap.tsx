@@ -1,6 +1,7 @@
-import type { ApiStation, Snapshot, SnapshotForecast } from '@rws/contracts';
+import type { ApiStation, Snapshot } from '@rws/contracts';
 import type { MapLayerMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import { testHook } from '../../lib/testHook.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';

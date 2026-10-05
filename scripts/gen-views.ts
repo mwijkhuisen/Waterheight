@@ -77,9 +77,11 @@ const ROLLUP_COLUMNS = 'o.series_id, o.bucket, o.vmin, o.vmax, o.vavg, o.vlast, 
 
 /** The body of each view, for one family. The keys are the logical names of audience.ts. */
 const BODY = {
+  // P9a: the effective api and history_export channels and the history window appended (the publisher's window rule,
+  // P9b's per-series api flag).
   series: (p: Params) => `
 SELECT s.id, s.station_id, s.source_id, s.quantity, s.value_kind, s.native_unit, s.to_canonical, s.datum,
-       s.expected_step, s.staleness_limit, s.active, e.audience
+       s.expected_step, s.staleness_limit, s.active, e.audience, e.lic_api, e.lic_history_export, e.history_window
 FROM series s
 JOIN series_eff e ON e.series_id = s.id
 WHERE ${seriesVisible('e', p)}`,
@@ -173,6 +175,27 @@ FROM gauge_zero z
 JOIN series_eff e ON e.series_id = z.series_id
 WHERE ${seriesVisible('e', p)}`,
 
+  // P9a: the publishers' dirty log of the family (the loader writes one row per kind per transaction; A§9.1).
+  dirty: (p: Params) => `
+SELECT d.id, d.kind, d.from_ts, d.to_ts, d.stations, d.created_at
+FROM publish_dirty d
+WHERE d.family = '${p.audience}'`,
+
+  // P9a: the family's settled-day versions (app_meta, written by the loader and migrate): one row per bumped day.
+  dayVersion: (p: Params) => `
+SELECT j.key::date AS day, (j.value ->> 'v')::int AS version, j.value ->> 'reason' AS reason,
+       (j.value ->> 'at')::timestamptz AS at
+FROM app_meta m
+CROSS JOIN LATERAL jsonb_each(m.value) j
+WHERE m.key = 'day_versions:${p.audience}'`,
+
+  // P9a: the family's sources for sources.json: names, licence kind and the provider's terms page.
+  source: (p: Params) => `
+SELECT s.id, s.name, pr.name AS provider, s.licence_kind, pr.terms_url, s.audience
+FROM source s
+JOIN provider pr ON pr.id = s.provider_id
+WHERE ${sourceVisible('s', p)}`,
+
   // No archive key and no hash: a batch is named by its id.
   ingestBatch: (p: Params) => `
 SELECT b.id, b.source_id, b.spec_id, b.fetched_at, b.parse_status, b.n_rows, b.n_new, b.n_changed, b.error,
@@ -189,8 +212,17 @@ FROM forecast_value v
 WHERE EXISTS (SELECT 1${forecastRunFrom(p).replaceAll('\n', '\n  ')}
     AND r.id = v.run_id)`;
 
+/** The series views as the first views migration created them: frozen, like forecastValueV1. */
+const seriesV1 = (p: Params) => `
+SELECT s.id, s.station_id, s.source_id, s.quantity, s.value_kind, s.native_unit, s.to_canonical, s.datum,
+       s.expected_step, s.staleness_limit, s.active, e.audience
+FROM series s
+JOIN series_eff e ON e.series_id = s.id
+WHERE ${seriesVisible('e', p)}`;
+
 /** The body a view had in the first views migration. */
-const firstBody = (logical: keyof typeof BODY) => (logical === 'forecastValue' ? forecastValueV1 : BODY[logical]);
+const firstBody = (logical: keyof typeof BODY) =>
+  logical === 'forecastValue' ? forecastValueV1 : logical === 'series' ? seriesV1 : BODY[logical];
 
 const SERIES_EFF = `
 -- The effective audience and licence channels of every series: its source's
@@ -246,10 +278,12 @@ function assertColumns(body: string, columns: readonly string[], what: string): 
   }
 }
 
-const laterNames: readonly string[] = (Object.keys(LATER) as (keyof typeof LATER)[]).flatMap((l) => [
-  VIEWS.public[l],
-  VIEWS.owner[l],
-]);
+/** P9a: the view pairs of PUBLISH_MIGRATION. */
+const PUBLISH_LATER = ['dirty', 'dayVersion', 'source'] as const;
+
+const laterNames: readonly string[] = [...(Object.keys(LATER) as (keyof typeof LATER)[]), ...PUBLISH_LATER].flatMap(
+  (l) => [VIEWS.public[l], VIEWS.owner[l]],
+);
 
 export function viewsMigration(): string {
   const up: string[] = [SERIES_EFF.trim()];
@@ -258,7 +292,7 @@ export function viewsMigration(): string {
     const family = VIEWS[audience];
     const { api, ...display } = family;
     for (const [logical, name] of Object.entries(display) as [keyof typeof BODY, string][]) {
-      if (logical in LATER) continue;
+      if (logical in LATER || (PUBLISH_LATER as readonly string[]).includes(logical)) continue;
       up.push(view(name, firstBody(logical)({ audience, api: false })));
       names.push(name);
     }
@@ -472,10 +506,64 @@ ${restore.join('\n\n')}
 `;
 }
 
+export const PUBLISH_MIGRATION = new URL('../db/migrations/20261107000002_views_publish.sql', import.meta.url);
+
+/**
+ * P9a: the four series views gain the effective `lic_api`, `lic_history_export` and `history_window` (appended; they
+ * keep their grants), and three view pairs are added: the dirty log, the day versions and the sources. Down drops the
+ * new views and restores the frozen series bodies with their grants.
+ */
+export function publishMigration(): string {
+  const up: string[] = [];
+  const grants: string[] = [];
+  const down: string[] = [];
+  const restore: string[] = [];
+  for (const audience of ['public', 'owner'] as const) {
+    for (const api of [false, true]) {
+      const name = api ? VIEWS[audience].api.series : VIEWS[audience].series;
+      up.push(`CREATE OR REPLACE VIEW ${name} WITH (security_barrier = true) AS${BODY.series({ audience, api })};`);
+      down.push(`DROP VIEW ${name};`);
+      restore.push(view(name, seriesV1({ audience, api })));
+      restore.push(`GRANT SELECT ON ${name} TO ${FAMILY_ROLES[audience].join(', ')};`);
+    }
+  }
+  const added: string[] = [];
+  for (const audience of ['public', 'owner'] as const) {
+    for (const logical of PUBLISH_LATER) {
+      const name = VIEWS[audience][logical];
+      up.push(view(name, BODY[logical]({ audience, api: false })));
+      grants.push(`GRANT SELECT ON ${name} TO ${FAMILY_ROLES[audience].join(', ')};`);
+      added.push(name);
+    }
+  }
+  return `-- GENERATED by scripts/gen-views.ts from apps/server/src/db/audience.ts. Do not edit:
+-- change the generator and run it again (CI fails on a difference).
+--
+-- P9a: the series views gain the effective api and history_export channels and the history window (appended; the
+-- views keep their grants), and the publishers' three view pairs: the dirty log, the day versions and the sources,
+-- security_barrier and granted to their family only.
+
+-- migrate:up
+${up.join('\n\n')}
+
+${grants.join('\n')}
+
+-- migrate:down
+${[...added]
+  .reverse()
+  .map((n) => `DROP VIEW ${n};`)
+  .join('\n')}
+${down.join('\n')}
+
+${restore.join('\n\n')}
+`;
+}
+
 if (import.meta.main) {
   const files: [URL, string][] = [
     [VIEWS_MIGRATION, viewsMigration()],
     [FORECAST_MIGRATION, forecastMigration()],
+    [PUBLISH_MIGRATION, publishMigration()],
     ...(Object.entries(LATER) as [keyof typeof LATER, URL][]).map(([l, url]): [URL, string] => [
       url,
       laterMigration(l),

@@ -223,10 +223,21 @@ test('NL is the default: language, heading, banner, disclaimer, and t is now', a
   expect(s.log.requests.filter((u) => /\/assets\/global\.esm-[^/]+\.js$/.test(u))).toHaveLength(
     browserName === 'webkit' ? 1 : 0,
   );
-  // The data comes from the three api routes, the snapshot at the page's t (debounced, so it may come last).
+  // The data comes from the static files (P9a): the runtime config, meta, stations and latest.json for now (debounced,
+  // so it may come last), and not one request to the API for any of them.
   await expect
     .poll(() => s.log.requests.map((u) => new URL(u).pathname + new URL(u).search))
-    .toEqual(expect.arrayContaining(['/api/v1/meta', '/api/v1/stations', '/api/v1/snapshot?t=2026-10-26T12:00Z']));
+    .toEqual(
+      expect.arrayContaining([
+        '/runtime-config.json',
+        '/data/v1/meta.json',
+        '/data/v1/stations.json',
+        '/data/v1/latest.json',
+      ]),
+    );
+  expect(
+    s.log.requests.map((u) => new URL(u).pathname).filter((p) => /^\/api\/v1\/(meta|stations|snapshot)$/.test(p)),
+  ).toEqual([]);
   await finish(page, s);
 });
 
@@ -274,9 +285,7 @@ test('the slider and the buttons update ?t= and the marker states', async ({ pag
   await expect.poll(() => tParam(page)).toBe('2026-10-26T10:00Z');
   await expect.poll(() => featureState(page, 'nl.e2e.gap')).toMatchObject({ has: true });
   expect(await featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true });
-  expect(s.log.requests.map((u) => new URL(u).pathname + new URL(u).search)).toContain(
-    '/api/v1/snapshot?t=2026-10-26T10:00Z',
-  );
+  expect(s.log.requests.map((u) => new URL(u).pathname)).toContain('/data/v1/recent/2026-10-26/1000.json');
 
   // The buttons: ten minutes back and forward, then "Nu" (back to 12:00Z, where the gap station has no value).
   await page.getByRole('button', { name: '10 minuten terug' }).click();
@@ -418,7 +427,7 @@ test('a held arrow key keeps the timebar moving; the URL follows with few writes
   await finish(page, s);
 });
 
-test('a held key asks the API only where it stops: one series request, few snapshots (SR-2)', async ({
+test('a held key asks only where it stops: one series request, few snapshot files (SR-2)', async ({
   page,
   context,
   baseURL,
@@ -427,11 +436,12 @@ test('a held key asks the API only where it stops: one series request, few snaps
   await open(page, '/?t=2026-10-24T12:00Z&s=nl.e2e.dst');
   await settled(page);
   // The station's forecast (its horizon, P8b) is asked once, whatever t does; it is not a series of the chart.
+  const urls = () => s.log.requests.map((u) => new URL(u));
   const asked = (route: string) =>
-    s.log.requests
-      .map((u) => new URL(u))
-      .filter((u) => u.pathname.startsWith(`/api/v1/${route}`) && !u.pathname.endsWith('/forecast'));
-  const before = { series: asked('series').length, snapshot: asked('snapshot').length };
+    urls().filter((u) => u.pathname.startsWith(`/api/v1/${route}`) && !u.pathname.endsWith('/forecast'));
+  // The snapshots are static files (P9a); the API is not asked for one.
+  const files = () => urls().filter((u) => /^\/data\/v1\/(recent|settled)\//.test(u.pathname));
+  const before = { series: asked('series').length, snapshot: files().length };
   expect(before.series).toBe(1);
 
   // Forty hours forward an hour at a time: the chart's span (six-hour blocks) would change six times on the way.
@@ -441,13 +451,14 @@ test('a held key asks the API only where it stops: one series request, few snaps
   await settled(page);
   await expect(panelOf(page).getByRole('region', { name: 'Waterstand' })).toContainText('Geen waarde op dit tijdstip');
   const series = asked('series').slice(before.series);
-  const snapshots = asked('snapshot').slice(before.snapshot);
+  const snapshots = files().slice(before.snapshot);
+  expect(asked('snapshot')).toEqual([]);
   // The live t would ask for every six-hour block on the way (six requests); the settled one asks where the keys
   // stopped. One more is allowed for a runner that pauses longer than the debounce between two presses.
   expect(series.length, series.map((u) => u.search).join(' ')).toBeLessThanOrEqual(2);
   expect(series.at(-1)?.search).toBe('?from=2026-10-19T06:00Z&to=2026-10-26T06:00Z&res=raw');
-  expect(snapshots.length, snapshots.map((u) => u.search).join(' ')).toBeLessThanOrEqual(5);
-  expect(snapshots.at(-1)?.search).toBe('?t=2026-10-26T04:00Z');
+  expect(snapshots.length, snapshots.map((u) => u.pathname).join(' ')).toBeLessThanOrEqual(5);
+  expect(snapshots.at(-1)?.pathname).toBe('/data/v1/recent/2026-10-26/0400.json');
   await finish(page, s);
 });
 
@@ -461,7 +472,7 @@ test('while a new t loads, the values of the old one are marked busy and dimmed 
   const held = new Promise<void>((r) => {
     release = r;
   });
-  await page.route('**/api/v1/snapshot?t=2026-10-26T11:50Z', async (route) => {
+  await page.route('**/data/v1/recent/2026-10-26/1150.json', async (route) => {
     await held;
     await route.continue();
   });
@@ -905,7 +916,7 @@ for (const [path, kind, state, disclaimer, row] of [
       // A new t replaces the lines in place: the popup, and a keyboard focus on its close button, stay.
       const content = page.locator('.maplibregl-popup-content');
       await content.evaluate((el) => el.setAttribute('data-kept', '1'));
-      const next = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/snapshot');
+      const next = page.waitForResponse((r) => new URL(r.url()).pathname.startsWith('/data/v1/recent/'));
       await slider(page).focus();
       await page.keyboard.press('ArrowLeft');
       await next;

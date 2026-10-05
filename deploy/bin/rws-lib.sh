@@ -11,7 +11,7 @@ readonly RWS_IDENTITY='https://github.com/mwijkhuisen/Waterheight/.github/workfl
 readonly RWS_ISSUER='https://token.actions.githubusercontent.com'
 readonly RWS_TAG_RE='^prod-[0-9]{8}T[0-9]{6}Z$'
 readonly RWS_HEX64_RE='^[0-9a-f]{64}$'
-readonly RWS_PING_SLUGS='^(backup|restore-drill|update|watchdog|cert|disk)$'
+readonly RWS_PING_SLUGS='^(backup|restore-drill|update|watchdog|cert|disk|publisher|owner-publisher)$'
 # The database roles that log in with a password (deploy/postgres/roles.sql).
 readonly RWS_DB_LOGIN_ROLES=(rws_migrator rws_load rws_publish rws_api rws_owner_api)
 

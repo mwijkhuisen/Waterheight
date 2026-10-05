@@ -229,6 +229,13 @@ describe('forecastCoverage per family', { timeout: 300_000 }, () => {
     expect(p.total.stations).toBe(148);
   });
 
+  it("P9a: the owner read's public split (the owner status file) equals the public family's coverage", async () => {
+    const split = await forecastCoverage(own.db, 'owner', NOW, { publicSplit: true });
+    expect(split).toEqual(await forecastCoverage(pub.db, 'public', NOW));
+    // The owner runs (DE-2, LU-3) do count in the owner's own report.
+    expect((await forecastCoverage(own.db, 'owner', NOW)).total.covered).toBeGreaterThan(split.total.covered);
+  });
+
   it('a DE-2 run on a weekend is current while Ruhrort stands at 4 m or more or is unknown, superseded below 4 m', async () => {
     // The Friday run of Kaub reaches the weekend; "now" is Saturday afternoon.
     const friday = Date.parse('2026-10-30T05:00:00Z');

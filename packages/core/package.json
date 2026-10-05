@@ -13,6 +13,10 @@
     "./tiles-manifest": {
       "rws-dist": "./dist/tiles-manifest.js",
       "default": "./src/tiles-manifest.ts"
+    },
+    "./forecast-hold": {
+      "rws-dist": "./dist/forecast-hold.js",
+      "default": "./src/forecast-hold.ts"
     }
   },
   "dependencies": {

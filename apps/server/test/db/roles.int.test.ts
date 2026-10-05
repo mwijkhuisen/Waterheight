@@ -47,6 +47,7 @@ const BASE_TABLES = [
   'ingest_batch',
   'source_health',
   'series_eff',
+  'publish_dirty',
 ];
 
 describe.each([
@@ -360,6 +361,23 @@ describe('rws_load (the loader)', () => {
                                  content_hash = content_hash WHERE false`,
       ),
     ).toBe('ok');
+  });
+
+  it('only appends to the publish log: INSERT yes, SELECT, UPDATE, DELETE and TRUNCATE no (P9a, review C4)', async () => {
+    expect(
+      await sqlState(
+        load,
+        "INSERT INTO publish_dirty (family, kind, from_ts, to_ts) VALUES ('public', 'obs', now(), now())",
+      ),
+    ).toBe('ok');
+    expect(await sqlState(load, 'SELECT 1 FROM publish_dirty LIMIT 1')).toBe('42501');
+    expect(await sqlState(load, 'SELECT max(id) FROM publish_dirty')).toBe('42501');
+    expect(await sqlState(load, "UPDATE publish_dirty SET kind = 'class' WHERE false")).toBe('42501');
+    expect(await sqlState(load, 'DELETE FROM publish_dirty')).toBe('42501');
+    expect(await sqlState(load, 'TRUNCATE publish_dirty')).toBe('42501');
+    expect(await sqlState(load, "SELECT setval('publish_dirty_id_seq', 1)")).toBe('42501');
+    // The publishers read the log only through their family's dirty view.
+    expect((await t.admin.query('SELECT count(*)::int AS n FROM publish_dirty')).rows).toEqual([{ n: 1 }]);
   });
 
   it('cannot delete observations, rewrite the revision log, or read the reader views', async () => {

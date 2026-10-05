@@ -1,5 +1,7 @@
-# healthchecks.io checks (issue #16 "P1a ↔ P1b contract"; A§11.3): 16 of the 20
-# free checks (P2a adds `load`, which the watchdog pings from /api/v1/health).
+# healthchecks.io checks (issue #16 "P1a ↔ P1b contract"; A§11.3): 18 of the 20
+# free checks (P2a adds `load`, which the watchdog pings from /api/v1/health; P9a
+# adds `publisher`, which the watchdog pings from /data/v1/meta.json, and
+# `owner-publisher`, which rws-tick pings from the mtime of the owner meta.json).
 # timeout = the check's cadence (a capture group's shortest cadence), grace =
 # 2 × timeout, so an alert fires after 3 × cadence without a ping. The check
 # name is the slug and carries no source ID. Synced by deploy/bin/rws-hc-sync;
@@ -22,6 +24,8 @@
     { "slug": "watchdog", "timeout": 300, "grace": 600 },
     { "slug": "cert", "timeout": 300, "grace": 600 },
     { "slug": "disk", "timeout": 300, "grace": 600 },
-    { "slug": "load", "timeout": 300, "grace": 600 }
+    { "slug": "load", "timeout": 300, "grace": 600 },
+    { "slug": "publisher", "timeout": 600, "grace": 1200 },
+    { "slug": "owner-publisher", "timeout": 1200, "grace": 2400 }
   ]
 }

@@ -1,6 +1,7 @@
 import { type GaugeZeroRow, type ObsRow, QC, type SeriesDecl } from '@rws/core';
 import { type Kysely, sql, type Transaction } from 'kysely';
 import type { DB } from '../db/generated.ts';
+import type { Audience, Touch } from './dirty.ts';
 
 // The loader's SQL (A§8 Q6 and the rollups of catalogue §6.4), all of it
 // parameterised. Every function runs inside the caller's transaction, which
@@ -104,6 +105,10 @@ export type SeriesRow = SeriesDecl & {
   off: boolean;
   /** It shares its source's audience: only such series count in the source's health and batch numbers. */
   sameAudience: boolean;
+  /** Its effective audience (P9a: which publisher family a change of it dirties). */
+  audience: Audience;
+  /** Its staleness limit: a value is carried forward this long, so a change at ts reaches the buckets up to ts + it. */
+  staleness_ms: number;
   /** primary, twin or mirror: only a primary series takes gap-fill rows (FR-3, CH-3). */
   role: 'primary' | 'twin' | 'mirror';
   /** Its station's registered position (a drift report compares it with what a payload states). */
@@ -125,6 +130,8 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
     tier: number;
     off: boolean;
     same_audience: boolean;
+    audience: Audience;
+    staleness_ms: number;
     role: 'primary' | 'twin' | 'mirror';
     lon: number | null;
     lat: number | null;
@@ -134,7 +141,9 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
            (EXTRACT(EPOCH FROM s.native_step) * 1000)::double precision AS native_step_ms,
            (EXTRACT(EPOCH FROM s.expected_step) * 1000)::double precision AS expected_step_ms, st.tier,
            LEAST(src.audience, COALESCE(s.audience, src.audience)) = 'off' AS off,
-           COALESCE(s.audience, src.audience) = src.audience AS same_audience, s.role, st.lon, st.lat
+           COALESCE(s.audience, src.audience) = src.audience AS same_audience,
+           LEAST(src.audience, COALESCE(s.audience, src.audience))::text AS audience,
+           (EXTRACT(EPOCH FROM s.staleness_limit) * 1000)::double precision AS staleness_ms, s.role, st.lon, st.lat
     FROM series s JOIN station st ON st.id = s.station_id JOIN source src ON src.id = s.source_id
     WHERE s.source_id = ${source} AND s.active`.execute(db);
   return new Map(
@@ -153,6 +162,8 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
         tier: r.tier,
         off: r.off,
         sameAudience: r.same_audience,
+        audience: r.audience,
+        staleness_ms: r.staleness_ms,
         role: r.role,
         lon: r.lon,
         lat: r.lat,
@@ -171,7 +182,7 @@ export type Written = {
   writes: number;
 };
 
-type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience'>;
+type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience' | 'staleness_ms'>;
 
 /**
  * Q6: the idempotent upsert with its revision log, plus obs_latest and the
@@ -212,6 +223,7 @@ export async function upsertObs(
   batch: string,
   fetchedAt: Date,
   fill = false,
+  touched: Touch[] = [],
 ): Promise<Written> {
   const none: Written = { n_new: 0, n_changed: 0, newest: null, writes: 0 };
   const sid: number[] = [];
@@ -281,6 +293,12 @@ export async function upsertObs(
     FROM up`.execute(tx);
   const changed = written.filter((w) => w.changed);
   if (changed.length === 0) return { ...none, writes: written.length };
+  // P9a: a changed value at ts is what every bucket up to ts + the staleness limit shows (LOCF).
+  const staleness = new Map([...ids.values()].map((s) => [s.id, s.staleness_ms]));
+  for (const w of changed) {
+    const at = w.ts.getTime();
+    touched.push({ series: w.series_id, from: at, to: at + (staleness.get(w.series_id) ?? 0) });
+  }
 
   const wSid = changed.map((w) => w.series_id);
   const wTs = changed.map((w) => w.ts);
@@ -354,6 +372,7 @@ export async function applyGaugeZeros(
   ids: ReadonlyMap<string, Series>,
   batch: string,
   fetchedAt: Date,
+  touched: Touch[] = [],
 ): Promise<Partial<Record<ZeroChange, number>>> {
   const changes: Partial<Record<ZeroChange, number>> = {};
   if (zeros.length === 0) return changes;
@@ -376,8 +395,10 @@ export async function applyGaugeZeros(
   const current = new Map(rows.map((r) => [r.series_id, { ...r, valid_from: r.valid_from?.toISOString() ?? null }]));
   const confirmed: number[] = [];
   for (const z of wanted) {
-    const note = (c: ZeroChange) => {
+    const note = (c: ZeroChange, since: string | Date | null) => {
       if (z.counted) changes[c] = (changes[c] ?? 0) + 1;
+      // P9a: the snapshot's nap and zero change from the changed range's start on.
+      touched.push({ series: z.id, from: since === null ? null : new Date(since).getTime() });
     };
     const from = sql`${z.valid_from}::timestamptz`;
     const now = current.get(z.id);
@@ -388,7 +409,7 @@ export async function applyGaugeZeros(
     if (now === undefined) {
       await sql`INSERT INTO gauge_zero (series_id, value_m, datum, valid, batch_id)
                 VALUES (${z.id}, ${z.value_m}, ${z.datum}, tstzrange(${from}, NULL), ${batch}::bigint)`.execute(tx);
-      note('new');
+      note('new', z.valid_from);
     } else if (
       now.valid_from !== z.valid_from &&
       z.valid_from !== null &&
@@ -398,25 +419,25 @@ export async function applyGaugeZeros(
                 WHERE series_id = ${z.id} AND upper_inf(valid)`.execute(tx);
       await sql`INSERT INTO gauge_zero (series_id, value_m, datum, valid, batch_id)
                 VALUES (${z.id}, ${z.value_m}, ${z.datum}, tstzrange(${from}, NULL), ${batch}::bigint)`.execute(tx);
-      note('superseded');
+      note('superseded', z.valid_from);
     } else if (!now.mine && !now.older) {
       // A newer payload holds it: a late line or a partial replay leaves it alone (no news, no alert).
     } else if (same) {
       if (now.older) confirmed.push(z.id);
     } else if (now.mine) {
       await rewrite();
-      note('corrected');
+      note('corrected', now.valid_from);
     } else if (now.valid_from !== null && utcDay(fetchedAt.getTime()) <= utcDay(Date.parse(now.valid_from))) {
       // The open range began this UTC day (or begins later): the newer payload's value wins in place.
       await rewrite();
-      note('changed');
+      note('changed', now.valid_from);
     } else {
       await sql`UPDATE gauge_zero SET valid = tstzrange(lower(valid), ${fetchedAt}::timestamptz)
                 WHERE series_id = ${z.id} AND upper_inf(valid)`.execute(tx);
       await sql`INSERT INTO gauge_zero (series_id, value_m, datum, valid, batch_id)
                 VALUES (${z.id}, ${z.value_m}, ${z.datum}, tstzrange(${fetchedAt}::timestamptz, NULL),
                         ${batch}::bigint)`.execute(tx);
-      note('changed');
+      note('changed', fetchedAt);
     }
   }
   if (confirmed.length > 0) {
@@ -590,4 +611,18 @@ export async function applyFetchHealth(tx: Tx, source: string, f: FetchFold): Pr
     const state = (await readMeta<Intervals>(tx, key)) ?? { last: {}, hours: {} };
     await writeMeta(tx, key, foldIntervals(state, f.starts));
   }
+}
+
+/**
+ * P9a: the newest provider `updated` instant of a source (DE-6's "Stand" date) in source_health.detail
+ * `provider_updated`, under the loader lock. Only a newer value replaces it; the health pass keeps the key (it strips
+ * named keys only). A source the registry does not know gets no row.
+ */
+export async function storeProviderUpdated(tx: Tx, source: string, at: string): Promise<void> {
+  await sql`
+    INSERT INTO source_health AS h (source_id, detail)
+    SELECT s.id, jsonb_build_object('provider_updated', ${at}::text) FROM source s WHERE s.id = ${source}
+    ON CONFLICT (source_id) DO UPDATE SET detail = jsonb_set(h.detail, '{provider_updated}', to_jsonb(${at}::text))
+    WHERE h.detail ->> 'provider_updated' IS NULL
+       OR (h.detail ->> 'provider_updated')::timestamptz < ${at}::timestamptz`.execute(tx);
 }

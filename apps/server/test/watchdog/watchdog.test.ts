@@ -52,7 +52,14 @@ const ok = (doc: unknown): Got => ({ status: 200, body: Buffer.from(JSON.stringi
 const health = (over: Record<string, unknown> = {}) => ({
   status: 'ok',
   generated_at: ago(MIN),
-  loader: { lag_p95_s: 34, backlog_files: 0, backlog_bytes: 0, backlog_age_s: null, bad_manifest_lines: 0 },
+  loader: {
+    lag_p95_s: 34,
+    backlog_files: 0,
+    backlog_bytes: 0,
+    backlog_age_s: null,
+    bad_manifest_lines: 0,
+    last_commit: null,
+  },
   sources: { ok: 10, degraded: 0, down: 0, unknown: 2, total: 12 },
   owner_sources: { healthy: 5, total: 6 },
   quarantined: 0,
@@ -76,10 +83,10 @@ function probe(over: Partial<Record<string, Got>> = {}, days: number | 'tls' = 6
 
 describe('watchdog checks', () => {
   it('all green when the site, both status files, the backup, the certificate and the disk are fine', async () => {
-    expect(await check(probe(), NOW)).toEqual({ watchdog: [], cert: [], disk: [], load: null });
+    expect(await check(probe(), NOW)).toEqual({ watchdog: [], cert: [], disk: [], load: null, publisher: null });
   });
 
-  it.each<[string, Partial<Record<string, Got>>, number | 'tls', Omit<Verdicts, 'load'>]>([
+  it.each<[string, Partial<Record<string, Got>>, number | 'tls', Omit<Verdicts, 'load' | 'publisher'>]>([
     [
       'healthz down',
       { '/healthz': { status: 503, body: Buffer.alloc(0) } },
@@ -149,12 +156,12 @@ describe('watchdog checks', () => {
     ['certificate expires in 13 days', {}, 13, { watchdog: [], cert: ['cert_expiring'], disk: [] }],
     ['no valid certificate', {}, 'tls', { watchdog: [], cert: ['tls'], disk: [] }],
   ])('%s', async (_, over, days, want) => {
-    expect(await check(probe(over, days), NOW)).toEqual({ ...want, load: null });
+    expect(await check(probe(over, days), NOW)).toEqual({ ...want, load: null, publisher: null });
   });
 
   it('keeps a backup of exactly 2 h and a certificate of exactly 14 days green', async () => {
     const p = probe({ '/status/ops.json': ok(ops({ last_backup: ago(2 * HOUR) })) }, 14);
-    expect(await check(p, NOW)).toEqual({ watchdog: [], cert: [], disk: [], load: null });
+    expect(await check(p, NOW)).toEqual({ watchdog: [], cert: [], disk: [], load: null, publisher: null });
   });
 
   it('every failure code is a fixed identifier, never provider or owner text', async () => {
@@ -165,7 +172,13 @@ describe('watchdog checks', () => {
       ),
       NOW,
     );
-    for (const code of [...worst.watchdog, ...worst.cert, ...worst.disk, ...(worst.load ?? [])])
+    for (const code of [
+      ...worst.watchdog,
+      ...worst.cert,
+      ...worst.disk,
+      ...(worst.load ?? []),
+      ...(worst.publisher ?? []),
+    ])
       expect(code).toMatch(/^[a-z0-9_]+$/);
   });
 
@@ -190,10 +203,13 @@ describe('watchdog probe and pings', () => {
       http.get(`https://${domain}/api/v1/health`, () =>
         HttpResponse.json(health({ generated_at: new Date().toISOString() })),
       ),
+      http.get(`https://${domain}/data/v1/meta.json`, () =>
+        HttpResponse.json({ generatedAt: new Date().toISOString() }),
+      ),
     );
     const live = liveProbe(domain, 'ua', testClient({ own: [domain] }));
     const p: Probe = { get: live.get, certDaysLeft: async () => 60 };
-    expect(await check(p, new Date())).toEqual({ watchdog: [], cert: [], disk: [], load: [] });
+    expect(await check(p, new Date())).toEqual({ watchdog: [], cert: [], disk: [], load: [], publisher: [] });
   });
 
   it('probes /api/v1/health on the same domain and treats its 404 as not deployed yet', async () => {
@@ -222,25 +238,33 @@ describe('watchdog probe and pings', () => {
       }),
     );
     const pinger = new Pinger('k'.repeat(22), 'ua', { warn: () => {} }, testClient({ hc: ['hc-ping.com'] }));
-    await report({ watchdog: [], cert: ['cert_expiring'], disk: ['disk_full', 'ops_stale'], load: null }, pinger);
-    // `load` is null before the P2a release: not pinged at all, neither success nor fail.
+    await report(
+      { watchdog: [], cert: ['cert_expiring'], disk: ['disk_full', 'ops_stale'], load: null, publisher: null },
+      pinger,
+    );
+    // `load` and `publisher` are null before their releases: not pinged at all, neither success nor fail.
     expect(seen).toEqual(['watchdog ', 'cert/fail cert_expiring', 'disk/fail disk_full ops_stale']);
     seen.length = 0;
-    await report({ watchdog: [], cert: [], disk: [], load: [] }, pinger);
-    await report({ watchdog: [], cert: [], disk: [], load: ['load_down', 'load_stale'] }, pinger);
+    await report({ watchdog: [], cert: [], disk: [], load: [], publisher: [] }, pinger);
+    await report(
+      { watchdog: [], cert: [], disk: [], load: ['load_down', 'load_stale'], publisher: ['publisher_stale'] },
+      pinger,
+    );
     expect(seen).toEqual([
       'watchdog ',
       'cert ',
       'disk ',
       'load ',
+      'publisher ',
       'watchdog ',
       'cert ',
       'disk ',
       'load/fail load_down load_stale',
+      'publisher/fail publisher_stale',
     ]);
   });
 
-  it('the pinger refuses any slug but the capture groups and the four watchdog checks', async () => {
+  it('the pinger refuses any slug but the capture groups and the five watchdog checks', async () => {
     const seen: string[] = [];
     server.use(
       http.all('https://hc-ping.com/*', ({ request }) => {
@@ -253,9 +277,11 @@ describe('watchdog probe and pings', () => {
     await pinger.ping('../x', 'success');
     await pinger.ping('cap-nl', 'success');
     await pinger.ping('load', 'success');
+    await pinger.ping('publisher', 'success');
+    await pinger.ping('owner-publisher', 'success');
     await pinger.ping('loader', 'success');
     await pinger.ping('load/fail', 'success');
-    expect(seen).toEqual([`/${'k'.repeat(22)}/cap-nl`, `/${'k'.repeat(22)}/load`]);
+    expect(seen).toEqual([`/${'k'.repeat(22)}/cap-nl`, `/${'k'.repeat(22)}/load`, `/${'k'.repeat(22)}/publisher`]);
   });
 });
 
@@ -286,6 +312,7 @@ describe('the load check (P2a)', () => {
       cert: [],
       disk: [],
       load: null,
+      publisher: null,
     });
   });
 
@@ -334,6 +361,43 @@ describe('the load check (P2a)', () => {
 
   it('a red load check does not fail the watchdog ping, and --once counts it', async () => {
     const v = await check(probe({ '/api/v1/health': ok(health({ status: 'down', generated_at: null })) }), NOW);
-    expect(v).toEqual({ watchdog: [], cert: [], disk: [], load: ['load_down', 'load_stale'] });
+    expect(v).toEqual({
+      watchdog: [],
+      cert: [],
+      disk: [],
+      load: ['load_down', 'load_stale'],
+      publisher: null,
+    });
+  });
+});
+
+describe('the publisher check (P9a)', () => {
+  const pub = async (page: Got) => (await check(probe({ '/data/v1/meta.json': page }), NOW)).publisher;
+  const meta = (generatedAt: string) => ok({ schemaVersion: 1, generatedAt, anything: 'else' });
+
+  it('is green for a fresh meta.json, including exactly 5 minutes old', async () => {
+    expect(await pub(meta(ago(MIN)))).toEqual([]);
+    expect(await pub(meta(ago(5 * MIN)))).toEqual([]);
+  });
+
+  it('is not deployed yet on a 404: no verdict, no ping', async () => {
+    expect(await pub({ status: 404, body: Buffer.alloc(0) })).toBeNull();
+    expect((await check(probe(), NOW)).publisher).toBeNull();
+  });
+
+  it.each<[string, Got, string[]]>([
+    ['stale', meta(ago(5 * MIN + 1000)), ['publisher_stale']],
+    ['unreachable', { error: 'timeout' }, ['publisher_unreachable']],
+    ['a 503', { status: 503, body: Buffer.from('x') }, ['publisher_unreachable']],
+    ['not JSON', { status: 200, body: Buffer.from('<html>') }, ['publisher_contract']],
+    ['no generatedAt', ok({ schemaVersion: 1 }), ['publisher_contract']],
+    ['a hostile generatedAt', ok({ generatedAt: 'BE-3 777777.777' }), ['publisher_contract']],
+  ])('%s', async (_, page, codes) => {
+    expect(await pub(page)).toEqual(codes);
+  });
+
+  it('a red publisher check does not fail the watchdog ping', async () => {
+    const v = await check(probe({ '/data/v1/meta.json': meta(ago(HOUR)) }), NOW);
+    expect(v).toMatchObject({ watchdog: [], publisher: ['publisher_stale'] });
   });
 });

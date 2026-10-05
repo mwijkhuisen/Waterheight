@@ -162,7 +162,12 @@ export function normaliseStations(doc: Stations, table: LhpTable, fetchedAt: num
       level,
     });
   }
-  return { ...emptyNormalised(), dropped, classes };
+  return {
+    ...emptyNormalised(),
+    dropped,
+    classes,
+    ...(isFuture(updated, fetchedAt) ? {} : { providerUpdated: toIso(updated) }),
+  };
 }
 
 /**
@@ -214,6 +219,7 @@ export function normaliseAlerts(doc: Alerts, fetchedAt: number): Normalised {
   return {
     ...emptyNormalised(),
     dropped,
+    providerUpdated: at,
     warnings: { mode: 'snapshot', at, rows, ...(kept.size > 0 ? { kept: [...kept] } : {}) },
   };
 }

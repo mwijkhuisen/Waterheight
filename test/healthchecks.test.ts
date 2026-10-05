@@ -6,8 +6,8 @@ import { parse } from 'yaml';
 import { GROUP_SLUGS, loadRegistry } from '../apps/server/src/capture/specs.ts';
 import { repoRoot } from './catalogue.ts';
 
-// deploy/healthchecks.yaml (issue #16 "P1a ↔ P1b contract"; P2a adds `load`): the
-// 16 slugs, a timeout of each check's cadence and a grace of twice that (alert at
+// deploy/healthchecks.yaml (issue #16 "P1a ↔ P1b contract"; P2a adds `load`, P9a `publisher` and `owner-publisher`): the
+// 18 slugs, a timeout of each check's cadence and a grace of twice that (alert at
 // 3 × cadence).
 
 type Check = { slug: string; timeout: number; grace: number };
@@ -20,10 +20,12 @@ const OPS: Record<string, number> = {
   cert: 300,
   disk: 300,
   load: 300, // the watchdog pings it every 5 min from /api/v1/health (P2a)
+  publisher: 600, // the watchdog pings it from /data/v1/meta.json (P9a); the publisher cycles every minute
+  'owner-publisher': 1200, // rws-tick pings it every 10 min from the mtime of the owner meta.json (P9a)
 };
 
 describe('deploy/healthchecks.yaml', () => {
-  it('has exactly the 16 contract slugs: the 9 capture groups and the 7 operations checks', () => {
+  it('has exactly the 18 contract slugs: the 9 capture groups and the 9 operations checks', () => {
     expect(checks.map((c) => c.slug).sort()).toEqual([...GROUP_SLUGS, ...Object.keys(OPS)].sort());
   });
 

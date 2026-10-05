@@ -13,12 +13,16 @@ import { Client } from '../http/client.ts';
 // The watchdog role (A§4, A§11.3; issue #16 P1b). Every 5 minutes it probes our
 // own public site the way a visitor reaches it (public DNS, verified TLS,
 // the SSRF-guarded client; egress only to our domain and hc-ping.com) and pings
-// its four healthchecks: `watchdog` (site up, capture.json and ops.json fresh,
+// its five healthchecks: `watchdog` (site up, capture.json and ops.json fresh,
 // last backup < 2 h), `cert` (certificate valid for >= 14 days), `disk`
 // (disk < 75%) and, from P2a, `load` (the loader computes: /api/v1/health is the
 // contract document, not down, fresh, no quarantine, lag < 2 min, no manifest
 // line left unconsumed for 15 min). A provider that is down is not the loader's
-// failure: that is capture's freshness. A failure ping carries fixed codes only.
+// failure: that is capture's freshness. From P9a `publisher` (the static publisher:
+// /data/v1/meta.json is the contract's generatedAt, < 5 min old; 404 = not deployed
+// yet, no ping). The fifth check, `owner-publisher`, is pinged by the host's
+// rws-tick from a file mtime: the owner site is never probed from here. A failure
+// ping carries fixed codes only.
 
 export const CYCLE_MS = 5 * 60_000;
 export const CAPTURE_MAX_AGE_MS = 5 * 60_000;
@@ -26,9 +30,12 @@ export const OPS_MAX_AGE_MS = 30 * 60_000;
 export const BACKUP_MAX_AGE_MS = 2 * 3_600_000;
 export const CERT_MIN_DAYS = 14;
 export const DISK_MAX_PCT = 75;
+export const PUBLISHER_MAX_AGE_MS = 5 * 60_000;
 
 const iso = z.iso.datetime();
 const n = z.number().int().nonnegative();
+/** The one field of /data/v1/meta.json the watchdog reads (the publisher's contract owns the rest). */
+const StaticMetaAge = z.looseObject({ generatedAt: iso });
 
 /** /status/ops.json (the P1a ↔ P1b contract): written by the backup, drill and tick jobs. */
 export const OpsStatus = z.strictObject({
@@ -50,7 +57,14 @@ export type Probe = {
  * release with /api/v1/health is not deployed (the site answers 404): that check
  * is not pinged at all.
  */
-export type Verdicts = { watchdog: string[]; cert: string[]; disk: string[]; load: string[] | null };
+export type Verdicts = {
+  watchdog: string[];
+  cert: string[];
+  disk: string[];
+  load: string[] | null;
+  /** Like `load`: null while the release with /data/v1/meta.json is not deployed (404). */
+  publisher: string[] | null;
+};
 
 export const CHECKS = [
   'watchdog: GET /healthz answers 200',
@@ -60,6 +74,7 @@ export const CHECKS = [
   `cert: the certificate is valid and expires in >= ${CERT_MIN_DAYS} days`,
   `disk: /srv/rws is < ${DISK_MAX_PCT}% full (disk_pct of a fresh ops.json)`,
   `load: /api/v1/health is the contract document, not down, generated < ${HEALTH_MAX_AGE_MS / 60_000} min ago, no quarantined payload, loader lag p95 < ${LAG_DEGRADED_S} s, no manifest line unconsumed for ${BACKLOG_MAX_AGE_S / 60} min, no failing twin check (404 = not deployed yet: no load ping)`,
+  `publisher: /data/v1/meta.json carries a generatedAt < ${PUBLISHER_MAX_AGE_MS / 60_000} min old (404 = not deployed yet: no publisher ping)`,
 ];
 
 const ageMs = (at: string, now: Date) => now.getTime() - Date.parse(at);
@@ -100,17 +115,29 @@ function loadCodes(got: Got, now: Date): string[] | null {
   return codes;
 }
 
+/** The `publisher` check (P9a): the static meta.json is fresh. 404 = not deployed: null. Fixed codes only. */
+function publisherCodes(got: Got, now: Date): string[] | null {
+  if ('error' in got) return ['publisher_unreachable'];
+  if (got.status === 404) return null;
+  if (got.status !== 200) return ['publisher_unreachable'];
+  const meta = json(got, StaticMetaAge);
+  if (typeof meta === 'string') return ['publisher_contract'];
+  return ageMs(meta.generatedAt, now) > PUBLISHER_MAX_AGE_MS ? ['publisher_stale'] : [];
+}
+
 /** One watchdog cycle: pure given the probe and the clock. */
 export async function check(probe: Probe, now: Date): Promise<Verdicts> {
-  const v: Verdicts = { watchdog: [], cert: [], disk: [], load: null };
-  const [healthz, capture, ops, days, health] = await Promise.all([
+  const v: Verdicts = { watchdog: [], cert: [], disk: [], load: null, publisher: null };
+  const [healthz, capture, ops, days, health, meta] = await Promise.all([
     probe.get('/healthz'),
     probe.get('/status/capture.json'),
     probe.get('/status/ops.json'),
     probe.certDaysLeft(),
     probe.get('/api/v1/health'),
+    probe.get('/data/v1/meta.json'),
   ]);
   v.load = loadCodes(health, now);
+  v.publisher = publisherCodes(meta, now);
   if ('error' in healthz) v.watchdog.push(`healthz_${healthz.error}`);
   else if (healthz.status !== 200) v.watchdog.push(`healthz_${healthz.status}`);
 
@@ -180,7 +207,7 @@ export function liveProbe(
 
 /** Pings each check: success, or /fail with its failure codes; a check that does not apply yet (null) is skipped. */
 export async function report(v: Verdicts, pinger: Pick<Pinger, 'ping'>): Promise<void> {
-  for (const slug of ['watchdog', 'cert', 'disk', 'load'] as const) {
+  for (const slug of ['watchdog', 'cert', 'disk', 'load', 'publisher'] as const) {
     const codes = v[slug];
     if (codes === null) continue;
     await (codes.length === 0 ? pinger.ping(slug, 'success') : pinger.ping(slug, 'fail', codes.join(' ')));
@@ -214,12 +241,17 @@ export async function runWatchdog(
   const cycle = async (): Promise<Verdicts> => {
     const v = await check(probe, new Date());
     await report(v, pinger);
-    logger.info({ watchdog: v.watchdog, cert: v.cert, disk: v.disk, load: v.load }, 'watchdog cycle');
+    logger.info(
+      { watchdog: v.watchdog, cert: v.cert, disk: v.disk, load: v.load, publisher: v.publisher },
+      'watchdog cycle',
+    );
     return v;
   };
   if (mode === 'once') {
     const v = await cycle();
-    return v.watchdog.length + v.cert.length + v.disk.length + (v.load?.length ?? 0) === 0 ? 0 : 1;
+    return v.watchdog.length + v.cert.length + v.disk.length + (v.load?.length ?? 0) + (v.publisher?.length ?? 0) === 0
+      ? 0
+      : 1;
   }
   // A cycle never rejects: an unexpected error is logged by name only and the next cycle runs.
   const safeCycle = () =>

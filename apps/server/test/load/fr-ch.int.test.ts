@@ -406,7 +406,8 @@ describe('the attribution of the fill sources (review SR-1)', () => {
     const x = await harness();
     try {
       const api = x.dbAs('rws_api');
-      const sources = async () => (await readMeta(api.db, { dataEpochMs: 0, displayStartMs: 0 }, 'dev', AFTER)).sources;
+      const sources = async () =>
+        (await readMeta(api.db, 'public', { dataEpochMs: 0, displayStartMs: 0 }, 'dev', AFTER)).sources;
       const all = await sources();
       // P5b: DE-7 and LU-1 are public sources with public series too. P8b: CH-4 and FR-4, whose forecast runs sit on
       // CH-1 and FR-1 series, are listed beside them for their attribution; DE-2, DE-3 and LU-3 (owner) never are.

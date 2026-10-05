@@ -14,6 +14,16 @@
 #    rws-status-copy.path if it is not active (a unit that hit a start or
 #    trigger limit stops watching for good) and publishes capture.json
 #    (rws-status-copy), in case an event was missed.
+# 5. (P9a) Pings the `owner-publisher` check when the owner publisher's
+#    meta.json was written < 5 min ago: only its mtime is read, never its
+#    content (the owner channel stays on the host). A missing file (not
+#    deployed yet) sends nothing; an old one sends /fail with a fixed code.
+# 6. (P9a, review SEC-3) A tripwire: the publishers' trees hold regular files
+#    and directories only (the code makes no link: O_EXCL|O_NOFOLLOW temps and
+#    renames). A link there means code ran in a publisher, and Caddy's
+#    file_server would follow it (as far as Caddy's own /data), so every link
+#    is removed at once and the tree's check fails with `links`. Only the
+#    count is logged, never a name or a target.
 #
 # Usage: rws-tick [--dry-run]
 set -euo pipefail
@@ -73,3 +83,31 @@ if ! systemctl is-active --quiet rws-status-copy.path; then
   fi
 fi
 "$here/rws-status-copy" "${dry[@]}" || log "rws-status-copy failed"
+
+# 5. The owner publisher's heartbeat: the mtime of its meta.json, nothing else.
+owner_meta=$RWS_SRV/owner/www/v1/meta.json
+if [[ -f $owner_meta && ! -L $owner_meta ]]; then
+  mtime=$(stat -c %Y "$owner_meta" 2>/dev/null || echo 0)
+  if [[ $mtime =~ ^[0-9]+$ ]] && (($(date +%s) - mtime < 300)); then
+    ping owner-publisher
+  else
+    ping owner-publisher fail stale
+  fi
+fi
+
+# 6. No links in the publishers' trees.
+for aud in public owner; do
+  tree=$RWS_SRV/$aud/www
+  [[ -d $tree && ! -L $tree ]] || continue
+  n=$(find "$tree" -type l | wc -l)
+  ((n > 0)) || continue
+  slug=publisher
+  [[ $aud == public ]] || slug=owner-publisher
+  if ((DRY_RUN)); then
+    log "dry-run: would remove $n link(s) under $tree"
+  else
+    find "$tree" -type l -delete
+    log "warning: removed $n link(s) under $tree: no publisher makes one"
+  fi
+  ping "$slug" fail links
+done

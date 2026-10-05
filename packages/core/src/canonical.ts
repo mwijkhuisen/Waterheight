@@ -156,6 +156,8 @@ export type Normalised = {
   classes?: ClassRow[];
   /** P7a: warnings or area classes. */
   warnings?: Warnings;
+  /** P9a: the provider's own update instant (UTC ISO) where the licence names it (DE-6 `updated`, the "Stand" date). */
+  providerUpdated?: string;
   /** P8a: forecast runs (packages/core forecast.ts), stored as immutable bi-temporal runs. */
   forecasts?: ForecastRunIn[];
   /** P8a: one file of a run that spans several payloads (LU-3), staged until the run is complete. */

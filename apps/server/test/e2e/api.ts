@@ -7,6 +7,9 @@
 // Playwright (local) and the CI e2e job start it; SIGTERM or SIGINT drops the database.
 //
 // Usage: env DATABASE_URL=<superuser url> [HOST=127.0.0.1] [PORT=4480] node apps/server/test/e2e/api.ts
+import { mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { serve } from '@hono/node-server';
 import { CANARIES, CANARY_RENDERINGS, SeriesForecast, Snapshot, Stations } from '@rws/contracts';
 import { DisplayWindow } from '../../src/api/window.ts';
@@ -14,8 +17,14 @@ import { createApp } from '../../src/app.ts';
 import { type Db, type DbConfig, dbConfig, openDb } from '../../src/db/pool.ts';
 import { readRegistry, syncRegistry } from '../../src/load/registry-sync.ts';
 import { openApiDb, parseListen } from '../../src/main.ts';
+import { publishOnce } from '../../src/publish/index.ts';
 import { createTestDb } from '../db/testdb.ts';
 
+/**
+ * The publisher's root (P9a): `v1/` under it is /data/v1/. The stand-in for Caddy (apps/web/e2e/server.ts) serves it;
+ * the CI e2e job mounts `<dir>/v1` into the real Caddy. Both read E2E_PUBLISH_DIR (same default).
+ */
+export const E2E_PUBLISH_DIR = process.env.E2E_PUBLISH_DIR ?? join(tmpdir(), 'rws-e2e-publish');
 /** The fixed clock; the Playwright specs use the same instant. */
 export const NOW = new Date('2026-10-26T12:00:00Z');
 const FROM = '2026-10-24T00:00:00Z';
@@ -129,6 +138,7 @@ let api: Db | undefined;
 let window: DisplayWindow | undefined;
 let server: ReturnType<typeof serve> | undefined;
 const cleanup = async () => {
+  await rm(E2E_PUBLISH_DIR, { recursive: true, force: true }).catch(() => undefined);
   server?.close(); // also closes idle keep-alive connections; the exit and the forced DROP do the rest
   window?.stop();
   await api?.close();
@@ -222,6 +232,20 @@ try {
       [f.station, f.source, f.issued, f.fetched, at(f.first), at(f.last), f.base, f.per, f.band, f.segmentEnd],
     );
     if ((seeded.rowCount ?? 0) === 0) throw new Error(`seed: no ${f.source} run on ${f.station}`);
+  }
+
+  // P9a: the static files, from the same seeded data and the same fixed clock, as the real `publish` role writes them
+  // (one full strict cycle). The web reads them first; it finds the API behind them.
+  await rm(E2E_PUBLISH_DIR, { recursive: true, force: true });
+  await mkdir(E2E_PUBLISH_DIR, { recursive: true });
+  const publisher = openDb(dbConfig({ DATABASE_URL: t.urlFor('rws_publish') }, 'rws_publish') as DbConfig, { max: 3 });
+  try {
+    // The newest settled day only: the display window reaches back to 2026-08-24 (about 60 empty settled days, two
+    // minutes of rendering); the others stay 0 in meta.dayVersions and are read from the API, as in production
+    // while the publisher catches up.
+    await publishOnce(publisher.db, 'public', E2E_PUBLISH_DIR, { now: NOW.getTime(), settledDays: 1 });
+  } finally {
+    await publisher.close();
   }
 
   const opened = openApiDb({ DATABASE_URL: t.urlFor('rws_api') });

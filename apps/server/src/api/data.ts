@@ -1,7 +1,7 @@
 import { floorBucket, MAX_POINTS, type Meta, type Series, type Snapshot, type Stations } from '@rws/contracts';
 import { FORECAST_SOURCES, OWNER_ONLY_SOURCES } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
-import { VIEWS } from '../db/audience.ts';
+import { type ChannelAudience, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { FILLED_BY, LOAD_ADAPTERS } from '../load/adapters.ts';
 import { forecastHorizons } from './forecast-at.ts';
@@ -10,9 +10,10 @@ import { readStates, type StateRead, type StaticCache, snapshotValues } from './
 import { coded, iso, snapshot } from './util.ts';
 import type { Window } from './window.ts';
 
-// The reads of the public data routes (A§8 Q1, Q4; A§9.2). This process serves
-// the public family only: every name comes from VIEWS.public / OBS_AT.public
-// (audience.ts), nothing in a request selects a view, and every value is a bound
+// The reads of the public data routes (A§8 Q1, Q4; A§9.2). The API serves the
+// public family only: every name comes from VIEWS / OBS_AT (audience.ts) of the
+// family its caller names (the routes always 'public'; the publishers their own,
+// P9a), nothing in a request selects a view, and every value is a bound
 // parameter. /meta, /stations and /snapshot read the display channel; /series
 // reads the api channel (lic_api; values older than the history window need
 // lic_history_export, applied inside the views).
@@ -53,9 +54,16 @@ const FILL_SOURCES = PAIRS.map(([, source]) => source);
  * runs sit on it (P8b: CH-4, FR-4, whose attribution is due where their forecasts are shown) as their own entries,
  * read through the same family's attribution view: a source the view does not show is not listed.
  */
-export async function readMeta(db: Kysely<DB>, window: Window, build: string, now: Date): Promise<Meta> {
+export async function readMeta(
+  db: Kysely<DB>,
+  family: ChannelAudience,
+  window: Window,
+  build: string,
+  now: Date,
+): Promise<Meta> {
+  const v = VIEWS[family];
   const { rows } = await sql<AttributionRow>`
-    WITH listed AS (SELECT DISTINCT source_id FROM ${sql.table(V.series)} WHERE active),
+    WITH listed AS (SELECT DISTINCT source_id FROM ${sql.table(v.series)} WHERE active),
     fill AS (
       SELECT f.source_id
       FROM unnest(${FILL_TARGETS}::text[], ${FILL_SOURCES}::text[]) AS f(target, source_id)
@@ -64,7 +72,7 @@ export async function readMeta(db: Kysely<DB>, window: Window, build: string, no
     )
     SELECT s.source_id, a.lang, a.text, a.url, a.required, a.needs_date
     FROM (SELECT source_id, false AS filled FROM listed UNION ALL SELECT source_id, true FROM fill) s
-    LEFT JOIN ${sql.table(V.attribution)} a ON a.source_id = s.source_id
+    LEFT JOIN ${sql.table(v.attribution)} a ON a.source_id = s.source_id
     WHERE NOT s.filled OR a.source_id IS NOT NULL
     ORDER BY s.source_id, a.ord`.execute(db);
   const sources = new Map<string, Meta['sources'][number]['attribution']>();
@@ -86,7 +94,7 @@ export async function readMeta(db: Kysely<DB>, window: Window, build: string, no
     displayStart: new Date(window.displayStartMs).toISOString(),
     build,
     sources: [...sources].map(([id, attribution]) => ({ id, attribution })),
-    forecastHorizons: forecastHorizons('public'),
+    forecastHorizons: forecastHorizons(family),
   };
 }
 
@@ -125,11 +133,12 @@ const flag = (flags: unknown, key: string): boolean | null => {
 // ponytail: dataSince is a GROUP BY over the whole daily rollup, cached 300 s; an uncached /stations took 580 ms at
 // 3,000 series × 365 days. Store the first-data day per series once the registry passes 1,000 active series or an
 // uncached /stations passes 500 ms.
-export async function readStations(db: Kysely<DB>): Promise<Stations> {
+export async function readStations(db: Kysely<DB>, family: ChannelAudience): Promise<Stations> {
+  const v = VIEWS[family];
   const { stations, series, since } = await snapshot(db, async (tx) => ({
     stations: (
       await sql<StationRow>`
-        SELECT id, name, water_name, country, lon, lat, tier, flags FROM ${sql.table(V.station)} ORDER BY id`.execute(
+        SELECT id, name, water_name, country, lon, lat, tier, flags FROM ${sql.table(v.station)} ORDER BY id`.execute(
         tx,
       )
     ).rows,
@@ -137,12 +146,12 @@ export async function readStations(db: Kysely<DB>): Promise<Stations> {
       await sql<SeriesRow>`
         SELECT id, station_id, source_id, quantity, value_kind, native_unit, datum,
                EXTRACT(EPOCH FROM expected_step)::int AS expected_step_s,
-               EXTRACT(EPOCH FROM staleness_limit)::int AS staleness_s
-        FROM ${sql.table(V.series)} WHERE active ORDER BY station_id, id`.execute(tx)
+               EXTRACT(EPOCH FROM staleness_limit)::float8 AS staleness_s
+        FROM ${sql.table(v.series)} WHERE active ORDER BY station_id, id`.execute(tx)
     ).rows,
     since: (
       await sql<{ series_id: number; since: Date }>`
-        SELECT series_id, min(bucket) AS since FROM ${sql.table(V.obs1d)} GROUP BY series_id`.execute(tx)
+        SELECT series_id, min(bucket) AS since FROM ${sql.table(v.obs1d)} GROUP BY series_id`.execute(tx)
     ).rows,
   }));
   const sinceOf = new Map(since.map((r) => [r.series_id, r.since]));
@@ -185,14 +194,17 @@ export async function readStations(db: Kysely<DB>): Promise<Stations> {
 
 /**
  * A§8 Q1 at the quantised `t` (the last observation of every series with ts ≤ t and ts > t − its staleness limit),
- * each value with its state, basis and detail-view height (P7b, A§8 Q3): the public family only.
+ * each value with its state, basis and detail-view height (P7b, A§8 Q3). The public family passes the owner-basis
+ * check at the boundary; the owner family's values may carry owner bases (its outputs are owner-only).
  */
 export async function readSnapshot(
   db: Kysely<DB>,
+  family: ChannelAudience,
   t: number,
   opts: { now: number; sections: ReadonlyMap<string, string>; cache: StaticCache },
 ): Promise<Snapshot> {
-  return publicSnapshot(await readStates(db, 'public', t, { ...opts, current: t >= floorBucket(opts.now) }));
+  const read = await readStates(db, family, t, { ...opts, current: t >= floorBucket(opts.now) });
+  return family === 'public' ? publicSnapshot(read) : { t: iso(new Date(read.t)), values: snapshotValues(read) };
 }
 
 /**
