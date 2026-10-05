@@ -21,6 +21,7 @@ import {
   type ReachesFile,
   type RiversManifest,
   Snapshot,
+  SnapshotAnswer,
   Stations,
   validateBasemap,
   WarningsFile,
@@ -179,17 +180,19 @@ describe('the A§12.2 headers', () => {
       'permissions-policy': 'geolocation=(), camera=(), microphone=()',
       'cross-origin-opener-policy': 'same-origin',
       'cross-origin-resource-policy': 'same-origin',
+      'reporting-endpoints': 'csp="/api/v1/beacon"',
       'x-robots-tag': 'noindex',
     });
-    expect(Object.keys(expected)).toHaveLength(8);
+    expect(Object.keys(expected)).toHaveLength(9);
   });
 
   it('the Caddyfile sends exactly these values, removes Server and sends no CORS header', () => {
     const site = readFileSync(join(repoRoot, 'deploy/web/site.caddy'), 'utf8');
     const block = /\n\theader \{\n([\s\S]*?)\n\t\}/.exec(site)?.[1] ?? '';
     const sent: Record<string, string> = {};
-    for (const [, name = '', value = ''] of block.matchAll(/^\t\t([A-Za-z-]+) "(.*)"$/gm))
-      sent[name.toLowerCase()] = value;
+    // A value may hold Caddyfile-escaped quotes (Reporting-Endpoints "csp=\"/api/v1/beacon\"").
+    for (const [, name = '', value = ''] of block.matchAll(/^\t\t([A-Za-z-]+) "((?:[^"\\]|\\.)*)"$/gm))
+      sent[name.toLowerCase()] = value.replaceAll(/\\(.)/g, '$1');
     expect(sent).toEqual(expected);
     expect(block).toMatch(/^\t\t-Server$/m);
     expect(site.toLowerCase()).not.toContain('access-control-');
@@ -561,7 +564,10 @@ describe('the health API answers', () => {
     const good: Record<string, Page | string> = Object.fromEntries(
       PARAM_CASES.map(([path, status]) => [
         path,
-        page(status === 400 ? '{"error":"unknown_parameter"}' : '{"error":"not_found"}', { status }),
+        page(
+          status === 400 ? '{"error":"unknown_parameter","attribution":[]}' : '{"error":"not_found","attribution":[]}',
+          { status },
+        ),
       ]),
     );
     expect(checkHealthParams(good)).toMatchObject({ check: 'health params', ok: true });
@@ -1763,9 +1769,10 @@ const stationsDoc = (): Stations =>
       stationDoc('lu.age.Perl', 'LU', [seriesDoc(7, 'LU-1', 'H')]),
     ],
   });
-const snapshotDoc = (ms: number, ages: Record<number, number> = { 1: 600, 3: 1200 }): Snapshot =>
-  Snapshot.parse({
+const snapshotDoc = (ms: number, ages: Record<number, number> = { 1: 600, 3: 1200 }): SnapshotAnswer =>
+  SnapshotAnswer.parse({
     t: new Date(ms).toISOString(),
+    attribution: [],
     values: Object.entries(ages).map(([series, ageSeconds]) => ({
       series: Number(series),
       ts: new Date(ms - ageSeconds * 1000).toISOString(),
@@ -2002,9 +2009,10 @@ describe('api snapshot', () => {
       detail: 'ECONNRESET',
     });
     // A t with seconds or milliseconds is the same instant.
-    expect(checkSnapshot(NOW_ASK, snapRead(NOW_ASK, NOW_MS, {}, { t: '2026-10-02T12:00:00Z', values: [] })).ok).toBe(
-      true,
-    );
+    expect(
+      checkSnapshot(NOW_ASK, snapRead(NOW_ASK, NOW_MS, {}, { t: '2026-10-02T12:00:00Z', values: [], attribution: [] }))
+        .ok,
+    ).toBe(true);
   });
 
   it('is a FAIL with the reason when /meta gave no server time', () => {
@@ -2374,7 +2382,7 @@ describe('api openapi and api params', () => {
   const bad = (over: Partial<Page> = {}): Page => ({
     status: 400,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-    body: '{"error":"unknown_parameter"}',
+    body: '{"error":"unknown_parameter","attribution":[]}',
     ...over,
   });
 
@@ -2384,7 +2392,7 @@ describe('api openapi and api params', () => {
 
   it('params fails on another status or body (not echoing the request), a cacheable 400 and a network error', () => {
     expect(checkApiParams(bad({ status: 200 })).detail).toBe('status 200, want 400');
-    expect(checkApiParams(bad({ body: '{"error":"bad_parameter"}' })).detail).toBe(
+    expect(checkApiParams(bad({ body: '{"error":"bad_parameter","attribution":[]}' })).detail).toBe(
       'the body is not the fixed 400 body',
     );
     expect(checkApiParams(bad({ body: '{"error":"unknown_parameter","x":"1"}' })).ok).toBe(false);
@@ -2927,7 +2935,10 @@ describe('health params through Caddy (P4b)', () => {
     const good = Object.fromEntries(
       PARAM_CASES.map(([path, status]) => [
         path,
-        page(status === 400 ? '{"error":"unknown_parameter"}' : '{"error":"not_found"}', { status }),
+        page(
+          status === 400 ? '{"error":"unknown_parameter","attribution":[]}' : '{"error":"not_found","attribution":[]}',
+          { status },
+        ),
       ]),
     );
     expect(checkHealthParams(good).ok).toBe(true);
@@ -2971,7 +2982,14 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     expect(rules('@api')).toEqual(['@api {', 'method GET HEAD', `expression ${API_PATH}`]);
     // A client's own address headers never reach the api (SR-4): Caddy sets X-Forwarded-For itself. Only Caddy sets
     // X-Degraded (P9a): /api/v1/snapshot alone has the stand-in for an upstream 502, 503 or 504 answer.
-    const proxy = ['header_up -Forwarded', 'header_up -X-Real-IP', 'header_down -Server', 'header_down -X-Degraded'];
+    // X-Rws-Client (P9b) is the TCP peer, set by Caddy and replacing a client's value: the api's rate-limit key.
+    const proxy = [
+      'header_up -Forwarded',
+      'header_up -X-Real-IP',
+      'header_up X-Rws-Client {remote_host}',
+      'header_down -Server',
+      'header_down -X-Degraded',
+    ];
     expect(rules('handle @api')).toEqual([
       'handle @api {',
       'request_body {',
@@ -3000,7 +3018,29 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       '}',
       '}',
     ]);
-    expect([...site.matchAll(/^\s+reverse_proxy (\S+)/gm)].map((m) => m[1])).toEqual(['api:8080', 'api:8080']);
+    // Three proxies: the beacon, the snapshot with its stand-in and the plain one.
+    expect([...site.matchAll(/^\s+reverse_proxy (\S+)/gm)].map((m) => m[1])).toEqual([
+      'api:8080',
+      'api:8080',
+      'api:8080',
+    ]);
+    // The beacon (P9b): the one POST, an exact method and path (not a folding path matcher), 8 KB, before the 405 guard.
+    expect(rules('@beacon')).toEqual(['@beacon {', 'method POST', "expression `{path} == '/api/v1/beacon'`"]);
+    expect(rules('handle @beacon')).toEqual([
+      'handle @beacon {',
+      'request_body {',
+      'max_size 8KB',
+      '}',
+      'header -Via',
+      'reverse_proxy api:8080 {',
+      ...proxy,
+      '}',
+    ]);
+    expect(site.indexOf('\n\thandle @beacon {')).toBeLessThan(site.indexOf('\n\thandle @write {'));
+    expect(site.match(/^\s+Reporting-Endpoints .*$/gm)?.map((l) => l.trim())).toEqual([
+      'Reporting-Endpoints "csp=\\"/api/v1/beacon\\""',
+      'Reporting-Endpoints "csp=\\"/api/v1/beacon\\""',
+    ]);
     // The dead-upstream half (a dial failure or a timeout is a Caddy error): scoped to /api/v1/snapshot, never a
     // site-wide error page (C19, KG-107).
     expect(site.match(/\n\thandle_errors /g)).toHaveLength(1);
@@ -4019,6 +4059,8 @@ describe('verify-prod: the static publisher (P9a)', () => {
       'static lag',
       'static rerender',
       'runtime config',
+      'api sweep',
+      'settled sweep',
     ];
     for (const n of names)
       expect(
@@ -4030,7 +4072,7 @@ describe('verify-prod: the static publisher (P9a)', () => {
     for (const n of required
       .match(/'([^']+)'/g)
       ?.map((x) => x.slice(1, -1))
-      .filter((x) => x.startsWith('static') || x === 'runtime config') ?? [])
+      .filter((x) => x.startsWith('static') || x === 'runtime config' || x === 'api sweep') ?? [])
       expect(names).toContain(n);
   });
 
