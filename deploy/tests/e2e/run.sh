@@ -999,8 +999,9 @@ step "API limits (P9b): the API is rate limited per client, static files never a
 burst() { # <path> <out file>: 300 GETs from 203.0.114.11 in a burst; one line "<status> <retry-after>" each
   local cfg=/ci/burst.cfg i
   : >"$cfg"
-  for i in $(seq 300); do printf 'url = "https://%s%s"\n' "$DOMAIN" "$1" >>"$cfg"; done
-  ip netns exec ext curl -sS -o /dev/null --parallel --parallel-max 30 --max-time 60 --cacert /ci/pki/pebble-root.pem \
+  # One `output` per URL: a single -o applies to the first URL only, and the other bodies would go to stdout.
+  for i in $(seq 300); do printf 'url = "https://%s%s"\noutput = "/dev/null"\n' "$DOMAIN" "$1" >>"$cfg"; done
+  ip netns exec ext curl -sS --parallel --parallel-max 30 --max-time 60 --cacert /ci/pki/pebble-root.pem \
     --interface "${CLIENT_IPS[0]}" --resolve "$DOMAIN:443:$IP4" -w '%{http_code} %header{retry-after}\n' -K "$cfg" >"$2"
 }
 burst /api/v1/meta /ci/burst-api.out
