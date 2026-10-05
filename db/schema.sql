@@ -142,6 +142,7 @@ CREATE FUNCTION public.own_forecast_at(p_asof timestamp with time zone, p_t time
   WHERE p_t >= p_asof AND r.first_valid <= p_t AND r.last_valid >= p_t
     AND e.audience IN ('public', 'owner') AND e.role = 'primary' AND e.lic_display
     AND fs.audience IN ('public', 'owner') AND fs.lic_display
+    AND (e.lic_history_export OR v.valid_ts >= statement_timestamp() - e.history_window)
 $$;
 
 
@@ -211,6 +212,7 @@ CREATE FUNCTION public.pub_forecast_at(p_asof timestamp with time zone, p_t time
   WHERE p_t >= p_asof AND r.first_valid <= p_t AND r.last_valid >= p_t
     AND e.audience IN ('public') AND e.role = 'primary' AND e.lic_display
     AND fs.audience IN ('public') AND fs.lic_display
+    AND (e.lic_history_export OR v.valid_ts >= statement_timestamp() - e.history_window)
 $$;
 
 
@@ -633,7 +635,7 @@ CREATE VIEW public.own_api_forecast_value WITH (security_barrier='true') AS
            FROM ((public.forecast_run r
              JOIN public.series_eff e ON ((e.series_id = r.series_id)))
              JOIN public.source fs ON ((fs.id = r.source_id)))
-          WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (fs.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND fs.lic_display AND fs.lic_api AND (r.id = v.run_id))));
+          WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (fs.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND fs.lic_display AND fs.lic_api AND (r.id = v.run_id) AND (e.lic_history_export OR (v.valid_ts >= (statement_timestamp() - e.history_window))))));
 
 
 --
@@ -843,7 +845,7 @@ CREATE VIEW public.own_forecast_value WITH (security_barrier='true') AS
            FROM ((public.forecast_run r
              JOIN public.series_eff e ON ((e.series_id = r.series_id)))
              JOIN public.source fs ON ((fs.id = r.source_id)))
-          WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (fs.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND fs.lic_display AND (r.id = v.run_id))));
+          WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (fs.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND fs.lic_display AND (r.id = v.run_id) AND (e.lic_history_export OR (v.valid_ts >= (statement_timestamp() - e.history_window))))));
 
 
 --
@@ -1323,7 +1325,7 @@ CREATE VIEW public.pub_api_forecast_value WITH (security_barrier='true') AS
            FROM ((public.forecast_run r
              JOIN public.series_eff e ON ((e.series_id = r.series_id)))
              JOIN public.source fs ON ((fs.id = r.source_id)))
-          WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (fs.audience = 'public'::public.audience) AND fs.lic_display AND fs.lic_api AND (r.id = v.run_id))));
+          WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (fs.audience = 'public'::public.audience) AND fs.lic_display AND fs.lic_api AND (r.id = v.run_id) AND (e.lic_history_export OR (v.valid_ts >= (statement_timestamp() - e.history_window))))));
 
 
 --
@@ -1515,7 +1517,7 @@ CREATE VIEW public.pub_forecast_value WITH (security_barrier='true') AS
            FROM ((public.forecast_run r
              JOIN public.series_eff e ON ((e.series_id = r.series_id)))
              JOIN public.source fs ON ((fs.id = r.source_id)))
-          WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (fs.audience = 'public'::public.audience) AND fs.lic_display AND (r.id = v.run_id))));
+          WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (fs.audience = 'public'::public.audience) AND fs.lic_display AND (r.id = v.run_id) AND (e.lic_history_export OR (v.valid_ts >= (statement_timestamp() - e.history_window))))));
 
 
 --
@@ -2561,4 +2563,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261106000002'),
     ('20261106000003'),
     ('20261107000001'),
-    ('20261107000002');
+    ('20261107000002'),
+    ('20261108000001');

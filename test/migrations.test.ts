@@ -25,6 +25,7 @@ const APPLIED: Readonly<Record<string, string>> = {
   '20261106000003_forecast_grants.sql': '4b5a47820540f426db3d82d952377b39d91d5368b1097952997ef85c9ba49936',
   '20261107000001_p9a_publish.sql': '4779bffc6ed8405cdf887ff8c0760e4f5592f105cf6ac45b8a1f56535ab8546c',
   '20261107000002_views_publish.sql': '9a89dbcb6f7f02c2705afc5253d96bb48607cb342f446a0642b1127d43db729f',
+  '20261108000001_views_history.sql': 'cab599d176ccff292d429007cf8f5a84089382e1845ffbcb37b77c14dcfdbc9c',
 };
 
 const dir = new URL('../db/migrations/', import.meta.url);
