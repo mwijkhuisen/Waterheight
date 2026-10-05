@@ -149,6 +149,7 @@ import {
   snapshotAt,
   soak,
   staleSpecs,
+  staticLeakTerms,
   TILE_416_REQUESTS,
   TILE_CACHE,
   TILE_HEADERS,
@@ -3677,6 +3678,19 @@ describe('owner ids and interval DE-6 (P7a)', () => {
 });
 
 describe('verify-prod: the static publisher (P9a)', () => {
+  it('a host a public source shares is no owner term in a static file; the tripwire list keeps it', () => {
+    // LU-1 (public) and LU-2 to LU-4 (owner) fetch from AGE's host; sources.json names LU-1's provider terms page.
+    const terms = staticLeakTerms(registry);
+    expect(leakTerms(registry)).toContain('inondations.public.lu');
+    expect(terms).not.toContain('inondations.public.lu');
+    for (const t of ['LU-2', 'LU-3', 'LU-4', 'BE-3', 'DE-2', 'lu-3-percentile', 'vorhersage.bafg.de', OWNER_CANARY])
+      expect(terms).toContain(t);
+    expect(leaks('{"licence":{"url":"https://inondations.public.lu/fr/support/aspects-legaux.html"}}', terms)).toEqual(
+      [],
+    );
+    expect(leaks('{"source":"LU-3"}', terms)).toEqual(['LU-3']);
+  });
+
   const accept = { safeParse: (v: unknown) => ({ success: true as const, data: v as { ok?: number } }) };
   const refuse = { safeParse: () => ({ success: false as const }) };
   const file = (doc: unknown, cache: string, type = 'application/json', over: Partial<Page> = {}): Page => ({

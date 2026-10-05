@@ -656,6 +656,21 @@ export function leakTerms(registry: Registry): string[] {
   return [...new Set([...ownerTerms(registry), ...CANARY_RENDERINGS])].sort();
 }
 
+/**
+ * The terms a public static file must not hold (P9a): every leak term except a host that a public source fetches
+ * from too. The public LU-1 and the owner LU-2 to LU-4 share AGE's inondations.public.lu, and the public sources.json
+ * names LU-1's provider terms page there; a shared host identifies nothing owner-only. The status copy's tripwire
+ * (deploy/owner-terms.json) keeps the full list.
+ */
+export function staticLeakTerms(registry: Registry): string[] {
+  const publicHosts = new Set(
+    [...registry.sources]
+      .filter(([, src]) => src.audience === 'public')
+      .flatMap(([id]) => registry.hosts.get(id) ?? []),
+  );
+  return leakTerms(registry).filter((t) => !publicHosts.has(t));
+}
+
 /** The keys of a JSON document (at any depth) that name an owner-only field. */
 export function ownerKeys(doc: unknown): string[] {
   if (Array.isArray(doc)) return doc.flatMap(ownerKeys);
@@ -2259,8 +2274,9 @@ async function main(argv: string[]): Promise<number> {
       checkRiversAttribution(entry === undefined ? undefined : await tile(entry)),
     );
 
-    // P9a: the static publisher's files through Caddy. The terms are checked per file (readStatic) and in the sweep below.
-    const terms = leakTerms(registry);
+    // P9a: the static publisher's files through Caddy. The terms are checked per file (readStatic) and in their own
+    // sweep below, without the hosts a public source shares (staticLeakTerms).
+    const terms = staticLeakTerms(registry);
     const st = (path: string, headers?: Readonly<Record<string, string>>) =>
       tryGet(`https://${domain}${path}`, net, headers);
     const D = '/data/v1/';
@@ -2353,12 +2369,15 @@ async function main(argv: string[]): Promise<number> {
           '/api/v1/stations': body(stationsPage),
           [RIVERS_MANIFEST_PATH]: body(riversPage),
           '/data/v1/rivers/reaches': body(reachesPage),
-          ...Object.fromEntries(Object.entries(staticPages).map(([path, page]) => [path, body(page)])),
           ...Object.fromEntries(
             SNAPSHOT_ASKS.map((ask) => [`/api/v1/snapshot ${ask.name}`, body(snapPages[ask.name])]),
           ),
         },
         leakTerms(registry),
+      ),
+      checkOwnerLeak(
+        Object.fromEntries(Object.entries(staticPages).map(([path, page]) => [path, body(page)])),
+        staticLeakTerms(registry),
       ),
     );
     results.push(

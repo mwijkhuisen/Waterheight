@@ -283,7 +283,8 @@ jobs:
   hook:
     name: hook
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # The install, pnpm check and the whole integration suite (about 17 minutes in CI since P9a's publisher tests).
+    timeout-minutes: 40
     permissions:
       contents: read
     env:

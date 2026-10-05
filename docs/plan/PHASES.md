@@ -2372,6 +2372,7 @@ Code review (Sonnet): approve, minors CR-1 to CR-6 and nits CR-7 to CR-9. Securi
 | SEC-3 | `rws-tick` removes every link in the two www trees and fails the tree's check with `links` (`backup.test.sh`); T-PUB-1 reworded |
 | SEC-4, SEC-6, SEC-7 | The `/data/v1` comment names the canonical path; the owner's error answers carry HSTS; the runbook covers a narrowing deploy |
 | SEC-5 | The CI throw-away owner password is hashed from stdin |
-| CI | `run.sh` passes `DOMAIN` through `env`; `owner-check.mjs` verifies caddy-owner's certificate against its `tls internal` root; the `integration` job may take 30 minutes |
+| CI | `run.sh` passes `DOMAIN` through `env`; `owner-check.mjs` verifies caddy-owner's certificate against its `tls internal` root; the `integration` job may take 30 minutes and `hook` 40 (it runs the whole suite after the install); the caddy-owner write probe runs its redirection in a subshell (a failed redirection of `:` ended `sh`) |
+| CI `verify-prod` | `static sources` and the owner-leak sweep took AGE's `inondations.public.lu` for an owner term: the public LU-1 shares the host with LU-2 to LU-4, and `sources.json` names LU-1's provider terms page there. The static checks and their own sweep use `staticLeakTerms` (the leak terms without a host a public source shares); every other body and the status tripwire `deploy/owner-terms.json` keep the full list |
 
 CR-7 to CR-9 are accepted (KG-223). Threat model 4.36.
