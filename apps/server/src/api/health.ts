@@ -45,14 +45,14 @@ import { coded, iso, snapshot, validated } from './util.ts';
 //
 // Under saturation (P9b, A§9.2): a health computation takes a DB permit only if
 // one is free now. When none is, the route answers the last good body (at most
-// 60 s old) with no-store and `X-Stale: 1`, else 503 busy with Retry-After, so
+// 10 minutes old: longer than the watchdog's 5-minute look, review F4) with no-store and `X-Stale: 1`, else 503 busy with Retry-After, so
 // the watchdog sees a stale but valid answer during a spike, never a false
 // "down". A real database error stays the cached 503 (5 s).
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const UNAVAILABLE: HealthUnavailable = { status: 'down', error: 'unavailable', attribution: [] };
 /** How old the last good body may be when it is served stale under saturation. */
-export const STALE_MS = 60_000;
+export const STALE_MS = 10 * 60_000;
 /** How long a computed answer is served; also the response's max-age. */
 export const CACHE_MS = 30_000;
 /** After a database error the next attempt waits this long (the answer stays a 503 meanwhile). */

@@ -237,7 +237,11 @@ async function api(
     versions.start();
   }
   // Fixed codes only: the limiter never logs an address (a collapsed peer is a deployment fault, C7).
-  const limiter = new Limiter({ onGateway: () => logger.error({ code: 'limiter_gateway_key' }, 'limiter') });
+  // The owner API's peer is always the owner's WireGuard address (a private one): its key is `unknown-gw` by design, so
+  // only the public API reports one (review SEC-4).
+  const limiter = new Limiter(
+    family === 'public' ? { onGateway: () => logger.error({ code: 'limiter_gateway_key' }, 'limiter') } : {},
+  );
   return new Promise<number>((resolve) => {
     const app = createApp({
       family,
@@ -250,7 +254,9 @@ async function api(
         ? {}
         : { db: pool.db, window, versions }),
     });
-    const server = serve({ fetch: app.fetch, ...listen }, (info) => {
+    // Behind Caddy's own read timeouts (10 s), a request that still trickles is cut here too (review SEC-2).
+    const serverOptions = { requestTimeout: 30_000, headersTimeout: 10_000 };
+    const server = serve({ fetch: app.fetch, ...listen, serverOptions }, (info) => {
       log(`api listening on ${info.address}:${info.port}`);
     });
     const stop = () =>

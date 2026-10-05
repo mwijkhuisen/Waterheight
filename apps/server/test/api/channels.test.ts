@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type Channel, channelViews, ROUTES, type RouteDef } from '../../src/api/channels.ts';
+import { createApp } from '../../src/app.ts';
 import { type ChannelAudience, VIEWS } from '../../src/db/audience.ts';
 
 // C21, the bulk_export guard (P9b): every route names its licence channel, a route reads its views only through
@@ -141,5 +142,20 @@ describe('the api channel is read through channelViews only', () => {
       expect(calls.length, file).toBeGreaterThan(0);
       for (const c of calls) expect(c, file).toMatch(/'api'/);
     }
+  });
+});
+
+describe('the served routes are the route table (review F8)', () => {
+  it('every route the app registers under /api/v1 is a non-planned entry of ROUTES with its method, and back', () => {
+    const app = createApp({ sections: new Map() });
+    const served = new Set(
+      app.routes
+        .filter((r) => r.path.startsWith('/api/v1/') && !r.path.endsWith('*') && r.method !== 'ALL')
+        .map((r) => `${r.method} ${r.path}`),
+    );
+    const table = new Set(ROUTES.filter((r) => !r.planned).map((r) => `${r.method} ${r.path}`));
+    expect([...served].sort()).toEqual([...table].sort());
+    // Nothing planned is served yet: a route that is built must leave `planned` (and so join the canary sweeps).
+    for (const r of ROUTES.filter((x) => x.planned)) expect(served.has(`${r.method} ${r.path}`), r.path).toBe(false);
   });
 });

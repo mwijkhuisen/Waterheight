@@ -45,6 +45,8 @@ describe('clientKey', () => {
     ['11.0.0.1', '11.0.0.1'],
     ['::ffff:203.0.113.5', '203.0.113.5'],
     ['::FFFF:203.0.113.5', '203.0.113.5'],
+    // The same address written in hex (review F11).
+    ['::ffff:cb00:7105', '203.0.113.5'],
   ])('IPv4 %j is %j', (header, key) => {
     expect(clientKey(header)).toBe(key);
   });

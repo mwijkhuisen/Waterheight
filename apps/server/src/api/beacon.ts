@@ -117,7 +117,9 @@ async function handle(c: Context, deps: BeaconDeps) {
       if (!(err instanceof z.ZodError)) throw err;
       throw new Refused(err.issues.some((i) => i.code === 'unrecognized_keys') ? 'unknown_parameter' : 'bad_parameter');
     }
-    for (const [beacon, fields] of lines) deps.log?.info({ beacon, fields }, 'beacon');
+    // One line per request, whatever the number of reports in it (review SEC-3): the global beacon bucket then bounds
+    // the log lines a second, not a twentieth of them.
+    deps.log?.info({ beacon: lines.map(([kind, fields]) => ({ kind, fields })) }, 'beacon');
     return c.body(null, 204, { 'Cache-Control': 'no-store' });
   } catch (err) {
     return failure(c, err);

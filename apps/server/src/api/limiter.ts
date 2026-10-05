@@ -70,6 +70,12 @@ export function clientKey(header: string | undefined): string {
   if (kind !== 6) return UNKNOWN;
   const g = ipv6Groups(text);
   if (g === undefined) return UNKNOWN;
+  // ::ffff:a.b.c.d written in hex (::ffff:102:304) is the IPv4 address too (review F11).
+  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) {
+    const [hi, lo] = [g[6] as number, g[7] as number];
+    const o = [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff];
+    return PRIVATE_V4(o) ? GATEWAY : o.join('.');
+  }
   const first = g[0] as number;
   // ::1, the unspecified address, ULA fc00::/7 and link-local fe80::/10 are the host's or a bridge's, never a client's.
   if (g.slice(0, 7).every((x) => x === 0) || (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80) return GATEWAY;

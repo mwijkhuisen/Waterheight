@@ -41,4 +41,5 @@ export const ownerOpenApiDocument = (): Record<string, unknown> =>
       HealthUnavailable,
     },
     'Waterheight owner API',
+    ' The owner API (owner view only) serves the paths of the public API with `audience: "owner"` in every body and `Cache-Control: private, no-store`.',
   );

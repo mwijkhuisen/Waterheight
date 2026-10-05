@@ -3029,7 +3029,7 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     expect(rules('handle @beacon')).toEqual([
       'handle @beacon {',
       'request_body {',
-      'max_size 8KB',
+      'max_size 8KiB',
       '}',
       'header -Via',
       'reverse_proxy api:8080 {',

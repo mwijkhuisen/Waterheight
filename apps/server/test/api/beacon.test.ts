@@ -31,8 +31,12 @@ async function refusal(res: Response, status: number, code: string) {
 const noCors = (res: Response) =>
   expect([...res.headers.keys()].filter((h) => h.startsWith('access-control-'))).toEqual([]);
 
-const line = (info: { mock: { calls: unknown[][] } }, i: number) =>
-  (info.mock.calls[i] as unknown[])[0] as { beacon: string; fields: Record<string, string | number> };
+type Report = { kind: string; fields: Record<string, string | number> };
+/** The first report of the i-th log line: one line per request, its reports in `beacon` (review SEC-3). */
+const line = (info: { mock: { calls: unknown[][] } }, i: number) => {
+  const r = ((info.mock.calls[i] as unknown[])[0] as { beacon: Report[] }).beacon[0] as Report;
+  return { beacon: r.kind, fields: r.fields };
+};
 
 describe('accepted reports', () => {
   it('application/csp-report: 204, no body, one log line', async () => {
@@ -45,14 +49,18 @@ describe('accepted reports', () => {
     expect(info).toHaveBeenCalledTimes(1);
     expect(info).toHaveBeenCalledWith(
       {
-        beacon: 'csp',
-        fields: { 'violated-directive': 'img-src', 'line-number': 12, 'blocked-uri': 'https://x.test/a' },
+        beacon: [
+          {
+            kind: 'csp',
+            fields: { 'violated-directive': 'img-src', 'line-number': 12, 'blocked-uri': 'https://x.test/a' },
+          },
+        ],
       },
       'beacon',
     );
   });
 
-  it('application/reports+json: one line per report, charset parameter and case ignored', async () => {
+  it('application/reports+json: one line per request holding every report, charset parameter and case ignored', async () => {
     const { info, post } = setup();
     const report = (type: string) => ({
       type,
@@ -66,12 +74,11 @@ describe('accepted reports', () => {
       'Application/Reports+JSON; charset=utf-8',
     );
     expect(res.status).toBe(204);
-    expect(info.mock.calls.map((c) => (c[0] as { beacon: string }).beacon)).toEqual([
-      'report:csp-violation',
-      'report:deprecation',
-    ]);
-    expect(info.mock.calls[0]?.[0]).toEqual({
-      beacon: 'report:csp-violation',
+    expect(info).toHaveBeenCalledTimes(1);
+    const reports = ((info.mock.calls[0] as unknown[])[0] as { beacon: Report[] }).beacon;
+    expect(reports.map((r) => r.kind)).toEqual(['report:csp-violation', 'report:deprecation']);
+    expect(reports[0]).toEqual({
+      kind: 'report:csp-violation',
       fields: { blockedURL: 'inline', lineNumber: 3, url: 'https://example.org/', user_agent: 'UA', age: 5 },
     });
   });
@@ -80,7 +87,10 @@ describe('accepted reports', () => {
     const { info, post } = setup();
     const res = await post(json({ kind: 'client_error', message: 'boom', url: '/x' }), 'application/json');
     expect(res.status).toBe(204);
-    expect(info).toHaveBeenCalledWith({ beacon: 'client_error', fields: { message: 'boom', url: '/x' } }, 'beacon');
+    expect(info).toHaveBeenCalledWith(
+      { beacon: [{ kind: 'client_error', fields: { message: 'boom', url: '/x' } }] },
+      'beacon',
+    );
   });
 
   it('strips control, ANSI, bidi, zero-width and separator characters, cuts at 200, and keeps quotes inert', async () => {
@@ -100,7 +110,7 @@ describe('accepted reports', () => {
     expect(long.status).toBe(204);
     expect(line(info, 1).fields['script-sample']).toHaveLength(200);
     // The line is one JSON object whatever the text holds.
-    expect(JSON.parse(JSON.stringify(line(info, 0)))).toEqual(line(info, 0));
+    expect(JSON.parse(JSON.stringify(info.mock.calls[0]?.[0]))).toEqual(info.mock.calls[0]?.[0]);
   });
 
   it('cleans the keys of a report body too', async () => {

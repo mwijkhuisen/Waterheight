@@ -3312,7 +3312,7 @@
     }
   },
   "info": {
-    "description": "Unofficial, no SLA. Read-only river levels and discharge for the rivers flowing into the Netherlands. Rate-limited per client (429 with Retry-After). Not an official warning service. Unknown or repeated query parameters are a 400. Every 200 body carries an `attribution` array that lists exactly the sources it names. The owner API (`api-owner`, owner view only) serves the same paths with `audience: \"owner\"`.",
+    "description": "Unofficial, no SLA. Read-only river levels and discharge for the rivers flowing into the Netherlands. Rate-limited per client (429 with Retry-After). Not an official warning service. Unknown or repeated query parameters are a 400. Every 200 body carries an `attribution` array that lists exactly the sources it names.",
     "title": "Waterheight public API",
     "version": "1"
   },

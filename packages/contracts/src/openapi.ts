@@ -180,15 +180,19 @@ const BEACON = {
 /** The document of the public API, built once per process. */
 export const openApiDocument = (): Record<string, unknown> => buildOpenApi(COMPONENTS, 'Waterheight public API');
 
-/** The document over `components` (the owner API passes its own schemas and title). */
-export function buildOpenApi(components: OpenApiComponents, title: string): Record<string, unknown> {
+/**
+ * The document over `components`. The owner API passes its own schemas, title and a note on its audience; the public
+ * document names no owner channel (review F7).
+ */
+export function buildOpenApi(components: OpenApiComponents, title: string, note = ''): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
       title,
       version: '1',
       description:
-        'Unofficial, no SLA. Read-only river levels and discharge for the rivers flowing into the Netherlands. Rate-limited per client (429 with Retry-After). Not an official warning service. Unknown or repeated query parameters are a 400. Every 200 body carries an `attribution` array that lists exactly the sources it names. The owner API (`api-owner`, owner view only) serves the same paths with `audience: "owner"`.',
+        'Unofficial, no SLA. Read-only river levels and discharge for the rivers flowing into the Netherlands. Rate-limited per client (429 with Retry-After). Not an official warning service. Unknown or repeated query parameters are a 400. Every 200 body carries an `attribution` array that lists exactly the sources it names.' +
+        note,
     },
     paths: {
       '/api/v1/meta': get(

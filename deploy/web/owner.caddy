@@ -66,7 +66,7 @@ owner.{$RWS_DOMAIN}:8443 {
 	}
 	handle @beacon {
 		request_body {
-			max_size 8KB
+			max_size 8KiB
 		}
 		header -Via
 		reverse_proxy api-owner:8080 {

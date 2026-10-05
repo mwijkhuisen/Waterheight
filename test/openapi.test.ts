@@ -77,7 +77,8 @@ describe('what the document says', () => {
     expect(d).toMatch(/[Rr]ate-limited/);
     expect(d).toMatch(/not an official warning service/i);
     expect(d).toMatch(/unknown or repeated query parameters are a 400/i);
-    expect(d).toContain('api-owner');
+    // The public document names no owner channel (review F7).
+    expect(d).not.toMatch(/owner/i);
   });
 
   it('every data route answers 400, 405, 429 and 503, the last two with Retry-After', () => {
@@ -141,6 +142,7 @@ describe('the owner document', () => {
 
   it('has the paths, parameters and responses of the public one', () => {
     expect(JSON.stringify(owner.paths)).toBe(JSON.stringify(pub.paths));
-    expect(owner.info.description).toBe(pub.info.description);
+    expect(owner.info.description.startsWith(pub.info.description)).toBe(true);
+    expect(owner.info.description).toContain('audience: "owner"');
   });
 });

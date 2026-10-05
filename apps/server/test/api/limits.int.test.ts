@@ -497,7 +497,7 @@ describe('health under saturation (C5)', () => {
   };
 
   for (const path of ['/api/v1/health', '/api/v1/health/sources']) {
-    it(`${path}: with no permit it answers the last good body (at most 60 s old) with X-Stale and no-store, then 503 busy`, async () => {
+    it(`${path}: with no permit it answers the last good body (at most 10 minutes old) with X-Stale and no-store, then 503 busy`, async () => {
       state.ms = NOW;
       const semaphore = new Semaphore({ permits: 1, maxWaiters: 0 });
       const app = clocked({ semaphore });
@@ -520,8 +520,8 @@ describe('health under saturation (C5)', () => {
         '1',
         good.text,
       ]);
-      // Older than 60 s: no stale body is served, the answer is the 503 busy.
-      state.ms = NOW + 70_000;
+      // Older than 10 minutes (STALE_MS, review F4): no stale body is served, the answer is the 503 busy.
+      state.ms = NOW + 10 * 60_000 + 10_000;
       const busy = await one(app, get(path));
       expect([busy.status, busy.text, busy.headerMap['retry-after'], busy.headerMap['cache-control']]).toEqual([
         503,
