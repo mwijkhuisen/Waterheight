@@ -42,7 +42,10 @@ const terms = [
   canarySource.attribution_text,
   canarySource.private_basis.clause,
   canarySource.name,
-].filter((t) => typeof t === 'string' && t.length > 0);
+];
+// Every term must exist (review F6): a registry field renamed or emptied would make the public grep pass vacuously.
+for (const [i, term] of terms.entries())
+  if (typeof term !== 'string' || term.length < 4) throw new Error(`term #${i} is missing from the registry`);
 const termBuffers = terms.map((t) => [Buffer.from(t), Buffer.from(JSON.stringify(t).slice(1, -1))]);
 
 // ---- `--logs <file>...`: only the terms in the files of a run (compose logs, the public access log); no network.
@@ -208,6 +211,17 @@ const displayStart = Date.parse(ownerMeta.body.displayStart);
 if (!hasCanaryAttribution(ownerMeta.body)) fail('owner /api/v1/meta: no attribution entry of the canary source');
 if (!ownerMeta.body.sources?.some((s) => s.id === canarySource.id))
   fail('owner /api/v1/meta: the canary source is not listed');
+// The owner outputs hold what the public ones must not (review F6): the attribution text in an owner attribution
+// entry, and the private_basis clause in the owner sources.json.
+if (!ownerMeta.body.attribution?.some((e) => e?.source === canarySource.id && e.text === canarySource.attribution_text))
+  fail('owner /api/v1/meta: the canary attribution text is not in its attribution');
+{
+  const res = await call('owner', { path: '/data/v1/sources.json', headers: { 'accept-encoding': 'identity' } });
+  counts.owner.bodies += 1;
+  if (res.status !== 200) fail(`owner /data/v1/sources.json: HTTP ${res.status}`);
+  else if (!res.body.includes(Buffer.from(JSON.stringify(canarySource.private_basis.clause).slice(1, -1))))
+    fail('owner /data/v1/sources.json: the canary private_basis clause is not in it');
+}
 
 const ownerStations = await ownerGet('/api/v1/stations');
 const canaryStation = ownerStations.body?.stations?.find((s) => s.id === CANARY_STATION);

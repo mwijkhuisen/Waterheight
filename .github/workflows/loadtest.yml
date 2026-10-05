@@ -44,11 +44,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The seed script is plain Node (type stripping), with no dependency: no pnpm install.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
+      # run.sh builds the fixture archive from the server sources on the runner (they import zod and the workspace
+      # packages), as ci.yml's deploy job does. The seed script itself needs no dependency.
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Host tools the stack needs (Ubuntu's signed repository)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nftables zstd >/dev/null
       - name: The stack (Docker 29.8.1, firewall, Pebble, compose, both publishers' first meta.json), left running
         env:
           RWS_E2E_MODE: loadtest
