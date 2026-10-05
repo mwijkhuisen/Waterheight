@@ -83,7 +83,7 @@ test('the api answers its own refusals as fixed JSON codes, never cached', async
     expect(res.status(), path).toBe(status);
     expect(res.headers()['content-type'], path).toMatch(JSON_TYPE);
     expect(res.headers()['cache-control'], path).toBe('no-store');
-    expect(await res.text(), path).toBe(JSON.stringify({ error }));
+    expect(await res.text(), path).toBe(JSON.stringify({ error, attribution: [] }));
     expectSiteHeaders(res);
   }
 });

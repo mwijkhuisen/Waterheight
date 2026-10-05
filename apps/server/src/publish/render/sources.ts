@@ -1,9 +1,8 @@
 import { type Kysely, sql } from 'kysely';
+import { attributionFor, sourceDates } from '../../attribution.ts';
 import { OWNER_ONLY_VIEWS, VIEWS } from '../../db/audience.ts';
 import type { DB } from '../../db/generated.ts';
 import type { RenderCtx } from '../cycle.ts';
-import { attributionFor } from './attribution.ts';
-import { sourceDates } from './dates.ts';
 
 // P9a (A§9.1, catalogue §1b): sources.json, the family's sources with the registry's attribution rows verbatim, the
 // licence and the date the licence asks for. The owner file adds each source's audience and, for an owner source, its

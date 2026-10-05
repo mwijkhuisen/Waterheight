@@ -1,4 +1,4 @@
-import { type ApiStation, RiversManifest, Series, SeriesForecast } from '@rws/contracts';
+import { type ApiStation, RiversManifest, SeriesAnswer, SeriesForecastAnswer } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { loadAudience } from '../config/runtime.ts';
@@ -102,7 +102,7 @@ const forecastQuery = (aud: string | undefined, id: number) => ({
   queryKey: ['forecast', aud, id],
   enabled: aud !== undefined,
   queryFn: ({ signal }: { signal: AbortSignal }) =>
-    getJson(`/api/v1/series/${id}/forecast`, SeriesForecast, signal).catch((e: unknown) => {
+    getJson(`/api/v1/series/${id}/forecast`, SeriesForecastAnswer, signal).catch((e: unknown) => {
       if (e instanceof HttpError && e.status === 404) return null;
       throw e;
     }),
@@ -131,7 +131,7 @@ export const useSeries = (id: number, from: number, to: number) => {
   return useQuery({
     queryKey: ['series', aud, id, from, to],
     queryFn: ({ signal }) =>
-      getJson(`/api/v1/series/${id}?from=${toUrlT(from)}&to=${toUrlT(to)}&res=raw`, Series, signal),
+      getJson(`/api/v1/series/${id}?from=${toUrlT(from)}&to=${toUrlT(to)}&res=raw`, SeriesAnswer, signal),
     enabled: aud !== undefined,
     staleTime: 60_000,
   });

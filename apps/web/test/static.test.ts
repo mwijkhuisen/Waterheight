@@ -95,7 +95,7 @@ const latest = (t: string, hash = 'aaaaaaaaaaaaaaaa') => ({
   dh24: [null, null],
   dh1: [null, null],
 });
-const apiSnapshot = (t: string) => ({ t, values: [] });
+const apiSnapshot = (t: string) => ({ t, values: [], attribution: [] });
 const run = {
   series: 2,
   source: 'NL-1',
@@ -190,7 +190,7 @@ describe('loadSnapshot', () => {
     const future = '2026-10-26T13:20:00.000Z';
     const path = '/api/v1/snapshot?t=2026-10-26T13:20Z';
     const forecast = { '/data/v1/forecast/latest.json': { body: forecastFile } };
-    const live = fake({ [path]: { body: { t: future, values: [] } }, ...forecast });
+    const live = fake({ [path]: { body: { t: future, values: [], attribution: [] } }, ...forecast });
     expect((await loadSnapshot(live.f, T(future), m, null)).degraded).toBe(false);
     expect(live.asked).toEqual([path]);
     for (const reply of [
@@ -237,6 +237,7 @@ describe('loadMeta and loadStations', () => {
     build: 'dev',
     sources: [],
     forecastHorizons: [],
+    attribution: [],
   };
   it("meta: static first; the API's meta has no day versions and is not degraded", async () => {
     const { f } = fake({ '/api/v1/meta': { body: apiMeta } });
@@ -284,11 +285,28 @@ describe('loadMeta and loadStations', () => {
     };
     const a = fake({
       '/data/v1/stations.json': {
-        body: { schemaVersion: 1, seriesHash: 'aaaaaaaaaaaaaaaa', stations: [st], attribution: [] },
+        body: {
+          schemaVersion: 2,
+          seriesHash: 'aaaaaaaaaaaaaaaa',
+          stations: [{ ...st, series: st.series.map((s) => ({ ...s, api: true })) }],
+          attribution: [],
+        },
       },
     });
     expect((await loadStations(a.f)).seriesHash).toBe('aaaaaaaaaaaaaaaa');
-    const b = fake({ '/data/v1/stations.json': { status: 500 }, '/api/v1/stations': { body: { stations: [st] } } });
+    const b = fake({
+      '/data/v1/stations.json': { status: 500 },
+      '/api/v1/stations': { body: { stations: [st], attribution: [] } },
+    });
     expect(await loadStations(b.f)).toMatchObject({ seriesHash: null, stations: [{ id: 'nl.a.b' }] });
+    // A cached v1 file (no `api`, schemaVersion 1) no longer parses: the page reads the API instead.
+    const c = fake({
+      '/data/v1/stations.json': {
+        body: { schemaVersion: 1, seriesHash: 'aaaaaaaaaaaaaaaa', stations: [st], attribution: [] },
+      },
+      '/api/v1/stations': { body: { stations: [st], attribution: [] } },
+    });
+    expect(await loadStations(c.f)).toMatchObject({ seriesHash: null });
+    expect(c.asked).toEqual(['/data/v1/stations.json', '/api/v1/stations']);
   });
 });

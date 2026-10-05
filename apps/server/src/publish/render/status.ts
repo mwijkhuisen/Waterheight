@@ -7,11 +7,10 @@ import { forecastCoverage } from '../../api/forecast.ts';
 import { Detail, lastCommit, latestTwinChecks, loaderRow, ownerCounts, sourceRows } from '../../api/health.ts';
 import { classCoverage, readStates } from '../../api/states.ts';
 import { iso, snapshot } from '../../api/util.ts';
+import { attributionFor, sourceDates } from '../../attribution.ts';
 import { CaptureStatus } from '../../capture/status.ts';
 import { errorCode } from '../../db/pool.ts';
 import type { PublisherStatus, RenderCtx } from '../cycle.ts';
-import { attributionFor } from './attribution.ts';
-import { sourceDates } from './dates.ts';
 import { familySources } from './sources.ts';
 
 // P9a (A§11.3): status.json, which absorbs /status/capture.json and /status/ops.json. Coarse on purpose: states, times

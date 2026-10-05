@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type AttributionRow, attributionFor } from '../../src/publish/render/attribution.ts';
-import { standText } from '../../src/publish/render/dates.ts';
+import { type AttributionRow, attributionFor, standText } from '../../src/attribution.ts';
 
 // P9a (§4.2): a file's attribution lists exactly the sources its body names; a licence's date only where it asks.
 

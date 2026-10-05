@@ -1,5 +1,7 @@
+import { randomBytes } from 'node:crypto';
+import { gunzipSync, zstdDecompressSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { Busy, Lru } from '../../src/api/lru.ts';
+import { Busy, Lru, negotiate } from '../../src/api/lru.ts';
 
 // The in-process answer cache of the public API: bounded, single flight, no failure kept.
 
@@ -356,5 +358,227 @@ describe('Lru: the in-flight cap', () => {
     expect(settled.filter((r) => r.status === 'fulfilled')).toHaveLength(4);
     expect(settled.filter((r) => r.status === 'rejected' && r.reason instanceof Busy)).toHaveLength(46);
     expect(lru.size.inflight).toBe(0);
+  });
+});
+
+describe('Lru: encoded variants (P9b)', () => {
+  const doc = { series: 12, points: Array.from({ length: 200 }, (_, i) => ({ ts: i, v: i % 7 })), é: '€😀' };
+  const json = JSON.stringify(doc);
+  const computed = () => async () => ({ json });
+  const text = (b: Buffer) => b.toString('utf8');
+
+  it('serves identity, gzip and zstd bodies that decompress to the JSON', async () => {
+    const { lru } = setup();
+    const id = await lru.getEncoded('k', TTL, computed(), 'identity');
+    const gz = await lru.getEncoded('k', TTL, computed(), 'gzip');
+    const zs = await lru.getEncoded('k', TTL, computed(), 'zstd');
+    expect(text(id.body)).toBe(json);
+    expect(text(gunzipSync(gz.body))).toBe(json);
+    expect(text(zstdDecompressSync(zs.body))).toBe(json);
+    expect(gz.body.length).toBeLessThan(json.length);
+    expect(zs.body.length).toBeLessThan(json.length);
+    expect(JSON.parse(text(zstdDecompressSync(zs.body)))).toEqual(doc);
+  });
+
+  it('a variant is compressed once: the same bytes come back and size.bytes counts them once', async () => {
+    const { lru } = setup();
+    const { calls, compute } = counting();
+    const one = () => async () => ({ json: await compute('k', json)() });
+    const id = await lru.getEncoded('k', TTL, one(), 'identity');
+    expect(lru.size).toEqual({ entries: 1, bytes: id.body.length, inflight: 0 });
+    const gz1 = await lru.getEncoded('k', TTL, one(), 'gzip');
+    const afterGzip = lru.size.bytes;
+    expect(afterGzip).toBe(Buffer.byteLength(json) + gz1.body.length);
+    const gz2 = await lru.getEncoded('k', TTL, one(), 'gzip');
+    expect(gz2.body).toBe(gz1.body);
+    expect(lru.size.bytes).toBe(afterGzip);
+    const zs = await lru.getEncoded('k', TTL, one(), 'zstd');
+    expect(lru.size.bytes).toBe(afterGzip + zs.body.length);
+    expect(lru.size.entries).toBe(1);
+    expect(calls('k')).toBe(1);
+  });
+
+  it('the plain get shares the entry of getEncoded', async () => {
+    const { lru } = setup();
+    const { calls, compute } = counting();
+    await lru.getEncoded('k', TTL, async () => ({ json: await compute('k', json)() }), 'gzip');
+    expect(await lru.get('k', TTL, compute('k', 'other'))).toBe(json);
+    expect(calls('k')).toBe(1);
+  });
+
+  it('adding variants can evict older entries (the byte bound counts every variant)', async () => {
+    const hex = () => randomBytes(500).toString('hex'); // 1,000 characters, about 4 bits each: gzip stays above 500
+    const { lru } = setup({ maxBytes: 2_500 });
+    const { calls, compute } = counting();
+    const a = hex();
+    const b = hex();
+    await lru.getEncoded('b', TTL, async () => ({ json: await compute('b', b)() }), 'identity');
+    await lru.getEncoded('a', TTL, async () => ({ json: await compute('a', a)() }), 'identity');
+    expect(lru.size).toEqual({ entries: 2, bytes: 2_000, inflight: 0 });
+    const gz = await lru.getEncoded('a', TTL, async () => ({ json: a }), 'gzip');
+    expect(text(gunzipSync(gz.body))).toBe(a);
+    // b was the least recently used and made room for a's gzip variant.
+    expect(lru.size.entries).toBe(1);
+    expect(lru.size.bytes).toBe(1_000 + gz.body.length);
+    await lru.getEncoded('b', TTL, async () => ({ json: await compute('b', b)() }), 'identity');
+    expect(calls('b')).toBe(2);
+  });
+
+  it('a body over maxBytes is returned in every encoding but nothing is stored or counted', async () => {
+    const { lru } = setup({ maxBytes: 10 });
+    const gz = await lru.getEncoded('k', TTL, computed(), 'gzip');
+    expect(text(gunzipSync(gz.body))).toBe(json);
+    expect(lru.size).toEqual({ entries: 0, bytes: 0, inflight: 0 });
+  });
+
+  it('an expired entry takes its variants with it', async () => {
+    const { clock, lru } = setup();
+    await lru.getEncoded('k', TTL, computed(), 'gzip');
+    await lru.getEncoded('k', TTL, computed(), 'zstd');
+    clock.t += TTL;
+    await lru.getEncoded('k', TTL, async () => ({ json: 'tiny' }), 'identity');
+    expect(lru.size).toEqual({ entries: 1, bytes: 4, inflight: 0 });
+  });
+
+  it('round-trips the tag and the cap of the computation, on a hit too', async () => {
+    const { clock, lru } = setup();
+    const compute = async () => ({ json, tag: '2026-10-01:3', capMs: 5_000 });
+    const first = await lru.getEncoded('k', TTL, compute, 'identity');
+    expect(first.tag).toBe('2026-10-01:3');
+    expect(first.capUntil).toBe(1_000 + 5_000);
+    clock.t += 1_000;
+    const hit = await lru.getEncoded('k', TTL, async () => ({ json: 'never', tag: 'never' }), 'gzip');
+    expect(hit.tag).toBe('2026-10-01:3');
+    expect(hit.capUntil).toBe(6_000);
+  });
+
+  it('without a tag or a cap: an empty tag and a null cap; an infinite cap is no cap', async () => {
+    const { lru } = setup();
+    expect(await lru.getEncoded('a', TTL, computed(), 'identity')).toMatchObject({ tag: '', capUntil: null });
+    const inf = await lru.getEncoded('b', TTL, async () => ({ json, capMs: Number.POSITIVE_INFINITY }), 'identity');
+    expect(inf.capUntil).toBeNull();
+    expect(lru.size.entries).toBe(2);
+  });
+
+  it('a cap of 0 (or less) is served but not stored: the next call computes again', async () => {
+    const { clock, lru } = setup();
+    let calls = 0;
+    const compute = (capMs: number) => async () => {
+      calls += 1;
+      return { json, capMs };
+    };
+    const served = await lru.getEncoded('k', TTL, compute(0), 'gzip');
+    expect(served.capUntil).toBe(clock.t);
+    expect(text(gunzipSync(served.body))).toBe(json);
+    expect(lru.size).toEqual({ entries: 0, bytes: 0, inflight: 0 });
+    await lru.getEncoded('k', TTL, compute(0), 'gzip');
+    expect(calls).toBe(2);
+    await lru.getEncoded('k', TTL, compute(-5), 'identity');
+    await lru.getEncoded('k', TTL, compute(-5), 'identity');
+    expect(calls).toBe(4);
+    expect(lru.size.entries).toBe(0);
+  });
+
+  it('a capped entry expires at its cap, before its TTL', async () => {
+    const { clock, lru } = setup();
+    let calls = 0;
+    const compute = async () => {
+      calls += 1;
+      return { json, capMs: 1_000 };
+    };
+    await lru.getEncoded('k', TTL, compute, 'identity');
+    clock.t += 999;
+    await lru.getEncoded('k', TTL, compute, 'identity');
+    expect(calls).toBe(1);
+    clock.t += 1;
+    await lru.getEncoded('k', TTL, compute, 'identity');
+    expect(calls).toBe(2);
+  });
+
+  it('a cap longer than the TTL does not extend it', async () => {
+    const { clock, lru } = setup();
+    let calls = 0;
+    const compute = async () => {
+      calls += 1;
+      return { json, capMs: 10 * TTL };
+    };
+    await lru.getEncoded('k', TTL, compute, 'identity');
+    clock.t += TTL;
+    await lru.getEncoded('k', TTL, compute, 'identity');
+    expect(calls).toBe(2);
+  });
+
+  it('single flight: concurrent callers of different encodings share one computation', async () => {
+    const { lru } = setup();
+    const g = gate<{ json: string; tag: string }>();
+    let calls = 0;
+    const compute = () => {
+      calls += 1;
+      return g.promise;
+    };
+    const all = (['zstd', 'gzip', 'identity', 'gzip', 'zstd'] as const).map((enc) =>
+      lru.getEncoded('k', TTL, compute, enc),
+    );
+    await tick();
+    expect(lru.size.inflight).toBe(1);
+    g.resolve({ json, tag: 'T' });
+    const [zs, gz, id, gz2, zs2] = await Promise.all(all);
+    expect(calls).toBe(1);
+    expect(text(zstdDecompressSync(zs?.body as Buffer))).toBe(json);
+    expect(text(gunzipSync(gz?.body as Buffer))).toBe(json);
+    expect(text(id?.body as Buffer)).toBe(json);
+    expect(gz2?.body).toBe(gz?.body);
+    expect(zs2?.body).toBe(zs?.body);
+    expect([zs?.tag, gz?.tag, id?.tag]).toEqual(['T', 'T', 'T']);
+    expect(lru.size.entries).toBe(1);
+  });
+
+  it('a failure is not stored and Busy still applies to getEncoded', async () => {
+    const { lru } = setup({ maxInflight: 1 });
+    await expect(lru.getEncoded('k', TTL, () => Promise.reject(new Error('down')), 'gzip')).rejects.toThrow('down');
+    expect(lru.size).toEqual({ entries: 0, bytes: 0, inflight: 0 });
+    const g = gate<{ json: string }>();
+    const running = lru.getEncoded('a', TTL, () => g.promise, 'identity');
+    await tick();
+    await expect(lru.getEncoded('b', TTL, computed(), 'zstd')).rejects.toBeInstanceOf(Busy);
+    g.resolve({ json });
+    await running;
+  });
+});
+
+describe('negotiate', () => {
+  it.each([
+    ['zstd, gzip', 'zstd'],
+    ['gzip, zstd', 'zstd'],
+    ['gzip, deflate, br, zstd', 'zstd'],
+    ['gzip', 'gzip'],
+    ['gzip, deflate', 'gzip'],
+    ['GZIP', 'gzip'],
+    ['Gzip;q=0.5', 'gzip'],
+    ['zstd;q=1.0, gzip;q=0.5', 'zstd'],
+    ['gzip;q=0.8, zstd;q=0.001', 'zstd'],
+    ['gzip;q=0, zstd;q=0', 'identity'],
+    ['gzip;q=0.0, zstd', 'zstd'],
+    ['zstd;q=0, gzip', 'gzip'],
+    ['br', 'identity'],
+    ['br, deflate', 'identity'],
+    ['identity', 'identity'],
+    ['*', 'identity'],
+    ['', 'identity'],
+    ['gzipx', 'identity'],
+    ['x-gzip', 'identity'],
+  ])('%j gives %s', (header, enc) => {
+    expect(negotiate(header)).toBe(enc);
+  });
+
+  it('a missing header is identity', () => {
+    expect(negotiate(undefined)).toBe('identity');
+  });
+
+  it('an over-long header is identity, even when it starts with gzip', () => {
+    expect(negotiate(`gzip, ${'x, '.repeat(300)}`)).toBe('identity');
+    expect(negotiate(`gzip${' '.repeat(600)}`)).toBe('identity');
+    // Right at the limit it is read.
+    expect(negotiate(`gzip${' '.repeat(508)}`)).toBe('gzip');
   });
 });

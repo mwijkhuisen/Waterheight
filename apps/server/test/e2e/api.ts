@@ -11,7 +11,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
-import { CANARIES, CANARY_RENDERINGS, SeriesForecast, Snapshot, Stations } from '@rws/contracts';
+import { CANARIES, CANARY_RENDERINGS, SeriesForecastAnswer, SnapshotAnswer, StationsAnswer } from '@rws/contracts';
 import { DisplayWindow } from '../../src/api/window.ts';
 import { createApp } from '../../src/app.ts';
 import { type Db, type DbConfig, dbConfig, openDb } from '../../src/db/pool.ts';
@@ -19,6 +19,7 @@ import { readRegistry, syncRegistry } from '../../src/load/registry-sync.ts';
 import { openApiDb, parseListen } from '../../src/main.ts';
 import { publishOnce } from '../../src/publish/index.ts';
 import { createTestDb } from '../db/testdb.ts';
+import { obsInsertSql, rollupInsertSql } from './seed.ts';
 
 /**
  * The publisher's root (P9a): `v1/` under it is /data/v1/. The stand-in for Caddy (apps/web/e2e/server.ts) serves it;
@@ -183,19 +184,12 @@ try {
   // One value per expected step for every series the public views show (registry series and the two test
   // stations with a regular grid): batch_id has no foreign key, so 1 does.
   await t.admin.query(
-    `INSERT INTO obs (series_id, ts, value, qc, batch_id)
-     SELECT s.id, g,
-            CASE s.quantity WHEN 'H' THEN 300 + 40 * sin(extract(epoch FROM g)::float8 / 20000)
-                            ELSE 800 + 100 * sin(extract(epoch FROM g)::float8 / 30000) END + s.id % 50,
-            1, 1
-     FROM series s
-     JOIN series_eff e ON e.series_id = s.id
-     CROSS JOIN LATERAL generate_series($1::timestamptz,
-                                        CASE WHEN s.station_id = 'nl.e2e.gap' THEN $3::timestamptz ELSE $2::timestamptz END,
-                                        s.expected_step) g
-     WHERE s.active AND e.role = 'primary' AND e.audience = 'public' AND e.lic_display
-       AND s.station_id <> 'nl.e2e.dst'`,
-    [FROM, NOW.toISOString(), GAP_LAST],
+    obsInsertSql({
+      from: FROM,
+      to: NOW.toISOString(),
+      gap: { station: 'nl.e2e.gap', last: GAP_LAST },
+      skipStation: 'nl.e2e.dst',
+    }),
   );
   await t.admin.query(
     `INSERT INTO obs (series_id, ts, value, qc, batch_id)
@@ -203,16 +197,7 @@ try {
      FROM series s, unnest($1::timestamptz[], $2::real[]) AS v(ts, value) WHERE s.station_id = 'nl.e2e.dst'`,
     [DST_VALUES.map(([ts]) => ts), DST_VALUES.map(([, value]) => value)],
   );
-  for (const [table, unit] of [
-    ['obs_1h', 'hour'],
-    ['obs_1d', 'day'],
-  ] as const)
-    await t.admin.query(
-      `INSERT INTO ${table} (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
-       SELECT series_id, date_trunc('${unit}', ts, 'UTC'), min(value), max(value), avg(value),
-              (array_agg(value ORDER BY ts DESC))[1], count(*), bit_or(qc)
-       FROM obs GROUP BY 1, 2`,
-    );
+  for (const table of ['obs_1h', 'obs_1d'] as const) await t.admin.query(rollupInsertSql(table));
 
   for (const f of FORECASTS) {
     // Every seeded run must exist, the owner canary's included: its absence test proves nothing otherwise (SEC-4).
@@ -263,8 +248,8 @@ try {
     return res.json() as Promise<unknown>;
   };
   await get('/api/v1/meta');
-  const { stations } = Stations.parse(await get('/api/v1/stations'));
-  const snapshot = Snapshot.parse(await get('/api/v1/snapshot?t=2026-10-26T12:00Z'));
+  const { stations } = StationsAnswer.parse(await get('/api/v1/stations'));
+  const snapshot = SnapshotAnswer.parse(await get('/api/v1/snapshot?t=2026-10-26T12:00Z'));
   const seriesOf = (id: string) => stations.find((st) => st.id === id)?.series[0]?.id;
   const [xss, gap] = [seriesOf('nl.e2e.xss'), seriesOf('nl.e2e.gap')];
   const holds = (source: string, test: (id: string) => boolean) =>
@@ -282,7 +267,7 @@ try {
   // with a stated one), the gap station has none, and the owner canary run on it appears in no public answer.
   const dst = seriesOf('nl.e2e.dst');
   const plus2 = await get(`/api/v1/snapshot?t=${at(2).slice(0, 16)}Z`);
-  const ahead = Snapshot.parse(plus2);
+  const ahead = SnapshotAnswer.parse(plus2);
   const held = (id: number | undefined) => ahead.forecasts?.find((f) => f.series === id);
   if (
     ahead.values.length > 0 ||
@@ -298,8 +283,8 @@ try {
   const [lobithH, lobithQ] = ['H', 'Q'].map((q) => lobith?.series.find((x) => x.quantity === q)?.id);
   if (held(lobithH)?.value !== 103 || lobithQ === undefined || held(lobithQ) !== undefined)
     throw new Error('self-check: Lobith has a forecast for H only');
-  const gapForecast = SeriesForecast.parse(await get(`/api/v1/series/${gap}/forecast`));
-  const xssForecast = SeriesForecast.parse(await get(`/api/v1/series/${xss}/forecast`));
+  const gapForecast = SeriesForecastAnswer.parse(await get(`/api/v1/series/${gap}/forecast`));
+  const xssForecast = SeriesForecastAnswer.parse(await get(`/api/v1/series/${xss}/forecast`));
   if (gapForecast.run !== null) throw new Error('self-check: a public run for nl.e2e.gap');
   if (xssForecast.run?.horizonEnd !== at(30)) throw new Error('self-check: nl.e2e.xss does not end at NOW + 30 h');
   const everything = JSON.stringify([plus2, gapForecast, xssForecast]);

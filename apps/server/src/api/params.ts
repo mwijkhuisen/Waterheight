@@ -136,3 +136,12 @@ export function agePolicy(instantMs: number, nowMs: number): CachePolicy {
   if (nowMs - instantMs < H48_MS) return { header: 'public, max-age=600', ttlMs: 600_000 };
   return { header: 'public, max-age=86400', ttlMs: 86_400_000 };
 }
+
+/** The longest raw query string (`?` included) any route takes; longer is a 400 before anything is parsed (P9b). */
+export const QUERY_MAX_BYTES = 256;
+
+/** `v` of /snapshot and /series/{id}, once the route's own parse has validated it (VERSION_RE); else undefined. */
+export function versionParam(url: string): number | undefined {
+  const v = new URL(url).searchParams.get('v');
+  return v === null ? undefined : Number(v);
+}

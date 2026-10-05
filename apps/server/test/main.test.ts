@@ -5,9 +5,68 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { captureEnv, captureUserAgent, readSecret } from '../src/capture/env.ts';
 import { healthy } from '../src/heartbeat.ts';
-import { dryRun, EXIT_CONFIG, EXIT_USAGE, parseListen, publishArgs, ROLES, run } from '../src/main.ts';
+import {
+  API_POOL,
+  API_POOL_MAX,
+  apiArgs,
+  dryRun,
+  EXIT_CONFIG,
+  EXIT_USAGE,
+  parseListen,
+  publishArgs,
+  ROLES,
+  run,
+} from '../src/main.ts';
 
 const quiet = () => {};
+
+describe('api --audience (P9b, C13)', () => {
+  it('takes no argument (public) or --audience public|owner, exactly once', () => {
+    expect(apiArgs([])).toEqual({ family: 'public' });
+    expect(apiArgs(['--audience', 'public'])).toEqual({ family: 'public' });
+    expect(apiArgs(['--audience', 'owner'])).toEqual({ family: 'owner' });
+  });
+
+  it.each([
+    [['--audience']],
+    [['--audience', 'x']],
+    [['--audience', 'off']],
+    [['--audience', 'OWNER']],
+    [['--audience', '']],
+    [['--audience', 'owner', '--audience', 'owner']],
+    [['--audience', 'owner', '--audience', 'public']],
+    [['--once']],
+    [['--dry-run']],
+    [['owner']],
+    [['--audience=owner']],
+    [['extra']],
+    [['--audience', 'owner', '--once']],
+  ])('apiArgs(%j) is a usage error', (rest) => {
+    expect(apiArgs(rest)).toBeUndefined();
+  });
+
+  it.each([
+    [['api', 'extra']],
+    [['api', '--audience']],
+    [['api', '--audience', 'x']],
+    [['api', '--audience', 'owner', '--audience', 'owner']],
+    [['api', '--once']],
+    [['api', '--audience', 'owner', '--once']],
+  ])('run rejects %j with a usage error before it listens', async (argv) => {
+    expect(await run(argv, {}, quiet)).toBe(EXIT_USAGE);
+  });
+
+  it('a malformed PORT is a usage error for the owner api as well', async () => {
+    expect(await run(['api', '--audience', 'owner'], { PORT: '80a' }, quiet)).toBe(EXIT_USAGE);
+    expect(await run(['api', '--audience', 'public'], { PORT: '80a' }, quiet)).toBe(EXIT_USAGE);
+  });
+
+  it('the pools: 10 connections for the public api, 2 for the owner api; the largest is 10', () => {
+    expect(API_POOL).toEqual({ public: 10, owner: 2 });
+    expect(API_POOL_MAX).toBe(10);
+    expect(API_POOL_MAX).toBe(Math.max(...Object.values(API_POOL)));
+  });
+});
 
 describe('role dispatcher', () => {
   it('publish takes --audience public|owner and --once, each once; it needs database settings: exit 78', async () => {

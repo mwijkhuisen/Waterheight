@@ -24,12 +24,12 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readSnapshot } from '../../src/api/data.ts';
 import { StaticCache } from '../../src/api/states.ts';
+import { attributionRows } from '../../src/attribution.ts';
 import type { ChannelAudience } from '../../src/db/audience.ts';
 import { publishTail } from '../../src/load/migrate.ts';
 import { vigicruesSections } from '../../src/load/tables.ts';
 import type { RenderCtx } from '../../src/publish/cycle.ts';
 import { publishOnce } from '../../src/publish/index.ts';
-import { attributionRows } from '../../src/publish/render/attribution.ts';
 import { renderFrames } from '../../src/publish/render/frames.ts';
 import { RENDERERS } from '../../src/publish/render/index.ts';
 import { renderLatest } from '../../src/publish/render/latest.ts';

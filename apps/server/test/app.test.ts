@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { visibleSources } from '../src/api/forecast.ts';
+import { Semaphore } from '../src/api/semaphore.ts';
 import type { DisplayWindow } from '../src/api/window.ts';
 import { createApp } from '../src/app.ts';
 import { FORECAST_AT, OBS_AT, VIEWS } from '../src/db/audience.ts';
@@ -25,7 +27,7 @@ describe('GET /healthz', () => {
 });
 
 describe('the health routes without a database', () => {
-  const unavailable = '{"status":"down","error":"unavailable"}';
+  const unavailable = '{"status":"down","error":"unavailable","attribution":[]}';
 
   it('answer 503 with a fixed body and no caching, while /healthz stays 200', async () => {
     const app = createApp();
@@ -41,7 +43,7 @@ describe('the health routes without a database', () => {
   it('answer 400 to any query parameter before anything else, without echoing it', async () => {
     const res = await createApp().request('/api/v1/health?leak=SECRET');
     expect(res.status).toBe(400);
-    expect(await res.text()).toBe('{"error":"unknown_parameter"}');
+    expect(await res.text()).toBe('{"error":"unknown_parameter","attribution":[]}');
     expect((await createApp().request('/api/v1/health/sources?x=1')).status).toBe(400);
   });
 
@@ -50,7 +52,7 @@ describe('the health routes without a database', () => {
     for (const path of ['/api/', '/api/v1', '/api/v1/', '/api/v1/health/', '/api/v1/health/x', '/api/v1/stations/']) {
       const res = await app.request(path);
       expect(res.status, path).toBe(404);
-      expect(await res.text(), path).toBe('{"error":"not_found"}');
+      expect(await res.text(), path).toBe('{"error":"not_found","attribution":[]}');
     }
     for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
       const res = await app.request('/api/v1/health', { method });
@@ -81,7 +83,7 @@ describe('the data routes without a database', () => {
       const res = await app.request(path);
       expect(res.status, path).toBe(503);
       expect(res.headers.get('cache-control')).toBe('no-store');
-      expect(await res.text()).toBe('{"error":"unavailable"}');
+      expect(await res.text()).toBe('{"error":"unavailable","attribution":[]}');
     }
     const doc = await app.request('/api/v1/openapi.json');
     expect(doc.status).toBe(200);
@@ -109,7 +111,7 @@ describe('the data routes when the database fails', () => {
       for (const res of answers) {
         expect(res.status).toBe(503);
         expect(res.headers.get('cache-control')).toBe('no-store');
-        expect(await res.text()).toBe('{"error":"unavailable"}');
+        expect(await res.text()).toBe('{"error":"unavailable","attribution":[]}');
       }
       // Three callers of one key share one computation, so one line, with a code and nothing else.
       expect(lines).toEqual([{ code: 'ECONNREFUSED', route: 'snapshot' }]);
@@ -135,6 +137,9 @@ describe('the in-flight cap of the data routes', () => {
         waiting += 1;
         await held;
       }
+      // The family's source view (P9b): /meta names the forecast sources of forecastHorizons, which must be visible.
+      if (q.sql.includes(`"${VIEWS.public.source}"`))
+        return { rows: [...visibleSources('public')].map((id) => ({ id })) };
       return { rows: [] };
     });
     const window = { current: { dataEpochMs: 0, displayStartMs: Date.parse('2026-08-24T00:00:00Z') } };
@@ -143,6 +148,8 @@ describe('the in-flight cap of the data routes', () => {
       window: window as unknown as DisplayWindow,
       now: () => new Date('2026-10-01T12:00:00Z'),
       sections: new Map(),
+      // Wide enough that the LRU's own in-flight cap, not the DB semaphore (P9b), is what refuses the 65th key.
+      semaphore: new Semaphore({ permits: 100 }),
     });
     const path = (i: number) =>
       `/api/v1/snapshot?t=${new Date(Date.parse('2026-10-01T00:00:00Z') + i * 600_000).toISOString()}`;
@@ -151,9 +158,9 @@ describe('the in-flight cap of the data routes', () => {
 
     const busy = await app.request(path(64));
     expect(busy.status).toBe(503);
-    expect(busy.headers.get('retry-after')).toBe('5');
+    expect(busy.headers.get('retry-after')).toBe('2');
     expect(busy.headers.get('cache-control')).toBe('no-store');
-    expect(await busy.text()).toBe('{"error":"busy"}');
+    expect(await busy.text()).toBe('{"error":"busy","attribution":[]}');
     const joined = app.request(path(0));
     // The fixed keys are a closed set: the cap never refuses them (review SR-1).
     for (const fixed of ['/api/v1/meta', '/api/v1/stations']) {

@@ -3,12 +3,12 @@ import { type AddressInfo, createServer } from 'node:net';
 import {
   type ApiErrorCode,
   CANARY_RENDERINGS,
-  Health,
-  HealthSources,
-  Meta,
-  Series,
-  Snapshot,
-  Stations,
+  HealthAnswer,
+  HealthSourcesAnswer,
+  MetaAnswer,
+  SeriesAnswer,
+  SnapshotAnswer,
+  StationsAnswer,
 } from '@rws/contracts';
 import type { Hono } from 'hono';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -33,6 +33,14 @@ let t: TestDb;
 let api: Db;
 let display: DisplayWindow;
 let ids: Record<string, number>;
+/** The source of each series of this file's database (the attribution of an answer follows its series' sources). */
+const sourceOfSeries = new Map<number, string>();
+/**
+ * The sources that have an attribution row in this file's database: the audience fixture's NL-1 and, for the
+ * forecast horizons of /meta (FR-4 lists no series here), FR-4, which the beforeAll adds. A family source without a
+ * row names no entry (P9b), so the attribution of an answer is its named sources among these.
+ */
+const WITH_ROWS = new Set(['NL-1', 'FR-4']);
 
 const sid = (key: string): number => {
   const id = ids[key];
@@ -64,6 +72,42 @@ async function setDisplayStart(iso: string) {
   await t.admin.query(`UPDATE app_meta SET value = to_jsonb($1::text) WHERE key = 'display_start'`, [iso]);
   expect(await display.refresh()).toBe(true);
 }
+
+const seriesSource = (id: number): string => {
+  const source = sourceOfSeries.get(id);
+  if (source === undefined) throw new Error(`no series ${id}`);
+  return source;
+};
+/** P9b: the attribution of an answer is exactly the sources its body names (those that have a row here). */
+const sameSources = (attribution: { source: string }[], named: Iterable<string>) =>
+  expect(new Set(attribution.map((a) => a.source))).toEqual(new Set([...named].filter((s) => WITH_ROWS.has(s))));
+/** The wire answers parsed against their contracts; each returns the data without its `attribution`, which it checks. */
+const snapOf = (json: unknown) => {
+  const { attribution, ...data } = SnapshotAnswer.parse(json);
+  sameSources(
+    attribution,
+    data.values.map((v) => seriesSource(v.series)),
+  );
+  return data;
+};
+const seriesOf = (json: unknown) => {
+  const { attribution, ...data } = SeriesAnswer.parse(json);
+  sameSources(attribution, [seriesSource(data.id)]);
+  return data;
+};
+const metaOf = (json: unknown) => {
+  const { attribution, ...data } = MetaAnswer.parse(json);
+  sameSources(attribution, [...data.sources.map((s) => s.id), ...data.forecastHorizons.map((f) => f.source)]);
+  return data;
+};
+const stationsOf = (json: unknown) => {
+  const { attribution, ...data } = StationsAnswer.parse(json);
+  sameSources(
+    attribution,
+    data.stations.flatMap((st) => st.series.map((x) => x.source)),
+  );
+  return data;
+};
 
 const spies = () => ({ connect: vi.spyOn(api.pool, 'connect'), query: vi.spyOn(api.pool, 'query') });
 
@@ -100,6 +144,17 @@ beforeAll(async () => {
     [inactive, fixture.public],
   );
   ids = { ...fixture, dst, dense, inactive };
+  // P9b: /meta names the forecast horizon of FR-4 (static), so the family's source view must hold it (an answer that
+  // names a source outside it is a 503); the audience fixture has no FR-4. Its attribution row is this file's own.
+  await t.admin.query(`
+    INSERT INTO provider (id, name, country) VALUES ('vigicrues', 'Vigicrues', 'FR');
+    INSERT INTO source (id, provider_id, name, audience, private_basis, lic_display, lic_api, lic_bulk_export,
+                        lic_history_export, history_window, capture_enabled) VALUES
+      ('FR-4', 'vigicrues', 'forecast only', 'public', NULL, true, true, true, true, '0', true);
+    INSERT INTO attribution (source_id, ord, lang, text, needs_date, required) VALUES
+      ('FR-4', 0, 'fr', 'FR4-ATTRIBUTION', false, false);`);
+  for (const r of (await t.admin.query<{ id: number; source_id: string }>('SELECT id, source_id FROM series')).rows)
+    sourceOfSeries.set(r.id, r.source_id);
 
   // The DST night: 02:30+02:00 is 00:30Z and 02:30+01:00 is 01:30Z, with a 45 min staleness limit
   // neither value can reach the other's bucket.
@@ -214,7 +269,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       for (const [label, path, code] of cases) {
         const res = await get(app, path);
         expect(res.status, label).toBe(400);
-        expect(res.text, label).toBe(JSON.stringify({ error: code }));
+        expect(res.text, label).toBe(JSON.stringify({ error: code, attribution: [] }));
         expect(res.cache, label).toBe('no-store');
         const url = new URL(path, 'http://x');
         const echoes = [...url.searchParams].flat().concat(url.pathname.split('/').pop() ?? '');
@@ -336,7 +391,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
         const before = connect.mock.calls.length;
         const got = await get(appAt(NOW), path(days, res === '' ? '' : `&res=${res}`));
         expect(got.status, `${days} d ${res}`).toBe(200);
-        const body = Series.parse(got.json());
+        const body = seriesOf(got.json());
         expect(body.res, `${days} d ${res}`).toBe(want);
         expect(body.truncated).toBe(false);
         expect(connect.mock.calls.length, `${days} d ${res}`).toBeGreaterThan(before);
@@ -365,7 +420,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       const before = connect.mock.calls.length;
       const res = await get(appAt(NOW), path);
       expect(res.status, label).toBe(200);
-      expect(Snapshot.parse(res.json()).t, label).toBe(expected[i]);
+      expect(snapOf(res.json()).t, label).toBe(expected[i]);
       expect(connect.mock.calls.length, label).toBeGreaterThan(before);
     }
 
@@ -373,7 +428,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     const before = connect.mock.calls.length;
     const res = await get(appAt(NOW), `/api/v1/series/${sid('dst')}?from=2026-10-26T11:00:00Z&to=2026-10-26T12:10:00Z`);
     expect(res.status).toBe(200);
-    expect(res.json()).toEqual({
+    expect(seriesOf(res.json())).toEqual({
       id: sid('dst'),
       from: '2026-10-26T11:00:00.000Z',
       to: '2026-10-26T12:10:00.000Z',
@@ -384,7 +439,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     expect(connect.mock.calls.length).toBeGreaterThan(before);
     // The highest id is valid, and unknown.
     const top = await get(appAt(NOW), `/api/v1/series/2147483647?from=2026-10-25T00:00:00Z&to=2026-10-26T00:00:00Z`);
-    expect([top.status, top.text, top.cache]).toEqual([404, '{"error":"not_found"}', 'no-store']);
+    expect([top.status, top.text, top.cache]).toEqual([404, '{"error":"not_found","attribution":[]}', 'no-store']);
   });
 
   it('sends Cache-Control by the age of the quantised instant, never immutable and never a CORS header', async () => {
@@ -396,6 +451,8 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       expect(res.status, path).toBe(200);
       expect(res.cache, path).toBe(cache);
       expect(res.headers.get('content-type'), path).toBe('application/json');
+      // P9b: a data answer varies by Accept-Encoding (health and the OpenAPI document are not data answers).
+      if (!/health|openapi/.test(path)) expect(res.headers.get('vary'), path).toBe('Accept-Encoding');
     };
     const snap = (instant: string) => `/api/v1/snapshot?t=${instant}`;
     await ok(snap('2026-10-26T12:00:00Z'), SWR);
@@ -445,9 +502,9 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       expect(res.cache, res.text).toBe('no-store');
       if (status === 405) {
         expect(res.headers.get('allow')).toBe('GET, HEAD');
-        expect(res.text).toBe('{"error":"method_not_allowed"}');
+        expect(res.text).toBe('{"error":"method_not_allowed","attribution":[]}');
       }
-      if (status === 404) expect(res.text).toBe('{"error":"not_found"}');
+      if (status === 404) expect(res.text).toBe('{"error":"not_found","attribution":[]}');
     }
     for (const res of heard) {
       for (const [name, value] of res.headers) {
@@ -461,8 +518,8 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     const app = appAt(NOW);
     const first = await get(app, '/api/v1/snapshot?t=2026-10-25T02:30%2B02:00');
     expect(first.status).toBe(200);
-    const dstOf = (res: Got) => Snapshot.parse(res.json()).values.filter((v) => v.series === sid('dst'));
-    expect(Snapshot.parse(first.json()).t).toBe('2026-10-25T00:30:00.000Z');
+    const dstOf = (res: Got) => snapOf(res.json()).values.filter((v) => v.series === sid('dst'));
+    expect(snapOf(first.json()).t).toBe('2026-10-25T00:30:00.000Z');
     expect(dstOf(first)).toEqual([
       {
         series: sid('dst'),
@@ -476,7 +533,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       },
     ]);
     const second = await get(app, '/api/v1/snapshot?t=2026-10-25T02:30%2B01:00');
-    expect(Snapshot.parse(second.json()).t).toBe('2026-10-25T01:30:00.000Z');
+    expect(snapOf(second.json()).t).toBe('2026-10-25T01:30:00.000Z');
     expect(dstOf(second)).toEqual([
       {
         series: sid('dst'),
@@ -504,7 +561,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     expect(connect.mock.calls.length).toBe(asked);
     // A second distinct key does ask.
     const d = await get(fresh, '/api/v1/snapshot?t=2026-10-25T00:40Z');
-    expect(Snapshot.parse(d.json()).t).toBe('2026-10-25T00:40:00.000Z');
+    expect(snapOf(d.json()).t).toBe('2026-10-25T00:40:00.000Z');
     expect(connect.mock.calls.length).toBeGreaterThan(asked);
   });
 
@@ -530,7 +587,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     const path = (q: string) => `/api/v1/series/${sid('dst')}?${q}`;
     // The 00:30 value is in, the 01:30 value is out; 00:39 floors to 00:30.
     const half = await get(app, path('from=2026-10-25T00:39:00Z&to=2026-10-25T01:30:00Z'));
-    expect(half.json()).toEqual({
+    expect(seriesOf(half.json())).toEqual({
       id: sid('dst'),
       from: '2026-10-25T00:30:00.000Z',
       to: '2026-10-25T01:30:00.000Z',
@@ -540,7 +597,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     });
     const day = 'from=2026-10-25T00:00:00Z&to=2026-10-26T00:00:00Z';
     const raw = await get(app, path(day));
-    expect(Series.parse(raw.json())).toEqual({
+    expect(seriesOf(raw.json())).toEqual({
       id: sid('dst'),
       from: '2026-10-25T00:00:00.000Z',
       to: '2026-10-26T00:00:00.000Z',
@@ -552,9 +609,9 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
         { ts: '2026-10-25T12:00:00.000Z', value: 333, qc: 5 },
       ],
     });
-    expect(Series.parse((await get(app, path(`${day}&res=raw`))).json())).toEqual(Series.parse(raw.json()));
+    expect(seriesOf((await get(app, path(`${day}&res=raw`))).json())).toEqual(seriesOf(raw.json()));
     const hourly = await get(app, path(`${day}&res=1h`));
-    expect(hourly.json()).toEqual({
+    expect(seriesOf(hourly.json())).toEqual({
       id: sid('dst'),
       from: '2026-10-25T00:00:00.000Z',
       to: '2026-10-26T00:00:00.000Z',
@@ -566,7 +623,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       ],
     });
     const daily = await get(app, path('from=2026-10-24T00:00:00Z&to=2026-10-26T00:00:00Z&res=1d'));
-    expect(daily.json()).toEqual({
+    expect(seriesOf(daily.json())).toEqual({
       id: sid('dst'),
       from: '2026-10-24T00:00:00.000Z',
       to: '2026-10-26T00:00:00.000Z',
@@ -579,14 +636,14 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     });
     // Without res: the finest resolution whose cap holds the span (20 days is over the raw cap of 14).
     const wide = await get(app, path('from=2026-10-06T12:00:00Z&to=2026-10-26T12:00:00Z'));
-    expect(Series.parse(wide.json()).res).toBe('1h');
+    expect(seriesOf(wide.json()).res).toBe('1h');
   });
 
   it('cuts an answer at 20,000 points and says so', async () => {
     const app = appAt(NOW);
     const path = (q: string) => `/api/v1/series/${sid('dense')}?${q}`;
     // 14 days, one value a minute: 20,160 values exist.
-    const cut = Series.parse((await get(app, path('from=2026-10-12T00:00:00Z&to=2026-10-26T00:00:00Z'))).json());
+    const cut = seriesOf((await get(app, path('from=2026-10-12T00:00:00Z&to=2026-10-26T00:00:00Z'))).json());
     expect(cut).toMatchObject({ res: 'raw', truncated: true });
     expect(cut.points).toHaveLength(20_000);
     const points = cut.points as { ts: string; value: number; qc: number }[];
@@ -595,7 +652,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     // Ascending: the cut drops the end of the span, not its start.
     expect(points.every((p, i) => i === 0 || p.ts > (points[i - 1] as { ts: string }).ts)).toBe(true);
     // An hour of it is whole.
-    const hour = Series.parse((await get(app, path('from=2026-10-25T00:00:00Z&to=2026-10-25T01:00:00Z'))).json());
+    const hour = seriesOf((await get(app, path('from=2026-10-25T00:00:00Z&to=2026-10-25T01:00:00Z'))).json());
     expect(hour.truncated).toBe(false);
     expect(hour.points).toHaveLength(60);
     const hourPoints = hour.points as { ts: string; value: number }[];
@@ -606,7 +663,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
   it('answers 200 bodies that match their contracts; meta carries the build and the window of app_meta', async () => {
     const app = appAt(NOW);
     const meta = await get(app, '/api/v1/meta');
-    expect(Meta.parse(meta.json())).toEqual({
+    expect(metaOf(meta.json())).toEqual({
       now: '2026-10-26T12:00:00.000Z',
       dataEpoch: '2026-10-02T00:00:00.000Z',
       displayStart: '2026-10-01T00:00:00.000Z',
@@ -639,16 +696,17 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     expect(stored).toEqual({ display_start: '2026-10-01T00:00:00.000Z', data_epoch: '2026-10-02T00:00:00.000Z' });
     // The build is the value passed in.
     const build = 'abcdef0123456789abcdef0123456789abcdef01';
-    expect(Meta.parse((await get(appAt(NOW, { build }), '/api/v1/meta')).json()).build).toBe(build);
+    expect(metaOf((await get(appAt(NOW, { build }), '/api/v1/meta')).json()).build).toBe(build);
 
-    expect(Snapshot.parse((await get(app, '/api/v1/snapshot?t=2026-10-25T01:30Z')).json()).t).toBe(
-      '2026-10-25T01:30:00.000Z',
+    expect(snapOf((await get(app, '/api/v1/snapshot?t=2026-10-25T01:30Z')).json()).t).toBe('2026-10-25T01:30:00.000Z');
+    expect(HealthAnswer.parse((await get(app, '/api/v1/health')).json()).sources.total).toBeGreaterThan(0);
+    expect(HealthSourcesAnswer.parse((await get(app, '/api/v1/health/sources')).json()).sources.length).toBeGreaterThan(
+      0,
     );
-    expect(Health.parse((await get(app, '/api/v1/health')).json()).sources.total).toBeGreaterThan(0);
-    expect(HealthSources.parse((await get(app, '/api/v1/health/sources')).json()).sources.length).toBeGreaterThan(0);
     const doc = (await get(app, '/api/v1/openapi.json')).json() as { openapi: string; paths: Record<string, unknown> };
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths).sort()).toEqual([
+      '/api/v1/beacon', // P9b
       '/api/v1/health',
       '/api/v1/health/sources',
       '/api/v1/meta',
@@ -706,7 +764,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
         },
       ],
     });
-    expect(Stations.parse(res.json())).toEqual({
+    expect(stationsOf(res.json())).toEqual({
       stations: [
         await station('ch.bafu.display-only', 'display only', 'CH', 2, 'displayOnly', 'CH-1', 900),
         await station('ch.bafu.window', 'history window', 'CH', 2, 'window', 'CH-3', 900),
@@ -719,7 +777,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
       ],
     });
     // The two dates the rollups give: today's bucket for the windowed series, 40 days back for the others.
-    const dates = Stations.parse(res.json()).stations.map((s) => s.series[0]?.dataSince);
+    const dates = stationsOf(res.json()).stations.map((s) => s.series[0]?.dataSince);
     expect(dates[1]).not.toBe(dates[2]);
     expect(Date.parse(dates[2] as string)).toBeLessThan(Date.parse(dates[1] as string));
   });
@@ -761,20 +819,24 @@ describe('without the display window', () => {
     ]) {
       const res = await get(app, path);
       expect(res.status, path).toBe(503);
-      expect(res.text, path).toBe('{"error":"unavailable"}');
+      expect(res.text, path).toBe('{"error":"unavailable","attribution":[]}');
       expect(res.cache, path).toBe('no-store');
     }
     // These need no window: validated first, with no query.
     for (const path of ['/api/v1/meta?zzfoobar=1', '/api/v1/stations?zzfoobar=1']) {
       const res = await get(app, path);
-      expect([res.status, res.text, res.cache], path).toEqual([400, '{"error":"unknown_parameter"}', 'no-store']);
+      expect([res.status, res.text, res.cache], path).toEqual([
+        400,
+        '{"error":"unknown_parameter","attribution":[]}',
+        'no-store',
+      ]);
     }
     expect(connect).not.toHaveBeenCalled();
     expect(query).not.toHaveBeenCalled();
     // /stations needs the database, not the window.
     const stations = await get(app, '/api/v1/stations');
     expect(stations.status).toBe(200);
-    expect(Stations.parse(stations.json()).stations.length).toBeGreaterThan(0);
+    expect(stationsOf(stations.json()).stations.length).toBeGreaterThan(0);
     expect(connect).toHaveBeenCalled();
     // The OpenAPI document needs neither.
     const doc = await get(createApp(), '/api/v1/openapi.json');
@@ -807,7 +869,7 @@ describe('the api role of main.ts', () => {
     const answer = lines.find((l) => 'status' in l) as { status: number; body: string } | undefined;
     // Until the first load the window answers 503, and start() tries again only after 10 s.
     expect(answer?.status, child.stdout + child.stderr).toBe(200);
-    expect(Meta.parse(JSON.parse(answer?.body ?? '')).displayStart).toBe(
+    expect(MetaAnswer.parse(JSON.parse(answer?.body ?? '')).displayStart).toBe(
       new Date(display.current?.displayStartMs ?? 0).toISOString(),
     );
     expect(lines.at(-1)).toEqual({ exit: 0 });
@@ -867,7 +929,7 @@ describe('on the real clock: channels and canaries', () => {
       const res = await get(app(), `/api/v1/snapshot?t=${iso}`);
       expect(res.status, iso).toBe(200);
       clean(iso, res.text);
-      const body = Snapshot.parse(res.json());
+      const body = snapOf(res.json());
       expect(body.t).toBe(iso);
       // Only the fixture's series: the fixed-clock series of this file hold values in October 2026.
       const values = body.values.filter((v) => !mine.has(v.series));
@@ -913,7 +975,11 @@ describe('on the real clock: channels and canaries', () => {
       const daily = await get(live, `/api/v1/series/${id}?from=${from1d}&to=${to}&res=1d`);
       if (!served.includes(key)) {
         for (const res of [raw, daily]) {
-          expect([res.status, res.text, res.cache], key).toEqual([404, '{"error":"not_found"}', 'no-store']);
+          expect([res.status, res.text, res.cache], key).toEqual([
+            404,
+            '{"error":"not_found","attribution":[]}',
+            'no-store',
+          ]);
         }
         continue;
       }
@@ -923,23 +989,23 @@ describe('on the real clock: channels and canaries', () => {
       clean(key, daily.text);
       if (MY_SERIES.includes(key)) continue;
       // Rows 10 days back and now; the 40 day row is outside the span (and, for CH-3, outside its window).
-      expect(Series.parse(raw.json()).points, key).toEqual(
+      expect(seriesOf(raw.json()).points, key).toEqual(
         [hours[1], hours[2]].map((h) => ({ ts: (h as Date).toISOString(), value: 100, qc: 1 })),
       );
       // Rollup days: 40 days back and today; CH-3's window hides the first.
       const days = (await buckets(key)).slice(key === 'window' ? -1 : 0);
-      expect(Series.parse(daily.json()).points, key).toEqual(
+      expect(seriesOf(daily.json()).points, key).toEqual(
         days.map((bucket) => ({ bucket, vmin: 100, vmax: 100, vavg: 100, vlast: 100, n: 1, qcOr: 1 })),
       );
     }
     const none = await get(live, `/api/v1/series/${Math.max(...Object.values(ids)) + 1}?from=${from}&to=${to}`);
-    expect([none.status, none.text]).toEqual([404, '{"error":"not_found"}']);
+    expect([none.status, none.text]).toEqual([404, '{"error":"not_found","attribution":[]}']);
   });
 
   it('/meta and /stations name no owner, off, mirror, twin or inactive series, source or attribution', async () => {
     const meta = await get(app(), '/api/v1/meta');
     clean('meta', meta.text);
-    const body = Meta.parse(meta.json());
+    const body = metaOf(meta.json());
     expect(Math.abs(Date.parse(body.now) - Date.now())).toBeLessThan(60_000);
     expect(body.displayStart).toBe(new Date(display.current?.displayStartMs ?? 0).toISOString());
     expect(body.sources.map((s) => s.id)).toEqual(['CH-1', 'CH-3', 'CH-4', 'DE-1', 'NL-1']);
@@ -948,7 +1014,7 @@ describe('on the real clock: channels and canaries', () => {
 
     const stations = await get(app(), '/api/v1/stations');
     clean('stations', stations.text);
-    const all = Stations.parse(stations.json()).stations;
+    const all = stationsOf(stations.json()).stations;
     const seen = all.flatMap((s) => s.series.map((x) => x.id));
     expect(seen.sort((a, b) => a - b)).toEqual([...DISPLAYED, ...MY_SERIES].map(sid).sort((a, b) => a - b));
     for (const key of HIDDEN) expect(seen, key).not.toContain(sid(key));

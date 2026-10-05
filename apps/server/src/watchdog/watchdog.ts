@@ -1,6 +1,6 @@
 import type { LookupFunction } from 'node:net';
 import { connect as tlsConnect } from 'node:tls';
-import { BACKLOG_MAX_AGE_S, HEALTH_MAX_AGE_MS, Health, LAG_DEGRADED_S } from '@rws/contracts';
+import { BACKLOG_MAX_AGE_S, HEALTH_MAX_AGE_MS, HealthAnswer, LAG_DEGRADED_S } from '@rws/contracts';
 import { type Logger, pino } from 'pino';
 import { z } from 'zod';
 import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from '../capture/env.ts';
@@ -100,7 +100,7 @@ function loadCodes(got: Got, now: Date): string[] | null {
   if ('error' in got) return ['load_unreachable'];
   if (got.status === 404) return null;
   if (got.status !== 200) return ['load_unreachable'];
-  const health = json(got, Health);
+  const health = json(got, HealthAnswer);
   if (typeof health === 'string') return ['load_contract'];
   const codes: string[] = [];
   if (health.status === 'down') codes.push('load_down');

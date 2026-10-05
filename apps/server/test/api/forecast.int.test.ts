@@ -1,4 +1,4 @@
-import { CANARY_RENDERINGS, ForecastCoverage, HealthSources } from '@rws/contracts';
+import { CANARY_RENDERINGS, ForecastCoverage, HealthSourcesAnswer } from '@rws/contracts';
 import { RUHRORT_W } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { forecastCoverage, RUHRORT_STATION, visibleSources } from '../../src/api/forecast.ts';
@@ -276,7 +276,11 @@ describe('GET /api/v1/health/sources', { timeout: 300_000 }, () => {
     const app = createApp({ db: pub.db, now: () => new Date(NOW) });
     const res = await app.request('/api/v1/health/sources');
     expect(res.status).toBe(200);
-    const doc = HealthSources.parse(await res.json());
+    const { attribution, ...doc } = HealthSourcesAnswer.parse(await res.json());
+    // P9b: the attribution names exactly the sources the document names.
+    expect(new Set(attribution.map((a) => a.source))).toEqual(
+      new Set([...doc.sources.map((s) => s.id), ...doc.quarantined_batches.map((q) => q.source)]),
+    );
     expect(doc.forecast_coverage).toEqual(await forecastCoverage(pub.db, 'public', NOW));
     expect(doc.forecast_coverage?.reaches).toHaveLength(15);
     // A source's `forecast` is null when it has stored no run (health was not computed here).

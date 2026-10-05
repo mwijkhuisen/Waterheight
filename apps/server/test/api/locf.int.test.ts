@@ -1,4 +1,4 @@
-import { Snapshot } from '@rws/contracts';
+import { type Snapshot, SnapshotAnswer } from '@rws/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DisplayWindow } from '../../src/api/window.ts';
 import { createApp } from '../../src/app.ts';
@@ -121,6 +121,7 @@ let display: DisplayWindow;
 let app: ReturnType<typeof createApp>;
 /** Series id by key, for the 300 series of the snapshot and for the ones that must stay out of it. */
 const ids = new Map<string, number>();
+const sourceOf = new Map<number, string>();
 const extras: string[] = [];
 
 async function addSeries(spec: Spec) {
@@ -147,6 +148,7 @@ async function addSeries(spec: Spec) {
   );
   const id = rows[0]?.id as number;
   ids.set(spec.key, id);
+  sourceOf.set(id, spec.source);
   return id;
 }
 
@@ -192,6 +194,13 @@ const id = (key: string): number => {
 let all: number[];
 let snapshot: Snapshot;
 
+/** The wire answer (data + attribution): the attribution names exactly the sources of the series in the body. */
+function parseSnapshot(json: unknown): Snapshot {
+  const { attribution, ...data } = SnapshotAnswer.parse(json);
+  expect(new Set(attribution.map((a) => a.source))).toEqual(new Set(data.values.map((v) => sourceOf.get(v.series))));
+  return data;
+}
+
 beforeAll(async () => {
   t = await createTestDb();
   const basis = `'{"clause": "c", "url": "https://example.org/terms", "retrieved": "2026-09-24"}'::jsonb`;
@@ -203,7 +212,10 @@ beforeAll(async () => {
       ('NL-1', 'rws', 'public obs', 'public', NULL, true, true, true, true, '0', true),
       ('DE-1', 'wsv', 'public obs', 'public', NULL, true, true, true, true, '0', true),
       ('CH-2', 'bafu', 'no display', 'public', NULL, false, false, false, false, '0', true),
-      ('BE-3', 'spw', 'owner obs', 'owner', ${basis}, true, true, false, true, '0', true);`);
+      ('BE-3', 'spw', 'owner obs', 'owner', ${basis}, true, true, false, true, '0', true);
+    -- P9b: an answer's attribution is exactly the sources its body names; give the two public ones a row.
+    INSERT INTO attribution (source_id, ord, lang, text, needs_date, required) VALUES
+      ('NL-1', 0, 'nl', 'LOCF-NL', false, false), ('DE-1', 0, 'de', 'LOCF-DE', false, false);`);
   await t.admin.query(`SELECT ensure_partitions('2026-10-01T00:00:00Z', '2026-11-01T00:00:00Z')`);
 
   const specs: Spec[] = EDGE_KEYS.map((key) => ({
@@ -263,7 +275,7 @@ beforeAll(async () => {
   const res = await app.request(`/api/v1/snapshot?t=${T_ISO}`);
   expect(res.status).toBe(200);
   expect(res.headers.get('cache-control')).toBe('public, max-age=600');
-  snapshot = Snapshot.parse(await res.json());
+  snapshot = parseSnapshot(await res.json());
 });
 
 afterAll(async () => {
@@ -333,7 +345,7 @@ describe('GET /api/v1/snapshot?t=<now - 1 day> against a direct LOCF computation
     expect(ref.length).toBeGreaterThan(15);
     expect(ref.length).toBeLessThan(46);
     // The same through a request of its own, so the answer is the one a visitor gets, not the shared fixture.
-    const again = Snapshot.parse(
+    const again = parseSnapshot(
       await (
         await createApp({ db: api.db, window: display, now: () => NOW }).request(`/api/v1/snapshot?t=${T_ISO}`)
       ).json(),
@@ -374,7 +386,7 @@ describe('GET /api/v1/snapshot?t=<now - 1 day> against a direct LOCF computation
     // T + 10 min: the value 600 s after T is now the latest one for age0 and atLimit.
     const next = T + 600 * SEC;
     const res = await app.request(`/api/v1/snapshot?t=${new Date(next).toISOString()}`);
-    const body = Snapshot.parse(await res.json());
+    const body = parseSnapshot(await res.json());
     expect(body.t).toBe(new Date(next).toISOString());
     expect(body.values.filter((v) => all.includes(v.series))).toEqual(await reference(all, next));
     const byId = new Map(body.values.map((v) => [v.series, v]));
