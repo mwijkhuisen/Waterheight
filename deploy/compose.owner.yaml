@@ -13,9 +13,11 @@
 #
 # api-owner (P9b, plan C15) is the owner API: the same server image as `api` with
 # `--audience owner` (role rws_owner_api over the owner views only, a pool of 2).
-# It sits on the new internal network owner_edge, which only caddy-owner and
-# api-owner join, plus db: the public caddy and the public api share no network
-# with it, so neither can reach it. Compose anchors do not cross files, so the
+# It sits on the internal network owner_edge, which only caddy-owner and
+# api-owner join, and reaches the database over owner_db, which only api-owner
+# and db join (review F1: on the shared `db` network the public api could open
+# api-owner:8080). The public caddy and the public api share no network with
+# it, so neither can reach it. pg_hba's `samenet` covers both db networks. Compose anchors do not cross files, so the
 # hardening flags of compose.yaml (x-hardening) are repeated here literally, and
 # test/caddy-owner.test.ts holds the two copies together.
 services:
@@ -68,7 +70,7 @@ services:
       RWS_DB_PORT: "5432"
       RWS_DB_NAME: rws
     secrets: [db_rws_owner_api]
-    networks: [owner_edge, db]
+    networks: [owner_edge, owner_db]
     depends_on:
       db:
         condition: service_healthy
@@ -82,12 +84,21 @@ services:
       retries: 3
       start_period: 60s
 
+  # The database joins owner_db for api-owner alone (the list keeps its own `db`).
+  db:
+    networks: [db, owner_db]
+
 networks:
   # caddy-owner and api-owner only (C15); internal, so no route out either.
   owner_edge:
     internal: true
     driver_opts:
       com.docker.network.bridge.name: rws-owner-edge
+  # api-owner and db only (review F1).
+  owner_db:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-owner-db
 
 secrets:
   owner_basic_auth:

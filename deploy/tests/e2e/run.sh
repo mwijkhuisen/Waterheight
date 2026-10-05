@@ -55,7 +55,7 @@
 #     every request without credentials, with both owner headers, and serving the
 #     owner canary with them; and the degraded stand-in: with the api stopped the
 #     map still loads for a future t and shows its banner;
-#   - (P9b) the owner API: api-owner (the overlay) joins only owner_edge and db, with
+#   - (P9b) the owner API: api-owner (the overlay) joins only owner_edge and owner_db, with
 #     caddy-owner the only other member of owner_edge; static files are never rate
 #     limited while the API is (429 with Retry-After); Caddy hands the API the real
 #     peer address (the masked access log never shows a Docker bridge gateway for
@@ -962,15 +962,19 @@ rws_compose run --rm --no-deps -T watchdog watchdog --once
 proof "watchdog --once with the publisher running: /data/v1/meta.json is fresh, so the publisher check is green too"
 
 # ------------------------------------------------------------------ the owner API and the API limits (P9b)
-step "The owner API (P9b): api-owner only on owner_edge and db, the hardening flags, its own secret"
+step "The owner API (P9b): api-owner only on owner_edge and owner_db, the hardening flags, its own secret"
 # Plan C15: owner_edge is joined by caddy-owner and api-owner alone, so neither the public caddy nor the public api
 # can reach the owner API; the overlay repeats the hardening flags of compose.yaml (test/caddy-owner.test.ts).
-[[ $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' rws-api-owner-1) == 'rws_db rws_owner_edge ' ]] ||
+[[ $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' rws-api-owner-1) == 'rws_owner_db rws_owner_edge ' ]] ||
   fail "api-owner networks: $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' rws-api-owner-1)"
 [[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-api-owner-1) =~ ^(\{\}|null)$ ]] || fail "api-owner publishes a port"
 [[ $(docker network inspect -f '{{.Internal}}' rws_owner_edge) == true ]] || fail "network rws_owner_edge is not internal"
 members=$(docker network inspect -f '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' rws_owner_edge | grep . | sort | tr '\n' ' ')
 [[ $members == 'rws-api-owner-1 rws-caddy-owner-1 ' ]] || fail "rws_owner_edge members: $members"
+# Review F1: the owner API reaches the database over owner_db, which only it and db join (never the shared rws_db).
+[[ $(docker network inspect -f '{{.Internal}}' rws_owner_db) == true ]] || fail "network rws_owner_db is not internal"
+members=$(docker network inspect -f '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' rws_owner_db | grep . | sort | tr '\n' ' ')
+[[ $members == 'rws-api-owner-1 rws-db-1 ' ]] || fail "rws_owner_db members: $members"
 st=$(docker exec rws-api-owner-1 /nodejs/bin/node -e "$read_status")
 grep -qP '^Uid:\t65532\t' <<<"$st" || fail "api-owner does not run as uid 65532"
 grep -qP '^CapEff:\t0000000000000000$' <<<"$st" || fail "api-owner has an effective capability"
@@ -986,7 +990,7 @@ if docker exec rws-caddy-1 wget -q -T 3 -O /dev/null http://api-owner:8080/healt
   fail "the public caddy reached api-owner"
 fi
 docker exec rws-caddy-owner-1 wget -q -T 5 -O /dev/null http://api-owner:8080/healthz || fail "caddy-owner cannot reach api-owner"
-proof "api-owner (the overlay's service) is on rws_owner_edge (internal) and rws_db only, publishes no port, runs as uid 65532 with CapEff 0, NoNewPrivs 1, a read-only root, 256m, 64 pids, 0.5 cpus and only db_rws_owner_api; rws_owner_edge holds exactly api-owner and caddy-owner; the public api and the public caddy cannot reach it, caddy-owner can"
+proof "api-owner (the overlay's service) is on rws_owner_edge and rws_owner_db (both internal) only, publishes no port, runs as uid 65532 with CapEff 0, NoNewPrivs 1, a read-only root, 256m, 64 pids, 0.5 cpus and only db_rws_owner_api; rws_owner_edge holds exactly api-owner and caddy-owner, rws_owner_db exactly api-owner and db; the public api and the public caddy cannot reach it, caddy-owner can"
 
 step "API limits (P9b): the API is rate limited per client, static files never are"
 # 203.0.114.11 is a public-looking source address in the outside namespace: the API keys it as itself (a private

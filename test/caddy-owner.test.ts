@@ -52,7 +52,7 @@ describe('the owner api routes (P9b)', () => {
 
   it('has the beacon handle: exact POST, 8 KB, before the 405 guard, to api-owner', () => {
     expect(code).toMatch(/@beacon \{\n\t\tmethod POST\n\t\texpression `\{path\} == '\/api\/v1\/beacon'`\n\t\}/);
-    const beacon = /handle @beacon \{\n\t\trequest_body \{\n\t\t\tmax_size 8KB\n\t\t\}\n([\s\S]*?)\n\t\}\n/.exec(code);
+    const beacon = /handle @beacon \{\n\t\trequest_body \{\n\t\t\tmax_size 8KiB\n\t\t\}\n([\s\S]*?)\n\t\}\n/.exec(code);
     expect(beacon?.[1]).toContain('reverse_proxy api-owner:8080 {');
     expect(code.indexOf('handle @beacon {')).toBeLessThan(code.indexOf('handle @write {'));
     // The 405 guard itself is unchanged.
@@ -113,7 +113,7 @@ describe('owner site isolation', () => {
     expect(owner?.secrets).toEqual(['owner_basic_auth']);
   });
 
-  it('adds api-owner in the overlay only: the hardening of compose.yaml, one secret, owner_edge and db, no port (P9b C15)', () => {
+  it('adds api-owner in the overlay only: the hardening of compose.yaml, one secret, owner_edge and owner_db, no port (P9b C15, review F1)', () => {
     type Svc = Record<string, unknown> & { networks?: string[]; secrets?: string[] };
     type File = { services: Record<string, Svc>; networks?: Record<string, { internal?: boolean }> };
     const base = parse(read('deploy/compose.yaml'), { merge: true }) as File;
@@ -139,7 +139,7 @@ describe('owner site isolation', () => {
     expect(svc.cpus).toBe(0.5);
     expect(svc.pids_limit).toBe(64);
     expect(svc.ports).toBeUndefined();
-    expect(svc.networks).toEqual(['owner_edge', 'db']);
+    expect(svc.networks).toEqual(['owner_edge', 'owner_db']);
     expect(svc.healthcheck).toEqual((base.services.api as Svc).healthcheck);
     expect(svc.depends_on).toEqual((base.services.api as Svc).depends_on);
     expect(svc.environment).toEqual((base.services.api as Svc).environment);
@@ -151,5 +151,16 @@ describe('owner site isolation', () => {
       .sort();
     expect(joined).toEqual(['api-owner', 'caddy-owner']);
     expect(base.networks?.owner_edge).toBeUndefined();
+    // owner_db (review F1): internal, joined by api-owner and db only, so the public api (on the shared db network)
+    // cannot reach api-owner; the overlay's db entry keeps its own network.
+    expect(overlay.networks?.owner_db?.internal).toBe(true);
+    const onOwnerDb = Object.entries(overlay.services)
+      .filter(([, s]) => s.networks?.includes('owner_db'))
+      .map(([name]) => name)
+      .sort();
+    expect(onOwnerDb).toEqual(['api-owner', 'db']);
+    expect((overlay.services.db as Svc).networks).toEqual(['db', 'owner_db']);
+    expect(Object.values(base.services).some((s) => s.networks?.includes('owner_db'))).toBe(false);
+    expect(base.networks?.owner_db).toBeUndefined();
   });
 });
