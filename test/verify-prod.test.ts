@@ -150,6 +150,7 @@ import {
   snapshotAt,
   soak,
   staleSpecs,
+  staticImports,
   staticLeakTerms,
   TILE_416_REQUESTS,
   TILE_CACHE,
@@ -3643,6 +3644,17 @@ describe('verify-prod: the rivers (P6b)', () => {
     expect(checkRiversAttribution(js('ODbL', 404)).ok).toBe(false);
     expect(checkRiversAttribution(undefined).ok).toBe(false);
     expect(checkRiversAttribution('timeout').detail).toBe('timeout');
+    // P10a: a thin entry whose static import holds the footer text passes; a 404 import or none does not.
+    expect(checkRiversAttribution(js('import"./api-x.js"'), [js('nothing'), js('"ODbL"')]).ok).toBe(true);
+    expect(checkRiversAttribution(js('import"./api-x.js"'), [js('ODbL', 404)]).ok).toBe(false);
+    expect(checkRiversAttribution(js('nothing'), []).ok).toBe(false);
+  });
+
+  it('reads the static imports of a built chunk, same directory only', () => {
+    expect(
+      staticImports('import{a as b}from"./api-BtxepN8z.js";import"./temporal-C1o8ltMq.js";import("./lazy-X.js")'),
+    ).toEqual(['/assets/api-BtxepN8z.js', '/assets/temporal-C1o8ltMq.js']);
+    expect(staticImports('import"https://evil.example/x.js";from"../up.js";from"./a/b.js"')).toEqual([]);
   });
 
   it('the rivers bodies are in the owner leak check: a canary in the reaches file fails it', () => {
