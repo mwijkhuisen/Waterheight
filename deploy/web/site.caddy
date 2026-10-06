@@ -54,8 +54,9 @@
 	# reports. Exact method and path, compared as sent (an expression, not a path
 	# matcher, which folds case: /API/v1/beacon and every other POST stay the 405
 	# below), placed before it. The body is capped at 8 KB here, as in the api; a
-	# 413 from this cap carries no site headers (KG-107). X-Rws-Client is the TCP
-	# peer, set here and replacing a client's value: the api keys its rate limit on it.
+	# 413 from this cap carries no site headers (KG-107). X-Rws-Client is the client
+	# address (the TCP peer, or a trusted proxy's X-Forwarded-For: KG-228), set here and replacing a client's
+	# value: the api keys its rate limit on it.
 	@beacon {
 		method POST
 		expression `{path} == '/api/v1/beacon'`
@@ -68,7 +69,7 @@
 		reverse_proxy api:8080 {
 			header_up -Forwarded
 			header_up -X-Real-IP
-			header_up X-Rws-Client {remote_host}
+			header_up X-Rws-Client {client_ip}
 			header_down -Server
 			header_down -X-Degraded
 		}
@@ -157,7 +158,7 @@
 			reverse_proxy api:8080 {
 				header_up -Forwarded
 				header_up -X-Real-IP
-				header_up X-Rws-Client {remote_host}
+				header_up X-Rws-Client {client_ip}
 				header_down -Server
 				header_down -X-Degraded
 				@upstream_5xx status 502 503 504
@@ -174,13 +175,14 @@
 		}
 		handle {
 			# The api keys its per-client rate limit on X-Rws-Client alone, which
-			# Caddy sets to the TCP peer (replacing a client's value; no
-			# trusted_proxies). Other client-address headers (True-Client-IP,
-			# X-Client-IP, X-Forwarded-For, …) are never read.
+			# Caddy sets to {client_ip} (replacing a client's value): the TCP peer,
+			# or X-Forwarded-For only from a peer in RWS_TRUSTED_PROXIES (KG-228).
+			# Other client-address headers (True-Client-IP, X-Client-IP, …) are
+			# never read, and the api never reads X-Forwarded-For itself.
 			reverse_proxy api:8080 {
 				header_up -Forwarded
 				header_up -X-Real-IP
-				header_up X-Rws-Client {remote_host}
+				header_up X-Rws-Client {client_ip}
 				header_down -Server
 				header_down -X-Degraded
 			}

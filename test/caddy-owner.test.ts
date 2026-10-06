@@ -59,14 +59,24 @@ describe('the owner api routes (P9b)', () => {
     expect(code).toContain('\t@write not method GET HEAD\n');
   });
 
-  it('sets X-Rws-Client to the TCP peer on every reverse_proxy, in both sites', () => {
+  it('sets X-Rws-Client on every reverse_proxy: the TCP peer on the owner site, {client_ip} on the public one (KG-228)', () => {
     expect(proxies.map((m) => m[1])).toEqual(['api-owner:8080', 'api-owner:8080']);
     for (const site of [ownerSite, publicSite]) {
       // Up to the first line that is only a closing brace (a nested block of the snapshot proxy comes after the headers).
       const all = [...site.replaceAll(/#.*$/gm, '').matchAll(/reverse_proxy (\S+) \{\n([\s\S]*?)\n\t*\}\n/g)];
       expect(all.length).toBe(site === ownerSite ? 2 : 3);
-      for (const m of all) expect(m[2], m[1]).toContain('header_up X-Rws-Client {remote_host}');
+      const want = site === ownerSite ? '{remote_host}' : '{client_ip}';
+      for (const m of all) expect(m[2], m[1]).toContain(`header_up X-Rws-Client ${want}`);
     }
+  });
+
+  it('trusts X-Forwarded-For only from RWS_TRUSTED_PROXIES, strictly, on the public site alone (KG-228)', () => {
+    const globals = read('deploy/web/Caddyfile').replaceAll(/#.*$/gm, '');
+    expect(globals).toContain('trusted_proxies static {$RWS_TRUSTED_PROXIES}\n');
+    expect(globals).toContain('trusted_proxies_strict\n');
+    expect(globals).toContain('client_ip_headers X-Forwarded-For\n');
+    expect(read('deploy/web/Caddyfile.owner')).not.toContain('trusted_proxies');
+    expect(read('deploy/compose.yaml')).toContain('RWS_TRUSTED_PROXIES: ${RWS_TRUSTED_PROXIES:-}\n');
   });
 
   it('puts Reporting-Endpoints in the header block of both sites', () => {
