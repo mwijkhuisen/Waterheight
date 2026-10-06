@@ -26,13 +26,13 @@
     "@biomejs/biome": "2.5.14",
     "@maplibre/maplibre-gl-style-spec": "26.4.4",
     "@protomaps/basemaps": "5.7.2",
-    "@types/node": "26.6.2",
-    "@vitest/coverage-v8": "5.0.1",
+    "@types/node": "26.6.3",
+    "@vitest/coverage-v8": "5.0.2",
     "fast-check": "4.10.2",
     "lighthouse": "13.5.0",
-    "msw": "2.15.0",
+    "msw": "3.0.0",
     "typescript": "6.0.3",
-    "vitest": "5.0.1",
+    "vitest": "5.0.2",
     "yaml": "2.9.1",
     "zod": "4.6.5"
   }
