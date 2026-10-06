@@ -110,6 +110,7 @@ describe('e2e build', () => {
     expect(files.length).toBeGreaterThan(0);
     const gzip = files.reduce((sum, f) => sum + gzipSync(readFileSync(join(out, f))).length, 0);
     console.log(`initial JS of ${page}: ${gzip} bytes gzip (${(gzip / 1024).toFixed(1)} KiB) in ${files.join(', ')}`);
+    for (const f of files) console.log(`  ${f}: ${gzipSync(readFileSync(join(out, f))).length} bytes gzip`);
     expect(gzip).toBeLessThanOrEqual(250 * 1024);
   });
 
