@@ -56,6 +56,8 @@ services:
     environment:
       RWS_DOMAIN: ${RWS_DOMAIN:?}
       RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+      # KG-228: the reverse proxy in front of the site, if any (CIDRs); empty trusts nobody.
+      RWS_TRUSTED_PROXIES: ${RWS_TRUSTED_PROXIES:-}
     # Only directories no networked role writes: the root-owned status directory
     # (never capture's public/status, where a planted symlink would make Caddy
     # serve any file it can read) and the tiles directory, which only

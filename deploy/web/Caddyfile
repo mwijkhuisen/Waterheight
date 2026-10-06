@@ -8,6 +8,13 @@
 	# P9b (review SEC-2): a slow client cannot hold a connection: 10 s for the headers and for a body (the largest
 	# accepted is the beacon's 8 KiB), 2 minutes idle between keep-alive requests.
 	servers {
+		# KG-228: a reverse proxy in front of this site (RWS_TRUSTED_PROXIES in /etc/rws/rws.env, CIDRs separated
+		# by spaces) is the only peer whose X-Forwarded-For is read; strict takes the right-most untrusted address,
+		# so a value a client sends ahead of the chain never wins. Empty (the default) trusts nobody: {client_ip}
+		# is then the TCP peer, as before. A malformed value stops Caddy at start, never trusts more.
+		trusted_proxies static {$RWS_TRUSTED_PROXIES}
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
 		timeouts {
 			read_header 10s
 			read_body 10s
