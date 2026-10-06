@@ -334,8 +334,6 @@ function Viewer({ locale }: { locale: Locale }) {
                   station={selected}
                   values={values}
                   forecasts={forecasts}
-                  mode={mode}
-                  state={states.get(selected.id)}
                   changes={changes}
                   warnings={warnings}
                   ownerSources={ownerSources}

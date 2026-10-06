@@ -5,9 +5,7 @@ import { useRecent, useSources } from '../../lib/data/api.ts';
 import type { Change } from '../../lib/data/change.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
-import type { StationState } from '../../lib/stationStates.ts';
 import { formatAge, formatDay, formatLocal } from '../../lib/time/time.ts';
-import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { DhMark } from '../legend/DhMark.tsx';
@@ -34,9 +32,7 @@ interface Props {
   values: ReadonlyMap<number, Value>;
   /** After now: the forecasts at t by series; undefined for a t up to now. */
   forecasts: ReadonlyMap<number, SnapshotForecast> | undefined;
-  /** P10a: the map mode, the station's feature-state record, the 24-hour change by series. */
-  mode: Mode;
-  state: StationState | undefined;
+  /** P10a: the 24-hour change by series. */
   changes: ReadonlyMap<number, Change> | undefined;
   /** The warning areas valid at t: an area basis's raw level code comes from its feature (label lookup, V2). */
   warnings: WarningsAt | undefined;
