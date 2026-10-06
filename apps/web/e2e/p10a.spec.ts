@@ -70,7 +70,8 @@ const highlightFilter = (page: Page) =>
 /** The reaches file as the stand-in serves it holds no river: this one names two (a catalogue one, a hostile one). */
 async function withRivers(page: Page) {
   await page.route('**/data/v1/rivers/reaches-*.json', async (route) => {
-    const res = await route.fetch();
+    // Uncompressed: Caddy serves the precompressed .zst to Firefox, and route.fetch() does not decode zstd.
+    const res = await route.fetch({ headers: { ...route.request().headers(), 'accept-encoding': 'identity' } });
     const body = (await res.json()) as { rivers: unknown[] };
     body.rivers = [
       { id: 'ems', name_nl: 'Eems', name_en: 'Ems', parent_river_id: null, km_direction: 'downstream' },
@@ -592,7 +593,8 @@ test('a display-only series older than 7 days asks the API for nothing and says 
   // The e2e registry has no series whose licence withholds the API channel, so the stations file is patched: the one
   // series of E2E DST is marked `api: false` (what the publisher writes for such a series).
   await page.route('**/data/v1/stations.json', async (route) => {
-    const res = await route.fetch();
+    // Uncompressed: Caddy serves the precompressed .zst to Firefox, and route.fetch() does not decode zstd.
+    const res = await route.fetch({ headers: { ...route.request().headers(), 'accept-encoding': 'identity' } });
     const body = (await res.json()) as { stations: { id: string; series: { api?: boolean }[] }[] };
     for (const st of body.stations) if (st.id === 'nl.e2e.dst') for (const x of st.series) x.api = false;
     await route.fulfill({ response: res, json: body });
