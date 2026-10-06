@@ -76,10 +76,18 @@ for (const path of [
   const r = await get(path, auth);
   check(ownerHeaders(r), `${path} with credentials: ${r.status}, both owner headers`);
 }
+// P10b: the document also holds the contact, the operator and the CDN: compare the audience and the four keys, never
+// the whole body (the operator's name is personal data, so nothing of it is printed).
 const config = await get('/runtime-config.json', auth);
+let doc = null;
+try {
+  doc = JSON.parse(config.body);
+} catch {}
 check(
-  config.status === 200 && config.body.trim() === '{"audience":"owner"}',
-  '/runtime-config.json with credentials is {"audience":"owner"}',
+  config.status === 200 &&
+    doc?.audience === 'owner' &&
+    Object.keys(doc).sort().join() === 'audience,cdn,contact,operator',
+  '/runtime-config.json with credentials has audience "owner" and exactly the keys audience, contact, operator and cdn',
 );
 const latest = await get('/data/v1/latest.json', auth);
 check(

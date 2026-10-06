@@ -1,27 +1,3 @@
-.beta {
-  margin: 0;
-  padding: 0.4rem var(--space);
-  background: var(--warn-bg);
-  color: var(--warn-ink);
-  font-size: 0.9rem;
-}
-
-.header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space);
-  padding: 0 var(--space);
-}
-
-/* Layout stability (P10a, Lighthouse CLS): child margins stay inside, and the loading frame is a screen tall, so the
-   footer starts below the fold and the arriving content never pushes it out of view. */
-.main {
-  display: flow-root;
-  min-height: 100vh;
-  padding: 0 var(--space) var(--space);
-}
-
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -67,20 +43,4 @@
 .busy {
   opacity: 0.45;
   transition: opacity 0s linear 0.2s;
-}
-
-.footer {
-  border-top: 1px solid var(--line);
-  padding: var(--space);
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
-.footer h2 {
-  font-size: 1rem;
-}
-
-.disclaimer {
-  font-weight: 600;
-  color: var(--ink);
 }

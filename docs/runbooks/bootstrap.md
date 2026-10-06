@@ -137,11 +137,15 @@ sudo docker restart rws-api-1                       # the consumer reads its sec
 | Key | Value |
 |---|---|
 | `RWS_DOMAIN` | the domain of A2/A4, e.g. `rivierstanden.nl` |
-| `RWS_CONTACT_EMAIL` | `contact@<domain>` (in every provider request's User-Agent) |
+| `RWS_CONTACT_EMAIL` | `contact@<domain>` (in every provider request's User-Agent; from P10b also on the colophon, the privacy page and the accessibility statement, through `/runtime-config.json`) |
+| `RWS_OPERATOR_NAME` | (P10b) the operator shown on those three pages, in your own words, at most 120 characters. The template bootstrap wrote has no such line and bootstrap never rewrites the file: add it. `scripts/verify-prod.sh` FAILs `runtime config` while it is empty. See the rule below the table |
+| `RWS_CDN_NAME` | (P10b, optional) the CDN in front of the site, shown on the privacy page, at most 80 characters. Leave the line out, or empty, while there is none: the page then says that no CDN is used. Naming one here before a CDN is armed (D20) would make the privacy page untrue |
 | `RWS_PUBLIC_IPV4`, `RWS_PUBLIC_IPV6` | detected by bootstrap. Check them against A4's DNS records: the site is published **only** on these addresses |
 | `RWS_RESTIC_REPOSITORY` | `s3:https://<endpoint>/<bucket>/restic` (port 443 only: the firewall allows no other) |
 | `RWS_S3_REGION` | the provider's region (e.g. `fr-par`, `eu-central-1`) |
 | `RWS_BACKUP` | leave `off` until step 6 |
+
+**The three values of `/runtime-config.json` (P10b).** Caddy builds that file's JSON from `RWS_CONTACT_EMAIL`, `RWS_OPERATOR_NAME` and `RWS_CDN_NAME` when it starts, so none of them may contain `{`, `}`, `#`, `"` or `\`: Caddy would expand a `{…}` placeholder, a quote or a backslash breaks the JSON and `#` starts a comment in an env file. Keep `<` and `>` out too (the page drops a value that has one) and also `'`, the backtick and `$`: `load_env` in `rws-lib.sh`, which every `rws-*` script runs, refuses the whole file for them. No tab or other control character either: it breaks the JSON, and a body that is no JSON reads as public (on the owner site the banner would go). A change takes effect when Caddy is recreated: `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`.
 
 **Check:** `sudo rws-update --dry-run` no longer says "rws.env is not complete".
 
@@ -307,3 +311,18 @@ Do this on the VPS that already runs the P3 (or a later) release. No new secret,
 3. Dispatch `geo.yml` on `main` once (`docs/runbooks/geo-refresh.md` §2): it publishes the first `geo-YYYY-MM-DD` release with the river overlay, the reaches file and the ODbL download, each signed.
 4. Run the first refresh and decide on the timer: `docs/runbooks/geo-refresh.md`, "Serving the rivers (P6b)" (a dry run, one real run, then `sudo systemctl enable --now rws-rivers-refresh.timer` when you are satisfied).
 5. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `rivers manifest`, `rivers tiles`, `rivers reaches`, `rivers download` and `rivers attribution`.
+
+## Later: the release with the pages (P10b; owner)
+
+Do this on the VPS that already runs the P6b (or a later) release. No new secret, migration or healthchecks check, no host file and so no bootstrap re-run: the release brings the information pages in NL and EN, the page list and the 404 page of `site.caddy` (and `owner.caddy`), and a `/runtime-config.json` that also carries the contact, the operator and the CDN. The one step that must come before the deploy is the first.
+
+1. Add the operator to `/etc/rws/rws.env` **before the release is deployed** (`sudoedit /etc/rws/rws.env`; the rules are under the table in §4):
+
+   ```
+   RWS_OPERATOR_NAME=<the name the colophon shows>
+   ```
+
+   Leave `RWS_CDN_NAME` out. The operator's name is shown to every visitor, and the texts of the Disclaimer, Colophon and Privacy pages are yours to approve (E5, issue #25). If the release is already deployed, set the line and run `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`.
+2. Approve the `promote` job for the release; `rws-update` deploys it within 5 minutes. **Check:** `sudo docker compose -p rws ps` (caddy healthy) and, from any browser, `https://<domain>/over`, `/colofon` and `/en/privacy` show the pages, the colophon names your operator and your contact address, and `https://<domain>/niet-hier` is the 404 page.
+3. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `pages <path>` (18, one per path of `apps/web/src/lib/routes.ts`) and `not found`, and `runtime config` now reads four keys: it FAILs while the operator is empty (`docs/runbooks/publisher.md`). A `FAIL pages <path>` or `FAIL not found` names the status, header or `<html lang>` that differs (the page list in `site.caddy` must equal `apps/web/src/lib/routes.ts`, which `test/page-routes.test.ts` checks): redeploy the previous release (`docs/runbooks/deploy-rollback.md`) and keep the output.
+4. A browser tab that still runs the P10a bundle reads the new `/runtime-config.json` as `public`, because the old bundle parses it as exactly one key. `index.html` is `no-cache`, so a reload loads the new bundle and fixes it. (The owner site, `caddy-owner`, serves the same file with `owner` and the same three values from `compose.owner.yaml`; it is not in production before P12a, KG-226.)

@@ -1,4 +1,5 @@
 import { type APIResponse, expect, test } from '@playwright/test';
+import { PAGE_ROUTES } from '../src/lib/routes.ts';
 import { siteHeaders } from './headers.ts';
 
 // P4b routes (issue #19): what the site answers for the api, the assets, the app routes and everything else,
@@ -144,9 +145,10 @@ test('a GET with a body over the limit is a 413', async ({ request }) => {
   expect(res.status()).toBe(413);
 });
 
-test('a miss under /assets, /tiles or /status, and the files that do not exist, are 404s, never HTML', async ({
+test('a miss under /assets, /tiles or /status/, and the files that do not exist, are bare 404s, never HTML', async ({
   request,
 }) => {
+  // (/status itself is a page since P10b; the 404 shells are never served under their own names either)
   for (const path of [
     '/assets/no-such-file.js',
     '/assets/no-such-file',
@@ -155,9 +157,13 @@ test('a miss under /assets, /tiles or /status, and the files that do not exist, 
     '/tiles/x',
     '/tiles',
     '/status/x',
-    '/status',
     '/favicon.ico',
     '/robots.txt',
+    '/missing.txt',
+    '/en/missing.png',
+    '/404.html',
+    '/en/404.html',
+    '/404.HTML',
   ]) {
     const res = await request.get(path);
     expect(res.status(), path).toBe(404);
@@ -168,27 +174,19 @@ test('a miss under /assets, /tiles or /status, and the files that do not exist, 
   }
 });
 
-test('app routes answer the page of their language; /en redirects to /en/', async ({ request, baseURL }) => {
-  const en = await request.get('/en/some/app/route');
-  expect(en.status()).toBe(200);
-  expect(en.headers()['content-type']).toMatch(/^text\/html/);
-  expect(await en.text()).toContain('<html lang="en"');
-  expectSiteHeaders(en);
-
-  const nl = await request.get('/some-route');
-  expect(nl.status()).toBe(200);
-  expect(nl.headers()['content-type']).toMatch(/^text\/html/);
-  expect(await nl.text()).toContain('<html lang="nl"');
-  expectSiteHeaders(nl);
-
-  for (const [path, lang] of [
-    ['/', 'nl'],
-    ['/en/', 'en'],
-  ] as const) {
-    const page = await request.get(path);
-    expect(page.status(), path).toBe(200);
-    expect(await page.text(), path).toContain(`<html lang="${lang}"`);
-  }
+// P10b: the pages are the exact paths of src/lib/routes.ts (the map and eight information pages in both languages, 18
+// paths); /status is one of them. Any other path is a real 404 that carries the 404 shell of its language.
+test('the pages answer 200 with the shell of their language; /en redirects to /en/', async ({ request, baseURL }) => {
+  for (const r of PAGE_ROUTES)
+    for (const lang of ['nl', 'en'] as const) {
+      const res = await request.get(r[lang]);
+      expect(res.status(), r[lang]).toBe(200);
+      expect(res.headers()['content-type'], r[lang]).toMatch(/^text\/html/);
+      expect(await res.text(), r[lang]).toContain(`<html lang="${lang}"`);
+      expectSiteHeaders(res);
+    }
+  // The shells are served for the pages, and /index.html is the map as well.
+  expect((await request.get('/index.html')).status()).toBe(200);
 
   const redirect = await request.get('/en', { maxRedirects: 0 });
   expect(redirect.status()).toBe(308);
@@ -196,15 +194,58 @@ test('app routes answer the page of their language; /en redirects to /en/', asyn
   expectSiteHeaders(redirect);
 });
 
-test('the pages and the app routes are revalidated on every use (no-cache); the assets stay immutable', async ({
+test('any other path is a 404 with the 404 shell of its language, never a page', async ({ request }) => {
+  // (/status/ and anything else under it is Caddy's own bare 404 for the production status files, tested above)
+  for (const [path, lang, heading] of [
+    ['/niet-hier-p10b', 'nl', 'Pagina niet gevonden'],
+    ['/some-route', 'nl', 'Pagina niet gevonden'],
+    ['/over/', 'nl', 'Pagina niet gevonden'],
+    ['/Over', 'nl', 'Pagina niet gevonden'],
+    ['/EN/about', 'nl', 'Pagina niet gevonden'],
+    ['/en/not-here-p10b', 'en', 'Page not found'],
+    ['/en/some/app/route', 'en', 'Page not found'],
+    ['/en/about/', 'en', 'Page not found'],
+    ['/en//about', 'en', 'Page not found'],
+  ] as const) {
+    const res = await request.get(path);
+    expect(res.status(), path).toBe(404);
+    expectSiteHeaders(res);
+    expect(res.headers()['cache-control'], path).toBe('no-cache');
+    expect(res.headers()['content-type'], path).toMatch(/^text\/html/);
+    const html = await res.text();
+    expect(html, path).toContain(`<html lang="${lang}"`);
+    // The shell carries its own heading, so the 404 page says what it is before any script runs.
+    expect(html, path).toContain(`<h1>${heading}</h1>`);
+  }
+});
+
+// Only the real Caddy matches page paths the way production does: Caddy keeps a doubled slash in `{path}`, so a
+// path that only looks like a page is no page (the stand-in's URL parser reads '//over' as a host, so it cannot say).
+test('the real Caddy matches page paths exactly: a doubled slash, the other case and the shells are no pages', async ({
+  request,
+  baseURL,
+}) => {
+  test.skip(process.env.E2E_BASE_URL === undefined, 'needs the real Caddy (CI): the stand-in is not production');
+  const origin = new URL(baseURL ?? '').origin;
+  for (const path of ['/Over', '//over', '/EN/about', '//404.html']) {
+    // (an absolute URL, so that '//over' is a path and not a host)
+    const res = await request.get(`${origin}${path}`);
+    expect(res.status(), path).toBe(404);
+    expectSiteHeaders(res);
+  }
+});
+
+test('the pages and the 404 shells are revalidated on every use (no-cache); the assets stay immutable', async ({
   request,
 }) => {
   // A page kept past a deploy would ask for asset names the new image no longer has (CR-6).
-  for (const path of ['/', '/index.html', '/en/', '/en/some/app/route', '/some-route', '/third-party-notices.txt']) {
+  for (const path of ['/', '/index.html', '/en/', '/over', '/en/status', '/third-party-notices.txt']) {
     const res = await request.get(path);
     expect(res.status(), path).toBe(200);
     expect(res.headers()['cache-control'], path).toBe('no-cache');
   }
+  for (const path of ['/en/some/app/route', '/some-route'])
+    expect((await request.get(path)).headers()['cache-control'], path).toBe('no-cache');
   const asset = /src="(\/assets\/[^"]+\.js)"/.exec(await (await request.get('/')).text())?.[1] ?? '';
   expect((await request.get(asset)).headers()['cache-control']).toBe('public, max-age=31536000, immutable');
   expect((await request.get('/api/v1/meta')).headers()['cache-control']).toBe('public, max-age=60');

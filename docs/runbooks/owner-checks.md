@@ -185,3 +185,12 @@ The `[owner]` items of P5b and the checks that `scripts/verify-prod.sh <domain>`
 ## 13. The static publisher (P9a, issue #24)
 
 The new `static *` and `runtime config` lines of `scripts/verify-prod.sh <domain>`, the `publisher` and `owner-publisher` healthchecks and the re-run of `deploy/host/bootstrap.sh` after this release: `docs/runbooks/publisher.md`.
+
+## 14. The pages (P10b, issue #25)
+
+The `[owner]` items of P10b and the checks that `scripts/verify-prod.sh <domain>` gained. Paste each output into #25.
+
+1. **E5, the texts.** Read the NL and EN text of the Disclaimer, Colophon and Privacy pages that the PR lists (`apps/web/src/features/pages/content/{nl,en}/` and the `official_*`, `colophon_*` and `privacy_*` messages) and approve them or ask for changes (KG-238). Done: approved on 2026-10-06.
+2. **D21.** Answer the decision on the uncovered rivers (due 2026-11-10, `docs/plan/PHASES.md` §6); if it differs from the Method page's list, only its two content files change (KG-239). Done: accepted as proposed on 2026-10-06.
+3. **The operator.** Set `RWS_OPERATOR_NAME` in `/etc/rws/rws.env` before the release is deployed, and leave `RWS_CDN_NAME` empty: `docs/runbooks/bootstrap.md`, "the release with the pages".
+4. **After the deploy.** `scripts/verify-prod.sh <domain>`: `pages <path>` for the 18 paths, `not found` and `runtime config` all PASS. Then look at the colophon and the privacy page in both languages: the operator and the contact address show and the CDN line says that no CDN is used.

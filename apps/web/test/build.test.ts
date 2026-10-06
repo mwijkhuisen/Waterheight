@@ -12,9 +12,36 @@ const webDir = fileURLToPath(new URL('..', import.meta.url));
 const tmp = mkdtempSync(join(tmpdir(), 'rws-web-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
+/** The four static shells: the map in both languages, and the 404 page in both (the information pages are the map's). */
+const SHELLS = ['index.html', 'en/index.html', '404.html', 'en/404.html'];
+
+type Chunk = { file: string; imports?: string[]; isDynamicEntry?: boolean };
+
 describe('web build', () => {
   const out = join(tmp, 'dist');
   const page = (p: string) => readFileSync(join(out, p), 'utf8');
+  const manifestOf = () => JSON.parse(page('.vite/manifest.json')) as Record<string, Chunk>;
+  /** `files` and everything they import statically, as built files. */
+  function closureOf(manifest: Record<string, Chunk>, files: Iterable<string>): Set<string> {
+    const byFile = new Map(Object.values(manifest).map((c) => [c.file, c]));
+    const seen = new Set<string>();
+    const visit = (file: string) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      for (const key of byFile.get(file)?.imports ?? []) {
+        const dep = manifest[key];
+        if (dep !== undefined) visit(dep.file);
+      }
+    };
+    for (const file of files) visit(file);
+    return seen;
+  }
+  /** What a shell loads before any dynamic import runs: its scripts and their static imports. */
+  const initialLoad = (manifest: Record<string, Chunk>, html: string) =>
+    closureOf(
+      manifest,
+      [...page(html).matchAll(/\ssrc="\/(assets\/[^"]+\.js)"/g)].flatMap(([, s]) => (s ? [s] : [])),
+    );
 
   beforeAll(async () => {
     // Vitest sets NODE_ENV=test, which makes Vite bundle React's development build: build as the CLI does.
@@ -39,14 +66,30 @@ describe('web build', () => {
     expect(html).not.toMatch(/%m:/);
   });
 
-  it.each(['index.html', 'en/index.html'])('%s makes no third-party request (invariant 7)', (file) => {
+  // P10b: Caddy serves these two with status 404 for any path that is no page. They hold the 404 page's own heading and
+  // a link to the map, so the page says what it is before any script runs.
+  it.each([
+    ['404.html', 'nl', 'Pagina niet gevonden', 'Rivierstanden', '/'],
+    ['en/404.html', 'en', 'Page not found', 'River levels', '/en/'],
+  ])(
+    '%s is the static %s 404 shell: its title, its heading and a link to the map',
+    (file, lang, heading, site, home) => {
+      const html = page(file);
+      expect(html).toMatch(new RegExp(`<html lang="${lang}">`));
+      expect(html).toContain(`<title>${heading} · ${site}</title>`);
+      expect(html).toMatch(new RegExp(`<div id="app">\\s*<main>\\s*<h1>${heading}</h1>\\s*<p><a href="${home}">`));
+      expect(html).not.toMatch(/%m:/);
+    },
+  );
+
+  it.each(SHELLS)('%s makes no third-party request (invariant 7)', (file) => {
     // Every src/href is a same-origin path; no scheme, no protocol-relative URL.
     const refs = [...page(file).matchAll(/\s(?:src|href)="([^"]*)"/g)].map(([, v]) => v);
     expect(refs.length).toBeGreaterThan(0);
     for (const ref of refs) expect(ref).toMatch(/^\/(?!\/)/);
   });
 
-  it.each(['index.html', 'en/index.html'])('%s has no inline script, style or handler', (file) => {
+  it.each(SHELLS)('%s has no inline script, style or handler', (file) => {
     const html = page(file);
     // Every <script> (any case) is an external file with an empty body.
     const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)];
@@ -120,8 +163,7 @@ describe('web build', () => {
   // P10a (plan C1, C13): the owner site runs this same build, so the build may hold the owner's schemas and labels
   // only in the lazy owner chunks, and never anything that names the owner site, its secret or a private basis.
   it('keeps the owner chunks out of every page’s initial load, and the canary spelling inside them', () => {
-    type Chunk = { file: string; imports?: string[]; isDynamicEntry?: boolean };
-    const manifest = JSON.parse(page('.vite/manifest.json')) as Record<string, Chunk>;
+    const manifest = manifestOf();
     const owner = Object.entries(manifest)
       .filter(([src, c]) => src.startsWith('src/features/owner/') && c.isDynamicEntry === true)
       .map(([, c]) => c.file);
@@ -135,24 +177,10 @@ describe('web build', () => {
       .filter((x) => x.audience === 'owner')
       .map((x) => `lbl_${x.id.toLowerCase().replaceAll('-', '_')}_`);
     expect(ownerLabelPrefixes).toContain('lbl_be_3_');
-    const byFile = new Map(Object.values(manifest).map((c) => [c.file, c]));
-    const closure = (entry: string) => {
-      const seen = new Set<string>();
-      const visit = (file: string) => {
-        if (seen.has(file)) return;
-        seen.add(file);
-        for (const key of byFile.get(file)?.imports ?? []) {
-          const dep = manifest[key];
-          if (dep !== undefined) visit(dep.file);
-        }
-      };
-      visit(entry);
-      return seen;
-    };
-    for (const html of ['index.html', 'en/index.html']) {
-      const entries = [...page(html).matchAll(/\ssrc="\/(assets\/[^"]+\.js)"/g)].flatMap(([, s]) => (s ? [s] : []));
-      expect(entries.length).toBeGreaterThan(0);
-      for (const file of entries.flatMap((e) => [...closure(e)])) {
+    for (const html of SHELLS) {
+      const initial = initialLoad(manifest, html);
+      expect(initial.size).toBeGreaterThan(0);
+      for (const file of initial) {
         expect(owner, `${html} → ${file}`).not.toContain(file);
         // static-owner's own refinement text: the owner sources schema is in no file a public page loads.
         expect(page(file), `${html} → ${file}`).not.toContain('an owner source has a private basis');
@@ -164,6 +192,91 @@ describe('web build', () => {
     const withCanary = files.filter((f) => page(f).includes('CANARY-'));
     expect(withCanary.length).toBeGreaterThan(0);
     for (const f of withCanary) expect(owner, f).toContain(f);
+  });
+
+  // P10b (plan C1, C9): the text of the information pages is one lazy chunk per page and language, and the shells load none
+  // of it; the footer's credits (MapCredits) are static, so the licence of the river network is in the entry's load.
+  it('keeps the text of every information page in its own lazy chunk, out of every shell’s initial load', () => {
+    const manifest = manifestOf();
+    const names = ['nl', 'en'].flatMap((locale) => {
+      const files = readdirSync(join(webDir, 'src/features/pages/content', locale));
+      return files.map((f) => `src/features/pages/content/${locale}/${f}`);
+    });
+    // Eight pages in two languages, the same file names in each (scripts/check-i18n.ts holds the content rule).
+    expect(names).toHaveLength(16);
+    const initial = new Set(SHELLS.flatMap((html) => [...initialLoad(manifest, html)]));
+    const files = new Set<string>();
+    for (const key of names) {
+      const chunk = manifest[key];
+      expect(chunk?.isDynamicEntry, `${key} is a dynamic entry`).toBe(true);
+      expect(initial.has(chunk?.file ?? ''), `${key} is in no shell's initial load`).toBe(false);
+      files.add(chunk?.file ?? '');
+    }
+    expect(files.size, 'one chunk per page and language').toBe(16);
+    // The router-less App reaches them only through the Page component's lazy imports.
+    const dynamic = Object.keys(manifest).filter((k) => k.startsWith('src/features/pages/content/'));
+    expect(dynamic.sort()).toEqual([...names].sort());
+  });
+
+  it('puts the ODbL in the entry script or a chunk it imports statically, as scripts/verify-prod.ts reads it', () => {
+    // verify-prod's `rivers attribution`: the first script the page references, or its static imports (two levels, at
+    // most ten files). The footer of every page names the licence of the river network, so it is in the entry's load.
+    const staticImports = (js: string) => [
+      ...new Set(
+        [...js.matchAll(/(?:\bimport|\bfrom)\s*["']\.\/([A-Za-z0-9_.-]+\.js)["']/g)].map(([, f]) => `assets/${f}`),
+      ),
+    ];
+    for (const html of SHELLS) {
+      const entry = /<script[^>]*\ssrc="\/(assets\/[^"]+\.js)"/.exec(page(html))?.[1];
+      expect(entry, html).toBeDefined();
+      const first = staticImports(page(entry ?? ''));
+      const second = first.flatMap((f) => staticImports(page(f)));
+      const read = [...new Set([entry ?? '', ...first, ...second])].slice(0, 11);
+      expect(
+        read.some((f) => page(f).includes('ODbL')),
+        `${html}: the ODbL is in the entry or its static imports`,
+      ).toBe(true);
+    }
+  });
+
+  it('has no personal-use source id and no canary in any chunk built from features/pages (invariant 11)', () => {
+    const manifest = manifestOf();
+    const owner = new Set(
+      Object.entries(manifest)
+        .filter(([src, c]) => src.startsWith('src/features/owner/') && c.isDynamicEntry === true)
+        .map(([, c]) => c.file),
+    );
+    expect(owner.size).toBe(3);
+    const entries = Object.entries(manifest).filter(([src]) => src.startsWith('src/features/pages/'));
+    expect(entries.length).toBeGreaterThanOrEqual(16);
+    // The chunks built from features/pages: each text and every chunk it imports statically that no shell loads at the
+    // start (the parts: the lists, the tables, the links). The owner chunks are loaded dynamically, never by import,
+    // so they are not among them; the shared initial chunks are not features/pages code.
+    const initial = new Set(SHELLS.flatMap((html) => [...initialLoad(manifest, html)]));
+    const chunks = [
+      ...closureOf(
+        manifest,
+        entries.map(([, c]) => c.file),
+      ),
+    ].filter((f) => !initial.has(f));
+    for (const file of chunks) expect(owner.has(file), `${file} is not an owner chunk`).toBe(false);
+    // 16 texts, and at least the parts the data pages are made of.
+    expect(chunks.length).toBeGreaterThan(20);
+    for (const part of ['SourcesList', 'StatusTables', 'OfficialLinks'])
+      expect(
+        chunks.some((f) => f.startsWith(`assets/${part}-`)),
+        part,
+      ).toBe(true);
+    const id = /\b(?:BE-3|LU-2|LU-3|LU-4|DE-2|DE-3)\b/;
+    for (const file of chunks.filter((f) => f.endsWith('.js'))) {
+      const code = page(file);
+      expect(id.exec(code)?.[0], `${file}: a personal-use source id`).toBeUndefined();
+      expect(code, `${file}: a canary`).not.toContain('CANARY-');
+      // Nor the words of the private channel (message keys are identifiers: the sweep below reads them too), nor the
+      // web's name of the basis field: only the owner chunk reads it (review round 1).
+      for (const needle of ['private_basis', 'privateBasis', 'owner_sources', 'licence_gate'])
+        expect(code.includes(needle), `${file}: ${needle}`).toBe(false);
+    }
   });
 
   it('names no owner host, port, secret, path or private-basis clause in any file (invariant 11, T-OWN-1)', () => {

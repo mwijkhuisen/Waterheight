@@ -25,6 +25,10 @@
     "./trend": {
       "rws-dist": "./dist/trend.js",
       "default": "./src/trend.ts"
+    },
+    "./datums": {
+      "rws-dist": "./dist/datums.js",
+      "default": "./src/datums.ts"
     }
   },
   "dependencies": {

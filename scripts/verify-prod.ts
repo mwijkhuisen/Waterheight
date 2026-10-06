@@ -3,7 +3,10 @@
 // non-zero on any miss and prints one PASS/FAIL/N-A line per check.
 //
 //   scripts/verify-prod.sh <domain>              TLS (IPv4 and IPv6), the exact A§12.2
-//                                                headers, noindex, /healthz, both status
+//                                                headers, noindex, the 18 pages of PAGE_ROUTES
+//                                                (P10b: 200, <html lang>, the same headers) and
+//                                                the 404 shell of a path that is no page,
+//                                                /healthz, both status
 //                                                files, per-spec freshness, owner_specs,
 //                                                the health API (contract, closed
 //                                                parameters, DE-1 and NL-1 health, tier-1
@@ -53,6 +56,7 @@ import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/ser
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
 import { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
+import { PAGE_ROUTES } from '../apps/web/src/lib/routes.ts';
 import {
   BACKLOG_MAX_AGE_S,
   CANARIES,
@@ -198,9 +202,11 @@ export function checkHeaders(
   status: number,
   headers: Readonly<Record<string, string | undefined>>,
   expected: Readonly<Record<string, string>>,
+  wantStatus = 200,
 ): Result {
   const problems: string[] = [];
-  if (status !== 200) problems.push(`status ${status}`);
+  if (status !== wantStatus)
+    problems.push(wantStatus === 200 ? `status ${status}` : `status ${status}, want ${wantStatus}`);
   for (const [name, value] of Object.entries(expected)) {
     if (headers[name] !== value) problems.push(`${name}: ${JSON.stringify(headers[name] ?? null)}`);
   }
@@ -211,6 +217,79 @@ export function checkHeaders(
   return problems.length === 0
     ? pass(`headers ${path}`, 'every A§12.2 header exact, noindex, no CORS, no Server')
     : miss(`headers ${path}`, problems.join('; '));
+}
+
+/** The pages of the site (apps/web/src/lib/routes.ts), `/`, `/en/`, `/over`, `/en/about` and so on, with the language of their shell. */
+export const PAGE_PATHS: readonly { path: string; lang: 'nl' | 'en' }[] = PAGE_ROUTES.flatMap((r) => [
+  { path: r.nl, lang: 'nl' as const },
+  { path: r.en, lang: 'en' as const },
+]);
+/** Two paths that are no page, one per language (P10b): the 404 shell of their language answers, never naming the path. */
+export const NOT_FOUND_PATHS = [
+  { path: '/rws-verify-geen-pagina', lang: 'nl' },
+  { path: '/en/rws-verify-no-page', lang: 'en' },
+] as const;
+
+/** The lang attribute of the root element (at most 16 characters: a longer one is no language tag). */
+const htmlLang = (html: string): string | undefined => /<html(?:\s[^>]*)?\slang="([^"]{0,16})"/.exec(html)?.[1];
+
+/**
+ * `pages <path>`, one result for each of the 18 pages: 200, the language of its shell in `<html lang>`, and the exact
+ * A§12.2 headers with noindex (checkHeaders). `got` holds one fetch of each path.
+ */
+export function checkPages(
+  got: Readonly<Record<string, Page | string>>,
+  expected: Readonly<Record<string, string>>,
+): Result[] {
+  return PAGE_PATHS.map(({ path, lang }) => {
+    const check = `pages ${path}`;
+    const page = got[path];
+    if (page === undefined) return miss(check, 'not fetched');
+    if (typeof page === 'string') return miss(check, page);
+    const problems: string[] = [];
+    const headers = checkHeaders(path, page.status, page.headers, expected);
+    if (headers.ok !== true) problems.push(headers.detail);
+    // CR-6: a page a browser kept past a deploy would ask for asset names the new image no longer has.
+    if (page.headers['cache-control'] !== 'no-cache')
+      problems.push(`cache-control ${show(page.headers['cache-control'])}`);
+    const seen = htmlLang(page.body);
+    if (seen !== lang) problems.push(`<html lang> ${show(seen)}, want "${lang}"`);
+    return problems.length === 0
+      ? pass(check, `200, <html lang="${lang}">, every A§12.2 header exact, noindex, no-cache`)
+      : miss(check, problems.join('; '));
+  });
+}
+
+/**
+ * `not found`: a path that is no page is a 404 with the 404 shell of its language (`<html lang>`), every A§12.2 header
+ * exact, `Cache-Control: no-cache`, and a body that never holds the path's last segment.
+ */
+export function checkNotFound(
+  got: Readonly<Record<string, Page | string>>,
+  expected: Readonly<Record<string, string>>,
+): Result {
+  const check = 'not found';
+  const problems: string[] = [];
+  for (const { path, lang } of NOT_FOUND_PATHS) {
+    const page = got[path];
+    if (page === undefined || typeof page === 'string') {
+      problems.push(`${path}: ${page ?? 'not fetched'}`);
+      continue;
+    }
+    const headers = checkHeaders(path, page.status, page.headers, expected, 404);
+    if (headers.ok !== true) problems.push(`${path}: ${headers.detail}`);
+    if (page.headers['cache-control'] !== 'no-cache')
+      problems.push(`${path}: cache-control ${show(page.headers['cache-control'])}`);
+    const seen = htmlLang(page.body);
+    if (seen !== lang) problems.push(`${path}: <html lang> ${show(seen)}, want "${lang}"`);
+    if (page.body.includes(path.slice(path.lastIndexOf('/') + 1))) problems.push(`${path}: the body names the path`);
+  }
+  return problems.length === 0
+    ? pass(
+        check,
+        `${NOT_FOUND_PATHS.map((p) => p.path).join(' and ')}: 404, the 404 shell of their language, every A§12.2 header exact, no-cache, the path not in the body`,
+      )
+    : miss(check, problems.join('; '));
 }
 
 type StatusSpec = CaptureStatus['specs'][number];
@@ -1579,7 +1658,12 @@ export const GEOJSON = 'application/geo+json';
 export const STATIC_LAG_MAX_S = 120;
 /** A settled day renders in under this (C23; [agent-prod] only, CI has no settled day). */
 export const RERENDER_MAX_S = 60;
-export const RUNTIME_CONFIG_BODY = '{"audience":"public"}';
+/** The four keys of /runtime-config.json (site.caddy; the web's RuntimeConfig is a strict object of exactly these). */
+export const RUNTIME_CONFIG_KEYS = ['audience', 'contact', 'operator', 'cdn'] as const;
+/** Caddy expands `{...}` placeholders in a respond body, " and \ break the JSON and # starts a comment in an env file: no value holds one. */
+const UNSAFE_CHARS = /[{}#"\\\p{Cc}]/u;
+/** The same address shape as env_ready in deploy/bin/rws-lib.sh. */
+const EMAIL = /^[A-Za-z0-9._%+-]{1,64}@([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
 /**
  * One answer of a /data/v1 file: 200, exactly `cache`, the media type `type`, the contract and no owner term in the
@@ -1865,7 +1949,45 @@ export function checkStaticRerender(r: ApiRead<StatusFile>): Result {
     : miss(check, `${d.day} v${d.version} took ${d.seconds} s (limit ${RERENDER_MAX_S} s)`);
 }
 
-/** /runtime-config.json: exactly {"audience":"public"}, application/json, no-cache. */
+/**
+ * What is wrong with the body of /runtime-config.json: JSON with exactly the four keys, audience "public", an e-mail
+ * address as contact, a non-empty operator, a CDN name ("" is none), and no value that Caddy or JSON would have
+ * mangled. The operator's name is personal data: a message names the field, never the value (nor an unexpected key).
+ */
+export function runtimeConfigProblems(body: string): string[] {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(body);
+  } catch {
+    return ['the body is not JSON'];
+  }
+  if (typeof doc !== 'object' || doc === null || Array.isArray(doc)) return ['the body is not a JSON object'];
+  const o = doc as Record<string, unknown>;
+  const problems: string[] = [];
+  const missing = RUNTIME_CONFIG_KEYS.filter((k) => !Object.hasOwn(o, k));
+  if (missing.length > 0) problems.push(`no ${missing.join(', ')}`);
+  const extra = Object.keys(o).filter((k) => !(RUNTIME_CONFIG_KEYS as readonly string[]).includes(k)).length;
+  if (extra > 0) problems.push(`${extra} unexpected key${extra === 1 ? '' : 's'}`);
+  if (Object.hasOwn(o, 'audience') && o.audience !== 'public') problems.push('audience is not "public"');
+  // The web app (lib/config/runtime.ts) drops an operator or CDN of the wrong length or with < or > and shows "not
+  // configured", so the same limits fail here instead of passing silently.
+  const text = (key: 'contact' | 'operator' | 'cdn', min: number, max: number) => {
+    const v = o[key];
+    if (v === undefined) return; // "no <key>" above
+    if (typeof v !== 'string') problems.push(`${key} is not a string`);
+    else if (v.length < min) problems.push(`${key} is empty`);
+    else if (v.length > max) problems.push(`${key} is longer than ${max} characters`);
+    else if (UNSAFE_CHARS.test(v) || /[<>]/.test(v))
+      problems.push(`${key} holds one of { } # " \\ < > or a control character`);
+    else if (key === 'contact' && !EMAIL.test(v)) problems.push('contact is not an e-mail address');
+  };
+  text('contact', 1, 254);
+  text('operator', 1, 120);
+  text('cdn', 0, 80);
+  return problems;
+}
+
+/** /runtime-config.json: the public site's four-key document (runtimeConfigProblems), application/json, no-cache. */
 export function checkRuntimeConfig(page: Page | string): Result {
   const check = 'runtime config';
   if (typeof page === 'string') return miss(check, page);
@@ -1875,9 +1997,12 @@ export function checkRuntimeConfig(page: Page | string): Result {
     problems.push(`content-type ${JSON.stringify(page.headers['content-type'] ?? '')}`);
   if (page.headers['cache-control'] !== 'no-cache')
     problems.push(`cache-control ${JSON.stringify(page.headers['cache-control'] ?? '')}`);
-  if (page.body.trim() !== RUNTIME_CONFIG_BODY) problems.push('the body is not {"audience":"public"}');
+  problems.push(...runtimeConfigProblems(page.body));
   return problems.length === 0
-    ? pass(check, `200, no-cache, ${RUNTIME_CONFIG_BODY}`)
+    ? pass(
+        check,
+        `200, no-cache, JSON with ${RUNTIME_CONFIG_KEYS.join(', ')}: audience public, contact an e-mail address, operator set (values not printed)`,
+      )
     : miss(check, problems.join('; '));
 }
 
@@ -2284,6 +2409,8 @@ async function statusFile(domain: string, name: string, net: Net): Promise<{ res
 export const CHECKS = [
   'tls ipv4 / tls ipv6: a valid certificate for the domain on every A and AAAA address, >= 14 days left (IPv6 n/a without AAAA or route)',
   'headers / and /en/: 200 and every A§12.2 header byte for byte (CSP from ARCHITECTURE.md), X-Robots-Tag: noindex, no CORS, no Server',
+  `pages <path>: each of the ${PAGE_PATHS.length} paths of PAGE_ROUTES (apps/web/src/lib/routes.ts: ${PAGE_PATHS.map((p) => p.path).join(' ')}) is fetched once and is 200 with <html lang> "nl" (the Dutch paths) or "en" (the English ones), every A§12.2 header byte for byte and X-Robots-Tag: noindex (/ and /en/ reuse the fetch of headers / and /en/)`,
+  `not found: ${NOT_FOUND_PATHS.map((p) => p.path).join(' and ')} are 404 with the 404 shell of their language (<html lang>), every A§12.2 header byte for byte, Cache-Control: no-cache, and a body that never holds the path's last segment`,
   'healthz: GET /healthz answers 200',
   'http: http:// redirects to https://',
   'status capture.json / ops.json: 200, Cache-Control: no-store, the exact contract fields',
@@ -2355,7 +2482,7 @@ export const CHECKS = [
   'static precompressed: meta.json with Accept-Encoding zstd and with gzip: that Content-Encoding, Vary: Accept-Encoding and a decompressed body equal to the identity body',
   `static lag: health.loader.last_commit minus meta.latestFrom is at most ${STATIC_LAG_MAX_S} s (no loader commit yet is a PASS)`,
   `static rerender: status.publisher.lastDayRender.seconds is under ${RERENDER_MAX_S} s (C23; none rendered yet is a PASS)`,
-  `runtime config: GET /runtime-config.json is 200 application/json, Cache-Control no-cache, exactly ${RUNTIME_CONFIG_BODY}`,
+  `runtime config: GET /runtime-config.json is 200 application/json, Cache-Control no-cache and JSON with exactly the keys ${RUNTIME_CONFIG_KEYS.join(', ')}: audience "public", contact an e-mail address, operator a non-empty text (at most 120 characters), cdn a text (at most 80; empty is no CDN), none of them holding { } # " \\ < > or a control character (the operator's name is personal data: a failure names the field, never its value; compose leaves RWS_OPERATOR_NAME empty until the owner sets it, and this FAILs until then)`,
   `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file, and (P9a) every public /data/v1 file fetched by the static checks`,
   'owner ids: no owner-audience source ID of registry/sources.yaml as a whole word in a string value or object key of /api/v1/health or health/sources',
   `api sweep: every non-planned GET route of the route table (meta, stations, snapshot at now, -6 h, -3 d and +6 h of /meta's now, series over a raw 3 h span and series forecast for the first series of each source, at most ${SWEEP_MAX_SERIES}, health, health/sources, openapi) fetched with Accept-Encoding ${SWEEP_ENCODINGS.join(', ')} (compressed bodies inflated): no owner or withheld canary rendering, nl.canary.owner, CANARY-OWNER, owner source ID, spec ID or owner-only host in any body, no 5xx; heavy routes at least ${SWEEP_PACE_MS} ms apart and one Retry-After honoured per 429 (all of a CI run's requests share one IP)`,
@@ -2422,14 +2549,20 @@ async function main(argv: string[]): Promise<number> {
   if (mode === 'default') {
     results.push(...(await tlsChecks(domain, net)));
     const expected = expectedHeaders(readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'));
+    // P10b: one fetch of each page and of the two 404 probes; headers, pages, not found, noindex and the entry script of
+    // `/` below all read these.
+    const site: Record<string, Page | string> = {};
+    for (const { path } of [...PAGE_PATHS, ...NOT_FOUND_PATHS])
+      site[path] = await tryGet(`https://${domain}${path}`, net);
     for (const path of ['/', '/en/']) {
-      try {
-        const page = await get(`https://${domain}${path}`, net);
-        results.push(checkHeaders(path, page.status, page.headers, expected));
-      } catch (e) {
-        results.push(miss(`headers ${path}`, (e as Error).message));
-      }
+      const page = site[path];
+      results.push(
+        page === undefined || typeof page === 'string'
+          ? miss(`headers ${path}`, page ?? 'not fetched')
+          : checkHeaders(path, page.status, page.headers, expected),
+      );
     }
+    results.push(...checkPages(site, expected), checkNotFound(site, expected));
     try {
       const h = await get(`https://${domain}/healthz`, net);
       results.push(h.status === 200 ? pass('healthz', '200') : miss('healthz', `status ${h.status}`));
@@ -2496,7 +2629,7 @@ async function main(argv: string[]): Promise<number> {
       snapReads.set(ask.name, readSnapshot(ask, at.ms, page));
     }
     const noindex: Record<string, Page | string> = {};
-    for (const path of NOINDEX_PATHS) noindex[path] = await api(path);
+    for (const path of NOINDEX_PATHS) noindex[path] = site[path] ?? (await api(path));
     results.push(
       checkMeta(metaRead),
       checkBuild(metaRead.data),
@@ -2543,9 +2676,7 @@ async function main(argv: string[]): Promise<number> {
     const downloadPath = cur === undefined ? undefined : `/downloads/${cur.download.file}`;
     const stationIds =
       stationsRead.data === undefined ? undefined : new Set(stationsRead.data.stations.map((st) => st.id));
-    const entry = entryScript(
-      await tryGet(`https://${domain}/`, net).then((p) => (typeof p === 'string' ? '' : p.body)),
-    );
+    const entry = entryScript(pageBody(site['/']));
     results.push(
       checkRiversManifest(rivers),
       checkRiversTiles(

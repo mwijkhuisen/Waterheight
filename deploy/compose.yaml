@@ -56,6 +56,10 @@ services:
     environment:
       RWS_DOMAIN: ${RWS_DOMAIN:?}
       RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+      # P10b: the colophon's operator and the privacy page's CDN, in /runtime-config.json (site.caddy). Unset
+      # shows "not configured" and "no CDN"; scripts/verify-prod.ts fails until the operator is set.
+      RWS_OPERATOR_NAME: ${RWS_OPERATOR_NAME:-}
+      RWS_CDN_NAME: ${RWS_CDN_NAME:-}
       # KG-228: the reverse proxy in front of the site, if any (CIDRs); empty trusts nobody.
       RWS_TRUSTED_PROXIES: ${RWS_TRUSTED_PROXIES:-}
     # Only directories no networked role writes: the root-owned status directory

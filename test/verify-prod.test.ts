@@ -10,6 +10,7 @@ import type { SpecState } from '../apps/server/src/capture/state.ts';
 import { buildStatus, type CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
 import type { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
+import { PAGE_ROUTES } from '../apps/web/src/lib/routes.ts';
 import {
   basemapAssetsPath,
   type ForecastCoverage,
@@ -60,12 +61,14 @@ import {
   checkMapAsset,
   checkMeta,
   checkNoindex,
+  checkNotFound,
   checkOpenapi,
   checkOwnerHealth,
   checkOwnerIds,
   checkOwnerLeak,
   checkOwnerSources,
   checkOwnerStations,
+  checkPages,
   checkReplay,
   checkRiversAttribution,
   checkRiversDownload,
@@ -118,6 +121,7 @@ import {
   MAP_ASSET_PATH,
   META_CACHE,
   NOINDEX_PATHS,
+  NOT_FOUND_PATHS,
   noIpv6Here,
   OPENAPI_CACHE,
   OpenApi31,
@@ -128,11 +132,13 @@ import {
   ownerSourceIds,
   ownerStationIds,
   ownerTerms,
+  PAGE_PATHS,
   PARAM_CASES,
   type Page,
   PMTILES_MAGIC,
   RERENDER_MAX_S,
   RIVERS_DOWNLOAD_RANGE,
+  RUNTIME_CONFIG_KEYS,
   reachIds,
   readApi,
   readRiversManifest,
@@ -209,6 +215,219 @@ describe('the A§12.2 headers', () => {
     expect(checkHeaders('/', 200, { ...expected, server: 'Caddy' }, expected).detail).toMatch(/server/);
     expect(checkHeaders('/', 200, { ...expected, 'x-robots-tag': 'noindex, nofollow' }, expected).ok).toBe(false);
     expect(checkHeaders('/', 404, expected, expected).detail).toMatch(/status 404/);
+  });
+
+  it('requires the status it is given (200 by default) and names both when they differ', () => {
+    expect(checkHeaders('/x', 404, expected, expected, 404)).toMatchObject({ ok: true, check: 'headers /x' });
+    expect(checkHeaders('/x', 200, expected, expected, 404)).toMatchObject({
+      ok: false,
+      detail: 'status 200, want 404',
+    });
+    expect(checkHeaders('/', 200, expected, expected, 200).ok).toBe(true);
+    // The headers are still compared whatever status is wanted.
+    expect(checkHeaders('/x', 404, { ...expected, 'x-robots-tag': undefined }, expected, 404)).toMatchObject({
+      ok: false,
+      detail: /x-robots-tag/,
+    });
+  });
+});
+
+// P10b: `pages <path>` for the 18 paths of PAGE_ROUTES and `not found` for two paths that are no page.
+
+describe('the page checks', () => {
+  const shell = (lang: string, over: Partial<Page> = {}): Page => ({
+    status: 200,
+    headers: { ...expected, 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' },
+    body: `<!doctype html>\n<html lang="${lang}">\n  <head><title>x</title></head>\n  <body><div id="app"></div></body>\n</html>\n`,
+    ...over,
+  });
+  /** Every page as its shell: the Dutch paths in Dutch, the English ones in English. */
+  const good = (): Record<string, Page | string> =>
+    Object.fromEntries(PAGE_PATHS.map(({ path, lang }) => [path, shell(lang)]));
+
+  it('lists the 18 paths of PAGE_ROUTES, / and /en/ first, with the language by prefix', () => {
+    expect(PAGE_PATHS).toHaveLength(18);
+    expect(PAGE_PATHS.map((p) => p.path)).toEqual(PAGE_ROUTES.flatMap((r) => [r.nl, r.en]));
+    expect(PAGE_PATHS.slice(0, 4).map((p) => p.path)).toEqual(['/', '/en/', '/over', '/en/about']);
+    for (const { path, lang } of PAGE_PATHS) expect(lang, path).toBe(path.startsWith('/en/') ? 'en' : 'nl');
+    expect(new Set(PAGE_PATHS.map((p) => p.path)).size).toBe(18);
+  });
+
+  it('passes each page: one result named pages <path>, 200, its language and the exact headers', () => {
+    const r = checkPages(good(), expected);
+    expect(r.map((x) => x.check)).toEqual(PAGE_PATHS.map((p) => `pages ${p.path}`));
+    for (const x of r) expect(x, x.check).toMatchObject({ ok: true });
+    expect(r.map((x) => x.check)).toContain('pages /over');
+    expect(r.map((x) => x.check)).toContain('pages /en/about');
+  });
+
+  it('reads the language from the root element only, in either attribute order', () => {
+    const got = good();
+    got['/over'] = shell('nl', { body: '<html class="a" lang="nl" data-x="y"><body lang="en"></body></html>' });
+    got['/en/about'] = shell('en', { body: '<!doctype html><html lang="en"><body lang="nl"></body></html>' });
+    for (const x of checkPages(got, expected)) expect(x, x.check).toMatchObject({ ok: true });
+  });
+
+  it.each([
+    ['a Dutch path in English', '/over', shell('en'), /<html lang> "en", want "nl"/],
+    ['an English path in Dutch', '/en/about', shell('nl'), /<html lang> "nl", want "en"/],
+    [
+      'no lang attribute',
+      '/bronnen',
+      shell('nl', { body: '<html><body lang="nl"></body></html>' }),
+      /<html lang> null/,
+    ],
+    [
+      'a lang on another element',
+      '/methode',
+      shell('nl', { body: '<html data-lang="nl"><body></body></html>' }),
+      /<html lang> null/,
+    ],
+    [
+      'a language tag that is no tag',
+      '/en/method',
+      shell('nl', { body: `<html lang="${'x'.repeat(17)}"></html>` }),
+      /<html lang> null/,
+    ],
+    ['a 404', '/status', shell('nl', { status: 404 }), /status 404/],
+    ['a redirect', '/en/privacy', shell('en', { status: 308 }), /status 308/],
+    [
+      'a wrong header',
+      '/colofon',
+      shell('nl', { headers: { ...shell('nl').headers, 'content-security-policy': 'default-src *' } }),
+      /content-security-policy/,
+    ],
+    [
+      'a missing header',
+      '/en/colophon',
+      shell('en', { headers: { ...shell('en').headers, 'strict-transport-security': undefined } }),
+      /strict-transport-security: null/,
+    ],
+    [
+      'a wrong robots tag',
+      '/',
+      shell('nl', { headers: { ...shell('nl').headers, 'x-robots-tag': 'all' } }),
+      /x-robots-tag: "all"/,
+    ],
+    [
+      'a Server header',
+      '/en/',
+      shell('en', { headers: { ...shell('en').headers, server: 'Caddy' } }),
+      /server: "Caddy"/,
+    ],
+    [
+      'a CORS header',
+      '/toegankelijkheid',
+      shell('nl', { headers: { ...shell('nl').headers, 'access-control-allow-origin': '*' } }),
+      /CORS header access-control-allow-origin/,
+    ],
+    [
+      'a page that may be cached (CR-6)',
+      '/en/sources',
+      shell('en', { headers: { ...shell('en').headers, 'cache-control': 'public, max-age=60' } }),
+      /cache-control "public, max-age=60"/,
+    ],
+  ])('fails %s, on that page alone', (_n, path, bad, re) => {
+    const got = { ...good(), [path]: bad };
+    const failed = checkPages(got, expected).filter((x) => x.ok !== true);
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({ check: `pages ${path}`, detail: re });
+  });
+
+  it('fails a request that failed and a page that was never fetched, naming the path', () => {
+    const got = good();
+    got['/disclaimer'] = 'timeout';
+    delete got['/en/disclaimer'];
+    const failed = checkPages(got, expected).filter((x) => x.ok !== true);
+    expect(failed).toEqual([
+      { check: 'pages /disclaimer', ok: false, detail: 'timeout' },
+      { check: 'pages /en/disclaimer', ok: false, detail: 'not fetched' },
+    ]);
+  });
+
+  describe('not found', () => {
+    const nl = NOT_FOUND_PATHS[0].path;
+    const en = NOT_FOUND_PATHS[1].path;
+    const missing = (lang: string, over: Partial<Page> = {}) =>
+      shell(lang, { status: 404, body: `<html lang="${lang}"><body><h1>Not found</h1></body></html>`, ...over });
+    const found = (): Record<string, Page | string> => ({ [nl]: missing('nl'), [en]: missing('en') });
+
+    it('probes one path per language that no page and no file answers', () => {
+      expect(NOT_FOUND_PATHS.map((p) => p.lang)).toEqual(['nl', 'en']);
+      expect(nl.startsWith('/en/')).toBe(false);
+      expect(en.startsWith('/en/')).toBe(true);
+      const pages = new Set<string>(PAGE_PATHS.map((p) => p.path));
+      for (const { path } of NOT_FOUND_PATHS) {
+        expect(pages.has(path), path).toBe(false);
+        expect(path, path).not.toMatch(/\.[^/]*$/);
+      }
+    });
+
+    it('passes a 404 shell in the language of the path, with the exact headers and no-cache', () => {
+      expect(checkNotFound(found(), expected)).toMatchObject({ check: 'not found', ok: true });
+    });
+
+    it.each([
+      ['a 200', nl, missing('nl', { status: 200 }), /status 200, want 404/],
+      ['a 200 in English', en, missing('en', { status: 200 }), /status 200, want 404/],
+      ['a 410', en, missing('en', { status: 410 }), /status 410, want 404/],
+      ['the English shell for a Dutch path', nl, missing('en'), /<html lang> "en", want "nl"/],
+      ['the Dutch shell for an English path', en, missing('nl'), /<html lang> "nl", want "en"/],
+      [
+        'a body that names the Dutch path',
+        nl,
+        missing('nl', { body: '<html lang="nl"><p>/rws-verify-geen-pagina</p></html>' }),
+        /the body names the path/,
+      ],
+      [
+        'a body that names the last segment of the English path',
+        en,
+        missing('en', { body: '<html lang="en"><p>rws-verify-no-page</p></html>' }),
+        /the body names the path/,
+      ],
+      [
+        'no Cache-Control',
+        nl,
+        missing('nl', { headers: { ...missing('nl').headers, 'cache-control': undefined } }),
+        /cache-control null/,
+      ],
+      [
+        'Cache-Control: no-store',
+        en,
+        missing('en', { headers: { ...missing('en').headers, 'cache-control': 'no-store' } }),
+        /cache-control "no-store"/,
+      ],
+      [
+        'a wrong header',
+        en,
+        missing('en', { headers: { ...missing('en').headers, 'x-content-type-options': 'sniff' } }),
+        /x-content-type-options/,
+      ],
+      ['a request that failed', nl, 'timeout', /timeout/],
+    ])('fails %s, naming the path', (_n, path, bad, re) => {
+      const r = checkNotFound({ ...found(), [path]: bad }, expected);
+      expect(r).toMatchObject({ check: 'not found', ok: false, detail: re });
+      expect(r.detail).toContain(path);
+    });
+
+    it('fails a path that was never fetched', () => {
+      expect(checkNotFound({ [nl]: missing('nl') }, expected)).toMatchObject({
+        ok: false,
+        detail: `${en}: not fetched`,
+      });
+    });
+  });
+
+  it('the --dry-run list has one entry for each, and ci.yml requires both', () => {
+    expect(CHECKS.filter((c) => c.startsWith('pages <path>:'))).toHaveLength(1);
+    expect(CHECKS.filter((c) => c.startsWith('not found:'))).toHaveLength(1);
+    const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+    const required = /for check in ([^;]*?); do/s.exec(ci.slice(ci.indexOf("'api meta'") - 20))?.[1] ?? '';
+    expect(required.match(/'([^']+)'/g)).toEqual(expect.arrayContaining(["'pages'", "'not found'"]));
+    // The tolerated-FAIL list never excuses them: they must PASS against the CI stack.
+    const tolerated = /grep -vE '\^FAIL \(([^']*)\) '/.exec(ci)?.[1] ?? '';
+    expect(tolerated.length).toBeGreaterThan(100);
+    expect(tolerated.split('|').some((n) => n.startsWith('pages') || n.startsWith('not found'))).toBe(false);
   });
 });
 
@@ -399,6 +618,9 @@ describe('freshness, soak and capacity', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/^headers \/ and \/en\/:/m);
     for (const name of [
+      'pages <path>',
+      'not found',
+      'runtime config',
       'health',
       'health params',
       'health DE-1',
@@ -3081,10 +3303,18 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     expect(rules('handle @api_other')).toEqual(['handle @api_other {', 'respond 404']);
   });
 
-  it('answers 404 for /status and every status path but the two files', () => {
+  it('answers 404 for every status path but the two files; /status itself is a page of the catch-all (P10b)', () => {
     expect(rules('handle /status/*')).toEqual(['handle /status/* {', 'respond 404']);
-    expect(rules('handle /status')).toEqual(['handle /status {', 'respond 404']);
     expect(site.indexOf('\thandle /status/capture.json {')).toBeLessThan(site.indexOf('\thandle /status/* {'));
+    // No `handle /status` of its own (it answered 404 before the status page, KG-118), and no /over redirect (the User-Agent
+    // of a capture request names https://<domain>/over, which is a page now).
+    const code = site.split('\n').filter((l) => !l.trim().startsWith('#'));
+    expect(code.filter((l) => /^\t(handle|redir|respond)\b.*\/(status|over)\b/.test(l))).toEqual([
+      '\thandle /status/capture.json {',
+      '\thandle /status/ops.json {',
+      '\thandle /status/* {',
+    ]);
+    expect(code.join('\n')).not.toMatch(/\bredir\b/);
   });
 
   it('serves the manifest with a short TTL, never immutable, from /srv/rws/tiles only', () => {
@@ -3210,7 +3440,6 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       at('\thandle /healthz {'),
       at('\thandle /status/capture.json {'),
       at('\thandle /status/* {'),
-      at('\thandle /status {'),
       at('\thandle @api {'),
       at('\thandle @api_other {'),
       at('\thandle @tiles_manifest {'),
@@ -3380,34 +3609,62 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       expect(miss.test(path), path).toBe(false);
   });
 
-  it('falls back to the page of its language for an app route, answers 404 for a missing file (P4b)', () => {
-    expect(rules('handle')).toEqual([
+  it('serves the pages of its allowlist, files as they are and the 404 shell of the language otherwise (P10b)', () => {
+    // The two lists themselves are test/page-routes.test.ts's; the shape is pinned here. Nested handle blocks keep their
+    // order (none has a path matcher). The catch-all sets the one Cache-Control; the answers of every branch keep the
+    // site headers, which a file_server 404 of its own would not (KG-107).
+    const list = /^(@page_(?:nl|en) expression) `\{path\} in \[('\/[a-z/]*'(?:, )?)+\]`$/;
+    expect(rules('handle').map((l) => l.replace(list, '$1 <the list>'))).toEqual([
       'handle {',
       'header Cache-Control "no-cache"',
       'root * /srv/www',
-      '@app_en {',
-      'path_regexp ^/en/',
-      'not file {path} {path}/',
-      'not path_regexp \\.[^/]*$',
-      '}',
-      '@app {',
-      'not file {path} {path}/',
-      'not path_regexp \\.[^/]*$',
-      '}',
-      'rewrite @app_en /en/index.html',
-      'rewrite @app /index.html',
-      '@missing not file {path} {path}/',
-      'respond @missing 404',
+      '@page_nl expression <the list>',
+      'handle @page_nl {',
+      'rewrite * /index.html',
       'file_server',
+      '}',
+      '@page_en expression <the list>',
+      'handle @page_en {',
+      'rewrite * /en/index.html',
+      'file_server',
+      '}',
+      '@file {',
+      'file {path} {path}/',
+      'not path /404.html /en/404.html',
+      // Review round 1: the file matcher cleans `//`, so a doubled slash is never a file (no 200 shell for `//en//`).
+      "not expression `{path}.contains('//')`",
+      '}',
+      'handle @file {',
+      'file_server',
+      '}',
+      '@dotted path_regexp \\.[^/]*$',
+      'handle @dotted {',
+      'respond 404',
+      '}',
+      '@not_found_en path_regexp ^/en/',
+      'handle @not_found_en {',
+      'rewrite * /en/404.html',
+      'file_server {',
+      'status 404',
+      '}',
+      '}',
+      'handle {',
+      'rewrite * /404.html',
+      'file_server {',
+      'status 404',
+      '}',
+      '}',
     ]);
-    // An app route has no dot in its last segment; favicon.ico and robots.txt are missing files, a 404 that
-    // keeps the site headers because Caddy's own file_server 404 would carry none (KG-107).
+    // A path with a dot in its last segment that is no file (favicon.ico, robots.txt) is a bare 404; the shells are
+    // the 404 of every other path, the English one under /en/ only.
     const dotted = /\.[^/]*$/;
     for (const path of ['/favicon.ico', '/robots.txt', '/en/x.html', '/a/b.c'])
       expect(dotted.test(path), path).toBe(true);
     for (const path of ['/foo', '/en/foo/bar', '/a.b/c']) expect(dotted.test(path), path).toBe(false);
     for (const path of ['/en/', '/en/foo']) expect(/^\/en\//.test(path), path).toBe(true);
-    for (const path of ['/en', '/foo', '/english']) expect(/^\/en\//.test(path), path).toBe(false);
+    for (const path of ['/en', '/foo', '/english', '/EN/about']) expect(/^\/en\//.test(path), path).toBe(false);
+    // The allowlist is an expression, compared as sent: the path matcher would fold case and merge slashes.
+    expect(site).not.toMatch(/@page_(nl|en) path\b/);
   });
 
   it('has exactly the cache classes no-store, max-age=60, immutable (tile files, assets), no-cache (pages), no browse', () => {
@@ -4036,23 +4293,115 @@ describe('verify-prod: the static publisher (P9a)', () => {
     });
   });
 
-  it('runtime config: exactly {"audience":"public"}, application/json, no-cache', () => {
-    const rc = (body: string, over: Partial<Page> = {}) => file(body, 'no-cache', 'application/json', over);
-    ok('runtime config', checkRuntimeConfig(rc('{"audience":"public"}')));
-    expect(checkRuntimeConfig(rc('{"audience":"owner"}'))).toMatchObject({
-      ok: false,
-      detail: /not \{"audience":"public"\}/,
+  describe('runtime config (P10b: the audience, the contact, the operator and the CDN)', () => {
+    const doc = (over: Record<string, unknown> = {}) => ({
+      audience: 'public',
+      contact: 'ci@rivierstanden.example',
+      operator: 'E2E Operator',
+      cdn: '',
+      ...over,
     });
-    expect(checkRuntimeConfig(file('{"audience":"public"}', 'public, max-age=60'))).toMatchObject({
-      ok: false,
-      detail: /cache-control/,
+    const rc = (body: unknown, over: Partial<Page> = {}) =>
+      file(typeof body === 'string' ? body : JSON.stringify(body), 'no-cache', 'application/json', over);
+    /** The detail of the failure of a body, and a check that none of `secret` is in it. */
+    const bad = (body: unknown, re: RegExp, secret?: string) => {
+      const r = checkRuntimeConfig(rc(body));
+      expect(r).toMatchObject({ check: 'runtime config', ok: false, detail: re });
+      if (secret !== undefined) expect(r.detail).not.toContain(secret);
+    };
+
+    it('names the four keys', () => {
+      expect([...RUNTIME_CONFIG_KEYS]).toEqual(['audience', 'contact', 'operator', 'cdn']);
     });
-    expect(checkRuntimeConfig(file('{"audience":"public"}', 'no-cache', 'text/html'))).toMatchObject({
-      ok: false,
-      detail: /content-type/,
+
+    it('passes the document of site.caddy, with and without a CDN, and prints no value', () => {
+      for (const cdn of ['', 'Some CDN']) {
+        const r = checkRuntimeConfig(rc(doc({ cdn })));
+        ok('runtime config', r);
+        expect(r.detail).not.toMatch(/E2E|rivierstanden|Some CDN/);
+      }
+      // The body as Caddy writes it: no spaces, a trailing newline is no harm.
+      ok(
+        'runtime config',
+        checkRuntimeConfig(
+          rc('{"audience":"public","contact":"ci@rivierstanden.example","operator":"E2E Operator","cdn":""}\n'),
+        ),
+      );
+      ok(
+        'runtime config',
+        checkRuntimeConfig(rc(doc({ operator: 'Ä Ö ü — Stichting d’Waterheight', cdn: 'x'.repeat(80) }))),
+      );
+      ok('runtime config', checkRuntimeConfig(rc(doc({ operator: 'x'.repeat(120) }))));
     });
-    expect(checkRuntimeConfig(rc('', { status: 404 }))).toMatchObject({ ok: false, detail: /status 404/ });
-    expect(checkRuntimeConfig('timeout')).toMatchObject({ ok: false });
+
+    it('fails the old body: the three new keys are missing', () => {
+      bad('{"audience":"public"}', /no contact, operator, cdn/);
+    });
+
+    it('fails the owner audience and any other, without printing it', () => {
+      bad(doc({ audience: 'owner' }), /audience is not "public"/, 'owner');
+      bad(doc({ audience: 'x-secret' }), /audience is not "public"/, 'x-secret');
+      bad(doc({ audience: undefined }), /no audience/);
+    });
+
+    it('fails a missing key by name and an unexpected one by count only', () => {
+      const { contact: _c, ...noContact } = doc();
+      bad(noContact, /no contact/);
+      bad(doc({ extra: 'x', 'weird-key': 'y' }), /2 unexpected keys/, 'weird-key');
+      bad(doc({ 'one-key': 'x' }), /1 unexpected key(?!s)/, 'one-key');
+      bad([], /not a JSON object/);
+      bad('null', /not a JSON object/);
+      bad('"public"', /not a JSON object/);
+    });
+
+    it('fails a body that is not JSON, without printing it', () => {
+      for (const body of ['', 'not json', '{"audience":"public","operator":"a"b"}', '<html></html>'])
+        bad(body, /the body is not JSON/, 'html');
+    });
+
+    it.each([
+      ['contact that is no address', { contact: 'not an address' }, /contact is not an e-mail address/],
+      ['contact without a domain dot', { contact: 'me@localhost' }, /contact is not an e-mail address/],
+      ['contact that is empty', { contact: '' }, /contact is empty/],
+      ['contact that is no string', { contact: 7 }, /contact is not a string/],
+      ['contact that is null', { contact: null }, /contact is not a string/],
+      ['operator that is empty', { operator: '' }, /operator is empty/],
+      ['operator that is no string', { operator: ['E2E'] }, /operator is not a string/],
+      ['operator over 120 characters', { operator: 'o'.repeat(121) }, /operator is longer than 120 characters/],
+      ['cdn that is no string', { cdn: false }, /cdn is not a string/],
+      ['cdn over 80 characters', { cdn: 'c'.repeat(81) }, /cdn is longer than 80 characters/],
+    ])('fails %s', (_n, over, re) => {
+      bad(doc(over), re);
+    });
+
+    it.each(['{', '}', '#', '"', '\\', '<', '>', '\n', '\t', '\u0007', '\u007f', '{$HOME}', '{http.request.host}'])(
+      'fails %j in any of the three texts, naming the field and never the value',
+      (c) => {
+        const text = (key: 'contact' | 'operator' | 'cdn') =>
+          key === 'contact' ? `Zed${c}@rivierstanden.example` : `Zed${c}Zed`;
+        for (const key of ['contact', 'operator', 'cdn'] as const) {
+          bad(
+            doc({ [key]: text(key) }),
+            new RegExp(`${key} holds one of \\{ \\} # " \\\\ < > or a control character`),
+            'Zed',
+          );
+        }
+      },
+    );
+
+    it('fails the status, the media type and the Cache-Control as before', () => {
+      expect(checkRuntimeConfig(file(JSON.stringify(doc()), 'public, max-age=60'))).toMatchObject({
+        ok: false,
+        detail: /cache-control/,
+      });
+      expect(checkRuntimeConfig(file(JSON.stringify(doc()), 'no-cache', 'text/html'))).toMatchObject({
+        ok: false,
+        detail: /content-type/,
+      });
+      expect(checkRuntimeConfig(rc('', { status: 404 }))).toMatchObject({ ok: false, detail: /status 404/ });
+      expect(checkRuntimeConfig(rc(doc(), { status: 404 }))).toMatchObject({ ok: false, detail: /status 404/ });
+      expect(checkRuntimeConfig('timeout')).toMatchObject({ ok: false, detail: 'timeout' });
+    });
   });
 
   it('the --dry-run list names each check once, and every name ci.yml requires is one of them', () => {

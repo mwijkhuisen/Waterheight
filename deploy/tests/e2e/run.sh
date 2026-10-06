@@ -33,10 +33,11 @@
 #     /health/sources answer through Caddy over TLS, and (P4b) so do /api/v1/meta
 #     and /stations; an unknown path under /api/v1/ is the api's JSON 404, a
 #     wrong-case path Caddy's 404, an unknown parameter a 400, a POST a 405 and
-#     a GET with a 2048-byte body a 413; a POST to a page, an app route or an
-#     asset a 405 with the site headers and no Server; an English route that is
-#     no file is the English page with no-cache, a missing asset or /favicon.ico
-#     a 404; load and api have no route out; db,
+#     a GET with a 2048-byte body a 413; a POST to a page, an unknown path or an
+#     asset a 405 with the site headers and no Server; (P10b) /over and /en/about
+#     are the pages of their language (200), a path that is no page the 404 shell of
+#     its language (404, never a 200), both with no-cache, a missing asset or
+#     /favicon.ico a bare 404; load and api have no route out; db,
 #     load and api keep the hardening flags; each sees only its own secret;
 #     the nightly dump is a valid custom-format dump readable only by root and
 #     gid 61003, and restic backs it up;
@@ -272,6 +273,8 @@ proof "caddy validate: deploy/web/Caddyfile.owner + owner.caddy valid inside the
 cat >/etc/rws/rws.env <<EOF
 RWS_DOMAIN=$DOMAIN
 RWS_CONTACT_EMAIL=contact@$DOMAIN
+RWS_OPERATOR_NAME=E2E Operator
+RWS_CDN_NAME=
 RWS_PUBLIC_IPV4=$IP4
 RWS_PUBLIC_IPV6=$IP6
 RWS_RESTIC_REPOSITORY=s3:https://minio/rws-raw/restic
@@ -598,18 +601,27 @@ done
 head -c 2048 /dev/zero | tr '\0' a >/ci/api.big
 api_req /api/v1/meta -X GET -H 'Expect:' --data-binary @/ci/api.big
 [[ $api_status == 413 ]] || fail "GET /api/v1/meta with a 2048-byte body: HTTP $api_status, want 413"
-# The pages: an English route that is no file is the English page, a missing file or asset is a 404.
-api_req /en/no-such-page
-[[ $api_status == 200 ]] || fail "/en/no-such-page: HTTP $api_status, want the English page"
-grep -qF '<html lang="en"' /ci/api.body || fail "/en/no-such-page is not the English page"
-grep -qiFx 'cache-control: no-cache' /ci/api.hdr || fail "/en/no-such-page: Cache-Control: $(grep -i '^cache-control:' /ci/api.hdr)"
+# The pages (P10b): the exact paths of the allowlist are the shell of their language (200); any other path (no file,
+# no dot in its last segment, or another case) is the 404 shell of its language with status 404, never a 200; a missing
+# file with an extension is a bare 404. page_is <path> <status> <lang>: the status, the shell's <html lang> and no-cache.
+page_is() {
+  api_req "$1"
+  [[ $api_status == "$2" ]] || fail "$1: HTTP $api_status, want $2"
+  grep -qF "<html lang=\"$3\"" /ci/api.body || fail "$1 is not the $3 shell"
+  grep -qiFx 'cache-control: no-cache' /ci/api.hdr || fail "$1: Cache-Control: $(grep -i '^cache-control:' /ci/api.hdr)"
+}
+page_is /over 200 nl
+page_is /en/about 200 en
+page_is /en/no-such-page 404 en
+page_is /no-such-page 404 nl
+page_is /Over 404 nl
 [[ $(api_code /assets/no-such-file) == 404 && $(api_code /favicon.ico) == 404 ]] ||
   fail "a missing asset or /favicon.ico is not a 404"
 headers=$(ip netns exec ext curl -sS -D - -o /dev/null --max-time 10 --cacert /ci/pki/pebble-root.pem \
   --resolve "$DOMAIN:443:$IP4" "$(api_url /api/v1/health)" | tr -d '\r')
 grep -qi '^content-security-policy: default-src' <<<"$headers" || fail "the api response lacks the site headers"
 ! grep -qiE '^(server|via|access-control-[a-z-]+):' <<<"$headers" || fail "the api response names its software or sends CORS"
-proof "load wrote $(psql_su 'select count(*) from obs') observations from the fixture archive; over TLS through Caddy /api/v1/health answers $(jq -c '{status}' <<<"$health") and /api/v1/health/sources lists DE-1, with the site headers and no Server, Via or CORS header; /api/v1/meta (max-age=60, DE-1 and NL-1 listed) and /api/v1/stations are 200 from the real api; /api/v1/x is the api's {\"error\":\"not_found\",\"attribution\":[]} 404 and /API/v1/health a 404 from Caddy; an unknown parameter is a 400; a POST is a 405 with Allow: GET, HEAD (site headers kept), on /, /en/foo and /assets/no-such-file.js too (no Server), and a GET with a 2048-byte body a 413; /en/no-such-page is the English page (200, Cache-Control: no-cache), /assets/no-such-file and /favicon.ico are 404s"
+proof "load wrote $(psql_su 'select count(*) from obs') observations from the fixture archive; over TLS through Caddy /api/v1/health answers $(jq -c '{status}' <<<"$health") and /api/v1/health/sources lists DE-1, with the site headers and no Server, Via or CORS header; /api/v1/meta (max-age=60, DE-1 and NL-1 listed) and /api/v1/stations are 200 from the real api; /api/v1/x is the api's {\"error\":\"not_found\",\"attribution\":[]} 404 and /API/v1/health a 404 from Caddy; an unknown parameter is a 400; a POST is a 405 with Allow: GET, HEAD (site headers kept), on /, /en/foo and /assets/no-such-file.js too (no Server), and a GET with a 2048-byte body a 413; /over and /en/about are the Dutch and the English page (200), /en/no-such-page, /no-such-page and /Over the 404 shell of their language (404), all with Cache-Control: no-cache, and /assets/no-such-file and /favicon.ico bare 404s"
 
 step "load and api: no route out, the hardening flags, only their own secret"
 no_route='const s = require("net").connect({ host: "1.1.1.1", port: 443, timeout: 5000 });
@@ -1020,18 +1032,20 @@ burst /data/v1/meta.json /ci/burst-static.out
 proof "from one client (203.0.114.11, in the outside namespace), 300 GETs of /api/v1/meta in a burst: $ok_api answered 200 and $limited were 429 with a whole-seconds Retry-After (general bucket 30/s, burst 120); at once after, 300 GETs of /data/v1/meta.json: all 300 answered 200, no 429 and no Retry-After (static files are served by Caddy and never meet the limiter)"
 
 step "The client address behind Docker (P9b, C7): the masked access log shows the runner, never a bridge gateway"
-# Requests from three sources, each to its own marker path (the app fallback answers 200 for a path without a dot);
-# Caddy's log masks addresses to /24 and /48, which still tells a client from a bridge gateway.
+# Requests from three sources, each to its own marker path (a path that is no page answers the 404 shell with status 404,
+# which `outside` (curl -f) reports as a failure: the `|| true` is for that, and a request that never reached Caddy is
+# caught below as a missing log line); Caddy's log masks addresses to /24 and /48, which still tells a client from a
+# bridge gateway.
 c7_expect=()
-outside -o /dev/null --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/c7-probe-ns4"
+outside -o /dev/null --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/c7-probe-ns4" || true
 c7_expect+=("/c7-probe-ns4 10.99.0.0")
-outside -o /dev/null --interface "${CLIENT_IPS[1]}" --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/c7-probe-pub4"
+outside -o /dev/null --interface "${CLIENT_IPS[1]}" --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/c7-probe-pub4" || true
 c7_expect+=("/c7-probe-pub4 203.0.114.0")
 # From the host itself (informational, not asserted: a local source is masqueraded to the gateway by Docker, which a
 # visitor never is; it shows what a host-side client such as Playwright or k6 on the host would be to the limiter).
 curl -fsS -o /dev/null --cacert /ci/pki/pebble-root.pem --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/c7-probe-host" || true
 if [[ $ipv6_result == ok ]]; then
-  outside -o /dev/null --resolve "$DOMAIN:443:[$IP6]" "https://$DOMAIN/c7-probe-ns6"
+  outside -o /dev/null --resolve "$DOMAIN:443:[$IP6]" "https://$DOMAIN/c7-probe-ns6" || true
   c7_expect+=("/c7-probe-ns6 fd99::")
 fi
 # From a container on a Docker bridge (informational: its peer is whatever Docker shows Caddy; nothing fails here).

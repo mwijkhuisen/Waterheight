@@ -715,8 +715,10 @@ test('the public site: no owner banner, no owner badge, no owner station, runtim
   request,
 }) => {
   const s = await start(page, context, baseURL, 'state');
-  const config = await request.get('/runtime-config.json');
-  expect(await config.json()).toEqual({ audience: 'public' });
+  // (P10b: the file also names the operator and contact of the pages, and the CDN; their values are pages.spec.ts's)
+  const config = (await (await request.get('/runtime-config.json')).json()) as Record<string, unknown>;
+  expect(config.audience).toBe('public');
+  expect(Object.keys(config).sort()).toEqual(['audience', 'cdn', 'contact', 'operator']);
   await open(page, '/');
   await mapReady(page);
   await expect(page.getByRole('region', { name: msg('nl', 'owner_banner_label') })).toHaveCount(0);

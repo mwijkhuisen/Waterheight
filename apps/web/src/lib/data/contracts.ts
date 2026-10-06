@@ -44,6 +44,10 @@ export interface Contracts {
   WarningsFile: Parser<WarningsFile>;
   Sources: Parser<WebSources>;
   StatusMode: Parser<StatusMode>;
+  /** status.json for the Status page and the Method page's forecast coverage (P10b). */
+  StatusPage: Parser<StatusPageData>;
+  /** The travel times of the installed reaches file (P10b Method page). */
+  ReachTravel: Parser<ReachTravelData>;
   MetaAnswer: Parser<z.infer<typeof MetaAnswer>>;
   StationsAnswer: Parser<z.infer<typeof StationsAnswer>>;
   SnapshotAnswer: Parser<z.infer<typeof SnapshotAnswer>>;
@@ -61,6 +65,130 @@ const PublicStatusMode = z
   .looseObject({ classification: Mode.nullable() })
   .transform((s): StatusMode => s.classification?.mode ?? null);
 
+// --- P10b: the Status page and the Method page's forecast coverage and travel times -------------------------------
+// Loose, web-side readers in the style of PublicStatusMode: only the fields the pages show, bounded arrays, and
+// strings that are only ever rendered as text nodes. The server's own schemas (packages/contracts/src/status.ts,
+// reaches.ts) are not imported (check-boundaries: the web never takes the status contracts).
+
+const count = z.number().int().nonnegative();
+const iso = z.iso.datetime();
+const share = z.number().min(0).max(1).nullable();
+const Country = z.enum(['NL', 'DE', 'BE', 'FR', 'LU', 'CH']);
+
+/** A list whose bad entries are dropped one by one, so one bad row never blanks a page. At most `max` entries. */
+const lenient = <T extends z.ZodType>(item: T, max: number) =>
+  z
+    .array(z.unknown())
+    .max(max)
+    .transform((list) =>
+      list.flatMap((entry) => {
+        const parsed = item.safeParse(entry);
+        return parsed.success ? [parsed.data as z.output<T>] : [];
+      }),
+    );
+
+/** The public spelling of a source id (no canary branch): the owner canary's row does not parse, so it is dropped. */
+const StatusSourceId = z.string().regex(/^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$/);
+
+const StatusRow = z.looseObject({
+  id: StatusSourceId,
+  // A status the page does not know is shown as unknown, never dropped: a missing row reads as "fine" (review round 1).
+  status: z.enum(['ok', 'degraded', 'down', 'unknown']).catch('unknown'),
+  lastFetchOk: iso.nullable(),
+  newestTs: iso.nullable(),
+  lagP95S: z.number().nonnegative().nullable(),
+  coverage: share,
+  forecast: z.looseObject({ runAgeS: count, late: z.iso.date().nullable() }).nullable(),
+});
+export type StatusRow = z.infer<typeof StatusRow>;
+
+const Share = z.looseObject({ stations: count, classed: count });
+export const ClassCoverage = z.looseObject({
+  tier1: Share,
+  first_release: Share,
+  countries: z.array(z.looseObject({ country: Country, tier1: Share, first_release: Share })).max(6),
+});
+export type ClassCoverage = z.infer<typeof ClassCoverage>;
+
+const Cover = { stations: count, covered: count };
+export const ForecastCoverage = z.looseObject({
+  total: z.looseObject(Cover),
+  countries: z.array(z.looseObject({ country: Country, ...Cover })).max(6),
+  reaches: z
+    .array(
+      z.looseObject({
+        id: z.string().min(1).max(60),
+        names: z.looseObject({ nl: z.string().min(1).max(80), en: z.string().min(1).max(80) }),
+        ...Cover,
+        no_official_forecast: z.boolean(),
+        after_permission: z.array(z.string().min(1).max(40)).max(8),
+        none_publishes: z.array(z.string().min(1).max(40)).max(8),
+      }),
+    )
+    .max(40),
+});
+export type ForecastCoverage = z.infer<typeof ForecastCoverage>;
+
+/** The fields of status.json both families share (the owner record builds its own file schema from them). */
+export const statusFields = {
+  generatedAt: iso,
+  sources: lenient(StatusRow, 200),
+  twins: z.looseObject({ ok: count, failing: count }),
+};
+/** A coverage block that does not parse is null (the page says "n/a"), not a failed file. */
+export const orNull = <T extends z.ZodType>(schema: T) => schema.nullable().catch(null);
+const pairOf = <T extends z.ZodType>(schema: T) => z.looseObject({ public: orNull(schema), owner: orNull(schema) });
+/** The owner file's `{public, owner}` pairs; a block that does not parse is a pair of nulls. */
+export const ClassPair = pairOf(ClassCoverage).catch({ public: null, owner: null });
+export const ForecastPair = pairOf(ForecastCoverage).catch({ public: null, owner: null });
+
+/** One coverage block per family; `owner` is undefined on the public file (it has no owner half) and null when the
+ *  owner file could not compute it. */
+export interface StatusPageData {
+  generatedAt: string;
+  sources: StatusRow[];
+  twins: { ok: number; failing: number };
+  /** The public file's two counts of owner-audience sources; null on the owner file, which lists them instead. */
+  ownerLine: { healthy: number; total: number } | null;
+  classification: { public: ClassCoverage | null; owner: ClassCoverage | null | undefined };
+  forecastCoverage: { public: ForecastCoverage | null; owner: ForecastCoverage | null | undefined };
+}
+
+const PublicStatusPage = z
+  .looseObject({
+    ...statusFields,
+    classification: orNull(ClassCoverage),
+    forecastCoverage: orNull(ForecastCoverage),
+    ownerSources: orNull(z.looseObject({ healthy: count, total: count })),
+  })
+  .transform(
+    (s): StatusPageData => ({
+      generatedAt: s.generatedAt,
+      sources: s.sources,
+      twins: s.twins,
+      ownerLine: s.ownerSources,
+      classification: { public: s.classification, owner: undefined },
+      forecastCoverage: { public: s.forecastCoverage, owner: undefined },
+    }),
+  );
+
+/** The reaches file's sourced travel times (catalogue §3.7): ranges in hours, indicative, never an ETA. */
+const StationRef = z
+  .string()
+  .max(80)
+  .regex(/^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$/);
+const TravelTime = z.looseObject({
+  from_station_id: StationRef,
+  to_station_id: StationRef,
+  h: z.tuple([z.number().positive(), z.number().positive()]).refine(([lo, hi]) => lo < hi),
+  basis: z.string().min(1).max(200),
+  source: z.string().min(1).max(300),
+  /** Never an href as it stands: the page passes it through httpsHref. */
+  source_url: z.string().max(500),
+});
+export const ReachTravel = z.looseObject({ travel_times: lenient(TravelTime, 1000) });
+export type ReachTravelData = z.infer<typeof ReachTravel>;
+
 export const PUBLIC_CONTRACTS: Contracts = {
   audience: 'public',
   StaticMeta,
@@ -72,6 +200,8 @@ export const PUBLIC_CONTRACTS: Contracts = {
   WarningsFile,
   Sources: StaticSources,
   StatusMode: PublicStatusMode,
+  StatusPage: PublicStatusPage,
+  ReachTravel,
   MetaAnswer,
   StationsAnswer,
   SnapshotAnswer,

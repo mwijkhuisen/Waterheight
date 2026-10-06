@@ -53,6 +53,13 @@ owner.{$RWS_DOMAIN}:8443 {
 			request>headers>X-Forwarded-For ip_mask 24 48
 			request>headers>Authorization delete
 			request>headers>Cookie delete
+			# Client addresses a proxy or a CDN may add are dropped, never logged in full (review round 1; D20).
+			request>headers>Forwarded delete
+			request>headers>X-Real-Ip delete
+			request>headers>Cf-Connecting-Ip delete
+			request>headers>True-Client-Ip delete
+			request>headers>X-Client-Ip delete
+			request>headers>Fastly-Client-Ip delete
 			wrap json
 		}
 	}
@@ -86,9 +93,11 @@ owner.{$RWS_DOMAIN}:8443 {
 		respond 405
 	}
 
+	# P10b: the operator, contact and CDN as on the public site (site.caddy), from
+	# this container's environment (compose.owner.yaml).
 	handle /runtime-config.json {
 		header Content-Type "application/json"
-		respond `{"audience":"owner"}` 200
+		respond `{"audience":"owner","contact":"{$RWS_CONTACT_EMAIL}","operator":"{$RWS_OPERATOR_NAME}","cdn":"{$RWS_CDN_NAME}"}` 200
 	}
 
 	# The basemap tiles and the river files (P10a, KG-213): the same routes as the
@@ -291,23 +300,46 @@ owner.{$RWS_DOMAIN}:8443 {
 		respond 404
 	}
 
-	# The pages, the assets and the app routes, as on the public site.
+	# The pages, the assets and the 404 shells, as on the public site (P10b; the
+	# same two lists, test/page-routes.test.ts). No Cache-Control line here: the
+	# `defer`red header block above makes every answer "private, no-store".
 	handle {
 		root * /srv/www
-		@app_en {
-			path_regexp ^/en/
-			not file {path} {path}/
-			not path_regexp \.[^/]*$
+		@page_nl expression `{path} in ['/', '/over', '/bronnen', '/methode', '/disclaimer', '/colofon', '/privacy', '/status', '/toegankelijkheid']`
+		handle @page_nl {
+			rewrite * /index.html
+			file_server
 		}
-		@app {
-			not file {path} {path}/
-			not path_regexp \.[^/]*$
+		@page_en expression `{path} in ['/en/', '/en/about', '/en/sources', '/en/method', '/en/disclaimer', '/en/colophon', '/en/privacy', '/en/status', '/en/accessibility']`
+		handle @page_en {
+			rewrite * /en/index.html
+			file_server
 		}
-		rewrite @app_en /en/index.html
-		rewrite @app /index.html
-		@missing not file {path} {path}/
-		respond @missing 404
-		file_server
+		@file {
+			file {path} {path}/
+			not path /404.html /en/404.html
+			not expression `{path}.contains('//')`
+		}
+		handle @file {
+			file_server
+		}
+		@dotted path_regexp \.[^/]*$
+		handle @dotted {
+			respond 404
+		}
+		@not_found_en path_regexp ^/en/
+		handle @not_found_en {
+			rewrite * /en/404.html
+			file_server {
+				status 404
+			}
+		}
+		handle {
+			rewrite * /404.html
+			file_server {
+				status 404
+			}
+		}
 	}
 
 	# The 401 of basic_auth and every other error carry the same two headers

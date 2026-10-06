@@ -23,7 +23,7 @@ sudo docker compose -p rws logs --since 30m publish | tail -n 50    # fixed code
 | `cycleAt` fresh, `health.loader.last_commit` older than 15 minutes | The loader stalled, not the publisher | `docs/runbooks/recorder-down.md` and the `load` logs |
 | `last_commit` fresh, `meta.latestFrom` more than 120 s behind it (`FAIL static lag`) | The publisher is behind: `meta.degraded` true, `pendingDays` above 0 or a slow cycle (`cycleSeconds`) | Wait one cycle; if it stays, check the host load and the database (`docs/runbooks/disk-full.md`) |
 | Files fresh on disk (`ls -l /srv/rws/public/www/v1/meta.json`) but a wrong status, Cache-Control or type from the site | Caddy or its mount | `docker compose -p rws logs caddy`, `caddy validate`; `FAIL static precompressed` with a fresh file: the `.zst` or `.gz` beside it is missing or stale |
-| `FAIL runtime config` | `deploy/web/site.caddy` (a hand edit, or a wrong release) | Redeploy the release (`docs/runbooks/deploy-rollback.md`) |
+| `FAIL runtime config` | The detail names the field and never its value (the operator's name is personal data). `operator is empty`: `RWS_OPERATOR_NAME` is not set in `/etc/rws/rws.env` (P10b). `contact is not an e-mail address`, `cdn is longer than 80 characters`, `operator holds one of { } # " \ < > or a control character`, `no <key>` or `1 unexpected key`: a value in `rws.env` that breaks the JSON Caddy builds from it, or `deploy/web/site.caddy` (a hand edit, or a wrong release) | Fix the line in `/etc/rws/rws.env` (`docs/runbooks/bootstrap.md` §4: none of the three values holds `{ } # " \`), then `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`; for the file itself, redeploy the release (`docs/runbooks/deploy-rollback.md`) |
 
 ## 2. Re-render one settled day
 

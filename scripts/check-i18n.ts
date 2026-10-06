@@ -6,6 +6,8 @@
 //     `subtext`, `label`: an ECharts axis or series name, a MapLibre or chart label) to a string literal (P10a review
 //     round 1: the chart and popup builders are .ts).
 //     Only text with a letter counts: punctuation, digits and symbols such as ( ) : · – are fine.
+//   - (P10b) the pages' prose under apps/web/src/features/pages/content/{nl,en}/ is exempt from that scan, but both
+//     folders hold the same non-empty files, which import only `react` and ../../parts/* and set no HTML string.
 // Output is the path, the line and the kind only, never the text.
 // Usage: node scripts/check-i18n.ts [repo-root]   (exit 1 on a problem)
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -93,7 +95,11 @@ export function findHardcoded(path: string, source: string): string[] {
   return found;
 }
 
-/** Repo-relative POSIX paths of the .ts and .tsx files the rule covers (generated files aside), sorted. */
+/** The pages' prose (P10b): one JSX file per page and language, outside the message files. */
+export const CONTENT_DIR = 'apps/web/src/features/pages/content';
+const isContent = (path: string) => path.startsWith(`${CONTENT_DIR}/`);
+
+/** Repo-relative POSIX paths of the .ts and .tsx files the rule covers (generated files and page prose aside), sorted. */
 function tsxFiles(root: string): string[] {
   const src = join(root, 'apps/web/src');
   if (!existsSync(src)) return [];
@@ -104,7 +110,55 @@ function tsxFiles(root: string): string[] {
         !name.split(sep).some((part) => part === 'paraglide' || part === 'node_modules'),
     )
     .map((name) => relative(root, join(src, name)).split(sep).join('/'))
+    .filter((path) => !isContent(path))
     .sort();
+}
+
+/** What a page's prose may import: React, and the parts that render its data. */
+const CONTENT_IMPORT = /^(react|\.\.\/\.\.\/parts\/[A-Za-z0-9_-]+\.tsx?)$/;
+
+/**
+ * The page prose rule (P10b): content/nl and content/en hold the same file names, each a non-empty .tsx; a file
+ * imports only `react` and ../../parts/*, loads nothing at run time, and never sets HTML from a string.
+ */
+export function contentProblems(root: string): string[] {
+  const dir = join(root, CONTENT_DIR);
+  if (!existsSync(dir)) return [];
+  const problems: string[] = [];
+  const names = new Map(
+    LOCALES.map((loc) => [loc, existsSync(join(dir, loc)) ? readdirSync(join(dir, loc)).sort() : []] as const),
+  );
+  for (const loc of LOCALES) {
+    for (const other of LOCALES)
+      for (const name of names.get(other) ?? [])
+        if (!(names.get(loc) ?? []).includes(name)) problems.push(`${CONTENT_DIR}/${loc}/${name} is missing`);
+    for (const name of names.get(loc) ?? []) {
+      const path = `${CONTENT_DIR}/${loc}/${name}`;
+      if (!name.endsWith('.tsx')) {
+        problems.push(`${path}: page prose is a .tsx file`);
+        continue;
+      }
+      const source = readFileSync(join(root, path), 'utf8');
+      if (source.trim() === '') problems.push(`${path}: empty`);
+      if (/dangerouslySetInnerHTML|innerHTML|outerHTML/.test(source)) problems.push(`${path}: sets HTML from a string`);
+      const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+      const visit = (node: ts.Node): void => {
+        const spec =
+          (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+          node.moduleSpecifier &&
+          ts.isStringLiteral(node.moduleSpecifier)
+            ? node.moduleSpecifier.text
+            : undefined;
+        if (spec !== undefined && !CONTENT_IMPORT.test(spec)) problems.push(`${path}: imports ${spec}`);
+        if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)
+          problems.push(`${path}: a dynamic import`);
+        if (ts.isImportEqualsDeclaration(node)) problems.push(`${path}: an import =`);
+        ts.forEachChild(node, visit);
+      };
+      visit(file);
+    }
+  }
+  return problems;
 }
 
 /**
@@ -166,6 +220,7 @@ function scan(root: string) {
     }
   }
   problems.push(...catalogueProblems(root, messages));
+  problems.push(...contentProblems(root));
   const files = tsxFiles(root);
   for (const path of files) problems.push(...findHardcoded(path, readFileSync(join(root, path), 'utf8')));
   return { problems: problems.sort(), files: files.length, messages: Object.keys(messages.get('nl') ?? {}).length };

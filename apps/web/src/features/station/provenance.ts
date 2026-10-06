@@ -1,4 +1,5 @@
 import { attributionText } from '../../lib/attribution.ts';
+import { httpsHref } from '../../lib/href.ts';
 import { formatDay } from '../../lib/time/time.ts';
 import type { Locale } from '../../paraglide/runtime.js';
 
@@ -11,15 +12,6 @@ interface CreditSource {
   date: string | null;
   dateText: string | null;
 }
-
-export const httpsUrl = (url: string | null): string | undefined => {
-  if (url === null) return undefined;
-  try {
-    return new URL(url).protocol === 'https:' ? url : undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 /** The credit lines in the page's language (else the language-neutral ones, else all), with the licence's own date. */
 export function creditLines(
@@ -35,7 +27,7 @@ export function creditLines(
   return rows.map((a) => ({
     lang: a.lang,
     text: date === undefined ? a.text : attributionText(a.text, source.dateKind !== null, date),
-    href: httpsUrl(a.url),
+    href: httpsHref(a.url),
   }));
 }
 

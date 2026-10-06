@@ -9,6 +9,7 @@ const PLACEHOLDER = /\[date de mise à jour\]|\(Bezugsdatum\)|<date>|<datum>/;
 export function attributionText(text: string, needsDate: boolean, date: string): string {
   if (!needsDate) return text;
   if (!PLACEHOLDER.test(text)) return `${text} (${date})`;
-  // A function, so that a `$` in the date is never read as a replacement pattern.
-  return text.replace(PLACEHOLDER, (found) => (found.startsWith('(') ? `(${date})` : date));
+  // A function, so that a `$` in the date is never read as a replacement pattern. BAFU's placeholder keeps its word
+  // (P10b, owner decision): "(Bezugsdatum: 26.10.2026)".
+  return text.replace(PLACEHOLDER, (found) => (found.startsWith('(') ? `(Bezugsdatum: ${date})` : date));
 }

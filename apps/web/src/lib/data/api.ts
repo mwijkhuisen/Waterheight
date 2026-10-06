@@ -1,7 +1,7 @@
 import { type ApiStation, floorBucket, RiversManifest } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { loadAudience } from '../config/runtime.ts';
+import { loadRuntimeConfig, type RuntimeConfig } from '../config/runtime.ts';
 import { stationHorizon } from '../forecast.ts';
 import { quantise, STEP_MS, toUrlT } from '../time/time.ts';
 import type { Mode } from '../url/url.ts';
@@ -9,12 +9,14 @@ import {
   browserFetch,
   HttpError,
   loadMeta,
+  loadReachTravel,
   loadRecent,
   loadRivers,
   loadSnapshot,
   loadSources,
   loadStations,
   loadStatusMode,
+  loadStatusPage,
   loadWarnings,
   type WebMeta,
 } from './chain.ts';
@@ -37,16 +39,21 @@ const LIVE_MS = 60_000;
 const live = (on: boolean) => (on ? { refetchInterval: LIVE_MS, refetchIntervalInBackground: false } : {});
 
 /**
- * Which site this is (/runtime-config.json, once): the query, so the page can say when it never answered. A failure
- * is retried (three times, with backoff) and never becomes "public" (lib/config/runtime.ts; review round 1).
+ * /runtime-config.json, once: one query for the audience and the site's operator, contact and CDN (P10b, plan C8). A
+ * failure is retried (three times, with backoff) and never becomes "public" (lib/config/runtime.ts; review round 1).
  */
-export const useAudienceQuery = () =>
-  useQuery({
-    queryKey: ['runtime-config'],
-    queryFn: ({ signal }) => loadAudience(undefined, signal),
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: 3,
-  });
+const runtimeConfigQuery = {
+  queryKey: ['runtime-config'],
+  queryFn: ({ signal }: { signal: AbortSignal }) => loadRuntimeConfig(undefined, signal),
+  staleTime: Number.POSITIVE_INFINITY,
+  retry: 3,
+} as const;
+
+/** Which site this is: the query, so the page can say when it never answered. */
+export const useAudienceQuery = () => useQuery({ ...runtimeConfigQuery, select: (c: RuntimeConfig) => c.audience });
+
+/** The operator, contact and CDN of this site (the colophon, the privacy page): the query, so a part can say when it failed. */
+export const useSiteConfig = () => useQuery(runtimeConfigQuery);
 
 /** Which site this is; undefined until it has answered (and after it failed for good). */
 export const useAudience = () => useAudienceQuery().data;
@@ -144,6 +151,30 @@ export const useSources = () => {
     queryFn: ({ signal }) => loadSources(browserFetch, signal, c),
     enabled: c !== undefined,
     staleTime: 300_000,
+  });
+};
+
+/** status.json for the Status page and the Method page's forecast coverage (P10b): static only, no retry. */
+export const useStatusPage = () => {
+  const c = useContracts();
+  return useQuery({
+    queryKey: ['status-page', c?.audience],
+    queryFn: ({ signal }) => loadStatusPage(browserFetch, signal, c),
+    enabled: c !== undefined,
+    staleTime: 60_000,
+    retry: false,
+  });
+};
+
+/** The travel times of the installed reaches file (P10b Method page): an error shows the page's own notice. */
+export const useReachTravel = () => {
+  const c = useContracts();
+  return useQuery({
+    queryKey: ['reach-travel', c?.audience],
+    queryFn: ({ signal }) => loadReachTravel(browserFetch, signal, c),
+    enabled: c !== undefined,
+    staleTime: 300_000,
+    retry: false,
   });
 };
 

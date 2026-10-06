@@ -82,10 +82,27 @@ export async function seedPublic(admin: Client, now: string): Promise<void> {
             ('station', $1, $2::timestamptz - interval '20 min', 'DE-6', 'HE:3', $3, 5)`,
     [DE_STATION, now, `Meldestufe 3 ${XSS}`],
   );
-  // Classes and areas count at the current bucket only while their source was fetched lately.
-  await admin.query(
-    `INSERT INTO source_health (source_id, last_fetch_ok, status) VALUES ('DE-6', $1, 'ok'), ('FR-5', $1, 'ok')
-     ON CONFLICT (source_id) DO UPDATE SET last_fetch_ok = EXCLUDED.last_fetch_ok, status = 'ok'`,
-    [now],
-  );
+  // Classes and areas count at the current bucket only while their source was fetched lately; and every public source
+  // whose licence asks for a date (catalogue 1b) needs the row the publisher reads it from (attribution.ts
+  // `sourceDates`), or its sources.json date is null and the Sources page says "datum onbekend":
+  //   `update` (FR-1, FR-3, FR-4, FR-5): `newest_ts`, the newest value we hold (the provider's own date is DE-6's only);
+  //   `update` of DE-6: `detail.provider_updated`, shown as "Stand: TT.MM.JJJJ hh:mm" in Berlin time;
+  //   `retrieval` (CH-1 .. CH-5): `last_fetch_ok`, the last successful fetch.
+  // The dates are fixed relative to NOW and on different Amsterdam days, so a spec sees which column fed which source:
+  // the French sources say 25 October 2026 (their newest value is 16 h old, 21:00 CET), the Swiss ones 26 October 2026,
+  // DE-6 "Stand: 26.10.2026 09:30" (08:30Z; Berlin is on CET after the DST change of the 25th).
+  type Health = [source: string, fetched: string, newest: string | null, detail: object];
+  const rows: Health[] = [
+    ['DE-6', now, null, { provider_updated: '2026-10-26T08:30:00Z' }],
+    ...['FR-1', 'FR-3', 'FR-4', 'FR-5'].map((id): Health => [id, now, '2026-10-25T20:00:00Z', {}]),
+    ...['CH-1', 'CH-2', 'CH-3', 'CH-4', 'CH-5'].map((id): Health => [id, '2026-10-26T11:55:00Z', null, {}]),
+  ];
+  for (const [source, fetched, newest, detail] of rows)
+    await admin.query(
+      `INSERT INTO source_health (source_id, last_fetch_ok, newest_ts, detail, status)
+       VALUES ($1, $2, $3, $4::jsonb, 'ok')
+       ON CONFLICT (source_id) DO UPDATE
+         SET last_fetch_ok = EXCLUDED.last_fetch_ok, newest_ts = EXCLUDED.newest_ts, detail = EXCLUDED.detail, status = 'ok'`,
+      [source, fetched, newest, JSON.stringify(detail)],
+    );
 }

@@ -67,8 +67,9 @@ export interface Session {
 
 /**
  * Request log and CSP listeners (instrument), the fixed clock, and a record of every dialog the page opens.
- * `status` is what /data/v1/status.json says about the default map mode: the e2e publisher writes none (a 404 means
- * the default is the change mode), so a spec that wants the state mode serves it here.
+ * `status` is what /data/v1/status.json says about the default map mode. The e2e publisher writes a real status.json
+ * (classification.mode "dh", i.e. the change mode, 15 forecast reaches), so a spec that wants the state mode serves a
+ * file that says so here; the pages specs (pages.spec.ts) read the real one.
  */
 export async function start(
   page: Page,

@@ -86,9 +86,12 @@ for path in /runtime-config.json /data/v1/meta.json /data/v1/latest.json /data/v
   ((rc == 0)) || continue # a file the publisher has not written yet is a 404 (curl 22 only with -f): body checked below
   ! grep -qE "$canary_re|123456\.789|123456\.79|private_basis" /ci/iso.body || fail "a canary or private_basis in the public $path"
 done
-audience=$(outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/runtime-config.json")
-[[ $audience == '{"audience":"public"}' ]] || fail "public /runtime-config.json: $audience"
-pass "the public listener never serves owner content for SNI and Host owner.$DOMAIN (refused, or no body); the public /runtime-config.json is {\"audience\":\"public\"} and no public static file carries a canary or private_basis"
+# P10b: the document also holds the contact, the operator and the CDN, so the audience and the four keys are compared, not the
+# whole body (and the message never prints it: the operator's name is personal data).
+config=$(outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/runtime-config.json")
+jq -e '.audience == "public" and (keys | sort) == ["audience", "cdn", "contact", "operator"]' <<<"$config" >/dev/null ||
+  fail "public /runtime-config.json is not audience public with exactly the keys audience, contact, operator and cdn"
+pass "the public listener never serves owner content for SNI and Host owner.$DOMAIN (refused, or no body); the public /runtime-config.json has audience public and exactly the keys audience, contact, operator and cdn, and no public static file carries a canary or private_basis"
 
 # ---- 4. caddy-owner
 # caddy-owner's `tls internal` root (its own local CA, in its data volume): the check verifies the certificate
@@ -99,4 +102,4 @@ docker run --rm --network rws_edge -e RWS_DOMAIN="$DOMAIN" -e OWNER_PW -e OWNER_
   --entrypoint /nodejs/bin/node rws-server:ci /check.mjs | tee /ci/owner-check.out ||
   fail "owner-check.mjs exited non-zero (its FAIL lines are above)"
 [[ $(grep -c '^FAIL' /ci/owner-check.out || true) == 0 ]] || fail "owner-check.mjs"
-pass "caddy-owner (SNI owner.$DOMAIN over rws_edge): $(grep -c '^PASS' /ci/owner-check.out) checks: 401 with both owner headers and no content without or with wrong credentials on every path, 200 with them, {\"audience\":\"owner\"}, and the owner canary in the owner latest.json"
+pass "caddy-owner (SNI owner.$DOMAIN over rws_edge): $(grep -c '^PASS' /ci/owner-check.out) checks: 401 with both owner headers and no content without or with wrong credentials on every path, 200 with them, audience owner in the runtime config, and the owner canary in the owner latest.json"

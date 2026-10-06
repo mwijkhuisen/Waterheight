@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dhGlyph, dhItems, LHP_ALERT_CODES, qItems, stateItems } from '../src/features/legend/items.ts';
-import { httpsHref } from '../src/features/owner/href.ts';
 import { clampPage, dhCell, PAGE_SIZE, pageCount, pageOf, pageRange } from '../src/features/table/page.ts';
+import { httpsHref } from '../src/lib/href.ts';
 
 describe('legend items', () => {
   it('lists six states, no_ref last', () => {

@@ -42,8 +42,8 @@ async function start(page: Page, context: BrowserContext, baseURL: string | unde
     void d.dismiss();
   });
   await page.clock.setFixedTime(NOW);
-  // P10a: the default map mode is status.json's (the e2e publisher writes none: the change mode); these specs read the
-  // state words, so they serve the file that says "state".
+  // P10a: the default map mode is status.json's (the e2e publisher's says "dh": the change mode); these specs read the
+  // state words, so they serve a file that says "state".
   await page.route('**/data/v1/status.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"classification":{"mode":"state"}}' }),
   );
