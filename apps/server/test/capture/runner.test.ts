@@ -778,6 +778,27 @@ describe('stage-2 requests', () => {
     expect(await runSpec(spec('lu-5-cap'), deps, { seed: true })).toMatchObject({ requests: 2, capped: true });
   });
 
+  it('LU-5: a refused next_page and a refused dump in one run are both reported (#44)', async () => {
+    server.use(
+      http.get(LU5, () =>
+        HttpResponse.json({ data: [dump(0), { ...dump(1), url: 'https://evil.example/x' }], next_page: 42 }),
+      ),
+      http.get(
+        'https://download.data.public.lu/resources/*',
+        () => new HttpResponse(fixture('LU-5', 'lu-5-file').body),
+      ),
+    );
+    const deps = runDeps();
+    expect(await runSpec(spec('lu-5-cap'), deps)).toMatchObject({ requests: 2, capped: true });
+    expect(
+      Object.values(deps.counters.alerts)
+        .flat()
+        .map((a) => a.kind)
+        .sort(),
+    ).toEqual(['item_refused', 'walk_broken']);
+    expect((await deps.state.read<SpecState>('lu-5-cap'))?.failed_items).toEqual([`file/${dump(1).id}`]);
+  });
+
   it('LU-5: a dump whose URL is refused is named in failed_items, raises item_refused and is retried, never fetched (#44)', async () => {
     const bad = (i: number, url: string) => ({ ...dump(i), url });
     const got: string[] = [];
@@ -789,6 +810,7 @@ describe('stage-2 requests', () => {
             bad(1, 'https://evil.example/resources/x/20260929-133001/dump-alert.1790688361.xml'),
             bad(2, 'https://download.data.public.lu/resources/x/other.xml'),
             bad(3, 'http://download.data.public.lu/resources/x/20260929-133003/dump-alert.1790688363.xml'),
+            { id: dump(4).id, title: dump(4).title }, // no url at all
           ],
           next_page: null,
         }),
@@ -802,7 +824,7 @@ describe('stage-2 requests', () => {
     await runSpec(spec('lu-5-cap'), deps);
     expect(got).toEqual([dump(0).url]);
     const st = await deps.state.read<SpecState>('lu-5-cap');
-    expect(st?.failed_items).toEqual([`file/${dump(1).id}`, `file/${dump(2).id}`, `file/${dump(3).id}`]);
+    expect(st?.failed_items).toEqual([1, 2, 3, 4].map((i) => `file/${dump(i).id}`));
     expect(st?.last_success).toBeDefined(); // the good dump came in: the run counts (#39)
     expect(st?.seen).toEqual([dump(0).id]); // a refused one is never seen, so it is named again next run
     expect(
@@ -811,7 +833,7 @@ describe('stage-2 requests', () => {
         .map((a) => a.kind),
     ).toEqual(['item_refused']);
     await runSpec(spec('lu-5-cap'), deps);
-    expect((await deps.state.read<SpecState>('lu-5-cap'))?.failed_items).toHaveLength(3);
+    expect((await deps.state.read<SpecState>('lu-5-cap'))?.failed_items).toHaveLength(4);
   });
 
   it('LU-5 fetches only new dumps, marks an id seen only after its file arrived, and remembers across runs', async () => {

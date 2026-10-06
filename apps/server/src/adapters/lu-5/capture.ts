@@ -22,10 +22,10 @@ export const adapter: Adapter = {
     let fresh = 0;
     for (const r of data) {
       if (typeof r?.id !== 'string' || !/^[0-9a-f-]{36}$/.test(r.id) || typeof r.title !== 'string') continue;
-      if (!TITLE.test(r.title) || typeof r.url !== 'string') continue;
-      if (seen.has(r.id)) continue;
-      const url = checkUrl(r.url);
-      // A dump we will not fetch is named, never silent: it stays unseen and is reported on every run (#44).
+      if (!TITLE.test(r.title) || seen.has(r.id)) continue;
+      const url = typeof r.url === 'string' ? checkUrl(r.url) : null;
+      // A dump we will not fetch (no url, or one that is refused) is named, never silent: it stays unseen and is
+      // reported on every run (#44).
       if (
         url === null ||
         new URL(url).hostname !== 'download.data.public.lu' ||
