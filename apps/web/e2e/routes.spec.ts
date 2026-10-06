@@ -261,6 +261,16 @@ test('/third-party-notices.txt is plain text and names maplibre-gl@6.11.1', asyn
   expectSiteHeaders(res);
 });
 
+// P10c: the brand's favicon, a file at the root like the notices (Caddy's @file): revalidated, never immutable.
+test('/favicon.svg is the SVG favicon from our origin; /favicon.ico stays a bare 404', async ({ request }) => {
+  const res = await request.get('/favicon.svg');
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toMatch(/^image\/svg\+xml/);
+  expect(res.headers()['cache-control']).toBe('no-cache');
+  expect(await res.text()).not.toMatch(/<script|\son[a-z]+=|href=/i);
+  expectSiteHeaders(res);
+});
+
 // P6b: the river files that rws-rivers-refresh installs (prepare-tiles.ts writes the e2e release 20261003).
 const RIVERS = '20261003';
 const IMMUTABLE = 'public, max-age=31536000, immutable';
