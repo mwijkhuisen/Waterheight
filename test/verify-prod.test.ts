@@ -2982,11 +2982,12 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     expect(rules('@api')).toEqual(['@api {', 'method GET HEAD', `expression ${API_PATH}`]);
     // A client's own address headers never reach the api (SR-4): Caddy sets X-Forwarded-For itself. Only Caddy sets
     // X-Degraded (P9a): /api/v1/snapshot alone has the stand-in for an upstream 502, 503 or 504 answer.
-    // X-Rws-Client (P9b) is the TCP peer, set by Caddy and replacing a client's value: the api's rate-limit key.
+    // X-Rws-Client (P9b) is {client_ip}, set by Caddy and replacing a client's value: the api's rate-limit key (the
+    // TCP peer, or X-Forwarded-For of a peer in RWS_TRUSTED_PROXIES only: KG-228).
     const proxy = [
       'header_up -Forwarded',
       'header_up -X-Real-IP',
-      'header_up X-Rws-Client {remote_host}',
+      'header_up X-Rws-Client {client_ip}',
       'header_down -Server',
       'header_down -X-Degraded',
     ];
