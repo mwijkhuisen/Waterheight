@@ -6,8 +6,11 @@
 // It lives under test/ so no image ever holds it; production has no clock switch.
 // Playwright (local) and the CI e2e job start it; SIGTERM or SIGINT drops the database.
 //
-// Usage: env DATABASE_URL=<superuser url> [HOST=127.0.0.1] [PORT=4480] node apps/server/test/e2e/api.ts
-import { mkdir, rm } from 'node:fs/promises';
+// Usage: env DATABASE_URL=<superuser url> [HOST=127.0.0.1] [PORT=4480] [E2E_PUBLISH_DIR=<dir>]
+//        [E2E_OWNER_PUBLISH_DIR=<dir> [E2E_OWNER_API_HOST=127.0.0.1] [E2E_OWNER_API_PORT=8080]] node apps/server/test/e2e/api.ts
+// With E2E_OWNER_PUBLISH_DIR (P10a) it also seeds synthetic owner rows (owner-seed.ts), writes the owner tree with the
+// owner publisher and serves the owner family (createApp family 'owner', as rws_owner_api) on the second address.
+import { mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
@@ -19,6 +22,8 @@ import { readRegistry, syncRegistry } from '../../src/load/registry-sync.ts';
 import { openApiDb, parseListen } from '../../src/main.ts';
 import { publishOnce } from '../../src/publish/index.ts';
 import { createTestDb } from '../db/testdb.ts';
+import { seedOwner } from './owner-seed.ts';
+import { ENDED_DAY, FR_STATION, seedPublic, XSS } from './public-seed.ts';
 import { obsInsertSql, rollupInsertSql } from './seed.ts';
 
 /**
@@ -133,16 +138,32 @@ if (typeof listen === 'string') {
   console.error(listen);
   process.exit(64);
 }
+const OWNER_DIR = process.env.E2E_OWNER_PUBLISH_DIR;
+const ownerListen = parseListen({
+  HOST: process.env.E2E_OWNER_API_HOST ?? '127.0.0.1',
+  PORT: process.env.E2E_OWNER_API_PORT ?? '8080',
+});
+if (typeof ownerListen === 'string') {
+  console.error(ownerListen);
+  process.exit(64);
+}
 
 const t = await createTestDb();
 let api: Db | undefined;
 let window: DisplayWindow | undefined;
 let server: ReturnType<typeof serve> | undefined;
+let ownerApi: Db | undefined;
+let ownerWindow: DisplayWindow | undefined;
+let ownerServer: ReturnType<typeof serve> | undefined;
 const cleanup = async () => {
   await rm(E2E_PUBLISH_DIR, { recursive: true, force: true }).catch(() => undefined);
+  if (OWNER_DIR) await rm(OWNER_DIR, { recursive: true, force: true }).catch(() => undefined);
   server?.close(); // also closes idle keep-alive connections; the exit and the forced DROP do the rest
+  ownerServer?.close();
   window?.stop();
+  ownerWindow?.stop();
   await api?.close();
+  await ownerApi?.close();
   await t.drop();
 };
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
@@ -199,6 +220,9 @@ try {
   );
   for (const table of ['obs_1h', 'obs_1d'] as const) await t.admin.query(rollupInsertSql(table));
 
+  await seedPublic(t.admin, NOW.toISOString());
+  if (OWNER_DIR) await seedOwner(t.admin, FROM, NOW.toISOString());
+
   for (const f of FORECASTS) {
     // Every seeded run must exist, the owner canary's included: its absence test proves nothing otherwise (SEC-4).
     const seeded = await t.admin.query(
@@ -231,6 +255,21 @@ try {
     await publishOnce(publisher.db, 'public', E2E_PUBLISH_DIR, { now: NOW.getTime(), settledDays: 1 });
   } finally {
     await publisher.close();
+  }
+
+  // The owner tree (C19): the owner publisher is the rws_owner_api login (limit 4); its pool of 2 closes before the
+  // owner API's opens.
+  if (OWNER_DIR) {
+    await rm(OWNER_DIR, { recursive: true, force: true });
+    await mkdir(OWNER_DIR, { recursive: true });
+    const ownerPub = openDb(dbConfig({ DATABASE_URL: t.urlFor('rws_owner_api') }, 'rws_owner_api') as DbConfig, {
+      max: 2,
+    });
+    try {
+      await publishOnce(ownerPub.db, 'owner', OWNER_DIR, { now: NOW.getTime(), settledDays: 1 });
+    } finally {
+      await ownerPub.close();
+    }
   }
 
   const opened = openApiDb({ DATABASE_URL: t.urlFor('rws_api') });
@@ -290,11 +329,56 @@ try {
   const everything = JSON.stringify([plus2, gapForecast, xssForecast]);
   if (CANARY_RENDERINGS.some((c) => everything.includes(c))) throw new Error('self-check: a canary in a public answer');
 
+  // P10a: the seeded zero, classes and warnings, in the snapshot and in the published files (the XSS text as data).
+  const fr = seriesOf(FR_STATION);
+  const frValue = snapshot.values.find((v) => v.series === fr);
+  if (frValue?.zero?.datum !== 'IGN69' || frValue.nap)
+    throw new Error('self-check: the FR-1 value has no IGN69 zero (or a nap)');
+  const file = async (path: string) => readFile(join(E2E_PUBLISH_DIR, 'v1', path), 'utf8');
+  const latest = await file('warnings/latest.geojson');
+  const ended = await file(`warnings/${ENDED_DAY}.json`);
+  if (
+    !latest.includes(XSS) ||
+    !latest.includes('e2e-river') ||
+    !latest.includes('e2e-2') ||
+    latest.includes('e2e-ended')
+  )
+    throw new Error('self-check: warnings/latest.geojson lacks the seeded areas');
+  if (!ended.includes('e2e-ended')) throw new Error(`self-check: warnings/${ENDED_DAY}.json lacks the ended area`);
+  if (!snapshot.values.some((v) => v.basis?.label.includes('LHP')))
+    throw new Error('self-check: no DE-6 class state in the snapshot');
+  if (CANARY_RENDERINGS.some((c) => latest.includes(c))) throw new Error('self-check: a canary in a public file');
+
+  let ownerApp: ReturnType<typeof createApp> | undefined;
+  if (OWNER_DIR) {
+    const ownerOpened = openApiDb({ DATABASE_URL: t.urlFor('rws_owner_api') }, undefined, 'owner');
+    if (typeof ownerOpened === 'string') throw new Error(ownerOpened);
+    ownerApi = ownerOpened;
+    ownerWindow = new DisplayWindow(ownerApi.db, undefined, 'owner');
+    if (!(await ownerWindow.refresh())) throw new Error('the owner display window did not load');
+    ownerWindow.start();
+    ownerApp = createApp({ family: 'owner', db: ownerApi.db, window: ownerWindow, now: () => NOW, build: 'dev' });
+    const res = await ownerApp.request('/api/v1/meta');
+    const meta = (await res.json()) as { audience?: string };
+    if (res.status !== 200 || meta.audience !== 'owner')
+      throw new Error('self-check: the owner api is not the owner family');
+    const sources = await readFile(join(OWNER_DIR, 'v1', 'sources.json'), 'utf8');
+    if (!sources.includes(XSS)) throw new Error('self-check: the owner sources.json lacks the XSS clause');
+  }
+
   const listening = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
     const s = serve({ fetch: app.fetch, ...listen }, () => resolve(s));
     s.once('error', reject);
   });
   server = listening;
+  if (ownerApp) {
+    const o = ownerApp;
+    ownerServer = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
+      const s = serve({ fetch: o.fetch, ...ownerListen }, () => resolve(s));
+      s.once('error', reject);
+    });
+    console.log(`e2e owner api listening on http://${ownerListen.hostname}:${ownerListen.port}`);
+  }
   console.log(`e2e api listening on http://${listen.hostname}:${listen.port}`);
 } catch (err) {
   console.error(`e2e api: ${err instanceof Error ? err.message.split('\n')[0] : 'set-up failed'}`);
