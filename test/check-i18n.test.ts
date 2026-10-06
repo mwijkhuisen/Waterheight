@@ -21,6 +21,19 @@ describe('check-i18n: hard-coded UI text', () => {
     expect(found(source)).toEqual([`a.tsx:1: ${what}`]);
   });
 
+  it('flags a UI-text property set to a literal in a .ts builder (an ECharts axis name; review round 1)', () => {
+    expect(findHardcoded('chart.ts', "const o = { yAxis: { name: 'Waterstand' } };")).toEqual([
+      'chart.ts:1: hard-coded name property',
+    ]);
+    expect(findHardcoded('chart.ts', "const o = { title: { text: cond ? 'Afvoer' : x } };")).toEqual([
+      'chart.ts:1: hard-coded text property',
+    ]);
+    // A variable, a message call, an id-like key and punctuation are fine.
+    expect(
+      findHardcoded('chart.ts', "const o = { name: d.unit, label: m.x({}, o), id: 'obs', type: 'line', text: ' – ' };"),
+    ).toEqual([]);
+  });
+
   it('reports the line of the text, not of its element', () => {
     expect(found('<div>\n  <p>\n    Hallo\n  </p>\n</div>')).toEqual(['a.tsx:3: hard-coded JSX text']);
   });

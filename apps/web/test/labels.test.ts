@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { basisLabel, lhpColour, type OwnerLabels, referenceLabel, riverName } from '../src/lib/labels/labels.ts';
 
 const owner: OwnerLabels = {
+  keys: Object.assign(Object.create(null), {
+    'BE-3\nnivcru\n*': 'lbl_be_3_nivcru_any',
+    'BE-3\nreference\nP05': 'lbl_be_3_reference_p05',
+  }),
   nl: Object.assign(Object.create(null), { lbl_be_3_nivcru_any: 'NL owner', lbl_be_3_reference_p05: 'P05 nl' }),
   en: Object.assign(Object.create(null), { lbl_be_3_nivcru_any: 'EN owner', lbl_be_3_reference_p05: 'P05 en' }),
 };

@@ -127,6 +127,14 @@ describe('web build', () => {
       .map(([, c]) => c.file);
     // contracts.ts (the owner schemas), labels.gen.ts (BE-3, LU-4 labels) and index.ts (the banner).
     expect(owner).toHaveLength(3);
+    const ownerLabelPrefixes = (
+      parse(readFileSync(join(webDir, '../../registry/sources.yaml'), 'utf8')) as {
+        sources: { id: string; audience: string }[];
+      }
+    ).sources
+      .filter((x) => x.audience === 'owner')
+      .map((x) => `lbl_${x.id.toLowerCase().replaceAll('-', '_')}_`);
+    expect(ownerLabelPrefixes).toContain('lbl_be_3_');
     const byFile = new Map(Object.values(manifest).map((c) => [c.file, c]));
     const closure = (entry: string) => {
       const seen = new Set<string>();
@@ -148,6 +156,8 @@ describe('web build', () => {
         expect(owner, `${html} → ${file}`).not.toContain(file);
         // static-owner's own refinement text: the owner sources schema is in no file a public page loads.
         expect(page(file), `${html} → ${file}`).not.toContain('an owner source has a private basis');
+        // The owner label index and texts (lbl_be_3_…, lbl_lu_4_…) live in the owner chunk only (security review round 1).
+        for (const prefix of ownerLabelPrefixes) expect(page(file), `${html} → ${file}`).not.toContain(prefix);
       }
     }
     const files = readdirSync(out, { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.js'));

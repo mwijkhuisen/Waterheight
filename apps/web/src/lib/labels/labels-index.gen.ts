@@ -143,7 +143,7 @@ import {
 } from '../../paraglide/messages.js';
 
 type Message = (inputs: object, options: { locale: 'nl' | 'en' }) => string;
-// Keys are `<source>\n<scale>\n<code>` (public labels, message functions imported by name so the bundle holds only these), a river id, or owner-label keys.
+// Keys are `<source>\n<scale>\n<code>` (public labels, message functions imported by name so the bundle holds only these), or a river id (the owner index lives in the owner chunk).
 export const PUBLIC_LABELS: Readonly<Record<string, Message>> = Object.freeze(
   Object.assign(Object.create(null), {
     'CH-1\ndanger\n1': lbl_ch_1_danger_1,
@@ -290,34 +290,6 @@ export const RIVER_LABELS: Readonly<Record<string, Message>> = Object.freeze(
     viroin: river_viroin,
     waal: river_waal,
     wurm: river_wurm,
-  }),
-);
-export const OWNER_KEYS: Readonly<Record<string, string>> = Object.freeze(
-  Object.assign(Object.create(null), {
-    'BE-3\nnivcru\n*': 'lbl_be_3_nivcru_any',
-    'BE-3\nreference\nMEDIAN': 'lbl_be_3_reference_median',
-    'BE-3\nreference\nMOYEN': 'lbl_be_3_reference_moyen',
-    'BE-3\nreference\nP05': 'lbl_be_3_reference_p05',
-    'BE-3\nreference\nP10': 'lbl_be_3_reference_p10',
-    'BE-3\nreference\nP15': 'lbl_be_3_reference_p15',
-    'BE-3\nreference\nP85': 'lbl_be_3_reference_p85',
-    'BE-3\nreference\nP90': 'lbl_be_3_reference_p90',
-    'BE-3\nreference\nP95': 'lbl_be_3_reference_p95',
-    'BE-3\nreference\nTOP3_1': 'lbl_be_3_reference_top3_1',
-    'BE-3\nreference\nTOP3_2': 'lbl_be_3_reference_top3_2',
-    'BE-3\nreference\nTOP3_3': 'lbl_be_3_reference_top3_3',
-    'LU-4\nreference\nHQ10': 'lbl_lu_4_reference_hq10',
-    'LU-4\nreference\nHQ100': 'lbl_lu_4_reference_hq100',
-    'LU-4\nreference\nHQ2': 'lbl_lu_4_reference_hq2',
-    'LU-4\nreference\nHQ20': 'lbl_lu_4_reference_hq20',
-    'LU-4\nreference\nHQ5': 'lbl_lu_4_reference_hq5',
-    'LU-4\nreference\nHQ50': 'lbl_lu_4_reference_hq50',
-    'LU-4\nreference\nLU4_CRUE_REF': 'lbl_lu_4_reference_lu4_crue_ref',
-    'LU-4\nreference\nLU4_ORANGE': 'lbl_lu_4_reference_lu4_orange',
-    'LU-4\nreference\nLU4_RED': 'lbl_lu_4_reference_lu4_red',
-    'LU-4\nreference\nLU4_YELLOW': 'lbl_lu_4_reference_lu4_yellow',
-    'LU-4\nreference\nMNQ': 'lbl_lu_4_reference_mnq',
-    'LU-4\nreference\nMQ': 'lbl_lu_4_reference_mq',
   }),
 );
 /** Copies of CLASS_SCALE and AREA_SCALE of packages/core/src/crosswalk.ts. */

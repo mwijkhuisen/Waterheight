@@ -2,6 +2,35 @@
 import type { OwnerLabels } from '../../lib/labels/labels.ts';
 
 export const OWNER_LABELS: OwnerLabels = Object.freeze({
+  // (source, scale, code) → key, here and not in the public index: the owner sources' ids stay out of the public bundle.
+  keys: Object.freeze(
+    Object.assign(Object.create(null), {
+      'BE-3\nnivcru\n*': 'lbl_be_3_nivcru_any',
+      'BE-3\nreference\nMEDIAN': 'lbl_be_3_reference_median',
+      'BE-3\nreference\nMOYEN': 'lbl_be_3_reference_moyen',
+      'BE-3\nreference\nP05': 'lbl_be_3_reference_p05',
+      'BE-3\nreference\nP10': 'lbl_be_3_reference_p10',
+      'BE-3\nreference\nP15': 'lbl_be_3_reference_p15',
+      'BE-3\nreference\nP85': 'lbl_be_3_reference_p85',
+      'BE-3\nreference\nP90': 'lbl_be_3_reference_p90',
+      'BE-3\nreference\nP95': 'lbl_be_3_reference_p95',
+      'BE-3\nreference\nTOP3_1': 'lbl_be_3_reference_top3_1',
+      'BE-3\nreference\nTOP3_2': 'lbl_be_3_reference_top3_2',
+      'BE-3\nreference\nTOP3_3': 'lbl_be_3_reference_top3_3',
+      'LU-4\nreference\nHQ10': 'lbl_lu_4_reference_hq10',
+      'LU-4\nreference\nHQ100': 'lbl_lu_4_reference_hq100',
+      'LU-4\nreference\nHQ2': 'lbl_lu_4_reference_hq2',
+      'LU-4\nreference\nHQ20': 'lbl_lu_4_reference_hq20',
+      'LU-4\nreference\nHQ5': 'lbl_lu_4_reference_hq5',
+      'LU-4\nreference\nHQ50': 'lbl_lu_4_reference_hq50',
+      'LU-4\nreference\nLU4_CRUE_REF': 'lbl_lu_4_reference_lu4_crue_ref',
+      'LU-4\nreference\nLU4_ORANGE': 'lbl_lu_4_reference_lu4_orange',
+      'LU-4\nreference\nLU4_RED': 'lbl_lu_4_reference_lu4_red',
+      'LU-4\nreference\nLU4_YELLOW': 'lbl_lu_4_reference_lu4_yellow',
+      'LU-4\nreference\nMNQ': 'lbl_lu_4_reference_mnq',
+      'LU-4\nreference\nMQ': 'lbl_lu_4_reference_mq',
+    }),
+  ),
   nl: Object.freeze(
     Object.assign(Object.create(null), {
       lbl_be_3_nivcru_any: 'Overstromingsstatus van SPW zoals gepubliceerd (ruw)',

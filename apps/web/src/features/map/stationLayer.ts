@@ -1,4 +1,4 @@
-import type { ApiStation, Snapshot, SnapshotForecast } from '@rws/contracts';
+import type { ApiStation } from '@rws/contracts';
 import type {
   ExpressionSpecification,
   GeoJSONSource,
@@ -26,18 +26,6 @@ import { showWarnings } from './warnings.ts';
 
 export const SOURCE = 'stations';
 
-export interface MarkerState {
-  /** A value at t, or after now a forecast at t. */
-  has: boolean;
-  stale: boolean;
-  /** t is after now: `has` means a forecast. */
-  forecast?: boolean;
-  /** Every forecast of the station is an estimate. */
-  estimate?: boolean;
-}
-
-type Value = Snapshot['values'][number];
-
 /** Points for the stations that have a position; the id and the two registry flags are the only properties, so no name reaches the renderer. */
 export function stationPoints(stations: readonly ApiStation[]) {
   return {
@@ -54,44 +42,6 @@ export function stationPoints(stations: readonly ApiStation[]) {
           ],
     ),
   };
-}
-
-/** Per station: a value at t in any series, and whether each of its values is older than twice its series' step. */
-export function markerStates(
-  stations: readonly ApiStation[],
-  values: ReadonlyMap<number, Value>,
-): Map<string, MarkerState> {
-  const out = new Map<string, MarkerState>();
-  for (const st of stations) {
-    let has = false;
-    let fresh = false;
-    for (const s of st.series) {
-      const v = values.get(s.id);
-      if (v === undefined) continue;
-      has = true;
-      if (v.ageSeconds <= 2 * s.expectedStepSeconds) fresh = true;
-    }
-    out.set(st.id, { has, stale: has && !fresh });
-  }
-  return out;
-}
-
-/** After now, per station: a forecast at t in any series, and whether each one is an estimate. */
-export function forecastStates(
-  stations: readonly ApiStation[],
-  forecasts: ReadonlyMap<number, Pick<SnapshotForecast, 'estimate'>>,
-): Map<string, MarkerState> {
-  const out = new Map<string, MarkerState>();
-  for (const st of stations) {
-    const found = st.series.flatMap((s) => forecasts.get(s.id) ?? []);
-    out.set(st.id, {
-      has: found.length > 0,
-      stale: false,
-      forecast: true,
-      estimate: found.length > 0 && found.every((f) => f.estimate),
-    });
-  }
-  return out;
 }
 
 const state = (key: string): ExpressionSpecification => ['boolean', ['feature-state', key], false];

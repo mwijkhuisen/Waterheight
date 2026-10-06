@@ -1,6 +1,7 @@
 import type { SeriesMeta, StationRecent } from '@rws/contracts';
+import { floorBucket } from '@rws/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useForecastAsOf, useSeries } from '../../lib/data/api.ts';
+import { useDebounced, useForecastAsOf, useSeries } from '../../lib/data/api.ts';
 import { historySource } from '../../lib/data/change.ts';
 import { referenceLabel, useOwnerLabels } from '../../lib/labels/labels.ts';
 import { m } from '../../paraglide/messages.js';
@@ -49,8 +50,11 @@ export function Chart({ locale, series, name, t, span, serverNow, recent, recent
   const source = historySource(t, serverNow, api);
   // 'none': nothing older than recent.json for a display-only series, and no request for it.
   const older = useSeries(series.id, span.from, span.to, source === 'api');
-  const future = t >= serverNow;
-  const asof = useForecastAsOf(series.id, future || !api ? undefined : t);
+  // The now bucket and after: the run of recent.json (the one forecast/latest.json shows). An earlier t asks the API
+  // for the run as of that t, once the slider has stopped (review round 1: a held key sent one request per step).
+  const future = t >= floorBucket(serverNow);
+  const settled = useDebounced(t, 150);
+  const asof = useForecastAsOf(series.id, future || !api || settled !== t ? undefined : settled);
   const unit = unitLabel(series, locale);
   const run: Run | undefined = useMemo(() => {
     if (future) return !recent?.run ? undefined : fromRecentRun(recent.run);

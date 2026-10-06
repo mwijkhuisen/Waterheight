@@ -36,14 +36,20 @@ export const queryClient = new QueryClient({
 const LIVE_MS = 60_000;
 const live = (on: boolean) => (on ? { refetchInterval: LIVE_MS, refetchIntervalInBackground: false } : {});
 
-/** Which site this is (/runtime-config.json, once); undefined until it has answered. */
-export const useAudience = () =>
+/**
+ * Which site this is (/runtime-config.json, once): the query, so the page can say when it never answered. A failure
+ * is retried (three times, with backoff) and never becomes "public" (lib/config/runtime.ts; review round 1).
+ */
+export const useAudienceQuery = () =>
   useQuery({
     queryKey: ['runtime-config'],
     queryFn: ({ signal }) => loadAudience(undefined, signal),
     staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  }).data;
+    retry: 3,
+  });
+
+/** Which site this is; undefined until it has answered (and after it failed for good). */
+export const useAudience = () => useAudienceQuery().data;
 
 /**
  * The site's schemas: the public record at once, the owner record from its lazy chunk (plan C1). Undefined until the
@@ -294,7 +300,11 @@ const forecastQuery = (c: Contracts | undefined, id: number) => ({
 export const useStationHorizon = (station: ApiStation | undefined): number | null | undefined => {
   const c = useContracts();
   return useQueries({
-    queries: (station?.series ?? []).map((s) => forecastQuery(c, s.id)),
+    // A display-only series (stations.json `api: false`) is not in the api channel: it is never asked (a 404 would
+    // say the same), review round 1.
+    queries: (station?.series ?? [])
+      .filter((s) => (s as { api?: boolean }).api !== false)
+      .map((s) => forecastQuery(c, s.id)),
     combine: (results) =>
       results.length === 0 || results.some((r) => r.isPending || r.isError)
         ? undefined

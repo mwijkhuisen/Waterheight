@@ -1,5 +1,5 @@
 import { type Meta, ODBL_URL } from '@rws/contracts';
-import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
 import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
 import { Legend } from './features/legend/Legend.tsx';
@@ -15,6 +15,7 @@ import {
   chartSpan,
   downloadHref,
   useAudience,
+  useAudienceQuery,
   useChanges,
   useDebounced,
   useMeta,
@@ -94,6 +95,7 @@ function Viewer({ locale }: { locale: Locale }) {
   const stations = useStations();
   const mode = useMode(url.mode);
   const owner = useAudience() === 'owner';
+  const audienceFailed = useAudienceQuery().isError;
   const ownerSources = useOwnerSources();
   const rivers = useRivers();
   const river = useRiver(url.river);
@@ -121,6 +123,11 @@ function Viewer({ locale }: { locale: Locale }) {
   const horizon = useStationHorizon(selected);
   const end = range && sliderEnd(range.now, globalEnd(range.now, range.ahead), horizon);
   const t = range && end !== undefined ? pageT(url.t, range.start, range.now, end) : undefined;
+  // A `?t=` that lands on the page's now (out of range, or clamped to the end of a station without a forecast) is
+  // live mode: the URL drops it, so the page refreshes as "Nu" does (review round 1).
+  useEffect(() => {
+    if (url.t !== undefined && range !== undefined && t === range.now) setUrl({ t: undefined });
+  }, [url.t, t, range, setUrl]);
 
   // The data follows `t` once it has settled: a drag or a held key asks only for where it stops.
   const settled = useDebounced(t, FETCH_DEBOUNCE_MS);
@@ -206,7 +213,7 @@ function Viewer({ locale }: { locale: Locale }) {
         t === undefined ||
         stations.data === undefined ||
         mode === undefined ? (
-          meta.isError || stations.isError ? (
+          meta.isError || stations.isError || audienceFailed ? (
             <p role="alert">{m.data_unavailable({}, { locale })}</p>
           ) : (
             // While the data loads, what the static shell of index.html says (P10a: the first frame carries the
@@ -371,7 +378,10 @@ const httpsUrl = (url: string | null): string | undefined => {
  */
 function Footer({ locale, meta, t }: { locale: Locale; meta: Meta | undefined; t: number | undefined }) {
   const date = t === undefined ? undefined : formatDay(t, locale, ZONE);
-  const download = downloadHref(useRiversManifest().data);
+  // The owner site serves no /downloads (owner.caddy): the river download is offered on the public site only.
+  const owner = useAudience() === 'owner';
+  const manifest = useRiversManifest().data;
+  const download = owner ? undefined : downloadHref(manifest);
   const shown = new Set<string>();
   return (
     <footer className={styles.footer}>

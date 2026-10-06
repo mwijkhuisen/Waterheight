@@ -2,7 +2,7 @@ import type { StateBasis } from '@rws/contracts';
 import { useQuery } from '@tanstack/react-query';
 import type { Locale } from '../../paraglide/runtime.js';
 import { useAudience } from '../data/api.ts';
-import { AREA_SCALE, CLASS_SCALE, LHP_COLOURS, OWNER_KEYS, PUBLIC_LABELS, RIVER_LABELS } from './labels-index.gen.ts';
+import { AREA_SCALE, CLASS_SCALE, LHP_COLOURS, PUBLIC_LABELS, RIVER_LABELS } from './labels-index.gen.ts';
 
 // The label lookup (plan V2, C10) over the generated catalogue: our NL/EN text for a provider class, area class or
 // reference kind. The key of a message comes only from a generated null-prototype map (never from data), every lookup
@@ -11,6 +11,8 @@ import { AREA_SCALE, CLASS_SCALE, LHP_COLOURS, OWNER_KEYS, PUBLIC_LABELS, RIVER_
 
 /** The BE-3 and LU-4 translations of the owner chunk: `{nl, en}`, each a null-prototype map keyed like the index. */
 export type OwnerLabels = {
+  /** (source, scale, code) → key: in the owner chunk, so the owner sources' ids are not in the public bundle. */
+  readonly keys: Readonly<Record<string, string>>;
   readonly nl: Readonly<Record<string, string>>;
   readonly en: Readonly<Record<string, string>>;
 };
@@ -29,7 +31,7 @@ function labelFor(
   const id = `${source}\n${scale}\n${code}`;
   const message = own(PUBLIC_LABELS, id);
   if (message !== undefined) return message({}, { locale });
-  const ownerKey = own(OWNER_KEYS, id);
+  const ownerKey = owner === undefined ? undefined : own(owner.keys, id);
   return ownerKey === undefined || owner === undefined ? undefined : own(owner[locale as 'nl' | 'en'] ?? {}, ownerKey);
 }
 
@@ -90,7 +92,7 @@ export function riverName(id: string, locale: Locale): string | undefined {
 export function useOwnerLabels(): OwnerLabels | undefined {
   const audience = useAudience();
   return useQuery({
-    queryKey: ['owner-labels'],
+    queryKey: ['owner-labels', audience],
     queryFn: async () => (await import('../../features/owner/labels.gen.ts')).OWNER_LABELS,
     enabled: audience === 'owner',
     staleTime: Number.POSITIVE_INFINITY,

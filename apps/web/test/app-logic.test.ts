@@ -1,8 +1,17 @@
 import type { ApiStation, SeriesMeta, Snapshot } from '@rws/contracts';
 import { describe, expect, it } from 'vitest';
-import { markerStates, stationPoints } from '../src/features/map/stationLayer.ts';
+import { stationPoints } from '../src/features/map/stationLayer.ts';
 import { chartSpan } from '../src/lib/data/api.ts';
+import { stationStates } from '../src/lib/stationStates.ts';
 import { quantise } from '../src/lib/time/time.ts';
+
+/** The has/stale part of the station record (P10a: stationStates replaced stationLayer's markerStates). */
+const markerStates = (stations: readonly ApiStation[], values: ReadonlyMap<number, Snapshot['values'][number]>) =>
+  new Map(
+    [...stationStates({ stations, values, forecasts: undefined, changes: undefined, ownerSources: new Set() })].map(
+      ([id, x]) => [id, { has: x.has, stale: x.stale }],
+    ),
+  );
 
 // The pure parts of the page that no DOM is needed for: what a marker shows
 // at t, what reaches the map renderer, and which span the chart asks for.

@@ -83,7 +83,7 @@ export function stationStates({
       if (v.ageSeconds <= 2 * s.expectedStepSeconds) fresh = true;
       if ((v.qc & SUSPECT_BITS) !== 0) suspect = true;
       const l = levelOf(v.state);
-      if (l > level || (l === level && v.section && !section)) {
+      if (l > level || (l === level && !v.section && section)) {
         level = l;
         section = v.section;
       }

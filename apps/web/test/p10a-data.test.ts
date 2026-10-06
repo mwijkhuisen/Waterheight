@@ -256,6 +256,41 @@ describe('stationStates', () => {
     });
   });
 
+  it('a gauge class wins a tie with an area (section) class of the same level, in either order', () => {
+    for (const order of [
+      [1, 2],
+      [2, 1],
+    ]) {
+      const values = new Map([
+        [1, value(1, { state: 'elevated', section: false })],
+        [2, value(2, { state: 'elevated', section: true })],
+      ]);
+      const sorted = { ...st, series: order.map((id) => (id === 1 ? series(1, 'H') : series(2, 'Q'))) };
+      const out = stationStates({
+        stations: [sorted as ApiStation],
+        values: values as never,
+        forecasts: undefined,
+        changes: undefined,
+        ownerSources: new Set(),
+      }).get('nl.a.b');
+      expect(out).toMatchObject({ level: 3, section: false });
+    }
+    // A higher area class still wins, with its badge.
+    const higher = new Map([
+      [1, value(1, { state: 'elevated', section: false })],
+      [2, value(2, { state: 'high', section: true })],
+    ]);
+    expect(
+      stationStates({
+        stations: [st],
+        values: higher as never,
+        forecasts: undefined,
+        changes: undefined,
+        ownerSources: new Set(),
+      }).get('nl.a.b'),
+    ).toMatchObject({ level: 4, section: true });
+  });
+
   it('has nothing without values; no Q series is null, a Q series without a value is 0', () => {
     const none = stationStates({
       stations: [st, station('nl.c.d', [series(3, 'H')])],

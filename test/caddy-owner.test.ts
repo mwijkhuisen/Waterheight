@@ -5,7 +5,8 @@ import { parse } from 'yaml';
 import { repoRoot } from './catalogue.ts';
 
 // The owner site (P9a): its A§12.2 headers are the public site's, and only the
-// two owner headers differ; the owner stack is isolated from the public one by
+// two owner headers differ, plus `Referrer-Policy: no-referrer` (P10a: a link to a provider never names the owner
+// site); the owner stack is isolated from the public one by
 // construction (deploy/compose.yaml, deploy/compose.owner.yaml).
 
 const read = (rel: string) => readFileSync(join(repoRoot, rel), 'utf8');
@@ -26,10 +27,10 @@ describe('owner site headers', () => {
   const pub = headerBlock(publicSite);
   const own = headerBlock(ownerSite);
 
-  it('equal the public set except X-Robots-Tag and the two owner additions', () => {
-    const robots = (l: string) => l.startsWith('X-Robots-Tag ');
-    expect(pub.filter(robots)).toEqual(['X-Robots-Tag "noindex"']);
-    expect(own.filter(robots)).toEqual(['X-Robots-Tag "noindex, nofollow"']);
+  it('equal the public set except X-Robots-Tag, the Referrer-Policy and the two owner additions', () => {
+    const robots = (l: string) => l.startsWith('X-Robots-Tag ') || l.startsWith('Referrer-Policy ');
+    expect(pub.filter(robots)).toEqual(['Referrer-Policy "strict-origin-when-cross-origin"', 'X-Robots-Tag "noindex"']);
+    expect(own.filter(robots)).toEqual(['Referrer-Policy "no-referrer"', 'X-Robots-Tag "noindex, nofollow"']);
     // Cache-Control and `defer` (so a proxied answer cannot override it) are the additions.
     expect(own.filter((l) => !robots(l) && l !== 'Cache-Control "private, no-store"' && l !== 'defer')).toEqual(
       pub.filter((l) => !robots(l)),

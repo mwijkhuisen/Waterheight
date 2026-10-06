@@ -19,11 +19,13 @@
 owner.{$RWS_DOMAIN}:8443 {
 	tls internal
 
+	# The public site's headers, plus noindex/nofollow, private no-store and no referrer at all (P10a security
+	# review: a link to a provider must not name the owner site).
 	header {
 		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
+		Referrer-Policy "no-referrer"
 		Permissions-Policy "geolocation=(), camera=(), microphone=()"
 		Cross-Origin-Opener-Policy "same-origin"
 		Cross-Origin-Resource-Policy "same-origin"
