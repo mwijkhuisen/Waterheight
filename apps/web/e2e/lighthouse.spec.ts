@@ -11,7 +11,10 @@ import { chromium, expect, test } from '@playwright/test';
 // use. Lighthouse drives it with its defaults (mobile form factor, simulated 4G and CPU throttling), three runs, and each
 // number below is the median of the three. It measures the e2e build, which differs from production only by the test
 // hook. The reports (json and html of every run) go to test-results/lighthouse/ (CI uploads the folder). The thresholds
-// are the plan's: performance at least 80, accessibility at least 95, LCP under 2500 ms.
+// are the plan's: performance at least 80, accessibility at least 95, LCP under 2500 ms. They fail the test only with
+// LIGHTHOUSE_GATE=1 (owner decision 2026-10-06): on the shared CI runner the same build measured performance 73, 95
+// and 74, so CI reports the numbers (the summary, an annotation and the artifact) and the P12 performance pass makes
+// them a gate (KG-237).
 
 const PORT = 9222;
 const RUNS = 3;
@@ -89,9 +92,22 @@ test('Lighthouse: performance, accessibility and LCP of the start page', async (
     writeFileSync(`${DIR}/summary.json`, `${JSON.stringify(summary, null, 2)}\n`);
     console.log(`lighthouse ${JSON.stringify(summary)}`);
 
-    expect(summary.median.performance, `performance ${performance}`).toBeGreaterThanOrEqual(80);
-    expect(summary.median.accessibility, `accessibility ${accessibility}`).toBeGreaterThanOrEqual(95);
-    expect(summary.median.lcp_ms, `LCP ${lcp}`).toBeLessThan(2500);
+    const misses = [
+      summary.median.performance < 80 && `performance ${summary.median.performance} < 80`,
+      summary.median.accessibility < 95 && `accessibility ${summary.median.accessibility} < 95`,
+      summary.median.lcp_ms >= 2500 && `LCP ${summary.median.lcp_ms} ms >= 2500 ms`,
+    ].filter((x): x is string => typeof x === 'string');
+    test.info().annotations.push({
+      type: 'lighthouse',
+      description: misses.length === 0 ? 'all thresholds met' : `below threshold: ${misses.join('; ')}`,
+    });
+    if (process.env.LIGHTHOUSE_GATE === '1') {
+      expect(summary.median.performance, `performance ${performance}`).toBeGreaterThanOrEqual(80);
+      expect(summary.median.accessibility, `accessibility ${accessibility}`).toBeGreaterThanOrEqual(95);
+      expect(summary.median.lcp_ms, `LCP ${lcp}`).toBeLessThan(2500);
+    } else if (misses.length > 0) {
+      console.log(`lighthouse REPORT-ONLY (set LIGHTHOUSE_GATE=1 to gate): ${misses.join('; ')}`);
+    }
   } finally {
     browser.kill('SIGKILL');
     rmSync(profile, { recursive: true, force: true });
