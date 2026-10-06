@@ -181,3 +181,83 @@ describe('owner site isolation', () => {
     expect(base.networks?.owner_db).toBeUndefined();
   });
 });
+
+describe('the owner site pages and runtime config (P10b)', () => {
+  /** The directives of the one-tab catch-all `handle {`, without blank lines and comments, up to its closing brace. */
+  function catchAll(src: string): string[] {
+    const start = src.indexOf('\n\thandle {\n');
+    expect(start).toBeGreaterThan(0);
+    return src
+      .slice(start, src.indexOf('\n\t}\n', start + 1))
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l !== '' && !l.startsWith('#'));
+  }
+  const code = (src: string) => src.replaceAll(/^\s*#.*$/gm, '');
+
+  it('serves the same page allowlist, files and 404 shells as the public site, and sets no Cache-Control itself', () => {
+    const own = catchAll(ownerSite);
+    const pub = catchAll(publicSite);
+    // The public catch-all sets `no-cache`; the owner one has no such line, because its `defer`red header block makes
+    // every answer "private, no-store".
+    expect(pub.filter((l) => l.includes('Cache-Control'))).toEqual(['header Cache-Control "no-cache"']);
+    expect(own.filter((l) => /cache-control/i.test(l))).toEqual([]);
+    expect(own).toEqual(pub.filter((l) => !l.includes('Cache-Control')));
+    expect(own.slice(0, 2)).toEqual(['handle {', 'root * /srv/www']);
+    // Two 404 shells, the English one under /en/ only, each answered with status 404; a dotted miss a bare 404.
+    expect(own.filter((l) => l === 'status 404')).toHaveLength(2);
+    expect(own).toContain('rewrite * /en/404.html');
+    expect(own).toContain('rewrite * /404.html');
+    expect(own).toContain('not path /404.html /en/404.html');
+    expect(own).toContain('@dotted path_regexp \\.[^/]*$');
+    expect(own).toContain('@not_found_en path_regexp ^/en/');
+    expect(own.filter((l) => l.startsWith('@page_'))).toHaveLength(2);
+  });
+
+  it('keeps no route of its own for /status or /over, and no redirect: both are pages', () => {
+    expect(code(ownerSite)).not.toMatch(/^\s*(handle|redir|respond)\b.*\/(status|over)\b/m);
+    expect(code(ownerSite)).not.toMatch(/\bredir\b/);
+    // The `defer`red Cache-Control is the one in the site-level header block: it is the only one in the file apart
+    // from the error route's.
+    expect([...code(ownerSite).matchAll(/^\s*Cache-Control "(.*)"$/gm)].map((m) => m[1])).toEqual([
+      'private, no-store',
+      'private, no-store',
+    ]);
+  });
+
+  it('answers /runtime-config.json with the four keys of the public site, audience owner', () => {
+    const body = (src: string) =>
+      /handle \/runtime-config\.json \{\n(?:\t\theader .*\n)*\t\trespond `(.*)` 200\n\t\}/.exec(src)?.[1];
+    const own = body(ownerSite);
+    const pub = body(publicSite);
+    expect(own).toBe(
+      '{"audience":"owner","contact":"{$RWS_CONTACT_EMAIL}","operator":"{$RWS_OPERATOR_NAME}","cdn":"{$RWS_CDN_NAME}"}',
+    );
+    expect(pub).toBe(own?.replace('"owner"', '"public"'));
+    // With the placeholders filled in, it is JSON with exactly these keys, in this order.
+    const filled = (own ?? '')
+      .replace('{$RWS_CONTACT_EMAIL}', 'ci@rivierstanden.example')
+      .replace('{$RWS_OPERATOR_NAME}', 'E2E Operator')
+      .replace('{$RWS_CDN_NAME}', '');
+    expect(JSON.parse(filled)).toEqual({
+      audience: 'owner',
+      contact: 'ci@rivierstanden.example',
+      operator: 'E2E Operator',
+      cdn: '',
+    });
+    expect(Object.keys(JSON.parse(filled))).toEqual(['audience', 'contact', 'operator', 'cdn']);
+    // The owner's own answer carries no Cache-Control of its own either (the deferred header makes it private).
+    expect(/handle \/runtime-config\.json \{\n([\s\S]*?)\n\t\}/.exec(ownerSite)?.[1]).not.toMatch(/Cache-Control/);
+  });
+
+  it('passes the three values to both Caddy containers from the environment, the operator and the CDN optional', () => {
+    type Svc = { environment?: Record<string, string> };
+    const base = parse(read('deploy/compose.yaml')) as { services: Record<string, Svc> };
+    const overlay = parse(read('deploy/compose.owner.yaml')) as { services: Record<string, Svc> };
+    for (const env of [base.services.caddy?.environment, overlay.services['caddy-owner']?.environment]) {
+      expect(env?.RWS_CONTACT_EMAIL).toBe(`\${RWS_CONTACT_EMAIL:?}`);
+      expect(env?.RWS_OPERATOR_NAME).toBe(`\${RWS_OPERATOR_NAME:-}`);
+      expect(env?.RWS_CDN_NAME).toBe(`\${RWS_CDN_NAME:-}`);
+    }
+  });
+});
