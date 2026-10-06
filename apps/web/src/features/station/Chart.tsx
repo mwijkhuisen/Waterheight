@@ -35,6 +35,10 @@ interface Props {
   ownerSources: ReadonlySet<string>;
 }
 
+/** A run of an owner source (LU-3) carries the "owner only" words in its name: the chart's legend and tooltip (P10a T12). */
+const ownerTag = (r: Pick<Run, 'source'>, owners: ReadonlySet<string>, locale: Locale): string =>
+  owners.has(r.source) ? ` · ${m.owner_badge({}, { locale })}` : '';
+
 /** One series of the panel over its chart span; ECharts loads on first use. */
 export function Chart({ locale, series, name, t, span, serverNow, recent, recentFailed, ownerSources }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -111,8 +115,8 @@ export function Chart({ locale, series, name, t, span, serverNow, recent, recent
           ? undefined
           : {
               view,
-              name: runName(run, locale),
-              estimateName: `${runName(run, locale)} (${m.forecast_estimate({}, { locale })})`,
+              name: `${runName(run, locale)}${ownerTag(run, ownerSources, locale)}`,
+              estimateName: `${runName(run, locale)}${ownerTag(run, ownerSources, locale)} (${m.forecast_estimate({}, { locale })})`,
             },
       xMax: view?.end,
       format: (v) => formatNumber(v, locale),
@@ -143,7 +147,12 @@ export function Chart({ locale, series, name, t, span, serverNow, recent, recent
       )}
       {source === 'none' && <p className={styles.note}>{m.history_none({}, { locale })}</p>}
       <div ref={ref} className={styles.chart} role="img" aria-label={m.chart_label({ unit }, { locale })} />
-      {run !== undefined && <p className={styles.note}>{runName(run, locale)}</p>}
+      {run !== undefined && (
+        <p className={styles.note}>
+          {runName(run, locale)}
+          {ownerTag(run, ownerSources, locale)}
+        </p>
+      )}
     </>
   );
 }

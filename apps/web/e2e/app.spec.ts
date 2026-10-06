@@ -17,6 +17,7 @@ const RAW_NAME = '<img src=x onerror=alert(1)>';
 const RAW_WATER = '<svg onload=alert(2)>';
 /** The label of the xss station's NL-4 class (its own payload, so the name and water sweeps stay exact). */
 const RAW_BASIS = 'Licht verhoogd (<img src=y onerror=alert(3)>)';
+const escapeRx = (text: string) => text.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** The few MapLibre and ECharts calls the tests make inside the page (the e2e build's `window.__rws`). */
 interface HookMap {
   getFeatureState(f: { source: string; id: string }): Record<string, unknown>;
@@ -48,6 +49,12 @@ async function start(page: Page, context: BrowserContext, baseURL: string | unde
     void d.dismiss();
   });
   await page.clock.setFixedTime(NOW);
+  // P10a: the map's default mode is status.json's (the e2e publisher writes none, so the page falls back to the change
+  // mode). These specs read the state words of the popup and panel, so they serve the file that says "state"; the
+  // default itself is p10a.spec.ts's.
+  await page.route('**/data/v1/status.json', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"classification":{"mode":"state"}}' }),
+  );
   return { log, dialogs };
 }
 
@@ -92,10 +99,17 @@ async function mapReady(page: Page) {
 }
 
 /** Presses a key on the focused element and waits for the URL it must produce. */
-async function press(page: Page, key: string, expectedT: string, valueTextEnd: RegExp, name?: string) {
+async function press(
+  page: Page,
+  key: string,
+  expectedT: string,
+  valueTextEnd: RegExp,
+  name?: string,
+  urlT: string | null = expectedT,
+) {
   const before = await slider(page, name).getAttribute('aria-valuetext');
   await page.keyboard.press(key);
-  await expect.poll(() => tParam(page), { message: `t after ${key}` }).toBe(expectedT);
+  await expect.poll(() => tParam(page), { message: `t after ${key}` }).toBe(urlT);
   const after = slider(page, name);
   await expect(after).toHaveAttribute('aria-valuetext', valueTextEnd);
   expect(await after.getAttribute('aria-valuetext'), `valuetext after ${key}`).not.toBe(before);
@@ -146,13 +160,8 @@ const withoutWebGL2 = () => {
 async function expectNoSeriousAxe(page: Page, scope?: string) {
   // axe yields to the page between its rules: a DOM that changes during the run makes checks undecidable (CR-1).
   await settled(page);
-  // Since P5a the table lists about 1,130 series (rows about 88 px tall) and the page is far taller than the 32,767 px a
-  // browser can hit-test: axe leaves the colour contrast of every row below that (from about row 370) undecided.
-  // Every row has the same markup and styles; the first 200 are checked (KG-129: P10 pages or virtualises the table).
-  // P6b: the DE-7 rows now show their water body, rows grew taller, and WebKit left rows from 238 on undecided.
-  const axe = new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
-    .exclude('tbody > tr:nth-child(n+201)');
+  // The table pages at 100 rows (P10a), so every row of a page is checked: nothing is left out any more (KG-129 closed).
+  const axe = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']);
   const result = await (scope === undefined ? axe : axe.include(scope)).analyze();
   expect(result.passes.length, 'axe ran its rules').toBeGreaterThan(10);
   /** Each node by its selector, its markup and axe's own reason, so a failure in CI can be diagnosed from the log. */
@@ -296,7 +305,9 @@ test('the slider and the buttons update ?t= and the marker states', async ({ pag
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /11:00 CET$/);
   const now = page.getByRole('button', { name: 'Nu', exact: true });
   await now.click();
-  await expect.poll(() => tParam(page)).toBe('2026-10-26T12:00Z');
+  // Choosing now is live mode again (P10a T7): no t in the URL, and the live note says so.
+  await expect.poll(() => tParam(page)).toBeNull();
+  await expect(page.getByText('Live: ververst elke minuut', { exact: true })).toBeVisible();
   // At the bound the button says so (aria-disabled) but keeps the focus, and does nothing (CR-10).
   await expect(now).toHaveAttribute('aria-disabled', 'true');
   await expect(now).not.toHaveAttribute('disabled');
@@ -305,7 +316,7 @@ test('the slider and the buttons update ?t= and the marker states', async ({ pag
   await expect(page.getByRole('button', { name: '10 minuten vooruit' })).toHaveAttribute('aria-disabled', 'false');
   await page.keyboard.press('Enter');
   await expect(now).toBeFocused();
-  expect(tParam(page)).toBe('2026-10-26T12:00Z');
+  expect(tParam(page)).toBeNull();
   await expect.poll(() => featureState(page, 'nl.e2e.gap')).toMatchObject({ has: false });
   expect(await featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true });
   await finish(page, s);
@@ -366,14 +377,15 @@ test('the slider and the station list work from the keyboard alone', async ({ pa
 
   // 2026-10-26 is winter time: 11:50Z is 12:50 CET.
   await press(page, 'ArrowLeft', '2026-10-26T11:50Z', /12:50 CET$/);
-  await press(page, 'ArrowRight', '2026-10-26T12:00Z', /13:00 CET$/);
+  // (now is live mode again: the URL has no t)
+  await press(page, 'ArrowRight', '2026-10-26T12:00Z', /13:00 CET$/, undefined, null);
   await press(page, 'PageDown', '2026-10-26T11:00Z', /12:00 CET$/);
-  await press(page, 'PageUp', '2026-10-26T12:00Z', /13:00 CET$/);
+  await press(page, 'PageUp', '2026-10-26T12:00Z', /13:00 CET$/, undefined, null);
   await press(page, 'Home', '2026-08-24T00:00Z', /02:00 CEST$/);
   // End is the end of the track: after now, the forecast part (now + 48 h with no station selected), and "Nu" comes back.
   await press(page, 'End', '2026-10-28T12:00Z', /13:00 CET \(verwachting\)$/);
   await page.getByRole('button', { name: 'Nu', exact: true }).click();
-  await expect.poll(() => tParam(page)).toBe('2026-10-26T12:00Z');
+  await expect.poll(() => tParam(page)).toBeNull();
 
   // The station list: a first station by ArrowDown, then another by typing its name.
   await stationList(page).focus();
@@ -382,7 +394,8 @@ test('the slider and the station list work from the keyboard alone', async ({ pa
   const firstName = (await stationList(page).locator('option').nth(1).textContent()) ?? '';
   expect(first).toMatch(/^[a-z]{2}\./);
   await page.keyboard.press('ArrowDown');
-  await expect.poll(() => where(page)).toBe(`/?t=2026-10-26T12:00Z&s=${encodeURIComponent(first ?? '')}`);
+  // (the t of now is no t: live mode)
+  await expect.poll(() => where(page)).toBe(`/?s=${encodeURIComponent(first ?? '')}`);
   await expect(stationList(page)).toHaveValue(first ?? '');
   expect((await panelOf(page).getByRole('heading', { level: 2 }).textContent()) ?? '').toBe(
     firstName.replace(/ \(.*\)$/, ''),
@@ -391,7 +404,7 @@ test('the slider and the station list work from the keyboard alone', async ({ pa
   await expect(stationList(page)).toBeFocused();
 
   await page.keyboard.type('E2E D');
-  await expect.poll(() => where(page)).toBe('/?t=2026-10-26T12:00Z&s=nl.e2e.dst');
+  await expect.poll(() => where(page)).toBe('/?s=nl.e2e.dst');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   await expect(panelOf(page).getByRole('region', { name: 'Waterstand' }).locator('strong')).toHaveText('444');
   await finish(page, s);
@@ -433,32 +446,33 @@ test('a held key asks only where it stops: one series request, few snapshot file
   baseURL,
 }) => {
   const s = await start(page, context, baseURL);
-  await open(page, '/?t=2026-10-24T12:00Z&s=nl.e2e.dst');
-  await settled(page);
+  // Older than recent.json's 7 days (P10a T6): the chart asks the API for its span, which is what a held key must not
+  // do at every step. (A t within 7 days reads the static recent.json and asks no series at all.)
+  await open(page, '/?t=2026-10-10T12:00Z&s=nl.e2e.dst');
+  // (no point of the chart exists before the data began, so `settled` has nothing to wait for: the page is idle)
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   // The station's forecast (its horizon, P8b) is asked once, whatever t does; it is not a series of the chart.
   const urls = () => s.log.requests.map((u) => new URL(u));
   const asked = (route: string) =>
     urls().filter((u) => u.pathname.startsWith(`/api/v1/${route}`) && !u.pathname.endsWith('/forecast'));
-  // The snapshots are static files (P9a); the API is not asked for one.
-  const files = () => urls().filter((u) => /^\/data\/v1\/(recent|settled)\//.test(u.pathname));
-  const before = { series: asked('series').length, snapshot: files().length };
-  expect(before.series).toBe(1);
+  // No static file holds a day before the data began, so the snapshots (and the 24-hour change's second one) come from
+  // the API, which a held key must ask only where it stops.
+  const snapshotsAsked = () => urls().filter((u) => u.pathname === '/api/v1/snapshot').length;
+  const before = { series: 1, snapshot: snapshotsAsked() };
+  await expect.poll(() => asked('series').length).toBe(1);
 
   // Forty hours forward an hour at a time: the chart's span (six-hour blocks) would change six times on the way.
   await slider(page).focus();
   for (let i = 0; i < 40; i++) await page.keyboard.press('PageUp');
-  await expect.poll(() => tParam(page)).toBe('2026-10-26T04:00Z');
-  await settled(page);
+  await expect.poll(() => tParam(page)).toBe('2026-10-12T04:00Z');
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await expect(panelOf(page).getByRole('region', { name: 'Waterstand' })).toContainText('Geen waarde op dit tijdstip');
   const series = asked('series').slice(before.series);
-  const snapshots = files().slice(before.snapshot);
-  expect(asked('snapshot')).toEqual([]);
   // The live t would ask for every six-hour block on the way (six requests); the settled one asks where the keys
   // stopped. One more is allowed for a runner that pauses longer than the debounce between two presses.
   expect(series.length, series.map((u) => u.search).join(' ')).toBeLessThanOrEqual(2);
-  expect(series.at(-1)?.search).toBe('?from=2026-10-19T06:00Z&to=2026-10-26T06:00Z&res=raw');
-  expect(snapshots.length, snapshots.map((u) => u.pathname).join(' ')).toBeLessThanOrEqual(5);
-  expect(snapshots.at(-1)?.pathname).toBe('/data/v1/recent/2026-10-26/0400.json');
+  expect(series.at(-1)?.search).toBe('?from=2026-10-05T06:00Z&to=2026-10-12T06:00Z&res=raw');
+  expect(snapshotsAsked() - before.snapshot).toBeLessThanOrEqual(6);
   await finish(page, s);
 });
 
@@ -620,33 +634,42 @@ test('without WebGL2 the table replaces the map, and the map chunk is never requ
     'Water',
     'Bron',
     'Grootheid',
+    'Toestand',
     'Waarde',
     'Gemeten',
     'Ouderdom',
+    'Kenmerken',
   ]);
-  // One row per series, each starting with a row header.
+  // One row per series, 100 to a page (P10a T7), each starting with a row header; the pager says where it is.
   const api = (await (await request.get('/api/v1/stations')).json()) as { stations: { series: unknown[] }[] };
   const series = api.stations.reduce((n, st) => n + st.series.length, 0);
   expect(series).toBeGreaterThan(300);
-  await expect(table.locator('tbody tr')).toHaveCount(series);
-  await expect(table.locator('tbody th[scope="row"]')).toHaveCount(series);
+  await expect(table.locator('tbody tr')).toHaveCount(100);
+  await expect(table.locator('tbody th[scope="row"]')).toHaveCount(100);
+  await expect(page.getByText(`Stations 1–100 van ${series}`, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Vorige' })).toBeDisabled();
 
+  // A station chosen in the list brings its page into view.
+  await stationList(page).selectOption('nl.e2e.dst');
   const row = (name: string) =>
     table.locator('tbody tr').filter({ has: page.getByRole('button', { name, exact: true }) });
   await expect(row('E2E DST')).toHaveCount(1);
-  // Its value at 12:00Z is the one of 11:50Z (limit 45 min), ten minutes old.
+  // Its value at 12:00Z is the one of 11:50Z (limit 45 min), ten minutes old; it has no reference, so no state.
   await expect(row('E2E DST').locator('td')).toHaveText([
     'E2E',
     'NL-1',
     'Waterstand',
+    'geen referentie',
     '444 cm NAP',
     /12:50 CET$/,
     /^10\s?min$/,
+    '',
   ]);
-  await expect(row('E2E gap').locator('td')).toHaveText(['E2E', 'NL-1', 'Waterstand', '–', '–', '–']);
+  await stationList(page).selectOption('nl.e2e.gap');
+  await expect(row('E2E gap').locator('td')).toHaveText(['E2E', 'NL-1', 'Waterstand', '–', '–', '–', '–', '']);
 
   // No map: no toggle, no canvas, and not a request for the map chunk, its worker, the manifest or a tile.
-  await expect(page.getByRole('group', { name: 'Weergave' })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Weergave', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Kaart', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Tabel', exact: true })).toHaveCount(0);
   await expect(page.locator('.maplibregl-canvas')).toHaveCount(0);
@@ -691,14 +714,17 @@ test('when MapLibre cannot get its own WebGL2 context the notice and the table a
   await expect(page.getByRole('status').filter({ hasText: 'De kaart kan niet worden geladen' })).toBeVisible();
   await expect(page.locator('table')).toHaveCount(1);
   await expect(page.locator('table tbody tr').first()).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Weergave' })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Weergave', exact: true })).toHaveCount(0);
   await expect(page.locator('.maplibregl-canvas')).toHaveCount(0);
   // The pre-check passed (call 1), then the map chunk was requested and asked for its own context (call 2 or more).
   expect(await page.evaluate(() => (window as unknown as W).__webgl2)).toBeGreaterThanOrEqual(2);
   expect(s.log.requests.map((u) => new URL(u).pathname).some((p) => /\/assets\/createMap-[^/]+\.js$/.test(p))).toBe(
     true,
   );
-  // The table works as the fallback: a row opens the panel.
+  // The table works as the fallback: a row opens the panel (the table pages at 100 rows, so a link names the station
+  // whose page is in view).
+  await page.goto('/?s=nl.e2e.gap');
+  await expect(slider(page)).toBeVisible();
   await page.getByRole('button', { name: 'E2E DST', exact: true }).click();
   await expect.poll(() => where(page)).toBe('/?s=nl.e2e.dst');
   await expect(panelOf(page).getByRole('heading', { level: 2, name: 'E2E DST' })).toBeFocused();
@@ -715,7 +741,7 @@ test('the view toggle reaches the table with WebGL2 present, and brings the map 
   await mapReady(page);
   const map = page.getByRole('button', { name: 'Kaart', exact: true });
   const tableButton = page.getByRole('button', { name: 'Tabel', exact: true });
-  await expect(page.getByRole('group', { name: 'Weergave' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Weergave', exact: true })).toBeVisible();
   await expect(map).toHaveAttribute('aria-pressed', 'true');
   await expect(tableButton).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.maplibregl-canvas')).toHaveCount(1);
@@ -728,7 +754,8 @@ test('the view toggle reaches the table with WebGL2 present, and brings the map 
   await expect(page.locator('table')).toHaveCount(1);
   await expect(page.locator('table caption')).toContainText('Stations op');
   await expect(page.locator('.maplibregl-canvas')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'E2E DST', exact: true })).toBeVisible();
+  // (the table pages at 100 rows: the first page's station buttons, not the e2e station further down the list)
+  await expect(page.locator('table tbody th button').first()).toBeVisible();
 
   await map.click();
   await expect(map).toHaveAttribute('aria-pressed', 'true');
@@ -853,11 +880,14 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
   // The tooltip was shown, as three lines of canvas text: the raw name, the time, the value with its unit...
   expect(tip.before.filter((t) => t.includes('onerror'))).toEqual([]);
   expect(tip.after.filter((t) => t.includes('onerror'))).toEqual([RAW_NAME]);
-  expect(tip.after.slice(-3)).toEqual([
+  const lines = tip.after.slice(tip.after.indexOf(RAW_NAME));
+  expect(lines.slice(0, 3)).toEqual([
     RAW_NAME,
     expect.stringMatching(/13:00 CET$/),
-    expect.stringMatching(/^\d+([.,]\d+)? cm NAP$/),
+    expect.stringMatching(/^gemeten: \d+([.,]\d+)? cm NAP$/),
   ]);
+  // (the station's forecast run, issued before now, adds its own line, labelled with its agency)
+  for (const extra of lines.slice(3)) expect(extra).toMatch(/^RWS · .+: \d+([.,]\d+)? cm NAP$/);
   // ...and not one element was added to the chart.
   expect(await chartTags()).toEqual(tagsBefore);
 
@@ -925,7 +955,10 @@ for (const [path, kind, state, disclaimer, row] of [
     }
     const panel = panelOf(page);
     await expect(panel.locator('dt', { hasText: row })).toBeVisible();
-    await expect(panel.locator('dd', { hasText: RAW_BASIS })).toHaveText(`${disclaimer}: ${RAW_BASIS}`);
+    // the provider's label as text, then our own translation after " — " (P10a label_translation)
+    await expect(panel.locator('dd', { hasText: RAW_BASIS })).toHaveText(
+      new RegExp(`^${escapeRx(`${disclaimer}: ${RAW_BASIS}`)} — .+$`),
+    );
     await expect(panel.locator('dd', { hasText: new RegExp(`^${state}$`) })).toBeVisible();
     await finish(page, s);
   });

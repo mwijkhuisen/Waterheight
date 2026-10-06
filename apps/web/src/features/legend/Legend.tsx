@@ -3,6 +3,7 @@ import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { OwnerBadge } from '../owner/OwnerBadge.tsx';
+import { DhMark } from './DhMark.tsx';
 import { dhItems, LHP_ALERT_CODES, qItems, stateItems } from './items.ts';
 import styles from './legend.module.css';
 import { LHP_NO_DATA } from './palette.ts';
@@ -64,7 +65,7 @@ export function Legend({ locale, mode, forecast, owner, warnings }: LegendProps)
           dhItems().map((i) => (
             <li key={i.bin}>
               <Dot colour={i.colour} r={6} />
-              <span aria-hidden="true">{i.glyph}</span>
+              <DhMark glyph={i.glyph} />
               {dhWord[i.bin]({}, o)}
             </li>
           ))}

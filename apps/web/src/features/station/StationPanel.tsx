@@ -10,6 +10,7 @@ import { formatAge, formatDay, formatLocal } from '../../lib/time/time.ts';
 import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { DhMark } from '../legend/DhMark.tsx';
 import { OwnerBadge } from '../owner/OwnerBadge.tsx';
 import { BasisLabel } from './BasisLabel.tsx';
 import { Chart } from './Chart.tsx';
@@ -233,7 +234,7 @@ export function StationPanel({
                   m.dh_na({}, { locale })
                 ) : (
                   <>
-                    <span aria-hidden="true">{trendGlyph(change.trend)}</span>{' '}
+                    <DhMark glyph={trendGlyph(change.trend)} />{' '}
                     {m.dh_value({ dh: dhValue(change.dh, series.quantity, locale) }, { locale })},{' '}
                     {/* By name, never `m[key]`: indexing the namespace would bundle every message. */}
                     {{ rising: m.trend_rising, falling: m.trend_falling, steady: m.trend_steady }[change.trend](
@@ -315,7 +316,16 @@ function ForecastFacts({
         <time dateTime={forecast.ts}>{formatLocal(Date.parse(forecast.ts), locale)}</time>
       </dd>
       <dt>{m.forecast_origin({}, { locale })}</dt>
-      <dd>{issueText(forecast, locale)}</dd>
+      <dd>
+        {issueText(forecast, locale)}
+        {/* The band of an owner source (LU-3) says so, in words (P10a T12). */}
+        {ownerSources.has(forecast.source) && (
+          <>
+            {' '}
+            <OwnerBadge locale={locale} />
+          </>
+        )}
+      </dd>
       {band !== null && (
         <>
           <dt>{m.forecast_band_label({}, { locale })}</dt>

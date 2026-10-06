@@ -7,6 +7,7 @@ import { formatAge, formatLocal } from '../../lib/time/time.ts';
 import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { DhMark } from '../legend/DhMark.tsx';
 import { dhGlyph } from '../legend/items.ts';
 import { OwnerBadge } from '../owner/OwnerBadge.tsx';
 import { forecastDetail, forecastValue } from '../station/forecast.ts';
@@ -124,8 +125,8 @@ export function StationTable({
                 if (c === null) return '–';
                 return (
                   <>
-                    <span aria-hidden="true">{dhGlyph(c.bin)} </span>
-                    {m.dh_value({ dh: formatNumber(c.dh, locale) }, o)}, {trendWord[c.trend]({}, o)}
+                    <DhMark glyph={dhGlyph(c.bin)} /> {m.dh_value({ dh: formatNumber(c.dh, locale) }, o)},{' '}
+                    {trendWord[c.trend]({}, o)}
                   </>
                 );
               }
