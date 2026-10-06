@@ -14,7 +14,11 @@
   padding: 0 var(--space);
 }
 
+/* Layout stability (P10a, Lighthouse CLS): child margins stay inside, and the loading frame is a screen tall, so the
+   footer starts below the fold and the arriving content never pushes it out of view. */
 .main {
+  display: flow-root;
+  min-height: 100vh;
   padding: 0 var(--space) var(--space);
 }
 
