@@ -44,7 +44,7 @@
 }
 
 .missing {
-  color: #8a1c1c;
+  color: var(--signal-error-ink);
 }
 
 .track {

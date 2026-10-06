@@ -1,16 +1,95 @@
 /* Tokens and base styles (A§10 styles/). Everything is a file: the CSP allows no inline style. */
+
+/* The brand fonts (P10c, docs/design/BRAND.md): vendored woff2 from @fontsource 5.3.0 (OFL-1.1), sha256-pinned in
+   fonts/SHA256SUMS. Imported from here, so Vite gives them hashed names under /assets/ (never a third-party request). */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/bricolage-grotesque-latin-ext-700-normal.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/bricolage-grotesque-latin-700-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/source-sans-3-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/source-sans-3-latin-400-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/source-sans-3-latin-ext-600-normal.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/source-sans-3-latin-600-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* The brand tokens (BRAND.md §3) and the signal set (BRAND.md §5). These are the only brand hex values in CSS; the
+   logo SVGs carry their own. */
 :root {
-  --ink: #1a1a1a;
-  --muted: #4d4d4d;
-  --paper: #ffffff;
-  --line: #c8c8c8;
-  --accent: #01665e;
-  --accent-ink: #ffffff;
-  --warn-bg: #fff3cd;
-  --warn-ink: #4a3b00;
+  --ink: #0e3a4b; /* Rivierblauw: text, the name's "Rivier", the subtitle */
+  --muted: #46606b; /* secondary text */
+  --paper: #f4f1ea; /* Gebroken wit */
+  --line: #c9c3b6; /* borders: a warm neutral on the off-white */
+  --accent: #17738a; /* links and small accent text */
+  --accent-ink: #f4f1ea; /* text on --accent */
+  --water: #1a7f96; /* Waterblauw: large text (from 24 px) and graphics only, never small text */
+  --water-dark: #4fb3c9; /* the iris water on Rivierblauw */
+  --name-dark: #7ccadb; /* "kijker" and links on Rivierblauw */
+  /* Signal set: notices and errors, never a brand colour (palette test). The map's class, Δh and alert colours are in
+     features/legend/palette.ts and lib/labels. */
+  --signal-caution-bg: #fff3cd;
+  --signal-caution-ink: #4a3b00;
+  --signal-caution-edge: #b8860b;
+  --signal-error-ink: #8a1c1c;
   --space: 0.75rem;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  line-height: 1.45;
+  font-family: "Source Sans 3", system-ui, sans-serif;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
   color: var(--ink);
   background: var(--paper);
 }
@@ -22,7 +101,17 @@ body {
 h1,
 h2,
 h3 {
-  line-height: 1.2;
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+h4,
+h5,
+h6,
+strong,
+b {
+  font-weight: 600;
 }
 
 button,

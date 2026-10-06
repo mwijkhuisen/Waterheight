@@ -1,6 +1,6 @@
 .banner {
   margin: var(--space) 0;
   padding: 0.4rem var(--space);
-  background: var(--warn-bg);
-  color: var(--warn-ink);
+  background: var(--signal-caution-bg);
+  color: var(--signal-caution-ink);
 }
