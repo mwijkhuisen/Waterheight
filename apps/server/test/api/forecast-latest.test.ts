@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { FORECAST_FLAG_BITS, ForecastLatest, OwnerForecastLatest } from '@rws/contracts';
+import { FORECAST_FLAG_BITS, ForecastLatest } from '@rws/contracts';
+import { OwnerForecastLatest } from '@rws/contracts/static-owner';
 import { FORECAST_FLAGS } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';

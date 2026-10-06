@@ -8,7 +8,7 @@
   },
   "scripts": {
     "i18n": "pnpm -F web i18n",
-    "check": "pnpm i18n && biome check && tsc -b && vitest run --project unit && node scripts/check-bom.ts && node scripts/check-boundaries.ts && node scripts/check-i18n.ts && node scripts/gen-openapi.ts --check",
+    "check": "pnpm i18n && node scripts/gen-web-labels.ts --check && biome check && tsc -b && vitest run --project unit && node scripts/check-bom.ts && node scripts/check-boundaries.ts && node scripts/check-i18n.ts && node scripts/gen-openapi.ts --check",
     "test": "pnpm i18n && vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "build": "pnpm i18n && tsc -b && pnpm -F web build",
@@ -28,6 +28,7 @@
     "@types/node": "26.6.2",
     "@vitest/coverage-v8": "5.0.1",
     "fast-check": "4.10.2",
+    "lighthouse": "13.5.0",
     "msw": "2.15.0",
     "typescript": "6.0.3",
     "vitest": "5.0.1",

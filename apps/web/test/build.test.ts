@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { CANARY_RENDERINGS } from '@rws/contracts';
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { parse } from 'yaml';
 import { i18nHtml, keyDrift } from '../i18n-html.ts';
 
 const webDir = fileURLToPath(new URL('..', import.meta.url));
@@ -19,7 +20,7 @@ describe('web build', () => {
     // Vitest sets NODE_ENV=test, which makes Vite bundle React's development build: build as the CLI does.
     vi.stubEnv('NODE_ENV', 'production');
     try {
-      await build({ root: webDir, logLevel: 'silent', build: { outDir: out, emptyOutDir: true } });
+      await build({ root: webDir, logLevel: 'silent', build: { outDir: out, emptyOutDir: true, manifest: true } });
     } finally {
       vi.unstubAllEnvs();
     }
@@ -113,6 +114,75 @@ describe('web build', () => {
       const text = readFileSync(path, 'utf8');
       for (const needle of [...CANARY_RENDERINGS, 'private_basis', 'owner_sources', 'licence_gate'])
         expect(text.includes(needle), `${path}: ${needle}`).toBe(false);
+    }
+  });
+
+  // P10a (plan C1, C13): the owner site runs this same build, so the build may hold the owner's schemas and labels
+  // only in the lazy owner chunks, and never anything that names the owner site, its secret or a private basis.
+  it('keeps the owner chunks out of every page’s initial load, and the canary spelling inside them', () => {
+    type Chunk = { file: string; imports?: string[]; isDynamicEntry?: boolean };
+    const manifest = JSON.parse(page('.vite/manifest.json')) as Record<string, Chunk>;
+    const owner = Object.entries(manifest)
+      .filter(([src, c]) => src.startsWith('src/features/owner/') && c.isDynamicEntry === true)
+      .map(([, c]) => c.file);
+    // contracts.ts (the owner schemas), labels.gen.ts (BE-3, LU-4 labels) and index.ts (the banner).
+    expect(owner).toHaveLength(3);
+    const ownerLabelPrefixes = (
+      parse(readFileSync(join(webDir, '../../registry/sources.yaml'), 'utf8')) as {
+        sources: { id: string; audience: string }[];
+      }
+    ).sources
+      .filter((x) => x.audience === 'owner')
+      .map((x) => `lbl_${x.id.toLowerCase().replaceAll('-', '_')}_`);
+    expect(ownerLabelPrefixes).toContain('lbl_be_3_');
+    const byFile = new Map(Object.values(manifest).map((c) => [c.file, c]));
+    const closure = (entry: string) => {
+      const seen = new Set<string>();
+      const visit = (file: string) => {
+        if (seen.has(file)) return;
+        seen.add(file);
+        for (const key of byFile.get(file)?.imports ?? []) {
+          const dep = manifest[key];
+          if (dep !== undefined) visit(dep.file);
+        }
+      };
+      visit(entry);
+      return seen;
+    };
+    for (const html of ['index.html', 'en/index.html']) {
+      const entries = [...page(html).matchAll(/\ssrc="\/(assets\/[^"]+\.js)"/g)].flatMap(([, s]) => (s ? [s] : []));
+      expect(entries.length).toBeGreaterThan(0);
+      for (const file of entries.flatMap((e) => [...closure(e)])) {
+        expect(owner, `${html} → ${file}`).not.toContain(file);
+        // static-owner's own refinement text: the owner sources schema is in no file a public page loads.
+        expect(page(file), `${html} → ${file}`).not.toContain('an owner source has a private basis');
+        // The owner label index and texts (lbl_be_3_…, lbl_lu_4_…) live in the owner chunk only (security review round 1).
+        for (const prefix of ownerLabelPrefixes) expect(page(file), `${html} → ${file}`).not.toContain(prefix);
+      }
+    }
+    const files = readdirSync(out, { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.js'));
+    const withCanary = files.filter((f) => page(f).includes('CANARY-'));
+    expect(withCanary.length).toBeGreaterThan(0);
+    for (const f of withCanary) expect(owner, f).toContain(f);
+  });
+
+  it('names no owner host, port, secret, path or private-basis clause in any file (invariant 11, T-OWN-1)', () => {
+    const sources = (
+      parse(readFileSync(join(webDir, '../../registry/sources.yaml'), 'utf8')) as {
+        sources: { id: string; audience: string; private_basis?: { clause: string } }[];
+      }
+    ).sources.filter((s) => s.audience === 'owner');
+    expect(sources.length).toBeGreaterThanOrEqual(4);
+    const clauses = sources.map((s) => (s.private_basis?.clause ?? '').replace(/\s+/g, ' ').trim().slice(0, 60));
+    for (const c of clauses) expect(c.length, 'every owner source states its clause').toBeGreaterThan(20);
+    const files = readdirSync(out, { recursive: true, withFileTypes: true }).filter((e) => e.isFile());
+    for (const e of files) {
+      const path = join(e.parentPath, e.name);
+      const text = readFileSync(path, 'utf8');
+      const flat = text.replace(/\s+/g, ' ');
+      for (const needle of ['api-owner', 'owner_basic_auth', '/srv/rws/owner', ':8443', ...clauses])
+        expect(flat.includes(needle), `${path}: ${needle}`).toBe(false);
+      expect(text, path).not.toMatch(/\bowner\.(?:localhost|[a-z0-9-]+\.(?:info|example|test|local))\b/);
     }
   });
 });

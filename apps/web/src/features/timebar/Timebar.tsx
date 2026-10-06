@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   amsterdam,
   formatDay,
@@ -46,18 +46,21 @@ interface Props {
   /** The selected station has no forecast at all: the track ends at now, and a note says why. */
   noForecast: boolean;
   epoch: number;
+  /** P10a: live mode (no `t` in the URL): the page follows meta.now; "Nu" returns to it. */
+  live: boolean;
   onChange: (t: number) => void;
 }
 
-export function Timebar({ locale, t, start, now, end, noForecast, epoch, onChange }: Props) {
+export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, onChange }: Props) {
   const id = useId();
   const [missing, setMissing] = useState(false);
   const [playing, setPlaying] = useState(false);
   const reduced = useReducedMotion();
   const latest = useRef(t);
   latest.current = t;
-  const local = amsterdam(t);
-  const twins = localInstants(local.date, local.time);
+  const local = useMemo(() => amsterdam(t), [t]);
+  // Temporal zone conversions are the time bar's costliest work: once per t, not once per render (P10a Lighthouse).
+  const twins = useMemo(() => localInstants(local.date, local.time), [local]);
   const forecast = t > now;
   const time = formatLocal(t, locale);
   const valueText = forecast ? m.slider_forecast_text({ time }, { locale }) : time;
@@ -234,6 +237,7 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, onChang
           {m.to_now({}, { locale })}
         </button>
       </div>
+      {live && <p className={styles.note}>{m.live_note({}, { locale })}</p>}
       {reduced && <p className={styles.note}>{m.play_reduced_motion({}, { locale })}</p>}
     </section>
   );

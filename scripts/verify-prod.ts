@@ -1113,15 +1113,30 @@ export function checkRiversDownload(
 export const entryScript = (html: string): string | undefined =>
   /<script[^>]*\ssrc="(\/assets\/[^"]+\.js)"/.exec(html)?.[1];
 
-/** The page's own script names the ODbL (the footer text of the river network, P6b): a plain substring. */
-export function checkRiversAttribution(script: Page | string | undefined): Result {
+/**
+ * The `/assets/*.js` files a built chunk imports statically (`import"./x.js"`, `from"./x.js"`): the rest of the
+ * page's initial load. Only same-directory names of the build's own shape are taken (P10a: the entry is a thin
+ * loader since the build keeps strict execution order, and the footer text sits in a shared initial chunk).
+ */
+export const staticImports = (js: string): string[] => [
+  ...new Set(
+    [...js.matchAll(/(?:\bimport|\bfrom)\s*["']\.\/([A-Za-z0-9_.-]+\.js)["']/g)].map(([, f]) => `/assets/${f}`),
+  ),
+];
+
+/**
+ * The page's initial load names the ODbL (the footer text of the river network, P6b): a plain substring of the
+ * entry script or of a chunk it imports statically (`more`).
+ */
+export function checkRiversAttribution(script: Page | string | undefined, more: readonly Page[] = []): Result {
   const check = 'rivers attribution';
   if (script === undefined) return miss(check, 'the page references no script');
   if (typeof script === 'string') return miss(check, script);
   if (script.status !== 200) return miss(check, `script status ${script.status}`);
-  return script.body.includes('ODbL')
-    ? pass(check, 'the entry script of the page names the ODbL')
-    : miss(check, 'the entry script of the page does not name the ODbL');
+  if (script.body.includes('ODbL')) return pass(check, 'the entry script of the page names the ODbL');
+  return more.some((p) => p.status === 200 && p.body.includes('ODbL'))
+    ? pass(check, "a chunk of the page's initial load names the ODbL")
+    : miss(check, 'neither the entry script of the page nor its static imports name the ODbL');
 }
 
 // ---------------------------------------------------------------- data API (P4b)
@@ -2325,7 +2340,7 @@ export const CHECKS = [
   `rivers tiles: GET /tiles/<the manifest's tiles file> with Range: ${TILE_HEADERS.range} is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
   `rivers reaches: GET /data/v1/rivers/<the manifest's reaches file> is 200 JSON with Cache-Control exactly "${TILE_CACHE}", the ReachesFile contract, checkReaches clean, the manifest's version, and every station of it a station of /api/v1/stations (the file's body is also in owner leak)`,
   `rivers download: HEAD /downloads/<the manifest's download file> is 200 application/gzip with no Content-Encoding, ${TILE_CACHE} and the manifest's length; a Range of ${RIVERS_DOWNLOAD_RANGE}, gunzipped (truncation tolerated), shows "attribution": "${OSM_ATTRIBUTION}" and "licence": "${ODBL_LICENCE}" before "features"`,
-  'rivers attribution: the entry script that / references contains the string ODbL (the footer text, P6b)',
+  'rivers attribution: the entry script that / references, or a chunk of its initial load (its static imports, two levels, at most 10 files), contains the string ODbL (the footer text, P6b)',
   `static meta: GET /data/v1/meta.json is 200 application/json with Cache-Control exactly "${STATIC_CACHE.live}", the StaticMeta contract, ${API_SOURCES.join(', ')} among the sources, and no owner term in the body`,
   `static latest: GET /data/v1/latest.json is 200 with "${STATIC_CACHE.live}", the LatestFile contract and the seriesHash of stations.json`,
   `static stations: GET /data/v1/stations.json is 200 with "${STATIC_CACHE.slow}" and the StaticStations contract`,
@@ -2547,7 +2562,26 @@ async function main(argv: string[]): Promise<number> {
           ? undefined
           : await tile(downloadPath, { ...RIVERS_DOWNLOAD_HEADERS, range: RIVERS_DOWNLOAD_RANGE }),
       ),
-      checkRiversAttribution(entry === undefined ? undefined : await tile(entry)),
+      await (async () => {
+        if (entry === undefined) return checkRiversAttribution(undefined);
+        const first = await tile(entry);
+        // The entry's static imports and theirs (two levels, at most 10 files): the page's initial load.
+        const more: Page[] = [];
+        const seen = new Set([entry]);
+        let next = typeof first === 'string' ? [] : staticImports(first.body);
+        for (let level = 0; level < 2; level++) {
+          const now = next.filter((f) => !seen.has(f)).slice(0, 10 - seen.size + 1);
+          next = [];
+          for (const f of now) {
+            seen.add(f);
+            const page = await tile(f);
+            if (typeof page === 'string') continue;
+            more.push(page);
+            next.push(...staticImports(page.body));
+          }
+        }
+        return checkRiversAttribution(first, more);
+      })(),
     );
 
     // P9a: the static publisher's files through Caddy. The terms are checked per file (readStatic) and in their own

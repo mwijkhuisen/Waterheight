@@ -403,6 +403,3 @@ export const CLASS_WINDOW_MIN: Readonly<Record<string, number>> = {
 
 /** Sources that need a permission before use (registry/sources.yaml `permission_required`; pinned by a test). */
 export const PERMISSION_REQUIRED: ReadonlySet<string> = new Set(['BE-1', 'DE-9', 'DE-10', 'DE-12', 'DE-13']);
-
-/** The trend's dead band (classify.ts deltaH): H ± 2 cm; Q ± max(1 m³/s, 2 % of the start value). */
-export const TREND_BAND = { cm: 2, qAbs: 1, qRel: 0.02 } as const;

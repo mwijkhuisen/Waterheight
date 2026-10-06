@@ -42,6 +42,11 @@ async function start(page: Page, context: BrowserContext, baseURL: string | unde
     void d.dismiss();
   });
   await page.clock.setFixedTime(NOW);
+  // P10a: the default map mode is status.json's (the e2e publisher writes none: the change mode); these specs read the
+  // state words, so they serve the file that says "state".
+  await page.route('**/data/v1/status.json', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"classification":{"mode":"state"}}' }),
+  );
   return { log, dialogs };
 }
 type Session = Awaited<ReturnType<typeof start>>;
@@ -90,10 +95,8 @@ async function settled(page: Page) {
 /** axe on the page (or one part of it): no undecided check, and no serious or critical finding. */
 async function expectNoSeriousAxe(page: Page, scope?: string) {
   await settled(page);
-  // The table lists about 1,130 series: the first 200 rows are checked, as in app.spec.ts (KG-129).
-  const axe = new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
-    .exclude('tbody > tr:nth-child(n+201)');
+  // The table pages at 100 rows (P10a): every row of a page is checked (KG-129 closed).
+  const axe = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']);
   const result = await (scope === undefined ? axe : axe.include(scope)).analyze();
   expect(result.passes.length, 'axe ran its rules').toBeGreaterThan(10);
   const nodes = (v: (typeof result.violations)[number]) =>
@@ -165,7 +168,7 @@ test('moving the slider past now switches to forecast styling, and "Nu" comes ba
 
   // "Nu" returns to the observations: the stations are filled again and the badge is gone.
   await page.getByRole('button', { name: 'Nu', exact: true }).click();
-  await expect.poll(() => tParam(page)).toBe(at(0));
+  await expect.poll(() => tParam(page)).toBeNull(); // now is live mode (P10a): no t
   await markerReady(page, false);
   expect(await featureState(page, 'nl.e2e.gap')).toMatchObject({ has: false, forecast: false });
   await expect(page.getByText('Verwachting', { exact: true })).toHaveCount(0);
@@ -213,7 +216,7 @@ test('the panel and the popup name the agency, the fetch time, the band and the 
   await expect(level.locator('dd', { hasText: /^elevated$/ })).toBeVisible();
   // The provider's class label is text: no element came out of it, nothing was requested for it.
   await expect(level.locator('dd', { hasText: RAW_BASIS })).toHaveText(
-    `RWS Waterinfo legend, not an official warning: ${RAW_BASIS}`,
+    `RWS Waterinfo legend, not an official warning: ${RAW_BASIS} — Slightly elevated (Waterinfo class)`,
   );
   await expect(page.locator('img[src="y"]')).toHaveCount(0);
   await expect.poll(() => featureState(page, 'nl.e2e.xss')).toMatchObject({ selected: true });
@@ -287,12 +290,17 @@ test('the table lists the forecast as text and says "Geen verwachting" for a sta
   await expect(table.getByRole('columnheader', { name: 'Verwachting', exact: true })).toBeVisible();
   await expect(table.getByRole('columnheader', { name: 'Gemeten' })).toHaveCount(0);
   const row = (name: string) => table.locator('tbody tr', { has: page.getByRole('button', { name, exact: true }) });
-  await expect(row('E2E gap').locator('td').nth(3)).toHaveText('Geen verwachting');
-  await expect(row('E2E gap').locator('td').nth(4)).toHaveText('–');
-  await expect(row('E2E DST').locator('td').nth(3)).toHaveText('420 cm NAP');
-  await expect(row('E2E DST').locator('td').nth(4)).toHaveText(/^RWS, uitgegeven .*10:00 CET$/);
-  await expect(row(RAW_NAME).locator('td').nth(3)).toHaveText('340 cm NAP');
-  await expect(row(RAW_NAME).locator('td').nth(4)).toHaveText(/^RWS, opgehaald .*11:00 CET; 10–90 %: 320–365 cm NAP$/);
+  // The table pages at 100 rows (P10a): the station chosen in the list brings its page into view (E2E DST, then the hostile
+  // name, which sorts first). Choosing a station also limits the slider to its forecast: both have one at +2 h.
+  await stationList(page).selectOption('nl.e2e.dst');
+  await expect(table.locator('caption')).toContainText('Verwachtingen voor');
+  await expect(row('E2E gap').locator('td').nth(4)).toHaveText('Geen verwachting');
+  await expect(row('E2E gap').locator('td').nth(5)).toHaveText('–');
+  await expect(row('E2E DST').locator('td').nth(4)).toHaveText('420 cm NAP');
+  await expect(row('E2E DST').locator('td').nth(5)).toHaveText(/^RWS, uitgegeven .*10:00 CET$/);
+  await stationList(page).selectOption('nl.e2e.xss');
+  await expect(row(RAW_NAME).locator('td').nth(4)).toHaveText('340 cm NAP');
+  await expect(row(RAW_NAME).locator('td').nth(5)).toHaveText(/^RWS, opgehaald .*11:00 CET; 10–90 %: 320–365 cm NAP$/);
   // Back at now the table shows the observations again.
   await page.getByRole('button', { name: 'Nu', exact: true }).click();
   await expect(table.getByRole('columnheader', { name: 'Gemeten' })).toBeVisible();
@@ -352,7 +360,7 @@ test('the slider works from the keyboard across now and says when it is in the f
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /13:10 CET \(verwachting\)$/);
   await expect(page.getByText('Verwachting', { exact: true })).toBeVisible();
   await page.keyboard.press('ArrowLeft');
-  await expect.poll(() => tParam(page)).toBe(at(0));
+  await expect.poll(() => tParam(page)).toBeNull(); // back at now: live mode, no t
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /13:00 CET$/);
   await expect(page.getByText('Verwachting', { exact: true })).toHaveCount(0);
   await page.keyboard.press('ArrowLeft');

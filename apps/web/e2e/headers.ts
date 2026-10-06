@@ -5,18 +5,22 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const siteCaddy = fileURLToPath(new URL('../../../deploy/web/site.caddy', import.meta.url));
+const ownerCaddy = fileURLToPath(new URL('../../../deploy/web/owner.caddy', import.meta.url));
 
-/** [name, value] pairs of the site's first header block (the same block test/verify-prod.test.ts reads). */
-export function siteHeaders(): [string, string][] {
-  const block = /\n\theader \{\n([\s\S]*?)\n\t\}/.exec(readFileSync(siteCaddy, 'utf8'))?.[1];
-  if (block === undefined) throw new Error('site.caddy has no header block');
+/**
+ * [name, value] pairs of the site's first header block (the same block test/verify-prod.test.ts reads); the owner
+ * site's block (P10a) is the same set plus Cache-Control "private, no-store" and `defer`.
+ */
+export function siteHeaders(owner = false): [string, string][] {
+  const block = /\n\theader \{\n([\s\S]*?)\n\t\}/.exec(readFileSync(owner ? ownerCaddy : siteCaddy, 'utf8'))?.[1];
+  if (block === undefined) throw new Error('the caddy file has no header block');
   const out: [string, string][] = [];
   for (const line of block.split('\n')) {
     // A value may hold escaped quotes (Reporting-Endpoints "csp=\"/api/v1/beacon\""): Caddyfile `\"` and `\\`.
     const header = /^\t\t([A-Za-z-]+) "((?:[^"\\]|\\.)*)"$/.exec(line);
     if (header?.[1] !== undefined && header[2] !== undefined)
       out.push([header[1], header[2].replaceAll(/\\(.)/g, '$1')]);
-    else if (!/^\t\t-[A-Za-z-]+$/.test(line)) throw new Error(`unexpected header line: ${line}`);
+    else if (!/^\t\t(-[A-Za-z-]+|defer)$/.test(line)) throw new Error(`unexpected header line: ${line}`);
   }
   return out;
 }

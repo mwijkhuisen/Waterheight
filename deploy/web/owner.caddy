@@ -13,16 +13,19 @@
 # without it, so the site fails closed. /data/v1 is the owner publisher's tree,
 # mounted read-only at /srv/rws/owner/www/v1; the app is the same /srv/www as
 # the public site's. /api/v1 goes to api-owner (P9b adds it: a 502 until then).
-# Not mounted here: the basemap tiles, the river files and the status files of
-# the public site; nothing of /srv/rws/public.
+# Mounted read-only besides: the basemap tiles (/srv/rws/tiles) and the river
+# files (/srv/rws/public/data/v1/rivers) for the owner map (P10a, KG-213); not the
+# status files or anything else of /srv/rws/public.
 owner.{$RWS_DOMAIN}:8443 {
 	tls internal
 
+	# The public site's headers, plus noindex/nofollow, private no-store and no referrer at all (P10a security
+	# review: a link to a provider must not name the owner site).
 	header {
 		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
+		Referrer-Policy "no-referrer"
 		Permissions-Policy "geolocation=(), camera=(), microphone=()"
 		Cross-Origin-Opener-Policy "same-origin"
 		Cross-Origin-Resource-Policy "same-origin"
@@ -86,6 +89,149 @@ owner.{$RWS_DOMAIN}:8443 {
 	handle /runtime-config.json {
 		header Content-Type "application/json"
 		respond `{"audience":"owner"}` 200
+	}
+
+	# The basemap tiles and the river files (P10a, KG-213): the same routes as the
+	# public site (deploy/web/site.caddy), over the same two read-only mounts and
+	# nothing else of the public tree. They sit before @data, so /data/v1/rivers/*
+	# never reaches the owner publisher's tree. The `defer`red header block above
+	# replaces their Cache-Control with "private, no-store".
+
+	# The basemap tiles (P3, ADR-0016), read-only from /srv/rws/tiles, which the
+	# basemap-promote job fills (the network-facing fetch job never writes it).
+	# Three kinds of path, then a 404 for the rest. Every match is an exact,
+	# case-sensitive one on the request path as Go decoded it, not cleaned
+	# (like @api_health): a folded-case, doubled-slash or dot-segment spelling is
+	# no tile file, while a percent-escape such as %2D reaches the same file as
+	# the plain name. The file matcher lets a route answer only for a file that
+	# exists: file_server's own 404 would otherwise carry the Cache-Control set
+	# before it, and a cached 404 must never be immutable.
+	#
+	# The manifest: short TTL, never immutable (it changes on every promote).
+	@tiles_manifest {
+		method GET HEAD
+		expression `{path} == '/tiles/manifest.json'`
+		file {
+			root /srv/rws/tiles
+			try_files /manifest.json
+		}
+	}
+	handle @tiles_manifest {
+		header Cache-Control "public, max-age=60"
+		uri strip_prefix /tiles
+		root * /srv/rws/tiles
+		file_server
+	}
+
+	# The tile files: dated names, so immutable. file_server answers Range
+	# requests (206, Content-Range) itself and lists no directory (no browse).
+	# The regex is TILE_FILE_RE of packages/core/src/tiles-manifest.ts.
+	@tiles_files {
+		method GET HEAD
+		expression `{path}.matches('^/tiles/(basemap|planet-z6)-[0-9]{8}\\.pmtiles$')`
+		file {
+			root /srv/rws/tiles
+			try_files /{http.request.uri.path.file}
+		}
+	}
+	# Only one explicit byte range is served, the request pmtiles.js makes
+	# (bytes=<first>-<last>). No Range (the whole multi-GB file), an open or
+	# suffix range and several ranges (a multipart answer about 30 times the
+	# size of the request) are a 416 with the site headers and no Cache-Control
+	# (SR-1, R-061). The header placeholder joins repeated Range fields with a
+	# comma, so a second Range field fails the match too. So is a range with
+	# If-Range (one that does not match gets the whole file, 200), If-Match or
+	# If-Unmodified-Since (a failed one is a 412 that would be marked immutable)
+	# (SR2-1); pmtiles.js sends none of them. If-None-Match and If-Modified-Since
+	# keep their 304. An empty header is no header, to Go as to the placeholder.
+	handle @tiles_files {
+		@one_range expression `{header.Range}.matches('^bytes=[0-9]+-[0-9]+$') && {header.If-Range} == '' && {header.If-Match} == '' && {header.If-Unmodified-Since} == ''`
+		handle @one_range {
+			header Cache-Control "public, max-age=31536000, immutable"
+			uri strip_prefix /tiles
+			root * /srv/rws/tiles
+			file_server
+		}
+		handle {
+			respond 416
+		}
+	}
+
+	# The river overlay (P6b): the URL /tiles/rivers-<ver>.pmtiles, but the file
+	# is installed by rws-rivers-refresh (root) into the root-owned rivers
+	# directory, never into /srv/rws/tiles, which the promote job owns. Its own
+	# matcher, so the basemap regex above stays as P3 wrote it; the same
+	# one-range rule, file existence and immutable name as the basemap tiles.
+	@tiles_rivers {
+		method GET HEAD
+		expression `{path}.matches('^/tiles/rivers-[0-9]{8}\\.pmtiles$')`
+		file {
+			root /srv/rws/public/data/v1/rivers
+			try_files /{http.request.uri.path.file}
+		}
+	}
+	handle @tiles_rivers {
+		@one_range_rivers expression `{header.Range}.matches('^bytes=[0-9]+-[0-9]+$') && {header.If-Range} == '' && {header.If-Match} == '' && {header.If-Unmodified-Since} == ''`
+		handle @one_range_rivers {
+			header Cache-Control "public, max-age=31536000, immutable"
+			uri strip_prefix /tiles
+			root * /srv/rws/public/data/v1/rivers
+			file_server
+		}
+		handle {
+			respond 416
+		}
+	}
+
+	# Everything else under /tiles (the directory itself, .staging, a temp
+	# manifest, a file that does not exist, any other method): a 404 from Caddy,
+	# whatever the disk holds, with no Cache-Control.
+	@tiles path /tiles /tiles/*
+	handle @tiles {
+		respond 404
+	}
+
+	# The river data (P6b), read-only from the two directories that
+	# rws-rivers-refresh fills (docs/runbooks/geo-refresh.md): the manifest (short
+	# TTL, it changes on every refresh), the dated reaches file and the dated ODbL
+	# download (immutable). Exact, case-sensitive matches with a file matcher, so
+	# a missing file is a 404 without Cache-Control; everything else under
+	# /data/v1/rivers and /downloads is a 404. The rest of /data/v1/ is the
+	# static publisher's (below).
+	# The download is gzip data, not a compressed transfer: application/gzip and
+	# never a Content-Encoding (it is not in encode's default types, and the
+	# gunzipped first bytes are what verify-prod reads with a Range).
+	@rivers_manifest {
+		method GET HEAD
+		expression `{path} == '/data/v1/rivers/manifest.json'`
+		file {
+			root /srv/rws/public/data/v1/rivers
+			try_files /manifest.json
+		}
+	}
+	handle @rivers_manifest {
+		header Cache-Control "public, max-age=60"
+		uri strip_prefix /data/v1/rivers
+		root * /srv/rws/public/data/v1/rivers
+		file_server
+	}
+	@rivers_reaches {
+		method GET HEAD
+		expression `{path}.matches('^/data/v1/rivers/reaches-[0-9]{8}\\.json$')`
+		file {
+			root /srv/rws/public/data/v1/rivers
+			try_files /{http.request.uri.path.file}
+		}
+	}
+	handle @rivers_reaches {
+		header Cache-Control "public, max-age=31536000, immutable"
+		uri strip_prefix /data/v1/rivers
+		root * /srv/rws/public/data/v1/rivers
+		file_server
+	}
+	@rivers_other path_regexp ^/data/v1/rivers(/|$)
+	handle @rivers_other {
+		respond 404
 	}
 
 	# The owner publisher's files, precompressed, any class: private, no-store.

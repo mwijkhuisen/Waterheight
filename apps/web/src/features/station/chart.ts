@@ -3,14 +3,15 @@
 // (`renderMode: 'richText'`) and its formatter returns plain text, so a station
 // name is never parsed as HTML (invariant 3).
 import { LineChart } from 'echarts/charts';
-import { GridComponent, MarkLineComponent, TooltipComponent } from 'echarts/components';
+import { GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent } from 'echarts/components';
 import { init, use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { testHook } from '../../lib/testHook.ts';
 import { formatLocal, formatShort } from '../../lib/time/time.ts';
 import type { Locale } from '../../paraglide/runtime.js';
+import type { ForecastView, Marks, Pt } from './chartModel.ts';
 
-use([LineChart, GridComponent, TooltipComponent, MarkLineComponent, CanvasRenderer]);
+use([LineChart, GridComponent, TooltipComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
 
 export interface ChartData {
   locale: Locale;
@@ -18,16 +19,29 @@ export interface ChartData {
   name: string;
   /** The unit as published, with its zero ("cm NAP"). */
   unit: string;
-  /** [UTC ms, value in the native unit]. */
-  points: [number, number][];
+  /** Observed points: [UTC ms, value in the native unit]. */
+  points: Pt[];
   /** The selected instant, marked by a vertical line. */
   t: number;
   format: (value: number) => string;
+  /** One run (never blended with another): its series names come from Paraglide. */
+  forecast?: { view: ForecastView; name: string; estimateName: string } | undefined;
+  marks: Marks;
+  observedName: string;
+  /** The x-axis end when a run is shown: min(now + 48 h, the run's end). */
+  xMax?: number | undefined;
 }
 
 interface AxisParam {
+  seriesId?: string;
+  seriesName?: string;
   value?: unknown;
 }
+
+const SHOWN = new Set(['obs', 'median', 'estimate']);
+const COLOUR = '#01665e';
+const FORECAST_COLOUR = '#542788';
+const flat = { symbol: 'none', connectNulls: false, smooth: false } as const;
 
 export function createChart(el: HTMLElement) {
   const chart = init(el, undefined, { renderer: 'canvas' });
@@ -36,28 +50,109 @@ export function createChart(el: HTMLElement) {
   testHook?.charts?.add(chart);
   return {
     update(d: ChartData) {
+      // Plain text only (invariant 3): one line per shown series.
       const tip = (params: AxisParam | AxisParam[]): string => {
-        const value = (Array.isArray(params) ? params[0] : params)?.value;
-        if (!Array.isArray(value) || typeof value[0] !== 'number' || typeof value[1] !== 'number') return '';
-        return `${d.name}\n${formatLocal(value[0], d.locale)}\n${d.format(value[1])} ${d.unit}`;
+        const items = (Array.isArray(params) ? params : [params]).filter((p) => SHOWN.has(p.seriesId ?? ''));
+        const lines: string[] = [];
+        let at: number | undefined;
+        for (const p of items) {
+          const v = p.value;
+          if (!Array.isArray(v) || typeof v[0] !== 'number' || typeof v[1] !== 'number') continue;
+          at = v[0];
+          lines.push(`${p.seriesName}: ${d.format(v[1])} ${d.unit}`);
+        }
+        return at === undefined ? '' : [d.name, formatLocal(at, d.locale), ...lines].join('\n');
       };
+      const f = d.forecast;
+      const forecastSeries =
+        f === undefined
+          ? []
+          : [
+              ...(f.view.hasBand
+                ? [
+                    {
+                      ...flat,
+                      id: 'band-lo',
+                      type: 'line',
+                      stack: 'band',
+                      data: f.view.lower,
+                      lineStyle: { opacity: 0 },
+                      silent: true,
+                    },
+                    {
+                      ...flat,
+                      id: 'band-spread',
+                      type: 'line',
+                      stack: 'band',
+                      data: f.view.spread,
+                      lineStyle: { opacity: 0 },
+                      areaStyle: { color: FORECAST_COLOUR, opacity: 0.2 },
+                      silent: true,
+                    },
+                  ]
+                : []),
+              {
+                ...flat,
+                id: 'median',
+                type: 'line',
+                name: f.name,
+                data: f.view.provider,
+                lineStyle: { type: 'dashed', color: FORECAST_COLOUR },
+                itemStyle: { color: FORECAST_COLOUR },
+              },
+              {
+                ...flat,
+                id: 'estimate',
+                type: 'line',
+                name: f.estimateName,
+                data: f.view.estimate,
+                lineStyle: { type: 'dotted', color: FORECAST_COLOUR },
+                itemStyle: { color: FORECAST_COLOUR },
+              },
+            ];
       chart.setOption(
         {
           animation: false,
           grid: { left: 56, right: 16, top: 24, bottom: 32 },
-          xAxis: { type: 'time', axisLabel: { formatter: (v: number) => formatShort(v, d.locale), hideOverlap: true } },
+          xAxis: {
+            type: 'time',
+            max: d.xMax,
+            axisLabel: { formatter: (v: number) => formatShort(v, d.locale), hideOverlap: true },
+          },
           yAxis: { type: 'value', scale: true, name: d.unit, nameTextStyle: { align: 'left' } },
           tooltip: { trigger: 'axis', renderMode: 'richText', formatter: tip },
           series: [
             {
+              ...flat,
+              id: 'obs',
               type: 'line',
-              name: d.name,
-              showSymbol: false,
+              name: d.observedName,
               data: d.points,
-              lineStyle: { color: '#01665e' },
-              itemStyle: { color: '#01665e' },
-              markLine: { silent: true, symbol: 'none', label: { show: false }, data: [{ xAxis: d.t }] },
+              lineStyle: { color: COLOUR },
+              itemStyle: { color: COLOUR },
+              markLine: {
+                silent: true,
+                symbol: 'none',
+                // A function, never a template string: a label may hold `{…}` (provider text).
+                label: { show: true, position: 'insideEndTop', formatter: (p: { name?: string }) => p.name ?? '' },
+                data: [
+                  { xAxis: d.t, name: '', label: { show: false } },
+                  ...d.marks.lines.map((l) => ({
+                    yAxis: l.value,
+                    name: l.text,
+                    lineStyle: { type: 'dashed', color: '#555' },
+                  })),
+                ],
+              },
+              markArea: {
+                silent: true,
+                data: d.marks.bands.map((b) => [
+                  { yAxis: b.from, itemStyle: { color: b.colour, opacity: 0.15 } },
+                  { yAxis: b.to },
+                ]),
+              },
             },
+            ...forecastSeries,
           ],
         },
         { notMerge: true },

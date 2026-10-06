@@ -74,6 +74,7 @@ export async function createMap(
       center: [6.1, 51.85],
       zoom: 7,
       maxPitch: 0,
+      pixelRatio: Math.min(devicePixelRatio, 2),
       attributionControl: { compact: true },
       locale: mapLocale(lang),
       ...options,

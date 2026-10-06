@@ -1,9 +1,11 @@
 import { type Meta, ODBL_URL } from '@rws/contracts';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
 import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
+import { Legend } from './features/legend/Legend.tsx';
+import { ModeControl } from './features/legend/ModeControl.tsx';
+import { RiverChip } from './features/legend/RiverChip.tsx';
 import { StationsMap } from './features/map/StationsMap.tsx';
-import { forecastStates, markerStates } from './features/map/stationLayer.ts';
 import { hasWebGL2 } from './features/map/webgl.ts';
 import { StationPanel } from './features/station/StationPanel.tsx';
 import { StationTable } from './features/table/StationTable.tsx';
@@ -12,14 +14,24 @@ import { attributionText } from './lib/attribution.ts';
 import {
   chartSpan,
   downloadHref,
+  useAudience,
+  useAudienceQuery,
+  useChanges,
   useDebounced,
   useMeta,
+  useMode,
+  useOwnerSources,
+  useRiver,
+  useRivers,
   useRiversManifest,
   useSnapshot,
+  useSources,
   useStationHorizon,
   useStations,
+  useWarnings,
 } from './lib/data/api.ts';
 import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
+import { stationStates } from './lib/stationStates.ts';
 import { formatDay, quantise, ZONE } from './lib/time/time.ts';
 import { otherLanguageHref } from './lib/url/url.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
@@ -35,12 +47,28 @@ import type { Locale } from './paraglide/runtime.js';
 const PAGES = new Set(['/', '/index.html', '/en/', '/en/index.html']);
 const FETCH_DEBOUNCE_MS = 150;
 
+// The owner chunk (P10a T12): fetched only on the owner site, never by the public page.
+const OwnerBanner = lazy(() => import('./features/owner/index.ts').then((o) => ({ default: o.OwnerBanner })));
+
 export function App({ locale }: { locale: Locale }) {
+  const owner = useAudience() === 'owner';
   return (
     <>
+      {owner && <OwnerShell locale={locale} />}
       <p className={styles.beta}>{m.beta_banner({}, { locale })}</p>
       {PAGES.has(location.pathname) ? <Viewer locale={locale} /> : <NotFound locale={locale} />}
     </>
+  );
+}
+
+/** The persistent owner banner on every view of the owner site (T-OWN-5); nothing on the public site. */
+function OwnerShell({ locale }: { locale: Locale }) {
+  const sources = useSources().data;
+  const owned = useMemo(() => sources?.sources.filter((s) => s.audience === 'owner'), [sources]);
+  return (
+    <Suspense fallback={null}>
+      <OwnerBanner locale={locale} sources={owned} />
+    </Suspense>
   );
 }
 
@@ -59,9 +87,18 @@ function NotFound({ locale }: { locale: Locale }) {
 }
 
 function Viewer({ locale }: { locale: Locale }) {
-  const meta = useMeta();
-  const stations = useStations();
   const [url, setUrl] = useUrlState();
+  // Live (P10a T7): no `t` in the URL. meta, the current snapshot and the warnings are asked again every minute, and
+  // the page's now (so the slider's end and t) follows meta.now.
+  const isLive = url.t === undefined;
+  const meta = useMeta(isLive);
+  const stations = useStations();
+  const mode = useMode(url.mode);
+  const owner = useAudience() === 'owner';
+  const audienceFailed = useAudienceQuery().isError;
+  const ownerSources = useOwnerSources();
+  const rivers = useRivers();
+  const river = useRiver(url.river);
   const [webgl] = useState(hasWebGL2);
   const [mapFailed, setMapFailed] = useState(false);
   const [view, setView] = useState<'map' | 'table'>('map');
@@ -86,10 +123,15 @@ function Viewer({ locale }: { locale: Locale }) {
   const horizon = useStationHorizon(selected);
   const end = range && sliderEnd(range.now, globalEnd(range.now, range.ahead), horizon);
   const t = range && end !== undefined ? pageT(url.t, range.start, range.now, end) : undefined;
+  // A `?t=` that lands on the page's now (out of range, or clamped to the end of a station without a forecast) is
+  // live mode: the URL drops it, so the page refreshes as "Nu" does (review round 1).
+  useEffect(() => {
+    if (url.t !== undefined && range !== undefined && t === range.now) setUrl({ t: undefined });
+  }, [url.t, t, range, setUrl]);
 
   // The data follows `t` once it has settled: a drag or a held key asks only for where it stops.
   const settled = useDebounced(t, FETCH_DEBOUNCE_MS);
-  const snapshot = useSnapshot(settled, meta.data, stations.data?.seriesHash);
+  const snapshot = useSnapshot(settled, meta.data, stations.data?.seriesHash, isLive);
   // Until the values of this very `t` are in, the ones on screen are marked as not current (aria-busy, dimmed).
   // A stand-in for a dead API is the newest bucket under its own t (the banner says so): it is what there is.
   const current =
@@ -104,19 +146,38 @@ function Viewer({ locale }: { locale: Locale }) {
       snapshot.data?.forecasts === undefined ? undefined : new Map(snapshot.data.forecasts.map((f) => [f.series, f])),
     [snapshot.data],
   );
+  const changes = useChanges(
+    settled,
+    meta.data,
+    stations.data?.seriesHash,
+    stations.data?.stations,
+    current ? snapshot.data : undefined,
+  );
+  const warnings = useWarnings(settled, meta.data, isLive).data;
   const states = useMemo(
-    () => (forecasts === undefined ? markerStates(list, values) : forecastStates(list, forecasts)),
-    [list, values, forecasts],
+    () => stationStates({ stations: list, values, forecasts, changes, ownerSources }),
+    [list, values, forecasts, changes, ownerSources],
   );
 
-  const setT = useCallback((next: number) => setUrl({ t: next }), [setUrl]);
+  // Choosing the page's now (the slider's end of observations, or "Nu") is live mode again: no `t` in the URL.
+  const setT = useCallback(
+    (next: number) => setUrl({ t: range !== undefined && next === range.now ? undefined : next }),
+    [setUrl, range],
+  );
+  const setMode = useCallback((next: typeof mode) => setUrl({ mode: next }), [setUrl]);
+  const setRiver = useCallback((id: string | undefined) => setUrl({ river: id }), [setUrl]);
   const select = useCallback((id: string | undefined) => setUrl({ s: id }), [setUrl]);
   // Opening a station from the map or the table moves the focus into the panel; choosing one in the list does
-  // not (the arrow keys of a list change its value at every press), and closing the panel returns to the list.
+  // not (the arrow keys of a list change its value at every press). Closing the panel returns the focus to what
+  // opened it (P10a T6): the table's station button while it is still on the page, else the station list (a marker
+  // has no focus of its own).
   const [focusPanel, setFocusPanel] = useState(false);
   const listRef = useRef<HTMLSelectElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const open = useCallback(
     (id: string | undefined) => {
+      const from = document.activeElement;
+      opener.current = from instanceof HTMLButtonElement ? from : null;
       setFocusPanel(true);
       select(id);
     },
@@ -124,7 +185,10 @@ function Viewer({ locale }: { locale: Locale }) {
   );
   const close = useCallback(() => {
     select(undefined);
-    listRef.current?.focus();
+    const back = opener.current;
+    opener.current = null;
+    if (back?.isConnected) back.focus();
+    else listRef.current?.focus();
   }, [select]);
   const failed = useCallback(() => setMapFailed(true), []);
 
@@ -144,11 +208,21 @@ function Viewer({ locale }: { locale: Locale }) {
         </a>
       </header>
       <main className={styles.main}>
-        {range === undefined || end === undefined || t === undefined || stations.data === undefined ? (
-          meta.isError || stations.isError ? (
+        {range === undefined ||
+        end === undefined ||
+        t === undefined ||
+        stations.data === undefined ||
+        mode === undefined ? (
+          meta.isError || stations.isError || audienceFailed ? (
             <p role="alert">{m.data_unavailable({}, { locale })}</p>
           ) : (
-            <p role="status">{m.loading({}, { locale })}</p>
+            // While the data loads, what the static shell of index.html says (P10a: the first frame carries the
+            // page's text at once, so the largest paint does not wait for the data).
+            <>
+              <p>{m.intro({}, { locale })}</p>
+              <p>{m.not_official({}, { locale })}</p>
+              <p role="status">{m.loading({}, { locale })}</p>
+            </>
           )
         ) : (
           <>
@@ -160,9 +234,11 @@ function Viewer({ locale }: { locale: Locale }) {
               end={end}
               noForecast={horizon === null}
               epoch={range.epoch}
+              live={isLive}
               onChange={setT}
             />
             <div className={styles.controls}>
+              <ModeControl locale={locale} mode={mode} onChange={setMode} />
               {canMap && (
                 <fieldset className={styles.toggle}>
                   <legend>{m.view_label({}, { locale })}</legend>
@@ -198,32 +274,53 @@ function Viewer({ locale }: { locale: Locale }) {
                 {notice} {m.map_fallback({}, { locale })}
               </p>
             )}
+            {river !== undefined && (
+              <RiverChip locale={locale} id={river.id} river={river.river} onClear={() => setRiver(undefined)} />
+            )}
             {snapshot.isError && <p role="alert">{m.data_unavailable({}, { locale })}</p>}
+            {warnings?.incomplete === true && <p role="status">{m.warnings_incomplete({}, { locale })}</p>}
+            {mode === 'delta' && forecasts !== undefined && <p role="status">{m.dh_future_note({}, { locale })}</p>}
             <DegradedBanner
               locale={locale}
               degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}
               standInAt={snapshot.data?.standIn === true ? Date.parse(snapshot.data.t) : undefined}
+            />
+            <Legend
+              locale={locale}
+              mode={mode}
+              forecast={forecasts !== undefined}
+              owner={owner}
+              warnings={(warnings?.features.length ?? 0) > 0}
             />
             <div className={loading ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={loading}>
               <div className={styles.view}>
                 {canMap && view === 'map' ? (
                   <StationsMap
                     locale={locale}
+                    mode={mode}
                     stations={list}
                     states={states}
                     values={values}
                     forecasts={forecasts}
+                    changes={changes}
+                    warnings={warnings}
+                    riverTiles={rivers.data?.manifest.current.tiles.file}
+                    river={river?.id}
                     selected={selected}
                     onSelect={open}
+                    onRiver={setRiver}
                     onClose={close}
                     onFailure={failed}
                   />
                 ) : (
                   <StationTable
                     locale={locale}
+                    mode={mode}
                     stations={list}
+                    states={states}
                     values={values}
                     forecasts={forecasts}
+                    changes={changes}
                     t={t}
                     selected={selected?.id}
                     onSelect={open}
@@ -237,6 +334,11 @@ function Viewer({ locale }: { locale: Locale }) {
                   station={selected}
                   values={values}
                   forecasts={forecasts}
+                  changes={changes}
+                  warnings={warnings}
+                  ownerSources={ownerSources}
+                  live={isLive}
+                  serverNow={range.serverNow}
                   t={t}
                   dataEpoch={range.epoch}
                   chartSpan={chartSpan(settled ?? t, range.start, range.serverNow)}
@@ -274,7 +376,10 @@ const httpsUrl = (url: string | null): string | undefined => {
  */
 function Footer({ locale, meta, t }: { locale: Locale; meta: Meta | undefined; t: number | undefined }) {
   const date = t === undefined ? undefined : formatDay(t, locale, ZONE);
-  const download = downloadHref(useRiversManifest().data);
+  // The owner site serves no /downloads (owner.caddy): the river download is offered on the public site only.
+  const owner = useAudience() === 'owner';
+  const manifest = useRiversManifest().data;
+  const download = owner ? undefined : downloadHref(manifest);
   const shown = new Set<string>();
   return (
     <footer className={styles.footer}>

@@ -1,15 +1,22 @@
 import type { ApiStation, Snapshot } from '@rws/contracts';
-import type { MapLayerMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
+import type { MapLayerMouseEvent, Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Change } from '../../lib/data/change.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
+import type { WarningsAt } from '../../lib/data/warnings.ts';
+import type { StationState } from '../../lib/stationStates.ts';
 import { testHook } from '../../lib/testHook.ts';
+import type { Mode } from '../../lib/url/url.ts';
+import { RIVER_ID } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { forecastLine } from '../station/forecast.ts';
-import { popupLine } from '../station/state.ts';
 import styles from './map.module.css';
-import { type MarkerState, SOURCE, showStations } from './stationLayer.ts';
+import { badgeLine, changeLine, modeLines } from './popup.ts';
+import { highlightRiver, RIVERS, showRivers } from './rivers.ts';
+import { SOURCE, setStationMode, showStations } from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
+import { showWarnings, WARNINGS_FILL } from './warnings.ts';
 
 // The map view (A§10 features/map): the self-hosted basemap with the stations
 // as a feature-state circle layer. A click selects; the selected station's name
@@ -19,8 +26,21 @@ const OPTIONS = { center: [7.2, 50.6] as [number, number], zoom: 5.3 };
 
 interface Props {
   locale: Locale;
+  /** P10a: the map mode; the marker paint follows it (state, delta, q). */
+  mode: Mode;
   stations: readonly ApiStation[];
-  states: ReadonlyMap<string, MarkerState>;
+  /** The feature-state record of every station at t (lib/stationStates.ts). */
+  states: ReadonlyMap<string, StationState>;
+  /** The 24-hour change by series (undefined after now or while it loads). */
+  changes: ReadonlyMap<number, Change> | undefined;
+  /** The warning areas valid at t (undefined while they load or after now). */
+  warnings: WarningsAt | undefined;
+  /** The installed river tile file (`rivers-<ver>.pmtiles`), undefined without a release: no river layer. */
+  riverTiles: string | undefined;
+  /** The highlighted river id (`?river=`). */
+  river: string | undefined;
+  /** A click on a river sets `?river=` (plan C17). */
+  onRiver: (id: string | undefined) => void;
   values: ReadonlyMap<number, Snapshot['values'][number]>;
   /** After now (P8b): the forecasts at t by series; undefined for a t up to now. */
   forecasts: ReadonlyMap<number, SnapshotForecast> | undefined;
@@ -34,8 +54,14 @@ interface Props {
 
 export function StationsMap({
   locale,
+  mode,
   stations,
   states,
+  changes,
+  warnings,
+  riverTiles,
+  river,
+  onRiver,
   values,
   forecasts,
   selected,
@@ -51,6 +77,10 @@ export function StationsMap({
   const close = useRef(onClose);
   close.current = onClose;
   const centred = useRef(false);
+  const modeNow = useRef(mode);
+  modeNow.current = mode;
+  const riverNow = useRef(onRiver);
+  riverNow.current = onRiver;
 
   useEffect(() => {
     if (state.status === 'error') onFailure(state.code);
@@ -63,6 +93,18 @@ export function StationsMap({
       const id = e.features?.[0]?.id;
       if (id !== undefined) select.current(String(id));
     };
+    // A click on a river line (a few pixels of slack: the line is thin) selects the river, unless a station is there.
+    const riverClick = (e: MapMouseEvent) => {
+      const { x, y } = e.point;
+      const box: [[number, number], [number, number]] = [
+        [x - 5, y - 5],
+        [x + 5, y + 5],
+      ];
+      if (ready.getLayer(RIVERS) === undefined || ready.queryRenderedFeatures(box, { layers: [SOURCE] }).length > 0)
+        return;
+      const id = ready.queryRenderedFeatures(box, { layers: [RIVERS] })[0]?.properties?.river_id;
+      if (typeof id === 'string' && RIVER_ID.test(id)) riverNow.current(id);
+    };
     const pointer = () => {
       ready.getCanvas().style.cursor = 'pointer';
     };
@@ -70,7 +112,8 @@ export function StationsMap({
       ready.getCanvas().style.cursor = '';
     };
     const add = () => {
-      showStations(ready, stations);
+      showStations(ready, stations, modeNow.current, m.legend_impounded({}, { locale }));
+      ready.on('click', riverClick);
       ready.on('click', SOURCE, click);
       ready.on('mouseenter', SOURCE, pointer);
       ready.on('mouseleave', SOURCE, plain);
@@ -82,22 +125,32 @@ export function StationsMap({
     return () => {
       ready.off('load', add);
       ready.off('click', SOURCE, click);
+      ready.off('click', riverClick);
       ready.off('mouseenter', SOURCE, pointer);
       ready.off('mouseleave', SOURCE, plain);
       if (testHook) testHook.map = null;
       setMap(null);
     };
-  }, [state, stations]);
+  }, [state, stations, locale]);
 
   useEffect(() => {
     if (map === null) return;
-    // Feature state merges: the forecast keys are always written, so a return to a t up to now clears them.
-    for (const [id, s] of states)
-      map.setFeatureState(
-        { source: SOURCE, id },
-        { forecast: false, estimate: false, ...s, selected: id === selected?.id },
-      );
+    // Feature state merges: every key of the record is always written, so nothing of an earlier t stays.
+    for (const [id, s] of states) map.setFeatureState({ source: SOURCE, id }, { ...s, selected: id === selected?.id });
   }, [map, states, selected]);
+
+  // The paint follows the mode; the warnings and rivers are layers of their own (data changes rarely: setData).
+  useEffect(() => {
+    if (map !== null) setStationMode(map, mode);
+  }, [map, mode]);
+  useEffect(() => {
+    if (map !== null) showWarnings(map, warnings, SOURCE);
+  }, [map, warnings]);
+  useEffect(() => {
+    if (map === null) return;
+    showRivers(map, location.origin, riverTiles, WARNINGS_FILL);
+    highlightRiver(map, river);
+  }, [map, riverTiles, river]);
 
   // A deep link with a station opens the map on it.
   useEffect(() => {
@@ -106,19 +159,31 @@ export function StationsMap({
     if (selected?.lon != null && selected.lat != null) map.jumpTo({ center: [selected.lon, selected.lat], zoom: 9 });
   }, [map, selected]);
 
-  // One line per value of the selected station: quantity, state and basis, all as text (P7b). After now (P8b) one
-  // line per series: its forecast with the agency and the issue time, or "no forecast"; a hollow or grey marker
-  // is never the only cue.
-  const lines = useMemo(
-    () =>
-      (selected?.series ?? []).flatMap((series) => {
-        const quantity = series.quantity === 'H' ? m.quantity_H({}, { locale }) : m.quantity_Q({}, { locale });
-        if (forecasts !== undefined) return [forecastLine(quantity, forecasts.get(series.id), series, locale)];
-        const v = values.get(series.id);
-        return v === undefined ? [] : [popupLine(quantity, v, locale)];
-      }),
-    [selected, values, forecasts, locale],
-  );
+  // The popup's lines: per series the text of the map mode (state and basis, the 24-hour change, the discharge), after
+  // now (P8b) its forecast with the agency and the issue time (in the delta mode "not applicable": forecasts and
+  // observations never mix), then one line of badges in words (a ring or a hollow marker is never the only cue).
+  const lines = useMemo(() => {
+    if (selected === undefined) return [];
+    const quantityWord = (s: ApiStation['series'][number]) =>
+      s.quantity === 'H' ? m.quantity_H({}, { locale }) : m.quantity_Q({}, { locale });
+    const body =
+      forecasts === undefined
+        ? modeLines({ mode, series: selected.series, values, changes, locale, quantityWord })
+        : selected.series.map((s) =>
+            mode === 'delta'
+              ? changeLine(quantityWord(s), s, null, locale)
+              : forecastLine(quantityWord(s), forecasts.get(s.id), s, locale),
+          );
+    const badges = badgeLine(
+      {
+        state: states.get(selected.id),
+        tidal: selected.flags.tidal === true,
+        impounded: selected.flags.impounded === true,
+      },
+      locale,
+    );
+    return badges === '' ? body : [...body, badges];
+  }, [selected, values, forecasts, changes, states, mode, locale]);
   const linesNow = useRef(lines);
   linesNow.current = lines;
   /** The popup's content element while a popup is open: its lines are replaced in place when `t` moves. */

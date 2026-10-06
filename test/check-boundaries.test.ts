@@ -19,6 +19,15 @@ describe('check-boundaries', () => {
     ]);
   });
 
+  it('keeps the owner schemas in the owner chunk and core subpaths only in apps/web/src (P10a, KG-235)', () => {
+    expect(fixture('web-owner')).toEqual([
+      'apps/web/src/bad.ts: imports @rws/contracts/static-owner (only the lazy owner chunk (features/owner) imports the owner schemas)',
+      'apps/web/src/bad.ts: imports @rws/contracts/api-owner (the web never imports the owner API or status contracts)',
+      'apps/web/src/bad.ts: imports @rws/core (the web imports only the subpaths of @rws/core)',
+      'apps/web/src/features/owner/contracts.ts: imports @rws/contracts/api-owner (the web never imports the owner API or status contracts)',
+    ]);
+  });
+
   it('fails when a package imports an app, by path and by package name', () => {
     const problems = fixture('packages-to-apps');
     expect(problems).toHaveLength(2);

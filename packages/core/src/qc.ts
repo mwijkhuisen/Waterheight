@@ -18,6 +18,9 @@ export const QC = {
 
 export const QC_MAX = 1023;
 
+/** QC bits that make a value suspect (A§6): provider-suspect, our range, spike and frozen checks. */
+export const SUSPECT_BITS = QC.PROVIDER_SUSPECT | QC.RANGE | QC.SPIKE | QC.FROZEN;
+
 export type ValueClass = 'stage' | 'level' | 'Q';
 
 /**

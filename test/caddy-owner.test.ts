@@ -5,7 +5,8 @@ import { parse } from 'yaml';
 import { repoRoot } from './catalogue.ts';
 
 // The owner site (P9a): its A§12.2 headers are the public site's, and only the
-// two owner headers differ; the owner stack is isolated from the public one by
+// two owner headers differ, plus `Referrer-Policy: no-referrer` (P10a: a link to a provider never names the owner
+// site); the owner stack is isolated from the public one by
 // construction (deploy/compose.yaml, deploy/compose.owner.yaml).
 
 const read = (rel: string) => readFileSync(join(repoRoot, rel), 'utf8');
@@ -26,10 +27,10 @@ describe('owner site headers', () => {
   const pub = headerBlock(publicSite);
   const own = headerBlock(ownerSite);
 
-  it('equal the public set except X-Robots-Tag and the two owner additions', () => {
-    const robots = (l: string) => l.startsWith('X-Robots-Tag ');
-    expect(pub.filter(robots)).toEqual(['X-Robots-Tag "noindex"']);
-    expect(own.filter(robots)).toEqual(['X-Robots-Tag "noindex, nofollow"']);
+  it('equal the public set except X-Robots-Tag, the Referrer-Policy and the two owner additions', () => {
+    const robots = (l: string) => l.startsWith('X-Robots-Tag ') || l.startsWith('Referrer-Policy ');
+    expect(pub.filter(robots)).toEqual(['Referrer-Policy "strict-origin-when-cross-origin"', 'X-Robots-Tag "noindex"']);
+    expect(own.filter(robots)).toEqual(['Referrer-Policy "no-referrer"', 'X-Robots-Tag "noindex, nofollow"']);
     // Cache-Control and `defer` (so a proxied answer cannot override it) are the additions.
     expect(own.filter((l) => !robots(l) && l !== 'Cache-Control "private, no-store"' && l !== 'defer')).toEqual(
       pub.filter((l) => !robots(l)),
@@ -93,14 +94,17 @@ describe('owner site isolation', () => {
     expect(ownerSite).not.toMatch(/^\s*route\b/m);
   });
 
-  it('never reads the public tree, and the public site never reads the owner tree or the secret', () => {
-    expect(ownerSite.replaceAll(/#.*$/gm, '')).not.toContain('/srv/rws/public');
+  it('reads nothing of the public tree but the river files, and the public site never reads the owner tree or the secret', () => {
+    // P10a (KG-213): the one public path the owner site reads is the rivers directory (and /srv/rws/tiles, which is not public/).
+    const ownerCode = ownerSite.replaceAll(/#.*$/gm, '').replaceAll('/srv/rws/public/data/v1/rivers', '');
+    expect(ownerCode).not.toContain('/srv/rws/public');
+    expect(ownerCode).not.toContain('/srv/rws/owner/status');
     const code = (f: string) => f.replaceAll(/#.*$/gm, '');
     expect(code(publicSite)).not.toMatch(/owner_basic_auth|caddy-owner|\/srv\/rws\/owner/);
     expect(code(read('deploy/compose.yaml'))).not.toMatch(/owner_basic_auth|caddy-owner/);
   });
 
-  it('mounts each publisher on its own audience only, and caddy-owner only the owner v1, read-only', () => {
+  it('mounts each publisher on its own audience only, and caddy-owner only the owner v1, the tiles and the rivers directory, read-only', () => {
     type Svc = { volumes?: string[]; secrets?: string[]; networks?: string[]; ports?: string[] };
     const base = parse(read('deploy/compose.yaml')) as { services: Record<string, Svc> };
     const overlay = parse(read('deploy/compose.owner.yaml')) as { services: Record<string, Svc> };
@@ -115,8 +119,11 @@ describe('owner site isolation', () => {
       '/srv/rws/public/www/v1:/srv/rws/public/www/v1:ro',
     ]);
     const owner = overlay.services['caddy-owner'];
+    // An exact list (P10a, KG-213): the owner tree, the basemap tiles and the river files, never anything else of /srv/rws/public.
     expect(owner?.volumes?.filter((v) => v.startsWith('/'))).toEqual([
       '/srv/rws/owner/www/v1:/srv/rws/owner/www/v1:ro',
+      '/srv/rws/tiles:/srv/rws/tiles:ro',
+      '/srv/rws/public/data/v1/rivers:/srv/rws/public/data/v1/rivers:ro',
     ]);
     expect(owner?.ports).toBeUndefined();
     expect(owner?.networks).toEqual(['edge', 'owner_edge']);

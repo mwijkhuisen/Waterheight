@@ -17,6 +17,14 @@
     "./forecast-hold": {
       "rws-dist": "./dist/forecast-hold.js",
       "default": "./src/forecast-hold.ts"
+    },
+    "./qc": {
+      "rws-dist": "./dist/qc.js",
+      "default": "./src/qc.ts"
+    },
+    "./trend": {
+      "rws-dist": "./dist/trend.js",
+      "default": "./src/trend.ts"
     }
   },
   "dependencies": {

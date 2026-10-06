@@ -33,7 +33,7 @@ describe('state text', () => {
     expect(heightText({ nap: { m: 1.234, pm: 0 } }, 'nl')).toBe('≈ 1,23 m NAP');
     expect(heightText({ nap: { m: 1.234, pm: 0.004 } }, 'en')).toBe('≈ 1.23 m NAP');
     expect(heightText({ zero: { m: 12.5, datum: 'IGN69' } }, 'nl')).toBe(
-      "peilnul: 12,5 m IGN69 (Hub'Eau-metadata, niet geverifieerd)",
+      "nulpunt: 12,5 m IGN69 (Hub'Eau-metadata, niet geverifieerd)",
     );
     expect(heightText({}, 'nl')).toBeNull();
   });

@@ -1,45 +1,82 @@
-import { type ApiStation, RiversManifest, SeriesAnswer, SeriesForecastAnswer } from '@rws/contracts';
+import { type ApiStation, floorBucket, RiversManifest } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { loadAudience } from '../config/runtime.ts';
 import { stationHorizon } from '../forecast.ts';
 import { quantise, STEP_MS, toUrlT } from '../time/time.ts';
-import { browserFetch, HttpError, loadMeta, loadSnapshot, loadStations, type WebMeta } from './chain.ts';
+import type { Mode } from '../url/url.ts';
+import {
+  browserFetch,
+  HttpError,
+  loadMeta,
+  loadRecent,
+  loadRivers,
+  loadSnapshot,
+  loadSources,
+  loadStations,
+  loadStatusMode,
+  loadWarnings,
+  type WebMeta,
+} from './chain.ts';
+import { type Change, changesAt } from './change.ts';
+import { type Contracts, PUBLIC_CONTRACTS } from './contracts.ts';
 import { snapshotSource, versionKey } from './static.ts';
 
-// The P4a API, read through relative paths only, so the same build can later
-// serve the owner site (A§10 owner mode). Every answer is parsed with its
-// contract before the UI sees it; anything else is an error state.
+// The data of the page, read through relative paths only, so the same build serves the public site and the owner
+// site (A§10 owner mode). Every answer is parsed with its site's contract (contracts.ts) before the UI sees it;
+// anything else is an error state. Every key carries the audience, so the two sites' answers never mix.
 
 export { HttpError };
-
-async function getJson<T>(path: string, contract: { parse(data: unknown): T }, signal: AbortSignal): Promise<T> {
-  const res = await browserFetch(path, signal);
-  if (!res.ok) throw new HttpError(res.status);
-  return contract.parse(await res.json());
-}
 
 export const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
-/** Which site this is (/runtime-config.json, once); undefined until it has answered. Every query key carries it. */
-export const useAudience = () =>
+/** Live mode (no `t`, P10a T7): the current answers are asked again every minute while the tab is visible. */
+const LIVE_MS = 60_000;
+const live = (on: boolean) => (on ? { refetchInterval: LIVE_MS, refetchIntervalInBackground: false } : {});
+
+/**
+ * Which site this is (/runtime-config.json, once): the query, so the page can say when it never answered. A failure
+ * is retried (three times, with backoff) and never becomes "public" (lib/config/runtime.ts; review round 1).
+ */
+export const useAudienceQuery = () =>
   useQuery({
     queryKey: ['runtime-config'],
     queryFn: ({ signal }) => loadAudience(undefined, signal),
     staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  }).data;
+    retry: 3,
+  });
 
-// Static first, the API as fallback (P9a, chain.ts): meta.json, stations.json, then the snapshot file of t.
-export const useMeta = () => {
+/** Which site this is; undefined until it has answered (and after it failed for good). */
+export const useAudience = () => useAudienceQuery().data;
+
+/**
+ * The site's schemas: the public record at once, the owner record from its lazy chunk (plan C1). Undefined until the
+ * audience is known (and, on the owner site, the chunk has loaded); every query waits for it.
+ */
+export function useContracts(): Contracts | undefined {
   const aud = useAudience();
   return useQuery({
-    queryKey: ['meta', aud],
-    queryFn: ({ signal }) => loadMeta(browserFetch, signal),
+    queryKey: ['contracts', aud],
+    queryFn: async (): Promise<Contracts> =>
+      aud === 'owner' ? (await import('../../features/owner/contracts.ts')).OWNER_CONTRACTS : PUBLIC_CONTRACTS,
     enabled: aud !== undefined,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+    structuralSharing: false,
+  }).data;
+}
+
+// Static first, the API as fallback (P9a, chain.ts): meta.json, stations.json, then the snapshot file of t.
+export const useMeta = (isLive = false) => {
+  const c = useContracts();
+  return useQuery({
+    queryKey: ['meta', c?.audience],
+    queryFn: ({ signal }) => loadMeta(browserFetch, signal, c),
+    enabled: c !== undefined,
     staleTime: 60_000,
+    ...live(isLive),
   });
 };
 
@@ -56,56 +93,202 @@ export function downloadHref(manifest: unknown): string | undefined {
 export const useRiversManifest = () =>
   useQuery({
     queryKey: ['rivers-manifest'],
-    queryFn: ({ signal }) => getJson(MANIFEST_PATH, RiversManifest, signal),
+    queryFn: async ({ signal }) => {
+      const res = await browserFetch(MANIFEST_PATH, signal);
+      if (!res.ok) throw new HttpError(res.status);
+      return RiversManifest.parse(await res.json());
+    },
     retry: false,
     staleTime: 300_000,
   });
 
+/**
+ * The installed river release (P10a T4): its manifest (the tile file of the `rivers` layer) and its river list (ids
+ * and names for `?river=`). An error means no river layer and no chip, never an error on the page.
+ */
+export const useRivers = () =>
+  useQuery({
+    queryKey: ['rivers'],
+    queryFn: ({ signal }) => loadRivers(browserFetch, signal),
+    retry: false,
+    staleTime: 300_000,
+  });
+
+/**
+ * `?river=` once the river list has answered (plan C17): kept while it loads, dropped when the list failed or does
+ * not name it.
+ */
+export function useRiver(river: string | undefined) {
+  const rivers = useRivers();
+  if (river === undefined) return undefined;
+  if (rivers.isPending) return { id: river, river: undefined };
+  const found = rivers.data?.rivers.find((r) => r.id === river);
+  return found === undefined ? undefined : { id: river, river: found };
+}
+
 export const useStations = () => {
-  const aud = useAudience();
+  const c = useContracts();
   return useQuery({
-    queryKey: ['stations', aud],
-    queryFn: ({ signal }) => loadStations(browserFetch, signal),
-    enabled: aud !== undefined,
+    queryKey: ['stations', c?.audience],
+    queryFn: ({ signal }) => loadStations(browserFetch, signal, c),
+    enabled: c !== undefined,
     staleTime: 300_000,
   });
 };
+
+/** sources.json: the credit lines with their dynamic dates and, on the owner site, every source's audience. */
+export const useSources = () => {
+  const c = useContracts();
+  return useQuery({
+    queryKey: ['sources', c?.audience],
+    queryFn: ({ signal }) => loadSources(browserFetch, signal, c),
+    enabled: c !== undefined,
+    staleTime: 300_000,
+  });
+};
+
+/** The source ids of owner audience (empty on the public site and until sources.json has answered). */
+export function useOwnerSources(): ReadonlySet<string> {
+  const sources = useSources().data;
+  return useMemo(
+    () => new Set((sources?.sources ?? []).filter((s) => s.audience === 'owner').map((s) => s.id)),
+    [sources],
+  );
+}
+
+/**
+ * The map mode (D10, plan C11): the URL's, else the default of status.json (`dh` → delta) for this site's family;
+ * `delta` when the file fails or names none. Undefined while status.json is on its way, so the page never flashes
+ * one mode and then shows another.
+ */
+export function useMode(urlMode: Mode | undefined): Mode | undefined {
+  const c = useContracts();
+  const status = useQuery({
+    queryKey: ['status-mode', c?.audience],
+    queryFn: ({ signal }) => loadStatusMode(browserFetch, signal, c),
+    enabled: c !== undefined && urlMode === undefined,
+    staleTime: 300_000,
+    retry: false,
+  });
+  if (urlMode !== undefined) return urlMode;
+  if (status.isPending) return undefined;
+  return status.data === 'state' ? 'state' : 'delta';
+}
 
 /**
  * The values at a quantised `t`. The key is that instant, so scrubbing back to
  * a bucket reuses its answer; a request that a newer `t` supersedes loses its
  * last observer and Query aborts it through `signal`. The previous values stay
- * on screen until the new ones arrive.
+ * on screen until the new ones arrive. In live mode the current bucket is asked again every minute.
  */
 export const useSnapshot = (
   t: number | undefined,
   meta: Pick<WebMeta, 'now' | 'dayVersions'> | undefined,
   seriesHash: string | null | undefined,
+  isLive = false,
 ) => {
-  const aud = useAudience();
+  const c = useContracts();
   const key = t === undefined || meta === undefined ? 'wait' : versionKey(snapshotSource(t, meta), t);
   return useQuery({
-    queryKey: ['snapshot', aud, t, key],
-    queryFn: ({ signal }) => loadSnapshot(browserFetch, t ?? 0, meta as WebMeta, seriesHash ?? null, signal),
-    enabled: aud !== undefined && t !== undefined && meta !== undefined && seriesHash !== undefined,
+    queryKey: ['snapshot', c?.audience, t, key],
+    queryFn: ({ signal }) => loadSnapshot(browserFetch, t ?? 0, meta as WebMeta, seriesHash ?? null, signal, c),
+    enabled: c !== undefined && t !== undefined && meta !== undefined && seriesHash !== undefined,
     placeholderData: keepPreviousData,
     staleTime: 60_000,
+    ...live(isLive),
   });
 };
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The 24-hour change per series at `t` (P10a T1): latest.json's own `dh24` when the snapshot is the current one,
+ * else value(t) − value(t − 24 h) from the snapshot at t − 24 h (its own query, through the same chain). Undefined
+ * after now (not applicable) and while either answer is on its way.
+ */
+export function useChanges(
+  t: number | undefined,
+  meta: Pick<WebMeta, 'now' | 'dayVersions' | 'displayStart'> | undefined,
+  seriesHash: string | null | undefined,
+  stations: readonly ApiStation[] | undefined,
+  current:
+    | { t: string; values: { series: number; value: number }[]; dh24?: ReadonlyMap<number, number | null> | undefined }
+    | undefined,
+): ReadonlyMap<number, Change> | undefined {
+  const future = t !== undefined && meta !== undefined && t > floorBucket(Date.parse(meta.now));
+  const needBefore =
+    !future &&
+    current !== undefined &&
+    current.dh24 === undefined &&
+    t !== undefined &&
+    t - DAY_MS >= Date.parse(meta?.displayStart ?? '');
+  const before = useSnapshot(needBefore && t !== undefined ? t - DAY_MS : undefined, meta, seriesHash);
+  const quantity = useMemo(
+    () => new Map((stations ?? []).flatMap((st) => st.series.map((s) => [s.id, s.quantity] as const))),
+    [stations],
+  );
+  return useMemo(() => {
+    if (future || current === undefined || t === undefined || Date.parse(current.t) !== t) return undefined;
+    if (current.dh24 !== undefined) return changesAt(quantity, current.values, undefined, current.dh24);
+    if (!needBefore) return changesAt(quantity, current.values, []);
+    if (before.data === undefined || Date.parse(before.data.t) !== t - DAY_MS) return undefined;
+    return changesAt(quantity, current.values, before.data.values);
+  }, [future, current, t, quantity, needBefore, before.data]);
+}
+
+/**
+ * The warning areas valid at `t` (P10a T5; warnings.ts picks the file). Live, the latest file is asked again every
+ * minute. A failure shows no areas (the map still works); `incomplete` says when earlier areas may be missing.
+ */
+export const useWarnings = (t: number | undefined, meta: Pick<WebMeta, 'now'> | undefined, isLive = false) => {
+  const c = useContracts();
+  const bucket = meta === undefined ? undefined : floorBucket(Date.parse(meta.now));
+  return useQuery({
+    queryKey: ['warnings', c?.audience, t, t !== undefined && bucket !== undefined && t >= bucket ? 'latest' : 'at'],
+    queryFn: ({ signal }) => loadWarnings(browserFetch, t ?? 0, meta as WebMeta, signal, c),
+    enabled: c !== undefined && t !== undefined && meta !== undefined && t <= (bucket ?? 0),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+    retry: false,
+    ...live(isLive),
+  });
+};
+
+/** series/<station>/recent.json of the selected station (7 days, its runs and references); refreshed live. */
+export const useRecent = (station: string | undefined, isLive = false) => {
+  const c = useContracts();
+  return useQuery({
+    queryKey: ['recent', c?.audience, station],
+    queryFn: ({ signal }) => loadRecent(browserFetch, station ?? '', signal, c),
+    enabled: c !== undefined && station !== undefined,
+    staleTime: 60_000,
+    retry: false,
+    ...live(isLive),
+  });
+};
+
+async function getJson<T>(path: string, contract: { parse(data: unknown): T }, signal: AbortSignal): Promise<T> {
+  const res = await browserFetch(path, signal);
+  if (!res.ok) throw new HttpError(res.status);
+  return contract.parse(await res.json());
+}
 
 /**
  * The run of one series that is current now (its horizon: the end of the slider, D8). The answer does not depend on
  * `t`, so it is fetched once per series and kept for as long as the API caches it. A series the API does not offer
  * (404: not in the api channel) has no forecast, like one without a run.
  */
-const forecastQuery = (aud: string | undefined, id: number) => ({
-  queryKey: ['forecast', aud, id],
-  enabled: aud !== undefined,
+const forecastQuery = (c: Contracts | undefined, id: number) => ({
+  queryKey: ['forecast', c?.audience, id],
+  enabled: c !== undefined,
   queryFn: ({ signal }: { signal: AbortSignal }) =>
-    getJson(`/api/v1/series/${id}/forecast`, SeriesForecastAnswer, signal).catch((e: unknown) => {
-      if (e instanceof HttpError && e.status === 404) return null;
-      throw e;
-    }),
+    getJson(`/api/v1/series/${id}/forecast`, (c as Contracts).SeriesForecastAnswer, signal).then(
+      (a) => (a.run !== null && (c as Contracts).hidden(a.run.source) ? { ...a, run: null } : a),
+      (e: unknown) => {
+        if (e instanceof HttpError && e.status === 404) return null;
+        throw e;
+      },
+    ),
   staleTime: 300_000,
 });
 
@@ -115,9 +298,13 @@ const forecastQuery = (aud: string | undefined, id: number) => ({
  * the global end, and the snapshot says per station what it has).
  */
 export const useStationHorizon = (station: ApiStation | undefined): number | null | undefined => {
-  const aud = useAudience();
+  const c = useContracts();
   return useQueries({
-    queries: (station?.series ?? []).map((s) => forecastQuery(aud, s.id)),
+    // A display-only series (stations.json `api: false`) is not in the api channel: it is never asked (a 404 would
+    // say the same), review round 1.
+    queries: (station?.series ?? [])
+      .filter((s) => (s as { api?: boolean }).api !== false)
+      .map((s) => forecastQuery(c, s.id)),
     combine: (results) =>
       results.length === 0 || results.some((r) => r.isPending || r.isError)
         ? undefined
@@ -125,14 +312,34 @@ export const useStationHorizon = (station: ApiStation | undefined): number | nul
   });
 };
 
-/** One series over [from, to), raw. The id comes only from the /stations answer. */
-export const useSeries = (id: number, from: number, to: number) => {
-  const aud = useAudience();
+/** One series' run for a past or settled t (`?asof=`), when recent.json's run is not the one of that t. */
+export const useForecastAsOf = (id: number | undefined, asof: number | undefined) => {
+  const c = useContracts();
   return useQuery({
-    queryKey: ['series', aud, id, from, to],
+    queryKey: ['forecast-asof', c?.audience, id, asof],
     queryFn: ({ signal }) =>
-      getJson(`/api/v1/series/${id}?from=${toUrlT(from)}&to=${toUrlT(to)}&res=raw`, SeriesAnswer, signal),
-    enabled: aud !== undefined,
+      getJson(`/api/v1/series/${id}/forecast?asof=${toUrlT(asof ?? 0)}`, (c as Contracts).SeriesForecastAnswer, signal),
+    enabled: c !== undefined && id !== undefined && asof !== undefined,
+    staleTime: 300_000,
+    retry: false,
+  });
+};
+
+/**
+ * One series over [from, to), raw. The id comes only from the stations answer, and the caller asks only for a
+ * series whose `api` flag is on (a display-only series is never asked: historySource in change.ts).
+ */
+export const useSeries = (id: number, from: number, to: number, enabled = true) => {
+  const c = useContracts();
+  return useQuery({
+    queryKey: ['series', c?.audience, id, from, to],
+    queryFn: ({ signal }) =>
+      getJson(
+        `/api/v1/series/${id}?from=${toUrlT(from)}&to=${toUrlT(to)}&res=raw`,
+        (c as Contracts).SeriesAnswer,
+        signal,
+      ),
+    enabled: c !== undefined && enabled,
     staleTime: 60_000,
   });
 };

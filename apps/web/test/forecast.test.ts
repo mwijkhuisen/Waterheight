@@ -2,10 +2,18 @@ import type { ApiStation, SeriesForecast, SeriesMeta, SnapshotForecast } from '@
 import { FORECAST_AHEAD_MS } from '@rws/contracts';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { forecastStates } from '../src/features/map/stationLayer.ts';
 import { bandText, forecastDetail, forecastLine, forecastValue, issueText } from '../src/features/station/forecast.ts';
 import { globalEnd, pageT, sliderEnd, stationHorizon } from '../src/lib/forecast.ts';
+import { stationStates } from '../src/lib/stationStates.ts';
 import { quantise } from '../src/lib/time/time.ts';
+
+/** The after-now part of the station record (P10a: stationStates replaced stationLayer's forecastStates). */
+const forecastStates = (stations: readonly ApiStation[], forecasts: ReadonlyMap<number, SnapshotForecast>) =>
+  new Map(
+    [...stationStates({ stations, values: new Map(), forecasts, changes: undefined, ownerSources: new Set() })].map(
+      ([id, x]) => [id, { has: x.has, stale: x.stale, forecast: x.forecast, estimate: x.estimate }],
+    ),
+  );
 
 // P8b, the pure parts of the forecast view: how far the slider reaches, which t the page shows, which marker a
 // station gets after now, and the words of a forecast (agency, issue time, estimate, band, "no forecast").

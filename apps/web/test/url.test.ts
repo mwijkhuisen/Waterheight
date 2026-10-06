@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { otherLanguageHref, readSearch, searchOf, type UrlState } from '../src/lib/url/url.ts';
+import { MODES, otherLanguageHref, RIVER_ID, readSearch, searchOf, type UrlState } from '../src/lib/url/url.ts';
 
 // The view lives in the URL (A§10): `?t=…&s=…`. Whatever does not parse is
 // dropped, never thrown and never rendered. The React hook has no unit test
@@ -116,5 +116,44 @@ describe('otherLanguageHref', () => {
     const none = { t: undefined, s: undefined };
     expect(otherLanguageHref('nl', none)).toBe('/en/');
     expect(otherLanguageHref('en', none)).toBe('/');
+  });
+});
+
+describe('mode and river (P10a)', () => {
+  it('reads a known mode and a river slug, and drops anything else', () => {
+    expect(readSearch('?mode=delta&river=waal')).toMatchObject({ mode: 'delta', river: 'waal' });
+    expect(readSearch('?mode=state').mode).toBe('state');
+    expect(readSearch('?mode=q').mode).toBe('q');
+    for (const bad of ['dh', 'Q', 'STATE', '', 'state ', '__proto__'])
+      expect(readSearch(`?mode=${encodeURIComponent(bad)}`).mode).toBeUndefined();
+    for (const bad of ['Waal', 'w', '1rhine', 'rhine_x', `a${'b'.repeat(41)}`, '<x>', ''])
+      expect(readSearch(`?river=${encodeURIComponent(bad)}`).river).toBeUndefined();
+  });
+
+  it('keeps every key in the other language', () => {
+    expect(otherLanguageHref('nl', { t: T, s: ID, mode: 'q', river: 'pannerdensch-kanaal' })).toBe(
+      `/en/?t=2026-10-25T01:30Z&s=${ID}&mode=q&river=pannerdensch-kanaal`,
+    );
+  });
+
+  it('round-trips, and never returns an invalid mode or river for random text', () => {
+    const state = fc.record({
+      t: fc.constant(undefined),
+      s: fc.constant(undefined),
+      mode: fc.option(fc.constantFrom(...MODES), { nil: undefined }),
+      river: fc.option(fc.stringMatching(/^[a-z][a-z0-9-]{1,40}$/), { nil: undefined }),
+    });
+    fc.assert(
+      fc.property(state, (x: UrlState) => {
+        expect(readSearch(searchOf(x))).toEqual(x);
+      }),
+    );
+    fc.assert(
+      fc.property(fc.string({ unit: 'binary' }), fc.string({ unit: 'binary' }), (mode, river) => {
+        const out = readSearch(`?mode=${encodeURIComponent(mode)}&river=${encodeURIComponent(river)}`);
+        if (out.mode !== undefined) expect(MODES).toContain(out.mode);
+        if (out.river !== undefined) expect(out.river).toMatch(RIVER_ID);
+      }),
+    );
   });
 });

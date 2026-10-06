@@ -1,4 +1,5 @@
-import { ForecastLatest, OwnerForecastLatest } from '@rws/contracts';
+import { ForecastLatest } from '@rws/contracts';
+import { OwnerForecastLatest } from '@rws/contracts/static-owner';
 import { type CurrentRun, de2Superseded, FORECAST_FLAGS, isCurrent } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { type ChannelAudience, FORECAST_AT, VIEWS } from '../db/audience.ts';

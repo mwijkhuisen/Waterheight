@@ -101,7 +101,8 @@ test('the spike renders under the production CSP, same-origin only', async ({ pa
   expect(html).not.toMatch(/createMap|maplibre/i);
   const scripts = [...html.matchAll(/<script\b[^>]*\ssrc="([^"]+)"/g)].map((m) => new URL(m[1] ?? '', log.origin).href);
   expect(
-    scripts.some((s) => /\/assets\/main-[^/]+\.js$/.test(s)),
+    // (the HTML's own entry: named after the page's entry file since the strict execution order of P10a)
+    scripts.some((s) => /\/assets\/(main|spike_[a-z]{2})-[^/]+\.js$/.test(s)),
     'the entry script',
   ).toBe(true);
   const scriptsAt = scripts.map((s) => log.requests.indexOf(s));

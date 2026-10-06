@@ -21,6 +21,19 @@ describe('check-i18n: hard-coded UI text', () => {
     expect(found(source)).toEqual([`a.tsx:1: ${what}`]);
   });
 
+  it('flags a UI-text property set to a literal in a .ts builder (an ECharts axis name; review round 1)', () => {
+    expect(findHardcoded('chart.ts', "const o = { yAxis: { name: 'Waterstand' } };")).toEqual([
+      'chart.ts:1: hard-coded name property',
+    ]);
+    expect(findHardcoded('chart.ts', "const o = { title: { text: cond ? 'Afvoer' : x } };")).toEqual([
+      'chart.ts:1: hard-coded text property',
+    ]);
+    // A variable, a message call, an id-like key and punctuation are fine.
+    expect(
+      findHardcoded('chart.ts', "const o = { name: d.unit, label: m.x({}, o), id: 'obs', type: 'line', text: ' – ' };"),
+    ).toEqual([]);
+  });
+
   it('reports the line of the text, not of its element', () => {
     expect(found('<div>\n  <p>\n    Hallo\n  </p>\n</div>')).toEqual(['a.tsx:3: hard-coded JSX text']);
   });
@@ -80,6 +93,57 @@ describe('check-i18n: messages', () => {
     expect(checkI18n(tree({ a: 'Een' }, { a: 'One' }, '<p>Hallo</p>'))).toEqual([
       'apps/web/src/A.tsx:1: hard-coded JSX text',
     ]);
+  });
+
+  describe('the label catalogue', () => {
+    /** A tree with one public and one owner source, one label each and one river, all present. */
+    const withRegistry = (opts: { nlText?: string; dropEn?: boolean; dropOwner?: boolean } = {}) => {
+      const key = 'lbl_de_6_station_m1';
+      const nl: Record<string, string> = { [key]: 'Geen', river_rhine: 'Rijn' };
+      const en: Record<string, string> = { [key]: 'None', river_rhine: 'Rhine' };
+      if (opts.dropEn) delete en[key];
+      const root = tree(nl, en);
+      mkdirSync(join(root, 'registry/labels'), { recursive: true });
+      mkdirSync(join(root, 'apps/web/src/features/owner'), { recursive: true });
+      writeFileSync(
+        join(root, 'registry/sources.yaml'),
+        'sources:\n  - { id: DE-6, audience: public }\n  - { id: BE-3, audience: owner }\n',
+      );
+      writeFileSync(
+        join(root, 'registry/labels/DE-6.yaml'),
+        `source: DE-6\nlabels:\n  - { scale: station, code: '-1', ${opts.nlText ?? 'nl: Geen'}, en: None }\n`,
+      );
+      writeFileSync(
+        join(root, 'registry/labels/BE-3.yaml'),
+        'source: BE-3\nlabels:\n  - { scale: reference, code: P05, nl: Een, en: One }\n',
+      );
+      writeFileSync(join(root, 'registry/rivers.yaml'), 'rivers:\n  - { id: rhine, name_nl: Rijn, name_en: Rhine }\n');
+      writeFileSync(
+        join(root, 'apps/web/src/features/owner/labels.gen.ts'),
+        opts.dropOwner ? 'export {};\n' : 'const a = { lbl_be_3_reference_p05: "x" };\n',
+      );
+      return root;
+    };
+
+    it('passes when every label and river is in the catalogue', () => {
+      expect(checkI18n(withRegistry())).toEqual([]);
+    });
+    it('fails on a registry label without an nl text', () => {
+      expect(checkI18n(withRegistry({ nlText: 'x: 1' }))).toEqual([
+        'label DE-6 station -1 has no nl text in the registry',
+      ]);
+    });
+    it('fails on a key missing in en.json', () => {
+      expect(checkI18n(withRegistry({ dropEn: true }))).toContain(
+        'label DE-6 station -1 ("lbl_de_6_station_m1") is missing in en.json',
+      );
+    });
+    it('fails on an owner label missing in labels.gen.ts', () => {
+      expect(checkI18n(withRegistry({ dropOwner: true }))).toEqual([
+        'label BE-3 reference P05 ("lbl_be_3_reference_p05") is missing in labels.gen.ts',
+        'label BE-3 reference P05 ("lbl_be_3_reference_p05") is missing in labels.gen.ts',
+      ]);
+    });
   });
 
   it('passes on the repository', () => {

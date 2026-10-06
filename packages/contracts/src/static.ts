@@ -2,7 +2,9 @@ import { z } from 'zod';
 import {
   ApiStation,
   Attribution,
+  AttributionEntry,
   attributionEntry,
+  DATE_KINDS,
   HealthSourceId,
   MAX_POINTS,
   Meta,
@@ -278,6 +280,43 @@ export const StaticForecastLatest = PUBLIC.StaticForecastLatest;
 export type StaticForecastLatest = z.infer<typeof StaticForecastLatest>;
 export const WarningsFile = PUBLIC.WarningsFile;
 export type WarningsFile = z.infer<typeof WarningsFile>;
+
+export const HttpsUrl = z
+  .string()
+  .max(500)
+  .regex(/^https:\/\/[^\s]+$/);
+
+/** One source of sources.json: the registry's names and attribution rows verbatim, and the date its licence asks for. */
+export const sourceEntry = (source: z.ZodString) =>
+  z.strictObject({
+    id: source,
+    name: z.string().min(1).max(200),
+    provider: z.string().min(1).max(200),
+    /** The licence kind of the registry and the provider's terms page. */
+    licence: z.strictObject({ kind: z.string().min(1).max(40).nullable(), url: HttpsUrl.nullable() }),
+    attribution: z
+      .array(
+        z.strictObject({
+          lang: z.enum(['nl', 'en', 'de', 'fr']).nullable(),
+          text: z.string().min(1).max(1000),
+          url: HttpsUrl.nullable(),
+          required: z.boolean(),
+        }),
+      )
+      .max(20),
+    dateKind: z.enum(DATE_KINDS).nullable(),
+    date: iso.nullable(),
+    dateText: z.string().max(60).nullable(),
+  });
+
+/** /data/v1/sources.json: the public sources (catalogue §1b texts, licence links, dynamic dates). */
+export const StaticSources = z.strictObject({
+  schemaVersion: z.literal(1),
+  generatedAt: iso,
+  sources: z.array(sourceEntry(HealthSourceId)).max(100),
+  attribution: z.array(AttributionEntry).max(500),
+});
+export type StaticSources = z.infer<typeof StaticSources>;
 
 /** The API's Snapshot from a snapshot file (latest, recent or settled): ordered by series, `ts = t − ageSeconds`. */
 export function toSnapshot(file: Omit<SnapshotFile, 'schemaVersion'>): Snapshot {

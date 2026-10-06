@@ -8,8 +8,8 @@
 # caddy-owner is the web image with its own Caddyfile (Caddyfile.owner):
 # basic_auth at the site level, the §12.2 headers plus `private, no-store` and
 # `noindex, nofollow` on every response, no published port (P12a binds it to the
-# WireGuard address). It mounts only the owner publisher's served tree (v1,
-# read-only); never anything of /srv/rws/public.
+# WireGuard address). It mounts the owner publisher's served tree (v1), the basemap
+# tiles and the river files, all read-only (P10a, KG-213); nothing else of /srv/rws/public.
 #
 # api-owner (P9b, plan C15) is the owner API: the same server image as `api` with
 # `--audience owner` (role rws_owner_api over the owner views only, a pool of 2).
@@ -38,6 +38,10 @@ services:
     secrets: [owner_basic_auth]
     volumes:
       - /srv/rws/owner/www/v1:/srv/rws/owner/www/v1:ro
+      # The owner map's basemap tiles and river files (P10a, KG-213): exactly these
+      # two, read-only, at the paths owner.caddy shares with site.caddy.
+      - /srv/rws/tiles:/srv/rws/tiles:ro
+      - /srv/rws/public/data/v1/rivers:/srv/rws/public/data/v1/rivers:ro
       - caddy_owner_data:/data
       - caddy_owner_config:/config
     networks: [edge, owner_edge]
