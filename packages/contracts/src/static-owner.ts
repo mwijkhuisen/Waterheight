@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OwnerForecastLatest } from './forecast.ts';
+import { forecastLatest } from './forecast.ts';
 import { HttpsUrl, sourceEntry, staticContracts } from './static.ts';
 
 // The public sources.json moved to static.ts (P10a: the web reads it); re-exported here for the server.
@@ -11,6 +11,9 @@ export { StaticSources } from './static.ts';
 
 /** The owner files also name the owner canary's source (A§9.3): the one spelling they add. */
 export const OwnerSourceId = z.string().regex(/^(?:(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?|CANARY-[A-Z]+)$/);
+
+/** The owner forecast/latest.json: the public shape, and the owner canary's source may appear. */
+export const OwnerForecastLatest = forecastLatest(OwnerSourceId);
 
 const iso = z.iso.datetime();
 const OWNER = staticContracts(OwnerSourceId, OwnerForecastLatest);

@@ -266,6 +266,7 @@ function Viewer({ locale }: { locale: Locale }) {
             )}
             {snapshot.isError && <p role="alert">{m.data_unavailable({}, { locale })}</p>}
             {warnings?.incomplete === true && <p role="status">{m.warnings_incomplete({}, { locale })}</p>}
+            {mode === 'delta' && forecasts !== undefined && <p role="status">{m.dh_future_note({}, { locale })}</p>}
             <DegradedBanner
               locale={locale}
               degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}

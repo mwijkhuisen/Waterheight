@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { CANARIES, CANARY_RENDERINGS, ForecastLatest, OwnerForecastLatest } from '@rws/contracts';
+import { CANARIES, CANARY_RENDERINGS, ForecastLatest } from '@rws/contracts';
+import { OwnerForecastLatest } from '@rws/contracts/static-owner';
 import { FORECAST_FLAGS, RUHRORT_W } from '@rws/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RUHRORT_STATION, visibleSources } from '../../src/api/forecast.ts';

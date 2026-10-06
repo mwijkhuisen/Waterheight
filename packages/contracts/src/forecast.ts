@@ -115,10 +115,11 @@ const forecastRun = (source: z.ZodString) =>
 
 /** A catalogue source ID: the public file names no other spelling (a canary or any other id fails the contract). */
 const CATALOGUE_SOURCE = z.string().regex(/^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$/);
-/** The owner file also holds the owner canary's own run (A§9.3): the one spelling it adds. */
-const OWNER_SOURCE = z.string().regex(/^(?:(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?|CANARY-[A-Z]+)$/);
-
-const forecastLatest = (source: z.ZodString) =>
+/**
+ * The document over a source-id schema. The owner document (static-owner.ts, `OwnerForecastLatest`) adds the owner
+ * canary's spelling: it lives there, so the public web bundle never holds that spelling (P10a plan C1).
+ */
+export const forecastLatest = (source: z.ZodString) =>
   z.strictObject({
     schemaVersion: z.literal(1),
     /** The instant the runs are current at: every run reaches it, and no value is later than it plus 48 hours. */
@@ -128,8 +129,6 @@ const forecastLatest = (source: z.ZodString) =>
   });
 /** The public document (and the owner's, minus the canary run): the schema every public answer is checked with. */
 export const ForecastLatest = forecastLatest(CATALOGUE_SOURCE);
-/** The owner document: the same shape, and the owner canary's source may appear. */
-export const OwnerForecastLatest = forecastLatest(OWNER_SOURCE);
 export type ForecastLatest = z.infer<typeof ForecastLatest>;
 export type ForecastRun = ForecastLatest['runs'][number];
 

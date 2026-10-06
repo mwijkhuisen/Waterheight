@@ -17,9 +17,9 @@ import {
   FORECAST_MAX_POINTS,
   FORECAST_PRECEDENCE,
   ForecastLatest,
-  OwnerForecastLatest,
   pickRun,
 } from '../src/forecast.ts';
+import { OwnerForecastLatest } from '../src/static-owner.ts';
 
 // The forecast contracts of P8b: the display rule (FORECAST_PRECEDENCE, pickRun), the band of forecast/latest.json
 // (kind p10p90 or p25p75, each column nullable, the kind's pair present, no number at a below-floor point), and the
