@@ -40,13 +40,16 @@ grep -qx '/srv/rws/public/www/v1 -> /srv/rws/public/www/v1 rw=false' <<<"$caddy"
 ! grep -qE 'www/(\.tmp|\.state)|/srv/rws/public/www( |$)' <<<"$caddy" || fail "the public caddy sees the publisher's .tmp or .state: $caddy"
 docker exec rws-caddy-1 test ! -e /run/secrets/owner_basic_auth || fail "the public caddy holds the owner secret"
 # caddy-owner's host mounts are exactly these three, all read-only (P10a, KG-213: the owner map's tiles and river
-# files); nothing else of /srv/rws/public, and no other host path (Docker's own named volumes, such as its /config,
-# are not host paths of ours).
+# files); nothing else of /srv/rws/public, and no other host path but its read-only basic_auth secret (Docker's own
+# named volumes, its /config and /data, are not host paths of ours).
 want=$(printf '%s\n' \
   '/srv/rws/owner/www/v1 -> /srv/rws/owner/www/v1 rw=false' \
   '/srv/rws/public/data/v1/rivers -> /srv/rws/public/data/v1/rivers rw=false' \
   '/srv/rws/tiles -> /srv/rws/tiles rw=false')
-[[ $(grep '^/' <<<"$cowner" | grep -v '^/var/lib/docker/volumes/' | sort) == "$want" ]] || fail "caddy-owner: host mounts are not exactly owner v1, tiles and the rivers directory, read-only: $cowner"
+[[ $(grep '^/srv/' <<<"$cowner" | sort) == "$want" ]] || fail "caddy-owner: /srv mounts are not exactly owner v1, tiles and the rivers directory, read-only: $cowner"
+# Beside them only its basic_auth secret (read-only) and Docker's own named volumes (/config, /data).
+[[ $(grep '^/' <<<"$cowner" | grep -v '^/srv/' | grep -v '^/var/lib/docker/volumes/') == '/etc/rws/secrets/owner_basic_auth -> /run/secrets/owner_basic_auth rw=false' ]] ||
+  fail "caddy-owner: a host path beside /srv, its secret and its volumes: $cowner"
 [[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-caddy-owner-1) == '{}' || $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-caddy-owner-1) == null ]] ||
   fail "caddy-owner publishes a port"
 pass "docker inspect: publish mounts public/www (rw) and public/ops (ro) and nothing of the owner channel; publish-owner owner/www (rw) and owner/status (ro) and nothing public; the public caddy mounts only www/v1 (ro) of the new trees, no owner path and no owner secret; caddy-owner mounts only owner/www/v1, tiles and the rivers directory (all ro) and publishes no port"
