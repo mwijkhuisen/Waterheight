@@ -720,6 +720,100 @@ describe('stage-2 requests', () => {
     expect(st?.failed_items).toEqual([]); // a list page is not an item
   });
 
+  it('LU-5: a next_page it would follow but refuses cuts the walk and raises walk_broken; the first page still comes in (#44)', async () => {
+    for (const next_page of [
+      'https://evil.example/api/2/datasets/67aca67bcaea3ae62308114f/resources/?page=2',
+      'https://data.public.lu/api/2/datasets/other/resources/?page=2',
+      'http://data.public.lu/api/2/datasets/67aca67bcaea3ae62308114f/resources/?page=2',
+      '',
+      42,
+    ]) {
+      const got: string[] = [];
+      server.use(
+        http.get(LU5, () => HttpResponse.json({ data: [dump(0)], next_page })),
+        http.get('https://download.data.public.lu/resources/*', ({ request }) => {
+          got.push(request.url);
+          return new HttpResponse(fixture('LU-5', 'lu-5-file').body);
+        }),
+      );
+      const deps = runDeps();
+      expect(await runSpec(spec('lu-5-cap'), deps), String(next_page)).toMatchObject({
+        requests: 2,
+        ok: 2,
+        capped: true,
+      });
+      expect(got).toEqual([dump(0).url]);
+      expect(
+        Object.values(deps.counters.alerts)
+          .flat()
+          .map((a) => a.kind),
+      ).toEqual(['walk_broken']);
+    }
+  });
+
+  it('LU-5: a refused next_page nobody would follow (no unseen dump, not a seed) is not reported (#44)', async () => {
+    server.use(
+      http.get(LU5, () => HttpResponse.json({ data: [dump(0)], next_page: 'https://evil.example/resources/' })),
+    );
+    const deps = runDeps();
+    await deps.state.update<SpecState>('lu-5-cap', () => ({
+      enabled_since: '2026-10-01T00:00:00.000Z',
+      variants: {},
+      seen: [dump(0).id],
+      pending_page: [],
+    }));
+    expect(await runSpec(spec('lu-5-cap'), deps)).toMatchObject({ requests: 1 });
+    expect(deps.counters.alerts).toEqual({});
+  });
+
+  it('LU-5: a seed that meets a refused next_page is capped, so its round is not done (#44)', async () => {
+    server.use(
+      http.get(LU5, () => HttpResponse.json({ data: [dump(0)], next_page: 'https://evil.example/resources/' })),
+      http.get(
+        'https://download.data.public.lu/resources/*',
+        () => new HttpResponse(fixture('LU-5', 'lu-5-file').body),
+      ),
+    );
+    const deps = runDeps();
+    expect(await runSpec(spec('lu-5-cap'), deps, { seed: true })).toMatchObject({ requests: 2, capped: true });
+  });
+
+  it('LU-5: a dump whose URL is refused is named in failed_items, raises item_refused and is retried, never fetched (#44)', async () => {
+    const bad = (i: number, url: string) => ({ ...dump(i), url });
+    const got: string[] = [];
+    server.use(
+      http.get(LU5, () =>
+        HttpResponse.json({
+          data: [
+            dump(0),
+            bad(1, 'https://evil.example/resources/x/20260929-133001/dump-alert.1790688361.xml'),
+            bad(2, 'https://download.data.public.lu/resources/x/other.xml'),
+            bad(3, 'http://download.data.public.lu/resources/x/20260929-133003/dump-alert.1790688363.xml'),
+          ],
+          next_page: null,
+        }),
+      ),
+      http.get('https://download.data.public.lu/resources/*', ({ request }) => {
+        got.push(request.url);
+        return new HttpResponse(fixture('LU-5', 'lu-5-file').body);
+      }),
+    );
+    const deps = runDeps();
+    await runSpec(spec('lu-5-cap'), deps);
+    expect(got).toEqual([dump(0).url]);
+    const st = await deps.state.read<SpecState>('lu-5-cap');
+    expect(st?.failed_items).toEqual([`file/${dump(1).id}`, `file/${dump(2).id}`, `file/${dump(3).id}`]);
+    expect(st?.last_success).toBeDefined(); // the good dump came in: the run counts (#39)
+    expect(st?.seen).toEqual([dump(0).id]); // a refused one is never seen, so it is named again next run
+    expect(
+      Object.values(deps.counters.alerts)
+        .flat()
+        .map((a) => a.kind),
+    ).toEqual(['item_refused']);
+    await runSpec(spec('lu-5-cap'), deps);
+    expect((await deps.state.read<SpecState>('lu-5-cap'))?.failed_items).toHaveLength(3);
+  });
+
   it('LU-5 fetches only new dumps, marks an id seen only after its file arrived, and remembers across runs', async () => {
     const deps = runDeps();
     const page = JSON.parse(fixture('LU-5', 'lu-5-cap').body.toString()) as { data: { id: string; url: string }[] };
