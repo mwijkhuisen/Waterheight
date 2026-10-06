@@ -1,7 +1,14 @@
 import { type ApiStation, type Meta, ReachRiver, RiversManifest, toSnapshot } from '@rws/contracts';
 import { holdForecasts } from '@rws/core/forecast-hold';
 import { z } from 'zod';
-import { type Contracts, PUBLIC_CONTRACTS, type StatusMode, type WebSources } from './contracts.ts';
+import {
+  type Contracts,
+  PUBLIC_CONTRACTS,
+  type ReachTravelData,
+  type StatusMode,
+  type StatusPageData,
+  type WebSources,
+} from './contracts.ts';
 import { type SnapshotSource, snapshotSource, type WebSnapshot } from './static.ts';
 import { type WarningsAt, warningsAt, warningsSource } from './warnings.ts';
 
@@ -210,6 +217,16 @@ export const loadStatusMode = async (
   c: Contracts = PUBLIC_CONTRACTS,
 ): Promise<StatusMode> => (await getJson(f, `${STATIC}status.json`, c.StatusMode, signal)).data;
 
+/** status.json for the Status page (P10b; static only): a source the site hides is dropped, a bad row never parses. */
+export async function loadStatusPage(
+  f: Fetcher,
+  signal?: AbortSignal,
+  c: Contracts = PUBLIC_CONTRACTS,
+): Promise<StatusPageData> {
+  const { data } = await getJson(f, `${STATIC}status.json`, c.StatusPage, signal);
+  return { ...data, sources: data.sources.filter((s) => !c.hidden(s.id)) };
+}
+
 /**
  * The warning areas valid at `t` (warnings.ts chooses the file): the dated file of an ended UTC day, else
  * latest.geojson filtered to `t`. A dated file that is missing (404) falls back to latest.geojson, marked incomplete.
@@ -270,4 +287,14 @@ export async function loadRivers(f: Fetcher, signal?: AbortSignal) {
   const { data: manifest } = await getJson(f, RIVERS_MANIFEST_PATH, RiversManifest, signal);
   const { data } = await getJson(f, `/data/v1/rivers/${manifest.current.reaches.file}`, RiverList, signal);
   return { manifest, rivers: data.rivers };
+}
+
+/** The travel times of the installed reaches file (found through the manifest as loadRivers finds it; P10b). */
+export async function loadReachTravel(
+  f: Fetcher,
+  signal?: AbortSignal,
+  c: Contracts = PUBLIC_CONTRACTS,
+): Promise<ReachTravelData> {
+  const { data: manifest } = await getJson(f, RIVERS_MANIFEST_PATH, RiversManifest, signal);
+  return (await getJson(f, `/data/v1/rivers/${manifest.current.reaches.file}`, c.ReachTravel, signal)).data;
 }

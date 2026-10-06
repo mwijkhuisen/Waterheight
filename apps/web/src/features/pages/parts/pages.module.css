@@ -1,0 +1,52 @@
+/* The data parts of the Sources, Status and Method pages (P10b). Tokens come from styles/base.css; the tables are
+   features/table/table.module.css's own. */
+.frame {
+  margin: var(--space) 0;
+}
+
+.sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.source {
+  border-top: 1px solid var(--line);
+  padding: var(--space) 0;
+}
+
+.source h3 {
+  margin: 0 0 0.5rem;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem var(--space);
+  margin: 0;
+}
+
+.facts dt {
+  font-weight: 600;
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rows {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.lang,
+.optional {
+  color: var(--muted);
+}
+
+@media (max-width: 40rem) {
+  .facts {
+    grid-template-columns: 1fr;
+  }
+}

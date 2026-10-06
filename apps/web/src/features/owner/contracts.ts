@@ -11,7 +11,15 @@ import {
   OwnerWarningsFile,
 } from '@rws/contracts/static-owner';
 import { z } from 'zod';
-import { type Contracts, OwnerStatusMode } from '../../lib/data/contracts.ts';
+import {
+  ClassPair,
+  type Contracts,
+  ForecastPair,
+  OwnerStatusMode,
+  ReachTravel,
+  type StatusPageData,
+  statusFields,
+} from '../../lib/data/contracts.ts';
 
 // The owner site's schemas (P10a, plan C1): a lazy chunk, imported only when /runtime-config.json says "owner", so
 // the owner family's source-id spelling never reaches the public initial bundle (apps/web/test/build.test.ts). The
@@ -25,6 +33,27 @@ const attribution = z.array(attributionEntry(OwnerSourceId)).max(500);
 /** The owner canary (A§9.3) proves the owner channel end to end; no view of the page ever shows it. */
 const CANARY = /^CANARY-/;
 
+/**
+ * The owner's status.json (P10b): the owner family's sources (the canary's row does not parse and is dropped), and
+ * `{public, owner}` pairs for the coverage; it has no count of owner sources, because it lists them.
+ */
+const OwnerStatusPage = z
+  .looseObject({
+    ...statusFields,
+    classification: ClassPair,
+    forecastCoverage: ForecastPair,
+  })
+  .transform(
+    (s): StatusPageData => ({
+      generatedAt: s.generatedAt,
+      sources: s.sources,
+      twins: s.twins,
+      ownerLine: null,
+      classification: s.classification,
+      forecastCoverage: s.forecastCoverage,
+    }),
+  );
+
 export const OWNER_CONTRACTS: Contracts = {
   audience: 'owner',
   StaticMeta: OwnerStaticMeta,
@@ -36,6 +65,8 @@ export const OWNER_CONTRACTS: Contracts = {
   WarningsFile: OwnerWarningsFile,
   Sources: OwnerStaticSources,
   StatusMode: OwnerStatusMode,
+  StatusPage: OwnerStatusPage,
+  ReachTravel,
   MetaAnswer: API.MetaAnswer.extend(audience),
   StationsAnswer: API.StationsAnswer.extend(audience),
   SnapshotAnswer: API.SnapshotAnswer.extend(audience),

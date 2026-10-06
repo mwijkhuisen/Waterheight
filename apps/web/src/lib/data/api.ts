@@ -9,12 +9,14 @@ import {
   browserFetch,
   HttpError,
   loadMeta,
+  loadReachTravel,
   loadRecent,
   loadRivers,
   loadSnapshot,
   loadSources,
   loadStations,
   loadStatusMode,
+  loadStatusPage,
   loadWarnings,
   type WebMeta,
 } from './chain.ts';
@@ -149,6 +151,30 @@ export const useSources = () => {
     queryFn: ({ signal }) => loadSources(browserFetch, signal, c),
     enabled: c !== undefined,
     staleTime: 300_000,
+  });
+};
+
+/** status.json for the Status page and the Method page's forecast coverage (P10b): static only, no retry. */
+export const useStatusPage = () => {
+  const c = useContracts();
+  return useQuery({
+    queryKey: ['status-page', c?.audience],
+    queryFn: ({ signal }) => loadStatusPage(browserFetch, signal, c),
+    enabled: c !== undefined,
+    staleTime: 60_000,
+    retry: false,
+  });
+};
+
+/** The travel times of the installed reaches file (P10b Method page): an error shows the page's own notice. */
+export const useReachTravel = () => {
+  const c = useContracts();
+  return useQuery({
+    queryKey: ['reach-travel', c?.audience],
+    queryFn: ({ signal }) => loadReachTravel(browserFetch, signal, c),
+    enabled: c !== undefined,
+    staleTime: 300_000,
+    retry: false,
   });
 };
 
