@@ -209,7 +209,13 @@ function Viewer({ locale }: { locale: Locale }) {
           meta.isError || stations.isError ? (
             <p role="alert">{m.data_unavailable({}, { locale })}</p>
           ) : (
-            <p role="status">{m.loading({}, { locale })}</p>
+            // While the data loads, what the static shell of index.html says (P10a: the first frame carries the
+            // page's text at once, so the largest paint does not wait for the data).
+            <>
+              <p>{m.intro({}, { locale })}</p>
+              <p>{m.not_official({}, { locale })}</p>
+              <p role="status">{m.loading({}, { locale })}</p>
+            </>
           )
         ) : (
           <>
