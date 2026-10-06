@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy globalVariable baseLocale --emit-ts-declarations --silent",
+    "i18n": "node ../../scripts/gen-web-labels.ts && paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy globalVariable baseLocale --emit-ts-declarations --silent",
     "build": "pnpm i18n && tsc -b && vite build",
     "build:e2e": "pnpm i18n && tsc -b && vite build --mode e2e",
     "e2e": "playwright test -c e2e/playwright.config.ts"

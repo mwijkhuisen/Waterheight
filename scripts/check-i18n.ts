@@ -8,7 +8,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
+import { parse } from 'yaml';
 import { keyDrift, loadMessages } from '../apps/web/i18n-html.ts';
+import { labelKey, slug } from './gen-web-labels.ts';
 
 const LOCALES = ['nl', 'en'] as const;
 /** Attributes whose value a visitor reads or hears; className, data-* and the like are not UI text. */
@@ -91,6 +93,54 @@ function tsxFiles(root: string): string[] {
     .sort();
 }
 
+/**
+ * The catalogue rule (P10a): every label of registry/labels and every river has a non-empty nl and en text, a public
+ * source's in both message files under its generated key, an owner source's in features/owner/labels.gen.ts.
+ */
+function catalogueProblems(root: string, messages: Map<string, Record<string, unknown>>): string[] {
+  const dir = join(root, 'registry/labels');
+  if (!existsSync(dir)) return [];
+  const problems: string[] = [];
+  const read = (p: string) => parse(readFileSync(join(root, p), 'utf8')) as Record<string, unknown>;
+  const audience = new Map(
+    (read('registry/sources.yaml').sources as { id: string; audience: string }[]).map((s) => [s.id, s.audience]),
+  );
+  const ownerPath = join(root, 'apps/web/src/features/owner/labels.gen.ts');
+  const ownerSource = existsSync(ownerPath) ? readFileSync(ownerPath, 'utf8') : '';
+  const need = (key: string, what: string, texts: Record<string, unknown>, owner: boolean) => {
+    for (const loc of LOCALES) {
+      if (typeof texts[loc] !== 'string' || texts[loc].trim() === '') {
+        problems.push(`${what} has no ${loc} text in the registry`);
+      } else if (owner) {
+        if (!new RegExp(`\\b${key}\\b`).test(ownerSource))
+          problems.push(`${what} ("${key}") is missing in labels.gen.ts`);
+      } else {
+        const have = messages.get(loc)?.[key];
+        if (typeof have !== 'string' || have.trim() === '')
+          problems.push(`${what} ("${key}") is missing in ${loc}.json`);
+      }
+    }
+  };
+  for (const f of readdirSync(dir).filter((n) => n.endsWith('.yaml'))) {
+    const doc = read(`registry/labels/${f}`) as { source: string; labels: Record<string, unknown>[] };
+    for (const l of doc.labels) {
+      const label = { source: doc.source, scale: String(l.scale), code: String(l.code) };
+      need(
+        labelKey(label),
+        `label ${label.source} ${label.scale} ${label.code}`,
+        l,
+        audience.get(doc.source) === 'owner',
+      );
+    }
+  }
+  const rivers = existsSync(join(root, 'registry/rivers.yaml'))
+    ? (read('registry/rivers.yaml').rivers as Record<string, unknown>[])
+    : [];
+  for (const r of rivers)
+    need(`river_${slug(String(r.id))}`, `river ${String(r.id)}`, { nl: r.name_nl, en: r.name_en }, false);
+  return problems;
+}
+
 function scan(root: string) {
   const messages = loadMessages(join(root, 'apps/web/messages'), LOCALES);
   const problems = keyDrift(messages);
@@ -101,6 +151,7 @@ function scan(root: string) {
       }
     }
   }
+  problems.push(...catalogueProblems(root, messages));
   const files = tsxFiles(root);
   for (const path of files) problems.push(...findHardcoded(path, readFileSync(join(root, path), 'utf8')));
   return { problems: problems.sort(), files: files.length, messages: Object.keys(messages.get('nl') ?? {}).length };
