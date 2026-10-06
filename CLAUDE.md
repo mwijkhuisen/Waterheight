@@ -425,6 +425,10 @@ Deviations from A§3, decided in P0b: pnpm **12.5.1** instead of 12.6.0 (12.6.0 
 
 - Runbooks: `docs/runbooks/schema-drift.md`, `replay.md` (§11 the P8a forecast runs, §12 the P8b ones), `partition-maintenance.md`, `outage-drill.md`, `twin-failure.md`, `label-offset.md`, `owner-drift.md`, `reference-change.md`, `publisher.md` (P9a), `api.md` (P9b: the limits, 429 and 503, saturation, the client-address check, the owner API).
 
+## Brand (P10c, D23)
+
+The public name is **Rivierkijker** (NL and EN; the repository and internal names stay Waterheight/rivierstanden). `docs/design/BRAND.md` is the brand pack: texts, tokens, logo, fonts and the signal set. Brand colours are tokens in `apps/web/src/styles/base.css` only (the logo SVGs aside): never a brand hex in a module, and Waterblauw (`--water`) only for large text and graphics, never small text. Signal colours (notices, errors, classes, warnings) are never brand colours (`apps/web/test/brand.test.ts`). The fonts are vendored woff2 in `apps/web/src/styles/fonts/`, pinned by `SHA256SUMS`, their OFL texts in the notices: never Google Fonts or a CDN (invariant 7).
+
 ## Criterion tags, definition of done and workflow (PHASES §2)
 
 - **[CI]**: provable offline (GitHub Actions, or the agent session with the hook's PostgreSQL). **[agent-prod]**: checkable from outside without SSH (`scripts/verify-prod.sh`, `/status/capture.json`, `/data/v1/status.json`, `/api/v1/health*`). **[owner]**: needs the owner's access or judgement; the agent supplies the script or checklist.
