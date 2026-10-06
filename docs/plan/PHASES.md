@@ -1164,6 +1164,7 @@ P5c uses the P5 build model and the default P5 reviewers (as P5a): `opus` xhigh,
   - **Privacy**: no cookies, no trackers, no analytics, no third-party requests; access logs IP-masked (IPv4 /24, IPv6 /48) and kept 14 days; rate-limiter state held in memory only; if the CDN break-glass (D20) is ever armed, the CDN is named here before it goes live.
   - **Status**: per-source freshness from `status.json`.
   - An **accessibility statement** and a 404 page, all in NL and EN.
+- **P10c** (built; issue #90, the evidence in §31): the Rivierkijker brand (D23): name, titles, subtitle and meta description in NL and EN, the logo and favicon, the self-hosted fonts, the brand tokens and the signal set (`docs/design/BRAND.md`).
 
 **Scope out:** flow animation, playback and Hovmöller (P11); accounts; notifications.
 
@@ -1520,6 +1521,7 @@ Defaults are recommended. "Needed by" is the phase whose build needs the answer.
 | D20 | Flood egress fallback (gap item 10) | Decide in advance from the P12 egress budget: if the flood-day peak exceeds 50% of the uplink or the month 50% of the quota, arm a CDN pull zone for `/tiles/*` and `/assets/*` only (static, licence-neutral) under the same hostname, disclosed on the privacy page. **No automatic switch to OpenFreeMap** (third-party browser requests, CSP change) | P12 |
 | D21 | **Rivers not covered in the first release** (catalogue gap item 14, §9 Q32) | **Accepted as proposed (owner, 2026-10-06; P10b).** Accept for the first release and list them on the Method page: the Kempen rivers entering NL directly (Mark, Dommel, Aa/Weerijs, Warmbeek, Keersop, Merkske, Voer) until VMM (P13); the RLP tributaries Ahr, Kyll, Prüm and Nahe with LHP classes only until RLP (P13); the NL water-board stretches through German upstream gauges and RWS (backlog, §9 Q10); canal transfers only at the RWS points (`smeermaas.zuidwillemsvaart`, `kanne`). **Austria and Liechtenstein** (Ill, Bregenzerach, Bodensee at Bregenz): out of scope for the first release; the Alpine Rhine and Bodensee come from CH-1 | P6, P10 (Method page), P13 |
 | D22 | **Hybrid audience** (decided by the owner, 2026-09-24; ADR-0017; catalogue §0.8) | **Decided:** keep the public site with the open sources exactly as planned, and add a login-only **owner view** that also shows the sources whose terms allow personal use: BE-3, LU-2, LU-3, LU-4, DE-3, DE-2 until the Belegexemplar, CH-2/CH-4/CH-5 if BAFU objects to public use, and BE-1/BE-2 once their credentials arrive. Only the owner uses it; giving anyone else access (credentials, a WireGuard peer, screenshots) is forbidden, because it would be distribution to third parties. Access: WireGuard only, then `basic_auth`. HIC and VMM are asked for credentials for a personal, non-commercial, private viewer (optionally also about public display); SPW and AGE are asked only for public display | P0 (registry), P1 (capture), P2, P5c, P7–P12, P13, P14 |
+| D23 | **Public name Rivierkijker** (issue #90, the owner's design document of 2026-09-29) | **Decided (owner, 2026-10-06; P10c).** The public site is Rivierkijker in NL and EN, with one translated subtitle; the repository, the packages, the user agent and the internal names keep theirs. The meta description says "forecasts and warnings where available" (not "official forecasts and alert levels" for every river); the map's colours stay and are documented as the signal set; the fonts are vendored woff2, sha256-pinned. `docs/design/BRAND.md`. |
 
 ### 6.2 Actions
 
@@ -2554,3 +2556,22 @@ Two read-only reviews on Sonnet (high) with #25's prompts: code **approve** (3 m
 - **The owner Sources spec asserts the owner sources' credit rows** (code minor; `owner-pages.spec.ts`).
 - Nits: `routeOf` uses `Object.hasOwn`; the footer nav marks the current page (`aria-current`); the screen-tall `min-height` applies to the map only; a status the page does not know is shown as unknown instead of dropping the row. Not changed (accepted): the information paths get the map's static shell until the app mounts; `MapCredits` on the colophon and Sources pages as well as in the footer (the approved texts); the status and reach readers in the entry chunk (initial JS 156 KiB gzip, budget 250); the CH-1 code `undefined` (the agency's own code); the words "eigenaarsbronnen / owner sources".
 - **Owner answers (2026-10-06):** the E5 texts are approved; the access log's stated purpose is right; the sentence on the Autoriteit Persoonsgegevens stays; no sentence about the LAN reverse proxy's log (rk.wijkhuisen.info is an acceptance server); no link to the repository; ADR-0018 records the licence; D21 is accepted as proposed.
+
+## 31. Amendment: P10c build (2026-10-06)
+
+What the P10c build (issue #90, PR "P10c: Rivierkijker brand", `Closes #90`) settled against the issue and its design document. P10c applies the brand (D23): `docs/design/BRAND.md` is the brand pack and says where each part lives.
+
+**Owner decisions (2026-10-06):** the meta description is softened ("met verwachtingen en waarschuwingen waar beschikbaar"), because public forecasts exist for NL and CH (FR only during events) and warning classes for DE, FR and CH, none for BE; the existing map palettes are documented as the signal set, with a test and the beta banner restyled, and the map's colours stay; the fonts are vendored woff2, sha256-pinned, with no npm dependency; the slot is P10c after P10b (#89).
+
+**Where reality differs from the issue:**
+- **The fonts are in `apps/web/src/styles/fonts/`, not `public/fonts/`.** Imported from `base.css`, they get hashed names under `/assets/` and Caddy's immutable cache, with no Caddy change; `public/` files keep their names and are revalidated. No CSP change: `font-src 'self'` was already there.
+- **No outlined lockup and no DM Sans.** The lockup on the site is the SVG mark plus the name as live text (two message keys, `name_lead` and `name_accent`, so `check-i18n` holds) and the subtitle as text, as the document allows.
+- **No `favicon.ico`, no app-icon PNGs, no manifest.** `/favicon.svg` is linked from the four shells; `/favicon.ico` stays the bare 404 that `routes.spec.ts`, verify-prod and the deploy e2e assert. The PNGs wait for home-screen install (KG-247).
+- **Tabular numerals on `:root`**, not per table: Source Sans 3 has them by default, and the fallback font gets them too.
+- **The `intro` text and the README** say the same softened claim as the meta description.
+- **The e2e `mapReady` helper scrolls the map into view.** The map mounts only near the viewport (`useMapLibre`); on the owner site the open owner banner and the taller brand header put it past that margin in the 768 px window, and three owner tests timed out locally.
+
+**Evidence ([CI]):**
+- `apps/web/test/brand.test.ts`: the fonts are what `SHA256SUMS` lists, byte for byte, and every woff2 is used by `base.css` with a same-folder `url()`; the brand tokens are the document's; ten contrast pairs meet their minimum (Waterblauw below 4.5:1 by test, so it stays out of small text); no colour of the signal tokens, `palette.ts`, `labels-index.gen.ts` or `stationLayer.ts` is a brand colour.
+- `apps/web/test/build.test.ts`: the titles and the h1 of the shells, the meta description, the favicon link and the theme colour in all four shells; `favicon.svg` at the root and no `favicon.ico`; six hashed woff2 under `/assets/`; both OFL texts in `third-party-notices.txt`.
+- e2e: the h1 and the subtitle; both fonts loaded (`document.fonts`) while the test's third-party check still passes (invariant 7); `/favicon.svg` is `image/svg+xml`, `no-cache`, with the site headers; the axe colour-contrast runs pass on the new palette.

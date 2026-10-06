@@ -23,8 +23,8 @@
 
 .notice {
   padding: 0.5rem var(--space);
-  background: var(--warn-bg);
-  color: var(--warn-ink);
+  background: var(--signal-caution-bg);
+  color: var(--signal-caution-ink);
 }
 
 .body {

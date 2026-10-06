@@ -4,7 +4,20 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
-## P10b Pages (PR pending, issue #25)
+## P10c Brand (PR pending, issue #90)
+
+`PHASES.md` §31 has the deviations and the evidence; `docs/design/BRAND.md` the brand pack.
+
+### Needs the owner
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-245 | brand, owner | **The name is not checked or registered.** rivierkijker.nl, .com and .eu returned no DNS record, which does not prove they are free; the BOIP register is not checked for the name | The owner checks and registers the domains (SIDN, registrar) and searches BOIP | open |
+| KG-246 | brand, owner | **The repository's About text is empty.** The document's short text is "Kijk mee met de rivieren richting Nederland." | The owner sets it, or says in the PR that an agent may (`gh repo edit --description`) | open |
+| KG-247 | web, brand | **No app-icon PNGs, web manifest or outlined lockups.** The site has the SVG favicon and the live-text lockup only | Render the PNGs once from the 96-unit SVG when home-screen install is wanted; the outlined lockups are the owner's export | open |
+| KG-248 | data, owner | **The LU station list on production was empty when checked (2026-10-06).** 37 public LU-1 stations are registered (`registry/stations/lu-1.yaml`); the list fills after the LU-1/LU-6 replays of KG-133, not with a code change | The owner re-checks the LU stations after the replays; if still empty, a bug issue | open |
+
+## P10b Pages (merged in #89, issue #25)
 
 KG-118 is closed by this PR (its row stays in the P4b section below). `PHASES.md` §30 has the deviations and the evidence.
 

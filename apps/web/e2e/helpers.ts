@@ -132,6 +132,9 @@ export const featureState = (page: Page, id: string) =>
 
 /** The map has its stations and the snapshot of the first `t` has arrived (nl.e2e.xss has a value from 2026-10-24). */
 export async function mapReady(page: Page) {
+  // The map mounts only near the viewport (useMapLibre); on the owner site the banner and the brand header (P10c)
+  // put it below the fold of the 768 px window, so bring the end of <main>, where the map is, into view first.
+  await page.locator('main').evaluate((main) => main.scrollIntoView({ block: 'end' }));
   await expect.poll(() => featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true });
 }
 

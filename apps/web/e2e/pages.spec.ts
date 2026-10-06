@@ -115,7 +115,7 @@ for (const { id, locale, path } of PATHS)
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page).toHaveTitle(
-      id === 'home' ? msg(locale, 'site_title') : `${titleOf(id, locale)} · ${msg(locale, 'site_title')}`,
+      id === 'home' ? msg(locale, 'site_title') : `${titleOf(id, locale)} · ${msg(locale, 'heading')}`,
     );
     if (id !== 'home') await expect(page.locator('h1')).toHaveText(h1Of(id, locale));
     await expectChrome(page, locale);
@@ -140,7 +140,7 @@ for (const { locale, path } of NOT_FOUND)
     await ready(page, null, locale);
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
     await expect(page.locator('h1')).toHaveText(msg(locale, 'not_found_heading'));
-    await expect(page).toHaveTitle(`${msg(locale, 'not_found_heading')} · ${msg(locale, 'site_title')}`);
+    await expect(page).toHaveTitle(`${msg(locale, 'not_found_heading')} · ${msg(locale, 'heading')}`);
     const home = page.getByRole('link', { name: msg(locale, 'not_found_link'), exact: true });
     await expect(home).toHaveAttribute('href', locale === 'nl' ? '/' : '/en/');
     await expectChrome(page, locale);

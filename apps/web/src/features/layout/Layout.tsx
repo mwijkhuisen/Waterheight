@@ -10,10 +10,12 @@ import { useUrlState } from '../../lib/url/useUrlState.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { MapCredits } from '../pages/parts/MapCredits.tsx';
+import { Logo } from './Logo.tsx';
 import styles from './layout.module.css';
 
-// The chrome of every view (P10b T2): the map, the information pages and the 404 page. A header with the site name
-// (the map's h1; a link home elsewhere) and the language link to the same page, the beta banner with a link to the
+// The chrome of every view (P10b T2): the map, the information pages and the 404 page. A header with the logo, the
+// site name in its two colours and the subtitle (P10c; the name is the map's h1 and a link home elsewhere) and the
+// language link to the same page, the beta banner with a link to the
 // disclaimer, the owner banner on the owner site, the view in <main>, and the footer: the page links, the map's
 // credits and, on the map, the attribution of the sources it shows.
 
@@ -63,23 +65,30 @@ export function Layout({
   const [url] = useUrlState();
   const id = route?.id;
   useEffect(() => {
-    const site = m.site_title({}, { locale });
+    // The map carries the full title; every other view is "<page> · Rivierkijker" (BRAND.md §2).
     document.title =
       id === 'home'
-        ? site
-        : `${id === undefined ? m.not_found_heading({}, { locale }) : pageTitle(id, locale)} · ${site}`;
+        ? m.site_title({}, { locale })
+        : `${id === undefined ? m.not_found_heading({}, { locale }) : pageTitle(id, locale)} · ${m.heading({}, { locale })}`;
   }, [id, locale]);
   const other = locale === 'nl' ? 'en' : 'nl';
   return (
     <>
       <header className={styles.header}>
-        {id === 'home' ? (
-          <h1>{m.heading({}, { locale })}</h1>
-        ) : (
-          <p className={styles.site}>
-            <a href={pathOf('home', locale)}>{m.heading({}, { locale })}</a>
-          </p>
-        )}
+        <div className={styles.brand}>
+          {id === 'home' ? (
+            <h1 className={styles.name}>
+              <Name locale={locale} />
+            </h1>
+          ) : (
+            <p className={styles.name}>
+              <a href={pathOf('home', locale)}>
+                <Name locale={locale} />
+              </a>
+            </p>
+          )}
+          <p className={styles.subtitle}>{m.subtitle({}, { locale })}</p>
+        </div>
         <a href={otherLanguageHref(locale, url, id)} hrefLang={other} lang={other}>
           {m.other_language({}, { locale })}
         </a>
@@ -90,6 +99,19 @@ export function Layout({
       {owner && <OwnerShell locale={locale} />}
       <main className={id === 'home' ? `${styles.main} ${styles.tall}` : styles.main}>{children}</main>
       <Footer locale={locale} current={id} meta={meta} t={t} />
+    </>
+  );
+}
+
+/** The logomark and the name in two colours, one word for a screen reader (the mark is decorative). */
+function Name({ locale }: { locale: Locale }) {
+  return (
+    <>
+      <Logo variant="light" size={64} />
+      <span>
+        {m.name_lead({}, { locale })}
+        <span className={styles.accent}>{m.name_accent({}, { locale })}</span>
+      </span>
     </>
   );
 }
@@ -126,6 +148,7 @@ function Footer({
   const shown = new Set<string>();
   return (
     <footer className={styles.footer}>
+      <Logo variant="dark" size={40} />
       <p className={styles.disclaimer}>{m.disclaimer({}, { locale })}</p>
       <nav aria-label={m.footer_nav_label({}, { locale })}>
         <ul className={styles.nav}>
