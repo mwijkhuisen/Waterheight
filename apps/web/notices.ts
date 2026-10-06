@@ -40,11 +40,30 @@ export function noticesText(packages: readonly NoticePackage[], preamble: string
   return `${lf(preamble)}\n\n${sections.join('\n\n')}\n`;
 }
 
+/**
+ * The brand fonts (P10c): vendored woff2 in src/styles/fonts, no npm package, so the bundle scan cannot see them. The
+ * OFL asks for its text beside the fonts; it is in that folder, pinned in its SHA256SUMS.
+ */
+export const FONTS = [
+  { name: 'Bricolage Grotesque (font, @fontsource/bricolage-grotesque)', file: 'OFL-bricolage-grotesque.txt' },
+  { name: 'Source Sans 3 (font, @fontsource/source-sans-3)', file: 'OFL-source-sans-3.txt' },
+] as const;
+export const FONTS_VERSION = '5.3.0';
+const fontsDir = new URL('./src/styles/fonts/', import.meta.url);
+
+const fontPackages = (): NoticePackage[] =>
+  FONTS.map((f) => ({
+    name: f.name,
+    version: FONTS_VERSION,
+    license: 'OFL-1.1',
+    files: [{ name: f.file, text: readFileSync(new URL(f.file, fontsDir), 'utf8') }],
+  }));
+
 const preamble = (mapCommit: string) =>
   [
-    "Licence texts of the third-party npm packages in this site's JavaScript. Map data: © OpenStreetMap contributors · Protomaps.",
+    "Licence texts of the third-party npm packages in this site's JavaScript and of its two fonts. Map data: © OpenStreetMap contributors · Protomaps.",
     `The licences of the map glyphs and sprites are in /assets/map/${mapCommit}/LICENSES.md.`,
-    'Licentieteksten van de npm-pakketten van derden in de JavaScript van deze site. Kaartgegevens: © OpenStreetMap contributors · Protomaps.',
+    'Licentieteksten van de npm-pakketten van derden in de JavaScript van deze site en van de twee lettertypen. Kaartgegevens: © OpenStreetMap contributors · Protomaps.',
     `De licenties van de kaartlettertypen en sprites staan in /assets/map/${mapCommit}/LICENSES.md.`,
   ].join('\n');
 
@@ -126,7 +145,7 @@ export function thirdPartyNotices(): Plugin {
       this.emitFile({
         type: 'asset',
         fileName: 'third-party-notices.txt',
-        source: noticesText([...packages.values()], preamble(commits[0] ?? '')),
+        source: noticesText([...packages.values(), ...fontPackages()], preamble(commits[0] ?? '')),
       });
     },
   };

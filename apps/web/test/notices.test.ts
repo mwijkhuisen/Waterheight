@@ -113,7 +113,9 @@ describe('thirdPartyNotices on a synthetic project', () => {
     expect(text).toContain('--- LICENSE ---\nMIT licence text\n');
     expect(text).not.toContain('a directory is not');
     expect(text).not.toContain('local.js');
-    expect(text.match(/^={72}$/gm)).toHaveLength(4);
+    // Two packages and the two vendored fonts (P10c), each between two rules.
+    expect(text.match(/^={72}$/gm)).toHaveLength(8);
+    expect(text).toContain('Source Sans 3 (font, @fontsource/source-sans-3)@5.3.0 — OFL-1.1');
     expect(text).toContain('/assets/map/abc1234/LICENSES.md');
   });
 
