@@ -246,7 +246,9 @@ A complete `rws.env` starts the deploys, so the secrets go first. Edit each file
 | Key | Value |
 |---|---|
 | `RWS_DOMAIN` | your domain, e.g. `rivierstanden.nl` |
-| `RWS_CONTACT_EMAIL` | `contact@<domain>` (sent in every provider request's User-Agent) |
+| `RWS_CONTACT_EMAIL` | `contact@<domain>` (sent in every provider request's User-Agent, and shown on the colophon and privacy pages) |
+| `RWS_OPERATOR_NAME` | the name the colophon and privacy pages give as the site's operator (P10b; `verify-prod.sh` fails `runtime config` until it is set). No `{`, `}`, `#`, `"`, `\`, `'`, backtick or `$` |
+| `RWS_CDN_NAME` | leave empty: the privacy page then says the site uses no CDN (P10b; D20 names a CDN here before one goes live) |
 | `RWS_PUBLIC_IPV4`, `RWS_PUBLIC_IPV6` | detected by bootstrap; compare them with your DNS records (step 5): the site listens only on these |
 | `RWS_RESTIC_REPOSITORY` | `s3:https://<endpoint>/<bucket>/restic` |
 | `RWS_S3_REGION` | the bucket's region |
