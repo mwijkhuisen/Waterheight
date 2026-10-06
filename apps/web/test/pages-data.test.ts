@@ -118,7 +118,7 @@ describe('the status.json reader of the public site', () => {
     expect(page.forecastCoverage.owner).toBeUndefined();
   });
 
-  it('drops a canary row, an invalid status and a bad id one by one, and keeps the file', () => {
+  it('drops a canary row and a bad id one by one, keeps a row whose status it does not know as unknown, and keeps the file', () => {
     const page = PUBLIC_CONTRACTS.StatusPage.parse({
       ...publicFile,
       sources: [
@@ -132,7 +132,12 @@ describe('the status.json reader of the public site', () => {
         row('CH-1'),
       ],
     });
-    expect(page.sources.map((s) => s.id)).toEqual(['NL-1', 'CH-1']);
+    // Review round 1: an unknown status keeps its row (as "unknown"); a missing row would read as "fine".
+    expect(page.sources.map((s) => [s.id, s.status])).toEqual([
+      ['NL-1', 'ok'],
+      ['DE-1', 'unknown'],
+      ['CH-1', 'ok'],
+    ]);
   });
 
   it('turns a coverage block that does not parse, or a missing count, into null instead of failing the file', () => {

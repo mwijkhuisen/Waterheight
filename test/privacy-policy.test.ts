@@ -39,6 +39,22 @@ describe.each(['deploy/web/site.caddy', 'deploy/web/owner.caddy'])('%s access lo
     expect(log).toContain('\t\t\trequest>headers>Cookie delete\n');
   });
 
+  // Review round 1: only X-Forwarded-For is masked, so every other header that can carry a client address is
+  // dropped, or a proxy or a CDN (D20) would put full addresses in the log the privacy page calls shortened.
+  it.each(['Forwarded', 'X-Real-Ip', 'Cf-Connecting-Ip', 'True-Client-Ip', 'X-Client-Ip', 'Fastly-Client-Ip'])(
+    'never logs the %s header',
+    (header) => {
+      expect(log).toContain(`\t\t\trequest>headers>${header} delete\n`);
+    },
+  );
+
+  it('masks no request header but X-Forwarded-For: every other one that names a client is deleted', () => {
+    const named = [...log.matchAll(/request>headers>([A-Za-z-]+) (ip_mask|delete)/g)].map(
+      ([, h, how]) => `${h} ${how}`,
+    );
+    expect(named.filter((n) => n.endsWith('ip_mask'))).toEqual(['X-Forwarded-For ip_mask']);
+  });
+
   it('rolls one file a day and keeps it for the published number of days', () => {
     expect(log).toContain('\t\t\troll_interval 24h\n');
     expect(log).toContain(`\t\t\troll_keep_for ${LOG.keepDays * 24}h\n`);

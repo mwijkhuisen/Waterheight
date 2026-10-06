@@ -75,9 +75,9 @@ export function SourcesList({ locale }: { locale: Locale }) {
                 </ul>
               </dd>
             </dl>
-            {personal && s.privateBasis != null && (
+            {personal && (
               <Suspense fallback={null}>
-                <OwnerBasis locale={locale} basis={s.privateBasis} />
+                <OwnerBasis locale={locale} source={s} />
               </Suspense>
             )}
           </li>

@@ -88,8 +88,8 @@ export function Layout({
         {m.beta_banner({}, { locale })} <a href={pathOf('disclaimer', locale)}>{m.beta_banner_link({}, { locale })}</a>
       </p>
       {owner && <OwnerShell locale={locale} />}
-      <main className={styles.main}>{children}</main>
-      <Footer locale={locale} meta={meta} t={t} />
+      <main className={id === 'home' ? `${styles.main} ${styles.tall}` : styles.main}>{children}</main>
+      <Footer locale={locale} current={id} meta={meta} t={t} />
     </>
   );
 }
@@ -110,7 +110,18 @@ function OwnerShell({ locale }: { locale: Locale }) {
  * CH-3). Where a row needs a date, it is the Amsterdam date of `t` in the page's language; a text that another
  * source already showed is not repeated (CH-3 says what CH-1 says).
  */
-function Footer({ locale, meta, t }: { locale: Locale; meta: Meta | undefined; t: number | undefined }) {
+function Footer({
+  locale,
+  current,
+  meta,
+  t,
+}: {
+  locale: Locale;
+  /** The page on screen (undefined on the 404 page): its link is marked as the current page. */
+  current: RouteId | undefined;
+  meta: Meta | undefined;
+  t: number | undefined;
+}) {
   const date = t === undefined ? undefined : formatDay(t, locale, ZONE);
   const shown = new Set<string>();
   return (
@@ -120,7 +131,9 @@ function Footer({ locale, meta, t }: { locale: Locale; meta: Meta | undefined; t
         <ul className={styles.nav}>
           {PAGE_ROUTES.map((r) => (
             <li key={r.id}>
-              <a href={r[locale]}>{pageTitle(r.id, locale)}</a>
+              <a href={r[locale]} aria-current={r.id === current ? 'page' : undefined}>
+                {pageTitle(r.id, locale)}
+              </a>
             </li>
           ))}
         </ul>

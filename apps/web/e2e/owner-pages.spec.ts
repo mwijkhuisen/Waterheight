@@ -35,8 +35,11 @@ interface OwnerSources {
     id: string;
     audience: 'public' | 'owner';
     privateBasis: { clause: string; url: string; retrieved: string } | null;
+    attribution: { lang: string | null; text: string }[];
   }[];
 }
+/** The date placeholders of the registry's credit texts (lib/attribution.ts): the text before one is fixed. */
+const PLACEHOLDER = /\[date de mise à jour\]|\(Bezugsdatum\)|<date>|<datum>/;
 interface OwnerStatus {
   sources: { id: string; status: 'ok' | 'degraded' | 'down' | 'unknown' }[];
 }
@@ -131,6 +134,7 @@ for (const locale of LOCALES)
     });
 
     let listed = 0;
+    let credits = 0;
     for (const id of OWNER_IDS) {
       const source = served.get(id);
       if (source === undefined) {
@@ -158,8 +162,16 @@ for (const locale of LOCALES)
       await expect(link).toHaveAttribute('href', basis.url);
       await expect(link).toHaveAttribute('rel', /noopener/);
       await expect(link).toHaveText(msg(locale, 'owner_terms_link'));
+      // Their credit rows (SPW, AGE, BfG; review round 1), every row in every language, as the owner file has them
+      // (LU-3 has none: "As LU-2").
+      credits += source.attribution.length;
+      for (const a of source.attribution) {
+        const fixed = (a.text.split(PLACEHOLDER)[0] ?? '').trim();
+        if (fixed !== '') await expect(item, `${id} credit ${a.lang}`).toContainText(fixed);
+      }
     }
     expect(listed, 'the e2e owner sources.json holds the personal-use sources').toBeGreaterThanOrEqual(4);
+    expect(credits, 'the personal-use sources have credit rows').toBeGreaterThan(0);
     // The badge is on the personal-use sources and on no other.
     await expect(main.locator('h3').getByText(badge, { exact: true })).toHaveCount(listed);
     // LU-3's clause is hostile text in the e2e seed (owner-seed.ts): text, no element.

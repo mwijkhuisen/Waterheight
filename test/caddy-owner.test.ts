@@ -209,6 +209,7 @@ describe('the owner site pages and runtime config (P10b)', () => {
     expect(own).toContain('rewrite * /en/404.html');
     expect(own).toContain('rewrite * /404.html');
     expect(own).toContain('not path /404.html /en/404.html');
+    expect(own).toContain("not expression `{path}.contains('//')`");
     expect(own).toContain('@dotted path_regexp \\.[^/]*$');
     expect(own).toContain('@not_found_en path_regexp ^/en/');
     expect(own.filter((l) => l.startsWith('@page_'))).toHaveLength(2);

@@ -25,12 +25,17 @@
   color: inherit;
 }
 
-/* Layout stability (P10a, Lighthouse CLS): child margins stay inside, and the loading frame is a screen tall, so the
-   footer starts below the fold and the arriving content never pushes it out of view. */
+/* Child margins stay inside. */
 .main {
   display: flow-root;
-  min-height: 100vh;
   padding: 0 var(--space) var(--space);
+}
+
+/* Layout stability on the map (P10a, Lighthouse CLS): its loading frame is a screen tall, so the footer starts below the
+   fold and the arriving map never pushes it out of view. Not on the pages, whose footer would sit a screen below a short
+   text (review round 1). */
+.tall {
+  min-height: 100vh;
 }
 
 .footer {

@@ -6,9 +6,12 @@ import type { Locale } from '../../paraglide/runtime.js';
 
 // The basis on which an owner-audience source may be shown to the owner (catalogue §0.8), on the Sources page of the
 // owner site: the clause verbatim, a link to the terms and the day they were read. It lives in the owner chunk (the
-// one the layout loads for the banner), so the public build never contains it; provider text is text only.
+// one the layout loads for the banner), so the public build never contains it, not even the field's name (review round
+// 1: the Sources page hands over the whole source); provider text is text only.
 
-export function OwnerBasis({ locale, basis }: { locale: Locale; basis: NonNullable<WebSource['privateBasis']> }) {
+export function OwnerBasis({ locale, source }: { locale: Locale; source: WebSource }) {
+  const basis = source.privateBasis;
+  if (basis == null) return null;
   const o = { locale };
   const href = httpsHref(basis.url);
   return (

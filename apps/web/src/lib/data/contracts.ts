@@ -92,7 +92,8 @@ const StatusSourceId = z.string().regex(/^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$/);
 
 const StatusRow = z.looseObject({
   id: StatusSourceId,
-  status: z.enum(['ok', 'degraded', 'down', 'unknown']),
+  // A status the page does not know is shown as unknown, never dropped: a missing row reads as "fine" (review round 1).
+  status: z.enum(['ok', 'degraded', 'down', 'unknown']).catch('unknown'),
   lastFetchOk: iso.nullable(),
   newestTs: iso.nullable(),
   lagP95S: z.number().nonnegative().nullable(),

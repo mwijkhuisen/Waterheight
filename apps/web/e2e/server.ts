@@ -272,7 +272,8 @@ const server = createServer(
     // Dutch 404 shell.
     if (PAGE_NL.has(path)) return serve(res, join(www, 'index.html'), undefined, NO_CACHE);
     if (PAGE_EN.has(path)) return serve(res, join(www, 'en/index.html'), undefined, NO_CACHE);
-    const shell = SHELL_404.test(path);
+    // @file's `not expression {path}.contains('//')`: a doubled slash is never a file (review round 1).
+    const shell = SHELL_404.test(path) || path.includes('//');
     if (asset !== undefined && !shell) return serve(res, asset, range, NO_CACHE);
     // A directory without its slash: file_server's redirect (/en → /en/).
     if (!shell && !path.endsWith('/') && file(www, `${path}/`) !== undefined)

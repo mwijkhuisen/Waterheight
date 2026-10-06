@@ -53,6 +53,13 @@ owner.{$RWS_DOMAIN}:8443 {
 			request>headers>X-Forwarded-For ip_mask 24 48
 			request>headers>Authorization delete
 			request>headers>Cookie delete
+			# Client addresses a proxy or a CDN may add are dropped, never logged in full (review round 1; D20).
+			request>headers>Forwarded delete
+			request>headers>X-Real-Ip delete
+			request>headers>Cf-Connecting-Ip delete
+			request>headers>True-Client-Ip delete
+			request>headers>X-Client-Ip delete
+			request>headers>Fastly-Client-Ip delete
 			wrap json
 		}
 	}
@@ -311,6 +318,7 @@ owner.{$RWS_DOMAIN}:8443 {
 		@file {
 			file {path} {path}/
 			not path /404.html /en/404.html
+			not expression `{path}.contains('//')`
 		}
 		handle @file {
 			file_server

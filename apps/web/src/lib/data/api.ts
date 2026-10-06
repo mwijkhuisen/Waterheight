@@ -52,8 +52,8 @@ const runtimeConfigQuery = {
 /** Which site this is: the query, so the page can say when it never answered. */
 export const useAudienceQuery = () => useQuery({ ...runtimeConfigQuery, select: (c: RuntimeConfig) => c.audience });
 
-/** The operator, contact and CDN of this site (the colophon, the privacy page); undefined until it has answered. */
-export const useSiteConfig = (): RuntimeConfig | undefined => useQuery(runtimeConfigQuery).data;
+/** The operator, contact and CDN of this site (the colophon, the privacy page): the query, so a part can say when it failed. */
+export const useSiteConfig = () => useQuery(runtimeConfigQuery);
 
 /** Which site this is; undefined until it has answered (and after it failed for good). */
 export const useAudience = () => useAudienceQuery().data;

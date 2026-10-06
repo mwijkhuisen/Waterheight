@@ -3631,6 +3631,8 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       '@file {',
       'file {path} {path}/',
       'not path /404.html /en/404.html',
+      // Review round 1: the file matcher cleans `//`, so a doubled slash is never a file (no 200 shell for `//en//`).
+      "not expression `{path}.contains('//')`",
       '}',
       'handle @file {',
       'file_server',

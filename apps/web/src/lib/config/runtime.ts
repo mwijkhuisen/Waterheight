@@ -7,8 +7,9 @@ import { z } from 'zod';
 // (P10a review round 1).
 // P10b: Caddy also fills in the operator, the contact address and the CDN (if any) from its environment
 // (RWS_OPERATOR_NAME, RWS_CONTACT_EMAIL, RWS_CDN_NAME), so none of them is in the repository or the build. Each is
-// text for the colophon and the privacy page; a value that does not pass is dropped on its own and never changes
-// the audience.
+// text for the colophon and the privacy page; a value that does not pass is dropped on its own, and a key the page
+// does not know is ignored, so neither ever changes the audience (review round 1: the owner site would lose its
+// banner). Only a body that is no JSON object with a valid `audience` is public.
 
 /** Text a page shows as a text node: no control character and no angle bracket. */
 const shown = (min: number, max: number) =>
@@ -18,7 +19,7 @@ const shown = (min: number, max: number) =>
     .max(max)
     .regex(/^[^\p{Cc}<>]*$/u);
 
-export const RuntimeConfig = z.strictObject({
+export const RuntimeConfig = z.object({
   audience: z.enum(['public', 'owner']),
   contact: z.email().max(254).optional().catch(undefined),
   operator: shown(1, 120).optional().catch(undefined),

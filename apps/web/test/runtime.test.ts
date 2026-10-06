@@ -7,16 +7,24 @@ const answer =
     new Response(JSON.stringify(body), { status });
 
 describe('loadRuntimeConfig', () => {
-  it('reads a strict {audience}; a missing file or an invalid answer is public', async () => {
+  it('reads {audience}; a missing file or an invalid answer is public', async () => {
     expect((await loadRuntimeConfig(answer(200, { audience: 'owner' }))).audience).toBe('owner');
     expect((await loadRuntimeConfig(answer(200, { audience: 'public' }))).audience).toBe('public');
     for (const f of [
       answer(200, { audience: 'admin' }),
-      answer(200, { audience: 'owner', extra: 1 }),
+      answer(200, { audience: ['owner'] }),
+      answer(200, { contact: 'a@b.nl' }),
       answer(200, 'x'),
+      answer(200, null),
       answer(404, { audience: 'owner' }),
     ])
       expect(await loadRuntimeConfig(f)).toEqual({ audience: 'public' });
+  });
+
+  it('ignores a key it does not know, so it never changes the audience (review round 1)', async () => {
+    expect(await loadRuntimeConfig(answer(200, { audience: 'owner', extra: 1 }))).toEqual({
+      audience: 'owner',
+    });
   });
 
   it('throws on a failure to answer, so the owner site is never taken for the public one (review round 1)', async () => {

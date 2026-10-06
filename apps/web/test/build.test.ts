@@ -272,8 +272,9 @@ describe('web build', () => {
       const code = page(file);
       expect(id.exec(code)?.[0], `${file}: a personal-use source id`).toBeUndefined();
       expect(code, `${file}: a canary`).not.toContain('CANARY-');
-      // Nor the words of the private channel (message keys are identifiers: the sweep below reads them too).
-      for (const needle of ['private_basis', 'owner_sources', 'licence_gate'])
+      // Nor the words of the private channel (message keys are identifiers: the sweep below reads them too), nor the
+      // web's name of the basis field: only the owner chunk reads it (review round 1).
+      for (const needle of ['private_basis', 'privateBasis', 'owner_sources', 'licence_gate'])
         expect(code.includes(needle), `${file}: ${needle}`).toBe(false);
     }
   });

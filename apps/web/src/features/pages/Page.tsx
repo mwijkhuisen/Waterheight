@@ -1,5 +1,5 @@
-import { type ComponentType, type LazyExoticComponent, lazy, Suspense } from 'react';
-import type { PageId } from '../../lib/routes.ts';
+import { Component, type ComponentType, type LazyExoticComponent, lazy, type ReactNode, Suspense } from 'react';
+import { type PageId, pathOf } from '../../lib/routes.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 
@@ -33,8 +33,33 @@ const CONTENT: Readonly<Record<PageId, Readonly<Record<Locale, Content>>>> = {
 export function Page({ id, locale }: { id: PageId; locale: Locale }) {
   const Text = CONTENT[id][locale];
   return (
-    <Suspense fallback={<p role="status">{m.page_loading({}, { locale })}</p>}>
-      <Text />
-    </Suspense>
+    <ChunkFailed id={id} locale={locale}>
+      <Suspense fallback={<p role="status">{m.page_loading({}, { locale })}</p>}>
+        <Text />
+      </Suspense>
+    </ChunkFailed>
   );
+}
+
+/**
+ * A page chunk that cannot load (a network failure, a deploy in between) must not unmount the whole root, which would
+ * leave a blank page without the header, the footer or the disclaimer link (review round 1): an alert and a link that
+ * loads this page again, inside the layout.
+ */
+class ChunkFailed extends Component<{ id: PageId; locale: Locale; children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  override render() {
+    if (!this.state.failed) return this.props.children;
+    const { id, locale } = this.props;
+    return (
+      <p role="alert">
+        {m.app_failed({}, { locale })} <a href={pathOf(id, locale)}>{m.page_reload({}, { locale })}</a>
+      </p>
+    );
+  }
 }

@@ -145,7 +145,7 @@ sudo docker restart rws-api-1                       # the consumer reads its sec
 | `RWS_S3_REGION` | the provider's region (e.g. `fr-par`, `eu-central-1`) |
 | `RWS_BACKUP` | leave `off` until step 6 |
 
-**The three values of `/runtime-config.json` (P10b).** Caddy builds that file's JSON from `RWS_CONTACT_EMAIL`, `RWS_OPERATOR_NAME` and `RWS_CDN_NAME` when it starts, so none of them may contain `{`, `}`, `#`, `"` or `\`: Caddy would expand a `{…}` placeholder, a quote or a backslash breaks the JSON and `#` starts a comment in an env file. Keep `<` and `>` out too (the page drops a value that has one) and also `'`, the backtick and `$`: `load_env` in `rws-lib.sh`, which every `rws-*` script runs, refuses the whole file for them. A change takes effect when Caddy is recreated: `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`.
+**The three values of `/runtime-config.json` (P10b).** Caddy builds that file's JSON from `RWS_CONTACT_EMAIL`, `RWS_OPERATOR_NAME` and `RWS_CDN_NAME` when it starts, so none of them may contain `{`, `}`, `#`, `"` or `\`: Caddy would expand a `{…}` placeholder, a quote or a backslash breaks the JSON and `#` starts a comment in an env file. Keep `<` and `>` out too (the page drops a value that has one) and also `'`, the backtick and `$`: `load_env` in `rws-lib.sh`, which every `rws-*` script runs, refuses the whole file for them. No tab or other control character either: it breaks the JSON, and a body that is no JSON reads as public (on the owner site the banner would go). A change takes effect when Caddy is recreated: `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`.
 
 **Check:** `sudo rws-update --dry-run` no longer says "rws.env is not complete".
 

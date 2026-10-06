@@ -35,8 +35,8 @@ export function routeOf(pathname: string): Route | null {
   } catch {
     return null;
   }
-  const shell = SHELLS[path];
-  if (shell !== undefined) return shell;
+  // An own key only: `constructor` or `__proto__` is never a page (the T-WEB-3 rule; review round 1).
+  if (Object.hasOwn(SHELLS, path)) return SHELLS[path] ?? null;
   for (const r of PAGE_ROUTES) {
     if (r.nl === path) return { id: r.id, locale: 'nl' };
     if (r.en === path) return { id: r.id, locale: 'en' };
