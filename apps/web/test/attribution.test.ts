@@ -22,7 +22,7 @@ describe('attributionText', () => {
         true,
         DATE,
       ),
-    ).toBe('Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (26 oktober 2026)');
+    ).toBe('Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum: 26 oktober 2026)');
     expect(attributionText('Swiss river data (raw, unverified data; retrieved <date>)', true, DATE)).toBe(
       'Swiss river data (raw, unverified data; retrieved 26 oktober 2026)',
     );

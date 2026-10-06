@@ -6,10 +6,12 @@
 // (apps/server/test/e2e/api.ts on E2E_API_PORT, default 4480) with a 1 KB body
 // limit, any other /api path a 404; the tiles with only one explicit range on a
 // tile file, without If-Range, If-Match or If-Unmodified-Since (anything else is
-// a 416); /status and /assets misses as 404s; and the pages with no-cache: a
-// path with no file and no dot in its last segment answers /en/index.html under
-// /en/, else /index.html. CI runs the same specs against the real Caddy image
-// instead (.github/workflows/ci.yml job e2e).
+// a 416); /status/* and /assets misses as 404s; and (P10b) the pages of
+// src/lib/routes.ts with no-cache, each exact path its language's shell; a file
+// as it is (never the 404 shells under their own name); a missing file with an
+// extension a bare 404; any other path the 404 shell of its language (/en/404.html
+// under /en/, else /404.html) with status 404. CI runs the same specs against the
+// real Caddy image instead (.github/workflows/ci.yml job e2e).
 // Owner mode (P10a, local runs of owner.spec.ts; CI uses the real deploy/web/owner.caddy): E2E_OWNER=1 with E2E_OWNER_PW
 // (basic auth, user `owner`, on every path), E2E_OWNER_PUBLISH_DIR (the owner tree under /data/v1) and E2E_OWNER_API_PORT
 // (default 4482): the headers of owner.caddy (Cache-Control "private, no-store" on every response, as its `defer`
@@ -23,6 +25,7 @@ import { tmpdir } from 'node:os';
 import { extname, isAbsolute, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGzip } from 'node:zlib';
+import { PAGE_ROUTES } from '../src/lib/routes.ts';
 import { siteHeaders } from './headers.ts';
 import { prepareRivers, prepareTiles } from './prepare-tiles.ts';
 
@@ -69,6 +72,14 @@ const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.geojson
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 /** site.caddy's catch-all: the pages, the app routes and their 404s and redirects are revalidated on every use. */
 const NO_CACHE = 'no-cache';
+/** site.caddy's @page_nl and @page_en: the exact paths, as sent (P10b). */
+const PAGE_NL = new Set<string>(PAGE_ROUTES.map((r) => r.nl));
+const PAGE_EN = new Set<string>(PAGE_ROUTES.map((r) => r.en));
+/** site.caddy's `not path /404.html /en/404.html` (the path matcher folds case and merges slashes). */
+const SHELL_404 = /^\/+(en\/+)?404\.html$/i;
+/** What /runtime-config.json says in the e2e runs: CI's Caddy containers get the same values (ci.yml job e2e). */
+const E2E_OPERATOR = 'E2E Operator';
+const E2E_CONTACT = 'ci@rivierstanden.example';
 /** site.caddy's @api: the path as sent, under /api/v1/, with no dot segment. */
 const API = (path: string) => path.startsWith('/api/v1/') && !path.includes('/.');
 const BODY_MAX = 1024;
@@ -110,7 +121,7 @@ function file(root: string, urlPath: string): string | undefined {
   }
 }
 
-function serve(res: ServerResponse, path: string, range: string | undefined, cache?: string) {
+function serve(res: ServerResponse, path: string, range: string | undefined, cache?: string, status = 200) {
   const size = statSync(path).size;
   const base: Record<string, string | number> = { 'content-type': TYPES[extname(path)] ?? 'application/octet-stream' };
   if (cache) base['cache-control'] = cache;
@@ -131,11 +142,11 @@ function serve(res: ServerResponse, path: string, range: string | undefined, cac
   // site.caddy's `encode @compressible zstd gzip` (everything but /tiles): the text types, gzip only here, so the sizes a
   // browser (and Lighthouse's throttling model) sees are about those of production.
   if (COMPRESSIBLE.has(extname(path)) && /\bgzip\b/.test(String(res.req.headers['accept-encoding'] ?? ''))) {
-    res.writeHead(200, { ...base, 'content-encoding': 'gzip', vary: 'Accept-Encoding' });
+    res.writeHead(status, { ...base, 'content-encoding': 'gzip', vary: 'Accept-Encoding' });
     createReadStream(path).pipe(createGzip()).pipe(res);
     return;
   }
-  res.writeHead(200, { ...base, 'accept-ranges': 'bytes', 'content-length': size });
+  res.writeHead(status, { ...base, 'accept-ranges': 'bytes', 'content-length': size });
   createReadStream(path).pipe(res);
 }
 
@@ -211,7 +222,9 @@ const server = createServer(
     if (API(path)) return proxy(req, res);
     if (/^\/api(\/|$)/i.test(path)) return send(res, 404);
     if (path === '/healthz') return send(res, 200);
-    if (path === '/status' || path.startsWith('/status/')) return send(res, 404);
+    // site.caddy's /status/* (the status files of production aside); /status is a page (P10b). owner.caddy has no
+    // such route: its /status/* paths reach the catch-all.
+    if (!owner && path.startsWith('/status/')) return send(res, 404);
     if (path === '/tiles/manifest.json')
       return serve(res, join(tiles, 'manifest.json'), undefined, 'public, max-age=60');
     if (TILE.test(path) || RIVER_TILE.test(path)) {
@@ -235,7 +248,12 @@ const server = createServer(
         res,
         200,
         { 'content-type': 'application/json', 'cache-control': NO_CACHE },
-        owner ? '{"audience":"owner"}' : '{"audience":"public"}',
+        JSON.stringify({
+          audience: owner ? 'owner' : 'public',
+          contact: E2E_CONTACT,
+          operator: E2E_OPERATOR,
+          cdn: '',
+        }),
       );
     if (path.startsWith('/data/v1/')) {
       const f = /\/\./.test(path) ? undefined : file(published, path.slice('/data/v1'.length));
@@ -250,13 +268,17 @@ const server = createServer(
     if (path === '/assets' || path.startsWith('/assets/'))
       return asset === undefined ? send(res, 404) : serve(res, asset, range, IMMUTABLE);
     if (/\/\./.test(path)) return send(res, 404);
-    if (asset !== undefined) return serve(res, asset, range, NO_CACHE);
+    // site.caddy's catch-all, in its order: @page_nl, @page_en, @file (never a 404 shell), @dotted, @not_found_en, the
+    // Dutch 404 shell.
+    if (PAGE_NL.has(path)) return serve(res, join(www, 'index.html'), undefined, NO_CACHE);
+    if (PAGE_EN.has(path)) return serve(res, join(www, 'en/index.html'), undefined, NO_CACHE);
+    const shell = SHELL_404.test(path);
+    if (asset !== undefined && !shell) return serve(res, asset, range, NO_CACHE);
     // A directory without its slash: file_server's redirect (/en → /en/).
-    if (!path.endsWith('/') && file(www, `${path}/`) !== undefined)
+    if (!shell && !path.endsWith('/') && file(www, `${path}/`) !== undefined)
       return send(res, 308, { location: `${path}/`, 'cache-control': NO_CACHE });
-    // An app route: no file, no dot in the last segment (site.caddy's @app_en and @app).
     if (/\.[^/]*$/.test(path)) return send(res, 404, { 'cache-control': NO_CACHE });
-    return serve(res, join(www, path.startsWith('/en/') ? 'en/index.html' : 'index.html'), undefined, NO_CACHE);
+    return serve(res, join(www, path.startsWith('/en/') ? 'en/404.html' : '404.html'), undefined, NO_CACHE, 404);
   },
 );
 

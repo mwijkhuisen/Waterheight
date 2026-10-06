@@ -1,7 +1,7 @@
 import type { WebSource } from '../../lib/data/contracts.ts';
+import { httpsHref } from '../../lib/href.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
-import { httpsHref } from './href.ts';
 
 // The persistent owner banner (T12, C14): not dismissible; provider and registry text only as text nodes.
 

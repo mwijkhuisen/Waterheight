@@ -379,7 +379,7 @@ jobs:
           for check in 'api meta' 'api stations' 'api snapshot now' 'api snapshot 6h' 'api snapshot 3d' 'api openapi' \
             'api params' 'noindex' 'rivers attribution' 'api states' 'class coverage' \
             'static meta' 'static latest' 'static stations' 'static sources' 'static recent' 'static forecast' \
-            'static warnings' 'static status' 'static precompressed' 'runtime config' 'api sweep'; do
+            'static warnings' 'static status' 'static precompressed' 'runtime config' 'api sweep' 'pages' 'not found'; do
             grep -qE "^PASS $check " "$RUNNER_TEMP/verify-prod.txt" || { echo "verify-prod: no PASS for $check" >&2; exit 1; }
           done
 
@@ -455,6 +455,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ops"
           docker run -d --name e2e-caddy -p 127.0.0.1:443:443 --add-host=api:host-gateway \
             -e RWS_DOMAIN=localhost -e RWS_CONTACT_EMAIL=ci@rivierstanden.example \
+            -e RWS_OPERATOR_NAME="E2E Operator" -e RWS_CDN_NAME= \
             -v "$PWD/apps/web/e2e/Caddyfile.e2e:/etc/caddy/Caddyfile:ro" \
             -v "$PWD/deploy/web/site.caddy:/etc/caddy/site.caddy:ro" \
             -v "$PWD/apps/web/dist-e2e:/srv/www:ro" \
@@ -487,7 +488,8 @@ jobs:
           echo "E2E_OWNER_PW=$OWNER_PW" >>"$GITHUB_ENV"
           docker run -d --name e2e-caddy-owner -p 127.0.0.1:8443:8443 \
             --add-host "api-owner:$(hostname -I | cut -d' ' -f1)" \
-            -e RWS_DOMAIN=localhost \
+            -e RWS_DOMAIN=localhost -e RWS_CONTACT_EMAIL=ci@rivierstanden.example \
+            -e RWS_OPERATOR_NAME="E2E Operator" -e RWS_CDN_NAME= \
             -v "$PWD/apps/web/e2e/Caddyfile.owner.e2e:/etc/caddy/Caddyfile:ro" \
             -v "$PWD/deploy/web/owner.caddy:/etc/caddy/owner.caddy:ro" \
             -v "$RUNNER_TEMP/secrets/owner_basic_auth:/run/secrets/owner_basic_auth:ro" \

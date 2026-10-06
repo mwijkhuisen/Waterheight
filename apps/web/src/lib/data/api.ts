@@ -1,7 +1,7 @@
 import { type ApiStation, floorBucket, RiversManifest } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { loadAudience } from '../config/runtime.ts';
+import { loadRuntimeConfig, type RuntimeConfig } from '../config/runtime.ts';
 import { stationHorizon } from '../forecast.ts';
 import { quantise, STEP_MS, toUrlT } from '../time/time.ts';
 import type { Mode } from '../url/url.ts';
@@ -37,16 +37,21 @@ const LIVE_MS = 60_000;
 const live = (on: boolean) => (on ? { refetchInterval: LIVE_MS, refetchIntervalInBackground: false } : {});
 
 /**
- * Which site this is (/runtime-config.json, once): the query, so the page can say when it never answered. A failure
- * is retried (three times, with backoff) and never becomes "public" (lib/config/runtime.ts; review round 1).
+ * /runtime-config.json, once: one query for the audience and the site's operator, contact and CDN (P10b, plan C8). A
+ * failure is retried (three times, with backoff) and never becomes "public" (lib/config/runtime.ts; review round 1).
  */
-export const useAudienceQuery = () =>
-  useQuery({
-    queryKey: ['runtime-config'],
-    queryFn: ({ signal }) => loadAudience(undefined, signal),
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: 3,
-  });
+const runtimeConfigQuery = {
+  queryKey: ['runtime-config'],
+  queryFn: ({ signal }: { signal: AbortSignal }) => loadRuntimeConfig(undefined, signal),
+  staleTime: Number.POSITIVE_INFINITY,
+  retry: 3,
+} as const;
+
+/** Which site this is: the query, so the page can say when it never answered. */
+export const useAudienceQuery = () => useQuery({ ...runtimeConfigQuery, select: (c: RuntimeConfig) => c.audience });
+
+/** The operator, contact and CDN of this site (the colophon, the privacy page); undefined until it has answered. */
+export const useSiteConfig = (): RuntimeConfig | undefined => useQuery(runtimeConfigQuery).data;
 
 /** Which site this is; undefined until it has answered (and after it failed for good). */
 export const useAudience = () => useAudienceQuery().data;

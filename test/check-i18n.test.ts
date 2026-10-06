@@ -146,6 +146,50 @@ describe('check-i18n: messages', () => {
     });
   });
 
+  describe('the pages’ prose (P10b)', () => {
+    const CONTENT = 'apps/web/src/features/pages/content';
+    /** A tree with content files: locale → name → source. */
+    const withContent = (files: Record<'nl' | 'en', Record<string, string>>) => {
+      const root = tree({ a: 'Een' }, { a: 'One' });
+      for (const loc of ['nl', 'en'] as const) {
+        mkdirSync(join(root, CONTENT, loc), { recursive: true });
+        for (const [name, source] of Object.entries(files[loc])) writeFileSync(join(root, CONTENT, loc, name), source);
+      }
+      return root;
+    };
+    const page = (h1: string) =>
+      `import { PageLink } from '../../parts/PageLink.tsx';\nexport default function About() {\n  return <h1>${h1} <PageLink id="home" locale="nl">kaart</PageLink></h1>;\n}\n`;
+
+    it('is exempt from the hard-coded text scan when both languages have the file', () => {
+      expect(checkI18n(withContent({ nl: { 'About.tsx': page('Over') }, en: { 'About.tsx': page('About') } }))).toEqual(
+        [],
+      );
+    });
+    it('fails on a page missing in one language, and on an empty file', () => {
+      expect(
+        checkI18n(
+          withContent({ nl: { 'About.tsx': page('Over'), 'Privacy.tsx': ' \n' }, en: { 'About.tsx': page('x') } }),
+        ),
+      ).toEqual([`${CONTENT}/en/Privacy.tsx is missing`, `${CONTENT}/nl/Privacy.tsx: empty`]);
+    });
+    it('fails on an import other than react and ../../parts/*, a dynamic import and an HTML string', () => {
+      const bad = [
+        "import { m } from '../../../../paraglide/messages.js';",
+        "import x from '../../parts/../../../lib/data/api.ts';",
+        "export * from 'zod';",
+        'const y = import("./other.tsx");',
+        'const z = <div dangerouslySetInnerHTML={{ __html: "x" }} />;',
+      ].join('\n');
+      expect(checkI18n(withContent({ nl: { 'About.tsx': bad }, en: { 'About.tsx': page('About') } }))).toEqual([
+        `${CONTENT}/nl/About.tsx: a dynamic import`,
+        `${CONTENT}/nl/About.tsx: imports ../../../../paraglide/messages.js`,
+        `${CONTENT}/nl/About.tsx: imports ../../parts/../../../lib/data/api.ts`,
+        `${CONTENT}/nl/About.tsx: imports zod`,
+        `${CONTENT}/nl/About.tsx: sets HTML from a string`,
+      ]);
+    });
+  });
+
   it('passes on the repository', () => {
     expect(checkI18n(repoRoot)).toEqual([]);
   });

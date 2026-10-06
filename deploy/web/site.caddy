@@ -47,9 +47,6 @@
 	}
 	encode @compressible zstd gzip
 
-	# The User-Agent of every capture request names https://<domain>/over.
-	redir /over / 308
-
 	# The beacon (P9b, A§9.2): the one POST of the site, for CSP and Reporting API
 	# reports. Exact method and path, compared as sent (an expression, not a path
 	# matcher, which folds case: /API/v1/beacon and every other POST stay the 405
@@ -103,19 +100,23 @@
 		root * /srv/rws/public/ops
 		file_server
 	}
+	# Any other path under /status/ is a 404; /status itself is the status page
+	# (P10b), served by the catch-all below.
 	handle /status/* {
-		respond 404
-	}
-	handle /status {
 		respond 404
 	}
 
 	# Which audience this site shows (P9a): the web app reads it once. The owner
 	# site (owner.caddy) answers {"audience":"owner"} from its own container.
+	# P10b: the operator, the contact address and the CDN for the colophon and the
+	# privacy page, from the environment (compose: RWS_OPERATOR_NAME,
+	# RWS_CONTACT_EMAIL, RWS_CDN_NAME), so none of them is in the image. Caddy
+	# fills them in when it reads this file; a value must not hold " \ { } or #
+	# (the runbook and scripts/verify-prod.ts check it), or the JSON breaks.
 	handle /runtime-config.json {
 		header Content-Type "application/json"
 		header Cache-Control "no-cache"
-		respond `{"audience":"public"}` 200
+		respond `{"audience":"public","contact":"{$RWS_CONTACT_EMAIL}","operator":"{$RWS_OPERATOR_NAME}","cdn":"{$RWS_CDN_NAME}"}` 200
 	}
 
 	# The api (P2a: its two health paths; P4b: everything under /api/v1/). GET
@@ -531,32 +532,56 @@
 		respond 404
 	}
 
-	# The pages and the app routes (P4b). A file is served as it is. A path with
-	# no file and no dot in its last segment is an app route: under /en/ the
-	# English page answers, anywhere else the Dutch one, and the app shows its
-	# own "not found" for a route it does not know. A missing file with an
-	# extension (favicon.ico, robots.txt) stays a 404, answered here so that it
-	# keeps the site headers (file_server's own 404 would carry none, KG-107).
-	# Everything here is revalidated on every use (no-cache, CR-6): a page that
-	# a browser kept past a deploy would ask for asset names the new image no
-	# longer has. /api, /status, /tiles and /assets never get here.
+	# The pages (P10b, apps/web/src/lib/routes.ts; test/page-routes.test.ts keeps
+	# both lists equal to it): exactly these paths, compared as sent (an
+	# expression: the path matcher would fold case and merge slashes, so /Over or
+	# //over would be a soft 404), answer the shell of their language. A file is
+	# served as it is (/index.html, /third-party-notices.txt, /en → /en/), the two
+	# 404 shells never under their own name. A missing file with an extension
+	# (favicon.ico, robots.txt) is a bare 404; any other path is the 404 shell of
+	# its language, with status 404 (it never names the path). Every answer here
+	# keeps the site headers (file_server's own 404 would carry none, KG-107) and
+	# is revalidated on every use (no-cache, CR-6): a page that a browser kept
+	# past a deploy would ask for asset names the new image no longer has. /api,
+	# /status/*, /tiles and /assets never get here. Nested handle blocks are tried
+	# in this order (none has a path matcher, so Caddy does not re-sort them).
 	handle {
 		header Cache-Control "no-cache"
 		root * /srv/www
-		@app_en {
-			path_regexp ^/en/
-			not file {path} {path}/
-			not path_regexp \.[^/]*$
+		@page_nl expression `{path} in ['/', '/over', '/bronnen', '/methode', '/disclaimer', '/colofon', '/privacy', '/status', '/toegankelijkheid']`
+		handle @page_nl {
+			rewrite * /index.html
+			file_server
 		}
-		@app {
-			not file {path} {path}/
-			not path_regexp \.[^/]*$
+		@page_en expression `{path} in ['/en/', '/en/about', '/en/sources', '/en/method', '/en/disclaimer', '/en/colophon', '/en/privacy', '/en/status', '/en/accessibility']`
+		handle @page_en {
+			rewrite * /en/index.html
+			file_server
 		}
-		rewrite @app_en /en/index.html
-		rewrite @app /index.html
-		@missing not file {path} {path}/
-		respond @missing 404
-		file_server
+		@file {
+			file {path} {path}/
+			not path /404.html /en/404.html
+		}
+		handle @file {
+			file_server
+		}
+		@dotted path_regexp \.[^/]*$
+		handle @dotted {
+			respond 404
+		}
+		@not_found_en path_regexp ^/en/
+		handle @not_found_en {
+			rewrite * /en/404.html
+			file_server {
+				status 404
+			}
+		}
+		handle {
+			rewrite * /404.html
+			file_server {
+				status 404
+			}
+		}
 	}
 }
 

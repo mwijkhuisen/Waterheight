@@ -1,19 +1,18 @@
-import { type Meta, ODBL_URL } from '@rws/contracts';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
 import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
+import { Layout } from './features/layout/Layout.tsx';
 import { Legend } from './features/legend/Legend.tsx';
 import { ModeControl } from './features/legend/ModeControl.tsx';
 import { RiverChip } from './features/legend/RiverChip.tsx';
 import { StationsMap } from './features/map/StationsMap.tsx';
 import { hasWebGL2 } from './features/map/webgl.ts';
+import { Page } from './features/pages/Page.tsx';
 import { StationPanel } from './features/station/StationPanel.tsx';
 import { StationTable } from './features/table/StationTable.tsx';
 import { Timebar } from './features/timebar/Timebar.tsx';
-import { attributionText } from './lib/attribution.ts';
 import {
   chartSpan,
-  downloadHref,
   useAudience,
   useAudienceQuery,
   useChanges,
@@ -23,65 +22,44 @@ import {
   useOwnerSources,
   useRiver,
   useRivers,
-  useRiversManifest,
   useSnapshot,
-  useSources,
   useStationHorizon,
   useStations,
   useWarnings,
 } from './lib/data/api.ts';
 import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
+import { pathOf, routeOf } from './lib/routes.ts';
 import { stationStates } from './lib/stationStates.ts';
-import { formatDay, quantise, ZONE } from './lib/time/time.ts';
-import { otherLanguageHref } from './lib/url/url.ts';
+import { quantise } from './lib/time/time.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
 import { m } from './paraglide/messages.js';
 import type { Locale } from './paraglide/runtime.js';
 
-// One page per language (NL at /, EN at /en/): the map or the table of the
-// DE-1 and NL-1 stations at the instant `?t=`, the station `?s=` in a panel. After now (P8b) the timeline
-// reaches into the forecast, as far as the selected station's forecast does (at most 48 h).
-// The language link is a full page load that keeps t and s, so <html lang>
-// always matches the page (A§10).
+// One shell per language (NL at /, EN at /en/; P10b: the pages of lib/routes.ts, and the 404 shells for any other
+// path). The map is the table or map of the stations at the instant `?t=`, the station `?s=` in a panel. After now
+// (P8b) the timeline reaches into the forecast, as far as the selected station's forecast does (at most 48 h).
+// The language link is a full page load that keeps t and s, so <html lang> always matches the page (A§10).
 
-const PAGES = new Set(['/', '/index.html', '/en/', '/en/index.html']);
 const FETCH_DEBOUNCE_MS = 150;
 
-// The owner chunk (P10a T12): fetched only on the owner site, never by the public page.
-const OwnerBanner = lazy(() => import('./features/owner/index.ts').then((o) => ({ default: o.OwnerBanner })));
-
 export function App({ locale }: { locale: Locale }) {
-  const owner = useAudience() === 'owner';
+  const route = routeOf(location.pathname);
+  if (route?.id === 'home') return <Viewer locale={locale} />;
   return (
-    <>
-      {owner && <OwnerShell locale={locale} />}
-      <p className={styles.beta}>{m.beta_banner({}, { locale })}</p>
-      {PAGES.has(location.pathname) ? <Viewer locale={locale} /> : <NotFound locale={locale} />}
-    </>
+    <Layout locale={locale} route={route}>
+      {route === null ? <NotFound locale={locale} /> : <Page id={route.id} locale={locale} />}
+    </Layout>
   );
 }
 
-/** The persistent owner banner on every view of the owner site (T-OWN-5); nothing on the public site. */
-function OwnerShell({ locale }: { locale: Locale }) {
-  const sources = useSources().data;
-  const owned = useMemo(() => sources?.sources.filter((s) => s.audience === 'owner'), [sources]);
-  return (
-    <Suspense fallback={null}>
-      <OwnerBanner locale={locale} sources={owned} />
-    </Suspense>
-  );
-}
-
+/** Any path that is no page (Caddy answers it with a 404 and the 404 shell). The path itself is never shown. */
 function NotFound({ locale }: { locale: Locale }) {
   return (
     <>
-      <main className={styles.main}>
-        <h1>{m.not_found_heading({}, { locale })}</h1>
-        <p>
-          <a href={locale === 'nl' ? '/' : '/en/'}>{m.not_found_link({}, { locale })}</a>
-        </p>
-      </main>
-      <Footer locale={locale} meta={undefined} t={undefined} />
+      <h1>{m.not_found_heading({}, { locale })}</h1>
+      <p>
+        <a href={pathOf('home', locale)}>{m.not_found_link({}, { locale })}</a>
+      </p>
     </>
   );
 }
@@ -196,232 +174,153 @@ function Viewer({ locale }: { locale: Locale }) {
   const notice = !webgl ? m.map_no_webgl({}, { locale }) : mapFailed ? m.map_unavailable({}, { locale }) : undefined;
 
   return (
-    <>
-      <header className={styles.header}>
-        <h1>{m.heading({}, { locale })}</h1>
-        <a
-          href={otherLanguageHref(locale, url)}
-          hrefLang={locale === 'nl' ? 'en' : 'nl'}
-          lang={locale === 'nl' ? 'en' : 'nl'}
-        >
-          {m.other_language({}, { locale })}
-        </a>
-      </header>
-      <main className={styles.main}>
-        {range === undefined ||
-        end === undefined ||
-        t === undefined ||
-        stations.data === undefined ||
-        mode === undefined ? (
-          meta.isError || stations.isError || audienceFailed ? (
-            <p role="alert">{m.data_unavailable({}, { locale })}</p>
-          ) : (
-            // While the data loads, what the static shell of index.html says (P10a: the first frame carries the
-            // page's text at once, so the largest paint does not wait for the data).
-            <>
-              <p>{m.intro({}, { locale })}</p>
-              <p>{m.not_official({}, { locale })}</p>
-              <p role="status">{m.loading({}, { locale })}</p>
-            </>
-          )
+    <Layout
+      locale={locale}
+      route={{ id: 'home', locale }}
+      meta={meta.data}
+      t={t === undefined || range === undefined ? t : Math.min(t, range.now)}
+    >
+      {range === undefined ||
+      end === undefined ||
+      t === undefined ||
+      stations.data === undefined ||
+      mode === undefined ? (
+        meta.isError || stations.isError || audienceFailed ? (
+          <p role="alert">{m.data_unavailable({}, { locale })}</p>
         ) : (
+          // While the data loads, what the static shell of index.html says (P10a: the first frame carries the
+          // page's text at once, so the largest paint does not wait for the data).
           <>
-            <Timebar
-              locale={locale}
-              t={t}
-              start={range.start}
-              now={range.now}
-              end={end}
-              noForecast={horizon === null}
-              epoch={range.epoch}
-              live={isLive}
-              onChange={setT}
-            />
-            <div className={styles.controls}>
-              <ModeControl locale={locale} mode={mode} onChange={setMode} />
-              {canMap && (
-                <fieldset className={styles.toggle}>
-                  <legend>{m.view_label({}, { locale })}</legend>
-                  <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>
-                    {m.view_map({}, { locale })}
-                  </button>
-                  <button type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>
-                    {m.view_table({}, { locale })}
-                  </button>
-                </fieldset>
-              )}
-              <label className={styles.select}>
-                {m.station_select_label({}, { locale })}
-                <select
-                  ref={listRef}
-                  value={selected?.id ?? ''}
-                  onChange={(e) => {
-                    setFocusPanel(false);
-                    select(e.currentTarget.value || undefined);
-                  }}
-                >
-                  <option value="">{m.station_select_none({}, { locale })}</option>
-                  {list.map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.waterName === null ? st.name : `${st.name} (${st.waterName})`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {notice !== undefined && (
-              <p role="status" className={styles.notice}>
-                {notice} {m.map_fallback({}, { locale })}
-              </p>
+            <p>{m.intro({}, { locale })}</p>
+            <p>{m.not_official({}, { locale })}</p>
+            <p role="status">{m.loading({}, { locale })}</p>
+          </>
+        )
+      ) : (
+        <>
+          <Timebar
+            locale={locale}
+            t={t}
+            start={range.start}
+            now={range.now}
+            end={end}
+            noForecast={horizon === null}
+            epoch={range.epoch}
+            live={isLive}
+            onChange={setT}
+          />
+          <div className={styles.controls}>
+            <ModeControl locale={locale} mode={mode} onChange={setMode} />
+            {canMap && (
+              <fieldset className={styles.toggle}>
+                <legend>{m.view_label({}, { locale })}</legend>
+                <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>
+                  {m.view_map({}, { locale })}
+                </button>
+                <button type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>
+                  {m.view_table({}, { locale })}
+                </button>
+              </fieldset>
             )}
-            {river !== undefined && (
-              <RiverChip locale={locale} id={river.id} river={river.river} onClear={() => setRiver(undefined)} />
-            )}
-            {snapshot.isError && <p role="alert">{m.data_unavailable({}, { locale })}</p>}
-            {warnings?.incomplete === true && <p role="status">{m.warnings_incomplete({}, { locale })}</p>}
-            {mode === 'delta' && forecasts !== undefined && <p role="status">{m.dh_future_note({}, { locale })}</p>}
-            <DegradedBanner
-              locale={locale}
-              degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}
-              standInAt={snapshot.data?.standIn === true ? Date.parse(snapshot.data.t) : undefined}
-            />
-            <Legend
-              locale={locale}
-              mode={mode}
-              forecast={forecasts !== undefined}
-              owner={owner}
-              warnings={(warnings?.features.length ?? 0) > 0}
-            />
-            <div className={loading ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={loading}>
-              <div className={styles.view}>
-                {canMap && view === 'map' ? (
-                  <StationsMap
-                    locale={locale}
-                    mode={mode}
-                    stations={list}
-                    states={states}
-                    values={values}
-                    forecasts={forecasts}
-                    changes={changes}
-                    warnings={warnings}
-                    riverTiles={rivers.data?.manifest.current.tiles.file}
-                    river={river?.id}
-                    selected={selected}
-                    onSelect={open}
-                    onRiver={setRiver}
-                    onClose={close}
-                    onFailure={failed}
-                  />
-                ) : (
-                  <StationTable
-                    locale={locale}
-                    mode={mode}
-                    stations={list}
-                    states={states}
-                    values={values}
-                    forecasts={forecasts}
-                    changes={changes}
-                    t={t}
-                    selected={selected?.id}
-                    onSelect={open}
-                  />
-                )}
-              </div>
-              {selected !== undefined && (
-                <StationPanel
-                  key={selected.id}
+            <label className={styles.select}>
+              {m.station_select_label({}, { locale })}
+              <select
+                ref={listRef}
+                value={selected?.id ?? ''}
+                onChange={(e) => {
+                  setFocusPanel(false);
+                  select(e.currentTarget.value || undefined);
+                }}
+              >
+                <option value="">{m.station_select_none({}, { locale })}</option>
+                {list.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.waterName === null ? st.name : `${st.name} (${st.waterName})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {notice !== undefined && (
+            <p role="status" className={styles.notice}>
+              {notice} {m.map_fallback({}, { locale })}
+            </p>
+          )}
+          {river !== undefined && (
+            <RiverChip locale={locale} id={river.id} river={river.river} onClear={() => setRiver(undefined)} />
+          )}
+          {snapshot.isError && <p role="alert">{m.data_unavailable({}, { locale })}</p>}
+          {warnings?.incomplete === true && <p role="status">{m.warnings_incomplete({}, { locale })}</p>}
+          {mode === 'delta' && forecasts !== undefined && <p role="status">{m.dh_future_note({}, { locale })}</p>}
+          <DegradedBanner
+            locale={locale}
+            degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}
+            standInAt={snapshot.data?.standIn === true ? Date.parse(snapshot.data.t) : undefined}
+          />
+          <Legend
+            locale={locale}
+            mode={mode}
+            forecast={forecasts !== undefined}
+            owner={owner}
+            warnings={(warnings?.features.length ?? 0) > 0}
+          />
+          <div className={loading ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={loading}>
+            <div className={styles.view}>
+              {canMap && view === 'map' ? (
+                <StationsMap
                   locale={locale}
-                  station={selected}
+                  mode={mode}
+                  stations={list}
+                  states={states}
                   values={values}
                   forecasts={forecasts}
                   changes={changes}
                   warnings={warnings}
-                  ownerSources={ownerSources}
-                  live={isLive}
-                  serverNow={range.serverNow}
-                  t={t}
-                  dataEpoch={range.epoch}
-                  chartSpan={chartSpan(settled ?? t, range.start, range.serverNow)}
-                  focus={focusPanel}
+                  riverTiles={rivers.data?.manifest.current.tiles.file}
+                  river={river?.id}
+                  selected={selected}
+                  onSelect={open}
+                  onRiver={setRiver}
                   onClose={close}
+                  onFailure={failed}
+                />
+              ) : (
+                <StationTable
+                  locale={locale}
+                  mode={mode}
+                  stations={list}
+                  states={states}
+                  values={values}
+                  forecasts={forecasts}
+                  changes={changes}
+                  t={t}
+                  selected={selected?.id}
+                  onSelect={open}
                 />
               )}
             </div>
-          </>
-        )}
-      </main>
-      <Footer
-        locale={locale}
-        meta={meta.data}
-        t={t === undefined || range === undefined ? t : Math.min(t, range.now)}
-      />
-    </>
-  );
-}
-
-/** Only an https link from the registry becomes an anchor; anything else stays text. */
-const httpsUrl = (url: string | null): string | undefined => {
-  if (url === null) return undefined;
-  try {
-    return new URL(url).protocol === 'https:' ? url : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-/**
- * The sources from /meta, a source that fills another's series included (FR-3, CH-3). Where a row needs a date, it
- * is the Amsterdam date of `t` in the page's language; a text that another source already showed is not repeated
- * (CH-3 says what CH-1 says).
- */
-function Footer({ locale, meta, t }: { locale: Locale; meta: Meta | undefined; t: number | undefined }) {
-  const date = t === undefined ? undefined : formatDay(t, locale, ZONE);
-  // The owner site serves no /downloads (owner.caddy): the river download is offered on the public site only.
-  const owner = useAudience() === 'owner';
-  const manifest = useRiversManifest().data;
-  const download = owner ? undefined : downloadHref(manifest);
-  const shown = new Set<string>();
-  return (
-    <footer className={styles.footer}>
-      <p className={styles.disclaimer}>{m.disclaimer({}, { locale })}</p>
-      {meta !== undefined && date !== undefined && meta.sources.length > 0 && (
-        <>
-          <h2>{m.sources_heading({}, { locale })}</h2>
-          <ul>
-            {meta.sources.flatMap((source) =>
-              source.attribution.flatMap((a) => {
-                const text = attributionText(a.text, a.needsDate, date);
-                const href = httpsUrl(a.url);
-                const seen = `${a.lang}|${href}|${text}`;
-                if (shown.has(seen)) return [];
-                shown.add(seen);
-                return [
-                  <li key={`${source.id}|${a.text}`} lang={a.lang ?? undefined}>
-                    {href === undefined ? text : <a href={href}>{text}</a>}
-                  </li>,
-                ];
-              }),
+            {selected !== undefined && (
+              <StationPanel
+                key={selected.id}
+                locale={locale}
+                station={selected}
+                values={values}
+                forecasts={forecasts}
+                changes={changes}
+                warnings={warnings}
+                ownerSources={ownerSources}
+                live={isLive}
+                serverNow={range.serverNow}
+                t={t}
+                dataEpoch={range.epoch}
+                chartSpan={chartSpan(settled ?? t, range.start, range.serverNow)}
+                focus={focusPanel}
+                onClose={close}
+              />
             )}
-          </ul>
+          </div>
         </>
       )}
-      <p>
-        <a href="https://www.openstreetmap.org/copyright">{m.osm_credit({}, { locale })}</a> ·{' '}
-        {m.protomaps_credit({}, { locale })}
-      </p>
-      <p>
-        {m.rivers_licence_lead({}, { locale })} <a href={ODBL_URL}>{m.rivers_licence_link({}, { locale })}</a>.{' '}
-        {m.rivers_collective({}, { locale })}
-        {download !== undefined && (
-          <>
-            {' '}
-            <a href={download}>{m.rivers_download({}, { locale })}</a>
-          </>
-        )}
-      </p>
-      <p>
-        <a href="/third-party-notices.txt">{m.notices_link({}, { locale })}</a>
-      </p>
-    </footer>
+    </Layout>
   );
 }

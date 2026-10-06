@@ -27,9 +27,13 @@ export default defineConfig(({ mode }) => {
         // P10a: the lazy owner chunk shares @rws/contracts with the page, so the schemas move into a shared chunk
         // that main imports; without strict order that chunk ran before lib/zod.ts set `jitless` (a CSP eval probe).
         output: { strictExecutionOrder: true },
+        // P10b: the 404 shells, which Caddy serves (with status 404) for a path that is no page; never under their
+        // own name.
         input: {
           nl: here('./index.html'),
           en: here('./en/index.html'),
+          not_found_nl: here('./404.html'),
+          not_found_en: here('./en/404.html'),
           ...(e2e ? { spike_nl: here('./_spike/index.html'), spike_en: here('./en/_spike/index.html') } : {}),
         },
       },

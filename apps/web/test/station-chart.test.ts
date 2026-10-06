@@ -7,7 +7,8 @@ import {
   referenceMarks,
   runName,
 } from '../src/features/station/chartModel.ts';
-import { creditLines, dhValue, httpsUrl, trendGlyph } from '../src/features/station/provenance.ts';
+import { creditLines, dhValue, trendGlyph } from '../src/features/station/provenance.ts';
+import { httpsHref } from '../src/lib/href.ts';
 
 const H = 3_600_000;
 const NOW = Date.parse('2026-10-26T12:00:00Z');
@@ -120,10 +121,10 @@ describe('observedPoints', () => {
 
 describe('provenance', () => {
   it('https only', () => {
-    expect(httpsUrl('https://a.example/x')).toBe('https://a.example/x');
-    expect(httpsUrl('http://a.example')).toBeUndefined();
-    expect(httpsUrl('javascript:alert(1)')).toBeUndefined();
-    expect(httpsUrl(null)).toBeUndefined();
+    expect(httpsHref('https://a.example/x')).toBe('https://a.example/x');
+    expect(httpsHref('http://a.example')).toBeUndefined();
+    expect(httpsHref('javascript:alert(1)')).toBeUndefined();
+    expect(httpsHref(null)).toBeUndefined();
   });
   it('credit lines prefer the page language and carry the licence date', () => {
     const lines = creditLines(

@@ -1,5 +1,6 @@
 import { ApiStation } from '@rws/contracts';
 import type { Locale } from '../../paraglide/runtime.js';
+import { pathOf, type RouteId } from '../routes.ts';
 import { parseUrlT, toUrlT } from '../time/time.ts';
 
 // The view lives in the URL (A§10): `?t=2026-11-20T14:00Z&s=nl.rws.lobith.bovenrijn.tolkamer&mode=delta&river=waal`.
@@ -49,6 +50,9 @@ export function searchOf({ t, s, mode, river }: UrlState): string {
   return parts.length === 0 ? '' : `?${parts.join('&')}`;
 }
 
-/** The page of the other language with the same view (a full load, so its `<html lang>` is right). */
-export const otherLanguageHref = (locale: Locale, state: UrlState): string =>
-  `${locale === 'nl' ? '/en/' : '/'}${searchOf(state)}`;
+/**
+ * The same page in the other language with the same view (a full load, so its `<html lang>` is right); the map when
+ * there is no page (the 404 page).
+ */
+export const otherLanguageHref = (locale: Locale, state: UrlState, id: RouteId = 'home'): string =>
+  `${pathOf(id, locale === 'nl' ? 'en' : 'nl')}${searchOf(state)}`;

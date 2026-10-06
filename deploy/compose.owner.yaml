@@ -35,6 +35,10 @@ services:
     group_add: ["61010"]
     environment:
       RWS_DOMAIN: ${RWS_DOMAIN:?}
+      # P10b: the colophon and privacy page, as on the public site (owner.caddy /runtime-config.json).
+      RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+      RWS_OPERATOR_NAME: ${RWS_OPERATOR_NAME:-}
+      RWS_CDN_NAME: ${RWS_CDN_NAME:-}
     secrets: [owner_basic_auth]
     volumes:
       - /srv/rws/owner/www/v1:/srv/rws/owner/www/v1:ro
