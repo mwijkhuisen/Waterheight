@@ -51,7 +51,7 @@ interface Props {
   onChange: (t: number) => void;
 }
 
-export function Timebar({ locale, t, start, now, end, noForecast, epoch, onChange }: Props) {
+export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, onChange }: Props) {
   const id = useId();
   const [missing, setMissing] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -236,6 +236,7 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, onChang
           {m.to_now({}, { locale })}
         </button>
       </div>
+      {live && <p className={styles.note}>{m.live_note({}, { locale })}</p>}
       {reduced && <p className={styles.note}>{m.play_reduced_motion({}, { locale })}</p>}
     </section>
   );

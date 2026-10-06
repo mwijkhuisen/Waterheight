@@ -1,9 +1,9 @@
 import type { WebSource } from '../../lib/data/contracts.ts';
+import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { httpsHref } from './href.ts';
 
-// STUB (lead, P10a): S3 builds the owner banner (plan T12, C14): a persistent, non-dismissible `role="region"` with
-// the one-line text, and a <details> listing each owner-audience source (canary already dropped by the loader) with
-// its clause as a text node, an https-only link and the retrieval date.
+// The persistent owner banner (T12, C14): not dismissible; provider and registry text only as text nodes.
 
 export interface OwnerBannerProps {
   locale: Locale;
@@ -11,6 +11,41 @@ export interface OwnerBannerProps {
   sources: readonly WebSource[] | undefined;
 }
 
-export function OwnerBanner(_: OwnerBannerProps) {
-  return null;
+export function OwnerBanner({ locale, sources }: OwnerBannerProps) {
+  const o = { locale };
+  return (
+    <section aria-label={m.owner_banner_label({}, o)}>
+      <p>
+        <strong>{m.owner_banner({}, o)}</strong>
+      </p>
+      <details>
+        <summary>{m.owner_terms_summary({}, o)}</summary>
+        <ul>
+          {(sources ?? []).map((s) => {
+            const b = s.privateBasis;
+            const href = b == null ? undefined : httpsHref(b.url);
+            return (
+              <li key={s.id}>
+                {s.id} {s.name}
+                {b != null && (
+                  <>
+                    {': '}
+                    {b.clause}{' '}
+                    {href === undefined ? (
+                      b.url
+                    ) : (
+                      <a href={href} rel="noopener noreferrer">
+                        {m.owner_terms_link({}, o)}
+                      </a>
+                    )}{' '}
+                    ({m.owner_retrieved({ date: b.retrieved }, o)})
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </details>
+    </section>
+  );
 }

@@ -1,9 +1,8 @@
+import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 
-// STUB (lead, P10a): S3 builds the badge (plan T12): "alleen eigenaar / owner only", a text badge next to a station,
-// series, forecast band or threshold of an owner-audience source. It holds no owner data, so it may live in the
-// initial bundle and is imported statically by the table, panel and popup.
+// A text badge for an owner-audience station, series, forecast band or threshold (T12). No owner data in it.
 
-export function OwnerBadge(_: { locale: Locale }) {
-  return null;
+export function OwnerBadge({ locale }: { locale: Locale }) {
+  return <strong>{m.owner_badge({}, { locale })}</strong>;
 }

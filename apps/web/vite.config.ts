@@ -24,6 +24,9 @@ export default defineConfig(({ mode }) => {
       // lazy chunk, never part of a page's initial load (test/map-build.test.ts).
       chunkSizeWarningLimit: 1100,
       rolldownOptions: {
+        // P10a: the lazy owner chunk shares @rws/contracts with the page, so the schemas move into a shared chunk
+        // that main imports; without strict order that chunk ran before lib/zod.ts set `jitless` (a CSP eval probe).
+        output: { strictExecutionOrder: true },
         input: {
           nl: here('./index.html'),
           en: here('./en/index.html'),
