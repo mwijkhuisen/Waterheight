@@ -214,6 +214,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @vitest/coverage-v8 | npm | 5.0.1 | installed | – | MIT | dev only: `pnpm test:coverage` (≥ 90% lines of every adapter's parse and normalise; P2a) |
 | @playwright/test | npm | 1.63.0 | installed | – | Apache-2.0 | dev only: `pnpm -F web e2e` (Chromium, Firefox, WebKit; P3, planned for P4) |
 | @axe-core/playwright | npm | 4.13.0 | installed | – | MPL-2.0 | dev only: axe on the spike pages (P3) and on three views of the real pages (P4b); the full accessibility pass is P10 |
+| lighthouse | npm | 13.5.0 | installed | – | Apache-2.0 | dev only: the Lighthouse spec of the CI `e2e` job (P10a; mobile, simulated 4G, local Chromium, reports to disk, no upload); 91 transitive packages, no build script |
 | docker/build-push-action | action | 7.4.0 | installed | c3c9e263c25d99ce0380d002d59b67737d91b0dc | Apache-2.0 | P1b |
 | docker/login-action | action | 4.6.0 | installed | dbcb813823bdd20940b903addbd779551569679f | Apache-2.0 | P1b |
 | docker/setup-buildx-action | action | 4.4.1 | installed | f87e5991a6d7451dcb8d9637bfbc97413f497069 | Apache-2.0 | P1b |

@@ -430,11 +430,17 @@ jobs:
         run: pnpm -F web build:e2e
       - name: The e2e api on the runner (seeded throw-away database, fixed clock 2026-10-26T12:00Z) and its static files
         env:
-          HOST: 0.0.0.0
+          # P10a (C4): the docker0 gateway, which `--add-host=api:host-gateway` resolves to; the owner api (a second
+          # listener of the same process) is on the runner's primary address, which the owner Caddy reaches as api-owner.
+          HOST: 172.17.0.1
           PORT: '8080'
           # P9a: the api's startup runs one full publisher cycle into this directory; Caddy mounts its v1/.
           E2E_PUBLISH_DIR: ${{ runner.temp }}/publish
+          # P10a: the owner tree (synthetic owner rows) of the same startup; the owner Caddy mounts its v1/.
+          E2E_OWNER_PUBLISH_DIR: ${{ runner.temp }}/owner-publish
         run: |
+          E2E_OWNER_API_HOST=$(hostname -I | cut -d' ' -f1)
+          export E2E_OWNER_API_HOST
           node apps/server/test/e2e/api.ts >"$RUNNER_TEMP/e2e-api.log" 2>&1 &
           for _ in $(seq 1 120); do
             if grep -q '^e2e api listening' "$RUNNER_TEMP/e2e-api.log"; then exit 0; fi
@@ -464,21 +470,68 @@ jobs:
           done
           docker logs e2e-caddy
           exit 1
+      # P10a: the production owner site (deploy/web/owner.caddy: basic_auth, the owner headers, the owner tree, the
+      # tiles and the river files) in a second real Caddy container. The password is made here, hashed in the Caddy
+      # image and never printed or written to the repository; the secret file is the one-line `owner <hash>` that
+      # production mounts. api-owner is the owner listener of the e2e api on the runner (the owner Caddy has no
+      # public network name for it).
+      - name: Serve the owner site through the real Caddy image and owner.caddy (https://owner.localhost:8443)
+        run: |
+          set -euo pipefail
+          OWNER_PW=$(openssl rand -hex 16)
+          echo "::add-mask::$OWNER_PW"
+          hash=$(docker run --rm "$CADDY_IMAGE" caddy hash-password --plaintext "$OWNER_PW")
+          mkdir -p "$RUNNER_TEMP/secrets"
+          printf 'owner %s\n' "$hash" >"$RUNNER_TEMP/secrets/owner_basic_auth"
+          chmod 0444 "$RUNNER_TEMP/secrets/owner_basic_auth"
+          echo "E2E_OWNER_PW=$OWNER_PW" >>"$GITHUB_ENV"
+          docker run -d --name e2e-caddy-owner -p 127.0.0.1:8443:8443 \
+            --add-host "api-owner:$(hostname -I | cut -d' ' -f1)" \
+            -e RWS_DOMAIN=localhost \
+            -v "$PWD/apps/web/e2e/Caddyfile.owner.e2e:/etc/caddy/Caddyfile:ro" \
+            -v "$PWD/deploy/web/owner.caddy:/etc/caddy/owner.caddy:ro" \
+            -v "$RUNNER_TEMP/secrets/owner_basic_auth:/run/secrets/owner_basic_auth:ro" \
+            -v "$PWD/apps/web/dist-e2e:/srv/www:ro" \
+            -v "$RUNNER_TEMP/owner-publish/v1:/srv/rws/owner/www/v1:ro" \
+            -v "$RUNNER_TEMP/tiles:/srv/rws/tiles:ro" \
+            -v "$RUNNER_TEMP/rivers:/srv/rws/public/data/v1/rivers:ro" \
+            "$CADDY_IMAGE" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+          for _ in $(seq 1 30); do
+            # 401 is the answer to a request without credentials: the site is up and gated.
+            if [ "$(curl -sk -o /dev/null -w '%{http_code}' --resolve owner.localhost:8443:127.0.0.1 https://owner.localhost:8443/)" = 401 ]; then exit 0; fi
+            sleep 1
+          done
+          docker logs e2e-caddy-owner
+          exit 1
       # Headless Firefox finds no GL driver without an X display (FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS):
       # the image's own Xvfb gives it one, with Mesa's software renderer (ADR-0016). --init: xvfb-run waits for
       # Xvfb's ready signal, which a PID 1 never gets, so without an init process it hangs silently.
       - name: Playwright (Chromium, Firefox, WebKit) in the pinned Playwright image
         timeout-minutes: 15
         run: |
+          # P10a: every project (the owner one reaches the owner Caddy; WebKit does not resolve *.localhost itself).
+          # The password reaches the container by name only (-e E2E_OWNER_PW takes it from the step's environment).
           docker run --rm --init --network host --ipc=host \
+            --add-host owner.localhost:127.0.0.1 \
             -e CI=true -e E2E_BASE_URL=https://localhost \
+            -e E2E_OWNER_URL=https://owner.localhost:8443 -e E2E_OWNER_PW \
             -v "$PWD:/work" -w /work/apps/web \
             "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
             node_modules/.bin/playwright test -c e2e/playwright.config.ts
+      # CVD screenshots, Lighthouse reports and each failed test's context.
+      - name: Upload the Playwright results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-test-results
+          path: apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Caddy's log, the e2e api's log and Playwright's failure context
         if: failure()
         run: |
           docker logs e2e-caddy 2>&1 | tail -n 100
+          docker logs e2e-caddy-owner 2>&1 | tail -n 100
           tail -n 100 "$RUNNER_TEMP/e2e-api.log"
           # Each failed test's page snapshot (error-context.md): what the browser showed, e.g. its own error page.
           find apps/web/test-results -name error-context.md -print -exec head -n 80 {} \; 2>/dev/null | head -n 400

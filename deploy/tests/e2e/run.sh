@@ -1097,3 +1097,17 @@ rws_compose start api
 wait_for "api healthy again" 240 healthy api
 ((degraded_rc == 0)) || fail "degraded.spec.ts failed with the api stopped (exit $degraded_rc)"
 proof "with the api container stopped, Playwright in the pinned image (host network, $DOMAIN -> $IP4) opened /?t=<now + 1 h>: the map canvas drew and the degraded banner showed (degraded.spec.ts); the api started again and is healthy"
+
+step "Owner smoke (P10a): the production build behind caddy-owner, one browser"
+# caddy-owner is reachable on rws_edge only (no published port); the browser stays on the host network and
+# resolves owner.$DOMAIN to the container's rws_edge address (never joins the network). The password is passed
+# by name; the spec (owner-smoke.spec.ts, selected by E2E_OWNER_SMOKE=1) checks runtime-config and the banner.
+owner_ip=$(docker inspect -f '{{(index .NetworkSettings.Networks "rws_edge").IPAddress}}' rws-caddy-owner-1)
+[[ $owner_ip =~ ^[0-9.]+$ ]] || fail "no rws_edge address for caddy-owner: $owner_ip"
+E2E_OWNER_PW=$OWNER_PW docker run --rm --init --network host --ipc=host --add-host "owner.$DOMAIN:$owner_ip" \
+  -e CI=true -e E2E_COMPOSE=1 -e E2E_OWNER_SMOKE=1 -e "E2E_OWNER_URL=https://owner.$DOMAIN:8443" -e E2E_OWNER_PW \
+  -v "$repo:/work" -w /work/apps/web \
+  "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
+  node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium ||
+  fail "the owner smoke (owner-smoke.spec.ts) failed"
+proof "owner smoke: Playwright (Chromium, host network, owner.$DOMAIN -> $owner_ip) signed in to caddy-owner on the production build: /runtime-config.json says owner and the owner banner shows (owner-smoke.spec.ts)"

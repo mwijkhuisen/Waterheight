@@ -1,0 +1,12 @@
+# CI only (.github/workflows/ci.yml job e2e): the production owner site
+# (deploy/web/owner.caddy, basic_auth included) served by the real Caddy image
+# for the owner Playwright project on https://owner.localhost:8443 with Caddy's
+# own local CA. Only these globals differ from deploy/web/Caddyfile.owner.
+{
+	admin off
+	local_certs
+	skip_install_trust
+	auto_https disable_redirects
+}
+
+import /etc/caddy/owner.caddy

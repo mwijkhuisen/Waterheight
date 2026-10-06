@@ -4,7 +4,7 @@
 # construction. Prints one PASS line per proof, exits 1 on the first failure.
 #   1. docker inspect: publish mounts nothing of /srv/rws/owner, publish-owner
 #      nothing of /srv/rws/public, the public caddy no owner path and no secret,
-#      caddy-owner only the owner v1 (read-only), no published port;
+#      caddy-owner only the owner v1, the tiles and the rivers directory (read-only), no published port;
 #   2. write attempts across the roots fail from inside the containers;
 #   3. the public listener never serves owner content for SNI owner.<domain>,
 #      and no public static file carries the owner canary;
@@ -39,11 +39,16 @@ grep -qx '/srv/rws/owner/status -> /srv/capture rw=false' <<<"$own" || fail "pub
 grep -qx '/srv/rws/public/www/v1 -> /srv/rws/public/www/v1 rw=false' <<<"$caddy" || fail "the public caddy does not mount www/v1 read-only: $caddy"
 ! grep -qE 'www/(\.tmp|\.state)|/srv/rws/public/www( |$)' <<<"$caddy" || fail "the public caddy sees the publisher's .tmp or .state: $caddy"
 docker exec rws-caddy-1 test ! -e /run/secrets/owner_basic_auth || fail "the public caddy holds the owner secret"
-! grep -q '/srv/rws/public' <<<"$cowner" || fail "caddy-owner mounts public paths: $cowner"
-grep -qx '/srv/rws/owner/www/v1 -> /srv/rws/owner/www/v1 rw=false' <<<"$cowner" || fail "caddy-owner: not the owner v1 read-only: $cowner"
+# caddy-owner's host mounts are exactly these three, all read-only (P10a, KG-213: the owner map's tiles and river
+# files); nothing else of /srv/rws/public, and no other host path.
+want=$(printf '%s\n' \
+  '/srv/rws/owner/www/v1 -> /srv/rws/owner/www/v1 rw=false' \
+  '/srv/rws/public/data/v1/rivers -> /srv/rws/public/data/v1/rivers rw=false' \
+  '/srv/rws/tiles -> /srv/rws/tiles rw=false')
+[[ $(grep '^/' <<<"$cowner" | sort) == "$want" ]] || fail "caddy-owner: host mounts are not exactly owner v1, tiles and the rivers directory, read-only: $cowner"
 [[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-caddy-owner-1) == '{}' || $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-caddy-owner-1) == null ]] ||
   fail "caddy-owner publishes a port"
-pass "docker inspect: publish mounts public/www (rw) and public/ops (ro) and nothing of the owner channel; publish-owner owner/www (rw) and owner/status (ro) and nothing public; the public caddy mounts only www/v1 (ro) of the new trees, no owner path and no owner secret; caddy-owner mounts only owner/www/v1 (ro) and publishes no port"
+pass "docker inspect: publish mounts public/www (rw) and public/ops (ro) and nothing of the owner channel; publish-owner owner/www (rw) and owner/status (ro) and nothing public; the public caddy mounts only www/v1 (ro) of the new trees, no owner path and no owner secret; caddy-owner mounts only owner/www/v1, tiles and the rivers directory (all ro) and publishes no port"
 
 # ---- 2. write attempts across the roots
 probe='const fs = require("fs"); const r = [];
