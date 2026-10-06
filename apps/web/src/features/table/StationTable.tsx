@@ -1,6 +1,9 @@
 import type { ApiStation, Snapshot } from '@rws/contracts';
+import type { Change } from '../../lib/data/change.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
+import type { StationState } from '../../lib/stationStates.ts';
 import { formatAge, formatLocal } from '../../lib/time/time.ts';
+import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { forecastDetail, forecastValue } from '../station/forecast.ts';
@@ -18,7 +21,12 @@ type Value = Snapshot['values'][number];
 
 interface Props {
   locale: Locale;
+  /** P10a: the mode column (state, Δh with ▲/▼ in words, Q or "geen afvoer"). */
+  mode: Mode;
   stations: readonly ApiStation[];
+  /** The feature-state record of every station at t: the section, owner, stale and suspect badges. */
+  states: ReadonlyMap<string, StationState>;
+  changes: ReadonlyMap<number, Change> | undefined;
   values: ReadonlyMap<number, Value>;
   /** After now: the forecasts at t by series; undefined for a t up to now. */
   forecasts: ReadonlyMap<number, SnapshotForecast> | undefined;

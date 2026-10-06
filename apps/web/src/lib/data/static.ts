@@ -21,7 +21,8 @@ export function snapshotSource(t: number, meta: MetaClock): SnapshotSource {
   if (t === floorBucket(now)) return { kind: 'latest' };
   const day = dayOf(t);
   if (!isSettled(day, now)) return { kind: 'recent', path: recentPath(t) };
-  const version = meta.dayVersions[day] ?? 1;
+  // An own key only (plan C18): the day is regex-checked, but a prototype key is never a version.
+  const version = Object.hasOwn(meta.dayVersions, day) ? (meta.dayVersions[day] as number) : 1;
   return version === 0 ? { kind: 'api' } : { kind: 'settled', path: settledPath(t, version), version };
 }
 
@@ -41,4 +42,6 @@ export type WebSnapshot = {
   standIn: boolean;
   /** The forecast fallback or a stand-in: the page says so. */
   degraded: boolean;
+  /** From latest.json only: the publisher's 24-hour change per series (canonical units; null without both values). */
+  dh24?: ReadonlyMap<number, number | null> | undefined;
 };

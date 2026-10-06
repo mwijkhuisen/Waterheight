@@ -1,14 +1,18 @@
 import type { ApiStation, Snapshot } from '@rws/contracts';
 import type { MapLayerMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Change } from '../../lib/data/change.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
+import type { WarningsAt } from '../../lib/data/warnings.ts';
+import type { StationState } from '../../lib/stationStates.ts';
 import { testHook } from '../../lib/testHook.ts';
+import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { forecastLine } from '../station/forecast.ts';
 import { popupLine } from '../station/state.ts';
 import styles from './map.module.css';
-import { type MarkerState, SOURCE, showStations } from './stationLayer.ts';
+import { SOURCE, showStations } from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
 
 // The map view (A§10 features/map): the self-hosted basemap with the stations
@@ -19,8 +23,21 @@ const OPTIONS = { center: [7.2, 50.6] as [number, number], zoom: 5.3 };
 
 interface Props {
   locale: Locale;
+  /** P10a: the map mode; the marker paint follows it (state, delta, q). */
+  mode: Mode;
   stations: readonly ApiStation[];
-  states: ReadonlyMap<string, MarkerState>;
+  /** The feature-state record of every station at t (lib/stationStates.ts). */
+  states: ReadonlyMap<string, StationState>;
+  /** The 24-hour change by series (undefined after now or while it loads). */
+  changes: ReadonlyMap<number, Change> | undefined;
+  /** The warning areas valid at t (undefined while they load or after now). */
+  warnings: WarningsAt | undefined;
+  /** The installed river tile file (`rivers-<ver>.pmtiles`), undefined without a release: no river layer. */
+  riverTiles: string | undefined;
+  /** The highlighted river id (`?river=`). */
+  river: string | undefined;
+  /** A click on a river sets `?river=` (plan C17). */
+  onRiver: (id: string | undefined) => void;
   values: ReadonlyMap<number, Snapshot['values'][number]>;
   /** After now (P8b): the forecasts at t by series; undefined for a t up to now. */
   forecasts: ReadonlyMap<number, SnapshotForecast> | undefined;
@@ -91,12 +108,8 @@ export function StationsMap({
 
   useEffect(() => {
     if (map === null) return;
-    // Feature state merges: the forecast keys are always written, so a return to a t up to now clears them.
-    for (const [id, s] of states)
-      map.setFeatureState(
-        { source: SOURCE, id },
-        { forecast: false, estimate: false, ...s, selected: id === selected?.id },
-      );
+    // Feature state merges: every key of the record is always written, so nothing of an earlier t stays.
+    for (const [id, s] of states) map.setFeatureState({ source: SOURCE, id }, { ...s, selected: id === selected?.id });
   }, [map, states, selected]);
 
   // A deep link with a station opens the map on it.

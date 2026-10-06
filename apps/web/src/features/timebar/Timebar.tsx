@@ -46,6 +46,8 @@ interface Props {
   /** The selected station has no forecast at all: the track ends at now, and a note says why. */
   noForecast: boolean;
   epoch: number;
+  /** P10a: live mode (no `t` in the URL): the page follows meta.now; "Nu" returns to it. */
+  live: boolean;
   onChange: (t: number) => void;
 }
 
