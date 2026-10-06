@@ -1,7 +1,9 @@
 import { z } from 'zod';
-import { AttributionEntry, DATE_KINDS, HealthSourceId } from './api.ts';
 import { OwnerForecastLatest } from './forecast.ts';
-import { staticContracts } from './static.ts';
+import { HttpsUrl, sourceEntry, staticContracts } from './static.ts';
+
+// The public sources.json moved to static.ts (P10a: the web reads it); re-exported here for the server.
+export { StaticSources } from './static.ts';
 
 // Server only (P9a): the owner family's static files (A§9.3) and both families' sources.json. The web never imports
 // this module (`@rws/contracts/static-owner`, not re-exported from the index), so neither the canary's id spelling
@@ -10,6 +12,7 @@ import { staticContracts } from './static.ts';
 /** The owner files also name the owner canary's source (A§9.3): the one spelling they add. */
 export const OwnerSourceId = z.string().regex(/^(?:(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?|CANARY-[A-Z]+)$/);
 
+const iso = z.iso.datetime();
 const OWNER = staticContracts(OwnerSourceId, OwnerForecastLatest);
 export const OwnerAttributionEntry = OWNER.AttributionEntry;
 export const OwnerSnapshotFile = OWNER.SnapshotFile;
@@ -19,44 +22,6 @@ export const OwnerStaticStations = OWNER.StaticStations;
 export const OwnerStationRecent = OWNER.StationRecent;
 export const OwnerStaticForecastLatest = OWNER.StaticForecastLatest;
 export const OwnerWarningsFile = OWNER.WarningsFile;
-
-const iso = z.iso.datetime();
-const HttpsUrl = z
-  .string()
-  .max(500)
-  .regex(/^https:\/\/[^\s]+$/);
-
-/** One source of sources.json: the registry's names and attribution rows verbatim, and the date its licence asks for. */
-const sourceEntry = (source: z.ZodString) =>
-  z.strictObject({
-    id: source,
-    name: z.string().min(1).max(200),
-    provider: z.string().min(1).max(200),
-    /** The licence kind of the registry and the provider's terms page. */
-    licence: z.strictObject({ kind: z.string().min(1).max(40).nullable(), url: HttpsUrl.nullable() }),
-    attribution: z
-      .array(
-        z.strictObject({
-          lang: z.enum(['nl', 'en', 'de', 'fr']).nullable(),
-          text: z.string().min(1).max(1000),
-          url: HttpsUrl.nullable(),
-          required: z.boolean(),
-        }),
-      )
-      .max(20),
-    dateKind: z.enum(DATE_KINDS).nullable(),
-    date: iso.nullable(),
-    dateText: z.string().max(60).nullable(),
-  });
-
-/** /data/v1/sources.json: the public sources (catalogue §1b texts, licence links, dynamic dates). */
-export const StaticSources = z.strictObject({
-  schemaVersion: z.literal(1),
-  generatedAt: iso,
-  sources: z.array(sourceEntry(HealthSourceId)).max(100),
-  attribution: z.array(AttributionEntry).max(500),
-});
-export type StaticSources = z.infer<typeof StaticSources>;
 
 /** The owner's sources.json: every source of the owner family, its audience and an owner source's private basis. */
 export const OwnerStaticSources = z.strictObject({

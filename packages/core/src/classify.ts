@@ -12,9 +12,8 @@ import {
   OWNER_ONLY_SOURCES,
   type ReferenceRole,
   referenceRole,
-  TREND_BAND,
 } from './crosswalk.ts';
-import { QC } from './qc.ts';
+import { SUSPECT_BITS } from './qc.ts';
 
 // The pure classifier (ADR-0009; PHASES P7b): one ordinal state per value, `no_ref < low < normal < elevated < high
 // < extreme`, with the basis it was taken from. No I/O: the server reads the rows valid at t through one view family
@@ -106,9 +105,6 @@ export type Classified = {
    */
   sources: readonly string[];
 };
-
-/** QC bits that make a value suspect (A§6): provider-suspect, our range, spike and frozen checks. */
-export const SUSPECT_BITS = QC.PROVIDER_SUSPECT | QC.RANGE | QC.SPIKE | QC.FROZEN;
 
 const n = (l: Level) => LEVEL_NORM[l];
 const LEVEL_AT: readonly Level[] = ['low', 'low', 'normal', 'elevated', 'high', 'extreme'];
@@ -414,18 +410,6 @@ export function classSeries<S extends { quantity: 'H' | 'Q' }>(source: string, s
   const basis = CROSSWALK.find((r) => r.source === source && r.scale === CLASS_SCALE[source])?.basis;
   const want = basis === 'discharge' ? 'Q' : 'H';
   return series.find((x) => x.quantity === want) ?? series[0];
-}
-
-/** Δh since the window start (canonical units) and its trend, with the dead band of TREND_BAND (|Δh| at the band is steady). */
-export function deltaH(
-  curr: number | null,
-  start: number | null,
-  quantity: 'H' | 'Q',
-): { dh: number; trend: 'rising' | 'falling' | 'steady' } | null {
-  if (curr === null || start === null) return null;
-  const dh = curr - start;
-  const band = quantity === 'H' ? TREND_BAND.cm : Math.max(TREND_BAND.qAbs, TREND_BAND.qRel * Math.abs(start));
-  return { dh, trend: dh > band ? 'rising' : dh < -band ? 'falling' : 'steady' };
 }
 
 // --- Area attachment ---------------------------------------------------------------------------------------------
