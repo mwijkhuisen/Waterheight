@@ -70,7 +70,10 @@ for (const locale of ['nl', 'en'] as const) {
     request,
   }) => {
     const s = await start(page, context, baseURL, 'state');
-    expect(await (await request.get('/runtime-config.json')).json()).toEqual({ audience: 'owner' });
+    // (P10b: the file also names the operator and contact of the pages, and the CDN; their values are pages.spec.ts's)
+    const config = (await (await request.get('/runtime-config.json')).json()) as Record<string, unknown>;
+    expect(config.audience).toBe('owner');
+    expect(Object.keys(config).sort()).toEqual(['audience', 'cdn', 'contact', 'operator']);
     await open(page, home, slide);
     await mapReady(page);
     const banner = page.getByRole('region', { name: msg(locale, 'owner_banner_label') });

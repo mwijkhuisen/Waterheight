@@ -53,4 +53,26 @@ export async function seedOwner(admin: Client, from: string, now: string): Promi
     [XSS_SOURCE, `Personal use only ${XSS}`],
   );
   if (basis.rowCount !== 1) throw new Error(`seed: no owner source ${XSS_SOURCE}`);
+
+  // The health of the six personal-use sources (the canary has none), so that the owner site's Status page lists them
+  // and the public one counts them (`ownerSources`, which no spec pins): a mix of states, last fetch at NOW.
+  const health: [source: string, status: 'ok' | 'degraded' | 'down', failures: number][] = [
+    ['BE-3', 'ok', 0],
+    ['LU-2', 'ok', 0],
+    ['LU-3', 'ok', 0],
+    ['LU-4', 'degraded', 1],
+    ['DE-2', 'ok', 0],
+    ['DE-3', 'down', 5],
+  ];
+  for (const [source, status, failures] of health) {
+    const done = await admin.query(
+      `INSERT INTO source_health (source_id, last_fetch_ok, newest_ts, consecutive_failures, status)
+       VALUES ($1, $2::timestamptz, $2::timestamptz - interval '10 minutes', $3, $4)
+       ON CONFLICT (source_id) DO UPDATE
+         SET last_fetch_ok = EXCLUDED.last_fetch_ok, newest_ts = EXCLUDED.newest_ts,
+             consecutive_failures = EXCLUDED.consecutive_failures, status = EXCLUDED.status`,
+      [source, now, failures, status],
+    );
+    if (done.rowCount !== 1) throw new Error(`seed: no health row for ${source}`);
+  }
 }

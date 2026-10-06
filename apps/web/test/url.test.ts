@@ -1,5 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { PAGE_ROUTES, pathOf, routeOf } from '../src/lib/routes.ts';
 import { MODES, otherLanguageHref, RIVER_ID, readSearch, searchOf, type UrlState } from '../src/lib/url/url.ts';
 
 // The view lives in the URL (A§10): `?t=…&s=…`. Whatever does not parse is
@@ -116,6 +117,56 @@ describe('otherLanguageHref', () => {
     const none = { t: undefined, s: undefined };
     expect(otherLanguageHref('nl', none)).toBe('/en/');
     expect(otherLanguageHref('en', none)).toBe('/');
+  });
+});
+
+describe('otherLanguageHref for a page (P10b)', () => {
+  const view: UrlState = { t: T, s: ID, mode: 'q', river: 'waal' };
+  const query = `?t=2026-10-25T01:30Z&s=${ID}&mode=q&river=waal`;
+
+  it('maps every page to its pair in the other language, both ways, keeping the whole query', () => {
+    expect(PAGE_ROUTES).toHaveLength(9);
+    for (const r of PAGE_ROUTES) {
+      expect(otherLanguageHref('nl', view, r.id), r.id).toBe(`${r.en}${query}`);
+      expect(otherLanguageHref('en', view, r.id), r.id).toBe(`${r.nl}${query}`);
+      expect(otherLanguageHref('nl', { t: undefined, s: undefined }, r.id), r.id).toBe(r.en);
+    }
+    // The pair is its own inverse: read the link back as the page it leads to, and its language link leads home again.
+    for (const r of PAGE_ROUTES) {
+      const there = new URL(otherLanguageHref('nl', view, r.id), 'https://x.example');
+      const back = otherLanguageHref('en', readSearch(there.search), routeOf(there.pathname)?.id);
+      expect(back, r.id).toBe(`${r.nl}${query}`);
+    }
+  });
+
+  it('is the map with no id (the 404 page), as the two-argument calls are', () => {
+    expect(otherLanguageHref('nl', view, undefined)).toBe(`/en/${query}`);
+    expect(otherLanguageHref('en', view, undefined)).toBe(`/${query}`);
+    expect(otherLanguageHref('nl', view)).toBe(otherLanguageHref('nl', view, 'home'));
+    expect(otherLanguageHref('en', view)).toBe(otherLanguageHref('en', view, 'home'));
+  });
+
+  it('is always a path of the other language, whatever the view', () => {
+    const state = fc.record({
+      t: fc.option(fc.constant(T), { nil: undefined }),
+      s: fc.option(fc.constant(ID), { nil: undefined }),
+      mode: fc.option(fc.constantFrom(...MODES), { nil: undefined }),
+      river: fc.option(fc.stringMatching(/^[a-z][a-z0-9-]{1,40}$/), { nil: undefined }),
+    });
+    fc.assert(
+      fc.property(
+        fc.constantFrom('nl', 'en'),
+        fc.constantFrom(...PAGE_ROUTES.map((r) => r.id)),
+        state,
+        (locale, id, x) => {
+          const href = otherLanguageHref(locale, x, id);
+          const other = locale === 'nl' ? 'en' : 'nl';
+          expect(href.startsWith(pathOf(id, other))).toBe(true);
+          expect(href.slice(pathOf(id, other).length)).toBe(searchOf(x));
+          expect(routeOf(new URL(href, 'https://x.example').pathname)).toEqual({ id, locale: other });
+        },
+      ),
+    );
   });
 });
 

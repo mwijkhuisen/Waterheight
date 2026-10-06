@@ -25,7 +25,10 @@ describe('e2e build', () => {
   const out = join(tmp, 'dist-e2e');
   let manifest: Record<string, Chunk> = {};
   const read = (file: string) => readFileSync(join(out, file), 'utf8');
-  const pages = ['index.html', 'en/index.html', '_spike/index.html', 'en/_spike/index.html'];
+  // The two map shells, the two 404 shells (P10b: Caddy serves them with status 404 for a path that is no page) and the
+  // two spike pages. The information pages are the map's shells: Caddy serves index.html for them.
+  const shells = ['index.html', 'en/index.html', '404.html', 'en/404.html'];
+  const pages = [...shells, '_spike/index.html', 'en/_spike/index.html'];
 
   beforeAll(async () => {
     // Vitest sets NODE_ENV=test, which makes Vite bundle React's development build (about 60% more gzip than the
@@ -70,8 +73,10 @@ describe('e2e build', () => {
     return staticClosure(scripts);
   }
 
-  it('builds both spike pages, each loading its own entry script', () => {
+  it('builds the four shells and both spike pages, each loading its own entry script', () => {
     for (const page of pages) expect(initialLoad(page).size, page).toBeGreaterThan(0);
+    expect(read('404.html')).toMatch(/<html lang="nl">/);
+    expect(read('en/404.html')).toMatch(/<html lang="en">/);
     expect(read('_spike/index.html')).toMatch(/<html lang="nl">/);
     expect(read('en/_spike/index.html')).toMatch(/<html lang="en">/);
   });
@@ -104,8 +109,9 @@ describe('e2e build', () => {
     for (const f of all) expect(read(f), f).not.toMatch(/\?worker&inline|new Blob\(\[[^\]]*maplibre-gl-worker/);
   });
 
-  // Issue #19: "Initial JS ≤ 250 KB gzip, excluding the lazy MapLibre and ECharts chunks".
-  it.each(['index.html', 'en/index.html'])('%s: the initial JavaScript is at most 250 KB gzip', (page) => {
+  // Issue #19: "Initial JS ≤ 250 KB gzip, excluding the lazy MapLibre and ECharts chunks". P10b: the same budget for the 404
+  // shells (they load the same app) as for the map's, which now also carries the layout, the footer and the credits.
+  it.each(shells)('%s: the initial JavaScript is at most 250 KB gzip', (page) => {
     const files = [...initialLoad(page)].filter((f) => f.endsWith('.js'));
     expect(files.length).toBeGreaterThan(0);
     const gzip = files.reduce((sum, f) => sum + gzipSync(readFileSync(join(out, f))).length, 0);

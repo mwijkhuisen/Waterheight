@@ -49,9 +49,9 @@ async function start(page: Page, context: BrowserContext, baseURL: string | unde
     void d.dismiss();
   });
   await page.clock.setFixedTime(NOW);
-  // P10a: the map's default mode is status.json's (the e2e publisher writes none, so the page falls back to the change
-  // mode). These specs read the state words of the popup and panel, so they serve the file that says "state"; the
-  // default itself is p10a.spec.ts's.
+  // P10a: the map's default mode is status.json's. The e2e publisher writes a real one (P10b: classification.mode is
+  // "dh", the change mode), so these specs, which read the state words of the popup and panel, serve a file that says
+  // "state"; the default itself is p10a.spec.ts's.
   await page.route('**/data/v1/status.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"classification":{"mode":"state"}}' }),
   );
@@ -208,20 +208,33 @@ test('NL is the default: language, heading, banner, disclaimer, and t is now', a
 
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Rivierstanden');
+  // (P10b: the banner ends in a link to the disclaimer page, so its text is no longer the whole of its paragraph)
   await expect(
-    page.getByText('Bèta: deze site is in ontwikkeling. Gegevens kunnen ontbreken of onjuist zijn.', { exact: true }),
+    page.getByText('Bèta: deze site is in ontwikkeling. Gegevens kunnen ontbreken of onjuist zijn.'),
   ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Lees de disclaimer' })).toHaveAttribute('href', '/disclaimer');
   await expect(page.getByText('Geen officiële waarschuwingsdienst', { exact: true })).toBeVisible();
-  // The sources come from /meta, each in its own language.
+  // The footer (P10b): the disclaimer line, the nine page links in their own navigation, the credits of the sources of
+  // /meta, each in its own language, then the map's credits and the third-party notices link.
+  await expect(page.locator('footer nav a')).toHaveCount(9);
+  await expect(page.locator('footer nav').getByRole('link', { name: 'Bronnen en licenties' })).toHaveAttribute(
+    'href',
+    '/bronnen',
+  );
   await expect(page.locator('footer h2')).toHaveText('Bronnen');
   await expect(page.locator('footer')).toContainText('vallen niet onder de ODbL');
+  await expect(page.locator('footer a[href="https://www.openstreetmap.org/copyright"]')).toHaveCount(1);
+  await expect(page.locator('footer a[href="/third-party-notices.txt"]')).toHaveCount(1);
   await expect(page.locator('footer li[lang="nl"]')).not.toHaveCount(0);
   await expect(page.locator('footer li[lang="de"]')).not.toHaveCount(0);
   // The date duty of FR-1, FR-3 (Etalab) and CH-1, CH-3 (BAFU): the date of t, never the registry's placeholder; and
-  // FR-3, which fills FR-1 series, is attributed in its own words (review SR-1).
-  await expect(page.locator('footer ul')).toContainText('26 oktober 2026');
-  await expect(page.locator('footer ul')).not.toContainText(/\[date de mise à jour\]|Bezugsdatum|<date>|<datum>/);
-  await expect(page.locator('footer ul')).toContainText('© VIGICRUES – www.vigicrues.gouv.fr, 26 oktober 2026,');
+  // FR-3, which fills FR-1 series, is attributed in its own words (review SR-1). BAFU's placeholder keeps its word:
+  // "(Bezugsdatum: 26 oktober 2026)" (the bare "(Bezugsdatum)" is the registry's placeholder).
+  const credits = page.locator('footer h2 + ul');
+  await expect(credits).toContainText('26 oktober 2026');
+  await expect(credits).not.toContainText(/\[date de mise à jour\]|\(Bezugsdatum\)|<date>|<datum>/);
+  await expect(credits).toContainText('(Bezugsdatum: 26 oktober 2026)');
+  await expect(credits).toContainText('© VIGICRUES – www.vigicrues.gouv.fr, 26 oktober 2026,');
 
   // No t in the URL: now (the clock is fixed at 2026-10-26T12:00Z = 13:00 CET).
   await expect(slider(page)).toHaveValue(String(NOW.getTime()));
@@ -1024,19 +1037,28 @@ test('under reduced motion Play is off and says why', async ({ page, context, ba
 
 // ---------------------------------------------------------------- not found
 
-test('an unknown app path is a page of its own, in its language', async ({ page, context, baseURL }) => {
+// P10b: a path that is no page is a real 404 (Caddy serves the 404 shell with that status), in its language; pages.spec.ts
+// holds the rest of the 404 page's checks.
+test('an unknown app path is a 404 with the 404 page of its own, in its language', async ({
+  page,
+  context,
+  baseURL,
+}) => {
   const s = await start(page, context, baseURL);
   const response = await page.goto('/en/does-not-exist');
-  expect(response?.status()).toBe(200); // the SPA fallback; the app shows the "not found"
+  expect(response?.status()).toBe(404);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Page not found');
   await expect(page.getByRole('link', { name: 'Go to the map' })).toHaveAttribute('href', '/en/');
   await expect(page.getByText('Not an official warning service', { exact: true })).toBeVisible();
+  await expect(page.locator('footer nav a')).toHaveCount(9);
 
-  await page.goto('/niet-hier');
+  const dutch = await page.goto('/niet-hier');
+  expect(dutch?.status()).toBe(404);
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pagina niet gevonden');
   await expect(page.getByRole('link', { name: 'Naar de kaart' })).toHaveAttribute('href', '/');
+  await expect(page.locator('footer nav a')).toHaveCount(9);
   await finish(page, s);
 });
 
