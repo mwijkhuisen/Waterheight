@@ -495,6 +495,15 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
         deps.counters.alert({ spec: spec.id, kind: 'walk_broken', at: end.toISOString() });
         deps.log.warn({ spec: spec.id, variant: req.variant, alert: 'walk_broken' }, 'walk cut: a next page refused');
       }
+      // An item whose URL the adapter refused makes no request: name it as a failed item, so it is not silent (#44).
+      if (more.refusedItems !== undefined && more.refusedItems.length > 0) {
+        for (const item of more.refusedItems) if (!failedItems.includes(item)) failedItems.push(item);
+        deps.counters.alert({ spec: spec.id, kind: 'item_refused', at: end.toISOString() });
+        deps.log.warn(
+          { spec: spec.id, variant: req.variant, alert: 'item_refused', n: more.refusedItems.length },
+          'stage-2 items refused',
+        );
+      }
     }
   }
 

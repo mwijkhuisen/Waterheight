@@ -18,24 +18,41 @@ export const adapter: Adapter = {
     const page = doc as { data?: unknown; next_page?: unknown } | null;
     const data = Array.isArray(page?.data) ? (page.data as Resource[]) : [];
     const reqs = [];
+    const refusedItems: string[] = [];
     let fresh = 0;
     for (const r of data) {
       if (typeof r?.id !== 'string' || !/^[0-9a-f-]{36}$/.test(r.id) || typeof r.title !== 'string') continue;
-      if (!TITLE.test(r.title) || typeof r.url !== 'string') continue;
-      if (seen.has(r.id)) continue;
-      const url = checkUrl(r.url);
-      if (url === null || new URL(url).hostname !== 'download.data.public.lu' || !FILE_PATH.test(new URL(url).pathname))
+      if (!TITLE.test(r.title) || seen.has(r.id)) continue;
+      const url = typeof r.url === 'string' ? checkUrl(r.url) : null;
+      // A dump we will not fetch (no url, or one that is refused) is named, never silent: it stays unseen and is
+      // reported on every run (#44).
+      if (
+        url === null ||
+        new URL(url).hostname !== 'download.data.public.lu' ||
+        !FILE_PATH.test(new URL(url).pathname)
+      ) {
+        refusedItems.push(`file/${r.id}`);
         continue;
+      }
       fresh += 1;
       reqs.push({ url, method: 'GET' as const, variant: `file/${r.id}`, seen_id: r.id });
     }
     // Follow the list in the seed, and while a page still holds an unseen dump (a failed fetch that moved
-    // down the list, an outage); the runner's max_expand bounds the walk.
-    const next = typeof page?.next_page === 'string' ? checkUrl(page.next_page) : null;
-    if (next !== null && LIST_PATH.test(new URL(next).pathname) && (seed || fresh > 0)) {
-      reqs.push({ url: next, method: 'GET' as const, variant: 'list' });
+    // down the list, an outage); the runner's max_expand bounds the walk. A link we would follow but refuse
+    // cuts the walk (`refused`, as for the Hub'Eau `next`); one we would not follow anyway is not reported.
+    let refused = false;
+    const link = page?.next_page;
+    if (link !== null && link !== undefined && (seed || fresh > 0)) {
+      const next = typeof link === 'string' ? checkUrl(link) : null;
+      if (next !== null && LIST_PATH.test(new URL(next).pathname)) {
+        reqs.push({ url: next, method: 'GET' as const, variant: 'list' });
+      } else refused = true;
     }
-    return { reqs };
+    return {
+      reqs,
+      ...(refused ? { refused: true as const } : {}),
+      ...(refusedItems.length > 0 ? { refusedItems } : {}),
+    };
   },
   coverage(doc) {
     const data = (doc as { data?: unknown } | null)?.data;

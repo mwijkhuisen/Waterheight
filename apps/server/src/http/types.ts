@@ -107,6 +107,11 @@ export type Expansion = {
   seen?: string[];
   /** A walk page names a next page that is refused (another host or path, not a URL): the walk is cut there (P5a). */
   refused?: true;
+  /**
+   * Variants of stage-2 items whose provider-supplied URL is refused (an LU-5 dump): no request is made, so the
+   * runner names them in `failed_items` and raises `item_refused` (#44). A variant is our own key, never a URL.
+   */
+  refusedItems?: string[];
 };
 
 /** Pure per-source hooks; the runner does everything else from the registry. */
