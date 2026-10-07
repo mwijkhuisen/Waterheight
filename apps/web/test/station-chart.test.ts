@@ -4,8 +4,11 @@ import {
   fromAsofRun,
   mergeHistory,
   observedPoints,
+  onAxis,
   type Run,
+  recentGap,
   runName,
+  xRange,
 } from '../src/features/station/chartModel.ts';
 import { creditLines, dhValue, trendGlyph } from '../src/features/station/provenance.ts';
 import { seriesRows } from '../src/features/station/seriesRows.ts';
@@ -99,6 +102,45 @@ describe('mergeHistory', () => {
   it('is either list alone when the other is empty', () => {
     expect(mergeHistory([[1, 1]], [])).toEqual([[1, 1]]);
     expect(mergeHistory([], [[2, 2]])).toEqual([[2, 2]]);
+  });
+});
+
+// Review round 1: when the panel asks the API for the part of its span before recent.json.
+describe('recentGap', () => {
+  const H = 3_600_000;
+  const first = 100 * H;
+
+  it('asks when the span starts over an hour before recent.json and the series has older data', () => {
+    expect(recentGap(first - 48 * H, first, first - 30 * 24 * H)).toBe(true);
+  });
+
+  it('does not ask when the series starts inside the window, or within the hour before it', () => {
+    expect(recentGap(first - 48 * H, first, first + H)).toBe(false);
+    expect(recentGap(first - 48 * H, first, first - H)).toBe(false);
+    expect(recentGap(first - 48 * H, first, first - H - 1)).toBe(true);
+  });
+
+  it('does not ask when the span starts inside recent.json or within the hour before it', () => {
+    expect(recentGap(first + H, first, 0)).toBe(false);
+    expect(recentGap(first - H, first, 0)).toBe(false);
+  });
+
+  it('does not ask without a first point or without dataSince', () => {
+    expect(recentGap(0, undefined, 0)).toBe(false);
+    expect(recentGap(0, first, undefined)).toBe(false);
+  });
+});
+
+describe('xRange and onAxis', () => {
+  it('is the span, stretched to the run end only when the run reaches further', () => {
+    expect(xRange({ from: 10, to: 20 }, undefined)).toEqual({ min: 10, max: 20 });
+    expect(xRange({ from: 10, to: 20 }, 30)).toEqual({ min: 10, max: 30 });
+    expect(xRange({ from: 10, to: 20 }, 15)).toEqual({ min: 10, max: 20 });
+  });
+
+  it('shows an instant only inside the axis, both ends included', () => {
+    const x = { min: 10, max: 20 };
+    expect([9, 10, 15, 20, 21].map((at) => onAxis(at, x))).toEqual([false, true, true, true, false]);
   });
 });
 

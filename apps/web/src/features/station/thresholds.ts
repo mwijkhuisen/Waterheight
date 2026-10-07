@@ -29,6 +29,8 @@ export interface LegendItem {
   /** The value or range with the unit and its zero: "≥ 520 cm NAP", "720–1170 cm NAP". */
   range: string;
   raw?: string;
+  /** The reference is an owner source's: the row carries the owner badge, as the chart line does (P10a T12). */
+  owner?: true;
 }
 
 export interface Marks {
@@ -91,6 +93,7 @@ interface Pending {
   strict: boolean;
   names: string[];
   raws: string[];
+  owner: boolean;
 }
 
 export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
@@ -106,7 +109,13 @@ export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
   const pending: Pending[] = [];
   /** The references that already have a zone: they get no line row of their own. */
   const zoned = new Set<Ref>();
-  const nameOf = (r: Ref) => o.ours(r) ?? r.label ?? r.kind;
+  // An NL-4 class without our text is named by its stem; the full workbook label (up to 700 characters) stays raw.
+  const stemName = (label: string, kind: string) => {
+    const stem = stemOf(label);
+    return o.stem(stem) ?? (stem === '' ? kind : stem);
+  };
+  const nameOf = (r: Ref) =>
+    o.ours(r) ?? (r.label !== null && r.source === 'NL-4' ? stemName(r.label, r.kind) : (r.label ?? r.kind));
   const rawOf = (r: Ref, name: string) => (r.label !== null && r.label !== name ? r.label : undefined);
 
   // Zones from roles, one source at a time.
@@ -140,6 +149,7 @@ export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
         strict: x.op === '<',
         names: [name],
         raws: raw === undefined ? [] : [raw],
+        owner: o.owner(x.r.source),
       });
     } else {
       prev.zone.from = prev.zone.from === null || from === null ? null : Math.min(prev.zone.from, from);
@@ -166,13 +176,14 @@ export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
     if (level === undefined || level === 'no_ref') continue;
     const from = froms.size === 0 ? null : (froms.values().next().value as number);
     const to = tos.size === 0 ? null : (tos.values().next().value as number);
-    const name = o.stem(stem) ?? label;
+    const name = stemName(label, 'NL-4');
     pending.push({
       zone: { from, to, level, colour: colourOf(level) },
       key: from ?? Number.NEGATIVE_INFINITY,
       strict: true,
       names: [name],
       raws: label !== name ? [label] : [],
+      owner: o.owner('NL-4'),
     });
     for (const { r } of group) zoned.add(r);
   }
@@ -184,6 +195,7 @@ export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
     name: p.names.join(' / '),
     range: rangeText({ from: p.zone.from, to: p.zone.to, strict: p.strict }, o),
     ...(p.raws.length === 0 ? {} : { raw: p.raws.join(' / ') }),
+    ...(p.owner ? { owner: true as const } : {}),
   }));
   // Every other reference is a line row: shown-only kinds, kinds with no role, a seasonal class.
   for (const { r, v } of [...usable].sort((a, b) => a.v - b.v)) {
@@ -195,6 +207,7 @@ export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
       name,
       range: m.threshold_line({ value: formatNumber(v, locale), unit: o.unit }, { locale }),
       ...(raw === undefined ? {} : { raw }),
+      ...(o.owner(r.source) ? { owner: true as const } : {}),
     });
   }
   return {

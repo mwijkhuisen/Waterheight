@@ -12,6 +12,7 @@ import {
   observedPoints,
   type Pt,
   type Run,
+  recentGap,
 } from './chartModel.ts';
 import { nativeValue } from './value.ts';
 
@@ -19,9 +20,6 @@ import { nativeValue } from './value.ts';
 // sat inside Chart.tsx's effect.
 
 export type RecentSeries = StationRecent['series'][number];
-
-/** recent.json holds 7 days: a span that starts before its first point asks the API for the gap. */
-const GAP_MS = 3_600_000;
 
 export interface SeriesData {
   points: Pt[];
@@ -56,12 +54,7 @@ export function useSeriesData({ series, t, span, serverNow, recent, recentFailed
   const firstRecent = recent === undefined || recent.ts.length === 0 ? undefined : Date.parse(recent.ts[0] as string);
   // The API is asked only when the series has data from before recent.json's first point (`dataSince`).
   const since = series.dataSince === null ? undefined : Date.parse(series.dataSince);
-  const gap =
-    source === 'recent' &&
-    firstRecent !== undefined &&
-    since !== undefined &&
-    firstRecent - span.from > GAP_MS &&
-    firstRecent - since > GAP_MS;
+  const gap = source === 'recent' && recentGap(span.from, firstRecent, since);
   const earlier = useSeries(series.id, span.from, firstRecent ?? span.from, gap && api);
   // The now bucket and after: the run of recent.json (the one forecast/latest.json shows). An earlier t asks the API
   // for the run as of that t, once the slider has stopped (review round 1: a held key sent one request per step).

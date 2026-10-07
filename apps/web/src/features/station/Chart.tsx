@@ -16,8 +16,10 @@ interface Props {
   name: string;
   /** The unit with its zero ("cm NAP"). */
   unit: string;
-  t: number;
-  serverNow: number;
+  /** The axis, and the now and selected instants when it shows them (SeriesSection decides, for its legend too). */
+  x: { min: number; max: number };
+  now: number | undefined;
+  selected: number | undefined;
   /** The span in days, for the chart's accessible name. */
   days: number;
   data: SeriesData;
@@ -37,8 +39,9 @@ export function Chart({
   locale,
   name,
   unit,
-  t,
-  serverNow,
+  x,
+  now,
+  selected,
   days,
   data,
   marks,
@@ -76,8 +79,8 @@ export function Chart({
       locale,
       name,
       unit,
-      t,
-      now: serverNow,
+      selected,
+      now,
       nowName: m.now_marker({}, { locale }),
       axisName: m.chart_axis_time({}, { locale }),
       showThresholds,
@@ -88,10 +91,10 @@ export function Chart({
         run === undefined || view === undefined
           ? undefined
           : { view, name: label, estimateName: `${label} (${m.forecast_estimate({}, { locale })})` },
-      xMax: view?.end,
+      x,
       format: (v) => formatNumber(v, locale),
     });
-  }, [chart, data, marks, showThresholds, serverNow, locale, name, unit, t, ownerSources]);
+  }, [chart, data, marks, showThresholds, now, selected, x, locale, name, unit, ownerSources]);
 
   return <div ref={ref} className={styles.chart} role="img" aria-label={m.chart_label({ unit, days }, { locale })} />;
 }

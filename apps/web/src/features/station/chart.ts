@@ -7,7 +7,7 @@ import { GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent }
 import { init, use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { testHook } from '../../lib/testHook.ts';
-import { formatLocal, formatShort, quantise } from '../../lib/time/time.ts';
+import { formatLocal, formatShort } from '../../lib/time/time.ts';
 import type { Locale } from '../../paraglide/runtime.js';
 import type { ForecastView, Pt } from './chartModel.ts';
 import { MEASURED_COLOUR as COLOUR, FORECAST_COLOUR } from './colours.ts';
@@ -23,10 +23,10 @@ export interface ChartData {
   unit: string;
   /** Observed points: [UTC ms, value in the native unit]. */
   points: Pt[];
-  /** The selected instant, marked by a dashed vertical line when it is not now. */
-  t: number;
-  /** The server's now: a solid vertical line, named `nowName`. */
-  now: number;
+  /** The selected instant when it is not now and on the axis: a dashed vertical line. */
+  selected: number | undefined;
+  /** The server's now when it is on the axis: a solid vertical line, named `nowName`. */
+  now: number | undefined;
   nowName: string;
   /** The title of the time axis ("Nederlandse tijd"). */
   axisName: string;
@@ -37,8 +37,8 @@ export interface ChartData {
   /** The threshold lines and zones are drawn only when this is true. */
   showThresholds: boolean;
   observedName: string;
-  /** The x-axis end when a run is shown: min(now + 48 h, the run's end). */
-  xMax?: number | undefined;
+  /** The time axis: the panel's span, stretched to the end of the run shown (xRange). */
+  x: { min: number; max: number };
 }
 
 interface AxisParam {
@@ -123,7 +123,8 @@ export function createChart(el: HTMLElement) {
           grid: { left: 56, right: 16, top: 24, bottom: 52 },
           xAxis: {
             type: 'time',
-            max: d.xMax,
+            min: d.x.min,
+            max: d.x.max,
             name: d.axisName,
             nameLocation: 'middle',
             nameGap: 30,
@@ -152,8 +153,10 @@ export function createChart(el: HTMLElement) {
                 // A function, never a template string: a label may hold `{…}` (provider text).
                 label: { show: true, position: 'insideEndTop', formatter: (p: { name?: string }) => p.name ?? '' },
                 data: [
-                  { xAxis: d.now, name: d.nowName, lineStyle: { type: 'solid', color: '#555' } },
-                  ...(d.t === quantise(d.now) ? [] : [{ xAxis: d.t, name: '', label: { show: false } }]),
+                  ...(d.now === undefined
+                    ? []
+                    : [{ xAxis: d.now, name: d.nowName, lineStyle: { type: 'solid', color: '#555' } }]),
+                  ...(d.selected === undefined ? [] : [{ xAxis: d.selected, name: '', label: { show: false } }]),
                   ...(d.showThresholds
                     ? d.marks.lines.map((l) => ({
                         yAxis: l.value,

@@ -125,6 +125,16 @@ describe('referenceMarks: roles', () => {
     expect(k.lines[0]?.text).toContain('owner only');
   });
 
+  it('marks the legend rows of an owner source too, zones and lines, and no public row (review round 1)', () => {
+    const owner = (s: string) => s === 'DE-1';
+    const k = marks([ref('DE-1', 'MNW', 100), ref('DE-1', 'MW', 300), ref('DE-7', 'MHW', 500)] as Refs, { owner });
+    expect(k.items.map((i) => [i.kind, i.range, i.owner])).toEqual([
+      ['zone', '≤ 100 cm NAP', true],
+      ['line', '300 cm NAP', true],
+      ['line', '500 cm NAP', undefined],
+    ]);
+  });
+
   it('has no zone, no row and no NL-4 flag without references', () => {
     expect(marks([])).toEqual({ lines: [], zones: [], items: [], hasNl4: false });
   });
@@ -172,8 +182,23 @@ describe('referenceMarks: NL-4 classes', () => {
       ['low', null, 100],
       ['elevated', 200, 300],
     ]);
-    // the four Normaal rows (two From, two To) are line rows
-    expect(k.items.filter((i) => i.kind === 'line')).toHaveLength(4);
+    // the four Normaal rows (two From, two To) are line rows, named by the stem; the label stays raw
+    const rows = k.items.filter((i) => i.kind === 'line');
+    expect(rows).toHaveLength(4);
+    expect(rows.map((i) => i.name)).toEqual(Array(4).fill('Normal (Waterinfo class)'));
+    expect(rows.map((i) => i.raw)).toEqual([
+      'Normaal (100 - 200cm)',
+      'Normaal (120 - 200cm)',
+      'Normaal (100 - 200cm)',
+      'Normaal (120 - 200cm)',
+    ]);
+  });
+
+  it('a seasonal class without our text is named by its stem, never by the whole label', () => {
+    const long = `Zomerpeil (${'x'.repeat(600)})`;
+    const k = marks([...cls(2, long, 0, 80), ...cls(2, long, 0, 90)]);
+    expect(k.items.map((i) => i.name)).toEqual(Array(4).fill('Zomerpeil'));
+    expect(k.items.every((i) => i.raw === long)).toBe(true);
   });
 
   it('the same stem twice with different bounds at one priority is seasonal (hellevoetsluis)', () => {
@@ -182,12 +207,12 @@ describe('referenceMarks: NL-4 classes', () => {
     expect(k.items.every((i) => i.kind === 'line')).toBe(true);
   });
 
-  it('an unknown stem draws lines only, and its label stays text', () => {
+  it('an unknown stem draws lines only, named by the stem; its label stays text', () => {
     const k = marks(cls(0, '<img src=x onerror=alert(1)> {x}', 100, 1000));
     expect(k.zones).toEqual([]);
-    expect(k.items.map((i) => i.name)).toEqual([
-      '<img src=x onerror=alert(1)> {x}',
-      '<img src=x onerror=alert(1)> {x}',
+    expect(k.items.map((i) => [i.name, i.raw])).toEqual([
+      ['<img src=x onerror=alert', '<img src=x onerror=alert(1)> {x}'],
+      ['<img src=x onerror=alert', '<img src=x onerror=alert(1)> {x}'],
     ]);
   });
 

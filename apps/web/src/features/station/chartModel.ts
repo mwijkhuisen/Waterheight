@@ -12,6 +12,24 @@ type RecentRun = NonNullable<RecentSeries['run']>;
 type AsofRun = NonNullable<SeriesForecast['run']>;
 
 const H48 = 48 * 3_600_000;
+/** recent.json holds 7 days: a span that starts more than this before its first point asks the API for the gap. */
+const GAP_MS = 3_600_000;
+
+/**
+ * The span asks the API for the part before recent.json's first point: only when that part is longer than an hour
+ * and the series has data from before it (`dataSince`).
+ */
+export const recentGap = (spanFrom: number, firstRecent: number | undefined, since: number | undefined): boolean =>
+  firstRecent !== undefined && since !== undefined && firstRecent - spanFrom > GAP_MS && firstRecent - since > GAP_MS;
+
+/** The chart's time axis: the span, stretched to the end of the run it shows. */
+export const xRange = (span: { from: number; to: number }, runEnd: number | undefined) => ({
+  min: span.from,
+  max: Math.max(span.to, runEnd ?? span.to),
+});
+
+/** An instant the axis shows: its vertical line and its legend key exist only then. */
+export const onAxis = (at: number, x: { min: number; max: number }): boolean => at >= x.min && at <= x.max;
 
 /** One run in columns, whichever file it came from (recent.json's `run` or `/series/{id}/forecast?asof=`). */
 export interface Run {

@@ -58,9 +58,11 @@ export function Nearby({ locale, station, stations, values, forecasts, onSelect 
     const forecast = series === undefined ? undefined : forecasts?.get(series.id);
     const shown = forecasts === undefined ? value : forecast;
     const direction = word({}, { locale });
-    const river = n.crossRiver ? riverName(n.riverId, locale) : undefined;
+    // Another river is always named, by our label or else in general words (owner decision 2).
+    const river = n.crossRiver ? (riverName(n.riverId, locale) ?? m.neighbour_other_river({}, { locale })) : undefined;
     return [
       {
+        side,
         id: other.id,
         where: river === undefined ? direction : m.neighbour_river({ direction, river }, { locale }),
         name: other.name,
@@ -80,7 +82,8 @@ export function Nearby({ locale, station, stations, values, forecasts, onSelect 
       <h3 id={headingId}>{m.neighbours_heading({}, { locale })}</h3>
       <ul className={styles.nearList}>
         {rows.map((r) => (
-          <li key={r.id}>
+          // By side: on a braided river the same station can be both.
+          <li key={r.side}>
             <button type="button" className={styles.nearRow} onClick={() => onSelect(r.id)}>
               <span className={styles.nearText}>
                 <span className={styles.nearWhere}>{r.where}</span>

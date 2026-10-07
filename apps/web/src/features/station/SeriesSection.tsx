@@ -13,7 +13,7 @@ import { DhMark } from '../legend/DhMark.tsx';
 import { OwnerBadge } from '../owner/OwnerBadge.tsx';
 import { BasisLabel } from './BasisLabel.tsx';
 import { Chart, ownerTag } from './Chart.tsx';
-import { runName } from './chartModel.ts';
+import { onAxis, runName, xRange } from './chartModel.ts';
 import { FORECAST_COLOUR, MEASURED_COLOUR } from './colours.ts';
 import { bandText, forecastValue, issueText } from './forecast.ts';
 import { creditLines, dhValue, trendGlyph } from './provenance.ts';
@@ -127,8 +127,11 @@ export function SeriesSection({
   const run = data.run;
   const runText =
     run === undefined ? undefined : `${runName(run, locale)}${ownerTag(run.source, ownerSources, locale)}`;
-  // The chart draws the selected time as its own dashed line only when it is not now.
-  const selectedMarked = t !== quantise(serverNow);
+  // The now line and the selected time's dashed line (when it is not now) exist only where the axis reaches.
+  const runEnd = data.view?.end;
+  const x = useMemo(() => xRange({ from: span.from, to: span.to }, runEnd), [span.from, span.to, runEnd]);
+  const nowShown = onAxis(serverNow, x);
+  const selectedMarked = t !== quantise(serverNow) && onAxis(t, x);
 
   return (
     <section className={styles.series} aria-labelledby={headingId}>
@@ -183,8 +186,9 @@ export function SeriesSection({
           locale={locale}
           name={station.name}
           unit={unit}
-          t={t}
-          serverNow={serverNow}
+          x={x}
+          now={nowShown ? serverNow : undefined}
+          selected={selectedMarked ? t : undefined}
           days={days}
           data={data}
           marks={marks}
@@ -221,10 +225,12 @@ export function SeriesSection({
               {m.forecast_band_label({}, o)}
             </li>
           )}
-          <li>
-            <Swatch kind="solid" colour="#555" />
-            {m.now_marker({}, o)}
-          </li>
+          {nowShown && (
+            <li>
+              <Swatch kind="solid" colour="#555" />
+              {m.now_marker({}, o)}
+            </li>
+          )}
           {selectedMarked && (
             <li>
               <Swatch kind="dashed" colour="#555" />
@@ -240,12 +246,20 @@ export function SeriesSection({
           <p className={styles.keysNone}>{m.thresholds_none({}, o)}</p>
         ) : (
           <ul className={styles.keys}>
-            {marks.items.map((i) => (
-              <li key={`${i.kind}|${i.name}|${i.range}`}>
+            {marks.items.map((i, n) => (
+              // Two FR-5 floods or seasonal NL-4 rows can share name and value: the position keeps keys apart.
+              // biome-ignore lint/suspicious/noArrayIndexKey: the rows are rebuilt as a whole, never reordered
+              <li key={`${n}|${i.kind}|${i.name}|${i.range}`}>
                 <Swatch kind={i.kind === 'zone' ? 'zone' : 'dash'} colour={i.colour ?? '#555'} />
                 <span>
                   {m.legend_threshold_item({ name: i.name, range: i.range }, o)}
                   {i.raw === undefined ? '' : ` · ${i.raw}`}
+                  {i.owner === true && (
+                    <>
+                      {' '}
+                      <OwnerBadge locale={locale} />
+                    </>
+                  )}
                 </span>
               </li>
             ))}
