@@ -143,6 +143,17 @@ test('the panel: header, last measurement, controls and the Reeksen legend', asy
   // No threshold: the legend says so, in words.
   await expect(level.getByText(nl('thresholds_none'), { exact: true })).toBeVisible();
   await expectNoSeriousAxe(page, 'aside');
+
+  // An earlier t: the axis ends before now, so there is no now line and no key for it; the selected time has both
+  // (review round 1).
+  const earlier = '2026-10-25T00:30Z';
+  await open(page, `/?t=${earlier}&s=${DST}`);
+  await settled(page);
+  await expect(series.getByRole('listitem').filter({ hasText: nl('chart_selected_time') })).toHaveCount(1);
+  await expect(series.getByRole('listitem').filter({ hasText: new RegExp(`^${nl('now_marker')}$`) })).toHaveCount(0);
+  const lines = (await chartOption(page)).lines;
+  expect(lines.map((l) => l.name)).not.toContain(nl('now_marker'));
+  expect(lines.map((l) => l.x)).toContain(Date.parse(earlier));
   await finish(page, s);
 });
 
@@ -343,9 +354,14 @@ test('in the table view the legend is in the flow above the table', async ({ pag
   const s = await start(page, context, baseURL, 'state');
   await open(page, '/');
   await mapReady(page);
-  await page.getByRole('button', { name: nl('view_table'), exact: true }).click();
   const details = page.locator('details').filter({ has: page.locator('summary', { hasText: nl('legend_heading') }) });
+  // closed on the map, it stays closed in the table view: the same element moves (review round 1)
+  await details.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(details).not.toHaveAttribute('open', '');
+  await page.getByRole('button', { name: nl('view_table'), exact: true }).click();
   await expect(details).toBeVisible();
+  await expect(details).not.toHaveAttribute('open', '');
   expect(await details.evaluate((el) => getComputedStyle(el).position)).toBe('static');
   const table = page.locator('table').first();
   const d = await details.boundingBox();
@@ -428,16 +444,24 @@ test('under reduced motion both play buttons are off', async ({ page, context, b
 
 test('the bar never hides the focused control and axe finds nothing on it', async ({ page, context, baseURL }) => {
   const s = await start(page, context, baseURL, 'state');
-  await page.setViewportSize({ width: 1024, height: 400 });
-  await open(page, `/?s=${DST}`);
+  // The tallest bar: the forecast and epoch notes and the DST choice (review round 1), in a short window it sticks in.
+  await page.setViewportSize({ width: 1024, height: 560 });
+  await open(page, `/?t=2026-10-25T00:30Z&s=${DST}`);
   await settled(page);
-  // a control far down the panel, focused by the keyboard, is scrolled clear of the sticky bar (WCAG 2.4.11)
-  const last = panelOf(page).getByRole('checkbox', { name: nl('thresholds_show') });
+  await expect(timebarOf(page).getByRole('group', { name: nl('repeated_hour_legend') })).toBeVisible();
+  expect(await timebarOf(page).evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
+  // the panel's last control, focused by the keyboard from the top, is scrolled clear of the sticky bar (WCAG 2.4.11)
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const last = panelOf(page).locator('a, button, input, select').last();
   await last.focus();
   const bar = await timebarOf(page).boundingBox();
   const control = await last.boundingBox();
+  expect(control).not.toBeNull();
   expect((control?.y ?? 0) + (control?.height ?? 0)).toBeLessThanOrEqual((bar?.y ?? 0) + 1);
   expect(where(page)).toContain(`s=${DST}`);
+  // a shorter window keeps its height for the page: the bar does not stick
+  await page.setViewportSize({ width: 1024, height: 400 });
+  expect(await timebarOf(page).evaluate((el) => getComputedStyle(el).position)).toBe('static');
   await page.setViewportSize({ width: 1024, height: 20_000 });
   await expectNoSeriousAxe(page, 'section:has(input[type="range"])');
   await finish(page, s);
