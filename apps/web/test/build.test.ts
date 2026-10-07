@@ -146,14 +146,14 @@ describe('web build', () => {
     for (const header of [
       'react@19.3.0 — MIT',
       'react-dom@19.3.0 — MIT',
-      'maplibre-gl@6.11.1 — BSD-3-Clause',
+      'maplibre-gl@6.11.2 — BSD-3-Clause',
       'pmtiles@4.5.0 — BSD-3-Clause',
       'temporal-polyfill@1.0.5 — MIT',
       'echarts@6.1.0 — Apache-2.0',
       'zrender@6.1.0 — BSD-3-Clause',
       'tslib@2.3.0 — 0BSD',
-      '@tanstack/react-query@5.103.2 — MIT',
-      '@tanstack/query-core@5.103.2 — MIT',
+      '@tanstack/react-query@5.104.0 — MIT',
+      '@tanstack/query-core@5.104.0 — MIT',
       'zod@4.6.5 — MIT',
     ])
       expect(text, header).toContain(`\n${header}\n`);

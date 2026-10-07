@@ -56,8 +56,8 @@ describe('check-bom', () => {
 
   it('fails on a wrong pin in a package.json', () => {
     const dir = scratch();
-    edit(dir, 'apps/server/package.json', '"hono": "4.13.8"', '"hono": "4.13.9"');
-    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.9: the bill of materials says 4\.13\.8/);
+    edit(dir, 'apps/server/package.json', '"hono": "4.13.11"', '"hono": "4.13.12"');
+    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.12: the bill of materials says 4\.13\.11/);
   });
 
   it('fails on a version range', () => {
@@ -68,8 +68,8 @@ describe('check-bom', () => {
 
   it('fails when the bill of materials drifts from the pins', () => {
     const dir = scratch();
-    edit(dir, 'CLAUDE.md', '| vitest | npm | 5.0.1 |', '| vitest | npm | 5.0.2 |');
-    expect(checkBom(dir).join('\n')).toMatch(/vitest@5\.0\.1: the bill of materials says 5\.0\.2/);
+    edit(dir, 'CLAUDE.md', '| vitest | npm | 5.0.2 |', '| vitest | npm | 5.0.3 |');
+    expect(checkBom(dir).join('\n')).toMatch(/vitest@5\.0\.2: the bill of materials says 5\.0\.3/);
   });
 
   it('fails when a dependency has no row', () => {
@@ -80,8 +80,8 @@ describe('check-bom', () => {
 
   it('fails when the lockfile does not match', () => {
     const dir = scratch();
-    edit(dir, 'pnpm-lock.yaml', /(\n {6}hono:\n {8}specifier: )4\.13\.8/, '$14.13.7');
-    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.8: pnpm-lock\.yaml has 4\.13\.7/);
+    edit(dir, 'pnpm-lock.yaml', /(\n {6}hono:\n {8}specifier: )4\.13\.11/, '$14.13.10');
+    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.11: pnpm-lock\.yaml has 4\.13\.10/);
   });
 
   it('fails on TypeScript 7', () => {
@@ -160,15 +160,15 @@ describe('supply-chain rules (risk R-008)', () => {
     edit(
       dir,
       'pnpm-lock.yaml',
-      /(\n {2}hono@4\.13\.8:\n {4}resolution: )\{integrity: [^}]+\}/,
-      '$1{tarball: https://example.com/hono-4.13.8.tgz}',
+      /(\n {2}hono@4\.13\.11:\n {4}resolution: )\{integrity: [^}]+\}/,
+      '$1{tarball: https://example.com/hono-4.13.11.tgz}',
     );
-    expect(checkSupplyChain(dir).join('\n')).toMatch(/hono@4\.13\.8: resolves by tarball, not by registry integrity/);
+    expect(checkSupplyChain(dir).join('\n')).toMatch(/hono@4\.13\.11: resolves by tarball, not by registry integrity/);
   });
 
   it.each([
-    ['without an expiry', '  - "vitest@5.0.2"', /needs a "# expires YYYY-MM-DD" comment/],
-    ['with a passed expiry', '  - "vitest@5.0.2" # GHSA-xxxx; expires 2026-01-01', /expired on 2026-01-01/],
+    ['without an expiry', '  - "vitest@5.0.3"', /needs a "# expires YYYY-MM-DD" comment/],
+    ['with a passed expiry', '  - "vitest@5.0.3" # GHSA-xxxx; expires 2026-01-01', /expired on 2026-01-01/],
   ])('fail on a minimumReleaseAgeExclude entry %s', (_, line, message) => {
     const dir = scratch();
     edit(
@@ -182,7 +182,7 @@ describe('supply-chain rules (risk R-008)', () => {
 
   it('accept an entry with an unexpired date', () => {
     const dir = scratch();
-    const line = '  - "vitest@5.0.2" # GHSA-xxxx; expires 2026-10-06';
+    const line = '  - "vitest@5.0.3" # GHSA-xxxx; expires 2026-10-06';
     edit(
       dir,
       'pnpm-workspace.yaml',

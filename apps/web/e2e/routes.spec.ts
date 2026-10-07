@@ -253,11 +253,11 @@ test('the pages and the 404 shells are revalidated on every use (no-cache); the 
     expect((await request.get(path)).headers()['cache-control'], path).toBeUndefined();
 });
 
-test('/third-party-notices.txt is plain text and names maplibre-gl@6.11.1', async ({ request }) => {
+test('/third-party-notices.txt is plain text and names maplibre-gl@6.11.2', async ({ request }) => {
   const res = await request.get('/third-party-notices.txt');
   expect(res.status()).toBe(200);
   expect(res.headers()['content-type']).toMatch(/^text\/plain/);
-  expect(await res.text()).toContain('maplibre-gl@6.11.1');
+  expect(await res.text()).toContain('maplibre-gl@6.11.2');
   expectSiteHeaders(res);
 });
 
