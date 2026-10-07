@@ -30,7 +30,7 @@
     "@vitest/coverage-v8": "5.0.2",
     "fast-check": "4.10.2",
     "lighthouse": "13.5.0",
-    "msw": "3.0.0",
+    "msw": "2.15.0",
     "typescript": "6.0.3",
     "vitest": "5.0.2",
     "yaml": "2.9.1",

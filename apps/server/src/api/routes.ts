@@ -121,12 +121,12 @@ export function refuse(
   status: 400 | 404 | 405 | 413 | 415 | 429 | 500 | 503,
   code: ApiErrorCode,
   extra: Record<string, string> = {},
-) {
+): Response {
   return c.json({ error: code, attribution: [] }, status, { 'Cache-Control': NO_STORE, ...extra });
 }
 
 /** A failure inside a route: its own refusal, a 503 busy with Retry-After when saturated, else 503 unavailable. */
-export function failure(c: Context, err: unknown) {
+export function failure(c: Context, err: unknown): Response {
   if (err instanceof Refused) return refuse(c, err.status, err.code);
   if (err instanceof Busy || err instanceof Saturated) return refuse(c, 503, 'busy', { 'Retry-After': RETRY_BUSY });
   return refuse(c, 503, 'unavailable');
