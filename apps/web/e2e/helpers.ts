@@ -24,6 +24,7 @@ export interface HookMap {
   once(event: string, fn: () => void): void;
   project(lngLat: [number, number]): { x: number; y: number };
   getZoom(): number;
+  getPadding(): { top: number; right: number; bottom: number; left: number };
 }
 export interface HookChart {
   getOption():
@@ -205,9 +206,9 @@ export const menuButton = (page: Page, locale: Lang = 'nl') =>
 export async function openMenu(page: Page, locale: Lang = 'nl') {
   const button = menuButton(page, locale);
   if (await button.isVisible()) {
-    // A popover button has no aria-expanded attribute in the DOM: look at the menu itself.
-    if (!(await barNav(page, locale).isVisible())) await button.click();
+    if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
     await expect(barNav(page, locale)).toBeVisible();
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
   }
 }
 

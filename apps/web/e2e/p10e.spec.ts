@@ -26,6 +26,7 @@ import {
   timebarMore,
   timebarOf,
   viewSummary,
+  type W,
 } from './helpers.ts';
 
 // P10e acceptance (issue #101), the PUBLIC site on Chromium, Firefox and WebKit: the full-screen map under a bar that
@@ -107,12 +108,17 @@ test('the bar links the nine pages: in a row from 80rem, behind the menu button 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(menuButton(page)).toBeVisible();
   await expect(barNav(page)).toBeHidden();
+  // The button says whether the menu is open in every browser (review round 1: a popover button has no aria-expanded
+  // of its own in the DOM).
+  await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'false');
   await menuButton(page).click();
   await expect(barNav(page)).toBeVisible();
+  await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'true');
   await expect(barNav(page).getByRole('link')).toHaveCount(9);
   expect((await box(barNav(page))).y).toBeGreaterThanOrEqual((await box(page.getByRole('banner'))).height - 1);
   await page.keyboard.press('Escape');
   await expect(barNav(page)).toBeHidden();
+  await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'false');
   await expect(menuButton(page)).toBeFocused();
   // And it is reachable by the keyboard alone.
   await page.keyboard.press('Enter');
@@ -121,6 +127,57 @@ test('the bar links the nine pages: in a row from 80rem, behind the menu button 
     .getByRole('link', { name: nl('page_sources_title'), exact: true })
     .click();
   await expect(page).toHaveURL(/\/bronnen$/);
+  await finish(page, s);
+});
+
+// Review round 1: the nine links measured, not estimated. From 80rem they are one row between the name and the tools
+// (on the map, whose bar also holds the magnifier, in both languages); at 360 px the bar holds the menu button.
+test('the bar fits: the nine links in one row at 1280x720 and 1366x768, the menu at 360x640', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  const right = (b: { x: number; width: number }) => b.x + b.width;
+  for (const [path, locale] of [
+    ['/', 'nl'],
+    ['/en/', 'en'],
+  ] as const)
+    for (const [width, height] of [
+      [1280, 720],
+      [1366, 768],
+      [360, 640],
+    ] as const) {
+      const at = `${path} ${width}x${height}`;
+      await page.setViewportSize({ width, height });
+      await open(page, path, locale === 'nl' ? 'Tijdlijn' : 'Timeline');
+      await expect(searchButton(page, locale)).toBeVisible();
+      const banner = page.getByRole('banner');
+      const bar = await box(banner);
+      expect(bar.height, `${at}: bar height`).toBeCloseTo(56, 0);
+      const brand = await box(banner.locator('h1'));
+      const tools = await box(searchButton(page, locale).locator('xpath=../..'));
+      expect(right(tools), `${at}: tools inside the window`).toBeLessThanOrEqual(width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), `${at}: no scroll`).toBe(0);
+      if (width < 1280) {
+        await expect(menuButton(page, locale)).toBeVisible();
+        const menu = await box(menuButton(page, locale));
+        expect(menu.x, `${at}: menu after the name`).toBeGreaterThanOrEqual(right(brand));
+        expect(right(menu), `${at}: menu before the tools`).toBeLessThanOrEqual(tools.x);
+        continue;
+      }
+      await expect(menuButton(page, locale)).toBeHidden();
+      const links = await barNav(page, locale)
+        .getByRole('link')
+        .evaluateAll((as) => as.map((a) => a.getBoundingClientRect().toJSON() as DOMRect));
+      expect(links).toHaveLength(9);
+      for (const l of links) {
+        expect(l.y, `${at}: one row`).toBeCloseTo(links[0]?.y ?? 0, 0);
+        expect(l.y + l.height, `${at}: inside the bar`).toBeLessThanOrEqual(bar.y + bar.height);
+      }
+      expect(links[0]?.x ?? 0, `${at}: links after the name`).toBeGreaterThanOrEqual(right(brand));
+      expect(right(links[8] ?? brand), `${at}: links before the tools`).toBeLessThanOrEqual(tools.x);
+    }
   await finish(page, s);
 });
 
@@ -166,6 +223,25 @@ test('the map fills the window under the bar: no page scrollbar, no footer', asy
     expect(map.width).toBeCloseTo(width, 0);
     await expect(page.getByRole('contentinfo')).toHaveCount(0);
   }
+  await finish(page, s);
+});
+
+test('a bar of a fractional height never makes the map a sliver too tall', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'state');
+  await ready(page);
+  // A root font size of 15.2 px makes the 3.5rem bar 53.2 px: offsetHeight would round it down to 53 (review round 1).
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '15.2px';
+  });
+  const chrome = () => page.evaluate(() => document.documentElement.style.getPropertyValue('--chrome-h'));
+  await expect.poll(chrome).not.toBe('56px');
+  expect(await chrome()).toBe('54px');
+  const m = await page.evaluate(() => {
+    const bar = document.querySelector('header')?.getBoundingClientRect();
+    const main = document.querySelector('main')?.getBoundingClientRect();
+    return { bottom: (bar?.height ?? 0) + (main?.height ?? 0), height: innerHeight };
+  });
+  expect(m.bottom).toBeLessThanOrEqual(m.height);
   await finish(page, s);
 });
 
@@ -278,6 +354,20 @@ test('the search: arrows move the active result, Escape closes it and returns th
   await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowUp');
   await expect(searchBox(page)).toHaveAttribute('aria-activedescendant', first);
+  // The field takes at most 100 characters (review round 1).
+  await expect(searchBox(page)).toHaveAttribute('maxlength', '100');
+  // Down the whole list of 20: the active option scrolls into sight in the list (review round 1).
+  await searchBox(page).fill('e');
+  await expect(options).toHaveCount(20);
+  for (let i = 0; i < 17; i++) await page.keyboard.press('ArrowDown');
+  const active = page.locator('[role="option"][aria-selected="true"]');
+  await expect(active).toHaveAttribute('id', (await options.nth(17).getAttribute('id')) ?? '');
+  await expect
+    .poll(async () => {
+      const [o, l] = [await box(active), await box(page.getByRole('listbox'))];
+      return o.y >= l.y - 1 && o.y + o.height <= l.y + l.height + 1;
+    })
+    .toBe(true);
   // No match says so; a diacritics-free, upper-case query still matches.
   await searchBox(page).fill('zzzzzz');
   await expect(page.getByRole('option')).toHaveCount(0);
@@ -291,6 +381,58 @@ test('the search: arrows move the active result, Escape closes it and returns th
   await searchBox(page).fill('E2E DST');
   await page.getByRole('option', { name: /E2E DST/ }).click();
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
+  await finish(page, s);
+});
+
+// Review round 1: where a click does not focus a button (WebKit, Firefox on macOS) the press blurred the open field or
+// panel to nothing, which closed it, and the click opened it again. The press now focuses the toggle itself.
+test('a press on the magnifier or on Bronnen keeps the focus in the control; the click closes it', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await ready(page);
+  // The browsers of this suite (Linux builds) focus a button on a click. Safari's default action is emulated: after
+  // the page's own handlers, a press on a button that nobody prevented moves the focus to nothing.
+  await page.evaluate(() =>
+    addEventListener('mousedown', (e) => {
+      if (e.defaultPrevented || !(e.target instanceof Element) || e.target.closest('button') === null) return;
+      e.preventDefault();
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    }),
+  );
+  const press = async (target: Locator, during: () => Promise<void>) => {
+    const b = await box(target);
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await during();
+    await page.mouse.up();
+  };
+
+  await searchButton(page).click();
+  await expect(searchBox(page)).toBeFocused();
+  await press(searchButton(page), async () => {
+    await expect(searchButton(page)).toBeFocused();
+    await expect(searchBox(page)).toHaveCount(1);
+  });
+  await expect(searchBox(page)).toHaveCount(0);
+  await expect(searchButton(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect(searchButton(page)).toBeFocused();
+
+  const button = attributionButton(page);
+  // Closed, the button points at no element (review round 1: aria-controls only while the panel exists).
+  await expect(button).not.toHaveAttribute('aria-controls');
+  const panel = await openAttribution(page);
+  await expect(button).toHaveAttribute('aria-controls', (await panel.getAttribute('id')) ?? '-');
+  await panel.focus();
+  await press(button, async () => {
+    await expect(button).toBeFocused();
+    await expect(panel).toBeVisible();
+  });
+  await expect(panel).toHaveCount(0);
+  await expect(button).toHaveAttribute('aria-expanded', 'false');
   await finish(page, s);
 });
 
@@ -343,6 +485,86 @@ test('the station panel is a drawer over the map: the map keeps its size; below 
   await finish(page, s);
 });
 
+// A deep link opens the map with the station in the part the drawer leaves free (1024x768: the drawer is 26rem), the
+// popup's close button beside the drawer, and (review round 1) no camera padding left behind for later zooms.
+test('a deep-linked station is in the part the drawer leaves free; the camera keeps no padding', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await open(page, '/?s=nl.e2e.dst');
+  await mapReady(page);
+  const drawer = await box(panelOf(page));
+  expect(drawer.x).toBeCloseTo(1024 - 26 * 16, 0);
+  const tip = await box(page.locator('.maplibregl-popup-tip'));
+  const x = tip.x + tip.width / 2;
+  expect(x).toBeGreaterThan(0);
+  expect(x).toBeLessThan(drawer.x);
+  // In the middle of the free part.
+  expect(x).toBeCloseTo(drawer.x / 2, -2);
+  expect(overlaps(await box(page.locator('.maplibregl-popup-close-button')), drawer)).toBe(false);
+  expect(await page.evaluate(() => (window as unknown as W).__rws?.map?.getPadding())).toEqual({
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  });
+  await finish(page, s);
+});
+
+// Review round 1: what the sheet covers was still focusable (the map canvas, MapLibre's button, the table's rows) and
+// the status lines were under it. Now the view is hidden while the sheet is open, the status lines are a band above
+// it, and the focus still returns to the opener once the sheet is gone.
+test('below 48rem the sheet hides the view under it, the status lines stand above it, the focus returns', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await page.setViewportSize({ width: 390, height: 844 });
+  // A t after now in the Δh mode: a status line ("after now the change shows nothing").
+  await open(page, '/?s=nl.e2e.dst&mode=delta&t=2026-10-26T14:00Z');
+  await mapReady(page);
+  const sheet = panelOf(page);
+  await expect(sheet.getByRole('heading', { level: 2 })).toHaveText('E2E DST');
+  await expect(page.locator('.maplibregl-canvas')).toBeHidden();
+  await expect(page.locator('.maplibregl-ctrl-attrib-button')).toBeHidden();
+  await expect(modeSummary(page)).toBeHidden();
+  const chip = page.getByText(nl('dh_future_note'), { exact: true });
+  await expect(chip).toBeVisible();
+  const close = sheet.getByRole('button', { name: nl('panel_close') });
+  expect((await box(chip)).y + (await box(chip)).height).toBeLessThanOrEqual((await box(sheet)).y + 1);
+  expect(overlaps(await box(chip), await box(close))).toBe(false);
+  // Shift+Tab from the sheet's close button never lands on the map under the sheet, or on anything hidden.
+  await close.focus();
+  await page.keyboard.press('Shift+Tab');
+  expect(
+    await page.evaluate(() => {
+      const el = document.activeElement;
+      return el !== null && el.closest('.maplibregl-map') === null && el.checkVisibility();
+    }),
+  ).toBe(true);
+  await close.click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  await expect(modeSummary(page)).toBeVisible();
+  await expect(searchButton(page)).toBeFocused();
+
+  // The table's row button is hidden under the sheet, and takes the focus back once the sheet closes.
+  await chooseView(page, 'table');
+  const row = page.locator('table tbody th button').first();
+  await row.focus();
+  await page.keyboard.press('Enter');
+  await expect(sheet.getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(row).toBeHidden();
+  await sheet.getByRole('button', { name: nl('panel_close') }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(row).toBeFocused();
+  await finish(page, s);
+});
+
 // ---------------------------------------------------------------- the timebar
 
 test('the timebar is collapsed at the start and expands to the full bar of P10d', async ({
@@ -392,6 +614,27 @@ test('the timebar is collapsed at the start and expands to the full bar of P10d'
   await more.click();
   await expect(more).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByLabel(nl('date_label'), { exact: true })).toHaveCount(0);
+  await finish(page, s);
+});
+
+// Review round 1: collapsing took away the reverse button, the only pause of reverse play, and the play left behind
+// switched it to forward play.
+test('collapsing the timebar stops reverse play', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'state');
+  await open(page, '/?t=2026-10-26T06:00Z');
+  await expandTimebar(page);
+  const bar = timebarOf(page);
+  await bar.getByRole('button', { name: nl('play_reverse'), exact: true }).click();
+  await expect(bar.getByRole('button', { name: nl('pause'), exact: true })).toHaveCount(1);
+  await expect.poll(() => param(page, 't'), { timeout: 10_000 }).not.toBe('2026-10-26T06:00Z');
+  await timebarMore(page).click();
+  await expect(timebarMore(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect(bar.getByRole('button', { name: nl('pause'), exact: true })).toHaveCount(0);
+  await expect(bar.getByRole('button', { name: nl('play'), exact: true })).toBeVisible();
+  const stopped = await slider(page).inputValue();
+  // Play steps once a second: two and a half seconds later the slider has not moved.
+  await page.waitForTimeout(2500);
+  await expect(slider(page)).toHaveValue(stopped);
   await finish(page, s);
 });
 
@@ -503,6 +746,36 @@ test('the credits are there in the table view and the English page too', async (
     '/en/sources',
   );
   await expect(panel.getByText(msg('en', 'disclaimer'), { exact: true })).toBeVisible();
+  await finish(page, s);
+});
+
+// Review round 1: beside a drawer the panel was as wide as the window and its start was cut off; in a short window
+// (200% zoom of 1440x900) its top went above the map and the heading was cut off.
+test('the Bronnen panel stays inside the window: beside the drawer, and in a short window', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await open(page, '/?s=nl.e2e.dst');
+  await mapReady(page);
+  const drawer = await box(panelOf(page));
+  let panel = await box(await openAttribution(page));
+  expect(panel.x).toBeGreaterThanOrEqual(0);
+  expect(panel.x + panel.width).toBeLessThanOrEqual(drawer.x);
+  await page.keyboard.press('Escape');
+
+  await page.setViewportSize({ width: 720, height: 450 });
+  await ready(page);
+  await expandTimebar(page);
+  const opened = await openAttribution(page);
+  panel = await box(opened);
+  const bar = await box(page.getByRole('banner'));
+  expect(panel.y).toBeGreaterThanOrEqual(bar.y + bar.height);
+  expect(overlaps(panel, await box(timebarOf(page)))).toBe(false);
+  // Its heading is in sight; the rest scrolls inside the panel.
+  await expect(opened.getByRole('heading', { level: 2 })).toBeInViewport();
   await finish(page, s);
 });
 

@@ -566,9 +566,8 @@ const AXE_VIEWS: [title: string, run: (page: Page) => Promise<void>, tall?: true
   [
     'the station panel with the 24-hour change next to the map',
     async (page) => {
-      // (1440 px wide: at 1024 px the map centres these stations under the drawer, and the popup's close button with them,
-      // which axe cannot judge: reported as a product observation in the P10e spec notes)
-      await page.setViewportSize({ width: 1440, height: 900 });
+      // (At the default 1024 px: the deep link centres the station in the part the drawer leaves free, so the popup's
+      // close button is beside the drawer, P10e review round 1.)
       await open(page, `/?s=${DE}&mode=delta`);
       await mapReady(page);
       await expect(panelOf(page).getByRole('heading', { level: 2, name: 'RHEINWEILER' })).toBeVisible();
@@ -578,7 +577,6 @@ const AXE_VIEWS: [title: string, run: (page: Page) => Promise<void>, tall?: true
   [
     'the French station panel (section, unverified zero)',
     async (page) => {
-      await page.setViewportSize({ width: 1440, height: 900 }); // (as above)
       await open(page, `/en/?s=${FR}&mode=state`, 'Timeline');
       await mapReady(page);
       await expect(panelOf(page).getByText('IGN69')).toBeVisible();
