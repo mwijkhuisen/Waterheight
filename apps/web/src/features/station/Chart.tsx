@@ -3,20 +3,13 @@ import { floorBucket } from '@rws/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDebounced, useForecastAsOf, useSeries } from '../../lib/data/api.ts';
 import { historySource } from '../../lib/data/change.ts';
-import { referenceLabel, useOwnerLabels } from '../../lib/labels/labels.ts';
+import { basisLabel, referenceLabel, useOwnerLabels } from '../../lib/labels/labels.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import type { createChart } from './chart.ts';
-import {
-  forecastView,
-  fromAsofRun,
-  fromRecentRun,
-  observedPoints,
-  type Run,
-  referenceMarks,
-  runName,
-} from './chartModel.ts';
+import { forecastView, fromAsofRun, fromRecentRun, observedPoints, type Run, runName } from './chartModel.ts';
 import styles from './station.module.css';
+import { referenceMarks } from './thresholds.ts';
 import { formatNumber, nativeValue, unitLabel } from './value.ts';
 
 type Handle = ReturnType<typeof createChart>;
@@ -98,19 +91,24 @@ export function Chart({ locale, series, name, t, span, serverNow, recent, recent
           ? []
           : observedPoints(recent.ts, recent.value, conv, span.from, span.to);
     const view = run === undefined ? undefined : forecastView(run, conv, future ? serverNow : t);
-    const marks = referenceMarks(
-      recent?.references ?? [],
-      series.quantity,
+    const marks = referenceMarks(recent?.references ?? [], {
+      quantity: series.quantity,
       conv,
-      (r) => referenceLabel(r.source, r.kind, locale, owner),
-      (s) => ownerSources.has(s),
+      ours: (r) => referenceLabel(r.source, r.kind, locale, owner),
+      stem: (stem) => basisLabel({ source: 'NL-4', kind: 'provider_class', ref: stem }, locale),
+      owner: (s) => ownerSources.has(s),
       locale,
-    );
+      unit,
+    });
     chart.update({
       locale,
       name,
       unit,
       t,
+      now: serverNow,
+      nowName: m.now_marker({}, { locale }),
+      axisName: m.chart_axis_time({}, { locale }),
+      showThresholds: true,
       points,
       marks,
       observedName: m.chart_observed({}, { locale }),
@@ -150,7 +148,12 @@ export function Chart({ locale, series, name, t, span, serverNow, recent, recent
         <p className={styles.note}>{m.chart_unavailable({}, { locale })}</p>
       )}
       {source === 'none' && <p className={styles.note}>{m.history_none({}, { locale })}</p>}
-      <div ref={ref} className={styles.chart} role="img" aria-label={m.chart_label({ unit }, { locale })} />
+      <div
+        ref={ref}
+        className={styles.chart}
+        role="img"
+        aria-label={m.chart_label({ unit, days: Math.round((span.to - span.from) / 86_400_000) }, { locale })}
+      />
       {run !== undefined && (
         <p className={styles.note}>
           {runName(run, locale)}

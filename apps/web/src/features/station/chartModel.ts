@@ -2,10 +2,9 @@ import type { SeriesForecast, StationRecent } from '@rws/contracts';
 import { formatLocal } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
-import { LADDER, STATE_COLOUR } from '../legend/palette.ts';
 
-// The pure part of the station chart (P10a T6): points, one forecast run with its band, the references as lines and
-// bands. Values arrive in canonical units; `conv` brings one to the native unit the page shows. Nothing here draws.
+// The pure part of the station chart (P10a T6): points and one forecast run with its band (the references are in
+// thresholds.ts since P10d). Values arrive in canonical units; `conv` brings one to the native unit the page shows. Nothing here draws.
 
 export type Pt = [number, number | null];
 type RecentSeries = StationRecent['series'][number];
@@ -100,48 +99,6 @@ export function forecastView(run: Run, conv: (v: number) => number, base: number
     return [run.ts[i] as number, lo === null || hi === null ? null : hi - lo];
   });
   return { provider, estimate, lower, spread, hasBand, end: median[median.length - 1]?.[0] ?? limit };
-}
-
-type Ref = RecentSeries['references'][number];
-
-export interface Marks {
-  lines: { value: number; text: string }[];
-  bands: { from: number; to: number; colour: string }[];
-}
-
-/** The reference's quantity unit in canonical terms: cm for a stage or level, m³/s for a discharge; else not shown. */
-const canonicalUnit = (unit: string, quantity: 'H' | 'Q'): boolean =>
-  quantity === 'H' ? unit === 'cm' : /^m(3|³)\/s$/.test(unit);
-
-/**
- * The references of a series as lines (label: the source's raw label, then our kind text) and, per source, alert
- * bands between consecutive levels at 15 % opacity. ponytail: every reference counts as a level, so a low-water
- * reference also starts a band; refine when the registry marks the kind (statistical lows).
- */
-export function referenceMarks(
-  refs: readonly Ref[],
-  quantity: 'H' | 'Q',
-  conv: (v: number) => number,
-  ours: (r: Ref) => string | undefined,
-  owner: (source: string) => boolean,
-  locale: Locale,
-): Marks {
-  const usable = refs.filter((r) => canonicalUnit(r.unit, quantity)).map((r) => ({ r, v: conv(r.value) }));
-  const lines = usable.map(({ r, v }) => ({
-    value: v,
-    text:
-      m.chart_reference({ label: r.label ?? r.kind, kind: ours(r) ?? r.kind }, { locale }) +
-      (owner(r.source) ? ` · ${m.owner_badge({}, { locale })}` : ''),
-  }));
-  const bands: Marks['bands'] = [];
-  for (const source of new Set(usable.map((u) => u.r.source))) {
-    const levels = [...new Set(usable.filter((u) => u.r.source === source).map((u) => u.v))].sort((a, b) => a - b);
-    levels.slice(0, -1).forEach((from, i) => {
-      const state = LADDER[Math.min(3 + i, LADDER.length - 1)] as keyof typeof STATE_COLOUR;
-      bands.push({ from, to: levels[i + 1] as number, colour: STATE_COLOUR[state] });
-    });
-  }
-  return { lines, bands };
 }
 
 /** Raw observations inside [from, to] as chart points. */

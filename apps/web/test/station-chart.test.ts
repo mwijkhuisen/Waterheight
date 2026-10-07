@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  forecastView,
-  fromAsofRun,
-  observedPoints,
-  type Run,
-  referenceMarks,
-  runName,
-} from '../src/features/station/chartModel.ts';
+import { forecastView, fromAsofRun, observedPoints, type Run, runName } from '../src/features/station/chartModel.ts';
 import { creditLines, dhValue, trendGlyph } from '../src/features/station/provenance.ts';
 import { httpsHref } from '../src/lib/href.ts';
 
@@ -73,41 +66,6 @@ describe('fromAsofRun', () => {
     expect(r.lo).toEqual([2]);
     expect(runName(r, 'en')).toContain('BAFU');
     expect(runName(r, 'en')).toContain('fetched');
-  });
-});
-
-describe('referenceMarks', () => {
-  const refs = [
-    { source: 'NL-4', kind: 'NL4_FROM', value: 300, unit: 'cm', priority: 1, label: 'Licht {c}' },
-    { source: 'NL-4', kind: 'NL4_FROM', value: 100, unit: 'cm', priority: 1, label: null },
-    { source: 'NL-4', kind: 'X', value: 5, unit: 'm3/s', priority: 1, label: 'wrong unit' },
-  ];
-  it('lines keep the raw label as text, bands join consecutive levels, other units are skipped', () => {
-    const k = referenceMarks(
-      refs,
-      'H',
-      (v) => v / 100,
-      () => 'ours',
-      (s) => s === 'NL-4',
-      'en',
-    );
-    expect(k.lines).toHaveLength(2);
-    expect(k.lines[0]?.text).toContain('Licht {c}');
-    expect(k.lines[0]?.text).toContain('ours');
-    expect(k.lines[0]?.text).toContain('owner only');
-    expect(k.bands).toEqual([{ from: 1, to: 3, colour: expect.stringMatching(/^#/) }]);
-  });
-  it('a discharge takes m3/s references', () => {
-    expect(
-      referenceMarks(
-        refs,
-        'Q',
-        id,
-        () => undefined,
-        () => false,
-        'nl',
-      ).lines,
-    ).toHaveLength(1);
   });
 });
 
