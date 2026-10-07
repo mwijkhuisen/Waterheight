@@ -27,7 +27,7 @@ const ownerPublish = join(tmpdir(), 'rws-e2e-owner-publish');
 
 /** Files each kind of project runs. The public ones never run an owner spec (no credentials) or the tool specs. */
 const OWNER = /owner[^/]*\.spec\.ts$/;
-const PUBLIC_IGNORE = /(owner[^/]*|cvd|lighthouse|no-webgl2)\.spec\.ts$/;
+const PUBLIC_IGNORE = /(owner[^/]*|cvd|screens|lighthouse|no-webgl2)\.spec\.ts$/;
 
 // Firefox refuses WebGL on a GL driver it does not trust; on a GPU-less runner that is Mesa's software renderer under
 // Xvfb (ci.yml). The page still has to create its own WebGL2 context. No HTTP/3: the CI job's Caddy advertises h3
@@ -71,8 +71,9 @@ export default defineConfig({
             testMatch: /no-webgl2\.spec\.ts$/,
             use: { ...chromium, launchOptions: { args: ['--disable-3d-apis'] } },
           },
-          // The colour-vision-deficiency screenshots of the map and the legend (Chromium's CDP emulation).
-          { name: 'cvd', testMatch: /cvd\.spec\.ts$/, use: chromium },
+          // The colour-vision-deficiency screenshots of the map and the legend (Chromium's CDP emulation), and P10d's
+          // screenshots of the viewer for the owner's visual check (screens.spec.ts).
+          { name: 'cvd', testMatch: /(cvd|screens)\.spec\.ts$/, use: chromium },
           // Lighthouse (C8): the spec starts Playwright's Chromium itself with --remote-debugging-port=9222 and
           // --ignore-certificate-errors, because a browser Playwright launches has no debugging port (lighthouse.spec.ts).
           { name: 'lighthouse', testMatch: /lighthouse\.spec\.ts$/, use: chromium },

@@ -29,7 +29,13 @@ export interface HookChart {
   getOption():
     | {
         tooltip?: { renderMode?: string }[];
-        series?: { id?: string; name?: string; data?: unknown[]; markLine?: { data?: { name?: string }[] } }[];
+        series?: {
+          id?: string;
+          name?: string;
+          data?: unknown[];
+          markLine?: { data?: { name?: string; xAxis?: number; yAxis?: number }[] };
+          markArea?: { data?: unknown[] };
+        }[];
       }
     | undefined;
   dispatchAction(action: object): void;
@@ -102,6 +108,18 @@ export async function finish(page: Page, s: Session) {
 }
 
 export const slider = (page: Page, name = 'Tijdlijn') => page.getByRole('slider', { name });
+/**
+ * The timebar's own `time` (P10d: the bar is docked after the panel in the DOM, so the first `time` of the page is no
+ * longer the bar's). The bar is the one section that holds the range input.
+ */
+export const timebarTime = (page: Page) =>
+  page
+    .locator('section')
+    .filter({ has: page.locator('input[type="range"]') })
+    .locator('time')
+    .first();
+/** The timebar section itself (axe scope, geometry). */
+export const timebarOf = (page: Page) => page.locator('section').filter({ has: page.locator('input[type="range"]') });
 /** The station list; `exact`, because the panel's close button is also named "Station …". */
 export const stationList = (page: Page, name = 'Station') => page.getByRole('combobox', { name, exact: true });
 export const panelOf = (page: Page) => page.locator('aside');

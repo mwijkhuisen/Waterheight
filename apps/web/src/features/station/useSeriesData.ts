@@ -54,7 +54,14 @@ export function useSeriesData({ series, t, span, serverNow, recent, recentFailed
   // 'none': nothing older than recent.json for a display-only series, and no request for it.
   const older = useSeries(series.id, span.from, span.to, source === 'api');
   const firstRecent = recent === undefined || recent.ts.length === 0 ? undefined : Date.parse(recent.ts[0] as string);
-  const gap = source === 'recent' && firstRecent !== undefined && firstRecent - span.from > GAP_MS;
+  // The API is asked only when the series has data from before recent.json's first point (`dataSince`).
+  const since = series.dataSince === null ? undefined : Date.parse(series.dataSince);
+  const gap =
+    source === 'recent' &&
+    firstRecent !== undefined &&
+    since !== undefined &&
+    firstRecent - span.from > GAP_MS &&
+    firstRecent - since > GAP_MS;
   const earlier = useSeries(series.id, span.from, firstRecent ?? span.from, gap && api);
   // The now bucket and after: the run of recent.json (the one forecast/latest.json shows). An earlier t asks the API
   // for the run as of that t, once the slider has stopped (review round 1: a held key sent one request per step).

@@ -17,6 +17,7 @@ import {
   start,
   stationList,
   textHosts,
+  timebarTime,
   type W,
   where,
   XSS,
@@ -232,7 +233,10 @@ test('a forecast after now is labelled with its agency, its issue or fetch time 
   expect(median?.name).toMatch(msgRx('nl', 'chart_run_fetched', { agency: 'RWS' }));
   expect(estimate?.name).toMatch(/ \(schatting\)$/);
   await expect(panelOf(page).getByText(msg('nl', 'forecast_estimate_note'), { exact: true })).toBeVisible();
-  await expect(panelOf(page).locator('p', { hasText: /^RWS · opgehaald / })).toHaveCount(1);
+  // (P10d: the run's name sits in the Reeksen legend, beside its estimate part, instead of a paragraph under the chart)
+  const keys = panelOf(page).locator('li', { hasText: /^RWS · opgehaald / });
+  await expect(keys).toHaveCount(2);
+  await expect(keys.filter({ hasText: /\(schatting\)$/ })).toHaveCount(1);
 
   await stationList(page).selectOption('nl.e2e.dst');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
@@ -666,14 +670,14 @@ test('the two 02:30s of 2026-10-25 are different in the URL, the label and the v
   await open(page, '/?t=2026-10-25T00:30Z&s=nl.e2e.dst');
   const value = () => panelOf(page).getByRole('region', { name: 'Waterstand' }).locator('strong');
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /^.*02:30 CEST$/);
-  await expect(page.locator('time').first()).toHaveAttribute('datetime', '2026-10-25T00:30:00.000Z');
+  await expect(timebarTime(page)).toHaveAttribute('datetime', '2026-10-25T00:30:00.000Z');
   await expect(value()).toHaveText('111');
   const first = where(page);
 
   await page.goto('/?t=2026-10-25T01:30Z&s=nl.e2e.dst');
   await expect(slider(page)).toBeVisible();
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /^.*02:30 CET$/);
-  await expect(page.locator('time').first()).toHaveAttribute('datetime', '2026-10-25T01:30:00.000Z');
+  await expect(timebarTime(page)).toHaveAttribute('datetime', '2026-10-25T01:30:00.000Z');
   await expect(value()).toHaveText('222');
   expect(where(page)).not.toBe(first);
   // The label of each in the table caption as well (text, in the page's zone).

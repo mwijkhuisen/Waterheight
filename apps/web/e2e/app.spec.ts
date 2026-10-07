@@ -1,6 +1,7 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { expectClean, instrument, type Log } from './clean.ts';
+import { timebarTime } from './helpers.ts';
 
 // P4b acceptance (issue #19), on Chromium, Firefox and WebKit, against the e2e
 // build served under the production headers with the e2e api behind it (a real
@@ -115,9 +116,9 @@ async function press(
   expect(await after.getAttribute('aria-valuetext'), `valuetext after ${key}`).not.toBe(before);
   await expect(after).toHaveValue(ms(`${expectedT.slice(0, 16)}:00Z`));
   // The <time> element and the slider say the same, in UTC and in words.
-  await expect(page.locator('time').first()).toHaveAttribute('datetime', `${expectedT.slice(0, 16)}:00.000Z`);
+  await expect(timebarTime(page)).toHaveAttribute('datetime', `${expectedT.slice(0, 16)}:00.000Z`);
   // (after now the slider's text adds "(verwachting)" to the time shown beside it)
-  await expect(page.locator('time').first()).toHaveText(
+  await expect(timebarTime(page)).toHaveText(
     ((await after.getAttribute('aria-valuetext')) ?? '').replace(/ \(verwachting\)$/, ''),
   );
 }
@@ -250,7 +251,7 @@ test('NL is the default: language, heading, banner, disclaimer, and t is now', a
   // No t in the URL: now (the clock is fixed at 2026-10-26T12:00Z = 13:00 CET).
   await expect(slider(page)).toHaveValue(String(NOW.getTime()));
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /13:00 CET$/);
-  await expect(page.locator('time').first()).toHaveAttribute('datetime', '2026-10-26T12:00:00.000Z');
+  await expect(timebarTime(page)).toHaveAttribute('datetime', '2026-10-26T12:00:00.000Z');
   expect(new URL(page.url()).search).toBe('');
   // Temporal: native where the browser has it; WebKit runs without it here (beforeEach), on the polyfill chunk.
   expect(s.log.requests.filter((u) => /\/assets\/global\.esm-[^/]+\.js$/.test(u))).toHaveLength(
@@ -361,7 +362,10 @@ test('a deep link restores the view: time, station, panel and the selected marke
   await expect(panel.getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   const level = panel.getByRole('region', { name: 'Water level' });
   await expect(level.locator('strong')).toHaveText('111');
-  await expect(level.locator('p', { has: page.locator('strong') })).toHaveText('111 cm NAP');
+  // (P10d: the line reads "Last measurement: 111 cm NAP at <time>"; the number is still the only <strong>)
+  await expect(level.locator('p', { has: page.locator('strong') })).toHaveText(
+    /^Last measurement: 111 cm NAP at .+ CEST$/,
+  );
   // The map is on the selected station and marks it.
   await expect.poll(() => featureState(page, 'nl.e2e.dst')).toMatchObject({ has: true, selected: true });
   expect(await featureState(page, 'nl.e2e.xss')).toMatchObject({ selected: false });
@@ -392,7 +396,7 @@ test('the slider and the station list work from the keyboard alone', async ({ pa
   const isSlider = () =>
     page.evaluate(() => document.activeElement instanceof HTMLInputElement && document.activeElement.type === 'range');
   let tabs = 0;
-  while (!(await isSlider()) && tabs < 25) {
+  while (!(await isSlider()) && tabs < 40) {
     await page.keyboard.press('Tab');
     tabs++;
   }
@@ -611,7 +615,7 @@ test('02:30 CEST and 02:30 CET are two choices of the time input, with their own
   await expect(level()).toHaveText('222');
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /02:30 CET$/);
   await expect(slider(page)).toHaveValue(ms('2026-10-25T01:30:00Z'));
-  await expect(page.locator('time').first()).toHaveAttribute('datetime', '2026-10-25T01:30:00.000Z');
+  await expect(timebarTime(page)).toHaveAttribute('datetime', '2026-10-25T01:30:00.000Z');
 
   await cest.check();
   await expect.poll(() => tParam(page)).toBe('2026-10-25T00:30Z');
@@ -619,7 +623,7 @@ test('02:30 CEST and 02:30 CET are two choices of the time input, with their own
   await expect(cet).not.toBeChecked();
   await expect(level()).toHaveText('111');
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /02:30 CEST$/);
-  await expect(page.locator('time').first()).toHaveAttribute('datetime', '2026-10-25T00:30:00.000Z');
+  await expect(timebarTime(page)).toHaveAttribute('datetime', '2026-10-25T00:30:00.000Z');
   expect(where(page)).toBe('/?t=2026-10-25T00:30Z&s=nl.e2e.dst');
 
   // Another minute in the repeated hour keeps the offset it is in (CR-9): 02:40 CEST, then from 02:30 CET 02:40 CET.
@@ -925,7 +929,7 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
     );
     // The basis label: the panel's basis row and, on the map, the popup line, as text.
     expect(await textHosts(page, 'onerror=alert(3)'), `basis hosts in the ${view} view`).toEqual(
-      view === 'map' ? ['dd', 'p'] : ['dd'],
+      view === 'map' ? ['dd', 'p', 'span'] : ['dd', 'span'],
     );
     await expect(page.locator('img')).toHaveCount(0);
     await expect(page.locator('img[src="x"], img[src="y"]')).toHaveCount(0);
@@ -995,8 +999,8 @@ test('play steps ten minutes a second; Pause and a hidden tab stop it', async ({
   await page.addInitScript(countUrlWrites);
   await open(page, '/?t=2026-10-26T11:00Z');
   const urls = () => urlWrites(page);
-  const play = page.getByRole('button', { name: 'Afspelen' });
-  const pause = page.getByRole('button', { name: 'Pauzeren' });
+  const play = page.getByRole('button', { name: 'Afspelen', exact: true });
+  const pause = page.getByRole('button', { name: 'Pauzeren', exact: true });
 
   // One button whose name says what it does next; no aria-pressed besides (CR-10).
   await expect(play).toBeEnabled();
@@ -1037,7 +1041,7 @@ test('under reduced motion Play is off and says why', async ({ page, context, ba
   const s = await start(page, context, baseURL);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await open(page, '/?t=2026-10-26T11:00Z');
-  await expect(page.getByRole('button', { name: 'Afspelen' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Afspelen', exact: true })).toBeDisabled();
   await expect(page.getByText('Afspelen staat uit, omdat je apparaat om minder beweging vraagt.')).toBeVisible();
   // The other controls still work.
   await expect(page.getByRole('button', { name: '10 minuten vooruit' })).toBeEnabled();
@@ -1146,6 +1150,6 @@ test('axe finds no serious or critical issue: the station panel next to the tabl
   // The table beside the panel wraps into rows taller than its scroll area, which axe cannot judge for contrast
   // (the page without a panel is checked whole above): the panel and the controls above the table are.
   await expectNoSeriousAxe(page, 'aside');
-  await expectNoSeriousAxe(page, 'section');
+  await expectNoSeriousAxe(page, 'section:has(input[type="range"])');
   await finish(page, s);
 });
