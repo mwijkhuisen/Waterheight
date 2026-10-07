@@ -52,7 +52,13 @@ export function Attribution({ locale, meta, t }: AttributionProps) {
         ref={button}
         className={styles.button}
         aria-expanded={open}
-        aria-controls={`${id}-p`}
+        aria-controls={open ? `${id}-p` : undefined}
+        // Focus the button on the press itself: where a click does not focus a button (WebKit, Firefox on macOS),
+        // the press would blur the panel to nothing, close it, and the click would open it again.
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.currentTarget.focus();
+        }}
         onClick={() => setOpen((v) => !v)}
       >
         {m.sources_heading({}, o)}

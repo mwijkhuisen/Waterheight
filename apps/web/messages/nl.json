@@ -167,8 +167,6 @@
   "map_no_webgl": "Deze browser kan de kaart niet tonen (geen WebGL2). De stations staan in de tabel.",
   "map_fallback": "De stations staan in de tabel.",
   "map_popup_close": "Sluiten",
-  "station_select_label": "Station",
-  "station_select_none": "Kies een station",
   "panel_close": "Station sluiten",
   "panel_water": "Water",
   "panel_source": "Bron",

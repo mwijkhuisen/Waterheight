@@ -1,4 +1,4 @@
-import { lazy, type ReactNode, Suspense, useEffect, useId, useMemo, useRef } from 'react';
+import { lazy, type ReactNode, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useAudience, useSources } from '../../lib/data/api.ts';
 import { PAGE_ROUTES, pathOf, type Route, type RouteId } from '../../lib/routes.ts';
 import { otherLanguageHref } from '../../lib/url/url.ts';
@@ -10,7 +10,7 @@ import styles from './layout.module.css';
 
 // The chrome of every view (P10b T2, P10e): the map, the information pages and the 404 page. A bar that stays at the
 // top (sticky): the logo and the site name in its two colours (the map's h1 and a link home elsewhere), the subtitle
-// where there is room, the nine page links (below 80rem folded into a menu button), a compact "bèta" link to the
+// from 100rem, the nine page links (below 80rem folded into a menu button), a compact "bèta" link to the
 // disclaimer, the language link to the same page and, on the map, the station search. The owner banner sits
 // directly under it on the owner site. On the map nothing follows but the full-screen view (its credits are the
 // "Bronnen" disclosure over the map, features/attribution); the pages and the 404 page end in a slim footer.
@@ -73,11 +73,11 @@ export function Layout({
   // biome-ignore lint/correctness/useExhaustiveDependencies: the owner strip exists only on the owner site; observe it once it does
   useEffect(() => {
     const root = document.documentElement;
+    // Rounded up (offsetHeight rounds to the nearest pixel, so a fractional bar could make the map a sliver too tall
+    // and the page scroll; review round 1).
+    const height = (el: HTMLElement | null) => el?.getBoundingClientRect().height ?? 0;
     const measure = () =>
-      root.style.setProperty(
-        '--chrome-h',
-        `${(bar.current?.offsetHeight ?? 0) + (strip.current?.offsetHeight ?? 0)}px`,
-      );
+      root.style.setProperty('--chrome-h', `${Math.ceil(height(bar.current) + height(strip.current))}px`);
     measure();
     const size = new ResizeObserver(measure);
     for (const el of [bar.current, strip.current]) if (el !== null) size.observe(el);
@@ -88,6 +88,8 @@ export function Layout({
   }, [owner]);
   const other = locale === 'nl' ? 'en' : 'nl';
   const menu = useId();
+  // A popover button gets no aria-expanded of its own in every browser: the nav's toggle event sets it.
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <>
       <header ref={bar} className={styles.bar}>
@@ -105,12 +107,18 @@ export function Layout({
           )}
           <p className={styles.subtitle}>{m.subtitle({}, { locale })}</p>
         </div>
-        <button type="button" className={styles.menuButton} popoverTarget={menu}>
+        <button type="button" className={styles.menuButton} popoverTarget={menu} aria-expanded={menuOpen}>
           {m.menu_button({}, { locale })}
         </button>
         {/* Below 80rem a popover (Escape and a click outside close it, the focus returns to the button); from there
             on the same element is simply the row of links. */}
-        <nav id={menu} popover="auto" className={styles.nav} aria-label={m.footer_nav_label({}, { locale })}>
+        <nav
+          id={menu}
+          popover="auto"
+          className={styles.nav}
+          aria-label={m.footer_nav_label({}, { locale })}
+          onToggle={(e) => setMenuOpen(e.newState === 'open')}
+        >
           <ul>
             {PAGE_ROUTES.map((r) => (
               <li key={r.id}>

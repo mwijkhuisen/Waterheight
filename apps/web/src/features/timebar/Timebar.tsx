@@ -148,7 +148,10 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
     const el = barRef.current;
     if (el === null) return;
     const root = document.documentElement;
-    const size = new ResizeObserver(() => root.style.setProperty('--timebar-h', `${el.offsetHeight}px`));
+    // Rounded up, never down: a fractional height must not leave a sliver of the bar over what stands above it.
+    const size = new ResizeObserver(() =>
+      root.style.setProperty('--timebar-h', `${Math.ceil(el.getBoundingClientRect().height)}px`),
+    );
     size.observe(el);
     return () => {
       size.disconnect();
@@ -262,7 +265,11 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
             className={styles.more}
             aria-expanded={expanded}
             aria-controls={`${id}-more`}
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => {
+              // Collapsing takes the reverse button, the only pause of reverse play, away: it stops (review round 1).
+              if (expanded) setPlaying((p) => (p === -1 ? 0 : p));
+              setExpanded(!expanded);
+            }}
           >
             {m.timebar_more({}, { locale })}
             <span className={styles.chevron} aria-hidden="true" />

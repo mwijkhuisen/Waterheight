@@ -161,13 +161,21 @@ function Viewer({ locale }: { locale: Locale }) {
     },
     [select],
   );
+  // The focus moves once the panel is gone: below 48rem the view under the sheet is hidden until then, and a hidden
+  // button takes no focus (review round 1).
+  const closing = useRef(false);
   const close = useCallback(() => {
+    closing.current = true;
     select(undefined);
+  }, [select]);
+  useEffect(() => {
+    if (selected !== undefined || !closing.current) return;
+    closing.current = false;
     const back = opener.current;
     opener.current = null;
     if (back?.isConnected) back.focus();
     else searchRef.current?.focus();
-  }, [select]);
+  }, [selected]);
   const failed = useCallback(() => setMapFailed(true), []);
 
   const canMap = webgl && !mapFailed;

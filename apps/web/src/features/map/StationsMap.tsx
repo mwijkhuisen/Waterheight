@@ -160,7 +160,10 @@ export function StationsMap({
     if (selected?.lon == null || selected.lat == null) return;
     const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
     const right = matchMedia('(min-width: 48rem)').matches ? 26 * rem : 0;
-    map.jumpTo({ center: [selected.lon, selected.lat], zoom: 9, padding: { top: 0, bottom: 0, left: 0, right } });
+    // Centred, then moved by half the drawer: the station lands in the middle of the free part. Not by the camera's
+    // padding, which would outlive the drawer and shift every later zoom (review round 1).
+    map.jumpTo({ center: [selected.lon, selected.lat], zoom: 9 });
+    if (right > 0) map.panBy([right / 2, 0], { animate: false });
   }, [map, selected]);
 
   // The popup's lines: per series the text of the map mode (state and basis, the 24-hour change, the discharge), after

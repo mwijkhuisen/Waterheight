@@ -39,6 +39,12 @@ export function StationSearch<T extends Searchable>({ locale, stations, onPick, 
     if (open) input.current?.focus();
   }, [open]);
   const optionId = (stationId: string) => `${id}-o-${stationId}`;
+  // The active option stays in sight while the arrows move it through a list that scrolls (review round 1).
+  const activeOption = useRef<HTMLDivElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the ref follows the active option; its id is the trigger
+  useEffect(() => {
+    activeOption.current?.scrollIntoView({ block: 'nearest' });
+  }, [current?.id]);
 
   const close = (restoreFocus: boolean) => {
     setOpen(false);
@@ -82,6 +88,12 @@ export function StationSearch<T extends Searchable>({ locale, stations, onPick, 
         aria-label={m.search_open({}, o)}
         aria-expanded={open}
         aria-controls={open ? `${id}-p` : undefined}
+        // Focus the button on the press itself: where a click does not focus a button (WebKit, Firefox on macOS),
+        // the press would blur the field to nothing, close it, and the click would open it again (review round 1).
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.currentTarget.focus();
+        }}
         onClick={() => (open ? close(true) : setOpen(true))}
       >
         <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
@@ -103,6 +115,7 @@ export function StationSearch<T extends Searchable>({ locale, stations, onPick, 
             aria-activedescendant={current === undefined ? undefined : optionId(current.id)}
             autoComplete="off"
             spellCheck={false}
+            maxLength={100}
             value={query}
             onChange={(e) => {
               setQuery(e.currentTarget.value);
@@ -117,6 +130,7 @@ export function StationSearch<T extends Searchable>({ locale, stations, onPick, 
                 // key handler only mirrors the click.
                 <div
                   key={st.id}
+                  ref={st.id === current?.id ? activeOption : undefined}
                   id={optionId(st.id)}
                   role="option"
                   tabIndex={-1}

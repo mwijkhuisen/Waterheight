@@ -42,14 +42,6 @@
   pointer-events: auto;
 }
 
-/* A sheet (below 48rem) covers the view: the mode and view choices under it are out of reach, so out of the tab order
-   too (the status lines stay). The legend and the credits stand over the sheet. */
-@media (max-width: 47.99rem) {
-  .withPanel .controls {
-    visibility: hidden;
-  }
-}
-
 .onTable .top {
   position: relative;
   flex: none;
@@ -82,6 +74,34 @@
 
 .status > span {
   background: var(--paper);
+}
+
+/* A sheet (below 48rem) covers the view: the map or the table under it and the mode and view choices are out of
+   sight, so out of the tab order too (review round 1), and the status lines become a band in the flow above the sheet,
+   so they stay readable. The legend and the credits stand over the sheet. (After `.onMap .top` and `.onTable .top`,
+   so it wins.) */
+@media (max-width: 47.99rem) {
+  /* (MapLibre's open compact attribution sets its own `visibility: visible`: hidden by name too.) */
+  .withPanel .view,
+  .withPanel .view :global(.maplibregl-ctrl-attrib) {
+    visibility: hidden;
+  }
+
+  .withPanel .controls {
+    display: none;
+  }
+
+  .withPanel .top {
+    position: relative;
+    inset: auto;
+    flex: none;
+    padding: 0;
+    border: 0;
+  }
+
+  .withPanel .status {
+    padding: 0.4rem 0;
+  }
 }
 
 /* The map or the table fills the rest; the drawer is a child of it. */

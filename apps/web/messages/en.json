@@ -167,8 +167,6 @@
   "map_no_webgl": "This browser cannot show the map (no WebGL2). The stations are listed in the table.",
   "map_fallback": "The stations are listed in the table.",
   "map_popup_close": "Close",
-  "station_select_label": "Station",
-  "station_select_none": "Choose a station",
   "panel_close": "Close station",
   "panel_water": "Water",
   "panel_source": "Source",
