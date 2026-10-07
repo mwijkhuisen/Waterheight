@@ -42,6 +42,16 @@ const firefox = {
 const chromium = { ...devices['Desktop Chrome'], viewport };
 const webkit = { ...devices['Desktop Safari'], viewport };
 
+// The projects Lighthouse waits for, so that it measures with no other browser on the CPU (see `workers`).
+const LIGHTHOUSE_AFTER = [
+  'chromium',
+  'firefox',
+  'webkit',
+  'no-webgl2',
+  'cvd',
+  ...(ownerUrl === undefined ? [] : ['owner-chromium', 'owner-firefox', 'owner-webkit']),
+];
+
 const ownerUse = {
   baseURL: ownerUrl ?? 'https://localhost:4444',
   httpCredentials: { username: 'owner', password: ownerPw ?? '' },
@@ -53,7 +63,10 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 20_000 },
   retries: 0,
-  workers: 1,
+  // Files run in parallel, the tests of one file in order. The specs share nothing on the server side (the e2e api
+  // answers reads on a fixed clock; every peer is loopback, so no rate limit), and each test has its own browser
+  // context. CI's runner has 4 vCPUs and renders WebGL in software: 2 workers there. `--workers=N` overrides.
+  workers: process.env.CI ? 2 : '50%',
   reporter: [['list']],
   forbidOnly: true,
   use: { baseURL: external ?? 'https://localhost:4443', ignoreHTTPSErrors: true },
@@ -76,7 +89,14 @@ export default defineConfig({
           { name: 'cvd', testMatch: /(cvd|screens)\.spec\.ts$/, use: chromium },
           // Lighthouse (C8): the spec starts Playwright's Chromium itself with --remote-debugging-port=9222 and
           // --ignore-certificate-errors, because a browser Playwright launches has no debugging port (lighthouse.spec.ts).
-          { name: 'lighthouse', testMatch: /lighthouse\.spec\.ts$/, use: chromium },
+          // It runs after every other project (`dependencies`), alone, so parallel workers never skew its scores; to
+          // run it on its own, add --no-deps.
+          {
+            name: 'lighthouse',
+            testMatch: /lighthouse\.spec\.ts$/,
+            use: chromium,
+            dependencies: LIGHTHOUSE_AFTER,
+          },
           // The owner site (owner.spec.ts): its own origin and the basic-auth credentials, on three browsers.
           ...(ownerUrl === undefined
             ? []
