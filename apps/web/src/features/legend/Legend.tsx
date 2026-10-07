@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { lhpColour } from '../../lib/labels/labels.ts';
 import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
@@ -9,6 +10,9 @@ import styles from './legend.module.css';
 import { LHP_NO_DATA } from './palette.ts';
 
 // The map legend (P10a T2): per mode, collapsible, with the honesty and NL-4 notes and the keys for the other cues.
+// P10d: over the map's bottom-right corner (as on waterinfo), open from 48rem and closed below it so a phone's map is
+// not covered; in the table view it stays in the flow above the table.
+const WIDE = '(min-width: 48rem)';
 
 export interface LegendProps {
   locale: Locale;
@@ -19,6 +23,8 @@ export interface LegendProps {
   owner: boolean;
   /** Warning areas are on the map at t (their key is shown). */
   warnings: boolean;
+  /** Placed over the corner of the map (its `.view` is `position: relative`), else in the flow. */
+  overlay: boolean;
 }
 
 const stateWord = {
@@ -48,10 +54,11 @@ function Dot({ colour, r }: { colour: string; r: number }) {
   );
 }
 
-export function Legend({ locale, mode, forecast, owner, warnings }: LegendProps) {
+export function Legend({ locale, mode, forecast, owner, warnings, overlay }: LegendProps) {
   const o = { locale };
+  const [open] = useState(() => matchMedia(WIDE).matches);
   return (
-    <details className={styles.legend} open>
+    <details className={overlay ? `${styles.legend} ${styles.overlay}` : styles.legend} open={open}>
       <summary>{m.legend_heading({}, o)}</summary>
       <ul className={styles.list}>
         {mode === 'state' &&

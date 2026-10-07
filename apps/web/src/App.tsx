@@ -171,7 +171,20 @@ function Viewer({ locale }: { locale: Locale }) {
   const failed = useCallback(() => setMapFailed(true), []);
 
   const canMap = webgl && !mapFailed;
+  const onMap = canMap && view === 'map';
   const notice = !webgl ? m.map_no_webgl({}, { locale }) : mapFailed ? m.map_unavailable({}, { locale }) : undefined;
+
+  const legend =
+    mode === undefined ? null : (
+      <Legend
+        locale={locale}
+        mode={mode}
+        forecast={forecasts !== undefined}
+        owner={owner}
+        warnings={(warnings?.features.length ?? 0) > 0}
+        overlay={onMap}
+      />
+    );
 
   return (
     <Layout
@@ -246,16 +259,10 @@ function Viewer({ locale }: { locale: Locale }) {
             degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}
             standInAt={snapshot.data?.standIn === true ? Date.parse(snapshot.data.t) : undefined}
           />
-          <Legend
-            locale={locale}
-            mode={mode}
-            forecast={forecasts !== undefined}
-            owner={owner}
-            warnings={(warnings?.features.length ?? 0) > 0}
-          />
           <div className={loading ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={loading}>
             <div className={styles.view}>
-              {canMap && view === 'map' ? (
+              {!onMap && legend}
+              {onMap ? (
                 <StationsMap
                   locale={locale}
                   mode={mode}
@@ -287,6 +294,7 @@ function Viewer({ locale }: { locale: Locale }) {
                   onSelect={open}
                 />
               )}
+              {onMap && legend}
             </div>
             {selected !== undefined && (
               <StationPanel
