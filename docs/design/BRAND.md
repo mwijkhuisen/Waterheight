@@ -90,7 +90,7 @@ The station panel, the map legend and the timebar follow the layout patterns of 
 - **Station panel:** a header band in `--line` with `--ink` text and a round close button (`--paper` with an `--ink` border); the body on `--paper`. Grafiek|Tabel is a segmented control of two radios: the checked segment is `--accent` with `--accent-ink` text, the other `--paper` with an `--accent` border and text. The legend boxes (Reeksen, Grenswaarden) and the neighbour rows are bordered with `--line`; secondary text is `--muted`. `--water` is not used for text in the panel.
 - **Chart colours:** the data colours stay the colour-blind checked ones of the map (`features/station/colours.ts`): measured is teal `#01665e` and solid, a forecast is purple `#542788` and dashed, an estimate dotted. Threshold zones use the state palette of the map (`features/legend/palette.ts`) at 15 % opacity, never a brand colour.
 - **Map legend:** `--paper` with a `--line` border, over the bottom-right corner of the map and above MapLibre's attribution button; the summary has a CSS chevron in `--ink`.
-- **Timebar:** `--paper` with a `--line` top border, docked at the bottom from 48rem. The handle is `--ink`, the track `--muted` (3:1 on `--paper`, WCAG 1.4.11); notes and day labels are `--muted`. `--water` is not used.
+- **Timebar:** `--paper` with a `--line` top border, docked at the bottom in a window at least 48rem wide and 32rem high. The handle is `--ink`, the track `--muted` (3:1 on `--paper`, WCAG 1.4.11); notes and day labels are `--muted`. `--water` is not used.
 - No token was added.
 
 ## 7. Open items (owner)
