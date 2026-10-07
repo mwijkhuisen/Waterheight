@@ -4,6 +4,8 @@ import { z } from 'zod';
 import {
   type Contracts,
   PUBLIC_CONTRACTS,
+  type ReachGraph,
+  ReachGraphFile,
   type ReachTravelData,
   type StatusMode,
   type StatusPageData,
@@ -282,19 +284,33 @@ export type WebRiver = z.infer<typeof ReachRiver>;
 
 export const RIVERS_MANIFEST_PATH = '/data/v1/rivers/manifest.json';
 
-/** The installed river release's manifest, and the rivers of its reaches file. */
-export async function loadRivers(f: Fetcher, signal?: AbortSignal) {
+/**
+ * The installed river release's manifest and its reaches file, fetched once for every reader (P10d). Each reader
+ * parses its own section (riversOf, travelOf, graphOf), so a bad section never hides another.
+ */
+export async function loadReachesFile(f: Fetcher, signal?: AbortSignal) {
   const { data: manifest } = await getJson(f, RIVERS_MANIFEST_PATH, RiversManifest, signal);
-  const { data } = await getJson(f, `/data/v1/rivers/${manifest.current.reaches.file}`, RiverList, signal);
-  return { manifest, rivers: data.rivers };
+  const { data: file } = await getJson(
+    f,
+    `/data/v1/rivers/${manifest.current.reaches.file}`,
+    z.looseObject({}),
+    signal,
+  );
+  return { manifest, file };
 }
+export type ReachesRead = Awaited<ReturnType<typeof loadReachesFile>>;
 
-/** The travel times of the installed reaches file (found through the manifest as loadRivers finds it; P10b). */
-export async function loadReachTravel(
-  f: Fetcher,
-  signal?: AbortSignal,
-  c: Contracts = PUBLIC_CONTRACTS,
-): Promise<ReachTravelData> {
-  const { data: manifest } = await getJson(f, RIVERS_MANIFEST_PATH, RiversManifest, signal);
-  return (await getJson(f, `/data/v1/rivers/${manifest.current.reaches.file}`, c.ReachTravel, signal)).data;
-}
+/** The river list: strict, an error means no river layer and no chip. */
+export const riversOf = ({ manifest, file }: ReachesRead) => ({ manifest, rivers: RiverList.parse(file).rivers });
+
+/** The travel times of the installed reaches file (P10b): only the valid pairs. */
+export const travelOf = ({ file }: ReachesRead, c: Contracts = PUBLIC_CONTRACTS): ReachTravelData =>
+  c.ReachTravel.parse(file);
+
+/** The stations and reaches of the graph (P10d neighbours): lenient, a bad row is dropped, a bad section is empty. */
+export const graphOf = ({ file }: ReachesRead): ReachGraph => ReachGraphFile.parse(file);
+
+export const loadRivers = async (f: Fetcher, signal?: AbortSignal) => riversOf(await loadReachesFile(f, signal));
+
+export const loadReachTravel = async (f: Fetcher, signal?: AbortSignal, c: Contracts = PUBLIC_CONTRACTS) =>
+  travelOf(await loadReachesFile(f, signal), c);

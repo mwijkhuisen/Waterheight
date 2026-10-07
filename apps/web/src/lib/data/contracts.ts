@@ -189,6 +189,30 @@ const TravelTime = z.looseObject({
 export const ReachTravel = z.looseObject({ travel_times: lenient(TravelTime, 1000) });
 export type ReachTravelData = z.infer<typeof ReachTravel>;
 
+// P10d: the neighbours of a station come from the stations and reaches of the same file. Local subsets with only the
+// fields the walk uses (the server's strict schemas are not used as values: a new field upstream must not drop rows).
+const GraphStationRef = z.string().max(80);
+const GraphReachId = z.string().max(60);
+const GraphStation = z.looseObject({
+  id: GraphStationRef,
+  river_id: z.string().max(60),
+  reach_id: GraphReachId.nullable(),
+  km_graph: z.number().nullable(),
+});
+const GraphReach = z.looseObject({
+  id: GraphReachId,
+  river_id: z.string().max(60),
+  up_station_id: GraphStationRef.nullable(),
+  down_station_id: GraphStationRef.nullable(),
+  upstream: z.array(GraphReachId).max(20),
+  downstream: z.array(GraphReachId).max(20),
+});
+export const ReachGraphFile = z.looseObject({
+  stations: lenient(GraphStation, 10_000).catch([]),
+  reaches: lenient(GraphReach, 50_000).catch([]),
+});
+export type ReachGraph = z.infer<typeof ReachGraphFile>;
+
 export const PUBLIC_CONTRACTS: Contracts = {
   audience: 'public',
   StaticMeta,
