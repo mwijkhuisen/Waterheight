@@ -1,58 +1,53 @@
-import type { SeriesMeta, StationRecent } from '@rws/contracts';
-import { floorBucket } from '@rws/contracts';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useDebounced, useForecastAsOf, useSeries } from '../../lib/data/api.ts';
-import { historySource } from '../../lib/data/change.ts';
-import { basisLabel, referenceLabel, useOwnerLabels } from '../../lib/labels/labels.ts';
+import { useEffect, useRef, useState } from 'react';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import type { createChart } from './chart.ts';
-import { forecastView, fromAsofRun, fromRecentRun, observedPoints, type Run, runName } from './chartModel.ts';
+import { runName } from './chartModel.ts';
 import styles from './station.module.css';
-import { referenceMarks } from './thresholds.ts';
-import { formatNumber, nativeValue, unitLabel } from './value.ts';
+import type { Marks } from './thresholds.ts';
+import type { SeriesData } from './useSeriesData.ts';
+import { formatNumber } from './value.ts';
 
 type Handle = ReturnType<typeof createChart>;
-export type RecentSeries = StationRecent['series'][number];
 
 interface Props {
   locale: Locale;
-  /** stations.json's series carry `api` (the API's /stations does not: then every series is asked, as before). */
-  series: SeriesMeta & { api?: boolean };
+  /** The station name exactly as published: untrusted text, only ever drawn as canvas text. */
   name: string;
+  /** The unit with its zero ("cm NAP"). */
+  unit: string;
   t: number;
-  span: { from: number; to: number };
   serverNow: number;
-  /** This series' entry of recent.json (undefined while it loads or when the file failed). */
-  recent: RecentSeries | undefined;
-  recentFailed: boolean;
+  /** The span in days, for the chart's accessible name. */
+  days: number;
+  data: SeriesData;
+  marks: Marks;
+  showThresholds: boolean;
   ownerSources: ReadonlySet<string>;
+  /** The chart's own failure (its chunk could not load) is reported up, to sit with the other notes. */
+  onFailed: (failed: boolean) => void;
 }
 
 /** A run of an owner source (LU-3) carries the "owner only" words in its name: the chart's legend and tooltip (P10a T12). */
-const ownerTag = (r: Pick<Run, 'source'>, owners: ReadonlySet<string>, locale: Locale): string =>
-  owners.has(r.source) ? ` · ${m.owner_badge({}, { locale })}` : '';
+export const ownerTag = (source: string, owners: ReadonlySet<string>, locale: Locale): string =>
+  owners.has(source) ? ` · ${m.owner_badge({}, { locale })}` : '';
 
 /** One series of the panel over its chart span; ECharts loads on first use. */
-export function Chart({ locale, series, name, t, span, serverNow, recent, recentFailed, ownerSources }: Props) {
+export function Chart({
+  locale,
+  name,
+  unit,
+  t,
+  serverNow,
+  days,
+  data,
+  marks,
+  showThresholds,
+  ownerSources,
+  onFailed,
+}: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [chart, setChart] = useState<Handle | null>(null);
-  const [failed, setFailed] = useState(false);
-  const owner = useOwnerLabels();
-  const api = series.api ?? true;
-  const source = historySource(t, serverNow, api);
-  // 'none': nothing older than recent.json for a display-only series, and no request for it.
-  const older = useSeries(series.id, span.from, span.to, source === 'api');
-  // The now bucket and after: the run of recent.json (the one forecast/latest.json shows). An earlier t asks the API
-  // for the run as of that t, once the slider has stopped (review round 1: a held key sent one request per step).
-  const future = t >= floorBucket(serverNow);
-  const settled = useDebounced(t, 150);
-  const asof = useForecastAsOf(series.id, future || !api || settled !== t ? undefined : settled);
-  const unit = unitLabel(series, locale);
-  const run: Run | undefined = useMemo(() => {
-    if (future) return !recent?.run ? undefined : fromRecentRun(recent.run);
-    return !asof.data?.run ? undefined : fromAsofRun(asof.data.run);
-  }, [future, recent, asof.data]);
 
   useEffect(() => {
     const el = ref.current;
@@ -65,41 +60,18 @@ export function Chart({ locale, series, name, t, span, serverNow, recent, recent
         made = createChart(el);
         setChart(made);
       })
-      .catch(() => setFailed(true));
+      .catch(() => onFailed(true));
     return () => {
       gone = true;
       made?.dispose();
       setChart(null);
     };
-  }, []);
+  }, [onFailed]);
 
   useEffect(() => {
     if (chart === null) return;
-    const conv = (v: number) => nativeValue(v, series);
-    const points =
-      source === 'api'
-        ? older.data?.res === 'raw'
-          ? observedPoints(
-              older.data.points.map((p) => p.ts),
-              older.data.points.map((p) => p.value),
-              conv,
-              span.from,
-              span.to,
-            )
-          : []
-        : recent === undefined
-          ? []
-          : observedPoints(recent.ts, recent.value, conv, span.from, span.to);
-    const view = run === undefined ? undefined : forecastView(run, conv, future ? serverNow : t);
-    const marks = referenceMarks(recent?.references ?? [], {
-      quantity: series.quantity,
-      conv,
-      ours: (r) => referenceLabel(r.source, r.kind, locale, owner),
-      stem: (stem) => basisLabel({ source: 'NL-4', kind: 'provider_class', ref: stem }, locale),
-      owner: (s) => ownerSources.has(s),
-      locale,
-      unit,
-    });
+    const { run, view } = data;
+    const label = run === undefined ? '' : `${runName(run, locale)}${ownerTag(run.source, ownerSources, locale)}`;
     chart.update({
       locale,
       name,
@@ -108,58 +80,18 @@ export function Chart({ locale, series, name, t, span, serverNow, recent, recent
       now: serverNow,
       nowName: m.now_marker({}, { locale }),
       axisName: m.chart_axis_time({}, { locale }),
-      showThresholds: true,
-      points,
+      showThresholds,
+      points: data.points,
       marks,
       observedName: m.chart_observed({}, { locale }),
       forecast:
         run === undefined || view === undefined
           ? undefined
-          : {
-              view,
-              name: `${runName(run, locale)}${ownerTag(run, ownerSources, locale)}`,
-              estimateName: `${runName(run, locale)}${ownerTag(run, ownerSources, locale)} (${m.forecast_estimate({}, { locale })})`,
-            },
+          : { view, name: label, estimateName: `${label} (${m.forecast_estimate({}, { locale })})` },
       xMax: view?.end,
       format: (v) => formatNumber(v, locale),
     });
-  }, [
-    chart,
-    older.data,
-    recent,
-    run,
-    source,
-    future,
-    serverNow,
-    locale,
-    name,
-    unit,
-    t,
-    span.from,
-    span.to,
-    series,
-    owner,
-    ownerSources,
-  ]);
+  }, [chart, data, marks, showThresholds, serverNow, locale, name, unit, t, ownerSources]);
 
-  return (
-    <>
-      {(failed || older.isError || recentFailed) && (
-        <p className={styles.note}>{m.chart_unavailable({}, { locale })}</p>
-      )}
-      {source === 'none' && <p className={styles.note}>{m.history_none({}, { locale })}</p>}
-      <div
-        ref={ref}
-        className={styles.chart}
-        role="img"
-        aria-label={m.chart_label({ unit, days: Math.round((span.to - span.from) / 86_400_000) }, { locale })}
-      />
-      {run !== undefined && (
-        <p className={styles.note}>
-          {runName(run, locale)}
-          {ownerTag(run, ownerSources, locale)}
-        </p>
-      )}
-    </>
-  );
+  return <div ref={ref} className={styles.chart} role="img" aria-label={m.chart_label({ unit, days }, { locale })} />;
 }

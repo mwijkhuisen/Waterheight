@@ -116,3 +116,12 @@ export function observedPoints(
   });
   return out;
 }
+
+/**
+ * The older points of the API followed by recent.json's own: both sorted, and where they meet (the boundary instant,
+ * or an overlap) recent.json's point is the one kept (P10d: a span beyond recent.json's 7 days).
+ */
+export function mergeHistory(older: readonly Pt[], recent: readonly Pt[]): Pt[] {
+  const first = recent[0]?.[0];
+  return [...(first === undefined ? older : older.filter(([t]) => t < first)), ...recent];
+}

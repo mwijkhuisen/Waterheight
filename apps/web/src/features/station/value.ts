@@ -8,6 +8,10 @@ import type { Locale } from '../../paraglide/runtime.js';
 // cm above the gauge zero (PNP, the German Pegelnullpunkt), an NL-1 level is cm
 // NAP, a few DE-1 levels are m+NN: they are never put on one scale.
 
+/** The quantity of a series in words (the panel's heading and the table's column). */
+export const quantityLabel = (series: Pick<Meta, 'quantity'>, locale: Locale): string =>
+  series.quantity === 'H' ? m.quantity_H({}, { locale }) : m.quantity_Q({}, { locale });
+
 /** canonical = native × TO_CANONICAL (catalogue §4.5), so native = canonical ÷ it. */
 export const nativeValue = (value: number, series: Pick<Meta, 'nativeUnit'>): number =>
   value / TO_CANONICAL[series.nativeUnit];

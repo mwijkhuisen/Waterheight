@@ -30,6 +30,7 @@
     "apps/web/src/features/station/chartModel.ts",
     "apps/web/src/features/station/thresholds.ts",
     "apps/web/src/features/station/neighbours.ts",
+    "apps/web/src/features/station/seriesRows.ts",
     "apps/web/src/features/timebar/play.ts",
     "apps/web/src/features/station/provenance.ts",
     "apps/web/src/lib/attribution.ts",

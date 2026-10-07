@@ -386,14 +386,14 @@ export const useSeries = (id: number, from: number, to: number, enabled = true) 
 const SIX_HOURS = 36 * STEP_MS;
 
 /**
- * The chart's span: 7 days up to the next 6-hour boundary after `t`, so stepping
+ * The chart's span: `days` (7 unless the panel's period says otherwise) up to the next 6-hour boundary after `t`, so stepping
  * or playing inside six hours asks nothing new. `to` never passes the API's
  * limit, the server's now + 10 minutes (`serverNow` is `meta.now`, never this
  * browser's clock, which may run ahead of it).
  */
-export function chartSpan(t: number, displayStart: number, serverNow: number): { from: number; to: number } {
+export function chartSpan(t: number, displayStart: number, serverNow: number, days = 7): { from: number; to: number } {
   const to = Math.min(Math.floor(t / SIX_HOURS) * SIX_HOURS + SIX_HOURS, quantise(serverNow + STEP_MS));
-  return { from: Math.max(displayStart, to - 7 * 24 * 3_600_000), to };
+  return { from: Math.max(displayStart, to - days * 24 * 3_600_000), to };
 }
 
 /**

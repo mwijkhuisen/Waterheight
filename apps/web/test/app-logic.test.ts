@@ -171,6 +171,16 @@ describe('chartSpan', () => {
       }
   });
 
+  it('takes the period of the panel (2, 7 or 14 days), the same end, held at the display window', () => {
+    const t = utc(2026, 9, 25, 1, 30);
+    const to = utc(2026, 9, 25, 6, 0);
+    expect(chartSpan(t, displayStart, serverNow, 2)).toEqual({ from: to - 2 * DAY, to });
+    expect(chartSpan(t, displayStart, serverNow, 7)).toEqual(chartSpan(t, displayStart, serverNow));
+    expect(chartSpan(t, displayStart, serverNow, 14)).toEqual({ from: to - 14 * DAY, to });
+    // 14 days back from late August would pass the first day: held there
+    expect(chartSpan(utc(2026, 7, 28, 1, 0), displayStart, serverNow, 14).from).toBe(displayStart);
+  });
+
   it('never starts before the display window', () => {
     const t = utc(2026, 7, 25, 3, 0);
     const span = chartSpan(t, displayStart, serverNow);

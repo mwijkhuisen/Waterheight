@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { forecastView, fromAsofRun, observedPoints, type Run, runName } from '../src/features/station/chartModel.ts';
+import {
+  forecastView,
+  fromAsofRun,
+  mergeHistory,
+  observedPoints,
+  type Run,
+  runName,
+} from '../src/features/station/chartModel.ts';
 import { creditLines, dhValue, trendGlyph } from '../src/features/station/provenance.ts';
+import { seriesRows } from '../src/features/station/seriesRows.ts';
 import { httpsHref } from '../src/lib/href.ts';
 
 const H = 3_600_000;
@@ -66,6 +74,62 @@ describe('fromAsofRun', () => {
     expect(r.lo).toEqual([2]);
     expect(runName(r, 'en')).toContain('BAFU');
     expect(runName(r, 'en')).toContain('fetched');
+  });
+});
+
+describe('mergeHistory', () => {
+  it('puts the older points first and keeps recent.json’s point at the boundary instant', () => {
+    const older: [number, number][] = [
+      [1, 10],
+      [2, 20],
+      [3, 99],
+    ];
+    const recent: [number, number][] = [
+      [3, 30],
+      [4, 40],
+    ];
+    expect(mergeHistory(older, recent)).toEqual([
+      [1, 10],
+      [2, 20],
+      [3, 30],
+      [4, 40],
+    ]);
+  });
+
+  it('is either list alone when the other is empty', () => {
+    expect(mergeHistory([[1, 1]], [])).toEqual([[1, 1]]);
+    expect(mergeHistory([], [[2, 2]])).toEqual([[2, 2]]);
+  });
+});
+
+describe('seriesRows', () => {
+  const view = forecastView(run, id, NOW);
+
+  it('lists the union of measured and forecast instants, newest first, each once', () => {
+    const rows = seriesRows(
+      [
+        [NOW - H, 7],
+        [NOW, 8],
+        [NOW + 2 * H, 9],
+      ],
+      view,
+    );
+    expect(rows.map((r) => r.ts)).toEqual([NOW + 3 * H, NOW + 2 * H, NOW + H, NOW, NOW - H]);
+    // the junction instant (NOW + 2 h) belongs to the provider part and the estimate part: still one row
+    expect(rows.filter((r) => r.ts === NOW + 2 * H)).toHaveLength(1);
+  });
+
+  it('folds the band into the forecast cell and leaves the empty cells null', () => {
+    const rows = seriesRows([[NOW, 8]], view);
+    const at = (h: number) => rows.find((r) => r.ts === NOW + h * H);
+    expect(at(0)).toMatchObject({ measured: 8, forecast: 1, band: [0, 2] });
+    expect(at(1)).toMatchObject({ measured: null, forecast: 2, band: [1, 3] });
+    // a forecast value that is null stays an empty cell
+    expect(at(2)?.forecast).toBeNull();
+  });
+
+  it('has only measured rows without a run', () => {
+    expect(seriesRows([[NOW, 5]], undefined)).toEqual([{ ts: NOW, measured: 5, forecast: null, band: null }]);
   });
 });
 

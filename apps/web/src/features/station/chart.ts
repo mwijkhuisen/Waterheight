@@ -7,9 +7,10 @@ import { GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent }
 import { init, use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { testHook } from '../../lib/testHook.ts';
-import { formatLocal, formatShort } from '../../lib/time/time.ts';
+import { formatLocal, formatShort, quantise } from '../../lib/time/time.ts';
 import type { Locale } from '../../paraglide/runtime.js';
 import type { ForecastView, Pt } from './chartModel.ts';
+import { MEASURED_COLOUR as COLOUR, FORECAST_COLOUR } from './colours.ts';
 import type { Marks } from './thresholds.ts';
 
 use([LineChart, GridComponent, TooltipComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
@@ -47,8 +48,6 @@ interface AxisParam {
 }
 
 const SHOWN = new Set(['obs', 'median', 'estimate']);
-const COLOUR = '#01665e';
-const FORECAST_COLOUR = '#542788';
 const flat = { symbol: 'none', connectNulls: false, smooth: false } as const;
 
 export function createChart(el: HTMLElement) {
@@ -154,7 +153,7 @@ export function createChart(el: HTMLElement) {
                 label: { show: true, position: 'insideEndTop', formatter: (p: { name?: string }) => p.name ?? '' },
                 data: [
                   { xAxis: d.now, name: d.nowName, lineStyle: { type: 'solid', color: '#555' } },
-                  ...(d.t === d.now ? [] : [{ xAxis: d.t, name: '', label: { show: false } }]),
+                  ...(d.t === quantise(d.now) ? [] : [{ xAxis: d.t, name: '', label: { show: false } }]),
                   ...(d.showThresholds
                     ? d.marks.lines.map((l) => ({
                         yAxis: l.value,

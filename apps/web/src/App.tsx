@@ -12,7 +12,6 @@ import { StationPanel } from './features/station/StationPanel.tsx';
 import { StationTable } from './features/table/StationTable.tsx';
 import { Timebar } from './features/timebar/Timebar.tsx';
 import {
-  chartSpan,
   useAudience,
   useAudienceQuery,
   useChanges,
@@ -310,9 +309,12 @@ function Viewer({ locale }: { locale: Locale }) {
                 serverNow={range.serverNow}
                 t={t}
                 dataEpoch={range.epoch}
-                chartSpan={chartSpan(settled ?? t, range.start, range.serverNow)}
+                displayStart={range.start}
+                chartAt={settled ?? t}
+                stations={list}
                 focus={focusPanel}
                 onClose={close}
+                onSelect={open}
               />
             )}
           </div>

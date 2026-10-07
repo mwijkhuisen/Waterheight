@@ -11,8 +11,7 @@ import { DhMark } from '../legend/DhMark.tsx';
 import { dhGlyph } from '../legend/items.ts';
 import { OwnerBadge } from '../owner/OwnerBadge.tsx';
 import { forecastDetail, forecastValue } from '../station/forecast.ts';
-import { quantityLabel } from '../station/StationPanel.tsx';
-import { formatNumber, formatValue, unitLabel } from '../station/value.ts';
+import { formatNumber, formatValue, quantityLabel, unitLabel } from '../station/value.ts';
 import { clampPage, dhCell, PAGE_SIZE, pageCount, pageOf, pageRange } from './page.ts';
 import styles from './table.module.css';
 
