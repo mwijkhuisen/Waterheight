@@ -310,7 +310,7 @@ test('Nabij gelegen metingen: the nearest station up and down the river, across 
 
 // ---------------------------------------------------------------- the map legend
 
-test('the legend sits in the bottom-right corner of the map, above the attribution button, and collapses', async ({
+test('the legend starts collapsed; open, it sits in the bottom-right corner of the map, above the attribution button', async ({
   page,
   context,
   baseURL,
@@ -320,6 +320,11 @@ test('the legend sits in the bottom-right corner of the map, above the attributi
   await mapReady(page);
   const details = page.locator('details').filter({ has: page.locator('summary', { hasText: nl('legend_heading') }) });
   const map = page.locator('.maplibregl-map');
+  // collapsed at the start, also on a desktop (owner, KG-251); Enter on the summary opens it
+  await expect(details).not.toHaveAttribute('open', '');
+  const summary = details.locator('summary');
+  await summary.focus();
+  await page.keyboard.press('Enter');
   await expect(details).toHaveAttribute('open', '');
 
   const box = async (l: ReturnType<Page['locator']>) => {
@@ -339,14 +344,11 @@ test('the legend sits in the bottom-right corner of the map, above the attributi
   const attribution = page.locator('.maplibregl-ctrl-attrib-button');
   await attribution.click({ timeout: 5_000 });
 
-  // Enter on the summary collapses it
-  const summary = details.locator('summary');
+  await expectNoSeriousAxe(page, undefined, false);
+  // Enter on the summary collapses it again
   await summary.focus();
   await page.keyboard.press('Enter');
   await expect(details).not.toHaveAttribute('open', '');
-  await page.keyboard.press('Enter');
-  await expect(details).toHaveAttribute('open', '');
-  await expectNoSeriousAxe(page, undefined, false);
   await finish(page, s);
 });
 
@@ -355,13 +357,14 @@ test('in the table view the legend is in the flow above the table', async ({ pag
   await open(page, '/');
   await mapReady(page);
   const details = page.locator('details').filter({ has: page.locator('summary', { hasText: nl('legend_heading') }) });
-  // closed on the map, it stays closed in the table view: the same element moves (review round 1)
+  // opened on the map, it stays open in the table view: the same element moves (review round 1)
+  await expect(details).not.toHaveAttribute('open', '');
   await details.locator('summary').focus();
   await page.keyboard.press('Enter');
-  await expect(details).not.toHaveAttribute('open', '');
+  await expect(details).toHaveAttribute('open', '');
   await page.getByRole('button', { name: nl('view_table'), exact: true }).click();
   await expect(details).toBeVisible();
-  await expect(details).not.toHaveAttribute('open', '');
+  await expect(details).toHaveAttribute('open', '');
   expect(await details.evaluate((el) => getComputedStyle(el).position)).toBe('static');
   const table = page.locator('table').first();
   const d = await details.boundingBox();

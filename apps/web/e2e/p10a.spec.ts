@@ -164,6 +164,9 @@ for (const locale of ['nl', 'en'] as const)
     await open(page, locale === 'nl' ? '/' : '/en/', locale === 'nl' ? undefined : 'Timeline');
     await mapReady(page);
     const box = legend(page, locale);
+    // collapsed at the start (P10d, KG-251): opened to read it
+    await expect(box).not.toHaveAttribute('open', '');
+    await box.locator('summary').click();
     await expect(box).toHaveAttribute('open', '');
     const text = box.locator('li, p');
     // State mode: the six states, and the two notes that are always there (the honesty note and the NL-4 disclaimer).
@@ -206,6 +209,8 @@ for (const locale of ['nl', 'en'] as const)
     await expect(slider(page, locale === 'nl' ? undefined : 'Timeline')).toBeVisible();
     await expect(legend(page, locale).getByText(msg(locale, 'legend_warnings'), { exact: true })).toHaveCount(0);
     await page.goto(`${locale === 'nl' ? '/' : '/en/'}?t=${at(2)}&mode=state`);
+    // a new page: the legend is collapsed again
+    await legend(page, locale).locator('summary').click();
     await expect(legend(page, locale).getByText(msg(locale, 'legend_forecast'), { exact: true })).toBeVisible();
     await finish(page, s);
   });
@@ -498,6 +503,7 @@ const AXE_VIEWS: [title: string, run: (page: Page) => Promise<void>, tall?: true
     async (page) => {
       await open(page, '/');
       await mapReady(page);
+      await legend(page, 'nl').locator('summary').click();
       await expect(legend(page, 'nl')).toHaveAttribute('open', '');
     },
   ],
@@ -506,6 +512,7 @@ const AXE_VIEWS: [title: string, run: (page: Page) => Promise<void>, tall?: true
     async (page) => {
       await open(page, '/en/?mode=q', 'Timeline');
       await mapReady(page);
+      await legend(page, 'en').locator('summary').click();
       await expect(legend(page, 'en')).toHaveAttribute('open', '');
     },
   ],
@@ -564,6 +571,7 @@ test('the hostile strings are inert wherever they show: map, table, panel, legen
   // ...in the table (a row button, a cell) and the legend open...
   await page.getByRole('button', { name: 'Tabel', exact: true }).click();
   await expect(page.locator('table tbody th button', { hasText: XSS })).toHaveCount(1);
+  await legend(page, 'nl').locator('summary').click();
   await expect(legend(page, 'nl')).toHaveAttribute('open', '');
   await expectInert(page, s);
   // ...and the chart's own canvas text (the tooltip is plain text): drawn, never parsed.

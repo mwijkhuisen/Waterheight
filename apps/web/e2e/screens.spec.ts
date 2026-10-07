@@ -44,12 +44,13 @@ for (const size of SIZES) {
     await expect(panelOf(page).getByRole('table')).toBeVisible();
     await shot(page, `${size.name}-panel-table`);
 
-    // the legend, collapsed
+    // the legend, collapsed as it starts (KG-251), then opened
     await page.goto('/');
     await mapReady(page);
-    await page.locator('summary', { hasText: msg('nl', 'legend_heading') }).click();
     await page.locator('.maplibregl-map').scrollIntoViewIfNeeded();
     await shot(page, `${size.name}-legend-collapsed`);
+    await page.locator('summary', { hasText: msg('nl', 'legend_heading') }).click();
+    await shot(page, `${size.name}-legend-open`);
 
     // the timebar in the repeated hour of the DST night
     await page.goto('/?t=2026-10-25T00:30Z');
