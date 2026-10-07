@@ -1,21 +1,22 @@
 /* The time bar (P10d): a compact card docked at the bottom of the viewer, after the map and the panel, so the DOM
-   order is the visual order. Above 48rem it sticks to the bottom of the window. */
+   order is the visual order. In a window at least 48rem wide and 32rem high it sticks to the bottom; a shorter one
+   keeps its height for the page. */
 .timebar {
   background: var(--paper);
   border-top: 1px solid var(--line);
   padding: 0.5rem var(--space) 0.4rem;
 }
 
-@media (min-width: 48rem) {
+@media (min-width: 48rem) and (min-height: 32rem) {
   .timebar {
     position: sticky;
     bottom: 0;
     z-index: 4;
   }
 
-  /* The bar must never hide the control that has the focus (WCAG 2.4.11). */
+  /* The bar must never hide the control that has the focus (WCAG 2.4.11): Timebar.tsx measures its real height. */
   :global(html):has(.timebar) {
-    scroll-padding-bottom: 9rem;
+    scroll-padding-bottom: calc(var(--timebar-h, 9rem) + 0.5rem);
   }
 }
 

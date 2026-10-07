@@ -11,7 +11,7 @@ import {
 } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
-import { type Direction, playNext, step } from './play.ts';
+import { type Direction, playNext } from './play.ts';
 import styles from './timebar.module.css';
 
 // The time selector (A§10 features/timebar, D11): a date, a time in
@@ -88,6 +88,7 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
   const last = amsterdam(end).date;
   const dateRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLInputElement>(null);
+  const barRef = useRef<HTMLElement>(null);
 
   const go = (ms: number) => {
     setMissing(false);
@@ -134,6 +135,23 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
   useEffect(() => {
     if (reduced) setPlaying(0);
   }, [reduced]);
+  // Play starts only where it has a step to take: at its bound the button stays Play, at once.
+  const toggle = (dir: Direction) =>
+    setPlaying((p) => (p === dir || playNext(latest.current, dir, start, end) === null ? 0 : dir));
+
+  // The sticky bar's real height (its notes and the DST choice come and go) keeps a focused control clear of it
+  // (WCAG 2.4.11, timebar.module.css).
+  useEffect(() => {
+    const el = barRef.current;
+    if (el === null) return;
+    const root = document.documentElement;
+    const size = new ResizeObserver(() => root.style.setProperty('--timebar-h', `${el.offsetHeight}px`));
+    size.observe(el);
+    return () => {
+      size.disconnect();
+      root.style.removeProperty('--timebar-h');
+    };
+  }, []);
 
   // Arrows and Home/End are the range input's own; PageUp/PageDown move an hour.
   const keys = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -154,7 +172,7 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
         ? m.forecast_station_none_note({}, { locale })
         : undefined;
   return (
-    <section className={styles.timebar} aria-labelledby={`${id}-h`}>
+    <section ref={barRef} className={styles.timebar} aria-labelledby={`${id}-h`}>
       <h2 id={`${id}-h`} className={styles.heading}>
         {m.timebar_heading({}, { locale })}
       </h2>
@@ -236,14 +254,14 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
             type="button"
             aria-label={m.step_back({}, { locale })}
             aria-disabled={t <= start}
-            onClick={() => t > start && go(step(t, -1, start, end))}
+            onClick={() => t > start && go(t - STEP_MS)}
           >
             <Icon d={ICON.back} />
           </button>
           <button
             type="button"
             aria-label={playing === -1 ? m.pause({}, { locale }) : m.play_reverse({}, { locale })}
-            onClick={() => setPlaying((p) => (p === -1 ? 0 : -1))}
+            onClick={() => toggle(-1)}
             disabled={reduced}
           >
             <Icon d={playing === -1 ? ICON.pause : ICON.rewind} />
@@ -251,7 +269,7 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           <button
             type="button"
             aria-label={playing === 1 ? m.pause({}, { locale }) : m.play({}, { locale })}
-            onClick={() => setPlaying((p) => (p === 1 ? 0 : 1))}
+            onClick={() => toggle(1)}
             disabled={reduced}
           >
             <Icon d={playing === 1 ? ICON.pause : ICON.play} />
@@ -260,7 +278,7 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
             type="button"
             aria-label={m.step_forward({}, { locale })}
             aria-disabled={t >= end}
-            onClick={() => t < end && go(step(t, 1, start, end))}
+            onClick={() => t < end && go(t + STEP_MS)}
           >
             <Icon d={ICON.forward} />
           </button>

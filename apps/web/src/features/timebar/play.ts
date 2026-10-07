@@ -6,10 +6,6 @@ import { STEP_MS } from '../../lib/time/time.ts';
 
 export type Direction = -1 | 1;
 
-/** One step from `t`, held at the bounds: at a bound it returns `t` itself. */
-export const step = (t: number, dir: Direction, start: number, end: number): number =>
-  Math.min(end, Math.max(start, t + dir * STEP_MS));
-
 /** The next instant of a running play, or null when the next step would leave [start, end]: stop. */
 export function playNext(t: number, dir: Direction, start: number, end: number): number | null {
   const next = t + dir * STEP_MS;

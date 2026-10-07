@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { playNext, step } from '../src/features/timebar/play.ts';
+import { playNext } from '../src/features/timebar/play.ts';
 import { formatLocal, quantise, STEP_MS } from '../src/lib/time/time.ts';
 
 // Stepping and playing the timebar (P10d): one 10-minute UTC step each way, held at the bounds.
@@ -7,15 +7,6 @@ import { formatLocal, quantise, STEP_MS } from '../src/lib/time/time.ts';
 const START = Date.parse('2026-08-24T00:00:00Z');
 const NOW = quantise(Date.parse('2026-10-26T12:00:00Z'));
 const END = NOW + 48 * 3_600_000;
-
-describe('step', () => {
-  it('moves one step and is held at both bounds', () => {
-    expect(step(NOW, 1, START, END)).toBe(NOW + STEP_MS);
-    expect(step(NOW, -1, START, END)).toBe(NOW - STEP_MS);
-    expect(step(START, -1, START, END)).toBe(START);
-    expect(step(END, 1, START, END)).toBe(END);
-  });
-});
 
 describe('playNext', () => {
   it('reverse stops at the first day', () => {
