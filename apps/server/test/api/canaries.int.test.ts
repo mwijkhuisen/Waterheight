@@ -221,6 +221,8 @@ async function sweep(family: ChannelAudience, ctx: Ctx) {
 beforeAll(async () => {
   t = await createTestDb();
   ids = await seedAudienceFixture(t.admin);
+  // The seed's latest rows sit at the top of the hour; its 45 min limit would make them stale after minute 45.
+  await t.admin.query("UPDATE series SET staleness_limit = '2 hours'");
   await q(`UPDATE app_meta SET value = to_jsonb($1::text) WHERE key = 'display_start'`, [iso(NOW - 50 * DAY)]);
   await q(`SELECT ensure_partitions(now() - interval '45 days', now() + interval '10 days')`);
 
