@@ -3,6 +3,7 @@ import {
   amsterdam,
   formatDay,
   formatLocal,
+  formatTick,
   localInstants,
   quantise,
   STEP_MS,
@@ -10,6 +11,7 @@ import {
 } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { type Direction, playNext, step } from './play.ts';
 import styles from './timebar.module.css';
 
 // The time selector (A§10 features/timebar, D11): a date, a time in
@@ -26,6 +28,24 @@ import styles from './timebar.module.css';
 
 const PLAY_MS = 1000;
 const HOUR_STEPS = 6;
+/** Day labels under the track: the first and the last always, the ones between only where there is room. */
+const TICKS = 6;
+
+/** An icon of the buttons: our own simple shapes, hidden from assistive technology (the button has its name). */
+function Icon({ d }: { d: string }) {
+  return (
+    <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
+      <path d={d} fill="currentColor" />
+    </svg>
+  );
+}
+const ICON = {
+  back: 'M4 4h2v12H4zM17 4v12L7 10z',
+  forward: 'M14 4h2v12h-2zM3 4v12l10-6z',
+  play: 'M6 4l10 6-10 6z',
+  rewind: 'M14 4L4 10l10 6z',
+  pause: 'M5 4h3.5v12H5zM11.5 4H15v12h-3.5z',
+} as const;
 
 const reducedMotion = '(prefers-reduced-motion: reduce)';
 const subscribeMotion = (notify: () => void) => {
@@ -54,7 +74,7 @@ interface Props {
 export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, onChange }: Props) {
   const id = useId();
   const [missing, setMissing] = useState(false);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState<0 | Direction>(0);
   const reduced = useReducedMotion();
   const latest = useRef(t);
   latest.current = t;
@@ -96,23 +116,23 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
   }, [local.date, local.time]);
 
   useEffect(() => {
-    if (!playing) return;
+    if (playing === 0) return;
     const timer = setInterval(() => {
-      const next = latest.current + STEP_MS;
-      if (next > end) setPlaying(false);
+      const next = playNext(latest.current, playing, start, end);
+      if (next === null) setPlaying(0);
       else onChange(next);
     }, PLAY_MS);
     const hidden = () => {
-      if (document.hidden) setPlaying(false);
+      if (document.hidden) setPlaying(0);
     };
     document.addEventListener('visibilitychange', hidden);
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', hidden);
     };
-  }, [playing, end, onChange]);
+  }, [playing, start, end, onChange]);
   useEffect(() => {
-    if (reduced) setPlaying(false);
+    if (reduced) setPlaying(0);
   }, [reduced]);
 
   // Arrows and Home/End are the range input's own; PageUp/PageDown move an hour.
@@ -138,38 +158,116 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
       <h2 id={`${id}-h`} className={styles.heading}>
         {m.timebar_heading({}, { locale })}
       </h2>
-      <p className={styles.current}>
-        <time dateTime={new Date(t).toISOString()}>{time}</time>
-        {forecast && <span className={styles.badge}>{m.timebar_forecast({}, { locale })}</span>}
-      </p>
-      <div className={styles.fields}>
-        <label>
-          {m.date_label({}, { locale })}
+      <div className={styles.row}>
+        <p className={styles.current}>
+          <time dateTime={new Date(t).toISOString()}>{time}</time>
+          {forecast && <span className={styles.badge}>{m.timebar_forecast({}, { locale })}</span>}
+        </p>
+        <div className={styles.fields}>
+          <label>
+            {m.date_label({}, { locale })}
+            <input
+              ref={dateRef}
+              type="date"
+              defaultValue={local.date}
+              min={first}
+              max={last}
+              onChange={(e) => wall(e.currentTarget.value, local.time, true)}
+              onBlur={(e) => {
+                e.currentTarget.value = local.date;
+              }}
+            />
+          </label>
+          <label>
+            {m.time_label({}, { locale })}
+            <input
+              ref={timeRef}
+              type="time"
+              step={600}
+              defaultValue={local.time}
+              onChange={(e) => wall(local.date, e.currentTarget.value, false)}
+              onBlur={(e) => {
+                e.currentTarget.value = local.time;
+              }}
+            />
+          </label>
+        </div>
+        <div className={styles.track}>
           <input
-            ref={dateRef}
-            type="date"
-            defaultValue={local.date}
-            min={first}
-            max={last}
-            onChange={(e) => wall(e.currentTarget.value, local.time, true)}
-            onBlur={(e) => {
-              e.currentTarget.value = local.date;
-            }}
+            type="range"
+            min={start}
+            max={end}
+            step={STEP_MS}
+            value={t}
+            aria-label={m.slider_label({}, { locale })}
+            aria-valuetext={valueText}
+            aria-describedby={note === undefined ? `${id}-epoch` : `${id}-epoch ${id}-forecast`}
+            onChange={(e) => go(Number(e.currentTarget.value))}
+            onKeyDown={keys}
           />
-        </label>
-        <label>
-          {m.time_label({}, { locale })}
-          <input
-            ref={timeRef}
-            type="time"
-            step={600}
-            defaultValue={local.time}
-            onChange={(e) => wall(local.date, e.currentTarget.value, false)}
-            onBlur={(e) => {
-              e.currentTarget.value = local.time;
-            }}
-          />
-        </label>
+          <span className={styles.epoch} style={{ left: `${epochAt}%` }} aria-hidden="true" />
+          {/* The "now" marker: a tick above the track and its word; the forecast part is to its right. */}
+          <span className={styles.nowTick} style={{ left: `${nowAt}%` }} aria-hidden="true" />
+          <span
+            className={styles.nowLabel}
+            style={{ left: `${nowAt}%`, transform: `translateX(-${nowAt}%)` }}
+            aria-hidden="true"
+          >
+            {m.now_marker({}, { locale })}
+          </span>
+          {span > 0 &&
+            Array.from({ length: TICKS }, (_, i) => {
+              const pos = (i / (TICKS - 1)) * 100;
+              return (
+                <span
+                  key={pos}
+                  className={i === 0 || i === TICKS - 1 ? styles.tick : `${styles.tick} ${styles.tickMid}`}
+                  style={{ left: `${pos}%`, transform: `translateX(-${pos}%)` }}
+                  aria-hidden="true"
+                >
+                  {formatTick(start + (span * i) / (TICKS - 1), locale)}
+                </span>
+              );
+            })}
+        </div>
+        {/* At a bound a button stays focusable and does nothing (aria-disabled): a disabled one would drop the focus. */}
+        <div className={styles.buttons}>
+          <button
+            type="button"
+            aria-label={m.step_back({}, { locale })}
+            aria-disabled={t <= start}
+            onClick={() => t > start && go(step(t, -1, start, end))}
+          >
+            <Icon d={ICON.back} />
+          </button>
+          <button
+            type="button"
+            aria-label={playing === -1 ? m.pause({}, { locale }) : m.play_reverse({}, { locale })}
+            onClick={() => setPlaying((p) => (p === -1 ? 0 : -1))}
+            disabled={reduced}
+          >
+            <Icon d={playing === -1 ? ICON.pause : ICON.rewind} />
+          </button>
+          <button
+            type="button"
+            aria-label={playing === 1 ? m.pause({}, { locale }) : m.play({}, { locale })}
+            onClick={() => setPlaying((p) => (p === 1 ? 0 : 1))}
+            disabled={reduced}
+          >
+            <Icon d={playing === 1 ? ICON.pause : ICON.play} />
+          </button>
+          <button
+            type="button"
+            aria-label={m.step_forward({}, { locale })}
+            aria-disabled={t >= end}
+            onClick={() => t < end && go(step(t, 1, start, end))}
+          >
+            <Icon d={ICON.forward} />
+          </button>
+          <button type="button" aria-disabled={t === now} onClick={() => t !== now && go(now)}>
+            {m.to_now({}, { locale })}
+          </button>
+        </div>
       </div>
       {twins.length === 2 && (
         <fieldset className={styles.twins}>
@@ -190,30 +288,6 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           {m.time_missing({}, { locale })}
         </p>
       )}
-      <div className={styles.track}>
-        <input
-          type="range"
-          min={start}
-          max={end}
-          step={STEP_MS}
-          value={t}
-          aria-label={m.slider_label({}, { locale })}
-          aria-valuetext={valueText}
-          aria-describedby={note === undefined ? `${id}-epoch` : `${id}-epoch ${id}-forecast`}
-          onChange={(e) => go(Number(e.currentTarget.value))}
-          onKeyDown={keys}
-        />
-        <span className={styles.epoch} style={{ left: `${epochAt}%` }} aria-hidden="true" />
-        {/* The "now" marker: a tick above the track and its word; the forecast part is to its right. */}
-        <span className={styles.nowTick} style={{ left: `${nowAt}%` }} aria-hidden="true" />
-        <span
-          className={styles.nowLabel}
-          style={{ left: `${nowAt}%`, transform: `translateX(-${nowAt}%)` }}
-          aria-hidden="true"
-        >
-          {m.now_marker({}, { locale })}
-        </span>
-      </div>
       <p id={`${id}-epoch`} className={styles.note}>
         {m.epoch_note({ date: formatDay(epoch, locale) }, { locale })}
       </p>
@@ -222,21 +296,6 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           {note}
         </p>
       )}
-      {/* At a bound a button stays focusable and does nothing (aria-disabled): a disabled one would drop the focus. */}
-      <div className={styles.buttons}>
-        <button type="button" aria-disabled={t <= start} onClick={() => t > start && go(t - STEP_MS)}>
-          {m.step_back({}, { locale })}
-        </button>
-        <button type="button" onClick={() => setPlaying((p) => !p)} disabled={reduced}>
-          {playing ? m.pause({}, { locale }) : m.play({}, { locale })}
-        </button>
-        <button type="button" aria-disabled={t >= end} onClick={() => t < end && go(t + STEP_MS)}>
-          {m.step_forward({}, { locale })}
-        </button>
-        <button type="button" aria-disabled={t === now} onClick={() => t !== now && go(now)}>
-          {m.to_now({}, { locale })}
-        </button>
-      </div>
       {live && <p className={styles.note}>{m.live_note({}, { locale })}</p>}
       {reduced && <p className={styles.note}>{m.play_reduced_motion({}, { locale })}</p>}
     </section>

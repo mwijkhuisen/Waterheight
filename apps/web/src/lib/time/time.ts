@@ -115,6 +115,12 @@ export function formatShort(ms: number, locale: Locale): string {
   return z.toLocaleString(intlLocale(locale), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+/** "25 okt": a day label for the timebar's track. */
+export function formatTick(ms: number, locale: Locale): string {
+  const z = Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(ZONE);
+  return z.toLocaleString(intlLocale(locale), { day: 'numeric', month: 'short' });
+}
+
 /** A UTC day (a `dataSince`) as a date; with `ZONE`, the Amsterdam day of an instant (the attribution date). */
 export const formatDay = (ms: number, locale: Locale, timeZone = 'UTC'): string =>
   new Intl.DateTimeFormat(intlLocale(locale), {

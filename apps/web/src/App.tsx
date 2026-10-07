@@ -198,17 +198,6 @@ function Viewer({ locale }: { locale: Locale }) {
         )
       ) : (
         <>
-          <Timebar
-            locale={locale}
-            t={t}
-            start={range.start}
-            now={range.now}
-            end={end}
-            noForecast={horizon === null}
-            epoch={range.epoch}
-            live={isLive}
-            onChange={setT}
-          />
           <div className={styles.controls}>
             <ModeControl locale={locale} mode={mode} onChange={setMode} />
             {canMap && (
@@ -319,6 +308,17 @@ function Viewer({ locale }: { locale: Locale }) {
               />
             )}
           </div>
+          <Timebar
+            locale={locale}
+            t={t}
+            start={range.start}
+            now={range.now}
+            end={end}
+            noForecast={horizon === null}
+            epoch={range.epoch}
+            live={isLive}
+            onChange={setT}
+          />
         </>
       )}
     </Layout>
