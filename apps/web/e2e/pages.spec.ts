@@ -76,9 +76,9 @@ async function ready(page: Page, id: RouteId | null, locale: Locale) {
   await expect(page.locator('main [role="status"], main [role="alert"]')).toHaveCount(0);
   // What settles after the heading, so that nothing moves under axe or a Tab: the operator and the contact address
   // (once /runtime-config.json is in), and the station names of the travel times (until stations.json is in they are
-  // ids). (P10e: the credits' download link of the river network is in the map's "Bronnen" panel, not on a page: its own
-  // test is below.)
-  await page.waitForLoadState('networkidle');
+  // ids). Each is waited for by its own element below, not by `networkidle`, which a slow runner may never reach in
+  // Firefox. (P10e: the credits' download link of the river network is in the map's "Bronnen" panel, not on a page: its
+  // own test is below.)
   // (the Sources and Colophon pages carry the map's credits, with the river network download once its manifest is in)
   if (id === 'sources' || id === 'colophon') await expect(main(page).locator('a[href^="/downloads/"]')).toHaveCount(1);
   if (id === 'colophon' || id === 'privacy' || id === 'accessibility')
