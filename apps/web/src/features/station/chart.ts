@@ -9,7 +9,9 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { testHook } from '../../lib/testHook.ts';
 import { formatLocal, formatShort } from '../../lib/time/time.ts';
 import type { Locale } from '../../paraglide/runtime.js';
-import type { ForecastView, Marks, Pt } from './chartModel.ts';
+import type { ForecastView, Pt } from './chartModel.ts';
+import { MEASURED_COLOUR as COLOUR, FORECAST_COLOUR } from './colours.ts';
+import type { Marks } from './thresholds.ts';
 
 use([LineChart, GridComponent, TooltipComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
 
@@ -21,15 +23,22 @@ export interface ChartData {
   unit: string;
   /** Observed points: [UTC ms, value in the native unit]. */
   points: Pt[];
-  /** The selected instant, marked by a vertical line. */
-  t: number;
+  /** The selected instant when it is not now and on the axis: a dashed vertical line. */
+  selected: number | undefined;
+  /** The server's now when it is on the axis: a solid vertical line, named `nowName`. */
+  now: number | undefined;
+  nowName: string;
+  /** The title of the time axis ("Nederlandse tijd"). */
+  axisName: string;
   format: (value: number) => string;
   /** One run (never blended with another): its series names come from Paraglide. */
   forecast?: { view: ForecastView; name: string; estimateName: string } | undefined;
   marks: Marks;
+  /** The threshold lines and zones are drawn only when this is true. */
+  showThresholds: boolean;
   observedName: string;
-  /** The x-axis end when a run is shown: min(now + 48 h, the run's end). */
-  xMax?: number | undefined;
+  /** The time axis: the panel's span, stretched to the end of the run shown (xRange). */
+  x: { min: number; max: number };
 }
 
 interface AxisParam {
@@ -39,8 +48,6 @@ interface AxisParam {
 }
 
 const SHOWN = new Set(['obs', 'median', 'estimate']);
-const COLOUR = '#01665e';
-const FORECAST_COLOUR = '#542788';
 const flat = { symbol: 'none', connectNulls: false, smooth: false } as const;
 
 export function createChart(el: HTMLElement) {
@@ -113,13 +120,23 @@ export function createChart(el: HTMLElement) {
       chart.setOption(
         {
           animation: false,
-          grid: { left: 56, right: 16, top: 24, bottom: 32 },
+          grid: { left: 56, right: 16, top: 24, bottom: 52 },
           xAxis: {
             type: 'time',
-            max: d.xMax,
+            min: d.x.min,
+            max: d.x.max,
+            name: d.axisName,
+            nameLocation: 'middle',
+            nameGap: 30,
             axisLabel: { formatter: (v: number) => formatShort(v, d.locale), hideOverlap: true },
           },
-          yAxis: { type: 'value', scale: true, name: d.unit, nameTextStyle: { align: 'left' } },
+          yAxis: {
+            type: 'value',
+            scale: true,
+            name: d.unit,
+            nameTextStyle: { align: 'left' },
+            splitLine: { show: true, lineStyle: { color: '#d9d9d9' } },
+          },
           tooltip: { trigger: 'axis', renderMode: 'richText', formatter: tip },
           series: [
             {
@@ -136,20 +153,28 @@ export function createChart(el: HTMLElement) {
                 // A function, never a template string: a label may hold `{…}` (provider text).
                 label: { show: true, position: 'insideEndTop', formatter: (p: { name?: string }) => p.name ?? '' },
                 data: [
-                  { xAxis: d.t, name: '', label: { show: false } },
-                  ...d.marks.lines.map((l) => ({
-                    yAxis: l.value,
-                    name: l.text,
-                    lineStyle: { type: 'dashed', color: '#555' },
-                  })),
+                  ...(d.now === undefined
+                    ? []
+                    : [{ xAxis: d.now, name: d.nowName, lineStyle: { type: 'solid', color: '#555' } }]),
+                  ...(d.selected === undefined ? [] : [{ xAxis: d.selected, name: '', label: { show: false } }]),
+                  ...(d.showThresholds
+                    ? d.marks.lines.map((l) => ({
+                        yAxis: l.value,
+                        name: l.text,
+                        lineStyle: { type: 'dashed', color: '#555' },
+                      }))
+                    : []),
                 ],
               },
               markArea: {
                 silent: true,
-                data: d.marks.bands.map((b) => [
-                  { yAxis: b.from, itemStyle: { color: b.colour, opacity: 0.15 } },
-                  { yAxis: b.to },
-                ]),
+                // An open end has no `yAxis`: ECharts clamps it to the axis.
+                data: d.showThresholds
+                  ? d.marks.zones.map((z) => [
+                      { ...(z.from === null ? {} : { yAxis: z.from }), itemStyle: { color: z.colour, opacity: 0.15 } },
+                      z.to === null ? {} : { yAxis: z.to },
+                    ])
+                  : [],
               },
             },
             ...forecastSeries,

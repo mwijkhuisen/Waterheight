@@ -12,7 +12,6 @@ import { StationPanel } from './features/station/StationPanel.tsx';
 import { StationTable } from './features/table/StationTable.tsx';
 import { Timebar } from './features/timebar/Timebar.tsx';
 import {
-  chartSpan,
   useAudience,
   useAudienceQuery,
   useChanges,
@@ -171,7 +170,23 @@ function Viewer({ locale }: { locale: Locale }) {
   const failed = useCallback(() => setMapFailed(true), []);
 
   const canMap = webgl && !mapFailed;
+  const onMap = canMap && view === 'map';
   const notice = !webgl ? m.map_no_webgl({}, { locale }) : mapFailed ? m.map_unavailable({}, { locale }) : undefined;
+
+  // One keyed element in either slot of `.view` (before the table, after the map): React moves it instead of
+  // remounting it, so switching views keeps the legend open or closed as the user left it.
+  const legend =
+    mode === undefined ? null : (
+      <Legend
+        key="legend"
+        locale={locale}
+        mode={mode}
+        forecast={forecasts !== undefined}
+        owner={owner}
+        warnings={(warnings?.features.length ?? 0) > 0}
+        overlay={onMap}
+      />
+    );
 
   return (
     <Layout
@@ -198,17 +213,6 @@ function Viewer({ locale }: { locale: Locale }) {
         )
       ) : (
         <>
-          <Timebar
-            locale={locale}
-            t={t}
-            start={range.start}
-            now={range.now}
-            end={end}
-            noForecast={horizon === null}
-            epoch={range.epoch}
-            live={isLive}
-            onChange={setT}
-          />
           <div className={styles.controls}>
             <ModeControl locale={locale} mode={mode} onChange={setMode} />
             {canMap && (
@@ -257,16 +261,10 @@ function Viewer({ locale }: { locale: Locale }) {
             degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}
             standInAt={snapshot.data?.standIn === true ? Date.parse(snapshot.data.t) : undefined}
           />
-          <Legend
-            locale={locale}
-            mode={mode}
-            forecast={forecasts !== undefined}
-            owner={owner}
-            warnings={(warnings?.features.length ?? 0) > 0}
-          />
           <div className={loading ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={loading}>
             <div className={styles.view}>
-              {canMap && view === 'map' ? (
+              {!onMap && legend}
+              {onMap ? (
                 <StationsMap
                   locale={locale}
                   mode={mode}
@@ -298,6 +296,7 @@ function Viewer({ locale }: { locale: Locale }) {
                   onSelect={open}
                 />
               )}
+              {onMap && legend}
             </div>
             {selected !== undefined && (
               <StationPanel
@@ -313,12 +312,26 @@ function Viewer({ locale }: { locale: Locale }) {
                 serverNow={range.serverNow}
                 t={t}
                 dataEpoch={range.epoch}
-                chartSpan={chartSpan(settled ?? t, range.start, range.serverNow)}
+                displayStart={range.start}
+                chartAt={settled ?? t}
+                stations={list}
                 focus={focusPanel}
                 onClose={close}
+                onSelect={open}
               />
             )}
           </div>
+          <Timebar
+            locale={locale}
+            t={t}
+            start={range.start}
+            now={range.now}
+            end={end}
+            noForecast={horizon === null}
+            epoch={range.epoch}
+            live={isLive}
+            onChange={setT}
+          />
         </>
       )}
     </Layout>

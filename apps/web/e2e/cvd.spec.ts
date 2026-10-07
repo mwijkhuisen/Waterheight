@@ -32,6 +32,8 @@ for (const deficiency of DEFICIENCIES)
         map.jumpTo({ center: [6.1, 51.85], zoom: 11 });
         await idle;
       });
+      // the legend starts collapsed (P10d, KG-251): opened for the picture
+      await page.locator('summary', { hasText: 'Legenda' }).click();
       await expect(
         page.locator('details[open]').filter({ has: page.locator('summary', { hasText: 'Legenda' }) }),
       ).toBeVisible();

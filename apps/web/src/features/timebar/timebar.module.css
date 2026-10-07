@@ -1,16 +1,47 @@
+/* The time bar (P10d): a compact card docked at the bottom of the viewer, after the map and the panel, so the DOM
+   order is the visual order. In a window at least 48rem wide and 32rem high it sticks to the bottom; a shorter one
+   keeps its height for the page. */
 .timebar {
-  border: 1px solid var(--line);
-  padding: var(--space);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  padding: 0.5rem var(--space) 0.4rem;
 }
 
+@media (min-width: 48rem) and (min-height: 32rem) {
+  .timebar {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+  }
+
+  /* The bar must never hide the control that has the focus (WCAG 2.4.11): Timebar.tsx measures its real height. */
+  :global(html):has(.timebar) {
+    scroll-padding-bottom: calc(var(--timebar-h, 9rem) + 0.5rem);
+  }
+}
+
+/* The heading names the region for assistive technology; the bar needs no visible title. */
 .heading {
-  margin: 0 0 0.25rem;
-  font-size: 1rem;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.4rem var(--space);
 }
 
 .current {
-  margin: 0 0 0.5rem;
-  font-size: 1.1rem;
+  margin: 0;
+  min-width: 12rem;
   font-weight: 600;
 }
 
@@ -26,17 +57,23 @@
 .fields {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space);
+  gap: 0.5rem;
 }
 
 .fields label {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.fields input {
+  color: var(--ink);
 }
 
 .twins {
-  margin: 0.5rem 0;
+  margin: 0.4rem 0;
+  font-size: 0.9rem;
 }
 
 .twins label {
@@ -47,21 +84,61 @@
   color: var(--signal-error-ink);
 }
 
+/* Room above for "now" and below for the day labels. */
 .track {
   position: relative;
-  margin-top: 1.75rem;
+  flex: 1 1 16rem;
+  min-width: 10rem;
+  margin: 1.3rem 0.5rem 1.2rem;
 }
 
-.track input {
+.track input[type="range"] {
   width: 100%;
+  margin: 0;
+  height: 1.5rem;
+  background: transparent;
+  appearance: none;
+}
+
+/* The handle and the track are drawn with tokens: --muted on --paper is the 3:1 a control needs (WCAG 1.4.11). */
+.track input[type="range"]::-webkit-slider-runnable-track {
+  height: 0.35rem;
+  border-radius: 0.2rem;
+  background: var(--muted);
+}
+
+.track input[type="range"]::-moz-range-track {
+  height: 0.35rem;
+  border-radius: 0.2rem;
+  background: var(--muted);
+}
+
+.track input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: -0.375rem;
+  border: 2px solid var(--paper);
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.track input[type="range"]::-moz-range-thumb {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid var(--paper);
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink);
 }
 
 /* The "now" marker: a tick above the track and its word; what lies to the right of it is forecast. */
 .nowTick {
   position: absolute;
-  top: -0.5rem;
+  top: -0.35rem;
   width: 2px;
-  height: 0.8rem;
+  height: 0.7rem;
   margin-left: -1px;
   background: var(--ink);
   pointer-events: none;
@@ -69,8 +146,8 @@
 
 .nowLabel {
   position: absolute;
-  top: -1.6rem;
-  font-size: 0.85rem;
+  top: -1.3rem;
+  font-size: 0.8rem;
   font-weight: 600;
   white-space: nowrap;
   pointer-events: none;
@@ -79,23 +156,48 @@
 /* The data epoch (D9): a tick under the scrubber; the note below says what it means. */
 .epoch {
   position: absolute;
-  bottom: -0.35rem;
+  bottom: -0.2rem;
   width: 2px;
-  height: 0.7rem;
+  height: 0.5rem;
   background: var(--ink);
   pointer-events: none;
 }
 
+/* Day labels under the track: decoration for the eye, the slider's value text says the time. */
+.tick {
+  position: absolute;
+  bottom: -1.3rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (max-width: 47.99rem) {
+  .tickMid {
+    display: none;
+  }
+}
+
 .note {
-  margin: 0.4rem 0;
-  font-size: 0.85rem;
+  margin: 0.2rem 0;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
 .buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.35rem;
+}
+
+.buttons button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0 0.6rem;
 }
 
 .buttons button[aria-disabled="true"] {

@@ -1,14 +1,37 @@
 .legend {
   border: 1px solid var(--line);
   background: var(--paper);
-  padding: 0.4rem 0.6rem;
+  padding: 0.3rem 0.6rem;
   margin: 0.5rem 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .legend summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   cursor: pointer;
   font-weight: 600;
+  list-style: none;
+}
+
+.legend summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The chevron is CSS: down when closed, up when open. */
+.legend summary::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  transform: translateY(-0.1rem) rotate(45deg);
+}
+
+.legend[open] > summary::after {
+  transform: translateY(0.1rem) rotate(-135deg);
 }
 
 .list {
@@ -61,4 +84,23 @@
   display: inline-flex;
   gap: 0.3rem;
   align-items: center;
+}
+
+/* Over the map's bottom-right corner, above MapLibre's attribution button (2 is its controls; 3 paints over them). */
+.overlay {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 2.75rem;
+  z-index: 3;
+  box-sizing: border-box;
+  max-width: 20rem;
+  max-height: calc(100% - 3.5rem);
+  margin: 0;
+  overflow: auto;
+}
+
+.overlay .list {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0.15rem;
 }

@@ -2,10 +2,9 @@ import type { SeriesForecast, StationRecent } from '@rws/contracts';
 import { formatLocal } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
-import { LADDER, STATE_COLOUR } from '../legend/palette.ts';
 
-// The pure part of the station chart (P10a T6): points, one forecast run with its band, the references as lines and
-// bands. Values arrive in canonical units; `conv` brings one to the native unit the page shows. Nothing here draws.
+// The pure part of the station chart (P10a T6): points and one forecast run with its band (the references are in
+// thresholds.ts since P10d). Values arrive in canonical units; `conv` brings one to the native unit the page shows. Nothing here draws.
 
 export type Pt = [number, number | null];
 type RecentSeries = StationRecent['series'][number];
@@ -13,6 +12,24 @@ type RecentRun = NonNullable<RecentSeries['run']>;
 type AsofRun = NonNullable<SeriesForecast['run']>;
 
 const H48 = 48 * 3_600_000;
+/** recent.json holds 7 days: a span that starts more than this before its first point asks the API for the gap. */
+const GAP_MS = 3_600_000;
+
+/**
+ * The span asks the API for the part before recent.json's first point: only when that part is longer than an hour
+ * and the series has data from before it (`dataSince`).
+ */
+export const recentGap = (spanFrom: number, firstRecent: number | undefined, since: number | undefined): boolean =>
+  firstRecent !== undefined && since !== undefined && firstRecent - spanFrom > GAP_MS && firstRecent - since > GAP_MS;
+
+/** The chart's time axis: the span, stretched to the end of the run it shows. */
+export const xRange = (span: { from: number; to: number }, runEnd: number | undefined) => ({
+  min: span.from,
+  max: Math.max(span.to, runEnd ?? span.to),
+});
+
+/** An instant the axis shows: its vertical line and its legend key exist only then. */
+export const onAxis = (at: number, x: { min: number; max: number }): boolean => at >= x.min && at <= x.max;
 
 /** One run in columns, whichever file it came from (recent.json's `run` or `/series/{id}/forecast?asof=`). */
 export interface Run {
@@ -102,48 +119,6 @@ export function forecastView(run: Run, conv: (v: number) => number, base: number
   return { provider, estimate, lower, spread, hasBand, end: median[median.length - 1]?.[0] ?? limit };
 }
 
-type Ref = RecentSeries['references'][number];
-
-export interface Marks {
-  lines: { value: number; text: string }[];
-  bands: { from: number; to: number; colour: string }[];
-}
-
-/** The reference's quantity unit in canonical terms: cm for a stage or level, m³/s for a discharge; else not shown. */
-const canonicalUnit = (unit: string, quantity: 'H' | 'Q'): boolean =>
-  quantity === 'H' ? unit === 'cm' : /^m(3|³)\/s$/.test(unit);
-
-/**
- * The references of a series as lines (label: the source's raw label, then our kind text) and, per source, alert
- * bands between consecutive levels at 15 % opacity. ponytail: every reference counts as a level, so a low-water
- * reference also starts a band; refine when the registry marks the kind (statistical lows).
- */
-export function referenceMarks(
-  refs: readonly Ref[],
-  quantity: 'H' | 'Q',
-  conv: (v: number) => number,
-  ours: (r: Ref) => string | undefined,
-  owner: (source: string) => boolean,
-  locale: Locale,
-): Marks {
-  const usable = refs.filter((r) => canonicalUnit(r.unit, quantity)).map((r) => ({ r, v: conv(r.value) }));
-  const lines = usable.map(({ r, v }) => ({
-    value: v,
-    text:
-      m.chart_reference({ label: r.label ?? r.kind, kind: ours(r) ?? r.kind }, { locale }) +
-      (owner(r.source) ? ` · ${m.owner_badge({}, { locale })}` : ''),
-  }));
-  const bands: Marks['bands'] = [];
-  for (const source of new Set(usable.map((u) => u.r.source))) {
-    const levels = [...new Set(usable.filter((u) => u.r.source === source).map((u) => u.v))].sort((a, b) => a - b);
-    levels.slice(0, -1).forEach((from, i) => {
-      const state = LADDER[Math.min(3 + i, LADDER.length - 1)] as keyof typeof STATE_COLOUR;
-      bands.push({ from, to: levels[i + 1] as number, colour: STATE_COLOUR[state] });
-    });
-  }
-  return { lines, bands };
-}
-
 /** Raw observations inside [from, to] as chart points. */
 export function observedPoints(
   ts: readonly (string | number)[],
@@ -158,4 +133,13 @@ export function observedPoints(
     if (ms >= from && ms <= to) out.push([ms, conv(value[i] as number)]);
   });
   return out;
+}
+
+/**
+ * The older points of the API followed by recent.json's own: both sorted, and where they meet (the boundary instant,
+ * or an overlap) recent.json's point is the one kept (P10d: a span beyond recent.json's 7 days).
+ */
+export function mergeHistory(older: readonly Pt[], recent: readonly Pt[]): Pt[] {
+  const first = recent[0]?.[0];
+  return [...(first === undefined ? older : older.filter(([t]) => t < first)), ...recent];
 }

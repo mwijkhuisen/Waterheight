@@ -136,7 +136,12 @@ test('the "owner only" badge is on the BE-3 station: the map, the table, the pan
   await expect(panel.locator('p > strong').first()).not.toHaveText(badge);
   // The popup says it in words (a ring is never the only cue), and the legend has its key.
   await expect(page.locator('.maplibregl-popup-content > p').last()).toContainText(badge);
-  await expect(page.locator('details').getByText(msg('nl', 'legend_owner'))).toBeVisible();
+  // (the legend starts collapsed, P10d KG-251: opened to read its key)
+  const mapLegend = page
+    .locator('details')
+    .filter({ has: page.locator('summary', { hasText: msg('nl', 'legend_heading') }) });
+  await mapLegend.locator('summary').click();
+  await expect(mapLegend.getByText(msg('nl', 'legend_owner'))).toBeVisible();
   // The table row.
   await page.getByRole('button', { name: 'Tabel', exact: true }).click();
   const row = page.locator('table tbody tr', { has: page.locator('button[aria-pressed="true"]') });

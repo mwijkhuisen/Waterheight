@@ -1,23 +1,26 @@
 import { type ApiStation, floorBucket, RiversManifest } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { loadRuntimeConfig, type RuntimeConfig } from '../config/runtime.ts';
 import { stationHorizon } from '../forecast.ts';
 import { quantise, STEP_MS, toUrlT } from '../time/time.ts';
 import type { Mode } from '../url/url.ts';
 import {
   browserFetch,
+  graphOf,
   HttpError,
   loadMeta,
-  loadReachTravel,
+  loadReachesFile,
   loadRecent,
-  loadRivers,
   loadSnapshot,
   loadSources,
   loadStations,
   loadStatusMode,
   loadStatusPage,
   loadWarnings,
+  type ReachesRead,
+  riversOf,
+  travelOf,
   type WebMeta,
 } from './chain.ts';
 import { type Change, changesAt } from './change.ts';
@@ -110,16 +113,27 @@ export const useRiversManifest = () =>
   });
 
 /**
- * The installed river release (P10a T4): its manifest (the tile file of the `rivers` layer) and its river list (ids
- * and names for `?river=`). An error means no river layer and no chip, never an error on the page.
+ * The installed river release's manifest and reaches file, read once (P10d). The same file serves both audiences, so
+ * the key carries none. Each reader below selects (and parses) its own section: a bad one fails only that reader.
  */
-export const useRivers = () =>
+const useReachesFile = <T>(select: (read: ReachesRead) => T, enabled = true) =>
   useQuery({
-    queryKey: ['rivers'],
-    queryFn: ({ signal }) => loadRivers(browserFetch, signal),
+    queryKey: ['reaches'],
+    queryFn: ({ signal }) => loadReachesFile(browserFetch, signal),
+    select,
+    enabled,
     retry: false,
     staleTime: 300_000,
   });
+
+/**
+ * The installed river release (P10a T4): its manifest (the tile file of the `rivers` layer) and its river list (ids
+ * and names for `?river=`). An error means no river layer and no chip, never an error on the page.
+ */
+export const useRivers = () => useReachesFile(riversOf);
+
+/** The stations and reaches of the river graph, for the neighbours of a station (P10d); lenient, never an error. */
+export const useReachGraph = () => useReachesFile(graphOf);
 
 /**
  * `?river=` once the river list has answered (plan C17): kept while it loads, dropped when the list failed or does
@@ -169,13 +183,9 @@ export const useStatusPage = () => {
 /** The travel times of the installed reaches file (P10b Method page): an error shows the page's own notice. */
 export const useReachTravel = () => {
   const c = useContracts();
-  return useQuery({
-    queryKey: ['reach-travel', c?.audience],
-    queryFn: ({ signal }) => loadReachTravel(browserFetch, signal, c),
-    enabled: c !== undefined,
-    staleTime: 300_000,
-    retry: false,
-  });
+  // A stable select: an inline one would re-parse the pairs on every render (review round 1).
+  const select = useCallback((read: ReachesRead) => travelOf(read, c), [c]);
+  return useReachesFile(select, c !== undefined);
 };
 
 /** The source ids of owner audience (empty on the public site and until sources.json has answered). */
@@ -378,14 +388,14 @@ export const useSeries = (id: number, from: number, to: number, enabled = true) 
 const SIX_HOURS = 36 * STEP_MS;
 
 /**
- * The chart's span: 7 days up to the next 6-hour boundary after `t`, so stepping
+ * The chart's span: `days` (7 unless the panel's period says otherwise) up to the next 6-hour boundary after `t`, so stepping
  * or playing inside six hours asks nothing new. `to` never passes the API's
  * limit, the server's now + 10 minutes (`serverNow` is `meta.now`, never this
  * browser's clock, which may run ahead of it).
  */
-export function chartSpan(t: number, displayStart: number, serverNow: number): { from: number; to: number } {
+export function chartSpan(t: number, displayStart: number, serverNow: number, days = 7): { from: number; to: number } {
   const to = Math.min(Math.floor(t / SIX_HOURS) * SIX_HOURS + SIX_HOURS, quantise(serverNow + STEP_MS));
-  return { from: Math.max(displayStart, to - 7 * 24 * 3_600_000), to };
+  return { from: Math.max(displayStart, to - days * 24 * 3_600_000), to };
 }
 
 /**

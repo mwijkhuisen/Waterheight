@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   forecastView,
   fromAsofRun,
+  mergeHistory,
   observedPoints,
+  onAxis,
   type Run,
-  referenceMarks,
+  recentGap,
   runName,
+  xRange,
 } from '../src/features/station/chartModel.ts';
 import { creditLines, dhValue, trendGlyph } from '../src/features/station/provenance.ts';
+import { seriesRows } from '../src/features/station/seriesRows.ts';
 import { httpsHref } from '../src/lib/href.ts';
 
 const H = 3_600_000;
@@ -76,38 +80,98 @@ describe('fromAsofRun', () => {
   });
 });
 
-describe('referenceMarks', () => {
-  const refs = [
-    { source: 'NL-4', kind: 'NL4_FROM', value: 300, unit: 'cm', priority: 1, label: 'Licht {c}' },
-    { source: 'NL-4', kind: 'NL4_FROM', value: 100, unit: 'cm', priority: 1, label: null },
-    { source: 'NL-4', kind: 'X', value: 5, unit: 'm3/s', priority: 1, label: 'wrong unit' },
-  ];
-  it('lines keep the raw label as text, bands join consecutive levels, other units are skipped', () => {
-    const k = referenceMarks(
-      refs,
-      'H',
-      (v) => v / 100,
-      () => 'ours',
-      (s) => s === 'NL-4',
-      'en',
-    );
-    expect(k.lines).toHaveLength(2);
-    expect(k.lines[0]?.text).toContain('Licht {c}');
-    expect(k.lines[0]?.text).toContain('ours');
-    expect(k.lines[0]?.text).toContain('owner only');
-    expect(k.bands).toEqual([{ from: 1, to: 3, colour: expect.stringMatching(/^#/) }]);
+describe('mergeHistory', () => {
+  it('puts the older points first and keeps recent.json’s point at the boundary instant', () => {
+    const older: [number, number][] = [
+      [1, 10],
+      [2, 20],
+      [3, 99],
+    ];
+    const recent: [number, number][] = [
+      [3, 30],
+      [4, 40],
+    ];
+    expect(mergeHistory(older, recent)).toEqual([
+      [1, 10],
+      [2, 20],
+      [3, 30],
+      [4, 40],
+    ]);
   });
-  it('a discharge takes m3/s references', () => {
-    expect(
-      referenceMarks(
-        refs,
-        'Q',
-        id,
-        () => undefined,
-        () => false,
-        'nl',
-      ).lines,
-    ).toHaveLength(1);
+
+  it('is either list alone when the other is empty', () => {
+    expect(mergeHistory([[1, 1]], [])).toEqual([[1, 1]]);
+    expect(mergeHistory([], [[2, 2]])).toEqual([[2, 2]]);
+  });
+});
+
+// Review round 1: when the panel asks the API for the part of its span before recent.json.
+describe('recentGap', () => {
+  const H = 3_600_000;
+  const first = 100 * H;
+
+  it('asks when the span starts over an hour before recent.json and the series has older data', () => {
+    expect(recentGap(first - 48 * H, first, first - 30 * 24 * H)).toBe(true);
+  });
+
+  it('does not ask when the series starts inside the window, or within the hour before it', () => {
+    expect(recentGap(first - 48 * H, first, first + H)).toBe(false);
+    expect(recentGap(first - 48 * H, first, first - H)).toBe(false);
+    expect(recentGap(first - 48 * H, first, first - H - 1)).toBe(true);
+  });
+
+  it('does not ask when the span starts inside recent.json or within the hour before it', () => {
+    expect(recentGap(first + H, first, 0)).toBe(false);
+    expect(recentGap(first - H, first, 0)).toBe(false);
+  });
+
+  it('does not ask without a first point or without dataSince', () => {
+    expect(recentGap(0, undefined, 0)).toBe(false);
+    expect(recentGap(0, first, undefined)).toBe(false);
+  });
+});
+
+describe('xRange and onAxis', () => {
+  it('is the span, stretched to the run end only when the run reaches further', () => {
+    expect(xRange({ from: 10, to: 20 }, undefined)).toEqual({ min: 10, max: 20 });
+    expect(xRange({ from: 10, to: 20 }, 30)).toEqual({ min: 10, max: 30 });
+    expect(xRange({ from: 10, to: 20 }, 15)).toEqual({ min: 10, max: 20 });
+  });
+
+  it('shows an instant only inside the axis, both ends included', () => {
+    const x = { min: 10, max: 20 };
+    expect([9, 10, 15, 20, 21].map((at) => onAxis(at, x))).toEqual([false, true, true, true, false]);
+  });
+});
+
+describe('seriesRows', () => {
+  const view = forecastView(run, id, NOW);
+
+  it('lists the union of measured and forecast instants, newest first, each once', () => {
+    const rows = seriesRows(
+      [
+        [NOW - H, 7],
+        [NOW, 8],
+        [NOW + 2 * H, 9],
+      ],
+      view,
+    );
+    expect(rows.map((r) => r.ts)).toEqual([NOW + 3 * H, NOW + 2 * H, NOW + H, NOW, NOW - H]);
+    // the junction instant (NOW + 2 h) belongs to the provider part and the estimate part: still one row
+    expect(rows.filter((r) => r.ts === NOW + 2 * H)).toHaveLength(1);
+  });
+
+  it('folds the band into the forecast cell and leaves the empty cells null', () => {
+    const rows = seriesRows([[NOW, 8]], view);
+    const at = (h: number) => rows.find((r) => r.ts === NOW + h * H);
+    expect(at(0)).toMatchObject({ measured: 8, forecast: 1, band: [0, 2] });
+    expect(at(1)).toMatchObject({ measured: null, forecast: 2, band: [1, 3] });
+    // a forecast value that is null stays an empty cell
+    expect(at(2)?.forecast).toBeNull();
+  });
+
+  it('has only measured rows without a run', () => {
+    expect(seriesRows([[NOW, 5]], undefined)).toEqual([{ ts: NOW, measured: 5, forecast: null, band: null }]);
   });
 });
 

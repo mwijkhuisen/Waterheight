@@ -83,6 +83,16 @@ The fallback behind both is `system-ui, sans-serif`.
 
 **Deviation from the document:** it puts the files under `apps/web/public/fonts/`. They are imported from `base.css` instead, so Vite gives them hashed names under `/assets/`, which Caddy serves immutable; `public/` files keep their names and are revalidated on every use. To update a font: download the new tarball, check its integrity against the registry, copy the six files and the licence, regenerate `SHA256SUMS`, bump `FONTS_VERSION` in `notices.ts`.
 
+## 8. Viewer layout (P10d)
+
+The station panel, the map legend and the timebar follow the layout patterns of waterinfo.rws.nl (issue #96), in these tokens. Only patterns are taken: no RWS logo, icon, font, CSS or text; the icons are our own simple SVG shapes and the words are our own, in Paraglide.
+
+- **Station panel:** a header band in `--line` with `--ink` text and a round close button (`--paper` with an `--ink` border); the body on `--paper`. Grafiek|Tabel is a segmented control of two radios: the checked segment is `--accent` with `--accent-ink` text, the other `--paper` with an `--accent` border and text. The legend boxes (Reeksen, Grenswaarden) and the neighbour rows are bordered with `--line`; secondary text is `--muted`. `--water` is not used for text in the panel.
+- **Chart colours:** the data colours stay the colour-blind checked ones of the map (`features/station/colours.ts`): measured is teal `#01665e` and solid, a forecast is purple `#542788` and dashed, an estimate dotted. Threshold zones use the state palette of the map (`features/legend/palette.ts`) at 15 % opacity, never a brand colour.
+- **Map legend:** `--paper` with a `--line` border, over the bottom-right corner of the map and above MapLibre's attribution button, collapsed at the start (KG-251); the summary has a CSS chevron in `--ink`.
+- **Timebar:** `--paper` with a `--line` top border, docked at the bottom in a window at least 48rem wide and 32rem high. The handle is `--ink`, the track `--muted` (3:1 on `--paper`, WCAG 1.4.11); notes and day labels are `--muted`. `--water` is not used.
+- No token was added.
+
 ## 7. Open items (owner)
 
 Tracked in `docs/known-gaps.md` (P10c): the domains rivierkijker.nl/.com/.eu and the BOIP register; the repository's About text; the outlined lockups and the app-icon PNGs; the LU stations on production after the KG-133 replays.

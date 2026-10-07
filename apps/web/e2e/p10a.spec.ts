@@ -17,6 +17,7 @@ import {
   start,
   stationList,
   textHosts,
+  timebarTime,
   type W,
   where,
   XSS,
@@ -163,6 +164,9 @@ for (const locale of ['nl', 'en'] as const)
     await open(page, locale === 'nl' ? '/' : '/en/', locale === 'nl' ? undefined : 'Timeline');
     await mapReady(page);
     const box = legend(page, locale);
+    // collapsed at the start (P10d, KG-251): opened to read it
+    await expect(box).not.toHaveAttribute('open', '');
+    await box.locator('summary').click();
     await expect(box).toHaveAttribute('open', '');
     const text = box.locator('li, p');
     // State mode: the six states, and the two notes that are always there (the honesty note and the NL-4 disclaimer).
@@ -205,6 +209,8 @@ for (const locale of ['nl', 'en'] as const)
     await expect(slider(page, locale === 'nl' ? undefined : 'Timeline')).toBeVisible();
     await expect(legend(page, locale).getByText(msg(locale, 'legend_warnings'), { exact: true })).toHaveCount(0);
     await page.goto(`${locale === 'nl' ? '/' : '/en/'}?t=${at(2)}&mode=state`);
+    // a new page: the legend is collapsed again
+    await legend(page, locale).locator('summary').click();
     await expect(legend(page, locale).getByText(msg(locale, 'legend_forecast'), { exact: true })).toBeVisible();
     await finish(page, s);
   });
@@ -232,7 +238,10 @@ test('a forecast after now is labelled with its agency, its issue or fetch time 
   expect(median?.name).toMatch(msgRx('nl', 'chart_run_fetched', { agency: 'RWS' }));
   expect(estimate?.name).toMatch(/ \(schatting\)$/);
   await expect(panelOf(page).getByText(msg('nl', 'forecast_estimate_note'), { exact: true })).toBeVisible();
-  await expect(panelOf(page).locator('p', { hasText: /^RWS · opgehaald / })).toHaveCount(1);
+  // (P10d: the run's name sits in the Reeksen legend, beside its estimate part, instead of a paragraph under the chart)
+  const keys = panelOf(page).locator('li', { hasText: /^RWS · opgehaald / });
+  await expect(keys).toHaveCount(2);
+  await expect(keys.filter({ hasText: /\(schatting\)$/ })).toHaveCount(1);
 
   await stationList(page).selectOption('nl.e2e.dst');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
@@ -494,6 +503,7 @@ const AXE_VIEWS: [title: string, run: (page: Page) => Promise<void>, tall?: true
     async (page) => {
       await open(page, '/');
       await mapReady(page);
+      await legend(page, 'nl').locator('summary').click();
       await expect(legend(page, 'nl')).toHaveAttribute('open', '');
     },
   ],
@@ -502,6 +512,7 @@ const AXE_VIEWS: [title: string, run: (page: Page) => Promise<void>, tall?: true
     async (page) => {
       await open(page, '/en/?mode=q', 'Timeline');
       await mapReady(page);
+      await legend(page, 'en').locator('summary').click();
       await expect(legend(page, 'en')).toHaveAttribute('open', '');
     },
   ],
@@ -560,6 +571,7 @@ test('the hostile strings are inert wherever they show: map, table, panel, legen
   // ...in the table (a row button, a cell) and the legend open...
   await page.getByRole('button', { name: 'Tabel', exact: true }).click();
   await expect(page.locator('table tbody th button', { hasText: XSS })).toHaveCount(1);
+  await legend(page, 'nl').locator('summary').click();
   await expect(legend(page, 'nl')).toHaveAttribute('open', '');
   await expectInert(page, s);
   // ...and the chart's own canvas text (the tooltip is plain text): drawn, never parsed.
@@ -666,14 +678,14 @@ test('the two 02:30s of 2026-10-25 are different in the URL, the label and the v
   await open(page, '/?t=2026-10-25T00:30Z&s=nl.e2e.dst');
   const value = () => panelOf(page).getByRole('region', { name: 'Waterstand' }).locator('strong');
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /^.*02:30 CEST$/);
-  await expect(page.locator('time').first()).toHaveAttribute('datetime', '2026-10-25T00:30:00.000Z');
+  await expect(timebarTime(page)).toHaveAttribute('datetime', '2026-10-25T00:30:00.000Z');
   await expect(value()).toHaveText('111');
   const first = where(page);
 
   await page.goto('/?t=2026-10-25T01:30Z&s=nl.e2e.dst');
   await expect(slider(page)).toBeVisible();
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /^.*02:30 CET$/);
-  await expect(page.locator('time').first()).toHaveAttribute('datetime', '2026-10-25T01:30:00.000Z');
+  await expect(timebarTime(page)).toHaveAttribute('datetime', '2026-10-25T01:30:00.000Z');
   await expect(value()).toHaveText('222');
   expect(where(page)).not.toBe(first);
   // The label of each in the table caption as well (text, in the page's zone).
