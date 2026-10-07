@@ -1,23 +1,31 @@
 import { expect, type Page, test } from '@playwright/test';
 import {
+  chooseMode,
+  chooseView,
   drawnText,
+  expandTimebar,
   expectInert,
   expectNoSeriousAxe,
   featureState,
   finish,
   mapReady,
+  modeRadio,
+  modeSummary,
   msg,
   msgRx,
   NOW,
   open,
   panelOf,
   param,
+  pickStation,
+  searchBox,
+  searchButton,
   settled,
   slider,
   start,
-  stationList,
   textHosts,
   timebarTime,
+  viewSummary,
   type W,
   where,
   XSS,
@@ -95,10 +103,10 @@ async function warningAreas(page: Page): Promise<string[]> {
 }
 
 /** Tab until `match` holds for the focused element (a bound, so a missing tab stop fails instead of hanging). */
-async function tabTo(page: Page, match: () => boolean, what: string) {
+async function tabTo(page: Page, match: () => boolean, what: string, key = 'Tab') {
   let tabs = 0;
   while (!(await page.evaluate(match)) && tabs < 60) {
-    await page.keyboard.press('Tab');
+    await page.keyboard.press(key);
     tabs++;
   }
   expect(await page.evaluate(match), `${what} is reachable by Tab (after ${tabs} presses)`).toBe(true);
@@ -112,7 +120,7 @@ test('the mode radios set ?mode=, the marker paint and the table column', async 
   await mapReady(page);
 
   // status.json says "dh": the default is the change mode, and the URL stays clean until the user chooses.
-  await expect(radio(page, 'nl', 'delta')).toBeChecked();
+  await expect(await modeRadio(page, 'delta')).toBeChecked();
   expect(param(page, 'mode')).toBeNull();
   await expect.poll(() => circleColour(page)).toContain('dhBin');
   expect(await circleColour(page)).not.toContain('qSize');
@@ -121,11 +129,11 @@ test('the mode radios set ?mode=, the marker paint and the table column', async 
   expect(await featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true, qSize: null, owner: false });
   expect(await featureState(page, FR)).toMatchObject({ level: 3, section: true });
 
-  await radio(page, 'nl', 'state').check();
+  await chooseMode(page, 'state', 'nl');
   await expect.poll(() => param(page, 'mode')).toBe('state');
   await expect.poll(() => circleColour(page)).toContain('"level"');
   expect(await circleColour(page)).not.toContain('dhBin');
-  await radio(page, 'nl', 'q').check();
+  await chooseMode(page, 'q', 'nl');
   await expect.poll(() => param(page, 'mode')).toBe('q');
   await expect.poll(() => circleColour(page)).toContain('qSize');
   expect(await circleColour(page)).not.toContain('dhBin');
@@ -135,7 +143,7 @@ test('the mode radios set ?mode=, the marker paint and the table column', async 
   // The table's mode column follows (the station in the URL brings its page into view).
   await page.goto(`/?s=${LOBITH}&mode=q`);
   await expect(slider(page)).toBeVisible();
-  await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+  await chooseView(page, 'table');
   const table = page.locator('table');
   await expect(table.locator('thead th').nth(4)).toHaveText(msg('nl', 'col_q'));
   const lobith = table
@@ -143,10 +151,10 @@ test('the mode radios set ?mode=, the marker paint and the table column', async 
     .filter({ has: page.getByRole('button', { name: 'Lobith, Bovenrijn, Tolkamer', exact: true }) });
   await expect(lobith).toHaveCount(2); // its stage and its discharge
   await expect(lobith.locator('td:nth-child(5)')).toHaveText(['–', /^93\d([.,]\d+)? m³\/s$/]);
-  await radio(page, 'nl', 'delta').check();
+  await chooseMode(page, 'delta', 'nl');
   await expect(table.locator('thead th').nth(4)).toHaveText(msg('nl', 'col_dh'));
   await expect(lobith.locator('td:nth-child(5)')).toHaveText([/\d/, /\d/]);
-  await radio(page, 'nl', 'state').check();
+  await chooseMode(page, 'state', 'nl');
   await expect(table.locator('thead th').nth(4)).toHaveText(msg('nl', 'col_state'));
   await expect(lobith.locator('td:nth-child(5)')).toHaveText([msg('nl', 'state_low'), msg('nl', 'state_low')]);
   await finish(page, s);
@@ -182,11 +190,11 @@ for (const locale of ['nl', 'en'] as const)
     await expect(box.getByText(msg(locale, 'legend_owner'), { exact: false })).toHaveCount(0);
 
     // Change mode: the seven bins in words; discharge mode: the four size classes and "no discharge".
-    await radio(page, locale, 'delta').check();
+    await chooseMode(page, 'delta', locale);
     for (const bin of ['fall_strong', 'fall', 'fall_slight', 'steady', 'rise_slight', 'rise', 'rise_strong'])
       await expect(box.getByText(msg(locale, `dh_${bin}`), { exact: true })).toBeVisible();
     await expect(box.getByText(msg(locale, 'state_low'), { exact: true })).toHaveCount(0);
-    await radio(page, locale, 'q').check();
+    await chooseMode(page, 'q', locale);
     for (const item of [
       msg(locale, 'legend_q_lt', { v: 10 }),
       msg(locale, 'legend_q_range', { lo: 10, hi: 100 }),
@@ -243,7 +251,7 @@ test('a forecast after now is labelled with its agency, its issue or fetch time 
   await expect(keys).toHaveCount(2);
   await expect(keys.filter({ hasText: /\(schatting\)$/ })).toHaveCount(1);
 
-  await stationList(page).selectOption('nl.e2e.dst');
+  await pickStation(page, 'E2E DST', /E2E DST/);
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   await settled(page);
   await expect
@@ -320,8 +328,8 @@ test('a deep link ?t&s&mode&river reproduces the view and the language switch ke
   await open(page, path);
   await expect(slider(page)).toHaveValue(String(Date.parse('2026-10-25T00:30:00Z')));
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /02:30 CEST$/);
-  await expect(stationList(page)).toHaveValue('nl.e2e.dst');
-  await expect(radio(page, 'nl', 'q')).toBeChecked();
+  // (P10e: the station <select> is gone; the panel heading below and the selected marker say which station is chosen)
+  await expect(await modeRadio(page, 'q')).toBeChecked();
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   await expect(page.getByText(msg('nl', 'river_chip', { name: 'Eems' }), { exact: true })).toBeVisible();
   await expect.poll(() => featureState(page, 'nl.e2e.dst')).toMatchObject({ has: true, selected: true });
@@ -357,7 +365,7 @@ test('a deep link ?t&s&mode&river reproduces the view and the language switch ke
   );
   await page.getByRole('link', { name: 'English' }).click();
   await expect(slider(page, 'Timeline')).toHaveAttribute('aria-valuetext', /02:30 CEST$/);
-  await expect(radio(page, 'en', 'q')).toBeChecked();
+  await expect(await modeRadio(page, 'q', 'en')).toBeChecked();
   await expect(page.getByText(msg('en', 'river_chip', { name: 'Ems' }), { exact: true })).toBeVisible();
   expect(where(page)).toBe('/en/?t=2026-10-25T00:30Z&s=nl.e2e.dst&mode=q&river=ems');
 
@@ -428,17 +436,17 @@ test('the German area name and the class of a gauge stay raw beside our translat
     msg('nl', 'label_translation', { raw: `LHP Hochwasserwarnung ${XSS}`, ours: msg('nl', 'lbl_de_6_alert_4') }),
   );
   // (the German name is in the panel's rows, and the popup says the basis of the discharge state, which is the area;
-  // the station list holds the hostile station name as an option's text)
+  // P10e: the station list is gone, so no option holds the hostile station name any more)
   const hosts = await textHosts(page, 'onerror=alert(1)');
   expect(hosts).toContain('dd');
-  expect(hosts.filter((h) => h !== 'dd' && h !== 'p' && h !== 'option')).toEqual([]);
+  expect(hosts.filter((h) => h !== 'dd' && h !== 'p')).toEqual([]);
   await expectInert(page, s);
   await finish(page, s);
 });
 
 // ---------------------------------------------------------------- the keyboard
 
-test('the mode radios, the station list and the focus return work from the keyboard alone', async ({
+test('the mode radios, the station search and the focus return work from the keyboard alone', async ({
   page,
   context,
   baseURL,
@@ -447,7 +455,16 @@ test('the mode radios, the station list and the focus return work from the keybo
   await open(page, '/');
   await mapReady(page);
 
-  // Tab to the radio group (the checked one is the tab stop), and the arrow keys move and choose.
+  // P10e: Tab to the mode disclosure's summary, Enter opens it; Tab to the radio group (the checked one is the tab
+  // stop), and the arrow keys move and choose without closing it.
+  await tabTo(
+    page,
+    () =>
+      document.activeElement?.tagName === 'SUMMARY' && (document.activeElement.textContent ?? '').startsWith('Kaart:'),
+    'the mode summary',
+  );
+  await expect(modeSummary(page)).toBeFocused();
+  await page.keyboard.press('Enter');
   await tabTo(
     page,
     () => document.activeElement instanceof HTMLInputElement && document.activeElement.name === 'map-mode',
@@ -463,21 +480,42 @@ test('the mode radios, the station list and the focus return work from the keybo
   await expect.poll(() => param(page, 'mode')).toBe('state');
   await expect.poll(() => circleColour(page)).toContain('"level"');
 
-  // The station list: the arrow keys choose a station (the focus stays on the list).
-  await tabTo(page, () => document.activeElement instanceof HTMLSelectElement, 'the station list');
+  // Escape closes the disclosure and returns the focus to its summary.
+  await page.keyboard.press('Escape');
+  await expect(radio(page, 'nl', 'state')).toBeHidden();
+  await expect(modeSummary(page)).toBeFocused();
+
+  // The station search: the magnifier is reachable by Tab (backwards from the mode summary: the bar comes first), Enter
+  // opens it, the arrow keys move through the results and Enter chooses a station (the focus goes to the panel).
+  await tabTo(
+    page,
+    () =>
+      document.activeElement?.getAttribute('aria-expanded') === 'false' &&
+      document.activeElement.tagName === 'BUTTON' &&
+      document.activeElement.getAttribute('aria-label') === 'Zoek een station',
+    'the magnifier',
+    'Shift+Tab',
+  );
+  await expect(searchButton(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(searchBox(page)).toBeFocused();
+  await page.keyboard.type('E2E');
   await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
   await expect.poll(() => param(page, 's')).not.toBeNull();
   await expect(panelOf(page)).toHaveCount(1);
-  await expect(stationList(page)).toBeFocused();
+  await expect(panelOf(page).getByRole('heading', { level: 2 })).toBeFocused();
   await panelOf(page)
     .getByRole('button', { name: msg('nl', 'panel_close') })
     .focus();
   await page.keyboard.press('Enter');
   await expect.poll(() => param(page, 's')).toBeNull();
-  await expect(stationList(page)).toBeFocused(); // a marker has no focus of its own: the list it is
+  await expect(searchButton(page)).toBeFocused(); // a marker has no focus of its own: the magnifier it is
 
   // The table: Enter on a station button opens the panel (focus on its heading); Tab, Enter on "close" gives the focus
-  // back to the button that opened it.
+  // back to the button that opened it. (The view disclosure: its summary by Enter, then the "Tabel" button.)
+  await viewSummary(page).focus();
+  await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Tabel', exact: true }).focus();
   await page.keyboard.press('Enter');
   const opener = page.locator('table tbody th button').nth(1);
@@ -520,7 +558,7 @@ const AXE_VIEWS: [title: string, run: (page: Page) => Promise<void>, tall?: true
     'the table (state mode)',
     async (page) => {
       await open(page, '/?mode=state');
-      await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+      await chooseView(page, 'table');
       await expect(page.locator('table tbody tr')).toHaveCount(100);
     },
     true,
@@ -528,6 +566,9 @@ const AXE_VIEWS: [title: string, run: (page: Page) => Promise<void>, tall?: true
   [
     'the station panel with the 24-hour change next to the map',
     async (page) => {
+      // (1440 px wide: at 1024 px the map centres these stations under the drawer, and the popup's close button with them,
+      // which axe cannot judge: reported as a product observation in the P10e spec notes)
+      await page.setViewportSize({ width: 1440, height: 900 });
       await open(page, `/?s=${DE}&mode=delta`);
       await mapReady(page);
       await expect(panelOf(page).getByRole('heading', { level: 2, name: 'RHEINWEILER' })).toBeVisible();
@@ -537,6 +578,7 @@ const AXE_VIEWS: [title: string, run: (page: Page) => Promise<void>, tall?: true
   [
     'the French station panel (section, unverified zero)',
     async (page) => {
+      await page.setViewportSize({ width: 1440, height: 900 }); // (as above)
       await open(page, `/en/?s=${FR}&mode=state`, 'Timeline');
       await mapReady(page);
       await expect(panelOf(page).getByText('IGN69')).toBeVisible();
@@ -566,16 +608,30 @@ test('the hostile strings are inert wherever they show: map, table, panel, legen
   await open(page, `/?s=nl.e2e.xss&river=e2e-xss-river&t=${at(0)}`);
   await mapReady(page);
   await expect(page.getByText(msg('nl', 'river_chip', { name: XSS }), { exact: true })).toBeVisible();
-  expect(await textHosts(page, 'onerror=alert(1)')).toEqual(expect.arrayContaining(['h2', 'option', 'span']));
+  expect(await textHosts(page, 'onerror=alert(1)')).toEqual(expect.arrayContaining(['h2', 'span']));
+  // (P10e: the hostile name is an option's text in the search's result list, nowhere else on top of the above)
+  await searchButton(page).click();
+  await searchBox(page).fill('onerror');
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(1);
+  // (the option is a div[role=option] holding one text node: no element inside it)
+  expect(await textHosts(page, 'onerror=alert(1)')).toEqual(expect.arrayContaining(['div', 'h2', 'span']));
+  expect(
+    await page
+      .getByRole('listbox')
+      .getByRole('option')
+      .evaluate((el) => el.childElementCount),
+  ).toBe(0);
   await expectInert(page, s);
+  await page.keyboard.press('Escape');
+  await expect(searchBox(page)).toHaveCount(0);
   // ...in the table (a row button, a cell) and the legend open...
-  await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+  await chooseView(page, 'table');
   await expect(page.locator('table tbody th button', { hasText: XSS })).toHaveCount(1);
   await legend(page, 'nl').locator('summary').click();
   await expect(legend(page, 'nl')).toHaveAttribute('open', '');
   await expectInert(page, s);
   // ...and the chart's own canvas text (the tooltip is plain text): drawn, never parsed.
-  await page.getByRole('button', { name: 'Kaart', exact: true }).click();
+  await chooseView(page, 'map');
   await settled(page);
   await page.evaluate(async () => {
     const chart = [...((window as unknown as W).__rws?.charts ?? [])][0];
@@ -647,6 +703,7 @@ test('without t the page is live: the note shows, the URL has no t, and "Nu" and
   const s = await start(page, context, baseURL, 'state');
   await open(page, '/');
   const live = page.getByText(msg('nl', 'live_note'), { exact: true });
+  await expandTimebar(page); // (P10e: the live note is in the expanded timebar)
   await expect(live).toBeVisible();
   expect(param(page, 't')).toBeNull();
   await expect(slider(page)).toHaveValue(String(NOW.getTime()));
@@ -665,6 +722,7 @@ test('without t the page is live: the note shows, the URL has no t, and "Nu" and
   // A deep link with a t is a fixed view: no live note either.
   await page.goto('/?t=2026-10-26T10:00Z');
   await expect(slider(page)).toBeVisible();
+  await expandTimebar(page); // (the note would be there if the page were live)
   await expect(page.getByText(msg('nl', 'live_note'), { exact: true })).toHaveCount(0);
   await finish(page, s);
 });
@@ -689,7 +747,7 @@ test('the two 02:30s of 2026-10-25 are different in the URL, the label and the v
   await expect(value()).toHaveText('222');
   expect(where(page)).not.toBe(first);
   // The label of each in the table caption as well (text, in the page's zone).
-  await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+  await chooseView(page, 'table');
   await expect(page.locator('table caption')).toContainText('02:30 CET');
   await finish(page, s);
 });
@@ -737,7 +795,13 @@ test('the public site: no owner banner, no owner badge, no owner station, runtim
   await expect(page.getByText(msg('nl', 'owner_banner'), { exact: true })).toHaveCount(0);
   await expect(page.getByText(msg('nl', 'owner_badge'))).toHaveCount(0);
   await expect(page.getByText(msg('nl', 'legend_owner'))).toHaveCount(0);
-  await expect(stationList(page).locator('option[value^="be.spw."], option[value^="lu.age-json."]')).toHaveCount(0);
+  // (P10e: no station list to read ids from: the API's stations hold no owner id, and the search finds no such station)
+  const api = (await (await request.get('/api/v1/stations')).json()) as { stations: { id: string }[] };
+  expect(api.stations.filter((st) => /^(be\.spw\.|lu\.age-json\.)/.test(st.id))).toEqual([]);
+  await searchButton(page).click();
+  await searchBox(page).fill('be.spw');
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   expect(await featureState(page, 'be.spw.1046')).toEqual({}); // not on the map: MapLibre knows no such feature
   // the owner chunk is never requested on the public site
   expect(

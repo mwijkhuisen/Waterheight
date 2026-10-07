@@ -1,7 +1,34 @@
-import { AxeBuilder } from '@axe-core/playwright';
-import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { expectClean, instrument, type Log } from './clean.ts';
-import { timebarTime } from './helpers.ts';
+import { expect, type Page, test } from '@playwright/test';
+import { expectClean } from './clean.ts';
+import {
+  type W as BaseW,
+  barNav,
+  chooseView,
+  escapeRx,
+  expandTimebar,
+  expectNoSeriousAxe,
+  featureState,
+  finish,
+  type HookChart,
+  mapReady,
+  ms,
+  NOW,
+  open,
+  openAttribution,
+  openMenu,
+  openView,
+  panelOf,
+  pickStation,
+  searchBox,
+  searchButton,
+  slider,
+  start,
+  textHosts,
+  timebarTime,
+  viewSummary,
+  where,
+  withoutWebGL2,
+} from './helpers.ts';
 
 // P4b acceptance (issue #19), on Chromium, Firefox and WebKit, against the e2e
 // build served under the production headers with the e2e api behind it (a real
@@ -13,92 +40,15 @@ import { timebarTime } from './helpers.ts';
 // - a station named as an img tag with an onerror handler is inert in the popup, panel, table and chart tooltip;
 // - 0 CSP violations, same-origin requests only, axe finds no serious or critical issue.
 
-const NOW = new Date('2026-10-26T12:00:00Z');
+type W = BaseW & { __urls?: string[]; __webgl2?: number };
 const RAW_NAME = '<img src=x onerror=alert(1)>';
 const RAW_WATER = '<svg onload=alert(2)>';
 /** The label of the xss station's NL-4 class (its own payload, so the name and water sweeps stay exact). */
 const RAW_BASIS = 'Licht verhoogd (<img src=y onerror=alert(3)>)';
-const escapeRx = (text: string) => text.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** The few MapLibre and ECharts calls the tests make inside the page (the e2e build's `window.__rws`). */
-interface HookMap {
-  getFeatureState(f: { source: string; id: string }): Record<string, unknown>;
-  jumpTo(o: { center: [number, number]; zoom: number }): void;
-  once(event: string, fn: () => void): void;
-  project(lngLat: [number, number]): { x: number; y: number };
-}
-interface HookChart {
-  getOption(): { tooltip?: { renderMode?: string }[]; series?: { data?: [number, number][] }[] } | undefined;
-  dispatchAction(action: object): void;
-  /** zrender's scene: the text elements ECharts has drawn on its canvas. */
-  getZr(): { storage: { getDisplayList(update?: boolean): { style?: { text?: unknown } }[] } };
-}
-type W = Window & { __rws?: { map: HookMap | null; charts: Set<HookChart> }; __urls?: string[]; __webgl2?: number };
 
 // ---------------------------------------------------------------- helpers
 
-interface Session {
-  log: Log;
-  dialogs: string[];
-}
-
-/** Request log and CSP listeners (instrument), the fixed clock, and a record of every dialog the page opens. */
-async function start(page: Page, context: BrowserContext, baseURL: string | undefined): Promise<Session> {
-  const log = await instrument(page, context, baseURL);
-  const dialogs: string[] = [];
-  page.on('dialog', (d) => {
-    dialogs.push(`${d.type()}: ${d.message()}`);
-    void d.dismiss();
-  });
-  await page.clock.setFixedTime(NOW);
-  // P10a: the map's default mode is status.json's. The e2e publisher writes a real one (P10b: classification.mode is
-  // "dh", the change mode), so these specs, which read the state words of the popup and panel, serve a file that says
-  // "state"; the default itself is p10a.spec.ts's.
-  await page.route('**/data/v1/status.json', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: '{"classification":{"mode":"state"}}' }),
-  );
-  return { log, dialogs };
-}
-
-/** No dialog, 0 CSP violations, same-origin requests only. */
-async function finish(page: Page, s: Session) {
-  expect(s.dialogs).toEqual([]);
-  await expectClean(page, s.log);
-}
-
-const slider = (page: Page, name = 'Tijdlijn') => page.getByRole('slider', { name });
-/** The station list; `exact`, because the panel's close button is also named "Station …". */
-const stationList = (page: Page, name = 'Station') => page.getByRole('combobox', { name, exact: true });
-const panelOf = (page: Page) => page.locator('aside');
-
-/** Opens a page and waits for the viewer (the slider exists once meta and stations have arrived). */
-async function open(page: Page, path: string, name?: string) {
-  const response = await page.goto(path);
-  await expect(slider(page, name)).toBeVisible();
-  return response;
-}
-
-/** Path and query of the current URL, e.g. `/en/?t=2026-10-25T01:30Z&s=nl.e2e.dst`. */
-const where = (page: Page) => {
-  const u = new URL(page.url());
-  return u.pathname + u.search;
-};
 const tParam = (page: Page) => new URL(page.url()).searchParams.get('t');
-const ms = (iso: string) => String(Date.parse(iso));
-
-const featureState = (page: Page, id: string) =>
-  page.evaluate((id) => {
-    try {
-      return (window as unknown as W).__rws?.map?.getFeatureState({ source: 'stations', id }) ?? null;
-    } catch {
-      return null;
-    }
-  }, id);
-
-/** The map has its stations and the snapshot of the first `t` has arrived (nl.e2e.xss has a value from 2026-10-24). */
-async function mapReady(page: Page) {
-  await expect.poll(() => featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true });
-}
-
 /** Presses a key on the focused element and waits for the URL it must produce. */
 async function press(
   page: Page,
@@ -135,58 +85,6 @@ const countUrlWrites = () => {
 };
 const urlWrites = (page: Page) => page.evaluate(() => (window as unknown as W).__urls ?? []);
 
-/** The values on screen are those of the page's t (nothing is marked busy) and every chart has drawn its points. */
-async function settled(page: Page) {
-  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
-  await page.waitForFunction(() => {
-    const charts = [...((window as unknown as W).__rws?.charts ?? [])];
-    const panels = document.querySelectorAll('aside div[role="img"]').length;
-    return charts.length === panels && charts.every((c) => (c.getOption()?.series?.[0]?.data?.length ?? 0) > 0);
-  });
-}
-
-/** Replaces canvas.getContext so 'webgl2' answers null (everything else is untouched). */
-const withoutWebGL2 = () => {
-  const get = HTMLCanvasElement.prototype.getContext as (this: HTMLCanvasElement, ...a: unknown[]) => unknown;
-  (HTMLCanvasElement.prototype as { getContext: unknown }).getContext = function (
-    this: HTMLCanvasElement,
-    type: string,
-    ...rest: unknown[]
-  ) {
-    return type === 'webgl2' ? null : get.call(this, type, ...rest);
-  };
-};
-
-/** axe on the page (or one part of it): no undecided check, and no serious or critical finding (issue #19). */
-async function expectNoSeriousAxe(page: Page, scope?: string) {
-  // axe yields to the page between its rules: a DOM that changes during the run makes checks undecidable (CR-1).
-  await settled(page);
-  // The table pages at 100 rows (P10a), so every row of a page is checked: nothing is left out any more (KG-129 closed).
-  const axe = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']);
-  const result = await (scope === undefined ? axe : axe.include(scope)).analyze();
-  expect(result.passes.length, 'axe ran its rules').toBeGreaterThan(10);
-  /** Each node by its selector, its markup and axe's own reason, so a failure in CI can be diagnosed from the log. */
-  const nodes = (v: (typeof result.violations)[number]) =>
-    v.nodes.map((n) => `${n.target.join(' ')} ${n.html.slice(0, 160)} ${n.failureSummary ?? ''}`.trim());
-  // Every check it ran was decidable (an "incomplete" colour contrast would be a check that proved nothing).
-  expect(result.incomplete.map((v) => `${v.id}: ${nodes(v).join(' | ')}`)).toEqual([]);
-  expect(
-    result.violations
-      .filter((v) => v.impact === 'serious' || v.impact === 'critical')
-      .map((v) => `${v.id} (${v.impact}): ${nodes(v).join(' | ')}`),
-  ).toEqual([]);
-}
-
-/** The tag names of the text nodes that contain `needle` (a text node is text, never an element). */
-const textHosts = (page: Page, needle: string) =>
-  page.evaluate((needle) => {
-    const hosts: string[] = [];
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    for (let n = walker.nextNode(); n; n = walker.nextNode())
-      if (n.nodeValue?.includes(needle)) hosts.push((n.parentElement?.tagName ?? '?').toLowerCase());
-    return hosts.sort();
-  }, needle);
-
 test.beforeEach(async ({ page, browserName }) => {
   // WebKit must run without Temporal to prove the polyfill path; WebKit 26.6
   // ships it, so it is deleted before any page script runs.
@@ -204,7 +102,9 @@ test('NL is the default: language, heading, banner, disclaimer, and t is now', a
   baseURL,
   browserName,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
+  // (P10e: the subtitle shows from 100rem, the nav is a row from 80rem)
+  await page.setViewportSize({ width: 1600, height: 900 });
   await open(page, '/');
 
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
@@ -220,33 +120,43 @@ test('NL is the default: language, heading, banner, disclaimer, and t is now', a
       .map((f) => `${f.family.replace(/["']/g, '')} ${f.weight}`);
   });
   expect(loaded).toEqual(expect.arrayContaining(['Bricolage Grotesque 700', 'Source Sans 3 400']));
-  // (P10b: the banner ends in a link to the disclaimer page, so its text is no longer the whole of its paragraph)
-  await expect(
-    page.getByText('Bèta: deze site is in ontwikkeling. Gegevens kunnen ontbreken of onjuist zijn.'),
-  ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Lees de disclaimer' })).toHaveAttribute('href', '/disclaimer');
-  await expect(page.getByText('Geen officiële waarschuwingsdienst', { exact: true })).toBeVisible();
-  // The footer (P10b): the disclaimer line, the nine page links in their own navigation, the credits of the sources of
+  // (P10e: the banner is the compact "bèta" link of the bar; its accessible name carries the whole banner text and the
+  // link text, and it goes to the disclaimer page)
+  const beta = page.getByRole('banner').getByRole('link', {
+    name: 'Bèta: deze site is in ontwikkeling. Gegevens kunnen ontbreken of onjuist zijn.',
+  });
+  await expect(beta).toHaveAttribute('href', '/disclaimer');
+  await expect(beta).toHaveAccessibleName(/Lees de disclaimer$/);
+  // The bar: the nine page links in their own navigation (P10e: a row from 80rem, below it behind the menu button).
+  await expect(barNav(page).getByRole('link')).toHaveCount(9);
+  await expect(barNav(page).getByRole('link', { name: 'Bronnen en licenties' })).toHaveAttribute('href', '/bronnen');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(barNav(page)).toBeHidden();
+  await openMenu(page);
+  await expect(barNav(page).getByRole('link')).toHaveCount(9);
+  await expect(barNav(page).getByRole('link', { name: 'Bronnen en licenties' })).toHaveAttribute('href', '/bronnen');
+  await page.keyboard.press('Escape');
+  await expect(barNav(page)).toBeHidden();
+  // The credits (P10b footer, P10e "Bronnen" panel over the map): the disclaimer line, the credits of the sources of
   // /meta, each in its own language, then the map's credits and the third-party notices link.
-  await expect(page.locator('footer nav a')).toHaveCount(9);
-  await expect(page.locator('footer nav').getByRole('link', { name: 'Bronnen en licenties' })).toHaveAttribute(
-    'href',
-    '/bronnen',
-  );
-  await expect(page.locator('footer h2')).toHaveText('Bronnen');
-  await expect(page.locator('footer')).toContainText('vallen niet onder de ODbL');
-  await expect(page.locator('footer a[href="https://www.openstreetmap.org/copyright"]')).toHaveCount(1);
-  await expect(page.locator('footer a[href="/third-party-notices.txt"]')).toHaveCount(1);
-  await expect(page.locator('footer li[lang="nl"]')).not.toHaveCount(0);
-  await expect(page.locator('footer li[lang="de"]')).not.toHaveCount(0);
+  const panel = await openAttribution(page);
+  await expect(panel.getByText('Geen officiële waarschuwingsdienst', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('heading', { level: 2 })).toHaveText('Bronnen');
+  await expect(panel).toContainText('vallen niet onder de ODbL');
+  await expect(panel.locator('a[href="https://www.openstreetmap.org/copyright"]')).toHaveCount(1);
+  await expect(panel.locator('a[href="/third-party-notices.txt"]')).toHaveCount(1);
+  await expect(panel.locator('li[lang="nl"]')).not.toHaveCount(0);
+  await expect(panel.locator('li[lang="de"]')).not.toHaveCount(0);
   // The date duty of FR-1, FR-3 (Etalab) and CH-1, CH-3 (BAFU): the date of t, never the registry's placeholder; and
   // FR-3, which fills FR-1 series, is attributed in its own words (review SR-1). BAFU's placeholder keeps its word:
   // "(Bezugsdatum: 26 oktober 2026)" (the bare "(Bezugsdatum)" is the registry's placeholder).
-  const credits = page.locator('footer h2 + ul');
+  const credits = panel.locator('h2 + ul');
   await expect(credits).toContainText('26 oktober 2026');
   await expect(credits).not.toContainText(/\[date de mise à jour\]|\(Bezugsdatum\)|<date>|<datum>/);
   await expect(credits).toContainText('(Bezugsdatum: 26 oktober 2026)');
   await expect(credits).toContainText('© VIGICRUES – www.vigicrues.gouv.fr, 26 oktober 2026,');
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
 
   // No t in the URL: now (the clock is fixed at 2026-10-26T12:00Z = 13:00 CET).
   await expect(slider(page)).toHaveValue(String(NOW.getTime()));
@@ -276,7 +186,7 @@ test('NL is the default: language, heading, banner, disclaimer, and t is now', a
 });
 
 test('the language switch keeps t and s, both ways', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/?t=2026-10-25T01:30Z&s=nl.e2e.dst');
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
   const english = page.getByRole('link', { name: 'English' });
@@ -287,7 +197,11 @@ test('the language switch keeps t and s, both ways', async ({ page, context, bas
   await expect.poll(() => where(page)).toBe('/en/?t=2026-10-25T01:30Z&s=nl.e2e.dst');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(slider(page, 'Timeline')).toBeVisible();
-  await expect(page.getByText('Not an official warning service', { exact: true })).toBeVisible();
+  // (P10e: the disclaimer line is in the "Bronnen" panel of the map)
+  const credits = await openAttribution(page, 'en');
+  await expect(credits.getByText('Not an official warning service', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(credits).toHaveCount(0);
   await expect(panelOf(page).getByRole('heading', { level: 2, name: 'E2E DST' })).toBeVisible();
   await expect(slider(page, 'Timeline')).toHaveAttribute('aria-valuetext', /02:30 CET/);
   await expect(slider(page, 'Timeline')).toHaveValue(ms('2026-10-25T01:30:00Z'));
@@ -304,7 +218,7 @@ test('the language switch keeps t and s, both ways', async ({ page, context, bas
 });
 
 test('the slider and the buttons update ?t= and the marker states', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/');
   await mapReady(page);
 
@@ -332,7 +246,6 @@ test('the slider and the buttons update ?t= and the marker states', async ({ pag
   await now.click();
   // Choosing now is live mode again (P10a T7): no t in the URL, and the live note says so.
   await expect.poll(() => tParam(page)).toBeNull();
-  await expect(page.getByText('Live: ververst elke minuut', { exact: true })).toBeVisible();
   // At the bound the button says so (aria-disabled) but keeps the focus, and does nothing (CR-10).
   await expect(now).toHaveAttribute('aria-disabled', 'true');
   await expect(now).not.toHaveAttribute('disabled');
@@ -342,6 +255,9 @@ test('the slider and the buttons update ?t= and the marker states', async ({ pag
   await page.keyboard.press('Enter');
   await expect(now).toBeFocused();
   expect(tParam(page)).toBeNull();
+  // (P10e: the live note is in the expanded timebar)
+  await expandTimebar(page);
+  await expect(page.getByText('Live: ververst elke minuut', { exact: true })).toBeVisible();
   await expect.poll(() => featureState(page, 'nl.e2e.gap')).toMatchObject({ has: false });
   expect(await featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true });
   await finish(page, s);
@@ -352,12 +268,12 @@ test('a deep link restores the view: time, station, panel and the selected marke
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/en/?t=2026-10-25T00:30Z&s=nl.e2e.dst', 'Timeline');
 
   await expect(slider(page, 'Timeline')).toHaveValue(ms('2026-10-25T00:30:00Z'));
   await expect(slider(page, 'Timeline')).toHaveAttribute('aria-valuetext', /02:30 CEST/);
-  await expect(stationList(page)).toHaveValue('nl.e2e.dst');
+  // (P10e: the station <select> is gone; the panel and the selected marker below say which station is chosen)
   const panel = panelOf(page);
   await expect(panel.getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   const level = panel.getByRole('region', { name: 'Water level' });
@@ -375,11 +291,12 @@ test('a deep link restores the view: time, station, panel and the selected marke
 });
 
 test('a t or s that does not parse is dropped, never shown', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/?t=2026-02-30T10:00Z&s=nl.e2e.nope%3Cb%3E');
   // t falls back to now, s to no selection; nothing of either reaches the page.
   await expect(slider(page)).toHaveValue(String(NOW.getTime()));
-  await expect(stationList(page)).toHaveValue('');
+  // (P10e: the station <select> is gone; "no selection" is no panel, no selected marker)
+  await expect.poll(() => featureState(page, 'nl.e2e.dst')).toMatchObject({ selected: false });
   await expect(panelOf(page)).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('nope');
   await expect(page.getByRole('link', { name: 'English' })).toHaveAttribute('href', '/en/');
@@ -388,8 +305,8 @@ test('a t or s that does not parse is dropped, never shown', async ({ page, cont
 
 // ---------------------------------------------------------------- the keyboard
 
-test('the slider and the station list work from the keyboard alone', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL);
+test('the slider and the station search work from the keyboard alone', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/');
 
   // Tab until the slider has the focus (a bound, so a missing tab stop fails instead of hanging).
@@ -415,23 +332,35 @@ test('the slider and the station list work from the keyboard alone', async ({ pa
   await page.getByRole('button', { name: 'Nu', exact: true }).click();
   await expect.poll(() => tParam(page)).toBeNull();
 
-  // The station list: a first station by ArrowDown, then another by typing its name.
-  await stationList(page).focus();
-  await expect(stationList(page)).toBeFocused();
-  const first = await stationList(page).locator('option').nth(1).getAttribute('value');
-  const firstName = (await stationList(page).locator('option').nth(1).textContent()) ?? '';
-  expect(first).toMatch(/^[a-z]{2}\./);
+  // The station search (P10e: the magnifier and its combobox replace the station list): open it, move to another
+  // result by ArrowDown, choose it by Enter; then another station by typing its name.
+  await searchButton(page).focus();
+  await expect(searchButton(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(searchBox(page)).toBeFocused();
+  await page.keyboard.type('E2E');
+  const options = page.getByRole('listbox').getByRole('option');
+  expect(await options.count()).toBeGreaterThan(1);
+  const firstName = (await options.nth(1).textContent()) ?? '';
   await page.keyboard.press('ArrowDown');
+  await expect(searchBox(page)).toHaveAttribute(
+    'aria-activedescendant',
+    (await options.nth(1).getAttribute('id')) ?? '',
+  );
+  await page.keyboard.press('Enter');
   // (the t of now is no t: live mode)
-  await expect.poll(() => where(page)).toBe(`/?s=${encodeURIComponent(first ?? '')}`);
-  await expect(stationList(page)).toHaveValue(first ?? '');
+  await expect.poll(() => where(page)).toMatch(/^\/\?s=nl\.e2e\./);
   expect((await panelOf(page).getByRole('heading', { level: 2 }).textContent()) ?? '').toBe(
     firstName.replace(/ \(.*\)$/, ''),
   );
-  // Opened from the list, the focus stays on the list (its arrow keys change its value at every press).
-  await expect(stationList(page)).toBeFocused();
+  // Opened from the search, the focus is in the panel (its heading) and the search has closed.
+  await expect(panelOf(page).getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(searchBox(page)).toHaveCount(0);
 
+  await searchButton(page).focus();
+  await page.keyboard.press('Enter');
   await page.keyboard.type('E2E D');
+  await page.keyboard.press('Enter');
   await expect.poll(() => where(page)).toBe('/?s=nl.e2e.dst');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   await expect(panelOf(page).getByRole('region', { name: 'Waterstand' }).locator('strong')).toHaveText('444');
@@ -445,7 +374,7 @@ test('a held arrow key keeps the timebar moving; the URL follows with few writes
 }) => {
   // WebKit throws after 100 replaceState calls in 30 s (Chromium ignores calls past its own limit): the state
   // moves at once, the URL at most every 400 ms, and it ends at the last value.
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(countUrlWrites);
@@ -473,7 +402,7 @@ test('a held key asks only where it stops: one series request, few snapshot file
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   // Older than recent.json's 7 days (P10a T6): the chart asks the API for its span, which is what a held key must not
   // do at every step. (A t within 7 days reads the static recent.json and asks no series at all.)
   await open(page, '/?t=2026-10-10T12:00Z&s=nl.e2e.dst');
@@ -509,7 +438,7 @@ test('while a new t loads, the values of the old one are marked busy and dimmed 
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   let release = () => {};
   const held = new Promise<void>((r) => {
     release = r;
@@ -540,8 +469,9 @@ test('a date typed digit by digit is taken when complete; a year half typed is n
   browserName,
 }) => {
   test.skip(browserName !== 'chromium', 'typing into the segments of a date field is Chromium’s behaviour');
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/?t=2026-10-26T11:00Z'); // 12:00 CET
+  await expandTimebar(page); // (P10e: the date and time fields are in the expanded timebar)
   const date = page.getByLabel('Datum', { exact: true });
   await date.focus();
   // The browser's locale (en-US) orders the segments month, day, year; on the way, 2026-01-26 and 0002-10-24
@@ -561,7 +491,7 @@ test('02:50 CEST is followed by 02:00 CET on the scrubber, and both 02:30 instan
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/?t=2026-10-25T00:50Z');
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /02:50 CEST$/);
   await expect(slider(page)).toHaveValue(ms('2026-10-25T00:50:00Z'));
@@ -590,12 +520,13 @@ test('02:30 CEST and 02:30 CET are two choices of the time input, with their own
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/?t=2026-10-24T12:00Z&s=nl.e2e.dst');
   const level = () => panelOf(page).getByRole('region', { name: 'Waterstand' }).locator('strong');
   await expect(level()).toHaveText('50');
   await expect(page.getByRole('group', { name: /Dit uur komt twee keer voor/ })).toHaveCount(0);
 
+  await expandTimebar(page); // (P10e: the date and time fields and the repeated-hour choice are in the expanded timebar)
   const date = page.getByLabel('Datum', { exact: true });
   const time = page.getByLabel('Tijd (Nederlandse tijd)', { exact: true });
   await date.fill('2026-10-25');
@@ -647,7 +578,7 @@ test('without WebGL2 the table replaces the map, and the map chunk is never requ
   baseURL,
   request,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await page.addInitScript(withoutWebGL2);
   await open(page, '/');
 
@@ -677,8 +608,8 @@ test('without WebGL2 the table replaces the map, and the map chunk is never requ
   await expect(page.getByText(`Stations 1–100 van ${series}`, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Vorige' })).toBeDisabled();
 
-  // A station chosen in the list brings its page into view.
-  await stationList(page).selectOption('nl.e2e.dst');
+  // A station chosen in the search (P10e) brings its page into view.
+  await pickStation(page, 'E2E DST', /E2E DST/);
   const row = (name: string) =>
     table.locator('tbody tr').filter({ has: page.getByRole('button', { name, exact: true }) });
   await expect(row('E2E DST')).toHaveCount(1);
@@ -693,10 +624,12 @@ test('without WebGL2 the table replaces the map, and the map chunk is never requ
     /^10\s?min$/,
     '',
   ]);
-  await stationList(page).selectOption('nl.e2e.gap');
+  await pickStation(page, 'E2E gap', /E2E gap/);
   await expect(row('E2E gap').locator('td')).toHaveText(['E2E', 'NL-1', 'Waterstand', '–', '–', '–', '–', '']);
 
-  // No map: no toggle, no canvas, and not a request for the map chunk, its worker, the manifest or a tile.
+  // No map: no view disclosure (P10e; it held the toggle), no canvas, and not a request for the map chunk, its worker,
+  // the manifest or a tile.
+  await expect(viewSummary(page)).toHaveCount(0);
   await expect(page.getByRole('group', { name: 'Weergave', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Kaart', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Tabel', exact: true })).toHaveCount(0);
@@ -705,7 +638,11 @@ test('without WebGL2 the table replaces the map, and the map chunk is never requ
   expect(paths.filter((p) => /createMap|maplibre|\/tiles\/|\/assets\/map\//i.test(p))).toEqual([]);
   expect(s.log.workers).toEqual([]);
 
-  // A row selects its station and opens the panel with the focus on its heading.
+  // A row selects its station and opens the panel with the focus on its heading (the search above opened that panel
+  // already, so it is closed first).
+  await panelOf(page).getByRole('button', { name: 'Station sluiten' }).click();
+  await expect(panelOf(page)).toHaveCount(0);
+  await expect.poll(() => where(page)).toBe('/');
   await row('E2E gap').getByRole('button', { name: 'E2E gap', exact: true }).click();
   await expect.poll(() => where(page)).toBe('/?s=nl.e2e.gap');
   const panel = panelOf(page);
@@ -713,7 +650,6 @@ test('without WebGL2 the table replaces the map, and the map chunk is never requ
   await expect(panel.getByRole('region', { name: 'Waterstand' })).toContainText('Geen waarde op dit tijdstip');
   await expect(row('E2E gap').getByRole('button')).toHaveAttribute('aria-pressed', 'true');
   await expect(row('E2E DST').getByRole('button')).toHaveAttribute('aria-pressed', 'false');
-  await expect(stationList(page)).toHaveValue('nl.e2e.gap');
   await finish(page, s);
 });
 
@@ -722,7 +658,7 @@ test('when MapLibre cannot get its own WebGL2 context the notice and the table a
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   // The page's pre-check gets a real context; every later request (MapLibre's own) gets null.
   await page.addInitScript(() => {
     const get = HTMLCanvasElement.prototype.getContext as (this: HTMLCanvasElement, ...a: unknown[]) => unknown;
@@ -742,6 +678,7 @@ test('when MapLibre cannot get its own WebGL2 context the notice and the table a
   await expect(page.getByRole('status').filter({ hasText: 'De kaart kan niet worden geladen' })).toBeVisible();
   await expect(page.locator('table')).toHaveCount(1);
   await expect(page.locator('table tbody tr').first()).toBeVisible();
+  await expect(viewSummary(page)).toHaveCount(0);
   await expect(page.getByRole('group', { name: 'Weergave', exact: true })).toHaveCount(0);
   await expect(page.locator('.maplibregl-canvas')).toHaveCount(0);
   // The pre-check passed (call 1), then the map chunk was requested and asked for its own context (call 2 or more).
@@ -764,11 +701,15 @@ test('the view toggle reaches the table with WebGL2 present, and brings the map 
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/');
   await mapReady(page);
   const map = page.getByRole('button', { name: 'Kaart', exact: true });
   const tableButton = page.getByRole('button', { name: 'Tabel', exact: true });
+  // P10e: the toggle lives in the view disclosure ("Weergave: Kaart"), closed at the start.
+  await expect(viewSummary(page)).toHaveText('Weergave: Kaart');
+  await expect(map).toBeHidden();
+  await openView(page);
   await expect(page.getByRole('group', { name: 'Weergave', exact: true })).toBeVisible();
   await expect(map).toHaveAttribute('aria-pressed', 'true');
   await expect(tableButton).toHaveAttribute('aria-pressed', 'false');
@@ -777,6 +718,10 @@ test('the view toggle reaches the table with WebGL2 present, and brings the map 
   await expect(page.getByRole('status')).toHaveCount(0); // no fallback notice when the map works
 
   await tableButton.click();
+  // Choosing a view closes the disclosure; its summary says where we are.
+  await expect(viewSummary(page)).toHaveText('Weergave: Tabel');
+  await expect(tableButton).toBeHidden();
+  await openView(page);
   await expect(tableButton).toHaveAttribute('aria-pressed', 'true');
   await expect(map).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('table')).toHaveCount(1);
@@ -786,6 +731,7 @@ test('the view toggle reaches the table with WebGL2 present, and brings the map 
   await expect(page.locator('table tbody th button').first()).toBeVisible();
 
   await map.click();
+  await openView(page);
   await expect(map).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('table')).toHaveCount(0);
   await expect(page.locator('.maplibregl-canvas')).toHaveCount(1);
@@ -800,18 +746,18 @@ test('the selected station stays selected when the view switches to the table an
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/?t=2026-10-25T01:30Z&s=nl.e2e.dst');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   await expect(page.locator('.maplibregl-popup-content > span')).toHaveText('E2E DST');
 
-  await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+  await chooseView(page, 'table');
   await expect(page.locator('table')).toHaveCount(1);
   expect(where(page)).toBe('/?t=2026-10-25T01:30Z&s=nl.e2e.dst');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   await expect(page.getByRole('button', { name: 'E2E DST', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
-  await page.getByRole('button', { name: 'Kaart', exact: true }).click();
+  await chooseView(page, 'map');
   await expect.poll(() => featureState(page, 'nl.e2e.dst')).toMatchObject({ has: true, selected: true });
   expect(where(page)).toBe('/?t=2026-10-25T01:30Z&s=nl.e2e.dst');
   await expect(page.locator('.maplibregl-popup-content > span')).toHaveText('E2E DST');
@@ -819,7 +765,7 @@ test('the selected station stays selected when the view switches to the table an
 });
 
 test("the popup's own close button deselects the station", async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/?t=2026-10-25T01:30Z&s=nl.e2e.dst');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   await expect(page.locator('.maplibregl-popup-content > span')).toHaveText('E2E DST');
@@ -828,9 +774,9 @@ test("the popup's own close button deselects the station", async ({ page, contex
   await expect(panelOf(page)).toHaveCount(0);
   await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
   await expect.poll(() => featureState(page, 'nl.e2e.dst')).toMatchObject({ selected: false });
-  await expect(stationList(page)).toHaveValue('');
-  // The focus goes to the station list, not to the page body the removed button leaves behind (CR-10).
-  await expect(stationList(page)).toBeFocused();
+  // The focus goes to the magnifier (P10e: the station list is gone), not to the page body the removed button leaves
+  // behind (CR-10).
+  await expect(searchButton(page)).toBeFocused();
   await finish(page, s);
 });
 
@@ -841,7 +787,7 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/?s=nl.e2e.xss');
   await mapReady(page);
 
@@ -901,7 +847,12 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
     const data = option?.series?.[0]?.data ?? [];
     chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: data.length - 1 });
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-    return { renderMode: option?.tooltip?.[0]?.renderMode, lastTs: data.at(-1)?.[0], before, after: drawn() };
+    return {
+      renderMode: option?.tooltip?.[0]?.renderMode,
+      lastTs: (data.at(-1) as [number, number] | undefined)?.[0],
+      before,
+      after: drawn(),
+    };
   });
   expect(tip.renderMode).toBe('richText');
   expect(tip.lastTs).toBe(NOW.getTime());
@@ -919,13 +870,14 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
   // ...and not one element was added to the chart.
   expect(await chartTags()).toEqual(tagsBefore);
 
-  // The sweep, map view: the raw strings sit only in text nodes of the heading, the popup and the list option.
+  // The sweep, map view: the raw strings sit only in text nodes of the heading and the popup (P10e: the station <select>
+  // and its options are gone; the search's result list has its own sweep below).
   const sweep = async (view: 'map' | 'table') => {
     expect(await textHosts(page, 'onerror=alert(1)'), `name hosts in the ${view} view`).toEqual(
-      view === 'map' ? ['h2', 'option', 'span'] : ['button', 'h2', 'option'],
+      view === 'map' ? ['h2', 'span'] : ['button', 'h2'],
     );
     expect(await textHosts(page, 'onload=alert(2)'), `water hosts in the ${view} view`).toEqual(
-      view === 'map' ? ['dd', 'option'] : ['dd', 'option', 'td'],
+      view === 'map' ? ['dd'] : ['dd', 'td'],
     );
     // The basis label: the panel's basis row and, on the map, the popup line, as text.
     expect(await textHosts(page, 'onerror=alert(3)'), `basis hosts in the ${view} view`).toEqual(
@@ -938,8 +890,26 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
   };
   await sweep('map');
 
+  // The search's result list (what the <select>'s option was): the hostile name and water are text of an option, nothing
+  // else, and no element or request comes of them.
+  await searchButton(page).click();
+  await searchBox(page).fill('onerror');
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(1);
+  // (the option is a div[role=option] holding one text node: no element inside it)
+  expect(await textHosts(page, 'onerror=alert(1)'), 'name hosts with the search open').toEqual(['div', 'h2', 'span']);
+  expect(await textHosts(page, 'onload=alert(2)'), 'water hosts with the search open').toEqual(['dd', 'div']);
+  expect(
+    await page
+      .getByRole('listbox')
+      .getByRole('option')
+      .evaluate((el) => el.childElementCount),
+  ).toBe(0);
+  await expect(page.locator('img')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(searchBox(page)).toHaveCount(0);
+
   // The table view, once: the station is still selected, its row button holds the raw name as text.
-  await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+  await chooseView(page, 'table');
   const cell = page.locator('table tbody th button', { hasText: RAW_NAME });
   await expect(cell).toHaveCount(1);
   expect(await cell.textContent()).toBe(RAW_NAME);
@@ -963,7 +933,7 @@ for (const [path, kind, state, disclaimer, row] of [
   ['/en/?s=nl.e2e.xss', 'Water level', 'elevated', 'RWS Waterinfo legend, not an official warning', 'Basis'],
 ] as const)
   test(`the popup and the panel show state and basis: ${path}`, async ({ page, context, baseURL }) => {
-    const s = await start(page, context, baseURL);
+    const s = await start(page, context, baseURL, 'state');
     await open(page, path, kind === 'Waterstand' ? undefined : 'Timeline');
     await mapReady(page);
     const line = page.locator('.maplibregl-popup-content > p');
@@ -994,7 +964,7 @@ for (const [path, kind, state, disclaimer, row] of [
 // ---------------------------------------------------------------- play
 
 test('play steps ten minutes a second; Pause and a hidden tab stop it', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   // Every URL the page writes (replaceState), so the steps are counted exactly instead of sampled.
   await page.addInitScript(countUrlWrites);
   await open(page, '/?t=2026-10-26T11:00Z');
@@ -1038,7 +1008,7 @@ test('play steps ten minutes a second; Pause and a hidden tab stop it', async ({
 });
 
 test('under reduced motion Play is off and says why', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await open(page, '/?t=2026-10-26T11:00Z');
   await expect(page.getByRole('button', { name: 'Afspelen', exact: true })).toBeDisabled();
@@ -1059,21 +1029,25 @@ test('an unknown app path is a 404 with the 404 page of its own, in its language
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   const response = await page.goto('/en/does-not-exist');
   expect(response?.status()).toBe(404);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Page not found');
   await expect(page.getByRole('link', { name: 'Go to the map' })).toHaveAttribute('href', '/en/');
-  await expect(page.getByText('Not an official warning service', { exact: true })).toBeVisible();
-  await expect(page.locator('footer nav a')).toHaveCount(9);
+  // (P10e: the disclaimer line is in the slim footer, the nine page links are in the bar, a row from 80rem)
+  await expect(
+    page.getByRole('contentinfo').getByText('Not an official warning service', { exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(barNav(page, 'en').getByRole('link')).toHaveCount(9);
 
   const dutch = await page.goto('/niet-hier');
   expect(dutch?.status()).toBe(404);
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pagina niet gevonden');
   await expect(page.getByRole('link', { name: 'Naar de kaart' })).toHaveAttribute('href', '/');
-  await expect(page.locator('footer nav a')).toHaveCount(9);
+  await expect(barNav(page).getByRole('link')).toHaveCount(9);
   await finish(page, s);
 });
 
@@ -1082,7 +1056,7 @@ test('when the Temporal polyfill cannot load, the page says so instead of stayin
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   // Every browser runs without Temporal here, and the polyfill chunk answers 404.
   await page.addInitScript(() => {
     delete (globalThis as { Temporal?: unknown }).Temporal;
@@ -1101,7 +1075,7 @@ test('when the Temporal polyfill cannot load, the page says so instead of stayin
 
 const axeSpec = (title: string, run: (page: Page) => Promise<void>) =>
   test(title, async ({ page, context, baseURL }) => {
-    const s = await start(page, context, baseURL);
+    const s = await start(page, context, baseURL, 'state');
     await run(page);
     await expectNoSeriousAxe(page);
     await finish(page, s);
@@ -1122,7 +1096,7 @@ const TALL = { width: 1024, height: 20_000 };
 axeSpec('axe finds no serious or critical issue: English table view', async (page) => {
   await page.setViewportSize(TALL);
   await open(page, '/en/', 'Timeline');
-  await page.getByRole('button', { name: 'Table', exact: true }).click();
+  await chooseView(page, 'table', 'en');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
   await expect(page.locator('table caption')).toContainText('Stations at');
 });
@@ -1140,7 +1114,7 @@ test('axe finds no serious or critical issue: the station panel next to the tabl
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await page.setViewportSize(TALL);
   await page.addInitScript(withoutWebGL2);
   await open(page, '/?s=nl.e2e.dst');

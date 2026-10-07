@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { finish, mapReady, open, type Session, start, type W } from './helpers.ts';
+import { finish, mapReady, modeRadio, modeSummary, open, type Session, start, type W } from './helpers.ts';
 
 // P10a (C5, plan T13 CVD): Chromium only. The map and its open legend under the three colour-vision deficiencies
 // Chromium can emulate (CDP Emulation.setEmulatedVisionDeficiency), in each map mode, as screenshots in
@@ -37,11 +37,12 @@ for (const deficiency of DEFICIENCIES)
       await expect(
         page.locator('details[open]').filter({ has: page.locator('summary', { hasText: 'Legenda' }) }),
       ).toBeVisible();
-      await expect(
-        page.getByRole('radio', {
-          name: mode === 'q' ? 'Afvoer' : mode === 'delta' ? 'Verandering in 24 uur' : 'Toestand',
-        }),
-      ).toBeChecked();
+      // (P10e: the radios are in the mode disclosure: opened to read the choice, closed again for the picture)
+      await expect(await modeRadio(page, mode)).toBeChecked();
+      await page.keyboard.press('Escape');
+      await expect(modeSummary(page)).toHaveText(
+        `Kaart: ${mode === 'q' ? 'Afvoer' : mode === 'delta' ? 'Verandering in 24 uur' : 'Toestand'}`,
+      );
       await page.screenshot({ path: `${DIR}/${deficiency}-${mode}.png` });
       await finish(page, s);
     });

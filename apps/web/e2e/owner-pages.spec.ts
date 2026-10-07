@@ -53,6 +53,13 @@ test.beforeEach(async ({ page, browserName }) => {
 
 const banner = (page: Page, locale: Locale) => page.getByRole('region', { name: msg(locale, 'owner_banner_label') });
 
+/** P10e: the owner banner is a slim strip directly under the bar, on every view and page. */
+async function expectUnderBar(page: Page, locale: Locale) {
+  const bar = await page.getByRole('banner').boundingBox();
+  const strip = await banner(page, locale).boundingBox();
+  expect(strip?.y ?? 0).toBeGreaterThanOrEqual((bar?.y ?? 0) + (bar?.height ?? 0) - 1);
+}
+
 async function ready(page: Page, id: RouteId | null, locale: Locale) {
   if (id === 'home') {
     await expect(slider(page, locale === 'nl' ? 'Tijdlijn' : 'Timeline')).toBeVisible();
@@ -91,6 +98,7 @@ for (const { id, locale, path } of PATHS)
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(banner(page, locale)).toBeVisible();
+    await expectUnderBar(page, locale);
     await expect(banner(page, locale).getByText(msg(locale, 'owner_banner'), { exact: true })).toBeVisible();
     // The owner site is the site's own origin: every request went to it (finish checks), and the banner is not a dialog.
     await expectNoSeriousAxe(page, undefined, id === 'home');
@@ -106,6 +114,7 @@ for (const { locale, path } of NOT_FOUND)
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
     await expect(page.locator('h1')).toHaveText(msg(locale, 'not_found_heading'));
     await expect(banner(page, locale)).toBeVisible();
+    await expectUnderBar(page, locale);
     await expectNoSeriousAxe(page, undefined, false);
     await finish(page, s);
   });

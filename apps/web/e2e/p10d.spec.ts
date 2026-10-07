@@ -1,5 +1,8 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 import {
+  attributionButton,
+  chooseView,
+  expandTimebar,
   expectInert,
   expectNoSeriousAxe,
   finish,
@@ -27,6 +30,13 @@ const GAP = 'nl.e2e.gap';
 const HOSTILE = 'nl.e2e.xss';
 const LOBITH = 'nl.rws.lobith.bovenrijn.tolkamer';
 const nl = (key: string, args: Record<string, string | number> = {}) => msg('nl', key, args);
+const box = async (l: Locator) => {
+  const b = await l.boundingBox();
+  if (b === null) throw new Error('no box');
+  return b;
+};
+const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 test.beforeEach(async ({ page, browserName }) => {
   // WebKit must run without Temporal to prove the polyfill path (as in app.spec.ts).
@@ -327,11 +337,6 @@ test('the legend starts collapsed; open, it sits in the bottom-right corner of t
   await page.keyboard.press('Enter');
   await expect(details).toHaveAttribute('open', '');
 
-  const box = async (l: ReturnType<Page['locator']>) => {
-    const b = await l.boundingBox();
-    if (b === null) throw new Error('no box');
-    return b;
-  };
   await page.evaluate(() => window.scrollTo(0, 0));
   const m = await box(map);
   const d = await box(details);
@@ -340,6 +345,13 @@ test('the legend starts collapsed; open, it sits in the bottom-right corner of t
   expect(m.x + m.width - (d.x + d.width)).toBeLessThan(40);
   expect(d.y + d.height).toBeLessThan(m.y + m.height);
   expect(d.y).toBeGreaterThanOrEqual(m.y);
+  // P10e: it stands above the "Bronnen" button and the timebar, never over them
+  const sources = await box(attributionButton(page));
+  const bar = await box(timebarOf(page));
+  expect(d.y + d.height).toBeLessThanOrEqual(sources.y + 1);
+  expect(d.y + d.height).toBeLessThanOrEqual(bar.y + 1);
+  expect(overlaps(d, sources)).toBe(false);
+  expect(overlaps(d, bar)).toBe(false);
   // the attribution button stays free and clickable
   const attribution = page.locator('.maplibregl-ctrl-attrib-button');
   await attribution.click({ timeout: 5_000 });
@@ -352,7 +364,11 @@ test('the legend starts collapsed; open, it sits in the bottom-right corner of t
   await finish(page, s);
 });
 
-test('in the table view the legend is in the flow above the table', async ({ page, context, baseURL }) => {
+test('in the table view the legend floats in the bottom-right corner above the timebar, and the table keeps room below its rows', async ({
+  page,
+  context,
+  baseURL,
+}) => {
   const s = await start(page, context, baseURL, 'state');
   await open(page, '/');
   await mapReady(page);
@@ -362,35 +378,57 @@ test('in the table view the legend is in the flow above the table', async ({ pag
   await details.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(details).toHaveAttribute('open', '');
-  await page.getByRole('button', { name: nl('view_table'), exact: true }).click();
+  await chooseView(page, 'table');
   await expect(details).toBeVisible();
   await expect(details).toHaveAttribute('open', '');
-  expect(await details.evaluate((el) => getComputedStyle(el).position)).toBe('static');
+  // P10e: it is no longer in the flow above the table; it floats over the view, as on the map (the table fills the
+  // window under the bar), in the bottom-right corner and above the timebar.
   const table = page.locator('table').first();
-  const d = await details.boundingBox();
-  const t = await table.boundingBox();
-  expect((d?.y ?? 0) + (d?.height ?? 0)).toBeLessThanOrEqual(t?.y ?? 0);
+  const d = await box(details);
+  expect(overlaps(d, await box(table)), 'the legend floats over the table, not above it in the flow').toBe(true);
+  const bar = await box(timebarOf(page));
+  const vp = page.viewportSize();
+  expect(vp).not.toBeNull();
+  expect((vp?.width ?? 0) - (d.x + d.width)).toBeLessThan(40);
+  expect(d.y + d.height).toBeLessThanOrEqual(bar.y + 1);
+  expect(overlaps(d, bar)).toBe(false);
+  expect(d.y).toBeGreaterThanOrEqual((await box(page.getByRole('banner'))).height - 1);
+  // The room below the rows (padding and scroll padding of the table wrapper): scrolled to its end, the last row's
+  // button stands clear of the timebar, the "Bronnen" button and the (collapsed) legend.
+  await details.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(details).not.toHaveAttribute('open', '');
+  const wrap = table.locator('..');
+  await wrap.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  const corner = [await box(details), await box(attributionButton(page)), await box(timebarOf(page))];
+  const last = page.locator('table tbody th button').last();
+  await last.focus();
+  const lastBox = await box(last);
+  for (const c of corner) expect(overlaps(lastBox, c), 'the last row is under a control').toBe(false);
   await finish(page, s);
 });
 
 // ---------------------------------------------------------------- the timebar
 
-test('the timebar is docked below the map, steps back to the first day and stops there', async ({
+test('the timebar floats over the bottom centre of the map, steps back to the first day and stops there', async ({
   page,
   context,
   baseURL,
 }) => {
   const s = await start(page, context, baseURL, 'state');
   await open(page, '/?t=2026-08-24T00:10Z');
-  await page.locator('main').evaluate((main) => main.scrollIntoView({ block: 'end' }));
   await expect(page.locator('.maplibregl-map')).toBeVisible();
   const bar = timebarOf(page);
-  // at the end of the page the bar is where the DOM puts it: after the map
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  const map = await page.locator('.maplibregl-map').boundingBox();
-  const b = await bar.boundingBox();
-  expect((b?.y ?? 0) + 1).toBeGreaterThanOrEqual((map?.y ?? 0) + (map?.height ?? 0));
-  expect(await bar.evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
+  // P10e: no longer docked below the map but over it, at the bottom centre; the page does not scroll
+  const map = await box(page.locator('.maplibregl-map'));
+  const b = await box(bar);
+  expect(b.y).toBeGreaterThan(map.y);
+  expect(b.y + b.height).toBeLessThanOrEqual(map.y + map.height + 1);
+  expect(b.x + b.width / 2).toBeCloseTo(map.x + map.width / 2, -1);
+  expect(await bar.evaluate((el) => getComputedStyle(el).position)).not.toBe('static');
+  expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
 
   const back = page.getByRole('button', { name: nl('step_back'), exact: true });
   await back.focus();
@@ -411,6 +449,7 @@ test('reverse play steps ten minutes back a second and stops at the first day; f
 }) => {
   const s = await start(page, context, baseURL, 'state');
   await open(page, '/?t=2026-08-24T00:20Z');
+  await expandTimebar(page); // (P10e: reverse play is in the expanded timebar)
   const rewind = page.getByRole('button', { name: nl('play_reverse'), exact: true });
   const pause = page.getByRole('button', { name: nl('pause'), exact: true });
   const play = page.getByRole('button', { name: nl('play'), exact: true });
@@ -440,32 +479,89 @@ test('under reduced motion both play buttons are off', async ({ page, context, b
   const s = await start(page, context, baseURL, 'state');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await open(page, '/?t=2026-10-26T11:00Z');
+  await expandTimebar(page);
   await expect(page.getByRole('button', { name: nl('play'), exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: nl('play_reverse'), exact: true })).toBeDisabled();
   await finish(page, s);
 });
 
-test('the bar never hides the focused control and axe finds nothing on it', async ({ page, context, baseURL }) => {
+// P10e (WCAG 2.4.11): the bar is over the view at the bottom centre; whatever it covers must not take a focus. The
+// drawer stands beside it from 48rem and the sheet ends above it below; the table's wrapper keeps room under its rows.
+const timebarH = (page: Page) => page.evaluate(() => document.documentElement.style.getPropertyValue('--timebar-h'));
+
+test('the bar never hides the focused control: --timebar-h follows its height; the drawer, the sheet and the table keep clear', async ({
+  page,
+  context,
+  baseURL,
+}) => {
   const s = await start(page, context, baseURL, 'state');
-  // The tallest bar: the forecast and epoch notes and the DST choice (review round 1), in a short window it sticks in.
+  // The tallest bar: the forecast and epoch notes and the DST choice (review round 1), in a short window.
   await page.setViewportSize({ width: 1024, height: 560 });
   await open(page, `/?t=2026-10-25T00:30Z&s=${DST}`);
   await settled(page);
-  await expect(timebarOf(page).getByRole('group', { name: nl('repeated_hour_legend') })).toBeVisible();
-  expect(await timebarOf(page).evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
-  // the panel's last control, focused by the keyboard from the top, is scrolled clear of the sticky bar (WCAG 2.4.11)
-  await page.evaluate(() => window.scrollTo(0, 0));
+  // --timebar-h is the bar's real height, collapsed and expanded
+  const bar = timebarOf(page);
+  await expect.poll(() => timebarH(page)).toBe(`${Math.round((await box(bar)).height)}px`);
+  const collapsed = (await box(bar)).height;
+  await expandTimebar(page);
+  await expect(bar.getByRole('group', { name: nl('repeated_hour_legend') })).toBeVisible();
+  await expect.poll(() => timebarH(page)).toBe(`${Math.round((await box(bar)).height)}px`);
+  expect((await box(bar)).height).toBeGreaterThan(collapsed);
+  // the drawer's last control, focused by the keyboard, is not under the bar (the bar keeps beside the drawer)
   const last = panelOf(page).locator('a, button, input, select').last();
   await last.focus();
-  const bar = await timebarOf(page).boundingBox();
-  const control = await last.boundingBox();
-  expect(control).not.toBeNull();
-  expect((control?.y ?? 0) + (control?.height ?? 0)).toBeLessThanOrEqual((bar?.y ?? 0) + 1);
+  const control = await box(last);
+  expect(overlaps(control, await box(bar)), 'the drawer control is under the bar').toBe(false);
+  expect(overlaps(await box(panelOf(page)), await box(bar)), 'the bar is over the drawer').toBe(false);
   expect(where(page)).toContain(`s=${DST}`);
-  // a shorter window keeps its height for the page: the bar does not stick
-  await page.setViewportSize({ width: 1024, height: 400 });
-  expect(await timebarOf(page).evaluate((el) => getComputedStyle(el).position)).toBe('static');
+
+  // below 48rem the drawer is a sheet that ends above the bar: its last control is clear of the bar as well
+  await page.setViewportSize({ width: 400, height: 560 });
+  await expect.poll(async () => (await box(panelOf(page))).width).toBeCloseTo(400, 0);
+  // (the bar grows at this width and --timebar-h follows a frame later: focus again until the layout has settled)
+  await expect
+    .poll(
+      async () => {
+        await last.blur(); // (focusing the focused element would not scroll it into view)
+        await last.focus();
+        const sheet = await box(panelOf(page));
+        const under = await box(bar);
+        return sheet.y + sheet.height <= under.y + 1 && !overlaps(await box(last), under);
+      },
+      { message: 'the sheet ends above the bar and its last control is not under it' },
+    )
+    .toBe(true);
+
+  // the table: the last row's button, focused, is scrolled clear of the bar, at both widths
+  for (const [width, height] of [
+    [1024, 560],
+    [400, 560],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    await expect(slider(page)).toBeVisible();
+    await chooseView(page, 'table');
+    for (const expanded of [false, true]) {
+      if (expanded) await expandTimebar(page);
+      const lastRow = page.locator('table tbody th button').last();
+      // (focus again until the bar's measured height has reached the scroll padding; a focused element would not scroll)
+      await expect
+        .poll(
+          async () => {
+            await lastRow.blur();
+            await lastRow.focus();
+            return overlaps(await box(lastRow), await box(timebarOf(page)));
+          },
+          { message: `${width}x${height}, expanded=${expanded}: the last row is under the bar` },
+        )
+        .toBe(false);
+    }
+  }
+
   await page.setViewportSize({ width: 1024, height: 20_000 });
+  await page.goto(`/?t=2026-10-25T00:30Z&s=${DST}`);
+  await expect(slider(page)).toBeVisible();
+  await expandTimebar(page);
   await expectNoSeriousAxe(page, 'section:has(input[type="range"])');
   await finish(page, s);
 });
