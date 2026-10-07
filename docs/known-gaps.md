@@ -4,6 +4,18 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P10e Full-screen map (PR pending, issue #101)
+
+`PHASES.md` §33 has the decisions and the evidence.
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-252 | web | **Choosing the open station again from the search does not move the focus to its panel.** The panel's focus effect runs on mount (or when its `focus` request changes), and the same station id changes neither | A later change: the search asks for focus explicitly when the picked id equals the open one | open |
+| KG-253 | web | **A popup near the drawer can reach under it.** A deep link (`?s=`) centres the map on the part the 26rem drawer leaves free (`jumpTo` pads by the drawer width from 48rem), but a station chosen later from the search, the table or a marker does not move the camera, and MapLibre places a popup by the whole map's width, so a marker just left of the drawer can put the popup's close button under it (the drawer's own close button stays reachable) | A later change: the search and table choices ease the camera into the free part, and the popup follows the free width | open |
+| KG-254 | web | **Below 48rem the mode and view controls are hidden while a station is open.** The sheet covers them (`visibility: hidden`), so the status lines stay but the mode cannot be changed until the panel closes | Accepted unless the owner's phone check says otherwise; the sheet's close button returns the controls | accepted: the controls come back with the map when the panel closes |
+| KG-255 | web | **Lighthouse after the layout change: local median performance 56, accessibility 100, LCP 4954 ms (P10d measured 73 in CI; the CI run of this PR is the comparison).** Lighthouse stays report-only in CI (KG-237); the map now fills the first screen, so `useMapLibre`'s start-near-the-viewport rule starts it at once on a phone too, which the P10a measurement did not | The numbers from the full CI run go into `PHASES.md` §33; the gate stays the P12 performance pass (KG-237) | open |
+| KG-256 | web | **Real-device and screen-reader pass of the combobox, the disclosures and the popover menu.** axe and the keyboard e2e pass on three browsers; no screen reader, no touch device and no real phone has been used on them | [owner]: a check with a screen reader and a phone; the agent supplies the checklist | open |
+
 ## P10d Station panel (PR pending, issues #96 and #88)
 
 `PHASES.md` §32 has the decisions and the evidence.
