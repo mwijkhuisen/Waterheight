@@ -120,9 +120,96 @@ export const timebarTime = (page: Page) =>
     .first();
 /** The timebar section itself (axe scope, geometry). */
 export const timebarOf = (page: Page) => page.locator('section').filter({ has: page.locator('input[type="range"]') });
-/** The station list; `exact`, because the panel's close button is also named "Station …". */
-export const stationList = (page: Page, name = 'Station') => page.getByRole('combobox', { name, exact: true });
 export const panelOf = (page: Page) => page.locator('aside');
+
+type Lang = 'nl' | 'en';
+
+// P10e: the controls that moved. The station <select> is the magnifier in the bar and its combobox; the mode and the
+// view are two disclosures over the top-left of the view; the timebar is collapsed until "Tijdopties" expands it; the
+// footer's credits are the "Bronnen" disclosure over the bottom right; the page links are the bar's <nav>, below 80rem
+// behind the menu button.
+
+/** The magnifier in the bar. */
+export const searchButton = (page: Page, locale: Lang = 'nl') =>
+  page.getByRole('button', { name: msg(locale, 'search_open'), exact: true });
+/** The search field (exists while the search is open). */
+export const searchBox = (page: Page, locale: Lang = 'nl') =>
+  page.getByRole('combobox', { name: msg(locale, 'search_open'), exact: true });
+/**
+ * Opens the search, types `query` and chooses a result: the option named `option` by a click, else the active (first)
+ * one by Enter. The panel then holds the focus.
+ */
+export async function pickStation(page: Page, query: string, option?: string | RegExp, locale: Lang = 'nl') {
+  await searchButton(page, locale).click();
+  const box = searchBox(page, locale);
+  await expect(box).toBeFocused();
+  await box.fill(query);
+  if (option === undefined) await box.press('Enter');
+  else await page.getByRole('option', { name: option }).click();
+}
+
+/** The button that expands the timebar. */
+export const timebarMore = (page: Page, locale: Lang = 'nl') =>
+  timebarOf(page).getByRole('button', { name: msg(locale, 'timebar_more'), exact: true });
+/** Expands the timebar (the date and time fields, reverse play, the repeated hour and the notes exist after this). */
+export async function expandTimebar(page: Page, locale: Lang = 'nl') {
+  const more = timebarMore(page, locale);
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+}
+
+const summaryOf = (page: Page, key: 'mode_summary' | 'view_summary', locale: Lang) =>
+  page.locator('summary', { hasText: msg(locale, key, { mode: '', view: '' }).trim() });
+/** The summary of the mode disclosure ("Kaart: Toestand") and of the view disclosure ("Weergave: Kaart"). */
+export const modeSummary = (page: Page, locale: Lang = 'nl') => summaryOf(page, 'mode_summary', locale);
+export const viewSummary = (page: Page, locale: Lang = 'nl') => summaryOf(page, 'view_summary', locale);
+async function openSummary(summary: ReturnType<typeof modeSummary>) {
+  if ((await summary.locator('..').getAttribute('open')) === null) await summary.click();
+}
+export const openMode = (page: Page, locale: Lang = 'nl') => openSummary(modeSummary(page, locale));
+export const openView = (page: Page, locale: Lang = 'nl') => openSummary(viewSummary(page, locale));
+/** Opens the mode disclosure and chooses a mode by its radio. */
+export async function chooseMode(page: Page, mode: 'state' | 'delta' | 'q', locale: Lang = 'nl') {
+  await openMode(page, locale);
+  await page.getByRole('radio', { name: msg(locale, `mode_${mode}`), exact: true }).check();
+}
+/** The radio of a mode, after opening the mode disclosure. */
+export async function modeRadio(page: Page, mode: 'state' | 'delta' | 'q', locale: Lang = 'nl') {
+  await openMode(page, locale);
+  return page.getByRole('radio', { name: msg(locale, `mode_${mode}`), exact: true });
+}
+/** Opens the view disclosure and chooses the map or the table. */
+export async function chooseView(page: Page, view: 'map' | 'table', locale: Lang = 'nl') {
+  await openView(page, locale);
+  await page.getByRole('button', { name: msg(locale, `view_${view}`), exact: true }).click();
+}
+
+/** The "Bronnen" button over the bottom right and the panel it opens (the credits the footer carried until P10d). */
+export const attributionButton = (page: Page, locale: Lang = 'nl') =>
+  page.getByRole('button', { name: msg(locale, 'sources_heading'), exact: true });
+export const attributionPanel = (page: Page, locale: Lang = 'nl') =>
+  page.getByRole('region', { name: msg(locale, 'attribution_panel_label') });
+export async function openAttribution(page: Page, locale: Lang = 'nl') {
+  const button = attributionButton(page, locale);
+  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+  await expect(attributionPanel(page, locale)).toBeVisible();
+  return attributionPanel(page, locale);
+}
+
+/** The bar's page links. Below 80rem they are behind the menu button: `openMenu` first. */
+export const barNav = (page: Page, locale: Lang = 'nl') =>
+  page.getByRole('navigation', { name: msg(locale, 'footer_nav_label') });
+export const menuButton = (page: Page, locale: Lang = 'nl') =>
+  page.getByRole('button', { name: msg(locale, 'menu_button'), exact: true });
+/** Opens the menu where there is one (a window narrower than 80rem); nothing to do from 80rem. */
+export async function openMenu(page: Page, locale: Lang = 'nl') {
+  const button = menuButton(page, locale);
+  if (await button.isVisible()) {
+    // A popover button has no aria-expanded attribute in the DOM: look at the menu itself.
+    if (!(await barNav(page, locale).isVisible())) await button.click();
+    await expect(barNav(page, locale)).toBeVisible();
+  }
+}
 
 /** Opens a page and waits for the viewer (the slider exists once meta and stations have arrived). */
 export async function open(page: Page, path: string, name?: string) {
