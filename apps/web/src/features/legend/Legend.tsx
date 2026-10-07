@@ -9,9 +9,10 @@ import styles from './legend.module.css';
 import { LHP_NO_DATA } from './palette.ts';
 
 // The map legend (P10a T2): per mode, collapsible, with the honesty and NL-4 notes and the keys for the other cues.
-// P10d: over the map's bottom-right corner (as on waterinfo), in the table view in the flow above the table. It starts
-// collapsed at every width (owner, KG-251): open, it covered a third of the map beside a station panel; the states are
-// also in words in the panel, the popup and the table.
+// P10d: over the map's bottom-right corner (as on waterinfo). P10e: in that corner of the table view too, above the
+// timebar and beside the drawer (App.module.css `.corner`). It starts collapsed at every width (owner, KG-251): open,
+// it covered a third of the map beside a station panel; the states are also in words in the panel, the popup and
+// the table.
 
 export interface LegendProps {
   locale: Locale;
@@ -22,8 +23,6 @@ export interface LegendProps {
   owner: boolean;
   /** Warning areas are on the map at t (their key is shown). */
   warnings: boolean;
-  /** Placed over the corner of the map (its `.view` is `position: relative`), else in the flow. */
-  overlay: boolean;
 }
 
 const stateWord = {
@@ -53,10 +52,10 @@ function Dot({ colour, r }: { colour: string; r: number }) {
   );
 }
 
-export function Legend({ locale, mode, forecast, owner, warnings, overlay }: LegendProps) {
+export function Legend({ locale, mode, forecast, owner, warnings }: LegendProps) {
   const o = { locale };
   return (
-    <details className={overlay ? `${styles.legend} ${styles.overlay}` : styles.legend}>
+    <details className={`${styles.legend} ${styles.floating}`}>
       <summary>{m.legend_heading({}, o)}</summary>
       <ul className={styles.list}>
         {mode === 'state' &&

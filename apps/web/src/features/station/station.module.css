@@ -1,8 +1,31 @@
-/* The panel (P10d): wider than before so the chart has room, in the flow beside the map (stacked under it on a phone). */
+/* The panel (P10e D4): a drawer over the right side of the view, under the bar, that does not shrink the map
+   (App.module.css `.withPanel` sets --drawer-w, its width, from 48rem). Below 48rem it is a full-width sheet that ends
+   above the timebar. The legend and the credits stand over it (z-index 5), the timebar beside it. */
 .panel {
-  flex: 1 1 30rem;
-  border: 1px solid var(--line);
-  min-width: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: var(--timebar-h, 0px);
+  z-index: 6;
+  box-sizing: border-box;
+  width: var(--drawer-w, 100%);
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: -0.25rem 0 1rem rgb(14 58 75 / 20%);
+}
+
+@media (min-width: 48rem) {
+  .panel {
+    bottom: 0;
+  }
+}
+
+/* A sheet leaves room at the bottom for the legend and the credits standing over it. */
+@media (max-width: 47.99rem) {
+  .panel {
+    padding-bottom: 3.5rem;
+  }
 }
 
 /* A header band with the name and a round close button; --line under --ink text is far above 4.5:1. */

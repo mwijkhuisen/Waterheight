@@ -11,13 +11,15 @@ export interface ModeControlProps {
   onChange: (mode: Mode) => void;
 }
 
+/** The name of a mode in a language: the radio's label and the summary of the mode disclosure. */
+export function modeLabel(mode: Mode, locale: Locale): string {
+  const o = { locale };
+  return mode === 'state' ? m.mode_state({}, o) : mode === 'delta' ? m.mode_delta({}, o) : m.mode_q({}, o);
+}
+
 export function ModeControl({ locale, mode, onChange }: ModeControlProps) {
   const o = { locale };
-  const items: [Mode, string][] = [
-    ['state', m.mode_state({}, o)],
-    ['delta', m.mode_delta({}, o)],
-    ['q', m.mode_q({}, o)],
-  ];
+  const items: [Mode, string][] = (['state', 'delta', 'q'] as const).map((value) => [value, modeLabel(value, locale)]);
   return (
     <fieldset className={styles.mode}>
       <legend>{m.mode_label({}, o)}</legend>

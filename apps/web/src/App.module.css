@@ -1,43 +1,118 @@
-.controls {
+/* While the data loads: the text of the static shell, in the space under the bar. */
+.plain {
+  padding: var(--space);
+}
+
+/* The stage (P10e): the whole window under the bar. On the map everything but the map floats over it; in the table
+   view the top is a band and the table scrolls in the rest. `--drawer-w` is the station panel's width while it is open
+   beside the view (from 48rem; below that the panel is a sheet over the view): the credits, the timebar and the
+   controls of MapLibre keep clear of it. */
+.stage {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space);
-  margin: var(--space) 0;
+  flex-direction: column;
+  height: 100%;
 }
 
-.toggle button[aria-pressed="true"] {
-  background: var(--accent);
-  color: var(--accent-ink);
+@media (min-width: 48rem) {
+  .withPanel {
+    --drawer-w: 26rem;
+  }
 }
 
-.select {
+/* The mode and view disclosures, and under them the status lines (D8) centred: the no-WebGL2 notice, the river chip,
+   the errors, the warnings and Δh notes and the degraded banner keep their role=status / role=alert. */
+.top {
+  z-index: 5;
   display: flex;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.onMap .top {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  right: calc(var(--drawer-w, 0px) + 0.5rem);
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.onMap .top > * {
+  pointer-events: auto;
+}
+
+/* A sheet (below 48rem) covers the view: the mode and view choices under it are out of reach, so out of the tab order
+   too (the status lines stay). The legend and the credits stand over the sheet. */
+@media (max-width: 47.99rem) {
+  .withPanel .controls {
+    visibility: hidden;
+  }
+}
+
+.onTable .top {
+  position: relative;
+  flex: none;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  align-self: center;
+  gap: 0.4rem;
+  max-width: min(40rem, 100%);
 }
 
-.select select {
-  max-width: 22rem;
+.status:empty {
+  display: none;
 }
 
-.notice {
-  padding: 0.5rem var(--space);
+.status > p {
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--signal-caution-edge);
   background: var(--signal-caution-bg);
   color: var(--signal-caution-ink);
+  box-shadow: 0 0.15rem 0.5rem rgb(14 58 75 / 20%);
 }
 
+.status > span {
+  background: var(--paper);
+}
+
+/* The map or the table fills the rest; the drawer is a child of it. */
 .body {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space);
-  align-items: flex-start;
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .view {
-  position: relative; /* the map legend sits over the map's corner */
-  flex: 3 1 32rem;
-  min-width: 0;
+  position: absolute;
+  inset: 0;
+}
+
+/* Over the bottom-right corner, above the timebar and beside the drawer: the legend, and under it the "Bronnen"
+   button (beside MapLibre's own attribution button, which map.module.css lifts to the same height). */
+.corner {
+  position: absolute;
+  right: calc(var(--drawer-w, 0px) + 0.5rem);
+  bottom: calc(var(--timebar-h, 0px) + 0.5rem + 10px);
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+/* On the map, MapLibre's own attribution row (its button, and its text where the map is wide) is the line under the
+   corner: the corner stands above it. */
+.onMap .corner {
+  bottom: calc(var(--timebar-h, 0px) + 0.5rem + 10px + 2.2rem);
 }
 
 /* Values of another t are on screen while this t loads (CR-4): dimmed, after a short delay so a fast answer does not flicker. */

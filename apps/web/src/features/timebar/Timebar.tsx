@@ -74,6 +74,8 @@ interface Props {
 export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, onChange }: Props) {
   const id = useId();
   const [missing, setMissing] = useState(false);
+  // P10e D7: collapsed at the start (the time, a short slider, the steps, play and "Nu"); the rest on request.
+  const [expanded, setExpanded] = useState(false);
   const [playing, setPlaying] = useState<0 | Direction>(0);
   const reduced = useReducedMotion();
   const latest = useRef(t);
@@ -139,8 +141,9 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
   const toggle = (dir: Direction) =>
     setPlaying((p) => (p === dir || playNext(latest.current, dir, start, end) === null ? 0 : dir));
 
-  // The sticky bar's real height (its notes and the DST choice come and go) keeps a focused control clear of it
-  // (WCAG 2.4.11, timebar.module.css).
+  // The bar's real height, collapsed or expanded (its notes and the DST choice come and go), is --timebar-h: the
+  // legend and the attribution buttons stand above it and a scrolled table keeps a focused row clear of it
+  // (WCAG 2.4.11, timebar.module.css, App.module.css).
   useEffect(() => {
     const el = barRef.current;
     if (el === null) return;
@@ -171,8 +174,13 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
       : noForecast
         ? m.forecast_station_none_note({}, { locale })
         : undefined;
+  const describedBy = note === undefined ? `${id}-epoch` : `${id}-epoch ${id}-forecast`;
   return (
-    <section ref={barRef} className={styles.timebar} aria-labelledby={`${id}-h`}>
+    <section
+      ref={barRef}
+      className={expanded ? `${styles.timebar} ${styles.expanded}` : styles.timebar}
+      aria-labelledby={`${id}-h`}
+    >
       <h2 id={`${id}-h`} className={styles.heading}>
         {m.timebar_heading({}, { locale })}
       </h2>
@@ -181,35 +189,6 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           <time dateTime={new Date(t).toISOString()}>{time}</time>
           {forecast && <span className={styles.badge}>{m.timebar_forecast({}, { locale })}</span>}
         </p>
-        <div className={styles.fields}>
-          <label>
-            {m.date_label({}, { locale })}
-            <input
-              ref={dateRef}
-              type="date"
-              defaultValue={local.date}
-              min={first}
-              max={last}
-              onChange={(e) => wall(e.currentTarget.value, local.time, true)}
-              onBlur={(e) => {
-                e.currentTarget.value = local.date;
-              }}
-            />
-          </label>
-          <label>
-            {m.time_label({}, { locale })}
-            <input
-              ref={timeRef}
-              type="time"
-              step={600}
-              defaultValue={local.time}
-              onChange={(e) => wall(local.date, e.currentTarget.value, false)}
-              onBlur={(e) => {
-                e.currentTarget.value = local.time;
-              }}
-            />
-          </label>
-        </div>
         <div className={styles.track}>
           <input
             type="range"
@@ -219,11 +198,11 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
             value={t}
             aria-label={m.slider_label({}, { locale })}
             aria-valuetext={valueText}
-            aria-describedby={note === undefined ? `${id}-epoch` : `${id}-epoch ${id}-forecast`}
+            aria-describedby={expanded ? describedBy : undefined}
             onChange={(e) => go(Number(e.currentTarget.value))}
             onKeyDown={keys}
           />
-          <span className={styles.epoch} style={{ left: `${epochAt}%` }} aria-hidden="true" />
+          {expanded && <span className={styles.epoch} style={{ left: `${epochAt}%` }} aria-hidden="true" />}
           {/* The "now" marker: a tick above the track and its word; the forecast part is to its right. */}
           <span className={styles.nowTick} style={{ left: `${nowAt}%` }} aria-hidden="true" />
           <span
@@ -233,7 +212,8 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           >
             {m.now_marker({}, { locale })}
           </span>
-          {span > 0 &&
+          {expanded &&
+            span > 0 &&
             Array.from({ length: TICKS }, (_, i) => {
               const pos = (i / (TICKS - 1)) * 100;
               return (
@@ -260,14 +240,6 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           </button>
           <button
             type="button"
-            aria-label={playing === -1 ? m.pause({}, { locale }) : m.play_reverse({}, { locale })}
-            onClick={() => toggle(-1)}
-            disabled={reduced}
-          >
-            <Icon d={playing === -1 ? ICON.pause : ICON.rewind} />
-          </button>
-          <button
-            type="button"
             aria-label={playing === 1 ? m.pause({}, { locale }) : m.play({}, { locale })}
             onClick={() => toggle(1)}
             disabled={reduced}
@@ -285,36 +257,96 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           <button type="button" aria-disabled={t === now} onClick={() => t !== now && go(now)}>
             {m.to_now({}, { locale })}
           </button>
+          <button
+            type="button"
+            className={styles.more}
+            aria-expanded={expanded}
+            aria-controls={`${id}-more`}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {m.timebar_more({}, { locale })}
+            <span className={styles.chevron} aria-hidden="true" />
+          </button>
         </div>
       </div>
-      {twins.length === 2 && (
-        <fieldset className={styles.twins}>
-          <legend>{m.repeated_hour_legend({}, { locale })}</legend>
-          {twins.map((ms) => {
-            const at = amsterdam(ms);
-            return (
-              <label key={ms}>
-                <input type="radio" name={`${id}-twin`} checked={quantise(ms) === t} onChange={() => go(ms)} />
-                {` ${at.time} ${at.label} (UTC${at.offset})`}
-              </label>
-            );
-          })}
-        </fieldset>
-      )}
-      {missing && (
-        <p role="alert" className={styles.missing}>
-          {m.time_missing({}, { locale })}
-        </p>
-      )}
-      <p id={`${id}-epoch`} className={styles.note}>
-        {m.epoch_note({ date: formatDay(epoch, locale) }, { locale })}
-      </p>
-      {note !== undefined && (
-        <p id={`${id}-forecast`} className={styles.note}>
-          {note}
-        </p>
-      )}
-      {live && <p className={styles.note}>{m.live_note({}, { locale })}</p>}
+      {/* The rest of the bar of P10d (a typed date and time, the reverse play, the repeated hour and the notes)
+          is in the page only while it is expanded. */}
+      <div id={`${id}-more`} hidden={!expanded}>
+        {expanded && (
+          <>
+            <div className={styles.rowMore}>
+              <div className={styles.fields}>
+                <label>
+                  {m.date_label({}, { locale })}
+                  <input
+                    ref={dateRef}
+                    type="date"
+                    defaultValue={local.date}
+                    min={first}
+                    max={last}
+                    onChange={(e) => wall(e.currentTarget.value, local.time, true)}
+                    onBlur={(e) => {
+                      e.currentTarget.value = local.date;
+                    }}
+                  />
+                </label>
+                <label>
+                  {m.time_label({}, { locale })}
+                  <input
+                    ref={timeRef}
+                    type="time"
+                    step={600}
+                    defaultValue={local.time}
+                    onChange={(e) => wall(local.date, e.currentTarget.value, false)}
+                    onBlur={(e) => {
+                      e.currentTarget.value = local.time;
+                    }}
+                  />
+                </label>
+              </div>
+              <div className={styles.buttons}>
+                <button
+                  type="button"
+                  aria-label={playing === -1 ? m.pause({}, { locale }) : m.play_reverse({}, { locale })}
+                  onClick={() => toggle(-1)}
+                  disabled={reduced}
+                >
+                  <Icon d={playing === -1 ? ICON.pause : ICON.rewind} />
+                </button>
+              </div>
+            </div>
+            {twins.length === 2 && (
+              <fieldset className={styles.twins}>
+                <legend>{m.repeated_hour_legend({}, { locale })}</legend>
+                {twins.map((ms) => {
+                  const at = amsterdam(ms);
+                  return (
+                    <label key={ms}>
+                      <input type="radio" name={`${id}-twin`} checked={quantise(ms) === t} onChange={() => go(ms)} />
+                      {` ${at.time} ${at.label} (UTC${at.offset})`}
+                    </label>
+                  );
+                })}
+              </fieldset>
+            )}
+            {missing && (
+              <p role="alert" className={styles.missing}>
+                {m.time_missing({}, { locale })}
+              </p>
+            )}
+            <p id={`${id}-epoch`} className={styles.note}>
+              {m.epoch_note({ date: formatDay(epoch, locale) }, { locale })}
+            </p>
+            {note !== undefined && (
+              <p id={`${id}-forecast`} className={styles.note}>
+                {note}
+              </p>
+            )}
+            {live && <p className={styles.note}>{m.live_note({}, { locale })}</p>}
+          </>
+        )}
+      </div>
+      {/* Why play is off is said in both states. */}
       {reduced && <p className={styles.note}>{m.play_reduced_motion({}, { locale })}</p>}
     </section>
   );

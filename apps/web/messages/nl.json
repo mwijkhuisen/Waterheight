@@ -483,5 +483,14 @@
   "river_vechte": "Overijsselse Vecht",
   "river_viroin": "Viroin",
   "river_waal": "Waal",
-  "river_wurm": "Worm"
+  "river_wurm": "Worm",
+  "search_open": "Zoek een station",
+  "search_none": "Geen station gevonden",
+  "search_count": "{count} stations gevonden",
+  "menu_button": "Menu",
+  "beta_short": "bèta",
+  "mode_summary": "Kaart: {mode}",
+  "view_summary": "Weergave: {view}",
+  "timebar_more": "Tijdopties",
+  "attribution_panel_label": "Bronnen en licenties van de kaart"
 }

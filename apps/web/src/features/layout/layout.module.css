@@ -1,62 +1,256 @@
-.header {
+/* The top bar (P10e): one row, always at the top of the window. Its height is fixed (and measured, as --chrome-h), so
+   the full-screen map below it is exactly the rest of the viewport. */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space);
-  padding: var(--space);
+  gap: 0.5rem var(--space);
+  box-sizing: border-box;
+  height: 3.5rem;
+  padding: 0 var(--space);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
 }
 
-/* The lockup (BRAND.md §4): the mark, the name in two colours and the subtitle under it. */
+/* A focused control on a page never hides under the bar (WCAG 2.4.11). */
+:global(html) {
+  scroll-padding-top: calc(var(--chrome-h, 3.5rem) + 0.5rem);
+}
+
+/* The lockup (BRAND.md §4, §9): the mark and the name in two colours, the subtitle under it where there is room. */
 .brand {
   display: flex;
+  flex: 0 1 auto;
   flex-direction: column;
+  min-width: 0;
 }
 
 /* The site name: the map's h1, and on every other page the same size as a link home. */
 .name {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   margin: 0;
   font-family: "Bricolage Grotesque", system-ui, sans-serif;
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.02em;
   color: var(--ink);
+  white-space: nowrap;
 }
 
 .name a {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   color: inherit;
   text-decoration: none;
 }
 
-/* "kijker" in Waterblauw: large text only (2rem bold here), never small text. */
+/* "kijker" in Waterblauw: large text only (24 px, BRAND.md §3), so below 40rem, where the name shrinks, it takes the
+   accent that is allowed for small text. */
 .accent {
   color: var(--water);
 }
 
 .subtitle {
-  margin: 0.25rem 0 0;
+  display: none;
+  margin: 0;
   color: var(--ink);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+@media (min-width: 100rem) {
+  .subtitle {
+    display: block;
+  }
+}
+
+.menuButton {
+  margin-left: auto;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menuButton[aria-expanded="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Below 80rem the page links are a popover under the bar, opened by the menu button. */
+.nav {
+  position: fixed;
+  inset: var(--chrome-h, 3.5rem) 0.5rem auto auto;
+  box-sizing: border-box;
+  width: min(22rem, calc(100vw - 1rem));
+  max-height: calc(100dvh - var(--chrome-h, 3.5rem) - 1rem);
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 0.25rem 1rem rgb(14 58 75 / 25%);
+}
+
+.nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav a {
+  display: block;
+  padding: 0.4rem 0.25rem;
+}
+
+.nav a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: inset 0.2rem 0 0 var(--water);
+  padding-left: 0.6rem;
+}
+
+/* From 80rem the same element is the row of links (an author `display` beats the popover's closed state). */
+@media (min-width: 80rem) {
+  .menuButton {
+    display: none;
+  }
+
+  .nav {
+    position: static;
+    display: block;
+    flex: 1 1 auto;
+    width: auto;
+    max-height: none;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    inset: auto;
+  }
+
+  .nav ul {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 0 0.9rem;
+  }
+
+  .nav a {
+    padding: 0.25rem 0;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  .nav a[aria-current="page"] {
+    padding-left: 0;
+    box-shadow: inset 0 -0.2rem 0 var(--water);
+  }
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem var(--space);
+  margin-left: 0;
+  white-space: nowrap;
+}
+
+@media (min-width: 80rem) {
+  .tools {
+    margin-left: auto;
+  }
 }
 
 /* A notice, so the caution signal (BRAND.md §5), never a brand colour. */
 .beta {
-  margin: 0;
-  padding: 0.4rem var(--space);
-  border-left: 4px solid var(--signal-caution-edge);
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--signal-caution-edge);
   background: var(--signal-caution-bg);
   color: var(--signal-caution-ink);
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
 }
 
-.beta a {
+@media (max-width: 40rem) {
+  .bar {
+    gap: 0.4rem;
+    padding: 0 0.5rem;
+  }
+
+  .tools {
+    gap: 0.4rem;
+  }
+
+  .name {
+    font-size: 1.1rem;
+  }
+
+  .accent {
+    color: var(--accent);
+  }
+}
+
+/* The owner banner: a slim strip directly under the bar, on every view of the owner site (T-OWN-5). Its terms open
+   in place; a long list scrolls inside it instead of eating the viewport. */
+.owner {
+  position: relative;
+  z-index: 9;
+  padding: 0.15rem var(--space);
+  border-bottom: 1px solid var(--signal-caution-edge);
+  background: var(--signal-caution-bg);
+  color: var(--signal-caution-ink);
+  font-size: 0.85rem;
+}
+
+.owner section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space);
+}
+
+.owner p {
+  margin: 0;
+}
+
+.owner a {
   color: inherit;
+}
+
+.owner details[open] {
+  flex-basis: 100%;
+  max-height: 30dvh;
+  overflow: auto;
+}
+
+/* The map: the viewport under the bar and the owner strip. Nothing scrolls on this page. */
+.mapMain {
+  position: relative;
+  height: calc(100vh - var(--chrome-h, 3.5rem));
+  overflow: hidden;
+}
+
+@supports (height: 100dvh) {
+  .mapMain {
+    height: calc(100dvh - var(--chrome-h, 3.5rem));
+  }
 }
 
 /* Child margins stay inside. */
@@ -65,19 +259,17 @@
   padding: 0 var(--space) var(--space);
 }
 
-/* Layout stability on the map (P10a, Lighthouse CLS): its loading frame is a screen tall, so the footer starts below the
-   fold and the arriving map never pushes it out of view. Not on the pages, whose footer would sit a screen below a short
-   text (review round 1). */
-.tall {
-  min-height: 100vh;
-}
-
-/* The dark variant (BRAND.md §4): Rivierblauw, off-white text, links in the light name accent (6.6:1). */
+/* The slim footer of the pages and the 404 page, in the dark variant (BRAND.md §4): Rivierblauw, off-white text,
+   links in the light name accent (6.6:1). */
 .footer {
   padding: var(--space);
   font-size: 0.9rem;
   background: var(--ink);
   color: var(--paper);
+}
+
+.footer p {
+  margin: 0.25rem 0;
 }
 
 .footer a {
@@ -88,19 +280,6 @@
   outline-color: var(--name-dark);
 }
 
-.footer h2 {
-  font-size: 1rem;
-}
-
 .disclaimer {
   font-weight: 600;
-}
-
-.nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem var(--space);
-  margin: var(--space) 0;
-  padding: 0;
-  list-style: none;
 }

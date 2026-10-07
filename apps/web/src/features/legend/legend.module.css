@@ -1,4 +1,5 @@
-.legend {
+.legend,
+.control {
   border: 1px solid var(--line);
   background: var(--paper);
   padding: 0.3rem 0.6rem;
@@ -6,7 +7,8 @@
   font-size: 0.85rem;
 }
 
-.legend summary {
+.legend summary,
+.control summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -16,12 +18,14 @@
   list-style: none;
 }
 
-.legend summary::-webkit-details-marker {
+.legend summary::-webkit-details-marker,
+.control summary::-webkit-details-marker {
   display: none;
 }
 
 /* The chevron is CSS: down when closed, up when open. */
-.legend summary::after {
+.legend summary::after,
+.control summary::after {
   content: "";
   width: 0.5rem;
   height: 0.5rem;
@@ -30,7 +34,8 @@
   transform: translateY(-0.1rem) rotate(45deg);
 }
 
-.legend[open] > summary::after {
+.legend[open] > summary::after,
+.control[open] > summary::after {
   transform: translateY(0.1rem) rotate(-135deg);
 }
 
@@ -86,21 +91,88 @@
   align-items: center;
 }
 
-/* Over the map's bottom-right corner, above MapLibre's attribution button (2 is its controls; 3 paints over them). */
-.overlay {
-  position: absolute;
-  right: 0.5rem;
-  bottom: 2.75rem;
-  z-index: 3;
+/* In the corner stack of the view (App.module.css `.corner`), above the timebar: it only limits its own size. */
+.floating {
   box-sizing: border-box;
-  max-width: 20rem;
-  max-height: calc(100% - 3.5rem);
+  max-width: min(20rem, calc(100vw - 1rem));
+  max-height: calc(100dvh - var(--chrome-h, 3.5rem) - var(--timebar-h, 0px) - 7rem);
   margin: 0;
   overflow: auto;
 }
 
-.overlay .list {
+.floating .list {
   flex-direction: column;
   flex-wrap: nowrap;
   gap: 0.15rem;
+}
+
+/* The mode and view disclosures over the top-left corner of the view (P10e D5): styled as the legend, the choice
+   in the summary, the choices in a menu under it so that opening one never moves the other. */
+.control {
+  position: relative;
+  margin: 0;
+}
+
+.control > summary {
+  white-space: nowrap;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: -1px;
+  z-index: 6;
+  box-sizing: border-box;
+  min-width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: 0 0.25rem 1rem rgb(14 58 75 / 25%);
+}
+
+.menu fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.menu .mode,
+.menu .view {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.menu .mode legend,
+.menu .view legend {
+  float: none;
+  margin: 0 0 0.35rem;
+  padding: 0;
+  font-weight: 600;
+}
+
+.menu .mode label {
+  white-space: nowrap;
+}
+
+.view button {
+  min-height: 2rem;
+  padding: 0.1rem 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.view button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.controlRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
 }

@@ -1,9 +1,23 @@
-.map {
-  height: 65vh;
-  min-height: 22rem;
-  border: 1px solid var(--line);
+/* The map fills its view (App.module.css `.view`), up to the window's edges: no border, no margin. */
+div.map {
+  position: absolute;
+  inset: 0;
+}
+
+/* MapLibre's compact attribution button stands above the timebar and beside the station drawer, level with the
+   "Bronnen" button (App.module.css `.corner`). */
+div.map :global(.maplibregl-ctrl-bottom-right) {
+  right: var(--drawer-w, 0px);
+  bottom: calc(var(--timebar-h, 0px) + 0.5rem);
 }
 
 .status {
-  margin: 0 0 0.5rem;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  background: var(--paper);
+  transform: translate(-50%, -50%);
 }
