@@ -173,7 +173,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | actions/checkout | action | 7.0.1 | installed | 3d3c42e5aac5ba805825da76410c181273ba90b1 | MIT | |
 | actions/setup-node | action | 7.0.0 | installed | 820762786026740c76f36085b0efc47a31fe5020 | MIT | `package-manager-cache: false` |
 | step-security/harden-runner | action | 2.21.1 | installed | e14015d583714f6e62063499dc959a02595150a1 | Apache-2.0 | audit mode |
-| github/codeql-action | action | 4.38.1 | installed | 1c5b675653bb5c22dbe9b12b556ec555138e09fd | MIT | public repository (D7) |
+| github/codeql-action | action | 4.38.2 | installed | 2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 | MIT | public repository (D7) |
 | postgres | image | 18.6-trixie | installed | postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 | PostgreSQL | CI service; P2 compose `db` |
 | pebble | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199 | MPL-2.0 | CI only: the ACME server of the deploy end-to-end test |
 | pebble-challtestsrv | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b | MPL-2.0 | CI only: DNS for Pebble |
