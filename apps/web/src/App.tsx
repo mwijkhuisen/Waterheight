@@ -173,9 +173,12 @@ function Viewer({ locale }: { locale: Locale }) {
   const onMap = canMap && view === 'map';
   const notice = !webgl ? m.map_no_webgl({}, { locale }) : mapFailed ? m.map_unavailable({}, { locale }) : undefined;
 
+  // One keyed element in either slot of `.view` (before the table, after the map): React moves it instead of
+  // remounting it, so switching views keeps the legend open or closed as the user left it.
   const legend =
     mode === undefined ? null : (
       <Legend
+        key="legend"
         locale={locale}
         mode={mode}
         forecast={forecasts !== undefined}

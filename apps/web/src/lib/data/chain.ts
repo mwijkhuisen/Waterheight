@@ -307,10 +307,19 @@ export const riversOf = ({ manifest, file }: ReachesRead) => ({ manifest, rivers
 export const travelOf = ({ file }: ReachesRead, c: Contracts = PUBLIC_CONTRACTS): ReachTravelData =>
   c.ReachTravel.parse(file);
 
-/** The stations and reaches of the graph (P10d neighbours): lenient, a bad row is dropped, a bad section is empty. */
-export const graphOf = ({ file }: ReachesRead): ReachGraph => ReachGraphFile.parse(file);
-
-export const loadRivers = async (f: Fetcher, signal?: AbortSignal) => riversOf(await loadReachesFile(f, signal));
+/**
+ * The stations and reaches of the graph (P10d neighbours): lenient, a bad row is dropped, a bad section is empty.
+ * Parsed once per file, however many panels read it (the neighbour index is kept per graph).
+ */
+const graphs = new WeakMap<object, ReachGraph>();
+export function graphOf({ file }: ReachesRead): ReachGraph {
+  let graph = graphs.get(file);
+  if (graph === undefined) {
+    graph = ReachGraphFile.parse(file);
+    graphs.set(file, graph);
+  }
+  return graph;
+}
 
 export const loadReachTravel = async (f: Fetcher, signal?: AbortSignal, c: Contracts = PUBLIC_CONTRACTS) =>
   travelOf(await loadReachesFile(f, signal), c);

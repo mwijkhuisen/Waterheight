@@ -1,6 +1,6 @@
 import { type ApiStation, floorBucket, RiversManifest } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { loadRuntimeConfig, type RuntimeConfig } from '../config/runtime.ts';
 import { stationHorizon } from '../forecast.ts';
 import { quantise, STEP_MS, toUrlT } from '../time/time.ts';
@@ -183,7 +183,9 @@ export const useStatusPage = () => {
 /** The travel times of the installed reaches file (P10b Method page): an error shows the page's own notice. */
 export const useReachTravel = () => {
   const c = useContracts();
-  return useReachesFile((read) => travelOf(read, c), c !== undefined);
+  // A stable select: an inline one would re-parse the pairs on every render (review round 1).
+  const select = useCallback((read: ReachesRead) => travelOf(read, c), [c]);
+  return useReachesFile(select, c !== undefined);
 };
 
 /** The source ids of owner audience (empty on the public site and until sources.json has answered). */
