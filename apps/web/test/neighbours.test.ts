@@ -120,11 +120,29 @@ describe('neighbours', () => {
 
   it('starts the upstream search on its own reach for a station at a sink', () => {
     const g: ReachGraph = {
-      stations: [st('P', 's', 's.1'), st('Q', 's', 's.1')],
+      stations: [st('P', 's', 's.1', 0), st('Q', 's', 's.1', 5)],
       reaches: [rc('s.1', 's', 'P', 'Q')],
     };
     const set = new Set(['P', 'Q']);
     expect(neighbours('Q', g, set)).toEqual({ up: { id: 'P', riverId: 's', crossRiver: false } });
+  });
+
+  // Review round 1: the station at the start of a reach that ends at a sink shares that reach with the sink station.
+  it('never takes a co-located station on a reach that ends at a sink, at either end', () => {
+    // O → (A0 = A1) → (T0 = T1, sink): A0 and T0 are the file's named ends
+    const g: ReachGraph = {
+      stations: [st('O', 's', 's.1', 0), st('A0', 's', 's.2', 3), st('A1', 's', 's.2', 3), st('T0', 's', 's.2', 9)],
+      reaches: [rc('s.1', 's', 'O', 'A0', [], ['s.2']), rc('s.2', 's', 'A0', 'T0', ['s.1'], [])],
+    };
+    const g2: ReachGraph = { ...g, stations: [...g.stations, st('T1', 's', 's.2', 9)] };
+    const set = new Set(['O', 'A0', 'A1', 'T0', 'T1']);
+    expect(neighbours('A1', g2, set)).toEqual({
+      up: { id: 'O', riverId: 's', crossRiver: false },
+      down: { id: 'T0', riverId: 's', crossRiver: false },
+    });
+    expect(neighbours('A0', g2, set).up?.id).toBe('O');
+    expect(neighbours('T1', g2, set)).toEqual({ up: { id: 'A0', riverId: 's', crossRiver: false } });
+    expect(neighbours('T0', g2, set)).toEqual({ up: { id: 'A0', riverId: 's', crossRiver: false } });
   });
 
   it('ends on a cycle, and stops at the depth cap', () => {

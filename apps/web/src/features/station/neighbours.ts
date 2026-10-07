@@ -4,7 +4,7 @@ import type { ReachGraph } from '../../lib/data/contracts.ts';
 // reach graph of reaches-<ver>.json. A reach starts at a station (`reach_id`), `down_station_id` is the station at its
 // end and `up_station_id` the one at its start; a reach with none is passed through to its neighbours. At a
 // confluence or a bifurcation the branch on the same river comes first, then file order. Co-located stations share
-// a reach, so the file already picks one of them per reach end: a station is never its own neighbour.
+// a reach and a chainage, and the file names only one of them at a reach end: such a station is never a neighbour.
 
 type GStation = ReachGraph['stations'][number];
 type GReach = ReachGraph['reaches'][number];
@@ -79,7 +79,9 @@ export function neighbours(id: string, graph: ReachGraph, known: ReadonlySet<str
   const own = ix.reaches.get(station.reach_id);
   if (own === undefined) return {};
 
-  const ok = (other: string) => other !== id && known.has(other) && ix.stations.has(other);
+  const here = (s: GStation | undefined) => s?.reach_id === station.reach_id && s?.km_graph === station.km_graph;
+  const ok = (other: string) =>
+    other !== id && known.has(other) && ix.stations.has(other) && !here(ix.stations.get(other));
   const make = (other: string | undefined): Neighbour | undefined => {
     const found = other === undefined ? undefined : ix.stations.get(other);
     return found === undefined
@@ -88,8 +90,8 @@ export function neighbours(id: string, graph: ReachGraph, known: ReadonlySet<str
   };
 
   // A station at a sink has the reach that ENDS there (the file's rule): its upstream search starts on that reach.
-  const end = own.down_station_id === null ? undefined : ix.stations.get(own.down_station_id);
-  const sink = end !== undefined && end.reach_id === own.id;
+  // The station at that end shares the reach and the chainage; one upstream on a reach that ends at a sink does not.
+  const sink = here(own.down_station_id === null ? undefined : ix.stations.get(own.down_station_id));
   const upStarts = sink ? [own] : branches(ix, own.upstream, own.river_id);
 
   const up = search(
