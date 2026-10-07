@@ -1166,6 +1166,8 @@ P5c uses the P5 build model and the default P5 reviewers (as P5a): `opus` xhigh,
   - An **accessibility statement** and a 404 page, all in NL and EN.
 - **P10c** (built; issue #90, the evidence in §31): the Rivierkijker brand (D23): name, titles, subtitle and meta description in NL and EN, the logo and favicon, the self-hosted fonts, the brand tokens and the signal set (`docs/design/BRAND.md`).
 
+- **P10d** (built; issue #96, the evidence in §32): the station panel, the map legend and the timebar after the waterinfo layout, neighbouring stations, threshold zones by reference role (#88) and reverse play.
+
 **Scope out:** flow animation, playback and Hovmöller (P11); accounts; notifications.
 
 **Acceptance criteria**
@@ -2575,3 +2577,9 @@ What the P10c build (issue #90, PR "P10c: Rivierkijker brand", `Closes #90`) set
 - `apps/web/test/brand.test.ts`: the fonts are what `SHA256SUMS` lists, byte for byte, and every woff2 is used by `base.css` with a same-folder `url()`; the brand tokens are the document's; ten contrast pairs meet their minimum (Waterblauw below 4.5:1 by test, so it stays out of small text); no colour of the signal tokens, `palette.ts`, `labels-index.gen.ts` or `stationLayer.ts` is a brand colour.
 - `apps/web/test/build.test.ts`: the titles and the h1 of the shells, the meta description, the favicon link and the theme colour in all four shells; `favicon.svg` at the root and no `favicon.ico`; six hashed woff2 under `/assets/`; both OFL texts in `third-party-notices.txt`.
 - e2e: the h1 and the subtitle; both fonts loaded (`document.fonts`) while the test's third-party check still passes (invariant 7); `/favicon.svg` is `image/svg+xml`, `no-cache`, with the site headers; the axe colour-contrast runs pass on the new palette.
+
+## 32. Amendment: P10d build (2026-10-07)
+
+What the P10d build (issue #96, PR "P10d: station panel, legend and timebar (waterinfo-like)", `Closes #96`, `Closes #88`) settled against the issue. P10d restyles the station panel, the map legend and the timebar after the layout of waterinfo.rws.nl, in the Rivierkijker brand (`docs/design/BRAND.md` §8). Only layout patterns are taken: no RWS logo, icon, font, CSS or text.
+
+**Owner decisions (2026-10-07):** *(filled in with the evidence)*
