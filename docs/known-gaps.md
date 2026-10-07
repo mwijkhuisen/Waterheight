@@ -11,6 +11,8 @@ Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residua
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
 | KG-249 | web | **Seasonal NL-4 classes are drawn as lines, not zones.** A class with more than one distinct From or To bound at one priority is seasonal, and `recent.json` carries no season (3 series in the committed build: `lobith.bovenrijn.tolkamer` H and Q, `olst` Q) | `recent.json` carries the season of a reference, then the zone follows the month | open |
+| KG-250 | web | **Only stations placed on a river have neighbours.** The nearby rows come from the reach graph of the installed river release: 484 of the 1,000 public stations are placed in the committed build, and the others show no "Nabij gelegen metingen" block. A neighbour on another river is named, but no distance or travel time is shown (P11a owns the indicative travel times) | A better snapping of the unplaced stations (P6 follow-up), or P11a's travel times | open |
+| KG-251 | web | **The open map legend covers part of the map on a desktop.** It sits over the bottom-right corner, open from 48rem, 20rem wide and as tall as its content (the warning-area keys make it long). The owner's visual check of the screenshots decides whether it should open collapsed or in two columns | The owner, after the screenshots (`e2e-test-results` artifact) | open |
 
 ## P10c Brand (PR pending, issue #90)
 
