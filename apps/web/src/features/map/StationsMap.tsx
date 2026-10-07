@@ -152,11 +152,15 @@ export function StationsMap({
     highlightRiver(map, river);
   }, [map, riverTiles, river]);
 
-  // A deep link with a station opens the map on it.
+  // A deep link with a station opens the map on it, in the part the station drawer leaves free (P10e: from 48rem the
+  // drawer is 26rem wide over the right of the map; below that the sheet covers all of it).
   useEffect(() => {
     if (map === null || centred.current) return;
     centred.current = true;
-    if (selected?.lon != null && selected.lat != null) map.jumpTo({ center: [selected.lon, selected.lat], zoom: 9 });
+    if (selected?.lon == null || selected.lat == null) return;
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const right = matchMedia('(min-width: 48rem)').matches ? 26 * rem : 0;
+    map.jumpTo({ center: [selected.lon, selected.lat], zoom: 9, padding: { top: 0, bottom: 0, left: 0, right } });
   }, [map, selected]);
 
   // The popup's lines: per series the text of the map mode (state and basis, the 24-hour change, the discharge), after
