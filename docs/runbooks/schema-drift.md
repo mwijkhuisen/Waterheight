@@ -65,6 +65,8 @@ sudo docker logs --since 24h rws-load-1 2>&1 | grep '"alert":"quarantined"'
 - a file of any sender that fails the XML guards (`xml_size`, `xml_dtd`, `xml_too_many_items`, `xml_invalid`, `xml_name`, …; 1 MiB, 2,000 tags and attributes, depth 32);
 - a file whose `<sender>` is missing, repeated, attributed or empty (`not_cap`).
 
+A `<sender>` that does not decode cleanly (a bad reference, a control or bidirectional character, such as `[AGE]&#x202E;`) is another sender's: such a file is `other_sender`, with no quarantine and no alert. If AGE's flood alerts stop arriving while `other_sender` counts rise, look at the senders in the archive.
+
 The quarantines of version 1 (63 files of other senders, 2026-10-03) go away with one replay: `replay.md` §10.
 
 **Only `quarantined` counts and pages.** A `skipped` batch is silent (only `object_missing` logs an alert, in the tail): list them now and then.

@@ -1283,7 +1283,7 @@ Esch-Sure,,m,… 314.35        (reservoir, absolute m NN)
   - a CGDIS Cancel of a fire alert with a raw left-to-right mark in its headline (`text_char`);
   - a file of sender `LU-Alert`, the platform itself: a **TEST snow warning of the location-based SMS channel** (2025-10-06, `cb-eu-level` TEST, 11 communes of the Redange canton in one block, so `too_big`). It is not a flood alert.
 
-  So the sender is checked **before** the strict schema. Only `[AGE]` files are schema-checked, and every other sender is `other_sender`, stored nowhere. The XML guards (§6.7) still run first on every file. A non-AGE file beyond them (1 MiB, 2,000 tags and attributes, depth 32) is still quarantined; none of the 63 was (their codes were all schema codes).
+  So the sender is checked **before** the strict schema. Only `[AGE]` files are schema-checked, and every other sender is `other_sender`, stored nowhere; its elements, sizes, characters and namespace (CAP 1.2 or not) are not checked. The XML guards (§6.7) still run first on every file. A non-AGE file beyond them (1 MiB, 2,000 tags and attributes, depth 32) is still quarantined; none of the 63 was (their codes were all schema codes).
 
 **LU-6 geometry**
 - pygeoapi 0.23.4: `https://features.geoportail.lu/collections/655/items?f=json&limit=100`. 51 features with `Nom`, `Etat_de_se`, `Hyperlinks` (station fiche PDF), `Hyperlin_1` (photo) and `Hyperlinks_graph` (always null). bbox filtering works; CORS `*`. No values.
