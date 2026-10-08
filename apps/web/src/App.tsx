@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
+import { Attribution } from './features/attribution/Attribution.tsx';
 import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
 import { Layout } from './features/layout/Layout.tsx';
 import { Legend } from './features/legend/Legend.tsx';
-import { ModeControl } from './features/legend/ModeControl.tsx';
+import { MapControls } from './features/legend/MapControls.tsx';
 import { RiverChip } from './features/legend/RiverChip.tsx';
 import { StationsMap } from './features/map/StationsMap.tsx';
 import { hasWebGL2 } from './features/map/webgl.ts';
 import { Page } from './features/pages/Page.tsx';
+import { StationSearch } from './features/search/StationSearch.tsx';
 import { StationPanel } from './features/station/StationPanel.tsx';
 import { StationTable } from './features/table/StationTable.tsx';
 import { Timebar } from './features/timebar/Timebar.tsx';
@@ -144,12 +146,11 @@ function Viewer({ locale }: { locale: Locale }) {
   const setMode = useCallback((next: typeof mode) => setUrl({ mode: next }), [setUrl]);
   const setRiver = useCallback((id: string | undefined) => setUrl({ river: id }), [setUrl]);
   const select = useCallback((id: string | undefined) => setUrl({ s: id }), [setUrl]);
-  // Opening a station from the map or the table moves the focus into the panel; choosing one in the list does
-  // not (the arrow keys of a list change its value at every press). Closing the panel returns the focus to what
-  // opened it (P10a T6): the table's station button while it is still on the page, else the station list (a marker
-  // has no focus of its own).
+  // Opening a station from the map, the table, the search or the nearby list moves the focus into the panel
+  // (P10e D6). Closing the panel returns the focus to what opened it (P10a T6): the table's station button while it
+  // is still on the page, else the search magnifier in the bar (a marker has no focus of its own).
   const [focusPanel, setFocusPanel] = useState(false);
-  const listRef = useRef<HTMLSelectElement>(null);
+  const searchRef = useRef<HTMLButtonElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   const open = useCallback(
     (id: string | undefined) => {
@@ -160,21 +161,27 @@ function Viewer({ locale }: { locale: Locale }) {
     },
     [select],
   );
+  // The focus moves once the panel is gone: below 48rem the view under the sheet is hidden until then, and a hidden
+  // button takes no focus (review round 1).
+  const closing = useRef(false);
   const close = useCallback(() => {
+    closing.current = true;
     select(undefined);
+  }, [select]);
+  useEffect(() => {
+    if (selected !== undefined || !closing.current) return;
+    closing.current = false;
     const back = opener.current;
     opener.current = null;
     if (back?.isConnected) back.focus();
-    else listRef.current?.focus();
-  }, [select]);
+    else searchRef.current?.focus();
+  }, [selected]);
   const failed = useCallback(() => setMapFailed(true), []);
 
   const canMap = webgl && !mapFailed;
   const onMap = canMap && view === 'map';
   const notice = !webgl ? m.map_no_webgl({}, { locale }) : mapFailed ? m.map_unavailable({}, { locale }) : undefined;
 
-  // One keyed element in either slot of `.view` (before the table, after the map): React moves it instead of
-  // remounting it, so switching views keeps the legend open or closed as the user left it.
   const legend =
     mode === undefined ? null : (
       <Legend
@@ -184,7 +191,6 @@ function Viewer({ locale }: { locale: Locale }) {
         forecast={forecasts !== undefined}
         owner={owner}
         warnings={(warnings?.features.length ?? 0) > 0}
-        overlay={onMap}
       />
     );
 
@@ -192,78 +198,63 @@ function Viewer({ locale }: { locale: Locale }) {
     <Layout
       locale={locale}
       route={{ id: 'home', locale }}
-      meta={meta.data}
-      t={t === undefined || range === undefined ? t : Math.min(t, range.now)}
+      search={
+        stations.data === undefined ? undefined : (
+          <StationSearch locale={locale} stations={list} onPick={open} buttonRef={searchRef} />
+        )
+      }
     >
       {range === undefined ||
       end === undefined ||
       t === undefined ||
       stations.data === undefined ||
       mode === undefined ? (
-        meta.isError || stations.isError || audienceFailed ? (
-          <p role="alert">{m.data_unavailable({}, { locale })}</p>
-        ) : (
-          // While the data loads, what the static shell of index.html says (P10a: the first frame carries the
-          // page's text at once, so the largest paint does not wait for the data).
-          <>
-            <p>{m.intro({}, { locale })}</p>
-            <p>{m.not_official({}, { locale })}</p>
-            <p role="status">{m.loading({}, { locale })}</p>
-          </>
-        )
+        <div className={styles.plain}>
+          {meta.isError || stations.isError || audienceFailed ? (
+            <p role="alert">{m.data_unavailable({}, { locale })}</p>
+          ) : (
+            // While the data loads, what the static shell of index.html says (P10a: the first frame carries the
+            // page's text at once, so the largest paint does not wait for the data).
+            <>
+              <p>{m.intro({}, { locale })}</p>
+              <p>{m.not_official({}, { locale })}</p>
+              <p role="status">{m.loading({}, { locale })}</p>
+            </>
+          )}
+        </div>
       ) : (
-        <>
-          <div className={styles.controls}>
-            <ModeControl locale={locale} mode={mode} onChange={setMode} />
-            {canMap && (
-              <fieldset className={styles.toggle}>
-                <legend>{m.view_label({}, { locale })}</legend>
-                <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>
-                  {m.view_map({}, { locale })}
-                </button>
-                <button type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>
-                  {m.view_table({}, { locale })}
-                </button>
-              </fieldset>
-            )}
-            <label className={styles.select}>
-              {m.station_select_label({}, { locale })}
-              <select
-                ref={listRef}
-                value={selected?.id ?? ''}
-                onChange={(e) => {
-                  setFocusPanel(false);
-                  select(e.currentTarget.value || undefined);
-                }}
-              >
-                <option value="">{m.station_select_none({}, { locale })}</option>
-                {list.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.waterName === null ? st.name : `${st.name} (${st.waterName})`}
-                  </option>
-                ))}
-              </select>
-            </label>
+        // P10e: the view is the stage, as tall as the window under the bar. On the map the mode and view disclosures
+        // and the status lines float over its top, the legend and the credits over its bottom right, the timebar over
+        // its bottom centre and the station panel is a drawer on its right; in the table view the top is a band above
+        // the table, which then scrolls inside the stage.
+        <div
+          className={`${styles.stage} ${onMap ? styles.onMap : styles.onTable} ${selected !== undefined ? styles.withPanel : ''}`}
+        >
+          <div className={styles.top}>
+            <div className={styles.controls}>
+              <MapControls locale={locale} mode={mode} onMode={setMode} view={view} onView={setView} canMap={canMap} />
+            </div>
+            <div className={styles.status}>
+              {notice !== undefined && (
+                <p role="status">
+                  {notice} {m.map_fallback({}, { locale })}
+                </p>
+              )}
+              {river !== undefined && (
+                <RiverChip locale={locale} id={river.id} river={river.river} onClear={() => setRiver(undefined)} />
+              )}
+              {snapshot.isError && <p role="alert">{m.data_unavailable({}, { locale })}</p>}
+              {warnings?.incomplete === true && <p role="status">{m.warnings_incomplete({}, { locale })}</p>}
+              {mode === 'delta' && forecasts !== undefined && <p role="status">{m.dh_future_note({}, { locale })}</p>}
+              <DegradedBanner
+                locale={locale}
+                degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}
+                standInAt={snapshot.data?.standIn === true ? Date.parse(snapshot.data.t) : undefined}
+              />
+            </div>
           </div>
-          {notice !== undefined && (
-            <p role="status" className={styles.notice}>
-              {notice} {m.map_fallback({}, { locale })}
-            </p>
-          )}
-          {river !== undefined && (
-            <RiverChip locale={locale} id={river.id} river={river.river} onClear={() => setRiver(undefined)} />
-          )}
-          {snapshot.isError && <p role="alert">{m.data_unavailable({}, { locale })}</p>}
-          {warnings?.incomplete === true && <p role="status">{m.warnings_incomplete({}, { locale })}</p>}
-          {mode === 'delta' && forecasts !== undefined && <p role="status">{m.dh_future_note({}, { locale })}</p>}
-          <DegradedBanner
-            locale={locale}
-            degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}
-            standInAt={snapshot.data?.standIn === true ? Date.parse(snapshot.data.t) : undefined}
-          />
           <div className={loading ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={loading}>
             <div className={styles.view}>
-              {!onMap && legend}
               {onMap ? (
                 <StationsMap
                   locale={locale}
@@ -296,7 +287,6 @@ function Viewer({ locale }: { locale: Locale }) {
                   onSelect={open}
                 />
               )}
-              {onMap && legend}
             </div>
             {selected !== undefined && (
               <StationPanel
@@ -321,6 +311,10 @@ function Viewer({ locale }: { locale: Locale }) {
               />
             )}
           </div>
+          <div className={styles.corner}>
+            {legend}
+            <Attribution locale={locale} meta={meta.data} t={Math.min(t, range.now)} />
+          </div>
           <Timebar
             locale={locale}
             t={t}
@@ -332,7 +326,7 @@ function Viewer({ locale }: { locale: Locale }) {
             live={isLive}
             onChange={setT}
           />
-        </>
+        </div>
       )}
     </Layout>
   );

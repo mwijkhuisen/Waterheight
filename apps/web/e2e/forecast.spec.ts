@@ -1,7 +1,18 @@
-import { AxeBuilder } from '@axe-core/playwright';
-import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { CANARY_RENDERINGS } from '@rws/contracts';
-import { expectClean, instrument } from './clean.ts';
+import {
+  chooseView,
+  expandTimebar,
+  expectNoSeriousAxe,
+  featureState,
+  finish,
+  open,
+  panelOf,
+  pickStation,
+  settled,
+  slider,
+  start,
+} from './helpers.ts';
 
 // P8b acceptance (issue #23), on Chromium, Firefox and WebKit, against the e2e build under the production headers
 // with the e2e api behind it (apps/server/test/e2e/api.ts, a fixed clock: NOW) and its synthetic forecast runs:
@@ -26,88 +37,13 @@ const RAW_BASIS = 'Licht verhoogd (<img src=y onerror=alert(3)>)';
 const RAW_NAME = '<img src=x onerror=alert(1)>';
 const LOBITH = 'nl.rws.lobith.bovenrijn.tolkamer';
 
-interface Hook {
-  map: { getFeatureState(f: { source: string; id: string }): Record<string, unknown> } | null;
-  charts: Set<{ getOption(): { series?: { data?: unknown[] }[] } | undefined }>;
-}
-type W = Window & { __rws?: Hook };
-
 // ---------------------------------------------------------------- helpers
 
-async function start(page: Page, context: BrowserContext, baseURL: string | undefined) {
-  const log = await instrument(page, context, baseURL);
-  const dialogs: string[] = [];
-  page.on('dialog', (d) => {
-    dialogs.push(`${d.type()}: ${d.message()}`);
-    void d.dismiss();
-  });
-  await page.clock.setFixedTime(NOW);
-  // P10a: the default map mode is status.json's (the e2e publisher's says "dh": the change mode); these specs read the
-  // state words, so they serve a file that says "state".
-  await page.route('**/data/v1/status.json', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: '{"classification":{"mode":"state"}}' }),
-  );
-  return { log, dialogs };
-}
-type Session = Awaited<ReturnType<typeof start>>;
-
-/** No dialog, 0 CSP violations, same-origin requests only. */
-async function finish(page: Page, s: Session) {
-  expect(s.dialogs).toEqual([]);
-  await expectClean(page, s.log);
-}
-
-const slider = (page: Page, name = 'Tijdlijn') => page.getByRole('slider', { name });
-const panelOf = (page: Page) => page.locator('aside');
-/** The station list; `exact`, because the panel's close button is also named "Station …". */
-const stationList = (page: Page, name = 'Station') => page.getByRole('combobox', { name, exact: true });
 const tParam = (page: Page) => new URL(page.url()).searchParams.get('t');
-
-/** Opens a page and waits for the viewer (the slider exists once meta and stations have arrived). */
-async function open(page: Page, path: string, name?: string) {
-  await page.goto(path);
-  await expect(slider(page, name)).toBeVisible();
-}
-
-const featureState = (page: Page, id: string) =>
-  page.evaluate((id) => {
-    try {
-      return (window as unknown as W).__rws?.map?.getFeatureState({ source: 'stations', id }) ?? null;
-    } catch {
-      return null;
-    }
-  }, id);
 
 /** The map has its stations and the snapshot of the page's t has arrived: the xss station is marked as it must be. */
 const markerReady = (page: Page, forecast: boolean) =>
   expect.poll(() => featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true, forecast });
-
-/** The values on screen are those of the page's t (nothing is marked busy) and every chart has drawn its points. */
-async function settled(page: Page) {
-  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
-  await page.waitForFunction(() => {
-    const charts = [...((window as unknown as W).__rws?.charts ?? [])];
-    const panels = document.querySelectorAll('aside div[role="img"]').length;
-    return charts.length === panels && charts.every((c) => (c.getOption()?.series?.[0]?.data?.length ?? 0) > 0);
-  });
-}
-
-/** axe on the page (or one part of it): no undecided check, and no serious or critical finding. */
-async function expectNoSeriousAxe(page: Page, scope?: string) {
-  await settled(page);
-  // The table pages at 100 rows (P10a): every row of a page is checked (KG-129 closed).
-  const axe = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']);
-  const result = await (scope === undefined ? axe : axe.include(scope)).analyze();
-  expect(result.passes.length, 'axe ran its rules').toBeGreaterThan(10);
-  const nodes = (v: (typeof result.violations)[number]) =>
-    v.nodes.map((n) => `${n.target.join(' ')} ${n.html.slice(0, 160)} ${n.failureSummary ?? ''}`.trim());
-  expect(result.incomplete.map((v) => `${v.id}: ${nodes(v).join(' | ')}`)).toEqual([]);
-  expect(
-    result.violations
-      .filter((v) => v.impact === 'serious' || v.impact === 'critical')
-      .map((v) => `${v.id} (${v.impact}): ${nodes(v).join(' | ')}`),
-  ).toEqual([]);
-}
 
 /** Every /api/ answer the page receives, with its body. */
 function watchApi(page: Page) {
@@ -143,8 +79,9 @@ test('moving the slider past now switches to forecast styling, and "Nu" comes ba
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/');
+  await expandTimebar(page); // (P10e: the "nu" marker, the notes and the slider's description are in the expanded timebar)
   await markerReady(page, false);
   // Up to now: values, no badge; the "nu" marker is on the track; with no station selected the track reaches +48 h.
   await expect(page.getByText('Verwachting', { exact: true })).toHaveCount(0);
@@ -180,7 +117,7 @@ test('after the provider’s own segment a forecast is an estimate; after a stat
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   // NOW + 20 h: xss is past its provider segment (NOW + 12 h), dst is at its last point (NOW + 20 h).
   await open(page, `/?t=${at(20)}`);
   await markerReady(page, true);
@@ -202,7 +139,7 @@ test('the panel and the popup name the agency, the fetch time, the band and the 
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, `/en/?t=${at(2)}&s=nl.e2e.xss`, 'Timeline');
   await markerReady(page, true);
   const level = panelOf(page).getByRole('region', { name: 'Water level' });
@@ -227,7 +164,7 @@ test('the panel and the popup name the agency, the fetch time, the band and the 
   expect(s.log.requests.map((u) => new URL(u).pathname).filter((p) => p.endsWith('/y'))).toEqual([]);
 
   // A stated issue time reads "issued"; this run has no band, so no row for one.
-  await stationList(page).selectOption('nl.e2e.dst');
+  await pickStation(page, 'E2E DST', /E2E DST/, 'en');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E DST');
   const dst = panelOf(page).getByRole('region', { name: 'Water level' });
   await expect(dst.locator('strong')).toHaveText('420');
@@ -237,7 +174,7 @@ test('the panel and the popup name the agency, the fetch time, the band and the 
 });
 
 test('an estimate says so in words (NL), and the band keeps its percentiles', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, `/?t=${at(20)}&s=nl.e2e.xss`);
   const level = panelOf(page).getByRole('region', { name: 'Waterstand' });
   await expect(level.locator('strong')).toHaveText('430');
@@ -257,7 +194,7 @@ test('a series without a forecast says "Geen verwachting" next to one that has i
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   // Lobith: a run for the water level only (to NOW + 40 h), none for the discharge.
   await open(page, `/?t=${at(2)}&s=${LOBITH}`);
   await expect(slider(page)).toHaveAttribute('max', ms(40));
@@ -279,12 +216,12 @@ test('the table lists the forecast as text and says "Geen verwachting" for a sta
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, `/?t=${at(2)}`);
   await markerReady(page, true);
   // The map greys the gap station; the table says it in words.
   expect(await featureState(page, 'nl.e2e.gap')).toMatchObject({ has: false, forecast: true });
-  await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+  await chooseView(page, 'table');
   const table = page.locator('table');
   await expect(table.locator('caption')).toContainText('Verwachtingen voor');
   await expect(table.getByRole('columnheader', { name: 'Verwachting', exact: true })).toBeVisible();
@@ -292,13 +229,13 @@ test('the table lists the forecast as text and says "Geen verwachting" for a sta
   const row = (name: string) => table.locator('tbody tr', { has: page.getByRole('button', { name, exact: true }) });
   // The table pages at 100 rows (P10a): the station chosen in the list brings its page into view (E2E DST, then the hostile
   // name, which sorts first). Choosing a station also limits the slider to its forecast: both have one at +2 h.
-  await stationList(page).selectOption('nl.e2e.dst');
+  await pickStation(page, 'E2E DST', /E2E DST/);
   await expect(table.locator('caption')).toContainText('Verwachtingen voor');
   await expect(row('E2E gap').locator('td').nth(4)).toHaveText('Geen verwachting');
   await expect(row('E2E gap').locator('td').nth(5)).toHaveText('–');
   await expect(row('E2E DST').locator('td').nth(4)).toHaveText('420 cm NAP');
   await expect(row('E2E DST').locator('td').nth(5)).toHaveText(/^RWS, uitgegeven .*10:00 CET$/);
-  await stationList(page).selectOption('nl.e2e.xss');
+  await pickStation(page, 'onerror', /onerror=alert\(1\)/);
   await expect(row(RAW_NAME).locator('td').nth(4)).toHaveText('340 cm NAP');
   await expect(row(RAW_NAME).locator('td').nth(5)).toHaveText(/^RWS, opgehaald .*11:00 CET; 10–90 %: 320–365 cm NAP$/);
   // Back at now the table shows the observations again.
@@ -314,21 +251,23 @@ test('the slider ends at the selected station’s horizon, else at now + 48 h; a
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, '/');
   await expect(slider(page)).toHaveAttribute('max', ms(48));
-  await stationList(page).selectOption('nl.e2e.xss');
+  await pickStation(page, 'onerror', /onerror=alert\(1\)/);
   await expect(slider(page)).toHaveAttribute('max', ms(30));
-  await stationList(page).selectOption('nl.e2e.dst');
+  await pickStation(page, 'E2E DST', /E2E DST/);
   await expect(slider(page)).toHaveAttribute('max', ms(20));
   // No run at all (the owner-canary run on it is not public): the track ends at now, and a note says why.
-  await stationList(page).selectOption('nl.e2e.gap');
+  await pickStation(page, 'E2E gap', /E2E gap/);
+  await expandTimebar(page); // (P10e: the notes are in the expanded timebar)
   await expect(slider(page)).toHaveAttribute('max', ms(0));
   await expect(
     page.getByText('Voor dit station is geen verwachting beschikbaar: de tijdlijn eindigt bij ‘nu’.'),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: '10 minuten vooruit' })).toHaveAttribute('aria-disabled', 'true');
-  await stationList(page).selectOption('');
+  await panelOf(page).getByRole('button', { name: 'Station sluiten' }).click();
+  await expect(panelOf(page)).toHaveCount(0);
   await expect(slider(page)).toHaveAttribute('max', ms(48));
   await expect(page.getByText('Voor dit station is geen verwachting beschikbaar', { exact: false })).toHaveCount(0);
 
@@ -350,7 +289,7 @@ test('the slider works from the keyboard across now and says when it is in the f
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   await open(page, `/?s=nl.e2e.xss`);
   await expect(slider(page)).toHaveAttribute('max', ms(30));
   await slider(page).focus();
@@ -388,7 +327,7 @@ test('the owner canary never appears: not in the page at any t, not in any /api/
   baseURL,
   request,
 }) => {
-  const s = await start(page, context, baseURL);
+  const s = await start(page, context, baseURL, 'state');
   const api = watchApi(page);
   const stations = (await (await request.get('/api/v1/stations')).json()) as {
     stations: { id: string; series: { id: number }[] }[];
@@ -412,12 +351,12 @@ test('the owner canary never appears: not in the page at any t, not in any /api/
     await expect.poll(() => featureState(page, 'nl.e2e.gap')).toMatchObject({ has: false, forecast: true });
     expect(leaks(await page.content()), `the page at +${hours} h`).toEqual([]);
   }
-  await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+  await chooseView(page, 'table');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
   expect(leaks(await page.content())).toEqual([]);
   expect(leaks(await page.locator('body').innerText())).toEqual([]);
   const forecastOfGap = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/v1/series/${gap}/forecast`);
-  await stationList(page).selectOption('nl.e2e.gap');
+  await pickStation(page, 'E2E gap', /E2E gap/);
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E gap');
   expect(((await (await forecastOfGap).json()) as { run: unknown }).run).toBeNull();
   await settled(page);
@@ -435,13 +374,16 @@ test('the owner canary never appears: not in the page at any t, not in any /api/
 
 const axeSpec = (title: string, run: (page: Page) => Promise<void>) =>
   test(title, async ({ page, context, baseURL }) => {
-    const s = await start(page, context, baseURL);
+    const s = await start(page, context, baseURL, 'state');
     await run(page);
     await expectNoSeriousAxe(page);
     await finish(page, s);
   });
 
 axeSpec('axe finds no serious or critical issue: the forecast view with the panel open', async (page) => {
+  // (1440 px wide: at 1024 px the map centres the station under the drawer, and its popup's close button with it, which
+  // axe cannot judge)
+  await page.setViewportSize({ width: 1440, height: 900 });
   await open(page, `/?t=${at(2)}&s=nl.e2e.xss`);
   await markerReady(page, true);
   await expect.poll(() => featureState(page, 'nl.e2e.xss')).toMatchObject({ selected: true });
@@ -453,13 +395,14 @@ axeSpec('axe finds no serious or critical issue: the forecast table, in English'
   // A tall viewport: axe cannot decide the colour contrast of rows that the scroll area clips.
   await page.setViewportSize({ width: 1024, height: 20_000 });
   await open(page, `/en/?t=${at(2)}`, 'Timeline');
-  await page.getByRole('button', { name: 'Table', exact: true }).click();
+  await chooseView(page, 'table', 'en');
   await expect(page.locator('table caption')).toContainText('Forecasts for');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
 });
 
 axeSpec('axe finds no serious or critical issue: a station without a forecast, at now', async (page) => {
   await open(page, '/?s=nl.e2e.gap');
+  await expandTimebar(page); // (P10e: the notes are in the expanded timebar)
   await expect(page.getByText('Voor dit station is geen verwachting beschikbaar')).toBeVisible();
   await expect(slider(page)).toHaveAttribute('max', ms(0));
 });

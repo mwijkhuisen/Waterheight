@@ -10,6 +10,6 @@
     "rewriteRelativeImportExtensions": false,
     "tsBuildInfoFile": "../node_modules/.cache/tsc/e2e.tsbuildinfo"
   },
-  "include": [".", "../src/lib/routes.ts"],
+  "include": [".", "../src/lib/routes.ts", "../src/lib/attribution.ts"],
   "references": [{ "path": "../../../packages/core" }]
 }

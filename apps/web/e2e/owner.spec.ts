@@ -4,6 +4,7 @@ import { expect, type Locator, test } from '@playwright/test';
 import { CANARY_RENDERINGS } from '@rws/contracts';
 import { parse } from 'yaml';
 import {
+  chooseView,
   expectInert,
   expectNoSeriousAxe,
   featureState,
@@ -15,10 +16,10 @@ import {
   open,
   panelOf,
   param,
+  pickStation,
   settled,
   slider,
   start,
-  stationList,
   type W,
   XSS,
 } from './helpers.ts';
@@ -78,6 +79,10 @@ for (const locale of ['nl', 'en'] as const) {
     await mapReady(page);
     const banner = page.getByRole('region', { name: msg(locale, 'owner_banner_label') });
     await expect(banner).toBeVisible();
+    // P10e: a slim strip directly under the bar
+    const bar = await page.getByRole('banner').boundingBox();
+    const strip = await banner.boundingBox();
+    expect(strip?.y ?? 0).toBeGreaterThanOrEqual((bar?.y ?? 0) + (bar?.height ?? 0) - 1);
     await expect(banner.getByText(msg(locale, 'owner_banner'), { exact: true })).toBeVisible();
     // Not dismissible: no button in it but the native disclosure.
     await expect(banner.getByRole('button')).toHaveCount(0);
@@ -108,10 +113,10 @@ for (const locale of ['nl', 'en'] as const) {
     }
 
     // The banner stays on the table view and with a station open.
-    await page.getByRole('button', { name: msg(locale, 'view_table'), exact: true }).click();
+    await chooseView(page, 'table', locale);
     await expect(page.locator('table')).toHaveCount(1);
     await expect(banner).toBeVisible();
-    await stationList(page, msg(locale, 'station_select_label')).selectOption(OWNER_STATION);
+    await pickStation(page, 'BIERGES', /BIERGES/, locale);
     await expect(panelOf(page)).toHaveCount(1);
     await expect(banner).toBeVisible();
     await finish(page, s);
@@ -143,7 +148,7 @@ test('the "owner only" badge is on the BE-3 station: the map, the table, the pan
   await mapLegend.locator('summary').click();
   await expect(mapLegend.getByText(msg('nl', 'legend_owner'))).toBeVisible();
   // The table row.
-  await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+  await chooseView(page, 'table');
   const row = page.locator('table tbody tr', { has: page.locator('button[aria-pressed="true"]') });
   await expect(row).toHaveCount(2); // its stage and its discharge series
   await expect(row.first().locator('td').last()).toContainText(badge);
@@ -222,13 +227,17 @@ test('the canary is nowhere: not a station, not a value, not in the page or any 
     expect(leaks(await page.content()), `the page at +${hours} h`).toEqual([]);
   }
   // The station that carries the canary's forecast run (nl.e2e.gap) shows no forecast and not its value.
-  await stationList(page).selectOption('nl.e2e.gap');
+  await pickStation(page, 'E2E gap', /E2E gap/);
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText('E2E gap');
   await idle(page);
   expect(leaks(await page.content())).toEqual([]);
   // Every chart's option, serialised, in both views of the owner stations.
-  for (const id of [OWNER_STATION, LU_STATION]) {
-    await stationList(page).selectOption(id);
+  for (const [id, name] of [
+    [OWNER_STATION, 'BIERGES'],
+    [LU_STATION, 'Bigonville'],
+  ] as const) {
+    await pickStation(page, name, new RegExp(name));
+    await expect.poll(() => param(page, 's')).toBe(id);
     await expect(page.locator('aside')).toHaveCount(1);
     await idle(page);
     const options = await page.evaluate(() =>
@@ -236,7 +245,7 @@ test('the canary is nowhere: not a station, not a value, not in the page or any 
     );
     expect(leaks(options), `chart options of ${id}`).toEqual([]);
   }
-  await page.getByRole('button', { name: 'Tabel', exact: true }).click();
+  await chooseView(page, 'table');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
   expect(leaks(await page.locator('body').innerText())).toEqual([]);
   expect(await page.locator('table tbody tr', { hasText: 'CANARY' }).count()).toBe(0);
@@ -252,6 +261,9 @@ test('axe finds no serious or critical issue on the owner map view with its bann
   baseURL,
 }) => {
   const s = await start(page, context, baseURL, 'state');
+  // P10e: the open terms scroll inside the strip (30 % of the window's height), and axe cannot decide the colour contrast
+  // of list items that a scroll area clips; a tall window shows them all.
+  await page.setViewportSize({ width: 1024, height: 2000 });
   await open(page, `/?s=${OWNER_STATION}`);
   await mapReady(page);
   await page

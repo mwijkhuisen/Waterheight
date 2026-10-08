@@ -1,7 +1,13 @@
+/* The table fills the view under the bar and scrolls in it (P10e). The room at its right (the station drawer) and at
+   its bottom (the timebar, the legend and the credits) is padding and scroll padding, so a focused row is never
+   hidden under one of them (WCAG 2.4.11). */
 .wrap {
-  max-height: 65vh;
+  box-sizing: border-box;
+  height: 100%;
+  padding-right: var(--drawer-w, 0px);
+  padding-bottom: calc(var(--timebar-h, 0px) + 3.5rem);
   overflow: auto;
-  border: 1px solid var(--line);
+  scroll-padding-bottom: calc(var(--timebar-h, 0px) + 4rem);
 }
 
 .table {

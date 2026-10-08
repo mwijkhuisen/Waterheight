@@ -1,23 +1,19 @@
-import type { Meta } from '@rws/contracts';
-import { lazy, type ReactNode, Suspense, useEffect, useMemo } from 'react';
-import { attributionText } from '../../lib/attribution.ts';
+import { lazy, type ReactNode, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useAudience, useSources } from '../../lib/data/api.ts';
-import { httpsHref } from '../../lib/href.ts';
 import { PAGE_ROUTES, pathOf, type Route, type RouteId } from '../../lib/routes.ts';
-import { formatDay, ZONE } from '../../lib/time/time.ts';
 import { otherLanguageHref } from '../../lib/url/url.ts';
 import { useUrlState } from '../../lib/url/useUrlState.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
-import { MapCredits } from '../pages/parts/MapCredits.tsx';
 import { Logo } from './Logo.tsx';
 import styles from './layout.module.css';
 
-// The chrome of every view (P10b T2): the map, the information pages and the 404 page. A header with the logo, the
-// site name in its two colours and the subtitle (P10c; the name is the map's h1 and a link home elsewhere) and the
-// language link to the same page, the beta banner with a link to the
-// disclaimer, the owner banner on the owner site, the view in <main>, and the footer: the page links, the map's
-// credits and, on the map, the attribution of the sources it shows.
+// The chrome of every view (P10b T2, P10e): the map, the information pages and the 404 page. A bar that stays at the
+// top (sticky): the logo and the site name in its two colours (the map's h1 and a link home elsewhere), the subtitle
+// from 100rem, the nine page links (below 80rem folded into a menu button), a compact "bèta" link to the
+// disclaimer, the language link to the same page and, on the map, the station search. The owner banner sits
+// directly under it on the owner site. On the map nothing follows but the full-screen view (its credits are the
+// "Bronnen" disclosure over the map, features/attribution); the pages and the 404 page end in a slim footer.
 
 // The owner chunk (P10a T12): fetched only on the owner site, never by the public page.
 const OwnerBanner = lazy(() => import('../owner/index.ts').then((o) => ({ default: o.OwnerBanner })));
@@ -49,21 +45,21 @@ export function pageTitle(id: RouteId, locale: Locale): string {
 export function Layout({
   locale,
   route,
-  meta,
-  t,
+  search,
   children,
 }: {
   locale: Locale;
   /** null on the 404 page. */
   route: Route | null;
-  /** The map's /meta and instant: the footer then credits the sources it shows. */
-  meta?: Meta | undefined;
-  t?: number | undefined;
+  /** The station search of the map (a magnifier in the bar), once the stations are known. */
+  search?: ReactNode;
   children: ReactNode;
 }) {
   const owner = useAudience() === 'owner';
   const [url] = useUrlState();
   const id = route?.id;
+  const bar = useRef<HTMLElement>(null);
+  const strip = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // The map carries the full title; every other view is "<page> · Rivierkijker" (BRAND.md §2).
     document.title =
@@ -71,10 +67,32 @@ export function Layout({
         ? m.site_title({}, { locale })
         : `${id === undefined ? m.not_found_heading({}, { locale }) : pageTitle(id, locale)} · ${m.heading({}, { locale })}`;
   }, [id, locale]);
+  // The real height of the bar and the owner strip (the strip grows when its terms are opened) is --chrome-h: the
+  // full-screen map is the viewport minus it, and a drawer or a menu starts under it. Set on <html> by the CSSOM,
+  // as the timebar does with --timebar-h (the CSP allows no inline style).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the owner strip exists only on the owner site; observe it once it does
+  useEffect(() => {
+    const root = document.documentElement;
+    // Rounded up (offsetHeight rounds to the nearest pixel, so a fractional bar could make the map a sliver too tall
+    // and the page scroll; review round 1).
+    const height = (el: HTMLElement | null) => el?.getBoundingClientRect().height ?? 0;
+    const measure = () =>
+      root.style.setProperty('--chrome-h', `${Math.ceil(height(bar.current) + height(strip.current))}px`);
+    measure();
+    const size = new ResizeObserver(measure);
+    for (const el of [bar.current, strip.current]) if (el !== null) size.observe(el);
+    return () => {
+      size.disconnect();
+      root.style.removeProperty('--chrome-h');
+    };
+  }, [owner]);
   const other = locale === 'nl' ? 'en' : 'nl';
+  const menu = useId();
+  // A popover button gets no aria-expanded of its own in every browser: the nav's toggle event sets it.
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <>
-      <header className={styles.header}>
+      <header ref={bar} className={styles.bar}>
         <div className={styles.brand}>
           {id === 'home' ? (
             <h1 className={styles.name}>
@@ -89,16 +107,49 @@ export function Layout({
           )}
           <p className={styles.subtitle}>{m.subtitle({}, { locale })}</p>
         </div>
-        <a href={otherLanguageHref(locale, url, id)} hrefLang={other} lang={other}>
-          {m.other_language({}, { locale })}
-        </a>
+        <button type="button" className={styles.menuButton} popoverTarget={menu} aria-expanded={menuOpen}>
+          {m.menu_button({}, { locale })}
+        </button>
+        {/* Below 80rem a popover (Escape and a click outside close it, the focus returns to the button); from there
+            on the same element is simply the row of links. */}
+        <nav
+          id={menu}
+          popover="auto"
+          className={styles.nav}
+          aria-label={m.footer_nav_label({}, { locale })}
+          onToggle={(e) => setMenuOpen(e.newState === 'open')}
+        >
+          <ul>
+            {PAGE_ROUTES.map((r) => (
+              <li key={r.id}>
+                <a href={r[locale]} aria-current={r.id === id ? 'page' : undefined}>
+                  {pageTitle(r.id, locale)}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <div className={styles.tools}>
+          <a
+            href={pathOf('disclaimer', locale)}
+            className={styles.beta}
+            aria-label={`${m.beta_banner({}, { locale })} ${m.beta_banner_link({}, { locale })}`}
+          >
+            {m.beta_short({}, { locale })}
+          </a>
+          <a href={otherLanguageHref(locale, url, id)} hrefLang={other} lang={other}>
+            {m.other_language({}, { locale })}
+          </a>
+          {search}
+        </div>
       </header>
-      <p className={styles.beta}>
-        {m.beta_banner({}, { locale })} <a href={pathOf('disclaimer', locale)}>{m.beta_banner_link({}, { locale })}</a>
-      </p>
-      {owner && <OwnerShell locale={locale} />}
-      <main className={id === 'home' ? `${styles.main} ${styles.tall}` : styles.main}>{children}</main>
-      <Footer locale={locale} current={id} meta={meta} t={t} />
+      {owner && (
+        <div ref={strip} className={styles.owner}>
+          <OwnerShell locale={locale} />
+        </div>
+      )}
+      <main className={id === 'home' ? styles.mapMain : styles.main}>{children}</main>
+      {id !== 'home' && <Footer locale={locale} />}
     </>
   );
 }
@@ -107,7 +158,7 @@ export function Layout({
 function Name({ locale }: { locale: Locale }) {
   return (
     <>
-      <Logo variant="light" size={64} />
+      <Logo variant="light" size={32} />
       <span>
         {m.name_lead({}, { locale })}
         <span className={styles.accent}>{m.name_accent({}, { locale })}</span>
@@ -127,62 +178,11 @@ function OwnerShell({ locale }: { locale: Locale }) {
   );
 }
 
-/**
- * The page links, and on the map the sources from /meta, a source that fills another's series included (FR-3,
- * CH-3). Where a row needs a date, it is the Amsterdam date of `t` in the page's language; a text that another
- * source already showed is not repeated (CH-3 says what CH-1 says).
- */
-function Footer({
-  locale,
-  current,
-  meta,
-  t,
-}: {
-  locale: Locale;
-  /** The page on screen (undefined on the 404 page): its link is marked as the current page. */
-  current: RouteId | undefined;
-  meta: Meta | undefined;
-  t: number | undefined;
-}) {
-  const date = t === undefined ? undefined : formatDay(t, locale, ZONE);
-  const shown = new Set<string>();
+/** The slim footer of the pages and the 404 page: the disclaimer line and the third-party notices. */
+function Footer({ locale }: { locale: Locale }) {
   return (
     <footer className={styles.footer}>
-      <Logo variant="dark" size={40} />
       <p className={styles.disclaimer}>{m.disclaimer({}, { locale })}</p>
-      <nav aria-label={m.footer_nav_label({}, { locale })}>
-        <ul className={styles.nav}>
-          {PAGE_ROUTES.map((r) => (
-            <li key={r.id}>
-              <a href={r[locale]} aria-current={r.id === current ? 'page' : undefined}>
-                {pageTitle(r.id, locale)}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      {meta !== undefined && date !== undefined && meta.sources.length > 0 && (
-        <>
-          <h2>{m.sources_heading({}, { locale })}</h2>
-          <ul>
-            {meta.sources.flatMap((source) =>
-              source.attribution.flatMap((a) => {
-                const text = attributionText(a.text, a.needsDate, date);
-                const href = httpsHref(a.url);
-                const seen = `${a.lang}|${href}|${text}`;
-                if (shown.has(seen)) return [];
-                shown.add(seen);
-                return [
-                  <li key={`${source.id}|${a.text}`} lang={a.lang ?? undefined}>
-                    {href === undefined ? text : <a href={href}>{text}</a>}
-                  </li>,
-                ];
-              }),
-            )}
-          </ul>
-        </>
-      )}
-      <MapCredits locale={locale} />
       <p>
         <a href="/third-party-notices.txt">{m.notices_link({}, { locale })}</a>
       </p>

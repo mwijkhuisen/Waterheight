@@ -4,6 +4,19 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P10e Full-screen map (PR pending, issue #101)
+
+`PHASES.md` §33 has the decisions and the evidence.
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-252 | web | **Choosing the open station again from the search does not move the focus to its panel.** The panel's focus effect runs on mount (or when its `focus` request changes), and the same station id changes neither | A later change: the search asks for focus explicitly when the picked id equals the open one | open |
+| KG-253 | web | **A popup near the drawer can reach under it.** The deep-link case is closed (review round 1): a deep link (`?s=`) centres the station in the middle of the part the 26rem drawer leaves free (`jumpTo`, then `panBy` half the drawer, with no camera padding left behind; e2e at 1024 × 768). What stays: a station chosen later from the search, the table or a marker does not move the camera, and MapLibre places a popup by the whole map's width, so a marker just left of the drawer can put the popup's close button under it (the drawer's own close button stays reachable) | A later change: the search and table choices ease the camera into the free part, and the popup follows the free width | open |
+| KG-254 | web | **Below 48rem the map or table and the mode and view controls are hidden while a station is open.** The sheet covers the view, so the view is `visibility: hidden` (out of the tab order, MapLibre's attribution button included) and the mode and view controls are not shown; the status lines become a band above the sheet and stay readable (review round 1). The mode cannot be changed until the panel closes | Accepted unless the owner's phone check says otherwise; the sheet's close button returns the map, the controls and the focus to the opener | accepted: the view and the controls come back when the panel closes |
+| KG-255 | web | **Lighthouse after the layout change: local median performance 56, accessibility 100, LCP 4954 ms (P10d measured 73 in CI; the CI run of this PR is the comparison).** Lighthouse stays report-only in CI (KG-237); the map now fills the first screen, so `useMapLibre`'s start-near-the-viewport rule starts it at once on a phone too, which the P10a measurement did not | The numbers from the full CI run go into `PHASES.md` §33; the gate stays the P12 performance pass (KG-237) | open |
+| KG-256 | web | **Real-device and screen-reader pass of the combobox, the disclosures and the popover menu.** axe and the keyboard e2e pass on three browsers; no screen reader, no touch device and no real phone has been used on them | [owner]: a check with a screen reader and a phone; the agent supplies the checklist | open |
+| KG-257 | licence | **The OpenStreetMap and ODbL credits on the map are behind two controls that fold** (the "Bronnen" disclosure, and MapLibre's compact attribution, which folds to a button), where the footer showed them in the page flow until P10d (security review round 1, L1). OSM's attribution guidelines accept a visible, labelled credit that expands, so this reads as compliant, but it is a licence reading, not a code fact | [owner]: confirm the OSM/ODbL reading; if a stricter one is wanted, show the short "© OpenStreetMap" text permanently | open |
+
 ## P10d Station panel (PR pending, issues #96 and #88)
 
 `PHASES.md` §32 has the decisions and the evidence.

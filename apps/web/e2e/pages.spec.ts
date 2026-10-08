@@ -1,11 +1,16 @@
 import { expect, type Page, test } from '@playwright/test';
 import { PAGE_ROUTES, type RouteId } from '../src/lib/routes.ts';
 import {
+  barNav,
+  escapeRx,
   expectInert,
   expectNoSeriousAxe,
   finish,
+  menuButton,
   msg,
   msgRx,
+  openAttribution,
+  openMenu,
   type Session,
   slider,
   start,
@@ -69,10 +74,13 @@ async function ready(page: Page, id: RouteId | null, locale: Locale) {
   await expect(page.locator('h1')).toHaveText(id === null ? msg(locale, 'not_found_heading') : h1Of(id, locale));
   await expect(page.locator('h1')).toHaveCount(1);
   await expect(page.locator('main [role="status"], main [role="alert"]')).toHaveCount(0);
-  // What settles after the heading, so that nothing moves under axe or a Tab: the credits' download link of the river
-  // network (once the rivers manifest is in; the public site offers it), the operator and the contact address (once
-  // /runtime-config.json is in), and the station names of the travel times (until stations.json is in they are ids).
-  await expect(page.locator('footer a[href^="/downloads/"]')).toHaveCount(1);
+  // What settles after the heading, so that nothing moves under axe or a Tab: the operator and the contact address
+  // (once /runtime-config.json is in), and the station names of the travel times (until stations.json is in they are
+  // ids). Each is waited for by its own element below, not by `networkidle`, which a slow runner may never reach in
+  // Firefox. (P10e: the credits' download link of the river network is in the map's "Bronnen" panel, not on a page: its
+  // own test is below.)
+  // (the Sources and Colophon pages carry the map's credits, with the river network download once its manifest is in)
+  if (id === 'sources' || id === 'colophon') await expect(main(page).locator('a[href^="/downloads/"]')).toHaveCount(1);
   if (id === 'colophon' || id === 'privacy' || id === 'accessibility')
     await expect(
       main(page)
@@ -82,9 +90,13 @@ async function ready(page: Page, id: RouteId | null, locale: Locale) {
   if (id === 'method') await page.waitForLoadState('networkidle');
 }
 
-/** What every view has: the nine page links of the footer in its language, and the banner's link to the disclaimer. */
+/**
+ * What every view has (P10e): the nine page links of the bar in its language (below 80rem behind the menu button, opened
+ * here and closed again), and the bar's compact link to the disclaimer.
+ */
 async function expectChrome(page: Page, locale: Locale) {
-  const nav = page.getByRole('navigation', { name: msg(locale, 'footer_nav_label') });
+  const nav = barNav(page, locale);
+  await openMenu(page, locale);
   await expect(nav).toHaveCount(1);
   const links = nav.getByRole('link');
   await expect(links).toHaveCount(PAGE_ROUTES.length);
@@ -92,15 +104,21 @@ async function expectChrome(page: Page, locale: Locale) {
     PAGE_ROUTES.map((r) => r[locale]),
   );
   expect(await links.allTextContents()).toEqual(PAGE_ROUTES.map((r) => titleOf(r.id, locale)));
-  const banner = page.getByRole('link', { name: msg(locale, 'beta_banner_link'), exact: true });
+  if (await menuButton(page, locale).isVisible()) {
+    await page.keyboard.press('Escape');
+    await expect(nav).toBeHidden();
+  }
+  // the beta notice: one link in the bar, named by the banner text and the link text, to the disclaimer
+  const banner = page.getByRole('banner').getByRole('link', { name: msg(locale, 'beta_banner') });
   await expect(banner).toHaveCount(1);
+  await expect(banner).toHaveAccessibleName(new RegExp(`${escapeRx(msg(locale, 'beta_banner_link'))}$`));
   await expect(banner).toHaveAttribute('href', PAGE_ROUTES.find((r) => r.id === 'disclaimer')?.[locale] ?? '');
 }
 
 // ---------------------------------------------------------------- every path
 
 for (const { id, locale, path } of PATHS)
-  test(`${path}: 200, <html lang="${locale}">, one h1, the footer navigation, the banner, axe and a clean request log`, async ({
+  test(`${path}: 200, <html lang="${locale}">, one h1, the bar navigation, the banner, axe and a clean request log`, async ({
     page,
     context,
     baseURL,
@@ -129,7 +147,7 @@ for (const { id, locale, path } of PATHS)
   });
 
 for (const { locale, path } of NOT_FOUND)
-  test(`${path}: a 404 with the 404 page of its language, a link home, the footer, and never its own path`, async ({
+  test(`${path}: a 404 with the 404 page of its language, a link home, the bar, and never its own path`, async ({
     page,
     context,
     baseURL,
@@ -152,6 +170,21 @@ for (const { locale, path } of NOT_FOUND)
     expect(await page.locator('body').innerText()).not.toContain(word);
     expect(await page.content()).not.toContain(word);
     await expectNoSeriousAxe(page, undefined, false);
+    await finish(page, s);
+  });
+
+// The credits' download link of the river network (the public site offers it, once the rivers manifest is in) used to
+// be in every footer; P10e moved the credits into the map's "Bronnen" panel, so it is there and only there.
+for (const locale of LOCALES)
+  test(`the map's credits panel offers the river network download (${locale})`, async ({ page, context, baseURL }) => {
+    const s = await start(page, context, baseURL);
+    await page.goto(locale === 'nl' ? '/' : '/en/');
+    await ready(page, 'home', locale);
+    const panel = await openAttribution(page, locale);
+    await expect(panel.locator('a[href^="/downloads/"]')).toHaveCount(1);
+    await page.goto(PAGE_ROUTES.find((r) => r.id === 'about')?.[locale] ?? '');
+    await ready(page, 'about', locale);
+    await expect(page.locator('a[href^="/downloads/"]')).toHaveCount(0);
     await finish(page, s);
   });
 
@@ -195,27 +228,21 @@ async function tabTo(page: Page, inside: string) {
 
 // (the map's keyboard is p10a.spec.ts's)
 for (const { id, locale, path } of [...PAGES, ...NOT_FOUND.map((n) => ({ id: null, locale: n.locale, path: n.path }))])
-  test(`${path}: Tab reaches the first link or control in <main> and the footer links, and Enter follows one`, async ({
+  test(`${path}: Tab reaches the bar's page links, then the first link or control in <main> and the footer link, and Enter follows a page link`, async ({
     page,
     context,
     baseURL,
   }) => {
     const s = await start(page, context, baseURL);
+    // (P10e: from 80rem the page links are a row in the bar; below it they are behind the menu button, whose keyboard is
+    // p10e.spec.ts's)
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(path);
     await ready(page, id, locale);
-    // The first tab stop of <main> is its first link or control (nothing in it is skipped, nothing is a trap).
-    await tabTo(page, 'main');
-    expect(
-      await page.evaluate(
-        (sel) => document.activeElement === document.querySelector('main')?.querySelector(sel),
-        FOCUSABLE,
-      ),
-    ).toBe(true);
-    // Then the footer's page links: the first stop is the map's.
-    await tabTo(page, 'footer nav');
     const hrefOfFocus = () => page.evaluate(() => document.activeElement?.getAttribute('href') ?? '');
+    // The bar comes first: its page links, the first stop is the map's. Enter on a link of another page goes there.
+    await tabTo(page, 'header nav');
     expect(await hrefOfFocus()).toBe(PAGE_ROUTES[0]?.[locale]);
-    // Enter on a link of another page goes there (a full page load: the path is the link's).
     let target = await hrefOfFocus();
     for (let i = 0; i < PAGE_ROUTES.length && (target === path || target === (locale === 'nl' ? '/' : '/en/')); i++) {
       await page.keyboard.press('Tab');
@@ -223,6 +250,20 @@ for (const { id, locale, path } of [...PAGES, ...NOT_FOUND.map((n) => ({ id: nul
     }
     expect(PAGE_ROUTES.map((r) => r[locale])).toContain(target);
     expect(target).not.toBe(path);
+    // Then <main>: its first tab stop is its first link or control (nothing in it is skipped, nothing is a trap).
+    await tabTo(page, 'main');
+    expect(
+      await page.evaluate(
+        (sel) => document.activeElement === document.querySelector('main')?.querySelector(sel),
+        FOCUSABLE,
+      ),
+    ).toBe(true);
+    // Then the slim footer: the third-party notices link (the page links are no longer repeated there).
+    await tabTo(page, 'footer');
+    expect(await hrefOfFocus()).toBe('/third-party-notices.txt');
+    await expect(page.locator('footer nav')).toHaveCount(0);
+    // Back to the bar's link of the other page: Enter follows it (a full page load: the path is the link's).
+    await page.locator(`header nav a[href="${target}"]`).focus();
     await page.keyboard.press('Enter');
     await expect.poll(() => new URL(page.url()).pathname).toBe(target);
     await expect(page.locator('html')).toHaveAttribute('lang', locale);

@@ -1,0 +1,56 @@
+/* The "Bronnen" button over the bottom-right corner of the view, under the legend, and the panel it opens upward. On
+   the map, MapLibre's own attribution row (its button, and its text where the map is wide) is the line under it. */
+.root {
+  position: relative;
+}
+
+.button {
+  min-height: 1.75rem;
+  padding: 0.1rem 0.6rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button[aria-expanded="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.4rem);
+  z-index: 5;
+  box-sizing: border-box;
+  /* Never wider than the room left of the drawer, never taller than the room above the button (review round 1). */
+  width: min(26rem, calc(100vw - var(--drawer-w, 0px) - 1rem));
+  max-height: min(28rem, calc(100dvh - var(--chrome-h, 3.5rem) - var(--timebar-h, 0px) - 8rem));
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: 0 0.25rem 1rem rgb(14 58 75 / 25%);
+  font-size: 0.85rem;
+}
+
+.panel h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.panel ul {
+  margin: 0 0 0.5rem;
+  padding-left: 1.1rem;
+}
+
+.panel p {
+  margin: 0.3rem 0;
+}
+
+.disclaimer {
+  font-weight: 600;
+}

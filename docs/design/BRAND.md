@@ -45,14 +45,14 @@ The focus ring stays #1D4ED8 (≥ 3:1 on the off-white); on the footer it is `--
 ## 4. Logo
 
 - **Mark:** an eye (almond outline), a Rivierblauw pupil, a Waterblauw water half with a wave as its top edge, a Lichtwater wave line and a white highlight. viewBox `0 0 96 96`. The drawings were taken from the document's canvas, artboard "icoon en formaten":
-  - 64 px and larger (the header, `Logo variant="light"`, 64 px): outline 5, pupil r 16, wave line 2.5, highlight;
-  - 32 px: outline 6, wave line 3, no highlight (not used yet);
+  - 64 px and larger (`Logo variant="light"`; P10e: the top bar shows it at 32 px, the same drawing scaled): outline 5, pupil r 16, wave line 2.5, highlight;
+  - 32 px: outline 6, wave line 3, no highlight (the separate drawing is still not used);
   - 16 px (`public/favicon.svg`): outline 9, pupil r 18, water without wave line or highlight;
-  - dark (the footer, `Logo variant="dark"`, 40 px): outline and pupil Gebroken wit, water #4FB3C9, highlight Rivierblauw.
+  - dark (`Logo variant="dark"`): outline and pupil Gebroken wit, water #4FB3C9, highlight Rivierblauw. Since P10e (§9) the slim page footer is Rivierblauw but has no logo, so the 40 px use is gone and nothing renders this variant today.
 - **Lockup on the site:** the mark, then the name as live HTML text in Bricolage Grotesque (two colours), the subtitle under it in Source Sans 3. No outlined lockup SVG and no DM Sans are needed on the site; the mark is decorative (`aria-hidden`), the text is the name.
 - **Favicon:** `/favicon.svg` only, linked from the four HTML shells, served by Caddy's `@file` with `no-cache`. There is no `/favicon.ico` (it stays a bare 404, as `routes.spec.ts` and verify-prod assert).
 - **Not yet:** the app-icon PNGs and a web manifest (add them when home-screen install is wanted), the outlined lockup exports (owner).
-- **Do:** the light variant on the off-white, the dark one on Rivierblauw; the mark only on a solid background. **Don't:** Waterblauw for small text; the name in one colour; stretch the mark or add shadows; the mark straight on the map.
+- **Do:** the light variant on the off-white (the bar), the dark one on Rivierblauw; the mark only on a solid background. **Don't:** Waterblauw for small text; the name in one colour; stretch the mark or add shadows; the mark straight on the map.
 
 ## 5. Signal set
 
@@ -92,6 +92,18 @@ The station panel, the map legend and the timebar follow the layout patterns of 
 - **Map legend:** `--paper` with a `--line` border, over the bottom-right corner of the map and above MapLibre's attribution button, collapsed at the start (KG-251); the summary has a CSS chevron in `--ink`.
 - **Timebar:** `--paper` with a `--line` top border, docked at the bottom in a window at least 48rem wide and 32rem high. The handle is `--ink`, the track `--muted` (3:1 on `--paper`, WCAG 1.4.11); notes and day labels are `--muted`. `--water` is not used.
 - No token was added.
+
+## 9. Full-screen layout (P10e)
+
+The map is the page: a sticky top bar, then the viewer fills the rest of the window (issue #101). The elements are the existing tokens; no token was added, and no colour is written outside `base.css`.
+
+- **Top bar:** 3.5rem tall, `--paper` with a `--line` bottom border, sticky. The light logo at 32 px, then the name in Bricolage Grotesque 700 at 1.5rem (24 px): large text, so "kijker" stays `--water` (§3). Below 40rem the name is 1.1rem and "kijker" takes `--accent` instead, the colour allowed for small text (a deliberate exception to the two-colour name of §4). The subtitle shows only from 100rem; the nine links and the subtitle do not fit earlier (the first note said about 64rem). The nine page links are a row from 80rem (measured in one row at 1280 and 1366 px in NL and EN, the magnifier included) and behind a "Menu" button below it (a `--paper` button with an `--ink` border, `--ink` with `--paper` text when open); the current page is marked with bold text and a `--water` edge. The compact "bèta" link uses the signal-caution set of §5.
+- **Owner strip:** the owner banner is a slim strip under the bar in the caution set; its terms scroll inside 30dvh.
+- **Slim footer:** only on the pages and the 404 page, `--ink` with `--paper` text and `--name-dark` links, no logo. The map has none; the credits are in the "Bronnen" disclosure (bottom right, `--paper` with a `--line` border, above MapLibre's attribution row).
+- **Station panel:** a right drawer of 26rem from 48rem, with the map keeping its size; a full-width sheet below 48rem that ends above the timebar.
+- **Timebar:** a card over the bottom centre of the view (at most 46rem, clear of the drawer), full width below 48rem; collapsed by default, with "Tijdopties" for the rest (§8 for its colours).
+- **Disclosures:** the mode ("Kaart: Toestand") and the view ("Weergave: Kaart") are `<details>` over the top left, and the legend a collapsed one in the bottom-right stack; all three in `--paper` with a `--line` border and an `--ink` chevron, as the legend of §8. Focus rings follow §3.
+- **Search:** a magnifier button in the bar; opened, a field with a listbox below it in the same `--paper` and `--line`.
 
 ## 7. Open items (owner)
 

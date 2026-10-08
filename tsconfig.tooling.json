@@ -44,6 +44,7 @@
     "apps/web/src/lib/labels/*.ts",
     "apps/web/src/features/owner/labels.gen.ts",
     "apps/web/src/lib/stationStates.ts",
+    "apps/web/src/lib/stationSearch.ts",
     "apps/web/src/lib/forecast.ts",
     "apps/web/src/lib/time/time.ts",
     "apps/web/src/lib/url/url.ts",

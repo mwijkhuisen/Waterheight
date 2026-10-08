@@ -1,22 +1,31 @@
-/* The time bar (P10d): a compact card docked at the bottom of the viewer, after the map and the panel, so the DOM
-   order is the visual order. In a window at least 48rem wide and 32rem high it sticks to the bottom; a shorter one
-   keeps its height for the page. */
+/* The time bar (P10e D7): over the map at the bottom centre (the view's bottom centre in the table view), a compact
+   card that keeps clear of the station drawer on the right (--drawer-w is set by the viewer) and, on a phone, runs the
+   full width at the bottom. Collapsed it holds the time, a short slider, the steps, play and "Nu"; expanded it adds
+   the date and time fields, the reverse play, the repeated hour and the notes. Timebar.tsx measures its height as
+   --timebar-h, so the legend, the attribution buttons and the scroll padding of the table stand above it. */
 .timebar {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0;
+  right: var(--drawer-w, 0px);
+  z-index: 4;
+  box-sizing: border-box;
+  width: min(46rem, calc(100% - var(--drawer-w, 0px) - 1rem));
+  margin-inline: auto;
+  padding: 0.35rem 0.75rem 0.3rem;
+  border: 1px solid var(--line);
   background: var(--paper);
-  border-top: 1px solid var(--line);
-  padding: 0.5rem var(--space) 0.4rem;
+  box-shadow: 0 0.25rem 1rem rgb(14 58 75 / 25%);
 }
 
-@media (min-width: 48rem) and (min-height: 32rem) {
+@media (max-width: 47.99rem) {
   .timebar {
-    position: sticky;
     bottom: 0;
-    z-index: 4;
-  }
-
-  /* The bar must never hide the control that has the focus (WCAG 2.4.11): Timebar.tsx measures its real height. */
-  :global(html):has(.timebar) {
-    scroll-padding-bottom: calc(var(--timebar-h, 9rem) + 0.5rem);
+    right: 0;
+    width: auto;
+    margin-inline: 0;
+    border-width: 1px 0 0;
+    box-shadow: none;
   }
 }
 
@@ -35,13 +44,14 @@
 .row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.4rem var(--space);
 }
 
 .current {
   margin: 0;
-  min-width: 12rem;
+  flex: 0 1 auto;
+  min-width: 0;
   font-weight: 600;
 }
 
@@ -84,12 +94,12 @@
   color: var(--signal-error-ink);
 }
 
-/* Room above for "now" and below for the day labels. */
+/* Room above for "now"; expanded, room below for the day labels. */
 .track {
   position: relative;
-  flex: 1 1 16rem;
-  min-width: 10rem;
-  margin: 1.3rem 0.5rem 1.2rem;
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  margin: 1.3rem 0.5rem 0.2rem;
 }
 
 .track input[type="range"] {
@@ -203,4 +213,41 @@
 .buttons button[aria-disabled="true"] {
   color: var(--muted);
   cursor: not-allowed;
+}
+
+/* The rest of the bar, only while expanded: the typed date and time and the reverse play. */
+.rowMore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.4rem var(--space);
+  margin-top: 0.4rem;
+}
+
+.more {
+  gap: 0.35rem;
+}
+
+.chevron {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentcolor;
+  border-bottom: 2px solid currentcolor;
+  transform: translateY(-0.1rem) rotate(-135deg);
+}
+
+.more[aria-expanded="true"] .chevron {
+  transform: translateY(-0.15rem) rotate(45deg);
+}
+
+.expanded .track {
+  margin-bottom: 1.3rem;
+}
+
+/* A phone: the time on its own line, then the slider and the buttons. */
+@media (max-width: 39.99rem) {
+  .current {
+    flex-basis: 100%;
+  }
 }
