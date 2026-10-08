@@ -60,6 +60,13 @@ sudo docker logs --since 24h rws-load-1 2>&1 | grep '"alert":"quarantined"'
 | `recovered_unattributed` | skipped | A `recovered` series object has no manifest variant, so its series cannot be named | The recorder recovered an object after a crash |
 | `object_missing` | skipped | The archived file is gone; in the tail this also logs the alert `object_missing` (the recorder writes an object before its line, so it should be there) | Pruned or lost |
 
+**LU-5 (`lu-5-cap`, #72):** the dump holds every LU-Alert sender. Only AGE's files (`<sender>[AGE]`) are checked under the strict schema. Since adapter version 2, a file of another sender (Meteolux, the Police, CGDIS, ALVA, `LU-Alert`) is an `ok` batch with no rows (`other_sender`) and is never quarantined for its elements, sizes or characters. A quarantined `lu-5-cap` file is therefore one of these:
+- an AGE file, which is real drift: read the code and path, and update the schema or caps under review;
+- a file of any sender that fails the XML guards (`xml_size`, `xml_dtd`, `xml_too_many_items`, `xml_invalid`, `xml_name`, …; 1 MiB, 2,000 tags and attributes, depth 32);
+- a file whose `<sender>` is missing, repeated, attributed or empty (`not_cap`).
+
+The quarantines of version 1 (63 files of other senders, 2026-10-03) go away with one replay: `replay.md` §10.
+
 **Only `quarantined` counts and pages.** A `skipped` batch is silent (only `object_missing` logs an alert, in the tail): list them now and then.
 
 ```bash
