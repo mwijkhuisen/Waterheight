@@ -710,7 +710,21 @@ specs:
     cron: "35 * * * *"
     request:
       url: https://www.hydrodaten.admin.ch/plots/q_forecast/{id}_q_forecast_de.json
-    variants: { seed: ch-4, key: [id], space_ms: 500 }
+    variants: { seed: ch-4, where: { plot: q }, key: [id], space_ms: 500 }
+    conditional: last-modified
+    gate: { kind: lastmod-runstart }
+    max_bytes: 2097152
+    retention: forever
+    validity: { format: json, required: [plot.data], count: plot.data, min: 1 }
+  # #78: BAFU publishes the lake-level forecasts under p_forecast (the seed's plot p); same figure, same adapter.
+  - id: ch-4-forecast-lake
+    source: CH-4
+    version: 1
+    first: true
+    cron: "37 * * * *"
+    request:
+      url: https://www.hydrodaten.admin.ch/plots/p_forecast/{id}_p_forecast_de.json
+    variants: { seed: ch-4, where: { plot: p }, key: [id], space_ms: 500 }
     conditional: last-modified
     gate: { kind: lastmod-runstart }
     max_bytes: 2097152

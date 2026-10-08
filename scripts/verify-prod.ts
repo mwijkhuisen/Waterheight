@@ -1423,26 +1423,11 @@ export function checkForecastNl1(doc: HealthSources | undefined): Result {
  */
 export const FORECAST_CH4_MAX_AGE_S = 12 * 3600;
 /**
- * P8b (known gap): the seeded CH-4 stations whose `q_forecast` answered 404 every hour of the production archive
- * (2026-09-30 to 2026-10-04): 13 lake stations (BAFU publishes no forecast plot of a lake level) and 2646. They are
- * captured and never have a run, so `forecast CH-4` does not expect one.
+ * The seeded CH-4 stations that have no forecast figure (KG-207): 2646 answers 404 on both `q_forecast` and
+ * `p_forecast`. It is captured and never has a run, so `forecast CH-4` does not expect one. (P8b listed the 13 lakes
+ * too; #78 fetches them from `p_forecast`, spec `ch-4-forecast-lake`.)
  */
-export const CH4_NO_FORECAST: readonly string[] = [
-  '2004',
-  '2022',
-  '2023',
-  '2027',
-  '2032',
-  '2043',
-  '2093',
-  '2101',
-  '2118',
-  '2207',
-  '2208',
-  '2209',
-  '2642',
-  '2646',
-];
+export const CH4_NO_FORECAST: readonly string[] = ['2646'];
 
 /**
  * P8b: how many CH-1 series should have a CH-4 run: the stations of registry/seed/ch-4.csv whose CH-1 series (`<id>/Q`,
@@ -2446,7 +2431,7 @@ export const CHECKS = [
   'api states: every value of the "now" snapshot has a state; basis is null exactly for no_ref; section only with an area basis and no area beside it; nap and zero never both (counts only; no values is a PASS)',
   'class coverage: /api/v1/health/sources has a non-null classification (tier-1 ratio, how many are classed by a section only, mode, classed/stations per country; no stations is a PASS)',
   `forecast NL-1: /api/v1/health/sources lists NL-1 with a forecast whose newest run was issued at most ${FORECAST_NL1_MAX_AGE_S / 3600} h ago (RWS issues one run a day: the criterion is 30 h, owner decision 2026-10-03) and of whose series at least ${FORECAST_NL1_CURRENT_MIN * 100}% have a current run; needs live capture (numbers only)`,
-  `forecast CH-4: /api/v1/health/sources lists CH-4 with a forecast whose newest run was issued at most ${FORECAST_CH4_MAX_AGE_S / 3600} h ago (BAFU starts a run every 2 to 6 hours, the capture is hourly) and that has a run on at least as many series as the registry expects (the seeded stations with a primary, non-off CH-1 series, less the ${CH4_NO_FORECAST.length} whose q_forecast answers 404); needs live capture (numbers only)`,
+  `forecast CH-4: /api/v1/health/sources lists CH-4 with a forecast whose newest run was issued at most ${FORECAST_CH4_MAX_AGE_S / 3600} h ago (BAFU starts a run every 2 to 6 hours, the capture is hourly) and that has a run on at least as many series as the registry expects (the seeded stations with a primary, non-off CH-1 series, less the ${CH4_NO_FORECAST.length} whose forecast figure answers 404 on both q_forecast and p_forecast); needs live capture (numbers only)`,
   'forecast coverage: /api/v1/health/sources has a non-null forecast_coverage with one entry per reach row of registry/forecast-reaches.yaml in order, each reach without a visible source states after_permission or none_publishes, and no owner-audience source ID or BfG appears in it (needs no fresh data; counts only)',
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
   'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter","attribution":[]} with Cache-Control: no-store',

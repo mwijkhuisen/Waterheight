@@ -4,7 +4,7 @@
 #   apps/server/src/adapters/ch-1/fixtures/ch-1-lindas.raw  sha256 f6185dc3de75540806dc3c39ab86df85423c7b198ed03f10b8a7dc31d6def180
 #   apps/server/src/adapters/ch-1/fixtures/ch-1-lindas-lake.raw  sha256 633ba0899d28bd1116d725ea1f423e173f38faf44d443998a1cfc7a5fa75fe5e
 #   apps/server/src/adapters/ch-2/fixtures/ch-2-pq.raw  sha256 bb4b7a7add0ffa0044e1569cb4f1966ea7a29b765c291a43291ee79ab9d030f6
-#   registry/seed/ch-4.csv  sha256 760723bd819ebed62eee775e92e4ae0eb8ddc1bd2e2a2b42cfd2e76413a5550c
+#   registry/seed/ch-4.csv  sha256 d78e74070c28160c48b3ab85121955da2891417bf7366e1f71bd227b63b35b5f
 #   registry/seed/ch-1-steps.csv  sha256 42f58693f5339a747be88b9c5ba7d69a798330520c4dd45fb81d23ec6c1d6fbd
 # role twin, tier 2, never published: a Q twin for every feature with a discharge sensor, an H twin for every one with a
 # level sensor, whatever its metric says. name = the CH-2 label, water_name = its hydro_body_name; coordinates, country,
