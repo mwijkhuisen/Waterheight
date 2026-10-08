@@ -318,9 +318,10 @@ describe('the CH-4 and FR-4 probes (P8b)', { timeout: 90_000 }, () => {
     }
   });
 
-  it('asks the registered station 2091, not the first seed row (2004, a lake whose figure answers 404)', async () => {
+  it('asks the registered station 2091, not the first row of the spec (2009; #78: the lakes are ch-4-forecast-lake)', async () => {
     const spec = capture.specs.find((x) => x.id === 'ch-4-forecast');
-    expect(spec?.rows[0]).toMatchObject({ id: '2004' });
+    expect(spec?.rows[0]).toMatchObject({ id: '2009', plot: 'q' });
+    expect(spec?.rows.some((r) => r.id === '2004')).toBe(false);
     expect(spec?.rows.some((r) => r.id === '2091')).toBe(true);
     expect(ROW['ch-4-forecast']).toEqual({ id: '2091' });
     const { seen, codes } = await run();

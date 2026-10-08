@@ -1,0 +1,12 @@
+{
+  "spec": "ch-4-forecast-lake",
+  "variant": "2209",
+  "source": "CH-4",
+  "synthetic": false,
+  "recorded_at": "2026-10-08T17:03:46Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://www.hydrodaten.admin.ch/plots/p_forecast/2209_p_forecast_de.json",
+  "bytes": 29086,
+  "trimmed": false
+}

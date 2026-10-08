@@ -32,7 +32,7 @@ const EXPECTED: Record<string, Row> = {
   'CH-1 LINDAS': { specs: ['ch-1-lindas'], cadence_s: 600, gate: 'hash', retention: 'obs' },
   'CH-2': { specs: ['ch-2-pq'], cadence_s: 600, gate: 'hash', conditional: 'last-modified', retention: 'obs' },
   'CH-4': {
-    specs: ['ch-4-forecast'],
+    specs: ['ch-4-forecast', 'ch-4-forecast-lake'],
     cadence_s: 3600,
     gate: 'lastmod-runstart',
     conditional: 'last-modified',

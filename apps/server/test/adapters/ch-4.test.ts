@@ -3,7 +3,14 @@ import { checkRun, encodeRun, FORECAST_FLAGS, FORECAST_SOURCES, type Normalised,
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { LAYOUT_DE, type Layout, normalise, SOURCE, TIME } from '../../src/adapters/ch-4/normalise.ts';
-import { JSON_CAPS, MAX_POINTS, parseBands, parseForecast, type Trace } from '../../src/adapters/ch-4/parse.ts';
+import {
+  JSON_CAPS,
+  MAX_POINTS,
+  parseAxisLabel,
+  parseBands,
+  parseForecast,
+  type Trace,
+} from '../../src/adapters/ch-4/parse.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
 // CH-4 BAFU forecast plot (public, catalogue §2.7): parse + normalise of the real recordings equal their goldens
@@ -34,7 +41,12 @@ function golden(name: string, actual: Golden): Golden {
 }
 
 const read = (name: string) => rawFixture('CH-4', name).body;
-const run = (name: string, variant: string): Normalised => normalise(parseForecast(read(name)), { variant });
+/** As the loader runs each spec: a lake figure (`ch-4-forecast-lake`, #78) with its y-axis label as the unit. */
+const run = (name: string, variant: string): Normalised => {
+  const body = read(name);
+  const lake = name.startsWith('ch-4-forecast-lake-');
+  return normalise(parseForecast(body), lake ? { variant, axisUnit: parseAxisLabel(body) } : { variant });
+};
 const projected = (n: Normalised): Golden => ({ forecasts: n.forecasts ?? [], dropped: n.dropped });
 const bytes = (v: unknown) => Buffer.from(JSON.stringify(v));
 type Doc = { plot: { data: Record<string, unknown>[]; layout: Record<string, unknown> }; hoverInfo: unknown };
@@ -45,6 +57,10 @@ const FIXTURES = [
   ['ch-4-forecast-2091-20260930t1535z', '2091'],
   ['ch-4-forecast-2091-20260930t1635z', '2091'],
   ['ch-4-forecast-2602-20261004t0535z', '2602'],
+  // #78: lake figures (p_forecast), recorded live 2026-10-08 by scripts/smoke-capture.ts.
+  ['ch-4-forecast-lake-2209', '2209'],
+  ['ch-4-forecast-lake-2032', '2032'],
+  ['ch-4-forecast-lake-2642', '2642'],
 ] as const;
 const RUN_A = 'ch-4-forecast-2091-20260930t1535z';
 const RUN_B = 'ch-4-forecast-2091-20260930t1635z';
@@ -510,21 +526,25 @@ describe('units, series and values', () => {
   });
 
   it('every station of the seed has a CH-1 series (a Q series, or a W series for the lakes), so none is unknown', () => {
-    const ids = root('registry/seed/ch-4.csv')
+    const lines = root('registry/seed/ch-4.csv')
       .split('\n')
-      .filter((l) => l !== '' && !l.startsWith('#'))
-      .slice(1);
-    expect(ids).toHaveLength(54);
+      .filter((l) => l !== '' && !l.startsWith('#'));
+    expect(lines[0]).toBe('id,plot');
+    const rows = lines.slice(1).map((l) => l.split(','));
+    expect(rows).toHaveLength(54);
     const ch1 = registryOf('CH-1');
     const kinds = new Map<string, number>();
-    for (const id of ids) {
+    for (const row of rows) {
+      const [id = '', plot] = row;
+      expect([id, row.length]).toEqual([id, 2]);
       expect(id).toMatch(/^\d{4}$/);
       const q = ch1.get(`${id}/Q`);
       const w = ch1.get(`${id}/W`);
       expect([id, q !== undefined || w !== undefined]).toEqual([id, true]);
-      // The declared mapping of the two kinds of figure onto the CH-1 quantities.
-      if (q === undefined) expect([id, w?.quantity]).toEqual([id, 'H']);
-      else expect([id, q.quantity]).toEqual([id, 'Q']);
+      // The declared mapping of the two kinds of figure onto the CH-1 quantities, and #78: a lake (no Q) is fetched
+      // from p_forecast (plot p), every other station from q_forecast (plot q).
+      if (q === undefined) expect([id, w?.quantity, plot]).toEqual([id, 'H', 'p']);
+      else expect([id, q.quantity, plot]).toEqual([id, 'Q', 'q']);
       kinds.set(q === undefined ? 'W' : 'Q', (kinds.get(q === undefined ? 'W' : 'Q') ?? 0) + 1);
     }
     expect([...kinds].sort()).toEqual([
@@ -756,6 +776,83 @@ describe('parse: strict, bounded, fixed codes', () => {
   });
 });
 
+describe('lake figures (p_forecast, #78)', () => {
+  const LAKE = 'ch-4-forecast-lake-2209';
+  const lake = (unit: string, axisUnit: string) =>
+    normalise(build(stamps(2), { ...cols(2), p50: [405.26, 405.27] }, unit), { variant: '2209', axisUnit });
+
+  it('the real lake figure: the five traces with BAFU’s `m³/s`, its axis labelled `m ü.M.`; a W run in centimetres', () => {
+    const body = read(LAKE);
+    const traces = parseForecast(body);
+    expect(traces.map((t) => [t.name, t.meta.unit, t.x.length])).toEqual([
+      ['Min. / Max.', 'm³/s', 114],
+      ['Min. / Max.', 'm³/s', 114],
+      ['25.-75. Perzentil', '', 229],
+      ['Median', 'm³/s', 114],
+      ['Gemessen', 'm³/s', 25],
+    ]);
+    expect(parseAxisLabel(body)).toBe('m ü.M.');
+    const out = run(LAKE, '2209');
+    expect(out.dropped).toEqual({});
+    const [r] = out.forecasts ?? [];
+    expect(r).toMatchObject({ target: 'CH-1', series: '2209/W', kind: 'ensemble_summary', stepMs: HOUR });
+    // 114 hourly points of the median; the measured trace (a day before the run) is never stored.
+    expect(r?.points).toHaveLength(114);
+    expect(r?.points[0]?.ts).toBe(new Date(Date.parse(traces[3]?.x[0] ?? '')).toISOString());
+    expect(
+      r?.points.every((p, i) => i === 0 || Date.parse(p.ts) - Date.parse(r.points[i - 1]?.ts ?? '') === HOUR),
+    ).toBe(true);
+    // Zürichsee at about 405.3 m ü.M. (LN02), in centimetres like the CH-1 W series it sits on.
+    expect(r?.points.every((p) => (p.value ?? 0) > 40_400 && (p.value ?? 0) < 40_700)).toBe(true);
+    // Read by its trace unit alone (the q_forecast way) it would be a discharge: hence the label.
+    expect(normalise(traces, { variant: '2209' }).forecasts?.[0]?.series).toBe('2209/Q');
+  });
+
+  it('a river figure’s label is its trace unit (`m³/s`), and every real figure has exactly one', () => {
+    for (const [name] of FIXTURES)
+      expect(parseAxisLabel(read(name))).toBe(name.startsWith('ch-4-forecast-lake-') ? 'm ü.M.' : 'm³/s');
+  });
+
+  it('the label is the unit: a declared H unit, with the traces stating it or BAFU’s `m³/s`, else drift', () => {
+    for (const label of ['m ü.M.', 'm ü. M.']) {
+      for (const unit of [label, 'm³/s']) {
+        const r = lake(unit, label).forecasts?.[0];
+        expect(r?.series).toBe('2209/W');
+        expect(r?.points.map((p) => p.value)).toEqual([40526, 40527]);
+      }
+      for (const unit of ['m3/s', 'l/s', '', 'cm', label === 'm ü.M.' ? 'm ü. M.' : 'm ü.M.'])
+        expect(() => lake(unit, label)).toThrow(drift('unit_mismatch', 'data.3'));
+    }
+    // A label that is not a declared unit, or a discharge, is never a lake level.
+    for (const label of ['m³/s', 'm3/s', 'l/s', '', 'm', 'cm', 'm ü.M', 'constructor', '__proto__'])
+      expect(() => lake('m³/s', label)).toThrow(drift('unknown_unit', 'layout'));
+    // The envelope keeps its rule: the maximum states the median's unit.
+    const traces = build(stamps(2), cols(2), 'm³/s');
+    (traces[0] as Trace).meta.unit = 'm ü.M.';
+    expect(() => normalise(traces, { variant: '2209', axisUnit: 'm ü.M.' })).toThrow(drift('unit_mismatch', 'data.0'));
+  });
+
+  it('parseAxisLabel: exactly one paper-anchored annotation with a text, else drift; bounded and strict', () => {
+    const d = docOf(LAKE);
+    const label = { text: 'm ü.M.', xref: 'paper', yref: 'paper' };
+    const start = { text: 'Vorhersage ab', xref: 'x', yref: 'paper' };
+    const withAnn = (annotations: unknown) => bytes({ ...d, plot: { ...d.plot, layout: { annotations } } });
+    expect(parseAxisLabel(withAnn([start, label]))).toBe('m ü.M.');
+    for (const bad of [[], [start], [label, label], [{ ...label, text: undefined }], [{ xref: 'paper' }]])
+      expect(() => parseAxisLabel(withAnn(bad))).toThrow(drift('ch4_axis_label', 'plot.layout'));
+    expect(() => parseAxisLabel(bytes({ ...d, plot: { ...d.plot, layout: {} } }))).toThrow(drift('ch4_axis_label'));
+    expect(() => parseAxisLabel(withAnn([{ ...label, text: 7 }]))).toThrow(
+      drift('invalid_type', 'plot.layout.annotations.0.text'),
+    );
+    expect(() => parseAxisLabel(withAnn([{ ...label, text: 'm'.repeat(101) }]))).toThrow(drift('too_big'));
+    expect(() => parseAxisLabel(withAnn([7]))).toThrow(drift('invalid_type', 'plot.layout.annotations.0'));
+    expect(() => parseAxisLabel(withAnn(Array.from({ length: 21 }, () => start)))).toThrow(drift('too_big'));
+    expect(parseAxisLabel(withAnn([...Array.from({ length: 19 }, () => start), label]))).toBe('m ü.M.');
+    expect(() => parseAxisLabel(withAnn('x'))).toThrow(drift('invalid_type', 'plot.layout.annotations'));
+    expect(() => parseAxisLabel(Buffer.from('x'))).toThrow(drift('not_json'));
+  });
+});
+
 describe('the fixtures', () => {
   it('every real forecast raw has a golden and every golden a raw (the Wayback capture and the stations list are no golden)', () => {
     const goldens = readdirSync(DIR)
@@ -885,7 +982,7 @@ describe('properties', () => {
           fc.json().map((j) => Buffer.from(`{"hoverInfo":1,"plot":{"layout":${j},"data":[${j}]}}`)),
         ),
         (b) => {
-          for (const fn of [parseForecast, parseBands])
+          for (const fn of [parseForecast, parseBands, parseAxisLabel])
             try {
               expect(fn(b).length).toBeLessThanOrEqual(MAX_POINTS * 10);
             } catch (err) {

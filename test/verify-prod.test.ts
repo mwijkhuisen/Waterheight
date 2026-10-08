@@ -2544,13 +2544,14 @@ describe('forecast CH-4 (P8b)', () => {
   }, () => {
     const seed = readSeed(REGISTRY_DIR, 'ch-4').map((r) => r.id);
     expect(seed).toHaveLength(54);
-    expect(CH4_NO_FORECAST).toHaveLength(14);
-    expect(new Set(CH4_NO_FORECAST).size).toBe(14);
+    expect(CH4_NO_FORECAST).toEqual(['2646']);
+    expect(new Set(CH4_NO_FORECAST).size).toBe(1);
     for (const id of CH4_NO_FORECAST) expect(seed, id).toContain(id);
-    // 54 seeded, 15 of them `off` (non-Rhine water bodies, 3 of those are in the 404 list), 11 more with no body.
-    expect(ch4ExpectedSeries()).toBe(28);
-    expect(checkForecastCh4(ch(run({ series: 28 })))).toMatchObject({ ok: true });
-    expect(checkForecastCh4(ch(run({ series: 27 })))).toMatchObject({ ok: false });
+    // 54 seeded, 15 of them `off` (non-Rhine water bodies, the lakes 2022, 2027 and 2101 among them) and 2646 with no
+    // forecast figure (#78: the other 10 lakes have a run from p_forecast).
+    expect(ch4ExpectedSeries()).toBe(38);
+    expect(checkForecastCh4(ch(run({ series: 38 })))).toMatchObject({ ok: true });
+    expect(checkForecastCh4(ch(run({ series: 37 })))).toMatchObject({ ok: false });
   });
 
   it('computes the count: Q before W, primary only, never off, no CH-1 series or a 404 station is not counted', () => {
@@ -2561,7 +2562,7 @@ describe('forecast CH-4 (P8b)', () => {
       audience: 'public',
       ...over,
     });
-    const seed = ['2091', '2016', '2018', '2029', '2030', '2034', '2044', '2056', '9999', '2004'].map((id) => ({ id }));
+    const seed = ['2091', '2016', '2018', '2029', '2030', '2034', '2044', '2056', '9999', '2646'].map((id) => ({ id }));
     const stations = [
       row('2091/Q'),
       row('2091/W'), // beside its Q: one station, counted once
@@ -2572,10 +2573,10 @@ describe('forecast CH-4 (P8b)', () => {
       row('2030/Q', { source: 'CH-2' }), // another source's series with that key
       row('2034/Q'),
       row('2044/Q'),
-      row('2004/W'), // in the 404 list
+      row('2646/Q'), // in the no-forecast list
     ];
     // Counted: 2091, 2016, 2034, 2044. Not: 2018 (Q off), 2029 (secondary), 2030 (no CH-1 series), 2056 and 9999
-    // (no row), 2004 (answers 404).
+    // (no row), 2646 (answers 404 on both figures).
     expect(ch4ExpectedSeries(seed, stations)).toBe(4);
     expect(ch4ExpectedSeries([], stations)).toBe(0);
     expect(ch4ExpectedSeries(seed, [])).toBe(0);
