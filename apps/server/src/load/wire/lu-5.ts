@@ -29,7 +29,8 @@ function utf8(body: Uint8Array, max: number): string {
 }
 
 export const ADAPTER: LoadAdapter = {
-  version: 1,
+  // 2: other senders are told apart before the strict schema (#72).
+  version: 2,
   specs: {
     'lu-5-cap': {
       maxBytes: 2 * 1024 * 1024,
