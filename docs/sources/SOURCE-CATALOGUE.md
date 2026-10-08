@@ -1359,6 +1359,7 @@ SELECT ?id ?name ?water ?time ?q ?w ?t ?dl ?wkt WHERE {
 - Station HTML: `https://www.hydrodaten.admin.ch/de/seen-und-fluesse/stationen-und-daten/{id}` (the old `/de/{id}.html` redirects with 301).
 
 **CH-4 forecasts:** `https://www.hydrodaten.admin.ch/plots/q_forecast/{id}_q_forecast_{lang}.json`.
+- **Lakes (owner probe 2026-10-08, #78):** the 13 lake stations answer 404 on `q_forecast` but 200 on `https://www.hydrodaten.admin.ch/plots/p_forecast/{id}_p_forecast_{lang}.json` (about 29 KB): the same five traces (114 hourly points on 2026-10-08), but every trace states `m³/s` although the values are lake levels in m ü. M. (Zürichsee 405.26); the y-axis label (`layout.annotations`) says `m ü.M.`. The measured trace agrees with the CH-1 lake level within 1 cm (LN02). 2646 answers 404 on both paths.
 - Hourly median, 25–75 % band, min/max, the last 24 h of measurements, and threshold bands.
 - The run seen started 19:00 local and ran **115 h** (to 14:00 on 28 Sept).
 - Model: WaSiM, hourly. The ensemble has "21 model results"; the link to ICON-CH2-EPS (21 members, 5 days) is UNVERIFIED.

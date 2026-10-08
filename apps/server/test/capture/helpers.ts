@@ -27,6 +27,8 @@ const ALIAS: Record<string, string> = {
   'fr-3-twin': 'fr-3-obs',
   // P7a: the weekly refs root is the ts_id list; its stage 2 is the values document.
   'be-3-refs': 'be-3-refs-list',
+  // #78: the lake figures are recorded per station (Zürichsee the first).
+  'ch-4-forecast-lake': 'ch-4-forecast-lake-2209',
 };
 /** Stage-2 documents (expand_validity) per spec. */
 export const STAGE2: Record<string, string> = {

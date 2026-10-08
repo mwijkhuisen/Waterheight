@@ -76,8 +76,9 @@ type Stations = ReturnType<typeof readRegistry>['stations'];
 /**
  * A spec whose first registry row is not the one to probe: the row fields to find among the spec's own registry
  * rows (a target still comes only from the registry). The first 1h forecast row, arnhem.nederrijn/Q, is a series RWS
- * serves stale (gaps only); Lobith Q is registered and live. P8b: the first CH-4 row, 2004, is a lake whose forecast
- * figure answers 404 every hour; 2091 is a river station with a discharge forecast (the station of the fixtures).
+ * serves stale (gaps only); Lobith Q is registered and live. P8b: the first CH-4 row was 2004, a lake whose q_forecast
+ * figure answers 404 every hour (#78: the lakes now have their own spec, ch-4-forecast-lake, on p_forecast, which is
+ * not probed nightly: its drift is quarantined in production and shows in health); 2091 is a river station with a discharge forecast (the station of the fixtures).
  */
 export const ROW: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   'nl-1-fc-1h': { code: 'lobith.bovenrijn.tolkamer', quantity: 'Q' },

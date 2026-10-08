@@ -23,6 +23,8 @@ const B = fixture('ch-4-forecast-2091-20260930t1635z'); // the next run, 15:00+0
 const REAL_2602 = fixture('ch-4-forecast-2602-20261004t0535z'); // another station and run, 118 points
 const REORDERED = fixture('ch-4-forecast-reordered.synthetic');
 const RENAMED = fixture('ch-4-forecast-renamed.synthetic');
+// #78: a real lake figure (p_forecast, Zürichsee, recorded 2026-10-08T17:03:46Z): traces in `m³/s`, axis `m ü.M.`.
+const REAL_LAKE = fixture('ch-4-forecast-lake-2209');
 
 type Doc = { plot: { data: { meta: { unit: string }; y: (number | null)[] }[]; layout: { title: string } } };
 const edited = (body: Buffer, edit: (doc: Doc) => void): Buffer => {
@@ -52,10 +54,10 @@ afterAll(async () => {
 
 type Row = Record<string, unknown>;
 const q = async (text: string, args: unknown[] = []): Promise<Row[]> => (await h.t.admin.query(text, args)).rows;
-const put = (variant: string, at: string, body: Buffer) =>
+const put = (variant: string, at: string, body: Buffer, spec = 'ch-4-forecast') =>
   writePayload(h.archive, {
     source: 'CH-4',
-    spec: 'ch-4-forecast',
+    spec,
     variant,
     at: new Date(at),
     url: 'https://example.invalid/ch-4-forecast',
@@ -298,5 +300,36 @@ describe('CH-4 runs through the loader', { timeout: 300_000 }, () => {
     const [p, o] = [await state(pub, 'public'), await state(own, 'owner')];
     expect(p.rows).toHaveLength(3);
     expect(o.rows).toEqual(p.rows);
+  });
+
+  it('#78: a real lake figure of ch-4-forecast-lake is a W run in centimetres (its axis label, not its trace unit); an off lake stores nothing', async () => {
+    await put('2209', '2026-10-08T17:03:46Z', REAL_LAKE, 'ch-4-forecast-lake');
+    await put('2022', '2026-10-08T17:03:56Z', REAL_LAKE, 'ch-4-forecast-lake');
+    expect(await tick()).toEqual({ lines: 2, loaded: 2 });
+    const [lake] = await runsOf('2209/W');
+    expect(lake).toMatchObject({
+      n: 114,
+      kind: 'ensemble_summary',
+      issued_at: date('2026-10-08T17:03:46Z'),
+      issued_inferred: true,
+      first_valid: date('2026-10-08T13:00:00Z'),
+      last_valid: date('2026-10-13T06:00:00Z'),
+    });
+    expect(await runsOf('2209/Q')).toEqual([]);
+    const first = await q(
+      `SELECT value, p25, p75, vmin, vmax FROM forecast_value WHERE run_id = $1::bigint ORDER BY valid_ts LIMIT 1`,
+      [lake?.id],
+    );
+    // Zürichsee at 405.26 m ü.M. (LN02), as centimetres like its CH-1 W series.
+    expect(first).toEqual([{ value: 40526, p25: 40526, p75: 40526, vmin: 40526, vmax: 40526 }]);
+    expect(await runsOf('2022/W')).toEqual([]);
+    expect(
+      await q(
+        `SELECT n_rows, n_new, n_skipped, parse_status FROM ingest_batch WHERE spec_id = 'ch-4-forecast-lake' ORDER BY id`,
+      ),
+    ).toEqual([
+      { n_rows: 114, n_new: 114, n_skipped: 0, parse_status: 'ok' },
+      { n_rows: 0, n_new: 0, n_skipped: 0, parse_status: 'ok' },
+    ]);
   });
 });

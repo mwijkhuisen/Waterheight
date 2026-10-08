@@ -44,6 +44,38 @@ describe('request budgets', () => {
     expect(peak('ld.admin.ch')).toBeLessThanOrEqual(6 * spec('ch-1-lindas').rows.length);
   });
 
+  it('CH-4 (#78): the 54 forecast stations split by figure, 41 on q_forecast and the 13 lakes on p_forecast, once an hour each', () => {
+    const q = spec('ch-4-forecast');
+    const p = spec('ch-4-forecast-lake');
+    expect([q.rows.length, p.rows.length]).toEqual([41, 13]);
+    const ids = (s: typeof q) => s.rows.map((r) => variantKey(r, s.variants?.key));
+    expect(new Set([...ids(q), ...ids(p)]).size).toBe(54);
+    expect(ids(q)).toContain('2646');
+    expect(ids(p)).toEqual([
+      '2004',
+      '2022',
+      '2023',
+      '2027',
+      '2032',
+      '2043',
+      '2093',
+      '2101',
+      '2118',
+      '2207',
+      '2208',
+      '2209',
+      '2642',
+    ]);
+    expect(baseRequest(p, p.rows.find((r) => r.id === '2209') as Row).url).toBe(
+      'https://www.hydrodaten.admin.ch/plots/p_forecast/2209_p_forecast_de.json',
+    );
+    expect(baseRequest(q, q.rows[0] as Row).url).toBe(
+      'https://www.hydrodaten.admin.ch/plots/q_forecast/2009_q_forecast_de.json',
+    );
+    expect([q.cadence_s, p.cadence_s]).toEqual([3600, 3600]);
+    expect(perHour('ch-4-forecast') + perHour('ch-4-forecast-lake')).toBe(54);
+  });
+
   it('DE-6 (LHP) refreshes at least every 10 min', () => {
     for (const id of ['de-6-stations', 'de-6-alerts']) expect(spec(id).cadence_s).toBeLessThanOrEqual(600);
   });
