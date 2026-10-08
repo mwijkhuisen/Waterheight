@@ -10,11 +10,13 @@ import {
   toIso,
   type WarningRow,
 } from '@rws/core';
-import type { CapAlert, CapInfo } from './parse.ts';
+import type { CapAlert, CapInfo, OtherSender } from './parse.ts';
 
 // LU-5 LU-Alert CAP → warning rows (catalogue §2.6, §4.9). One payload is one message ('message' mode):
 //  - only AGE's flood alerts: sender `[AGE]` and an eventCode FLOOD (the valueName is `LU-Alert` in 2025 and
-//    `LU_Alert` since 2026); the other senders (ALVA food recalls, …) are dropped, never stored;
+//    `LU_Alert` since 2026). parseCap tells the other senders (Meteolux, the Police, CGDIS, ALVA, …) apart before
+//    its strict schema (#72): such a file is `other_sender`, with no rows and no `warnings`, so it states nothing
+//    about AGE's warnings and nothing of it is stored;
 //  - a TEST is known by its `cb-eu-level` parameter (`TEST`) or a headline that starts with TEST, in any info
 //    block, never by `<status>` alone: the real TEST of 2026-02-02 says `Actual`. It stores nothing, not even a
 //    cancel; a message whose `<status>` is not `Actual` (Exercise, System, Test, Draft) is no real alert either
@@ -37,7 +39,6 @@ import type { CapAlert, CapInfo } from './parse.ts';
 export const SOURCE = 'LU-5';
 export const TIME: TimeConvention = { kind: 'iso-offset' };
 
-const SENDER = '[AGE]';
 const SCALE = 'zone';
 const MAX_REFERENCES = 50;
 const BASE_LANGUAGE = 'fr-FR';
@@ -119,8 +120,12 @@ function references(raw: string | undefined): string[] {
   return [...new Set(ids)];
 }
 
-export function normalise(alert: CapAlert, ctx: Context): Normalised {
+export function normalise(alert: CapAlert | OtherSender, ctx: Context): Normalised {
   const out = emptyNormalised();
+  if ('other' in alert) {
+    out.dropped.other_sender = 1;
+    return out;
+  }
   const sent = instant(alert.sent);
   const sentIso = toIso(sent);
   const empty = (code: string): Normalised => {
@@ -128,7 +133,6 @@ export function normalise(alert: CapAlert, ctx: Context): Normalised {
     out.warnings = { mode: 'message', sent: sentIso, rows: [], cancels: [] };
     return out;
   };
-  if (alert.sender !== SENDER) return empty('other_sender');
   if (alert.info.length > 0 && !alert.info.every(isFlood)) return empty('not_flood');
   if (alert.info.some(isTest)) return empty('test');
   if (alert.status !== 'Actual') return empty('not_actual');

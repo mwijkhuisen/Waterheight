@@ -266,6 +266,21 @@ The loader of the releases before P7a stored no reference, class or warning, and
 
 LU-4 is an owner source: its rows are read on the owner view only (`reference-change.md` §8), and a replay prints no value.
 
+**After the #72 deploy (LU-5 adapter version 2):** the first `lu-5-cap` replay quarantined 63 of 891 lines. They were files of other senders (Meteolux, the Police, CGDIS, ALVA, `LU-Alert`) that version 1 checked under AGE's strict schema before it looked at the sender. Version 2 tells the sender apart first, so these files load as `ok` batches with no rows (`other_sender`). One replay turns the 63 batches `ok`, and LU-5 stops being `degraded`:
+
+```bash
+rwsc run --rm --no-deps -T load replay --source LU-5 --spec lu-5-cap --from 2026-09-26 --to "$(date -u +%F)"
+sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -Atc "SELECT parse_status, count(*) FROM ingest_batch WHERE spec_id = 'lu-5-cap' GROUP BY 1"
+curl -s https://<domain>/api/v1/health/sources | jq -c '.sources[] | select(.id == "LU-5") | {status, quarantined}'
+```
+
+Expect the following:
+- The replay line shows `"quarantined":0` and `"n_new":0`. AGE's files were already loaded, and other senders' files store nothing.
+- The status query returns no `quarantined` row.
+- After the next health precompute (every minute), LU-5 shows `quarantined: 0` and a status other than `degraded`.
+
+A quarantined `lu-5-cap` batch after this is either an AGE file (real drift: `schema-drift.md`) or a file of any sender beyond the XML guards (1 MiB, 2,000 tags and attributes, depth 32).
+
 ## 11. After the P8a deploy: load the forecast runs since P1
 
 The loader of the releases before P8a had no entry for the NL-1 forecast specs, `de-2-wv` or `lu-3-percentile`, so it moved its cursor past their lines and stored nothing. They have been archived since P1 (`retention: forever`), and upstream keeps only its latest run, so the archive is the only history. After the release with P8a is deployed and `migrate` has applied `20261106000001_p8a_forecasts.sql` and `20261106000002_views_forecast.sql`, load the runs once; the lines are all still in the archive (the pruner is a dry run). The first production manifest day is 2026-09-29. The order does not matter, between the specs and against the tail: the stored runs are the same (§1, forecast runs). DE-2 and LU-3 are owner data (invariant 11): run their replays as the owner on the VPS, read only the counts the command prints and paste nothing of a payload anywhere.

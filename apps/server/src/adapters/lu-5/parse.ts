@@ -2,14 +2,19 @@ import { boundedJson, cappedArray, parseStrict, SchemaDrift, xmlOverCaps } from 
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { z } from 'zod';
 
-// LU-5 LU-Alert CAP 1.2 (catalogue §2.6, §6.7): one alert file of AGE (or of another sender, which normalise
-// drops) of the data.public.lu dump, and the dataset's resource list page. The CAP text comes from the wire
-// (load/wire/lu-5.ts: size, UTF-8 and the XML guard), and is checked again here because this module is never
-// told where its input came from. Anything it does not know is a SchemaDrift with a fixed code, never provider
-// text. Nothing is resolved: a DOCTYPE or ENTITY declaration is refused before the parser sees the text, and
-// fast-xml-parser runs with entities off (the five predefined ones and numeric references are decoded by hand,
-// so `&amp;#39;` in a description, an HTML text escaped twice by the provider, ends as `&#39;`, which we keep
-// as text and never put into an HTML sink). Texts hold no control or bidi character.
+// LU-5 LU-Alert CAP 1.2 (catalogue §2.6, §6.7): one alert file of the data.public.lu dump, and the dataset's
+// resource list page. The CAP text comes from the wire (load/wire/lu-5.ts: size, UTF-8 and the XML guard), and is
+// checked again here because this module is never told where its input came from. Anything it does not know is a
+// SchemaDrift with a fixed code, never provider text. Nothing is resolved: a DOCTYPE or ENTITY declaration is
+// refused before the parser sees the text, and fast-xml-parser runs with entities off (the five predefined ones and
+// numeric references are decoded by hand, so `&amp;#39;` in a description, an HTML text escaped twice by the
+// provider, ends as `&#39;`, which we keep as text and never put into an HTML sink). Texts hold no control or bidi
+// character.
+//
+// Only AGE's files (`<sender>[AGE]`) go through the strict schema. The dump also holds the files of Meteolux, the
+// Police, CGDIS, ALVA and `LU-Alert` itself, with CAP elements, sizes and characters AGE never sends (a `<circle>`,
+// 11 areas in a block, a left-to-right mark in a headline): after the same XML guards, such a file is `{ other: true }`
+// and none of its text is decoded or kept (#72). A missing, repeated or empty sender is `not_cap`.
 //
 // Caps are about 5× the largest of the 25 real files (2026-10-03: 38 KB, 218 tags and attributes, 3 info
 // blocks, 167 points in a ring, a 1,966 character description, 2 referenced messages), except the text fields,
@@ -29,6 +34,12 @@ const MAX_REFERENCES_CHARS = 10_000;
 /** Of the stored warning text (WarningRow.texts): the longest real description is 1,966 characters. */
 const MAX_LONG_TEXT = 8000;
 const MAX_POLYGON_CHARS = 200_000;
+
+/** AGE's `<sender>`, decoded: the only sender whose files are schema-checked and stored. */
+export const SENDER = '[AGE]';
+
+/** A file of another sender: nothing of it is kept. */
+export type OtherSender = { readonly other: true };
 
 /** The profile namespace as published (`…:cap:1.2:profile:cap-lu:1.0`); any 1.2 profile is accepted. */
 const NAMESPACE = /^urn:oasis:names:tc:emergency:cap:1\.2(?::[A-Za-z0-9._-]{1,40}){0,4}$/;
@@ -76,6 +87,16 @@ function decoded(node: unknown): unknown {
   if (typeof node === 'object' && node !== null)
     return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, decoded(v)]));
   return node;
+}
+
+/** Whether a raw `<sender>` decodes to AGE's; one that does not decode cleanly (SchemaDrift) is not. */
+function isAge(raw: string): boolean {
+  try {
+    return decode(raw) === SENDER;
+  } catch (e) {
+    if (e instanceof SchemaDrift) return false;
+    throw e;
+  }
 }
 
 const text = (max: number) => z.string().max(max);
@@ -154,10 +175,12 @@ const parser = new XMLParser({
 const ENCODING = /^\s*<\?xml[^>]*?\sencoding\s*=\s*["']([^"']+)["']/;
 
 /**
- * One CAP 1.2 alert file, checked and parsed under the strict schema. Entities, DOCTYPEs, namespaces other than
- * CAP 1.2, unknown elements or attributes, a list or text over its cap and a non-UTF-8 declaration are drift.
+ * One CAP 1.2 alert file. Every file passes the XML guards (entities, DOCTYPEs, a non-UTF-8 declaration, the tag,
+ * item and depth caps, well-formedness, prototype names) and needs one non-empty `<sender>`. A file of AGE is then
+ * parsed under the strict schema: namespaces other than CAP 1.2, unknown elements or attributes and a list or text
+ * over its cap are drift. A file of any other sender is `{ other: true }`, unread past its sender.
  */
-export function parseCap(xml: string): CapAlert {
+export function parseCap(xml: string): CapAlert | OtherSender {
   if (xml.length > MAX_CHARS) drift('xml_size');
   if (/<!DOCTYPE|<!ENTITY/i.test(xml)) drift('xml_dtd');
   const declared = ENCODING.exec(xml)?.[1];
@@ -174,6 +197,10 @@ export function parseCap(xml: string): CapAlert {
   }
   const root = (doc as { alert?: unknown } | null)?.alert;
   if (typeof root !== 'object' || root === null || Array.isArray(root)) return drift('not_cap');
+  // A missing, repeated (an array), attributed (an object) or empty sender names no one: drift, never other_sender.
+  const sender = (root as { sender?: unknown }).sender;
+  if (typeof sender !== 'string' || sender === '') return drift('not_cap');
+  if (!isAge(sender)) return { other: true };
   const { '@_xmlns': _ns, ...alert } = parseStrict(Alert, decoded(root), ['alert']);
   return alert;
 }

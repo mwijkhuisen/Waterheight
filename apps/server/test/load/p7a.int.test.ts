@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildP7aFixtureArchive, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { VIEWS } from '../../src/db/audience.ts';
+import { computeHealth } from '../../src/load/health.ts';
 import { parsedOkIn } from '../../src/load/prune.ts';
 import { replay } from '../../src/load/replay.ts';
 import { type Harness, harness } from './harness.ts';
@@ -435,5 +436,93 @@ describe('P7a through the loader', { timeout: 300_000 }, () => {
     }
     expect(await counts()).toEqual(before);
     expect(await shape()).toEqual(refs);
+  });
+
+  it('#72: other senders’ files load ok with no rows, and a replay turns the batches the first deploy quarantined ok', async () => {
+    const names = ['unrecognized-keys', 'too-big', 'text-char', 'lu-alert'].map((n) => `lu-5-other-${n}`);
+    const keys: string[] = [];
+    for (const name of names) {
+      const { body, at, url } = recorded(name, 'LU-5');
+      const { variant } = JSON.parse(
+        readFileSync(new URL(`../../src/adapters/lu-5/fixtures/${name}.meta.json`, import.meta.url), 'utf8'),
+      ) as { variant: string };
+      const line = await writePayload(h.archive, {
+        source: 'LU-5',
+        spec: 'lu-5-cap',
+        variant,
+        at,
+        body,
+        url,
+        retention: 'forever',
+      });
+      keys.push(line.key as string);
+    }
+    const batches = () =>
+      q(
+        'SELECT parse_status, error, n_rows, n_skipped, adapter_version FROM ingest_batch WHERE archive_key = ANY($1)',
+        [keys],
+      );
+    const ok = names.map(() => ({ parse_status: 'ok', error: null, n_rows: 0, n_skipped: 0, adapter_version: 2 }));
+    const rows = async () => (await q("SELECT count(*)::int AS n FROM warning_area WHERE source_id = 'LU-5'"))[0]?.n;
+    const quarantines = async () => {
+      const backlog = { files: 0, bytes: 0, age_s: null };
+      await computeHealth(h.load.db, { cadenceS: new Map(), lagP95Ms: new Map(), backlog, badLines: 0, now: LATER });
+      return (await q("SELECT quarantine_count FROM source_health WHERE source_id = 'LU-5'"))[0]?.quarantine_count;
+    };
+
+    h.alerts.length = 0;
+    expect(await h.loader({ now: LATER }).tick()).toEqual({ lines: 4, loaded: 4 });
+    expect(await batches()).toEqual(ok);
+    expect(h.alerts).toEqual([]);
+    expect(await rows()).toBe(19);
+    expect(await quarantines()).toBe(0);
+
+    // The state the first deploy left: adapter version 1 quarantined these files under its strict schema.
+    await q(
+      "UPDATE ingest_batch SET parse_status = 'quarantined', error = 'unrecognized_keys', adapter_version = 1 WHERE archive_key = ANY($1)",
+      [keys],
+    );
+    expect(await quarantines()).toBe(4);
+    const r = await replay(
+      {
+        db: h.load.db,
+        reader: h.reader,
+        alert: (code: string, fields: Record<string, string | number> = {}) => h.alerts.push({ code, fields }),
+        now: () => LATER,
+      },
+      { source: 'LU-5', spec: 'lu-5-cap', from: '2026-09-01', to: '2026-12-31', dryRun: false },
+    );
+    expect(r).toMatchObject({ quarantined: 0, n_new: 0, n_changed: 0, loaded: r.lines });
+    expect(r.lines).toBeGreaterThanOrEqual(4);
+    expect(await batches()).toEqual(ok);
+    expect(h.alerts).toEqual([]);
+    expect(await rows()).toBe(19);
+    expect(await quarantines()).toBe(0);
+  });
+
+  it('#72: through the wire, an empty or repeated sender is quarantined as not_cap, never other_sender', async () => {
+    const { body, at, url } = recorded('lu-5-other-unrecognized-keys', 'LU-5');
+    const police = '<sender>[Police]</sender>';
+    const senders = ['<sender></sender>', `${police}${police}`];
+    const keys: string[] = [];
+    for (const [i, sender] of senders.entries()) {
+      const line = await writePayload(h.archive, {
+        source: 'LU-5',
+        spec: 'lu-5-cap',
+        variant: `file/not-cap-${i}`,
+        at: new Date(at.getTime() + (i + 1) * 1000),
+        body: Buffer.from(body.toString('utf8').replace(police, sender)),
+        url,
+        retention: 'forever',
+      });
+      keys.push(line.key as string);
+    }
+    h.alerts.length = 0;
+    expect(await h.loader({ now: LATER }).tick()).toEqual({ lines: 2, loaded: 0 });
+    expect(await q('SELECT parse_status, error, n_rows FROM ingest_batch WHERE archive_key = ANY($1)', [keys])).toEqual(
+      senders.map(() => ({ parse_status: 'quarantined', error: 'not_cap', n_rows: 0 })),
+    );
+    expect(h.alerts.map((a) => [a.code, a.fields.code])).toEqual(senders.map(() => ['quarantined', 'not_cap']));
+    expect(await q("SELECT count(*)::int AS n FROM warning_area WHERE source_id = 'LU-5'")).toEqual([{ n: 19 }]);
   });
 });

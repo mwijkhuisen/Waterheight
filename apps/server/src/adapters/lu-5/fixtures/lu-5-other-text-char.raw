@@ -1,0 +1,134 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0">
+  <identifier>LU-Alert.1789878489.4815.1</identifier>
+  <sender>[CGDIS]</sender>
+  <sent>2026-09-20T06:28:09+02:00</sent>
+  <status>Actual</status>
+  <msgType>Cancel</msgType>
+  <scope>Public</scope>
+  <code>CANCEL</code>
+  <references>[CGDIS],LU-Alert.1789853691.4815.0,2026-09-19T23:34:51+02:00</references>
+  <info>
+    <language>fr-FR</language>
+    <category>Fire</category>
+    <event>Indéfini</event>
+    <urgency>Immediate</urgency>
+    <severity>Unknown</severity>
+    <certainty>Unknown</certainty>
+    <effective>2026-09-19T23:34:51+02:00</effective>
+    <expires>2026-09-26T23:58:00+02:00</expires>
+    <senderName>LU</senderName>
+    <headline>Incendie d’envergure en cours à Sanem, Differdange‎</headline>
+    <description>&lt;p&gt;Incendie d’envergure en cours à Sanem, Differdange‎ &lt;/p&gt;&lt;p&gt;Consignes à respecter :&lt;/p&gt;&lt;p&gt;&lt;strong&gt;- Prière d’éviter le secteur. &lt;/strong&gt;&lt;/p&gt;&lt;p&gt;&lt;strong&gt;- Laisser la voie libre aux véhicules d’urgence.&lt;/strong&gt;&lt;/p&gt;</description>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:name</valueName>
+      <value>Kronospan</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:cb-eu-level</valueName>
+      <value>ALERT_LVL_3</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:zone-name</valueName>
+      <value>Communes Luxembourg</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:canal</valueName>
+      <value>Website channel</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:id-canal</valueName>
+      <value>1</value>
+    </parameter>
+    <area>
+      <areaDesc>Sanem</areaDesc>
+      <polygon>49.568822999999995,5.957888 49.559774,5.9493849999999995 49.561854,5.937850999999999 49.557085,5.9317139999999995 49.551818999999995,5.90362 49.547109999999996,5.898543 49.546194,5.913258 49.543001,5.905492 49.537016,5.9147289999999995 49.526553,5.906337 49.522991,5.90817 49.52321,5.914772999999999 49.516641,5.916319 49.508365,5.913876999999999 49.506406999999996,5.904935999999999 49.505095,5.909568 49.502223,5.901943 49.500084,5.9072629999999995 49.501985999999995,5.913072 49.498382,5.927537999999999 49.500962,5.940118 49.495179,5.943822 49.497603,5.946206999999999 49.501728,5.943218 49.508416,5.9502489999999995 49.510148,5.946949999999999 49.514443,5.966851 49.517140999999995,5.976192999999999 49.527532,5.975727 49.530179,5.972225 49.530190999999995,5.95416 49.534161,5.953005999999999 49.547463,5.969535 49.545718,5.961107 49.560627,5.965644 49.568154,5.96113 49.568822999999995,5.957888</polygon>
+    </area>
+    <area>
+      <areaDesc>Differdange</areaDesc>
+      <polygon>49.547109999999996,5.898543 49.547042,5.885295999999999 49.541793999999996,5.870006999999999 49.538689999999995,5.873175 49.539505,5.867774 49.533887,5.865044999999999 49.535303,5.856434 49.529838,5.850642 49.529902,5.845808 49.526781,5.83449 49.519963,5.836056 49.514948999999994,5.847824999999999 49.508675,5.850003 49.500879,5.864222 49.496533,5.895534 49.500084,5.9072629999999995 49.502223,5.901943 49.505095,5.909568 49.506406999999996,5.904935999999999 49.508365,5.913876999999999 49.516641,5.916319 49.52321,5.914772999999999 49.522991,5.90817 49.526553,5.906337 49.537016,5.9147289999999995 49.543001,5.905492 49.546194,5.913258 49.547109999999996,5.898543</polygon>
+    </area>
+  </info>
+  <info>
+    <language>en-US</language>
+    <category>Fire</category>
+    <event>Undefined</event>
+    <urgency>Immediate</urgency>
+    <severity>Unknown</severity>
+    <certainty>Unknown</certainty>
+    <effective>2026-09-19T23:34:51+02:00</effective>
+    <expires>2026-09-26T23:58:00+02:00</expires>
+    <senderName>LU</senderName>
+    <headline>Large-scale fire in progress in Sanem, Differdange‎</headline>
+    <description>&lt;p&gt;Large-scale fire in progress in Sanem, Differdange‎ &lt;/p&gt;&lt;p&gt;Instructions to follow:&lt;/p&gt;&lt;p&gt;&lt;strong&gt;- Please avoid the area &lt;/strong&gt;&lt;/p&gt;&lt;p&gt;&lt;strong&gt;- Keep the way clear for emergency vehicles.&lt;/strong&gt;&lt;/p&gt;</description>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:name</valueName>
+      <value>Kronospan</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:cb-eu-level</valueName>
+      <value>ALERT_LVL_3</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:zone-name</valueName>
+      <value>Communes Luxembourg</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:canal</valueName>
+      <value>Website channel</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:id-canal</valueName>
+      <value>1</value>
+    </parameter>
+    <area>
+      <areaDesc>Sanem</areaDesc>
+      <polygon>49.568822999999995,5.957888 49.559774,5.9493849999999995 49.561854,5.937850999999999 49.557085,5.9317139999999995 49.551818999999995,5.90362 49.547109999999996,5.898543 49.546194,5.913258 49.543001,5.905492 49.537016,5.9147289999999995 49.526553,5.906337 49.522991,5.90817 49.52321,5.914772999999999 49.516641,5.916319 49.508365,5.913876999999999 49.506406999999996,5.904935999999999 49.505095,5.909568 49.502223,5.901943 49.500084,5.9072629999999995 49.501985999999995,5.913072 49.498382,5.927537999999999 49.500962,5.940118 49.495179,5.943822 49.497603,5.946206999999999 49.501728,5.943218 49.508416,5.9502489999999995 49.510148,5.946949999999999 49.514443,5.966851 49.517140999999995,5.976192999999999 49.527532,5.975727 49.530179,5.972225 49.530190999999995,5.95416 49.534161,5.953005999999999 49.547463,5.969535 49.545718,5.961107 49.560627,5.965644 49.568154,5.96113 49.568822999999995,5.957888</polygon>
+    </area>
+    <area>
+      <areaDesc>Differdange</areaDesc>
+      <polygon>49.547109999999996,5.898543 49.547042,5.885295999999999 49.541793999999996,5.870006999999999 49.538689999999995,5.873175 49.539505,5.867774 49.533887,5.865044999999999 49.535303,5.856434 49.529838,5.850642 49.529902,5.845808 49.526781,5.83449 49.519963,5.836056 49.514948999999994,5.847824999999999 49.508675,5.850003 49.500879,5.864222 49.496533,5.895534 49.500084,5.9072629999999995 49.502223,5.901943 49.505095,5.909568 49.506406999999996,5.904935999999999 49.508365,5.913876999999999 49.516641,5.916319 49.52321,5.914772999999999 49.522991,5.90817 49.526553,5.906337 49.537016,5.9147289999999995 49.543001,5.905492 49.546194,5.913258 49.547109999999996,5.898543</polygon>
+    </area>
+  </info>
+  <info>
+    <language>de</language>
+    <category>Fire</category>
+    <event>Undefined</event>
+    <urgency>Immediate</urgency>
+    <severity>Unknown</severity>
+    <certainty>Unknown</certainty>
+    <effective>2026-09-19T23:34:51+02:00</effective>
+    <expires>2026-09-26T23:58:00+02:00</expires>
+    <senderName>LU</senderName>
+    <headline>Laufender Großbrand in Sanem, Differdange‎</headline>
+    <description>&lt;p&gt;Laufender Großbrand in&lt;strong&gt; Sanem, Differdange‎ &lt;/strong&gt;&lt;/p&gt;&lt;p&gt;Anweisungen:&lt;/p&gt;&lt;p&gt;&lt;strong&gt;- Bitte meiden Sie das Gebiet. &lt;/strong&gt;&lt;/p&gt;&lt;p&gt;&lt;strong&gt;- Halten Sie den Weg für Einsatzfahrzeuge frei.&lt;/strong&gt;&lt;/p&gt;</description>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:name</valueName>
+      <value>Kronospan</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:cb-eu-level</valueName>
+      <value>ALERT_LVL_3</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:zone-name</valueName>
+      <value>Communes Luxembourg</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:canal</valueName>
+      <value>Website channel</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:id-canal</valueName>
+      <value>1</value>
+    </parameter>
+    <area>
+      <areaDesc>Sanem</areaDesc>
+      <polygon>49.568822999999995,5.957888 49.559774,5.9493849999999995 49.561854,5.937850999999999 49.557085,5.9317139999999995 49.551818999999995,5.90362 49.547109999999996,5.898543 49.546194,5.913258 49.543001,5.905492 49.537016,5.9147289999999995 49.526553,5.906337 49.522991,5.90817 49.52321,5.914772999999999 49.516641,5.916319 49.508365,5.913876999999999 49.506406999999996,5.904935999999999 49.505095,5.909568 49.502223,5.901943 49.500084,5.9072629999999995 49.501985999999995,5.913072 49.498382,5.927537999999999 49.500962,5.940118 49.495179,5.943822 49.497603,5.946206999999999 49.501728,5.943218 49.508416,5.9502489999999995 49.510148,5.946949999999999 49.514443,5.966851 49.517140999999995,5.976192999999999 49.527532,5.975727 49.530179,5.972225 49.530190999999995,5.95416 49.534161,5.953005999999999 49.547463,5.969535 49.545718,5.961107 49.560627,5.965644 49.568154,5.96113 49.568822999999995,5.957888</polygon>
+    </area>
+    <area>
+      <areaDesc>Differdange</areaDesc>
+      <polygon>49.547109999999996,5.898543 49.547042,5.885295999999999 49.541793999999996,5.870006999999999 49.538689999999995,5.873175 49.539505,5.867774 49.533887,5.865044999999999 49.535303,5.856434 49.529838,5.850642 49.529902,5.845808 49.526781,5.83449 49.519963,5.836056 49.514948999999994,5.847824999999999 49.508675,5.850003 49.500879,5.864222 49.496533,5.895534 49.500084,5.9072629999999995 49.502223,5.901943 49.505095,5.909568 49.506406999999996,5.904935999999999 49.508365,5.913876999999999 49.516641,5.916319 49.52321,5.914772999999999 49.522991,5.90817 49.526553,5.906337 49.537016,5.9147289999999995 49.543001,5.905492 49.546194,5.913258 49.547109999999996,5.898543</polygon>
+    </area>
+  </info>
+</alert>
