@@ -4,15 +4,15 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
-## #72 LU-5 other senders (PR #103)
+## #72 LU-5 other senders (#103, merged and replayed 2026-10-08)
 
 `PHASES.md` §23 (the row "After the deploy (#72)") has the finding and the evidence.
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
 | KG-258 | adapters | **A file of another LU-5 sender over the XML caps is still quarantined.** The guards (1 MiB, 2,000 tags and attributes, depth 32, well-formedness) run before the sender test on purpose (T-REF-1), so such a file is `xml_*` drift, not `other_sender`. None of the 63 files of the first replay was (the largest exported one is 71,736 bytes) | Raise a cap only with evidence of such a file in the dump (owner export) | accepted: the security order wins |
-| KG-259 | adapters | **Only 4 of the 63 quarantined LU-5 files were exported and committed.** The other 59 had the same three schema codes (`unrecognized_keys`, `too_big`, `text_char`), and the sender test runs before the schema whatever the code, but they were not seen | Owner item 2 (the `lu-5-cap` replay, `replay.md` §10): `quarantined: 0` closes it | open |
-| KG-260 | ops | **The production replay and LU-5 health after the #72 deploy are unverified.** LU-5 stays `degraded` until the replay turns the 63 batches `ok` | The owner runs Owner item 2; then the [agent-prod] check of `/api/v1/health/sources` | open |
+| KG-259 | adapters | **Only 4 of the 63 quarantined LU-5 files were exported and committed.** The other 59 had the same three schema codes (`unrecognized_keys`, `too_big`, `text_char`), and the sender test runs before the schema whatever the code, but they were not seen | Owner item 2 (the `lu-5-cap` replay, `replay.md` §10): `quarantined: 0` closes it | closed in #103: the production replay of 2026-10-08 turned all 63 batches `ok` (adapter version 2), with `quarantined: 0` |
+| KG-260 | ops | **The production replay and LU-5 health after the #72 deploy are unverified.** LU-5 stays `degraded` until the replay turns the 63 batches `ok` | The owner runs Owner item 2; then the [agent-prod] check of `/api/v1/health/sources` | closed in #103: replayed 2026-10-08 (903 lines, `quarantined: 0`, a second pass 0/0); LU-5 `ok`, `quarantined: 0` from outside |
 
 ## P10e Full-screen map (PR pending, issue #101)
 
