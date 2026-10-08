@@ -1,20 +1,26 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { type Normalised, SchemaDrift } from '@rws/core';
+import { emptyNormalised, type Normalised, SchemaDrift } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { MAX_TEXTS_BYTES, normalise } from '../../src/adapters/lu-5/normalise.ts';
-import { MAX_CHARS, parseCap, parseList } from '../../src/adapters/lu-5/parse.ts';
+import { type CapAlert, MAX_CHARS, parseCap, parseList, SENDER } from '../../src/adapters/lu-5/parse.ts';
 import type { LoadContext } from '../../src/load/adapters.ts';
 import { ADAPTER } from '../../src/load/wire/lu-5.ts';
 import { goldenUrl, rawFixture } from './registry.ts';
 
-// LU-5 LU-Alert CAP 1.2: parse + normalise of the real files of AGE (and one of ALVA) equals the committed
+// LU-5 LU-Alert CAP 1.2: parse + normalise of the real files of AGE (and five of other senders) equals the committed
 // golden files (invariant 9); the hostile synthetic files are refused with a fixed code and nothing in them is
 // ever resolved. `UPDATE_GOLDEN=1` rewrites the goldens; a golden change is reviewed like code.
 
 const text = (name: string) => rawFixture('LU-5', name).body.toString('utf8');
 const fetchedAt = (name: string) => Date.parse(rawFixture('LU-5', name).meta.recorded_at);
 const run = (name: string) => normalise(parseCap(text(name)), { fetchedAt: fetchedAt(name) });
+/** An AGE file parsed under the strict schema, or a failure of the test if it was taken for another sender's. */
+function age(xml: string): CapAlert {
+  const cap = parseCap(xml);
+  if ('other' in cap) throw new Error('taken for another sender');
+  return cap;
+}
 
 function golden(name: string, actual: Normalised): Normalised {
   const url = goldenUrl('LU-5', name);
@@ -47,6 +53,8 @@ const FILES = readdirSync(new URL('../../src/adapters/lu-5/fixtures/', import.me
   .filter((f) => /^lu-5-cap-\d{8}-\d{6}-.*\.raw$/.test(f))
   .map((f) => f.replace(/\.raw$/, ''));
 const MOSELLE = 'lu-5-cap-20260213-095631-alert-lvl3';
+/** The real files of other senders the first replay quarantined (#72): Police, ALVA, CGDIS and `LU-Alert`. */
+const OTHERS = ['unrecognized-keys', 'too-big', 'text-char', 'lu-alert'].map((n) => `lu-5-other-${n}`);
 const SUD_RED = 'lu-5-cap-20250908-231502-alert-lvl1';
 
 describe('golden files (real payloads)', () => {
@@ -58,6 +66,7 @@ describe('golden files (real payloads)', () => {
     'lu-5-file',
     MOSELLE,
     'lu-5-cap-20250909-080509-alert-lvl4',
+    ...OTHERS,
   ])('%s', (name) => {
     const out = run(name);
     expect(out).toEqual(golden(name, out));
@@ -115,7 +124,7 @@ describe('golden files (real payloads)', () => {
   it('every real [AGE] file is stored or refused as designed: Cancels have no rows, an Update names what it replaces', () => {
     expect(FILES).toHaveLength(24);
     for (const name of FILES) {
-      const cap = parseCap(text(name));
+      const cap = age(text(name));
       const out = run(name);
       const w = out.warnings;
       if (w?.mode !== 'message') throw new Error('mode');
@@ -141,16 +150,16 @@ describe('golden files (real payloads)', () => {
 
   it('the TEST of 2026-02-02 says <status>Actual</status> and is dropped by its parameter and headline, with no cancel', () => {
     const name = 'lu-5-cap-20260202-095833-alert-test';
-    expect(parseCap(text(name)).status).toBe('Actual');
+    expect(age(text(name)).status).toBe('Actual');
     const out = run(name);
     expect(out.dropped).toEqual({ test: 1 });
     expect(out.warnings).toEqual({ mode: 'message', sent: '2026-02-02T08:58:33.000Z', rows: [], cancels: [] });
   });
 
-  it('the ALVA food recall (a different sender, FOOD_RECALL) is dropped before anything is stored', () => {
+  it('the ALVA food recall (a different sender, FOOD_RECALL) is dropped before anything is stored, with no warnings', () => {
     const out = run('lu-5-file');
     expect(out.dropped).toEqual({ other_sender: 1 });
-    expect(out.warnings).toMatchObject({ rows: [], cancels: [] });
+    expect(out.warnings).toBeUndefined();
   });
 
   it('the Moselle alert of 2026-02-13: yellow (3 → 3), the sender-local +01:00 time in UTC', () => {
@@ -338,7 +347,74 @@ describe('strict parse', () => {
     }
     expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
     // As a value it is only text.
-    expect(parseCap(moselle.replace('<code>IN_ZONE', '<code>__proto__')).code).toBe('__proto__');
+    expect(age(moselle.replace('<code>IN_ZONE', '<code>__proto__')).code).toBe('__proto__');
+  });
+});
+
+describe('other senders (#72): told apart after every XML guard and before the strict schema', () => {
+  const moselle = text(MOSELLE);
+  const tag = `<sender>${SENDER}</sender>`;
+  const police = moselle.replace(tag, '<sender>[Police]</sender>');
+  const refused = (xml: string) => codeOf(() => parseCap(xml));
+  const other = { ...emptyNormalised(), dropped: { other_sender: 1 } };
+  const block = /<info>[\s\S]*?<\/info>/.exec(moselle)?.[0] as string;
+  const control = String.fromCharCode(1);
+
+  it('the four real files the first replay quarantined are other_sender, with no rows and no warnings', () => {
+    for (const name of OTHERS) {
+      expect([name, parseCap(text(name))]).toEqual([name, { other: true }]);
+      const out = run(name);
+      expect([name, out, out.warnings]).toEqual([name, other, undefined]);
+      expect([name, viaWire(rawFixture('LU-5', name).body)]).toEqual([name, other]);
+    }
+  });
+
+  it('an element, a list size or a character the schema refuses in an AGE file does not matter in another sender’s', () => {
+    expect(police).not.toBe(moselle);
+    for (const xml of [
+      police.replace('<scope>', '<note>x</note><scope>'),
+      police.replace(block, block.repeat(9)),
+      police.replace('<headline>', `<headline>${control}`),
+      moselle.replace(tag, '<sender>AGE</sender>'),
+      // A sender that does not decode cleanly is no AGE sender either.
+      moselle.replace(tag, '<sender>&#1;</sender>'),
+      moselle.replace(tag, `<sender>${SENDER}&#x202E;</sender>`),
+    ])
+      expect(parseCap(xml)).toEqual({ other: true });
+  });
+
+  it('every XML guard still runs first, whoever the sender', () => {
+    expect(refused(police.replace('<alert', '<!DOCTYPE alert><alert'))).toBe('xml_dtd');
+    expect(refused(police.replace('<scope>', '<__proto__><polluted>1</polluted></__proto__><scope>'))).toBe('xml_name');
+    expect(refused(police.replace('</alert>', `${'<a/>'.repeat(2001)}</alert>`))).toBe('xml_too_many_items');
+    expect(refused(police.replace('UTF-8', 'ISO-8859-1'))).toBe('xml_encoding');
+    expect(refused(police.replace('</alert>', ''))).toBe('xml_invalid');
+    expect(refused(police.replace('</alert>', `<!-- ${'-'.repeat(MAX_CHARS)} --></alert>`))).toBe('xml_size');
+    expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+  });
+
+  it('a missing, repeated, attributed or empty sender is not_cap: drift, never other_sender', () => {
+    expect(refused(moselle.replace(tag, ''))).toBe('not_cap');
+    expect(refused(moselle.replace(tag, `${tag}${tag}`))).toBe('not_cap');
+    expect(refused(police.replace('<sender>', `${tag}<sender>`))).toBe('not_cap');
+    expect(refused(moselle.replace(tag, `<sender a="1">${SENDER}</sender>`))).toBe('not_cap');
+    expect(refused(moselle.replace(tag, '<sender/>'))).toBe('not_cap');
+    expect(refused(moselle.replace(tag, '<sender>  </sender>'))).toBe('not_cap');
+  });
+
+  it('AGE written with references or spaces is AGE, and stays under the strict schema', () => {
+    const coded = moselle.replace(tag, '<sender>&#91;AGE&#93;</sender>');
+    const at = { fetchedAt: Date.parse('2026-02-13T09:00:00Z') };
+    expect(coded).not.toBe(moselle);
+    expect(normalise(parseCap(coded), at)).toEqual(normalise(parseCap(moselle), at));
+    expect(refused(coded.replace('<scope>', '<note>x</note><scope>'))).toBe('unrecognized_keys');
+    expect(age(moselle.replace(tag, `<sender> ${SENDER} </sender>`)).sender).toBe(SENDER);
+  });
+
+  it('AGE’s own files are exactly as strict as before', () => {
+    expect(refused(moselle.replace('<scope>', '<note>x</note><scope>'))).toBe('unrecognized_keys');
+    expect(refused(moselle.replace(block, block.repeat(9)))).toBe('too_big');
+    expect(refused(moselle.replace('<headline>', `<headline>${control}`))).toBe('text_char');
   });
 });
 
@@ -429,6 +505,26 @@ describe('property', () => {
         (n, s) => safe(real.slice(0, n) + s + real.slice(n)),
       ),
       { numRuns: 300 },
+    );
+  });
+
+  it('any other sender, with any extra element in <alert> or an <info>, is other_sender and never a schema code (#72)', () => {
+    // The parser trims the text, so ` [AGE] ` is AGE's: the filter trims as well. Controls and bad references stay in.
+    const sender = fc
+      .string({ unit: 'binary', maxLength: 30 })
+      .filter((s) => s.trim() !== '' && s.trim() !== SENDER)
+      .map((s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;'));
+    const name = fc
+      .stringMatching(/^[A-Za-z_][A-Za-z0-9_.-]{0,15}$/)
+      .filter((n) => !['__proto__', 'constructor', 'prototype', 'sender'].includes(n));
+    fc.assert(
+      fc.property(sender, name, fc.constantFrom('<scope>', '<category>'), (s, n, before) => {
+        const xml = real
+          .replace(`<sender>${SENDER}</sender>`, `<sender>${s}</sender>`)
+          .replace(before, `<${n}>x</${n}>${before}`);
+        expect(parseCap(xml)).toEqual({ other: true });
+      }),
+      { numRuns: 200 },
     );
   });
 });

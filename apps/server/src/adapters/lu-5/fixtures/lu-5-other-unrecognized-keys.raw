@@ -1,0 +1,121 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0">
+  <identifier>LU-Alert.1788773030.4796.0</identifier>
+  <sender>[Police]</sender>
+  <sent>2026-09-07T11:23:50+02:00</sent>
+  <status>Actual</status>
+  <msgType>Alert</msgType>
+  <scope>Public</scope>
+  <code>IN_ZONE</code>
+  <info>
+    <language>fr-FR</language>
+    <category>Security</category>
+    <event>Indéfini</event>
+    <urgency>Unknown</urgency>
+    <severity>Unknown</severity>
+    <certainty>Unknown</certainty>
+    <effective>2026-09-07T11:23:50+02:00</effective>
+    <expires>2026-09-07T12:23:50+02:00</expires>
+    <senderName>LU</senderName>
+    <headline>TEST TEST TEST</headline>
+    <description>&lt;p&gt;&lt;strong&gt;Ceci est un message test du système national d’alerte et d’information LU-Alert. Aucune action n’est requise de votre part. &lt;/strong&gt;&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;En cas de danger réel, vous auriez reçu un message tel que:&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;&amp;quot;Opération de police en cours à Esch-Belval.&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;ol&gt;&lt;li&gt;Veuillez éviter la zone autant que possible.&lt;/li&gt;&lt;li&gt;Veuillez suivre les instructions des services d’intervention sur place.&lt;/li&gt;&lt;/ol&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;Plus d’informations sur le site internet lu-alert.&amp;quot;&lt;/p&gt;</description>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:name</valueName>
+      <value>Test_07_09_2026</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:cb-eu-level</valueName>
+      <value>TEST</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:zone-name</valueName>
+      <value>Belval Test</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:canal</valueName>
+      <value>Website channel</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:id-canal</valueName>
+      <value>3</value>
+    </parameter>
+    <area>
+      <areaDesc>Belval</areaDesc>
+      <circle>49.503358,5.945792 0.665</circle>
+    </area>
+  </info>
+  <info>
+    <language>de</language>
+    <category>Security</category>
+    <event>Undefined</event>
+    <urgency>Unknown</urgency>
+    <severity>Unknown</severity>
+    <certainty>Unknown</certainty>
+    <effective>2026-09-07T11:23:50+02:00</effective>
+    <expires>2026-09-07T12:23:50+02:00</expires>
+    <senderName>LU</senderName>
+    <headline>TEST TEST TEST</headline>
+    <description>&lt;p&gt;&lt;strong&gt;Dies ist eine Testnachricht des nationalen Warn- und Informationssystems LU-Alert. Es ist keine Aktion Ihrerseits erforderlich. &lt;/strong&gt;&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;Im Falle einer tatsächlichen Gefahr hätten Sie z. B. folgende Nachricht erhalten:&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;&amp;quot;Laufender Polizeieinsatz in Esch-Belval.&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;ol&gt;&lt;li&gt;Bitte meiden Sie wenn möglich den Bereich.&lt;/li&gt;&lt;li&gt;Bitte folgen Sie den Anweisungen der Einsatzkräfte vor Ort.&lt;/li&gt;&lt;/ol&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;Weitere Informationen auf der Website lu-alert.&amp;quot;&lt;/p&gt;</description>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:name</valueName>
+      <value>Test_07_09_2026</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:cb-eu-level</valueName>
+      <value>TEST</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:zone-name</valueName>
+      <value>Belval Test</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:canal</valueName>
+      <value>Website channel</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:id-canal</valueName>
+      <value>3</value>
+    </parameter>
+    <area>
+      <areaDesc>Belval</areaDesc>
+      <circle>49.503358,5.945792 0.665</circle>
+    </area>
+  </info>
+  <info>
+    <language>en-US</language>
+    <category>Security</category>
+    <event>Undefined</event>
+    <urgency>Unknown</urgency>
+    <severity>Unknown</severity>
+    <certainty>Unknown</certainty>
+    <effective>2026-09-07T11:23:50+02:00</effective>
+    <expires>2026-09-07T12:23:50+02:00</expires>
+    <senderName>LU</senderName>
+    <headline>TEST TEST TEST</headline>
+    <description>&lt;p&gt;&lt;strong&gt;This is a test message from the LU-Alert national warning and information system. No action is required on your part. &lt;/strong&gt;&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;In the event of real danger, you would have received a message such as:&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;&amp;quot;Ongoing police operation in Esch-Belval.&lt;/p&gt;&lt;p&gt;&lt;/p&gt;&lt;ol&gt;&lt;li&gt;Please avoid the area as much as possible.&lt;/li&gt;&lt;li&gt;Please follow the instructions of the emergency services on site.&lt;/li&gt;&lt;/ol&gt;&lt;p&gt;&lt;/p&gt;&lt;p&gt;More information on the LU-Alert website.&amp;quot;&lt;/p&gt;</description>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:name</valueName>
+      <value>Test_07_09_2026</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:cb-eu-level</valueName>
+      <value>TEST</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:zone-name</valueName>
+      <value>Belval Test</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:canal</valueName>
+      <value>Website channel</value>
+    </parameter>
+    <parameter>
+      <valueName>urn:oasis:names:tc:emergency:cap:1.2:profile:cap-lu:1.0:id-canal</valueName>
+      <value>3</value>
+    </parameter>
+    <area>
+      <areaDesc>Belval</areaDesc>
+      <circle>49.503358,5.945792 0.665</circle>
+    </area>
+  </info>
+</alert>

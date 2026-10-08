@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildP7aFixtureArchive, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { VIEWS } from '../../src/db/audience.ts';
+import { computeHealth } from '../../src/load/health.ts';
 import { parsedOkIn } from '../../src/load/prune.ts';
 import { replay } from '../../src/load/replay.ts';
 import { type Harness, harness } from './harness.ts';
@@ -435,5 +436,64 @@ describe('P7a through the loader', { timeout: 300_000 }, () => {
     }
     expect(await counts()).toEqual(before);
     expect(await shape()).toEqual(refs);
+  });
+
+  it('#72: other senders’ files load ok with no rows, and a replay turns the batches the first deploy quarantined ok', async () => {
+    const names = ['unrecognized-keys', 'too-big', 'text-char', 'lu-alert'].map((n) => `lu-5-other-${n}`);
+    const keys: string[] = [];
+    for (const name of names) {
+      const { body, at, url } = recorded(name, 'LU-5');
+      const { variant } = JSON.parse(
+        readFileSync(new URL(`../../src/adapters/lu-5/fixtures/${name}.meta.json`, import.meta.url), 'utf8'),
+      ) as { variant: string };
+      const line = await writePayload(h.archive, {
+        source: 'LU-5',
+        spec: 'lu-5-cap',
+        variant,
+        at,
+        body,
+        url,
+        retention: 'forever',
+      });
+      keys.push(line.key as string);
+    }
+    const batches = () =>
+      q('SELECT parse_status, error, n_rows, adapter_version FROM ingest_batch WHERE archive_key = ANY($1)', [keys]);
+    const ok = names.map(() => ({ parse_status: 'ok', error: null, n_rows: 0, adapter_version: 2 }));
+    const rows = async () => (await q("SELECT count(*)::int AS n FROM warning_area WHERE source_id = 'LU-5'"))[0]?.n;
+    const quarantines = async () => {
+      const backlog = { files: 0, bytes: 0, age_s: null };
+      await computeHealth(h.load.db, { cadenceS: new Map(), lagP95Ms: new Map(), backlog, badLines: 0, now: LATER });
+      return (await q("SELECT quarantine_count FROM source_health WHERE source_id = 'LU-5'"))[0]?.quarantine_count;
+    };
+
+    h.alerts.length = 0;
+    expect(await h.loader({ now: LATER }).tick()).toEqual({ lines: 4, loaded: 4 });
+    expect(await batches()).toEqual(ok);
+    expect(h.alerts).toEqual([]);
+    expect(await rows()).toBe(19);
+    expect(await quarantines()).toBe(0);
+
+    // The state the first deploy left: adapter version 1 quarantined these files under its strict schema.
+    await q(
+      "UPDATE ingest_batch SET parse_status = 'quarantined', error = 'unrecognized_keys', adapter_version = 1 WHERE archive_key = ANY($1)",
+      [keys],
+    );
+    expect(await quarantines()).toBe(4);
+    const r = await replay(
+      {
+        db: h.load.db,
+        reader: h.reader,
+        alert: (code: string, fields: Record<string, string | number> = {}) => h.alerts.push({ code, fields }),
+        now: () => LATER,
+      },
+      { source: 'LU-5', spec: 'lu-5-cap', from: '2026-09-01', to: '2026-12-31', dryRun: false },
+    );
+    expect(r).toMatchObject({ quarantined: 0, n_new: 0, n_changed: 0, loaded: r.lines });
+    expect(r.lines).toBeGreaterThanOrEqual(4);
+    expect(await batches()).toEqual(ok);
+    expect(h.alerts).toEqual([]);
+    expect(await rows()).toBe(19);
+    expect(await quarantines()).toBe(0);
   });
 });

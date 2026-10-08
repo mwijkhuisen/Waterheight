@@ -1,11 +1,12 @@
 // Turns payloads the owner exported from the production raw archive (Action D2;
 // the read-only export command is in the P5a PR) into adapter fixtures:
 //
-//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b] <export dir>
+//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other] <export dir>
 //
 // (`--p5b`: the P5b export and its rules, `IMPORTS_P5B`; `--p7a`: `IMPORTS_P7A`; `--p8a`: the NL-1 forecast captures
 // of `IMPORTS_P8A`, whole bodies; `--p8a-maaseik`: the maaseik Q captures of `IMPORTS_P8A_MAASEIK`; `--p8b`: the
-// CH-4 and FR-4 forecasts of `IMPORTS_P8B`, whole bodies; without a flag the P5a list.)
+// CH-4 and FR-4 forecasts of `IMPORTS_P8B`, whole bodies; `--lu5-other`: the LU-5 files of other senders of
+// `IMPORTS_LU5_OTHER` (#72), whole bodies; without a flag the P5a list.)
 //
 // The export holds `<name>.raw` (the archived body) and `<name>.line.json` (its
 // manifest line). Each payload listed below is copied to
@@ -412,6 +413,20 @@ export const IMPORTS_P8A_MAASEIK: readonly { name: string; source: 'NL-1'; fixtu
   { name: 'nl-1-fc-1h-maaseik-q-0019', source: 'NL-1', fixture: 'nl-1-fc-1h-maaseik-q-20261001t0625z' },
 ];
 
+/**
+ * #72 (Owner item 1, export of 2026-10-08): four whole LU-5 files of other senders that the first `lu-5-cap` replay
+ * quarantined, one per refusal the strict schema gave, all fetched 2026-09-30. `[Police]` (a TEST of 2026-09-07 with
+ * a `<circle>`, `unrecognized_keys`), `[ALVA]` (a TEST food recall of 2026-04-02, 72 KB, `too_big`), `[CGDIS]` (the
+ * Cancel of a fire alert of 2026-09-20 with a left-to-right mark in its headline, `text_char`) and `LU-Alert` (a
+ * TEST snow warning of the location-based SMS channel of 2025-10-06, 11 areas in a block, `too_big`).
+ */
+export const IMPORTS_LU5_OTHER: readonly { name: string; source: 'LU-5'; fixture: string }[] = [
+  { name: 'lu-5-other-unrecognized-keys', source: 'LU-5', fixture: 'lu-5-other-unrecognized-keys' },
+  { name: 'lu-5-other-too-big', source: 'LU-5', fixture: 'lu-5-other-too-big' },
+  { name: 'lu-5-other-text-char', source: 'LU-5', fixture: 'lu-5-other-text-char' },
+  { name: 'lu-5-other-lu-alert', source: 'LU-5', fixture: 'lu-5-other-lu-alert' },
+];
+
 /** The FR-5 territories whose sections reach the rivers into the Netherlands (catalogue §2.5). */
 export const FR5_TERRITORIES = ['2', '3', '29'] as const;
 
@@ -432,7 +447,7 @@ export function cutP7a(
   };
 }
 
-function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' | 'p8b'): void {
+function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' | 'p8b' | 'lu5-other'): void {
   type Entry = {
     name: string;
     source: string;
@@ -449,6 +464,7 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' |
     p8a: IMPORTS_P8A,
     'p8a-maaseik': IMPORTS_P8A_MAASEIK,
     p8b: IMPORTS_P8B,
+    'lu5-other': IMPORTS_LU5_OTHER,
   };
   const list = lists[mode];
   for (const { name, source, fixture, keep, last, rule, n } of list) {
@@ -491,11 +507,14 @@ if (import.meta.main) {
     '--p8a': 'p8a',
     '--p8a-maaseik': 'p8a-maaseik',
     '--p8b': 'p8b',
+    '--lu5-other': 'lu5-other',
   } as const;
   const mode = flag !== undefined && Object.hasOwn(modes, flag) ? modes[flag as keyof typeof modes] : 'p5a';
   const dir = process.argv[mode === 'p5a' ? 2 : 3];
   if (dir === undefined) {
-    console.error('usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b] <export dir>');
+    console.error(
+      'usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other] <export dir>',
+    );
     process.exitCode = 64;
   } else main(dir, mode);
 }
