@@ -27,7 +27,12 @@ import type { Trace } from './parse.ts';
 //    loader, never guessed;
 //  - unit: the median's own `meta.unit`, looked up in the forecast source's declaration (FORECAST_SOURCES['CH-4']:
 //    `m³/s` and `m3/s` Q × 1, `l/s` Q × 0.001, `m ü. M.` and `m ü.M.` H × 100 to centimetres). The two traces of the
-//    envelope must state the same unit, the band none or the same; an unknown unit is drift, never a guess;
+//    envelope must state the same unit, the band none or the same; an unknown unit is drift, never a guess.
+//    #78, the lake figure (`p_forecast`, spec `ch-4-forecast-lake`): BAFU states its traces in `m³/s` although the
+//    values are lake levels in metres (Zürichsee 405.27 on 2026-10-08); its y-axis label says `m ü.M.`. For that
+//    figure the wire passes the label (`axisUnit`, parse `parseAxisLabel`) and it is the unit: it must be a declared
+//    H unit (else `unknown_unit` at `layout`), and the median must state the label or `m³/s` (`LAKE_TRACE_UNITS`,
+//    else `unit_mismatch`); the envelope and band rules stay. A discharge figure never reads the label;
 //  - kind: `ensemble_summary` (median, 25–75 % band and the extremes of the ensemble, `stepMs` one hour);
 //  - values are the published ones (one decimal) times the declared factor, cleaned of float noise at 1e-6, never
 //    reordered or clamped: if the provider's order does not hold the core flags the point `ORDER`.
@@ -66,7 +71,12 @@ const VARIANT = /^\d{4}$/;
 export type Context = {
   /** The manifest line's variant: the BAFU station id. */
   variant: string;
+  /** #78, the lake figure only (`p_forecast`): its y-axis label (`parseAxisLabel`), which is then the unit. */
+  axisUnit?: string;
 };
+
+/** #78: the trace unit BAFU states on its lake figures (whose values are lake levels in metres, not discharge). */
+const LAKE_TRACE_UNITS: readonly string[] = ['m³/s'];
 
 const count = (dropped: Record<string, number>, code: string) => {
   dropped[code] = (dropped[code] ?? 0) + 1;
@@ -88,9 +98,15 @@ export function normalise(traces: readonly Trace[], ctx: Context, layout: Layout
   if (!same(vminT.x, median.x)) throw new SchemaDrift('ch4_axis', 'data.1');
 
   const unit = median.meta.unit;
-  const decl = Object.hasOwn(UNITS, unit) ? UNITS[unit] : undefined;
-  if (decl === undefined) throw new SchemaDrift('unknown_unit', 'data.3');
+  const label = ctx.axisUnit ?? unit;
+  const decl = Object.hasOwn(UNITS, label) ? UNITS[label] : undefined;
+  if (decl === undefined) throw new SchemaDrift('unknown_unit', ctx.axisUnit === undefined ? 'data.3' : 'layout');
   const [quantity, factor] = decl;
+  // A lake figure is a level in a declared H unit whose traces state that unit or BAFU's mislabel, nothing else.
+  if (ctx.axisUnit !== undefined) {
+    if (quantity !== 'H') throw new SchemaDrift('unknown_unit', 'layout');
+    if (unit !== label && !LAKE_TRACE_UNITS.includes(unit)) throw new SchemaDrift('unit_mismatch', 'data.3');
+  }
   if (vmaxT.meta.unit !== unit) throw new SchemaDrift('unit_mismatch', 'data.0');
   if (vminT.meta.unit !== unit) throw new SchemaDrift('unit_mismatch', 'data.1');
   if (bandT.meta.unit !== '' && bandT.meta.unit !== unit) throw new SchemaDrift('unit_mismatch', 'data.2');

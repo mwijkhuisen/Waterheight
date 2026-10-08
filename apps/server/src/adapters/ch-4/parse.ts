@@ -2,6 +2,7 @@ import { boundedJson, cappedArray, type JsonCaps, parseStrict, SchemaDrift } fro
 import { z } from 'zod';
 
 // CH-4 BAFU forecast plot (catalogue §2.7): the Plotly figure of one station, `plots/q_forecast/<id>_q_forecast_de.json`
+// (a lake's level: `plots/p_forecast/<id>_p_forecast_de.json`, #78, the same traces; its unit: `parseAxisLabel`)
 // (5 traces: the maximum, the minimum, the 25–75 % band as a closed polygon, the median and the measured trace).
 // Only each trace's name, unit and x/y arrays are read, strictly typed; Plotly's styling keys are presentation and
 // are not, and neither is the layout except its threshold bands, which a separate function reads (`parseBands`,
@@ -51,6 +52,28 @@ export function parseForecast(body: Uint8Array): Trace[] {
     if (trace.x.length !== trace.y.length) throw new SchemaDrift('length_mismatch', `plot.data.${i}`);
     return trace;
   });
+}
+
+/** At most this many annotations are read (the figure has 2: the axis label and the run start). */
+const MAX_ANNOTATIONS = 20;
+
+const Annotated = z.object({ annotations: cappedArray(z.unknown(), MAX_ANNOTATIONS).optional() });
+const Annotation = z.object({ text: text(100).optional(), xref: text(10).optional(), yref: text(10).optional() });
+
+/**
+ * #78: the y-axis label of the figure, the one annotation placed on the paper on both axes (`m³/s` on a discharge
+ * figure, `m ü.M.` on a lake figure; the other annotation, the run start, sits on the time axis). The lake figure
+ * (`p_forecast`) states its traces in `m³/s` although its values are lake levels in metres: for that figure this
+ * label is the unit (normalise, `axisUnit`). None or more than one is SchemaDrift (`ch4_axis_label`).
+ */
+export function parseAxisLabel(body: Uint8Array): string {
+  const layout = parseStrict(Annotated, document(body).plot.layout ?? {}, ['plot', 'layout']);
+  const labels = (layout.annotations ?? [])
+    .map((a, i) => parseStrict(Annotation, a, ['plot', 'layout', 'annotations', i]))
+    .filter((a) => a.xref === 'paper' && a.yref === 'paper');
+  const [label] = labels;
+  if (labels.length !== 1 || label?.text === undefined) throw new SchemaDrift('ch4_axis_label', 'plot.layout');
+  return label.text;
 }
 
 /** At most this many shapes are read (the figure has about 6 day lines and 8 bands per threshold). */
