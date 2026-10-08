@@ -31,7 +31,7 @@ import type { Trace } from './parse.ts';
 //    #78, the lake figure (`p_forecast`, spec `ch-4-forecast-lake`): BAFU states its traces in `m³/s` although the
 //    values are lake levels in metres (Zürichsee 405.27 on 2026-10-08); its y-axis label says `m ü.M.`. For that
 //    figure the wire passes the label (`axisUnit`, parse `parseAxisLabel`) and it is the unit: it must be a declared
-//    H unit (else `unknown_unit` at `layout`), and the median must state the label or `m³/s` (`LAKE_TRACE_UNITS`,
+//    H unit (else `unknown_unit` at `plot.layout`), and the median must state the label or `m³/s` (`LAKE_TRACE_UNITS`,
 //    else `unit_mismatch`); the envelope and band rules stay. A discharge figure never reads the label;
 //  - kind: `ensemble_summary` (median, 25–75 % band and the extremes of the ensemble, `stepMs` one hour);
 //  - values are the published ones (one decimal) times the declared factor, cleaned of float noise at 1e-6, never
@@ -100,11 +100,11 @@ export function normalise(traces: readonly Trace[], ctx: Context, layout: Layout
   const unit = median.meta.unit;
   const label = ctx.axisUnit ?? unit;
   const decl = Object.hasOwn(UNITS, label) ? UNITS[label] : undefined;
-  if (decl === undefined) throw new SchemaDrift('unknown_unit', ctx.axisUnit === undefined ? 'data.3' : 'layout');
+  if (decl === undefined) throw new SchemaDrift('unknown_unit', ctx.axisUnit === undefined ? 'data.3' : 'plot.layout');
   const [quantity, factor] = decl;
   // A lake figure is a level in a declared H unit whose traces state that unit or BAFU's mislabel, nothing else.
   if (ctx.axisUnit !== undefined) {
-    if (quantity !== 'H') throw new SchemaDrift('unknown_unit', 'layout');
+    if (quantity !== 'H') throw new SchemaDrift('unknown_unit', 'plot.layout');
     if (unit !== label && !LAKE_TRACE_UNITS.includes(unit)) throw new SchemaDrift('unit_mismatch', 'data.3');
   }
   if (vmaxT.meta.unit !== unit) throw new SchemaDrift('unit_mismatch', 'data.0');

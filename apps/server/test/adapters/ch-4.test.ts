@@ -825,7 +825,7 @@ describe('lake figures (p_forecast, #78)', () => {
     }
     // A label that is not a declared unit, or a discharge, is never a lake level.
     for (const label of ['m³/s', 'm3/s', 'l/s', '', 'm', 'cm', 'm ü.M', 'constructor', '__proto__'])
-      expect(() => lake('m³/s', label)).toThrow(drift('unknown_unit', 'layout'));
+      expect(() => lake('m³/s', label)).toThrow(drift('unknown_unit', 'plot.layout'));
     // The envelope keeps its rule: the maximum states the median's unit.
     const traces = build(stamps(2), cols(2), 'm³/s');
     (traces[0] as Trace).meta.unit = 'm ü.M.';
@@ -838,6 +838,8 @@ describe('lake figures (p_forecast, #78)', () => {
     const start = { text: 'Vorhersage ab', xref: 'x', yref: 'paper' };
     const withAnn = (annotations: unknown) => bytes({ ...d, plot: { ...d.plot, layout: { annotations } } });
     expect(parseAxisLabel(withAnn([start, label]))).toBe('m ü.M.');
+    // Only the label's text is read: a long note or one without text elsewhere changes nothing.
+    expect(parseAxisLabel(withAnn([{ ...start, text: 'n'.repeat(500) }, { xref: 'x' }, label]))).toBe('m ü.M.');
     for (const bad of [[], [start], [label, label], [{ ...label, text: undefined }], [{ xref: 'paper' }]])
       expect(() => parseAxisLabel(withAnn(bad))).toThrow(drift('ch4_axis_label', 'plot.layout'));
     expect(() => parseAxisLabel(bytes({ ...d, plot: { ...d.plot, layout: {} } }))).toThrow(drift('ch4_axis_label'));

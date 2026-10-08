@@ -58,22 +58,26 @@ export function parseForecast(body: Uint8Array): Trace[] {
 const MAX_ANNOTATIONS = 20;
 
 const Annotated = z.object({ annotations: cappedArray(z.unknown(), MAX_ANNOTATIONS).optional() });
-const Annotation = z.object({ text: text(100).optional(), xref: text(10).optional(), yref: text(10).optional() });
+const Anchor = z.object({ xref: text(10).optional(), yref: text(10).optional() });
+const Label = z.object({ text: text(100) });
 
 /**
  * #78: the y-axis label of the figure, the one annotation placed on the paper on both axes (`m³/s` on a discharge
  * figure, `m ü.M.` on a lake figure; the other annotation, the run start, sits on the time axis). The lake figure
  * (`p_forecast`) states its traces in `m³/s` although its values are lake levels in metres: for that figure this
- * label is the unit (normalise, `axisUnit`). None or more than one is SchemaDrift (`ch4_axis_label`).
+ * label is the unit (normalise, `axisUnit`). None or more than one is SchemaDrift (`ch4_axis_label`). Only the
+ * label's text is read: another annotation's text (the run start) is not, so a longer note there changes nothing.
  */
 export function parseAxisLabel(body: Uint8Array): string {
   const layout = parseStrict(Annotated, document(body).plot.layout ?? {}, ['plot', 'layout']);
-  const labels = (layout.annotations ?? [])
-    .map((a, i) => parseStrict(Annotation, a, ['plot', 'layout', 'annotations', i]))
-    .filter((a) => a.xref === 'paper' && a.yref === 'paper');
+  const at = (i: number) => ['plot', 'layout', 'annotations', i];
+  const labels = (layout.annotations ?? []).flatMap((a, i) => {
+    const { xref, yref } = parseStrict(Anchor, a, at(i));
+    return xref === 'paper' && yref === 'paper' ? [{ a: a as { text?: unknown }, i }] : [];
+  });
   const [label] = labels;
-  if (labels.length !== 1 || label?.text === undefined) throw new SchemaDrift('ch4_axis_label', 'plot.layout');
-  return label.text;
+  if (labels.length !== 1 || label?.a.text === undefined) throw new SchemaDrift('ch4_axis_label', 'plot.layout');
+  return parseStrict(Label, label.a, at(label.i)).text;
 }
 
 /** At most this many shapes are read (the figure has about 6 day lines and 8 bands per threshold). */
