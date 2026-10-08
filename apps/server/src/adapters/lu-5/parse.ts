@@ -89,12 +89,13 @@ function decoded(node: unknown): unknown {
   return node;
 }
 
-/** Whether a raw `<sender>` decodes to AGE's; one that does not decode cleanly (decode throws only SchemaDrift) is not. */
+/** Whether a raw `<sender>` decodes to AGE's; one that does not decode cleanly (SchemaDrift) is not. */
 function isAge(raw: string): boolean {
   try {
     return decode(raw) === SENDER;
-  } catch {
-    return false;
+  } catch (e) {
+    if (e instanceof SchemaDrift) return false;
+    throw e;
   }
 }
 

@@ -458,8 +458,11 @@ describe('P7a through the loader', { timeout: 300_000 }, () => {
       keys.push(line.key as string);
     }
     const batches = () =>
-      q('SELECT parse_status, error, n_rows, adapter_version FROM ingest_batch WHERE archive_key = ANY($1)', [keys]);
-    const ok = names.map(() => ({ parse_status: 'ok', error: null, n_rows: 0, adapter_version: 2 }));
+      q(
+        'SELECT parse_status, error, n_rows, n_skipped, adapter_version FROM ingest_batch WHERE archive_key = ANY($1)',
+        [keys],
+      );
+    const ok = names.map(() => ({ parse_status: 'ok', error: null, n_rows: 0, n_skipped: 0, adapter_version: 2 }));
     const rows = async () => (await q("SELECT count(*)::int AS n FROM warning_area WHERE source_id = 'LU-5'"))[0]?.n;
     const quarantines = async () => {
       const backlog = { files: 0, bytes: 0, age_s: null };
@@ -495,5 +498,31 @@ describe('P7a through the loader', { timeout: 300_000 }, () => {
     expect(h.alerts).toEqual([]);
     expect(await rows()).toBe(19);
     expect(await quarantines()).toBe(0);
+  });
+
+  it('#72: through the wire, an empty or repeated sender is quarantined as not_cap, never other_sender', async () => {
+    const { body, at, url } = recorded('lu-5-other-unrecognized-keys', 'LU-5');
+    const police = '<sender>[Police]</sender>';
+    const senders = ['<sender></sender>', `${police}${police}`];
+    const keys: string[] = [];
+    for (const [i, sender] of senders.entries()) {
+      const line = await writePayload(h.archive, {
+        source: 'LU-5',
+        spec: 'lu-5-cap',
+        variant: `file/not-cap-${i}`,
+        at: new Date(at.getTime() + (i + 1) * 1000),
+        body: Buffer.from(body.toString('utf8').replace(police, sender)),
+        url,
+        retention: 'forever',
+      });
+      keys.push(line.key as string);
+    }
+    h.alerts.length = 0;
+    expect(await h.loader({ now: LATER }).tick()).toEqual({ lines: 2, loaded: 0 });
+    expect(await q('SELECT parse_status, error, n_rows FROM ingest_batch WHERE archive_key = ANY($1)', [keys])).toEqual(
+      senders.map(() => ({ parse_status: 'quarantined', error: 'not_cap', n_rows: 0 })),
+    );
+    expect(h.alerts.map((a) => [a.code, a.fields.code])).toEqual(senders.map(() => ['quarantined', 'not_cap']));
+    expect(await q("SELECT count(*)::int AS n FROM warning_area WHERE source_id = 'LU-5'")).toEqual([{ n: 19 }]);
   });
 });
