@@ -1031,7 +1031,7 @@ P5c uses the P5 build model and the default P5 reviewers (as P5a): `opus` xhigh,
 - NL-1: Lobith, the NL branches, Eijsden and the Maas, plus the Belgian RWS points `antwerpen`, `maaseik` (H and Q) and `lanaken` (§0.6).
 - DE-2 and DE-3 (owner audience; DE-2 public after the P12 gate): 7 Rhine gauges.
 - LU-3 (owner audience): the 11 AGE-computed stations on the Sûre, Alzette, Wark and Our (the Moselle runs are LfU RLP's and wait for C4 or C11).
-- CH-4: 55 stations on the Rhine and Aare (§26: 54 seeded, 40 answering, 28 expected to store a run).
+- CH-4: 55 stations on the Rhine and Aare (§26: 54 seeded, 40 answering, 28 expected to store a run; §34, #78: 53 answering, 38 expected).
 - FR-4: French stations, during events only.
 
 **Risks**
@@ -2662,3 +2662,30 @@ What the P10e build (issue #101) settled against the issue. P10e makes the map t
 - **Security L1 (licence visibility):** the OSM and ODbL credits are behind the "Bronnen" disclosure and MapLibre's compact attribution; this reads as compliant with OSM's attribution guidelines, but it is a licence reading for the owner to confirm (KG-257, [owner]). **L2:** T-WEB-5 now names the `metadata: false` guard of the PMTiles protocol behind MapLibre's compact attribution.
 
 **[U] list.** The owner's visual check of the screenshots on a phone and a desktop; the real-device and screen-reader pass of the combobox, the disclosures and the popover menu (KG-256); KG-252 to KG-254 (small behaviours, listed in `docs/known-gaps.md`); the Lighthouse numbers (KG-255); the owner's confirmation of the OSM/ODbL reading of the folded credits (KG-257).
+
+## 34. Amendment: fix #78, CH-4 lake forecasts from `p_forecast` (2026-10-08)
+
+What the fix of issue #78 (follow-up of P8b, KG-207) settled. BAFU publishes the forecasts of the 13 CH-4 lake stations under `plots/p_forecast/{id}_p_forecast_de.json`, not `q_forecast` (owner probe, 2026-10-08, issue comment). They are now captured and loaded; 2646 (Kander – Emdthal) answers 404 on both paths and stays the only station without a forecast.
+
+**Owner decisions (2026-10-08, planning):** real lake fixtures from a live smoke capture of exactly three stations (2209 Zürichsee, 2032 Bodensee-Obersee, 2642 Lac de Neuchâtel; at most one retry); 2646 stays in the seed with its hourly `q_forecast` capture; only the `_de` figure; the three lakes on `off` CH-1 series (2022, 2027, 2101) are captured like the off rivers and store nothing; no contract-check probe for the lake spec.
+
+**What was built:**
+- **Seed:** `registry/seed/ch-4.csv` gains a column `plot`: `q` for the 41 river stations (2646 included), `p` for the 13 lakes. The unit test holds `p` to exactly the stations with no CH-1 `/Q`. `ch-1.yaml` and `ch-2.yaml` were regenerated: only the seed's sha256 in their headers changed.
+- **Capture:** `ch-4-forecast` takes `where: { plot: q }` (41 variants, URL unchanged); the new `ch-4-forecast-lake` (`cron "37 * * * *"`, `where: { plot: p }`, 13 variants) fetches `p_forecast` with the same conditional, gate, caps, retention and validity. Same host; the hydrodaten budget is unchanged (`budgets()`: peak 65 per hour, 10,759 a week, before and after), as the 13 requests move from `q_` to `p_`.
+- **Loader:** `load/wire/ch-4.ts` has a second spec entry with the same caps and `refTarget`. The adapter version stays 1 (it is only recorded in `ingest_batch`), because a `q_forecast` payload normalises exactly as before (the four river goldens are byte-identical).
+
+**Where reality differs from the plan:** the plan expected no adapter change. The recordings showed one: **the lake figure states every trace in `m³/s`** although the values are lake levels in metres (Zürichsee 405.26); only its y-axis label (the one `layout.annotations` entry on the paper in both axes) says `m ü.M.`. Unchanged, the run would have gone to `<id>/Q` in metres. Fix, without loosening the strictness: `parseAxisLabel` (parse.ts, strict and capped: exactly one paper-anchored annotation with a text, else `ch4_axis_label`) and an optional `axisUnit` in normalise's context that only the lake entry passes. For a lake figure the label is the unit: it must be a declared H unit (else `unknown_unit` at `layout`), and the median must state the label or `m³/s` (`LAKE_TRACE_UNITS`, else `unit_mismatch`); the envelope and band rules are unchanged. A river figure never reads the label. The capture test helper also needed an `ALIAS` from the spec to its first recording (`validity.test.ts` wants a fixture per spec).
+
+**Datum check (no extra BAFU request):** the measured trace of each recording against the CH-1 lake level that our public API serves for the same instants (`/api/v1/series/<id>` on rk.wijkhuisen.info, 2026-10-08): Zürichsee 21 instants, −0.4 to +0.5 cm; Bodensee-Obersee 21, −0.4 to +0.5 cm; Lac de Neuchâtel 20, −0.5 to +0.6 cm. Same datum (LN02), the difference is the figure's centimetre rounding.
+
+**Live requests:** 3 GETs to `www.hydrodaten.admin.ch` (`scripts/smoke-capture.ts`, contact the owner's address), all 200 on the first try, no retry; 3 to our own public API for the datum check.
+
+**Evidence ([CI]):**
+- `apps/server/test/adapters/ch-4.test.ts`: the three lake recordings are goldens (114 hourly points, `<id>/W` in centimetres, no drop); a lake case (the five traces and their units, the label, the W run, the measured trace not stored, and the same traces read the q way give `2209/Q`: why the label is passed); the label rules (H units only, the trace unit the label or `m³/s`, every other spelling drift); `parseAxisLabel` (none, two, no text, a non-string, too long, too many annotations, a bad layout, not JSON); every real figure has exactly one label (`m³/s` for rivers); `parseAxisLabel` joins the bytes-to-SchemaDrift property; the seed test reads `id,plot`.
+- `apps/server/test/capture/budget.test.ts`: 41 + 13 variants, 54 distinct, 2646 on `q`, the lake URL for 2209, both hourly. `catalogue-01a.test.ts` checks both specs (cadence, `first`, gate, conditional, retention).
+- `apps/server/test/load/ch-4.int.test.ts`: the real 2209 figure through `ch-4-forecast-lake` stores one run of 114 points on `2209/W` (40526 cm first), none on `2209/Q`; the same figure for 2022 (an off lake) stores nothing.
+- `test/verify-prod.test.ts`: `CH4_NO_FORECAST` is `['2646']`, `ch4ExpectedSeries()` is **38** (54 seeded, 15 on off CH-1 series, 2646); `test/contract-check.test.ts`: still eleven specs, the first `ch-4-forecast` row is now 2009, the probe still asks 2091.
+
+**[agent-prod] after the deploy:** `verify-prod.sh rk.wijkhuisen.info` → `PASS forecast CH-4` with at least 38 series once the lakes have had a run (the first `:37` capture after the deploy); `/status/capture.json` lists `ch-4-forecast-lake` with 13 variants and `ch-4-forecast` with 41. No replay: no `p_forecast` line was archived before this release, and the archived 404 lines of the lakes hold no object.
+
+**[U]:** KG-207, narrowed to 2646 (the owner accepts it or keeps #78 open for it).
