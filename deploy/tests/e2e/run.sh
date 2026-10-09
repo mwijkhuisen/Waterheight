@@ -236,6 +236,29 @@ install -d -m 0755 -o 65532 -g 65532 /srv/rws/tiles
 install -d -m 0700 -o 65532 -g 65532 /srv/rws/tiles/.staging
 # The river files (P6b): root's, written only by rws-rivers-refresh; Caddy mounts exactly these two read-only.
 install -d -m 0755 -o 0 -g 0 /srv/rws/public/data /srv/rws/public/data/v1 /srv/rws/public/data/v1/rivers /srv/rws/public/downloads
+# P11a (issue #26): one river release installed as rws-rivers-refresh leaves it (root's, 0644, immutable names, then the
+# manifest), from the committed fixtures: the reaches file of the fixture graph and its tiles (tools/geo/fixtures,
+# test/reaches-fixture.test.ts), so the web has a graph to draw the upstream chain from and publish-owner a release
+# to split. The download file is a valid gzip of an empty collection (the manifest names one; nothing here reads it).
+rivers_ver=20261003
+rivers_dir=/srv/rws/public/data/v1/rivers
+install -m 0644 -o 0 -g 0 "$repo/test/fixtures/reaches-fixture.json" "$rivers_dir/reaches-$rivers_ver.json"
+install -m 0644 -o 0 -g 0 "$repo/tools/geo/fixtures/rivers-fixture.pmtiles" "$rivers_dir/rivers-$rivers_ver.pmtiles"
+printf '{"type":"FeatureCollection","features":[]}\n' | gzip -n >"/srv/rws/public/downloads/rivers-$rivers_ver.geojson.gz"
+chmod 0644 "/srv/rws/public/downloads/rivers-$rivers_ver.geojson.gz"
+jq -e --arg v "$rivers_ver" '.schema_version == 1 and .version == $v' "$rivers_dir/reaches-$rivers_ver.json" >/dev/null ||
+  fail "test/fixtures/reaches-fixture.json is not version $rivers_ver"
+rivers_entry() { # <file>: the manifest entry of an installed file
+  jq -n --arg f "${1##*/}" --arg s "$(sha256sum "$1" | cut -d' ' -f1)" --argjson b "$(stat -c %s "$1")" \
+    '{file: $f, sha256: $s, bytes: $b}'
+}
+jq -n --arg v "$rivers_ver" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --argjson tiles "$(rivers_entry "$rivers_dir/rivers-$rivers_ver.pmtiles")" \
+  --argjson reaches "$(rivers_entry "$rivers_dir/reaches-$rivers_ver.json")" \
+  --argjson dl "$(rivers_entry "/srv/rws/public/downloads/rivers-$rivers_ver.geojson.gz")" \
+  '{schema_version: 1, current: {version: $v, tag: "geo-2026-10-03", installed_at: $now, tiles: $tiles, reaches: $reaches, download: $dl}, previous: null}' \
+  >"$rivers_dir/manifest.json"
+chmod 0644 "$rivers_dir/manifest.json"
 # The parent is root's: its subdirectories are bind-mounted one by one, and a uid-65532 owner could swap db/ for a link.
 install -d -m 0700 -o 0 -g 0 /srv/rws/backup
 install -d -m 0700 -o 65532 -g 65532 /srv/rws/backup/cache /srv/rws/backup/drill
@@ -971,6 +994,26 @@ wait_for "the owner canary in the owner latest.json" 240 owner_latest_has_canary
   fail "meta.json modes: $(stat -c '%n %a %u:%g' /srv/rws/public/www/v1/meta.json /srv/rws/owner/www/v1/meta.json | tr '\n' ' ')"
 env DOMAIN="$DOMAIN" IP4="$IP4" "$e2e/isolation.sh"
 proof "isolation.sh: publish and publish-owner each mount only their own audience's tree, no write crosses the roots, the public listener serves no owner content for SNI owner.$DOMAIN, caddy-owner answers 401 with private no-store and noindex nofollow on every path without credentials and 200 with the owner canary with them; the owner canary is in no public static file"
+
+# P11a (issue #26 C5): the river release the public site serves is the installed fixture, byte for byte, and neither it nor
+# stations.json knows an owner station; the owner variant of the reaches file (caddy-owner) is owner-check.mjs's.
+pub_rivers=$(outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/data/v1/rivers/manifest.json") ||
+  fail "the public rivers manifest is not served"
+[[ $(jq -r .current.version <<<"$pub_rivers") == "$rivers_ver" ]] || fail "the public rivers manifest is not version $rivers_ver"
+outside -o /ci/public-reaches.json --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/data/v1/rivers/reaches-$rivers_ver.json" ||
+  fail "the public reaches file is not served"
+cmp -s /ci/public-reaches.json "$repo/test/fixtures/reaches-fixture.json" ||
+  fail "the public reaches file differs from the installed release: the owner split must never touch the public bytes"
+outside -o /ci/public-stations.json --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/data/v1/stations.json" ||
+  fail "the public stations.json is not served"
+for f in /ci/public-reaches.json /ci/public-stations.json; do
+  ! grep -qE 'be\.spw\.|777777\.(777|75)' "$f" || fail "an owner station or the owner canary in the public ${f##*/}"
+done
+# Positive controls: the files are the real ones (Eijsden is a public station of both).
+for f in /ci/public-reaches.json /ci/public-stations.json; do
+  grep -q 'nl\.rws\.eijsden\.grens' "$f" || fail "the public ${f##*/} does not hold nl.rws.eijsden.grens"
+done
+proof "public /data/v1/rivers/reaches-$rivers_ver.json is the installed fixture release byte for byte (cmp), and it and /data/v1/stations.json hold no be.spw. station and no owner canary value (both hold nl.rws.eijsden.grens)"
 rws_compose run --rm --no-deps -T watchdog watchdog --once
 proof "watchdog --once with the publisher running: /data/v1/meta.json is fresh, so the publisher check is green too"
 
@@ -1118,8 +1161,8 @@ step "Owner smoke (P10a): the production build behind caddy-owner, one browser"
 # by name; the spec (owner-smoke.spec.ts, selected by E2E_OWNER_SMOKE=1) checks runtime-config and the banner.
 owner_ip=$(docker inspect -f '{{(index .NetworkSettings.Networks "rws_edge").IPAddress}}' rws-caddy-owner-1)
 [[ $owner_ip =~ ^[0-9.]+$ ]] || fail "no rws_edge address for caddy-owner: $owner_ip"
-E2E_OWNER_PW=$OWNER_PW docker run --rm --init --network host --ipc=host --add-host "owner.$DOMAIN:$owner_ip" \
-  -e CI=true -e E2E_COMPOSE=1 -e E2E_OWNER_SMOKE=1 -e "E2E_OWNER_URL=https://owner.$DOMAIN:8443" -e E2E_OWNER_PW \
+E2E_OWNER_PW=$OWNER_PW docker run --rm --init --network host --ipc=host --add-host "owner.$DOMAIN:$owner_ip" --add-host "$DOMAIN:$IP4" \
+  -e CI=true -e E2E_COMPOSE=1 -e E2E_OWNER_SMOKE=1 -e "E2E_OWNER_URL=https://owner.$DOMAIN:8443" -e "E2E_COMPOSE_URL=https://$DOMAIN" -e E2E_OWNER_PW \
   -v "$repo:/work" -w /work/apps/web \
   "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
   node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium ||

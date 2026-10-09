@@ -239,7 +239,10 @@ const server = createServer(
     if (path === '/data/v1/rivers/manifest.json')
       return serve(res, join(riversData, 'manifest.json'), undefined, 'public, max-age=60');
     if (REACHES.test(path)) {
-      const f = file(riversData, path.slice('/data/v1/rivers'.length));
+      // P11a: the owner site serves the owner publisher's variant of the reaches file in preference to the public one
+      // (owner.caddy's @owner_reaches), when it wrote one.
+      const name = path.slice('/data/v1/rivers'.length);
+      const f = (owner ? file(join(published, 'rivers'), name) : undefined) ?? file(riversData, name);
       return f === undefined ? send(res, 404) : serve(res, f, range, IMMUTABLE);
     }
     if (/^\/data\/v1\/rivers(\/|$)/.test(path)) return send(res, 404);

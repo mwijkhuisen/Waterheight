@@ -102,6 +102,46 @@ check(
 check((await get('/data/v1/missing.json', auth)).status === 404, 'a missing owner file is a 404');
 check((await get('/data/v1/meta.json.zst', auth)).status === 404, 'a precompressed name is a 404');
 
+// P11a (issue #26 C5): the owner variant of the reaches file. run.sh installs the fixture release before the stack
+// starts; the owner publisher splits it at the BE-3 gauges and writes reaches-<ver>.json into the owner tree, which
+// caddy-owner serves in preference to the public file of the same name (owner.caddy). The public bytes are run.sh's
+// check (cmp against the installed file, no be.spw. in it or in stations.json). The owner publisher writes it in its
+// first cycle; the loop only absorbs the order of that cycle's steps.
+const manifest = await get('/data/v1/rivers/manifest.json', auth);
+let version = '';
+try {
+  version = JSON.parse(manifest.body).current.version;
+} catch {}
+check(
+  manifest.status === 200 && /^[0-9]{8}$/.test(version),
+  '/data/v1/rivers/manifest.json with credentials names a release',
+);
+const reachesPath = `/data/v1/rivers/reaches-${version}.json`;
+let variant = await get(reachesPath, auth);
+for (let i = 0; i < 30 && version !== '' && !variant.body.includes('"be.spw.'); i++) {
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  variant = await get(reachesPath, auth);
+}
+let file = null;
+try {
+  file = JSON.parse(variant.body);
+} catch {}
+const spw = (file?.stations ?? []).map((s) => s.id).filter((id) => id.startsWith('be.spw.'));
+check(
+  variant.status === 200 && file?.version === version,
+  `${reachesPath} with credentials is the release's reaches file`,
+);
+check(ownerHeaders(variant), `${reachesPath} with credentials: both owner headers (private, no-store)`);
+check(
+  ['be.spw.5447', 'be.spw.5451', 'be.spw.8702'].every((id) => spw.includes(id)),
+  `${reachesPath} is the owner variant: it places the SPW gauges be.spw.5447, 5451 and 8702 (${spw.length} be.spw. stations)`,
+);
+check(
+  (file?.stations ?? []).some((s) => s.id === 'nl.rws.eijsden.grens'),
+  `${reachesPath} keeps the public stations (nl.rws.eijsden.grens)`,
+);
+check(!CANARY.test(variant.body), `${reachesPath} holds no owner canary value`);
+
 if (failures.length > 0) {
   console.error(`owner-check: ${failures.length} failed`);
   process.exit(1);

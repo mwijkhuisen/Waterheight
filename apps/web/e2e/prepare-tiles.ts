@@ -11,7 +11,7 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { ReachesFile, RiversManifest } from '@rws/contracts';
+import { checkReaches, ReachesFile, RiversManifest } from '@rws/contracts';
 import { checkTilesManifest, tileFileNames } from '@rws/core/tiles-manifest';
 
 export const E2E_BUILD = '20261001';
@@ -23,12 +23,38 @@ const fixtures = fileURLToPath(new URL('../../../tools/geo/fixtures/', import.me
 const reachesFixture = fileURLToPath(new URL('../../../test/fixtures/reaches-fixture.json', import.meta.url));
 
 /**
- * The reaches file as the e2e site serves it. W5 (P11a): add the e2e station rows here (the XSS station and one test
- * station as `ReachStation` rows on a Rhine reach upstream of Lobith), so that their names render in a chain row.
- * Until then it returns the committed release as it is.
+ * The reaches file as the e2e site serves it: the committed release plus two e2e stations on the Rhine above Lobith
+ * (P11a, issue #26), so that their names render in a chain row. The hostile one (nl.e2e.xss) sits at the head of
+ * rhine.47, between Koeln and Bonn; the ordinary one (nl.e2e.dst) at the head of rhine.44, between Andernach and
+ * Remagen. Both reaches have no station of their own in the release (a confluence starts them), so the stations
+ * become their `up_station_id`: the chain names a row by the station a reach starts at. Every other row is as built.
  */
+export const E2E_CHAIN: readonly [station: string, reach: string][] = [
+  ['nl.e2e.xss', 'rhine.47'],
+  ['nl.e2e.dst', 'rhine.44'],
+];
 function e2eReaches(release: ReachesFile): ReachesFile {
-  return release;
+  const stations = [...release.stations];
+  const reaches = release.reaches.map((r) => ({ ...r }));
+  for (const [id, reachId] of E2E_CHAIN) {
+    const reach = reaches.find((r) => r.id === reachId);
+    if (reach === undefined || reach.up_station_id !== null) throw new Error(`e2e reaches: ${reachId} is not free`);
+    reach.up_station_id = id;
+    stations.push({
+      id,
+      river_id: reach.river_id,
+      reach_id: reach.id,
+      km_official: null,
+      km_official_system: null,
+      km_graph: reach.km_graph_from,
+      km_to_nl_entry: null,
+      nl_entry_node: null,
+    });
+  }
+  const out = ReachesFile.parse({ ...release, reaches, stations });
+  const problems = checkReaches(out);
+  if (problems.length > 0) throw new Error(`e2e reaches: ${problems[0]}`);
+  return out;
 }
 
 export function prepareTiles(dir: string): void {

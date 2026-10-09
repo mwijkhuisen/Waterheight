@@ -17,6 +17,7 @@ import {
   open,
   panelOf,
   param,
+  pauseFlow,
   pickStation,
   searchBox,
   searchButton,
@@ -92,6 +93,7 @@ async function withRivers(page: Page) {
 
 /** The `area` of every warning feature the map holds at the current t (jumps over Basel so its tiles are loaded). */
 async function warningAreas(page: Page): Promise<string[]> {
+  await pauseFlow(page); // the map must be able to go idle (P11a)
   return page.evaluate(async () => {
     const map = (window as unknown as W).__rws?.map;
     if (!map) throw new Error('no map');
