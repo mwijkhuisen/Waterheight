@@ -110,6 +110,10 @@ const fromFile = (file: Parameters<typeof toSnapshot>[0]): WebSnapshot => ({
   degraded: false,
 });
 
+/** latest.json's age of the newest value of each series with none at t (KG-233), by series; null: never one. */
+const lastAgeOf = (file: { lapsed: readonly number[]; lapsedAge: readonly (number | null)[] }) =>
+  new Map(file.lapsed.map((id, i) => [id, file.lapsedAge[i] ?? null]));
+
 async function fromStatic(
   f: Fetcher,
   source: Exclude<SnapshotSource, { kind: 'api' }>,
@@ -125,7 +129,7 @@ async function fromStatic(
     if (data.seriesHash !== seriesHash || Date.parse(data.t) !== t) throw new Error('latest_mismatch');
     // The 24-hour change the publisher computed (canonical units, null without both values), by series.
     const dh24 = new Map(data.series.map((id, i) => [id, data.dh24[i] ?? null]));
-    return { ...fromFile(data), dh24 };
+    return { ...fromFile(data), dh24, lastAge: lastAgeOf(data) };
   }
   const { data } = await getJson(f, `${STATIC}${path}`, c.SnapshotFile, signal);
   if (Date.parse(data.t) !== t) throw new Error('file_mismatch');
@@ -143,12 +147,15 @@ async function fromApi(f: Fetcher, t: number, c: Contracts, signal?: AbortSignal
     return { t: at, values, ...(forecasts === undefined ? {} : { forecasts }), standIn: false, degraded: false };
   }
   let file: Parameters<typeof toSnapshot>[0];
+  let lastAge: WebSnapshot['lastAge'];
   try {
-    file = c.LatestFile.parse(body);
+    const latest = c.LatestFile.parse(body);
+    file = latest;
+    lastAge = lastAgeOf(latest);
   } catch {
     file = c.SnapshotFile.parse(body);
   }
-  return { ...toSnapshot(file), standIn: true, degraded: true };
+  return { ...toSnapshot(file), lastAge, standIn: true, degraded: true };
 }
 
 /** A future t without the API: the held values of forecast/latest.json, with no state (the API's classes need it). */

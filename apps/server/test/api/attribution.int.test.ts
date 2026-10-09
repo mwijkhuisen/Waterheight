@@ -71,6 +71,9 @@ function extract(body: unknown, fills = true): Set<string> {
     if (Array.isArray(o.series) && o.series.length > 0 && o.series.every((x) => typeof x === 'number'))
       for (const [i, sid] of (o.series as number[]).entries())
         series(sid, Array.isArray(o.qc) ? (o.qc[i] as number) : undefined);
+    // latest.json's `lapsed` (KG-233): the series with no value, whose newest value's age is the source's data too.
+    if (Array.isArray(o.lapsed) && o.lapsed.every((x) => typeof x === 'number'))
+      for (const sid of o.lapsed as number[]) series(sid);
     // A station's series row, and a /series answer (its points' qc or qcOr).
     if (typeof o.id === 'number' && 'quantity' in o) series(o.id);
     // A station file's series row: parallel ts, value and qc arrays.

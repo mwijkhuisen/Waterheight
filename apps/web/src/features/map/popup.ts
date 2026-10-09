@@ -37,7 +37,8 @@ export function badgeLine({ state, tidal, impounded }: BadgeInput, locale: Local
     state?.section ? m.section_badge({}, { locale }) : '',
     state?.owner ? m.owner_badge({}, { locale }) : '',
     state?.suspect ? m.suspect_note({}, { locale }) : '',
-    state?.stale ? m.stale_note({}, { locale }) : '',
+    // KG-233: stale without a value is a lapsed station (its newest value is past the staleness limit).
+    state?.stale ? (state.has ? m.stale_note : m.lapsed_note)({}, { locale }) : '',
     tidal ? m.legend_tidal({}, { locale }) : '',
     impounded ? m.legend_impounded({}, { locale }) : '',
   ];

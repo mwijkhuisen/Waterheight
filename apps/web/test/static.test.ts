@@ -94,6 +94,8 @@ const latest = (t: string, hash = 'aaaaaaaaaaaaaaaa') => ({
   seriesHash: hash,
   dh24: [null, null],
   dh1: [null, null],
+  lapsed: [],
+  lapsedAge: [],
 });
 const apiSnapshot = (t: string) => ({ t, values: [], attribution: [] });
 const run = {
@@ -140,6 +142,17 @@ describe('loadSnapshot', () => {
     ]);
   });
 
+  it('latest.json gives the age of the newest value of each lapsed series (KG-233)', async () => {
+    const body = { ...latest(NOW), lapsed: [7, 8], lapsedAge: [5400, null] };
+    const s = await loadSnapshot(fake({ '/data/v1/latest.json': { body } }).f, T(NOW), m, 'aaaaaaaaaaaaaaaa');
+    expect(s.lastAge).toEqual(
+      new Map([
+        [7, 5400],
+        [8, null],
+      ]),
+    );
+  });
+
   it('a latest.json of another series hash goes to the API', async () => {
     const { f, asked } = fake({
       '/data/v1/latest.json': { body: latest(NOW, 'bbbbbbbbbbbbbbbb') },
@@ -184,6 +197,22 @@ describe('loadSnapshot', () => {
     const s = await loadSnapshot(g.f, T('2026-10-26T11:50:00Z'), m, null);
     expect(s).toMatchObject({ t: NOW, standIn: true, degraded: true });
     expect(s.values).toHaveLength(2);
+  });
+
+  it("an X-Degraded latest.json keeps its lapsed series' ages (KG-233)", async () => {
+    const body = { ...latest(NOW), lapsed: [7, 8], lapsedAge: [5400, null] };
+    const g = fake({
+      '/data/v1/recent/2026-10-26/1150.json': { status: 503 },
+      '/api/v1/snapshot?t=2026-10-26T11:50Z': { body, headers: { 'x-degraded': '1' } },
+    });
+    const s = await loadSnapshot(g.f, T('2026-10-26T11:50:00Z'), m, null);
+    expect(s.standIn).toBe(true);
+    expect(s.lastAge).toEqual(
+      new Map([
+        [7, 5400],
+        [8, null],
+      ]),
+    );
   });
 
   it('a future t asks the API first (states); on failure or a stand-in, the held forecast file without states', async () => {

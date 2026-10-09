@@ -113,11 +113,29 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
   /**
    * latest.json: the current bucket, its series in stations.json's order (the series with a value at t), the hash of
    * that order, and per series Δh over 24 h and over 1 h (value(t) − value(t − 24 h), value(t) − value(t − 1 h); null
-   * without both values).
+   * without both values). KG-233: `lapsed` lists, in the same order, the series with no value at t (past their
+   * staleness limit, or none at all) and `lapsedAge` the age in seconds at t of each one's newest value (null: it
+   * never had one), so the page can tell a stale series from one that never had a value. A series with a value
+   * carries its age in `ageSeconds`.
    */
   const LatestFile = z
-    .strictObject({ ...snapshotColumns, generatedAt: iso, seriesHash: SeriesHash, dh24: Delta, dh1: Delta })
-    .superRefine((f, ctx) => checkColumns(f, ctx, [f.dh24, f.dh1]));
+    .strictObject({
+      ...snapshotColumns,
+      generatedAt: iso,
+      seriesHash: SeriesHash,
+      dh24: Delta,
+      dh1: Delta,
+      lapsed: column(SeriesId),
+      lapsedAge: column(count.nullable()),
+    })
+    .superRefine((f, ctx) => {
+      checkColumns(f, ctx, [f.dh24, f.dh1]);
+      const have = new Set(f.series);
+      if (f.lapsedAge.length !== f.lapsed.length || new Set(f.lapsed).size !== f.lapsed.length)
+        ctx.addIssue({ code: 'custom', message: 'lapsedAge has one entry per lapsed series, each listed once' });
+      if (f.lapsed.some((s) => have.has(s)))
+        ctx.addIssue({ code: 'custom', message: 'a series with a value is not lapsed' });
+    });
 
   const Day = z.string().regex(DAY_RE);
   /** meta.json: the API's /meta plus the static fields. */

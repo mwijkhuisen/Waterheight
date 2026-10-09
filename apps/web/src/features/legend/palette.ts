@@ -72,3 +72,7 @@ export const Q_COLOUR = '#35978f';
  * generated label table (registry/labels/DE-6.yaml `color`) is the source; this copy is pinned to it by a test.
  */
 export const LHP_NO_DATA = '#7b7b7b';
+
+/** KG-233: a station with no value at t whose newest value is past its staleness limit is a small grey dot. */
+export const LAPSED_COLOUR = '#969696';
+export const LAPSED_RADIUS = 3.5;

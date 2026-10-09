@@ -807,3 +807,96 @@ test('the public site: no owner banner, no owner badge, no owner station, runtim
   ).toEqual([]);
   await finish(page, s);
 });
+
+// ---------------------------------------------------------------- KG-233: the age of a series' newest value
+
+test("latest.json's lapsed ages: stale past the limit, hidden after 25 hours (KG-233)", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  const real = (await (
+    await page.request.get('/data/v1/stations.json', { headers: { 'accept-encoding': 'identity' } })
+  ).json()) as {
+    stations: { id: string; series: { id: number; stalenessLimitSeconds: number }[] }[];
+  };
+  const lobith = real.stations.find((x) => x.id === LOBITH)?.series ?? [];
+  const ids = lobith.map((x) => x.id);
+  expect(ids.length).toBeGreaterThan(0);
+  // Lobith's series have no value at t and a newest value this old (seconds).
+  let age = 7200;
+  // Two hours is past every one of Lobith's staleness limits (the DB keeps a value only while its age < limit).
+  for (const x of lobith) expect(x.stalenessLimitSeconds).toBeLessThanOrEqual(age);
+  await page.route('**/data/v1/latest.json', async (route) => {
+    const file = (await (
+      await route.fetch({ headers: { ...route.request().headers(), 'accept-encoding': 'identity' } })
+    ).json()) as Record<string, unknown[]>;
+    const keep = (file.series as number[]).map((id) => !ids.includes(id));
+    for (const col of [
+      'series',
+      'ageSeconds',
+      'value',
+      'qc',
+      'state',
+      'basis',
+      'section',
+      'area',
+      'nap',
+      'zero',
+      'dh24',
+      'dh1',
+    ])
+      file[col] = (file[col] as unknown[]).filter((_, i) => keep[i]);
+    file.lapsed = [...(file.lapsed as number[]), ...ids];
+    file.lapsedAge = [...(file.lapsedAge as unknown[]), ...ids.map(() => age)];
+    await route.fulfill({ json: file });
+  });
+  const rows = page
+    .locator('table tbody tr')
+    .filter({ has: page.getByRole('button', { name: 'Lobith, Bovenrijn, Tolkamer', exact: true }) });
+  /** The table's row count of all its pages, from the pager ("Stations 1–50 van 123"). */
+  const total = async () => {
+    const text = await page.getByText(/^Stations \d+–\d+ van \d+$/).textContent();
+    return Number(text?.match(/(\d+)$/)?.[1]);
+  };
+  /** The station ids in the map's source. */
+  const drawn = () =>
+    page.evaluate(async () => {
+      const source = (window as unknown as W).__rws?.map?.getSource('stations');
+      const data = (await source?.getData()) as { features?: { properties: { id: string } }[] } | undefined;
+      return (data?.features ?? []).map((f) => f.properties.id);
+    });
+
+  // Two hours: past the staleness limit, so the station is on the map as a lapsed marker (stale without a value),
+  // its popup and panel say so, and its table rows carry the lapsed note only.
+  await open(page, `/?s=${LOBITH}`);
+  await expect(slider(page)).toBeVisible();
+  await mapReady(page);
+  await expect.poll(() => featureState(page, LOBITH)).toMatchObject({ has: false, stale: true, hidden: false });
+  await expect(page.locator('.maplibregl-popup-content > p').last()).toContainText(msg('nl', 'lapsed_note'));
+  await expect(panelOf(page)).toContainText(msg('nl', 'lapsed_note'));
+  await chooseView(page, 'table');
+  await expect(rows).toHaveCount(ids.length);
+  await expect(rows.first().locator('td').last()).toContainText(msg('nl', 'lapsed_note'));
+  await expect(rows.first().locator('td').last()).not.toContainText(msg('nl', 'stale_note'));
+  const all = await total();
+
+  // 25 hours and a second: hidden from the search, the map and the table; its link still opens the panel, with no
+  // popup over the empty spot.
+  age = 25 * 3600 + 1;
+  await open(page, '/');
+  await searchButton(page).click();
+  await searchBox(page).fill('Lobith');
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(0);
+  await open(page, `/?s=${LOBITH}`);
+  await expect(panelOf(page)).toContainText(msg('nl', 'lapsed_hidden_note'));
+  await mapReady(page);
+  await expect.poll(drawn).toContain(DE);
+  await expect.poll(drawn).not.toContain(LOBITH);
+  await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+  await chooseView(page, 'table');
+  await expect(rows).toHaveCount(0);
+  await expect.poll(total).toBe(all - ids.length);
+  await finish(page, s);
+});

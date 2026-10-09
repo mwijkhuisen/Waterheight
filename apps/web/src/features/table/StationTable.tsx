@@ -2,7 +2,7 @@ import type { ApiStation, Snapshot } from '@rws/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import type { Change } from '../../lib/data/change.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
-import type { StationState } from '../../lib/stationStates.ts';
+import type { Lapse, StationState } from '../../lib/stationStates.ts';
 import { formatAge, formatLocal } from '../../lib/time/time.ts';
 import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
@@ -32,6 +32,8 @@ interface Props {
   states: ReadonlyMap<string, StationState>;
   changes: ReadonlyMap<number, Change> | undefined;
   values: ReadonlyMap<number, Value>;
+  /** KG-233: the series with no value whose newest value is past its limit (or over 25 hours old). */
+  lapsed: ReadonlyMap<number, Lapse>;
   /** After now: the forecasts at t by series; undefined for a t up to now. */
   forecasts: ReadonlyMap<number, SnapshotForecast> | undefined;
   t: number;
@@ -56,6 +58,7 @@ export function StationTable({
   states,
   changes,
   values,
+  lapsed,
   forecasts,
   t,
   selected,
@@ -114,6 +117,7 @@ export function StationTable({
             const state = states.get(station.id);
             const value = values.get(series.id);
             const forecast = forecasts?.get(series.id);
+            const lapse = value === undefined ? lapsed.get(series.id) : undefined;
             const modeCell = () => {
               if (mode === 'state') {
                 const st = forecasts === undefined ? value?.state : forecast?.state;
@@ -158,7 +162,13 @@ export function StationTable({
                         <time dateTime={value.ts}>{formatLocal(Date.parse(value.ts), locale)}</time>
                       )}
                     </td>
-                    <td>{value === undefined ? '–' : formatAge(value.ageSeconds, locale)}</td>
+                    <td>
+                      {value !== undefined
+                        ? formatAge(value.ageSeconds, locale)
+                        : lapse === undefined
+                          ? '–'
+                          : formatAge(lapse.ageSeconds, locale)}
+                    </td>
                   </>
                 ) : (
                   <>
@@ -173,7 +183,9 @@ export function StationTable({
                 <td>
                   {state?.section && <span>{m.section_badge({}, o)} </span>}
                   {state?.owner && <OwnerBadge locale={locale} />}
-                  {state?.stale && <span>{m.stale_note({}, o)} </span>}
+                  {/* A carried value's note; a lapsed series says its own (KG-233), one note per row. */}
+                  {state?.stale && state.has && lapse === undefined && <span>{m.stale_note({}, o)} </span>}
+                  {lapse !== undefined && <span>{(lapse.hidden ? m.lapsed_hidden_note : m.lapsed_note)({}, o)} </span>}
                   {state?.suspect && <span>{m.suspect_note({}, o)} </span>}
                 </td>
               </tr>

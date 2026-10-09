@@ -100,9 +100,16 @@ describe('snapshot files', () => {
       seriesHash: '0123456789abcdef',
       dh24: [1, null],
       dh1: [null, 0],
+      lapsed: [3, 4],
+      lapsedAge: [5400, null],
     };
     expect(LatestFile.safeParse(latest).success).toBe(true);
     expect(LatestFile.safeParse({ ...latest, dh1: [null] }).success).toBe(false);
+    // KG-233: one age per lapsed series, each series once, and a series with a value is not lapsed.
+    expect(LatestFile.safeParse({ ...latest, lapsedAge: [5400] }).success).toBe(false);
+    expect(LatestFile.safeParse({ ...latest, lapsed: [3, 3] }).success).toBe(false);
+    expect(LatestFile.safeParse({ ...latest, lapsed: [9, 4] }).success).toBe(false);
+    expect(LatestFile.safeParse({ ...latest, lapsedAge: [-1, null] }).success).toBe(false);
     expect(OwnerLatestFile.safeParse(latest).success).toBe(true);
   });
 });

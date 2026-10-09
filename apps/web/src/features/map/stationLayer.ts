@@ -7,16 +7,27 @@ import type {
   SymbolLayerSpecification,
 } from 'maplibre-gl';
 import type { Mode } from '../../lib/url/url.ts';
-import { DH_COLOUR, LADDER, Q_COLOUR, Q_RADIUS, STATE_COLOUR, STATE_RADIUS } from '../legend/palette.ts';
+import {
+  DH_COLOUR,
+  LADDER,
+  LAPSED_COLOUR,
+  LAPSED_RADIUS,
+  Q_COLOUR,
+  Q_RADIUS,
+  STATE_COLOUR,
+  STATE_RADIUS,
+} from '../legend/palette.ts';
 import { hatchAreaIcon, hatchIcon, type Icon, triangleIcon } from './icons.ts';
 import { showWarnings } from './warnings.ts';
 
 // The stations as `circle` layers whose look comes only from feature-state (the P3 pattern: a new `t` never rebuilds
 // the source; P10a: the paint follows the map mode and is replaced with `setPaintProperty` when the mode changes).
 // Feature state (lib/stationStates.ts): has, stale, forecast, estimate, level, section, suspect, dhBin, qSize, owner,
-// plus selected. Layers, bottom to top:
+// hidden (never drawn: a hidden station is not in the source), plus selected. Layers, bottom to top:
 //   stations          the marker: fill by mode (state level, 24 h change bin or discharge size), radius by level or
-//                     discharge size; hollow grey ring = nothing to show in this mode; selected = larger, black ring.
+//                     discharge size; hollow grey ring = nothing to show in this mode; a stale value is fainter; a
+//                     small grey dot = no value, the newest one past its staleness limit (`stale` without `has`,
+//                     KG-233); selected = larger, black ring.
 //   stations-suspect  a second, outer ring (MapLibre circles cannot be dashed): a station with a suspect value.
 //   stations-owner    a third, wider purple ring (owner site only: the state is only ever true there).
 //   stations-trend-*  the ▲ / ▼ icons of the delta mode (symbol layout cannot use feature-state, so two layers whose
@@ -54,6 +65,8 @@ const level = num('level', 0);
 const NO_BIN = 99;
 /** A station with a forecast at t: a ring. */
 const ring: ExpressionSpecification = ['all', state('forecast'), state('has')];
+/** KG-233: no value at t, and a series' newest value is past its limit (under 25 h): a small grey dot. */
+const lapsed: ExpressionSpecification = ['all', ['!', state('has')], state('stale')];
 
 /** Nothing to show in this mode: no value, no state (state mode), no change (delta mode) or no discharge (q mode). */
 export function hollow(mode: Mode): ExpressionSpecification {
@@ -79,7 +92,7 @@ function radius(mode: Mode): ExpressionSpecification {
         ? ['case', state('has'), 6.5, 4]
         : ['match', num('qSize', 0), ...pairs(([0, 1, 2, 3, 4] as const).map((q) => [q, Q_RADIUS[q]] as const)), 4],
   );
-  return ['case', state('forecast'), ['case', state('has'), 6, 4], base];
+  return ['case', state('forecast'), ['case', state('has'), 6, 4], lapsed, LAPSED_RADIUS, base];
 }
 
 function fill(mode: Mode): ExpressionSpecification {
@@ -96,7 +109,7 @@ function fill(mode: Mode): ExpressionSpecification {
         : Q_COLOUR,
   );
   // After now a grey dot is "no forecast"; a ring (opacity 0) is a forecast.
-  return ['case', state('forecast'), '#767676', hollow(mode), '#ffffff', coloured];
+  return ['case', state('forecast'), '#767676', lapsed, LAPSED_COLOUR, hollow(mode), '#ffffff', coloured];
 }
 
 /** The paint of every mode-dependent layer; `showStations` adds them and `setStationMode` replaces them. */
@@ -112,10 +125,11 @@ export function layerPaints(mode: Mode): Record<string, Record<string, unknown>>
   return {
     [SOURCE]: {
       'circle-radius': ['case', state('selected'), ['+', r, 3], r],
-      // BrBG teal (A§10, colour-blind safe). A stale value is fainter (a hollow ring has no fill at all); the ring
-      // of a forecast has no fill and a teal outline; the selection ring never fades.
+      // BrBG teal (A§10, colour-blind safe). A stale value is fainter (a hollow ring has no fill at all, a lapsed
+      // station is a small grey dot); the ring of a forecast has no fill and a teal outline; the selection ring
+      // never fades.
       'circle-color': fill(mode),
-      'circle-opacity': ['case', ring, 0, state('forecast'), 1, hollow(mode), 0, state('stale'), 0.55, 1],
+      'circle-opacity': ['case', ring, 0, state('forecast'), 1, lapsed, 1, hollow(mode), 0, state('stale'), 0.55, 1],
       'circle-stroke-color': [
         'case',
         state('selected'),
