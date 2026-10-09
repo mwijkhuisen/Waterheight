@@ -113,18 +113,22 @@ export const useRiversManifest = () =>
   });
 
 /**
- * The installed river release's manifest and reaches file, read once (P10d). The same file serves both audiences, so
- * the key carries none. Each reader below selects (and parses) its own section: a bad one fails only that reader.
+ * The installed river release's manifest and reaches file, read once (P10d). The owner site serves its own variant
+ * of the reaches file at the same path (P11a, D-C: the reaches split at the owner stations), so the key carries the
+ * audience and every reader waits for it: one fetch per site. Each reader below selects (and parses) its own section:
+ * a bad one fails only that reader.
  */
-const useReachesFile = <T>(select: (read: ReachesRead) => T, enabled = true) =>
-  useQuery({
-    queryKey: ['reaches'],
+const useReachesFile = <T>(select: (read: ReachesRead) => T, enabled = true) => {
+  const aud = useAudience();
+  return useQuery({
+    queryKey: ['reaches', aud],
     queryFn: ({ signal }) => loadReachesFile(browserFetch, signal),
     select,
-    enabled,
+    enabled: enabled && aud !== undefined,
     retry: false,
     staleTime: 300_000,
   });
+};
 
 /**
  * The installed river release (P10a T4): its manifest (the tile file of the `rivers` layer) and its river list (ids

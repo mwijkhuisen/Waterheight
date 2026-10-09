@@ -15,6 +15,10 @@
       "rws-dist": "./dist/api-owner.js",
       "default": "./src/api-owner.ts"
     },
+    "./reaches-owner": {
+      "rws-dist": "./dist/reaches-owner.js",
+      "default": "./src/reaches-owner.ts"
+    },
     "./static-owner": {
       "rws-dist": "./dist/static-owner.js",
       "default": "./src/static-owner.ts"
