@@ -512,7 +512,10 @@ export async function expectHovLayout(page: Page, where: string, bars: readonly 
         })
         .toBe(true);
       const top = (await box(region)).y;
-      for (const c of corner) {
+      for (const [i, c] of corner.entries()) {
+        // Below 48rem an open station's sheet hides the map view, and MapLibre's attribution with it (CI WebKit):
+        // a control that is not on screen covers nothing. The legend and "Bronnen" are always checked.
+        if (i === 2 && !(await c.isVisible())) continue;
         const b = await box(c);
         expect(b.y + b.height, `${label}: a corner control is over the panel`).toBeLessThanOrEqual(top + 1);
         expect(meet(b, await box(timebarOf(page))), `${label}: a corner control is under the bar`).toBe(false);
