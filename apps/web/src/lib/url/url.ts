@@ -12,6 +12,10 @@ import { parseUrlT, toUrlT } from '../time/time.ts';
 export const MODES = ['state', 'delta', 'q'] as const;
 export type Mode = (typeof MODES)[number];
 
+/** P11c: the Hovmöller panel's paths (features/flow/hovmoller/path.ts); here so the URL never loads the lazy panel. */
+export const HOV_PATHS = ['rhine-waal', 'rhine-lek', 'rhine-ijssel', 'meuse'] as const;
+export type HovPathId = (typeof HOV_PATHS)[number];
+
 export interface UrlState {
   /** A quantised UTC instant, or undefined for "now". */
   t: number | undefined;
@@ -26,12 +30,15 @@ export interface UrlState {
    * with `t` restores that hour and the speed, paused.
    */
   play?: Speed | undefined;
+  /** P11c: the open "Langs de rivier" panel and its path; absent = closed. */
+  hov?: HovPathId | undefined;
 }
 
 const stationId = ApiStation.shape.id;
 /** The river slug of registry/rivers.yaml and ReachRiver.id. */
 export const RIVER_ID = /^[a-z][a-z0-9-]{1,40}$/;
 const isSpeed = (v: string | null): v is Speed => v !== null && (SPEEDS as readonly string[]).includes(v);
+const isHov = (v: string | null): v is HovPathId => v !== null && (HOV_PATHS as readonly string[]).includes(v);
 const isMode = (v: string | null): v is Mode => v !== null && (MODES as readonly string[]).includes(v);
 
 export function readSearch(search: string): UrlState {
@@ -40,23 +47,26 @@ export function readSearch(search: string): UrlState {
   const mode = q.get('mode');
   const river = q.get('river');
   const play = q.get('play');
+  const hov = q.get('hov');
   return {
     t: parseUrlT(q.get('t')),
     s: s !== null && stationId.safeParse(s).success ? s : undefined,
     mode: isMode(mode) ? mode : undefined,
     river: river !== null && RIVER_ID.test(river) ? river : undefined,
     play: isSpeed(play) ? play : undefined,
+    hov: isHov(hov) ? hov : undefined,
   };
 }
 
-/** `?t=…&s=…&mode=…&river=…&play=…`, with `t`'s colons left plain (valid in a query, and readable). */
-export function searchOf({ t, s, mode, river, play }: UrlState): string {
+/** `?t=…&s=…&mode=…&river=…&play=…&hov=…`, with `t`'s colons left plain (valid in a query, and readable). */
+export function searchOf({ t, s, mode, river, play, hov }: UrlState): string {
   const parts: string[] = [];
   if (t !== undefined) parts.push(`t=${toUrlT(t)}`);
   if (s !== undefined) parts.push(`s=${encodeURIComponent(s)}`);
   if (mode !== undefined) parts.push(`mode=${mode}`);
   if (river !== undefined) parts.push(`river=${river}`);
   if (play !== undefined) parts.push(`play=${play}`);
+  if (hov !== undefined) parts.push(`hov=${hov}`);
   return parts.length === 0 ? '' : `?${parts.join('&')}`;
 }
 

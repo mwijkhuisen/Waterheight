@@ -204,6 +204,8 @@ const GraphStation = z.looseObject({
   river_id: z.string().max(60),
   reach_id: GraphReachId.nullable(),
   km_graph: z.number().nullable(),
+  /** P11c (the Hovmöller x axis): + upstream of the NL entry node, 0 at it, − below it (A§6); a bad value is unknown. */
+  km_to_nl_entry: z.number().nullable().optional().catch(undefined),
 });
 const GraphReach = z.looseObject({
   id: GraphReachId,

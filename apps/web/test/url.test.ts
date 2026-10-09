@@ -1,7 +1,15 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { PAGE_ROUTES, pathOf, routeOf } from '../src/lib/routes.ts';
-import { MODES, otherLanguageHref, RIVER_ID, readSearch, searchOf, type UrlState } from '../src/lib/url/url.ts';
+import {
+  HOV_PATHS,
+  MODES,
+  otherLanguageHref,
+  RIVER_ID,
+  readSearch,
+  searchOf,
+  type UrlState,
+} from '../src/lib/url/url.ts';
 
 // The view lives in the URL (A§10): `?t=…&s=…`. Whatever does not parse is
 // dropped, never thrown and never rendered. The React hook has no unit test
@@ -193,6 +201,26 @@ describe('play (P11b)', () => {
     expect(searchOf({ t: T, s: undefined, play: 'slow' })).toBe('?t=2026-10-25T01:30Z&play=slow');
     expect(searchOf({ t: T, s: undefined })).toBe('?t=2026-10-25T01:30Z');
     expect(readSearch(searchOf({ t: T, s: undefined, play: 'normal' }))).toMatchObject({ t: T, play: 'normal' });
+  });
+});
+
+describe('hov (P11c)', () => {
+  it.each(HOV_PATHS)('round-trips the path %s, written last, after play', (hov) => {
+    expect(readSearch(`?t=2026-10-25T01:30Z&hov=${hov}`)).toMatchObject({ t: T, hov });
+    expect(searchOf({ t: T, s: undefined, play: 'slow', hov })).toBe(`?t=2026-10-25T01:30Z&play=slow&hov=${hov}`);
+    expect(readSearch(searchOf({ t: T, s: ID, hov }))).toMatchObject({ s: ID, hov });
+  });
+
+  it('drops anything else, never throws', () => {
+    for (const bad of ['', 'RHINE-WAAL', 'rhine', 'rhine-waal%20', '__proto__', 'meuse,rhine-waal'])
+      expect(readSearch(`?hov=${bad}`).hov, bad).toBeUndefined();
+    fc.assert(
+      fc.property(fc.string({ unit: 'binary' }), (p) => {
+        const out = readSearch(`?hov=${encodeURIComponent(p)}`).hov;
+        expect(out === undefined || (HOV_PATHS as readonly string[]).includes(out)).toBe(true);
+      }),
+    );
+    expect(searchOf({ t: T, s: undefined })).toBe('?t=2026-10-25T01:30Z');
   });
 });
 
