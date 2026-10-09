@@ -1,4 +1,4 @@
-import { type ApiStation, floorBucket, RiversManifest } from '@rws/contracts';
+import { type ApiStation, dayOf, floorBucket, isSettled, RiversManifest } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { loadRuntimeConfig, type RuntimeConfig } from '../config/runtime.ts';
@@ -25,7 +25,15 @@ import {
 } from './chain.ts';
 import { type Change, changesAt } from './change.ts';
 import { type Contracts, PUBLIC_CONTRACTS } from './contracts.ts';
-import type { FrameStore } from './frames.ts';
+import {
+  buildFrameStore,
+  type FrameStore,
+  type FramesChunk,
+  type FramesUnit,
+  framesPlan,
+  framesUrl,
+  readFramesBody,
+} from './frames.ts';
 import { snapshotSource, versionKey } from './static.ts';
 
 // The data of the page, read through relative paths only, so the same build serves the public site and the owner
@@ -423,10 +431,130 @@ export function useDebounced<T>(value: T, ms: number): T {
  * ['frames', aud, 'api', from, to]); the store grows as they answer. A failed day file falls back to the API.
  */
 export function useFrames(
-  _window: { from: number; to: number } | undefined,
-  _meta: WebMeta | undefined,
-  _stations: readonly ApiStation[] | undefined,
+  window: { from: number; to: number } | undefined,
+  meta: WebMeta | undefined,
+  stations: readonly ApiStation[] | undefined,
 ): FrameStore | undefined {
-  // L0 stub (W4 builds it).
-  return undefined;
+  const c = useContracts();
+  const aud = c?.audience;
+  const on = c !== undefined && window !== undefined && meta !== undefined && stations !== undefined;
+  const from = window?.from ?? 0;
+  const to = window?.to ?? 0;
+  const nowMs = Date.parse(meta?.now ?? '');
+
+  // Stage 1: the files (settled days, recent.json). A file that fails moves its days into `failed`.
+  const files = useMemo(
+    () =>
+      on && aud === 'public'
+        ? framesPlan(from, to, meta as WebMeta, aud).filter((u): u is FileUnit => u.kind !== 'api')
+        : [],
+    [on, aud, from, to, meta],
+  );
+  const read1 = useCallback(
+    (rs: readonly FramesRead[]) => {
+      const out = {
+        chunks: [] as FramesChunk[],
+        answered: [] as { from: number; to: number }[],
+        failed: new Set<string>(),
+      };
+      rs.forEach((r, i) => {
+        const u = files[i] as FileUnit;
+        if (r.isError) {
+          if (u.kind === 'day') out.failed.add(u.day);
+          else
+            for (let d = Math.floor(from / DAY_MS) * DAY_MS; d < to; d += DAY_MS)
+              if (!isSettled(dayOf(d), nowMs)) out.failed.add(dayOf(d));
+        } else if (r.data) {
+          out.chunks.push(r.data);
+          out.answered.push({ from: Date.parse(r.data.from), to: Date.parse(r.data.to) });
+        }
+      });
+      return out;
+    },
+    [files, from, to, nowMs],
+  );
+  const q1 = useQueries({
+    queries: files.map((u) => ({
+      queryKey: u.kind === 'day' ? ['frames', aud, 'day', u.day, u.v] : ['frames', aud, 'recent', meta?.now],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        loadFrames(framesUrl(u), (c as Contracts).FramesFile, c as Contracts, signal),
+      enabled: on,
+      ...FRAMES_QUERY,
+    })),
+    combine: read1,
+  });
+
+  // Stage 2: the API for version-0 days, failed files and the whole owner range, one call per contiguous range.
+  const failedKey = [...q1.failed].sort().join();
+  const calls = useMemo(
+    () =>
+      on
+        ? framesPlan(
+            from,
+            to,
+            meta as WebMeta,
+            aud as 'public' | 'owner',
+            new Set(failedKey === '' ? [] : failedKey.split(',')),
+          ).filter((u): u is ApiUnit => u.kind === 'api')
+        : [],
+    [on, aud, from, to, meta, failedKey],
+  );
+  const read2 = useCallback(
+    (rs: readonly FramesRead[]) => {
+      const out = { chunks: [] as FramesChunk[], answered: [] as { from: number; to: number }[] };
+      rs.forEach((r, i) => {
+        if (!r.isSuccess) return;
+        // An API range that failed was answered with no data (null): it is never asked again in a loop.
+        out.answered.push({ from: (calls[i] as ApiUnit).from, to: (calls[i] as ApiUnit).to });
+        if (r.data) out.chunks.push(r.data);
+      });
+      return out;
+    },
+    [calls],
+  );
+  const q2 = useQueries({
+    queries: calls.map((u) => ({
+      queryKey: ['frames', aud, 'api', u.from, u.to],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        loadFrames(framesUrl(u), (c as Contracts).FramesAnswer, c as Contracts, signal).catch((e) => {
+          if (signal.aborted) throw e;
+          return null;
+        }),
+      enabled: on,
+      ...FRAMES_QUERY,
+    })),
+    combine: read2,
+  });
+
+  return useMemo(
+    () =>
+      on
+        ? buildFrameStore(
+            [...q1.chunks, ...q2.chunks],
+            [...q1.answered, ...q2.answered],
+            stations as readonly ApiStation[],
+          )
+        : undefined,
+    [on, q1, q2, stations],
+  );
+}
+
+type FileUnit = Exclude<FramesUnit, { kind: 'api' }>;
+type ApiUnit = Extract<FramesUnit, { kind: 'api' }>;
+type FramesRead = { isError: boolean; isSuccess: boolean; data: FramesChunk | null | undefined };
+
+/** Frames never change once settled: kept 10 minutes after the last observer, asked again only after 5 minutes, never retried. */
+const FRAMES_QUERY = { gcTime: 600_000, staleTime: 300_000, retry: false, structuralSharing: false } as const;
+
+/** One frames body, capped before it is parsed, as a chunk without the attribution of a hidden source. */
+async function loadFrames(
+  url: string,
+  parser: { parse(data: unknown): FramesChunk },
+  c: Contracts,
+  signal: AbortSignal,
+): Promise<FramesChunk> {
+  const res = await browserFetch(url, signal);
+  if (!res.ok) throw new HttpError(res.status);
+  const f = parser.parse(JSON.parse(await readFramesBody(res)));
+  return { ...f, attribution: f.attribution.filter((a) => !c.hidden(a.source)) };
 }
