@@ -1,15 +1,15 @@
-/* The "Langs de rivier" panel (P11c): an in-flow child of the stage between the view and the timebar. Its height is
+/* The "Langs de rivier" panel (P11c): an in-flow child of the stage between the view and the timebar. Its whole box is
    --hov-h (App.module.css `.hovOpen`) plus the room the absolutely placed timebar takes at the bottom, so the bar
-   stands over the panel's padding and never over the chart. */
+   stands over the panel's padding and never over the chart, and the corner (lifted by exactly that) clears it. */
 .panel {
   position: relative;
   z-index: 1;
   flex: none;
-  box-sizing: content-box;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  height: var(--hov-h, 20rem);
+  height: calc(var(--hov-h, 20rem) + var(--timebar-h, 0px) + 0.5rem);
   padding: 0.25rem var(--space) calc(var(--timebar-h, 0px) + 0.5rem);
   border-top: 1px solid var(--line);
   background: var(--paper);

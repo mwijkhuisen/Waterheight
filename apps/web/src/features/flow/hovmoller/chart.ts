@@ -21,6 +21,11 @@ const MAX_HALF_KM = 4;
 const MIN_PX = 1.5;
 const HALF_OF_GAP = 0.45;
 const NARROW_PX = 600;
+const GRID = { left: 124, right: 16, top: 8, bottom: 70 };
+const GRID_NARROW = { left: 96, right: 8, top: 6, bottom: 58 };
+/** The y labels: every `step`-th row from the newest, the smallest whole-hour step that gives a label this much room. */
+const LABEL_PX = 16;
+const STEPS = [1, 2, 3, 6, 12, 24, 48];
 /** A cell with no change known (the grey of the map's no-data reaches); the data holds a bin or this. */
 const NO_BIN = 9;
 const INK = '#0e3a4b';
@@ -69,9 +74,16 @@ export function createHovChart(el: HTMLElement, onCell: (column: number, row: nu
   // A phone gets tighter margins and smaller labels; crossing the line redraws.
   const narrow = () => el.clientWidth < NARROW_PX;
   let wasNarrow = narrow();
+  // ECharts' own label thinning let about 20 of 168 rows overlap in a 150 px plot (W4): the step is ours.
+  const stepOf = (rows: number): number => {
+    const g = narrow() ? GRID_NARROW : GRID;
+    const rowPx = Math.max(el.clientHeight - g.top - g.bottom, 1) / Math.max(rows, 1);
+    return STEPS.find((s) => s * rowPx >= LABEL_PX) ?? (STEPS.at(-1) as number);
+  };
+  let wasStep = 1;
   const resize = new ResizeObserver(() => {
     chart.resize();
-    if (data !== undefined && narrow() !== wasNarrow) api.update(data);
+    if (data !== undefined && (narrow() !== wasNarrow || stepOf(data.rowLabels.length) !== wasStep)) api.update(data);
   });
   resize.observe(el);
   let data: HovData | undefined;
@@ -199,6 +211,9 @@ export function createHovChart(el: HTMLElement, onCell: (column: number, row: nu
       data = d;
       wasNarrow = narrow();
       const small = wasNarrow;
+      wasStep = stepOf(d.rowLabels.length);
+      const step = wasStep;
+      const last = d.rowLabels.length - 1;
       const xs = d.columns.map((c) => c.x);
       halves = xs.map((_, i) => half(xs, i));
       const halfAt = (x: number) => halves[xs.findIndex((v) => Math.abs(v - x) < 1e-6)] ?? 0;
@@ -216,7 +231,7 @@ export function createHovChart(el: HTMLElement, onCell: (column: number, row: nu
       chart.setOption(
         {
           animation: false,
-          grid: small ? { left: 84, right: 8, top: 6, bottom: 58 } : { left: 108, right: 16, top: 8, bottom: 70 },
+          grid: small ? GRID_NARROW : GRID,
           xAxis: {
             type: 'value',
             min: Math.min(...xs) - reach,
@@ -243,7 +258,12 @@ export function createHovChart(el: HTMLElement, onCell: (column: number, row: nu
             data: [...d.rowLabels],
             axisTick: { show: false },
             splitLine: { show: false },
-            axisLabel: { hideOverlap: true, fontSize: small ? 10 : 11, width: small ? 76 : 100, overflow: 'truncate' },
+            axisLabel: {
+              interval: (i: number) => (last - i) % step === 0,
+              fontSize: small ? 10 : 11,
+              width: small ? 88 : 116,
+              overflow: 'truncate',
+            },
           },
           tooltip: {
             trigger: 'item',
