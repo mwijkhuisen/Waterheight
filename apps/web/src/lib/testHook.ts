@@ -1,4 +1,6 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
+import type { Cell } from '../features/flow/hovmoller/grid.ts';
+import type { HovPathId } from './url/url.ts';
 
 /** What the Playwright tests read from the page (apps/web/e2e). */
 export interface RwsHook {
@@ -16,6 +18,23 @@ declare global {
     __rwsFlow?: boolean;
     /** P11b: set by a spec before the page loads to hold playback on its first hour (frames on screen, no tick). */
     __rwsPlayHold?: boolean;
+    /**
+     * P11c: the "Langs de rivier" panel's columns, rows and cells, e2e build only (hovmoller/HovmollerPanel.tsx). Not in
+     * `__rws.charts`: the station panels' idle check counts those against `aside div[role="img"]`.
+     */
+    __rwsHov?:
+      | {
+          /** The ECharts instance; null until the chart chunk has loaded (and in the table view). */
+          chart: { getOption(): unknown } | null;
+          path: HovPathId;
+          columns: readonly { id: string; x: number }[];
+          /** ISO UTC of each row hour, ascending. */
+          rows: readonly string[];
+          cellAt(id: string, iso: string): Cell | undefined;
+          /** Viewport (client) pixels of the cell centre. */
+          pixelOf(id: string, iso: string): [number, number] | undefined;
+        }
+      | undefined;
   }
 }
 

@@ -134,14 +134,17 @@ describe('e2e build', () => {
     }
   });
 
-  it('keeps ECharts in its own lazy chunk, away from every initial load and from the map chunk', () => {
+  // P11c (issue #26): a second lazy ECharts importer (the Hovmöller chart) hoists ECharts core into a chunk both share,
+  // so the station chart's markers are asserted on the entry's static closure, not on its own file.
+  it('keeps ECharts in lazy chunks, away from every initial load and from the map chunk', () => {
     const chart = manifest['src/features/station/chart.ts'];
     const map = manifest['src/features/map/createMap.ts'];
     expect(chart?.isDynamicEntry).toBe(true);
     expect(map?.isDynamicEntry).toBe(true);
-    const chartCode = read(chart?.file ?? '');
-    expect(chartCode).toContain('_echarts_instance_'); // ECharts is in the lazy chart chunk
-    expect(chartCode).toContain('ecModel');
+    const chartFiles = staticClosure([chart?.file ?? '']);
+    const closureCode = [...chartFiles].map(read).join('\n');
+    expect(closureCode).toContain('_echarts_instance_'); // ECharts is in the lazy chart chunk (or one it shares)
+    expect(closureCode).toContain('ecModel');
     for (const page of pages) {
       for (const file of initialLoad(page)) {
         const code = read(file);
@@ -149,12 +152,41 @@ describe('e2e build', () => {
         expect(file, `${page} → ${file}`).not.toBe(chart?.file);
       }
     }
-    // The chart chunk is not the map chunk, and neither loads the other or holds the other's code.
+    // The chart chunks are not the map chunk, and neither loads the other or holds the other's code.
     expect(chart?.file).not.toBe(map?.file);
     expect(staticClosure([map?.file ?? '']).has(chart?.file ?? '')).toBe(false);
-    expect(staticClosure([chart?.file ?? '']).has(map?.file ?? '')).toBe(false);
+    expect(chartFiles.has(map?.file ?? '')).toBe(false);
     expect(read(map?.file ?? '')).not.toMatch(/_echarts_instance_|ecModel/);
-    expect(chartCode).not.toMatch(/Wrong magic number for PMTiles|maplibregl-canvas/);
-    for (const file of staticClosure([chart?.file ?? ''])) expect(file).not.toMatch(/createMap|maplibre-gl-worker/);
+    expect(closureCode).not.toMatch(/Wrong magic number for PMTiles|maplibregl-canvas/);
+    for (const file of chartFiles) expect(file).not.toMatch(/createMap|maplibre-gl-worker/);
+  });
+
+  // P11c: "Langs de rivier" is a lazy chunk (the panel) that loads the chart chunk only on first use; neither is in any
+  // page's initial load, and neither pulls MapLibre in.
+  it('keeps the Hovmöller panel and its chart out of every initial load, apart from the map', () => {
+    const panel = manifest['src/features/flow/hovmoller/HovmollerPanel.tsx'];
+    const chart = manifest['src/features/flow/hovmoller/chart.ts'];
+    const map = manifest['src/features/map/createMap.ts'];
+    expect(panel?.isDynamicEntry).toBe(true);
+    expect(chart?.isDynamicEntry).toBe(true);
+    // `pixelOf` (the chart's e2e measuring method) and `__rwsHov` (the panel's e2e hook) are in no other file.
+    expect(read(chart?.file ?? '')).toContain('pixelOf');
+    expect(read(panel?.file ?? '')).toContain('__rwsHov');
+    const lazy = [...staticClosure([panel?.file ?? '', chart?.file ?? ''])];
+    for (const page of pages) {
+      for (const file of initialLoad(page)) {
+        expect(file, `${page} → ${file}`).not.toBe(panel?.file);
+        expect(file, `${page} → ${file}`).not.toBe(chart?.file);
+        expect(read(file), `${page} → ${file}`).not.toMatch(/__rwsHov|pixelOf/);
+      }
+    }
+    // The hov closure holds neither MapLibre nor the map chunk.
+    expect(staticClosure([panel?.file ?? '', chart?.file ?? '']).has(map?.file ?? '')).toBe(false);
+    for (const file of lazy) expect(file).not.toMatch(/createMap|maplibre-gl-worker/);
+    for (const file of lazy) expect(read(file), file).not.toMatch(/Wrong magic number for PMTiles|maplibregl-canvas/);
+    // The panel chunk (and what it imports statically) holds no ECharts: the chart chunk loads on first use.
+    expect(staticClosure([panel?.file ?? '']).has(chart?.file ?? '')).toBe(false);
+    for (const file of staticClosure([panel?.file ?? '']))
+      expect(read(file), file).not.toMatch(/_echarts_instance_|ecModel/);
   });
 });

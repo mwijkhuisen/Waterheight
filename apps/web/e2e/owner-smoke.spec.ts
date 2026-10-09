@@ -136,6 +136,54 @@ test('the owner site: hourly playback reads the owner frames api only, its answe
   await expectClean(page, log);
 });
 
+// P11c (issue #26 OV, the Hovmöller part of the owner-view criterion): "Langs de rivier" on the Meuse, as its table (the
+// production build has no test hook; the table is the panel's own accessible twin). The owner site holds the SPW gauges
+// between Chooz and Eijsden as columns, each with the "owner only" badge; the two seeded gauges (run.sh: be.spw.5447, an
+// H series, and be.spw.5451, discharge only: the map's Δ rule gives it the trend of its Q) have a change in the newest
+// hours, and the 24 h change needs a value 24 h earlier, so only the newest six rows can have one (31 seeded hours).
+// Only that a cell says something other than "no data" is asserted, never a value.
+test('the owner site: the Meuse panel has the SPW columns badged, each with a change in the newest hours', async ({
+  page,
+  context,
+  baseURL,
+  request,
+}) => {
+  const log = await instrument(page, context, baseURL);
+  const names = await namesOf(request);
+  await page.goto('/?hov=meuse&mode=delta');
+  const region = page.getByRole('region', { name: msg('nl', 'hov_region'), exact: true });
+  await expect(region).toBeVisible();
+  await region.getByRole('button', { name: msg('nl', 'hov_table_toggle'), exact: true }).click();
+  const table = region.getByRole('table');
+  await expect(table).toBeVisible({ timeout: 60_000 });
+  for (const id of SPW_ROWS) {
+    const name = names.get(id) ?? '?';
+    const head = table.locator('thead th').filter({ has: page.getByRole('button', { name, exact: true }) });
+    await expect(head, `${id} is a column`).toHaveCount(1);
+    await expect(head).toContainText(msg('nl', 'owner_badge'));
+    // The column's place in the header row is its place among a row's cells (the time header is the first).
+    const at = await head.evaluate((th) => [...(th.parentElement?.children ?? [])].indexOf(th));
+    const newest = async () => {
+      const cells = await Promise.all(
+        [0, 1, 2, 3, 4, 5].map((i) =>
+          table
+            .locator('tbody tr')
+            .nth(i)
+            .locator('td')
+            .nth(at - 1)
+            .textContent(),
+        ),
+      );
+      return cells.filter((c) => c !== null && c !== msg('nl', 'hov_no_data'));
+    };
+    // (the hourly values arrive after the table: poll until the newest rows have them)
+    await expect
+      .poll(async () => (await newest()).length, { timeout: 60_000, message: `${id}'s newest cells` })
+      .toBeGreaterThan(0);
+  }
+  await expectClean(page, log);
+});
+
 test.describe('the public site of the same stack', () => {
   test.skip(process.env.E2E_COMPOSE_URL === undefined, 'needs the public site (E2E_COMPOSE_URL, run.sh)');
   // (no owner credentials: the public Caddy has none)
@@ -150,6 +198,38 @@ test.describe('the public site of the same stack', () => {
     // The archive's French Meuse gauges are hidden for their age (#107), so the public chain may be empty here; whatever
     // the panel shows holds no owner row. The public reaches file itself is checked byte for byte by run.sh.
     await expect(page.getByText(msg('nl', 'owner_badge'), { exact: true })).toHaveCount(0);
+    await expectClean(page, log);
+  });
+
+  // P11c (issue #26): the public Meuse panel has the Walloon gap where the owner site has the SPW columns, and the
+  // panel's requests are the page's usual ones (frames, stations, reaches): no SPW id and no canary value in any
+  // JSON answer the page read with the panel open (run.sh's sweeps cover every public output; this is the browser's view).
+  test('the Meuse panel has the Walloon gap column and no SPW id or canary value in what it read', async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    const log = await instrument(page, context, baseURL);
+    const bodies: Promise<string>[] = [];
+    page.on('response', (r) => {
+      if (new URL(r.url()).origin === log.origin && (r.headers()['content-type'] ?? '').includes('json'))
+        bodies.push(r.text().catch(() => ''));
+    });
+    await page.goto('/?hov=meuse&mode=delta');
+    const region = page.getByRole('region', { name: msg('nl', 'hov_region'), exact: true });
+    await expect(region).toBeVisible();
+    await region.getByRole('button', { name: msg('nl', 'hov_table_toggle'), exact: true }).click();
+    const table = region.getByRole('table');
+    await expect(table).toBeVisible({ timeout: 60_000 });
+    await expect(table.locator('thead th').filter({ hasText: msg('nl', 'hov_gap_wallonia') })).toHaveCount(1);
+    await expect(region.getByRole('status')).toHaveCount(0, { timeout: 60_000 });
+    await expect(region.getByText(msg('nl', 'owner_badge'), { exact: true })).toHaveCount(0);
+    const read = await Promise.all(bodies);
+    expect(read.length, 'the page read JSON answers').toBeGreaterThan(3);
+    for (const body of read) {
+      expect(body).not.toContain('be.spw.');
+      expect(body).not.toContain('777777.777');
+    }
     await expectClean(page, log);
   });
 });

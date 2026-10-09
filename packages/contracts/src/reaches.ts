@@ -86,6 +86,7 @@ export const ReachStation = z.strictObject({
   km_official: Km.nullable(),
   km_official_system: z.string().min(1).max(80).nullable(),
   km_graph: Km.nullable(),
+  /** Km to the NL entry node along the graph: + upstream of it, 0 at it, − below it, falling downstream (A§6). */
   km_to_nl_entry: Km.nullable(),
   nl_entry_node: Slug.nullable(),
 });

@@ -3,9 +3,12 @@ import {
   attributionButton,
   chooseView,
   expandTimebar,
+  expectHovLayout,
   expectInert,
   expectNoSeriousAxe,
   finish,
+  hovReady,
+  hovRegion,
   mapReady,
   msg,
   open,
@@ -570,5 +573,37 @@ test('the bar never hides the focused control: --timebar-h follows its height; t
   await expect(slider(page)).toBeVisible();
   await expandTimebar(page);
   await expectNoSeriousAxe(page, 'section:has(input[type="range"])');
+  await finish(page, s);
+});
+
+// P11c (issue #26, C13): the open "Langs de rivier" panel, in the narrow and the short windows of the checks above: the
+// bar (collapsed and expanded) covers neither its chart nor its table, the corner stands above it, and the station
+// sheet or drawer ends above it.
+test('the open Langs de rivier panel is clear of the timebar, the corner and the drawer, narrow and short', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  // (the expanded bar of a 400 px window is about 440 px high, over most of a 600 px one: KG-280; only 1024x560 checks it)
+  for (const [width, height, bars] of [
+    [400, 600, [false]],
+    [1024, 560, [false, true]],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await open(page, '/?t=2026-10-25T00:30Z&hov=rhine-waal');
+    await hovReady(page, 'rhine-waal');
+    await expectHovLayout(page, `${width}x${height}`, bars);
+    // With a station open (the drawer beside the bar, the sheet below 48rem; the expanded bar over a 560 px window next to
+    // a drawer is about 320 px high and reaches the chart's axis labels: not asserted).
+    await open(page, `/?t=2026-10-25T00:30Z&hov=rhine-waal&s=${DST}`);
+    await hovReady(page, 'rhine-waal');
+    await expectHovLayout(page, `${width}x${height} with a station`, [false]);
+    const drawer = await box(panelOf(page));
+    expect(drawer.y + drawer.height, `${width}x${height}: the drawer ends above the panel`).toBeLessThanOrEqual(
+      (await box(hovRegion(page))).y + 1,
+    );
+    expect(overlaps(drawer, await box(timebarOf(page))), `${width}x${height}: the drawer is under the bar`).toBe(false);
+  }
   await finish(page, s);
 });

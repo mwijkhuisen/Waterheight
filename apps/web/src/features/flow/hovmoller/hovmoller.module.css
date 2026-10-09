@@ -1,0 +1,195 @@
+/* The "Langs de rivier" panel (P11c): an in-flow child of the stage between the view and the timebar. Its whole box is
+   --hov-h (App.module.css `.hovOpen`) plus the room the absolutely placed timebar takes at the bottom, so the bar
+   stands over the panel's padding and never over the chart, and the corner (lifted by exactly that) clears it. */
+.panel {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  height: calc(var(--hov-h, 20rem) + var(--timebar-h, 0px) + 0.5rem);
+  padding: 0.25rem var(--space) calc(var(--timebar-h, 0px) + 0.5rem);
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.head {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+.field select {
+  min-height: 2rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.colour {
+  font-weight: 600;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.head button,
+.more {
+  box-sizing: border-box;
+  min-height: 2rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.head button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.head button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.close {
+  margin-left: auto;
+}
+
+/* The chart fills what is left; ECharts sizes its canvas to this box. */
+.chart {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* The credits stay on screen with the data (invariant 8), clamped to two lines: the rest scrolls (it takes the focus). */
+.sources {
+  flex: none;
+  max-height: 2.4rem;
+  margin: 0;
+  overflow: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+/* The table scrolls inside the panel; its head and its time column stay in view. */
+.tableWrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.table {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.table caption {
+  position: sticky;
+  left: 0;
+  padding: 0.2rem 0;
+  text-align: left;
+  font-weight: 600;
+}
+
+.table th,
+.table td {
+  padding: 0.2rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--paper);
+  white-space: normal;
+  min-width: 6rem;
+}
+
+.table tbody th {
+  position: sticky;
+  left: 0;
+  background: var(--paper);
+}
+
+.table th button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.table th button[aria-pressed="true"],
+.table th button[aria-current="time"] {
+  font-weight: 700;
+}
+
+/* A stretch without a station: hatched, and said in words in its head. */
+.gapHead,
+.gapCell {
+  background: repeating-linear-gradient(135deg, var(--line) 0 1px, var(--paper) 1px 6px);
+}
+
+.table thead th.gapHead {
+  min-width: 9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.more {
+  margin: 0.4rem 0;
+}
+
+/* A phone: the head is two rows at most and the credits one line, so the chart keeps a usable height; the hint of the
+   disabled State stays for assistive technology (aria-describedby) and as the button's title. */
+@media (max-width: 47.99rem) {
+  .head .note {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .sources {
+    max-height: 1.3rem;
+  }
+}

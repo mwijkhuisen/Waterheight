@@ -5,6 +5,7 @@ import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
 import { FlowToggle } from './features/flow/FlowToggle.tsx';
 import { playRange, type Speed } from './features/flow/playback/engine.ts';
 import { usePlayback } from './features/flow/playback/usePlayback.ts';
+import toggleStyles from './features/flow/toggle.module.css';
 import { Layout } from './features/layout/Layout.tsx';
 import { Legend } from './features/legend/Legend.tsx';
 import { MapControls } from './features/legend/MapControls.tsx';
@@ -38,6 +39,7 @@ import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
 import { pathOf, routeOf } from './lib/routes.ts';
 import { hiddenKey, lapses, stationStates, visibleStations } from './lib/stationStates.ts';
 import { DAY_MS, floorHour, quantise } from './lib/time/time.ts';
+import { searchOf } from './lib/url/url.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
 import { m } from './paraglide/messages.js';
 import type { Locale } from './paraglide/runtime.js';
@@ -48,6 +50,8 @@ import type { Locale } from './paraglide/runtime.js';
 // The language link is a full page load that keeps t and s, so <html lang> always matches the page (A§10).
 
 const FETCH_DEBOUNCE_MS = 150;
+
+type HovmollerPanel = typeof import('./features/flow/hovmoller/HovmollerPanel.tsx').HovmollerPanel;
 
 export function App({ locale }: { locale: Locale }) {
   const route = routeOf(location.pathname);
@@ -261,6 +265,32 @@ function Viewer({ locale }: { locale: Locale }) {
     else searchRef.current?.focus();
   }, [selected]);
   const failed = useCallback(() => setMapFailed(true), []);
+  // P11c: the Hovmöller panel opens on the Meuse when the river chip says so, else on Rhine–Waal; closing it returns
+  // the focus to its toggle.
+  const hovToggle = useRef<HTMLButtonElement>(null);
+  const toggleHov = useCallback(
+    () => setUrl({ hov: url.hov === undefined ? (url.river === 'meuse' ? 'meuse' : 'rhine-waal') : undefined }),
+    [setUrl, url.hov, url.river],
+  );
+  const closeHov = useCallback(() => {
+    setUrl({ hov: undefined });
+    hovToggle.current?.focus();
+  }, [setUrl]);
+  // The panel is a lazy chunk (ECharts and the grid stay out of the entry chunk), asked for only once `?hov=` is set.
+  // A chunk that fails (offline, a tab older than the deploy) is an alert in the panel's place, never a blank page
+  // (review round 1): no React.lazy, which throws into a viewer without an error boundary.
+  const hovOpen = url.hov !== undefined;
+  const [hov, setHov] = useState<{ Panel: HovmollerPanel } | 'failed' | undefined>();
+  useEffect(() => {
+    if (!hovOpen || hov !== undefined) return;
+    let gone = false;
+    import('./features/flow/hovmoller/HovmollerPanel.tsx')
+      .then((x) => !gone && setHov({ Panel: x.HovmollerPanel }))
+      .catch(() => !gone && setHov('failed'));
+    return () => {
+      gone = true;
+    };
+  }, [hovOpen, hov]);
 
   const canMap = webgl && !mapFailed;
   const riverTiles = rivers.data?.manifest.current.tiles.file;
@@ -314,12 +344,21 @@ function Viewer({ locale }: { locale: Locale }) {
         // its bottom centre and the station panel is a drawer on its right; in the table view the top is a band above
         // the table, which then scrolls inside the stage.
         <div
-          className={`${styles.stage} ${onMap ? styles.onMap : styles.onTable} ${selected !== undefined ? styles.withPanel : ''}`}
+          className={`${styles.stage} ${onMap ? styles.onMap : styles.onTable} ${selected !== undefined ? styles.withPanel : ''}${url.hov !== undefined ? ` ${styles.hovOpen}` : ''}`}
         >
           <div className={styles.top}>
             <div className={styles.controls}>
               <MapControls locale={locale} mode={mode} onMode={setMode} view={view} onView={setView} canMap={canMap} />
               {onMap && riverTiles !== undefined && <FlowToggle locale={locale} on={flow} onChange={setFlow} />}
+              <button
+                type="button"
+                ref={hovToggle}
+                className={toggleStyles.toggle}
+                aria-pressed={url.hov !== undefined}
+                onClick={toggleHov}
+              >
+                {m.hov_toggle({}, { locale })}
+              </button>
             </div>
             <div className={styles.status}>
               {notice !== undefined && (
@@ -406,6 +445,33 @@ function Viewer({ locale }: { locale: Locale }) {
               />
             )}
           </div>
+          {url.hov !== undefined &&
+            (hov === undefined || hov === 'failed' ? (
+              // Its box is kept while the chunk loads, so the view above and the corner do not jump.
+              <div className={styles.hovPending}>
+                {hov === 'failed' && (
+                  <p role="alert">
+                    {m.data_unavailable({}, { locale })}{' '}
+                    <a href={`${pathOf('home', locale)}${searchOf(url)}`}>{m.page_reload({}, { locale })}</a>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <hov.Panel
+                locale={locale}
+                meta={meta.data}
+                stations={sorted}
+                ownerSources={ownerSources}
+                playback={playback}
+                t={t}
+                setT={setT}
+                selected={url.s}
+                open={open}
+                path={url.hov}
+                onPath={(next) => setUrl({ hov: next })}
+                onClose={closeHov}
+              />
+            ))}
           <div className={styles.corner}>
             {legend}
             <Attribution

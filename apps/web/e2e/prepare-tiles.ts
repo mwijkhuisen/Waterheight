@@ -28,15 +28,17 @@ const reachesFixture = fileURLToPath(new URL('../../../test/fixtures/reaches-fix
  * rhine.47, between Koeln and Bonn; the ordinary one (nl.e2e.dst) at the head of rhine.44, between Andernach and
  * Remagen. Both reaches have no station of their own in the release (a confluence starts them), so the stations
  * become their `up_station_id`: the chain names a row by the station a reach starts at. Every other row is as built.
+ * P11c: each also has its `km_to_nl_entry` (the Rhine's km_graph + km_to_nl_entry is the constant 1069.59 in the
+ * release), so the stations are columns of the "Langs de rivier" Rhine paths and the hostile name reaches its axis.
  */
-export const E2E_CHAIN: readonly [station: string, reach: string][] = [
-  ['nl.e2e.xss', 'rhine.47'],
-  ['nl.e2e.dst', 'rhine.44'],
+export const E2E_CHAIN: readonly [station: string, reach: string, kmToNlEntry: number][] = [
+  ['nl.e2e.xss', 'rhine.47', 204.1],
+  ['nl.e2e.dst', 'rhine.44', 234.27],
 ];
 function e2eReaches(release: ReachesFile): ReachesFile {
   const stations = [...release.stations];
   const reaches = release.reaches.map((r) => ({ ...r }));
-  for (const [id, reachId] of E2E_CHAIN) {
+  for (const [id, reachId, kmToNlEntry] of E2E_CHAIN) {
     const reach = reaches.find((r) => r.id === reachId);
     if (reach === undefined || reach.up_station_id !== null) throw new Error(`e2e reaches: ${reachId} is not free`);
     reach.up_station_id = id;
@@ -47,7 +49,7 @@ function e2eReaches(release: ReachesFile): ReachesFile {
       km_official: null,
       km_official_system: null,
       km_graph: reach.km_graph_from,
-      km_to_nl_entry: null,
+      km_to_nl_entry: kmToNlEntry,
       nl_entry_node: null,
     });
   }

@@ -37,6 +37,8 @@
     "apps/web/src/features/flow/reaches/colour.ts",
     "apps/web/src/features/flow/reaches/reachLayer.ts",
     "apps/web/src/features/flow/playback/engine.ts",
+    "apps/web/src/features/flow/hovmoller/path.ts",
+    "apps/web/src/features/flow/hovmoller/grid.ts",
     "apps/web/src/lib/travel.ts",
     "apps/web/e2e/eta-scan.ts",
     "apps/web/src/features/station/seriesRows.ts",

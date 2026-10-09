@@ -129,7 +129,7 @@
 .corner {
   position: absolute;
   right: calc(var(--drawer-w, 0px) + 0.5rem);
-  bottom: calc(var(--timebar-h, 0px) + 0.5rem + 10px);
+  bottom: calc(var(--timebar-h, 0px) + 0.5rem + 10px + var(--hov-h, 0px));
   z-index: 7;
   display: flex;
   flex-direction: column;
@@ -140,7 +140,27 @@
 /* On the map, MapLibre's own attribution row (its button, and its text where the map is wide) is the line under the
    corner: the corner stands above it. */
 .onMap .corner {
-  bottom: calc(var(--timebar-h, 0px) + 0.5rem + 10px + 2.2rem);
+  bottom: calc(var(--timebar-h, 0px) + 0.5rem + 10px + 2.2rem + var(--hov-h, 0px));
+}
+
+/* P11c: the "Langs de rivier" panel stands between the view and the timebar (in flow, its own padding clears the
+   bar), so the view above it keeps no room for the bar, and the corner lifts above the panel. */
+.hovOpen {
+  --hov-h: min(40dvh, 20rem);
+}
+
+.hovOpen .body {
+  --timebar-h: 0px;
+}
+
+/* The panel's box while its chunk loads (or the alert when it failed): as tall as the panel itself. */
+.hovPending {
+  flex: none;
+  box-sizing: border-box;
+  height: calc(var(--hov-h) + var(--timebar-h, 0px) + 0.5rem);
+  padding: 0.5rem var(--space);
+  border-top: 1px solid var(--line);
+  background: var(--paper);
 }
 
 /* Values of another t are on screen while this t loads (CR-4): dimmed, after a short delay so a fast answer does not flicker. */
