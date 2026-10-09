@@ -2794,6 +2794,7 @@ What the P11b build (issue #26, branch `claude/p11b-reach-colouring-playback`, d
 | 5 | The API fallback is equivalent | It lacks display-only series (R11, KG-275) |
 | 6 | `readFrames` joins the api hourly view to the api series view `WHERE active` (as `readSeries` does) | Two reads in one snapshot instead (the active ids, then the hourly view), filtered in code: the join of two security-barrier views that both repeat the series and source join made the planner estimate one row and re-run the hourly view per series. On the e2e stand-in (1,418 public api series) a 4-hour range took 5.4 s, past `rws_api`'s 2 s `statement_timeout` (a 503); quadratic in the series count, so production would have hit it too. `/series` was never affected (one series id) |
 | 7 | The speed `<select>` beside Play | In the expanded part, beside the reverse play: in the collapsed bar it wrapped to a row of its own. The State mode's play hint (D-1) is still one more line in the tallest bar, so P10d's narrow-window check of the station sheet runs at 400 × 600 instead of 400 × 560 (KG-280) |
+| 8 | Reach colours from the mode palettes as they are | A coloured reach has a grey casing under it (`rivers-reach-casing`, 1.6 px wider): the steady Δh bin and the normal state are near-white and vanished on the light map in the first CI baselines, as the markers would without their dark ring. The visual scenes carry no `?river=` highlight, which covered the Rhine's colours |
 
 **Evidence ([CI]) of #26's criteria.** Results of the CI-only runs are in PR #111; no number here is invented.
 

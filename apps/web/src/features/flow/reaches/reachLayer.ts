@@ -3,7 +3,7 @@ import type { ExpressionSpecification, LayerSpecification, Map as MapLibreMap } 
 import type { Change } from '../../../lib/data/change.ts';
 import type { ReachGraph } from '../../../lib/data/contracts.ts';
 import type { Mode } from '../../../lib/url/url.ts';
-import { REACH_IMPOUNDED_COLOUR, REACH_NODATA_COLOUR } from '../../legend/palette.ts';
+import { REACH_CASING_COLOUR, REACH_IMPOUNDED_COLOUR, REACH_NODATA_COLOUR } from '../../legend/palette.ts';
 import { reachHatchIcon } from '../../map/icons.ts';
 import { type ReachPaint, reachPaints } from './colour.ts';
 import { type FeatureSpan, spansOf } from './spans.ts';
@@ -36,6 +36,7 @@ export interface ReachHandle {
 
 const SOURCE = 'rivers';
 const SOURCE_LAYER = 'rivers';
+export const REACH_CASING = 'rivers-reach-casing';
 export const REACH = 'rivers-reach';
 export const REACH_NODATA = 'rivers-reach-nodata';
 export const REACH_IMPOUNDED = 'rivers-reach-impounded';
@@ -54,12 +55,32 @@ const coloured = (base: readonly [number, number, number]): ExpressionSpecificat
   12,
   ['*', base[2], ['coalesce', ['feature-state', 'w'], 1]],
 ];
+/** The casing: the coloured width plus a fixed edge, so a near-white colour (steady, normal) reads on a light map. */
+const cased = (base: readonly [number, number, number]): ExpressionSpecification => [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  4,
+  ['+', ['*', base[0], ['coalesce', ['feature-state', 'w'], 1]], 1.6],
+  8,
+  ['+', ['*', base[1], ['coalesce', ['feature-state', 'w'], 1]], 1.6],
+  12,
+  ['+', ['*', base[2], ['coalesce', ['feature-state', 'w'], 1]], 1.6],
+];
 const kindIs = (k: string): ExpressionSpecification => ['case', ['==', ['feature-state', 'k'], k], 1, 0];
 const WIDTH: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 4, 1, 8, 2.4, 12, 4.8];
 const THIN: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 4, 0.9, 8, 2, 12, 4];
 
-/** The four layers, bottom to top (pure; the test validates them against the style spec). */
+/** The five layers, bottom to top (pure; the test validates them against the style spec). */
 export const reachLayers = (): LayerSpecification[] => [
+  {
+    id: REACH_CASING,
+    type: 'line',
+    source: SOURCE,
+    'source-layer': SOURCE_LAYER,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': REACH_CASING_COLOUR, 'line-opacity': kindIs('v'), 'line-width': cased([1, 2.4, 4.8]) },
+  },
   {
     id: REACH,
     type: 'line',

@@ -47,6 +47,7 @@ function fakeMap(opts: { source?: boolean } = {}) {
   return { map: map as never, calls, dropSource: () => (source = false) };
 }
 const only = (calls: { fn: string; args: unknown[] }[], fn: string) => calls.filter((c) => c.fn === fn);
+const byId = (id: string) => reachLayers().find((l) => l.id === id);
 
 describe('reach layer specs', () => {
   it('are valid for the style spec, in the planned order', () => {
@@ -59,6 +60,7 @@ describe('reach layer specs', () => {
     };
     expect(validateStyleMin(style as never)).toEqual([]);
     expect(layers.map((l) => l.id)).toEqual([
+      'rivers-reach-casing',
       'rivers-reach',
       'rivers-reach-nodata',
       'rivers-reach-impounded',
@@ -66,13 +68,12 @@ describe('reach layer specs', () => {
     ]);
   });
   it('keeps zoom at the top of the width, with feature-state inside the stops', () => {
-    const w = (reachLayers()[0] as { paint: Record<string, unknown> }).paint['line-width'] as unknown[];
+    const w = (byId('rivers-reach') as { paint: Record<string, unknown> }).paint['line-width'] as unknown[];
     expect(w.slice(0, 3)).toEqual(['interpolate', ['linear'], ['zoom']]);
     expect(JSON.stringify(w.slice(4, 5))).toContain('feature-state');
   });
   it('evaluates: colour from state c, transparent without; opacity by kind', () => {
-    const [reach] = reachLayers();
-    const paint = reach?.paint as Record<string, never>;
+    const paint = byId('rivers-reach')?.paint as Record<string, never>;
     const ev = (expr: never, state: Record<string, unknown>, type: 'color' | 'number') => {
       const r = createExpression(expr, {
         type,
@@ -88,9 +89,14 @@ describe('reach layer specs', () => {
     expect(ev(paint['line-opacity'] as never, { k: 'nodata' }, 'number')).toBe(0);
     expect(ev(paint['line-width'] as never, { w: 2 }, 'number')).toBeCloseTo(4.8);
     expect(ev(paint['line-width'] as never, {}, 'number')).toBeCloseTo(2.4);
+    // the casing under it: only for a coloured reach, 1.6 px wider, so near-white (steady, normal) reads on a light map
+    const casing = byId('rivers-reach-casing')?.paint as Record<string, never>;
+    expect(ev(casing['line-opacity'] as never, { k: 'v' }, 'number')).toBe(1);
+    expect(ev(casing['line-opacity'] as never, { k: 'tidal' }, 'number')).toBe(0);
+    expect(ev(casing['line-width'] as never, { w: 2 }, 'number')).toBeCloseTo(4.8 + 1.6);
   });
   it('hatches by the tile flag, 3 px or more at every zoom, and carries no name or label', () => {
-    const tidal = reachLayers()[3];
+    const tidal = byId('rivers-reach-tidal');
     expect((tidal as { filter?: unknown }).filter).toEqual(['==', ['get', 'tidal'], true]);
     const w = (tidal as { paint: Record<string, unknown> }).paint['line-width'] as number[];
     expect([w[4], w[6], w[8]].every((x) => (x ?? 0) >= 3)).toBe(true);
@@ -116,18 +122,18 @@ describe('reach hatch icon', () => {
 });
 
 describe('addReaches', () => {
-  it('adds the hatch image and four layers before the highlight, and removes them on dispose', () => {
+  it('adds the hatch image and five layers before the highlight, and removes them on dispose', () => {
     const f = fakeMap();
     const h = addReaches(f.map, 'rivers-highlight');
     expect(only(f.calls, 'addImage')[0]?.args[2]).toEqual({ pixelRatio: 1 });
     const adds = only(f.calls, 'addLayer');
-    expect(adds).toHaveLength(4);
+    expect(adds).toHaveLength(5);
     for (const a of adds) expect(a.args[1]).toBe('rivers-highlight');
     h.dispose();
-    expect(only(f.calls, 'removeLayer')).toHaveLength(4);
+    expect(only(f.calls, 'removeLayer')).toHaveLength(5);
     expect(only(f.calls, 'removeImage')[0]?.args[0]).toBe(REACH_HATCH);
     h.dispose();
-    expect(only(f.calls, 'removeLayer')).toHaveLength(4);
+    expect(only(f.calls, 'removeLayer')).toHaveLength(5);
   });
   it('writes only the reaches whose paint changed, with sourceLayer, and resets vanished ones', () => {
     const f = fakeMap();

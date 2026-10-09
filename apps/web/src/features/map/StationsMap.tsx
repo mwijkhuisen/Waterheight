@@ -180,15 +180,21 @@ export function StationsMap({
     if (map === null || riverTiles === undefined) return;
     let gone = false;
     // Two chunks loaded apart, so one that fails never keeps the other off the map (each anchors its own layers).
-    void import('../flow/reaches/reachLayer.ts').then(({ addReaches }) => {
-      if (gone || map.getLayer(RIVERS) === undefined) return;
-      reachLayer.current = addReaches(map, RIVERS_HIGHLIGHT);
-      setReachesOn(true);
-    });
-    void import('../flow/flowLayer.ts').then(({ addFlow }) => {
-      if (gone || map.getLayer(RIVERS) === undefined) return;
-      flowLayer.current = addFlow(map, WARNINGS_FILL, flowNow.current);
-    });
+    // A chunk that fails to load leaves its layers off; the map and the other chunk carry on.
+    const none = () => undefined;
+    import('../flow/reaches/reachLayer.ts')
+      .then(({ addReaches }) => {
+        if (gone || map.getLayer(RIVERS) === undefined) return;
+        reachLayer.current = addReaches(map, RIVERS_HIGHLIGHT);
+        setReachesOn(true);
+      })
+      .catch(none);
+    import('../flow/flowLayer.ts')
+      .then(({ addFlow }) => {
+        if (gone || map.getLayer(RIVERS) === undefined) return;
+        flowLayer.current = addFlow(map, WARNINGS_FILL, flowNow.current);
+      })
+      .catch(none);
     return () => {
       gone = true;
       reachLayer.current?.dispose();

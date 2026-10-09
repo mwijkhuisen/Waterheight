@@ -37,15 +37,18 @@ export async function readFramesBody(res: Response): Promise<string> {
   const reader = res.body.getReader();
   const parts: Uint8Array[] = [];
   let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > MAX_FRAMES_BYTES) {
-      await reader.cancel();
-      throw new Error('too_big');
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_FRAMES_BYTES) throw new Error('too_big');
+      parts.push(value);
     }
-    parts.push(value);
+  } catch (e) {
+    // Past the cap, or a read that failed mid-stream: the rest of the body is never read.
+    await reader.cancel().catch(() => undefined);
+    throw e;
   }
   const all = new Uint8Array(size);
   let at = 0;
