@@ -120,21 +120,21 @@ const shot = async (page: Page, name: string) => {
 
 test('scene a: the recorded low water of 2026-09-29, 12:00Z, change in 24 hours', async ({ page }) => {
   await serve(page, 'lowwater');
-  await hold(page, 't=2026-09-29T12:00Z&play=normal&mode=delta&river=rhine', { center: [6.6, 49.9], zoom: 6.4 });
+  await hold(page, 't=2026-09-29T12:00Z&play=normal&mode=delta', { center: [6.6, 49.9], zoom: 6.4 });
   await shot(page, 'lowwater-delta');
 });
 
 test('scene b: a synthetic flood wave, 2026-10-11 12:00Z, discharge', async ({ page }) => {
   await serve(page, 'flood');
-  await hold(page, 't=2026-10-11T12:00Z&play=normal&mode=q&river=rhine');
+  await hold(page, 't=2026-10-11T12:00Z&play=normal&mode=q');
   await shot(page, 'flood-q');
 });
 
 test('scene c: the DST night of 2026-10-25, 00:00Z and 01:00Z, change in 24 hours', async ({ page }) => {
   await serve(page, 'dst');
-  await hold(page, 't=2026-10-25T00:00Z&play=normal&mode=delta&river=rhine');
+  await hold(page, 't=2026-10-25T00:00Z&play=normal&mode=delta');
   await shot(page, 'dst-0000z');
   // The repeated local hour is a different instant with different values: its own deep link, its own screenshot.
-  await hold(page, 't=2026-10-25T01:00Z&play=normal&mode=delta&river=rhine');
+  await hold(page, 't=2026-10-25T01:00Z&play=normal&mode=delta');
   await shot(page, 'dst-0100z');
 });

@@ -95,7 +95,7 @@ test('the owner site: the chain of Eijsden starts with the SPW gauges, in order,
 // per range, and never from /data/v1/frames/. Playback from 6 hours ago runs to the end of its range (the production
 // build has no hold: the engine plays at its own pace and stops at the current hour); the station panel then shows the
 // SPW value with the owner badge.
-test('the owner site: hourly playback reads the owner frames api only, and an SPW gauge shows its value with the owner badge', async ({
+test('the owner site: hourly playback reads the owner frames api only, its answer carries the SPW value, the panel the owner badge', async ({
   page,
   context,
   baseURL,
@@ -106,7 +106,16 @@ test('the owner site: hourly playback reads the owner frames api only, and an SP
   await page.goto(`/?t=${t}Z&s=be.spw.5447&mode=delta&play=normal`);
   await expect(page.getByRole('slider', { name: 'Tijdlijn' })).toBeVisible();
   const play = page.getByRole('button', { name: msg('nl', 'play'), exact: true });
+  // The owner frames answer itself: the played hours of the seeded SPW gauges (run.sh writes 321 for be.spw.5447 and
+  // be.spw.5451). After the play the page is paused and reads its snapshot, whose own freshness rules decide what the
+  // panel shows, so the played value is checked in the answer the playback used.
+  const answer = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/frames' && r.ok(), {
+    timeout: 60_000,
+  });
   await play.click();
+  const body = (await (await answer).json()) as { audience?: string; vlast?: (number | null)[][] };
+  expect(body.audience, 'an owner answer').toBe('owner');
+  expect((body.vlast ?? []).flat(), 'the seeded SPW value is played').toContain(321);
   // The engine plays to the end of the page's range and stops by itself: t has moved and the Play button is back. The
   // end is the last whole hour of meta.now (the publisher's clock, which may trail this one past an hour boundary), so
   // t is within an hour of this clock's hour, or gone when that hour is the page's now (live).
@@ -124,7 +133,6 @@ test('the owner site: hourly playback reads the owner frames api only, and an SP
   ).toEqual([]);
   const panel = page.locator('aside');
   await expect(panel.getByText(msg('nl', 'owner_badge'), { exact: true }).first()).toBeVisible();
-  await expect(panel).toContainText(new RegExp(`${msg('nl', 'panel_last_measurement')}:\\s*321`));
   await expectClean(page, log);
 });
 
