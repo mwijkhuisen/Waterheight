@@ -8,8 +8,10 @@ import {
   FORECAST_FLAGS,
   FORECAST_SOURCES,
   type ForecastRunIn,
+  type ForecastSourceDecl,
   isCurrent,
   isTail,
+  MAX_ISSUE_AGE_MS,
   MAX_LEAD_MS,
   MAX_RUN_POINTS,
   mergeDecision,
@@ -147,6 +149,14 @@ describe('checkRun', () => {
     expect(out.dropped).toEqual({ before_window: 1 });
     // the same first row is still dropped for a source without an allowance
     expect(checkRun(run([at(FETCH - 3 * day), at(FETCH)]), FETCH, NL1).dropped).toEqual({ before_window: 1 });
+  });
+
+  it('every leadMs is a positive finite bound no wider than MAX_ISSUE_AGE_MS (review S1)', () => {
+    for (const d of Object.values(FORECAST_SOURCES) as ForecastSourceDecl[]) {
+      const { leadMs } = d;
+      expect(leadMs === undefined || (Number.isFinite(leadMs) && leadMs > 0 && leadMs <= MAX_ISSUE_AGE_MS)).toBe(true);
+    }
+    expect(Object.values(FORECAST_SOURCES).filter((d) => 'leadMs' in d)).toHaveLength(1);
   });
 });
 

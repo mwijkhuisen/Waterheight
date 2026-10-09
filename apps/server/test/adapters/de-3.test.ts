@@ -391,6 +391,15 @@ describe('rules (synthetic)', () => {
       drift(() => table(text(ramp()).replace(label(0), bad)), 'time_bad_format', 'rows.0');
   });
 
+  it('a file fetched 3 days after its first row keeps every row (leadMs, issue #79); past 4 days is before_window', () => {
+    const out = run(ramp(14));
+    const first = Date.parse(out.forecasts?.[0]?.points[0]?.ts as string);
+    const r = out.forecasts?.[0] as NonNullable<Normalised['forecasts']>[number];
+    expect(checkRun(r, first + 3 * DAY, DECL)).toMatchObject({ dropped: {} });
+    expect(checkRun(r, first + 3 * DAY, DECL).run?.points).toHaveLength(14);
+    expect(checkRun(r, first + 4 * DAY + 1, DECL).dropped).toEqual({ before_window: 1 });
+  });
+
   it('a file with no row is no run, only the drop count', () => {
     const out = normalise(table(text([])), { variant: EMMERICH, keyOf });
     expect(out.forecasts).toBeUndefined();
