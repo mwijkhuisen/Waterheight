@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
 import { Attribution } from './features/attribution/Attribution.tsx';
 import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
+import { FlowToggle } from './features/flow/FlowToggle.tsx';
 import { Layout } from './features/layout/Layout.tsx';
 import { Legend } from './features/legend/Legend.tsx';
 import { MapControls } from './features/legend/MapControls.tsx';
@@ -81,6 +82,10 @@ function Viewer({ locale }: { locale: Locale }) {
   const [webgl] = useState(hasWebGL2);
   const [mapFailed, setMapFailed] = useState(false);
   const [view, setView] = useState<'map' | 'table'>('map');
+  // P11a: the flow animation's pause control (WCAG 2.2.2); the page's own state, no URL key (A§10). The e2e build
+  // starts with it off unless a spec sets window.__rwsFlow first: an animating map keeps a software renderer busy
+  // and never idle. A build-time constant, so the production bundle holds no trace of it.
+  const [flow, setFlow] = useState(() => import.meta.env.MODE !== 'e2e' || window.__rwsFlow === true);
 
   // `now` is the page's now: the API's clock at the load (or this browser's, if behind it), never ahead of it,
   // so the "now" of the page is a t whose snapshot holds observations; `serverNow` is the API's clock itself.
@@ -188,6 +193,7 @@ function Viewer({ locale }: { locale: Locale }) {
   const failed = useCallback(() => setMapFailed(true), []);
 
   const canMap = webgl && !mapFailed;
+  const riverTiles = rivers.data?.manifest.current.tiles.file;
   const onMap = canMap && view === 'map';
   const notice = !webgl ? m.map_no_webgl({}, { locale }) : mapFailed ? m.map_unavailable({}, { locale }) : undefined;
 
@@ -242,6 +248,7 @@ function Viewer({ locale }: { locale: Locale }) {
           <div className={styles.top}>
             <div className={styles.controls}>
               <MapControls locale={locale} mode={mode} onMode={setMode} view={view} onView={setView} canMap={canMap} />
+              {onMap && riverTiles !== undefined && <FlowToggle locale={locale} on={flow} onChange={setFlow} />}
             </div>
             <div className={styles.status}>
               {notice !== undefined && (
@@ -274,7 +281,8 @@ function Viewer({ locale }: { locale: Locale }) {
                   forecasts={forecasts}
                   changes={changes}
                   warnings={warnings}
-                  riverTiles={rivers.data?.manifest.current.tiles.file}
+                  riverTiles={riverTiles}
+                  flow={flow}
                   river={river?.id}
                   selected={selected}
                   onSelect={open}
@@ -304,6 +312,7 @@ function Viewer({ locale }: { locale: Locale }) {
                 locale={locale}
                 station={selected}
                 values={values}
+                states={states}
                 forecasts={forecasts}
                 changes={changes}
                 lapsed={lapsed}

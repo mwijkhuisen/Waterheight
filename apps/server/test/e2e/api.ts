@@ -10,11 +10,21 @@
 //        [E2E_OWNER_PUBLISH_DIR=<dir> [E2E_OWNER_API_HOST=127.0.0.1] [E2E_OWNER_API_PORT=8080]] node apps/server/test/e2e/api.ts
 // With E2E_OWNER_PUBLISH_DIR (P10a) it also seeds synthetic owner rows (owner-seed.ts), writes the owner tree with the
 // owner publisher and serves the owner family (createApp family 'owner', as rws_owner_api) on the second address.
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { serve } from '@hono/node-server';
-import { CANARIES, CANARY_RENDERINGS, SeriesForecastAnswer, SnapshotAnswer, StationsAnswer } from '@rws/contracts';
+import {
+  CANARIES,
+  CANARY_RENDERINGS,
+  RiversManifest,
+  SeriesForecastAnswer,
+  SnapshotAnswer,
+  StationsAnswer,
+} from '@rws/contracts';
 import { DisplayWindow } from '../../src/api/window.ts';
 import { createApp } from '../../src/app.ts';
 import { type Db, type DbConfig, dbConfig, openDb } from '../../src/db/pool.ts';
@@ -139,6 +149,30 @@ if (typeof listen === 'string') {
   process.exit(64);
 }
 const OWNER_DIR = process.env.E2E_OWNER_PUBLISH_DIR;
+/**
+ * P11a: the river release the owner publisher splits at the BE-3 gauges (the owner reaches variant): the committed
+ * fixture release (test/fixtures/reaches-fixture.json and its tiles) under a manifest, as rws-rivers-refresh leaves it.
+ */
+const RIVERS_DIR = OWNER_DIR ? join(tmpdir(), 'rws-e2e-rivers') : undefined;
+const RIVERS_VERSION = '20261003';
+async function installRivers(dir: string): Promise<void> {
+  const root = fileURLToPath(new URL('../../../../', import.meta.url));
+  const entry = async (file: string, bytes: Buffer) => {
+    await writeFile(join(dir, file), bytes);
+    return { file, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length };
+  };
+  const v = RIVERS_VERSION;
+  const release = {
+    version: v,
+    tag: 'geo-2026-10-03',
+    installed_at: '2026-10-05T05:40:00Z',
+    tiles: await entry(`rivers-${v}.pmtiles`, await readFile(join(root, 'tools/geo/fixtures/rivers-fixture.pmtiles'))),
+    reaches: await entry(`reaches-${v}.json`, await readFile(join(root, 'test/fixtures/reaches-fixture.json'))),
+    download: await entry(`rivers-${v}.geojson.gz`, gzipSync('{"type":"FeatureCollection","features":[]}\n')),
+  };
+  const manifest = RiversManifest.parse({ schema_version: 1, current: release, previous: null });
+  await writeFile(join(dir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+}
 const ownerListen = parseListen({
   HOST: process.env.E2E_OWNER_API_HOST ?? '127.0.0.1',
   PORT: process.env.E2E_OWNER_API_PORT ?? '8080',
@@ -158,6 +192,7 @@ let ownerServer: ReturnType<typeof serve> | undefined;
 const cleanup = async () => {
   await rm(E2E_PUBLISH_DIR, { recursive: true, force: true }).catch(() => undefined);
   if (OWNER_DIR) await rm(OWNER_DIR, { recursive: true, force: true }).catch(() => undefined);
+  if (RIVERS_DIR) await rm(RIVERS_DIR, { recursive: true, force: true }).catch(() => undefined);
   server?.close(); // also closes idle keep-alive connections; the exit and the forced DROP do the rest
   ownerServer?.close();
   window?.stop();
@@ -262,11 +297,20 @@ try {
   if (OWNER_DIR) {
     await rm(OWNER_DIR, { recursive: true, force: true });
     await mkdir(OWNER_DIR, { recursive: true });
+    if (RIVERS_DIR) {
+      await rm(RIVERS_DIR, { recursive: true, force: true });
+      await mkdir(RIVERS_DIR, { recursive: true });
+      await installRivers(RIVERS_DIR);
+    }
     const ownerPub = openDb(dbConfig({ DATABASE_URL: t.urlFor('rws_owner_api') }, 'rws_owner_api') as DbConfig, {
       max: 2,
     });
     try {
-      await publishOnce(ownerPub.db, 'owner', OWNER_DIR, { now: NOW.getTime(), settledDays: 1 });
+      await publishOnce(ownerPub.db, 'owner', OWNER_DIR, {
+        now: NOW.getTime(),
+        settledDays: 1,
+        ...(RIVERS_DIR ? { riversDir: RIVERS_DIR } : {}),
+      });
     } finally {
       await ownerPub.close();
     }
@@ -364,6 +408,12 @@ try {
       throw new Error('self-check: the owner api is not the owner family');
     const sources = await readFile(join(OWNER_DIR, 'v1', 'sources.json'), 'utf8');
     if (!sources.includes(XSS)) throw new Error('self-check: the owner sources.json lacks the XSS clause');
+    // P11a: the owner publisher split the fixture release at the SPW gauges.
+    const variant = await readFile(join(OWNER_DIR, 'v1', 'rivers', `reaches-${RIVERS_VERSION}.json`), 'utf8').catch(
+      () => '',
+    );
+    if (!variant.includes('"be.spw.5447"') || !variant.includes('"be.spw.5451"'))
+      throw new Error('self-check: the owner reaches variant lacks the SPW gauges of Eijsden');
   }
 
   const listening = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {

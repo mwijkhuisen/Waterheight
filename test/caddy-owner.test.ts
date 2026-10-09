@@ -104,13 +104,21 @@ describe('owner site isolation', () => {
     expect(code(read('deploy/compose.yaml'))).not.toMatch(/owner_basic_auth|caddy-owner/);
   });
 
-  it('mounts each publisher on its own audience only, and caddy-owner only the owner v1, the tiles and the rivers directory, read-only', () => {
+  it('mounts each publisher on its own audience only (publish-owner also reads the river release directory, read-only), and caddy-owner only the owner v1, the tiles and the rivers directory, read-only', () => {
     type Svc = { volumes?: string[]; secrets?: string[]; networks?: string[]; ports?: string[] };
     const base = parse(read('deploy/compose.yaml')) as { services: Record<string, Svc> };
     const overlay = parse(read('deploy/compose.owner.yaml')) as { services: Record<string, Svc> };
     const vols = (s?: Svc) => s?.volumes ?? [];
     expect(vols(base.services.publish).join(' ')).not.toContain('/srv/rws/owner');
-    expect(vols(base.services['publish-owner']).join(' ')).not.toContain('/srv/rws/public');
+    // P11a (D-C): the one public path publish-owner reads is the installed river release, read-only, at /srv/rivers.
+    expect(vols(base.services['publish-owner']).filter((v) => v.includes('/srv/rws/public'))).toEqual([
+      '/srv/rws/public/data/v1/rivers:/srv/rivers:ro',
+    ]);
+    expect(vols(base.services['publish-owner'])).toEqual([
+      '/srv/rws/owner/www:/srv/www',
+      '/srv/rws/owner/status:/srv/capture:ro',
+      '/srv/rws/public/data/v1/rivers:/srv/rivers:ro',
+    ]);
     expect(base.services.publish?.secrets).toEqual(['db_rws_publish']);
     expect(base.services['publish-owner']?.secrets).toEqual(['db_rws_owner_api']);
     expect(base.services.publish?.networks).toEqual(['db']);
@@ -179,6 +187,38 @@ describe('owner site isolation', () => {
     expect((overlay.services.db as Svc).networks).toEqual(['db', 'owner_db']);
     expect(Object.values(base.services).some((s) => s.networks?.includes('owner_db'))).toBe(false);
     expect(base.networks?.owner_db).toBeUndefined();
+  });
+});
+
+describe('the owner reaches variant (P11a, D-C)', () => {
+  const code = ownerSite.replaceAll(/#.*$/gm, '');
+  const at = (s: string) => code.indexOf(s);
+
+  it("serves the owner publisher's reaches file before the public one, both before the 404 of the rest of /data/v1/rivers", () => {
+    const order = [
+      at('\t@rivers_manifest {'),
+      at('\t@owner_reaches {'),
+      at('\thandle @owner_reaches {'),
+      at('\t@rivers_reaches {'),
+      at('\thandle @rivers_reaches {'),
+      at('\t@rivers_other path_regexp'),
+    ];
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("reads it from the owner tree only, precompressed, with the public matcher's exact path and no immutable caching", () => {
+    const block = /\t@owner_reaches \{\n([\s\S]*?)\n\t\}\n\thandle @owner_reaches \{\n([\s\S]*?)\n\t\}\n/.exec(code);
+    expect(block).not.toBeNull();
+    const pub = /\t@rivers_reaches \{\n([\s\S]*?)\n\t\}\n/.exec(code);
+    const expression = (b: string | undefined) => /expression `([^`]*)`/.exec(b ?? '')?.[1];
+    expect(expression(block?.[1])).toBe(expression(pub?.[1]));
+    expect(block?.[1]).toContain('root /srv/rws/owner/www/v1/rivers');
+    expect(block?.[2]).toContain('root * /srv/rws/owner/www/v1/rivers');
+    expect(block?.[2]).toContain('precompressed zstd gzip');
+    // Content follows the owner stations, so the name is not a version: no Cache-Control of its own (private, no-store applies).
+    expect(block?.[2]).not.toMatch(/Cache-Control|immutable/);
+    expect(`${block?.[1]}${block?.[2]}`).not.toContain('/srv/rws/public');
   });
 });
 

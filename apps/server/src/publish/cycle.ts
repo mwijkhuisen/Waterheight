@@ -18,6 +18,7 @@ import {
   settledPath,
   WarningsFile,
 } from '@rws/contracts';
+import { OwnerReachesFile } from '@rws/contracts/reaches-owner';
 import {
   OwnerLatestFile,
   OwnerSnapshotFile,
@@ -38,7 +39,7 @@ import type { StaticCache } from '../api/states.ts';
 import { coded, validated } from '../api/util.ts';
 import type { DisplayWindow, Window } from '../api/window.ts';
 import { type AttributionRow, attributionRows } from '../attribution.ts';
-import { type ChannelAudience, VIEWS } from '../db/audience.ts';
+import { type ChannelAudience, REACHES_VARIANT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
 import type { BumpReason } from '../load/dirty.ts';
@@ -56,6 +57,7 @@ import {
   type Version,
   versionOf,
 } from './plan.ts';
+import { OwnerRivers, type Rivernet } from './rivers.ts';
 import type { Output } from './write.ts';
 
 // P9a: one publisher loop per family (A§9.1), at most once a minute. It only reads (invariant 2): the family's views
@@ -119,8 +121,21 @@ export type Renderers = {
   meta(c: RenderCtx, m: MetaInput): Promise<unknown>;
 };
 
-type Kind = 'meta' | 'latest' | 'snapshot' | 'frames' | 'stations' | 'sources' | 'forecast' | 'station' | 'warnings';
-/** The contract of every file per family. The owner family writes no frames: its schema refuses everything. */
+type Kind =
+  | 'meta'
+  | 'latest'
+  | 'snapshot'
+  | 'frames'
+  | 'stations'
+  | 'sources'
+  | 'forecast'
+  | 'station'
+  | 'warnings'
+  | 'reaches';
+/**
+ * The contract of every file per family. The owner family writes no frames: its schema refuses everything, as the
+ * public family's does for `reaches` (P11a: only the owner publisher writes the split river release).
+ */
 const CONTRACTS: Record<ChannelAudience, Record<Kind | 'status', z.ZodType>> = {
   public: {
     meta: StaticMeta,
@@ -132,6 +147,7 @@ const CONTRACTS: Record<ChannelAudience, Record<Kind | 'status', z.ZodType>> = {
     forecast: StaticForecastLatest,
     station: StationRecent,
     warnings: WarningsFile,
+    reaches: z.never(),
     status: StatusFile,
   },
   owner: {
@@ -144,6 +160,7 @@ const CONTRACTS: Record<ChannelAudience, Record<Kind | 'status', z.ZodType>> = {
     forecast: OwnerStaticForecastLatest,
     station: OwnerStationRecent,
     warnings: OwnerWarningsFile,
+    reaches: OwnerReachesFile,
     status: OwnerStatusFile,
   },
 };
@@ -171,6 +188,14 @@ export type CycleDeps = {
   sections: ReadonlyMap<string, string>;
   cache: StaticCache;
   inputs: string | undefined;
+  /**
+   * The read-only mount of the public rivers directory (P11a, D-C; production /srv/rivers): the owner family splits the
+   * installed river release found there at the owner stations. Public family: never read (REACHES_VARIANT); undefined
+   * switches the step off.
+   */
+  riversDir?: string | undefined;
+  /** rivernet.yaml for that step; the image's registry by default (a test passes its own). */
+  rivernet?: (() => Rivernet | null) | undefined;
   log: Pick<Logger, 'error'>;
   /** The time a cycle may spend on recent buckets and station files (production 35 s; publishOnce no limit). */
   budgetMs: number;
@@ -200,8 +225,12 @@ export class Publisher {
   /** The steps that failed in this cycle. */
   readonly #failed = new Set<string>();
 
+  readonly #rivers: OwnerRivers | undefined;
+
   constructor(deps: CycleDeps) {
     this.#d = deps;
+    if (REACHES_VARIANT[deps.family] && deps.riversDir !== undefined)
+      this.#rivers = new OwnerRivers(deps.riversDir, deps.log, deps.rivernet);
   }
 
   /** Runs one cycle. A failing step is logged by its fixed code and skipped; the others still run, meta last. */
@@ -267,6 +296,27 @@ export class Publisher {
     await this.#step('sources', async () => {
       await this.#put(c, 'sources', 'sources.json', await d.render.sources(c));
     });
+    // The owner variant of the river release, split at the owner stations (P11a, D-C). Owner family only; it needs the
+    // station list, and a missing or bad release is logged by its fixed code and leaves the files as they are.
+    if (this.#rivers !== undefined && stations !== undefined) {
+      const rivers = this.#rivers;
+      await this.#step('reaches', async () => {
+        const built = await rivers.next(new Set(stations.stations.map((s) => s.id)));
+        if (built === null) return;
+        const keep = new Set<string>();
+        for (const b of built) {
+          await this.#put(c, 'reaches', `rivers/${b.name}`, b.body);
+          keep.add(b.name);
+        }
+        // Every other reaches file (a release that rolled off, a leftover) goes, with its .zst and .gz.
+        const stale = new Set<string>();
+        for (const e of await d.out.list('rivers')) {
+          const name = e.name.replace(/\.(?:zst|gz)$/, '');
+          if (/^reaches-[0-9]{8}\.json$/.test(name) && !keep.has(name)) stale.add(name);
+        }
+        for (const name of stale) await d.out.remove(`rivers/${name}`);
+      });
+    }
 
     // 2. The dirty rows: queued in memory, so the cursor moves on at once (a restart queues everything anyway).
     await this.#step('dirty', async () => {

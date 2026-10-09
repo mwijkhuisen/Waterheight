@@ -62,3 +62,31 @@ test('the browser has no WebGL2; the table replaces the map and works', async ({
   await expectNoSeriousAxe(page);
   await finish(page, s);
 });
+
+// P11a (issue #26): without WebGL2 there is no map and no flow code, but the station panel over the table still has its
+// upstream chain (a list on the reach graph, not a map feature), and the flow clock never ran.
+test('without WebGL2 a station of the table shows its upstream chain, and the flow clock never ran', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await open(page, '/');
+  await expect(page.locator('table')).toHaveCount(1);
+  await expect(page.locator('.maplibregl-canvas')).toHaveCount(0);
+  await pickStation(page, 'Lobith', /Lobith/);
+  await expect(page.locator('aside').getByRole('heading', { level: 2, name: /Lobith/ })).toBeVisible();
+  const chain = page
+    .locator('aside section')
+    .filter({ has: page.getByRole('heading', { level: 3, name: 'Stroomopwaarts' }) });
+  await expect(chain).toBeVisible();
+  await expect(chain.locator('xpath=./ul/li[button]').first()).toContainText(/Emmerich/i);
+  // No toggle (it belongs to the map), no flow request, no clock.
+  await expect(page.getByRole('button', { name: 'Stroming animeren' })).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { __rwsFlowFrames?: number }).__rwsFlowFrames ?? 0)).toBe(0);
+  expect(s.log.requests.map((u) => new URL(u).pathname).filter((p) => /flowLayer|\/tiles\/rivers-/i.test(p))).toEqual(
+    [],
+  );
+  await expectNoSeriousAxe(page);
+  await finish(page, s);
+});

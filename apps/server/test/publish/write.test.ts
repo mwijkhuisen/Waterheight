@@ -25,6 +25,7 @@ describe('safeRel', () => {
     'series/de.wsv.9598e4cb-0849-401e-bba0-689234b27644/recent.json',
     'warnings/latest.geojson',
     'warnings/2026-10-03.json',
+    'rivers/reaches-20261003.json',
   ])('takes %s', (rel) => {
     expect(safeRel(rel)).toBe(rel);
   });
@@ -41,6 +42,9 @@ describe('safeRel', () => {
     `series/de.x.${'a'.repeat(80)}/recent.json`,
     'series/DE.x.y/recent.json',
     'meta.JSON',
+    'rivers/reaches-2026100.json',
+    'rivers/reaches-20261003.json.gz',
+    'rivers/Reaches-20261003.json',
   ])('refuses %j', (rel) => {
     expect(() => safeRel(rel)).toThrow('unsafe_path');
   });

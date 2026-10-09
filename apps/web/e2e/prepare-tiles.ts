@@ -11,12 +11,51 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { ReachesFile, RiversManifest } from '@rws/contracts';
+import { checkReaches, ReachesFile, RiversManifest } from '@rws/contracts';
 import { checkTilesManifest, tileFileNames } from '@rws/core/tiles-manifest';
 
 export const E2E_BUILD = '20261001';
 export const E2E_RIVERS = '20261003';
 const fixtures = fileURLToPath(new URL('../../../tools/geo/fixtures/', import.meta.url));
+// P11a (issue #26): the river release is the committed fixture one, whose reach ids the tiles carry (read by path, no
+// tools/geo import): test/fixtures/reaches-fixture.json (version 20261003, regenerated and compared by
+// test/reaches-fixture.test.ts) and tools/geo/fixtures/rivers-fixture.pmtiles (709 reaches, layer `rivers`).
+const reachesFixture = fileURLToPath(new URL('../../../test/fixtures/reaches-fixture.json', import.meta.url));
+
+/**
+ * The reaches file as the e2e site serves it: the committed release plus two e2e stations on the Rhine above Lobith
+ * (P11a, issue #26), so that their names render in a chain row. The hostile one (nl.e2e.xss) sits at the head of
+ * rhine.47, between Koeln and Bonn; the ordinary one (nl.e2e.dst) at the head of rhine.44, between Andernach and
+ * Remagen. Both reaches have no station of their own in the release (a confluence starts them), so the stations
+ * become their `up_station_id`: the chain names a row by the station a reach starts at. Every other row is as built.
+ */
+export const E2E_CHAIN: readonly [station: string, reach: string][] = [
+  ['nl.e2e.xss', 'rhine.47'],
+  ['nl.e2e.dst', 'rhine.44'],
+];
+function e2eReaches(release: ReachesFile): ReachesFile {
+  const stations = [...release.stations];
+  const reaches = release.reaches.map((r) => ({ ...r }));
+  for (const [id, reachId] of E2E_CHAIN) {
+    const reach = reaches.find((r) => r.id === reachId);
+    if (reach === undefined || reach.up_station_id !== null) throw new Error(`e2e reaches: ${reachId} is not free`);
+    reach.up_station_id = id;
+    stations.push({
+      id,
+      river_id: reach.river_id,
+      reach_id: reach.id,
+      km_official: null,
+      km_official_system: null,
+      km_graph: reach.km_graph_from,
+      km_to_nl_entry: null,
+      nl_entry_node: null,
+    });
+  }
+  const out = ReachesFile.parse({ ...release, reaches, stations });
+  const problems = checkReaches(out);
+  if (problems.length > 0) throw new Error(`e2e reaches: ${problems[0]}`);
+  return out;
+}
 
 export function prepareTiles(dir: string): void {
   mkdirSync(dir, { recursive: true });
@@ -48,21 +87,8 @@ export function prepareRivers(dataDir: string, downloadsDir: string): void {
     writeFileSync(join(dir, name), bytes);
     return { file: name, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length };
   };
-  const reaches = ReachesFile.parse({
-    schema_version: 1,
-    version: v,
-    attribution: '\u00a9 OpenStreetMap contributors',
-    attribution_url: 'https://www.openstreetmap.org/copyright',
-    licence: 'ODbL-1.0',
-    licence_url: 'https://opendatacommons.org/licenses/odbl/1-0/',
-    licence_note: 'e2e fixture',
-    osm_replication_timestamp: '2026-10-01T20:22:06Z',
-    rivers: [],
-    nl_entry_nodes: [],
-    reaches: [],
-    stations: [],
-    travel_times: [],
-  });
+  const reaches = e2eReaches(ReachesFile.parse(JSON.parse(readFileSync(reachesFixture, 'utf8'))));
+  if (reaches.version !== v) throw new Error(`the reaches fixture is version ${reaches.version}, not ${v}`);
   const download = gzipSync(
     `${JSON.stringify({
       type: 'FeatureCollection',
@@ -75,7 +101,7 @@ export function prepareRivers(dataDir: string, downloadsDir: string): void {
     version: v,
     tag: 'geo-2026-10-03',
     installed_at: '2026-10-05T05:40:00Z',
-    tiles: entry(dataDir, `rivers-${v}.pmtiles`, readFileSync(join(fixtures, 'lobith-z14.pmtiles'))),
+    tiles: entry(dataDir, `rivers-${v}.pmtiles`, readFileSync(join(fixtures, 'rivers-fixture.pmtiles'))),
     reaches: entry(dataDir, `reaches-${v}.json`, Buffer.from(`${JSON.stringify(reaches)}\n`)),
     download: entry(downloadsDir, `rivers-${v}.geojson.gz`, download),
   };

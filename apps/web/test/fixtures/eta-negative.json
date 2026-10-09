@@ -1,0 +1,25 @@
+{
+  "negative": [
+    { "text": "aankomst 14:00", "travelRow": true, "rules": ["aankomst", "clock", "not-indicative"] },
+    { "text": "expected at 3 pm", "travelRow": false, "rules": ["expected-at"] },
+    { "text": "in 5 h", "travelRow": true, "rules": ["countdown", "not-indicative"] },
+    { "text": "28–48 h", "travelRow": true, "rules": ["not-indicative"] },
+    { "text": "za 12 okt", "travelRow": true, "rules": ["weekday", "day-month", "not-indicative"] },
+    { "text": "ETA 2026-10-12", "travelRow": true, "rules": ["eta", "iso-date", "not-indicative"] },
+    { "text": "Het water bereikt Lobith om 14 uur", "travelRow": false, "rules": ["bereikt-om"] },
+    { "text": "verwacht om 9:30", "travelRow": true, "rules": ["verwacht-om", "clock", "not-indicative"] },
+    { "text": "The wave arrives tomorrow", "travelRow": false, "rules": ["arrive"] },
+    { "text": "indicatief: nog 5 uur", "travelRow": true, "rules": ["countdown"] },
+    { "text": "indicatief: over 3 uur", "travelRow": true, "rules": ["countdown"] },
+    { "text": "indicative: in 2 hours", "travelRow": true, "rules": ["countdown"] },
+    { "text": "indicative: Monday 12 October", "travelRow": true, "rules": ["weekday", "day-month"] },
+    { "text": "indicatief: dinsdag", "travelRow": true, "rules": ["weekday"] },
+    { "text": "indicative: Oct 12", "travelRow": true, "rules": ["day-month"] }
+  ],
+  "positive": [
+    { "text": "indicatief: 1,5–2 dagen (piek juli 2021)", "travelRow": true },
+    { "text": "indicative: about 1.5 days (flood)", "travelRow": true },
+    { "text": "indicative: about 3.5 h (piek juli 2021)", "travelRow": true },
+    { "text": "geen bronwaarde", "travelRow": true }
+  ]
+}

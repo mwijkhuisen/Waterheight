@@ -1,0 +1,73 @@
+/* The upstream chain in the station panel (P11a): the look of the nearby list (station.module.css), one row per
+   station with its facts beside the select button, a tributary as a collapsed disclosure. */
+.chain h3 {
+  margin: var(--space) 0 0.25rem;
+  font-size: 1.1rem;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+}
+
+.list .list {
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding-left: 0.75rem;
+}
+
+.list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.station {
+  display: flex;
+  flex-direction: column;
+}
+
+.select {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.25rem;
+  border: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0.75rem 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.gap {
+  padding: 0.5rem 0.75rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.group summary {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}

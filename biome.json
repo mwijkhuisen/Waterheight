@@ -16,7 +16,8 @@
       "!tools/geo/fixtures/rivernet.*",
       "!tools/geo/fixtures/euhydro",
       "!tools/geo/fixtures/wikidata",
-      "!tools/geo/fixtures/geofabrik"
+      "!tools/geo/fixtures/geofabrik",
+      "!test/fixtures/reaches-fixture.json"
     ]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },

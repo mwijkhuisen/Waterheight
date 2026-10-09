@@ -137,6 +137,13 @@ export const FAMILY_AUDIENCES = {
   owner: ['public', 'owner'],
 } as const satisfies Record<ChannelAudience, readonly ChannelAudience[]>;
 
+/**
+ * Which families write the owner variant of reaches-<ver>.json (P11a, D-C): the owner publisher splits the installed
+ * river release at the owner stations; the public publisher never builds a reaches file (the public one comes from
+ * rws-rivers-refresh). The only switch for it.
+ */
+export const REACHES_VARIANT = { public: false, owner: true } as const satisfies Record<ChannelAudience, boolean>;
+
 /** The read-only login roles that may SELECT a family, and nothing else (A§12.2). */
 export const FAMILY_ROLES = {
   public: ['rws_api', 'rws_publish'],

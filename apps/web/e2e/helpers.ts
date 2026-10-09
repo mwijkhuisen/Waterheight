@@ -16,6 +16,9 @@ export const XSS = '<img src=x onerror=alert(1)>';
 export interface HookMap {
   getFeatureState(f: { source: string; id: string }): Record<string, unknown>;
   getPaintProperty(layer: string, name: string): unknown;
+  getLayoutProperty(layer: string, name: string): unknown;
+  /** MapLibre draws every frame while true (fps.spec.ts measures with it on). */
+  repaint: boolean;
   getFilter(layer: string): unknown;
   getLayer(id: string): { id: string; source?: string; sourceLayer?: string } | undefined;
   getStyle(): { layers: Record<string, unknown>[] };

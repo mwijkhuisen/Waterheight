@@ -206,6 +206,13 @@ const GraphReach = z.looseObject({
   down_station_id: GraphStationRef.nullable(),
   upstream: z.array(GraphReachId).max(20),
   downstream: z.array(GraphReachId).max(20),
+  // P11a (the upstream chain): a bad value is null, never a dropped row (the neighbours walk needs none of them).
+  length_km: z.number().nonnegative().nullable().catch(null),
+  km_graph_from: z.number().nullable().catch(null),
+  km_graph_to: z.number().nullable().catch(null),
+  flags: z.looseObject({ tidal: z.boolean(), impounded: z.boolean(), bifurcation: z.boolean() }).nullable().catch(null),
+  /** The owner variant only: the public reach this part was cut from (D-C). */
+  part_of: GraphReachId.optional().catch(undefined),
 });
 export const ReachGraphFile = z.looseObject({
   stations: lenient(GraphStation, 10_000).catch([]),

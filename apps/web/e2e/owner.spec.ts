@@ -280,3 +280,31 @@ test('axe finds no serious or critical issue on the owner map view with its bann
   expect(param(page, 's')).toBe(OWNER_STATION);
   await finish(page, s);
 });
+
+// P11a (issue #26 C5): the owner publisher splits the installed river release at the BE-3 gauges (api.ts hands it the
+// fixture release), and the owner site's chain of Eijsden starts with them, nearest first, each with the badge. (The
+// public site's chain has none: p11a.spec.ts runs on the public tree, and the compose job checks both sites.)
+test('the chain of Eijsden on the owner site starts with the SPW gauges, each marked owner only', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  const res = await page.request.get('/api/v1/stations');
+  expect(res.status()).toBe(200);
+  const { stations } = (await res.json()) as { stations: { id: string; name: string }[] };
+  const names = new Map(stations.map((st) => [st.id, st.name]));
+  await open(page, '/?s=nl.rws.eijsden.grens');
+  await mapReady(page);
+  const chain = panelOf(page)
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { level: 3, name: msg('nl', 'chain_heading'), exact: true }) });
+  await expect(chain).toBeVisible();
+  const rows = chain.locator(':scope > ul > li');
+  for (const [i, id] of ['be.spw.5447', 'be.spw.5451'].entries()) {
+    expect(names.get(id), `${id} is in the owner stations.json`).toBeTruthy();
+    await expect(rows.nth(i).locator(':scope > button > span').first(), `row ${i + 1}`).toHaveText(names.get(id) ?? '');
+    await expect(rows.nth(i).getByText(msg('nl', 'owner_badge'), { exact: true })).toBeVisible();
+  }
+  await finish(page, s);
+});

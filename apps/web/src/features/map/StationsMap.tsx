@@ -10,6 +10,7 @@ import type { Mode } from '../../lib/url/url.ts';
 import { RIVER_ID } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import type { FlowHandle } from '../flow/flowLayer.ts';
 import { forecastLine } from '../station/forecast.ts';
 import styles from './map.module.css';
 import { badgeLine, changeLine, modeLines } from './popup.ts';
@@ -39,6 +40,8 @@ interface Props {
   riverTiles: string | undefined;
   /** The highlighted river id (`?river=`). */
   river: string | undefined;
+  /** P11a: the flow animation's pause control; the flow layers come with the river layer (a lazy chunk). */
+  flow: boolean;
   /** A click on a river sets `?river=` (plan C17). */
   onRiver: (id: string | undefined) => void;
   values: ReadonlyMap<number, Snapshot['values'][number]>;
@@ -61,6 +64,7 @@ export function StationsMap({
   warnings,
   riverTiles,
   river,
+  flow,
   onRiver,
   values,
   forecasts,
@@ -81,6 +85,9 @@ export function StationsMap({
   modeNow.current = mode;
   const riverNow = useRef(onRiver);
   riverNow.current = onRiver;
+  const flowNow = useRef(flow);
+  flowNow.current = flow;
+  const flowLayer = useRef<FlowHandle | null>(null);
 
   useEffect(() => {
     if (state.status === 'error') onFailure(state.code);
@@ -156,6 +163,23 @@ export function StationsMap({
     showRivers(map, location.origin, riverTiles, WARNINGS_FILL);
     highlightRiver(map, river);
   }, [map, riverTiles, river]);
+  // The flow direction over the river lines (P11a): its own chunk, loaded once the river layer exists.
+  useEffect(() => {
+    if (map === null || riverTiles === undefined) return;
+    let gone = false;
+    void import('../flow/flowLayer.ts').then(({ addFlow }) => {
+      if (gone || map.getLayer(RIVERS) === undefined) return;
+      flowLayer.current = addFlow(map, WARNINGS_FILL, flowNow.current);
+    });
+    return () => {
+      gone = true;
+      flowLayer.current?.dispose();
+      flowLayer.current = null;
+    };
+  }, [map, riverTiles]);
+  useEffect(() => {
+    flowLayer.current?.setEnabled(flow);
+  }, [flow]);
 
   // A deep link with a station opens the map on it, in the part the station drawer leaves free (P10e: from 48rem the
   // drawer is 26rem wide over the right of the map; below that the sheet covers all of it).

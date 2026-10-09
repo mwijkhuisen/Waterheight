@@ -1,0 +1,39 @@
+/* The pause control of the flow animation, styled as the mode and view disclosures beside it (legend.module.css). */
+.row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+.toggle {
+  box-sizing: border-box;
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.toggle[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.toggle:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.note {
+  max-width: 14rem;
+  padding: 0.15rem 0.4rem;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 0.8rem;
+}

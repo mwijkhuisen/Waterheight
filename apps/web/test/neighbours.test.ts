@@ -22,7 +22,18 @@ const rc = (
   down: string | null,
   upstream: string[] = [],
   downstream: string[] = [],
-): R => ({ id, river_id: river, up_station_id: up, down_station_id: down, upstream, downstream });
+): R => ({
+  id,
+  river_id: river,
+  up_station_id: up,
+  down_station_id: down,
+  upstream,
+  downstream,
+  length_km: null,
+  km_graph_from: null,
+  km_graph_to: null,
+  flags: null,
+});
 
 // rhine: A → B → C → D, with the Moselle joining at B (its last gauge M) and a bifurcation after D into the Waal (W)
 // and the Lek (L, same river as the Rhine's branch `rhine.5`).

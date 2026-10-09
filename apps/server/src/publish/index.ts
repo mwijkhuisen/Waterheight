@@ -9,6 +9,7 @@ import { startHeartbeat } from '../heartbeat.ts';
 import { vigicruesSections } from '../load/tables.ts';
 import { type CycleDeps, Publisher, type Renderers } from './cycle.ts';
 import { RENDERERS } from './render/index.ts';
+import { RIVERS_DIR_DEFAULT } from './rivers.ts';
 import { Output } from './write.ts';
 
 // The `publish` role (A§9.1, P9a): `publish [--audience public|owner] [--once]`. The public publisher logs in as
@@ -41,7 +42,16 @@ export async function publishOnce(
   db: Kysely<DB>,
   family: ChannelAudience,
   dir: string,
-  opts: { now: number; render?: Renderers; inputs?: string; build?: string; settledDays?: number },
+  opts: {
+    now: number;
+    render?: Renderers;
+    inputs?: string;
+    build?: string;
+    settledDays?: number;
+    /** The owner family's read-only rivers directory (production /srv/rivers); unset: no owner reaches step. */
+    riversDir?: string;
+    rivernet?: CycleDeps['rivernet'];
+  },
 ): Promise<void> {
   const base: Base = {
     db,
@@ -52,6 +62,8 @@ export async function publishOnce(
     build: opts.build ?? 'dev',
     sections: vigicruesSections(),
     inputs: opts.inputs,
+    riversDir: opts.riversDir,
+    rivernet: opts.rivernet,
     log: { error: () => undefined },
   };
   await publisher(base, {
@@ -88,6 +100,8 @@ export async function runPublisher(
       build: /^[0-9a-f]{40}$/.test(env.RWS_BUILD ?? '') ? (env.RWS_BUILD as string) : 'dev',
       sections: vigicruesSections(),
       inputs: family === 'public' ? env.RWS_OPS_DIR || '/srv/ops' : env.RWS_CAPTURE_DIR || '/srv/capture',
+      // Only the owner publisher mounts the rivers directory (compose.yaml, read-only); the public one never reads it.
+      riversDir: family === 'owner' ? env.RWS_RIVERS_DIR || RIVERS_DIR_DEFAULT : undefined,
       log: logger,
     },
     { budgetMs: BUDGET_MS, settledPerCycle: 1, strict: false },

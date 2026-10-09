@@ -10,6 +10,10 @@ export interface RwsHook {
 declare global {
   interface Window {
     __rws?: RwsHook;
+    /** P11a: the flow ticks so far, counted in the e2e build only (features/flow/flowLayer.ts). */
+    __rwsFlowFrames?: number;
+    /** P11a: set by a spec before the page loads to start the e2e build with the flow animation on (App.tsx). */
+    __rwsFlow?: boolean;
   }
 }
 

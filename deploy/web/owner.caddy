@@ -200,16 +200,13 @@ owner.{$RWS_DOMAIN}:8443 {
 		respond 404
 	}
 
-	# The river data (P6b), read-only from the two directories that
-	# rws-rivers-refresh fills (docs/runbooks/geo-refresh.md): the manifest (short
-	# TTL, it changes on every refresh), the dated reaches file and the dated ODbL
-	# download (immutable). Exact, case-sensitive matches with a file matcher, so
-	# a missing file is a 404 without Cache-Control; everything else under
-	# /data/v1/rivers and /downloads is a 404. The rest of /data/v1/ is the
-	# static publisher's (below).
-	# The download is gzip data, not a compressed transfer: application/gzip and
-	# never a Content-Encoding (it is not in encode's default types, and the
-	# gunzipped first bytes are what verify-prod reads with a Range).
+	# The river data (P6b), read-only from the directory that rws-rivers-refresh
+	# fills (docs/runbooks/geo-refresh.md): the manifest (short TTL, it changes on
+	# every refresh) and the dated reaches file. Exact, case-sensitive matches with
+	# a file matcher, so a missing file is a 404 without Cache-Control; everything
+	# else under /data/v1/rivers is a 404 (the ODbL download under /downloads is
+	# the public site's: this site mounts and serves none). The rest of /data/v1/
+	# is the static publisher's (below).
 	@rivers_manifest {
 		method GET HEAD
 		expression `{path} == '/data/v1/rivers/manifest.json'`
@@ -223,6 +220,28 @@ owner.{$RWS_DOMAIN}:8443 {
 		uri strip_prefix /data/v1/rivers
 		root * /srv/rws/public/data/v1/rivers
 		file_server
+	}
+	# The owner variant of the reaches file (P11a, D-C): publish-owner splits the
+	# installed release at the owner stations into its own tree. It goes before the
+	# public file of the same name, which answers when the variant is not there
+	# (not written yet, or the publisher is down). Not immutable: the name is the
+	# release's, but the content also follows the owner stations, so it is written
+	# again when they change (the `defer`red private, no-store header applies); the
+	# publisher's .zst and .gz siblings are served by precompressed.
+	@owner_reaches {
+		method GET HEAD
+		expression `{path}.matches('^/data/v1/rivers/reaches-[0-9]{8}\\.json$')`
+		file {
+			root /srv/rws/owner/www/v1/rivers
+			try_files /{http.request.uri.path.file}
+		}
+	}
+	handle @owner_reaches {
+		uri strip_prefix /data/v1/rivers
+		root * /srv/rws/owner/www/v1/rivers
+		file_server {
+			precompressed zstd gzip
+		}
 	}
 	@rivers_reaches {
 		method GET HEAD

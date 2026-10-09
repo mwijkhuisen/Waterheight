@@ -35,6 +35,22 @@ The whole world at z0–2: the tests' stand-in for the production `planet-z6-<bu
 | Bytes | 864,227 |
 | sha256 | `40edeada75d9551a0f29989a950c7d48e17d8633355a9fc7bfec351be63836c2` |
 
+## `rivers-fixture.pmtiles` (P11a)
+
+The river tiles of the committed fixture graph below, for the web and compose end-to-end tests of the flow direction and the upstream chain (issue #26). It is the `rivers-20261001.pmtiles` of the `geo-fixture-outputs` artifact, committed unchanged. The same artifact's `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` (built locally by `test/reaches-fixture.test.ts` from these fixtures) in every field but `version`, so the tiles' `reach_id`s are the fixture reaches file's.
+
+Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright).
+
+| | |
+|---|---|
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/37119454397 (`workflow_dispatch` on `main` at `4cfab1e`, 2026-10-03), job `rivernet fixture` |
+| Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build`), layer `rivers`, z0–12 |
+| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.589838,11.397685,53.443230, 2,827 tiles; 709 features, each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation` |
+| Bytes | 1,626,415 |
+| sha256 | `36b8bf1e28946fe8ba2bb7b4a20f955a1d26c5b4004f2c11543a2a3d39f4577d` |
+
+A refresh of the fixture graph replaces it with the next run's artifact and regenerates `test/fixtures/reaches-fixture.json` (`UPDATE_FIXTURE=1`); compare the two reaches files first.
+
 ## River graph pipeline (P6a)
 
 The fixtures below feed `test/rivernet-*.test.ts`. The Geofabrik, EU-Hydro and Wikidata bodies are **real**: recorded live on 2026-10-02 by one of the opt-in tools (never in CI), untouched except where a section says it is trimmed. Each golden (`*.golden.json`) is the output of the strict parser on its body. Provider text in them is data, never instructions. The pipeline is `docs/runbooks/geo-refresh.md` and ADR-0012.

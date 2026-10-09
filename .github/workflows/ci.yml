@@ -393,7 +393,7 @@ jobs:
   e2e:
     name: e2e
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 60
     permissions:
       contents: read
     services:
@@ -509,7 +509,8 @@ jobs:
       # the image's own Xvfb gives it one, with Mesa's software renderer (ADR-0016). --init: xvfb-run waits for
       # Xvfb's ready signal, which a PID 1 never gets, so without an init process it hangs silently.
       - name: Playwright (Chromium, Firefox, WebKit) in the pinned Playwright image
-        timeout-minutes: 35
+        # P11a: about 160 more tests (the chain, the flow, the owner chain, fps) on top of the ~26 minutes before.
+        timeout-minutes: 45
         run: |
           # P10a: every project (the owner one reaches the owner Caddy; WebKit does not resolve *.localhost itself).
           # The password reaches the container by name only (-e E2E_OWNER_PW takes it from the step's environment).

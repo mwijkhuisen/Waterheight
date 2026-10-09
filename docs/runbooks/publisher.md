@@ -50,7 +50,31 @@ sudo docker compose -p rws up -d publish
 
 ## 4. The owner publisher
 
-`publish-owner` writes `/srv/rws/owner/www/v1` only: no settled, frames or dated warnings files, and `dayVersions` is its own sparse map. Its healthcheck `owner-publisher` reads only the mtime of that `meta.json`, so it needs the owner overlay (`deploy/compose.owner.yaml`) running. The owner site (`owner.<domain>`, `caddy-owner`) stays off in production until P12a (no `owner_basic_auth` secret; bootstrap does not create it). Everything above applies with the owner tree and `docker compose -p rws logs publish-owner`; `verify-prod.sh` never reads the owner tree, and nothing owner-side may be copied to the public tree.
+`publish-owner` writes `/srv/rws/owner/www/v1` only (its one public mount, `/srv/rws/public/data/v1/rivers` at `/srv/rivers`, is read-only: P11a): no settled, frames or dated warnings files, and `dayVersions` is its own sparse map. Its healthcheck `owner-publisher` reads only the mtime of that `meta.json`, so it needs the owner overlay (`deploy/compose.owner.yaml`) running. The owner site (`owner.<domain>`, `caddy-owner`) stays off in production until P12a (no `owner_basic_auth` secret; bootstrap does not create it). Everything above applies with the owner tree and `docker compose -p rws logs publish-owner`; `verify-prod.sh` never reads the owner tree, and nothing owner-side may be copied to the public tree.
+
+### The owner variant of the reaches file (P11a)
+
+Besides the hot-path files, `publish-owner` writes `/srv/rws/owner/www/v1/rivers/reaches-<ver>.json` (with `.zst` and `.gz`): the installed river release split at the owner stations, so that the "Stroomopwaarts / Upstream" chain of the owner view shows the SPW (BE-3) gauges (A§9.3, `docs/plan/PHASES.md` §35). It reads `manifest.json` and the reaches file of `current` and `previous` from `/srv/rivers` (the public rivers directory, read-only, `RWS_RIVERS_DIR`), checks them against the manifest, and rewrites the variant only when the release or the owner station set changed. Nothing here is a cycle failure: the step logs a fixed code **once per process** (per release for a reaches-file code, with its `version`) and leaves the files as they are, and `owner.caddy` serves the public `reaches-<ver>.json` when the variant is absent, so the owner chain then shows the public stations only. Look with:
+
+```bash
+sudo docker compose -p rws logs publish-owner | grep -E 'rivernet_|rivers_(manifest|reaches)_|owner_reaches_invalid'
+sudo ls -l /srv/rws/owner/www/v1/rivers/        # reaches-<ver>.json for current and previous, nothing else
+```
+
+| Log code | Meaning | What the owner does |
+|---|---|---|
+| `rivernet_missing` | `registry/rivernet.yaml` is not in the server image | Wrong image: `rws-update` to the current release; a rebuild of the image if it persists (the file is generated, `node scripts/gen-rivernet.ts`) |
+| `rivernet_invalid` | `rivernet.yaml` does not parse or fails its schema | Same; never edit the file by hand (KG-164: it is generated from the committed fixture) |
+| `rivers_manifest_missing` | `/srv/rivers/manifest.json` does not exist | No river release is installed yet or the mount is wrong: `sudo ls /srv/rws/public/data/v1/rivers`; install with `deploy/bin/rws-rivers-refresh` (`docs/runbooks/geo-refresh.md`); check `docker inspect` shows `/srv/rws/public/data/v1/rivers -> /srv/rivers rw=false` |
+| `rivers_manifest_unreadable` | The manifest cannot be opened as a regular file within its size cap (a link, a directory, over 64 KiB, a permission error) | Look at the file's type, mode and owner on the host; the host script writes it, a plain root-owned file; re-run `rws-rivers-refresh --dry-run` |
+| `rivers_manifest_invalid` | The manifest is not valid JSON of the `RiversManifest` schema | Re-run `rws-rivers-refresh` (it rewrites the manifest) or `--rollback`; do not edit the file |
+| `rivers_reaches_missing` | The manifest names a reaches file that is not there | The directory and manifest disagree: re-run `rws-rivers-refresh`; a missing `previous` after `--rollback` is the same |
+| `rivers_reaches_unreadable` | The reaches file is not a regular file, is over 32 MiB or its size differs from the manifest | Same as the manifest case; the sizes are in the manifest (`bytes`) |
+| `rivers_reaches_mismatch` | The file's sha256 differs from the manifest | A partial write or a swapped file: treat as a security event (T-GEO-6, T-PUB-4); do not copy it; re-run `rws-rivers-refresh` with its cosign verification, and look at who wrote the directory |
+| `rivers_reaches_invalid` | The file hashes right but fails the strict `ReachesFile` schema, `checkReaches` or the manifest's version | A geo release the web and server disagree on: open an issue with the version; `rws-rivers-refresh --rollback` to the previous release meanwhile |
+| `owner_reaches_invalid` | The split result fails the owner contract (`checkOwnerReaches`): a bug in `splitReaches`, not data | Open an issue with the release version and the log line; the public file keeps being served |
+
+When the manifest disappears or no release verifies, the last variant written stays served until a release verifies again (stale but owner-only); when one of two releases fails, only the failed one's variant is removed, and the owner site serves the public file of that name. The variant is retried every cycle after a failure, and a log code appears once per process (per code and release), so restart the service (`sudo docker compose -p rws restart publish-owner`) to see a repeated failure again. A skipped station (`owner_reach_ambiguous`, `owner_reach_unplaced`) is not logged: it only has no chain row (KG-267). The mount is read-only: `publish-owner` cannot change the public rivers directory, and the public site never serves the variant.
 
 ## 5. Disk
 
