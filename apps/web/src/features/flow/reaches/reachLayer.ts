@@ -151,8 +151,13 @@ export function addReaches(map: MapLibreMap, beforeId: string): ReachHandle {
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const l of reachLayers()) if (map.getLayer(l.id) !== undefined) map.removeLayer(l.id);
-      if (map.hasImage(REACH_HATCH)) map.removeImage(REACH_HATCH);
+      // StationsMap disposes on unmount, which may run after map.remove(): a removed map has no style to ask.
+      try {
+        for (const l of reachLayers()) if (map.getLayer(l.id) !== undefined) map.removeLayer(l.id);
+        if (map.hasImage(REACH_HATCH)) map.removeImage(REACH_HATCH);
+      } catch {
+        // the map is already gone, and its layers with it
+      }
     },
   };
 }

@@ -253,9 +253,11 @@
 }
 
 /* The play speed: a native select next to the play controls. */
+/* The speed of playback, on one line beside the reverse play (the expanded part). */
 .speed {
   display: inline-flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.8rem;
   color: var(--muted);
 }

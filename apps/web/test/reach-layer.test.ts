@@ -178,6 +178,16 @@ describe('addReaches', () => {
     h.dispose();
     expect(() => h.update(input(['s1']))).not.toThrow();
   });
+  it('disposes without throwing after map.remove() (StationsMap unmounts the map first)', () => {
+    const f = fakeMap();
+    const h = addReaches(f.map, 'rivers-highlight');
+    // A removed map has no style: MapLibre throws on every style query.
+    const gone = () => {
+      throw new TypeError('style is undefined');
+    };
+    Object.assign(f.map, { getLayer: gone, hasImage: gone, removeLayer: gone, removeImage: gone });
+    expect(() => h.dispose()).not.toThrow();
+  });
 });
 
 describe('rivers source and legend', () => {

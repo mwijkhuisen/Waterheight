@@ -267,16 +267,6 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           <button type="button" aria-disabled={t === now} onClick={() => t !== now && go(now)}>
             {m.to_now({}, { locale })}
           </button>
-          <label className={styles.speed}>
-            {m.play_speed({}, { locale })}
-            <select value={playback.speed} onChange={(e) => playback.setSpeed(e.currentTarget.value as Speed)}>
-              {SPEEDS.map((s) => (
-                <option key={s} value={s}>
-                  {SPEED_WORD[s]({}, { locale })}
-                </option>
-              ))}
-            </select>
-          </label>
           <button
             type="button"
             className={styles.more}
@@ -339,6 +329,16 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
                 >
                   <Icon d={playing && dir === -1 ? ICON.pause : ICON.rewind} />
                 </button>
+                <label className={styles.speed}>
+                  {m.play_speed({}, { locale })}
+                  <select value={playback.speed} onChange={(e) => playback.setSpeed(e.currentTarget.value as Speed)}>
+                    {SPEEDS.map((s) => (
+                      <option key={s} value={s}>
+                        {SPEED_WORD[s]({}, { locale })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
             {twins.length === 2 && (
