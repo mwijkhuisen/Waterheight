@@ -44,4 +44,6 @@ export type WebSnapshot = {
   degraded: boolean;
   /** From latest.json only: the publisher's 24-hour change per series (canonical units; null without both values). */
   dh24?: ReadonlyMap<number, number | null> | undefined;
+  /** From latest.json only (KG-233): the age of the newest value of each series that has none at t (null: never one). */
+  lastAge?: ReadonlyMap<number, number | null> | undefined;
 };

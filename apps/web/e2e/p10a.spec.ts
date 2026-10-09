@@ -807,3 +807,63 @@ test('the public site: no owner banner, no owner badge, no owner station, runtim
   ).toEqual([]);
   await finish(page, s);
 });
+
+// ---------------------------------------------------------------- KG-233: the age of a series' newest value
+
+test("latest.json's lapsed ages: stale past the limit, hidden after 25 hours (KG-233)", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  const real = (await (await page.request.get('/data/v1/stations.json')).json()) as {
+    stations: { id: string; series: { id: number }[] }[];
+  };
+  const ids = real.stations.find((x) => x.id === LOBITH)?.series.map((x) => x.id) ?? [];
+  expect(ids.length).toBeGreaterThan(0);
+  // Lobith's series have no value at t and a newest value this old (seconds).
+  let age = 7200;
+  await page.route('**/data/v1/latest.json', async (route) => {
+    const file = (await (await route.fetch()).json()) as Record<string, unknown[]>;
+    const keep = (file.series as number[]).map((id) => !ids.includes(id));
+    for (const col of [
+      'series',
+      'ageSeconds',
+      'value',
+      'qc',
+      'state',
+      'basis',
+      'section',
+      'area',
+      'nap',
+      'zero',
+      'dh24',
+      'dh1',
+    ])
+      file[col] = (file[col] as unknown[]).filter((_, i) => keep[i]);
+    file.lapsed = [...(file.lapsed as number[]), ...ids];
+    file.lapsedAge = [...(file.lapsedAge as unknown[]), ...ids.map(() => age)];
+    await route.fulfill({ json: file });
+  });
+
+  // Two hours: past the staleness limit, so the station is on the page with its stale note in the table.
+  await open(page, `/?s=${LOBITH}`);
+  await expect(slider(page)).toBeVisible();
+  await chooseView(page, 'table');
+  const rows = page
+    .locator('table tbody tr')
+    .filter({ has: page.getByRole('button', { name: 'Lobith, Bovenrijn, Tolkamer', exact: true }) });
+  await expect(rows).toHaveCount(ids.length);
+  await expect(rows.first().locator('td').last()).toContainText(msg('nl', 'lapsed_note'));
+  await expect(panelOf(page)).toContainText(msg('nl', 'lapsed_note'));
+
+  // 25 hours and a second: hidden from the search (and so from the map and the table); its link still opens the panel.
+  age = 25 * 3600 + 1;
+  await open(page, '/');
+  await searchButton(page).click();
+  await searchBox(page).fill('Lobith');
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(0);
+  await open(page, `/?s=${LOBITH}`);
+  await expect(panelOf(page)).toContainText(msg('nl', 'lapsed_hidden_note'));
+  await finish(page, s);
+});

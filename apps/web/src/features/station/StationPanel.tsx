@@ -4,6 +4,7 @@ import { chartSpan, useRecent, useSources } from '../../lib/data/api.ts';
 import type { Change } from '../../lib/data/change.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
+import type { Lapse } from '../../lib/stationStates.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { Nearby } from './Nearby.tsx';
@@ -31,6 +32,8 @@ interface Props {
   forecasts: ReadonlyMap<number, SnapshotForecast> | undefined;
   /** P10a: the 24-hour change by series. */
   changes: ReadonlyMap<number, Change> | undefined;
+  /** KG-233: the series with no value whose newest value is past its limit (or over 25 hours old). */
+  lapsed: ReadonlyMap<number, Lapse>;
   /** The warning areas valid at t: an area basis's raw level code comes from its feature (label lookup, V2). */
   warnings: WarningsAt | undefined;
   /** Owner-audience source ids (empty on the public site): owner badges on series, bands and thresholds. */
@@ -59,6 +62,7 @@ export function StationPanel({
   values,
   forecasts,
   changes,
+  lapsed,
   warnings,
   ownerSources,
   live,
@@ -155,6 +159,7 @@ export function StationPanel({
             values={values}
             forecasts={forecasts}
             changes={changes}
+            lapse={lapsed.get(series.id)}
             warnings={warnings}
             ownerSources={ownerSources}
             sourceDocs={sourceDocs}

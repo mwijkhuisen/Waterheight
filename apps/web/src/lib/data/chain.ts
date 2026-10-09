@@ -125,7 +125,8 @@ async function fromStatic(
     if (data.seriesHash !== seriesHash || Date.parse(data.t) !== t) throw new Error('latest_mismatch');
     // The 24-hour change the publisher computed (canonical units, null without both values), by series.
     const dh24 = new Map(data.series.map((id, i) => [id, data.dh24[i] ?? null]));
-    return { ...fromFile(data), dh24 };
+    const lastAge = new Map(data.lapsed.map((id, i) => [id, data.lapsedAge[i] ?? null]));
+    return { ...fromFile(data), dh24, lastAge };
   }
   const { data } = await getJson(f, `${STATIC}${path}`, c.SnapshotFile, signal);
   if (Date.parse(data.t) !== t) throw new Error('file_mismatch');

@@ -94,6 +94,8 @@ const latest = (t: string, hash = 'aaaaaaaaaaaaaaaa') => ({
   seriesHash: hash,
   dh24: [null, null],
   dh1: [null, null],
+  lapsed: [],
+  lapsedAge: [],
 });
 const apiSnapshot = (t: string) => ({ t, values: [], attribution: [] });
 const run = {
@@ -138,6 +140,17 @@ describe('loadSnapshot', () => {
       [2, NOW, 'x'],
       [5, '2026-10-26T11:50:00.000Z', null],
     ]);
+  });
+
+  it('latest.json gives the age of the newest value of each lapsed series (KG-233)', async () => {
+    const body = { ...latest(NOW), lapsed: [7, 8], lapsedAge: [5400, null] };
+    const s = await loadSnapshot(fake({ '/data/v1/latest.json': { body } }).f, T(NOW), m, 'aaaaaaaaaaaaaaaa');
+    expect(s.lastAge).toEqual(
+      new Map([
+        [7, 5400],
+        [8, null],
+      ]),
+    );
   });
 
   it('a latest.json of another series hash goes to the API', async () => {
