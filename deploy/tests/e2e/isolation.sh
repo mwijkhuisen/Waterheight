@@ -2,8 +2,8 @@
 # CI only (called by deploy/tests/e2e/run.sh once the stack runs with the owner
 # overlay; plan P9a §4.9): the owner channel is isolated from the public one by
 # construction. Prints one PASS line per proof, exits 1 on the first failure.
-#   1. docker inspect: publish mounts nothing of /srv/rws/owner, publish-owner
-#      nothing of /srv/rws/public, the public caddy no owner path and no secret,
+#   1. docker inspect: publish mounts nothing of /srv/rws/owner, publish-owner of
+#      /srv/rws/public only the river release directory, read-only (P11a, D-C), the public caddy no owner path and no secret,
 #      caddy-owner only the owner v1, the tiles and the rivers directory (read-only), no published port;
 #   2. write attempts across the roots fail from inside the containers;
 #   3. the public listener never serves owner content for SNI owner.<domain>,
@@ -30,7 +30,9 @@ own=$(mounts rws-publish-owner-1)
 caddy=$(mounts rws-caddy-1)
 cowner=$(mounts rws-caddy-owner-1)
 ! grep -q '/srv/rws/owner' <<<"$pub" || fail "publish mounts owner paths: $pub"
-! grep -q '/srv/rws/public' <<<"$own" || fail "publish-owner mounts public paths: $own"
+# publish-owner's one public path is the river release directory, read-only (P11a, D-C: the owner reaches variant is split from it).
+[[ $(grep '/srv/rws/public' <<<"$own") == '/srv/rws/public/data/v1/rivers -> /srv/rivers rw=false' ]] ||
+  fail "publish-owner mounts public paths other than the river directory (read-only): $own"
 grep -qx '/srv/rws/public/www -> /srv/www rw=true' <<<"$pub" || fail "publish: not exactly public/www read-write: $pub"
 grep -qx '/srv/rws/public/ops -> /srv/ops rw=false' <<<"$pub" || fail "publish: ops not read-only: $pub"
 grep -qx '/srv/rws/owner/www -> /srv/www rw=true' <<<"$own" || fail "publish-owner: not exactly owner/www read-write: $own"
@@ -52,7 +54,7 @@ want=$(printf '%s\n' \
   fail "caddy-owner: a host path beside /srv, its secret and its volumes: $cowner"
 [[ $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-caddy-owner-1) == '{}' || $(docker inspect -f '{{json .HostConfig.PortBindings}}' rws-caddy-owner-1) == null ]] ||
   fail "caddy-owner publishes a port"
-pass "docker inspect: publish mounts public/www (rw) and public/ops (ro) and nothing of the owner channel; publish-owner owner/www (rw) and owner/status (ro) and nothing public; the public caddy mounts only www/v1 (ro) of the new trees, no owner path and no owner secret; caddy-owner mounts only owner/www/v1, tiles and the rivers directory (all ro) and publishes no port"
+pass "docker inspect: publish mounts public/www (rw) and public/ops (ro) and nothing of the owner channel; publish-owner owner/www (rw), owner/status (ro) and, of the public tree, only the river release directory at /srv/rivers (ro); the public caddy mounts only www/v1 (ro) of the new trees, no owner path and no owner secret; caddy-owner mounts only owner/www/v1, tiles and the rivers directory (all ro) and publishes no port"
 
 # ---- 2. write attempts across the roots
 probe='const fs = require("fs"); const r = [];
@@ -60,13 +62,13 @@ for (const p of process.argv.slice(1)) { try { fs.writeFileSync(p, "x"); r.push(
 console.log(r.join(" "));'
 got=$(docker exec rws-publish-1 /nodejs/bin/node -e "$probe" /srv/rws/owner/www/v1/isolation-probe /srv/rws/owner/isolation-probe /srv/ops/isolation-probe)
 [[ $got == 'ENOENT ENOENT EROFS' ]] || fail "writes from publish: $got"
-got=$(docker exec rws-publish-owner-1 /nodejs/bin/node -e "$probe" /srv/rws/public/www/v1/isolation-probe /srv/rws/public/isolation-probe /srv/capture/isolation-probe)
-[[ $got == 'ENOENT ENOENT EROFS' ]] || fail "writes from publish-owner: $got"
+got=$(docker exec rws-publish-owner-1 /nodejs/bin/node -e "$probe" /srv/rws/public/www/v1/isolation-probe /srv/rws/public/isolation-probe /srv/capture/isolation-probe /srv/rivers/isolation-probe)
+[[ $got == 'ENOENT ENOENT EROFS EROFS' ]] || fail "writes from publish-owner: $got"
 # The redirection runs in a subshell: a failed redirection of the special built-in `:` would end sh itself.
 got=$(docker exec rws-caddy-owner-1 sh -c 'for p in /srv/rws/owner/www/v1/isolation-probe /srv/rws/public/isolation-probe; do if (: >"$p") 2>/dev/null; then echo wrote; else echo refused; fi; done' | tr '\n' ' ')
 [[ $got == 'refused refused ' ]] || fail "writes from caddy-owner: $got"
 [[ -z $(find /srv/rws/owner /srv/rws/public -name isolation-probe) ]] || fail "a probe file reached the host"
-pass "write attempts across the roots fail from inside the containers: publish gets ENOENT for the owner paths and EROFS on its ops mount, publish-owner ENOENT for the public paths and EROFS on its capture mount, caddy-owner cannot write at all; no probe file on the host"
+pass "write attempts across the roots fail from inside the containers: publish gets ENOENT for the owner paths and EROFS on its ops mount, publish-owner ENOENT for the public paths and EROFS on its capture and river release mounts (P11a), caddy-owner cannot write at all; no probe file on the host"
 
 # ---- 3. the public listener and the public files
 outside() { ip netns exec ext curl -sS --max-time 10 --cacert /ci/pki/pebble-root.pem "$@"; }

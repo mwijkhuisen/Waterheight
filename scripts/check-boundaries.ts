@@ -11,8 +11,8 @@
 //     checker's own test trees), and no .sql file under apps/ or packages/
 //     (db/migrations is where they are created);
 //   - apps/web/src (P10a, plan C1, KG-235): the owner schemas of `@rws/contracts/static-owner` only under
-//     features/owner/ (the lazy owner chunk), `@rws/contracts/api-owner` and `/status` nowhere (they carry the
-//     health documents), and never the root of `@rws/core` (it pulls the XML and CSV parsers: use its subpaths).
+//     features/owner/ (the lazy owner chunk), `@rws/contracts/api-owner`, `/status` and `/reaches-owner` nowhere
+//     (the first two carry the health documents, the third the owner variant of the river release, P11a), and never the root of `@rws/core` (it pulls the XML and CSV parsers: use its subpaths).
 // Usage: node scripts/check-boundaries.ts [repo-root]   (exit 1 on a violation)
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -169,6 +169,10 @@ export function checkBoundaries(root: string): string[] {
       if (under(from, 'apps/web/src')) {
         if (spec === '@rws/contracts/api-owner' || spec === '@rws/contracts/status')
           bad('the web never imports the owner API or status contracts');
+        if (spec === '@rws/contracts/reaches-owner')
+          bad(
+            'the web never imports the owner reaches contract (the owner variant of the river release is server only)',
+          );
         if (spec === '@rws/contracts/static-owner' && !under(from, 'apps/web/src/features/owner'))
           bad('only the lazy owner chunk (features/owner) imports the owner schemas');
         if (spec === '@rws/core') bad('the web imports only the subpaths of @rws/core');

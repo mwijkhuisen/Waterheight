@@ -23,6 +23,7 @@ describe('check-boundaries', () => {
     expect(fixture('web-owner')).toEqual([
       'apps/web/src/bad.ts: imports @rws/contracts/static-owner (only the lazy owner chunk (features/owner) imports the owner schemas)',
       'apps/web/src/bad.ts: imports @rws/contracts/api-owner (the web never imports the owner API or status contracts)',
+      'apps/web/src/bad.ts: imports @rws/contracts/reaches-owner (the web never imports the owner reaches contract (the owner variant of the river release is server only))',
       'apps/web/src/bad.ts: imports @rws/core (the web imports only the subpaths of @rws/core)',
       'apps/web/src/features/owner/contracts.ts: imports @rws/contracts/api-owner (the web never imports the owner API or status contracts)',
     ]);

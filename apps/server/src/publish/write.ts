@@ -23,6 +23,8 @@ const SEGMENTS = [
   /^[0-9]{4}\.json$/,
   /^[0-9]{4}-[0-9]{2}-[0-9]{2}\.json$/,
   /^[a-z]+(?:\.json|\.geojson)?$/,
+  // The owner variant of a river release's reaches file (P11a): v1/rivers/reaches-<ver>.json.
+  /^reaches-[0-9]{8}\.json$/,
   // A station id (the registry's pattern, api.ts Station.id).
   /^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$/,
 ];

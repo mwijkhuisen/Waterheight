@@ -9,7 +9,10 @@
 #     that group (docs/runbooks/bootstrap.md, "Secrets").
 # The owner channel is /srv/rws/owner/status (into capture) and, from P9a, the
 # publisher trees /srv/rws/<audience>/www (publish and publish-owner, each only
-# its own; never cross-mounted). This file holds no owner site: caddy-owner is in
+# its own; never cross-mounted). The one public path publish-owner reads is the
+# installed river release, /srv/rws/public/data/v1/rivers, read-only at /srv/rivers
+# (P11a, D-C: it writes the owner variant of reaches-<ver>.json into its own tree).
+# This file holds no owner site: caddy-owner is in
 # the overlay compose.owner.yaml, which production does not use before P12a
 # (WireGuard-only), so a missing owner secret can never take the public site down.
 # The database (P2a): db publishes no port and sits only on the internal network
@@ -390,9 +393,10 @@ services:
     healthcheck: *node-healthcheck
 
   # The owner publisher (P9a): the same role over the owner views (role
-  # rws_owner_api, pool of at most 2), into /srv/rws/owner/www. Never mounts
-  # anything of /srv/rws/public; publish never mounts anything of /srv/rws/owner.
-  # Only caddy-owner (compose.owner.yaml) serves its v1, behind basic_auth.
+  # rws_owner_api, pool of at most 2), into /srv/rws/owner/www. Its one read of
+  # /srv/rws/public is the river release directory, read-only (P11a, D-C: the
+  # manifest and the reaches files it splits at the owner stations); publish never
+  # mounts anything of /srv/rws/owner. Only caddy-owner (compose.owner.yaml) serves its v1, behind basic_auth.
   publish-owner:
     <<: *hardening
     image: ${RWS_SERVER_IMAGE:?}
@@ -407,6 +411,7 @@ services:
     volumes:
       - /srv/rws/owner/www:/srv/www
       - /srv/rws/owner/status:/srv/capture:ro
+      - /srv/rws/public/data/v1/rivers:/srv/rivers:ro
     networks: [db]
     depends_on:
       db:
