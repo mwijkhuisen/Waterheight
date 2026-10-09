@@ -2728,7 +2728,7 @@ What the P11a build (issue #26, branch `claude/p11a-flow-direction-upstream-chai
 | 7 | Plan: calibration of the fixture km | Piecewise-linear between the public stations both files place; identity on the fixture release; ceiling KG-266 |
 | 8 | Issue: "a labelled Walloon Meuse gap" | The gap rows read "{km} km Maas zonder meetpunt" (the river's name, no region), and the Sambre and Houille groups split the stretch into three rows |
 | 9 | (merge of #107, KG-233) | The chain lists the site's visible stations only: a station hidden for a value older than 25 hours is no chain row, as it is not on the map, in the table or in the search |
-| 10 | (review round 1) | The e2e build starts with the flow animation off unless a spec sets `window.__rwsFlow` before the page loads (`p11a.spec.ts`, `fps.spec.ts`): an animating map keeps a software renderer from going idle and made the CI e2e step run past its 35 minutes; the step now has 45 (job 60). The production build starts with it on |
+| 10 | (review round 1) | The e2e build starts with the flow animation off unless a spec sets `window.__rwsFlow` before the page loads (`p11a.spec.ts`, `fps.spec.ts`): an animating map keeps a software renderer from going idle and made the CI e2e step run past its 35 minutes; the step now has 45 (job 60). The production build starts with it on; Lighthouse (report-only, KG-237) runs on the e2e build, so its numbers do not include the flow |
 | 11 | (review round 1) | A source arm of the river it joins is labelled "zijtak / branch", not "zijrivier / tributary"; the chain note says "Indicatief / Indicative"; a travel pair to a station co-located with the target counts |
 
 **Evidence ([CI]) of #26's criteria.**

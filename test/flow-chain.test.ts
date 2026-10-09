@@ -122,6 +122,16 @@ describe('the fixture chains', () => {
     expect(idsOf(nodes).every((i) => known.has(i))).toBe(true);
   });
 
+  it('marks an arm of the river it joins as a branch, a tributary not (the Neckar groups of Lobith)', () => {
+    const top = groupsOf(chain(graph, rivers, LOBITH, everyone));
+    const neckar = top.find((g) => g.kind === 'group' && g.riverId === 'neckar');
+    if (neckar?.kind !== 'group') throw new Error('no Neckar group in the Lobith chain');
+    expect(neckar.sameRiver).toBeUndefined(); // it joins the Rhine
+    const arms = allGroups(neckar.children).filter((g) => g.kind === 'group' && g.riverId === 'neckar');
+    expect(arms.length).toBeGreaterThan(0);
+    expect(arms.every((g) => g.kind === 'group' && g.sameRiver === true)).toBe(true);
+  });
+
   it('is empty for a station the file does not place', () => {
     expect(chain(graph, rivers, 'nl.nowhere.x', everyone)).toEqual([]);
     expect(chain(graph, rivers, 'fr.sandre.B110000001', everyone)).toEqual([]);
