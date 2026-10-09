@@ -816,7 +816,9 @@ test("latest.json's lapsed ages: stale past the limit, hidden after 25 hours (KG
   baseURL,
 }) => {
   const s = await start(page, context, baseURL, 'dh');
-  const real = (await (await page.request.get('/data/v1/stations.json')).json()) as {
+  const real = (await (
+    await page.request.get('/data/v1/stations.json', { headers: { 'accept-encoding': 'identity' } })
+  ).json()) as {
     stations: { id: string; series: { id: number; stalenessLimitSeconds: number }[] }[];
   };
   const lobith = real.stations.find((x) => x.id === LOBITH)?.series ?? [];
@@ -827,7 +829,9 @@ test("latest.json's lapsed ages: stale past the limit, hidden after 25 hours (KG
   // Two hours is past every one of Lobith's staleness limits (the DB keeps a value only while its age < limit).
   for (const x of lobith) expect(x.stalenessLimitSeconds).toBeLessThanOrEqual(age);
   await page.route('**/data/v1/latest.json', async (route) => {
-    const file = (await (await route.fetch()).json()) as Record<string, unknown[]>;
+    const file = (await (
+      await route.fetch({ headers: { ...route.request().headers(), 'accept-encoding': 'identity' } })
+    ).json()) as Record<string, unknown[]>;
     const keep = (file.series as number[]).map((id) => !ids.includes(id));
     for (const col of [
       'series',
