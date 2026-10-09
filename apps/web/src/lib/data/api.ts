@@ -25,6 +25,7 @@ import {
 } from './chain.ts';
 import { type Change, changesAt } from './change.ts';
 import { type Contracts, PUBLIC_CONTRACTS } from './contracts.ts';
+import type { FrameStore } from './frames.ts';
 import { snapshotSource, versionKey } from './static.ts';
 
 // The data of the page, read through relative paths only, so the same build serves the public site and the owner
@@ -414,4 +415,18 @@ export function useDebounced<T>(value: T, ms: number): T {
     return () => clearTimeout(id);
   }, [value, ms]);
   return settled;
+}
+
+/**
+ * P11b: the frames of the whole hours [window.from, window.to) while playback runs (undefined: nothing is asked).
+ * One query per unit of framesPlan (keys ['frames', aud, 'day', day, v], ['frames', aud, 'recent', meta.now],
+ * ['frames', aud, 'api', from, to]); the store grows as they answer. A failed day file falls back to the API.
+ */
+export function useFrames(
+  _window: { from: number; to: number } | undefined,
+  _meta: WebMeta | undefined,
+  _stations: readonly ApiStation[] | undefined,
+): FrameStore | undefined {
+  // L0 stub (W4 builds it).
+  return undefined;
 }

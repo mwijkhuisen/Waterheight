@@ -36,6 +36,8 @@ export interface ChainContext {
   travel: ReachTravelData;
   /** The target and the stations co-located with it (a pair may name any of them); default: the target alone. */
   targetIds?: readonly string[];
+  /** P11b: the values are played-back hourly frames (no state, basis or class). */
+  played?: boolean;
 }
 
 export interface StationRow {

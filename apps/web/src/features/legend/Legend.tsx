@@ -15,6 +15,8 @@ import { LAPSED_COLOUR, LAPSED_RADIUS, LHP_NO_DATA } from './palette.ts';
 // the table.
 
 export interface LegendProps {
+  /** P11b: the reaches are coloured on the map (the river layer is shown): their legend entries. */
+  reaches?: boolean;
   locale: Locale;
   mode: Mode;
   /** t is after now: the forecast marker key replaces the value keys. */

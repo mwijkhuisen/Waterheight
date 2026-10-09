@@ -14,6 +14,8 @@ declare global {
     __rwsFlowFrames?: number;
     /** P11a: set by a spec before the page loads to start the e2e build with the flow animation on (App.tsx). */
     __rwsFlow?: boolean;
+    /** P11b: set by a spec before the page loads to hold playback on its first hour (frames on screen, no tick). */
+    __rwsPlayHold?: boolean;
   }
 }
 

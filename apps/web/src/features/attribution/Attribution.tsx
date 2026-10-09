@@ -22,6 +22,8 @@ export interface AttributionProps {
   meta: Meta | undefined;
   /** The instant on screen: where a row needs a date, it is the Amsterdam date of t in the page's language. */
   t: number | undefined;
+  /** P11b: while playing, the credits of the loaded frames (FrameStore.attribution), as text. */
+  played?: readonly { source: string; lang: string | null; text: string }[] | undefined;
 }
 
 export function Attribution({ locale, meta, t }: AttributionProps) {

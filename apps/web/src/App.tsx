@@ -3,6 +3,8 @@ import styles from './App.module.css';
 import { Attribution } from './features/attribution/Attribution.tsx';
 import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
 import { FlowToggle } from './features/flow/FlowToggle.tsx';
+import { playRange, type Speed } from './features/flow/playback/engine.ts';
+import { usePlayback } from './features/flow/playback/usePlayback.ts';
 import { Layout } from './features/layout/Layout.tsx';
 import { Legend } from './features/legend/Legend.tsx';
 import { MapControls } from './features/legend/MapControls.tsx';
@@ -19,6 +21,7 @@ import {
   useAudienceQuery,
   useChanges,
   useDebounced,
+  useFrames,
   useMeta,
   useMode,
   useOwnerSources,
@@ -29,10 +32,12 @@ import {
   useStations,
   useWarnings,
 } from './lib/data/api.ts';
+import { changesAt } from './lib/data/change.ts';
+import type { FrameStore } from './lib/data/frames.ts';
 import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
 import { pathOf, routeOf } from './lib/routes.ts';
 import { hiddenKey, lapses, stationStates, visibleStations } from './lib/stationStates.ts';
-import { quantise } from './lib/time/time.ts';
+import { DAY_MS, floorHour, quantise } from './lib/time/time.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
 import { m } from './paraglide/messages.js';
 import type { Locale } from './paraglide/runtime.js';
@@ -106,43 +111,113 @@ function Viewer({ locale }: { locale: Locale }) {
   // or more than 48 h after now is treated as no `t`: now.
   const horizon = useStationHorizon(selected);
   const end = range && sliderEnd(range.now, globalEnd(range.now, range.ahead), horizon);
-  const t = range && end !== undefined ? pageT(url.t, range.start, range.now, end) : undefined;
+  // P11b: a deep link with `play` restores the whole hour of its `t` when that hour is inside the playback range.
+  const playable = range === undefined ? undefined : playRange(range.start, range.now);
+  const hour = url.play !== undefined && url.t !== undefined ? floorHour(url.t) : undefined;
+  const urlT =
+    hour !== undefined && playable !== undefined && hour >= playable.start && hour <= playable.end ? hour : url.t;
+  const t = range && end !== undefined ? pageT(urlT, range.start, range.now, end) : undefined;
   // A `?t=` that lands on the page's now (out of range, or clamped to the end of a station without a forecast) is
   // live mode: the URL drops it, so the page refreshes as "Nu" does (review round 1).
   useEffect(() => {
     if (url.t !== undefined && range !== undefined && t === range.now) setUrl({ t: undefined });
   }, [url.t, t, range, setUrl]);
 
+  // Choosing the page's now (the slider's end of observations, or "Nu") is live mode again: no `t` in the URL. Live
+  // and a t after now drop the playback speed (P11b).
+  const setT = useCallback(
+    (next: number) =>
+      setUrl(
+        range !== undefined && next === range.now
+          ? { t: undefined, play: undefined }
+          : range !== undefined && next > range.now
+            ? { t: next, play: undefined }
+            : { t: next },
+      ),
+    [setUrl, range],
+  );
+  const setPlay = useCallback((speed: Speed) => setUrl({ play: speed }), [setUrl]);
+
+  // P11b: hourly frames playback (Δh and Q modes, D-1). While it plays, the values come from the frames (bucket
+  // t − 1 h, R12) and no snapshot, change or warnings file is asked; paused, the snapshot path returns.
+  const framesNow = useRef<FrameStore | undefined>(undefined);
+  // The e2e build holds play on its first hour when a spec sets window.__rwsPlayHold first (the visual scenes): a
+  // build-time constant, so the production bundle holds no trace of it.
+  const ready = useCallback(
+    (h: number) =>
+      !(import.meta.env.MODE === 'e2e' && window.__rwsPlayHold === true) && (framesNow.current?.ready(h) ?? false),
+    [],
+  );
+  const playback = usePlayback({
+    t: url.t === undefined ? undefined : t,
+    displayStart: range?.start ?? 0,
+    now: range?.now ?? 0,
+    speed: url.play,
+    ready,
+    onT: setT,
+    onSpeed: setPlay,
+  });
+  const playing = playback.playing;
+  const frames = useFrames(playback.window, meta.data, stations.data?.stations);
+  framesNow.current = frames;
+  // Until the frames of the first hour are in, the paused snapshot stays on screen (no blank map at the start).
+  const played = playing && frames !== undefined && t !== undefined && frames.ready(t);
+  const { pause } = playback;
+  useEffect(() => {
+    if (mode === 'state' && playing) pause();
+  }, [mode, playing, pause]);
+
   // The data follows `t` once it has settled: a drag or a held key asks only for where it stops.
   const settled = useDebounced(t, FETCH_DEBOUNCE_MS);
-  const snapshot = useSnapshot(settled, meta.data, stations.data?.seriesHash, isLive);
+  const asked = playing ? undefined : settled;
+  const snapshot = useSnapshot(asked, meta.data, stations.data?.seriesHash, isLive);
   // Until the values of this very `t` are in, the ones on screen are marked as not current (aria-busy, dimmed).
   // A stand-in for a dead API is the newest bucket under its own t (the banner says so): it is what there is.
   const current =
     snapshot.data !== undefined && t !== undefined && (snapshot.data.standIn || Date.parse(snapshot.data.t) === t);
   // Not after a failed request: the alert says so, and a dimmed page would stay unreadable (review round 2).
-  const loading = !current && !snapshot.isError;
-  const values = useMemo(() => new Map((snapshot.data?.values ?? []).map((v) => [v.series, v])), [snapshot.data]);
+  const loading = !playing && !current && !snapshot.isError;
+  const snapValues = useMemo(() => new Map((snapshot.data?.values ?? []).map((v) => [v.series, v])), [snapshot.data]);
+  const playedValues = useMemo(
+    () => (played && frames !== undefined && t !== undefined ? frames.valuesAt(t) : undefined),
+    [played, frames, t],
+  );
+  const values = playedValues ?? snapValues;
   // The answer for a t after now holds forecasts instead of values (P8b): what is on screen follows the answer, so
   // the marker, panel and table never mix the two.
   const forecasts = useMemo(
     () =>
-      snapshot.data?.forecasts === undefined ? undefined : new Map(snapshot.data.forecasts.map((f) => [f.series, f])),
-    [snapshot.data],
+      playing || snapshot.data?.forecasts === undefined
+        ? undefined
+        : new Map(snapshot.data.forecasts.map((f) => [f.series, f])),
+    [playing, snapshot.data],
   );
-  const changes = useChanges(
-    settled,
+  const snapChanges = useChanges(
+    asked,
     meta.data,
     stations.data?.seriesHash,
     stations.data?.stations,
     current ? snapshot.data : undefined,
   );
-  const warnings = useWarnings(settled, meta.data, isLive).data;
+  // While playing, Δh is value(t) − value(t − 24 h) of the frames (the window starts 24 h before the first hour).
+  const quantity = useMemo(
+    () => new Map(sorted.flatMap((st) => st.series.map((s) => [s.id, s.quantity] as const))),
+    [sorted],
+  );
+  const playedChanges = useMemo(
+    () =>
+      playedValues === undefined || frames === undefined || t === undefined
+        ? undefined
+        : changesAt(quantity, [...playedValues.values()], [...frames.valuesAt(t - DAY_MS).values()]),
+    [playedValues, frames, t, quantity],
+  );
+  const changes = playedValues === undefined ? snapChanges : playedChanges;
+  const warnings = useWarnings(asked, meta.data, isLive).data;
   // KG-233: latest.json's age of the newest value of a series with none at t; a station with nothing newer than
   // 25 hours is hidden (map, table, search), and the selected one stays open by its link.
   // Live, the previous bucket's latest.json stays on screen while the next one loads (keepPreviousData): its ages go
   // with its values, so hidden stations do not flash back. Off live only the snapshot of this very t has ages.
-  const lastAges = current || isLive ? snapshot.data?.lastAge : undefined;
+  const lastAges = !playing && (current || isLive) ? snapshot.data?.lastAge : undefined;
   const lapsed = useMemo(() => lapses(sorted, values, lastAges), [sorted, values, lastAges]);
   const states = useMemo(
     () => stationStates({ stations: sorted, values, forecasts, changes, ownerSources, lapsed }),
@@ -152,11 +227,6 @@ function Viewer({ locale }: { locale: Locale }) {
   const hidden = hiddenKey(states);
   const list = useMemo(() => visibleStations(sorted, hidden), [sorted, hidden]);
 
-  // Choosing the page's now (the slider's end of observations, or "Nu") is live mode again: no `t` in the URL.
-  const setT = useCallback(
-    (next: number) => setUrl({ t: range !== undefined && next === range.now ? undefined : next }),
-    [setUrl, range],
-  );
   const setMode = useCallback((next: typeof mode) => setUrl({ mode: next }), [setUrl]);
   const setRiver = useCallback((id: string | undefined) => setUrl({ river: id }), [setUrl]);
   const select = useCallback((id: string | undefined) => setUrl({ s: id }), [setUrl]);
@@ -206,6 +276,7 @@ function Viewer({ locale }: { locale: Locale }) {
         forecast={forecasts !== undefined}
         owner={owner}
         warnings={(warnings?.features.length ?? 0) > 0}
+        reaches={onMap && riverTiles !== undefined}
       />
     );
 
@@ -289,6 +360,8 @@ function Viewer({ locale }: { locale: Locale }) {
                   onRiver={setRiver}
                   onClose={close}
                   onFailure={failed}
+                  allStations={sorted}
+                  played={played}
                 />
               ) : (
                 <StationTable
@@ -303,6 +376,7 @@ function Viewer({ locale }: { locale: Locale }) {
                   t={t}
                   selected={selected?.id}
                   onSelect={open}
+                  played={played}
                 />
               )}
             </div>
@@ -328,12 +402,18 @@ function Viewer({ locale }: { locale: Locale }) {
                 focus={focusPanel}
                 onClose={close}
                 onSelect={open}
+                played={played}
               />
             )}
           </div>
           <div className={styles.corner}>
             {legend}
-            <Attribution locale={locale} meta={meta.data} t={Math.min(t, range.now)} />
+            <Attribution
+              locale={locale}
+              meta={meta.data}
+              t={Math.min(t, range.now)}
+              played={played ? frames?.attribution() : undefined}
+            />
           </div>
           <Timebar
             locale={locale}
@@ -345,6 +425,8 @@ function Viewer({ locale }: { locale: Locale }) {
             epoch={range.epoch}
             live={isLive}
             onChange={setT}
+            mode={mode}
+            playback={playback}
           />
         </div>
       )}

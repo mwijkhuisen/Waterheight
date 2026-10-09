@@ -9,8 +9,10 @@ import {
   STEP_MS,
   wallInstant,
 } from '../../lib/time/time.ts';
+import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import type { Playback } from '../flow/playback/usePlayback.ts';
 import { type Direction, playNext } from './play.ts';
 import styles from './timebar.module.css';
 
@@ -69,6 +71,10 @@ interface Props {
   /** P10a: live mode (no `t` in the URL): the page follows meta.now; "Nu" returns to it. */
   live: boolean;
   onChange: (t: number) => void;
+  /** P11b: the map mode (D-1: no play in the State mode). */
+  mode: Mode;
+  /** P11b: hourly frames playback (App owns it). */
+  playback: Playback;
 }
 
 export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, onChange }: Props) {

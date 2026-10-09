@@ -39,6 +39,8 @@ interface Props {
   t: number;
   selected: string | undefined;
   onSelect: (id: string) => void;
+  /** P11b: the values are played-back hourly frames (no state, basis or class). */
+  played?: boolean;
 }
 
 const trendWord = { rising: m.trend_rising, falling: m.trend_falling, steady: m.trend_steady } as const;

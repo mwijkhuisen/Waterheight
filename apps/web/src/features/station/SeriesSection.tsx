@@ -53,6 +53,8 @@ interface Props {
   days: number;
   view: 'chart' | 'table';
   showThresholds: boolean;
+  /** P11b: the values are played-back hourly frames (no state, basis or class: W5 hides those lines). */
+  played?: boolean;
 }
 
 type SwatchKind = 'solid' | 'dashed' | 'dotted' | 'band' | 'zone' | 'dash';

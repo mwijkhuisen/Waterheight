@@ -59,6 +59,8 @@ interface Props {
   onClose: () => void;
   /** Open another station (a neighbour). */
   onSelect: (id: string) => void;
+  /** P11b: the values are played-back hourly frames (no state, basis or class). */
+  played?: boolean;
 }
 
 export function StationPanel({
@@ -78,6 +80,7 @@ export function StationPanel({
   dataEpoch,
   displayStart,
   chartAt,
+  played = false,
   focus,
   onClose,
   onSelect,
@@ -179,6 +182,7 @@ export function StationPanel({
             days={days}
             view={view}
             showThresholds={showThresholds}
+            played={played}
           />
         ))}
         <Nearby
@@ -197,6 +201,7 @@ export function StationPanel({
             states={states}
             values={values}
             ownerSources={ownerSources}
+            played={played}
             onSelect={onSelect}
           />
         </Suspense>

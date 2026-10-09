@@ -47,7 +47,7 @@ interface Walk {
   places: Map<string, GStation[]>;
 }
 
-const placeKey = (s: GStation) => `${s.reach_id}|${s.km_graph}`;
+export const placeKey = (s: GStation) => `${s.reach_id}|${s.km_graph}`;
 
 const lengthOf = (r: GReach): number =>
   r.length_km ?? (r.km_graph_from !== null && r.km_graph_to !== null ? Math.abs(r.km_graph_to - r.km_graph_from) : 0);

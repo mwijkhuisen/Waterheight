@@ -1,4 +1,5 @@
 import { ApiStation } from '@rws/contracts';
+import type { Speed } from '../../features/flow/playback/engine.ts';
 import type { Locale } from '../../paraglide/runtime.js';
 import { pathOf, type RouteId } from '../routes.ts';
 import { parseUrlT, toUrlT } from '../time/time.ts';
@@ -20,6 +21,11 @@ export interface UrlState {
   mode?: Mode | undefined;
   /** A river id of reaches-<ver>.json to highlight; checked against that file once it has loaded (useReaches). */
   river?: string | undefined;
+  /**
+   * P11b: the playback speed, written while playing and after a pause (live and the forecast drop it). A deep link
+   * with `t` restores that hour and the speed, paused.
+   */
+  play?: Speed | undefined;
 }
 
 const stationId = ApiStation.shape.id;
