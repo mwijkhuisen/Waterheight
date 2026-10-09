@@ -4,6 +4,14 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## #79 DE-3 lead allowance (PR pending)
+
+The issue called this gap KG-210, but KG-210 was already the publisher's frozen warnings file, so the row is KG-261.
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-261 | loader, forecasts | **The production replay of `de-3-files` (2026-09-29 … 10-04, 58 lines) raised `before_window` (n = 9) on both passes**: BfG 14-day files start a day or more before their issue day, and a file fetched later than its first rows is cut, so leading past days lay more than the global `MAX_LEAD_MS` (2 days) before the fetch. They were dropped from the stored run, and every such file raised the alert again. `ForecastSourceDecl.leadMs` now widens the bound per source (DE-3: 4 days; every other source keeps 2 days); the adapter `version` is 2 | [owner] After the deploy, replay `de-3-files` (`replay.md` §12): the second pass prints 0/0 and no `before_window` remains. A DE-3 point more than 4 days before the fetch is still dropped and alerted | open [U] until the replay |
+
 ## #72 LU-5 other senders (#103, merged and replayed 2026-10-08)
 
 `PHASES.md` §23 (the row "After the deploy (#72)") has the finding and the evidence.

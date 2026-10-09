@@ -133,6 +133,21 @@ describe('checkRun', () => {
       checkRun(run([at(issued - MAX_LEAD_MS - 1)], { issuedAt: new Date(issued).toISOString() }), FETCH, NL1).dropped,
     ).toEqual({ before_window: 1, empty_run: 1 });
   });
+
+  it('DE-3 keeps leading past days up to its own 4-day allowance (issue #79); every other source keeps two days', () => {
+    const DE3 = FORECAST_SOURCES['DE-3'];
+    const day = 24 * 3_600_000;
+    const at = (ms: number) => ({ ts: new Date(ms).toISOString(), value: 1, flags: 0 });
+    const out = checkRun(
+      run([at(FETCH - 3 * day), at(FETCH - 4 * day), at(FETCH - 4 * day - 1), at(FETCH)]),
+      FETCH,
+      DE3,
+    );
+    expect(out.run?.points.map((p) => p.ms)).toEqual([FETCH - 4 * day, FETCH - 3 * day, FETCH]);
+    expect(out.dropped).toEqual({ before_window: 1 });
+    // the same first row is still dropped for a source without an allowance
+    expect(checkRun(run([at(FETCH - 3 * day), at(FETCH)]), FETCH, NL1).dropped).toEqual({ before_window: 1 });
+  });
 });
 
 describe('quantile order and censored points (P8b)', () => {

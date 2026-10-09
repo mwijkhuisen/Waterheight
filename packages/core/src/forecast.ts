@@ -80,6 +80,11 @@ export type ForecastSourceDecl = {
    * whose points are the tail of a stored run is that run, never a new one (`mergeDecision`).
    */
   headDrops: boolean;
+  /**
+   * How far before (issue ?? fetch) a valid time may lie before it is dropped as `before_window`; default
+   * MAX_LEAD_MS. DE-3 files start a day or more before the issue day (KG-261).
+   */
+  leadMs?: number;
 };
 
 const HOUR = 3_600_000;
@@ -136,6 +141,8 @@ export const FORECAST_SOURCES = {
     stepMs: 24 * HOUR,
     kind: 'quantiles',
     headDrops: false,
+    // A 14-day file keeps past days before its issue day; the observed lead is up to about 3 days (issue #79).
+    leadMs: 4 * 24 * HOUR,
   },
 } as const satisfies Record<string, ForecastSourceDecl>;
 export type ForecastSource = keyof typeof FORECAST_SOURCES;
@@ -147,7 +154,7 @@ const MAX_ABS = 1e7;
 /**
  * A valid time more than this before (issue ?? fetch) is dropped as `before_window` (review SEC-1: a stamp years back
  * would make the loader's partition call create every month in between). NL-1 starts about 10 minutes before its
- * fetch, LU-3 about 105 minutes, DE-2 at its issue.
+ * fetch, LU-3 about 105 minutes, DE-2 at its issue; a source may widen it with `leadMs` (DE-3: 4 days).
  */
 export const MAX_LEAD_MS = 2 * 24 * HOUR;
 /**
@@ -211,7 +218,7 @@ export function orderBroken(v: readonly (number | null)[]): boolean {
  * The bounds every forecast run passes before it is stored: a provider issue time more than 15 minutes after the
  * fetch is drift (`future_issue`), one more than MAX_ISSUE_AGE_MS before it too (`stale_issue`), a non-finite or absurd value is drift (`bad_value`), two points at one valid time
  * are drift (the adapter resolves conflicts), a point past (issue ?? fetch) + horizon + 1 h is dropped as
- * `beyond_horizon` and one before (issue ?? fetch) − MAX_LEAD_MS as `before_window` (both retained and alerted), a
+ * `beyond_horizon` and one before (issue ?? fetch) − `decl.leadMs ?? MAX_LEAD_MS` as `before_window` (both retained and alerted), a
  * point with no value is a `gap` unless it is CENSORED, a point whose quantiles are out of order gets ORDER
  * (`orderBroken`), and a run left without points is none.
  */
@@ -227,7 +234,7 @@ export function checkRun(run: ForecastRunIn, fetchedAtMs: number, decl: Forecast
   const segmentEnd = run.providerSegmentEnd === null ? null : instant(run.providerSegmentEnd, 'bad_segment');
   if (run.stepMs !== null && !(Number.isInteger(run.stepMs) && run.stepMs > 0)) throw new SchemaDrift('bad_step');
   const limit = (issuedAt ?? fetchedAtMs) + decl.horizonMs + HOUR;
-  const floor = (issuedAt ?? fetchedAtMs) - MAX_LEAD_MS;
+  const floor = (issuedAt ?? fetchedAtMs) - (decl.leadMs ?? MAX_LEAD_MS);
   const points: CanonPoint[] = [];
   for (const p of run.points) {
     const ms = instant(p.ts, 'bad_time');
