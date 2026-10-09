@@ -65,6 +65,7 @@ export function StationTable({
   t,
   selected,
   onSelect,
+  played = false,
 }: Props) {
   const o = { locale };
   const rows = useMemo(
@@ -122,6 +123,8 @@ export function StationTable({
             const lapse = value === undefined ? lapsed.get(series.id) : undefined;
             const modeCell = () => {
               if (mode === 'state') {
+                // Frames carry no state: the word would be a false "no reference".
+                if (played) return m.played_note({}, o);
                 const st = forecasts === undefined ? value?.state : forecast?.state;
                 return st == null ? '–' : stateWord[st]({}, o);
               }

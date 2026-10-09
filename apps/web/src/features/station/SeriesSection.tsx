@@ -103,6 +103,7 @@ export function SeriesSection({
   days,
   view,
   showThresholds,
+  played = false,
 }: Props) {
   const value = values.get(series.id);
   const forecast = forecasts?.get(series.id);
@@ -178,6 +179,7 @@ export function SeriesSection({
           {m.panel_last_measurement({}, o)}: <strong>{formatValue(value.value, series, locale)}</strong> {unit}{' '}
           {m.panel_at_time({ time: formatLocal(Date.parse(value.ts), locale) }, o)}
           {value.section && <span className={styles.badge}>{m.section_badge({}, o)}</span>}
+          {played && <span className={styles.note}> {m.played_value_note({}, o)}</span>}
         </p>
       )}
       {(suspect || stale || lapsed !== undefined) && (
@@ -304,31 +306,35 @@ export function SeriesSection({
         )}
         {forecasts === undefined && value !== undefined && (
           <>
-            <dt>{m.panel_state({}, o)}</dt>
-            <dd>
-              {stateWord(value.state, locale)}
-              {value.section && ` ${m.section_marker({}, o)}`}
-            </dd>
-            {value.basis !== null && (
+            {!played && (
               <>
-                <dt>{m.panel_basis({}, o)}</dt>
+                <dt>{m.panel_state({}, o)}</dt>
                 <dd>
-                  <BasisLabel locale={locale} basis={value.basis} warnings={warnings} ownerSources={ownerSources} />
+                  {stateWord(value.state, locale)}
+                  {value.section && ` ${m.section_marker({}, o)}`}
                 </dd>
-              </>
-            )}
-            {value.area !== undefined && (
-              <>
-                <dt>{m.panel_area({}, o)}</dt>
-                <dd>
-                  {stateWord(value.area.state, locale)}:{' '}
-                  <BasisLabel
-                    locale={locale}
-                    basis={value.area.basis}
-                    warnings={warnings}
-                    ownerSources={ownerSources}
-                  />
-                </dd>
+                {value.basis !== null && (
+                  <>
+                    <dt>{m.panel_basis({}, o)}</dt>
+                    <dd>
+                      <BasisLabel locale={locale} basis={value.basis} warnings={warnings} ownerSources={ownerSources} />
+                    </dd>
+                  </>
+                )}
+                {value.area !== undefined && (
+                  <>
+                    <dt>{m.panel_area({}, o)}</dt>
+                    <dd>
+                      {stateWord(value.area.state, locale)}:{' '}
+                      <BasisLabel
+                        locale={locale}
+                        basis={value.area.basis}
+                        warnings={warnings}
+                        ownerSources={ownerSources}
+                      />
+                    </dd>
+                  </>
+                )}
               </>
             )}
             {heightText(value, locale) !== null && (

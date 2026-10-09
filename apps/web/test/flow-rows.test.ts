@@ -100,6 +100,23 @@ describe('chainRows', () => {
     expect([none.state, none.basis, none.section]).toEqual([null, null, false]);
   });
 
+  it.each(LOCALES)('while played says "played" instead of a state word, with no basis (%s)', (locale) => {
+    const stations = stationsOf(['nl.rws.x', 'nl.rws.y']);
+    const series = stations.get('nl.rws.x')?.series[0]?.id ?? 0;
+    // a frame value is shaped like a snapshot value: no_ref, no basis
+    const values = new Map([[series, value(series, 'no_ref')]]);
+    const c = ctx(locale, { stations, values, played: true });
+    const row = first(chainRows([node(['nl.rws.x'])], c));
+    expect([row.state, row.basis, row.section]).toEqual([m.played_note({}, { locale }), null, false]);
+    expect(row.state).not.toBe(stateWord('no_ref', locale));
+    // no value for the hour: null, so the list says "no value" as before
+    expect(first(chainRows([node(['nl.rws.y'])], c)).state).toBeNull();
+    // played false keeps the state word
+    expect(first(chainRows([node(['nl.rws.x'])], ctx(locale, { stations, values }))).state).toBe(
+      stateWord('no_ref', locale),
+    );
+  });
+
   it('takes the highest state among the series of a row and of its co-located stations', () => {
     const stations = stationsOf(['a.b.c', 'a.b.d']);
     const [s1 = 0, s2 = 0] = ['a.b.c', 'a.b.d'].map((i) => stations.get(i)?.series[0]?.id ?? 0);

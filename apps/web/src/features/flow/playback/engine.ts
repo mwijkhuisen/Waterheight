@@ -1,4 +1,4 @@
-import { ceilHour, DAY_MS, floorHour } from '../../../lib/time/time.ts';
+import { ceilHour, DAY_MS, floorHour, HOUR_MS } from '../../../lib/time/time.ts';
 
 // The playback clock (P11b, issue #26): one UTC hour per tick, forward or in reverse, at `HPS[speed]` hours per
 // second (7 days in about 18.7 s, 14 s or 10.5 s). It holds on an hour whose frames have not answered yet, never
@@ -27,6 +27,8 @@ export interface EngineOptions {
   onTick: (t: number) => void;
   /** Play stopped by itself (a range end). */
   onStop: () => void;
+  /** The clock started or stopped holding for data (once per change, not per retry). */
+  onWait?: (waiting: boolean) => void;
 }
 
 export interface Engine {
@@ -39,14 +41,70 @@ export interface Engine {
   readonly playing: boolean;
 }
 
-export function createEngine(_o: EngineOptions): Engine {
-  // L0 stub (W5 builds it).
+export function createEngine(o: EngineOptions): Engine {
+  let timer: unknown;
+  let running = false;
+  let t = 0;
+  let dir: Direction = 1;
+  let speed: Speed = 'normal';
+  let waiting = false;
+  const wait = (w: boolean) => {
+    if (w !== waiting) {
+      waiting = w;
+      o.onWait?.(w);
+    }
+  };
+  const stop = () => {
+    if (timer !== undefined) o.host.clearTimeout(timer);
+    timer = undefined;
+    running = false;
+    wait(false);
+  };
+  const inRange = (h: number) => h >= o.range.start && h <= o.range.end;
+  // The speed is read when the timer is set, so a change applies from the next tick.
+  const schedule = () => {
+    timer = o.host.setTimeout(tick, 1000 / HPS[speed]);
+  };
+  function tick() {
+    timer = undefined;
+    const next = t + dir * HOUR_MS;
+    if (!inRange(next)) {
+      stop();
+      o.onStop();
+      return;
+    }
+    // Never skip an hour: hold on this one and ask again at the next tick.
+    if (!o.ready(next)) {
+      wait(true);
+      schedule();
+      return;
+    }
+    wait(false);
+    t = next;
+    o.onTick(t);
+    if (inRange(t + dir * HOUR_MS)) schedule();
+    else {
+      stop();
+      o.onStop();
+    }
+  }
   return {
-    play: () => undefined,
-    setSpeed: () => undefined,
-    pause: () => undefined,
-    dispose: () => undefined,
-    playing: false,
+    play(from, d, s) {
+      stop();
+      t = from;
+      dir = d;
+      speed = s;
+      running = true;
+      schedule();
+    },
+    setSpeed(s) {
+      speed = s;
+    },
+    pause: stop,
+    dispose: stop,
+    get playing() {
+      return running;
+    },
   };
 }
 

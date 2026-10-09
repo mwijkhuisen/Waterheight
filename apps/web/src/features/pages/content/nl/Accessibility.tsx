@@ -22,8 +22,11 @@ export default function Accessibility() {
         <li>
           Tijdlijn: met de pijltjestoetsen ga je 10 minuten terug of vooruit, met Page Up en Page Down een uur, en met
           Home en End naar het begin en het einde van de tijdlijn. Je kunt ook een datum en een tijd invullen en de
-          knoppen “10 minuten terug”, “10 minuten vooruit”, “Nu”, “Afspelen” en “Pauzeren” gebruiken. Afspelen staat uit
-          als je apparaat om minder beweging vraagt.
+          knoppen “1 uur terug”, “1 uur vooruit”, “Nu”, “Afspelen” en “Pauzeren” gebruiken. Afspelen loopt per uur terug
+          of vooruit, tot het laatste hele uur, en alleen in de modi “Verandering in 24 uur” en “Afvoer”; de snelheid
+          kies je in een keuzelijst (langzaam, normaal, snel). Het stopt als het tabblad niet meer zichtbaar is en staat
+          uit als je apparaat om minder beweging vraagt; stappen met de knoppen kan dan nog wel. Tijdens het afspelen
+          meldt de pagina, beleefd en alleen als het even duurt, dat ze op gegevens wacht.
         </li>
         <li>
           Kaartweergave (“Toestand”, “Verandering in 24 uur” en “Afvoer”): drie keuzerondjes, die je met de

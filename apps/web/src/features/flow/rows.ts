@@ -89,6 +89,11 @@ function riverText(id: string, ctx: ChainContext): string {
 /** The state of a row at t: the highest among its stations' values, with that value's basis. */
 function stateOf(ids: readonly string[], ctx: ChainContext): Pick<StationRow, 'state' | 'basis' | 'section'> {
   const none = { state: null, basis: null, section: false };
+  // Frames carry values only: say so where the state word would be, never a false "no reference" or a basis.
+  if (ctx.played === true) {
+    const has = ids.some((id) => ctx.stations.get(id)?.series.some((s) => ctx.values.has(s.id)));
+    return has ? { state: m.played_note({}, { locale: ctx.locale }), basis: null, section: false } : none;
+  }
   const recs = ids.flatMap((id) => ctx.states.get(id) ?? []);
   // After now the record holds a forecast's state, and no value of t carries a basis.
   if (recs.some((r) => r.forecast)) {

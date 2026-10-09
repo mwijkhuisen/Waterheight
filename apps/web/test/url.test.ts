@@ -170,6 +170,32 @@ describe('otherLanguageHref for a page (P10b)', () => {
   });
 });
 
+describe('play (P11b)', () => {
+  it.each(['slow', 'normal', 'fast'] as const)('reads the speed %s as an enum', (speed) => {
+    expect(readSearch(`?t=2026-10-25T01:30Z&play=${speed}`)).toMatchObject({ t: T, play: speed });
+  });
+
+  it('drops anything else, never throws', () => {
+    for (const bad of ['', 'FAST', 'turbo', '1', 'fast%20', '__proto__', 'fast,slow'])
+      expect(readSearch(`?play=${bad}`).play, bad).toBeUndefined();
+    fc.assert(
+      fc.property(fc.string({ unit: 'binary' }), (p) => {
+        const out = readSearch(`?play=${encodeURIComponent(p)}`).play;
+        expect(out === undefined || ['slow', 'normal', 'fast'].includes(out)).toBe(true);
+      }),
+    );
+  });
+
+  it('writes play last, after river, only when defined', () => {
+    expect(searchOf({ t: T, s: ID, mode: 'delta', river: 'waal', play: 'fast' })).toBe(
+      `?t=2026-10-25T01:30Z&s=${ID}&mode=delta&river=waal&play=fast`,
+    );
+    expect(searchOf({ t: T, s: undefined, play: 'slow' })).toBe('?t=2026-10-25T01:30Z&play=slow');
+    expect(searchOf({ t: T, s: undefined })).toBe('?t=2026-10-25T01:30Z');
+    expect(readSearch(searchOf({ t: T, s: undefined, play: 'normal' }))).toMatchObject({ t: T, play: 'normal' });
+  });
+});
+
 describe('mode and river (P10a)', () => {
   it('reads a known mode and a river slug, and drops anything else', () => {
     expect(readSearch('?mode=delta&river=waal')).toMatchObject({ mode: 'delta', river: 'waal' });

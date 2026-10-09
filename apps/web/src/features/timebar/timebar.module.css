@@ -251,3 +251,21 @@
     flex-basis: 100%;
   }
 }
+
+/* The play speed: a native select next to the play controls. */
+.speed {
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.speed select {
+  min-height: 1.6rem;
+  color: var(--ink);
+}
+
+/* The polite status is in the page empty: no gap until it speaks. */
+.status:empty {
+  margin: 0;
+}

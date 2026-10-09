@@ -21,9 +21,12 @@ export default function Accessibility() {
       <ul>
         <li>
           Timeline: the arrow keys move 10 minutes back or forward, Page Up and Page Down move an hour, and Home and End
-          go to the start and the end of the timeline. You can also type a date and a time and use the buttons “10
-          minutes back”, “10 minutes forward”, “Now”, “Play” and “Pause”. Play is off if your device asks for reduced
-          motion.
+          go to the start and the end of the timeline. You can also type a date and a time and use the buttons “1 hour
+          back”, “1 hour forward”, “Now”, “Play” and “Pause”. Play runs hour by hour, back or forward, up to the last
+          whole hour, and only in the “Change over 24 hours” and “Discharge” modes; you choose the speed in a list
+          (slow, normal, fast). It stops when the tab is no longer visible and is off if your device asks for reduced
+          motion; the step buttons still work then. While it plays, the page says, politely and only when it takes a
+          while, that it is waiting for data.
         </li>
         <li>
           Map mode (“State”, “Change over 24 hours” and “Discharge”): three radio buttons, which you switch with the

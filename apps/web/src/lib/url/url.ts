@@ -1,5 +1,5 @@
 import { ApiStation } from '@rws/contracts';
-import type { Speed } from '../../features/flow/playback/engine.ts';
+import { SPEEDS, type Speed } from '../../features/flow/playback/engine.ts';
 import type { Locale } from '../../paraglide/runtime.js';
 import { pathOf, type RouteId } from '../routes.ts';
 import { parseUrlT, toUrlT } from '../time/time.ts';
@@ -31,6 +31,7 @@ export interface UrlState {
 const stationId = ApiStation.shape.id;
 /** The river slug of registry/rivers.yaml and ReachRiver.id. */
 export const RIVER_ID = /^[a-z][a-z0-9-]{1,40}$/;
+const isSpeed = (v: string | null): v is Speed => v !== null && (SPEEDS as readonly string[]).includes(v);
 const isMode = (v: string | null): v is Mode => v !== null && (MODES as readonly string[]).includes(v);
 
 export function readSearch(search: string): UrlState {
@@ -38,21 +39,24 @@ export function readSearch(search: string): UrlState {
   const s = q.get('s');
   const mode = q.get('mode');
   const river = q.get('river');
+  const play = q.get('play');
   return {
     t: parseUrlT(q.get('t')),
     s: s !== null && stationId.safeParse(s).success ? s : undefined,
     mode: isMode(mode) ? mode : undefined,
     river: river !== null && RIVER_ID.test(river) ? river : undefined,
+    play: isSpeed(play) ? play : undefined,
   };
 }
 
-/** `?t=…&s=…&mode=…&river=…`, with `t`'s colons left plain (valid in a query, and readable). */
-export function searchOf({ t, s, mode, river }: UrlState): string {
+/** `?t=…&s=…&mode=…&river=…&play=…`, with `t`'s colons left plain (valid in a query, and readable). */
+export function searchOf({ t, s, mode, river, play }: UrlState): string {
   const parts: string[] = [];
   if (t !== undefined) parts.push(`t=${toUrlT(t)}`);
   if (s !== undefined) parts.push(`s=${encodeURIComponent(s)}`);
   if (mode !== undefined) parts.push(`mode=${mode}`);
   if (river !== undefined) parts.push(`river=${river}`);
+  if (play !== undefined) parts.push(`play=${play}`);
   return parts.length === 0 ? '' : `?${parts.join('&')}`;
 }
 
