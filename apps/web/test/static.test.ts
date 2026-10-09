@@ -199,6 +199,22 @@ describe('loadSnapshot', () => {
     expect(s.values).toHaveLength(2);
   });
 
+  it("an X-Degraded latest.json keeps its lapsed series' ages (KG-233)", async () => {
+    const body = { ...latest(NOW), lapsed: [7, 8], lapsedAge: [5400, null] };
+    const g = fake({
+      '/data/v1/recent/2026-10-26/1150.json': { status: 503 },
+      '/api/v1/snapshot?t=2026-10-26T11:50Z': { body, headers: { 'x-degraded': '1' } },
+    });
+    const s = await loadSnapshot(g.f, T('2026-10-26T11:50:00Z'), m, null);
+    expect(s.standIn).toBe(true);
+    expect(s.lastAge).toEqual(
+      new Map([
+        [7, 5400],
+        [8, null],
+      ]),
+    );
+  });
+
   it('a future t asks the API first (states); on failure or a stand-in, the held forecast file without states', async () => {
     const future = '2026-10-26T13:20:00.000Z';
     const path = '/api/v1/snapshot?t=2026-10-26T13:20Z';
