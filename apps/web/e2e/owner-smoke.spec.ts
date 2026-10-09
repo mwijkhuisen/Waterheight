@@ -90,6 +90,40 @@ test('the owner site: the chain of Eijsden starts with the SPW gauges, in order,
   await expectClean(page, log);
 });
 
+// P11b (issue #26 OV): hourly playback on the owner site. run.sh gives two SPW gauges synthetic hourly values (321) for
+// the last 31 hours; the owner site has no static frames, so a played range is read from the owner api only, one request
+// per range, and never from /data/v1/frames/. Playback from 6 hours ago runs to the end of its range (the production
+// build has no hold: the engine plays at its own pace and stops at the current hour); the station panel then shows the
+// SPW value with the owner badge.
+test('the owner site: hourly playback reads the owner frames api only, and an SPW gauge shows its value with the owner badge', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const log = await instrument(page, context, baseURL);
+  const hour = 3_600_000;
+  const t = new Date(Math.floor(Date.now() / hour) * hour - 6 * hour).toISOString().slice(0, 16);
+  await page.goto(`/?t=${t}Z&s=be.spw.5447&mode=delta&play=normal`);
+  await expect(page.getByRole('slider', { name: 'Tijdlijn' })).toBeVisible();
+  await page.getByRole('button', { name: msg('nl', 'play'), exact: true }).click();
+  // The engine reaches the end of the range (the current hour, written to the URL) and stops: the Play button is back.
+  const end = new Date(Math.floor(Date.now() / hour) * hour).toISOString().slice(0, 16);
+  await expect.poll(() => new URL(page.url()).searchParams.get('t'), { timeout: 60_000 }).toBe(`${end}Z`);
+  await expect(page.getByRole('button', { name: msg('nl', 'play'), exact: true })).toBeVisible();
+  const frames = log.requests.filter((u) => /\/(api\/v1|data\/v1)\/frames/.test(new URL(u).pathname));
+  const api = frames.filter((u) => new URL(u).pathname === '/api/v1/frames');
+  expect(api.length, 'the owner frames api was asked').toBeGreaterThanOrEqual(1);
+  expect(new Set(api).size, 'one request per range').toBe(api.length);
+  expect(
+    frames.filter((u) => new URL(u).pathname.startsWith('/data/v1/frames')),
+    'no static frames file',
+  ).toEqual([]);
+  const panel = page.locator('aside');
+  await expect(panel.getByText(msg('nl', 'owner_badge'), { exact: true }).first()).toBeVisible();
+  await expect(panel).toContainText(new RegExp(`${msg('nl', 'panel_last_measurement')}:\\s*321`));
+  await expectClean(page, log);
+});
+
 test.describe('the public site of the same stack', () => {
   test.skip(process.env.E2E_COMPOSE_URL === undefined, 'needs the public site (E2E_COMPOSE_URL, run.sh)');
   // (no owner credentials: the public Caddy has none)

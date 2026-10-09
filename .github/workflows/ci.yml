@@ -530,6 +530,16 @@ jobs:
           path: apps/web/test-results/
           if-no-files-found: ignore
           retention-days: 14
+      # P11b (issue #26 B3): the baselines of the visual project. The first run has none: Playwright writes each one and
+      # fails, so this step runs; the owner views every PNG before committing it (never a locally generated one).
+      - name: Upload the visual baselines
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-visual-baselines
+          path: apps/web/e2e/visual/__screenshots__/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Caddy's log, the e2e api's log and Playwright's failure context
         if: failure()
         run: |
