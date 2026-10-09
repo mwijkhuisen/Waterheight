@@ -27,7 +27,11 @@ const ownerPublish = join(tmpdir(), 'rws-e2e-owner-publish');
 
 /** Files each kind of project runs. The public ones never run an owner spec (no credentials) or the tool specs. */
 const OWNER = /owner[^/]*\.spec\.ts$/;
-const PUBLIC_IGNORE = /(owner[^/]*|cvd|screens|lighthouse|fps|no-webgl2)\.spec\.ts$/;
+const PUBLIC_IGNORE = /(owner[^/]*|cvd|screens|lighthouse|fps|no-webgl2|visual)\.spec\.ts$/;
+
+// P11b (issue #26 B3): the visual-regression project runs in CI's e2e job (its baselines come from the pinned Playwright
+// image there) and locally only with VISUAL=1: a baseline made on another machine would never match.
+const visual = !compose && (process.env.CI !== undefined || process.env.VISUAL === '1');
 
 // Firefox refuses WebGL on a GL driver it does not trust; on a GPU-less runner that is Mesa's software renderer under
 // Xvfb (ci.yml). The page still has to create its own WebGL2 context. No HTTP/3: the CI job's Caddy advertises h3
@@ -49,6 +53,7 @@ const LIGHTHOUSE_AFTER = [
   'webkit',
   'no-webgl2',
   'cvd',
+  ...(visual ? ['visual'] : []),
   ...(ownerUrl === undefined ? [] : ['owner-chromium', 'owner-firefox', 'owner-webkit']),
 ];
 
@@ -87,6 +92,22 @@ export default defineConfig({
           // The colour-vision-deficiency screenshots of the map and the legend (Chromium's CDP emulation), and P10d's
           // screenshots of the viewer for the owner's visual check (screens.spec.ts).
           { name: 'cvd', testMatch: /(cvd|screens)\.spec\.ts$/, use: chromium },
+          // P11b (issue #26 B3, visual.spec.ts): three held playback scenes as screenshots, one fixed viewport, Chromium
+          // only, baselines under visual/__screenshots__ (written by CI's pinned image, never by a developer machine).
+          // maxDiffPixelRatio 0.002 (about 1,600 of 786,432 pixels) absorbs the software GL's anti-aliasing of the river
+          // lines and the glyph rasterisation between two runs; a reach with the wrong colour or the hatch missing moves
+          // far more than that.
+          ...(visual
+            ? [
+                {
+                  name: 'visual',
+                  testMatch: /visual\.spec\.ts$/,
+                  snapshotPathTemplate: '{testDir}/visual/__screenshots__/{arg}{ext}',
+                  expect: { toHaveScreenshot: { animations: 'disabled' as const, maxDiffPixelRatio: 0.002 } },
+                  use: chromium,
+                },
+              ]
+            : []),
           // Lighthouse (C8): the spec starts Playwright's Chromium itself with --remote-debugging-port=9222 and
           // --ignore-certificate-errors, because a browser Playwright launches has no debugging port (lighthouse.spec.ts).
           // It runs after every other project (`dependencies`), alone, so parallel workers never skew its scores; to
@@ -144,7 +165,8 @@ export default defineConfig({
             },
             url: 'http://127.0.0.1:4480/healthz',
             reuseExistingServer: false,
-            timeout: 180_000,
+            // P11b: the seed and the publish of nine settled days take about 3 minutes (174 s on a dev box).
+            timeout: 300_000,
           },
           {
             command: 'node e2e/server.ts',

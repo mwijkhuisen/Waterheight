@@ -39,6 +39,8 @@ interface Props {
   t: number;
   selected: string | undefined;
   onSelect: (id: string) => void;
+  /** P11b: the values are played-back hourly frames (no state, basis or class). */
+  played?: boolean;
 }
 
 const trendWord = { rising: m.trend_rising, falling: m.trend_falling, steady: m.trend_steady } as const;
@@ -63,6 +65,7 @@ export function StationTable({
   t,
   selected,
   onSelect,
+  played = false,
 }: Props) {
   const o = { locale };
   const rows = useMemo(
@@ -120,6 +123,8 @@ export function StationTable({
             const lapse = value === undefined ? lapsed.get(series.id) : undefined;
             const modeCell = () => {
               if (mode === 'state') {
+                // Frames carry no state: the word would be a false "no reference".
+                if (played) return m.played_note({}, o);
                 const st = forecasts === undefined ? value?.state : forecast?.state;
                 return st == null ? '–' : stateWord[st]({}, o);
               }

@@ -1,4 +1,4 @@
-import type { Meta } from '@rws/contracts';
+import type { AttributionEntry, Meta } from '@rws/contracts';
 import { type FocusEvent, type KeyboardEvent, useId, useRef, useState } from 'react';
 import { attributionText } from '../../lib/attribution.ts';
 import { httpsHref } from '../../lib/href.ts';
@@ -22,9 +22,11 @@ export interface AttributionProps {
   meta: Meta | undefined;
   /** The instant on screen: where a row needs a date, it is the Amsterdam date of t in the page's language. */
   t: number | undefined;
+  /** P11b: while playing, the credits of the loaded frames (FrameStore.attribution), as text. */
+  played?: readonly AttributionEntry[] | undefined;
 }
 
-export function Attribution({ locale, meta, t }: AttributionProps) {
+export function Attribution({ locale, meta, t, played }: AttributionProps) {
   const o = { locale };
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -65,6 +67,26 @@ export function Attribution({ locale, meta, t }: AttributionProps) {
       </button>
       {open && (
         <section id={`${id}-p`} className={styles.panel} aria-label={m.attribution_panel_label({}, o)} tabIndex={-1}>
+          {/* P11b: while playing, the credits the played frames carry (the sources of those hours), first. */}
+          {played !== undefined && date !== undefined && played.length > 0 && (
+            <>
+              <h2>{m.played_sources({}, o)}</h2>
+              <ul>
+                {played.flatMap((a) => {
+                  const text = attributionText(a.text, a.dateKind !== null, date);
+                  const href = httpsHref(a.url);
+                  const seen = `${a.lang}|${href}|${text}`;
+                  if (shown.has(seen)) return [];
+                  shown.add(seen);
+                  return [
+                    <li key={seen} lang={a.lang ?? undefined}>
+                      {href === undefined ? text : <a href={href}>{text}</a>}
+                    </li>,
+                  ];
+                })}
+              </ul>
+            </>
+          )}
           {meta !== undefined && date !== undefined && meta.sources.length > 0 && (
             <>
               <h2>{m.sources_heading({}, o)}</h2>

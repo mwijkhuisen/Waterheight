@@ -1,4 +1,6 @@
 import {
+  FramesAnswer,
+  FramesFile,
   LatestFile,
   MetaAnswer,
   SeriesAnswer,
@@ -53,6 +55,10 @@ export interface Contracts {
   SnapshotAnswer: Parser<z.infer<typeof SnapshotAnswer>>;
   SeriesAnswer: Parser<z.infer<typeof SeriesAnswer>>;
   SeriesForecastAnswer: Parser<z.infer<typeof SeriesForecastAnswer>>;
+  /** P11b: a settled day's or recent.json's hourly frames (the owner family has no static frames: never parses). */
+  FramesFile: Parser<FramesFile>;
+  /** P11b: /api/v1/frames. */
+  FramesAnswer: Parser<z.infer<typeof FramesAnswer>>;
   /** The publisher writes a dated warnings file per ended UTC day for this family (the owner's has none). */
   datedWarnings: boolean;
   /** A source no view shows (the owner canary): its stations, series, runs, areas and credits are dropped on read. */
@@ -238,6 +244,8 @@ export const PUBLIC_CONTRACTS: Contracts = {
   SnapshotAnswer,
   SeriesAnswer,
   SeriesForecastAnswer,
+  FramesFile,
+  FramesAnswer,
   datedWarnings: true,
   hidden: () => false,
 };

@@ -1,64 +1,90 @@
 import { describe, expect, it } from 'vitest';
-import { playNext } from '../src/features/timebar/play.ts';
-import { formatLocal, quantise, STEP_MS } from '../src/lib/time/time.ts';
+import { playRange } from '../src/features/flow/playback/engine.ts';
+import { canPlay, playDisabled, stepHour } from '../src/features/timebar/steps.ts';
+import { formatLocal, HOUR_MS } from '../src/lib/time/time.ts';
 
-// Stepping and playing the timebar (P10d): one 10-minute UTC step each way, held at the bounds.
+// The timebar's step and play rules (P11b): the step buttons move one UTC hour, play is off in the State mode (D-1)
+// and with reduced motion, and has no hour to take at the range ends. The hidden-tab stop (usePlayback) and the
+// reduced-motion pause (Timebar) are React: the Playwright specs cover them; the clock is in playback-engine.test.ts.
 
 const START = Date.parse('2026-08-24T00:00:00Z');
-const NOW = quantise(Date.parse('2026-10-26T12:00:00Z'));
-const END = NOW + 48 * 3_600_000;
+const NOW = Date.parse('2026-10-26T12:20:00Z');
+const END = NOW + 48 * HOUR_MS;
+const H = (iso: string) => Date.parse(iso);
 
-describe('playNext', () => {
-  it('reverse stops at the first day', () => {
-    expect(playNext(START + STEP_MS, -1, START, END)).toBe(START);
-    expect(playNext(START, -1, START, END)).toBeNull();
+describe('stepHour', () => {
+  it('moves a whole hour from a t on the hour', () => {
+    const t = H('2026-10-20T10:00:00Z');
+    expect(stepHour(t, -1, START, END)).toBe(t - HOUR_MS);
+    expect(stepHour(t, 1, START, END)).toBe(t + HOUR_MS);
   });
 
-  it('forward stops at the end of the forecast, at most now + 48 h', () => {
-    expect(playNext(END - STEP_MS, 1, START, END)).toBe(END);
-    expect(playNext(END, 1, START, END)).toBeNull();
+  it('goes back to the start of the hour and forward to the next one from an off-hour t', () => {
+    const t = H('2026-10-20T10:40:00Z');
+    expect(stepHour(t, -1, START, END)).toBe(H('2026-10-20T10:00:00Z'));
+    expect(stepHour(t, 1, START, END)).toBe(H('2026-10-20T11:00:00Z'));
+    expect(stepHour(H('2026-10-20T10:10:00Z'), -1, START, END)).toBe(H('2026-10-20T10:00:00Z'));
   });
 
-  it('forward stops at now for a station without a forecast', () => {
-    expect(playNext(NOW - STEP_MS, 1, START, NOW)).toBe(NOW);
-    expect(playNext(NOW, 1, START, NOW)).toBeNull();
+  it('clamps to [start, end]: a button at a bound stays where it is', () => {
+    expect(stepHour(START, -1, START, END)).toBe(START);
+    expect(stepHour(START + 600_000, -1, START, END)).toBe(START);
+    expect(stepHour(END, 1, START, END)).toBe(END);
+    expect(stepHour(NOW, 1, START, NOW)).toBe(NOW);
+  });
+
+  it('walks the repeated hour of the DST night in order, both ways (2026-10-25)', () => {
+    let t = H('2026-10-25T02:00:00Z'); // 03:00 CET
+    const down: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      t = stepHour(t, -1, START, END);
+      down.push(t);
+    }
+    expect(down).toEqual([
+      H('2026-10-25T01:00:00Z'),
+      H('2026-10-25T00:00:00Z'),
+      H('2026-10-24T23:00:00Z'),
+      H('2026-10-24T22:00:00Z'),
+    ]);
+    expect(formatLocal(H('2026-10-25T01:00:00Z'), 'en')).toContain('02:00 CET');
+    expect(formatLocal(H('2026-10-25T00:00:00Z'), 'en')).toContain('02:00 CEST');
+    let up = H('2026-10-24T23:00:00Z');
+    const seen: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      up = stepHour(up, 1, START, END);
+      seen.push(up);
+    }
+    expect(seen).toEqual([H('2026-10-25T00:00:00Z'), H('2026-10-25T01:00:00Z'), H('2026-10-25T02:00:00Z')]);
   });
 });
 
-describe('reverse play across the DST night (2026-10-25)', () => {
-  const from = Date.parse('2026-10-25T02:20:00Z'); // 03:20 CET
-  const to = Date.parse('2026-10-24T23:50:00Z'); // 01:50 CEST
+describe('play is off in the State mode (D-1) and with reduced motion', () => {
+  it('is disabled for state, enabled for delta and q, always disabled when reduced', () => {
+    expect(playDisabled('state', false)).toBe(true);
+    expect(playDisabled('delta', false)).toBe(false);
+    expect(playDisabled('q', false)).toBe(false);
+    for (const mode of ['state', 'delta', 'q'] as const) expect(playDisabled(mode, true)).toBe(true);
+  });
+});
 
-  const walk = (locale: 'nl' | 'en') => {
-    const seen = [from];
-    for (let t = playNext(from, -1, START, END); t !== null; t = playNext(t, -1, START, END)) {
-      seen.push(t);
-      if (t === to) break;
-    }
-    return { seen, labels: seen.map((t) => formatLocal(t, locale)) };
-  };
+describe('canPlay', () => {
+  const range = playRange(START, NOW);
 
-  it('every step is −10 minutes in UTC and the walk is monotonic', () => {
-    const { seen } = walk('en');
-    expect(seen.at(-1)).toBe(to);
-    for (const [i, t] of seen.slice(1).entries()) expect((seen[i] as number) - t).toBe(STEP_MS);
+  it('forward has an hour inside the range, and at live starts seven days back', () => {
+    expect(canPlay(1, undefined, range)).toBe(true);
+    expect(canPlay(1, range.start, range)).toBe(true);
+    expect(canPlay(1, range.end - HOUR_MS, range)).toBe(true);
   });
 
-  it('the local clock runs 03:20 CET … 02:00 CET, then 02:50 CEST … 01:50 CEST, and 02:30 comes twice', () => {
-    for (const locale of ['nl', 'en'] as const) {
-      const { labels } = walk(locale);
-      expect(labels[0]).toContain('03:20 CET');
-      expect(labels.at(-1)).toContain('01:50 CEST');
-      const at = (utc: string) => formatLocal(Date.parse(utc), locale);
-      expect(at('2026-10-25T01:30:00Z')).toContain('02:30 CET');
-      expect(at('2026-10-25T00:30:00Z')).toContain('02:30 CEST');
-      expect(labels).toContain(at('2026-10-25T01:30:00Z'));
-      expect(labels).toContain(at('2026-10-25T00:30:00Z'));
-      expect(labels.filter((l) => l.includes('02:30'))).toHaveLength(2);
-      // 02:00 CET (01:00Z) is followed, going back, by 02:50 CEST (00:50Z)
-      const i = labels.indexOf(at('2026-10-25T01:00:00Z'));
-      expect(labels[i]).toContain('02:00 CET');
-      expect(labels[i + 1]).toContain('02:50 CEST');
-    }
+  it('forward does nothing at the range end or after now (there is no play after now)', () => {
+    expect(canPlay(1, range.end, range)).toBe(false);
+    expect(canPlay(1, range.end + 30 * 60_000, range)).toBe(false);
+    expect(canPlay(1, NOW + 5 * HOUR_MS, range)).toBe(false);
+  });
+
+  it('reverse stops at the range start', () => {
+    expect(canPlay(-1, range.start, range)).toBe(false);
+    expect(canPlay(-1, range.start + HOUR_MS, range)).toBe(true);
+    expect(canPlay(-1, range.end, range)).toBe(true);
   });
 });

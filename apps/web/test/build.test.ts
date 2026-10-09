@@ -15,7 +15,7 @@ afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 /** The four static shells: the map in both languages, and the 404 page in both (the information pages are the map's). */
 const SHELLS = ['index.html', 'en/index.html', '404.html', 'en/404.html'];
 
-type Chunk = { file: string; imports?: string[]; isDynamicEntry?: boolean };
+type Chunk = { file: string; src?: string; imports?: string[]; isDynamicEntry?: boolean };
 
 describe('web build', () => {
   const out = join(tmp, 'dist');
@@ -189,6 +189,36 @@ describe('web build', () => {
       expect(initial.size).toBeGreaterThan(0);
       expect(initial.has(flow?.file ?? ''), `${html} loads the flow chunk at the start`).toBe(false);
       for (const file of initial) expect(page(file), `${html} → ${file}`).not.toContain('rivers-flow');
+    }
+  });
+
+  // P11b (issue #26): the reach layers, their colour and their spans are one lazy chunk next to the flow one: no page's
+  // initial load holds a reach layer id, a chunk made of the reaches code, or the production build's hooks of the e2e.
+  it('keeps the reach layers, spans and colour out of every page’s initial load, in a chunk of their own', () => {
+    const manifest = manifestOf();
+    const reach = manifest['src/features/flow/reaches/reachLayer.ts'];
+    expect(reach?.isDynamicEntry, 'reachLayer.ts is a dynamic entry').toBe(true);
+    expect(page(reach?.file ?? ''), 'the reach chunk holds the layers').toContain('rivers-reach');
+    for (const html of SHELLS) {
+      const initial = initialLoad(manifest, html);
+      expect(initial.size).toBeGreaterThan(0);
+      expect(initial.has(reach?.file ?? ''), `${html} loads the reach chunk at the start`).toBe(false);
+      for (const file of initial) {
+        expect(page(file), `${html} → ${file}`).not.toContain('rivers-reach');
+        expect(
+          manifest[Object.keys(manifest).find((k) => manifest[k]?.file === file) ?? '']?.src ?? '',
+          file,
+        ).not.toMatch(/features\/flow\/reaches\//);
+      }
+    }
+  });
+
+  it('holds no trace of the e2e playback hold (`__rwsPlayHold`) in the production build', () => {
+    const files = readdirSync(out, { recursive: true, withFileTypes: true }).filter((e) => e.isFile());
+    expect(files.length).toBeGreaterThan(0);
+    for (const e of files) {
+      const path = join(e.parentPath, e.name);
+      expect(readFileSync(path, 'utf8'), path).not.toContain('__rwsPlayHold');
     }
   });
 

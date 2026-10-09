@@ -1,5 +1,16 @@
 import { expect, test } from '@playwright/test';
-import { chooseMode, expectNoSeriousAxe, finish, open, pickStation, start, viewSummary } from './helpers.ts';
+import {
+  chooseMode,
+  expectNoSeriousAxe,
+  FRAMES_FILE,
+  finish,
+  open,
+  pickStation,
+  SNAPSHOT_PATH,
+  start,
+  viewSummary,
+  XSS,
+} from './helpers.ts';
 
 // P10a (C5): the `no-webgl2` project (Chromium with --disable-3d-apis: the browser itself has no WebGL2, not a patched
 // getContext as in app.spec.ts). The page shows its notice and the table, the map chunk is never requested, the table
@@ -88,5 +99,37 @@ test('without WebGL2 a station of the table shows its upstream chain, and the fl
     [],
   );
   await expectNoSeriousAxe(page);
+  await finish(page, s);
+});
+
+// P11b (issue #26): the table plays from the hourly frames like the map would: the same rows change hour by hour (the
+// hostile station's measured time moves on), nothing of the snapshot path is asked while it plays, and Pause brings it back.
+test('without WebGL2 the table plays hour by hour from the frames, with no snapshot request', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  await open(page, '/?mode=delta&t=2026-10-25T02:00Z');
+  await expect(page.locator('table')).toHaveCount(1);
+  await expect(page.locator('.maplibregl-canvas')).toHaveCount(0);
+  const row = page.locator('table tbody tr').filter({ hasText: XSS });
+  const measured = () => row.locator('time').getAttribute('datetime');
+  await expect(row).toHaveCount(1);
+  const before = await measured();
+  const mark = s.log.requests.length;
+  await page.getByRole('button', { name: 'Afspelen', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pauzeren', exact: true })).toBeVisible();
+  // The row's measured hour moves on while playing: at least three different hours are seen.
+  const seen = new Set<string | null>([before]);
+  await expect
+    .poll(async () => seen.add(await measured()).size, { timeout: 30_000, intervals: [100] })
+    .toBeGreaterThanOrEqual(4);
+  const stop = s.log.requests.length;
+  await page.getByRole('button', { name: 'Pauzeren', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Afspelen', exact: true })).toBeVisible();
+  const during = s.log.requests.slice(mark, stop).map((u) => new URL(u).pathname);
+  expect(during.filter((p) => SNAPSHOT_PATH.test(p))).toEqual([]);
+  expect(during.filter((p) => FRAMES_FILE.test(p)).length).toBeGreaterThan(0);
   await finish(page, s);
 });

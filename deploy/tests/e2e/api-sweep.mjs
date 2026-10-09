@@ -232,12 +232,15 @@ if (!hasCanaryAttribution(ownerStations.body))
 
 const tNow = iso(floor(now));
 const span = `from=${iso(displayStart)}&to=${tNow}`; // the whole window: holds the canary's one instant
+// Whole hours around the canary's one instant (2026-10-01T00:00Z, load/canary.ts): a few hours, at most 14 days.
+const framesSpan = 'from=2026-10-01T00:00:00Z&to=2026-10-01T06:00:00Z';
 const ownerPaths = {
   '/api/v1/meta': ['/api/v1/meta'],
   '/api/v1/stations': ['/api/v1/stations'],
   '/api/v1/snapshot': [`/api/v1/snapshot?t=${tNow}`],
   '/api/v1/series/:id': [`/api/v1/series/${canaryId}?${span}&res=1d`],
   '/api/v1/series/:id/forecast': [`/api/v1/series/${canaryId}/forecast`],
+  '/api/v1/frames': [`/api/v1/frames?${framesSpan}&step=1h`],
   '/api/v1/health': ['/api/v1/health'],
   '/api/v1/health/sources': ['/api/v1/health/sources'],
   '/api/v1/openapi.json': ['/api/v1/openapi.json'],
@@ -252,7 +255,10 @@ for (const route of getRoutes) {
     const { res, body } = await ownerGet(path, route.endsWith('openapi.json') ? 'openapi' : undefined);
     ownerSeen.add(route);
     const needsValue =
-      route === '/api/v1/snapshot' || route === '/api/v1/series/:id' || route === '/api/v1/series/:id/forecast';
+      route === '/api/v1/snapshot' ||
+      route === '/api/v1/series/:id' ||
+      route === '/api/v1/series/:id/forecast' ||
+      route === '/api/v1/frames';
     if (needsValue) {
       if (!hasValue(res.body)) fail(`owner ${path}: the canary value is absent`);
       if (!hasCanaryAttribution(body)) fail(`owner ${path}: no attribution entry of the canary source`);
@@ -286,6 +292,9 @@ const publicPaths = {
   '/api/v1/snapshot': [`/api/v1/snapshot?t=${iso(floor(pnow))}`, ...randomT.map((t) => `/api/v1/snapshot?t=${t}`)],
   '/api/v1/series/:id': ids.map((id) => `/api/v1/series/${id}?${pspan}`),
   '/api/v1/series/:id/forecast': ids.map((id) => `/api/v1/series/${id}/forecast`),
+  '/api/v1/frames': [
+    `/api/v1/frames?from=${iso(Math.floor(pnow / 3_600_000) * 3_600_000 - 48 * 3_600_000)}&to=${iso(Math.floor(pnow / 3_600_000) * 3_600_000)}&step=1h`,
+  ],
   '/api/v1/health': ['/api/v1/health'],
   '/api/v1/health/sources': ['/api/v1/health/sources'],
   '/api/v1/openapi.json': ['/api/v1/openapi.json'],

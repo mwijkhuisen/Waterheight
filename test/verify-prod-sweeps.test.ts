@@ -130,8 +130,14 @@ describe('sweepAsks', () => {
       '/api/v1/series/7?from=2026-11-20T09:30Z&to=2026-11-20T12:30Z&res=raw',
     );
   });
-  it('marks the series routes heavy and the rest not', () => {
-    for (const a of r?.asks ?? []) expect(a.heavy, a.path).toBe(a.path.startsWith('/api/v1/series/'));
+  it('marks the series and frames routes heavy and the rest not', () => {
+    for (const a of r?.asks ?? [])
+      expect(a.heavy, a.path).toBe(a.path.startsWith('/api/v1/series/') || a.path.startsWith('/api/v1/frames'));
+  });
+  it('asks /frames for the last 3 whole hours, step 1h', () => {
+    expect((r?.asks ?? []).filter((a) => a.path.startsWith('/api/v1/frames')).map((a) => a.path)).toEqual([
+      '/api/v1/frames?from=2026-11-20T09:00Z&to=2026-11-20T12:00Z&step=1h',
+    ]);
   });
   it('takes at most SWEEP_MAX_SERIES ids', () => {
     const many: Stations = {

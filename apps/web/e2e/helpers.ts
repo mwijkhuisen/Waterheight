@@ -14,7 +14,7 @@ export const XSS = '<img src=x onerror=alert(1)>';
 
 /** The few MapLibre and ECharts calls the tests make inside the page. */
 export interface HookMap {
-  getFeatureState(f: { source: string; id: string }): Record<string, unknown>;
+  getFeatureState(f: { source: string; sourceLayer?: string; id: string }): Record<string, unknown>;
   getPaintProperty(layer: string, name: string): unknown;
   getLayoutProperty(layer: string, name: string): unknown;
   /** MapLibre draws every frame while true (fps.spec.ts measures with it on). */
@@ -333,3 +333,37 @@ export const drawnText = (page: Page) =>
         if (typeof e.style?.text === 'string') out.push(e.style.text);
     return out;
   });
+
+// P11b (issue #26): playback and the reach colouring.
+
+/** The e2e build holds playback on its first hour, that hour's frames on screen (App.tsx `ready`): set before load. */
+export const playHold = (page: Page) =>
+  page.addInitScript(() => {
+    (window as unknown as { __rwsPlayHold?: boolean }).__rwsPlayHold = true;
+  });
+
+/** The feature-state `{k, c, w}` of a public reach (the `rivers` source promotes `reach_id`), null while unset. */
+export const reachState = (page: Page, id: string) =>
+  page.evaluate((id) => {
+    try {
+      const s = (window as unknown as W).__rws?.map?.getFeatureState({ source: 'rivers', sourceLayer: 'rivers', id });
+      return s?.k === undefined ? null : (s as { k: string; c: string; w: number });
+    } catch {
+      return null;
+    }
+  }, id);
+/** The kind `k` of several reaches at once (`v`, `nodata`, `tidal`, `impounded`, or null while unset). */
+export const reachKinds = async (page: Page, ids: readonly string[]) =>
+  Object.fromEntries(await Promise.all(ids.map(async (id) => [id, (await reachState(page, id))?.k ?? null] as const)));
+/** The reach layer has painted: every one of `ids` has a feature-state. */
+export const reachesPainted = (page: Page, ids: readonly string[]) =>
+  expect.poll(async () => Object.values(await reachKinds(page, ids)).every((k) => k !== null)).toBe(true);
+
+/** The static frames files (`frames/<day>/v<n>.json`, `frames/recent.json`) of a request log. */
+export const FRAMES_FILE = /^\/data\/v1\/frames\/(?:\d{4}-\d{2}-\d{2}\/v\d+|recent)\.json$/;
+export const FRAMES_API = '/api/v1/frames';
+/** What playback must not ask: a snapshot, a latest/recent/settled file, a warnings file. */
+export const SNAPSHOT_PATH =
+  /^\/api\/v1\/snapshot$|^\/data\/v1\/(?:latest\.json|latest\/|recent\/|settled\/|warnings\/)/;
+/** The requests of a log from index `from` on, as URLs. */
+export const urlsFrom = (s: Session, from = 0) => s.log.requests.slice(from).map((u) => new URL(u));

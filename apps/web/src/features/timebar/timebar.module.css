@@ -251,3 +251,23 @@
     flex-basis: 100%;
   }
 }
+
+/* The play speed: a native select next to the play controls. */
+/* The speed of playback, on one line beside the reverse play (the expanded part). */
+.speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.speed select {
+  min-height: 1.6rem;
+  color: var(--ink);
+}
+
+/* The polite status is in the page empty: no gap until it speaks. */
+.status:empty {
+  margin: 0;
+}

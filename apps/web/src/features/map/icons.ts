@@ -28,6 +28,10 @@ export const hatchIcon = (): Icon =>
 /** `hatch-area`: a seamless 8 × 8 stripe tile, the `fill-pattern` of a hatched warning area. */
 export const hatchAreaIcon = (): Icon => draw(8, 8, (x, y) => ((x + y) % 4 < 1 ? BLACK : null));
 
+/** `reach-hatch`: a seamless 8 × 8 opaque stripe tile, the `line-pattern` of a tidal reach (not interpolated). */
+export const reachHatchIcon = (): Icon =>
+  draw(8, 8, (x, y) => ((x + y) % 4 < 2 ? [60, 80, 100, 255] : [226, 234, 240, 255]));
+
 /** `tri-up` / `tri-down`: a white triangle with a black outline (rising or falling), readable on any fill. */
 export function triangleIcon(up: boolean): Icon {
   const size = 12;

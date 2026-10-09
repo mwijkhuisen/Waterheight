@@ -1134,6 +1134,25 @@ docker exec rws-caddy-1 cat /data/access/access.log >/ci/logs/access.log
   tee /ci/api-sweep-logs.out || fail "the owner canary is in a log of the run (path and term index above)"
 proof "api-sweep.mjs: $(grep '^public:' /ci/api-sweep.out); $(grep '^owner:' /ci/api-sweep.out); the owner canary's value (both renderings), station, source id, key, attribution text, private_basis clause and name (read from /app/registry at run time) are in no public byte, in identity, gzip or zstd, attribution arrays included, and the owner API shows the canary in /snapshot, /series/{id} and /series/{id}/forecast with its source in the attribution; $(grep '^logs:' /ci/api-sweep-logs.out)"
 
+step "Owner frames (P11b, issue #26 OV): synthetic SPW hours, and none of them in a public frames output"
+# The compose archive holds no BE-3 observation, so the owner playback would play nothing: two SPW gauges get 31 made-up
+# hourly values (321, the 30 hours before the current one and the current one), with their hourly rollup, which the
+# frames read. batch 0 marks them. Never a provider value (invariant 9, 11).
+psql_su "select ensure_partitions(now() - interval '3 days', now() + interval '1 day')" >/dev/null
+spw_obs=$(psql_su "with ins as (insert into obs (series_id, ts, value, qc, batch_id)
+  select s.id, g, 321, 1, 0 from series s,
+    lateral generate_series(date_trunc('hour', now(), 'UTC') - interval '30 hours', date_trunc('hour', now(), 'UTC'), interval '1 hour') g
+  where s.station_id in ('be.spw.5447', 'be.spw.5451') and s.role = 'primary' on conflict do nothing returning 1)
+  select count(*) from ins")
+[[ $spw_obs == 62 ]] || fail "the synthetic SPW hours: $spw_obs rows, expected 62"
+psql_su "insert into obs_1h (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
+  select series_id, ts, value, value, value, value, 1, qc from obs where batch_id = 0 on conflict do nothing" >/dev/null
+"${sweep_run[@]}" -v "$e2e/frames-check.mjs:/frames-check.mjs:ro" --entrypoint /nodejs/bin/node rws-server:ci /frames-check.mjs |
+  tee /ci/frames-check.out || fail "frames-check.mjs exited non-zero (its FAIL lines are above)"
+[[ $(grep -c '^FAIL' /ci/frames-check.out || true) == 0 ]] || fail "frames-check.mjs"
+grep -q '^PASS frames-check$' /ci/frames-check.out || fail "frames-check.mjs did not finish"
+proof "frames-check.mjs: $(grep '^frames:' /ci/frames-check.out | tail -n 1); the owner /api/v1/frames answer names the SPW series, and no SPW series id and no owner canary rendering is in any public frames output (recent.json, every day file, /api/v1/frames), in identity, gzip or zstd"
+
 step "Degraded: the api stopped, a future t still shows the map and the banner (P9a)"
 rws_compose stop api
 # A past t with the api down (review CR-6): Caddy's dead-upstream stand-in answers /api/v1/snapshot with the newest

@@ -120,6 +120,20 @@ describe('e2e build', () => {
     expect(gzip).toBeLessThanOrEqual(250 * 1024);
   });
 
+  // P11b (issue #26): the reach layers, their colour and their spans are a lazy chunk of their own (the e2e build too,
+  // where the specs read their feature-states).
+  it('keeps the reach layers out of every page’s initial load, in a lazy chunk of their own', () => {
+    const reach = manifest['src/features/flow/reaches/reachLayer.ts'];
+    expect(reach?.isDynamicEntry).toBe(true);
+    expect(read(reach?.file ?? '')).toContain('rivers-reach');
+    for (const page of pages) {
+      for (const file of initialLoad(page)) {
+        expect(read(file), `${page} → ${file}`).not.toContain('rivers-reach');
+        expect(file, `${page} → ${file}`).not.toBe(reach?.file);
+      }
+    }
+  });
+
   it('keeps ECharts in its own lazy chunk, away from every initial load and from the map chunk', () => {
     const chart = manifest['src/features/station/chart.ts'];
     const map = manifest['src/features/map/createMap.ts'];

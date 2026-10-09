@@ -53,3 +53,6 @@ export const qItems = (): QItem[] =>
 
 /** The LHP alert classes the legend shows (class 2 is hatched); "3" does not exist. */
 export const LHP_ALERT_CODES = ['1', '2', '4', '5', '6'] as const;
+
+/** P11b: the keys of the reach lines (shown with `LegendProps.reaches`); the component maps each to its message. */
+export const reachItems = (): readonly ('nodata' | 'tidal' | 'impounded')[] => ['nodata', 'tidal', 'impounded'];

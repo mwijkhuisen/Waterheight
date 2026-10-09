@@ -707,6 +707,7 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths).sort()).toEqual([
       '/api/v1/beacon', // P9b
+      '/api/v1/frames', // P11b
       '/api/v1/health',
       '/api/v1/health/sources',
       '/api/v1/meta',

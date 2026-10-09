@@ -1,6 +1,8 @@
 import {
   type ApiErrorCode,
   FORECAST_AHEAD_MS,
+  FRAMES_MAX_HOURS,
+  FramesQuery,
   floorBucket,
   INSTANT_MAX_LENGTH,
   instantMs,
@@ -120,6 +122,23 @@ export function seriesParams(rawId: string, url: string, nowMs: number, displayS
   const res = q.res ?? RESOLUTIONS.find((r) => span <= SPAN_CAP_MS[r]);
   if (res === undefined || span > SPAN_CAP_MS[res]) throw new Refused('span_too_long');
   return { id, from, to, res };
+}
+
+const HOUR_MS = 3_600_000;
+
+/**
+ * /frames (P11b): `from` and `to` whole UTC hours (an offset is fine), from < to, step `1h`; a span over 14 days is
+ * `span_too_long`; from ≥ ceilHour(displayStart) and to ≤ now (the partial bucket of now is never served), else
+ * `out_of_range`. All before any query.
+ */
+export function framesParams(url: string, nowMs: number, displayStartMs: number): { from: number; to: number } {
+  const q = parsed(FramesQuery, queryOf(url));
+  const from = instant(q.from);
+  const to = instant(q.to);
+  if (from % HOUR_MS !== 0 || to % HOUR_MS !== 0 || from >= to) throw new Refused('bad_parameter');
+  if (to - from > FRAMES_MAX_HOURS * HOUR_MS) throw new Refused('span_too_long');
+  if (from < Math.ceil(displayStartMs / HOUR_MS) * HOUR_MS || to > nowMs) throw new Refused('out_of_range');
+  return { from, to };
 }
 
 export type CachePolicy = { header: string; ttlMs: number };

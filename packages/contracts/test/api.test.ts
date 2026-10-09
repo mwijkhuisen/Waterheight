@@ -573,11 +573,12 @@ describe('openApiDocument', () => {
       schema: Record<string, unknown>;
     };
 
-  it('is OpenAPI 3.1.0 with exactly the nine public paths, each a GET but the beacon, a POST', () => {
+  it('is OpenAPI 3.1.0 with exactly the ten public paths, each a GET but the beacon, a POST', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths).sort()).toEqual(
       [
         '/api/v1/beacon',
+        '/api/v1/frames',
         '/api/v1/health',
         '/api/v1/health/sources',
         '/api/v1/meta',
@@ -601,6 +602,7 @@ describe('openApiDocument', () => {
         'Snapshot',
         'Series',
         'SeriesForecast',
+        'Frames',
         'Health',
         'HealthSources',
         'HealthUnavailable',

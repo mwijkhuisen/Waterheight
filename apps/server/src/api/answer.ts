@@ -1,6 +1,7 @@
 import type { AttributionEntry } from '@rws/contracts';
 import { attributionFor, type SourceDate, standText } from '../attribution.ts';
 import { FILLED_BY } from '../load/adapters.ts';
+import type { FramesRead } from './data.ts';
 import type { Static } from './states.ts';
 import { coded } from './util.ts';
 
@@ -13,7 +14,7 @@ import { coded } from './util.ts';
 // names no entry.
 
 /** The routes whose bodies carry attribution. */
-export type BodyKind = 'meta' | 'stations' | 'snapshot' | 'series' | 'forecast' | 'healthSources';
+export type BodyKind = 'meta' | 'stations' | 'snapshot' | 'series' | 'forecast' | 'frames' | 'healthSources';
 
 /** qc bit 512: a row filled from another source's payload (A§6, P5a). */
 export const FILL_BIT = 512;
@@ -44,7 +45,7 @@ export function bodySources(kind: BodyKind, body: unknown, seriesSource: (id: nu
     name(out, s, at);
     return s;
   };
-  const fills = (target: string, at: number) => {
+  const fills = (target: string, at: number | null) => {
     for (const f of FILLED_BY.get(target) ?? []) name(out, f, at);
   };
   const b = body as Record<string, unknown>;
@@ -90,6 +91,15 @@ export function bodySources(kind: BodyKind, body: unknown, seriesSource: (id: nu
       series(b.series as number);
       const run = b.run as { source: string; issuedAt: string } | null;
       if (run !== null) name(out, run.source, ms(run.issuedAt));
+      break;
+    }
+    case 'frames': {
+      // Every series names its source; the qc bits of its kept hours (read, never in the body) add the fill sources.
+      const qcOf = (body as FramesRead).qcOf;
+      for (const id of b.series as number[]) {
+        const src = series(id);
+        if (((qcOf.get(id) ?? 0) & FILL_BIT) !== 0) fills(src, null);
+      }
       break;
     }
     case 'healthSources': {
@@ -144,6 +154,16 @@ export function historyCapMs(
     if (w !== undefined) cap = Math.min(cap, w - (nowMs - Date.parse(ts)));
   };
   if (kind === 'snapshot') for (const v of b.values as { series: number; ts: string }[]) at(v.series, v.ts);
+  if (kind === 'frames') {
+    // Hour i of a row is the bucket from + i h; the oldest value of a row bounds it.
+    const ids = b.series as number[];
+    (b.vlast as (number | null)[][]).forEach((row, i) => {
+      const w = history.get(ids[i] as number);
+      const first = row.findIndex((v) => v !== null);
+      if (w !== undefined && first >= 0)
+        cap = Math.min(cap, w - (nowMs - Date.parse(b.from as string) - first * 3_600_000));
+    });
+  }
   if (kind === 'series')
     for (const p of b.points as ({ ts: string } | { bucket: string })[])
       at(b.id as number, 'ts' in p ? p.ts : p.bucket);

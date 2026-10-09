@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ApiError, apiContracts, attributionEntry, Series } from './api.ts';
+import { ApiError, apiContracts, attributionEntry, checkFrames, Series } from './api.ts';
 import { HealthUnavailable, healthSources, ownerHealth } from './health.ts';
 import { buildOpenApi } from './openapi.ts';
 import { OwnerSourceId } from './static-owner.ts';
@@ -16,6 +16,7 @@ export const OwnerMetaAnswer = OWNER.MetaAnswer.extend(audience);
 export const OwnerStationsAnswer = OWNER.StationsAnswer.extend(audience);
 export const OwnerSnapshotAnswer = OWNER.SnapshotAnswer.extend(audience);
 export const OwnerSeriesForecastAnswer = OWNER.SeriesForecastAnswer.extend(audience);
+export const OwnerFramesAnswer = OWNER.Frames.extend(audience).superRefine(checkFrames);
 export const OwnerSeriesAnswer = z.discriminatedUnion('res', [
   (Series.options[0] as (typeof Series.options)[0]).extend({ ...audience, attribution }),
   (Series.options[1] as (typeof Series.options)[1]).extend({ ...audience, attribution }),
@@ -36,6 +37,7 @@ export const ownerOpenApiDocument = (): Record<string, unknown> =>
       Snapshot: OwnerSnapshotAnswer,
       Series: OwnerSeriesAnswer,
       SeriesForecast: OwnerSeriesForecastAnswer,
+      Frames: OwnerFramesAnswer,
       Health: OwnerHealthAnswer,
       HealthSources: OwnerHealthSourcesAnswer,
       HealthUnavailable,

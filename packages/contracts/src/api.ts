@@ -82,6 +82,10 @@ export const SeriesQuery = z.strictObject({
   v: Version.optional(),
 });
 export const SeriesPath = z.strictObject({ id: z.string().regex(SERIES_ID_RE) });
+/** /api/v1/frames (P11b, A§9.2): at most 14 days of hourly frames per answer. */
+export const FRAMES_MAX_HOURS = 14 * 24;
+/** `from` and `to` are whole UTC hours with an offset, `step` is `1h` (the only step), `v` as for /series. */
+export const FramesQuery = z.strictObject({ from: Instant, to: Instant, step: z.literal('1h'), v: Version.optional() });
 
 const daysIn = (year: number, month: number) => new Date(Date.UTC(year, month, 0)).getUTCDate();
 
@@ -208,6 +212,35 @@ export const Series = z.discriminatedUnion('res', [
   z.strictObject({ ...span, res: z.enum(['1h', '1d']), points: z.array(BucketPoint).max(MAX_POINTS) }),
 ]);
 export type Series = z.infer<typeof Series>;
+
+/**
+ * Hourly playback frames (A§8 Q5: the hourly rollup's `vlast`), one row per series, one entry per hour of [from, to).
+ * One shape for the static files (`maxHours` 120: a settled day or recent.json) and /api/v1/frames (336: 14 days);
+ * a family's instance takes its source-id schema. Refined by `checkFrames` after any `.extend` (Zod 4 refuses to
+ * extend a refined object).
+ */
+export const framesObject = (source: z.ZodString, maxHours: number) =>
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    from: iso,
+    to: iso,
+    stepSeconds: z.literal(3600),
+    series: z.array(SeriesId).max(MAX_POINTS),
+    vlast: z.array(z.array(z.number().nullable()).max(maxHours)).max(MAX_POINTS),
+    attribution: z.array(attributionEntry(source)).max(500),
+  });
+
+/** Whole hours from → to, each series once, one row per series and one entry per hour. */
+export function checkFrames(
+  f: { from: string; to: string; series: readonly number[]; vlast: readonly (readonly (number | null)[])[] },
+  ctx: z.RefinementCtx,
+): void {
+  const hours = (Date.parse(f.to) - Date.parse(f.from)) / 3_600_000;
+  if (!Number.isInteger(hours) || hours < 0) ctx.addIssue({ code: 'custom', message: 'whole hours from → to' });
+  if (new Set(f.series).size !== f.series.length) ctx.addIssue({ code: 'custom', message: 'a series is listed twice' });
+  if (f.vlast.length !== f.series.length) ctx.addIssue({ code: 'custom', message: 'one row per series' });
+  if (f.vlast.some((r) => r.length !== hours)) ctx.addIssue({ code: 'custom', message: 'one entry per hour' });
+}
 
 /**
  * The answer schemas of one family (P9b): `source` is its source-id schema. The public instances below refuse a
@@ -388,6 +421,9 @@ export function apiContracts(source: z.ZodString) {
       .nullable(),
   });
 
+  /** /api/v1/frames (P11b): the frames of [from, to) from the family's api views (not the display views). */
+  const Frames = framesObject(source, FRAMES_MAX_HOURS);
+
   const wire = { attribution };
   return {
     AttributionEntry: Entry,
@@ -405,6 +441,8 @@ export function apiContracts(source: z.ZodString) {
     StationsAnswer: Stations.extend(wire),
     SnapshotAnswer: Snapshot.extend(wire),
     SeriesForecastAnswer: SeriesForecast.extend(wire),
+    Frames,
+    FramesAnswer: Frames.superRefine(checkFrames),
     SeriesAnswer: z.discriminatedUnion('res', [
       (Series.options[0] as (typeof Series.options)[0]).extend(wire),
       (Series.options[1] as (typeof Series.options)[1]).extend(wire),
@@ -441,6 +479,8 @@ export const SeriesAnswer = PUBLIC.SeriesAnswer;
 export type SeriesAnswer = z.infer<typeof SeriesAnswer>;
 export const SeriesForecastAnswer = PUBLIC.SeriesForecastAnswer;
 export type SeriesForecastAnswer = z.infer<typeof SeriesForecastAnswer>;
+export const FramesAnswer = PUBLIC.FramesAnswer;
+export type FramesAnswer = z.infer<typeof FramesAnswer>;
 
 // /data/v1/rivers/manifest.json (P6b): the river files that are served, written
 // by deploy/bin/rws-rivers-refresh after it verified a signed geo-<date>

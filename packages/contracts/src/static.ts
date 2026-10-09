@@ -4,7 +4,9 @@ import {
   Attribution,
   AttributionEntry,
   attributionEntry,
+  checkFrames,
   DATE_KINDS,
+  framesObject,
   HealthSourceId,
   MAX_POINTS,
   Meta,
@@ -169,23 +171,8 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
     attribution,
   });
 
-  /** Hourly playback frames (A§8 Q5: the hourly rollup's `vlast`): one row per series, one entry per hour of [from, to). */
-  const FramesFile = z
-    .strictObject({
-      schemaVersion: z.literal(1),
-      from: iso,
-      to: iso,
-      stepSeconds: z.literal(3600),
-      series: z.array(SeriesId).max(MAX_POINTS),
-      vlast: z.array(z.array(z.number().nullable()).max(24 * 5)).max(MAX_POINTS),
-      attribution,
-    })
-    .superRefine((f, ctx) => {
-      const hours = (Date.parse(f.to) - Date.parse(f.from)) / 3_600_000;
-      if (!Number.isInteger(hours) || hours < 0) ctx.addIssue({ code: 'custom', message: 'whole hours from → to' });
-      if (f.vlast.length !== f.series.length) ctx.addIssue({ code: 'custom', message: 'one row per series' });
-      if (f.vlast.some((r) => r.length !== hours)) ctx.addIssue({ code: 'custom', message: 'one entry per hour' });
-    });
+  /** Hourly playback frames (A§8 Q5: the hourly rollup's `vlast`), as /api/v1/frames carries them (api.ts); ≤ 5 days. */
+  const FramesFile = framesObject(source, 24 * 5).superRefine(checkFrames);
 
   const Run = latest.shape.runs.element;
   /** series/{station}/recent.json: 7 days of raw observations, the latest run and the references valid now. */

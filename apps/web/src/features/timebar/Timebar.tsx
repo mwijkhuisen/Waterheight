@@ -9,9 +9,12 @@ import {
   STEP_MS,
   wallInstant,
 } from '../../lib/time/time.ts';
+import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
-import { type Direction, playNext } from './play.ts';
+import { SPEEDS, type Speed } from '../flow/playback/engine.ts';
+import type { Playback } from '../flow/playback/usePlayback.ts';
+import { canPlay, type Direction, playDisabled, stepHour } from './steps.ts';
 import styles from './timebar.module.css';
 
 // The time selector (A§10 features/timebar, D11): a date, a time in
@@ -26,7 +29,6 @@ import styles from './timebar.module.css';
 // they have the focus: a value is taken once it is complete and inside the
 // range, and never written back into a field that is being typed in.
 
-const PLAY_MS = 1000;
 const HOUR_STEPS = 6;
 /** Day labels under the track: the first and the last always, the ones between only where there is room. */
 const TICKS = 6;
@@ -46,6 +48,9 @@ const ICON = {
   rewind: 'M14 4L4 10l10 6z',
   pause: 'M5 4h3.5v12H5zM11.5 4H15v12h-3.5z',
 } as const;
+
+/** The speed words by name, never `m[key]`: indexing the namespace would bundle every message. */
+const SPEED_WORD = { slow: m.play_speed_slow, normal: m.play_speed_normal, fast: m.play_speed_fast } as const;
 
 const reducedMotion = '(prefers-reduced-motion: reduce)';
 const subscribeMotion = (notify: () => void) => {
@@ -69,17 +74,21 @@ interface Props {
   /** P10a: live mode (no `t` in the URL): the page follows meta.now; "Nu" returns to it. */
   live: boolean;
   onChange: (t: number) => void;
+  /** P11b: the map mode (D-1: no play in the State mode). */
+  mode: Mode;
+  /** P11b: hourly frames playback (App owns it). */
+  playback: Playback;
 }
 
-export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, onChange }: Props) {
+export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, onChange, mode, playback }: Props) {
   const id = useId();
   const [missing, setMissing] = useState(false);
   // P10e D7: collapsed at the start (the time, a short slider, the steps, play and "Nu"); the rest on request.
   const [expanded, setExpanded] = useState(false);
-  const [playing, setPlaying] = useState<0 | Direction>(0);
   const reduced = useReducedMotion();
-  const latest = useRef(t);
-  latest.current = t;
+  const { playing, dir, pause } = playback;
+  const offState = mode === 'state';
+  const off = playDisabled(mode, reduced);
   const local = useMemo(() => amsterdam(t), [t]);
   // Temporal zone conversions are the time bar's costliest work: once per t, not once per render (P10a Lighthouse).
   const twins = useMemo(() => localInstants(local.date, local.time), [local]);
@@ -92,7 +101,9 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
   const timeRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLElement>(null);
 
+  // Any manual move of t is the user's: it pauses playback.
   const go = (ms: number) => {
+    pause();
     setMissing(false);
     onChange(Math.min(end, Math.max(start, quantise(ms))));
   };
@@ -118,28 +129,22 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
       if (el !== null && el !== document.activeElement && el.value !== value) el.value = value;
   }, [local.date, local.time]);
 
+  // Reduced motion pauses a running play (a hidden tab does too: usePlayback).
   useEffect(() => {
-    if (playing === 0) return;
-    const timer = setInterval(() => {
-      const next = playNext(latest.current, playing, start, end);
-      if (next === null) setPlaying(0);
-      else onChange(next);
-    }, PLAY_MS);
-    const hidden = () => {
-      if (document.hidden) setPlaying(0);
-    };
-    document.addEventListener('visibilitychange', hidden);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', hidden);
-    };
-  }, [playing, start, end, onChange]);
-  useEffect(() => {
-    if (reduced) setPlaying(0);
-  }, [reduced]);
-  // Play starts only where it has a step to take: at its bound the button stays Play, at once.
-  const toggle = (dir: Direction) =>
-    setPlaying((p) => (p === dir || playNext(latest.current, dir, start, end) === null ? 0 : dir));
+    if (reduced) pause();
+  }, [reduced, pause]);
+  // Play starts only where it has an hour to take (at live: seven days back); at the range end it stays Play and does nothing.
+  const playT = live ? undefined : t;
+  const toggle = (d: Direction) => {
+    if (playing && dir === d) pause();
+    else if (canPlay(d, playT, playback.range)) playback.play(d);
+  };
+  const blocked = (d: Direction) => !(playing && dir === d) && !canPlay(d, playT, playback.range);
+  const back = stepHour(t, -1, start, end);
+  const fwd = stepHour(t, 1, start, end);
+  const hintId = `${id}-hint`;
+  const playDesc =
+    [offState ? hintId : '', reduced ? `${id}-reduced` : ''].filter((x) => x !== '').join(' ') || undefined;
 
   // The bar's real height, collapsed or expanded (its notes and the DST choice come and go), is --timebar-h: the
   // legend and the attribution buttons stand above it and a scrolled table keeps a focused row clear of it
@@ -236,24 +241,26 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           <button
             type="button"
             aria-label={m.step_back({}, { locale })}
-            aria-disabled={t <= start}
-            onClick={() => t > start && go(t - STEP_MS)}
+            aria-disabled={back === t}
+            onClick={() => back !== t && go(back)}
           >
             <Icon d={ICON.back} />
           </button>
           <button
             type="button"
-            aria-label={playing === 1 ? m.pause({}, { locale }) : m.play({}, { locale })}
+            aria-label={playing && dir === 1 ? m.pause({}, { locale }) : m.play({}, { locale })}
+            aria-describedby={playDesc}
+            aria-disabled={blocked(1)}
             onClick={() => toggle(1)}
-            disabled={reduced}
+            disabled={off}
           >
-            <Icon d={playing === 1 ? ICON.pause : ICON.play} />
+            <Icon d={playing && dir === 1 ? ICON.pause : ICON.play} />
           </button>
           <button
             type="button"
             aria-label={m.step_forward({}, { locale })}
-            aria-disabled={t >= end}
-            onClick={() => t < end && go(t + STEP_MS)}
+            aria-disabled={fwd === t}
+            onClick={() => fwd !== t && go(fwd)}
           >
             <Icon d={ICON.forward} />
           </button>
@@ -267,7 +274,7 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
             aria-controls={`${id}-more`}
             onClick={() => {
               // Collapsing takes the reverse button, the only pause of reverse play, away: it stops (review round 1).
-              if (expanded) setPlaying((p) => (p === -1 ? 0 : p));
+              if (expanded && playing && dir === -1) pause();
               setExpanded(!expanded);
             }}
           >
@@ -314,12 +321,24 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
               <div className={styles.buttons}>
                 <button
                   type="button"
-                  aria-label={playing === -1 ? m.pause({}, { locale }) : m.play_reverse({}, { locale })}
+                  aria-label={playing && dir === -1 ? m.pause({}, { locale }) : m.play_reverse({}, { locale })}
+                  aria-describedby={playDesc}
+                  aria-disabled={blocked(-1)}
                   onClick={() => toggle(-1)}
-                  disabled={reduced}
+                  disabled={off}
                 >
-                  <Icon d={playing === -1 ? ICON.pause : ICON.rewind} />
+                  <Icon d={playing && dir === -1 ? ICON.pause : ICON.rewind} />
                 </button>
+                <label className={styles.speed}>
+                  {m.play_speed({}, { locale })}
+                  <select value={playback.speed} onChange={(e) => playback.setSpeed(e.currentTarget.value as Speed)}>
+                    {SPEEDS.map((s) => (
+                      <option key={s} value={s}>
+                        {SPEED_WORD[s]({}, { locale })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
             {twins.length === 2 && (
@@ -353,8 +372,22 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           </>
         )}
       </div>
-      {/* Why play is off is said in both states. */}
-      {reduced && <p className={styles.note}>{m.play_reduced_motion({}, { locale })}</p>}
+      {/* Why play is off is said in both states (D-1 and reduced motion). */}
+      {offState && (
+        <p id={hintId} className={styles.note}>
+          {m.play_state_hint({}, { locale })}
+        </p>
+      )}
+      {reduced && (
+        <p id={`${id}-reduced`} className={styles.note}>
+          {m.play_reduced_motion({}, { locale })}
+        </p>
+      )}
+      {/* A polite status, always in the page so its text is announced when it appears: only a hold longer than
+          usePlayback's WAIT_MS fills it, and it empties as soon as the clock moves, so a fast network says nothing. */}
+      <p role="status" className={`${styles.note} ${styles.status}`}>
+        {playback.waiting ? m.play_waiting({}, { locale }) : ''}
+      </p>
     </section>
   );
 }

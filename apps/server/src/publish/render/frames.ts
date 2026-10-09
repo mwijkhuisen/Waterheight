@@ -14,19 +14,25 @@ import { readFacts } from './series.ts';
 
 const HOUR_MS = 3_600_000;
 
-export async function renderFrames(c: RenderCtx, from: number, to: number): Promise<FramesFile> {
+export type FrameRow = { series_id: number; bucket: Date; vlast: number; qc_or: number };
+
+/**
+ * Pure (P11b; the publisher and /api/v1/frames share it): rows of any order and length become one row per series that
+ * has a value in [from, to) (ids increasing), one entry per hour, null where an hour has no bucket, never carried
+ * forward. A bucket outside the span is dropped. `qcOf` is the OR of the qc bits of the kept hours per series (a
+ * filled hour names its fill source too); the API keeps it out of the body.
+ */
+export function assembleFrames(
+  rows: readonly FrameRow[],
+  from: number,
+  to: number,
+): { ids: number[]; vlast: (number | null)[][]; qcOf: Map<number, number> } {
   const hours = Math.max(0, Math.round((to - from) / HOUR_MS));
-  const facts = await readFacts(c.db, c.family);
-  const { rows } = await sql<{ series_id: number; bucket: Date; vlast: number; qc_or: number }>`
-    SELECT series_id, bucket, vlast, qc_or FROM ${sql.table(VIEWS[c.family].obs1h)}
-    WHERE bucket >= ${new Date(from)}::timestamptz AND bucket < ${new Date(to)}::timestamptz`.execute(c.db);
   const bySeries = new Map<number, (number | null)[]>();
-  // The qc bits of the kept hours per series: a filled hour names its fill source too (P9b, as the API does).
   const qcOf = new Map<number, number>();
   for (const r of rows) {
-    const f = facts.get(r.series_id);
     const h = Math.round((r.bucket.getTime() - from) / HOUR_MS);
-    if (f === undefined || historyExcluded(f, 'other') || h < 0 || h >= hours) continue;
+    if (h < 0 || h >= hours) continue;
     let row = bySeries.get(r.series_id);
     if (row === undefined) {
       row = new Array<number | null>(hours).fill(null);
@@ -36,13 +42,27 @@ export async function renderFrames(c: RenderCtx, from: number, to: number): Prom
     qcOf.set(r.series_id, (qcOf.get(r.series_id) ?? 0) | r.qc_or);
   }
   const ids = [...bySeries.keys()].sort((a, b) => a - b);
+  return { ids, vlast: ids.map((id) => bySeries.get(id) as (number | null)[]), qcOf };
+}
+
+export async function renderFrames(c: RenderCtx, from: number, to: number): Promise<FramesFile> {
+  const facts = await readFacts(c.db, c.family);
+  const { rows } = await sql<FrameRow>`
+    SELECT series_id, bucket, vlast, qc_or FROM ${sql.table(VIEWS[c.family].obs1h)}
+    WHERE bucket >= ${new Date(from)}::timestamptz AND bucket < ${new Date(to)}::timestamptz`.execute(c.db);
+  const kept = rows.filter((r) => {
+    const f = facts.get(r.series_id);
+    return f !== undefined && !historyExcluded(f, 'other');
+  });
+  // The qc bits of the kept hours per series: a filled hour names its fill source too (P9b, as the API does).
+  const { ids, vlast, qcOf } = assembleFrames(kept, from, to);
   return {
     schemaVersion: 1,
     from: iso(new Date(from)),
     to: iso(new Date(to)),
     stepSeconds: 3600,
     series: ids,
-    vlast: ids.map((id) => bySeries.get(id) as (number | null)[]),
+    vlast,
     attribution: attributionFor(
       c.attribution,
       new Set(ids.flatMap((id) => valueSources((facts.get(id) as { source: string }).source, qcOf.get(id) ?? 0))),

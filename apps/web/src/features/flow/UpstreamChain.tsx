@@ -29,6 +29,8 @@ export interface UpstreamChainProps {
   ownerSources: ReadonlySet<string>;
   /** Open another station. */
   onSelect: (id: string) => void;
+  /** P11b: the values are played-back hourly frames. */
+  played?: boolean;
 }
 
 const NO_TRAVEL = { travel_times: [] };
@@ -109,6 +111,7 @@ export function UpstreamChain({
   values,
   ownerSources,
   onSelect,
+  played = false,
 }: UpstreamChainProps) {
   const graph = useReachGraph().data;
   const rivers = useRivers().data?.rivers;
@@ -136,8 +139,9 @@ export function UpstreamChain({
             values,
             ownerSources,
             travel: travel ?? NO_TRAVEL,
+            played,
           }),
-    [walk, rivers, travel, station.id, stations, states, values, ownerSources, locale],
+    [walk, rivers, travel, station.id, stations, states, values, ownerSources, locale, played],
   );
   if (rows.length === 0) return null;
   const headingId = `${station.id}-chain`;

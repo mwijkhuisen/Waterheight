@@ -183,8 +183,9 @@ for (const locale of ['nl', 'en'] as const)
     await expect(box.getByText(msg(locale, 'legend_honesty'), { exact: true })).toBeVisible();
     await expect(box.getByText(msg(locale, 'basis_nl4'), { exact: true })).toBeVisible();
     // The keys for the other cues; the warnings key shows while an area is on the map (NOW: three).
+    // (EN: the reach legend's own "impounded" entry says the same word, P11b: the first is enough)
     for (const key of ['legend_stale', 'legend_tidal', 'legend_impounded', 'legend_section'])
-      await expect(box.getByText(msg(locale, key), { exact: true })).toBeVisible();
+      await expect(box.getByText(msg(locale, key), { exact: true }).first()).toBeVisible();
     await expect(box.getByText(msg(locale, 'legend_warnings'), { exact: true })).toBeVisible();
     await expect(box.getByText(msg(locale, 'legend_lhp2'), { exact: true })).toBeVisible();
     await expect(box.getByText(msg(locale, 'legend_owner'), { exact: false })).toHaveCount(0);

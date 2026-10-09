@@ -1,5 +1,6 @@
 import {
   type ApiErrorCode,
+  FramesAnswer,
   floorBucket,
   isSettled,
   MetaAnswer,
@@ -10,6 +11,7 @@ import {
   StationsAnswer,
 } from '@rws/contracts';
 import {
+  OwnerFramesAnswer,
   OwnerMetaAnswer,
   OwnerSeriesAnswer,
   OwnerSeriesForecastAnswer,
@@ -27,13 +29,14 @@ import { errorCode } from '../db/pool.ts';
 import { attributionOf, type BodyKind, bodySources, historyCapMs } from './answer.ts';
 import { registerBeacon } from './beacon.ts';
 import { rateClass } from './channels.ts';
-import { readMeta, readSeries, readSnapshot, readStations } from './data.ts';
+import { readFrames, readMeta, readSeries, readSnapshot, readStations } from './data.ts';
 import { readFutureSnapshot, readSeriesForecast } from './forecast-at.ts';
 import { clientKey, type Limiter } from './limiter.ts';
 import { Busy, type Encoding, Lru, negotiate } from './lru.ts';
 import {
   agePolicy,
   type CachePolicy,
+  framesParams,
   noQuery,
   QUERY_MAX_BYTES,
   Refused,
@@ -49,7 +52,7 @@ import { type DayVersions, IMMUTABLE, isImmutable, readVersionTag, spannedDays, 
 import type { DisplayWindow, Window } from './window.ts';
 
 // The data routes of an api process (A§9.2, A§9.3; PHASES P4a, P8b, P9b): /api/v1/meta, /stations, /snapshot,
-// /series/{id}, /series/{id}/forecast, /openapi.json and /beacon, plus the rules of the whole /api/v1 tree. One
+// /series/{id}, /series/{id}/forecast, /frames, /openapi.json and /beacon, plus the rules of the whole /api/v1 tree. One
 // process serves one family, fixed at start (`api` public, `api --audience owner` the owner's): never request input.
 // Every request runs one pipeline (P9b): the method rule; the per-client token buckets (before anything is parsed, so
 // a flood of bad requests is limited too); a cap on the raw query string; strict validation, all in memory; a cache
@@ -105,6 +108,7 @@ const WIRE = {
     snapshot: SnapshotAnswer,
     series: SeriesAnswer,
     forecast: SeriesForecastAnswer,
+    frames: FramesAnswer,
   },
   owner: {
     meta: OwnerMetaAnswer,
@@ -112,6 +116,7 @@ const WIRE = {
     snapshot: OwnerSnapshotAnswer,
     series: OwnerSeriesAnswer,
     forecast: OwnerSeriesForecastAnswer,
+    frames: OwnerFramesAnswer,
   },
 } as const satisfies Record<ChannelAudience, Record<Exclude<BodyKind, 'healthSources'>, z.ZodType>>;
 
@@ -371,6 +376,24 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
         if (series === undefined) throw new Refused('not_found', 404);
         return series;
       },
+    };
+  });
+
+  // /frames (P11b): [from, to) of whole hours, at most 14 days; the key holds the in-memory version of each spanned day
+  // (like /series), so `v` makes the answer immutable only when it equals them all and every day is settled.
+  route('/api/v1/frames', 'frames', (c): Plan => {
+    const now = deps.now().getTime();
+    const p = framesParams(c.req.url, now, window().displayStartMs);
+    const days = spannedDays(p.from, p.to);
+    return {
+      key: `frames|${p.from}|${p.to}|${vstate(days)}`,
+      policy: agePolicy(p.to, now),
+      kind: 'frames',
+      live: false,
+      at: p.to,
+      days,
+      v: versionParam(c.req.url),
+      read: (db) => readFrames(db, family, p),
     };
   });
 

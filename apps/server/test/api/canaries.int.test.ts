@@ -113,6 +113,26 @@ const GENERATORS: Record<string, (c: Ctx) => Req[]> = {
     get('/api/v1/series/abc/forecast'),
     get('/api/v1/series/99999999999/forecast'),
   ],
+  '/api/v1/frames': (c) => {
+    const to = Math.floor(c.now / HOUR) * HOUR;
+    const span = (days: number) => `from=${iso(to - days * DAY)}&to=${iso(to)}&step=1h`;
+    return [
+      get(`/api/v1/frames?${span(14)}`),
+      get(`/api/v1/frames?${span(14)}&v=1`),
+      get(`/api/v1/frames?${span(14)}&v=7`),
+      get(`/api/v1/frames?${span(2)}`),
+      get(`/api/v1/frames?from=${iso(to - 6 * DAY)}&to=${iso(to - 3 * DAY)}&step=1h&v=1`),
+      get('/api/v1/frames'),
+      get(`/api/v1/frames?${span(15)}`),
+      get(`/api/v1/frames?${span(2)}&zz=1`),
+      get(`/api/v1/frames?${span(2)}&step=2h`),
+      get(`/api/v1/frames?from=${iso(to - 2 * DAY)}&to=${iso(to)}`),
+      get(`/api/v1/frames?from=${iso(to - 2 * DAY + 600_000)}&to=${iso(to)}&step=1h`),
+      get(`/api/v1/frames?from=${iso(c.now - 60 * DAY)}&to=${iso(c.now - 59 * DAY)}&step=1h`),
+      get(`/api/v1/frames?from=${iso(to)}&to=${iso(to + 3 * HOUR)}&step=1h`),
+      get(`/api/v1/frames?${span(2)}&v=0`),
+    ];
+  },
   '/api/v1/health': () => [get('/api/v1/health'), get('/api/v1/health?zz=1')],
   '/api/v1/health/sources': () => [get('/api/v1/health/sources'), get('/api/v1/health/sources?zz=1')],
   '/api/v1/openapi.json': () => [get('/api/v1/openapi.json'), get('/api/v1/openapi.json?zz=1')],
@@ -158,7 +178,6 @@ const GENERATORS: Record<string, (c: Ctx) => Req[]> = {
 /** Routes listed but not served yet: asked anyway, they must answer the plain 404. */
 const PLANNED_PATHS = (id: number) => ({
   '/api/v1/stations/:id': `/api/v1/stations/${id}`,
-  '/api/v1/frames': '/api/v1/frames',
 });
 
 /** The requests every route also gets: a method the route does not take, the HEAD, a query over 256 bytes. */

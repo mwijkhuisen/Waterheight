@@ -265,7 +265,7 @@ test('the slider ends at the selected station’s horizon, else at now + 48 h; a
   await expect(
     page.getByText('Voor dit station is geen verwachting beschikbaar: de tijdlijn eindigt bij ‘nu’.'),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: '10 minuten vooruit' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByRole('button', { name: '1 uur vooruit' })).toHaveAttribute('aria-disabled', 'true');
   await panelOf(page).getByRole('button', { name: 'Station sluiten' }).click();
   await expect(panelOf(page)).toHaveCount(0);
   await expect(slider(page)).toHaveAttribute('max', ms(48));

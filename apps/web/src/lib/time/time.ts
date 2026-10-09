@@ -8,8 +8,11 @@ import type { Locale } from '../../paraglide/runtime.js';
 export const ZONE = 'Europe/Amsterdam';
 /** The slider step and the API's grid (D11). */
 export const STEP_MS = BUCKET_MS;
-const HOUR_MS = 3_600_000;
+export const HOUR_MS = 3_600_000;
 export const DAY_MS = 24 * HOUR_MS;
+/** The whole UTC hour at or before / at or after an instant (P11b: playback moves in whole UTC hours). */
+export const floorHour = (ms: number): number => Math.floor(ms / HOUR_MS) * HOUR_MS;
+export const ceilHour = (ms: number): number => Math.ceil(ms / HOUR_MS) * HOUR_MS;
 
 /** The 10-minute UTC bucket of an instant, exactly as the API floors `t`. */
 export const quantise = (ms: number): number => floorBucket(ms);

@@ -1,4 +1,4 @@
-import { apiContracts, attributionEntry, Series } from '@rws/contracts';
+import { apiContracts, attributionEntry, checkFrames, Series } from '@rws/contracts';
 import {
   OwnerLatestFile,
   OwnerSnapshotFile,
@@ -75,6 +75,9 @@ export const OWNER_CONTRACTS: Contracts = {
     (Series.options[1] as (typeof Series.options)[1]).extend({ ...audience, attribution }),
   ]),
   SeriesForecastAnswer: API.SeriesForecastAnswer.extend(audience),
+  // P11b: publish-owner writes no frames (the owner host reads /api/v1/frames only), so no static file parses.
+  FramesFile: z.never(),
+  FramesAnswer: API.Frames.extend(audience).superRefine(checkFrames),
   datedWarnings: false,
   hidden: (source) => CANARY.test(source),
 };

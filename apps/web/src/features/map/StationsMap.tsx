@@ -1,6 +1,7 @@
 import type { ApiStation, Snapshot } from '@rws/contracts';
 import type { MapLayerMouseEvent, Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useReachGraph } from '../../lib/data/api.ts';
 import type { Change } from '../../lib/data/change.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
@@ -11,10 +12,11 @@ import { RIVER_ID } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import type { FlowHandle } from '../flow/flowLayer.ts';
+import type { ReachHandle } from '../flow/reaches/reachLayer.ts';
 import { forecastLine } from '../station/forecast.ts';
 import styles from './map.module.css';
 import { badgeLine, changeLine, modeLines } from './popup.ts';
-import { highlightRiver, RIVERS, showRivers } from './rivers.ts';
+import { highlightRiver, RIVERS, RIVERS_HIGHLIGHT, showRivers } from './rivers.ts';
 import { SOURCE, setStationMode, showStations } from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
 import { showWarnings, WARNINGS_FILL } from './warnings.ts';
@@ -53,6 +55,10 @@ interface Props {
   onClose: () => void;
   /** The map could not start (no WebGL2 context, no basemap, …): the page shows the table. */
   onFailure: (code: string) => void;
+  /** P11b: every station of the site (hidden ones too: they still end a span of the reach colouring). */
+  allStations: readonly ApiStation[];
+  /** P11b: the values are played-back hourly frames (the popup says so). */
+  played: boolean;
 }
 
 export function StationsMap({
@@ -72,6 +78,8 @@ export function StationsMap({
   onSelect,
   onClose,
   onFailure,
+  allStations,
+  played,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const state = useMapLibre(ref, locale, OPTIONS);
@@ -88,6 +96,9 @@ export function StationsMap({
   const flowNow = useRef(flow);
   flowNow.current = flow;
   const flowLayer = useRef<FlowHandle | null>(null);
+  const reachLayer = useRef<ReachHandle | null>(null);
+  const [reachesOn, setReachesOn] = useState(false);
+  const graph = useReachGraph().data;
 
   useEffect(() => {
     if (state.status === 'error') onFailure(state.code);
@@ -163,20 +174,40 @@ export function StationsMap({
     showRivers(map, location.origin, riverTiles, WARNINGS_FILL);
     highlightRiver(map, river);
   }, [map, riverTiles, river]);
-  // The flow direction over the river lines (P11a): its own chunk, loaded once the river layer exists.
+  // The flow direction over the river lines (P11a) and the reach colouring under it (P11b): their own chunks, loaded
+  // once the river layer exists. The reach layers go under the highlight, the flow dashes over it.
   useEffect(() => {
     if (map === null || riverTiles === undefined) return;
     let gone = false;
-    void import('../flow/flowLayer.ts').then(({ addFlow }) => {
-      if (gone || map.getLayer(RIVERS) === undefined) return;
-      flowLayer.current = addFlow(map, WARNINGS_FILL, flowNow.current);
-    });
+    // Two chunks loaded apart, so one that fails never keeps the other off the map (each anchors its own layers).
+    // A chunk that fails to load leaves its layers off; the map and the other chunk carry on.
+    const none = () => undefined;
+    import('../flow/reaches/reachLayer.ts')
+      .then(({ addReaches }) => {
+        if (gone || map.getLayer(RIVERS) === undefined) return;
+        reachLayer.current = addReaches(map, RIVERS_HIGHLIGHT);
+        setReachesOn(true);
+      })
+      .catch(none);
+    import('../flow/flowLayer.ts')
+      .then(({ addFlow }) => {
+        if (gone || map.getLayer(RIVERS) === undefined) return;
+        flowLayer.current = addFlow(map, WARNINGS_FILL, flowNow.current);
+      })
+      .catch(none);
     return () => {
       gone = true;
+      reachLayer.current?.dispose();
+      reachLayer.current = null;
       flowLayer.current?.dispose();
       flowLayer.current = null;
+      setReachesOn(false);
     };
   }, [map, riverTiles]);
+  useEffect(() => {
+    if (reachesOn && graph !== undefined)
+      reachLayer.current?.update({ graph, mode, stations: allStations, values, changes });
+  }, [reachesOn, graph, mode, allStations, values, changes]);
   useEffect(() => {
     flowLayer.current?.setEnabled(flow);
   }, [flow]);
@@ -218,8 +249,9 @@ export function StationsMap({
       },
       locale,
     );
-    return badges === '' ? body : [...body, badges];
-  }, [selected, values, forecasts, changes, states, mode, locale]);
+    const words = played ? [badges, m.played_note({}, { locale })].filter((w) => w !== '').join(' · ') : badges;
+    return words === '' ? body : [...body, words];
+  }, [selected, values, forecasts, changes, states, mode, locale, played]);
   const linesNow = useRef(lines);
   linesNow.current = lines;
   /** The popup's content element while a popup is open: its lines are replaced in place when `t` moves. */
