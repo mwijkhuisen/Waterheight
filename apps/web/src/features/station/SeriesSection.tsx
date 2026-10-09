@@ -6,6 +6,7 @@ import type { WebSources } from '../../lib/data/contracts.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
 import { basisLabel, referenceLabel, useOwnerLabels } from '../../lib/labels/labels.ts';
+import type { Lapse } from '../../lib/stationStates.ts';
 import { formatAge, formatDay, formatLocal, quantise } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
@@ -38,6 +39,8 @@ interface Props {
   values: ReadonlyMap<number, Value>;
   forecasts: ReadonlyMap<number, SnapshotForecast> | undefined;
   changes: ReadonlyMap<number, Change> | undefined;
+  /** KG-233: this series has no value at t and its newest one is past the limit (or over 25 hours old). */
+  lapse: Lapse | undefined;
   warnings: WarningsAt | undefined;
   ownerSources: ReadonlySet<string>;
   sourceDocs: WebSources['sources'] | undefined;
@@ -85,6 +88,7 @@ export function SeriesSection({
   values,
   forecasts,
   changes,
+  lapse,
   warnings,
   ownerSources,
   sourceDocs,
@@ -105,6 +109,8 @@ export function SeriesSection({
   const credit = sourceDocs?.find((s) => s.id === series.source);
   const suspect = value !== undefined && (value.qc & SUSPECT_BITS) !== 0;
   const stale = value !== undefined && value.ageSeconds > 2 * series.expectedStepSeconds;
+  // KG-233: no value at t, and the newest one is past the limit (stale) or over 25 hours old (hidden).
+  const lapsed = value === undefined ? lapse : undefined;
   const unit = unitLabel(series, locale);
   const o = { locale };
 
@@ -172,10 +178,16 @@ export function SeriesSection({
           {value.section && <span className={styles.badge}>{m.section_badge({}, o)}</span>}
         </p>
       )}
-      {(suspect || stale) && (
+      {(suspect || stale || lapsed !== undefined) && (
         <ul className={styles.notes}>
           {suspect && <li>{m.suspect_note({}, o)}</li>}
           {stale && <li>{m.stale_note({}, o)}</li>}
+          {lapsed !== undefined && (
+            <li>
+              {(lapsed.hidden ? m.lapsed_hidden_note : m.lapsed_note)({}, o)} ({m.age({}, o)}:{' '}
+              {formatAge(lapsed.ageSeconds, locale)})
+            </li>
+          )}
         </ul>
       )}
       {(data.failed || chartFailed) && <p className={styles.note}>{m.chart_unavailable({}, o)}</p>}

@@ -50,7 +50,7 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const WINDOW = { dataEpochMs: BASE - 86_400_000, displayStartMs: BASE };
 
 let h: Harness;
-let ids: { a: number; b: number; withheld: number };
+let ids: { a: number; b: number; c: number; withheld: number };
 let stationA: string;
 let canary: number;
 
@@ -61,7 +61,7 @@ async function seed() {
   const { rows } = await q(
     `SELECT s.id, s.station_id FROM series s WHERE s.source_id = 'NL-1' AND s.active AND s.role = 'primary'
        AND NOT EXISTS (SELECT 1 FROM series o WHERE o.station_id = s.station_id AND o.id <> s.id)
-     ORDER BY s.id LIMIT 2`,
+     ORDER BY s.id LIMIT 3`,
   );
   await q(`INSERT INTO station (id, name, country, tier) VALUES ('nl.canary.withheld', 'withheld canary', 'NL', 2)`);
   const w = await q(
@@ -70,7 +70,7 @@ async function seed() {
      VALUES ('nl.canary.withheld', 'NL-1', 'H', 'stage', 'canary-withheld', 'cm', 1, 'LOCAL', '15 min', '15 min',
              '45 min', 'primary', 'off') RETURNING id`,
   );
-  ids = { a: rows[0].id, b: rows[1].id, withheld: w.rows[0].id };
+  ids = { a: rows[0].id, b: rows[1].id, c: rows[2].id, withheld: w.rows[0].id };
   stationA = rows[0].station_id;
   // value = 100 + k at BASE + k steps: Δh over 1 h is 6 and over 24 h is 144 wherever both ends exist.
   const obs = (series: number, from: number, to: number, mul = 1) =>
@@ -81,6 +81,13 @@ async function seed() {
     );
   await obs(ids.a, 0, 504);
   await obs(ids.b, 490, 504);
+  // Series c: its newest value is 64 steps (38,400 s) before the bucket, far past the 45-minute limit (KG-233).
+  await obs(ids.c, 0, 440);
+  // The loader keeps obs_latest; this seed writes obs directly, so it writes the newest point itself.
+  await q(`INSERT INTO obs_latest (series_id, ts, value, qc, batch_id) VALUES ($1, $2, 540, 0, 0)`, [
+    ids.c,
+    iso(BASE + 440 * STEP),
+  ]);
   await q(
     `INSERT INTO obs (series_id, ts, value, qc, batch_id)
      VALUES ($1, $2, ${CANARIES.withheld.value}, 0, 0)`,
@@ -204,6 +211,53 @@ describe('renderers', { timeout: 120_000 }, () => {
     expect(file.dh1[at(ids.b)]).toBe(6);
     expect(file.dh24[at(ids.b)]).toBeNull();
     expect(file.series).not.toContain(ids.withheld);
+  });
+
+  it('latest: a series past its limit is lapsed with the age of its newest value, never one with a value', async () => {
+    const c = await ctx('public');
+    const stations = StaticStations.parse(await renderStations(c));
+    const file = LatestFile.parse((await renderLatest(c, stations)).body);
+    expect(file.series).not.toContain(ids.c);
+    expect(file.lapsed).toContain(ids.c);
+    expect(file.lapsedAge[file.lapsed.indexOf(ids.c)]).toBe(38_400);
+    // A registry series that never had an observation is lapsed with null; the series with a value are not listed.
+    expect(file.lapsedAge).toContain(null);
+    expect(file.lapsed).not.toContain(ids.a);
+    expect(file.lapsed).not.toContain(ids.b);
+    expect(file.lapsed).not.toContain(ids.withheld);
+    const order = stations.stations.flatMap((s) => s.series.map((x) => x.id));
+    expect(file.lapsed).toEqual(order.filter((id) => file.lapsed.includes(id)));
+  });
+
+  it('latest, owner family: lapsed through its own latest view, the owner canary with a value never lapsed', async () => {
+    const c = await ctx('owner');
+    const stations = OwnerStaticStations.parse(await renderStations(c));
+    const file = OwnerLatestFile.parse((await renderLatest(c, stations)).body);
+    expect(file.lapsed).toContain(ids.c);
+    expect(file.lapsedAge[file.lapsed.indexOf(ids.c)]).toBe(38_400);
+    expect(file.series).toContain(canary);
+    expect(file.lapsed).not.toContain(canary);
+    expect(file.lapsed).not.toContain(ids.withheld);
+  });
+
+  it('latest: a newest point after the bucket gives age 0, never a negative age', async () => {
+    const c = await ctx('public');
+    const stations = StaticStations.parse(await renderStations(c));
+    const before = LatestFile.parse((await renderLatest(c, stations)).body);
+    // A series that never had a value; its newest point is now at the clock, five minutes after the bucket.
+    const d = before.lapsed[before.lapsedAge.indexOf(null)] as number;
+    expect(d).toBeDefined();
+    await h.t.admin.query(`INSERT INTO obs_latest (series_id, ts, value, qc, batch_id) VALUES ($1, $2, 1, 0, 0)`, [
+      d,
+      iso(NOW),
+    ]);
+    try {
+      const file = LatestFile.parse((await renderLatest(c, stations)).body);
+      expect(file.series).not.toContain(d);
+      expect(file.lapsedAge[file.lapsed.indexOf(d)]).toBe(0);
+    } finally {
+      await h.t.admin.query(`DELETE FROM obs_latest WHERE series_id = $1`, [d]);
+    }
   });
 
   it('frames: one row per series with a value, null where an hour has none', async () => {

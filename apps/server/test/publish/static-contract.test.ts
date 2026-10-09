@@ -33,6 +33,8 @@ describe('a file of no_ref states only', () => {
       seriesHash: '0'.repeat(16),
       dh24: [null, null],
       dh1: [null, null],
+      lapsed: [],
+      lapsedAge: [],
     };
     expect(LatestFile.safeParse(latest).success).toBe(true);
   });

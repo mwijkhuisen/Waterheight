@@ -10,10 +10,59 @@ import type { WebForecast } from './data/static.ts';
 
 type Value = Snapshot['values'][number];
 
+/** A series with no value at t is hidden once its newest value is older than this (A§10: hidden after 25 h). */
+export const HIDE_AFTER_S = 25 * 3600;
+
+/** A series with no value at t whose newest value is known (KG-233): stale past its limit, hidden after 25 h. */
+export interface Lapse {
+  hidden: boolean;
+  /** The age of its newest value at t, in seconds. */
+  ageSeconds: number;
+}
+
+/**
+ * `lastAges`: latest.json's `lapsed`/`lapsedAge` by series (current bucket only; undefined elsewhere, where no series
+ * is lapsed). A series that never had a value (null) or has one within its limit is not lapsed: it is just empty.
+ */
+export function lapses(
+  stations: readonly ApiStation[],
+  values: ReadonlyMap<number, Value>,
+  lastAges: ReadonlyMap<number, number | null> | undefined,
+): Map<number, Lapse> {
+  const out = new Map<number, Lapse>();
+  if (lastAges === undefined) return out;
+  for (const st of stations)
+    for (const s of st.series) {
+      const age = lastAges.get(s.id);
+      // The at-t functions keep a value only while ts > t − limit, so an age of exactly the limit is lapsed too.
+      if (values.has(s.id) || age == null || age < s.stalenessLimitSeconds) continue;
+      out.set(s.id, { hidden: age > HIDE_AFTER_S, ageSeconds: age });
+    }
+  return out;
+}
+
+/**
+ * The ids of the hidden stations as one string: it changes only when the hidden set does, so the visible list can
+ * be memoised on it (a new `states` every snapshot must not rebuild the map's source and popup).
+ */
+export const hiddenKey = (states: ReadonlyMap<string, StationState>): string =>
+  [...states].flatMap(([id, s]) => (s.hidden ? [id] : [])).join('\n');
+
+/** The stations not named in `hiddenKey`'s string. */
+export function visibleStations<T extends { id: string }>(stations: readonly T[], key: string): readonly T[] {
+  if (key === '') return stations;
+  const hidden = new Set(key.split('\n'));
+  return stations.filter((st) => !hidden.has(st.id));
+}
+
 export interface StationState {
   /** A value at t (up to now), or a forecast at t (after now). */
   has: boolean;
-  /** Every value at t is older than twice its series' step (the value is carried forward). */
+  /**
+   * Every value at t is older than twice its series' step (the value is carried forward); or, with no value at t
+   * (`has` false), a series' newest value is past its staleness limit and under 25 hours old (KG-233: a small
+   * grey dot, "no value within the staleness limit").
+   */
   stale: boolean;
   /** t is after now: `has` means a forecast, `level` is the forecast's state. */
   forecast: boolean;
@@ -31,6 +80,8 @@ export interface StationState {
   qSize: QSize | null;
   /** The station has a series of an owner-audience source (owner site only): a ring and an "owner only" badge. */
   owner: boolean;
+  /** No value at t, and every series' newest value is older than 25 hours (KG-233): not drawn, listed or found. */
+  hidden: boolean;
 }
 
 export interface StatesInput {
@@ -42,6 +93,8 @@ export interface StatesInput {
   changes: ReadonlyMap<number, Change> | undefined;
   /** The owner-audience source ids (useOwnerSources; empty on the public site). */
   ownerSources: ReadonlySet<string>;
+  /** The lapsed series (see `lapses`); none when omitted. */
+  lapsed?: ReadonlyMap<number, Lapse> | undefined;
 }
 
 export function stationStates({
@@ -50,6 +103,7 @@ export function stationStates({
   forecasts,
   changes,
   ownerSources,
+  lapsed,
 }: StatesInput): Map<string, StationState> {
   const out = new Map<string, StationState>();
   for (const st of stations) {
@@ -68,6 +122,7 @@ export function stationStates({
         dhBin: null,
         qSize: null,
         owner,
+        hidden: false,
       });
       continue;
     }
@@ -93,7 +148,8 @@ export function stationStates({
     const q = qSeries === undefined ? undefined : values.get(qSeries.id);
     out.set(st.id, {
       has,
-      stale: has && !fresh,
+      // A station with no value is stale when a series' newest value is past its limit (and under 25 h).
+      stale: has ? !fresh : st.series.some((s) => lapsed?.get(s.id)?.hidden === false),
       forecast: false,
       estimate: false,
       level,
@@ -102,6 +158,7 @@ export function stationStates({
       dhBin: change == null || trendSeries === undefined ? null : dhBin(change, trendSeries.quantity),
       qSize: qSeries === undefined ? null : q === undefined ? 0 : qSize(q.value),
       owner,
+      hidden: !has && st.series.length > 0 && st.series.every((s) => lapsed?.get(s.id)?.hidden === true),
     });
   }
   return out;

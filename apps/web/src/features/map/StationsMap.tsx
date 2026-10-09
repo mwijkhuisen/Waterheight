@@ -142,9 +142,14 @@ export function StationsMap({
 
   useEffect(() => {
     if (map === null) return;
-    // Feature state merges: every key of the record is always written, so nothing of an earlier t stays.
-    for (const [id, s] of states) map.setFeatureState({ source: SOURCE, id }, { ...s, selected: id === selected?.id });
-  }, [map, states, selected]);
+    // Feature state merges: every key of the record is always written, so nothing of an earlier t stays. Only the
+    // stations in the source: a hidden one (KG-233) has no feature to write to.
+    for (const st of stations) {
+      const s = states.get(st.id);
+      if (s !== undefined)
+        map.setFeatureState({ source: SOURCE, id: st.id }, { ...s, selected: st.id === selected?.id });
+    }
+  }, [map, stations, states, selected]);
 
   // The paint follows the mode; the warnings and rivers are layers of their own (data changes rarely: setData).
   useEffect(() => {
@@ -220,8 +225,10 @@ export function StationsMap({
   /** The popup's content element while a popup is open: its lines are replaced in place when `t` moves. */
   const host = useRef<HTMLElement | null>(null);
 
+  // A station hidden from the map (KG-233) still opens its panel by link, but gets no popup over an empty spot.
+  const drawn = selected !== undefined && stations.includes(selected);
   useEffect(() => {
-    if (map === null || selected === undefined || selected.lon === null || selected.lat === null) return;
+    if (map === null || selected === undefined || !drawn || selected.lon === null || selected.lat === null) return;
     const at: [number, number] = [selected.lon, selected.lat];
     const name = selected.name;
     let removed = false;
@@ -249,7 +256,7 @@ export function StationsMap({
       host.current = null;
       remove?.();
     };
-  }, [map, selected]);
+  }, [map, selected, drawn]);
 
   // A new snapshot changes the lines only: the popup and its close button (and the keyboard focus on it) stay.
   useEffect(() => {

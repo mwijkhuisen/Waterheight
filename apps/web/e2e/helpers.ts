@@ -23,6 +23,7 @@ export interface HookMap {
   getLayer(id: string): { id: string; source?: string; sourceLayer?: string } | undefined;
   getStyle(): { layers: Record<string, unknown>[] };
   querySourceFeatures(source: string, o?: object): { properties: Record<string, unknown> }[];
+  getSource(id: string): { getData(): Promise<unknown> } | undefined;
   jumpTo(o: { center: [number, number]; zoom: number }): void;
   once(event: string, fn: () => void): void;
   project(lngLat: [number, number]): { x: number; y: number };

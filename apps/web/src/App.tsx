@@ -31,7 +31,7 @@ import {
 } from './lib/data/api.ts';
 import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
 import { pathOf, routeOf } from './lib/routes.ts';
-import { stationStates } from './lib/stationStates.ts';
+import { hiddenKey, lapses, stationStates, visibleStations } from './lib/stationStates.ts';
 import { quantise } from './lib/time/time.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
 import { m } from './paraglide/messages.js';
@@ -94,11 +94,11 @@ function Viewer({ locale }: { locale: Locale }) {
     const now = Math.max(start, quantise(Math.min(Date.now(), serverNow)));
     return { start, now, epoch: Date.parse(meta.data.dataEpoch), serverNow, ahead: meta.data.forecastHorizons };
   }, [meta.data]);
-  const list = useMemo(
+  const sorted = useMemo(
     () => [...(stations.data?.stations ?? [])].sort((a, b) => a.name.localeCompare(b.name, locale)),
     [stations.data, locale],
   );
-  const selected = url.s === undefined ? undefined : list.find((st) => st.id === url.s);
+  const selected = url.s === undefined ? undefined : sorted.find((st) => st.id === url.s);
   // The slider reaches now + min(48 h, the selected station's horizon): without a selection (or until the
   // horizon is known) the largest horizon of /meta. A `t` beyond it is clamped to it; a `t` before the first day
   // or more than 48 h after now is treated as no `t`: now.
@@ -136,10 +136,19 @@ function Viewer({ locale }: { locale: Locale }) {
     current ? snapshot.data : undefined,
   );
   const warnings = useWarnings(settled, meta.data, isLive).data;
+  // KG-233: latest.json's age of the newest value of a series with none at t; a station with nothing newer than
+  // 25 hours is hidden (map, table, search), and the selected one stays open by its link.
+  // Live, the previous bucket's latest.json stays on screen while the next one loads (keepPreviousData): its ages go
+  // with its values, so hidden stations do not flash back. Off live only the snapshot of this very t has ages.
+  const lastAges = current || isLive ? snapshot.data?.lastAge : undefined;
+  const lapsed = useMemo(() => lapses(sorted, values, lastAges), [sorted, values, lastAges]);
   const states = useMemo(
-    () => stationStates({ stations: list, values, forecasts, changes, ownerSources }),
-    [list, values, forecasts, changes, ownerSources],
+    () => stationStates({ stations: sorted, values, forecasts, changes, ownerSources, lapsed }),
+    [sorted, values, forecasts, changes, ownerSources, lapsed],
   );
+  // A new array only when the hidden set changes: the map rebuilds its source (and popup) on a new list.
+  const hidden = hiddenKey(states);
+  const list = useMemo(() => visibleStations(sorted, hidden), [sorted, hidden]);
 
   // Choosing the page's now (the slider's end of observations, or "Nu") is live mode again: no `t` in the URL.
   const setT = useCallback(
@@ -288,6 +297,7 @@ function Viewer({ locale }: { locale: Locale }) {
                   values={values}
                   forecasts={forecasts}
                   changes={changes}
+                  lapsed={lapsed}
                   t={t}
                   selected={selected?.id}
                   onSelect={open}
@@ -303,6 +313,7 @@ function Viewer({ locale }: { locale: Locale }) {
                 states={states}
                 forecasts={forecasts}
                 changes={changes}
+                lapsed={lapsed}
                 warnings={warnings}
                 ownerSources={ownerSources}
                 live={isLive}
