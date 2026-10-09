@@ -619,7 +619,7 @@ Partition maintenance: `ensure_partitions()` is `SECURITY DEFINER` with a fixed 
 | Path | Contents | Writer | `Cache-Control` |
 |---|---|---|---|
 | `/data/v1/meta.json` | `now`, `dataEpoch`, `displayStart`, `dayVersions` (sparse map day → n), forecast horizon per source, build id, `degraded` | publish, every cycle | `public, max-age=60, stale-while-revalidate=300` |
-| `/data/v1/latest.json` | Latest 10-min bucket: columnar arrays (series index, value, age, qc, state, basis id, Δh 24 h, trend) | publish | same |
+| `/data/v1/latest.json` | Latest 10-min bucket: columnar arrays (series index, value, age, qc, state, basis id, Δh 24 h, trend), and (#87, KG-233) `lapsed` / `lapsedAge`: the series of stations.json with no value at t and the age in seconds of each one's newest value (`null`: it never had one), from the family's `obs_latest` view | publish | same |
 | `/data/v1/stations.json` | Stations, series (index order + hash), rivers and reaches, flags, tiers, source IDs | publish, when the registry changes | `max-age=300` |
 | `/data/v1/sources.json` | Source attribution in NL/EN with dynamic dates (VIGICRUES update, LHP "Stand", BAFU "Bezugsdatum", HIC retrieval date), licence links; public-audience sources only | publish | `max-age=300` |
 | `/data/v1/recent/YYYY-MM-DD/HHmm.json` | 10-min snapshots of the days not yet settled (P9a: up to 72 h) | publish, dirty buckets | `max-age=300, stale-while-revalidate=600` |
