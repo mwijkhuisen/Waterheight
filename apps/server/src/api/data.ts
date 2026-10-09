@@ -289,13 +289,17 @@ export type FramesRead = Omit<FramesAnswer, 'attribution'> & { readonly qcOf: Re
  */
 export async function readFrames(db: Kysely<DB>, family: ChannelAudience, p: { from: number; to: number }) {
   const V = channelViews(family, 'api');
+  // Two reads, never a join of the two views: both repeat the series and source join behind a security barrier, the
+  // planner estimates one row for it and re-runs the whole hourly view per series (quadratic: 5 s for 1,400 series on
+  // the e2e stand-in, past the role's 2 s statement_timeout). The active ids are filtered here instead.
   const rows = await snapshot(db, async (tx) => {
+    const active = await sql<{ id: number }>`SELECT id FROM ${sql.table(V.series)} WHERE active`.execute(tx);
+    const ids = new Set(active.rows.map((s) => s.id));
     const r = await sql<FrameRow>`
-      SELECT h.series_id, h.bucket, h.vlast, h.qc_or FROM ${sql.table(V.obs1h)} h
-      JOIN ${sql.table(V.series)} s ON s.id = h.series_id AND s.active
-      WHERE h.bucket >= ${new Date(p.from)}::timestamptz AND h.bucket < ${new Date(p.to)}::timestamptz
-      ORDER BY h.series_id, h.bucket`.execute(tx);
-    return r.rows;
+      SELECT series_id, bucket, vlast, qc_or FROM ${sql.table(V.obs1h)}
+      WHERE bucket >= ${new Date(p.from)}::timestamptz AND bucket < ${new Date(p.to)}::timestamptz
+      ORDER BY series_id, bucket`.execute(tx);
+    return r.rows.filter((row) => ids.has(row.series_id));
   });
   const { ids, vlast, qcOf } = assembleFrames(rows, p.from, p.to);
   const body = {
