@@ -6,8 +6,8 @@ import type { ReachGraph } from '../../lib/data/contracts.ts';
 // confluence or a bifurcation the branch on the same river comes first, then file order. Co-located stations share
 // a reach and a chainage, and the file names only one of them at a reach end: such a station is never a neighbour.
 
-type GStation = ReachGraph['stations'][number];
-type GReach = ReachGraph['reaches'][number];
+export type GStation = ReachGraph['stations'][number];
+export type GReach = ReachGraph['reaches'][number];
 
 export type Neighbour = { id: string; riverId: string; crossRiver: boolean };
 export type Neighbours = { up?: Neighbour; down?: Neighbour };
@@ -15,10 +15,10 @@ export type Neighbours = { up?: Neighbour; down?: Neighbour };
 /** Reaches visited per search: a cycle or a huge delta ends the walk instead of the tab. */
 const DEPTH_CAP = 200;
 
-type Index = { stations: Map<string, GStation>; reaches: Map<string, GReach> };
+export type Index = { stations: Map<string, GStation>; reaches: Map<string, GReach> };
 const indexes = new WeakMap<ReachGraph, Index>();
 
-function indexOf(graph: ReachGraph): Index {
+export function indexOf(graph: ReachGraph): Index {
   let ix = indexes.get(graph);
   if (ix === undefined) {
     ix = {
@@ -30,8 +30,23 @@ function indexOf(graph: ReachGraph): Index {
   return ix;
 }
 
+/** Co-location: the same reach and the same chainage (the file names only one of them at a reach end). */
+export const coLocated = (a: GStation | undefined, b: GStation | undefined): boolean =>
+  a !== undefined && b !== undefined && a.reach_id === b.reach_id && a.km_graph === b.km_graph;
+
+/**
+ * The sink rule: a station at a sink has the reach that ENDS there (the file's rule), so its upstream search starts on
+ * that reach. The station at that end shares the reach and the chainage; one upstream on a reach that ends at a sink
+ * does not. Otherwise the search starts on the reaches that end where the station's own reach starts.
+ */
+export function upstreamStarts(ix: Index, station: GStation, own: GReach): { starts: GReach[]; sink: boolean } {
+  const end = own.down_station_id === null ? undefined : ix.stations.get(own.down_station_id);
+  const sink = coLocated(station, end);
+  return { starts: sink ? [own] : branches(ix, own.upstream, own.river_id), sink };
+}
+
 /** The reaches of `ids` that the file holds, the ones on `river` first (a stable sort keeps the file order). */
-const branches = (ix: Index, ids: readonly string[], river: string): GReach[] =>
+export const branches = (ix: Index, ids: readonly string[], river: string): GReach[] =>
   ids
     .flatMap((id) => {
       const r = ix.reaches.get(id);
@@ -79,9 +94,8 @@ export function neighbours(id: string, graph: ReachGraph, known: ReadonlySet<str
   const own = ix.reaches.get(station.reach_id);
   if (own === undefined) return {};
 
-  const here = (s: GStation | undefined) => s?.reach_id === station.reach_id && s?.km_graph === station.km_graph;
   const ok = (other: string) =>
-    other !== id && known.has(other) && ix.stations.has(other) && !here(ix.stations.get(other));
+    other !== id && known.has(other) && ix.stations.has(other) && !coLocated(station, ix.stations.get(other));
   const make = (other: string | undefined): Neighbour | undefined => {
     const found = other === undefined ? undefined : ix.stations.get(other);
     return found === undefined
@@ -89,10 +103,7 @@ export function neighbours(id: string, graph: ReachGraph, known: ReadonlySet<str
       : { id: found.id, riverId: found.river_id, crossRiver: found.river_id !== station.river_id };
   };
 
-  // A station at a sink has the reach that ENDS there (the file's rule): its upstream search starts on that reach.
-  // The station at that end shares the reach and the chainage; one upstream on a reach that ends at a sink does not.
-  const sink = here(own.down_station_id === null ? undefined : ix.stations.get(own.down_station_id));
-  const upStarts = sink ? [own] : branches(ix, own.upstream, own.river_id);
+  const upStarts = upstreamStarts(ix, station, own).starts;
 
   const up = search(
     ix,

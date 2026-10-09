@@ -1,14 +1,20 @@
 import type { ApiStation, Snapshot } from '@rws/contracts';
 import type { WebRiver } from '../../lib/data/chain.ts';
 import type { ReachTravelData } from '../../lib/data/contracts.ts';
+import { httpsHref } from '../../lib/href.ts';
+import { riverName } from '../../lib/labels/labels.ts';
 import type { StationState } from '../../lib/stationStates.ts';
+import { travelText } from '../../lib/travel.ts';
+import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { LADDER, levelOf } from '../legend/palette.ts';
+import { basisKind, stateWord } from '../station/state.ts';
+import { formatNumber } from '../station/value.ts';
 import type { ChainNode } from './chain.ts';
 
 // The texts of the upstream chain's rows (P11a, issue #26): the name as published, the river, the state word and its
 // basis, the section and owner flags, the travel time to the target (only the exact sourced pair, through the one
 // formatter lib/travel.ts) with its basis and source. Every string is a React text node (invariant 3). Pure.
-// STUB (L0): W1 implements it.
 
 type Value = Snapshot['values'][number];
 
@@ -70,8 +76,77 @@ export interface GapRow {
 
 export type ChainRow = StationRow | GroupRow | GapRow;
 
-export function chainRows(nodes: readonly ChainNode[], ctx: ChainContext): ChainRow[] {
-  void nodes;
-  void ctx;
-  return [];
+/** The river as the page names it: our label, else the release's own name, else the id. */
+function riverText(id: string, ctx: ChainContext): string {
+  const r = ctx.rivers.get(id);
+  return riverName(id, ctx.locale) ?? (r === undefined ? id : ctx.locale === 'nl' ? r.name_nl : r.name_en);
+}
+
+/** The state of a row at t: the highest among its stations' values, with that value's basis. */
+function stateOf(ids: readonly string[], ctx: ChainContext): Pick<StationRow, 'state' | 'basis' | 'section'> {
+  const none = { state: null, basis: null, section: false };
+  const recs = ids.flatMap((id) => ctx.states.get(id) ?? []);
+  // After now the record holds a forecast's state, and no value of t carries a basis.
+  if (recs.some((r) => r.forecast)) {
+    const top = recs.reduce((a, r) => (r.has && r.level > a ? r.level : a), -1);
+    const state = LADDER[top];
+    return state === undefined ? none : { state: stateWord(state, ctx.locale), basis: null, section: false };
+  }
+  let best: Value | undefined;
+  for (const id of ids)
+    for (const s of ctx.stations.get(id)?.series ?? []) {
+      const v = ctx.values.get(s.id);
+      if (v !== undefined && (best === undefined || levelOf(v.state) > levelOf(best.state))) best = v;
+    }
+  if (best === undefined) return none;
+  return {
+    state: stateWord(best.state, ctx.locale),
+    // NL-4 is a basis ("not an official warning"), never a warning of ours: basisKind words it so.
+    basis: best.basis === null ? null : `${basisKind(best.basis, ctx.locale)}: ${best.basis.label}`,
+    section: best.section && levelOf(best.state) > 0,
+  };
+}
+
+function stationRow(n: Extract<ChainNode, { kind: 'station' }>, ctx: ChainContext): StationRow {
+  const id = n.ids[0] ?? '';
+  // Only the exact pair row -> target of the file: no sum of two pairs and no scaling (owner decision D-A).
+  const pair = ctx.travel.travel_times.find(
+    (t) => t.to_station_id === ctx.targetId && n.ids.includes(t.from_station_id),
+  );
+  const text =
+    pair === undefined ? null : travelText({ kind: 'range', lo: pair.h[0], hi: pair.h[1], unit: 'h' }, ctx.locale);
+  const sourced = pair !== undefined && text !== null;
+  return {
+    kind: 'station',
+    key: n.ids.join('+'),
+    id,
+    name: ctx.stations.get(id)?.name ?? id,
+    river: riverText(n.riverId, ctx),
+    ...stateOf(n.ids, ctx),
+    owner: n.ids.some((i) => ctx.stations.get(i)?.series.some((s) => ctx.ownerSources.has(s.source))),
+    travel: text ?? m.travel_no_source({}, { locale: ctx.locale }),
+    travelBasis: sourced ? pair.basis : null,
+    source: sourced ? pair.source : null,
+    href: sourced ? httpsHref(pair.source_url) : undefined,
+  };
+}
+
+export function chainRows(nodes: readonly ChainNode[], ctx: ChainContext, path = ''): ChainRow[] {
+  return nodes.map((n, i): ChainRow => {
+    const key = `${path}/${i}`;
+    if (n.kind === 'station') return stationRow(n, ctx);
+    const river = riverText(n.riverId, ctx);
+    if (n.kind === 'gap')
+      return {
+        kind: 'gap',
+        key,
+        text: m.chain_gap({ km: formatNumber(Math.round(n.km), ctx.locale), river }, { locale: ctx.locale }),
+      };
+    return {
+      kind: 'group',
+      key,
+      summary: m.chain_group({ river, count: formatNumber(n.count, ctx.locale) }, { locale: ctx.locale }),
+      children: chainRows(n.children, ctx, key),
+    };
+  });
 }
