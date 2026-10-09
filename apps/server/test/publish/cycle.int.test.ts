@@ -54,6 +54,8 @@ function fake(over: Partial<Renderers> = {}): Renderers {
         seriesHash: '0'.repeat(16),
         dh24: [],
         dh1: [],
+        lapsed: [],
+        lapsedAge: [],
         attribution,
       },
       latestFrom: iso(c.now - 60_000),
