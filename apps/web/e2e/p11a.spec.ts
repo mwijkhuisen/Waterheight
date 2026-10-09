@@ -69,6 +69,12 @@ async function openChain(page: Page, locale: Locale, id: string) {
   return chain;
 }
 
+/** The e2e build starts with the flow off (App.tsx); these specs ask for it before the page loads. */
+const flowOn = (page: Page) =>
+  page.addInitScript(() => {
+    (window as unknown as { __rwsFlow?: boolean }).__rwsFlow = true;
+  });
+
 const frames = (page: Page) =>
   page.evaluate(() => (window as unknown as { __rwsFlowFrames?: number }).__rwsFlowFrames ?? 0);
 const visibility = (page: Page, layer: string) =>
@@ -237,6 +243,7 @@ test('the flow clock runs, freezes in a hidden tab and runs again once the tab i
   baseURL,
 }) => {
   const s = await start(page, context, baseURL, 'state');
+  await flowOn(page);
   await open(page, '/');
   await mapReady(page);
   await flowReady(page);
@@ -275,6 +282,7 @@ test('the flow toggle works from the keyboard: Space stops the clock, Enter star
   baseURL,
 }) => {
   const s = await start(page, context, baseURL, 'state');
+  await flowOn(page);
   await open(page, '/');
   await mapReady(page);
   await flowReady(page);
@@ -316,6 +324,7 @@ test.describe('reduced motion', () => {
     baseURL,
   }) => {
     const s = await start(page, context, baseURL, 'state');
+    await flowOn(page);
     await open(page, '/');
     await mapReady(page);
     await flowReady(page);

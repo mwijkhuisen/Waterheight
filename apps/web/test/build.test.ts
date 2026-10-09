@@ -192,12 +192,12 @@ describe('web build', () => {
     }
   });
 
-  it('holds no trace of the e2e flow frame counter (`__rwsFlowFrames`) in the production build', () => {
+  it('holds no trace of the e2e flow hooks (`__rwsFlowFrames`, `__rwsFlow`) in the production build', () => {
     const files = readdirSync(out, { recursive: true, withFileTypes: true }).filter((e) => e.isFile());
     expect(files.length).toBeGreaterThan(0);
     for (const e of files) {
       const path = join(e.parentPath, e.name);
-      expect(readFileSync(path, 'utf8'), path).not.toContain('__rwsFlowFrames');
+      expect(readFileSync(path, 'utf8'), path).not.toContain('__rwsFlow');
     }
   });
 

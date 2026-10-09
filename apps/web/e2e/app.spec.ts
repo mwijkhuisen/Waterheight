@@ -18,7 +18,6 @@ import {
   openMenu,
   openView,
   panelOf,
-  pauseFlow,
   pickStation,
   searchBox,
   searchButton,
@@ -808,7 +807,6 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
   await expect(panel).toHaveCount(0);
   await expect(popup).toHaveCount(0);
   await expect.poll(() => where(page)).toBe('/');
-  await pauseFlow(page); // the map must be able to go idle (P11a)
   const circle = await page.evaluate(
     async ([lon, lat]) => {
       const map = (window as unknown as W).__rws?.map;

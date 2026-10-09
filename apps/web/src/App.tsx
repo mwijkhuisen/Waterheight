@@ -82,8 +82,10 @@ function Viewer({ locale }: { locale: Locale }) {
   const [webgl] = useState(hasWebGL2);
   const [mapFailed, setMapFailed] = useState(false);
   const [view, setView] = useState<'map' | 'table'>('map');
-  // P11a: the flow animation's pause control (WCAG 2.2.2); the page's own state, no URL key (A§10).
-  const [flow, setFlow] = useState(true);
+  // P11a: the flow animation's pause control (WCAG 2.2.2); the page's own state, no URL key (A§10). The e2e build
+  // starts with it off unless a spec sets window.__rwsFlow first: an animating map keeps a software renderer busy
+  // and never idle. A build-time constant, so the production bundle holds no trace of it.
+  const [flow, setFlow] = useState(() => import.meta.env.MODE !== 'e2e' || window.__rwsFlow === true);
 
   // `now` is the page's now: the API's clock at the load (or this browser's, if behind it), never ahead of it,
   // so the "now" of the page is a t whose snapshot holds observations; `serverNow` is the API's clock itself.

@@ -1,5 +1,5 @@
 import { type Browser, devices, expect, type Page, test } from '@playwright/test';
-import { mapReady, msg, NOW, open, pauseFlow, slider, type W } from './helpers.ts';
+import { mapReady, msg, NOW, open, slider, type W } from './helpers.ts';
 
 // P11a (issue #26, C4; owner decision D-B): the frame rate of the map with the flow animation on, while the timebar is
 // scrubbed with the keyboard for 10 s over the fixture rivers (the committed river release, prepare-tiles.ts), measured
@@ -91,9 +91,8 @@ async function measure(browser: Browser, page: Page, tracePath: string, throttle
   await page.clock.setFixedTime(NOW);
   await open(page, '/');
   await mapReady(page);
-  // The camera jump waits for `idle`, which a running animation can hold off for ever on a software renderer: the flow
-  // is paused for it and switched on again (the real pause control) before the measurement.
-  await pauseFlow(page);
+  // The e2e build starts with the flow off (App.tsx), so the camera jump below can wait for `idle` (a running animation
+  // holds it off on a software renderer); the real pause control turns the flow on before the measurement.
   // The Rhine and the Meuse of the fixture release both in view (about 4 degrees across at this zoom).
   const lines = await page.evaluate(async () => {
     const map = (window as unknown as W).__rws?.map;

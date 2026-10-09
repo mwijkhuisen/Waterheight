@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { finish, mapReady, modeRadio, modeSummary, open, pauseFlow, type Session, start, type W } from './helpers.ts';
+import { finish, mapReady, modeRadio, modeSummary, open, type Session, start, type W } from './helpers.ts';
 
 // P10a (C5, plan T13 CVD): Chromium only. The map and its open legend under the three colour-vision deficiencies
 // Chromium can emulate (CDP Emulation.setEmulatedVisionDeficiency), in each map mode, as screenshots in
@@ -25,8 +25,6 @@ for (const deficiency of DEFICIENCIES)
       await open(page, `/?mode=${mode}&s=nl.e2e.dst`);
       await mapReady(page);
       await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
-      // A still picture, and a map that can go idle (P11a): the flow animation off.
-      await pauseFlow(page);
       await page.evaluate(async () => {
         const map = (window as unknown as W).__rws?.map;
         if (!map) throw new Error('no map');

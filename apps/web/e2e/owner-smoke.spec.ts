@@ -50,9 +50,8 @@ test('the owner site says owner, shows the owner banner and stays clean', async 
 // P11a (issue #26 C5): the upstream chain of Eijsden on the stack's two sites, from the river release the job installs
 // (deploy/tests/e2e/run.sh: the committed fixture graph; the owner publisher splits it at the BE-3 gauges). The owner
 // site's chain begins with the SPW gauges of the Walloon Meuse, each with the "owner only" badge; the public site's
-// has no SPW row, and its first station row is Chooz (the Walloon Meuse between is a gap row and tributary groups).
+// has no SPW row and no owner badge (its French Meuse gauges may be hidden for their age in the compose archive).
 const EIJSDEN = 'nl.rws.eijsden.grens';
-const CHOOZ = 'fr.sandre.B720000002';
 const SPW_ROWS = ['be.spw.5447', 'be.spw.5451'];
 
 /** The names a site publishes, by station id (the api answer the page reads). */
@@ -86,8 +85,8 @@ test('the owner site: the chain of Eijsden starts with the SPW gauges, in order,
     await expect(rowName(rows.nth(i)), `row ${i + 1} is ${id}`).toHaveText(names.get(id) ?? '');
     await expect(rows.nth(i).getByText(msg('nl', 'owner_badge'), { exact: true })).toBeVisible();
   }
-  // Chooz is further up the same chain.
-  await expect(chain.getByRole('button', { name: names.get(CHOOZ) ?? '?' }).first()).toBeVisible();
+  // (Not Chooz: the compose archive's French Meuse gauges are older than 25 hours, so they are hidden, #107, and the
+  // chain leaves them out as the map and the table do.)
   await expectClean(page, log);
 });
 
@@ -96,23 +95,15 @@ test.describe('the public site of the same stack', () => {
   // (no owner credentials: the public Caddy has none)
   test.use({ baseURL: process.env.E2E_COMPOSE_URL ?? 'https://rivierstanden.example', httpCredentials: undefined });
 
-  test('the chain of Eijsden has no SPW row: a gap and tributary groups, then Chooz', async ({
-    page,
-    context,
-    baseURL,
-    request,
-  }) => {
+  test('the chain of Eijsden has no SPW row and no owner badge', async ({ page, context, baseURL, request }) => {
     const log = await instrument(page, context, baseURL);
     const names = await namesOf(request);
     expect([...names.keys()].filter((id) => id.startsWith('be.spw.'))).toEqual([]);
-    expect(names.get(CHOOZ), `${CHOOZ} is in the public stations.json`).toBeTruthy();
     await page.goto(`/?s=${EIJSDEN}`);
-    const chain = chainOf(page);
-    await expect(chain).toBeVisible();
-    // The first station row is Chooz: before it there are only gap and group rows.
-    const stations = chain.locator('xpath=./ul/li[button]');
-    await expect(rowName(stations.first())).toHaveText(names.get(CHOOZ) ?? '');
-    await expect(chain.getByText(msg('nl', 'owner_badge'), { exact: true })).toHaveCount(0);
+    await expect(page.locator('aside').getByRole('heading', { level: 2 })).toHaveText(names.get(EIJSDEN) ?? '?');
+    // The archive's French Meuse gauges are hidden for their age (#107), so the public chain may be empty here; whatever
+    // the panel shows holds no owner row. The public reaches file itself is checked byte for byte by run.sh.
+    await expect(page.getByText(msg('nl', 'owner_badge'), { exact: true })).toHaveCount(0);
     await expectClean(page, log);
   });
 });
