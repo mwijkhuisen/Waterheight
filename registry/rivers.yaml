@@ -287,6 +287,28 @@ rivers:
     parent_river_id: meuse
     km_direction: none
     evidence: "catalogue §5.3 relation; Wikidata Q160698 (P402 2246211; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: vesdre
+    name_nl: "Vesder"
+    name_en: "Vesdre"
+    names: {}
+    aliases: ["Vesdre", "Vesder"]
+    osm_relation_id: 12117339
+    osm_way_name: null
+    wikidata: Q707598
+    parent_river_id: ourthe
+    km_direction: none
+    evidence: "Wikidata Q707598 (P402 12117339; P403 Q160698 Ourthe; P17 Germany and Belgium), one SPARQL request 2026-10-10 (#110 item 4, tools/geo/rivernet/lookup-wikidata.ts lookup()); joins the Ourthe at Chênée (Liège). Its German name Weser is left out of aliases: it is the name of another river"
+  - id: ambleve
+    name_nl: "Amblève"
+    name_en: "Amblève"
+    names: {}
+    aliases: ["Amel"]
+    osm_relation_id: 12641506
+    osm_way_name: null
+    wikidata: Q461361
+    parent_river_id: ourthe
+    km_direction: none
+    evidence: "Wikidata Q461361 (P402 12641506; P403 Q160698 Ourthe), one SPARQL request 2026-10-10 (#110 item 4, tools/geo/rivernet/lookup-wikidata.ts lookup()); the other fr \"Amblève\" item, Q159868, is the municipality Amel (P402 2433429, a boundary): rejected. Joins the Ourthe at Comblain-au-Pont"
   - id: rur
     name_nl: "Roer"
     name_en: "Rur"

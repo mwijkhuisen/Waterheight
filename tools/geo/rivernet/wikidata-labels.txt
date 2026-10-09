@@ -25,6 +25,9 @@ fr:Sambre
 nl:Samber
 fr:Ourthe
 nl:Ourthe
+fr:Vesdre
+nl:Vesder
+fr:Amblève
 de:Rur
 nl:Roer
 en:Roer
