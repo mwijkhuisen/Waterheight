@@ -1,4 +1,5 @@
 import type { ApiStation, AttributionEntry } from '@rws/contracts';
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
   buildFrameStore,
@@ -112,6 +113,20 @@ describe('readFramesBody', () => {
     await expect(readFramesBody(big)).rejects.toThrow('too_big');
     await expect(readFramesBody(new Response('x'.repeat(MAX_FRAMES_BYTES + 1)))).rejects.toThrow('too_big');
     expect(await readFramesBody(new Response('{"a":1}'))).toBe('{"a":1}');
+  });
+
+  it('stops a body without a length at the cap while it streams (review round 1)', async () => {
+    let pulled = 0;
+    const chunk = new Uint8Array(1024 * 1024).fill(120);
+    const endless = new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulled += 1;
+        c.enqueue(chunk);
+      },
+    });
+    await expect(readFramesBody(new Response(endless))).rejects.toThrow('too_big');
+    expect(pulled).toBeLessThanOrEqual(MAX_FRAMES_BYTES / chunk.byteLength + 2);
+    expect(await readFramesBody(new Response('é'))).toBe('é');
   });
 });
 
@@ -259,5 +274,49 @@ describe('the frame store', () => {
     expect(s.valuesAt(T0 + 4 * H).get(1)?.value).toBe(4);
     expect(s.valuesAt(T0 + 6 * H).get(1)?.value).toBe(6);
     expect(s.attribution().map((x) => x.text)).toEqual(['RWS', 'Hub']);
+  });
+});
+
+describe('buildFrameStore on crafted chunks (review round 1)', () => {
+  const known = new Set([1, 2]);
+  const hour = fc.integer({ min: 0, max: 48 }).map((h) => at('2026-10-24T00:00:00Z') + h * H);
+  const cell = fc.oneof(fc.constant(null), fc.double(), fc.constant(Number.NaN), fc.constant(Number.POSITIVE_INFINITY));
+  const chunk = fc
+    .record({
+      from: fc.oneof(
+        hour,
+        hour.map((t) => t + 1234),
+      ),
+      hours: fc.integer({ min: -2, max: 30 }),
+      series: fc.array(fc.oneof(fc.constantFrom(1, 2), fc.integer({ min: -5, max: 2_147_483_647 })), { maxLength: 6 }),
+      rows: fc.array(fc.array(cell, { maxLength: 32 }), { maxLength: 8 }),
+    })
+    .map(
+      (r): FramesChunk => ({
+        from: new Date(r.from).toISOString(),
+        to: new Date(r.from + r.hours * H).toISOString(),
+        series: r.series,
+        vlast: r.rows,
+        attribution: [],
+      }),
+    );
+
+  it('never throws, maps only known ids to finite values, and counts what it drops', () => {
+    fc.assert(
+      fc.property(fc.array(chunk, { maxLength: 4 }), hour, (chunks, t) => {
+        const store = buildFrameStore(
+          chunks,
+          [{ from: at('2026-10-23T00:00:00Z'), to: at('2026-10-27T00:00:00Z') }],
+          stations,
+        );
+        expect(store.dropped).toBeGreaterThanOrEqual(0);
+        for (const [id, v] of store.valuesAt(t)) {
+          expect(known.has(id)).toBe(true);
+          expect(Number.isFinite(v.value)).toBe(true);
+          expect(v.ageSeconds).toBeGreaterThanOrEqual(0);
+        }
+      }),
+      { numRuns: 300 },
+    );
   });
 });

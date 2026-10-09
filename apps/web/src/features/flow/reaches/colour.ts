@@ -50,7 +50,7 @@ export function endValues(
         const value = values.get(s.id);
         if (value === undefined) continue;
         const v = mode === 'delta' ? changes?.get(s.id)?.dh : mode === 'q' ? value.value : levelOf(value.state);
-        return v === undefined ? undefined : { v, ageS: value.ageSeconds, limitS: s.stalenessLimitSeconds };
+        if (v !== undefined) return { v, ageS: value.ageSeconds, limitS: s.stalenessLimitSeconds };
       }
     return undefined;
   };
@@ -69,7 +69,7 @@ export function reachColour(
     return { k: 'nodata' };
   if (mode === 'delta' && fs.impounded === true) return { k: 'impounded' };
   const [a, b] = ends;
-  if (a === undefined || b === undefined || a.ageS > a.limitS || b.ageS > b.limitS) return { k: 'nodata' };
+  if (a === undefined || b === undefined || a.ageS >= a.limitS || b.ageS >= b.limitS) return { k: 'nodata' };
   const x = lerp(a.v, b.v, span.pos);
   if (mode === 'delta') {
     const trend = x > TREND_BAND.cm ? 'rising' : x < -TREND_BAND.cm ? 'falling' : 'steady';

@@ -74,7 +74,9 @@ describe('no data', () => {
       expect(reachColour(meuse28, [undefined, ev(2)], mode)).toEqual({ k: 'nodata' });
       expect(reachColour(meuse28, [ev(2, 3601), ev(2)], mode)).toEqual({ k: 'nodata' });
       expect(reachColour(meuse28, [ev(2), ev(2, 3601)], mode)).toEqual({ k: 'nodata' });
-      expect(reachColour(meuse28, [ev(2, 3600), ev(2, 3600)], mode).k).toBe('v'); // the limit itself is fresh
+      // the same rule as lapses and the frames store: an age of exactly the limit is no end
+      expect(reachColour(meuse28, [ev(2, 3600), ev(2)], mode)).toEqual({ k: 'nodata' });
+      expect(reachColour(meuse28, [ev(2, 3599), ev(2, 3599)], mode).k).toBe('v');
     }
     expect(reachColour(meuse28, [ev(0), ev(3)], 'state')).toEqual({ k: 'nodata' });
     expect(reachColour(meuse28, [ev(3), ev(0)], 'state')).toEqual({ k: 'nodata' });
@@ -224,6 +226,23 @@ describe('endValues', () => {
   it('reads the change in the change mode, a null change being no end', () => {
     expect(endValues(grp, 'delta', values, changes, stations)).toEqual([{ v: 7, ageS: 120, limitS: 333 }, undefined]);
     expect(endValues(grp, 'delta', values, undefined, stations)).toEqual([undefined, undefined]);
+  });
+
+  it('goes on to the next station of the group when the first has no change (review round 1)', () => {
+    const a = station('fr.sandre.B720000001', ['H', 100]);
+    const b = station('fr.sandre.B720000004', ['H', 200]);
+    const [ha] = a.series as unknown as { id: number }[];
+    const [hb] = b.series as unknown as { id: number }[];
+    const by = new Map([a, b, down].map((s) => [s.id, s]));
+    const at = new Map<number, Value>([
+      [(ha as { id: number }).id, val((ha as { id: number }).id, 1)],
+      [(hb as { id: number }).id, val((hb as { id: number }).id, 2)],
+    ]);
+    const dh = new Map<number, Change>([
+      [(ha as { id: number }).id, null],
+      [(hb as { id: number }).id, { dh: -4, trend: 'falling' }],
+    ]);
+    expect(endValues(grp, 'delta', at, dh, by)[0]).toEqual({ v: -4, ageS: 60, limitS: 200 });
   });
 
   it('has no ends on an open span, and paints every reach', () => {

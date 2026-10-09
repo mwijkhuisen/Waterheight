@@ -27,12 +27,33 @@ const API_DAYS = FRAMES_MAX_HOURS / 24;
  */
 export const MAX_FRAMES_BYTES = 16 * 1024 * 1024;
 
-/** The text of a frames response, refused (`too_big`) above MAX_FRAMES_BYTES by its declared and its actual size. */
+/**
+ * The text of a frames response, refused (`too_big`) above MAX_FRAMES_BYTES by its declared size and, while it is read,
+ * by its decoded bytes: a compressed or chunked body has no usable length, so it is never buffered past the cap.
+ */
 export async function readFramesBody(res: Response): Promise<string> {
   if (Number(res.headers.get('content-length')) > MAX_FRAMES_BYTES) throw new Error('too_big');
-  const text = await res.text();
-  if (text.length > MAX_FRAMES_BYTES) throw new Error('too_big');
-  return text;
+  if (res.body === null) return '';
+  const reader = res.body.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_FRAMES_BYTES) {
+      await reader.cancel();
+      throw new Error('too_big');
+    }
+    parts.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) {
+    all.set(p, at);
+    at += p.byteLength;
+  }
+  return new TextDecoder().decode(all);
 }
 
 const hourIso = (ms: number): string => `${new Date(ms).toISOString().slice(0, 13)}:00:00Z`;
