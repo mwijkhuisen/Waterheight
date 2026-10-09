@@ -8,8 +8,10 @@ import {
   FORECAST_FLAGS,
   FORECAST_SOURCES,
   type ForecastRunIn,
+  type ForecastSourceDecl,
   isCurrent,
   isTail,
+  MAX_ISSUE_AGE_MS,
   MAX_LEAD_MS,
   MAX_RUN_POINTS,
   mergeDecision,
@@ -132,6 +134,29 @@ describe('checkRun', () => {
     expect(
       checkRun(run([at(issued - MAX_LEAD_MS - 1)], { issuedAt: new Date(issued).toISOString() }), FETCH, NL1).dropped,
     ).toEqual({ before_window: 1, empty_run: 1 });
+  });
+
+  it('DE-3 keeps leading past days up to its own 4-day allowance (issue #79); every other source keeps two days', () => {
+    const DE3 = FORECAST_SOURCES['DE-3'];
+    const day = 24 * 3_600_000;
+    const at = (ms: number) => ({ ts: new Date(ms).toISOString(), value: 1, flags: 0 });
+    const out = checkRun(
+      run([at(FETCH - 3 * day), at(FETCH - 4 * day), at(FETCH - 4 * day - 1), at(FETCH)]),
+      FETCH,
+      DE3,
+    );
+    expect(out.run?.points.map((p) => p.ms)).toEqual([FETCH - 4 * day, FETCH - 3 * day, FETCH]);
+    expect(out.dropped).toEqual({ before_window: 1 });
+    // the same first row is still dropped for a source without an allowance
+    expect(checkRun(run([at(FETCH - 3 * day), at(FETCH)]), FETCH, NL1).dropped).toEqual({ before_window: 1 });
+  });
+
+  it('every leadMs is a positive finite bound no wider than MAX_ISSUE_AGE_MS (review S1)', () => {
+    for (const d of Object.values(FORECAST_SOURCES) as ForecastSourceDecl[]) {
+      const { leadMs } = d;
+      expect(leadMs === undefined || (Number.isFinite(leadMs) && leadMs > 0 && leadMs <= MAX_ISSUE_AGE_MS)).toBe(true);
+    }
+    expect(Object.values(FORECAST_SOURCES).filter((d) => 'leadMs' in d)).toHaveLength(1);
   });
 });
 

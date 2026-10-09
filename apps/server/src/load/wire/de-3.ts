@@ -16,7 +16,7 @@ export const SOURCE = 'DE-3';
 export const TIME: TimeConvention = DE3_TIME;
 
 export const ADAPTER: LoadAdapter = {
-  version: 1,
+  version: 2,
   specs: {
     'de-3-files': {
       // The spec's max_bytes (1 MiB): a 14-day file is about 1.2 KB.
