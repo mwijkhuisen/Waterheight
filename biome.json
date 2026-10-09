@@ -17,7 +17,8 @@
       "!tools/geo/fixtures/euhydro",
       "!tools/geo/fixtures/wikidata",
       "!tools/geo/fixtures/geofabrik",
-      "!test/fixtures/reaches-fixture.json"
+      "!test/fixtures/reaches-fixture.json",
+      "!apps/web/e2e/fixtures/visual"
     ]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
