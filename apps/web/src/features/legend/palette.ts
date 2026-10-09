@@ -76,3 +76,8 @@ export const LHP_NO_DATA = '#7b7b7b';
 /** KG-233: a station with no value at t whose newest value is past its staleness limit is a small grey dot. */
 export const LAPSED_COLOUR = '#969696';
 export const LAPSED_RADIUS = 3.5;
+
+/** P11b reach lines: "no data" (dashed), "impounded" (solid, neutral) and the tidal hatch's two stripe colours. */
+export const REACH_NODATA_COLOUR = '#8c8c8c';
+export const REACH_IMPOUNDED_COLOUR = '#9aa5ad';
+export const REACH_HATCH_COLOURS = ['rgb(60 80 100)', 'rgb(226 234 240)'] as const;

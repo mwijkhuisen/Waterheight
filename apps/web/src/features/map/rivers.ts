@@ -14,6 +14,11 @@ export const riverUrl = (origin: string, file: string): string | undefined =>
 /** The highlight filter: the tile property `river_id` (tools/geo/rivernet/outputs.ts) equals the chosen id. */
 export const riverFilter = (id: string): FilterSpecification => ['==', ['get', 'river_id'], id];
 
+// P11b: where a reach has a paint (feature-state `k`, written by flow/reaches/reachLayer) the reach layers draw the
+// line, so the base blue steps aside: it would show through the grey dashes and tint the colours. Without a paint it
+// stays as before.
+const BASE_OPACITY: ExpressionSpecification = ['case', ['==', ['feature-state', 'k'], null], 0.7, 0];
+
 const width = (scale: number): ExpressionSpecification => [
   'interpolate',
   ['linear'],
@@ -30,7 +35,7 @@ const width = (scale: number): ExpressionSpecification => [
 export function showRivers(map: MapLibreMap, origin: string, file: string | undefined, beforeId: string): void {
   const url = file === undefined ? undefined : riverUrl(origin, file);
   if (url === undefined || map.getSource(RIVERS) !== undefined) return;
-  map.addSource(RIVERS, { type: 'vector', url });
+  map.addSource(RIVERS, { type: 'vector', url, promoteId: 'reach_id' });
   const before = map.getLayer(beforeId) === undefined ? undefined : beforeId;
   map.addLayer(
     {
@@ -39,7 +44,7 @@ export function showRivers(map: MapLibreMap, origin: string, file: string | unde
       source: RIVERS,
       'source-layer': 'rivers',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#2b6f9e', 'line-opacity': 0.7, 'line-width': width(1) },
+      paint: { 'line-color': '#2b6f9e', 'line-opacity': BASE_OPACITY, 'line-width': width(1) },
     },
     before,
   );

@@ -4,9 +4,16 @@ import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { OwnerBadge } from '../owner/OwnerBadge.tsx';
 import { DhMark } from './DhMark.tsx';
-import { dhItems, LHP_ALERT_CODES, qItems, stateItems } from './items.ts';
+import { dhItems, LHP_ALERT_CODES, qItems, reachItems, stateItems } from './items.ts';
 import styles from './legend.module.css';
-import { LAPSED_COLOUR, LAPSED_RADIUS, LHP_NO_DATA } from './palette.ts';
+import {
+  LAPSED_COLOUR,
+  LAPSED_RADIUS,
+  LHP_NO_DATA,
+  REACH_HATCH_COLOURS,
+  REACH_IMPOUNDED_COLOUR,
+  REACH_NODATA_COLOUR,
+} from './palette.ts';
 
 // The map legend (P10a T2): per mode, collapsible, with the honesty and NL-4 notes and the keys for the other cues.
 // P10d: over the map's bottom-right corner (as on waterinfo). P10e: in that corner of the table view too, above the
@@ -54,7 +61,44 @@ function Dot({ colour, r }: { colour: string; r: number }) {
   );
 }
 
-export function Legend({ locale, mode, forecast, owner, warnings }: LegendProps) {
+/** A short line swatch of a reach key: dashed grey, hatched, or solid neutral (the text says it all). */
+function LineKey({ kind }: { kind: 'nodata' | 'tidal' | 'impounded' }) {
+  return (
+    <svg width="28" height="10" aria-hidden="true" focusable="false">
+      {kind === 'tidal' && (
+        <defs>
+          <pattern
+            id="reach-hatch-key"
+            width="4"
+            height="4"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <rect width="4" height="4" fill={REACH_HATCH_COLOURS[1]} />
+            <rect width="2" height="4" fill={REACH_HATCH_COLOURS[0]} />
+          </pattern>
+        </defs>
+      )}
+      {kind === 'tidal' ? (
+        <rect x="1" y="2" width="26" height="6" fill="url(#reach-hatch-key)" />
+      ) : (
+        <line
+          x1="1"
+          y1="5"
+          x2="27"
+          y2="5"
+          stroke={kind === 'nodata' ? REACH_NODATA_COLOUR : REACH_IMPOUNDED_COLOUR}
+          strokeWidth={kind === 'nodata' ? 3 : 4}
+          strokeDasharray={kind === 'nodata' ? '4 3' : undefined}
+        />
+      )}
+    </svg>
+  );
+}
+
+const reachWord = { nodata: m.reach_nodata, tidal: m.reach_tidal, impounded: m.reach_impounded } as const;
+
+export function Legend({ reaches, locale, mode, forecast, owner, warnings }: LegendProps) {
   const o = { locale };
   return (
     <details className={`${styles.legend} ${styles.floating}`}>
@@ -113,6 +157,20 @@ export function Legend({ locale, mode, forecast, owner, warnings }: LegendProps)
           </li>
         )}
       </ul>
+      {reaches && (
+        <>
+          <p className={styles.note}>{m.reach_legend_heading({}, o)}</p>
+          <ul className={styles.list}>
+            {reachItems().map((k) => (
+              <li key={k}>
+                <LineKey kind={k} />
+                {reachWord[k]({}, o)}
+              </li>
+            ))}
+          </ul>
+          <p className={styles.note}>{m.reach_interpolated({}, o)}</p>
+        </>
+      )}
       {warnings && (
         <>
           <p className={styles.note}>{m.legend_warnings({}, o)}</p>
