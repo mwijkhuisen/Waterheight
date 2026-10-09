@@ -105,11 +105,15 @@ test('the owner site: hourly playback reads the owner frames api only, and an SP
   const t = new Date(Math.floor(Date.now() / hour) * hour - 6 * hour).toISOString().slice(0, 16);
   await page.goto(`/?t=${t}Z&s=be.spw.5447&mode=delta&play=normal`);
   await expect(page.getByRole('slider', { name: 'Tijdlijn' })).toBeVisible();
-  await page.getByRole('button', { name: msg('nl', 'play'), exact: true }).click();
-  // The engine reaches the end of the range (the current hour, written to the URL) and stops: the Play button is back.
-  const end = new Date(Math.floor(Date.now() / hour) * hour).toISOString().slice(0, 16);
-  await expect.poll(() => new URL(page.url()).searchParams.get('t'), { timeout: 60_000 }).toBe(`${end}Z`);
-  await expect(page.getByRole('button', { name: msg('nl', 'play'), exact: true })).toBeVisible();
+  const play = page.getByRole('button', { name: msg('nl', 'play'), exact: true });
+  await play.click();
+  // The engine plays to the end of the page's range and stops by itself: t has moved and the Play button is back. The
+  // end is the last whole hour of meta.now (the publisher's clock, which may trail this one past an hour boundary), so
+  // t is within an hour of this clock's hour, or gone when that hour is the page's now (live).
+  await expect.poll(() => new URL(page.url()).searchParams.get('t'), { timeout: 60_000 }).not.toBe(`${t}Z`);
+  await expect(play).toBeVisible({ timeout: 60_000 });
+  const played = new URL(page.url()).searchParams.get('t');
+  if (played !== null) expect(Date.parse(played)).toBeGreaterThanOrEqual(Math.floor(Date.now() / hour) * hour - hour);
   const frames = log.requests.filter((u) => /\/(api\/v1|data\/v1)\/frames/.test(new URL(u).pathname));
   const api = frames.filter((u) => new URL(u).pathname === '/api/v1/frames');
   expect(api.length, 'the owner frames api was asked').toBeGreaterThanOrEqual(1);

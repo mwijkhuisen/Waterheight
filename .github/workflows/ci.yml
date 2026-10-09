@@ -442,7 +442,8 @@ jobs:
           E2E_OWNER_API_HOST=$(hostname -I | cut -d' ' -f1)
           export E2E_OWNER_API_HOST
           node apps/server/test/e2e/api.ts >"$RUNNER_TEMP/e2e-api.log" 2>&1 &
-          for _ in $(seq 1 120); do
+          # P11b: the seed and the public publish of nine settled days take about 3 minutes (174 s on a dev box).
+          for _ in $(seq 1 300); do
             if grep -q '^e2e api listening' "$RUNNER_TEMP/e2e-api.log"; then exit 0; fi
             sleep 1
           done

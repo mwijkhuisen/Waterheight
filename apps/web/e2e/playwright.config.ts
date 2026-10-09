@@ -165,7 +165,8 @@ export default defineConfig({
             },
             url: 'http://127.0.0.1:4480/healthz',
             reuseExistingServer: false,
-            timeout: 180_000,
+            // P11b: the seed and the publish of nine settled days take about 3 minutes (174 s on a dev box).
+            timeout: 300_000,
           },
           {
             command: 'node e2e/server.ts',
