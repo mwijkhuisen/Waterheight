@@ -1,9 +1,18 @@
-import { floorBucket, MAX_POINTS, type Meta, type Series, type Snapshot, type Stations } from '@rws/contracts';
+import {
+  type FramesAnswer,
+  floorBucket,
+  MAX_POINTS,
+  type Meta,
+  type Series,
+  type Snapshot,
+  type Stations,
+} from '@rws/contracts';
 import { FORECAST_SOURCES, OWNER_ONLY_SOURCES } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { type ChannelAudience, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { FILLED_BY, LOAD_ADAPTERS } from '../load/adapters.ts';
+import { assembleFrames, type FrameRow } from '../publish/render/frames.ts';
 import { channelViews } from './channels.ts';
 import { forecastHorizons } from './forecast-at.ts';
 import type { SeriesParams } from './params.ts';
@@ -268,4 +277,34 @@ export async function readSeries(
       })),
     };
   });
+}
+
+/** The frames body without its attribution; `qcOf` (the qc bits per series, for the attribution) is not enumerable. */
+export type FramesRead = Omit<FramesAnswer, 'attribution'> & { readonly qcOf: ReadonlyMap<number, number> };
+
+/**
+ * A§8 Q5 over [from, to) (whole hours, validated by the route) in the api channel: the hourly rollup's last value per
+ * active series, one row per series with a value, null where an hour has none, nothing carried forward (P11b). The
+ * qc bits ride along as a non-enumerable `qcOf`, so the body spread never carries them.
+ */
+export async function readFrames(db: Kysely<DB>, family: ChannelAudience, p: { from: number; to: number }) {
+  const V = channelViews(family, 'api');
+  const rows = await snapshot(db, async (tx) => {
+    const r = await sql<FrameRow>`
+      SELECT h.series_id, h.bucket, h.vlast, h.qc_or FROM ${sql.table(V.obs1h)} h
+      JOIN ${sql.table(V.series)} s ON s.id = h.series_id AND s.active
+      WHERE h.bucket >= ${new Date(p.from)}::timestamptz AND h.bucket < ${new Date(p.to)}::timestamptz
+      ORDER BY h.series_id, h.bucket`.execute(tx);
+    return r.rows;
+  });
+  const { ids, vlast, qcOf } = assembleFrames(rows, p.from, p.to);
+  const body = {
+    schemaVersion: 1 as const,
+    from: iso(new Date(p.from)),
+    to: iso(new Date(p.to)),
+    stepSeconds: 3600 as const,
+    series: ids,
+    vlast,
+  };
+  return Object.defineProperty(body, 'qcOf', { value: qcOf, enumerable: false }) as FramesRead;
 }

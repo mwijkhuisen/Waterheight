@@ -128,6 +128,161 @@
         ],
         "type": "object"
       },
+      "Frames": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateKind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "update",
+                        "stand",
+                        "reference",
+                        "retrieval"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dateText": {
+                  "anyOf": [
+                    {
+                      "maxLength": 60,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lang": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nl",
+                        "en",
+                        "de",
+                        "fr"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "pattern": "^(?:NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$",
+                  "type": "string"
+                },
+                "text": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "maxLength": 500,
+                      "pattern": "^https:\\/\\/[^\\s]+$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "lang",
+                "text",
+                "url",
+                "required",
+                "dateKind",
+                "date",
+                "dateText"
+              ],
+              "type": "object"
+            },
+            "maxItems": 500,
+            "type": "array"
+          },
+          "from": {
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": 1,
+            "type": "number"
+          },
+          "series": {
+            "items": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxItems": 20000,
+            "type": "array"
+          },
+          "stepSeconds": {
+            "const": 3600,
+            "type": "number"
+          },
+          "to": {
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "vlast": {
+            "items": {
+              "items": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "maxItems": 336,
+              "type": "array"
+            },
+            "maxItems": 20000,
+            "type": "array"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "from",
+          "to",
+          "stepSeconds",
+          "series",
+          "vlast",
+          "attribution"
+        ],
+        "type": "object"
+      },
       "Health": {
         "additionalProperties": false,
         "properties": {
@@ -3565,6 +3720,135 @@
           }
         },
         "summary": "A browser report (CSP violation, Reporting API batch or a client error): logged with control characters removed and cut, never stored"
+      }
+    },
+    "/api/v1/frames": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The start (inclusive), a whole UTC hour from ceil(displayStart). RFC 3339 with an offset (`Z` or `%2B01:00`), at most 32 characters; floored to the 10-minute UTC grid.",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "pattern": "^((?:19|20)[0-9]{2})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The end (exclusive), a whole UTC hour after from, at most 14 days after it and at most now. RFC 3339 with an offset (`Z` or `%2B01:00`), at most 32 characters; floored to the 10-minute UTC grid.",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "pattern": "^((?:19|20)[0-9]{2})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "step",
+            "required": true,
+            "schema": {
+              "enum": [
+                "1h"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The day version from `meta.dayVersions` (absent there means 1). An answer is immutable only when v is current for every day it spans and they are settled; otherwise it is cached for a short time only.",
+            "in": "query",
+            "name": "v",
+            "required": false,
+            "schema": {
+              "pattern": "^[1-9][0-9]{0,5}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Frames"
+                }
+              }
+            },
+            "description": "Frames"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "A parameter is unknown, repeated, malformed or out of range, or the query is too long"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Only GET, HEAD is allowed",
+            "headers": {
+              "Allow": {
+                "description": "The methods this path takes.",
+                "schema": {
+                  "const": "GET, HEAD",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too many requests from this client: wait for Retry-After",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "The data is unavailable or busy for now",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before the request is tried again (an integer, at least 1).",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The last hourly value of every series with data over [from, to), one row per series and one entry per hour (null where an hour has none, never carried forward); the value of bucket h is the last in [h, h + 1 h)"
       }
     },
     "/api/v1/health": {

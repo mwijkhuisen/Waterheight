@@ -20,7 +20,7 @@ export type RouteDef = {
   rate: RateClass;
   /** Takes `v` (day versions; immutable answers). */
   versioned: boolean;
-  /** Listed for its rate class and the sweeps, not served yet (#26 builds /frames; /stations/{id} is A§9.2's). */
+  /** Listed for its rate class and the sweeps, not served yet (/stations/{id} is A§9.2's). */
   planned: boolean;
 };
 
@@ -38,7 +38,7 @@ export const ROUTES: readonly RouteDef[] = [
   r('/api/v1/snapshot', 'display', 'general', { versioned: true }),
   r('/api/v1/series/:id', 'api', 'heavy', { versioned: true }),
   r('/api/v1/series/:id/forecast', 'api', 'heavy'),
-  r('/api/v1/frames', 'api', 'heavy', { planned: true }),
+  r('/api/v1/frames', 'api', 'heavy', { versioned: true }),
   r('/api/v1/health', 'meta', 'general'),
   r('/api/v1/health/sources', 'meta', 'general'),
   r('/api/v1/openapi.json', 'meta', 'general'),

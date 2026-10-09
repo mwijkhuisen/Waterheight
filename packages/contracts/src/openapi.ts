@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   ApiError,
+  FramesAnswer,
   INSTANT_MAX_LENGTH,
   INSTANT_RE,
   MetaAnswer,
@@ -28,6 +29,7 @@ const COMPONENTS = {
   Snapshot: SnapshotAnswer,
   Series: SeriesAnswer,
   SeriesForecast: SeriesForecastAnswer,
+  Frames: FramesAnswer,
   Health: HealthAnswer,
   HealthSources: HealthSourcesAnswer,
   HealthUnavailable,
@@ -234,6 +236,16 @@ export function buildOpenApi(components: OpenApiComponents, title: string, note 
           },
         ],
         NOT_FOUND,
+      ),
+      '/api/v1/frames': get(
+        'The last hourly value of every series with data over [from, to), one row per series and one entry per hour (null where an hour has none, never carried forward); the value of bucket h is the last in [h, h + 1 h)',
+        json('Frames', 'Frames'),
+        [
+          instant('from', 'The start (inclusive), a whole UTC hour from ceil(displayStart).'),
+          instant('to', 'The end (exclusive), a whole UTC hour after from, at most 14 days after it and at most now.'),
+          { name: 'step', in: 'query', required: true, schema: { type: 'string', enum: ['1h'] } },
+          VERSION_PARAM,
+        ],
       ),
       '/api/v1/health': get('Loader and source health (public sources)', json('Health', 'Health'), [], HEALTH_503),
       '/api/v1/health/sources': get('Health per public source', json('HealthSources', 'HealthSources'), [], HEALTH_503),

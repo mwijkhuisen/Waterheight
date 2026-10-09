@@ -92,8 +92,8 @@ describe('ROUTES', () => {
     for (const r of ROUTES.filter((x) => x.path.startsWith('/api/v1/series/'))) expect(r.rate).toBe('heavy');
   });
 
-  it('only the planned routes are not built: /stations/:id and /frames', () => {
-    expect(ROUTES.filter((r) => r.planned).map((r) => r.path)).toEqual(['/api/v1/stations/:id', '/api/v1/frames']);
+  it('only /stations/:id is planned, not built', () => {
+    expect(ROUTES.filter((r) => r.planned).map((r) => r.path)).toEqual(['/api/v1/stations/:id']);
   });
 });
 
@@ -123,6 +123,7 @@ describe('the api channel is read through channelViews only', () => {
     const handlers: Record<string, string> = {
       '/api/v1/series/:id': 'data.ts',
       '/api/v1/series/:id/forecast': 'forecast-at.ts',
+      '/api/v1/frames': 'data.ts',
     };
     const apiRoutes = ROUTES.filter((r) => r.channel === 'api' && r.method === 'GET' && !r.planned);
     expect(apiRoutes.map((r) => r.path).sort()).toEqual(Object.keys(handlers).sort());

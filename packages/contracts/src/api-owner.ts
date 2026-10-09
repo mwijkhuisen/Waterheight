@@ -37,6 +37,7 @@ export const ownerOpenApiDocument = (): Record<string, unknown> =>
       Snapshot: OwnerSnapshotAnswer,
       Series: OwnerSeriesAnswer,
       SeriesForecast: OwnerSeriesForecastAnswer,
+      Frames: OwnerFramesAnswer,
       Health: OwnerHealthAnswer,
       HealthSources: OwnerHealthSourcesAnswer,
       HealthUnavailable,

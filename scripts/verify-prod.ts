@@ -2125,6 +2125,15 @@ export function sweepAsks(stations: Stations, serverNow: string): { asks: SweepA
       case '/api/v1/series/:id/forecast':
         for (const id of ids) add(`/api/v1/series/${id}/forecast`, route.rate === 'heavy');
         break;
+      case '/api/v1/frames': {
+        // Whole hours, to at most now: the last 3 full hours.
+        const h = Math.floor(now / SWEEP_HOUR_MS) * SWEEP_HOUR_MS;
+        add(
+          `${route.path}?from=${instantParam(h - 3 * SWEEP_HOUR_MS)}&to=${instantParam(h)}&step=1h`,
+          route.rate === 'heavy',
+        );
+        break;
+      }
       default:
         unknown.push(route.path);
     }
