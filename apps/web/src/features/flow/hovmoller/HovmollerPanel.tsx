@@ -158,6 +158,7 @@ export function HovmollerPanel({
   useEffect(() => {
     const el = box.current;
     if (!drawn || el === null) return;
+    setFailed(false);
     let gone = false;
     let made: HovChart | undefined;
     import('./chart.ts')

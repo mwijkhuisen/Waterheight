@@ -208,6 +208,7 @@ export function createHovChart(el: HTMLElement, onCell: (column: number, row: nu
     /** The ECharts instance: the e2e hook reads its option. */
     instance: chart,
     update(d: HovData) {
+      if (chart.isDisposed()) return;
       data = d;
       wasNarrow = narrow();
       const small = wasNarrow;
@@ -315,6 +316,7 @@ export function createHovChart(el: HTMLElement, onCell: (column: number, row: nu
     /** The t line and the selected column move without a rebuild of the cells. */
     mark(next: Marks) {
       marks = next;
+      if (chart.isDisposed()) return;
       chart.setOption({ series: [{ id: 'marker', data: markData(next) }] });
     },
     /** The viewport (client) pixel of a cell's centre, for the e2e hook; undefined while the chart has no such cell. */

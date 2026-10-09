@@ -64,9 +64,10 @@ function visitedReaches(graph: ReachGraph, spec: PathSpec, startReach: string): 
   // The seen set ends a cycle; a split is at most 20 wide (the contract), so the walk is bounded by the file.
   const todo = [startReach];
   for (let id = todo.pop(); id !== undefined; id = todo.pop()) {
-    const next = (reaches.get(id)?.downstream ?? []).filter((d) => rank(d) >= 0 && !seen.has(d));
+    // The split's top rank counts a reach already walked too, so a merge never lets a lower-ranked sibling in.
+    const next = (reaches.get(id)?.downstream ?? []).filter((d) => rank(d) >= 0);
     const top = Math.max(...next.map(rank));
-    for (const d of next.filter((n) => rank(n) === top)) {
+    for (const d of next.filter((n) => rank(n) === top && !seen.has(n))) {
       seen.add(d);
       todo.push(d);
     }

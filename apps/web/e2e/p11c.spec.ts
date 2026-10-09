@@ -6,6 +6,8 @@ import {
   escapeRx,
   expectInert,
   expectNoSeriousAxe,
+  FRAMES_API,
+  FRAMES_FILE,
   finish,
   type HovW,
   hovDrawnText,
@@ -24,11 +26,13 @@ import {
   hovRegion as regionOf,
   hovSeries as seriesOf,
   settled,
+  slider,
   start,
   hovState as stateOf,
   hovTableToggle as tableToggle,
   textHosts,
   hovToggle as toggleOf,
+  urlsFrom,
   where,
   XSS,
   hovYLabels as yLabels,
@@ -151,6 +155,62 @@ test('the panel chunk is not requested until the toggle is pressed; the page sta
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await toggle.click();
   await expect(regionOf(page)).toHaveCount(0);
+  await expect.poll(() => param(page, 'hov')).toBeNull();
+  await finish(page, s);
+});
+
+// Review round 1: what a deep link asks, and a panel chunk that does not load.
+test('a deep link reads one page of frames: each file of its window once, no API frames, no autoplay', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  await open(page, '/?mode=delta&hov=rhine-waal');
+  await ready(page, 'rhine-waal');
+  // Live: page 0 is the 168 hours up to 2026-10-26T12:00Z; the 25 h lead starts the window at 2026-10-18T12:00Z.
+  const urls = urlsFrom(s);
+  const files = urls.filter((u) => FRAMES_FILE.test(u.pathname)).map((u) => u.pathname);
+  expect(new Set(files).size, 'no frames file is asked twice').toBe(files.length);
+  expect(
+    files
+      .filter((p) => !p.endsWith('/recent.json'))
+      .map((p) => p.split('/')[4])
+      .sort(),
+    'a day file per settled day of the window, 2026-10-18 to 2026-10-23',
+  ).toEqual(['2026-10-18', '2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23']);
+  expect(
+    files.filter((p) => p.endsWith('/recent.json')),
+    'the unsettled days: one recent file',
+  ).toHaveLength(1);
+  expect(
+    urls.filter((u) => u.pathname === FRAMES_API),
+    'no API frames while the files exist',
+  ).toEqual([]);
+  expect(param(page, 'play'), 'a deep link never plays').toBeNull();
+  await expect(play(page)).toBeVisible();
+  await finish(page, s);
+});
+
+test('a panel chunk that does not load is an alert in its place; the map, the timebar and the toggle stay', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  // A 404, not an abort: WebKit logs an aborted request as "Blocked by Web Inspector", which the CSP check counts.
+  await page.route('**/assets/HovmollerPanel-*.js', (route) => route.fulfill({ status: 404, body: 'not found' }));
+  await open(page, deep(null));
+  await mapReady(page);
+  await toggleOf(page).click();
+  const alert = page.getByRole('alert').filter({ hasText: nl('data_unavailable') });
+  await expect(alert).toBeVisible();
+  await expect(alert.getByRole('link', { name: nl('page_reload') })).toHaveAttribute('href', /[?&]hov=rhine-waal/);
+  await expect(regionOf(page)).toHaveCount(0);
+  await expect(slider(page)).toBeVisible();
+  await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  await toggleOf(page).click();
+  await expect(alert).toHaveCount(0);
   await expect.poll(() => param(page, 'hov')).toBeNull();
   await finish(page, s);
 });

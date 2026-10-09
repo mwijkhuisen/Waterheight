@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
+  FRAMES_API,
+  FRAMES_FILE,
   finish,
   type HovW,
   hovAxisLabels,
@@ -14,6 +16,7 @@ import {
   reachKm,
   start,
   stationNames,
+  urlsFrom,
 } from './helpers.ts';
 
 // P11c (issue #26, OV): the "Langs de rivier" panel on the OWNER site on Chromium, Firefox and WebKit (the `owner-*`
@@ -130,5 +133,30 @@ test('OV: a discharge-only SPW gauge is coloured by its trend (the map’s Δ ru
   const col = columns.findIndex((c) => c.id === Q_ONLY) + 1;
   const row = table.locator('tbody tr').filter({ has: page.locator('th[scope="row"] button[aria-current="time"]') });
   await expect(row.locator('td').nth(col - 1)).toHaveText(/^[+−]?\d+ m³\/s$/);
+  await finish(page, s);
+});
+
+// Review round 1 (T-WEB-8): the owner host reads the panel's page from the owner API, one bounded call, no file.
+test('OV: the owner panel asks its page of frames with one owner API call of at most 14 days, no static file', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  await open(page, `/?mode=delta&t=${T}&hov=meuse`);
+  await hovReady(page, 'meuse');
+  const urls = urlsFrom(s);
+  const calls = urls.filter((u) => u.pathname === FRAMES_API);
+  expect(calls, 'one owner API call for the page').toHaveLength(1);
+  const [from, to] = [
+    Date.parse(calls[0]?.searchParams.get('from') ?? ''),
+    Date.parse(calls[0]?.searchParams.get('to') ?? ''),
+  ];
+  expect(to - from, 'at most 14 days').toBeLessThanOrEqual(14 * 86_400_000);
+  expect(to, 'the window ends at the page, never after it').toBeLessThanOrEqual(Date.parse('2026-10-26T12:00:00Z'));
+  expect(
+    urls.filter((u) => FRAMES_FILE.test(u.pathname)),
+    'no static frames file on the owner host',
+  ).toEqual([]);
   await finish(page, s);
 });

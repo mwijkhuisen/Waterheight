@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
 import { Attribution } from './features/attribution/Attribution.tsx';
 import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
@@ -39,6 +39,7 @@ import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
 import { pathOf, routeOf } from './lib/routes.ts';
 import { hiddenKey, lapses, stationStates, visibleStations } from './lib/stationStates.ts';
 import { DAY_MS, floorHour, quantise } from './lib/time/time.ts';
+import { searchOf } from './lib/url/url.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
 import { m } from './paraglide/messages.js';
 import type { Locale } from './paraglide/runtime.js';
@@ -50,11 +51,7 @@ import type { Locale } from './paraglide/runtime.js';
 
 const FETCH_DEBOUNCE_MS = 150;
 
-// P11c: "Langs de rivier" is a lazy chunk (ECharts and the grid stay out of the entry chunk), asked for only while
-// `?hov=` is set.
-const HovmollerPanel = lazy(() =>
-  import('./features/flow/hovmoller/HovmollerPanel.tsx').then((x) => ({ default: x.HovmollerPanel })),
-);
+type HovmollerPanel = typeof import('./features/flow/hovmoller/HovmollerPanel.tsx').HovmollerPanel;
 
 export function App({ locale }: { locale: Locale }) {
   const route = routeOf(location.pathname);
@@ -279,6 +276,21 @@ function Viewer({ locale }: { locale: Locale }) {
     setUrl({ hov: undefined });
     hovToggle.current?.focus();
   }, [setUrl]);
+  // The panel is a lazy chunk (ECharts and the grid stay out of the entry chunk), asked for only once `?hov=` is set.
+  // A chunk that fails (offline, a tab older than the deploy) is an alert in the panel's place, never a blank page
+  // (review round 1): no React.lazy, which throws into a viewer without an error boundary.
+  const hovOpen = url.hov !== undefined;
+  const [hov, setHov] = useState<{ Panel: HovmollerPanel } | 'failed' | undefined>();
+  useEffect(() => {
+    if (!hovOpen || hov !== undefined) return;
+    let gone = false;
+    import('./features/flow/hovmoller/HovmollerPanel.tsx')
+      .then((x) => !gone && setHov({ Panel: x.HovmollerPanel }))
+      .catch(() => !gone && setHov('failed'));
+    return () => {
+      gone = true;
+    };
+  }, [hovOpen, hov]);
 
   const canMap = webgl && !mapFailed;
   const riverTiles = rivers.data?.manifest.current.tiles.file;
@@ -433,9 +445,19 @@ function Viewer({ locale }: { locale: Locale }) {
               />
             )}
           </div>
-          {url.hov !== undefined && (
-            <Suspense fallback={null}>
-              <HovmollerPanel
+          {url.hov !== undefined &&
+            (hov === undefined || hov === 'failed' ? (
+              // Its box is kept while the chunk loads, so the view above and the corner do not jump.
+              <div className={styles.hovPending}>
+                {hov === 'failed' && (
+                  <p role="alert">
+                    {m.data_unavailable({}, { locale })}{' '}
+                    <a href={`${pathOf('home', locale)}${searchOf(url)}`}>{m.page_reload({}, { locale })}</a>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <hov.Panel
                 locale={locale}
                 meta={meta.data}
                 stations={sorted}
@@ -446,11 +468,10 @@ function Viewer({ locale }: { locale: Locale }) {
                 selected={url.s}
                 open={open}
                 path={url.hov}
-                onPath={(hov) => setUrl({ hov })}
+                onPath={(next) => setUrl({ hov: next })}
                 onClose={closeHov}
               />
-            </Suspense>
-          )}
+            ))}
           <div className={styles.corner}>
             {legend}
             <Attribution
