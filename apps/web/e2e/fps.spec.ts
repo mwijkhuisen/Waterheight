@@ -1,5 +1,5 @@
 import { type Browser, devices, expect, type Page, test } from '@playwright/test';
-import { mapReady, msg, NOW, open, slider, type W } from './helpers.ts';
+import { type HovW, mapReady, msg, NOW, open, slider, type W } from './helpers.ts';
 
 // P11a (issue #26, C4; owner decision D-B): the frame rate of the map with the flow animation on, while the timebar is
 // scrubbed with the keyboard for 10 s over the fixture rivers (the committed river release, prepare-tiles.ts), measured
@@ -93,10 +93,14 @@ async function measure(
   tracePath: string,
   throttle: number | null,
   playing = false,
+  panel = false,
 ): Promise<Run> {
   await page.clock.setFixedTime(NOW);
-  await open(page, playing ? '/?mode=delta' : '/');
+  await open(page, panel ? '/?mode=delta&hov=rhine-waal' : playing ? '/?mode=delta' : '/');
   await mapReady(page);
+  // P11c: with the "Langs de rivier" panel open its chart has drawn (the hook holds the ECharts instance) before measuring.
+  if (panel)
+    await expect.poll(() => page.evaluate(() => (window as unknown as HovW).__rwsHov?.chart != null)).toBe(true);
   // The e2e build starts with the flow off (App.tsx), so the camera jump below can wait for `idle` (a running animation
   // holds it off on a software renderer); the real pause control turns the flow on before the measurement.
   // The Rhine and the Meuse of the fixture release both in view (about 4 degrees across at this zoom).
@@ -228,4 +232,49 @@ test('desktop: at least 30 frames a second while playing back with the reach lay
     `fps desktop playing: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
   );
   gate(run.fps, DESKTOP_MIN_FPS, `desktop playing fps (${run.method}) ${JSON.stringify(run.all)}`);
+});
+
+// P11c (issue #26): the same two measures with the "Langs de rivier" panel open (the ECharts canvas of 168 rows) and
+// hourly playback running, so the chart's marker and the reach layers both update. Report-only like the others (KG-269)
+// unless FPS_GATE=1; the numbers are printed, annotated and attached.
+test('desktop: at least 30 frames a second while playing back with the Hovmöller panel open', async ({
+  browser,
+  page,
+}, testInfo) => {
+  const run = await measure(browser, page, testInfo.outputPath('trace-desktop-hov.json'), null, true, true);
+  testInfo.annotations.push({ type: 'fps-desktop-hov', description: `${run.fps.toFixed(1)} (${run.method})` });
+  await testInfo.attach('fps-desktop-hov.json', {
+    body: JSON.stringify(run, null, 2),
+    contentType: 'application/json',
+  });
+  console.log(
+    `fps desktop panel: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
+  );
+  gate(run.fps, DESKTOP_MIN_FPS, `desktop panel fps (${run.method}) ${JSON.stringify(run.all)}`);
+});
+
+test('mobile, 4x CPU throttle: at least 20 frames a second while playing back with the Hovmöller panel open', async ({
+  browser,
+  baseURL,
+}, testInfo) => {
+  const context = await browser.newContext({
+    ...devices['Pixel 5'],
+    ...(baseURL === undefined ? {} : { baseURL }),
+    ignoreHTTPSErrors: true,
+  });
+  try {
+    const page = await context.newPage();
+    const run = await measure(browser, page, testInfo.outputPath('trace-mobile-hov.json'), 4, true, true);
+    testInfo.annotations.push({ type: 'fps-mobile-4x-hov', description: `${run.fps.toFixed(1)} (${run.method})` });
+    await testInfo.attach('fps-mobile-hov.json', {
+      body: JSON.stringify(run, null, 2),
+      contentType: 'application/json',
+    });
+    console.log(
+      `fps mobile 4x panel: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
+    );
+    gate(run.fps, MOBILE_MIN_FPS, `mobile panel fps (${run.method}) ${JSON.stringify(run.all)}`);
+  } finally {
+    await context.close();
+  }
 });

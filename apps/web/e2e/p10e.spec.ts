@@ -6,8 +6,11 @@ import {
   barNav,
   chooseView,
   expandTimebar,
+  expectHovLayout,
   expectNoSeriousAxe,
   finish,
+  hovReady,
+  hovRegion,
   mapReady,
   menuButton,
   modeSummary,
@@ -662,6 +665,27 @@ test('at 390x844 the timebar covers neither the legend button nor the panel clos
   await expect(close).toBeVisible();
   expect(overlaps(await box(timebarOf(page)), await box(close))).toBe(false);
   expect(overlaps(await box(timebarOf(page)), await box(legend))).toBe(false);
+  await finish(page, s);
+});
+
+// P11c (issue #26, C13): with "Langs de rivier" open the timebar, the corner and the station sheet leave it clear.
+test('at 390x844 the open Langs de rivier panel is clear of the timebar, the corner and the station sheet', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await ready(page, '/?hov=rhine-waal');
+  await hovReady(page, 'rhine-waal');
+  await expectHovLayout(page, '390x844');
+  await pickStation(page, 'E2E DST', /E2E DST/);
+  // The sheet (below 48rem) ends above the panel and never reaches the bar.
+  const sheet = await box(panelOf(page));
+  const region = await box(hovRegion(page));
+  expect(sheet.y + sheet.height).toBeLessThanOrEqual(region.y + 1);
+  expect(overlaps(sheet, await box(timebarOf(page)))).toBe(false);
+  await expect(panelOf(page).getByRole('button', { name: nl('panel_close') })).toBeInViewport();
   await finish(page, s);
 });
 

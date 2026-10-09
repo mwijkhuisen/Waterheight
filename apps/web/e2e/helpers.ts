@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
-import { type BrowserContext, expect, type Page } from '@playwright/test';
+import { type BrowserContext, expect, type Locator, type Page } from '@playwright/test';
 import { expectClean, instrument, type Log } from './clean.ts';
 
 // Helpers of the P10a specs (p10a, owner, no-webgl2, cvd): the "clean page" session, the e2e build's test hook
@@ -367,3 +367,156 @@ export const SNAPSHOT_PATH =
   /^\/api\/v1\/snapshot$|^\/data\/v1\/(?:latest\.json|latest\/|recent\/|settled\/|warnings\/)/;
 /** The requests of a log from index `from` on, as URLs. */
 export const urlsFrom = (s: Session, from = 0) => s.log.requests.slice(from).map((u) => new URL(u));
+
+// P11c (issue #26): the "Langs de rivier" panel. Its hook (`window.__rwsHov`, e2e build only) is not in `__rws.charts`: the
+// station panels' idle check counts those against `aside div[role="img"]`, and the panel is not inside an `aside`.
+
+/** What the tests read from the Hovmöller chart's option (hovmoller/chart.ts): the series' own data tuples. */
+export interface HovOption {
+  yAxis?: { data?: string[] }[];
+  xAxis?: { axisLabel?: { formatter?: (v: number) => string; customValues?: number[] } }[];
+  series?: { id?: string; data?: number[][] }[];
+  tooltip?: { renderMode?: string }[];
+}
+export interface HovHook {
+  chart: {
+    getOption(): HovOption;
+    setOption(option: unknown, opts?: unknown): void;
+    getZr(): { storage: { getDisplayList(update?: boolean): { style?: { text?: unknown } }[] } };
+  } | null;
+  path: string;
+  columns: readonly { id: string; x: number }[];
+  rows: readonly string[];
+  cellAt(
+    id: string,
+    iso: string,
+  ): { bin: number | null; change: number | null; quantity: 'H' | 'Q' | null } | undefined;
+  pixelOf(id: string, iso: string): [number, number] | undefined;
+}
+export type HovW = Window & { __rwsHov?: HovHook };
+/** The river release of the e2e site (prepare-tiles.ts E2E_RIVERS). */
+const HOV_RIVERS = '20261003';
+
+/** Every text the Hovmöller chart has drawn on its canvas (axis labels, gap text, the tooltip), as plain strings. */
+export const hovDrawnText = (page: Page) =>
+  page.evaluate(() => {
+    const out: string[] = [];
+    const chart = (window as unknown as HovW).__rwsHov?.chart;
+    if (chart)
+      for (const e of chart.getZr().storage.getDisplayList(true))
+        if (typeof e.style?.text === 'string') out.push(e.style.text);
+    return out;
+  });
+
+// the panel's controls, by the page's own messages
+export const hovToggle = (page: Page, locale: 'nl' | 'en' = 'nl') =>
+  page.getByRole('button', { name: msg(locale, 'hov_toggle'), exact: true });
+export const hovRegion = (page: Page, locale: 'nl' | 'en' = 'nl') =>
+  page.getByRole('region', { name: msg(locale, 'hov_region'), exact: true });
+export const hovPathSelect = (page: Page) =>
+  page.getByRole('combobox', { name: msg('nl', 'hov_path_label'), exact: true });
+export const hovTableToggle = (page: Page, locale: 'nl' | 'en' = 'nl') =>
+  hovRegion(page, locale).getByRole('button', { name: msg(locale, 'hov_table_toggle'), exact: true });
+export const hovClose = (page: Page) =>
+  hovRegion(page).getByRole('button', { name: msg('nl', 'hov_close'), exact: true });
+
+/** The hook's view of the panel: its path, columns (id, x) and rows (ISO). Null while the hook is not there. */
+export const hovState = (page: Page) =>
+  page.evaluate(() => {
+    const h = (window as unknown as HovW).__rwsHov;
+    return h === undefined ? null : { path: h.path, columns: h.columns.map((c) => ({ ...c })), rows: [...h.rows] };
+  });
+/** The chart option's series data by id (cells `[x, row, half width, bin (9 none), tidal, column]`, marker, gaps). */
+export const hovSeries = (page: Page, id: string) =>
+  page.evaluate((id) => {
+    const o = (window as unknown as HovW).__rwsHov?.chart?.getOption();
+    return o?.series?.find((s) => s.id === id)?.data ?? null;
+  }, id);
+export const hovYLabels = (page: Page) =>
+  page.evaluate(() => (window as unknown as HovW).__rwsHov?.chart?.getOption().yAxis?.[0]?.data ?? []);
+/** The drawn axis labels are the formatter's output for each column x: the full names, never the truncated drawing. */
+export const hovAxisLabels = (page: Page, xs: readonly number[]) =>
+  page.evaluate((xs) => {
+    const o: HovOption | undefined = (window as unknown as HovW).__rwsHov?.chart?.getOption();
+    const f = o?.xAxis?.[0]?.axisLabel?.formatter;
+    return f === undefined ? [] : xs.map((x) => f(x));
+  }, xs);
+
+/**
+ * The panel is open on `path`, its hourly values are in (no loading status) and the chart has drawn every cell of every
+ * column and row.
+ */
+export async function hovReady(page: Page, path?: string, locale: 'nl' | 'en' = 'nl') {
+  await expect(hovRegion(page, locale)).toBeVisible();
+  await expect(hovRegion(page, locale).getByRole('status')).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate((path) => {
+        const h = (window as unknown as HovW).__rwsHov;
+        const cells = h?.chart?.getOption().series?.find((s) => s.id === 'cells')?.data;
+        if (h === undefined || !cells || cells.length === 0 || (path !== undefined && h.path !== path)) return false;
+        return cells.length === h.columns.length * h.rows.length && cells[0]?.[0] === h.columns[0]?.x;
+      }, path),
+    )
+    .toBe(true);
+}
+
+/** The station names the site publishes, by id (the api answer the page itself reads). */
+export async function stationNames(page: Page): Promise<Map<string, string>> {
+  const res = await page.request.get('/api/v1/stations');
+  expect(res.status()).toBe(200);
+  const { stations } = (await res.json()) as { stations: { id: string; name: string }[] };
+  return new Map(stations.map((s) => [s.id, s.name]));
+}
+/** `km_to_nl_entry` of every station of the reaches file the page reads (the registry's chainage; + upstream, 0 at the entry). */
+export async function reachKm(page: Page): Promise<Map<string, number>> {
+  const res = await page.request.get(`/data/v1/rivers/reaches-${HOV_RIVERS}.json`);
+  expect(res.status()).toBe(200);
+  const { stations } = (await res.json()) as { stations: { id: string; km_to_nl_entry: number | null }[] };
+  return new Map(stations.flatMap((s) => (s.km_to_nl_entry === null ? [] : ([[s.id, s.km_to_nl_entry]] as const))));
+}
+
+/**
+ * The layout of the open "Langs de rivier" panel (P11c C13), in the chart view and in the table view, with the timebar
+ * collapsed and expanded: the bar never covers the chart or the table's scroll area, and the corner (the legend, the
+ * "Bronnen" button, MapLibre's attribution) stands above the panel, not over it. (The panel's own padding is under the
+ * bar by design, so the boxes compared are the chart's and the table area's.)
+ */
+export async function expectHovLayout(page: Page, where: string, bars: readonly boolean[] = [false, true]) {
+  const box = async (l: Locator) => {
+    const b = await l.boundingBox();
+    if (b === null) throw new Error('no box');
+    return b;
+  };
+  const meet = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  const region = hovRegion(page);
+  const corner = [
+    page.locator('summary', { hasText: msg('nl', 'legend_heading') }),
+    page.getByRole('button', { name: msg('nl', 'sources_heading'), exact: true }),
+    page.locator('.maplibregl-ctrl-attrib-button'),
+  ];
+  for (const view of ['chart', 'table'] as const) {
+    if ((view === 'table') !== ((await hovTableToggle(page).getAttribute('aria-pressed')) === 'true'))
+      await hovTableToggle(page).click();
+    const area = view === 'chart' ? region.getByRole('img') : region.getByRole('table').locator('xpath=..');
+    await expect(area).toBeVisible();
+    for (const expanded of bars) {
+      const more = timebarOf(page).getByRole('button', { name: msg('nl', 'timebar_more'), exact: true });
+      if ((await more.getAttribute('aria-expanded')) !== (expanded ? 'true' : 'false')) await more.click();
+      const label = `${where}, ${view}, expanded=${expanded}`;
+      // (the bar's measured height reaches the panel's padding a frame later)
+      await expect
+        .poll(async () => (await box(area)).y + (await box(area)).height <= (await box(timebarOf(page))).y + 1, {
+          message: `${label}: the bar covers the ${view}`,
+        })
+        .toBe(true);
+      const top = (await box(region)).y;
+      for (const c of corner) {
+        const b = await box(c);
+        expect(b.y + b.height, `${label}: a corner control is over the panel`).toBeLessThanOrEqual(top + 1);
+        expect(meet(b, await box(timebarOf(page))), `${label}: a corner control is under the bar`).toBe(false);
+      }
+    }
+  }
+}
