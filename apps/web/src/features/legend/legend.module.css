@@ -95,7 +95,7 @@
 .floating {
   box-sizing: border-box;
   max-width: min(20rem, calc(100vw - 1rem));
-  max-height: calc(100dvh - var(--chrome-h, 3.5rem) - var(--timebar-h, 0px) - 7rem);
+  max-height: calc(100dvh - var(--chrome-h, 3.5rem) - var(--timebar-h, 0px) - var(--hov-h, 0px) - 7rem);
   margin: 0;
   overflow: auto;
 }

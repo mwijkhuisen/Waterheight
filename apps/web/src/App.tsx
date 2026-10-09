@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
 import { Attribution } from './features/attribution/Attribution.tsx';
 import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
 import { FlowToggle } from './features/flow/FlowToggle.tsx';
 import { playRange, type Speed } from './features/flow/playback/engine.ts';
 import { usePlayback } from './features/flow/playback/usePlayback.ts';
+import toggleStyles from './features/flow/toggle.module.css';
 import { Layout } from './features/layout/Layout.tsx';
 import { Legend } from './features/legend/Legend.tsx';
 import { MapControls } from './features/legend/MapControls.tsx';
@@ -48,6 +49,12 @@ import type { Locale } from './paraglide/runtime.js';
 // The language link is a full page load that keeps t and s, so <html lang> always matches the page (A§10).
 
 const FETCH_DEBOUNCE_MS = 150;
+
+// P11c: "Langs de rivier" is a lazy chunk (ECharts and the grid stay out of the entry chunk), asked for only while
+// `?hov=` is set.
+const HovmollerPanel = lazy(() =>
+  import('./features/flow/hovmoller/HovmollerPanel.tsx').then((x) => ({ default: x.HovmollerPanel })),
+);
 
 export function App({ locale }: { locale: Locale }) {
   const route = routeOf(location.pathname);
@@ -261,6 +268,17 @@ function Viewer({ locale }: { locale: Locale }) {
     else searchRef.current?.focus();
   }, [selected]);
   const failed = useCallback(() => setMapFailed(true), []);
+  // P11c: the Hovmöller panel opens on the Meuse when the river chip says so, else on Rhine–Waal; closing it returns
+  // the focus to its toggle.
+  const hovToggle = useRef<HTMLButtonElement>(null);
+  const toggleHov = useCallback(
+    () => setUrl({ hov: url.hov === undefined ? (url.river === 'meuse' ? 'meuse' : 'rhine-waal') : undefined }),
+    [setUrl, url.hov, url.river],
+  );
+  const closeHov = useCallback(() => {
+    setUrl({ hov: undefined });
+    hovToggle.current?.focus();
+  }, [setUrl]);
 
   const canMap = webgl && !mapFailed;
   const riverTiles = rivers.data?.manifest.current.tiles.file;
@@ -314,12 +332,21 @@ function Viewer({ locale }: { locale: Locale }) {
         // its bottom centre and the station panel is a drawer on its right; in the table view the top is a band above
         // the table, which then scrolls inside the stage.
         <div
-          className={`${styles.stage} ${onMap ? styles.onMap : styles.onTable} ${selected !== undefined ? styles.withPanel : ''}`}
+          className={`${styles.stage} ${onMap ? styles.onMap : styles.onTable} ${selected !== undefined ? styles.withPanel : ''}${url.hov !== undefined ? ` ${styles.hovOpen}` : ''}`}
         >
           <div className={styles.top}>
             <div className={styles.controls}>
               <MapControls locale={locale} mode={mode} onMode={setMode} view={view} onView={setView} canMap={canMap} />
               {onMap && riverTiles !== undefined && <FlowToggle locale={locale} on={flow} onChange={setFlow} />}
+              <button
+                type="button"
+                ref={hovToggle}
+                className={toggleStyles.toggle}
+                aria-pressed={url.hov !== undefined}
+                onClick={toggleHov}
+              >
+                {m.hov_toggle({}, { locale })}
+              </button>
             </div>
             <div className={styles.status}>
               {notice !== undefined && (
@@ -406,6 +433,24 @@ function Viewer({ locale }: { locale: Locale }) {
               />
             )}
           </div>
+          {url.hov !== undefined && (
+            <Suspense fallback={null}>
+              <HovmollerPanel
+                locale={locale}
+                meta={meta.data}
+                stations={sorted}
+                ownerSources={ownerSources}
+                playback={playback}
+                t={t}
+                setT={setT}
+                selected={url.s}
+                open={open}
+                path={url.hov}
+                onPath={(hov) => setUrl({ hov })}
+                onClose={closeHov}
+              />
+            </Suspense>
+          )}
           <div className={styles.corner}>
             {legend}
             <Attribution
