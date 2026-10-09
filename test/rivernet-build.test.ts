@@ -11,6 +11,7 @@ import {
   readWays,
 } from '../tools/geo/rivernet/build.ts';
 import type { WayFeature } from '../tools/geo/rivernet/geojsonseq.ts';
+import { buildNetwork } from '../tools/geo/rivernet/network.ts';
 import type { Relation } from '../tools/geo/rivernet/opl.ts';
 
 // The P6a graph builder on small synthetic networks: which ways are kept, where
@@ -335,6 +336,73 @@ describe('buildGraph', () => {
       licence: 'ODbL-1.0',
       rivers: [{ relation_tags: { type: 'waterway', waterway: 'river', wikidata: a.wikidata } }],
     });
+  });
+});
+
+// The join split (#110): a join onto another river makes that river's nearest vertex a graph node first.
+describe('buildGraph: the split at a join onto another river', () => {
+  const SINK: [number, number] = [5.0031, 51.0031]; // 14 m from vertex n3 of the main way
+  const main = river('main', 1);
+  const trib = river('trib', 2);
+  const mainWay = way(10, [1, 2, 3, 4, 5]);
+  const tribWay = (id = 20): WayFeature => ({
+    id,
+    nodes: [100, 101],
+    coords: [[5.0035, 51.0045], SINK],
+    tags: { waterway: 'river' },
+  });
+  const withJoin = (maxM: number, toRiver = 'main', joiner = 'trib') => ({
+    ...rivers(main, trib),
+    joins: [{ river: joiner, at: SINK, to_river: toRiver, max_m: maxM, reason: 'synthetic' }],
+  });
+  const relations = (shared = false) => [
+    rel(1, main.wikidata, [[10, 'main_stream']]),
+    rel(
+      2,
+      trib.wikidata,
+      shared
+        ? [
+            [10, 'main_stream'],
+            [20, 'main_stream'],
+          ]
+        : [[20, 'main_stream']],
+    ),
+  ];
+  const run = (rf: RiversFile, shared = false) =>
+    buildGraph(ways(mainWay, tribWay()), relations(shared), rf, provenance);
+  const plain = edgesOf(run(rivers(main, trib)));
+
+  it('is the baseline: with no join the main way stays one edge', () => {
+    expect(plain).toEqual(['w10.0:n1>n5:main', 'w20.0:n100>n101:trib']);
+  });
+
+  it('splits the target way at the nearest interior vertex; the join lands on that node with its short length', () => {
+    const rf = withJoin(100);
+    const r = run(rf);
+    expect(edgesOf(r)).toEqual(['w10.0:n1>n3:main', 'w10.1:n3>n5:main', 'w20.0:n100>n101:trib']);
+    const net = buildNetwork(r.edges, rf);
+    expect(net.joins).toHaveLength(1);
+    expect(net.joins[0]).toMatchObject({ id: 'j1', from: 'n101', to: 'n3', river: 'trib' });
+    expect(net.joins[0]?.length_m).toBeLessThan(30);
+    expect(net.out.get('n3')).toEqual(['w10.1']);
+    expect([...(net.in.get('n3') ?? [])].sort()).toEqual(['j1', 'w10.0']);
+  });
+
+  it('splits nothing for a same-river join', () => {
+    const rf = withJoin(100, 'trib');
+    expect(edgesOf(run(rf))).toEqual(plain);
+  });
+
+  it('splits nothing when the nearest vertex is farther than max_m, and the network refuses it (join_too_far)', () => {
+    const rf = withJoin(5);
+    const r = run(rf);
+    expect(edgesOf(r)).toEqual(plain);
+    expect(() => buildNetwork(r.edges, rf)).toThrow(/join_too_far/);
+  });
+
+  it('never counts a vertex of a way the joining river shares', () => {
+    const rf = withJoin(100);
+    expect(edgesOf(run(rf, true))).toEqual(['w10.0:n1>n5:main,trib', 'w20.0:n100>n101:trib']);
   });
 });
 

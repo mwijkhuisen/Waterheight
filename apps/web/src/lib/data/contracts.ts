@@ -183,15 +183,25 @@ const StationRef = z
   .string()
   .max(80)
   .regex(/^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$/);
-const TravelTime = z.looseObject({
-  from_station_id: StationRef,
-  to_station_id: StationRef,
-  h: z.tuple([z.number().positive(), z.number().positive()]).refine(([lo, hi]) => lo < hi),
-  basis: z.string().min(1).max(200),
-  source: z.string().min(1).max(300),
-  /** Never an href as it stands: the page passes it through httpsHref. */
-  source_url: z.string().max(500),
-});
+const TravelValue = z.union([
+  z.number().positive(),
+  z.tuple([z.number().positive(), z.number().positive()]).refine(([lo, hi]) => lo < hi),
+]);
+const TravelTime = z
+  .looseObject({
+    from_station_id: StationRef,
+    to_station_id: StationRef,
+    // v2 (#110): exactly one of h and d (checked below); a single number needs its label.
+    h: TravelValue.optional(),
+    d: TravelValue.optional(),
+    label: z.strictObject({ nl: z.string().min(1).max(80), en: z.string().min(1).max(80) }).optional(),
+    derived: z.literal(true).optional(),
+    basis: z.string().min(1).max(200),
+    source: z.string().min(1).max(300),
+    /** Never an href as it stands: the page passes it through httpsHref. */
+    source_url: z.string().max(500),
+  })
+  .refine((t) => (t.h === undefined) !== (t.d === undefined) && (Array.isArray(t.h ?? t.d) || t.label !== undefined));
 export const ReachTravel = z.looseObject({ travel_times: lenient(TravelTime, 1000) });
 export type ReachTravelData = z.infer<typeof ReachTravel>;
 

@@ -139,7 +139,7 @@ describe('chainRows', () => {
     const pair = travel.travel_times.find((t) => t.from_station_id === 'de.wsv.2790020');
     expect(pair?.to_station_id).toBe(LOBITH);
     const row = first(chainRows([node(['de.wsv.2790020'])], ctx(locale)));
-    const text = travelText({ kind: 'range', lo: 1, hi: 8, unit: 'h' }, locale);
+    const text = travelText({ kind: 'range', lo: 1, hi: 9, unit: 'h' }, locale);
     expect(row.travel).toBe(text ?? m.travel_no_source({}, { locale }));
     if (text === null) {
       expect([row.travelBasis, row.source, row.href]).toEqual([null, null, undefined]);
@@ -166,7 +166,7 @@ describe('chainRows', () => {
   it('finds the pair through a co-located station of the row', () => {
     const row = first(chainRows([node(['de.wsv.9999', 'de.wsv.2790020'])], ctx('en')));
     expect(row.travel).toBe(
-      travelText({ kind: 'range', lo: 1, hi: 8, unit: 'h' }, 'en') ?? m.travel_no_source({}, { locale: 'en' }),
+      travelText({ kind: 'range', lo: 1, hi: 9, unit: 'h' }, 'en') ?? m.travel_no_source({}, { locale: 'en' }),
     );
   });
 

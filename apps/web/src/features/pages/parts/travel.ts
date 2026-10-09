@@ -1,6 +1,6 @@
 import type { ReachTravelData } from '../../../lib/data/contracts.ts';
 import { httpsHref } from '../../../lib/href.ts';
-import { travelText } from '../../../lib/travel.ts';
+import { travelPriorOf, travelText } from '../../../lib/travel.ts';
 import { m } from '../../../paraglide/messages.js';
 import type { Locale } from '../../../paraglide/runtime.js';
 
@@ -28,8 +28,7 @@ export function travelRows(
     key: `${t.from_station_id}\n${t.to_station_id}\n${t.basis}`,
     from: names.get(t.from_station_id) ?? t.from_station_id,
     to: names.get(t.to_station_id) ?? t.to_station_id,
-    range:
-      travelText({ kind: 'range', lo: t.h[0], hi: t.h[1], unit: 'h' }, locale) ?? m.travel_no_source({}, { locale }),
+    range: travelText(travelPriorOf(t), locale) ?? m.travel_no_source({}, { locale }),
     basis: t.basis,
     source: t.source,
     href: httpsHref(t.source_url),

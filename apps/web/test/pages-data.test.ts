@@ -229,11 +229,15 @@ describe('the loaders', () => {
           pair({ h: [5, 5] }),
           pair({ to_station_id: 'x' }),
           pair({ h: [2] }),
+          pair({ h: undefined, d: [4, 5], derived: true }),
+          pair({ h: 5, label: { nl: 'a', en: 'b' } }),
+          pair({ h: 5 }),
+          pair({ d: 2, label: { nl: 'a', en: 'b' } }),
         ],
       },
     });
     const travel = await loadReachTravel(f);
-    expect(travel.travel_times.map((t) => t.h)).toEqual([[1, 8]]);
+    expect(travel.travel_times.map((t) => t.h ?? t.d)).toEqual([[1, 8], [4, 5], 5]);
     await expect(loadReachTravel(fake({ '/data/v1/rivers/manifest.json': manifest }))).rejects.toThrow();
   });
 });

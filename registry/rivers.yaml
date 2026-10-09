@@ -979,7 +979,8 @@ travel_times:
     source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1: Andernach 28¾ to 48¾ h (rows 5, 8, 20 and 21 struck), outward to whole hours; catalogue §3.7 and §8 C1"
     source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
   # Upper Rhine and the derived figures to Lobith (catalogue §3.7: derived = from other anchors, flagged as such).
-  - from_station: de.wsv.2310010
+  # Basel is the BAFU primary gauge Basel, Rheinhalle; PEGELONLINE's de.wsv.2310010 is its tier-2 mirror, never public.
+  - from_station: ch.bafu.2289
     to_station: de.wsv.23700200
     h: 23
     label: { nl: "na de Boven-Rijnwerken", en: "after the Upper Rhine training works" }

@@ -1,6 +1,7 @@
 import { numberText } from '../features/pages/parts/numbers.ts';
 import { m } from '../paraglide/messages.js';
 import type { Locale } from '../paraglide/runtime.js';
+import type { ReachTravelData } from './data/contracts.ts';
 
 // The one travel-time formatter (P11a, issue #26 C1; catalogue §3.7): a sourced prior as "indicatief"/"indicative"
 // text in the source's own unit. No conversion, no arithmetic, never relative to now and never an arrival time.
@@ -35,4 +36,17 @@ export function travelText(prior: TravelPrior, locale: Locale): string | null {
     text = m.travel_labelled({ text, label: label(prior.label) }, o);
   }
   return prior.derived ? m.travel_derived({ text }, o) : text;
+}
+
+/** A file entry as a prior (v2, #110): the file's value, unit and label as they are; a bad shape was dropped on parse. */
+export function travelPriorOf(t: ReachTravelData['travel_times'][number]): TravelPrior {
+  const unit: TravelUnit = t.h !== undefined ? 'h' : 'd';
+  const v = t.h ?? t.d;
+  const derived = t.derived === true ? { derived: true } : {};
+  if (v === undefined) return { kind: 'unverified' };
+  if (typeof v === 'number')
+    return t.label === undefined
+      ? { kind: 'unverified' }
+      : { kind: 'single', value: v, unit, label: t.label, ...derived };
+  return { kind: 'range', lo: v[0], hi: v[1], unit, ...derived, ...(t.label ? { label: t.label } : {}) };
 }

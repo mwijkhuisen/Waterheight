@@ -37,17 +37,17 @@ The whole world at z0–2: the tests' stand-in for the production `planet-z6-<bu
 
 ## `rivers-fixture.pmtiles` (P11a)
 
-The river tiles of the committed fixture graph below, for the web and compose end-to-end tests of the flow direction and the upstream chain (issue #26). It is the `rivers-20261001.pmtiles` of the `geo-fixture-outputs` artifact, committed unchanged. The same artifact's `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` (built locally by `test/reaches-fixture.test.ts` from these fixtures) in every field but `version`, so the tiles' `reach_id`s are the fixture reaches file's.
+The river tiles of the committed fixture graph below, for the web and compose end-to-end tests of the flow direction and the upstream chain (issue #26). It is the `rivers-20261001.pmtiles` of the `geo-fixture-outputs` artifact, committed unchanged. The same artifact's `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` (built locally by `test/reaches-fixture.test.ts` from these fixtures) in every field but `version` and `travel_times` (the run predates the Basel pair fix of #110; the tiles hold no travel time), so the tiles' `reach_id`s are the fixture reaches file's. Replaced for #110 (the Ourthe join splits the Meuse reach at Liège: Meuse `seq` from there on is one higher).
 
 Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright).
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/37119454397 (`workflow_dispatch` on `main` at `4cfab1e`, 2026-10-03), job `rivernet fixture` |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38005400582 (`pull_request` #114 at `b8b8a9c`, 2026-10-09T23:38Z), job `rivernet fixture` |
 | Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build`), layer `rivers`, z0–12 |
-| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.589838,11.397685,53.443230, 2,827 tiles; 709 features, each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation` |
-| Bytes | 1,626,415 |
-| sha256 | `36b8bf1e28946fe8ba2bb7b4a20f955a1d26c5b4004f2c11543a2a3d39f4577d` |
+| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.589838,11.397685,53.443230, 2,827 tiles; one feature per drawn reach (710 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation` |
+| Bytes | 1,626,809 |
+| sha256 | `2b4d4b40214e3639a56c72814fb5e05b58995f723490741f2bf5582eb65f748a` |
 
 A refresh of the fixture graph replaces it with the next run's artifact and regenerates `test/fixtures/reaches-fixture.json` (`UPDATE_FIXTURE=1`); compare the two reaches files first.
 
