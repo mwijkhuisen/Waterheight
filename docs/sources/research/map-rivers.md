@@ -260,6 +260,8 @@ EU-Hydro (`GET https://image.discomap.eea.europa.eu/arcgis/rest/services/EUHydro
 | Wesel (814.0) | 48 km | 6–19 h, ≈ 11 h | – |
 | Emmerich (851.9) | 10 km | 1–8 h, ≈ **3 h** | **2 h** (r = 0.78) |
 
+*Correction, 2026-10-10 (#110): the scan of appendix 1 gives Andernach 28¾–48¾, Köln 22½–40¾ (no 46 in the column; the 22–46 above is a misread), Wesel 6½–19½ and Emmerich ¼–8½ h. Every bound above was floored; the registry rounds outward to whole hours (Emmerich floor 1 h): Andernach 28–49, Köln 22–41, Wesel 6–20, Emmerich 1–9. See catalogue §3.7 and §8 C1.*
+
 The same note gives times from Lobith onward (appendix 2): Nijmegen about 5 h, Tiel about 13 h, Zaltbommel about 19 h, IJsselkop about 5 h, Driel about 12 h, Amerongen about 25 h, Olst about 40 h, Katerveer (IJssel) about 48 h, with large spread. It says travel time depends strongly on floodplain storage; the floodplains start conveying water at about 7000 m³/s at Lobith.
 
 **How the low-water values were measured:** LIVE PEGELONLINE requests, `GET https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/{uuid}/W/measurements.json?start=P30D`, 8 stations, 24 Aug–23 Sep 2026. Kaub was at 9–77 cm, below its NW of 25 cm (`stateMnwMhw: "low"`). I resampled hourly, applied a 6 h rolling mean and cross-correlated first differences. Measured legs:

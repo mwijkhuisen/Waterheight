@@ -1698,7 +1698,7 @@ There is **no discharge anywhere on the Ems** in PEGELONLINE. The km systems mix
 
 Travel times depend strongly on discharge: they vary 1.5–2× between low water and flood. Floodplain storage slows the wave from about 5,000 m³/s at Lobith; the floodplains start conveying water at about 7,000 m³/s and the wave speeds up again. **Present these values as "typical, indicative" and never as an ETA.**
 
-**Rhine → Lobith.** The flood-peak column comes from RWS note GWIO 85.006, *"Looptijden hoogwatergolven op de Rijn"* (L.P.M. de Vrees, Aug 1985; 24 flood waves 1965–1983 with Q_Lobith > 5000 m³/s; appendix 1): https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/ (PDF `https://open.rijkswaterstaat.nl/publish/pages/61132/gwio_85006.pdf`). Ranges are the observed spread; ≈ values are medians computed by map-rivers.
+**Rhine → Lobith.** The flood-peak column comes from RWS note GWIO 85.006, *"Looptijden hoogwatergolven op de Rijn"* (L.P.M. de Vrees, Aug 1985; 24 flood waves 1965–1983 with Q_Lobith > 5000 m³/s; appendix 1): https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/ (PDF `https://open.rijkswaterstaat.nl/publish/pages/61132/gwio_85006.pdf`). Ranges are the observed spread of the unstruck rows of appendix 1, rounded outward to whole hours (Emmerich keeps a floor of 1 h; owner rule, 2026-10-10, #110). The ≈ values are medians computed by map-rivers; they are not in the registry (`registry/rivers.yaml` holds the ranges only).
 
 | From (PEGELONLINE km) | Distance to Lobith | Flood peak → Lobith | Low water, Aug–Sep 2026 (map-rivers cross-correlation) |
 |---|---|---|---|
@@ -1706,13 +1706,13 @@ Travel times depend strongly on discharge: they vary 1.5–2× between low water
 | Maxau (362.3) | 500 km | Not in RWS 1985. In the Feb and May 1999 floods, peaks were Maxau 21.02 / 14.05 → Kaub 24.02 / 17.05 (LfW RLP report 212/99, Tabelle 3, https://www.hochwasser.rlp.de/static/shared/documents/rhein_1999.pdf; daily resolution; confounded by retention and the Neckar/Main). That implies **about 4–5 days to Lobith** (derived) | Maxau → Kaub 11 h, r = 0.29 (**unreliable**) |
 | Kaub (546.2) | 316 km | **About 2 days** (derived: Kaub → Andernach about 0.5 day, plus Andernach → Lobith) | **About 64 h** (9 + 16 + 37 + 2) |
 | Koblenz (591.5) | 271 km | **About 40–45 h** (derived) | **About 55 h** |
-| Andernach (613.8) | 248 km | 28–48 h, ≈ **39 h** (ch-bafu cites 28–49 h; see §8 C1) | – |
+| Andernach (613.8) | 248 km | 28–49 h, ≈ **39 h** (scan: 28¾–48¾; see §8 C1) | – |
 | Bonn (654.8) | 207 km | 24–49 h, ≈ 35 h | – |
-| Köln (688.0) | 174 km | 22–46 h, ≈ **30 h** (ch-bafu: "about 22–40 h") | About 39 h |
+| Köln (688.0) | 174 km | 22–41 h, ≈ **30 h** (scan: 22½–40¾; see §8 C1) | About 39 h |
 | Düsseldorf (744.2) | 118 km | 11–34 h, ≈ 23 h | – |
 | Ruhrort (780.8) | 81 km | 13–27 h, ≈ 19 h | – |
-| Wesel (814.0) | 48 km | 6–19 h, ≈ 11 h | – |
-| Emmerich (851.9) | 10 km | 1–8 h, ≈ **3 h** | **2 h** (r = 0.78) |
+| Wesel (814.0) | 48 km | 6–20 h, ≈ 11 h | – |
+| Emmerich (851.9) | 10 km | 1–9 h, ≈ **3 h** | **2 h** (r = 0.78) |
 
 - Low-water legs measured by map-rivers (PEGELONLINE `measurements.json?start=P30D` for 8 stations, 24 Aug–23 Sep 2026; resampled hourly, 6 h rolling mean, cross-correlated first differences): Kaub → Koblenz 9 h (r 0.57); Koblenz → Köln 16 h (r 0.67); Köln → Emmerich 37 h (r 0.57); Emmerich → Lobith 2 h (r 0.78); Cochem → Koblenz 5 h (r 0.45); Trier UP → Cochem not usable (r 0.22, weir-regulated).
 - **Lobith onward** (same RWS note, appendix 2; large spread): Nijmegen about 5 h, Tiel about 13 h, Zaltbommel about 19 h, IJsselkop about 5 h, Driel about 12 h, Amerongen about 25 h, Olst about 40 h, Katerveer (IJssel) about 48 h.
@@ -2524,7 +2524,7 @@ Each item is marked **Resolved** (with the evidence) or **Flagged** (needs a dec
 
 | # | Topic | Report A says | Report B says | Status |
 |---|---|---|---|---|
-| C1 | Flood travel time to Lobith (the same RWS 1985 note) | map-rivers: Andernach 28–48 h (≈39 h), Köln 22–46 h (≈30 h) | ch-bafu: Andernach 28–49 h; Köln about 22–40 h | **Flagged (minor).** Both cite GWIO 85.006, appendix 1. Re-read the PDF (`scratchpad/gwio85006.pdf`) before quoting exact bounds. Use "about 1.5 days (28–49 h)" for Andernach in the UI |
+| C1 | Flood travel time to Lobith (the same RWS 1985 note) | map-rivers: Andernach 28–48 h (≈39 h), Köln 22–46 h (≈30 h) | ch-bafu: Andernach 28–49 h; Köln about 22–40 h | **Resolved (#110, 2026-10-10).** The scan of appendix 1 gives unstruck Andernach 28¾–48¾ h and Köln 22½–40¾ h (the Köln column has no 46; the map-rivers 22–46 was a misread, and ch-bafu floored 40¾ to "about 40"; its Andernach 28–49 was 48¾ rounded up). Rule: whole hours rounded outward, Emmerich floor 1 h. The registry holds Andernach 28–49, Köln 22–41, Wesel 6–20, Emmerich 1–9; Bonn 24–49, Düsseldorf 11–34 and Ruhrort 13–27 are unchanged (§3.7). Use "about 1.5 days (28–49 h)" for Andernach in the UI |
 | C2 | Basel → Lobith total | ch-bafu: composite "about 3–4 days" (UNVERIFIED) | map-rivers: Maxau → Lobith about 4–5 days (derived from the 1999 floods) plus IKSR Basel → Maxau 23 h, i.e. about 5–6 days. A secondary source says "Upper Rhine water about 5 days to Lobith"; a blog says "6 days" | **Flagged.** No primary source covers the whole path. Show segment anchors only, and calibrate from our own data |
 | C3 | PEGELONLINE absolute-unit series | de-pegelonline: 683 cm series, **54** in `m+NN`, 2 `m+PNP` | datum-arch: 668 relative, **67** in `m+NN`, 2 `m+PNP` | **Flagged (immaterial).** The two probably counted different timeseries sets. The design rule is the same either way: branch on `unit` per series. Both agree 95 series have no gauge zero |
 | C4 | PEGELONLINE latency | de-pegelonline: value available about 2 min after its timestamp (Emmerich 22:00 was in by 22:02:13) | datum-arch: "~12 min" observed lag | **Resolved.** de-pegelonline measured availability; datum-arch measured value age at poll time (15-min step + poll phase). Poll at hh:02/:17/:32/:47 |

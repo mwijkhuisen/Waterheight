@@ -226,6 +226,7 @@ No single authoritative figure was found. The pieces that are sourced:
 - **Basel → Karlsruhe/Maxau: about 23 h.** It "has been reduced from 64 to 23 hours" by the Upper Rhine training works (IKSR/ICPR, `https://www.iksr.org/en/topics/floods/water-retention`).
 - **Andernach → Lobith: about 28–49 h** for Lobith peaks of 5,640–10,000 m³/s. Source: Rijkswaterstaat note GWIO 85.006, "Looptijden hoogwatergolven op de Rijn" (de Vrees, Aug 1985), appendix 1 (`https://open.rijkswaterstaat.nl/publish/pages/61132/gwio_85006.pdf`).
   - Cologne → Lobith: about 22–40 h.
+  - *Correction, 2026-10-10 (#110): the scan of appendix 1 gives Andernach 28¾–48¾ h and Cologne 22½–40¾ h, so "28–49" above is 48¾ rounded up and "22–40" floored 40¾. The registry uses whole hours rounded outward: Andernach 28–49, Cologne 22–41 (catalogue §3.7, §8 C1).*
   - Travel time depends strongly on discharge. It slows as floodplains fill, around 5,000 m³/s at Lobith, and speeds up again once floodplains carry flow, around 7,000 m³/s.
 - **Maxau → Andernach:** not sourced (**UNVERIFIED**; in the order of 1–1.5 days).
 - **Overall estimate: about 3–4 days** for a flood crest from Basel to Lobith. This is an **UNVERIFIED** composite. A Dutch blog (klimaatgek.nl, 2026-08-30) quotes "6 days"; it is not authoritative and probably describes mean flow.
