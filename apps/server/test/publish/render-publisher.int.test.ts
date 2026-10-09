@@ -229,6 +229,37 @@ describe('renderers', { timeout: 120_000 }, () => {
     expect(file.lapsed).toEqual(order.filter((id) => file.lapsed.includes(id)));
   });
 
+  it('latest, owner family: lapsed through its own latest view, the owner canary with a value never lapsed', async () => {
+    const c = await ctx('owner');
+    const stations = OwnerStaticStations.parse(await renderStations(c));
+    const file = OwnerLatestFile.parse((await renderLatest(c, stations)).body);
+    expect(file.lapsed).toContain(ids.c);
+    expect(file.lapsedAge[file.lapsed.indexOf(ids.c)]).toBe(38_400);
+    expect(file.series).toContain(canary);
+    expect(file.lapsed).not.toContain(canary);
+    expect(file.lapsed).not.toContain(ids.withheld);
+  });
+
+  it('latest: a newest point after the bucket gives age 0, never a negative age', async () => {
+    const c = await ctx('public');
+    const stations = StaticStations.parse(await renderStations(c));
+    const before = LatestFile.parse((await renderLatest(c, stations)).body);
+    // A series that never had a value; its newest point is now at the clock, five minutes after the bucket.
+    const d = before.lapsed[before.lapsedAge.indexOf(null)] as number;
+    expect(d).toBeDefined();
+    await h.t.admin.query(`INSERT INTO obs_latest (series_id, ts, value, qc, batch_id) VALUES ($1, $2, 1, 0, 0)`, [
+      d,
+      iso(NOW),
+    ]);
+    try {
+      const file = LatestFile.parse((await renderLatest(c, stations)).body);
+      expect(file.series).not.toContain(d);
+      expect(file.lapsedAge[file.lapsed.indexOf(d)]).toBe(0);
+    } finally {
+      await h.t.admin.query(`DELETE FROM obs_latest WHERE series_id = $1`, [d]);
+    }
+  });
+
   it('frames: one row per series with a value, null where an hour has none', async () => {
     const f = FramesFile.parse(await renderFrames(await ctx('public'), BASE, BASE + 86_400_000));
     expect(f.series).toEqual([ids.a]);
