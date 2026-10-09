@@ -122,8 +122,8 @@ for (const locale of ['nl', 'en'] as const) {
     await expect(chain.locator('xpath=./ul/li[not(button) and not(details)]')).toHaveCount(0);
     await expect(chain.locator('details[open]')).toHaveCount(0);
 
-    // Emmerich has an exact sourced pair to Lobith (1-8 h, GWIO 85.006): a range, and it says it is indicative.
-    const range = msg(locale, 'travel_range', { lo: 1, hi: 8 });
+    // Emmerich has an exact sourced pair to Lobith (1-9 h, GWIO 85.006): a range, and it says it is indicative.
+    const range = msg(locale, 'travel_range', { lo: 1, hi: 9 });
     await expect(stationRows.nth(0)).toContainText(msg(locale, 'chain_travel', { text: range }));
     // Rees has none: "no sourced value", never a number computed from its neighbours (owner decision D-A).
     await expect(stationRows.nth(1)).toContainText(
