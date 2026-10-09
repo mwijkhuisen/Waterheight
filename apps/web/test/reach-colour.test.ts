@@ -32,7 +32,7 @@ const reach = (id: string): FeatureSpan => {
 const ev = (v: number, ageS = 0, limitS = 3600): EndValue => ({ v, ageS, limitS });
 const ids = (from: string, a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => `${from}.${a + i}`);
 
-const TIDAL = [...ids('scheldt', 9, 13), ...ids('ems', 23, 33), ...ids('lek', 4, 6), 'meuse.55'];
+const TIDAL = [...ids('scheldt', 9, 13), ...ids('ems', 23, 33), ...ids('lek', 4, 6), 'meuse.56'];
 const MODES = ['state', 'delta', 'q'] as const;
 const colourOf = (p: ReachPaint) => (p.k === 'v' ? p.colour : p.k);
 
@@ -65,21 +65,21 @@ describe('the tidal reaches', () => {
 });
 
 describe('no data', () => {
-  const meuse28 = reach('meuse.28'); // 8 km, ordinary, pos 0.5
+  const meuse29 = reach('meuse.29'); // 8 km, ordinary, pos 0.5
   const meuse20 = reach('meuse.20');
 
   it('is stale, missing or without a reference', () => {
     for (const mode of MODES) {
-      expect(reachColour(meuse28, [ev(2), undefined], mode)).toEqual({ k: 'nodata' });
-      expect(reachColour(meuse28, [undefined, ev(2)], mode)).toEqual({ k: 'nodata' });
-      expect(reachColour(meuse28, [ev(2, 3601), ev(2)], mode)).toEqual({ k: 'nodata' });
-      expect(reachColour(meuse28, [ev(2), ev(2, 3601)], mode)).toEqual({ k: 'nodata' });
+      expect(reachColour(meuse29, [ev(2), undefined], mode)).toEqual({ k: 'nodata' });
+      expect(reachColour(meuse29, [undefined, ev(2)], mode)).toEqual({ k: 'nodata' });
+      expect(reachColour(meuse29, [ev(2, 3601), ev(2)], mode)).toEqual({ k: 'nodata' });
+      expect(reachColour(meuse29, [ev(2), ev(2, 3601)], mode)).toEqual({ k: 'nodata' });
       // the same rule as lapses and the frames store: an age of exactly the limit is no end
-      expect(reachColour(meuse28, [ev(2, 3600), ev(2)], mode)).toEqual({ k: 'nodata' });
-      expect(reachColour(meuse28, [ev(2, 3599), ev(2, 3599)], mode).k).toBe('v');
+      expect(reachColour(meuse29, [ev(2, 3600), ev(2)], mode)).toEqual({ k: 'nodata' });
+      expect(reachColour(meuse29, [ev(2, 3599), ev(2, 3599)], mode).k).toBe('v');
     }
-    expect(reachColour(meuse28, [ev(0), ev(3)], 'state')).toEqual({ k: 'nodata' });
-    expect(reachColour(meuse28, [ev(3), ev(0)], 'state')).toEqual({ k: 'nodata' });
+    expect(reachColour(meuse29, [ev(0), ev(3)], 'state')).toEqual({ k: 'nodata' });
+    expect(reachColour(meuse29, [ev(3), ev(0)], 'state')).toEqual({ k: 'nodata' });
   });
 
   it('is an open span, a river head and a tributary tail', () => {
@@ -90,15 +90,15 @@ describe('no data', () => {
 
   it('is a span of unknown length or position, never interpolated', () => {
     const unknown: FeatureSpan = {
-      ...meuse28,
-      span: { ...(meuse28.span as NonNullable<FeatureSpan['span']>), lengthKm: null, pos: null },
+      ...meuse29,
+      span: { ...(meuse29.span as NonNullable<FeatureSpan['span']>), lengthKm: null, pos: null },
     };
     expect(reachColour(unknown, [ev(2), ev(3)], 'q')).toEqual({ k: 'nodata' });
     expect(meuse20.span?.lengthKm).toBeLessThan(120);
   });
 
   it('is the 139 km Chooz to Eijsden gap on the public file, while meuse.23 is coloured', () => {
-    for (const id of ['meuse.24', 'meuse.25', 'meuse.26'])
+    for (const id of ['meuse.24', 'meuse.25', 'meuse.26', 'meuse.27'])
       for (const mode of MODES)
         expect(reachColour(reach(id), [ev(2), ev(3)], mode), `${id} ${mode}`).toEqual({ k: 'nodata' });
     expect(reachColour(reach('meuse.23'), [ev(2), ev(3)], 'state').k).toBe('v');
@@ -131,7 +131,7 @@ describe('impounded reaches', () => {
 });
 
 describe('the modes', () => {
-  const r = reach('meuse.28'); // pos 0.5
+  const r = reach('meuse.29'); // pos 0.5
   const r20 = reach('meuse.20'); // pos about 0.94
 
   it('state: the level is rounded from the ends and stays within them', () => {

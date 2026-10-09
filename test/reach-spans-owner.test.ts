@@ -33,8 +33,8 @@ describe('spansOf on the owner variant', () => {
     for (const r of ownerGraph.reaches) if (r.part_of !== undefined) expect(owner.has(r.id)).toBe(false);
   });
 
-  it('maps meuse.24 to 26 onto the SPW span that holds their midpoint', () => {
-    for (const id of ['meuse.24', 'meuse.25', 'meuse.26']) {
+  it('maps meuse.24 to 27 onto the SPW span that holds their midpoint', () => {
+    for (const id of ['meuse.24', 'meuse.25', 'meuse.26', 'meuse.27']) {
       const parts = ownerGraph.reaches.filter((r) => r.part_of === id);
       const fs = owner.get(id);
       expect(fs?.impounded, id).toBe(true);

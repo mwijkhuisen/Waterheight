@@ -90,3 +90,46 @@ describe('rivers.yaml schema', () => {
     }
   });
 });
+
+describe('rivers.yaml travel_times (#110)', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    from_station: 'de.wsv.2790020',
+    to_station: 'nl.rws.lobith.bovenrijn.tolkamer',
+    h: [1, 9],
+    basis: 'flood peak',
+    source: 'a note',
+    source_url: 'https://example.org/note',
+    ...over,
+  });
+  const label = { nl: 'hoogwater', en: 'flood' };
+  const withRow = (r: Record<string, unknown>) => ({ ...valid(), travel_times: [r] });
+  const omit = (r: Record<string, unknown>, k: string) =>
+    Object.fromEntries(Object.entries(r).filter(([x]) => x !== k));
+
+  it('accepts a range in hours, a range in days, a labelled single value and a derived figure', () => {
+    for (const r of [
+      row(),
+      omit(row({ d: [4, 5] }), 'h'),
+      row({ h: 23, label }),
+      omit(row({ d: 2, label, derived: true }), 'h'),
+    ])
+      expect(problems(withRow(r)), JSON.stringify(r)).toBe('');
+  });
+
+  it('refuses the bad shapes with their own problem', () => {
+    const cases: [string, Record<string, unknown>, RegExp][] = [
+      ['neither h nor d', omit(row(), 'h'), /exactly one of h and d/],
+      ['both h and d', row({ d: [1, 2] }), /exactly one of h and d/],
+      ['a single value without a label', row({ h: 5 }), /a single value needs its label/],
+      ['an equal range', row({ h: [5, 5] }), /lo < hi/],
+      ['a reversed range', omit(row({ d: [5, 4] }), 'h'), /lo < hi/],
+      ['derived false', row({ derived: false }), /derived/],
+      ['markup in a label', row({ h: 5, label: { nl: '<b>x', en: 'x' } }), /< or >/],
+      ['a control character in a label', row({ h: 5, label: { nl: 'x', en: 'a​b' } }), /control or format/],
+      ['an empty label', row({ h: 5, label: { nl: '', en: 'x' } }), /label/],
+      ['a label with an unknown key', row({ h: 5, label: { nl: 'x', en: 'x', de: 'x' } }), /label/],
+      ['an http source_url', row({ source_url: 'http://example.org/' }), /source_url/],
+    ];
+    for (const [name, r, want] of cases) expect(problems(withRow(r)), name).toMatch(want);
+  });
+});

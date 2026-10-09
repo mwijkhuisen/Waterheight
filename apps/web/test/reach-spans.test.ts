@@ -33,14 +33,14 @@ describe('spansOf on the fixture release', () => {
     for (const [id, fs] of spans) if (fs.tidal === true) expect(fs.span === null || fs.span.tidal, id).toBe(true);
   });
 
-  it('measures the Chooz to Eijsden gap as meuse.24 to 26, 139 km, and the next stretch apart', () => {
-    for (const id of ['meuse.24', 'meuse.25', 'meuse.26']) {
+  it('measures the Chooz to Eijsden gap as meuse.24 to 27, 139 km, and the next stretch apart', () => {
+    for (const id of ['meuse.24', 'meuse.25', 'meuse.26', 'meuse.27']) {
       expect(at(id)?.up).toEqual(['fr.sandre.B720000002']);
       expect(at(id)?.down).toEqual(['nl.rws.eijsden.grens']);
       expect(at(id)?.lengthKm).toBeCloseTo(139.222, 3);
     }
     expect(at('meuse.23')?.lengthKm).toBeCloseTo(2.323, 3);
-    expect(at('meuse.27')?.lengthKm).toBeCloseTo(0.174, 3);
+    expect(at('meuse.28')?.lengthKm).toBeCloseTo(0.174, 3);
   });
 
   it('groups co-located stations in file order at a span end', () => {
@@ -68,10 +68,14 @@ describe('spansOf on the fixture release', () => {
 
   it('puts the midpoint of a reach on its span by the lengths before it', () => {
     const len = (id: string) => graph.reaches.find((r) => r.id === id)?.length_km ?? Number.NaN;
-    const total = len('meuse.24') + len('meuse.25') + len('meuse.26');
+    const total = len('meuse.24') + len('meuse.25') + len('meuse.26') + len('meuse.27');
     expect(at('meuse.24')?.pos).toBeCloseTo(len('meuse.24') / 2 / total, 9);
     expect(at('meuse.25')?.pos).toBeCloseTo((len('meuse.24') + len('meuse.25') / 2) / total, 9);
     expect(at('meuse.26')?.pos).toBeCloseTo((len('meuse.24') + len('meuse.25') + len('meuse.26') / 2) / total, 9);
+    expect(at('meuse.27')?.pos).toBeCloseTo(
+      (len('meuse.24') + len('meuse.25') + len('meuse.26') + len('meuse.27') / 2) / total,
+      9,
+    );
   });
 
   it('leaves a tributary open: its last stretch before the confluence has no span', () => {

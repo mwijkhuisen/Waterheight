@@ -200,12 +200,20 @@ describe('the Eijsden chain of the owner variant (F1, F2)', () => {
     ).toBe(true);
   });
 
-  it('places the Ourthe gauges on parts of ourthe.1, which the fixture graph leaves unconnected (no downstream): no Ourthe group (doubt for the lead)', () => {
+  it('places the Ourthe gauges on parts of ourthe.1, which joins the Meuse (#110): an Ourthe group in graph order after Liège', () => {
     const ourthe = split.file.stations.filter((s) => s.id.startsWith('be.spw.') && s.river_id === 'ourthe');
     expect(ourthe.length).toBe(15);
     expect(ourthe.every((s) => reachOf(s.reach_id as string)?.part_of === 'ourthe.1')).toBe(true);
-    expect(release.reaches.find((r) => r.id === 'ourthe.1')?.downstream).toEqual([]);
-    expect(groups(nodes).some((g) => g.kind === 'group' && g.riverId === 'ourthe')).toBe(false);
+    expect(release.reaches.find((r) => r.id === 'ourthe.1')?.downstream).toEqual(['meuse.27']);
+    const group = groups(nodes).find((g) => g.kind === 'group' && g.riverId === 'ourthe');
+    expect(group).toBeDefined();
+    const inGroup = ids(group ? [group] : []).filter((id) => id.startsWith('be.spw.'));
+    const placedOurthe = ourthe.map((s) => s.id);
+    expect([...inGroup].sort()).toEqual([...placedOurthe].sort());
+    const km = (id: string) => placedOf.get(id)?.km_graph as number;
+    expect(inGroup.map(km)).toEqual([...inGroup.map(km)].sort((a, b) => b - a));
+    expect(groups(nodes).some((g) => g.kind === 'group' && g.riverId === 'sambre')).toBe(true);
+    for (const id of placedOurthe) expect(placedOf.get(id)?.nl_entry_node, id).toBe('eijsden');
   });
 
   it('is the public chain without any be.spw. row on the public release', () => {
