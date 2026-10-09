@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { travelShapeProblem } from './reaches.ts';
+import { TravelLabel, travelShapeProblem } from './reaches.ts';
 
 // The river registry (registry/rivers.yaml; P6a): the rivers the graph pipeline
 // builds, their OSM selection and the verbatim spellings providers use.
@@ -75,8 +75,10 @@ export type River = z.infer<typeof River>;
  * has a gap (KG-161): the sink of `river` nearest `at` joins the nearest node of
  * `to_river` that is not upstream of it, at most `max_m` away. Onto another
  * river, that river's vertex nearest `at` becomes a node first, so the join
- * lands where the river passes (#110). Routing only: a join is never drawn and
- * never published as geometry.
+ * lands where the river passes (#110). `max_m` bounds both that vertex's
+ * distance from `at` and the join's length from the sink, so `at` is best the
+ * sink itself. Routing only: a join is never drawn and never published as
+ * geometry.
  */
 export const Join = z.strictObject({
   river: Slug,
@@ -87,6 +89,7 @@ export const Join = z.strictObject({
 });
 export type Join = z.infer<typeof Join>;
 
+// The file's TravelValue without its lo < hi refine: validateRivers checks the order with a named message.
 const TravelSpan = z.union([z.number().positive(), z.tuple([z.number().positive(), z.number().positive()])]);
 
 /**
@@ -99,7 +102,7 @@ export const TravelTime = z.strictObject({
   to_station: StationRef,
   h: TravelSpan.optional(),
   d: TravelSpan.optional(),
-  label: z.strictObject({ nl: Name, en: Name }).optional(),
+  label: TravelLabel.optional(),
   derived: z.literal(true).optional(),
   basis: z.string().min(1).max(200),
   source: z.string().min(1).max(300),
