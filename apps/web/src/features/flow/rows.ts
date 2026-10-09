@@ -34,6 +34,8 @@ export interface ChainContext {
   ownerSources: ReadonlySet<string>;
   /** The release's sourced travel times. */
   travel: ReachTravelData;
+  /** The target and the stations co-located with it (a pair may name any of them); default: the target alone. */
+  targetIds?: readonly string[];
 }
 
 export interface StationRow {
@@ -110,8 +112,9 @@ function stateOf(ids: readonly string[], ctx: ChainContext): Pick<StationRow, 's
 function stationRow(n: Extract<ChainNode, { kind: 'station' }>, ctx: ChainContext): StationRow {
   const id = n.ids[0] ?? '';
   // Only the exact pair row -> target of the file: no sum of two pairs and no scaling (owner decision D-A).
+  const targets = ctx.targetIds ?? [ctx.targetId];
   const pair = ctx.travel.travel_times.find(
-    (t) => t.to_station_id === ctx.targetId && n.ids.includes(t.from_station_id),
+    (t) => targets.includes(t.to_station_id) && n.ids.includes(t.from_station_id),
   );
   const text =
     pair === undefined ? null : travelText({ kind: 'range', lo: pair.h[0], hi: pair.h[1], unit: 'h' }, ctx.locale);
@@ -145,7 +148,10 @@ export function chainRows(nodes: readonly ChainNode[], ctx: ChainContext, path =
     return {
       kind: 'group',
       key,
-      summary: m.chain_group({ river, count: formatNumber(n.count, ctx.locale) }, { locale: ctx.locale }),
+      summary: (n.sameRiver ? m.chain_branch : m.chain_group)(
+        { river, count: formatNumber(n.count, ctx.locale) },
+        { locale: ctx.locale },
+      ),
       children: chainRows(n.children, ctx, key),
     };
   });

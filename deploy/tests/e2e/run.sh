@@ -1007,13 +1007,15 @@ cmp -s /ci/public-reaches.json "$repo/test/fixtures/reaches-fixture.json" ||
 outside -o /ci/public-stations.json --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/data/v1/stations.json" ||
   fail "the public stations.json is not served"
 for f in /ci/public-reaches.json /ci/public-stations.json; do
-  ! grep -qE 'be\.spw\.|777777\.(777|75)' "$f" || fail "an owner station or the owner canary in the public ${f##*/}"
+  # The station ids of the owner sources that have station rows (BE-3, LU-2), the owner and the withheld canary.
+  ! grep -qE 'be\.spw\.|lu\.age-json\.|777777\.(777|75)|123456\.789' "$f" ||
+    fail "an owner station or a canary in the public ${f##*/}"
 done
 # Positive controls: the files are the real ones (Eijsden is a public station of both).
 for f in /ci/public-reaches.json /ci/public-stations.json; do
   grep -q 'nl\.rws\.eijsden\.grens' "$f" || fail "the public ${f##*/} does not hold nl.rws.eijsden.grens"
 done
-proof "public /data/v1/rivers/reaches-$rivers_ver.json is the installed fixture release byte for byte (cmp), and it and /data/v1/stations.json hold no be.spw. station and no owner canary value (both hold nl.rws.eijsden.grens)"
+proof "public /data/v1/rivers/reaches-$rivers_ver.json is the installed fixture release byte for byte (cmp), and it and /data/v1/stations.json hold no owner station (be.spw., lu.age-json.) and no owner or withheld canary value (both hold nl.rws.eijsden.grens)"
 rws_compose run --rm --no-deps -T watchdog watchdog --once
 proof "watchdog --once with the publisher running: /data/v1/meta.json is fresh, so the publisher check is green too"
 

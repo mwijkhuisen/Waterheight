@@ -211,7 +211,7 @@ describe('the owner reaches step', { timeout: 120_000 }, () => {
     await bad.p.cycle();
     await bad.p.cycle();
     expect(bad.errors.filter((e) => e.step === 'reaches')).toEqual([
-      { code: 'rivers_reaches_mismatch', step: 'reaches', family: 'owner' },
+      { code: 'rivers_reaches_mismatch', version: VERSION, step: 'reaches', family: 'owner' },
     ]);
     install(VERSION, null, (m) => {
       (m.current as { reaches: { bytes: number } }).reaches.bytes += 1;
@@ -219,7 +219,7 @@ describe('the owner reaches step', { timeout: 120_000 }, () => {
     const size = publisher('owner');
     await size.p.cycle();
     expect(size.errors.filter((e) => e.step === 'reaches')).toEqual([
-      { code: 'rivers_reaches_unreadable', step: 'reaches', family: 'owner' },
+      { code: 'rivers_reaches_unreadable', version: VERSION, step: 'reaches', family: 'owner' },
     ]);
     // A reaches file that is no valid release: right bytes and sha256, wrong content.
     const junk = Buffer.from('{"schema_version":1}');
@@ -230,7 +230,7 @@ describe('the owner reaches step', { timeout: 120_000 }, () => {
     const invalid = publisher('owner');
     await invalid.p.cycle();
     expect(invalid.errors.filter((e) => e.step === 'reaches')).toEqual([
-      { code: 'rivers_reaches_invalid', step: 'reaches', family: 'owner' },
+      { code: 'rivers_reaches_invalid', version: VERSION, step: 'reaches', family: 'owner' },
     ]);
     expect(listRivers()).toEqual([]);
     // None of it hurt the rest of the tree.

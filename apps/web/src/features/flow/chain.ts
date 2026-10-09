@@ -10,8 +10,11 @@ import { coLocated, type GReach, type GStation, type Index, indexOf, upstreamSta
 export type ChainNode =
   /** A row: co-located stations share one (`ids`, the first is the one the file names); `distKm` is upstream of the target. */
   | { kind: 'station'; ids: readonly string[]; riverId: string; distKm: number }
-  /** A tributary collapsed at its confluence with the main stem; `count` station rows inside, recursively. */
-  | { kind: 'group'; riverId: string; children: readonly ChainNode[]; count: number }
+  /**
+   * A tributary collapsed at its confluence with the main stem; `count` station rows inside, recursively. `sameRiver`:
+   * an arm of the river it joins (a source branch), not a tributary.
+   */
+  | { kind: 'group'; riverId: string; children: readonly ChainNode[]; count: number; sameRiver?: true }
   /** More than GAP_KM of main stem without a station row. */
   | { kind: 'gap'; riverId: string; km: number };
 
@@ -94,7 +97,13 @@ function stem(w: Walk, starts: readonly GReach[], d0: number, river: string, dep
         const only = kids.length === 1 && kids[0]?.kind === 'group' ? kids[0] : undefined;
         if (count > 0)
           items.push({
-            node: only ?? { kind: 'group', riverId: other.river_id, children: kids, count },
+            node: only ?? {
+              kind: 'group',
+              riverId: other.river_id,
+              children: kids,
+              count,
+              ...(other.river_id === cur ? { sameRiver: true as const } : {}),
+            },
             at: d,
             river: cur,
           });

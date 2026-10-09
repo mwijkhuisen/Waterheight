@@ -24,14 +24,26 @@ const REACHES_MAX = 32 * 1024 * 1024;
 export type OwnerVariant = { name: string; body: OwnerReachesFile; skipped: { id: string; code: OwnerSkipCode }[] };
 export type Rivernet = Pick<RivernetFile, 'stations'>;
 
-/** Reads at most `max` bytes of a regular file, never through a link; `expect` is the size the manifest promised. */
+/**
+ * Reads at most `max` bytes of a regular file, never through a link; `expect` is the size the manifest promised.
+ * Non-blocking, so a FIFO in its place cannot hang the open; at most one byte past the size is read, so a file that
+ * grew after the stat is refused instead of read without a bound.
+ */
 async function readExact(path: string, max: number, expect?: number): Promise<Buffer> {
-  const fh = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const fh = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  const size = () => Object.assign(new Error('size'), { code: 'SIZE' });
   try {
     const st = await fh.stat();
-    if (!st.isFile() || st.size > max || (expect !== undefined && st.size !== expect))
-      throw Object.assign(new Error('size'), { code: 'SIZE' });
-    return await fh.readFile();
+    if (!st.isFile() || st.size > max || (expect !== undefined && st.size !== expect)) throw size();
+    const buf = Buffer.alloc(st.size + 1);
+    let got = 0;
+    for (;;) {
+      const { bytesRead } = await fh.read(buf, got, buf.length - got, got);
+      got += bytesRead;
+      if (bytesRead === 0 || got === buf.length) break;
+    }
+    if (got !== st.size) throw size();
+    return buf.subarray(0, got);
   } finally {
     await fh.close();
   }
@@ -61,10 +73,12 @@ export class OwnerRivers {
     this.#registry = registry;
   }
 
-  #fail(code: string): null {
-    if (!this.#logged.has(code)) {
-      this.#logged.add(code);
-      this.#log.error({ code, step: 'reaches', family: 'owner' }, 'owner reaches variant not written');
+  /** Logs a fixed code once per process, per release when it concerns one (`version`, already RIVERS_VERSION_RE). */
+  #fail(code: string, version?: string): null {
+    const key = version === undefined ? code : `${code}:${version}`;
+    if (!this.#logged.has(key)) {
+      this.#logged.add(key);
+      this.#log.error({ code, version, step: 'reaches', family: 'owner' }, 'owner reaches variant not written');
     }
     return null;
   }
@@ -115,22 +129,22 @@ export class OwnerRivers {
       try {
         const bytes = await readExact(join(this.#dir, e.reaches.file), REACHES_MAX, e.reaches.bytes);
         if (createHash('sha256').update(bytes).digest('hex') !== e.reaches.sha256) {
-          this.#fail('rivers_reaches_mismatch');
+          this.#fail('rivers_reaches_mismatch', e.version);
           continue;
         }
         const parsed = ReachesFile.safeParse(JSON.parse(bytes.toString('utf8')));
         if (!parsed.success || parsed.data.version !== e.version || checkReaches(parsed.data).length > 0) {
-          this.#fail('rivers_reaches_invalid');
+          this.#fail('rivers_reaches_invalid', e.version);
           continue;
         }
         release = parsed.data;
       } catch (err) {
-        this.#fail(err instanceof SyntaxError ? 'rivers_reaches_invalid' : `rivers_reaches_${fixed(err)}`);
+        this.#fail(err instanceof SyntaxError ? 'rivers_reaches_invalid' : `rivers_reaches_${fixed(err)}`, e.version);
         continue;
       }
       const { file, skipped } = splitReaches(release, owner, net);
       if (checkOwnerReaches(file).length > 0) {
-        this.#fail('owner_reaches_invalid');
+        this.#fail('owner_reaches_invalid', e.version);
         continue;
       }
       built.push({ name: e.reaches.file, body: file, skipped });

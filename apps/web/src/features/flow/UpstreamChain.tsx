@@ -5,6 +5,7 @@ import type { StationState } from '../../lib/stationStates.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { OwnerBadge } from '../owner/OwnerBadge.tsx';
+import { coLocated } from '../station/neighbours.ts';
 import styles from './chain.module.css';
 import { chain } from './chain.ts';
 import { type ChainRow, chainRows, type StationRow } from './rows.ts';
@@ -112,21 +113,32 @@ export function UpstreamChain({
   const graph = useReachGraph().data;
   const rivers = useRivers().data?.rivers;
   const travel = useReachTravel().data;
-  const rows = useMemo(() => {
-    if (graph === undefined) return [];
-    const list = rivers ?? [];
-    const nodes = chain(graph, list, station.id, new Set(stations.map((s) => s.id)));
-    return chainRows(nodes, {
-      locale,
-      targetId: station.id,
-      stations: new Map(stations.map((s) => [s.id, s])),
-      rivers: new Map(list.map((r) => [r.id, r])),
-      states,
-      values,
-      ownerSources,
-      travel: travel ?? NO_TRAVEL,
-    });
-  }, [graph, rivers, travel, station.id, stations, states, values, ownerSources, locale]);
+  // The walk once per graph and station; the texts again when t moves (states, values).
+  const walk = useMemo(() => {
+    if (graph === undefined) return undefined;
+    const target = graph.stations.find((s) => s.id === station.id);
+    return {
+      nodes: chain(graph, rivers ?? [], station.id, new Set(stations.map((s) => s.id))),
+      targetIds: graph.stations.filter((s) => s.id === station.id || coLocated(target, s)).map((s) => s.id),
+    };
+  }, [graph, rivers, station.id, stations]);
+  const rows = useMemo(
+    () =>
+      walk === undefined
+        ? []
+        : chainRows(walk.nodes, {
+            locale,
+            targetId: station.id,
+            targetIds: walk.targetIds,
+            stations: new Map(stations.map((s) => [s.id, s])),
+            rivers: new Map((rivers ?? []).map((r) => [r.id, r])),
+            states,
+            values,
+            ownerSources,
+            travel: travel ?? NO_TRAVEL,
+          }),
+    [walk, rivers, travel, station.id, stations, states, values, ownerSources, locale],
+  );
   if (rows.length === 0) return null;
   const headingId = `${station.id}-chain`;
   return (

@@ -153,6 +153,23 @@ describe('chainRows', () => {
     );
   });
 
+  it('finds the pair when the panel is open on a station co-located with the pair target (review round 1)', () => {
+    const peer = 'nl.rws.lobith.peer';
+    const open = { targetId: peer, targetIds: [peer, LOBITH] };
+    expect(first(chainRows([node(['de.wsv.2790020'])], ctx('en', open))).travelBasis).not.toBeNull();
+    expect(first(chainRows([node(['de.wsv.2790020'])], ctx('en', { targetId: peer }))).travelBasis).toBeNull();
+  });
+
+  it('labels a source arm of the river it joins a branch, not a tributary (review round 1)', () => {
+    const arm: ChainNode = { kind: 'group', riverId: 'neckar', children: [node(['x.y.1'], 'neckar')], count: 1 };
+    const [branch, tributary] = chainRows([{ ...arm, sameRiver: true }, arm], ctx('en'));
+    const river = riverName('neckar', 'en') ?? 'neckar';
+    expect(branch?.kind === 'group' && branch.summary).toBe(m.chain_branch({ river, count: '1' }, { locale: 'en' }));
+    expect(tributary?.kind === 'group' && tributary.summary).toBe(
+      m.chain_group({ river, count: '1' }, { locale: 'en' }),
+    );
+  });
+
   it('shows a link only for an https source', () => {
     const bad = {
       travel_times: [{ ...travel.travel_times[0], source_url: 'javascript:alert(1)' }],
