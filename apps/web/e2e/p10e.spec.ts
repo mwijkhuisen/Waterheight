@@ -309,7 +309,7 @@ test('the search: a partial query without diacritics finds Lobith; Enter opens t
   await expect(searchBox(page)).toBeFocused();
   await expect(searchButton(page)).toHaveAttribute('aria-expanded', 'true');
   await page.keyboard.type('lobit');
-  const options = page.getByRole('option');
+  const options = page.locator('[role="option"]');
   await expect(options.first()).toHaveText(/^Lobith/);
   await expect(searchBox(page)).toHaveAttribute(
     'aria-activedescendant',
@@ -344,7 +344,7 @@ test('the search: arrows move the active result, Escape closes it and returns th
   await ready(page);
   await searchButton(page).click();
   await searchBox(page).fill('e2e');
-  const options = page.getByRole('option');
+  const options = page.locator('[role="option"]');
   expect(await options.count()).toBeGreaterThan(1);
   const first = (await options.nth(0).getAttribute('id')) ?? '';
   const second = (await options.nth(1).getAttribute('id')) ?? '';
@@ -370,7 +370,7 @@ test('the search: arrows move the active result, Escape closes it and returns th
     .toBe(true);
   // No match says so; a diacritics-free, upper-case query still matches.
   await searchBox(page).fill('zzzzzz');
-  await expect(page.getByRole('option')).toHaveCount(0);
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(0);
   await expect(page.getByText(nl('search_none'), { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(searchBox(page)).toHaveCount(0);
@@ -620,19 +620,20 @@ test('the timebar is collapsed at the start and expands to the full bar of P10d'
 // Review round 1: collapsing took away the reverse button, the only pause of reverse play, and the play left behind
 // switched it to forward play.
 test('collapsing the timebar stops reverse play', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL, 'state');
-  await open(page, '/?t=2026-10-26T06:00Z');
+  const s = await start(page, context, baseURL, 'dh');
+  // P11b: reverse play runs hour by hour in the Δh and Q modes (twelve hours a second at the normal speed)
+  await open(page, '/?mode=delta&t=2026-10-24T12:00Z');
   await expandTimebar(page);
   const bar = timebarOf(page);
   await bar.getByRole('button', { name: nl('play_reverse'), exact: true }).click();
   await expect(bar.getByRole('button', { name: nl('pause'), exact: true })).toHaveCount(1);
-  await expect.poll(() => param(page, 't'), { timeout: 10_000 }).not.toBe('2026-10-26T06:00Z');
+  await expect.poll(() => param(page, 't'), { timeout: 10_000 }).not.toBe('2026-10-24T12:00Z');
   await timebarMore(page).click();
   await expect(timebarMore(page)).toHaveAttribute('aria-expanded', 'false');
   await expect(bar.getByRole('button', { name: nl('pause'), exact: true })).toHaveCount(0);
   await expect(bar.getByRole('button', { name: nl('play'), exact: true })).toBeVisible();
   const stopped = await slider(page).inputValue();
-  // Play steps once a second: two and a half seconds later the slider has not moved.
+  // Play ticks several times a second: two and a half seconds later the slider has not moved.
   await page.waitForTimeout(2500);
   await expect(slider(page)).toHaveValue(stopped);
   await finish(page, s);

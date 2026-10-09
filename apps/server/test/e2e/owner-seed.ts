@@ -3,11 +3,18 @@
 // `private_basis`. Called only when E2E_OWNER_PUBLISH_DIR is set.
 import type { Client } from 'pg';
 import { XSS } from './public-seed.ts';
+import { rollupInsertSql } from './seed.ts';
 
 export const OWNER_STATION = 'be.spw.1046';
 export const LU_STATION = 'lu.age.bigonville';
 /** The owner source whose private_basis clause holds the XSS string (the banner test compares the others to the registry). */
 export const XSS_SOURCE = 'LU-3';
+/**
+ * P11b: the SPW gauges of the Walloon Meuse between Chooz (be.spw.8702, co-located with the French station) and Eijsden
+ * that have a registry Q series (the owner reaches variant cuts the Meuse at them). Each primary series gets synthetic
+ * values, so that the owner frames and the owner reach colouring have both ends of a sub-span (owner-p11b.spec.ts).
+ */
+export const SPW_Q_STATIONS = ['be.spw.8702', 'be.spw.8078', 'be.spw.8016', 'be.spw.7132', 'be.spw.5451'];
 
 export async function seedOwner(admin: Client, from: string, now: string): Promise<void> {
   // One BE-3 H series with a value per step (owner audience by its source: only the owner views show it).
@@ -20,6 +27,22 @@ export async function seedOwner(admin: Client, from: string, now: string): Promi
     [OWNER_STATION, from, now],
   );
   if ((obs.rowCount ?? 0) === 0) throw new Error(`seed: no BE-3 H series on ${OWNER_STATION}`);
+
+  // P11b: synthetic H and Q for the Meuse gauges above, hourly-rollup visible (the frames read obs_1h). Made-up
+  // numbers only (a sine per series), never a provider value.
+  const spw = await admin.query(
+    `INSERT INTO obs (series_id, ts, value, qc, batch_id)
+     SELECT s.id, g,
+            CASE s.quantity WHEN 'H' THEN 180 + 20 * sin(extract(epoch FROM g)::float8 / 25000)
+                            ELSE 60 + 8 * sin(extract(epoch FROM g)::float8 / 35000) END + s.id % 9,
+            1, 1
+     FROM series s, LATERAL generate_series($2::timestamptz, $3::timestamptz, s.expected_step) g
+     WHERE s.station_id = ANY($1::text[]) AND s.role = 'primary'
+     ON CONFLICT DO NOTHING`,
+    [SPW_Q_STATIONS, from, now],
+  );
+  if ((spw.rowCount ?? 0) === 0) throw new Error('seed: no BE-3 series on the Meuse gauges');
+  await admin.query(rollupInsertSql('obs_1h'));
 
   // An LU-3 forecast run with a 10-90 % band, NOW - 1 h .. NOW + 24 h, on an LU-1 H series.
   const run = await admin.query(

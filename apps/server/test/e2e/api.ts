@@ -284,10 +284,10 @@ try {
   await mkdir(E2E_PUBLISH_DIR, { recursive: true });
   const publisher = openDb(dbConfig({ DATABASE_URL: t.urlFor('rws_publish') }, 'rws_publish') as DbConfig, { max: 3 });
   try {
-    // The newest settled day only: the display window reaches back to 2026-08-24 (about 60 empty settled days, two
-    // minutes of rendering); the others stay 0 in meta.dayVersions and are read from the API, as in production
-    // while the publisher catches up.
-    await publishOnce(publisher.db, 'public', E2E_PUBLISH_DIR, { now: NOW.getTime(), settledDays: 1 });
+    // The nine newest settled days (P11b R10: a 7-day playback with its 24 h Δh lead reads six day files of frames); the
+    // display window reaches back to 2026-08-24 (about 60 empty settled days, two minutes of rendering), and the older
+    // ones stay 0 in meta.dayVersions and are read from the API, as in production while the publisher catches up.
+    await publishOnce(publisher.db, 'public', E2E_PUBLISH_DIR, { now: NOW.getTime(), settledDays: 9 });
   } finally {
     await publisher.close();
   }

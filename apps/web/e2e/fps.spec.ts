@@ -87,9 +87,15 @@ interface Run {
 }
 
 /** Opens the map over the fixture rivers in a page, scrubs the timebar for 10 s under a trace, and counts the frames. */
-async function measure(browser: Browser, page: Page, tracePath: string, throttle: number | null): Promise<Run> {
+async function measure(
+  browser: Browser,
+  page: Page,
+  tracePath: string,
+  throttle: number | null,
+  playing = false,
+): Promise<Run> {
   await page.clock.setFixedTime(NOW);
-  await open(page, '/');
+  await open(page, playing ? '/?mode=delta' : '/');
   await mapReady(page);
   // The e2e build starts with the flow off (App.tsx), so the camera jump below can wait for `idle` (a running animation
   // holds it off on a software renderer); the real pause control turns the flow on before the measurement.
@@ -129,10 +135,16 @@ async function measure(browser: Browser, page: Page, tracePath: string, throttle
   await setRepaint(page, true);
   await browser.startTracing(page, { path: tracePath, categories: CATEGORIES });
   const t0 = performance.now();
-  // Back through the time range, and forth again: every key press changes t, so values and map states change.
-  for (let key = 0; performance.now() - t0 < SCRUB_MS; key++) {
-    await page.keyboard.press(Math.floor(key / 100) % 2 === 0 ? 'ArrowLeft' : 'ArrowRight');
-    await page.waitForTimeout(KEY_EVERY_MS);
+  if (playing) {
+    // P11b: hourly playback from 7 days back at the normal speed, the reach layers painting a new hour about 12 times a second.
+    await page.getByRole('button', { name: msg('nl', 'play'), exact: true }).click();
+    await page.waitForTimeout(SCRUB_MS);
+  } else {
+    // Back through the time range, and forth again: every key press changes t, so values and map states change.
+    for (let key = 0; performance.now() - t0 < SCRUB_MS; key++) {
+      await page.keyboard.press(Math.floor(key / 100) % 2 === 0 ? 'ArrowLeft' : 'ArrowRight');
+      await page.waitForTimeout(KEY_EVERY_MS);
+    }
   }
   const elapsed = (performance.now() - t0) / 1000;
   const trace = JSON.parse((await browser.stopTracing()).toString('utf8')) as unknown;
@@ -140,7 +152,7 @@ async function measure(browser: Browser, page: Page, tracePath: string, throttle
   const { method, frames, all } = countFrames(trace);
   const flowTicks = (await flowFrames(page)) - framesBefore;
   // Flow stayed on the whole time, at no more than its cap.
-  expect(flowTicks, 'flow ticks while scrubbing').toBeGreaterThan(0);
+  expect(flowTicks, 'flow ticks while scrubbing or playing').toBeGreaterThan(0);
   expect(flowTicks / elapsed, 'flow ticks a second').toBeLessThanOrEqual(25.5);
   return { fps: frames / (SCRUB_MS / 1000), method, all, flowTicks, pixelRatio };
 }
@@ -198,4 +210,22 @@ test('mobile, 4x CPU throttle: at least 20 frames a second while scrubbing the t
   } finally {
     await context.close();
   }
+});
+
+// P11b (issue #26): the same measure with hourly playback running and the reach layers painting every hour. Report-only
+// like the others (KG-269) unless FPS_GATE=1; the numbers are printed, annotated and attached.
+test('desktop: at least 30 frames a second while playing back with the reach layers on', async ({
+  browser,
+  page,
+}, testInfo) => {
+  const run = await measure(browser, page, testInfo.outputPath('trace-desktop-play.json'), null, true);
+  testInfo.annotations.push({ type: 'fps-desktop-play', description: `${run.fps.toFixed(1)} (${run.method})` });
+  await testInfo.attach('fps-desktop-play.json', {
+    body: JSON.stringify(run, null, 2),
+    contentType: 'application/json',
+  });
+  console.log(
+    `fps desktop playing: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
+  );
+  gate(run.fps, DESKTOP_MIN_FPS, `desktop playing fps (${run.method}) ${JSON.stringify(run.all)}`);
 });

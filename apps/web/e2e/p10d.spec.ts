@@ -442,13 +442,14 @@ test('the timebar floats over the bottom centre of the map, steps back to the fi
   await finish(page, s);
 });
 
-test('reverse play steps ten minutes back a second and stops at the first day; forward play stops at the end', async ({
+test('reverse play steps an hour back at a time and stops at the start of the playback range; forward play stops at now', async ({
   page,
   context,
   baseURL,
 }) => {
-  const s = await start(page, context, baseURL, 'state');
-  await open(page, '/?t=2026-08-24T00:20Z');
+  // P11b: playback covers the last 14 days (2026-10-12T12:00Z to now) in the Δh and Q modes; the future stays on the slider.
+  const s = await start(page, context, baseURL, 'dh');
+  await open(page, '/?mode=delta&t=2026-10-12T15:30Z');
   await expandTimebar(page); // (P10e: reverse play is in the expanded timebar)
   const rewind = page.getByRole('button', { name: nl('play_reverse'), exact: true });
   const pause = page.getByRole('button', { name: nl('pause'), exact: true });
@@ -459,26 +460,31 @@ test('reverse play steps ten minutes back a second and stops at the first day; f
   await expect(pause).toHaveCount(1);
   await expect(pause).toBeFocused();
   await expect(rewind).toHaveCount(0);
-  await expect.poll(() => param(page, 't'), { timeout: 10_000 }).toBe('2026-08-24T00:00Z');
-  // it stops by itself at the first day
-  await expect(page.getByRole('button', { name: nl('play_reverse'), exact: true })).toBeVisible();
+  // it stops by itself at the first hour of the range
+  await expect(page.getByRole('button', { name: nl('play_reverse'), exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(pause).toHaveCount(0);
+  await expect.poll(() => param(page, 't')).toBe('2026-10-12T12:00Z');
+  // there is nothing before it to play
+  await expect(page.getByRole('button', { name: nl('play_reverse'), exact: true })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
 
-  // forward: from 47.5 hours after now, play reaches the end of the forecast and stops
-  await page.goto('/?t=2026-10-28T11:40Z');
+  // forward: from three hours before now, play reaches the last whole hour (now) and stops, back at the live view
+  await page.goto('/?mode=delta&t=2026-10-26T09:00Z');
   await expect(slider(page)).toBeVisible();
   await play.click();
   await expect(pause).toBeFocused();
-  const end = await slider(page).getAttribute('max');
-  await expect.poll(() => slider(page).inputValue(), { timeout: 15_000 }).toBe(end);
+  await expect.poll(() => param(page, 't'), { timeout: 15_000 }).toBeNull();
   await expect(play).toBeVisible();
+  expect(param(page, 'play')).toBeNull();
   await finish(page, s);
 });
 
 test('under reduced motion both play buttons are off', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL, 'state');
+  const s = await start(page, context, baseURL, 'dh');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await open(page, '/?t=2026-10-26T11:00Z');
+  await open(page, '/?mode=delta&t=2026-10-26T11:00Z');
   await expandTimebar(page);
   await expect(page.getByRole('button', { name: nl('play'), exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: nl('play_reverse'), exact: true })).toBeDisabled();
@@ -501,11 +507,11 @@ test('the bar never hides the focused control: --timebar-h follows its height; t
   await settled(page);
   // --timebar-h is the bar's real height, collapsed and expanded
   const bar = timebarOf(page);
-  await expect.poll(() => timebarH(page)).toBe(`${Math.round((await box(bar)).height)}px`);
+  await expect.poll(() => timebarH(page)).toBe(`${Math.ceil((await box(bar)).height)}px`);
   const collapsed = (await box(bar)).height;
   await expandTimebar(page);
   await expect(bar.getByRole('group', { name: nl('repeated_hour_legend') })).toBeVisible();
-  await expect.poll(() => timebarH(page)).toBe(`${Math.round((await box(bar)).height)}px`);
+  await expect.poll(() => timebarH(page)).toBe(`${Math.ceil((await box(bar)).height)}px`);
   expect((await box(bar)).height).toBeGreaterThan(collapsed);
   // the drawer's last control, focused by the keyboard, is not under the bar (the bar keeps beside the drawer)
   const last = panelOf(page).locator('a, button, input, select').last();
@@ -515,8 +521,9 @@ test('the bar never hides the focused control: --timebar-h follows its height; t
   expect(overlaps(await box(panelOf(page)), await box(bar)), 'the bar is over the drawer').toBe(false);
   expect(where(page)).toContain(`s=${DST}`);
 
-  // below 48rem the drawer is a sheet that ends above the bar: its last control is clear of the bar as well
-  await page.setViewportSize({ width: 400, height: 560 });
+  // below 48rem the drawer is a sheet that ends above the bar: its last control is clear of the bar as well (600 px
+  // high: P11b's State-mode play hint, D-1, is one more line in this tallest bar; KG-280)
+  await page.setViewportSize({ width: 400, height: 600 });
   await expect.poll(async () => (await box(panelOf(page))).width).toBeCloseTo(400, 0);
   // (the bar grows at this width and --timebar-h follows a frame later: focus again until the layout has settled)
   await expect

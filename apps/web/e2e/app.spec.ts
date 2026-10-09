@@ -235,11 +235,11 @@ test('the slider and the buttons update ?t= and the marker states', async ({ pag
   expect(await featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true });
   expect(s.log.requests.map((u) => new URL(u).pathname)).toContain('/data/v1/recent/2026-10-26/1000.json');
 
-  // The buttons: ten minutes back and forward, then "Nu" (back to 12:00Z, where the gap station has no value).
-  await page.getByRole('button', { name: '10 minuten terug' }).click();
-  await expect.poll(() => tParam(page)).toBe('2026-10-26T09:50Z');
-  await expect(slider(page)).toHaveAttribute('aria-valuetext', /10:50 CET$/);
-  await page.getByRole('button', { name: '10 minuten vooruit' }).click();
+  // The buttons: one hour back and forward (P11b), then "Nu" (back to 12:00Z, where the gap station has no value).
+  await page.getByRole('button', { name: '1 uur terug' }).click();
+  await expect.poll(() => tParam(page)).toBe('2026-10-26T09:00Z');
+  await expect(slider(page)).toHaveAttribute('aria-valuetext', /10:00 CET$/);
+  await page.getByRole('button', { name: '1 uur vooruit' }).click();
   await expect.poll(() => tParam(page)).toBe('2026-10-26T10:00Z');
   await expect(slider(page)).toHaveAttribute('aria-valuetext', /11:00 CET$/);
   const now = page.getByRole('button', { name: 'Nu', exact: true });
@@ -251,7 +251,7 @@ test('the slider and the buttons update ?t= and the marker states', async ({ pag
   await expect(now).not.toHaveAttribute('disabled');
   await expect(now).toBeFocused();
   // The timeline goes on after now (P8b: no station is selected, so it reaches the largest horizon of /meta).
-  await expect(page.getByRole('button', { name: '10 minuten vooruit' })).toHaveAttribute('aria-disabled', 'false');
+  await expect(page.getByRole('button', { name: '1 uur vooruit' })).toHaveAttribute('aria-disabled', 'false');
   await page.keyboard.press('Enter');
   await expect(now).toBeFocused();
   expect(tParam(page)).toBeNull();
@@ -443,7 +443,7 @@ test('while a new t loads, the values of the old one are marked busy and dimmed 
   const held = new Promise<void>((r) => {
     release = r;
   });
-  await page.route('**/data/v1/recent/2026-10-26/1150.json', async (route) => {
+  await page.route('**/data/v1/recent/2026-10-26/1100.json', async (route) => {
     await held;
     await route.continue();
   });
@@ -451,8 +451,8 @@ test('while a new t loads, the values of the old one are marked busy and dimmed 
   const body = panelOf(page).locator('..');
   await expect(body).toHaveAttribute('aria-busy', 'false');
   await expect(panelOf(page).locator('strong')).toHaveText('444');
-  await page.getByRole('button', { name: '10 minuten terug' }).click();
-  await expect(slider(page)).toHaveAttribute('aria-valuetext', /12:50 CET$/);
+  await page.getByRole('button', { name: '1 uur terug' }).click();
+  await expect(slider(page)).toHaveAttribute('aria-valuetext', /12:00 CET$/);
   // The panel still shows the value of 12:00Z, so the region says it is not current yet, and looks it.
   await expect(body).toHaveAttribute('aria-busy', 'true');
   await expect.poll(() => body.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeLessThan(0.6);
@@ -715,7 +715,8 @@ test('the view toggle reaches the table with WebGL2 present, and brings the map 
   await expect(tableButton).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.maplibregl-canvas')).toHaveCount(1);
   await expect(page.locator('table')).toHaveCount(0);
-  await expect(page.getByRole('status')).toHaveCount(0); // no fallback notice when the map works
+  // (the timebar's polite play status is always in the page, empty: only a filled status would be the fallback notice)
+  await expect(page.getByRole('status').filter({ hasText: /\S/ })).toHaveCount(0); // no fallback notice when the map works
 
   await tableButton.click();
   // Choosing a view closes the disclosure; its summary says where we are.
@@ -963,12 +964,14 @@ for (const [path, kind, state, disclaimer, row] of [
 
 // ---------------------------------------------------------------- play
 
-test('play steps ten minutes a second; Pause and a hidden tab stop it', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL, 'state');
-  // Every URL the page writes (replaceState), so the steps are counted exactly instead of sampled.
+test('play steps whole hours from the frames; Pause and a hidden tab stop it', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'dh');
+  // Every URL the page writes (replaceState). P11b: play is for the Δh and Q modes (D-1) and takes one UTC hour a tick
+  // (about twelve a second at the normal speed), so the throttled URL writes show whole hours, rising.
   await page.addInitScript(countUrlWrites);
-  await open(page, '/?t=2026-10-26T11:00Z');
+  await open(page, '/?mode=delta&t=2026-10-25T06:00Z');
   const urls = () => urlWrites(page);
+  const hours = async () => (await urls()).map((u) => new URLSearchParams(u).get('t') ?? '');
   const play = page.getByRole('button', { name: 'Afspelen', exact: true });
   const pause = page.getByRole('button', { name: 'Pauzeren', exact: true });
 
@@ -980,14 +983,18 @@ test('play steps ten minutes a second; Pause and a hidden tab stop it', async ({
   await expect(pause).not.toHaveAttribute('aria-pressed');
   await expect(pause).toBeFocused();
   await expect.poll(async () => (await urls()).length, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
-  expect((await urls()).slice(0, 2)).toEqual(['?t=2026-10-26T11:10Z', '?t=2026-10-26T11:20Z']);
+  const first = await hours();
+  for (const t of first) expect(t).toMatch(/^2026-10-25T\d\d:00Z$/);
+  expect([...first].sort()).toEqual(first);
+  expect((await urls())[0]).toMatch(/play=normal/);
 
   await pause.click();
   await expect(play).toBeVisible();
+  await page.waitForTimeout(600); // (the URL write is throttled: the last hour reaches it after the click)
   const stopped = await urls();
   const last = stopped.at(-1) ?? '';
-  expect(last).toMatch(/^\?t=2026-10-26T11:[1-5]0Z$/);
-  await expect(slider(page)).toHaveAttribute('aria-valuetext', new RegExp(`12:${last.slice(-3, -2)}0 CET$`));
+  expect(last).toMatch(/^\?t=2026-10-25T\d\d:00Z&mode=delta&play=normal$/);
+  await expect(slider(page)).toHaveAttribute('aria-valuetext', /:00 CET$/);
   await page.waitForTimeout(2500);
   expect(await urls()).toEqual(stopped);
 
@@ -1000,23 +1007,24 @@ test('play steps ten minutes a second; Pause and a hidden tab stop it', async ({
     document.dispatchEvent(new Event('visibilitychange'));
   });
   await expect(play).toBeVisible();
+  await page.waitForTimeout(600);
   const hidden = await urls();
   await page.waitForTimeout(2500);
   expect(await urls()).toEqual(hidden);
-  expect(await tParam(page)).toBe(hidden.at(-1)?.slice('?t='.length));
+  expect(await tParam(page)).toBe(hidden.at(-1)?.match(/t=([^&]+)/)?.[1]);
   await finish(page, s);
 });
 
 test('under reduced motion Play is off and says why', async ({ page, context, baseURL }) => {
-  const s = await start(page, context, baseURL, 'state');
+  const s = await start(page, context, baseURL, 'dh');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await open(page, '/?t=2026-10-26T11:00Z');
+  await open(page, '/?mode=delta&t=2026-10-26T10:00Z');
   await expect(page.getByRole('button', { name: 'Afspelen', exact: true })).toBeDisabled();
   await expect(page.getByText('Afspelen staat uit, omdat je apparaat om minder beweging vraagt.')).toBeVisible();
-  // The other controls still work.
-  await expect(page.getByRole('button', { name: '10 minuten vooruit' })).toBeEnabled();
-  await page.getByRole('button', { name: '10 minuten vooruit' }).click();
-  await expect.poll(() => tParam(page)).toBe('2026-10-26T11:10Z');
+  // The other controls still work: the step is one hour.
+  await expect(page.getByRole('button', { name: '1 uur vooruit' })).toBeEnabled();
+  await page.getByRole('button', { name: '1 uur vooruit' }).click();
+  await expect.poll(() => tParam(page)).toBe('2026-10-26T11:00Z');
   await finish(page, s);
 });
 
