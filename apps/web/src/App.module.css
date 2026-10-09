@@ -29,6 +29,14 @@
   gap: 0.4rem;
 }
 
+/* P11a: the flow toggle stands beside the mode and view disclosures, never under an open menu. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
 .onMap .top {
   position: absolute;
   top: 0.5rem;

@@ -5,7 +5,8 @@ import { repoRoot } from './catalogue.ts';
 const fixture = (name: string) => checkBoundaries(`${repoRoot}scripts/fixtures/boundaries/${name}`);
 
 describe('check-boundaries', () => {
-  it('passes on the repository', () => {
+  // It parses every TypeScript file of the repository: about 5 s under the full parallel unit run (P11a).
+  it('passes on the repository', { timeout: 30_000 }, () => {
     expect(checkBoundaries(repoRoot)).toEqual([]);
   });
 

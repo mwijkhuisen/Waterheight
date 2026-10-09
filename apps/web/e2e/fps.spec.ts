@@ -1,5 +1,5 @@
 import { type Browser, devices, expect, type Page, test } from '@playwright/test';
-import { mapReady, msg, NOW, open, slider, type W } from './helpers.ts';
+import { mapReady, msg, NOW, open, pauseFlow, slider, type W } from './helpers.ts';
 
 // P11a (issue #26, C4; owner decision D-B): the frame rate of the map with the flow animation on, while the timebar is
 // scrubbed with the keyboard for 10 s over the fixture rivers (the committed river release, prepare-tiles.ts), measured
@@ -9,9 +9,11 @@ import { mapReady, msg, NOW, open, slider, type W } from './helpers.ts';
 //   desktop         at least 30 frames a second
 //   mobile, 4x CPU  at least 20 frames a second (Pixel 5 profile, device scale factor 2.75, the CDP CPU throttle)
 //
-// THE THRESHOLDS ARE FIXED. A shortfall is never "fixed" by lowering them: the lead reports the numbers and the traces
-// and asks the owner (D-B). The traces and the numbers are saved with the test (testInfo.outputPath, an annotation, an
-// attachment); CI uploads test-results/ with its `if: always()` step.
+// THE THRESHOLDS ARE FIXED. A shortfall is never "fixed" by lowering them (D-B). They fail the test only with
+// FPS_GATE=1 (owner decision 2026-10-09, the Lighthouse pattern of KG-237): with software WebGL the map alone renders
+// about 23 frames a second before the flow is added (KG-269), so CI reports the numbers (console, an annotation and an
+// attachment; the traces via testInfo.outputPath, uploaded by CI's `if: always()` step), and the owner runs this spec
+// once with FPS_GATE=1 on a machine with a real GPU before the launch.
 //
 // What is counted. Chromium's compositor reports every display frame as a `PipelineReporter` async event whose
 // `chrome_frame_reporter.state` says what became of it: `STATE_PRESENTED_ALL` or `STATE_PRESENTED_PARTIAL` is a frame the
@@ -89,6 +91,9 @@ async function measure(browser: Browser, page: Page, tracePath: string, throttle
   await page.clock.setFixedTime(NOW);
   await open(page, '/');
   await mapReady(page);
+  // The camera jump waits for `idle`, which a running animation can hold off for ever on a software renderer: the flow
+  // is paused for it and switched on again (the real pause control) before the measurement.
+  await pauseFlow(page);
   // The Rhine and the Meuse of the fixture release both in view (about 4 degrees across at this zoom).
   const lines = await page.evaluate(async () => {
     const map = (window as unknown as W).__rws?.map;
@@ -103,7 +108,9 @@ async function measure(browser: Browser, page: Page, tracePath: string, throttle
   });
   expect(lines.lines, 'the fixture river lines are in view').toBeGreaterThan(0);
   expect(lines.flow, `the ${FLOW} layer exists`).toBe(true);
-  await expect(page.getByRole('button', { name: msg('nl', 'flow_toggle') })).toHaveAttribute('aria-pressed', 'true');
+  const toggle = page.getByRole('button', { name: msg('nl', 'flow_toggle') });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
   const pixelRatio = await page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas.maplibregl-canvas');
@@ -118,6 +125,9 @@ async function measure(browser: Browser, page: Page, tracePath: string, throttle
   }
   const framesBefore = await flowFrames(page);
   await slider(page).focus();
+  // The map draws every frame while measured (MapLibre's `repaint`): Chromium presents a frame only when something
+  // changed, so without it the count follows the key presses (about 26 a second here), not what the page can render.
+  await setRepaint(page, true);
   await browser.startTracing(page, { path: tracePath, categories: CATEGORIES });
   const t0 = performance.now();
   // Back through the time range, and forth again: every key press changes t, so values and map states change.
@@ -127,6 +137,7 @@ async function measure(browser: Browser, page: Page, tracePath: string, throttle
   }
   const elapsed = (performance.now() - t0) / 1000;
   const trace = JSON.parse((await browser.stopTracing()).toString('utf8')) as unknown;
+  await setRepaint(page, false);
   const { method, frames, all } = countFrames(trace);
   const flowTicks = (await flowFrames(page)) - framesBefore;
   // Flow stayed on the whole time, at no more than its cap.
@@ -134,6 +145,19 @@ async function measure(browser: Browser, page: Page, tracePath: string, throttle
   expect(flowTicks / elapsed, 'flow ticks a second').toBeLessThanOrEqual(25.5);
   return { fps: frames / (SCRUB_MS / 1000), method, all, flowTicks, pixelRatio };
 }
+
+/** The threshold fails the test only with FPS_GATE=1; otherwise a shortfall is reported. */
+function gate(fps: number, min: number, what: string): void {
+  if (process.env.FPS_GATE === '1') expect(fps, what).toBeGreaterThanOrEqual(min);
+  else if (fps < min) console.log(`fps REPORT-ONLY (set FPS_GATE=1 to gate): ${what} ${fps.toFixed(1)} < ${min}`);
+}
+
+const setRepaint = (page: Page, on: boolean) =>
+  page.evaluate((v) => {
+    const map = (window as unknown as W).__rws?.map;
+    if (!map) throw new Error('no map');
+    map.repaint = v;
+  }, on);
 
 const flowFrames = (page: Page) =>
   page.evaluate(() => (window as unknown as W & { __rwsFlowFrames?: number }).__rwsFlowFrames ?? 0);
@@ -151,7 +175,7 @@ test('desktop: at least 30 frames a second while scrubbing the timebar with the 
   console.log(
     `fps desktop: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
   );
-  expect(run.fps, `desktop fps (${run.method}) ${JSON.stringify(run.all)}`).toBeGreaterThanOrEqual(DESKTOP_MIN_FPS);
+  gate(run.fps, DESKTOP_MIN_FPS, `desktop fps (${run.method}) ${JSON.stringify(run.all)}`);
 });
 
 test('mobile, 4x CPU throttle: at least 20 frames a second while scrubbing the timebar with the flow on', async ({
@@ -171,7 +195,7 @@ test('mobile, 4x CPU throttle: at least 20 frames a second while scrubbing the t
     console.log(
       `fps mobile 4x: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
     );
-    expect(run.fps, `mobile fps (${run.method}) ${JSON.stringify(run.all)}`).toBeGreaterThanOrEqual(MOBILE_MIN_FPS);
+    gate(run.fps, MOBILE_MIN_FPS, `mobile fps (${run.method}) ${JSON.stringify(run.all)}`);
   } finally {
     await context.close();
   }

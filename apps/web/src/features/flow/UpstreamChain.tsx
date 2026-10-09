@@ -32,17 +32,7 @@ export interface UpstreamChainProps {
 
 const NO_TRAVEL = { travel_times: [] };
 
-function Station({
-  row,
-  locale,
-  target,
-  onSelect,
-}: {
-  row: StationRow;
-  locale: Locale;
-  target: string;
-  onSelect: (id: string) => void;
-}) {
+function Station({ row, locale, onSelect }: { row: StationRow; locale: Locale; onSelect: (id: string) => void }) {
   return (
     <li className={styles.station}>
       <button type="button" className={styles.select} onClick={() => onSelect(row.id)}>
@@ -61,7 +51,7 @@ function Station({
           )}
         </span>
         {row.basis !== null && <span className={styles.muted}>{row.basis}</span>}
-        <span>{m.chain_travel({ target, text: row.travel }, { locale })}</span>
+        <span>{m.chain_travel({ text: row.travel }, { locale })}</span>
         {row.travelBasis !== null && <span className={styles.muted}>{row.travelBasis}</span>}
         {row.source !== null && (
           <span className={styles.muted}>
@@ -82,19 +72,17 @@ function Station({
 function Rows({
   rows,
   locale,
-  target,
   onSelect,
 }: {
   rows: readonly ChainRow[];
   locale: Locale;
-  target: string;
   onSelect: (id: string) => void;
 }) {
   return (
     <ul className={styles.list}>
       {rows.map((row) =>
         row.kind === 'station' ? (
-          <Station key={row.key} row={row} locale={locale} target={target} onSelect={onSelect} />
+          <Station key={row.key} row={row} locale={locale} onSelect={onSelect} />
         ) : row.kind === 'gap' ? (
           <li key={row.key} className={styles.gap}>
             {row.text}
@@ -103,7 +91,7 @@ function Rows({
           <li key={row.key}>
             <details className={styles.group}>
               <summary>{row.summary}</summary>
-              <Rows rows={row.children} locale={locale} target={target} onSelect={onSelect} />
+              <Rows rows={row.children} locale={locale} onSelect={onSelect} />
             </details>
           </li>
         ),
@@ -144,7 +132,7 @@ export function UpstreamChain({
   return (
     <section className={styles.chain} aria-labelledby={headingId}>
       <h3 id={headingId}>{m.chain_heading({}, { locale })}</h3>
-      <Rows rows={rows} locale={locale} target={station.name} onSelect={onSelect} />
+      <Rows rows={rows} locale={locale} onSelect={onSelect} />
       <p className={styles.note}>{m.chain_note({}, { locale })}</p>
     </section>
   );

@@ -16,6 +16,9 @@ export const XSS = '<img src=x onerror=alert(1)>';
 export interface HookMap {
   getFeatureState(f: { source: string; id: string }): Record<string, unknown>;
   getPaintProperty(layer: string, name: string): unknown;
+  getLayoutProperty(layer: string, name: string): unknown;
+  /** MapLibre draws every frame while true (fps.spec.ts measures with it on). */
+  repaint: boolean;
   getFilter(layer: string): unknown;
   getLayer(id: string): { id: string; source?: string; sourceLayer?: string } | undefined;
   getStyle(): { layers: Record<string, unknown>[] };
@@ -237,6 +240,26 @@ export const featureState = (page: Page, id: string) =>
   }, id);
 
 /** The map has its stations and the snapshot of the first `t` has arrived (nl.e2e.xss has a value from 2026-10-24). */
+/**
+ * P11a: press the flow toggle off (when the page shows it and it is on). While the flow animates, MapLibre always has a
+ * frame to draw, so a slow software renderer (WebKit, a CI runner) never fires `idle`: pause it before such a wait.
+ * The toggle appears with the river layer, so this waits briefly for it; a page without rivers has none.
+ */
+export async function pauseFlow(page: Page): Promise<void> {
+  const toggle = page.getByRole('button', {
+    name: new RegExp(`^(${escapeRx(msg('nl', 'flow_toggle'))}|${escapeRx(msg('en', 'flow_toggle'))})$`),
+  });
+  if (
+    !(await toggle.waitFor({ timeout: 10_000 }).then(
+      () => true,
+      () => false,
+    ))
+  )
+    return;
+  if ((await toggle.getAttribute('aria-pressed')) === 'true') await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+}
+
 export async function mapReady(page: Page) {
   // The map mounts only near the viewport (useMapLibre); on the owner site the banner and the brand header (P10c)
   // put it below the fold of the 768 px window, so bring the end of <main>, where the map is, into view first.

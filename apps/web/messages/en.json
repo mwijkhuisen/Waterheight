@@ -343,7 +343,7 @@
   "chain_note": "Travel times vary 1.5–2× with discharge.",
   "chain_gap": "{km} km {river} without a station",
   "chain_group": "{river} (tributary, stations: {count})",
-  "chain_travel": "Travel time to {target}: {text}",
+  "chain_travel": "Travel time to here: {text}",
   "travel_no_source": "no sourced value",
   "flow_toggle": "Animate flow",
   "flow_reduced": "Off: your system asks for reduced motion",

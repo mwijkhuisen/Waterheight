@@ -201,15 +201,17 @@ describe('web build', () => {
     }
   });
 
-  it('ships no canary rendering and no registry or health internal of @rws/contracts (invariant 11, SR-1)', () => {
+  it('ships no canary rendering and no registry, health or owner-reaches internal of @rws/contracts (invariant 11, SR-1)', () => {
     // The public static files are a public output: the owner canary appears in none, the withheld one nowhere.
-    // The web uses only the API contract and the units; `sideEffects: false` lets the bundler drop the rest.
+    // The web uses only the API contract and the units; `sideEffects: false` lets the bundler drop the rest. P11a: the
+    // server-only `@rws/contracts/reaches-owner` (its id rule and a cross-check text) is in no file, owner chunks included.
     const files = readdirSync(out, { recursive: true, withFileTypes: true }).filter((e) => e.isFile());
     expect(CANARY_RENDERINGS.length).toBe(4);
+    const ownerReaches = ['<river>.<seq>-<k>', 'still in the file beside its parts'];
     for (const e of files) {
       const path = join(e.parentPath, e.name);
       const text = readFileSync(path, 'utf8');
-      for (const needle of [...CANARY_RENDERINGS, 'private_basis', 'owner_sources', 'licence_gate'])
+      for (const needle of [...CANARY_RENDERINGS, 'private_basis', 'owner_sources', 'licence_gate', ...ownerReaches])
         expect(text.includes(needle), `${path}: ${needle}`).toBe(false);
     }
   });
