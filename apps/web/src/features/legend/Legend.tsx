@@ -6,7 +6,7 @@ import { OwnerBadge } from '../owner/OwnerBadge.tsx';
 import { DhMark } from './DhMark.tsx';
 import { dhItems, LHP_ALERT_CODES, qItems, stateItems } from './items.ts';
 import styles from './legend.module.css';
-import { LHP_NO_DATA } from './palette.ts';
+import { LAPSED_COLOUR, LAPSED_RADIUS, LHP_NO_DATA } from './palette.ts';
 
 // The map legend (P10a T2): per mode, collapsible, with the honesty and NL-4 notes and the keys for the other cues.
 // P10d: over the map's bottom-right corner (as on waterinfo). P10e: in that corner of the table view too, above the
@@ -97,7 +97,10 @@ export function Legend({ locale, mode, forecast, owner, warnings }: LegendProps)
       </ul>
       {forecast && <p className={styles.note}>{m.legend_forecast({}, o)}</p>}
       <ul className={styles.list}>
-        <li>{m.legend_stale({}, o)}</li>
+        <li>
+          <Dot colour={LAPSED_COLOUR} r={LAPSED_RADIUS} />
+          {m.legend_stale({}, o)}
+        </li>
         <li>! {m.legend_suspect({}, o)}</li>
         <li>{m.legend_tidal({}, o)}</li>
         <li>{m.legend_impounded({}, o)}</li>

@@ -250,7 +250,7 @@
   "legend_heading": "Legend",
   "legend_honesty": "Classes follow each agency's own references; not strictly equivalent",
   "legend_no_value": "no value at this time",
-  "legend_stale": "older than two measuring steps",
+  "legend_stale": "older than two measuring steps, or no value within the staleness limit",
   "legend_suspect": "suspect value (quality flag)",
   "legend_tidal": "tidal",
   "legend_impounded": "impounded",

@@ -58,7 +58,11 @@ export function visibleStations<T extends { id: string }>(stations: readonly T[]
 export interface StationState {
   /** A value at t (up to now), or a forecast at t (after now). */
   has: boolean;
-  /** Every value at t is older than twice its series' step (the value is carried forward). */
+  /**
+   * Every value at t is older than twice its series' step (the value is carried forward); or, with no value at t
+   * (`has` false), a series' newest value is past its staleness limit and under 25 hours old (KG-233: a small
+   * grey dot, "no value within the staleness limit").
+   */
   stale: boolean;
   /** t is after now: `has` means a forecast, `level` is the forecast's state. */
   forecast: boolean;

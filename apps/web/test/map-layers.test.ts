@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
+import { LAPSED_COLOUR, LAPSED_RADIUS } from '../src/features/legend/palette.ts';
 import { hatchAreaIcon, hatchIcon, triangleIcon } from '../src/features/map/icons.ts';
 import { badgeLine, changeLine } from '../src/features/map/popup.ts';
 import { riverFilter, riverUrl } from '../src/features/map/rivers.ts';
@@ -80,6 +81,13 @@ describe('layer paint', () => {
     }
     expect(colours.size).toBe(3);
   });
+  it('draws a lapsed station (stale without a value) as a small grey dot in every mode (KG-233)', () => {
+    for (const mode of MODES) {
+      const paint = JSON.stringify(layerPaints(mode).stations);
+      expect(paint, mode).toContain(LAPSED_COLOUR);
+      expect(paint, mode).toContain(String(LAPSED_RADIUS));
+    }
+  });
   it('shows the triangles only in the delta mode', () => {
     expect(JSON.stringify(layerPaints('state')['stations-trend-up'])).toContain('false');
     expect(JSON.stringify(layerPaints('delta')['stations-trend-up'])).toContain('dhBin');
@@ -134,6 +142,14 @@ describe('popup text', () => {
     const state = { section: true, owner: false, suspect: true, stale: false } as never;
     expect(badgeLine({ state, tidal: true, impounded: false }, 'en')).toMatch(/^section · ! suspect.* · tidal$/);
     expect(badgeLine({ state: undefined, tidal: false, impounded: false }, 'en')).toBe('');
+    // KG-233: stale with a value is a carried value; stale without one is a lapsed station.
+    const stale = (has: boolean) => ({ section: false, owner: false, suspect: false, stale: true, has }) as never;
+    expect(badgeLine({ state: stale(true), tidal: false, impounded: false }, 'en')).toBe(
+      'older than two measuring steps',
+    );
+    expect(badgeLine({ state: stale(false), tidal: false, impounded: false }, 'en')).toBe(
+      'no value within the staleness limit',
+    );
   });
 });
 

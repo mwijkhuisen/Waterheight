@@ -183,7 +183,8 @@ export function StationTable({
                 <td>
                   {state?.section && <span>{m.section_badge({}, o)} </span>}
                   {state?.owner && <OwnerBadge locale={locale} />}
-                  {state?.stale && <span>{m.stale_note({}, o)} </span>}
+                  {/* A carried value's note; a lapsed series says its own (KG-233), one note per row. */}
+                  {state?.stale && state.has && lapse === undefined && <span>{m.stale_note({}, o)} </span>}
                   {lapse !== undefined && <span>{(lapse.hidden ? m.lapsed_hidden_note : m.lapsed_note)({}, o)} </span>}
                   {state?.suspect && <span>{m.suspect_note({}, o)} </span>}
                 </td>
