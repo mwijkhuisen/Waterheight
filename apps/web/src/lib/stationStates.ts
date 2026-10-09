@@ -34,10 +34,25 @@ export function lapses(
   for (const st of stations)
     for (const s of st.series) {
       const age = lastAges.get(s.id);
-      if (values.has(s.id) || age == null || age <= s.stalenessLimitSeconds) continue;
+      // The at-t functions keep a value only while ts > t − limit, so an age of exactly the limit is lapsed too.
+      if (values.has(s.id) || age == null || age < s.stalenessLimitSeconds) continue;
       out.set(s.id, { hidden: age > HIDE_AFTER_S, ageSeconds: age });
     }
   return out;
+}
+
+/**
+ * The ids of the hidden stations as one string: it changes only when the hidden set does, so the visible list can
+ * be memoised on it (a new `states` every snapshot must not rebuild the map's source and popup).
+ */
+export const hiddenKey = (states: ReadonlyMap<string, StationState>): string =>
+  [...states].flatMap(([id, s]) => (s.hidden ? [id] : [])).join('\n');
+
+/** The stations not named in `hiddenKey`'s string. */
+export function visibleStations<T extends { id: string }>(stations: readonly T[], key: string): readonly T[] {
+  if (key === '') return stations;
+  const hidden = new Set(key.split('\n'));
+  return stations.filter((st) => !hidden.has(st.id));
 }
 
 export interface StationState {

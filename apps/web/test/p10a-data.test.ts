@@ -7,7 +7,7 @@ import { type Fetcher, loadMeta, loadRecent, loadSources, loadStations, loadWarn
 import { changesAt, historySource } from '../src/lib/data/change.ts';
 import { PUBLIC_CONTRACTS } from '../src/lib/data/contracts.ts';
 import { validAt, warningsAt, warningsSource } from '../src/lib/data/warnings.ts';
-import { HIDE_AFTER_S, lapses, stationStates } from '../src/lib/stationStates.ts';
+import { HIDE_AFTER_S, hiddenKey, lapses, stationStates, visibleStations } from '../src/lib/stationStates.ts';
 
 // P10a, the lead's pure parts: the warnings at t, the 24-hour change, the history source, the palette bins, the
 // station feature-state record and the owner record's hidden canary.
@@ -282,12 +282,19 @@ describe('stationStates', () => {
       ]);
       expect(lapsed.get(1)).toEqual({ hidden: false, ageSeconds: 3601 });
       expect(lapsed.get(2)).toEqual({ hidden: true, ageSeconds: HIDE_AFTER_S + 1 });
+      // The DB keeps a value only while ts > t − limit: an age of exactly the limit is lapsed, one second less is not.
       expect(
         states([
           [1, 3600],
           [2, HIDE_AFTER_S],
-        ]).lapsed.size,
-      ).toBe(1);
+        ]).lapsed,
+      ).toEqual(
+        new Map([
+          [1, { hidden: false, ageSeconds: 3600 }],
+          [2, { hidden: false, ageSeconds: HIDE_AFTER_S }],
+        ]),
+      );
+      expect(states([[1, 3599]]).lapsed.size).toBe(0);
       expect(
         states([
           [1, null],
@@ -326,6 +333,32 @@ describe('stationStates', () => {
     it('a station with a value is never hidden, whatever its other series', () => {
       const out = states([[2, HIDE_AFTER_S + 1]], new Map([[1, value(1)]]) as never).out;
       expect(out).toMatchObject({ has: true, hidden: false });
+    });
+
+    it('the visible list changes only with the hidden set (the map rebuilds its source on a new list)', () => {
+      const other = station('nl.c.d', [series(3, 'H')]);
+      const at = (ages: [number, number | null][]) =>
+        hiddenKey(
+          stationStates({
+            stations: [st, other],
+            values: new Map(),
+            forecasts: undefined,
+            changes: undefined,
+            ownerSources: new Set(),
+            lapsed: lapses([st, other], new Map(), new Map(ages)),
+          }),
+        );
+      const gone: [number, number | null][] = [
+        [1, HIDE_AFTER_S + 1],
+        [2, HIDE_AFTER_S + 1],
+      ];
+      // Two snapshots with other ages but the same hidden set: the same key, so the same memoised list.
+      expect(at(gone)).toBe(at([...gone, [3, 7200]]));
+      expect(at(gone)).toBe('nl.a.b');
+      expect(at([])).toBe('');
+      const list = [st, other];
+      expect(visibleStations(list, '')).toBe(list);
+      expect(visibleStations(list, at(gone))).toEqual([other]);
     });
   });
 
