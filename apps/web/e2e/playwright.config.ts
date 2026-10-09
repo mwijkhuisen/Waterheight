@@ -27,7 +27,7 @@ const ownerPublish = join(tmpdir(), 'rws-e2e-owner-publish');
 
 /** Files each kind of project runs. The public ones never run an owner spec (no credentials) or the tool specs. */
 const OWNER = /owner[^/]*\.spec\.ts$/;
-const PUBLIC_IGNORE = /(owner[^/]*|cvd|screens|lighthouse|no-webgl2)\.spec\.ts$/;
+const PUBLIC_IGNORE = /(owner[^/]*|cvd|screens|lighthouse|fps|no-webgl2)\.spec\.ts$/;
 
 // Firefox refuses WebGL on a GL driver it does not trust; on a GPU-less runner that is Mesa's software renderer under
 // Xvfb (ci.yml). The page still has to create its own WebGL2 context. No HTTP/3: the CI job's Caddy advertises h3
@@ -96,6 +96,16 @@ export default defineConfig({
             testMatch: /lighthouse\.spec\.ts$/,
             use: chromium,
             dependencies: LIGHTHOUSE_AFTER,
+          },
+          // The frame rate of the map with the flow animation on (P11a, issue #26 C4, fps.spec.ts): Chromium's trace of
+          // 10 s of timebar scrubbing, on desktop and on a throttled phone. After Lighthouse (which itself waits for every
+          // other project), so that the two never run at once and each has the CPU to itself; to run it on its own, add
+          // --no-deps. Its thresholds are fixed (owner decision D-B): a shortfall is reported, never tuned away.
+          {
+            name: 'fps',
+            testMatch: /fps\.spec\.ts$/,
+            use: chromium,
+            dependencies: ['lighthouse'],
           },
           // The owner site (owner.spec.ts): its own origin and the basic-auth credentials, on three browsers.
           ...(ownerUrl === undefined

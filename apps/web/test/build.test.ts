@@ -177,6 +177,30 @@ describe('web build', () => {
     }
   });
 
+  // P11a (issue #26, C2): the flow direction is a lazy chunk (StationsMap imports it once the river layer exists), and its
+  // e2e frame counter is a build-time constant of `--mode e2e`.
+  it('keeps the flow layers out of every page’s initial load, in a chunk of their own', () => {
+    const manifest = manifestOf();
+    const flow = manifest['src/features/flow/flowLayer.ts'];
+    expect(flow?.isDynamicEntry, 'flowLayer.ts is a dynamic entry').toBe(true);
+    expect(page(flow?.file ?? ''), 'the flow chunk holds the layers').toContain('rivers-flow');
+    for (const html of SHELLS) {
+      const initial = initialLoad(manifest, html);
+      expect(initial.size).toBeGreaterThan(0);
+      expect(initial.has(flow?.file ?? ''), `${html} loads the flow chunk at the start`).toBe(false);
+      for (const file of initial) expect(page(file), `${html} → ${file}`).not.toContain('rivers-flow');
+    }
+  });
+
+  it('holds no trace of the e2e flow frame counter (`__rwsFlowFrames`) in the production build', () => {
+    const files = readdirSync(out, { recursive: true, withFileTypes: true }).filter((e) => e.isFile());
+    expect(files.length).toBeGreaterThan(0);
+    for (const e of files) {
+      const path = join(e.parentPath, e.name);
+      expect(readFileSync(path, 'utf8'), path).not.toContain('__rwsFlowFrames');
+    }
+  });
+
   it('ships no canary rendering and no registry or health internal of @rws/contracts (invariant 11, SR-1)', () => {
     // The public static files are a public output: the owner canary appears in none, the withheld one nowhere.
     // The web uses only the API contract and the units; `sideEffects: false` lets the bundler drop the rest.
