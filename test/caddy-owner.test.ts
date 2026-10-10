@@ -330,6 +330,10 @@ describe('the owner site is reachable over WireGuard only (P12a)', () => {
     const fw = read('deploy/host/nftables.conf');
     expect(fw).toContain('udp dport 51820 accept');
     expect(fw).toMatch(/hook prerouting priority -150[\s\S]*ip daddr 10\.66\.0\.1 iifname != \{ "wg0", "lo" \} drop/);
+    // The one exception: replies of a tracked connection (the host's own to the site), never a new one.
+    expect(fw.match(/ip daddr 10\.66\.0\.1 iifname != \{ "wg0", "lo" \} .*accept/g)).toEqual([
+      'ip daddr 10.66.0.1 iifname != { "wg0", "lo" } ct state established,related ct direction reply accept',
+    ]);
     expect(fw).toContain(
       'iifname "wg0" meta l4proto tcp ct original ip daddr 10.66.0.1 ct original proto-dst 443 accept',
     );
