@@ -364,6 +364,20 @@ export const reachState = (page: Page, id: string) =>
       return null;
     }
   }, id);
+/** The feature-state of one position bin of a reach (#112 PR B: `<reach>/<i>`, source-layer `reach_bins`, zoom >= 8 only). */
+export const binState = (page: Page, id: string) =>
+  page.evaluate((id) => {
+    try {
+      const s = (window as unknown as W).__rws?.map?.getFeatureState({
+        source: 'rivers',
+        sourceLayer: 'reach_bins',
+        id,
+      });
+      return s?.k === undefined ? null : (s as { k: string; c: string; w: number });
+    } catch {
+      return null;
+    }
+  }, id);
 /** The kind `k` of several reaches at once (`v`, `nodata`, `tidal`, `impounded`, or null while unset). */
 export const reachKinds = async (page: Page, ids: readonly string[]) =>
   Object.fromEntries(await Promise.all(ids.map(async (id) => [id, (await reachState(page, id))?.k ?? null] as const)));

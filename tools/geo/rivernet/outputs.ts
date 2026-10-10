@@ -12,6 +12,7 @@ import {
   RIVERS_VERSION_RE,
 } from '../../../packages/contracts/src/reaches.ts';
 import type { RiversFile } from '../../../packages/contracts/src/rivers.ts';
+import { BIN_MINZOOM, binCount, binLines } from './bins.ts';
 import { BuildError, canonicalJson, type Edge, MAX_WAYS_BYTES, readRivers } from './build.ts';
 import { InputError } from './geojsonseq.ts';
 import { type Placed, place, readOverrides } from './place.ts';
@@ -20,7 +21,8 @@ import { readStations } from './stations.ts';
 // The public P6b outputs (A§9.1; release assets of geo.yml):
 //   reaches-<ver>.json       public reaches in graph order, public stations with km (ReachesFile)
 //   rivers-<ver>.geojson.gz  the ODbL download: one line per reach, names, flags; no station data
-//   rivers.geojsonseq        the same lines for tippecanoe (rivers-<ver>.pmtiles; not an asset)
+//   rivers.geojsonseq        the same lines for tippecanoe (rivers-<ver>.pmtiles layer `rivers`; not an asset)
+//   reach-bins.geojsonseq    each drawn reach in 1…8 position bins (layer `reach_bins`, #112; not an asset)
 //   snap-report.json         public stations per id; counts per rule of public-audience stations only
 //   VERSION
 // Only public stations appear in them (invariants 8, 11): owner and off
@@ -121,6 +123,25 @@ function lineFeatures(placed: Placed, rivers: RiversFile): string[] {
   );
 }
 
+/**
+ * The position bins of each drawn reach (#112): `reach_id`, `bin` (0-based), `seg` = `<reach_id>/<bin>` (the web's
+ * promoteId, unique per bin) and `tidal`; tippecanoe keeps them from zoom BIN_MINZOOM on.
+ */
+function binFeatures(placed: Placed): string[] {
+  return placed.reaches.flatMap((r) =>
+    r.coords.length < 2
+      ? []
+      : binLines(r.coords, binCount(km3(r.length_m))).map((coords, bin) =>
+          JSON.stringify({
+            type: 'Feature',
+            tippecanoe: { minzoom: BIN_MINZOOM },
+            geometry: { type: 'LineString', coordinates: coords },
+            properties: { reach_id: r.id, bin, seg: `${r.id}/${bin}`, tidal: r.flags.tidal },
+          }),
+        ),
+  );
+}
+
 /** The ODbL download: attribution and licence ahead of the features, so the first bytes carry them. */
 export function downloadText(placed: Placed, rivers: RiversFile, version: string, osmStamp: string): string {
   const head = JSON.stringify({
@@ -198,6 +219,7 @@ export function writeOutputs(out: string, placed: Placed, rivers: RiversFile, ve
     gzipSync(Buffer.from(downloadText(placed, rivers, version, osmStamp)), { level: 9 }),
   );
   writeFileSync(join(out, 'rivers.geojsonseq'), `${lineFeatures(placed, rivers).join('\n')}\n`);
+  writeFileSync(join(out, 'reach-bins.geojsonseq'), `${binFeatures(placed).join('\n')}\n`);
   writeFileSync(join(out, 'snap-report.json'), snapReport(placed, version, osmStamp));
   writeFileSync(join(out, 'VERSION'), `${version}\n`);
 }

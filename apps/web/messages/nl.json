@@ -377,6 +377,7 @@
   "played_sources": "Bronnen van de afgespeelde uren",
   "reach_legend_heading": "Rivier tussen meetpunten",
   "reach_interpolated": "kleur geschat tussen de twee meetpunten",
+  "reach_shifted": "tijdverschoven, indicatief: tussen twee meetpunten met een bronvermelde looptijd is het bovenstroomse meetpunt eerder afgelezen",
   "reach_nodata": "geen gegevens",
   "reach_tidal": "getij, niet geïnterpoleerd",
   "reach_impounded": "gestuwd",

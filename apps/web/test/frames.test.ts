@@ -97,6 +97,47 @@ describe('framesPlan', () => {
   });
 });
 
+// #112 PR B: windows with the travel-time lead. The playback window itself lives in usePlayback (a hook, not covered by
+// a unit test: 25 h + extraLeadHours is one multiplication there); what is pinned here is that every such window still
+// costs at most one file per UTC day, and `recent.json` once.
+describe('framesPlan for the shifted windows (#112)', () => {
+  const key = (u: ReturnType<typeof framesPlan>[number]) => (u.kind === 'day' ? u.day : u.kind);
+  const oneFilePerDay = (from: number, to: number) => {
+    const plan = framesPlan(from, to, meta(), 'public');
+    expect(plan.every((u) => u.kind !== 'api')).toBe(true);
+    const keys = plan.map(key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(plan.filter((u) => u.kind === 'recent').length).toBeLessThanOrEqual(1);
+    return plan;
+  };
+
+  it.each([
+    ['a settled day', '2026-10-15T10:00:00Z', ['2026-10-14', '2026-10-15']],
+    ['across a day boundary', '2026-10-15T03:00:00Z', ['2026-10-13', '2026-10-14', '2026-10-15']],
+    ['unsettled days', '2026-10-25T10:00:00Z', ['recent']],
+    ['the settled/unsettled boundary', '2026-10-24T05:00:00Z', ['2026-10-22', '2026-10-23', 'recent']],
+  ])('the paused window [t - 30 h, t) at %s', (_n, iso, keys) => {
+    const t = at(iso);
+    expect(oneFilePerDay(t - 30 * H, t).map(key)).toEqual(keys);
+  });
+
+  it('every hour of a week: at most one file per UTC day for the paused window', () => {
+    for (let t = at('2026-10-18T00:00:00Z'); t <= at('2026-10-26T12:00:00Z'); t += H) {
+      const plan = oneFilePerDay(t - 30 * H, t);
+      expect(plan.length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('a 7-day play window with the 30 h lead asks at most one file per UTC day', () => {
+    const end = at('2026-10-26T12:00:00Z');
+    for (const shiftH of [0, 5]) {
+      const plan = oneFilePerDay(end - 7 * D - (25 + shiftH) * H, end);
+      const days = Math.ceil((7 * D + (25 + shiftH) * H + 12 * H) / D) + 1;
+      expect(plan.length).toBeLessThanOrEqual(days);
+    }
+  });
+});
+
 describe('framesUrl', () => {
   it('builds relative URLs from the day, the version and whole UTC hours', () => {
     expect(framesUrl({ kind: 'day', day: '2026-10-21', v: 3 })).toBe('/data/v1/frames/2026-10-21/v3.json');

@@ -147,13 +147,14 @@ test('OV: the owner panel asks its page of frames with one owner API call of at 
   await hovReady(page, 'meuse');
   const urls = urlsFrom(s);
   const calls = urls.filter((u) => u.pathname === FRAMES_API);
-  expect(calls, 'one owner API call for the page').toHaveLength(1);
-  const [from, to] = [
-    Date.parse(calls[0]?.searchParams.get('from') ?? ''),
-    Date.parse(calls[0]?.searchParams.get('to') ?? ''),
-  ];
-  expect(to - from, 'at most 14 days').toBeLessThanOrEqual(14 * 86_400_000);
-  expect(to, 'the window ends at the page, never after it').toBeLessThanOrEqual(Date.parse('2026-10-26T12:00:00Z'));
+  // #112: one call for the page; a second, bounded one for the time shift's read of [t - 30 h, t) once a span is shifted.
+  expect(calls.length, 'the page, and at most the shift read').toBeGreaterThanOrEqual(1);
+  expect(calls.length).toBeLessThanOrEqual(2);
+  for (const call of calls) {
+    const [from, to] = [Date.parse(call.searchParams.get('from') ?? ''), Date.parse(call.searchParams.get('to') ?? '')];
+    expect(to - from, 'at most 14 days').toBeLessThanOrEqual(14 * 86_400_000);
+    expect(to, 'the window ends at the page, never after it').toBeLessThanOrEqual(Date.parse('2026-10-26T12:00:00Z'));
+  }
   expect(
     urls.filter((u) => FRAMES_FILE.test(u.pathname)),
     'no static frames file on the owner host',

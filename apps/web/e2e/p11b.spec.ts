@@ -1,6 +1,7 @@
 import { expect, type Page, type Route, test } from '@playwright/test';
 import {
   attributionPanel,
+  binState,
   chooseMode,
   chooseView,
   expandTimebar,
@@ -26,6 +27,7 @@ import {
   textHosts,
   timebarOf,
   urlsFrom,
+  type W,
   XSS,
 } from './helpers.ts';
 
@@ -257,9 +259,12 @@ test('B2: playing 7 days back reads at most one frames file per UTC day, no snap
     '2026-10-23',
   ]);
   expect(new Set(files).size, 'no file is asked twice').toBe(files.length);
+  // (the live page's paused shift read [now - 30 h, now) already asked recent.json before Play: the store keeps it)
   expect(
-    files.filter((p) => p.endsWith('/recent.json')),
-    'the unsettled days: one recent file',
+    urlsFrom(s)
+      .slice(0, stop)
+      .filter((u) => u.pathname.endsWith('/recent.json') && FRAMES_FILE.test(u.pathname)),
+    'the unsettled days: one recent file, in all',
   ).toHaveLength(1);
   expect(
     during.filter((u) => u.pathname === FRAMES_API),
@@ -293,6 +298,50 @@ test('B2: a day file that answers 404 is read from the API with exactly one call
   // The 404 was asked once (no retry) and the other days still came from their files.
   expect(during.filter((u) => u.pathname.includes('/frames/2026-10-20/'))).toHaveLength(1);
   expect(during.filter((u) => /\/frames\/2026-10-2[123]\//.test(u.pathname))).toHaveLength(3);
+  await finish(page, s);
+});
+
+// ---------------------------------------------------------------- #112 PR B: bins and the shift label
+
+test('#112: the legend says the shift is indicative; the bins of rhine.56 are painted at zoom 8 and the reach layer ends there', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  await open(page, deep());
+  await mapReady(page);
+  await reachesPainted(page, ['rhine.56']);
+  // The legend (collapsed by default) names the shift, with the word that says it is no forecast.
+  await page.locator('summary', { hasText: nl('legend_heading') }).click();
+  await expect(page.getByText(nl('reach_shifted'), { exact: true })).toBeVisible();
+  expect(nl('reach_shifted')).toContain('indicatief');
+  // Zoomed in over Lobith and Emmerich: the eight bins of the 10.328 km reach carry a state.
+  await page.evaluate(async () => {
+    const map = (window as unknown as W).__rws?.map as unknown as {
+      jumpTo(o: { center: [number, number]; zoom: number }): void;
+      once(e: string, f: () => void): void;
+    };
+    const idle = new Promise<void>((r) => map.once('idle', r));
+    map.jumpTo({ center: [6.1, 51.85], zoom: 10 });
+    await idle;
+  });
+  const ids = Array.from({ length: 8 }, (_, i) => `rhine.56/${i}`);
+  await expect
+    .poll(async () => (await Promise.all(ids.map((id) => binState(page, id)))).every((st) => st !== null), {
+      timeout: 30_000,
+    })
+    .toBe(true);
+  const states = await Promise.all(ids.map((id) => binState(page, id)));
+  for (const st of states) expect(st?.c).toMatch(/^#[0-9a-f]{6}$/i);
+  // The per-reach layers stop where the bins start.
+  const zoom = await page.evaluate(() => {
+    const map = (window as unknown as W).__rws?.map as unknown as {
+      getLayer(id: string): { maxzoom?: number; minzoom?: number } | undefined;
+    };
+    return [map.getLayer('rivers-reach')?.maxzoom, map.getLayer('rivers-reach-bin')?.minzoom];
+  });
+  expect(zoom).toEqual([8, 8]);
   await finish(page, s);
 });
 
@@ -355,8 +404,8 @@ test('R2: a frames file with misaligned rows is not used; the API covers its day
   // The API answers for the days of the dropped file (recent.json: 2026-10-24 to 2026-10-26).
   await expect.poll(() => urlsFrom(s, mark).filter((u) => u.pathname === FRAMES_API).length).toBe(1);
   const api = urlsFrom(s, mark).filter((u) => u.pathname === FRAMES_API)[0] as URL;
-  // (the window starts 25 h before the held hour; the dropped file's days are cut to it)
-  expect(api.searchParams.get('from')).toBe('2026-10-24T11:00:00Z');
+  // (the window starts 30 h before the held hour: 25 h and Emmerich to Lobith's 5 h; the dropped file's days are cut to it)
+  expect(api.searchParams.get('from')).toBe('2026-10-24T06:00:00Z');
   await expect(panelOf(page).getByText(nl('played_value_note')).first()).toBeVisible();
   await expect.poll(() => featureState(page, XSS_ID)).toMatchObject({ has: true });
   await expect(page.locator('body')).not.toContainText('424242');
@@ -385,7 +434,7 @@ test('R2: a frames file whose state rows alone are misaligned is not used either
   await expect(pause(page)).toBeVisible();
   await expect.poll(() => urlsFrom(s, mark).filter((u) => u.pathname === FRAMES_API).length).toBe(1);
   const api = urlsFrom(s, mark).filter((u) => u.pathname === FRAMES_API)[0] as URL;
-  expect(api.searchParams.get('from')).toBe('2026-10-24T11:00:00Z');
+  expect(api.searchParams.get('from')).toBe('2026-10-24T06:00:00Z');
   await expect(panelOf(page).getByText(nl('played_value_note')).first()).toBeVisible();
   await expect.poll(() => featureState(page, XSS_ID)).toMatchObject({ has: true });
   await expect(page.locator('body')).not.toContainText('424242');
@@ -409,9 +458,16 @@ test('URL: a deep link restores the hour and the speed, paused, and Play keeps t
   await paused(page);
   await expect(pause(page)).toHaveCount(0);
   expect(param(page, 'play')).toBe('fast');
-  // Paused: no frames are asked (they are for the played window only), the snapshot path serves the page.
+  // Paused: the snapshot path serves the page; the only frames asked are the time shift's read (#112: Emmerich to
+  // Lobith is shifted 5 h) of the whole UTC days around [t - 30 h, t): the settled 2026-10-23 as its day file and the
+  // unsettled 24 and 25 as recent.json, each once, never the API.
   await mapReady(page);
-  expect(urlsFrom(s).filter((u) => FRAMES_FILE.test(u.pathname) || u.pathname === FRAMES_API)).toEqual([]);
+  await expect.poll(() => urlsFrom(s).filter((u) => FRAMES_FILE.test(u.pathname)).length).toBe(2);
+  const asked = urlsFrom(s).filter((u) => FRAMES_FILE.test(u.pathname) || u.pathname === FRAMES_API);
+  expect(asked.map((u) => u.pathname).sort(), 'only the shift read: one file per UTC day, no API frames').toEqual([
+    '/data/v1/frames/2026-10-23/v1.json',
+    '/data/v1/frames/recent.json',
+  ]);
   // Play (held on the first hour): the hour is the link's whole hour, the speed the link's.
   await play(page).click();
   await expect(pause(page)).toBeVisible();

@@ -1,6 +1,7 @@
 import type { ReachGraph } from '../../../lib/data/contracts.ts';
 import { type GReach, type GStation, indexOf } from '../../station/neighbours.ts';
 import { placeKey } from '../chain.ts';
+import { binCount } from './bins.ts';
 
 // The spans of the reach colouring (P11b, issue #26): a span is the run of reaches from a station to the next
 // station downstream on the same river (reaches-<ver>.json; a reach itself starts and ends at a confluence, a
@@ -29,6 +30,11 @@ export interface FeatureSpan {
   impounded: boolean | null;
   /** Its closed span, or null when it lies only on open paths (a river head, a tributary's last stretch). */
   span: Span | null;
+  /**
+   * #112: the span of each of its position bins (`binCount` of its length; tile ids `<reach_id>/<i>`), each at the
+   * bin's centre; on the owner variant each centre lies in the owner part that holds it (its own span).
+   */
+  bins: readonly (Span | null)[];
 }
 
 /** Reaches visited per start: a cycle or a huge delta ends the walk instead of the tab. */
@@ -137,10 +143,13 @@ export function spansOf(graph: ReachGraph, known: ReadonlySet<string>): Map<stri
   const whole = new Map<string, GReach[]>();
   for (const r of graph.reaches) {
     if (r.part_of === undefined) {
+      const len = r.length_km;
+      const n = binCount(len);
       out.set(r.id, {
         tidal: r.flags?.tidal ?? null,
         impounded: r.flags?.impounded ?? null,
-        span: at(r, r.length_km === null ? null : r.length_km / 2),
+        span: at(r, len === null ? null : len / 2),
+        bins: Array.from({ length: n }, (_, i) => at(r, len === null ? null : ((i + 0.5) * len) / n)),
       });
     } else whole.set(r.part_of, [...(whole.get(r.part_of) ?? []), r]);
   }
@@ -150,25 +159,32 @@ export function spansOf(graph: ReachGraph, known: ReadonlySet<string>): Map<stri
     const parts = list.toSorted((a, b) => partNo(a) - partNo(b));
     const lens = parts.map((r) => r.length_km);
     const mid = lens.includes(null) ? null : parts.reduce((a, r) => a + (r.length_km ?? 0), 0);
-    let span: Span | null = null;
-    if (mid === null) {
-      const first = parts.find((r) => placed.has(r.id));
-      span = first === undefined ? null : at(first, null);
-    } else {
+    /** The span at `d` km along the whole public reach: in the part that holds it, at its own offset. */
+    const along = (d: number): Span | null => {
       let c = 0;
       for (const [i, r] of parts.entries()) {
         const len = lens[i] as number;
-        if (c + len >= mid / 2 || i === parts.length - 1) {
-          span = at(r, mid / 2 - c);
-          break;
-        }
+        if (c + len >= d || i === parts.length - 1) return at(r, d - c);
         c += len;
       }
+      return null;
+    };
+    let span: Span | null = null;
+    let bins: (Span | null)[];
+    if (mid === null) {
+      const first = parts.find((r) => placed.has(r.id));
+      span = first === undefined ? null : at(first, null);
+      bins = [span];
+    } else {
+      span = along(mid / 2);
+      const n = binCount(mid);
+      bins = Array.from({ length: n }, (_, i) => along(((i + 0.5) * mid) / n));
     }
     out.set(id, {
       tidal: flag(parts.map((r) => r.flags?.tidal)),
       impounded: flag(parts.map((r) => r.flags?.impounded)),
       span,
+      bins,
     });
   }
   return out;

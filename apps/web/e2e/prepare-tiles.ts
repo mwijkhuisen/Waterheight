@@ -19,7 +19,7 @@ export const E2E_RIVERS = '20261003';
 const fixtures = fileURLToPath(new URL('../../../tools/geo/fixtures/', import.meta.url));
 // P11a (issue #26): the river release is the committed fixture one, whose reach ids the tiles carry (read by path, no
 // tools/geo import): test/fixtures/reaches-fixture.json (version 20261003, regenerated and compared by
-// test/reaches-fixture.test.ts) and tools/geo/fixtures/rivers-fixture.pmtiles (709 reaches, layer `rivers`).
+// test/reaches-fixture.test.ts) and tools/geo/fixtures/rivers-fixture.pmtiles (714 reaches, layers `rivers` and `reach_bins`).
 const reachesFixture = fileURLToPath(new URL('../../../test/fixtures/reaches-fixture.json', import.meta.url));
 
 /**

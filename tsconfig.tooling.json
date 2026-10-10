@@ -33,6 +33,8 @@
     "apps/web/src/features/flow/chain.ts",
     "apps/web/src/features/flow/rows.ts",
     "apps/web/src/features/flow/animation.ts",
+    "apps/web/src/features/flow/reaches/bins.ts",
+    "apps/web/src/features/flow/reaches/shift.ts",
     "apps/web/src/features/flow/reaches/spans.ts",
     "apps/web/src/features/flow/reaches/colour.ts",
     "apps/web/src/features/flow/reaches/reachLayer.ts",

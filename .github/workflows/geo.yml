@@ -136,14 +136,16 @@ jobs:
           for n in 1 2; do
             node tools/geo/rivernet/outputs.ts --graph "$RUNNER_TEMP/build$n" --version "$ver" \
               --out "$RUNNER_TEMP/p6b$n" --nonpublic "$RUNNER_TEMP/nonpublic$n.txt"
-            tools/geo/rivernet/tiles.sh build "$RUNNER_TEMP/p6b$n/rivers.geojsonseq" "$RUNNER_TEMP/p6b$n/rivers-$ver.pmtiles"
+            tools/geo/rivernet/tiles.sh build "$RUNNER_TEMP/p6b$n/rivers.geojsonseq" "$RUNNER_TEMP/p6b$n/rivers-$ver.pmtiles" \
+              "$RUNNER_TEMP/p6b$n/reach-bins.geojsonseq"
             tools/geo/rivernet/tiles.sh decode "$RUNNER_TEMP/p6b$n/rivers-$ver.pmtiles" "$RUNNER_TEMP/p6b$n/decoded.json"
           done
           {
             echo '### Outputs and tiles (fixture)'
             echo
           } >>"$GITHUB_STEP_SUMMARY"
-          for f in "reaches-$ver.json" "rivers-$ver.geojson.gz" snap-report.json rivers.geojsonseq decoded.json; do
+          echo "- tile input features: $(wc -l <"$RUNNER_TEMP/p6b1/rivers.geojsonseq") reaches (layer rivers), $(wc -l <"$RUNNER_TEMP/p6b1/reach-bins.geojsonseq") position bins (layer reach_bins)" >>"$GITHUB_STEP_SUMMARY"
+          for f in "reaches-$ver.json" "rivers-$ver.geojson.gz" snap-report.json rivers.geojsonseq reach-bins.geojsonseq decoded.json; do
             a=$(sha256sum "$RUNNER_TEMP/p6b1/$f" | cut -d' ' -f1)
             b=$(sha256sum "$RUNNER_TEMP/p6b2/$f" | cut -d' ' -f1)
             [[ $a == "$b" ]] || { echo "not identical: $f" >&2; exit 1; }
@@ -158,7 +160,8 @@ jobs:
           [[ -s $RUNNER_TEMP/nonpublic1.txt ]] || { echo "empty non-public list" >&2; exit 1; }
           gzip -dc "$RUNNER_TEMP/p6b1/rivers-$ver.geojson.gz" >"$RUNNER_TEMP/p6b1/download.json"
           if grep -F -f "$RUNNER_TEMP/nonpublic1.txt" "$RUNNER_TEMP/p6b1/decoded.json" "$RUNNER_TEMP/p6b1/reaches-$ver.json" \
-            "$RUNNER_TEMP/p6b1/download.json" "$RUNNER_TEMP/p6b1/snap-report.json" >/dev/null; then
+            "$RUNNER_TEMP/p6b1/download.json" "$RUNNER_TEMP/p6b1/snap-report.json" \
+            "$RUNNER_TEMP/p6b1/reach-bins.geojsonseq" >/dev/null; then
             echo "a non-public station id occurs in a public output" >&2
             exit 1
           fi
@@ -235,8 +238,14 @@ jobs:
           VER=$(date -u +%Y%m%d)
           a=$RUNNER_TEMP/out/assets
           node tools/geo/rivernet/outputs.ts --graph "$a" --version "$VER" --out "$a"
-          tools/geo/rivernet/tiles.sh build "$a/rivers.geojsonseq" "$a/rivers-$VER.pmtiles"
-          rm -f "$a/rivers.geojsonseq" # the tiles input is not an asset
+          tools/geo/rivernet/tiles.sh build "$a/rivers.geojsonseq" "$a/rivers-$VER.pmtiles" "$a/reach-bins.geojsonseq"
+          {
+            echo '### Tiles'
+            echo
+            echo "- tile input features: $(wc -l <"$a/rivers.geojsonseq") reaches (layer rivers), $(wc -l <"$a/reach-bins.geojsonseq") position bins (layer reach_bins)"
+            echo "- rivers-$VER.pmtiles: $(stat -c %s "$a/rivers-$VER.pmtiles") bytes"
+          } >>"$GITHUB_STEP_SUMMARY"
+          rm -f "$a/rivers.geojsonseq" "$a/reach-bins.geojsonseq" # the tiles inputs are not assets
           (($(stat -c %s "$a/rivers-$VER.pmtiles") < 30000000)) || { echo "rivers-$VER.pmtiles is 30 MB or more" >&2; exit 1; }
       - name: Checksums and summary
         run: |

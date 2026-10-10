@@ -1,9 +1,12 @@
 import type { ApiStation, Snapshot } from '@rws/contracts';
 import { TREND_BAND } from '@rws/core/trend';
 import type { Change } from '../../../lib/data/change.ts';
+import type { ReachTravelData } from '../../../lib/data/contracts.ts';
 import type { Mode } from '../../../lib/url/url.ts';
 import { DH_COLOUR, dhBin, LADDER, levelOf, Q_COLOUR, type QSize, qSize, STATE_COLOUR } from '../../legend/palette.ts';
 import { GAP_KM } from '../chain.ts';
+import { segOf } from './bins.ts';
+import { shiftAt, spanShift } from './shift.ts';
 import type { FeatureSpan } from './spans.ts';
 
 // The colour of one reach (P11b, issue #26): the map mode's value interpolated along its span between the two end
@@ -28,33 +31,56 @@ export interface EndValue {
   limitS: number;
 }
 
+/** The values and the 24-hour changes of one hour. */
+export interface HourValues {
+  values: ReadonlyMap<number, Value>;
+  changes: ReadonlyMap<number, Change> | undefined;
+}
+
+/**
+ * The travel-time shift (#112 item 3, shift.ts): the sourced travel times, and the values `k` whole hours before t
+ * (undefined: not loaded, so a shifted end has none and its bin is "no data").
+ */
+export interface Shift {
+  travel: ReachTravelData | undefined;
+  past: (k: number) => HourValues | undefined;
+}
+
 /** Line width multiplier per discharge size (1 at size 2, the middle class). */
 export const Q_WIDTH: Readonly<Record<QSize, number>> = { 0: 0.6, 1: 0.8, 2: 1, 3: 1.4, 4: 1.9 };
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** The ends of a span in `mode`: per end group, the first station with a series of the mode's quantity and a value. */
+/**
+ * The ends of a span in `mode`: per end group, the first station with a series of the mode's quantity and a value. On a
+ * span a sourced travel time names exactly (`shift`, #112), the up end is read `shiftAt(T, pos)` hours before t.
+ */
 export function endValues(
   fs: FeatureSpan,
   mode: Mode,
   values: ReadonlyMap<number, Value>,
   changes: ReadonlyMap<number, Change> | undefined,
   stations: ReadonlyMap<string, ApiStation>,
+  shift?: Shift,
 ): [EndValue | undefined, EndValue | undefined] {
   if (fs.span === null) return [undefined, undefined];
   const quantity = mode === 'q' ? 'Q' : 'H';
-  const end = (group: readonly string[]): EndValue | undefined => {
+  const end = (group: readonly string[], at: HourValues | undefined): EndValue | undefined => {
+    if (at === undefined) return undefined;
     for (const id of group)
       for (const s of stations.get(id)?.series ?? []) {
         if (s.quantity !== quantity) continue;
-        const value = values.get(s.id);
+        const value = at.values.get(s.id);
         if (value === undefined) continue;
-        const v = mode === 'delta' ? changes?.get(s.id)?.dh : mode === 'q' ? value.value : levelOf(value.state);
+        const v = mode === 'delta' ? at.changes?.get(s.id)?.dh : mode === 'q' ? value.value : levelOf(value.state);
         if (v !== undefined) return { v, ageS: value.ageSeconds, limitS: s.stalenessLimitSeconds };
       }
     return undefined;
   };
-  return [end(fs.span.up), end(fs.span.down)];
+  const now = { values, changes };
+  const t = shift === undefined ? null : spanShift(fs.span, shift.travel);
+  const k = t === null ? 0 : shiftAt(t, fs.span.pos);
+  return [end(fs.span.up, k === 0 ? now : shift?.past(k)), end(fs.span.down, now)];
 }
 
 /** The paint of one reach from its span and its two ends (see the rules above). */
@@ -88,8 +114,32 @@ export function reachPaints(
   values: ReadonlyMap<number, Value>,
   changes: ReadonlyMap<number, Change> | undefined,
   stations: ReadonlyMap<string, ApiStation>,
+  shift?: Shift,
 ): Map<string, ReachPaint> {
   const out = new Map<string, ReachPaint>();
-  for (const [id, fs] of spans) out.set(id, reachColour(fs, endValues(fs, mode, values, changes, stations), mode));
+  for (const [id, fs] of spans)
+    out.set(id, reachColour(fs, endValues(fs, mode, values, changes, stations, shift), mode));
+  return out;
+}
+
+/**
+ * Every position bin's paint (#112): bin i of a reach takes the reach's own rules with its span at the bin's centre
+ * (`FeatureSpan.bins`), keyed by its tile id `<reach_id>/<i>`. A long reach between two valued stations so shows the
+ * gradient along it.
+ */
+export function binPaints(
+  spans: ReadonlyMap<string, FeatureSpan>,
+  mode: Mode,
+  values: ReadonlyMap<number, Value>,
+  changes: ReadonlyMap<number, Change> | undefined,
+  stations: ReadonlyMap<string, ApiStation>,
+  shift?: Shift,
+): Map<string, ReachPaint> {
+  const out = new Map<string, ReachPaint>();
+  for (const [id, fs] of spans)
+    for (const [i, span] of fs.bins.entries()) {
+      const bin = { ...fs, span };
+      out.set(segOf(id, i), reachColour(bin, endValues(bin, mode, values, changes, stations, shift), mode));
+    }
   return out;
 }

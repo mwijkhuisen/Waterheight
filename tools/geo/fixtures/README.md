@@ -37,17 +37,17 @@ The whole world at z0–2: the tests' stand-in for the production `planet-z6-<bu
 
 ## `rivers-fixture.pmtiles` (P11a)
 
-The river tiles of the committed fixture graph below, for the web and compose end-to-end tests of the flow direction and the upstream chain (issue #26). It is the `rivers-20261001.pmtiles` of the `geo-fixture-outputs` artifact, committed unchanged. The same artifact's `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` (built locally by `test/reaches-fixture.test.ts` from these fixtures) in every field but `version`, so the tiles' `reach_id`s are the fixture reaches file's. Replaced twice for #110: PR 1 (the Ourthe join splits the Meuse reach at Liège: Meuse `seq` from there on is one higher) and PR 2 (the refreshed fixture, OSM 2026-10-09, with the Vesdre and the Amblève; the Ourthe cut at their confluences).
+The river tiles of the committed fixture graph below, for the web and compose end-to-end tests of the flow direction and the upstream chain (issue #26). It is the `rivers-20261001.pmtiles` of the `geo-fixture-outputs` artifact, committed unchanged. The same artifact's `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` (built locally by `test/reaches-fixture.test.ts` from these fixtures) in every field but `version`, so the tiles' `reach_id`s are the fixture reaches file's. Replaced twice for #110: PR 1 (the Ourthe join splits the Meuse reach at Liège: Meuse `seq` from there on is one higher) and PR 2 (the refreshed fixture, OSM 2026-10-09, with the Vesdre and the Amblève; the Ourthe cut at their confluences). Replaced for #112 PR B: the same graph with the second layer `reach_bins` (the reach position bins, from zoom 8).
 
 Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright).
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38009696220 (`pull_request` #115 at `a60561f`, 2026-10-10), job `rivernet fixture` |
-| Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build`), layer `rivers`, z0–12 |
-| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.589838,11.397685,53.443230, 2,860 tiles; one feature per drawn reach (714 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation` |
-| Bytes | 1,653,660 |
-| sha256 | `a5cfa5d1e051dcae909264128539b5a0c647d85c949e0b16410b2f85324a2cd3` |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38038752392 (`workflow_dispatch` on `claude/fix-112-tile-bins` at `35b720a`, 2026-10-10), job `rivernet fixture` |
+| Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build` with the bins input), layers `rivers` and `reach_bins`, z0–12 |
+| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.589838,11.397685,53.443230, 2,860 tiles. Layer `rivers`: one feature per drawn reach (714 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation`. Layer `reach_bins`: 4,332 bins (1 to 8 per reach), each with `reach_id`, `bin`, `seg` and `tidal`, in the tiles of zoom 8 and up only (a z5 or z7 tile holds `rivers` alone) |
+| Bytes | 2,471,391 |
+| sha256 | `33947d1ee7141731fb14f13153c78117612e923c2d8fe9ddc790a116eba098cc` |
 
 A refresh of the fixture graph replaces it with the next run's artifact and regenerates `test/fixtures/reaches-fixture.json` (`UPDATE_FIXTURE=1`); compare the two reaches files first.
 

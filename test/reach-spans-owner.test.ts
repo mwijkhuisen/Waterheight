@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { readRegistry, readRiverRegistry } from '../apps/server/src/load/registry-sync.ts';
 import { splitReaches } from '../apps/server/src/publish/render/reaches-owner.ts';
 import { GAP_KM } from '../apps/web/src/features/flow/chain.ts';
+import { binCount } from '../apps/web/src/features/flow/reaches/bins.ts';
 import { reachColour } from '../apps/web/src/features/flow/reaches/colour.ts';
 import { spansOf } from '../apps/web/src/features/flow/reaches/spans.ts';
 import { ReachGraphFile } from '../apps/web/src/lib/data/contracts.ts';
@@ -61,5 +62,35 @@ describe('spansOf on the owner variant', () => {
     expect(reachColour(pub.get('meuse.25') as NonNullable<ReturnType<typeof pub.get>>, [ev(50), ev(90)], 'q').k).toBe(
       'nodata',
     );
+  });
+});
+
+describe('the bins on the owner variant (#112)', () => {
+  const cut = [...new Set(ownerGraph.reaches.flatMap((r) => (r.part_of === undefined ? [] : [r.part_of])))];
+  const groups = (id: string) => new Set((owner.get(id)?.bins ?? []).map((b) => JSON.stringify([b?.up, b?.down])));
+
+  it('has a cut public reach, and every public reach keeps binCount(its whole length) bins', () => {
+    expect(cut.length).toBeGreaterThan(0);
+    for (const r of publicGraph.reaches) expect(owner.get(r.id)?.bins.length, r.id).toBe(binCount(r.length_km));
+  });
+
+  it("takes each bin's span from the part that holds its centre: different groups across the cut", () => {
+    const differing = cut.filter((id) => groups(id).size > 1);
+    expect(differing).toContain('meuse.25');
+    expect(owner.get('meuse.25')?.bins.every((b) => b !== null)).toBe(true);
+    for (const id of differing) {
+      const parts = ownerGraph.reaches.filter((r) => r.part_of === id);
+      expect(parts.length, id).toBeGreaterThan(1);
+      for (const b of owner.get(id)?.bins ?? []) {
+        if (b === null || b === undefined || b.pos === null) continue; // a part on an open path has no span
+        expect(b.pos, id).toBeGreaterThanOrEqual(0);
+        expect(b.pos, id).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('keeps one span group for every bin of the same reach on the public file', () => {
+    for (const id of ['meuse.24', 'meuse.25', 'meuse.26', 'meuse.27'])
+      expect(new Set((pub.get(id)?.bins ?? []).map((b) => JSON.stringify([b?.up, b?.down]))).size, id).toBe(1);
   });
 });

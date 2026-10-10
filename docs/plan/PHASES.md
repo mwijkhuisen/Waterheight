@@ -2939,3 +2939,47 @@ What PR A of issue #112 built: item 1 (a state code per series and hour in the f
 **Upgrade.** No host file and no migration file: the bump runs in `migrate` (`publishTail`, under the loader lock) and logs `frames schema bump N day(s)`. It marks the public days of the last 16 (the unsettled ones included, which only get an early version) with reason `schema`; the publisher then re-renders about 14 settled days at one per cycle, and each day also re-renders its 144 snapshot files (the `registryBump` load pattern), while the old complete versions stay named and served. Meanwhile the web plays those days from the v1 frames with the state unknown: Δh and Q work, the State mode shows no data for those hours. Days older than the bump window keep v1 for good. A second `migrate` bumps nothing.
 
 **Gaps:** KG-270, KG-280 and KG-282 close; KG-292 to KG-296 open (see `docs/known-gaps.md`).
+
+## 40. Amendment: fix #112 PR B, reach position bins and the travel-time shift (2026-10-10)
+
+What PR B of issue #112 built: item 2 (position bins in the river tiles, so a long reach shows its change along it) and item 3 (an indicative travel-time shift of the reach colours). It is stacked on PR A (§39) and closes #112.
+
+**Owner decisions (2026-10-10, binding).**
+- **D-1 Two PRs.** PR A is §39. PR B is items 2 and 3 ("Closes #112").
+- **D-4 The shift is exact pairs only.** A span is shifted only where a sourced (never `derived`) travel time names exactly its two ends (`from` in the span's up group, `to` in its down group). Everywhere else the colours are unshifted. The legend says "tijdverschoven, indicatief / time-shifted, indicative". No apportioning by chainage, and no numeric ETA anywhere.
+
+**What changed.**
+- **Tile layer `reach_bins`.** `tools/geo/rivernet/bins.ts`: `BIN_M` 500, `BIN_MAX` 8, `BIN_MINZOOM` 8; `binCount(km)` is the rounded metres divided by 500, floored, clamped to 1..8 (null: 1); `binLines` cuts the drawn line into n equal parts. `outputs.ts` writes `reach-bins.geojsonseq` (per bin `reach_id`, `bin` 0-based, `seg` = `<reach_id>/<bin>`, `tidal`, feature-level `tippecanoe.minzoom` 8). `tiles.sh build <rivers> <out> [<bins>]` names the two layers (`-L rivers:`, `-L reach_bins:`), the bins file beside the input, no network; `geo.yml` passes it.
+- **Two tile generations in the web.** `hasReachBins` (`features/map/rivers.ts`) reads the archive's metadata once (same origin, lazy `import('pmtiles')`) and takes only the ids of `vector_layers`; any failure means false. The rivers source has `promoteId: {rivers: 'reach_id', reach_bins: 'seg'}`. Without the layer the reach colouring paints per reach at every zoom, as before.
+- **Per-bin paints.** Each bin is painted from the span value at its own centre `(i+0.5)·L/n` (`FeatureSpan.bins`); on the owner variant the centre is evaluated in the owner part that holds it. `addReaches` adds the five bin layers (`<id>-bin`, source-layer `reach_bins`, minzoom 8, butt caps) when the bins promise resolves true, limits the per-reach layers to zooms [0, 8) and writes per-bin feature states (changed keys only).
+- **The shift.** `reaches/shift.ts`: `shiftHours` (the range's midpoint, or the single value, whole hours, days × 24; derived: null), `spanShift`, `shiftAt(T, pos)` (T · position, rounded to the hour) and `maxShift`. A shifted span reads its down end at t and its up end `shiftAt` hours earlier. A missing past value makes that end missing, so the reach is "no data".
+- **Frames window.** While playing, the lead is 25 h + the largest T (`usePlayback` `extraLeadHours`). Paused, a second frames read covers the whole UTC days around [t − T − 25 h, t) (from the day of t − T − 25 h to the end of t's day, never past now nor before the display start), only while the map shows the reach colours and for a t up to now, reading only the shifted ends' series; it is one file per UTC day, cached 300 s and shares query keys with playback and the Hovmöller panel, and a scrubbed t rebuilds nothing until its day changes. Nothing is read when no span is shifted. T is capped at 96 h (`MAX_SHIFT_H`, review round 1): a longer figure leaves its span unshifted. The lead is fixed when Play starts (KG-302).
+
+**Where the build differs from the issue's proposal, and why.**
+
+| # | Issue or plan said | Built | Why |
+|---|---|---|---|
+| C8 | Bins in the `rivers` tiles | A second layer `reach_bins` | The flow dashes and the existing per-reach features stay untouched; a bin feature carries only `reach_id`, `bin`, `seg`, `tidal` |
+| C9 | Bins at every zoom | Feature-level minzoom 8, per-reach layers drawn below it | Tippecanoe's per-tile limits would drop features unpredictably in the dense low-zoom tiles; z5 and z7 tiles hold `rivers` alone |
+| C10 | The web assumes the new tiles | A metadata read picks the generation | Between the web deploy and the tile refresh the installed archive has no bins; a rollback of the tiles must also work |
+| C12 | Shift every travel time to Lobith or a span | Exact pairs only (D-4) | Most sourced travel times span an intermediate station; apportioning them by chainage would invent a figure. One span matches on the national release |
+
+**Measured.** Fixture run and full-data run 38038752392 are both green, and the national release equals the fixture graph.
+- `rivers-20261010.pmtiles`: 2,471,390 bytes (1,653,660 without bins; the gate is 30 MB). Layers `rivers` 714 features and `reach_bins` 4,332 (1 to 8 per reach: 153 reaches of 1 bin, 473 of 8). Bins sit only in tiles of zoom 8 and above.
+- Item 3: exactly one shifted span: Emmerich `de.wsv.2790020` to Lobith, [1, 9] h, T = 5 h, reach `rhine.56` (10.328 km, 8 bins). Every other travel time spans an intermediate station or is derived.
+- Cost: production's `frames/recent.json` (v1) is 430 KB raw and 123 KB gzip (2026-10-10). The paused shift read adds about that per paused page view (cached 300 s, shared with playback and the Hovmöller panel). On the owner site it is one bounded `/api/v1/frames` call (two to three days, ending at now) per paused day.
+
+**Criteria (#112 "Verify", items 2 and 3).**
+
+| # | Criterion | Evidence |
+|---|---|---|
+| 2a | Tiles carry `reach_bins` with 1 to 8 bins per reach, only from zoom 8; the 30 MB gate holds | evidence: see PR |
+| 2b | At zoom 8 and above a long reach shows more than one colour; below it one per reach | evidence: see PR |
+| 2c | Old tiles (no `reach_bins`): per-reach colours at every zoom, no error | evidence: see PR |
+| 2d | Owner variant: a bin takes the colour of the part that holds its centre | evidence: see PR |
+| 3a | Only exact sourced pairs are shifted; derived and intermediate-station figures are not | evidence: see PR |
+| 3b | The legend labels the shift; no numeric ETA appears; the frames window grows by T and stays within `MAX_FRAMES_BYTES` | evidence: see PR |
+
+**Deploy order.** (1) The owner merges; the web deploys. The installed tiles are the old archive, so the map keeps per-reach colours as today. (2) The owner dispatches `geo.yml` on `main`; first check for a same-day `geo-*` release (a geo release is never rewritten). (3) `sudo rws-rivers-refresh` installs the new archive; the bins are live. (4) `scripts/verify-prod.sh <domain>` rivers checks. A rollback of the tiles (`--rollback`) falls back to per-reach colours.
+
+**Gaps:** KG-271 and KG-274 close; KG-298 to KG-303 open (see `docs/known-gaps.md`; KG-303 is the bins' frame-rate cost measured in the build).

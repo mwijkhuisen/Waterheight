@@ -45,7 +45,7 @@ const pointKey = (e: Edge, offset: number) =>
   offset === 0 ? e.from : offset === e.length_m ? e.to : `c:${e.id}:${offset}`;
 
 /** The part of an edge's line between two offsets (metres, the edge's own haversine metric). */
-export function sliceLine(e: Edge, a: number, b: number): LonLat[] {
+export function sliceLine(e: Pick<Edge, 'coords'>, a: number, b: number): LonLat[] {
   const out: LonLat[] = [];
   let along = 0;
   const at = (p: LonLat, q: LonLat, t: number): LonLat => [p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])];

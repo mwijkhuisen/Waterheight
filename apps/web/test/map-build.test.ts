@@ -85,7 +85,10 @@ describe('e2e build', () => {
     const map = manifest['src/features/map/createMap.ts'];
     expect(map?.isDynamicEntry).toBe(true);
     const mapCode = read(map?.file ?? '');
-    expect(mapCode).toContain('Wrong magic number for PMTiles'); // pmtiles is in the lazy map chunk
+    // pmtiles is in the lazy map chunk or a chunk only it imports (#112: the reach bins' metadata read imports pmtiles
+    // on demand too, so the bundler may give it a chunk of its own); never in an initial load (below).
+    const mapChunks = [map?.file ?? '', ...(map?.imports ?? []).map((k) => manifest[k]?.file ?? '')].map(read);
+    expect(mapChunks.some((c) => c.includes('Wrong magic number for PMTiles'))).toBe(true);
     expect(mapCode).toMatch(/\/assets\/maplibre-gl-worker-[^"'`/]+\.js/); // and names the worker file
     for (const page of pages) {
       for (const file of initialLoad(page)) {
