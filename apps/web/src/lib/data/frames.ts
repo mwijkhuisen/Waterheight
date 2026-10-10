@@ -7,6 +7,7 @@ import {
   framesPath,
   isSettled,
   type Snapshot,
+  stateOf,
 } from '@rws/contracts';
 
 // The hourly frames of playback (P11b, issue #26; A§9.1 frames/, A§9.2 /api/v1/frames). Pure. A public range is
@@ -17,6 +18,12 @@ import {
 // id is never mapped, it is dropped and counted (frames carry no series hash, R2).
 
 type Value = Snapshot['values'][number];
+/**
+ * A played value (#112): the Snapshot's shape with the state of its own hour, or, from a chunk written before #112
+ * (frames version 1, no `state`), `stateUnknown`: its `state` is then a placeholder that the State mode must show as
+ * no data, never as no_ref; Δh and Q use the value as always.
+ */
+export type PlayedValue = Value & { stateUnknown?: true };
 
 const HOUR_MS = 3_600_000;
 /** The longest API range one call asks for: the contract's 336 hours. */
@@ -125,12 +132,13 @@ export function framesUrl(unit: FramesUnit): string {
   return `/api/v1/frames?${q.toString()}`;
 }
 
-/** One parsed answer (a file or the API), before the series check. */
+/** One parsed answer (a file or the API), before the series check; `state` is absent in a version 1 file. */
 export interface FramesChunk {
   from: string;
   to: string;
   series: readonly number[];
   vlast: readonly (readonly (number | null)[])[];
+  state?: readonly (readonly (number | null)[])[];
   attribution: readonly AttributionEntry[];
 }
 
@@ -140,9 +148,10 @@ export interface FrameStore {
   /**
    * The values at the whole hour `t` in the Snapshot's shape: the value of bucket t − 1 h, else the last non-null
    * bucket before it, while younger than the series' stalenessLimitSeconds (ageSeconds from t); `ts` is the end of
-   * the bucket it came from; `state` 'no_ref', `basis` null, `qc` 0, `section` false. An absent series has no entry.
+   * the bucket it came from; `state` and `section` those of that bucket's hour (#112: a carried value shows the state
+   * of its own hour), `stateUnknown` from a version 1 chunk; `basis` null, `qc` 0. An absent series has no entry.
    */
-  valuesAt(t: number): Map<number, Value>;
+  valuesAt(t: number): Map<number, PlayedValue>;
   /** The union of the loaded answers' attribution rows. */
   attribution(): readonly AttributionEntry[];
   /** Series ids dropped by the check (unknown ids, misaligned rows). */
@@ -161,6 +170,8 @@ export function buildFrameStore(
   const limit = new Map<number, number>();
   for (const st of stations) for (const s of st.series) limit.set(s.id, s.stalenessLimitSeconds);
   const buckets = new Map<number, Map<number, number>>();
+  // The state code of each bucket (#112); a bucket without one (a version 1 chunk) has its state unknown.
+  const codes = new Map<number, Map<number, number>>();
   const first = new Map<number, number>();
   const credits = new Map<string, AttributionEntry>();
   let dropped = 0;
@@ -173,7 +184,8 @@ export function buildFrameStore(
       hours < 0 ||
       from % HOUR_MS !== 0 ||
       c.vlast.length !== c.series.length ||
-      c.vlast.some((r) => r.length !== hours)
+      c.vlast.some((r) => r.length !== hours) ||
+      (c.state !== undefined && (c.state.length !== c.series.length || c.state.some((r) => r.length !== hours)))
     ) {
       dropped += c.series.length;
       continue;
@@ -185,13 +197,20 @@ export function buildFrameStore(
         return;
       }
       const m = buckets.get(id) ?? new Map<number, number>();
+      const k = codes.get(id) ?? new Map<number, number>();
+      const states = c.state?.[i];
       (c.vlast[i] as readonly (number | null)[]).forEach((v, h) => {
         if (v === null || !Number.isFinite(v)) return;
         const at = from + h * HOUR_MS;
         m.set(at, v);
+        // A later chunk for the same hour replaces the value, so it replaces (or drops) the state too.
+        const code = states?.[h];
+        if (code == null) k.delete(at);
+        else k.set(at, code);
         first.set(id, Math.min(first.get(id) ?? at, at));
       });
       buckets.set(id, m);
+      codes.set(id, k);
     });
     for (const a of c.attribution) credits.set(JSON.stringify(a), a);
   }
@@ -200,7 +219,7 @@ export function buildFrameStore(
     return answered.some((r) => r.from <= b && b < r.to);
   };
   const valuesAt = (t: number) => {
-    const out = new Map<number, Value>();
+    const out = new Map<number, PlayedValue>();
     const newest = Math.floor(t / HOUR_MS) * HOUR_MS - HOUR_MS;
     for (const [series, m] of buckets) {
       const limitMs = (limit.get(series) as number) * 1000;
@@ -211,15 +230,18 @@ export function buildFrameStore(
         if (ageMs >= limitMs) break;
         const value = m.get(b);
         if (value === undefined) continue;
+        const code = codes.get(series)?.get(b);
+        const decoded = code === undefined ? undefined : stateOf(code);
         out.set(series, {
           series,
           ts: new Date(b + HOUR_MS).toISOString(),
           value,
           qc: 0,
           ageSeconds: Math.round(ageMs / 1000),
-          state: 'no_ref',
+          state: decoded?.state ?? 'no_ref',
           basis: null,
-          section: false,
+          section: decoded?.section ?? false,
+          ...(decoded === undefined ? { stateUnknown: true as const } : {}),
         });
         break;
       }

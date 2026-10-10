@@ -88,7 +88,7 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
   const reduced = useReducedMotion();
   const { playing, dir, pause } = playback;
   const offState = mode === 'state';
-  const off = playDisabled(mode, reduced);
+  const off = playDisabled(reduced);
   const local = useMemo(() => amsterdam(t), [t]);
   // Temporal zone conversions are the time bar's costliest work: once per t, not once per render (P10a Lighthouse).
   const twins = useMemo(() => localInstants(local.date, local.time), [local]);
