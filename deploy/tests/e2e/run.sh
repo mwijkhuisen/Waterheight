@@ -474,9 +474,34 @@ issuer=$(ip netns exec ext openssl s_client -connect "$IP4:443" -servername "$DO
   openssl x509 -noout -issuer 2>/dev/null)
 proof "caddy runs as uid 65533 with CapEff=CapPrm=0 (cap_drop ALL, nothing added) and still binds 80/443; it obtained a certificate from Pebble over ACME HTTP-01 through the published port ($issuer)"
 
+# ------------------------------------------------------------------ the basemap fixtures (P3; P12a: every mode)
+tiles=/srv/rws/tiles build=20261001 fixtures=$repo/tools/geo/fixtures
+sha() { sha256sum "$1" | cut -d' ' -f1; }
+size() { stat -c %s "$1"; }
+# What fetch leaves behind (its real output is a file per extract under its final name and result.json), from the
+# recorded fixtures, then the real promote job, through the same compose file as the rest, against the CI copy of the
+# basemap registry. The load-test modes need it too: without a tiles manifest the map draws no canvas (P12a chaos).
+promote_basemap() {
+  install -m 0644 -o 65532 -g 65532 "$fixtures/lobith-z14.pmtiles" "$tiles/.staging/basemap-$build.pmtiles"
+  install -m 0644 -o 65532 -g 65532 "$fixtures/planet-z2.pmtiles" "$tiles/.staging/planet-z6-$build.pmtiles"
+  jq -n --arg build "$build" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg bsum "$(sha "$fixtures/lobith-z14.pmtiles")" --argjson bsize "$(size "$fixtures/lobith-z14.pmtiles")" \
+    --arg psum "$(sha "$fixtures/planet-z2.pmtiles")" --argjson psize "$(size "$fixtures/planet-z2.pmtiles")" \
+    '{schema_version: 1, build: $build, version: "4.15.2", created_at: $at,
+      basemap: {file: "basemap-\($build).pmtiles", sha256: $bsum, bytes: $bsize},
+      planet: {file: "planet-z6-\($build).pmtiles", sha256: $psum, bytes: $psize}}' >/ci/result.json
+  install -m 0644 -o 65532 -g 65532 /ci/result.json "$tiles/.staging/result.json"
+  promote_out=$(rws_compose run --rm --no-deps -T basemap-promote basemap promote 2>&1) || {
+    echo "$promote_out"
+    fail "basemap promote failed"
+  }
+  echo "$promote_out"
+}
+
 # ------------------------------------------------------------------ the load-test stack (P9b, P12a)
 if [[ -n $mode ]]; then
-  step "Load-test stack: data loaded, both publishers' first files, /ci/loadtest.env"
+  step "Load-test stack: data loaded, both publishers' first files, the basemap, /ci/loadtest.env"
+  promote_basemap
   wait_for "observations from the DE-1 fixture archive" 300 obs_loaded
   wait_for "/api/v1/health through Caddy" 120 outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/api/v1/health"
   wait_for "publish's first meta.json" 240 test -s /srv/rws/public/www/v1/meta.json
@@ -722,7 +747,6 @@ proof "db (uid 999), load and api (uid 65532): read-only root, cap_drop ALL, Cap
 
 # ------------------------------------------------------------------ basemap (P3)
 step "basemap: fetch cannot write what Caddy serves; promote (no network) moves the checked PMTiles in; Caddy serves them with Range"
-tiles=/srv/rws/tiles build=20261001 fixtures=$repo/tools/geo/fixtures
 # The shape T-WEB-1 rests on, from the merged compose file the stack runs: the job with the
 # network sees the served directory read-only and writes only .staging, no file of it over
 # 6.5 GB (fsize, T-MAP-1); the job that writes the served directory has no network (and
@@ -777,24 +801,7 @@ promote_route=$(rws_compose run --rm --no-deps -T --entrypoint /nodejs/bin/node 
   fail "basemap-promote reached 1.1.1.1:443"
 proof "from the merged compose file: basemap joins only rws_egress, mounts /srv/rws/tiles read-only and only .staging read-write, has no secret and a file size limit of 6.5 GB (/proc/self/limits: $fsize); basemap-promote has network_mode none, mounts /srv/rws/tiles read-write and no secret; caddy mounts /srv/rws/tiles read-only (docker inspect agrees); in the real containers basemap gets EROFS writing /tiles and can write /staging, and basemap-promote has only lo (1.1.1.1:443: $promote_route)"
 
-# What fetch leaves behind (its real output is a file per extract under its final name and result.json), from the recorded fixtures.
-sha() { sha256sum "$1" | cut -d' ' -f1; }
-size() { stat -c %s "$1"; }
-install -m 0644 -o 65532 -g 65532 "$fixtures/lobith-z14.pmtiles" "$tiles/.staging/basemap-$build.pmtiles"
-install -m 0644 -o 65532 -g 65532 "$fixtures/planet-z2.pmtiles" "$tiles/.staging/planet-z6-$build.pmtiles"
-jq -n --arg build "$build" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --arg bsum "$(sha "$fixtures/lobith-z14.pmtiles")" --argjson bsize "$(size "$fixtures/lobith-z14.pmtiles")" \
-  --arg psum "$(sha "$fixtures/planet-z2.pmtiles")" --argjson psize "$(size "$fixtures/planet-z2.pmtiles")" \
-  '{schema_version: 1, build: $build, version: "4.15.2", created_at: $at,
-    basemap: {file: "basemap-\($build).pmtiles", sha256: $bsum, bytes: $bsize},
-    planet: {file: "planet-z6-\($build).pmtiles", sha256: $psum, bytes: $psize}}' >/ci/result.json
-install -m 0644 -o 65532 -g 65532 /ci/result.json "$tiles/.staging/result.json"
-# The real promote job, through the same compose file as the rest, against the CI copy of the basemap registry.
-promote_out=$(rws_compose run --rm --no-deps -T basemap-promote basemap promote 2>&1) || {
-  echo "$promote_out"
-  fail "basemap promote failed"
-}
-echo "$promote_out"
+promote_basemap
 ls -la "$tiles" "$tiles/.staging"
 # shellcheck disable=SC2016 # a jq program, not shell
 manifest_shape='keys == ["current", "previous", "schema_version"] and .schema_version == 1 and .previous == null
