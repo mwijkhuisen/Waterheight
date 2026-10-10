@@ -269,7 +269,10 @@ function Viewer({ locale }: { locale: Locale }) {
   const shiftT = playing ? t : asked;
   const shift = useMemo((): Shift | undefined => {
     if (shiftMax === 0 || shiftT === undefined) return undefined;
-    if (pastStore === undefined) return { travel, past: () => undefined };
+    // Loading a wanted window: "no data" for a shifted end. No window wanted (a forecast t, no reach colours, the
+    // range not yet known): unshifted (review round 2).
+    if (pastStore === undefined)
+      return playing || shiftWindow !== undefined ? { travel, past: () => undefined } : undefined;
     const store = pastStore;
     const hours = new Map<number, HourValues | undefined>();
     const past = (k: number): HourValues | undefined => {
@@ -285,7 +288,7 @@ function Viewer({ locale }: { locale: Locale }) {
       return out;
     };
     return { travel, past };
-  }, [shiftMax, shiftSeries, shiftT, pastStore, travel, quantity]);
+  }, [shiftMax, shiftSeries, shiftT, pastStore, playing, shiftWindow, travel, quantity]);
   const warnings = useWarnings(asked, meta.data, isLive).data;
   // KG-233: latest.json's age of the newest value of a series with none at t; a station with nothing newer than
   // 25 hours is hidden (map, table, search), and the selected one stays open by its link.
