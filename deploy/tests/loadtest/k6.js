@@ -179,7 +179,10 @@ if (SCENARIO === 'normal') {
   th('dropped_iterations', 'counter', ['count==0']);
   healthThresholds();
 } else if (SCENARIO === 'saturation') {
-  scenarios.saturate = arrival('saturate', SAT_RPS, SAT_RPS, SAT_RPS * 10);
+  // At most 2 x SAT_RPS requests in flight per process (about 1,500 in all): enough to saturate the API, which answers a
+  // 503 `busy` once its permits are taken. Ten times as many (P12a, first run) filled the 256 MiB of Caddy with TLS
+  // connections and measured Caddy, not the API (KG-313).
+  scenarios.saturate = arrival('saturate', SAT_RPS, SAT_RPS, SAT_RPS * 2);
   scenarios.health = healthScenario('healthSample');
   keepKinds(['api_snapshot', 'api_series', 'api_frames']);
   healthThresholds();
