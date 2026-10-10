@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   CANARIES,
+  FramesAnswer,
   FramesFile,
   floorBucket,
   LatestFile,
@@ -24,6 +25,8 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readSnapshot } from '../../src/api/data.ts';
 import { StaticCache } from '../../src/api/states.ts';
+import { DisplayWindow } from '../../src/api/window.ts';
+import { createApp } from '../../src/app.ts';
 import { attributionRows } from '../../src/attribution.ts';
 import type { ChannelAudience } from '../../src/db/audience.ts';
 import { publishTail } from '../../src/load/migrate.ts';
@@ -372,6 +375,49 @@ describe('publishOnce with the real renderers', { timeout: 300_000 }, () => {
       }
     });
   }
+});
+
+describe('static frames carry the API frames states (#112)', { timeout: 300_000 }, () => {
+  it('recent.json and a settled day are version 2 and their state equals /api/v1/frames for the same span', async () => {
+    // An operational reference at 200 cm splits the rising values of series a (100 + 6 h) into two states.
+    await h.t.admin.query(
+      `INSERT INTO reference_value (series_id, source_id, kind, value, unit, semantics, period, valid)
+       VALUES ($1, 'DE-1', 'HSW', 200, 'cm', 'operational', '[2010-11-01,2020-11-01)', tstzrange('2020-01-01', NULL))`,
+      [ids.a],
+    );
+    const dir = mkdtempSync(join(tmpdir(), 'rws-s1-'));
+    try {
+      const db = h.dbAs('rws_publish', 3);
+      await publishOnce(db.db, 'public', dir, { now: NOW, render: RENDERERS });
+      const api = h.dbAs('rws_api', 2);
+      const window = new DisplayWindow(api.db);
+      expect(await window.refresh()).toBe(true);
+      const app = createApp({ db: api.db, window, now: () => new Date(NOW) });
+      const hourEnd = Math.floor(NOW / 3_600_000) * 3_600_000;
+      const states = new Set<number>();
+      for (const rel of ['frames/2026-10-01/v1.json', 'frames/recent.json']) {
+        const f = FramesFile.parse(JSON.parse(readFileSync(join(dir, 'v1', rel), 'utf8')));
+        expect(f.schemaVersion, rel).toBe(2);
+        // the API refuses a span past the current hour: compare the whole hours before it
+        const to = Math.min(Date.parse(f.to), hourEnd);
+        const hours = (to - Date.parse(f.from)) / 3_600_000;
+        const res = await app.request(`/api/v1/frames?from=${f.from}&to=${iso(to)}&step=1h`);
+        expect(res.status, rel).toBe(200);
+        const a = FramesAnswer.parse(await res.json());
+        const i = f.series.indexOf(ids.a);
+        const j = a.series.indexOf(ids.a);
+        expect(i, rel).toBeGreaterThanOrEqual(0);
+        expect(j, rel).toBeGreaterThanOrEqual(0);
+        expect(f.vlast[i]?.slice(0, hours), rel).toEqual(a.vlast[j]);
+        expect(f.state[i]?.slice(0, hours), rel).toEqual(a.state[j]);
+        for (const c of a.state[j] ?? []) if (c !== null) states.add(c);
+      }
+      expect(states.size).toBeGreaterThanOrEqual(2); // not a single state everywhere
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      await h.t.admin.query(`DELETE FROM reference_value WHERE series_id = $1 AND kind = 'HSW'`, [ids.a]);
+    }
+  });
 });
 
 describe('history export (§9 C5)', { timeout: 120_000 }, () => {

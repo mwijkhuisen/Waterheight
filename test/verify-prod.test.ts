@@ -16,6 +16,7 @@ import {
   type ForecastCoverage,
   ForecastReaches,
   FramesFile,
+  FramesFileAny,
   Health,
   HealthSources,
   Meta,
@@ -4067,18 +4068,31 @@ describe('verify-prod: the static publisher (P9a)', () => {
         ).problems,
       ).toEqual(['not the contract document']);
       const f = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         from: '2026-10-04T00:00:00Z',
         to: '2026-10-04T02:00:00Z',
         stepSeconds: 3600,
         series: [1],
         vlast: [[1, null]],
+        state: [[2, null]],
         attribution: [],
       };
-      expect(readStatic(file(f, STATIC_CACHE.slow), FramesFile, STATIC_CACHE.slow).problems).toEqual([]);
-      expect(
-        readStatic(file({ ...f, vlast: [[1]] }, STATIC_CACHE.slow), FramesFile, STATIC_CACHE.slow).problems,
-      ).toEqual(['not the contract document']);
+      const { state: _state, ...old } = f;
+      const v1 = { ...old, schemaVersion: 1 };
+      const read = (body: unknown, schema: typeof FramesFile | typeof FramesFileAny) =>
+        readStatic(file(body, STATIC_CACHE.slow), schema, STATIC_CACHE.slow).problems;
+      const notContract = ['not the contract document'];
+      // recent.json: v2 only.
+      expect(read(f, FramesFile)).toEqual([]);
+      expect(read(v1, FramesFile)).toEqual(notContract);
+      expect(read({ ...f, vlast: [[1]] }, FramesFile)).toEqual(notContract);
+      expect(read(old, FramesFile)).toEqual(notContract);
+      // a settled day: v2, or a v1 file not yet re-rendered.
+      expect(read(f, FramesFileAny)).toEqual([]);
+      expect(read(v1, FramesFileAny)).toEqual([]);
+      expect(read(old, FramesFileAny)).toEqual(notContract); // v2 without state
+      expect(read({ ...v1, vlast: [[1]] }, FramesFileAny)).toEqual(notContract); // misaligned v1
+      expect(read({ ...f, state: [[null, null]] }, FramesFileAny)).toEqual(notContract);
     });
   });
 
@@ -4178,6 +4192,23 @@ describe('verify-prod: the static publisher (P9a)', () => {
       ok: false,
       detail: /frames\/2026-10-01\/v1\.json: cache-control/,
     });
+    // a settled day may still be a v1 file during the #112 catch-up; a v2 one passes too
+    const body = {
+      schemaVersion: 1,
+      from: '2026-10-01T00:00:00Z',
+      to: '2026-10-01T02:00:00Z',
+      stepSeconds: 3600,
+      series: [1],
+      vlast: [[1, null]],
+      attribution: [],
+    };
+    const day = (b: unknown) => file(b, STATIC_CACHE.immutable);
+    expect(checkStaticFrames(recent, ask, day(body))).toMatchObject({ ok: true });
+    expect(checkStaticFrames(recent, ask, day({ ...body, schemaVersion: 2, state: [[2, null]] }))).toMatchObject({
+      ok: true,
+    });
+    expect(checkStaticFrames(recent, ask, day({ ...body, schemaVersion: 2 }))).toMatchObject({ ok: false });
+    expect(checkStaticFrames(recent, ask, day({ ...body, vlast: [[1]] }))).toMatchObject({ ok: false });
     const none = settledAsk(metaDoc({ dayVersions: { '2026-10-01': 0 } }), 0);
     expect(checkStaticFrames(recent, none, file('', '', 'text/plain', { status: 404 }))).toMatchObject({
       ok: true,

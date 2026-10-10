@@ -67,6 +67,7 @@ import {
   dayStartMs,
   ForecastReaches,
   FramesFile,
+  FramesFileAny,
   floorBucket,
   framesPath,
   type Health,
@@ -1795,7 +1796,8 @@ export function checkStaticFrames(
     settled !== undefined &&
     !(typeof settled === 'object' && settled.status === 404 && ask.none !== undefined)
   ) {
-    const s = readStatic(settled, FramesFile, STATIC_CACHE.immutable);
+    // #112: a settled day may still be a v1 file while the schema bump catches up; recent.json is v2 only.
+    const s = readStatic(settled, FramesFileAny, STATIC_CACHE.immutable);
     extra.push(...s.problems.map((p) => `${framesPath(ask.day, ask.version)}: ${p}`));
     tail = `day ${ask.day} v${ask.version} ${STATIC_CACHE.immutable}`;
   } else if (ask?.none !== undefined) tail = `settled part: none yet (${ask.none})`;
@@ -2468,7 +2470,7 @@ export const CHECKS = [
   `static sources: GET /data/v1/sources.json is 200 with "${STATIC_CACHE.slow}" and the public StaticSources contract (no owner source ID, term or private_basis)`,
   `static recent: the recent file of the current or the previous 10-minute bucket of meta.now is 200 with "${STATIC_CACHE.recent}" and the SnapshotFile contract at that t`,
   `static settled: a sample of the newest settled day (version from meta.dayVersions, default 1) is 200 with "${STATIC_CACHE.immutable}" and the SnapshotFile contract; none yet (PASS) while version 0, before the display window or while the day is pending`,
-  `static frames: frames/recent.json is 200 with "${STATIC_CACHE.slow}" and the FramesFile contract, and the newest settled day's frames file with "${STATIC_CACHE.immutable}" (none yet for that part is a PASS)`,
+  `static frames: frames/recent.json is 200 with "${STATIC_CACHE.slow}" and the FramesFile contract (v2), and the newest settled day's frames file (v1 or v2) with "${STATIC_CACHE.immutable}" (none yet for that part is a PASS)`,
   `static forecast: GET /data/v1/forecast/latest.json is 200 with "${STATIC_CACHE.slow}" and the StaticForecastLatest contract`,
   `static series: the first station of stations.json has series/<id>/recent.json, 200 with "${STATIC_CACHE.slow}" and the StationRecent contract`,
   `static warnings: warnings/latest.geojson is 200 ${GEOJSON} with "${STATIC_CACHE.warnings}" and the WarningsFile contract; yesterday's dated file, when it exists, with "${STATIC_CACHE.immutable}"`,

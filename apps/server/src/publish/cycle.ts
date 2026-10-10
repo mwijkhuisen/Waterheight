@@ -67,10 +67,10 @@ import type { Output } from './write.ts';
 // day (public), prunes, and writes status.json and then meta.json last. Every body is validated against the family's
 // contract and a public body is refused when it holds a canary rendering, before anything is written.
 
-/** What a renderer gets: the family's read-only connection, the cycle's clock and the boot-time tables. */
 /** The dirty kinds that change recent frames: their values (obs) and their states (#112). */
 const FRAMES_KINDS: ReadonlySet<string> = new Set(['obs', 'reference', 'class', 'warning']);
 
+/** What a renderer gets: the family's read-only connection, the cycle's clock and the boot-time tables. */
 export type RenderCtx = {
   db: Kysely<DB>;
   family: ChannelAudience;
