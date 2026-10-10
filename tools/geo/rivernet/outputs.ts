@@ -88,13 +88,10 @@ export function reachesFile(placed: Placed, rivers: RiversFile, version: string,
       km_to_nl_entry: s.km_to_nl_entry,
       nl_entry_node: s.nl_entry_node,
     })),
-    travel_times: placed.travel.map((t) => ({
-      from_station_id: t.from_station,
-      to_station_id: t.to_station,
-      h: t.h,
-      basis: t.basis,
-      source: t.source,
-      source_url: t.source_url,
+    travel_times: placed.travel.map(({ from_station, to_station, ...value }) => ({
+      from_station_id: from_station,
+      to_station_id: to_station,
+      ...value,
     })),
   };
   const parsed = ReachesSchema.safeParse(file);

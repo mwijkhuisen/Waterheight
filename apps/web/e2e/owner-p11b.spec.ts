@@ -137,9 +137,9 @@ test('OV: Δh mode, played: the owner sub-spans of the impounded Meuse are impou
   await mapReady(page);
   await page.getByRole('button', { name: nl('play'), exact: true }).click();
   await expect(page.getByRole('button', { name: nl('pause'), exact: true })).toBeVisible();
-  const reaches = ['meuse.24', 'meuse.25', 'meuse.26'];
+  const reaches = ['meuse.24', 'meuse.25', 'meuse.26', 'meuse.27'];
   await reachesPainted(page, reaches);
-  // (on the public site these three are a 139 km gap and grey; the owner gauges cut it into sub-spans)
+  // (on the public site these four are a 139 km gap and grey; the owner gauges cut it into sub-spans)
   await expect
     .poll(async () => Object.values(await reachKinds(page, reaches)).every((k) => k === 'impounded'))
     .toBe(true);

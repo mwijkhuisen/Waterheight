@@ -154,12 +154,12 @@ export function place(
   }
 
   // Travel times: only sourced pairs between two public placed stations; a reach carries one only when the
-  // pair is exactly its two ends.
+  // pair is exactly its two ends and the value is a range in hours.
   const shown = new Set(placed.filter((p) => p.public && p.river !== null).map((p) => p.id));
   const travel = (rivers.travel_times ?? []).filter((t) => shown.has(t.from_station) && shown.has(t.to_station));
   for (const r of reaches) {
     const t = travel.find((x) => x.from_station === r.up_station && x.to_station === r.down_station);
-    if (t !== undefined) {
+    if (t !== undefined && Array.isArray(t.h)) {
       r.travel_time_h = [t.h[0], t.h[1]];
       r.travel_time_source = t.source;
     }

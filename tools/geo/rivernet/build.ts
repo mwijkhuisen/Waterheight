@@ -270,18 +270,39 @@ export function buildGraph(
   if (mismatch.length > 0) throw new BuildError('wikidata_mismatch', mismatch.sort());
   if (empty.length > 0) throw new BuildError('river_without_edges', empty.sort());
 
-  // Graph nodes: the ends of every kept way and every node used more than once.
+  // Graph nodes: the ends of every kept way, every node used more than once and the landing vertex of each join.
   const keptWays = [...wayRivers.keys()].sort(byNumber);
   const uses = new Map<number, number>();
   for (const id of keptWays) {
     for (const n of (ways.get(id) as WayFeature).nodes) uses.set(n, (uses.get(n) ?? 0) + 1);
+  }
+  // A join onto another river (KG-161) lands where that river passes: the vertex of a `to_river` way nearest `at`
+  // (a way the joining river shares never counts) becomes a node, so the join meets the river there and not at the
+  // next way end kilometres away. A same-river join lands on a way end and splits nothing.
+  const splits = new Set<number>();
+  for (const j of rivers.joins ?? []) {
+    let best: { n: number; d: number } | undefined;
+    for (const id of keptWays) {
+      const rs = wayRivers.get(id) as Set<string>;
+      if (!rs.has(j.to_river) || rs.has(j.river)) continue;
+      const way = ways.get(id) as WayFeature;
+      for (const [i, n] of way.nodes.entries()) {
+        const d = haversine(way.coords[i] as [number, number], j.at);
+        if (best === undefined || d < best.d || (d === best.d && n < best.n)) best = { n, d };
+      }
+    }
+    if (best !== undefined && best.d <= j.max_m) splits.add(best.n);
   }
   const coordOf = new Map<number, [number, number]>();
   const edges: Edge[] = [];
   for (const id of keptWays) {
     const way = ways.get(id) as WayFeature;
     const rs = [...(wayRivers.get(id) as Set<string>)].sort(byString);
-    const isNode = (i: number) => i === 0 || i === way.nodes.length - 1 || (uses.get(way.nodes[i] as number) ?? 0) > 1;
+    const isNode = (i: number) =>
+      i === 0 ||
+      i === way.nodes.length - 1 ||
+      (uses.get(way.nodes[i] as number) ?? 0) > 1 ||
+      splits.has(way.nodes[i] as number);
     let start = 0;
     let k = 0;
     for (let i = 1; i < way.nodes.length; i++) {

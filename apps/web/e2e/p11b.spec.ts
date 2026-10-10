@@ -49,9 +49,9 @@ const XSS_ID = 'nl.e2e.xss';
 const ranged = (river: string, from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => `${river}.${from + i}`);
 /** The tidal reaches of the fixture release (PHASES §P11b: Scheldt, Ems, Lek delta members, the Meuse delta). */
-const TIDAL = [...ranged('scheldt', 9, 13), ...ranged('ems', 23, 33), ...ranged('lek', 4, 6), 'meuse.55'];
+const TIDAL = [...ranged('scheldt', 9, 13), ...ranged('ems', 23, 33), ...ranged('lek', 4, 6), 'meuse.56'];
 /** Chooz to Eijsden: 139.2 km, over GAP_KM (120) and without a station between them. */
-const GAP = ranged('meuse', 24, 26);
+const GAP = ranged('meuse', 24, 27);
 const MID = '2026-10-25T12:00Z';
 
 const deep = (t = MID, mode = 'delta', extra = '') => `/?mode=${mode}&t=${t}${extra}`;
@@ -156,18 +156,28 @@ test('the Chooz to Eijsden gap is grey in every mode; the impounded Meuse is neu
   const s = await start(page, context, baseURL, 'dh');
   await open(page, deep());
   await mapReady(page);
-  await reachesPainted(page, [...GAP, 'meuse.23', 'meuse.27', 'rhine.4']);
+  await reachesPainted(page, [...GAP, 'meuse.23', 'meuse.28', 'rhine.4']);
   // The Δh mode: the gap is checked before the impounded rule, so it is `nodata`; the short reaches are `impounded`.
-  expect(await reachKinds(page, GAP)).toEqual({ 'meuse.24': 'nodata', 'meuse.25': 'nodata', 'meuse.26': 'nodata' });
-  expect(await reachKinds(page, ['meuse.23', 'meuse.27'])).toEqual({
+  expect(await reachKinds(page, GAP)).toEqual({
+    'meuse.24': 'nodata',
+    'meuse.25': 'nodata',
+    'meuse.26': 'nodata',
+    'meuse.27': 'nodata',
+  });
+  expect(await reachKinds(page, ['meuse.23', 'meuse.28'])).toEqual({
     'meuse.23': 'impounded',
-    'meuse.27': 'impounded',
+    'meuse.28': 'impounded',
   });
   // An ordinary free-flowing reach is coloured (rhine.4: the longest Rhine span, 104.6 km, under GAP_KM).
   expect((await reachState(page, 'rhine.4'))?.k).toBe('v');
   await chooseMode(page, 'q');
-  await expect.poll(async () => (await reachState(page, 'meuse.27'))?.k).not.toBe('impounded');
-  expect(await reachKinds(page, GAP)).toEqual({ 'meuse.24': 'nodata', 'meuse.25': 'nodata', 'meuse.26': 'nodata' });
+  await expect.poll(async () => (await reachState(page, 'meuse.28'))?.k).not.toBe('impounded');
+  expect(await reachKinds(page, GAP)).toEqual({
+    'meuse.24': 'nodata',
+    'meuse.25': 'nodata',
+    'meuse.26': 'nodata',
+    'meuse.27': 'nodata',
+  });
   await finish(page, s);
 });
 
@@ -197,12 +207,17 @@ test('meuse.23 is coloured once both its ends have a discharge (Chooz given one 
     await fulfilJson(route, f);
   });
   await held(page, deep(MID, 'q'));
-  await reachesPainted(page, ['meuse.23', 'meuse.27']);
+  await reachesPainted(page, ['meuse.23', 'meuse.28']);
   await expect.poll(async () => (await reachState(page, 'meuse.23'))?.k).toBe('v');
   const st = await reachState(page, 'meuse.23');
   expect(st?.c).toMatch(/^#[0-9a-f]{6}$/i);
   // The gap stays grey whatever the ends hold.
-  expect(await reachKinds(page, GAP)).toEqual({ 'meuse.24': 'nodata', 'meuse.25': 'nodata', 'meuse.26': 'nodata' });
+  expect(await reachKinds(page, GAP)).toEqual({
+    'meuse.24': 'nodata',
+    'meuse.25': 'nodata',
+    'meuse.26': 'nodata',
+    'meuse.27': 'nodata',
+  });
   await finish(page, s);
 });
 

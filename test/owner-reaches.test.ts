@@ -55,11 +55,10 @@ describe('splitReaches on the fixture release', () => {
     expect(ReachesFile.safeParse(split.file).success).toBe(false);
   });
 
-  it('places the BE-3 gauges: about 70 points, one skipped as ambiguous (the Lys, whose headwaters restart at km 0)', () => {
+  it('places the BE-3 gauges: 87 points (72, plus 15 on the Vesdre and the Amblève, #110 PR 2), one skipped as ambiguous (the Lys, whose headwaters restart at km 0)', () => {
     const be3Split = splitReaches(release, be3, rivernet);
     const added = be3Split.file.stations.length - release.stations.length;
-    expect(added).toBeGreaterThanOrEqual(65);
-    expect(added).toBeLessThanOrEqual(80);
+    expect(added).toBe(87);
     expect(be3Split.skipped).toEqual([{ id: 'be.spw.3884', code: 'owner_reach_ambiguous' }]);
     // Only the owner stations the file did not have are added; the public ones are all still there.
     const have = new Set(be3Split.file.stations.map((s) => s.id));
@@ -184,14 +183,30 @@ describe('the Eijsden chain of the owner variant (F1, F2)', () => {
     expect(stem).toContain('fr.sandre.B720000002');
   });
 
-  it('has the Sambre as a group with SPW rows, and no Vesdre or Amblève (KG-163)', () => {
+  it('has the Sambre, the Vesdre and the Amblève as groups with SPW rows (KG-163 closed)', () => {
     const rivers = groups(nodes).map((g) => (g.kind === 'group' ? g.riverId : ''));
     expect(rivers).toContain('sambre');
-    expect(rivers).not.toContain('vesdre');
-    expect(rivers).not.toContain('ambleve');
+    expect(rivers).toContain('vesdre');
+    expect(rivers).toContain('ambleve');
     const inGroup = (river: string) =>
       groups(nodes).flatMap((g) => (g.kind === 'group' && g.riverId === river ? ids(g.children) : []));
-    expect(inGroup('sambre').filter((id) => id.startsWith('be.spw.')).length).toBeGreaterThan(3);
+    const spwIn = (river: string) => inGroup(river).filter((id) => id.startsWith('be.spw.'));
+    expect(spwIn('sambre').length).toBeGreaterThan(3);
+    const placed = (river: string) =>
+      split.file.stations.filter((s) => s.id.startsWith('be.spw.') && s.river_id === river).map((s) => s.id);
+    expect(placed('vesdre').length).toBe(7);
+    expect(placed('ambleve').length).toBe(8);
+    expect([...spwIn('vesdre')].sort()).toEqual([...placed('vesdre')].sort());
+    expect([...spwIn('ambleve')].sort()).toEqual([...placed('ambleve')].sort());
+    // Graph order within each group: km descending.
+    for (const r of ['vesdre', 'ambleve']) {
+      const kms = spwIn(r).map((id) => placedOf.get(id)?.km_graph as number);
+      expect(kms).toEqual([...kms].sort((a, b) => b - a));
+    }
+    // The groups follow the graph order: the Ourthe group first, then the Vesdre, then the Amblève.
+    const order = groups(nodes).map((g) => (g.kind === 'group' ? g.riverId : ''));
+    expect(order.indexOf('ourthe')).toBeLessThan(order.indexOf('vesdre'));
+    expect(order.indexOf('vesdre')).toBeLessThan(order.indexOf('ambleve'));
     // Chooz and SPW 8702 are one row.
     expect(
       nodes.some(
@@ -200,12 +215,26 @@ describe('the Eijsden chain of the owner variant (F1, F2)', () => {
     ).toBe(true);
   });
 
-  it('places the Ourthe gauges on parts of ourthe.1, which the fixture graph leaves unconnected (no downstream): no Ourthe group (doubt for the lead)', () => {
+  it('places the Ourthe gauges on parts of ourthe.1, ourthe.2 and ourthe.3, which joins the Meuse (#110): an Ourthe group in graph order after Liège', () => {
     const ourthe = split.file.stations.filter((s) => s.id.startsWith('be.spw.') && s.river_id === 'ourthe');
     expect(ourthe.length).toBe(15);
-    expect(ourthe.every((s) => reachOf(s.reach_id as string)?.part_of === 'ourthe.1')).toBe(true);
-    expect(release.reaches.find((r) => r.id === 'ourthe.1')?.downstream).toEqual([]);
-    expect(groups(nodes).some((g) => g.kind === 'group' && g.riverId === 'ourthe')).toBe(false);
+    const parents = new Set(['ourthe.1', 'ourthe.2', 'ourthe.3']);
+    expect(ourthe.every((s) => parents.has(reachOf(s.reach_id as string)?.part_of as string))).toBe(true);
+    // The Ourthe is cut at the Amblève and the Vesdre; its last reach joins the Meuse.
+    expect(release.reaches.find((r) => r.id === 'ourthe.3')?.downstream).toEqual(['meuse.27']);
+    const group = groups(nodes).find((g) => g.kind === 'group' && g.riverId === 'ourthe');
+    expect(group).toBeDefined();
+    // The Vesdre and the Amblève are groups nested in the Ourthe's: its own rows are its direct stations.
+    const own = group?.kind === 'group' ? group.children.filter((c) => c.kind === 'station') : [];
+    const sub = group?.kind === 'group' ? group.children.flatMap((c) => (c.kind === 'group' ? [c.riverId] : [])) : [];
+    expect(sub).toEqual(expect.arrayContaining(['vesdre', 'ambleve']));
+    const inGroup = ids(own).filter((id) => id.startsWith('be.spw.'));
+    const placedOurthe = ourthe.map((s) => s.id);
+    expect([...inGroup].sort()).toEqual([...placedOurthe].sort());
+    const km = (id: string) => placedOf.get(id)?.km_graph as number;
+    expect(inGroup.map(km)).toEqual([...inGroup.map(km)].sort((a, b) => b - a));
+    expect(groups(nodes).some((g) => g.kind === 'group' && g.riverId === 'sambre')).toBe(true);
+    for (const id of placedOurthe) expect(placedOf.get(id)?.nl_entry_node, id).toBe('eijsden');
   });
 
   it('is the public chain without any be.spw. row on the public release', () => {

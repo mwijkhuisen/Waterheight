@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 // /data/v1/rivers/reaches-<ver>.json (P6b; A§9.1): the public reaches of the
 // river graph in graph order, their upstream/downstream adjacency, the public
-// stations with their chainage, and the sourced travel-time ranges (catalogue
-// §3.7: indicative, never an ETA). Written by tools/geo/rivernet in geo.yml and
+// stations with their chainage, and the sourced travel times (catalogue §3.7:
+// indicative, never an ETA). Written by tools/geo/rivernet in geo.yml and
 // served immutable after rws-rivers-refresh. P11 reads it (the upstream chain,
 // the Hovmöller km axis), so this module stays web-safe: it imports nothing of
 // the registry, the health documents or the canaries.
@@ -44,6 +44,25 @@ export type ReachFlags = z.infer<typeof ReachFlags>;
 export const TravelRange = z
   .tuple([z.number().positive(), z.number().positive()])
   .refine(([lo, hi]) => lo < hi, 'a travel time is a range lo < hi');
+/** A travel time's value (#110): a range [lo, hi], or one value, which then names its condition in `label`. */
+export const TravelValue = z.union([z.number().positive(), TravelRange]);
+// Reviewed display text, as the registry's names: trimmed, no markup, no control or format characters.
+const LabelText = z
+  .string()
+  .min(1)
+  .max(80)
+  .refine((s) => s === s.trim(), 'label has leading or trailing whitespace')
+  .refine((s) => !/[<>]/.test(s), 'label holds < or >')
+  .refine((s) => !/[\p{Cc}\p{Cf}]/u.test(s), 'label holds a control or format character');
+/** The condition or event a value holds for ("piek juli 2021"), NL and EN: reviewed registry text, no provider string. */
+export const TravelLabel = z.strictObject({ nl: LabelText, en: LabelText });
+
+/** What the schema cannot say alone: exactly one unit (`h` hours, `d` days), and a label on every single value. */
+export function travelShapeProblem(t: { h?: unknown; d?: unknown; label?: unknown }): string | null {
+  if ((t.h === undefined) === (t.d === undefined)) return 'exactly one of h and d';
+  if (typeof (t.h ?? t.d) === 'number' && t.label === undefined) return 'a single value needs its label';
+  return null;
+}
 
 export const ReachRiver = z.strictObject({
   id: Slug,
@@ -92,14 +111,22 @@ export const ReachStation = z.strictObject({
 });
 export type ReachStation = z.infer<typeof ReachStation>;
 
-export const StationTravelTime = z.strictObject({
-  from_station_id: StationRef,
-  to_station_id: StationRef,
-  h: TravelRange,
-  basis: z.string().min(1).max(200),
-  source: z.string().min(1).max(300),
-  source_url: z.url({ protocol: /^https$/ }),
-});
+// A sourced travel time (#110): `h` or `d`, a range or a labelled single value; `derived` marks a figure the
+// catalogue derives. A pre-#110 row (an `h` range only) is one of these, so schema_version stays 1.
+export const StationTravelTime = z
+  .strictObject({
+    from_station_id: StationRef,
+    to_station_id: StationRef,
+    h: TravelValue.optional(),
+    d: TravelValue.optional(),
+    label: TravelLabel.optional(),
+    derived: z.literal(true).optional(),
+    basis: z.string().min(1).max(200),
+    source: z.string().min(1).max(300),
+    source_url: z.url({ protocol: /^https$/ }),
+  })
+  .refine((t) => travelShapeProblem(t) === null, 'exactly one of h and d, and a single value needs its label');
+export type StationTravelTime = z.infer<typeof StationTravelTime>;
 
 export const ReachesFile = z.strictObject({
   schema_version: z.literal(REACHES_SCHEMA_VERSION),

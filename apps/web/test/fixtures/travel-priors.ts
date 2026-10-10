@@ -45,8 +45,8 @@ const unverified = (id: string, ref: string): PriorCase => ({
 
 export const PRIORS: readonly PriorCase[] = [
   // Rhine -> Lobith, flood peak (GWIO 85.006 appendix 1), ranges
-  range('emmerich-lobith', '§3.7 Rhine table, Emmerich', 1, 8, 'h', 'indicatief: 1–8 u', 'indicative: 1–8 h'),
-  range('wesel-lobith', '§3.7 Rhine table, Wesel', 6, 19, 'h', 'indicatief: 6–19 u', 'indicative: 6–19 h'),
+  range('emmerich-lobith', '§3.7 Rhine table, Emmerich', 1, 9, 'h', 'indicatief: 1–9 u', 'indicative: 1–9 h'),
+  range('wesel-lobith', '§3.7 Rhine table, Wesel', 6, 20, 'h', 'indicatief: 6–20 u', 'indicative: 6–20 h'),
   range('ruhrort-lobith', '§3.7 Rhine table, Ruhrort', 13, 27, 'h', 'indicatief: 13–27 u', 'indicative: 13–27 h'),
   range(
     'duesseldorf-lobith',
@@ -59,32 +59,14 @@ export const PRIORS: readonly PriorCase[] = [
   ),
   range(
     'koeln-lobith',
-    '§3.7 Rhine table, Köln; §8 C1 (map-rivers)',
+    '§3.7 Rhine table, Köln (GWIO 85.006 app. 1)',
     22,
-    46,
+    41,
     'h',
-    'indicatief: 22–46 u',
-    'indicative: 22–46 h',
-  ),
-  range(
-    'koeln-lobith-chbafu',
-    '§8 C1 (ch-bafu: about 22–40 h)',
-    22,
-    40,
-    'h',
-    'indicatief: 22–40 u',
-    'indicative: 22–40 h',
+    'indicatief: 22–41 u',
+    'indicative: 22–41 h',
   ),
   range('bonn-lobith', '§3.7 Rhine table, Bonn', 24, 49, 'h', 'indicatief: 24–49 u', 'indicative: 24–49 h'),
-  range(
-    'andernach-lobith-file',
-    '§3.7 Rhine table, Andernach (map-rivers / reaches file)',
-    28,
-    48,
-    'h',
-    'indicatief: 28–48 u',
-    'indicative: 28–48 h',
-  ),
   {
     id: 'andernach-lobith-c1',
     ref: '§8 C1: use "about 1.5 days (28–49 h)" for Andernach in the UI',

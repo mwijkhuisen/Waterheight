@@ -4,7 +4,7 @@ import type { ReachTravelData } from '../../lib/data/contracts.ts';
 import { httpsHref } from '../../lib/href.ts';
 import { riverName } from '../../lib/labels/labels.ts';
 import type { StationState } from '../../lib/stationStates.ts';
-import { travelText } from '../../lib/travel.ts';
+import { travelPriorOf, travelText } from '../../lib/travel.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { LADDER, levelOf } from '../legend/palette.ts';
@@ -123,8 +123,7 @@ function stationRow(n: Extract<ChainNode, { kind: 'station' }>, ctx: ChainContex
   const pair = ctx.travel.travel_times.find(
     (t) => targets.includes(t.to_station_id) && n.ids.includes(t.from_station_id),
   );
-  const text =
-    pair === undefined ? null : travelText({ kind: 'range', lo: pair.h[0], hi: pair.h[1], unit: 'h' }, ctx.locale);
+  const text = pair === undefined ? null : travelText(travelPriorOf(pair), ctx.locale);
   const sourced = pair !== undefined && text !== null;
   return {
     kind: 'station',

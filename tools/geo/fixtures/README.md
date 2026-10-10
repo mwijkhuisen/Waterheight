@@ -37,17 +37,17 @@ The whole world at z0–2: the tests' stand-in for the production `planet-z6-<bu
 
 ## `rivers-fixture.pmtiles` (P11a)
 
-The river tiles of the committed fixture graph below, for the web and compose end-to-end tests of the flow direction and the upstream chain (issue #26). It is the `rivers-20261001.pmtiles` of the `geo-fixture-outputs` artifact, committed unchanged. The same artifact's `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` (built locally by `test/reaches-fixture.test.ts` from these fixtures) in every field but `version`, so the tiles' `reach_id`s are the fixture reaches file's.
+The river tiles of the committed fixture graph below, for the web and compose end-to-end tests of the flow direction and the upstream chain (issue #26). It is the `rivers-20261001.pmtiles` of the `geo-fixture-outputs` artifact, committed unchanged. The same artifact's `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` (built locally by `test/reaches-fixture.test.ts` from these fixtures) in every field but `version`, so the tiles' `reach_id`s are the fixture reaches file's. Replaced twice for #110: PR 1 (the Ourthe join splits the Meuse reach at Liège: Meuse `seq` from there on is one higher) and PR 2 (the refreshed fixture, OSM 2026-10-09, with the Vesdre and the Amblève; the Ourthe cut at their confluences).
 
 Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright).
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/37119454397 (`workflow_dispatch` on `main` at `4cfab1e`, 2026-10-03), job `rivernet fixture` |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38009696220 (`pull_request` #115 at `a60561f`, 2026-10-10), job `rivernet fixture` |
 | Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build`), layer `rivers`, z0–12 |
-| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.589838,11.397685,53.443230, 2,827 tiles; 709 features, each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation` |
-| Bytes | 1,626,415 |
-| sha256 | `36b8bf1e28946fe8ba2bb7b4a20f955a1d26c5b4004f2c11543a2a3d39f4577d` |
+| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.589838,11.397685,53.443230, 2,860 tiles; one feature per drawn reach (714 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation` |
+| Bytes | 1,653,660 |
+| sha256 | `a5cfa5d1e051dcae909264128539b5a0c647d85c949e0b16410b2f85324a2cd3` |
 
 A refresh of the fixture graph replaces it with the next run's artifact and regenerates `test/fixtures/reaches-fixture.json` (`UPDATE_FIXTURE=1`); compare the two reaches files first.
 
@@ -89,14 +89,14 @@ Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/37071962474 (`workflow_dispatch` on `claude/p6a-graph-pipeline`, 2026-10-02, after review round 1 pinned the Prüm; the first committed fixture came from run 37064062453) |
-| Extracts | the 16 Geofabrik regions of `registry/geo-sources.yaml`, all with replication timestamp 2026-10-01T20:22:06Z; md5, sha256 and bytes per region in `rivernet.provenance.json` |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38006225186 (`workflow_dispatch` on `claude/fix-110-vesdre-ambleve`, 2026-10-09; #110 PR 2, which added the Vesdre and the Amblève). Earlier: run 37071962474 (`claude/p6a-graph-pipeline`, 2026-10-02, OSM 2026-10-01, after review round 1 pinned the Prüm), and the first committed fixture came from run 37064062453. The distances in the `reason`s of `registry/snap-overrides.yaml` were measured on the 2026-10-01 fixture, except the two #110 `waters` rows (Vesdre, Amblève), measured on this one |
+| Extracts | the 16 Geofabrik regions of `registry/geo-sources.yaml`, with replication timestamps up to 2026-10-09T20:21:04Z; md5, sha256 and bytes per region in `rivernet.provenance.json` |
 | Made | osmium-tool 1.19.1 in the tool image (`tools/geo/Dockerfile`), `tools/geo/rivernet/extract.sh` |
-| `rivernet.osm.pbf` | 2,039,272 bytes, sha256 `f79f666d1ecb6b93b4681eed7a4b1040822365feb9799f84aeaa164e0e814b75` |
-| `rivernet.ways.geojsonseq` | 10,017,794 bytes, sha256 `1b84d8339c3ef2eadc55cd23b30bb574bf437af91d9052e66ae2e9251f1496aa` |
-| `rivernet.relations.opl` | 180,661 bytes, sha256 `0da620fb683674a679f53dd90a3b0dcaf47d6a2ccd029866f5a89352f3d96724` |
-| `rivernet.provenance.json` | 5,546 bytes, sha256 `6bfaf2ecb13480e7742ea565855c76d9dbccac3f085d97f70742db8ed0628dfa` |
-| Graph | 3,756 nodes, 3,768 edges, 19 components, 39 bifurcations; the run's `river_graph.json` (sha256 `9e305106…`) and `reaches.geojson` (`cca549c1…`) equal a local build of these files byte for byte |
+| `rivernet.osm.pbf` | 2,073,740 bytes, sha256 `97e5eaa065e0eb36dfcaa9b196ac330358e43c1561dbcf73e12d2581d9a40e10` |
+| `rivernet.ways.geojsonseq` | 10,175,728 bytes, sha256 `b48c28e0533914ffd18ba26bb6f38160cff6cfea4146df78964834a09faa0451` |
+| `rivernet.relations.opl` | 182,187 bytes, sha256 `31d462f9fdc46e76260a9cbe7adf2c275e8e093617f0d573d2f21be8da91e9bb` |
+| `rivernet.provenance.json` | 5,546 bytes, sha256 `a0f13ff5439d6db41bd404cfa6d6bcd577a7514f1e9c13008793c3dceb69e153` |
+| Graph | 3,808 nodes, 3,820 edges, 19 components, 39 bifurcations (the earlier fixture, OSM 2026-10-01: 3,756 nodes, 3,768 edges); the run's `river_graph.json` (sha256 `44bff11c…`) and `reaches.geojson` (`34e7f31e…`) equal a local build of these files byte for byte |
 
 A refresh replaces the four files from a newer run's artifact (at most 15 MB for the PBF, a test checks it), updates this table, and regenerates the golden only after reviewing every changed bifurcation.
 

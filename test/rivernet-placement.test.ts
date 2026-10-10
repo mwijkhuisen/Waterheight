@@ -683,17 +683,29 @@ describe('flags and travel times', () => {
     },
   );
 
-  it('gives Emmerich to Lobith [1, 8] h and no other reach a travel time without a curated pair', SLOW, () => {
+  it('gives Emmerich to Lobith [1, 9] h and no other reach a travel time without a curated pair', SLOW, () => {
     const emmerich = placed.reaches.find(
       (r) => r.up_station === 'de.wsv.2790020' && r.down_station === 'nl.rws.lobith.bovenrijn.tolkamer',
     );
     expect(emmerich?.id).toBe('rhine.56');
-    expect(emmerich?.travel_time_h).toEqual([1, 8]);
+    expect(emmerich?.travel_time_h).toEqual([1, 9]);
     const pairs = new Set((rivers.travel_times ?? []).map((t) => `${t.from_station}>${t.to_station}`));
     const timed = placed.reaches.filter((r) => r.travel_time_h !== null);
     expect(timed.map((r) => r.id)).toEqual(['rhine.56']);
     for (const r of timed) expect(pairs.has(`${r.up_station}>${r.down_station}`), r.id).toBe(true);
   });
+
+  it(
+    'keeps every curated travel pair of rivers.yaml in the reaches file (a typo or an unplaced gauge never drops one)',
+    SLOW,
+    () => {
+      const want = (rivers.travel_times ?? []).map((t) => `${t.from_station}>${t.to_station}`);
+      const got = reachesFile(placed, rivers, VERSION, osm).travel_times.map(
+        (t) => `${t.from_station_id}>${t.to_station_id}`,
+      );
+      expect(got).toEqual(want);
+    },
+  );
 });
 
 describe('known gaps', () => {

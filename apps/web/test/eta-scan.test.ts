@@ -7,7 +7,7 @@ import { chain } from '../src/features/flow/chain.ts';
 import { type ChainRow, chainRows } from '../src/features/flow/rows.ts';
 import type { WebRiver } from '../src/lib/data/chain.ts';
 import { ReachGraphFile, ReachTravel } from '../src/lib/data/contracts.ts';
-import { travelText } from '../src/lib/travel.ts';
+import { travelPriorOf, travelText } from '../src/lib/travel.ts';
 import type { Locale } from '../src/paraglide/runtime.js';
 import { PRIORS } from './fixtures/travel-priors.ts';
 
@@ -57,7 +57,7 @@ describe('the site texts', () => {
       ...PRIORS.map((p) => ({ where: `${l}:${p.id}`, text: travelText(p.prior, l) })),
       ...pairs.map((t) => ({
         where: `${l}:${t.from_station_id}`,
-        text: travelText({ kind: 'range', lo: t.h[0], hi: t.h[1], unit: 'h' }, l),
+        text: travelText(travelPriorOf(t), l),
       })),
     ]);
     const shown = items.flatMap((i) => (i.text === null ? [] : [{ where: i.where, text: i.text, travelRow: true }]));

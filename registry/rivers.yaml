@@ -18,8 +18,10 @@
 #                   the repository does not settle
 #   joins           (P6b, top level) a reviewed routing-only connection where an OSM relation ends short (KG-161): never
 #                   drawn, never published as geometry
-#   travel_times    (P6b, top level) sourced RANGES only (catalogue §3.7), between two registered stations; indicative,
-#                   never an ETA, never a single "about" value
+#   travel_times    (P6b, top level; #110) sourced values only (catalogue §3.7), between two registered public stations:
+#                   `h` hours or `d` days, a range [lo, hi] or one value with its `label` {nl, en} (the condition or
+#                   event); `derived: true` for a figure the catalogue derives from other anchors. Indicative, never an
+#                   ETA; the catalogue's UNVERIFIED figures and our own medians and low-water legs stay out
 version: 1
 rivers:
   - id: rhine
@@ -285,6 +287,28 @@ rivers:
     parent_river_id: meuse
     km_direction: none
     evidence: "catalogue §5.3 relation; Wikidata Q160698 (P402 2246211; P403 Q41986 Meuse), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: vesdre
+    name_nl: "Vesder"
+    name_en: "Vesdre"
+    names: {}
+    aliases: ["Vesdre", "Vesder"]
+    osm_relation_id: 12117339
+    osm_way_name: null
+    wikidata: Q707598
+    parent_river_id: ourthe
+    km_direction: none
+    evidence: "Wikidata Q707598 (P402 12117339; P403 Q160698 Ourthe; P17 Germany and Belgium), one SPARQL request 2026-10-10 (#110 item 4, tools/geo/rivernet/lookup-wikidata.ts lookup()); joins the Ourthe at Chênée (Liège). Its German name Weser is left out of aliases: it is the name of another river"
+  - id: ambleve
+    name_nl: "Amblève"
+    name_en: "Amblève"
+    names: {}
+    aliases: ["Amel"]
+    osm_relation_id: 12641506
+    osm_way_name: null
+    wikidata: Q461361
+    parent_river_id: ourthe
+    km_direction: none
+    evidence: "Wikidata Q461361 (P402 12641506; P403 Q160698 Ourthe), one SPARQL request 2026-10-10 (#110 item 4, tools/geo/rivernet/lookup-wikidata.ts lookup()); the other fr \"Amblève\" item, Q159868, is the municipality Amel (P402 2433429, a boundary): rejected. Joins the Ourthe at Comblain-au-Pont"
   - id: rur
     name_nl: "Roer"
     name_en: "Rur"
@@ -904,46 +928,164 @@ joins:
     to_river: scheldt
     max_m: 600
     reason: "KG-161: the Scheldt has a gap between the sink n958071562 of its upper component (3.2870, 50.2242) and the source n2092817137 of the lower one (3.2939, 50.2263), 541 m apart (measured on the fixture 2026-10-01; the next node upstream of the sink, n2092816941, is 63 m back, no other Scheldt node lies within 1.5 km). The FR-1 Escaut gauges (Iwuy E131000202, Maulde E240041101) lie upstream of it, so their path to the Scheldt border needs it"
+  - river: ourthe
+    at: [5.5796611, 50.6230914]
+    to_river: meuse
+    max_m: 150
+    reason: "KG-161, KG-265 (#110 item 3): the Ourthe relation 2246211 ends at its sink n1637515679 (5.5797, 50.6231) at Liège without sharing a node with the Meuse: the Meuse there is one way, w524363778 (16.0 km, n720478241 to n334511303), whose ends lie 4.2 and 8.5 km away. Its vertex nearest the sink, 97 m off, becomes a node and the join lands there (measured on the fixture 2026-10-01). The Ourthe SPW gauges (owner) need it for their path to Eijsden"
 travel_times:
+  # Rhine → Lobith, flood peaks (GWIO 85.006 appendix 1, read from the scan for #110): each range holds every value the
+  # note does not strike through, in whole hours rounded outward (Emmerich keeps a floor of 1 h).
   - from_station: de.wsv.2790020
     to_station: nl.rws.lobith.bovenrijn.tolkamer
-    h: [1, 8]
+    h: [1, 9]
     basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
-    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Emmerich to Lobith: observed spread 1-8 h)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1: Emmerich ¼ to 8½ h and once −¼ h, outward to whole hours with a floor of 1 h; catalogue §3.7"
     source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
   - from_station: de.wsv.2770040
     to_station: nl.rws.lobith.bovenrijn.tolkamer
-    h: [6, 19]
+    h: [6, 20]
     basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
-    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Wesel to Lobith: observed spread 6-19 h)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1: Wesel 6½ to 19½ h, outward to whole hours; catalogue §3.7"
     source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
   - from_station: de.wsv.2770010
     to_station: nl.rws.lobith.bovenrijn.tolkamer
     h: [13, 27]
     basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
-    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Duisburg-Ruhrort to Lobith: observed spread 13-27 h)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1: Ruhrort 13½ to 27 h (one struck value left out), outward to whole hours; catalogue §3.7"
     source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
   - from_station: de.wsv.2750010
     to_station: nl.rws.lobith.bovenrijn.tolkamer
     h: [11, 34]
     basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
-    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Düsseldorf to Lobith: observed spread 11-34 h)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1: Düsseldorf 11 to 34 h; catalogue §3.7"
     source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
   - from_station: de.wsv.2730010
     to_station: nl.rws.lobith.bovenrijn.tolkamer
-    h: [22, 46]
+    h: [22, 41]
     basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
-    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Köln to Lobith: observed spread 22-46 h)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1: Köln (Keulen) 22½ to 40¾ h, outward to whole hours (an earlier 22-46 was a misread); catalogue §3.7"
     source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
   - from_station: de.wsv.2710080
     to_station: nl.rws.lobith.bovenrijn.tolkamer
     h: [24, 49]
     basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
-    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Bonn to Lobith: observed spread 24-49 h)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1: Bonn 24½ to 49 h, outward to whole hours; catalogue §3.7"
     source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
   - from_station: de.wsv.27100400
     to_station: nl.rws.lobith.bovenrijn.tolkamer
-    h: [28, 48]
+    h: [28, 49]
     basis: "flood peak, Q Lobith > 5000 m³/s (24 waves 1965-1983)"
-    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1; catalogue §3.7 (Andernach to Lobith: observed spread 28-48 h)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (L.P.M. de Vrees, Aug 1985), appendix 1: Andernach 28¾ to 48¾ h (rows 5, 8, 20 and 21 struck), outward to whole hours; catalogue §3.7 and §8 C1"
     source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  # Upper Rhine and the derived figures to Lobith (catalogue §3.7: derived = from other anchors, flagged as such).
+  # Basel is the BAFU primary gauge Basel, Rheinhalle; PEGELONLINE's de.wsv.2310010 is its tier-2 mirror, never public.
+  - from_station: ch.bafu.2289
+    to_station: de.wsv.23700200
+    h: 23
+    label: { nl: "na de Boven-Rijnwerken", en: "after the Upper Rhine training works" }
+    basis: "flood wave, after the Upper Rhine training works (reduced from 64 to 23 h)"
+    source: "ICPR (IKSR), Floods: water retention; catalogue §3.7 (Basel to Maxau about 23 h)"
+    source_url: "https://www.iksr.org/en/topics/floods/water-retention"
+  - from_station: de.wsv.23700200
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    d: [4, 5]
+    derived: true
+    basis: "flood peak; the Feb and May 1999 peaks Maxau to Kaub (daily resolution), plus Kaub to Lobith"
+    source: "LfW Rheinland-Pfalz report 212/99, Tabelle 3 (peaks Feb and May 1999); catalogue §3.7 (Maxau: about 4-5 days to Lobith, derived)"
+    source_url: "https://www.hochwasser.rlp.de/static/shared/documents/rhein_1999.pdf"
+  - from_station: de.wsv.25700100
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    d: 2
+    derived: true
+    label: { nl: "hoogwater", en: "flood" }
+    basis: "flood peak; Kaub to Andernach about half a day, plus Andernach to Lobith"
+    source: "catalogue §3.7 (Kaub: about 2 days, derived), with RWS note GWIO 85.006 appendix 1 for Andernach to Lobith"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: de.wsv.25900700
+    to_station: nl.rws.lobith.bovenrijn.tolkamer
+    h: [40, 45]
+    derived: true
+    basis: "flood peak; Koblenz lies 22 km upstream of Andernach"
+    source: "catalogue §3.7 (Koblenz: about 40-45 h, derived), with RWS note GWIO 85.006 appendix 1 for Andernach to Lobith"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  # Lobith onward (GWIO 85.006 appendix 2, waves 1970-1984): about-values with a large spread; Katerveer has no gauge.
+  # Driel and Amerongen are the gauges above the weir: the weirs are raised at these discharges (the note, §1).
+  - from_station: nl.rws.lobith.bovenrijn.tolkamer
+    to_station: nl.rws.nijmegen.waal
+    h: 5
+    label: { nl: "RWS 1985, grote spreiding", en: "RWS 1985, large spread" }
+    basis: "flood peak, Q Lobith > 5000 m³/s (waves 1970-1984)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (Aug 1985), appendix 2; catalogue §3.7 (Lobith onward: Nijmegen about 5 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: nl.rws.lobith.bovenrijn.tolkamer
+    to_station: nl.rws.tiel.waal
+    h: 13
+    label: { nl: "RWS 1985, grote spreiding", en: "RWS 1985, large spread" }
+    basis: "flood peak, Q Lobith > 5000 m³/s (waves 1970-1984)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (Aug 1985), appendix 2; catalogue §3.7 (Lobith onward: Tiel about 13 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: nl.rws.lobith.bovenrijn.tolkamer
+    to_station: nl.rws.zaltbommel
+    h: 19
+    label: { nl: "RWS 1985, grote spreiding", en: "RWS 1985, large spread" }
+    basis: "flood peak, Q Lobith > 5000 m³/s (waves 1970-1984)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (Aug 1985), appendix 2; catalogue §3.7 (Lobith onward: Zaltbommel about 19 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: nl.rws.lobith.bovenrijn.tolkamer
+    to_station: nl.rws.westervoort.ijsselkop
+    h: 5
+    label: { nl: "RWS 1985, grote spreiding", en: "RWS 1985, large spread" }
+    basis: "flood peak, Q Lobith > 5000 m³/s (waves 1970-1984)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (Aug 1985), appendix 2; catalogue §3.7 (Lobith onward: IJsselkop about 5 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: nl.rws.lobith.bovenrijn.tolkamer
+    to_station: nl.rws.driel.boven
+    h: 12
+    label: { nl: "RWS 1985, grote spreiding", en: "RWS 1985, large spread" }
+    basis: "flood peak, Q Lobith > 5000 m³/s (waves 1970-1984)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (Aug 1985), appendix 2; catalogue §3.7 (Lobith onward: Driel about 12 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: nl.rws.lobith.bovenrijn.tolkamer
+    to_station: nl.rws.amerongen.boven
+    h: 25
+    label: { nl: "RWS 1985, grote spreiding", en: "RWS 1985, large spread" }
+    basis: "flood peak, Q Lobith > 5000 m³/s (waves 1970-1984)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (Aug 1985), appendix 2; catalogue §3.7 (Lobith onward: Amerongen about 25 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  - from_station: nl.rws.lobith.bovenrijn.tolkamer
+    to_station: nl.rws.olst
+    h: 40
+    label: { nl: "RWS 1985, grote spreiding", en: "RWS 1985, large spread" }
+    basis: "flood peak, Q Lobith > 5000 m³/s (waves 1970-1984)"
+    source: "RWS note GWIO 85.006 \"Looptijden hoogwatergolven op de Rijn\" (Aug 1985), appendix 2; catalogue §3.7 (Lobith onward: Olst about 40 h)"
+    source_url: "https://open.rijkswaterstaat.nl/@87627/looptijden-hoogwatergolven-rijn/"
+  # Meuse (RWS report on the July 2021 flood, v2.0 of 16-12-2021).
+  - from_station: nl.rws.eijsden.grens
+    to_station: nl.rws.maastricht.sintpieter
+    h: 1
+    label: { nl: "normale omstandigheden", en: "normal conditions" }
+    basis: "normal discharge, Eijsden-grens (rkm 2.56) to St. Pieter (rkm 10.80)"
+    source: "RWS \"Topafvoeren hoogwater Maas juli 2021\" v2.0 (16-12-2021); catalogue §3.7 (Eijsden-grens to St. Pieter about 1 h)"
+    source_url: "https://edepot.wur.nl/568220"
+  - from_station: nl.rws.eijsden.grens
+    to_station: nl.rws.maastricht.borgharen.maas.beneden
+    h: 3.5
+    label: { nl: "piek juli 2021", en: "peak July 2021" }
+    basis: "the July 2021 flood peak: Eijsden-grens 15 July 21:50 (3195 m³/s), Borgharen-dorp 16 July 01:20"
+    source: "RWS \"Topafvoeren hoogwater Maas juli 2021\" v2.0 (16-12-2021); catalogue §3.7 (July 2021 peak)"
+    source_url: "https://edepot.wur.nl/568220"
+  - from_station: nl.rws.eijsden.grens
+    to_station: nl.rws.venlo
+    h: 38
+    label: { nl: "piek juli 2021", en: "peak July 2021" }
+    basis: "the July 2021 flood peak: Eijsden-grens 15 July 21:50 (3195 m³/s), Venlo 17 July 11:50"
+    source: "RWS \"Topafvoeren hoogwater Maas juli 2021\" v2.0 (16-12-2021); catalogue §3.7 (July 2021 peak)"
+    source_url: "https://edepot.wur.nl/568220"
+  - from_station: nl.rws.eijsden.grens
+    to_station: nl.rws.megen.maas
+    h: 82
+    label: { nl: "piek juli 2021", en: "peak July 2021" }
+    basis: "the July 2021 flood peak: Eijsden-grens 15 July 21:50 (3195 m³/s), Megen 19 July 07:30"
+    source: "RWS \"Topafvoeren hoogwater Maas juli 2021\" v2.0 (16-12-2021); catalogue §3.7 (July 2021 peak)"
+    source_url: "https://edepot.wur.nl/568220"

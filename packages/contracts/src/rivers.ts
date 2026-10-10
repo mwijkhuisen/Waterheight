@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TravelLabel, travelShapeProblem } from './reaches.ts';
 
 // The river registry (registry/rivers.yaml; P6a): the rivers the graph pipeline
 // builds, their OSM selection and the verbatim spellings providers use.
@@ -72,8 +73,12 @@ export type River = z.infer<typeof River>;
 /**
  * A reviewed connection where the OSM relation ends short of its confluence or
  * has a gap (KG-161): the sink of `river` nearest `at` joins the nearest node of
- * `to_river` that is not upstream of it, at most `max_m` away. Routing only:
- * a join is never drawn and never published as geometry.
+ * `to_river` that is not upstream of it, at most `max_m` away. Onto another
+ * river, that river's vertex nearest `at` becomes a node first, so the join
+ * lands where the river passes (#110). `max_m` bounds both that vertex's
+ * distance from `at` and the join's length from the sink, so `at` is best the
+ * sink itself. Routing only: a join is never drawn and never published as
+ * geometry.
  */
 export const Join = z.strictObject({
   river: Slug,
@@ -84,11 +89,21 @@ export const Join = z.strictObject({
 });
 export type Join = z.infer<typeof Join>;
 
-/** A sourced travel-time range between two stations (catalogue §3.7): indicative, never an ETA. */
+// The file's TravelValue without its lo < hi refine: validateRivers checks the order with a named message.
+const TravelSpan = z.union([z.number().positive(), z.tuple([z.number().positive(), z.number().positive()])]);
+
+/**
+ * A sourced travel time between two stations (catalogue §3.7; #110): hours `h` or days `d`, a range [lo, hi] or one
+ * value with its `label` (the condition or event, NL and EN); `derived` marks a figure the catalogue derives from
+ * other anchors. Indicative, never an ETA.
+ */
 export const TravelTime = z.strictObject({
   from_station: StationRef,
   to_station: StationRef,
-  h: z.tuple([z.number().positive(), z.number().positive()]),
+  h: TravelSpan.optional(),
+  d: TravelSpan.optional(),
+  label: TravelLabel.optional(),
+  derived: z.literal(true).optional(),
   basis: z.string().min(1).max(200),
   source: z.string().min(1).max(300),
   source_url: z.url({ protocol: /^https$/ }),
@@ -153,7 +168,10 @@ export function validateRivers(input: unknown): { problems: string[]; rivers?: R
   }
   const pairs = new Set<string>();
   for (const t of f.travel_times ?? []) {
-    if (!(t.h[0] < t.h[1])) problems.push(`travel_times ${t.from_station}: h must be a range lo < hi`);
+    const shape = travelShapeProblem(t);
+    if (shape !== null) problems.push(`travel_times ${t.from_station}: ${shape}`);
+    const v = t.h ?? t.d;
+    if (Array.isArray(v) && !(v[0] < v[1])) problems.push(`travel_times ${t.from_station}: a range must be lo < hi`);
     if (t.from_station === t.to_station) problems.push(`travel_times ${t.from_station}: from and to are the same`);
     dup('travel_times pair', pairs, `${t.from_station} ${t.to_station}`, 'travel_times');
   }
