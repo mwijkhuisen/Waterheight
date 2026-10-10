@@ -1,5 +1,5 @@
 import type { ApiStation } from '@rws/contracts';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { attributionText } from '../../../lib/attribution.ts';
 import { useFrames, useReachGraph, useRivers } from '../../../lib/data/api.ts';
 import type { WebMeta } from '../../../lib/data/chain.ts';
@@ -8,18 +8,19 @@ import { floorHour, formatDay, formatLocal, HOUR_MS, ZONE } from '../../../lib/t
 import { HOV_PATHS, type HovPathId } from '../../../lib/url/url.ts';
 import { m } from '../../../paraglide/messages.js';
 import type { Locale } from '../../../paraglide/runtime.js';
+import { LADDER, REACH_NODATA_COLOUR, STATE_COLOUR } from '../../legend/palette.ts';
 import type { Playback } from '../playback/usePlayback.ts';
 import type { HovChart, HovData } from './chart.ts';
-import { buildGrid, hoursOf, hovFetch, hovRows } from './grid.ts';
-import { changeText, gapText, HovTable, hourLabel } from './HovTable.tsx';
+import { buildGrid, buildStateGrid, hoursOf, hovFetch, hovRows } from './grid.ts';
+import { changeText, gapText, HovTable, hourLabel, stateText } from './HovTable.tsx';
 import styles from './hovmoller.module.css';
 import { buildPath, type Column } from './path.ts';
 
 // "Langs de rivier / Along the river" (P11c, issue #26, a lazy chunk of the viewer): x = river km (upstream left, the
-// NL entry at 0), y = hourly time, colour = the map's 24-hour change (Δ; the State has no per-hour value, D-2 and
-// KG-270). The panel asks the hourly frames itself (the page's own frames exist only while playing) for the 7-day
-// page that holds t. A click on a cell (or its table twin) pauses playback, moves t to that hour and opens the
-// station. ECharts loads on first use, in its own chunk.
+// NL entry at 0), y = hourly time, colour = the map's 24-hour change (Δ) or the played state (#112, D-3). The panel
+// asks the hourly frames itself (the page's own frames exist only while playing) for the 7-day page that holds t. A
+// click on a cell (or its table twin) pauses playback, moves t to that hour and opens the station. ECharts loads on
+// first use, in its own chunk.
 
 export interface HovmollerPanelProps {
   locale: Locale;
@@ -70,12 +71,12 @@ export function HovmollerPanel({
   onClose,
 }: HovmollerPanelProps) {
   const o = { locale };
-  const id = useId();
   const graph = useReachGraph();
   const rivers = useRivers().data?.rivers;
   const [table, setTable] = useState(false);
   const [all, setAll] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [byState, setByState] = useState(false);
 
   const built = useMemo(
     () => (graph.data === undefined ? undefined : buildPath(path, graph.data, stations, ownerSources)),
@@ -99,6 +100,13 @@ export function HovmollerPanel({
     () => (built === undefined || frames === undefined ? undefined : buildGrid(built.columns, stations, hours, frames)),
     [built, stations, hours, frames],
   );
+  const levels = useMemo(
+    () =>
+      !byState || built === undefined || frames === undefined
+        ? undefined
+        : buildStateGrid(built.columns, stations, hours, frames),
+    [byState, built, stations, hours, frames],
+  );
 
   // Provider text (names, rivers) is only ever data: strings for the canvas and text nodes for the table.
   const riverText = useCallback(
@@ -115,6 +123,7 @@ export function HovmollerPanel({
       columns: built.columns,
       gaps: built.gaps,
       cells,
+      levels,
       rowLabels: hours.map((h) => hourLabel(h, locale)),
       colLabels: built.columns.map((c) => (c.owner ? `${c.name} · ${badge}` : c.name)),
       gapTexts: built.gaps.map((g) => gapText(g, locale)),
@@ -127,12 +136,14 @@ export function HovmollerPanel({
           c.owner ? `${c.name} · ${badge}` : c.name,
           riverText(c.riverId),
           formatLocal(h, locale),
-          `${m.dh_label({}, { locale })}: ${changeText(cell, locale)}`,
+          levels === undefined
+            ? `${m.dh_label({}, { locale })}: ${changeText(cell, locale)}`
+            : `${m.mode_state({}, { locale })}: ${stateText(levels[ri]?.[ci] ?? null, locale)}`,
         ].join('\n');
       },
     };
     // `columns` is derived from `built`.
-  }, [built, cells, hours, locale, riverText]);
+  }, [built, cells, levels, hours, locale, riverText]);
 
   const { pause } = playback;
   const pickHour = useCallback(
@@ -201,6 +212,10 @@ export function HovmollerPanel({
         const [ci, ri] = cellIndex(cid, iso);
         return ci < 0 || ri < 0 ? undefined : cells?.[ri]?.[ci];
       },
+      levelAt(cid, iso) {
+        const [ci, ri] = cellIndex(cid, iso);
+        return levels === undefined || ci < 0 || ri < 0 ? null : (levels[ri]?.[ci] ?? null);
+      },
       pixelOf(cid, iso) {
         const [ci, ri] = cellIndex(cid, iso);
         return ci < 0 || ri < 0 ? undefined : chart?.pixelOf(ci, ri);
@@ -209,14 +224,13 @@ export function HovmollerPanel({
     return () => {
       window.__rwsHov = undefined;
     };
-  }, [built, columns, hours, cells, chart, path]);
+  }, [built, columns, hours, cells, levels, chart, path]);
 
   const name = pathName(path, locale);
   const credits = useMemo(() => {
     const date = formatDay(Math.min(t, hours.at(-1) ?? t), locale, ZONE);
     return [...new Set((frames?.attribution() ?? []).map((a) => attributionText(a.text, a.dateKind !== null, date)))];
   }, [frames, t, hours, locale]);
-  const hint = `${id}-state`;
 
   return (
     <section className={styles.panel} aria-label={m.hov_region({}, o)}>
@@ -237,13 +251,14 @@ export function HovmollerPanel({
             ))}
           </select>
         </label>
-        <span className={styles.colour}>{m.hov_colour({}, o)}</span>
-        <button type="button" disabled aria-describedby={hint} title={m.hov_state_hint({}, o)}>
-          {m.mode_state({}, o)}
-        </button>
-        <span id={hint} className={styles.note}>
-          {m.hov_state_hint({}, o)}
-        </span>
+        <fieldset className={styles.colour} aria-label={m.mode_label({}, o)}>
+          <button type="button" aria-pressed={!byState} onClick={() => setByState(false)}>
+            {m.mode_delta({}, o)}
+          </button>{' '}
+          <button type="button" aria-pressed={byState} onClick={() => setByState(true)}>
+            {m.mode_state({}, o)}
+          </button>
+        </fieldset>
         <button type="button" aria-pressed={table} onClick={() => setTable((v) => !v)}>
           {m.hov_table_toggle({}, o)}
         </button>
@@ -263,6 +278,20 @@ export function HovmollerPanel({
         </p>
       )}
       {drawn && <div ref={box} className={styles.chart} role="img" aria-label={m.hov_chart_label({ path: name }, o)} />}
+      {byState && (
+        <ul className={styles.legend} aria-label={m.legend_heading({}, o)}>
+          {[...LADDER.slice(1), ...LADDER.slice(0, 1)].map((state) => (
+            <li key={state}>
+              <span className={styles.swatch} style={{ background: STATE_COLOUR[state] }} aria-hidden="true" />
+              {stateText(LADDER.indexOf(state), locale)}
+            </li>
+          ))}
+          <li>
+            <span className={styles.swatch} style={{ background: REACH_NODATA_COLOUR }} aria-hidden="true" />
+            {m.hov_no_data({}, o)}
+          </li>
+        </ul>
+      )}
       {table && built !== undefined && columns.length > 0 && cells !== undefined && (
         <HovTable
           locale={locale}
@@ -270,6 +299,7 @@ export function HovmollerPanel({
           path={built}
           hours={hours}
           cells={cells}
+          levels={levels}
           t={t}
           selected={selected}
           all={all}

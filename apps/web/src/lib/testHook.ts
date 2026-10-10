@@ -31,6 +31,8 @@ declare global {
           /** ISO UTC of each row hour, ascending. */
           rows: readonly string[];
           cellAt(id: string, iso: string): Cell | undefined;
+          /** The state level (index of the ladder) of a cell; null when Δ is chosen or the cell has none. */
+          levelAt(id: string, iso: string): number | null;
           /** Viewport (client) pixels of the cell centre. */
           pixelOf(id: string, iso: string): [number, number] | undefined;
         }

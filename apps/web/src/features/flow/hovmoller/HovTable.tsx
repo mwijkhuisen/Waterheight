@@ -1,6 +1,7 @@
 import { amsterdam, floorHour, formatShort } from '../../../lib/time/time.ts';
 import { m } from '../../../paraglide/messages.js';
 import type { Locale } from '../../../paraglide/runtime.js';
+import { LADDER } from '../../legend/palette.ts';
 import { OwnerBadge } from '../../owner/OwnerBadge.tsx';
 import type { Cell } from './grid.ts';
 import styles from './hovmoller.module.css';
@@ -26,6 +27,21 @@ export function changeText(cell: Cell | undefined, locale: Locale): string {
   return `${n.replaceAll('-', '−')} ${cell.quantity === 'H' ? 'cm' : 'm³/s'}`;
 }
 
+const stateWord = {
+  no_ref: m.state_no_ref,
+  low: m.state_low,
+  normal: m.state_normal,
+  elevated: m.state_elevated,
+  high: m.state_high,
+  extreme: m.state_extreme,
+} as const;
+
+/** The state word of a ladder level, "no data" for null. */
+export function stateText(level: number | null, locale: Locale): string {
+  const state = level === null ? undefined : LADDER[level];
+  return state === undefined ? m.hov_no_data({}, { locale }) : stateWord[state]({}, { locale });
+}
+
 /** The message of a gap band. */
 export const gapText = (gap: Gap, locale: Locale): string =>
   gap.kind === 'wallonia'
@@ -40,6 +56,8 @@ interface Props {
   hours: readonly number[];
   /** [row][column], rows as `hours`. */
   cells: readonly (readonly Cell[])[];
+  /** State mode: the level per [row][column] replaces the change in the cells. */
+  levels?: readonly (readonly (number | null)[])[] | undefined;
   t: number;
   selected: string | undefined;
   all: boolean;
@@ -48,7 +66,20 @@ interface Props {
   onStation: (id: string) => void;
 }
 
-export function HovTable({ locale, pathName, path, hours, cells, t, selected, all, onAll, onHour, onStation }: Props) {
+export function HovTable({
+  locale,
+  pathName,
+  path,
+  hours,
+  cells,
+  levels,
+  t,
+  selected,
+  all,
+  onAll,
+  onHour,
+  onStation,
+}: Props) {
   const o = { locale };
   const shown = all ? hours.length : Math.min(hours.length, NEWEST_ROWS);
   const rows = Array.from({ length: shown }, (_, k) => hours.length - 1 - k).flatMap((ri) => {
@@ -101,7 +132,11 @@ export function HovTable({ locale, pathName, path, hours, cells, t, selected, al
                 h.kind === 'gap' ? (
                   <td key={`gap-${h.i}`} className={styles.gapCell} />
                 ) : (
-                  <td key={h.column.id}>{changeText(cells[ri]?.[h.i], locale)}</td>
+                  <td key={h.column.id}>
+                    {levels === undefined
+                      ? changeText(cells[ri]?.[h.i], locale)
+                      : stateText(levels[ri]?.[h.i] ?? null, locale)}
+                  </td>
                 ),
               )}
             </tr>
