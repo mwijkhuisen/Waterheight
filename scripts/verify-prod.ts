@@ -1828,10 +1828,14 @@ export function checkStaticSeries(r: ApiRead<StationRecent> | undefined, id: str
   );
 }
 
-/** warnings/latest.geojson (application/geo+json, max-age=60) and yesterday's dated file when it exists (immutable). */
+/**
+ * warnings/latest.geojson (application/geo+json, max-age=60), yesterday's dated file when it exists (immutable) and
+ * today.json (#86: the live class, `day` today; written every cycle, so missing is a FAIL).
+ */
 export function checkStaticWarnings(
   latest: ApiRead<WarningsFile>,
   yesterday: { day: string; page: Page | string } | undefined,
+  today?: { day: string; read: ApiRead<WarningsFile> },
 ): Result {
   const extra: string[] = [];
   let tail = 'no dated file yet';
@@ -1840,6 +1844,12 @@ export function checkStaticWarnings(
     extra.push(...y.problems.map((p) => `${yesterday.day}: ${p}`));
     if (y.data !== undefined && y.data.day !== yesterday.day) extra.push(`${yesterday.day}: day ${y.data.day}`);
     tail = `${yesterday.day} ${STATIC_CACHE.immutable}`;
+  }
+  if (today !== undefined) {
+    extra.push(...today.read.problems.map((p) => `today.json: ${p}`));
+    const day = today.read.data?.day;
+    if (day !== undefined && day !== today.day) extra.push(`today.json: day ${day}, not ${today.day}`);
+    tail += `; today.json ${today.day} ${STATIC_CACHE.live}`;
   }
   return (
     staticMiss('static warnings', latest, extra) ??
@@ -2471,7 +2481,7 @@ export const CHECKS = [
   `static frames: frames/recent.json is 200 with "${STATIC_CACHE.slow}" and the FramesFile contract, and the newest settled day's frames file with "${STATIC_CACHE.immutable}" (none yet for that part is a PASS)`,
   `static forecast: GET /data/v1/forecast/latest.json is 200 with "${STATIC_CACHE.slow}" and the StaticForecastLatest contract`,
   `static series: the first station of stations.json has series/<id>/recent.json, 200 with "${STATIC_CACHE.slow}" and the StationRecent contract`,
-  `static warnings: warnings/latest.geojson is 200 ${GEOJSON} with "${STATIC_CACHE.warnings}" and the WarningsFile contract; yesterday's dated file, when it exists, with "${STATIC_CACHE.immutable}"`,
+  `static warnings: warnings/latest.geojson is 200 ${GEOJSON} with "${STATIC_CACHE.warnings}" and the WarningsFile contract; yesterday's dated file, when it exists, with "${STATIC_CACHE.immutable}"; warnings/today.json is 200 with "${STATIC_CACHE.live}", the contract and today's day`,
   `static status: GET /data/v1/status.json is 200 with "${STATIC_CACHE.status}", the public StatusFile contract (public sources, the two ownerSources counts) and no owner term`,
   'static precompressed: meta.json with Accept-Encoding zstd and with gzip: that Content-Encoding, Vary: Accept-Encoding and a decompressed body equal to the identity body',
   `static lag: health.loader.last_commit minus meta.latestFrom is at most ${STATIC_LAG_MAX_S} s (no loader commit yet is a PASS)`,
@@ -2772,6 +2782,10 @@ async function main(argv: string[]): Promise<number> {
     );
     const yday = dayOf(Date.parse(smeta.data?.now ?? now.toISOString()) - DAY_MS);
     const ydayPage = await fetchStatic(`warnings/${yday}.json`);
+    const today = {
+      day: dayOf(Date.parse(smeta.data?.now ?? now.toISOString())),
+      read: readStatic(await fetchStatic('warnings/today.json'), WarningsFile, STATIC_CACHE.live, undefined, terms),
+    };
     const idPage = await st(`${D}meta.json`);
     const zstdPage = await st(`${D}meta.json`, { 'accept-encoding': 'zstd' });
     const gzipPage = await st(`${D}meta.json`, { 'accept-encoding': 'gzip' });
@@ -2785,7 +2799,7 @@ async function main(argv: string[]): Promise<number> {
       checkStaticFrames(framesRecent, ask, framesSettled),
       checkStaticForecast(sforecast),
       checkStaticSeries(sseries, firstStation),
-      checkStaticWarnings(swarn, { day: yday, page: ydayPage }),
+      checkStaticWarnings(swarn, { day: yday, page: ydayPage }, today),
       checkStaticStatus(sstatus),
       checkStaticPrecompressed(idPage, { zstd: zstdPage, gzip: gzipPage }),
       checkStaticLag(health.data, smeta.data),
