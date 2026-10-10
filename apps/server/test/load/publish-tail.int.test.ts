@@ -158,4 +158,21 @@ describe('migrate publish tail', { timeout: 60_000 }, () => {
     expect(await publishTail(migrator.db, NOW)).toMatchObject({ schema: [], bumped: {} });
     expect((await versions('public')) ?? {}).toEqual(pub);
   });
+
+  it('the schema bump keeps a pending narrowing as narrowed, so its older versions still go at once (review S1)', async () => {
+    const before = (await versions('public')) ?? {};
+    const map = {
+      ...before,
+      '2026-10-01': { v: (before['2026-10-01']?.v ?? 1) + 1, reason: 'narrowed', at: NOW.toISOString() },
+    };
+    await h.t.admin.query("UPDATE app_meta SET value = $1::jsonb WHERE key = 'day_versions:public'", [
+      JSON.stringify(map),
+    ]);
+    await h.t.admin.query("DELETE FROM app_meta WHERE key = 'frames_schema:public'");
+    const tail = await publishTail(migrator.db, NOW);
+    expect(tail.schema).toContain('2026-10-01');
+    const pub = (await versions('public')) ?? {};
+    expect(pub['2026-10-01']).toMatchObject({ v: (map['2026-10-01']?.v ?? 1) + 1, reason: 'narrowed' });
+    expect(pub['2026-09-30']?.reason).toBe('schema');
+  });
 });

@@ -113,6 +113,13 @@ describe('chainRows', () => {
     const u = first(chainRows([node(['nl.rws.x'])], ctx(locale, { stations, values: unknown, played: true })));
     expect([u.state, u.basis, u.section]).toEqual([m.reach_nodata({}, { locale }), null, false]);
     expect(u.state).not.toBe(stateWord('no_ref', locale));
+    // at an equal level a known no_ref beats an unknown one listed first (review round 1, nit 3)
+    const ySeries = stations.get('nl.rws.y')?.series[0]?.id ?? 0;
+    const mixed = new Map([...unknown, [ySeries, value(ySeries, 'no_ref')]]);
+    const both = first(
+      chainRows([node(['nl.rws.x', 'nl.rws.y'])], ctx(locale, { stations, values: mixed, played: true })),
+    );
+    expect(both.state).toBe(stateWord('no_ref', locale));
     // no value for the hour: null, so the list says "no value" as before
     expect(first(chainRows([node(['nl.rws.y'])], c)).state).toBeNull();
     // played false keeps the state word

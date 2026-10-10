@@ -401,9 +401,9 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
           sections: deps.sections,
           cache: deps.cache,
           // The settled days' state codes are kept per day version (#112); without loaded versions nothing is kept.
-          ...(deps.versions === undefined
-            ? {}
-            : { memo: hourMemo, versionOf: (d: string) => deps.versions?.versionOf(d) ?? 1 }),
+          ...(deps.versions?.loaded === true
+            ? { memo: hourMemo, versionOf: (d: string) => deps.versions?.versionOf(d) ?? 1 }
+            : {}),
           yieldEvery: 200,
         }),
     };

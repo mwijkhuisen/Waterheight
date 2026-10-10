@@ -103,7 +103,15 @@ function stateOf(ids: readonly string[], ctx: ChainContext): Pick<StationRow, 's
   for (const id of ids)
     for (const s of ctx.stations.get(id)?.series ?? []) {
       const v = ctx.values.get(s.id);
-      if (v !== undefined && (best === undefined || levelOf(v.state) > levelOf(best.state))) best = v;
+      if (v === undefined) continue;
+      const level = levelOf(v.state);
+      // At an equal level a known state beats an unknown one (a played v1 value: its no_ref is a placeholder).
+      if (
+        best === undefined ||
+        level > levelOf(best.state) ||
+        (level === levelOf(best.state) && best.stateUnknown === true && v.stateUnknown !== true)
+      )
+        best = v;
     }
   if (best === undefined) return none;
   if (played)

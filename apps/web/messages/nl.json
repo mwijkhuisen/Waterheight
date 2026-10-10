@@ -382,6 +382,8 @@
   "reach_impounded": "gestuwd",
   "hov_toggle": "Langs de rivier",
   "hov_region": "Langs de rivier: verandering per meetpunt en per uur",
+  "hov_colour": "Kleur",
+  "hov_delta": "Δ 24 u",
   "hov_path_label": "Traject",
   "hov_path_rhine_waal": "Rijn – Waal",
   "hov_path_rhine_lek": "Rijn – Nederrijn – Lek",

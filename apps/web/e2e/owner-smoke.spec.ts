@@ -124,11 +124,9 @@ test('the owner site: hourly playback reads the owner frames api only, its answe
   const vlast = body.vlast ?? [];
   const state = body.state ?? [];
   expect(state.length, 'one state row per series').toBe(vlast.length);
-  vlast.forEach((row, i) =>
-    row.forEach((v, h) =>
-      expect(state[i]?.[h] === null, `a code exactly where a value is (${i}, ${h})`).toBe(v === null),
-    ),
-  );
+  for (const [i, row] of vlast.entries())
+    for (const [h, v] of row.entries())
+      expect(state[i]?.[h] === null, `a code exactly where a value is (${i}, ${h})`).toBe(v === null);
   // The engine plays to the end of the page's range and stops by itself: t has moved and the Play button is back. The
   // end is the last whole hour of meta.now (the publisher's clock, which may trail this one past an hour boundary), so
   // t is within an hour of this clock's hour, or gone when that hour is the page's now (live).

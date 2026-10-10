@@ -75,7 +75,10 @@ export function dirtyEntriesOf(
   return entries;
 }
 
-/** Raises the version of each day by one (an absent day is version 1), in the caller's transaction. */
+/**
+ * Raises the version of each day by one (an absent day is version 1), in the caller's transaction. A `schema` bump
+ * keeps a `narrowed` reason (#112 review S1): the versions before a narrowing must still go at once.
+ */
 export async function bumpDays(
   tx: Tx,
   family: ChannelAudience,
@@ -86,7 +89,12 @@ export async function bumpDays(
   const list = [...new Set(days)];
   if (list.length === 0) return;
   const map = (await readMeta<Record<string, DayVersion>>(tx, versionKey(family))) ?? {};
-  for (const d of list) map[d] = { v: (map[d]?.v ?? 1) + 1, reason, at: now.toISOString() };
+  for (const d of list)
+    map[d] = {
+      v: (map[d]?.v ?? 1) + 1,
+      reason: reason === 'schema' && map[d]?.reason === 'narrowed' ? 'narrowed' : reason,
+      at: now.toISOString(),
+    };
   await writeMeta(tx, versionKey(family), map);
 }
 

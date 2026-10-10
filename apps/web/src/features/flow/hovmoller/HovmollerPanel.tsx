@@ -251,9 +251,9 @@ export function HovmollerPanel({
             ))}
           </select>
         </label>
-        <fieldset className={styles.colour} aria-label={m.mode_label({}, o)}>
+        <fieldset className={styles.colour} aria-label={m.hov_colour({}, o)}>
           <button type="button" aria-pressed={!byState} onClick={() => setByState(false)}>
-            {m.mode_delta({}, o)}
+            {m.hov_delta({}, o)}
           </button>{' '}
           <button type="button" aria-pressed={byState} onClick={() => setByState(true)}>
             {m.mode_state({}, o)}

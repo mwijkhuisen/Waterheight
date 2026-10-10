@@ -498,6 +498,10 @@ export async function expectHovLayout(page: Page, where: string, bars: readonly 
     page.locator('.maplibregl-ctrl-attrib-button'),
   ];
   for (const view of ['chart', 'table'] as const) {
+    // The view switches with the bar collapsed: the expanded bar of a 560 px window lifts the panel's head under the
+    // map's control row (KG-297), which would take the click.
+    const more = timebarOf(page).getByRole('button', { name: msg('nl', 'timebar_more'), exact: true });
+    if ((await more.getAttribute('aria-expanded')) === 'true') await more.click();
     if ((view === 'table') !== ((await hovTableToggle(page).getAttribute('aria-pressed')) === 'true'))
       await hovTableToggle(page).click();
     const area = view === 'chart' ? region.getByRole('img') : region.getByRole('table').locator('xpath=..');

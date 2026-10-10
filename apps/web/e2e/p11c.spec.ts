@@ -623,7 +623,7 @@ test('choosing State colours the cells by state (a level per valued cell), Δ ag
   await expect.poll(async () => (await levelsAt()).some((l) => l !== null)).toBe(true);
   for (const l of await levelsAt()) expect(l === null || (Number.isInteger(l) && l >= 0 && l <= 5)).toBe(true);
   await regionOf(page)
-    .getByRole('button', { name: nl('mode_delta'), exact: true })
+    .getByRole('button', { name: nl('hov_delta'), exact: true })
     .click();
   await expect.poll(async () => (await levelsAt()).every((l) => l === null)).toBe(true);
   await finish(page, s);
@@ -662,7 +662,7 @@ test('the keyboard: toggle, path, table, a row, a column and close, in order, an
   await ready(page, 'rhine-lek');
   await expect(pathSelect(page)).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(regionOf(page).getByRole('button', { name: nl('mode_delta'), exact: true })).toBeFocused();
+  await expect(regionOf(page).getByRole('button', { name: nl('hov_delta'), exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(regionOf(page).getByRole('button', { name: nl('mode_state'), exact: true })).toBeFocused();
   await page.keyboard.press('Tab');

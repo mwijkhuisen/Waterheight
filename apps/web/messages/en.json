@@ -382,6 +382,8 @@
   "reach_impounded": "impounded",
   "hov_toggle": "Along the river",
   "hov_region": "Along the river: change per station and per hour",
+  "hov_colour": "Colour",
+  "hov_delta": "Δ 24 h",
   "hov_path_label": "Path",
   "hov_path_rhine_waal": "Rhine – Waal",
   "hov_path_rhine_lek": "Rhine – Nederrijn – Lek",

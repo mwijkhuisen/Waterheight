@@ -443,7 +443,7 @@ test('URL: the speed select writes play=; the live view carries no play key', as
 
 // ---------------------------------------------------------------- D-1: the State mode
 
-test('D-1: the State mode plays (forward and reverse); a switch to it keeps playing; the played state shows', async ({
+test('D-1: the State mode plays (forward and reverse); a switch to it keeps playing; a paused hour steps', async ({
   page,
   context,
   baseURL,
@@ -461,8 +461,29 @@ test('D-1: the State mode plays (forward and reverse); a switch to it keeps play
   await expect(pause(page)).toBeVisible();
   const t0 = param(page, 't');
   await expect.poll(() => param(page, 't')).not.toBe(t0);
+  // Pause, then the paused hour steps in the State mode.
+  await pause(page).click();
+  await paused(page);
+  const before = param(page, 't');
+  await page.getByRole('button', { name: nl('step_forward'), exact: true }).click();
+  await expect.poll(() => param(page, 't')).not.toBe(before);
+  await finish(page, s);
+});
+
+test('D-1: played in the State mode, the marker and the table show the hour state, never its basis', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  // Held on its first hour, so the played hour stays on screen while it is asserted.
+  await playHold(page);
+  await open(page, deep(MID, 'state'));
+  await mapReady(page);
+  await play(page).click();
+  await expect(pause(page)).toBeVisible();
   // The hostile station's NL-4 class makes any value of 100-1000 cm "elevated": its marker has level 3 while played,
-  // its table cell says so, and its basis label (the payload's text) appears nowhere.
+  // its table cell says so beside the played note, and its basis label (the payload's text) appears nowhere.
   await expect.poll(() => featureState(page, XSS_ID)).toMatchObject({ has: true, level: 3 });
   await chooseView(page, 'table');
   const row = page.getByRole('row').filter({ hasText: XSS });
@@ -470,13 +491,6 @@ test('D-1: the State mode plays (forward and reverse); a switch to it keeps play
   await expect(row).toContainText(nl('state_elevated'));
   await expect(row).toContainText(nl('played_note'));
   await expect(page.locator('body')).not.toContainText('onerror=alert(3)');
-  // (the fixture's reaches are checked by B1 and the colour tests; this test asserts the marker and the table)
-  // Pause, then the paused hour steps in the State mode.
-  await pause(page).click();
-  await paused(page);
-  const before = param(page, 't');
-  await page.getByRole('button', { name: nl('step_forward'), exact: true }).click();
-  await expect.poll(() => param(page, 't')).not.toBe(before);
   await finish(page, s);
 });
 
