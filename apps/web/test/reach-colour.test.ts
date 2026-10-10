@@ -35,7 +35,7 @@ const reach = (id: string): FeatureSpan => {
 const ev = (v: number, ageS = 0, limitS = 3600): EndValue => ({ v, ageS, limitS });
 const ids = (from: string, a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => `${from}.${a + i}`);
 
-const TIDAL = [...ids('scheldt', 9, 13), ...ids('ems', 23, 33), ...ids('lek', 4, 6), 'meuse.56'];
+const TIDAL = [...ids('scheldt', 9, 13), ...ids('ems', 24, 34), ...ids('lek', 4, 6), 'meuse.56'];
 const MODES = ['state', 'delta', 'q'] as const;
 const colourOf = (p: ReachPaint) => (p.k === 'v' ? p.colour : p.k);
 
@@ -347,8 +347,8 @@ describe('binPaints (#112)', () => {
   });
 
   describe('with the travel-time shift', () => {
-    // rhine.56: Emmerich to Lobith, T = 5 h, bins at pos (i + 0.5) / 8, so k = round(5 pos) = 0 1 2 2 3 3 4 5
-    const rhine = new Map([['rhine.56', reach('rhine.56')]]);
+    // rhine.59: Emmerich to Lobith, T = 5 h, bins at pos (i + 0.5) / 8, so k = round(5 pos) = 0 1 2 2 3 3 4 5
+    const rhine = new Map([['rhine.59', reach('rhine.59')]]);
     const emmerich = station('de.wsv.2790020');
     const lobith = station('nl.rws.lobith.bovenrijn.tolkamer');
     const sb = new Map([emmerich, lobith].map((s) => [s.id, s]));
@@ -385,7 +385,7 @@ describe('binPaints (#112)', () => {
       expect(paints[0]).toEqual(plain[0]);
       expect(paints[7]?.[1]).not.toEqual(plain[7]?.[1]);
       // and it is the past value: the past has an up end only, so the down end (read at t) is `now`'s Lobith
-      const bin7 = { ...reach('rhine.56'), span: reach('rhine.56').bins[7] ?? null };
+      const bin7 = { ...reach('rhine.59'), span: reach('rhine.59').bins[7] ?? null };
       expect(paints[7]?.[1]).toEqual(reachColour(bin7, [ev(60), ev(0)], 'delta'));
     });
 
