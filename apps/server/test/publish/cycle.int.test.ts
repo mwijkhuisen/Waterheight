@@ -202,6 +202,18 @@ describe('publish cycle', { timeout: 120_000 }, () => {
     walk(dir);
   });
 
+  it('at midnight UTC today.json moves to the new day and the ended day gets its dated file, across a restart', async () => {
+    // #86: publishOnce is a new process each time, so its start lists warnings/ again (today.json is no dated name).
+    const db = h.dbAs('rws_publish');
+    const eve = Date.parse('2026-10-04T23:59:00Z');
+    await publishOnce(db.db, 'public', dir, { now: eve, render: fake() });
+    expect(read('warnings/today.json').day).toBe('2026-10-04');
+    expect(ls('v1/warnings')).not.toContain('2026-10-04.json');
+    await publishOnce(db.db, 'public', dir, { now: eve + 2 * 60_000, render: fake() });
+    expect(read('warnings/today.json').day).toBe('2026-10-05');
+    expect(read('warnings/2026-10-04.json').day).toBe('2026-10-04');
+  });
+
   it('renders a bumped day under its new version, keeps the old one 1 h, then prunes it', async () => {
     const db = h.dbAs('rws_publish');
     await publishOnce(db.db, 'public', dir, { now: NOW, render: fake() });
