@@ -55,11 +55,10 @@ describe('splitReaches on the fixture release', () => {
     expect(ReachesFile.safeParse(split.file).success).toBe(false);
   });
 
-  it('places the BE-3 gauges: about 87 points (15 of them on the Vesdre and the Amblève, #110 PR 2), one skipped as ambiguous (the Lys, whose headwaters restart at km 0)', () => {
+  it('places the BE-3 gauges: 87 points (72, plus 15 on the Vesdre and the Amblève, #110 PR 2), one skipped as ambiguous (the Lys, whose headwaters restart at km 0)', () => {
     const be3Split = splitReaches(release, be3, rivernet);
     const added = be3Split.file.stations.length - release.stations.length;
-    expect(added).toBeGreaterThanOrEqual(80);
-    expect(added).toBeLessThanOrEqual(90);
+    expect(added).toBe(87);
     expect(be3Split.skipped).toEqual([{ id: 'be.spw.3884', code: 'owner_reach_ambiguous' }]);
     // Only the owner stations the file did not have are added; the public ones are all still there.
     const have = new Set(be3Split.file.stations.map((s) => s.id));

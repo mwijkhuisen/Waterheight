@@ -37,17 +37,17 @@ The whole world at z0–2: the tests' stand-in for the production `planet-z6-<bu
 
 ## `rivers-fixture.pmtiles` (P11a)
 
-The river tiles of the committed fixture graph below, for the web and compose end-to-end tests of the flow direction and the upstream chain (issue #26). It is the `rivers-20261001.pmtiles` of the `geo-fixture-outputs` artifact, committed unchanged. The same artifact's `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` (built locally by `test/reaches-fixture.test.ts` from these fixtures) in every field but `version` and `travel_times` (the run predates the Basel pair fix of #110; the tiles hold no travel time), so the tiles' `reach_id`s are the fixture reaches file's. Replaced for #110 (the Ourthe join splits the Meuse reach at Liège: Meuse `seq` from there on is one higher).
+The river tiles of the committed fixture graph below, for the web and compose end-to-end tests of the flow direction and the upstream chain (issue #26). It is the `rivers-20261001.pmtiles` of the `geo-fixture-outputs` artifact, committed unchanged. The same artifact's `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` (built locally by `test/reaches-fixture.test.ts` from these fixtures) in every field but `version`, so the tiles' `reach_id`s are the fixture reaches file's. Replaced twice for #110: PR 1 (the Ourthe join splits the Meuse reach at Liège: Meuse `seq` from there on is one higher) and PR 2 (the refreshed fixture, OSM 2026-10-09, with the Vesdre and the Amblève; the Ourthe cut at their confluences).
 
 Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright).
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38006225186 (`workflow_dispatch` on `claude/fix-110-vesdre-ambleve`, OSM data of 2026-10-09T20:21:04Z; #110 PR 2, which added the Vesdre and the Amblève). Earlier: run 37071962474 (`claude/p6a-graph-pipeline`, 2026-10-02, OSM 2026-10-01), the first committed fixture from run 37064062453. The distances quoted in the `reason`s of `registry/snap-overrides.yaml` were measured on the earlier fixture |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38009696220 (`pull_request` #115 at `a60561f`, 2026-10-10), job `rivernet fixture` |
 | Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build`), layer `rivers`, z0–12 |
-| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.589838,11.397685,53.443230, 2,827 tiles; one feature per drawn reach (710 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation` |
-| Bytes | 1,626,809 |
-| sha256 | `2b4d4b40214e3639a56c72814fb5e05b58995f723490741f2bf5582eb65f748a` |
+| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.589838,11.397685,53.443230, 2,860 tiles; one feature per drawn reach (714 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation` |
+| Bytes | 1,653,660 |
+| sha256 | `a5cfa5d1e051dcae909264128539b5a0c647d85c949e0b16410b2f85324a2cd3` |
 
 A refresh of the fixture graph replaces it with the next run's artifact and regenerates `test/fixtures/reaches-fixture.json` (`UPDATE_FIXTURE=1`); compare the two reaches files first.
 
@@ -89,7 +89,7 @@ Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/37071962474 (`workflow_dispatch` on `claude/p6a-graph-pipeline`, 2026-10-02, after review round 1 pinned the Prüm; the first committed fixture came from run 37064062453) |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38006225186 (`workflow_dispatch` on `claude/fix-110-vesdre-ambleve`, 2026-10-09; #110 PR 2, which added the Vesdre and the Amblève). Earlier: run 37071962474 (`claude/p6a-graph-pipeline`, 2026-10-02, OSM 2026-10-01, after review round 1 pinned the Prüm), and the first committed fixture came from run 37064062453. The distances in the `reason`s of `registry/snap-overrides.yaml` were measured on the 2026-10-01 fixture, except the two #110 `waters` rows (Vesdre, Amblève), measured on this one |
 | Extracts | the 16 Geofabrik regions of `registry/geo-sources.yaml`, with replication timestamps up to 2026-10-09T20:21:04Z; md5, sha256 and bytes per region in `rivernet.provenance.json` |
 | Made | osmium-tool 1.19.1 in the tool image (`tools/geo/Dockerfile`), `tools/geo/rivernet/extract.sh` |
 | `rivernet.osm.pbf` | 2,073,740 bytes, sha256 `97e5eaa065e0eb36dfcaa9b196ac330358e43c1561dbcf73e12d2581d9a40e10` |
