@@ -12,7 +12,8 @@
 #                arms    when 5xx / requests > 2 % over the last 5 min with at least 200 requests,
 #                disarms when that share has been < 0.5 % (or there were no requests) for 10 minutes in a row.
 #              The 503 answers that carry `X-Brownout` (the brownout's own refusals) are left out of both numbers,
-#              so a brownout never keeps itself armed. Only counts reach the journal, one line per transition.
+#              so a brownout never keeps itself armed, and so is every 4xx: an abuser's 429s must not dilute a real
+#              failure share (review CR-3). Only counts reach the journal, one line per transition.
 # Paths and the clock move for the offline test (deploy/tests/rws-brownout.test.sh): RWS_BROWNOUT_DIR,
 # RWS_BROWNOUT_LOG, RWS_BROWNOUT_STATE, RWS_NOW (epoch seconds), RWS_STATE_DIR, RWS_LOCK_DIR.
 set -euo pipefail
@@ -24,7 +25,8 @@ readonly DIR=${RWS_BROWNOUT_DIR:-$RWS_SRV/brownout}
 readonly LOG=${RWS_BROWNOUT_LOG:-/var/lib/docker/volumes/rws_caddy_data/_data/access/access.log}
 readonly STATE=${RWS_BROWNOUT_STATE:-$RWS_STATE_DIR/brownout}
 readonly BUCKET=15 WINDOW=300 CALM_FOR=600 MIN_REQUESTS=200
-readonly MAX_READ=4194304 # ponytail: sampled tail beyond 4 MiB per run (~20k req/s); the share stays representative
+readonly MAX_READ=4194304 # ponytail: the newest 4 MiB per run; a log line is ~1 KB, so above ~270 r/s of ALL traffic
+# (static included) each 15 s run reads a sample of its bucket: the share stays representative, the counts shrink (KG-307)
 
 usage() {
   echo "usage: rws-brownout on|off|auto|status|evaluate" >&2
@@ -82,7 +84,8 @@ window_sums() {
 ingest() {
   local inode size off=0 saved_inode='' saved_off chunk complete len
   [[ -f $LOG && ! -L $LOG ]] || return 0
-  read -r inode size < <(stat -c '%i %s' -- "$LOG")
+  # Bounded: the log sits in a volume Caddy writes, so a swapped file must not hang this root timer (review SR-7).
+  read -r inode size < <(timeout 5 stat -c '%i %s' -- "$LOG") || return 0
   if [[ -f $STATE/pos ]] && read -r saved_inode saved_off <"$STATE/pos" &&
     [[ $saved_inode =~ ^[0-9]+$ && $saved_off =~ ^[0-9]+$ ]]; then
     if [[ $saved_inode == "$inode" && $saved_off -le $size ]]; then off=$saved_off; else off=0; fi
@@ -93,7 +96,7 @@ ingest() {
   len=$((size - off))
   if ((len > 0)); then
     chunk=$(
-      tail -c +$((off + 1)) -- "$LOG" | head -c "$len"
+      timeout 10 tail -c +$((off + 1)) -- "$LOG" | head -c "$len"
       printf x
     )
     chunk=${chunk%x}
@@ -105,6 +108,7 @@ ingest() {
           | select(((.request.uri? // "") | type == "string") and ((.request.uri? // "") | startswith("/api/v1/")))
           | select((.ts | type) == "number" and (.status | type) == "number")
           | select(((.status == 503) and (((.resp_headers? | objects) // {}) | keys | map(ascii_downcase) | index("x-brownout") != null)) | not)
+          | select(.status < 400 or .status >= 500)
           | [((.ts / $bk | floor) * $bk), (if .status >= 500 and .status <= 599 then 1 else 0 end)] ]
         | group_by(.[0])[] | "\(.[0][0]) \(length) \(map(.[1]) | add)"' >>"$STATE/buckets"
       off=$((off + ${#complete}))

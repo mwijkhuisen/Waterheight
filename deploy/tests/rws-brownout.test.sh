@@ -101,6 +101,15 @@ setup
 ticks 0 19 50 50 0 # plain 5xx without the header
 expect_active "5xx without the header"
 
+case_ "4xx (an abuser's 429s) never dilute the share (review CR-3)"
+setup
+for k in $(seq 0 19); do
+  awk -v ts=$((T0 + k * 15)) 'BEGIN { for (i = 0; i < 2000; i++) printf "{\"ts\":%.3f,\"status\":429,\"request\":{\"uri\":\"/api/v1/frames?i=%d\"}}\n", ts + 1, i }' >>"$LOG"
+  tick "$k" 96 4 0 # 4 % 5xx among the answered requests, under 2000 refusals a bucket
+done
+expect_active "a real 4 % share under a flood of 429s"
+has $((T0 + 20 * 15 - 1)) 'window 5 min: requests=2000 5xx=80 '
+
 case_ "hysteresis: stays armed between 0.5 % and 2 %, disarms after 10 minutes in a row under 0.5 %"
 setup
 ticks 0 19 100 0 0

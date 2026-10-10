@@ -138,7 +138,8 @@ jobs:
   # images of the latest release manifest (public GHCR packages, pulled anonymously, by digest),
   # not a fresh build, so it costs no build and is exactly what the VPS runs. It is not part of
   # the aggregate `security` check (a new advisory must never block an unrelated PR); a red run
-  # is the signal: bump the pin, or the owner decides (docs/risk-register.md). No ignore entries.
+  # is the signal: bump the pin, or the owner decides (docs/risk-register.md). The only ignore entries are the
+  # owner-approved, expiring rules of .grype.yaml (R-095, until 2026-11-10; test/grype-ignore.test.ts).
   grype-weekly:
     name: grype-weekly
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

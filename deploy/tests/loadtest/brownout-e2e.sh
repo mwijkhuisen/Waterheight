@@ -16,6 +16,11 @@ repo=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)
 # shellcheck source=deploy/bin/rws-lib.sh
 . "$repo/deploy/bin/rws-lib.sh"
 umask 022
+# CI only: it installs units and stops the api, so it refuses anything but the load-test stack's marker (review SR-13).
+if ! [[ -f /ci/e2e-stack ]] || ! jq -e '.mode == "loadtest" and .domain == "rivierstanden.example"' /ci/e2e-stack >/dev/null; then
+  echo "brownout-e2e: refused: not the CI load-test stack (/ci/e2e-stack)" >&2
+  exit 78
+fi
 # shellcheck source=/dev/null
 . /ci/loadtest.env
 flag=/srv/rws/brownout
