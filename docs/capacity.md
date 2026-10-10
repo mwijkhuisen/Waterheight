@@ -5,19 +5,19 @@ Two parts. The year-1 disk and bucket projection is written by `scripts/verify-p
 <!-- egress:begin -->
 ## Egress budget (P12a, issue #27; decision D20)
 
-Generated from `docs/capacity-egress.json` by `node scripts/lib/capacity-egress.ts`; edit the JSON and re-run it, not this block (`scripts/verify-prod.sh --capacity` keeps it). **The profile is provisional** (a local estimate; the first CI run of `egress.spec.ts` replaces it).
+Generated from `docs/capacity-egress.json` by `node scripts/lib/capacity-egress.ts`; edit the JSON and re-run it, not this block (`scripts/verify-prod.sh --capacity` keeps it).
 
-Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback), measured by `apps/web/e2e/egress.spec.ts` as bytes on the wire (headers and body, compressed, as transferred), at 2026-10-10T19:08:13.974Z. Compose stack: the tiles are a Lobith fixture and the data a synthetic seed, so this is a regression guard, not a production forecast of the bytes.
+Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback), measured by `apps/web/e2e/egress.spec.ts` as bytes on the wire (headers and body, compressed, as transferred), at 2026-10-10T20:14:11.902Z. Compose stack: the tiles are a Lobith fixture and the data a synthetic seed, so this is a regression guard, not a production forecast of the bytes.
 
 | Class | Requests | Bytes (MB) |
 |---|---:|---:|
-| tiles | 30 | 1.95 |
-| assets | 54 | 0.98 |
-| data | 9 | 0.11 |
-| api | 13 | 0.02 |
+| tiles | 43 | 2.92 |
+| assets | 53 | 1.12 |
+| data | 14 | 0.43 |
+| api | 4 | 0.00 |
 | html | 1 | 0.00 |
 | other | 1 | 0.00 |
-| **Session** | 108 | **3.06** |
+| **Session** | 116 | **4.47** |
 
 CI fails when the total or a class grows by more than 20% over the baseline (`EGRESS_UPDATE=1` rewrites it; the change is reviewed like any other). A cold cache is the worst case: a returning visitor re-fetches no hashed asset.
 
@@ -37,8 +37,8 @@ CI fails when the total or a class grows by more than 20% over the baseline (`EG
 
 | Item | Value | Against the plan |
 |---|---:|---|
-| Flood-day peak egress | 272.1 Mbit/s | **OWNER: fill in `inputs` of `docs/capacity-egress.json` (A3)** |
-| Worst month | 2.48 TB (810,000 sessions) | **OWNER: fill in `inputs` of `docs/capacity-egress.json` (A3)** |
+| Flood-day peak egress | 397.6 Mbit/s | **OWNER: fill in `inputs` of `docs/capacity-egress.json` (A3)** |
+| Worst month | 3.62 TB (810,000 sessions) | **OWNER: fill in `inputs` of `docs/capacity-egress.json` (A3)** |
 
 Verdict: not decided until the owner fills in A3.
 
