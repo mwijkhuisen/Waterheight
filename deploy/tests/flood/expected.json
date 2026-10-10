@@ -1,0 +1,932 @@
+{
+  "$comment": "The levels the flood drill (scripts/flood-drill.ts) must reach in latest.json and warnings/latest.geojson (issue #27). Generated once from the real adapters and checked by test/flood-expected.test.ts against classify(), the crosswalk, the P7 goldens and the shifted fixtures; read by deploy/tests/e2e/flood-check.mjs. Levels are the numbers of LEVEL_NORM (0 no_ref, 1 low, 2 normal, 3 elevated, 4 high, 5 extreme).",
+  "version": 1,
+  "levels": {
+    "no_ref": 0,
+    "low": 1,
+    "normal": 2,
+    "elevated": 3,
+    "high": 4,
+    "extreme": 5
+  },
+  "scales": {
+    "DE-6 station": {
+      "0": "normal",
+      "1": "elevated",
+      "2": "high",
+      "3": "extreme",
+      "4": "extreme",
+      "-1": "no_ref",
+      "none": "no_ref"
+    },
+    "DE-6 alert": {
+      "1": "normal",
+      "2": "elevated",
+      "4": "high",
+      "5": "extreme",
+      "6": "extreme"
+    },
+    "FR-5 section": {
+      "1": "normal",
+      "2": "elevated",
+      "3": "high",
+      "4": "extreme"
+    },
+    "LU-5 zone": {
+      "ALERT_LVL_4": "normal",
+      "ALERT_LVL_3": "elevated",
+      "ALERT_LVL_2": "high",
+      "ALERT_LVL_1": "extreme"
+    }
+  },
+  "stations": [
+    {
+      "id": "de.wsv.25700100",
+      "name": "Kaub",
+      "source": "DE-6",
+      "scale": "station",
+      "raw": "RP:4",
+      "state": "extreme",
+      "section": false,
+      "fixture": "de-6-stations-class4.synthetic"
+    },
+    {
+      "id": "de.wsv.25800100",
+      "name": "Giessen-Klaerwerk",
+      "source": "DE-6",
+      "scale": "station",
+      "raw": "HE:1",
+      "state": "elevated",
+      "section": false,
+      "fixture": "de-6-stations-test"
+    },
+    {
+      "id": "de.lanuk.3331000000100",
+      "name": "Greven",
+      "source": "DE-6",
+      "scale": "station",
+      "raw": "NW:1",
+      "state": "elevated",
+      "section": false,
+      "fixture": "de-6-stations-test"
+    },
+    {
+      "id": "fr.sandre.A800621001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "2",
+      "state": "elevated",
+      "section": true,
+      "area": "LO13",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A802101001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "2",
+      "state": "elevated",
+      "section": true,
+      "area": "LO13",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A807101001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "2",
+      "state": "elevated",
+      "section": true,
+      "area": "LO13",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A701061001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "3",
+      "state": "high",
+      "section": true,
+      "area": "LO10",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A712201001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "3",
+      "state": "high",
+      "section": true,
+      "area": "LO10",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A735201001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "3",
+      "state": "high",
+      "section": true,
+      "area": "LO10",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A402061001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "3",
+      "state": "high",
+      "section": true,
+      "area": "LO24",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A405062001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "3",
+      "state": "high",
+      "section": true,
+      "area": "LO24",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A414020201",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "3",
+      "state": "high",
+      "section": true,
+      "area": "LO24",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.B400101001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "4",
+      "state": "extreme",
+      "section": true,
+      "area": "LO19",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.B400101101",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "4",
+      "state": "extreme",
+      "section": true,
+      "area": "LO19",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.B402101001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "4",
+      "state": "extreme",
+      "section": true,
+      "area": "LO19",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A302009050",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "2",
+      "state": "elevated",
+      "section": true,
+      "area": "SA16",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A361011001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "2",
+      "state": "elevated",
+      "section": true,
+      "area": "SA16",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "fr.sandre.A368021001",
+      "source": "FR-5",
+      "scale": "section",
+      "raw": "2",
+      "state": "elevated",
+      "section": true,
+      "area": "SA16",
+      "fixture": "fr-5-vigilance-level4.synthetic"
+    },
+    {
+      "id": "lu.age.bissen",
+      "source": "LU-5",
+      "scale": "zone",
+      "raw": "ALERT_LVL_1",
+      "state": "extreme",
+      "section": true,
+      "area": "Sud du Luxembourg",
+      "fixture": "lu-5-cap-20250908-231502-alert-lvl1"
+    },
+    {
+      "id": "lu.age.mersch",
+      "source": "LU-5",
+      "scale": "zone",
+      "raw": "ALERT_LVL_1",
+      "state": "extreme",
+      "section": true,
+      "area": "Sud du Luxembourg",
+      "fixture": "lu-5-cap-20250908-231502-alert-lvl1"
+    },
+    {
+      "id": "lu.age.remich",
+      "source": "LU-5",
+      "scale": "zone",
+      "raw": "ALERT_LVL_1",
+      "state": "extreme",
+      "section": true,
+      "area": "Sud du Luxembourg",
+      "fixture": "lu-5-cap-20250908-231502-alert-lvl1"
+    },
+    {
+      "id": "lu.age.clervaux",
+      "source": "LU-5",
+      "scale": "zone",
+      "raw": "ALERT_LVL_2",
+      "state": "high",
+      "section": true,
+      "area": "Nord du Luxembourg",
+      "fixture": "lu-5-cap-20250908-231507-alert-lvl2",
+      "closedBy": "lu-5-cap-20250909-080450-cancel"
+    },
+    {
+      "id": "lu.age.wiltz",
+      "source": "LU-5",
+      "scale": "zone",
+      "raw": "ALERT_LVL_2",
+      "state": "high",
+      "section": true,
+      "area": "Nord du Luxembourg",
+      "fixture": "lu-5-cap-20250908-231507-alert-lvl2",
+      "closedBy": "lu-5-cap-20250909-080450-cancel"
+    },
+    {
+      "id": "lu.age.vianden",
+      "source": "LU-5",
+      "scale": "zone",
+      "raw": "ALERT_LVL_2",
+      "state": "high",
+      "section": true,
+      "area": "Nord du Luxembourg",
+      "fixture": "lu-5-cap-20250908-231507-alert-lvl2",
+      "closedBy": "lu-5-cap-20250909-080450-cancel"
+    }
+  ],
+  "noGaugeClass": [
+    {
+      "id": "de.lanuk.2721330000100",
+      "raw": "NW:none",
+      "fixture": "de-6-stations-classless.synthetic"
+    },
+    {
+      "id": "de.lanuk.2721390000100",
+      "raw": "NW:none",
+      "fixture": "de-6-stations-classless.synthetic"
+    },
+    {
+      "id": "de.lanuk.2721459000100",
+      "raw": "NW:-1",
+      "fixture": "de-6-stations-classless.synthetic"
+    }
+  ],
+  "areas": [
+    {
+      "source": "DE-6",
+      "area": "BB_18",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "BB_39_L",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_672",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_571",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_577",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_780",
+      "levelRaw": "2",
+      "level": 3
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_773",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_190",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_474",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_374",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_376",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "BY_185",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "HE_104",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "HE_HE_15",
+      "levelRaw": "5",
+      "level": 5
+    },
+    {
+      "source": "DE-6",
+      "area": "HE_HE_16",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "HE_205",
+      "levelRaw": "5",
+      "level": 5
+    },
+    {
+      "source": "DE-6",
+      "area": "HE_206",
+      "levelRaw": "5",
+      "level": 5
+    },
+    {
+      "source": "DE-6",
+      "area": "HE_208",
+      "levelRaw": "5",
+      "level": 5
+    },
+    {
+      "source": "DE-6",
+      "area": "HE_102",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "RP_103",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "RP_101",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "RP_105",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "RP_106",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "RP_29",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "RP_401",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "RP_501",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "SN_MU_01",
+      "levelRaw": "5",
+      "level": 5
+    },
+    {
+      "source": "DE-6",
+      "area": "SN_NO_04",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_04",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_02",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_13",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_10",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_01",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_03",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_07",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_09",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_12",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_11",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_05",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "DE-6",
+      "area": "TH_06",
+      "levelRaw": "4",
+      "level": 4
+    },
+    {
+      "source": "FR-5",
+      "area": "LO12",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO13",
+      "levelRaw": "2",
+      "level": 3
+    },
+    {
+      "source": "FR-5",
+      "area": "LO14",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO10",
+      "levelRaw": "3",
+      "level": 4
+    },
+    {
+      "source": "FR-5",
+      "area": "LO22",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO23",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO24",
+      "levelRaw": "3",
+      "level": 4
+    },
+    {
+      "source": "FR-5",
+      "area": "LO25",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO20",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO21",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO19",
+      "levelRaw": "4",
+      "level": 5
+    },
+    {
+      "source": "FR-5",
+      "area": "LO15",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO16",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO17",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO18",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO26",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP2",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP3",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP4",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP5",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP1",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA12",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA13",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA14",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA15",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA10",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA10",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA11",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA11",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA16",
+      "levelRaw": "2",
+      "level": 3
+    },
+    {
+      "source": "FR-5",
+      "area": "AP6",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA12",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP7",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA13",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA14",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA15",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP15",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP16",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP12",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP13",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "AP14",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA5",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA6",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA7",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA1",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "OA9",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "LO4",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA1",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA2",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA3",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA4",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA9",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA5",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA6",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA7",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "FR-5",
+      "area": "SA8",
+      "levelRaw": "1",
+      "level": 2
+    },
+    {
+      "source": "LU-5",
+      "area": "Sud du Luxembourg",
+      "levelRaw": "ALERT_LVL_1",
+      "level": 5
+    },
+    {
+      "source": "LU-5",
+      "area": "Nord du Luxembourg",
+      "levelRaw": "ALERT_LVL_2",
+      "level": 4,
+      "closedBy": "lu-5-cap-20250909-080450-cancel"
+    }
+  ],
+  "minimums": {
+    "sectionStations": {
+      "extreme": 3,
+      "high": 3,
+      "elevated": 3
+    },
+    "de6GaugeClassStations": 100
+  },
+  "absent": {
+    "source": "LU-5",
+    "fixture": "lu-5-cap-20260202-095833-alert-test",
+    "textPrefix": "TEST"
+  },
+  "forecast": {
+    "station": "ch.bafu.2020",
+    "series": "Q",
+    "source": "CH-4",
+    "agency": "BAFU",
+    "fixture": "ch-4-forecast-ciaran-it",
+    "kind": "ensemble_summary",
+    "stepSeconds": 3600,
+    "bandKind": "p25p75",
+    "medianPeak": 476.4,
+    "vmaxPeak": 800.3,
+    "firstThreshold": 700,
+    "runStartBeforeFetchSeconds": 30797
+  },
+  "owner": {
+    "station": "de.wsv.25700100",
+    "source": "DE-2",
+    "agency": "BfG",
+    "fixture": "de-2-wv-truncated.synthetic",
+    "points": 13,
+    "valueMin": 530,
+    "valueMax": 549,
+    "canary": ["777777.777", "777777.75"]
+  }
+}
