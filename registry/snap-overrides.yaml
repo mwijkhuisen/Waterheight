@@ -199,8 +199,8 @@ stations:
   - { station: ch.bafu-pq.2471, unsnapped: true, reason: "Murg at Murgenthal is the Aare tributary (Wikidata Q1953660), not the curated Thurgau murg (Q685327) that the name matches; 86.6 km from the murg, 1256 m from the aare on the fixture (OSM 2026-10-10) [U: an uncurated river]" }
   # Tier-1 gauges (#100) deliberately left without an entry: the name rule matches their curated river, but no edge of it
   # lies within 500 m, so they stay `no_edge_within_500m` and are placed by themselves once OSM covers them (an
-  # `unsnapped` entry would keep them out after such a fix). Measured on the fixture (OSM 2026-10-10); KG-250; three are
-  # pinned in test/fixtures/rivernet-golden.yaml, so a change shows in review.
+  # `unsnapped` entry would keep them out after such a fix). Measured on the fixture (OSM 2026-10-10); KG-250; all six
+  # are pinned in test/fixtures/rivernet-golden.yaml, so a change shows in review.
   #   de.lanuk.2782370000100 Weine, de.lanuk.2782700000100 Niederntudorf, de.lanuk.2782900000200 Neuhaus2 (Alme): 6.3,
   #     17.1 and 27.5 km from the kept alme; relation r379697 has a member without a waterway tag and its 54 empty-role
   #     ways below it do not connect to the main stream
