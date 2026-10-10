@@ -311,7 +311,8 @@ describe('writeDrill', () => {
   });
 });
 
-describe('setup.sh (the drill registry)', () => {
+// Each test copies the whole of registry/ (thousands of files): 5 s is too short on a busy CI runner.
+describe('setup.sh (the drill registry)', { timeout: 30_000 }, () => {
   const run = (repo: string, out: string) => {
     try {
       const stdout = execFileSync(new URL('deploy/tests/flood/setup.sh', ROOT).pathname, [out, repo], {
