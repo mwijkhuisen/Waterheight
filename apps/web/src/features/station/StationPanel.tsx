@@ -1,7 +1,8 @@
-import type { ApiStation, Snapshot } from '@rws/contracts';
+import type { ApiStation } from '@rws/contracts';
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { chartSpan, useRecent, useSources } from '../../lib/data/api.ts';
 import type { Change } from '../../lib/data/change.ts';
+import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
 import type { Lapse, StationState } from '../../lib/stationStates.ts';
@@ -21,7 +22,7 @@ const UpstreamChain = lazy(() => import('../flow/UpstreamChain.tsx').then((c) =>
 // After now (P8b) a series shows its forecast at t instead. The state of the controls is the panel's own (no URL key)
 // and returns to its defaults when another station is opened.
 
-type Value = Snapshot['values'][number];
+type Value = PlayedValue;
 
 /** The periods of the select (days back from the chart's end), 7 being today's. */
 const PERIODS = [2, 7, 14] as const;

@@ -1,6 +1,7 @@
-import type { ApiStation, Snapshot } from '@rws/contracts';
+import type { ApiStation } from '@rws/contracts';
 import { useMemo } from 'react';
 import { useReachGraph, useReachTravel, useRivers } from '../../lib/data/api.ts';
+import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { StationState } from '../../lib/stationStates.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
@@ -24,7 +25,7 @@ export interface UpstreamChainProps {
   stations: readonly ApiStation[];
   /** The feature-state record of every station at t. */
   states: ReadonlyMap<string, StationState>;
-  values: ReadonlyMap<number, Snapshot['values'][number]>;
+  values: ReadonlyMap<number, PlayedValue>;
   /** Owner-audience source ids (empty on the public site). */
   ownerSources: ReadonlySet<string>;
   /** Open another station. */

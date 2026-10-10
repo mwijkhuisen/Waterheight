@@ -155,26 +155,66 @@ const chunk = (
   vlast: (number | null)[][],
   from = T0,
   attribution = [credit('RWS')],
+  state?: (number | null)[][],
 ): FramesChunk => ({
   from: new Date(from).toISOString(),
   to: new Date(from + (vlast[0]?.length ?? 0) * H).toISOString(),
   series,
   vlast,
+  ...(state === undefined ? {} : { state }),
   attribution,
 });
 const stations = [station('nl.rws.a', [{ id: 1, limit: 3 * 3600 }]), station('nl.rws.b', [{ id: 2, limit: 7200 }])];
 const span = [{ from: T0, to: T0 + 6 * H }];
 
 describe('the frame store', () => {
-  it('shows the bucket t - 1 h (R12), Snapshot-shaped, with ts at the bucket end', () => {
+  it('a carried value shows the state of its own bucket', () => {
+    const s = buildFrameStore(
+      [chunk([1], [[10, 11, null, null, null, null]], T0, [credit('RWS')], [[1, 3, null, null, null, null]])],
+      span,
+      stations,
+    );
+    const v = s.valuesAt(T0 + 4 * H).get(1);
+    expect([v?.value, v?.state]).toEqual([11, 'elevated']);
+  });
+
+  it('a v1 chunk (no state) gives stateUnknown with a no_ref placeholder', () => {
     const s = buildFrameStore([chunk([1], [[10, 11, 12, 13, 14, 15]])], span, stations);
+    const v = s.valuesAt(T0 + 3 * H).get(1);
+    expect([v?.value, v?.state, v?.section, v?.stateUnknown, v?.basis]).toEqual([12, 'no_ref', false, true, null]);
+  });
+
+  it('drops a chunk with a misaligned state whole and counts it', () => {
+    const rows = [[1, 2, 3, 4, 5, 6]];
+    const short = chunk([1], rows, T0, [], [[1, 2, 3]]);
+    const count = chunk([1], rows, T0, [], [rows[0] as number[], rows[0] as number[]]);
+    const s = buildFrameStore([short, count], span, stations);
+    expect(s.valuesAt(T0 + 6 * H).size).toBe(0);
+    expect(s.dropped).toBe(2);
+  });
+
+  it('a later chunk for the same hour without state drops the earlier code', () => {
+    const a = chunk([1], [[1, 2, 3]], T0, [], [[4, 4, 4]]);
+    const b = chunk([1], [[7, 8, 9]], T0, []);
+    const v = buildFrameStore([a, b], span, stations)
+      .valuesAt(T0 + 3 * H)
+      .get(1);
+    expect([v?.value, v?.stateUnknown]).toEqual([9, true]);
+  });
+
+  it('shows the bucket t - 1 h (R12), Snapshot-shaped, with ts at the bucket end and the hour state (v2)', () => {
+    // code 4 = high; 12 = high + SECTION_BIT
+    const state = [[0, 1, 4, 12, 2, 5]];
+    const s = buildFrameStore([chunk([1], [[10, 11, 12, 13, 14, 15]], T0, [credit('RWS')], state)], span, stations);
+    const sec = s.valuesAt(T0 + 4 * H).get(1);
+    expect([sec?.state, sec?.section, sec?.stateUnknown]).toEqual(['high', true, undefined]);
     expect(s.valuesAt(T0 + 3 * H).get(1)).toEqual({
       series: 1,
       ts: new Date(T0 + 3 * H).toISOString(),
       value: 12,
       qc: 0,
       ageSeconds: 0,
-      state: 'no_ref',
+      state: 'high',
       basis: null,
       section: false,
     });
