@@ -35,7 +35,8 @@ const columns = {
   zero: [],
 };
 const iso = (ms: number) => new Date(ms).toISOString();
-// one pool for the #112 tests: the role has a connection limit and every dbAs call opens its own pool
+// one rws_publish pool for every test of the file: the role allows 6 connections, and every dbAs call opens a pool of
+// 2 that stays open (idle connections linger 10 s) until the harness closes (#121's CI: "too many connections")
 let shared: ReturnType<Harness['dbAs']> | undefined;
 const pubDb = () => {
   shared ??= h.dbAs('rws_publish');
@@ -147,7 +148,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('publish cycle', { timeout: 120_000 }, () => {
   it('writes the whole public tree, the settled day with its marker, and meta.json last', async () => {
-    const db = h.dbAs('rws_publish');
+    const db = pubDb();
     await publishOnce(db.db, 'public', dir, { now: NOW, render: fake() });
     expect(calls.at(-1)).toBe('meta');
     expect(calls.at(-2)).toBe('status');
@@ -206,7 +207,7 @@ describe('publish cycle', { timeout: 120_000 }, () => {
   });
 
   it('renders a bumped day under its new version, keeps the old one 1 h, then prunes it', async () => {
-    const db = h.dbAs('rws_publish');
+    const db = pubDb();
     await publishOnce(db.db, 'public', dir, { now: NOW, render: fake() });
     await setVersions('public', { '2026-10-01': 2 });
     await publishOnce(db.db, 'public', dir, { now: NOW + 60_000, render: fake() });
@@ -310,7 +311,7 @@ describe('publish cycle', { timeout: 120_000 }, () => {
   );
 
   it('drops a version bumped while it renders, and meta never names it', async () => {
-    const db = h.dbAs('rws_publish');
+    const db = pubDb();
     let bumped = false;
     const render = fake({
       snapshot: async (_c, t) => {
@@ -330,7 +331,7 @@ describe('publish cycle', { timeout: 120_000 }, () => {
   });
 
   it('skips one failing bucket or station, never the rest; a failing hot step makes meta degraded (CR-1, CR-2)', async () => {
-    const db = h.dbAs('rws_publish');
+    const db = pubDb();
     const bad = Date.parse('2026-10-03T12:00:00Z');
     const errors: Record<string, unknown>[] = [];
     const render = fake({
@@ -390,7 +391,7 @@ describe('publish cycle', { timeout: 120_000 }, () => {
           ],
         }),
       });
-    const pub = h.dbAs('rws_publish');
+    const pub = pubDb();
     await expect(
       publishOnce(pub.db, 'public', dir, { now: NOW, render: withValue(CANARIES.owner.real) }),
     ).rejects.toThrow('canary_in_output');
