@@ -2983,3 +2983,26 @@ What PR B of issue #112 built: item 2 (position bins in the river tiles, so a lo
 **Deploy order.** (1) The owner merges; the web deploys. The installed tiles are the old archive, so the map keeps per-reach colours as today. (2) The owner dispatches `geo.yml` on `main`; first check for a same-day `geo-*` release (a geo release is never rewritten). (3) `sudo rws-rivers-refresh` installs the new archive; the bins are live. (4) `scripts/verify-prod.sh <domain>` rivers checks. A rollback of the tiles (`--rollback`) falls back to per-reach colours.
 
 **Gaps:** KG-271 and KG-274 close; KG-298 to KG-303 open (see `docs/known-gaps.md`; KG-303 is the bins' frame-rate cost measured in the build).
+
+## 41. Amendment: P12a reality, flood hardening, WireGuard and the owner site (2026-10-10)
+
+What P12a (#27, PR #130, "Part of #27") built, and where the build differs from the P12 brief. The plan was approved by the owner on 2026-10-10 (one PR; the connection limit stays in `roles.sql` with a guard migration).
+
+**Owner decisions (2026-10-10, binding).**
+- **One PR** for the whole of P12a (WireGuard was not pulled forward).
+- **The `rws_api` connection limit stays in `deploy/postgres/roles.sql`** (applied as superuser by `db_prepare` on every deploy). A migration cannot set it because `rws_migrator` cannot `ALTER ROLE`. A read-only guard migration (`20261109000001_connection_budget_guard.sql`) fails a migrate when the budget is broken.
+
+**Where the build differs from the brief, and why.**
+
+| # | Brief said | Built | Why |
+|---|---|---|---|
+| D-1 | "a migration sets `rws_api` CONNECTION LIMIT" | `roles.sql` sets it; a read-only guard migration checks `rws_api ≤ max_connections − (load + publish + owner_api) − 5` | `rws_migrator` has no `ALTER ROLE`; `roles.sql` already runs as superuser on every deploy (owner decision) |
+| D-2 | Brownout auto-arms "when 503 responses exceed 2 % for 5 min" | Every 5xx on `/api/v1/*` over all `/api/v1/*` requests, ≥ 200 requests, 15 s buckets; the brownout's own 503s (`X-Brownout`) excluded; disarm after 10 min under 0.5 % | A dead upstream answers 502 from Caddy and a saturated api 503 `busy`: both mean the API cannot keep up. Excluding its own refusals keeps the brownout from holding itself on (KG-307) |
+| D-3 | "file-watched" flag | A host-side evaluator (`rws-brownout evaluate`, systemd timer every 15 s, root) reads Caddy's access log; the containers only read `/run/rws-brownout/active` (2 s cache) | The access log is on the `caddy_data` volume, which no container but Caddy may read; the flag directory is mounted read-only |
+| D-4 | "one offset" for the flood drill | One offset per payload; an alert and its Cancel share one | The recordings come from different days (2023 to 2026), so a single offset would put some in the future. The LHP test-server stations carry two clocks (`updated` vs. the readings), so their events land 35 min before the drill clock. LU-Alert identifiers are shifted too, since the base archive already holds the real Cancel of the drilled alert |
+| D-5 | Wayback Vigicrues levels 2–3 replayed | A synthetic level-4 map (`fr-5-vigilance-level4.synthetic`) with the Wayback's structure on the 56 real sections (levels 2, 3 and 4) | The real Wayback payload names none of our 56 sections; the loader refuses it as `too_few_areas` |
+| D-6 | Provider blackholed by the fake upstream | The fake upstream blackholes per host (a control file), and the chaos check proves the cause through `capture.json` and `status.json` | Pausing the whole fake would also silence the fake healthchecks; every capture group holds unfaked specs, so a `/fail` alone is not causal (KG-305) |
+| D-7 | "others' p95 moves ≤ 10 %" | ≤ max(10 %, 5 ms) | CI p95 values are a few milliseconds; 10 % of that is below the run-to-run noise (KG-304) |
+| D-8 | History view clamps to 30 days | The API refuses spans over 30 days while the brownout is on, and the chart asks `res=1h` | The panel's periods are 2, 7 and 14 days, so no web clamp is needed (KG-312) |
+
+**What changed.** The PR body of #130 lists every piece. The new commands are in CLAUDE.md § Commands, and the gaps are KG-304 to KG-312 and R-094 (R-029 closed). ADR-0019 records the tuning values with the k6 evidence; ADR-0020 records the HSTS preload decision (D17: not at launch).
