@@ -1,4 +1,5 @@
 import type { Snapshot } from '@rws/contracts';
+import type { PlayedValue } from '../../lib/data/frames.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { formatNumber } from './value.ts';
@@ -33,9 +34,13 @@ export function basisKind(basis: Pick<Basis, 'kind' | 'source'>, locale: Locale)
   }
 }
 
+/** The state word of a value; a played value from a version 1 frame has no state (#112): "no data", never no_ref. */
+export const valueStateWord = (value: PlayedValue, locale: Locale): string =>
+  value.stateUnknown === true ? m.reach_nodata({}, { locale }) : stateWord(value.state, locale);
+
 /** One line for the map popup: "Waterstand: Verhoogd, <kind>: <label> (sectie)". */
-export function popupLine(quantity: string, value: Value, locale: Locale): string {
-  const parts = [`${quantity}: ${stateWord(value.state, locale)}`];
+export function popupLine(quantity: string, value: PlayedValue, locale: Locale): string {
+  const parts = [`${quantity}: ${valueStateWord(value, locale)}`];
   if (value.basis !== null) parts.push(`${basisKind(value.basis, locale)}: ${value.basis.label}`);
   if (value.section) parts.push(m.section_marker({}, { locale }));
   return parts.join(', ');

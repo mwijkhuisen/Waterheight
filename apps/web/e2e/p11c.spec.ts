@@ -337,7 +337,8 @@ test('CLICK: a click on a cell of the chart pauses playback, moves t to that hou
   // Paused, with that station open and its column outlined, and t on a row hour of the chart.
   await expect(play(page)).toBeVisible();
   await expect.poll(() => param(page, 't')).not.toBe(before);
-  expect(param(page, 's')).toBe(KOELN);
+  // t and s are written apart: wait for s too (Firefox CI read it in between, #117/#121).
+  await expect.poll(() => param(page, 's')).toBe(KOELN);
   expect(param(page, 'hov')).toBe('rhine-waal');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText((await namesOf(page)).get(KOELN) ?? '?');
   const state = await stateOf(page);
@@ -600,6 +601,35 @@ test('axe finds no serious issue in the panel, as a chart and as a table', async
   await finish(page, s);
 });
 
+test('choosing State colours the cells by state (a level per valued cell), Δ again clears them', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  await open(page, deep('rhine-waal'));
+  await ready(page, 'rhine-waal');
+  const levelsAt = () =>
+    page.evaluate((iso) => {
+      const h = (window as unknown as HovW).__rwsHov;
+      return (h?.columns ?? []).map((c) => h?.levelAt(c.id, iso) ?? null);
+    }, T);
+  expect(
+    (await levelsAt()).every((l) => l === null),
+    'Δ: no levels',
+  ).toBe(true);
+  const stateButton = regionOf(page).getByRole('button', { name: nl('mode_state'), exact: true });
+  await stateButton.click();
+  await expect(stateButton).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(async () => (await levelsAt()).some((l) => l !== null)).toBe(true);
+  for (const l of await levelsAt()) expect(l === null || (Number.isInteger(l) && l >= 0 && l <= 5)).toBe(true);
+  await regionOf(page)
+    .getByRole('button', { name: nl('hov_delta'), exact: true })
+    .click();
+  await expect.poll(async () => (await levelsAt()).every((l) => l === null)).toBe(true);
+  await finish(page, s);
+});
+
 test('axe finds no serious issue on the whole page with the panel open, chart and table', async ({
   page,
   context,
@@ -626,15 +656,18 @@ test('the keyboard: toggle, path, table, a row, a column and close, in order, an
   await toggle.focus();
   await page.keyboard.press('Enter');
   await ready(page, 'rhine-waal');
-  // The path select, then (the disabled State is no stop) the table toggle, then close.
+  // The path select, then the Δ and State buttons (both normal stops, #112), the table toggle, then close.
   await pathSelect(page).focus();
   await page.keyboard.press('ArrowDown');
   await expect.poll(() => param(page, 'hov')).toBe('rhine-lek');
   await ready(page, 'rhine-lek');
   await expect(pathSelect(page)).toBeFocused();
   await page.keyboard.press('Tab');
+  await expect(regionOf(page).getByRole('button', { name: nl('hov_delta'), exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(regionOf(page).getByRole('button', { name: nl('mode_state'), exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(tableToggle(page)).toBeFocused();
-  await expect(regionOf(page).getByRole('button', { name: nl('mode_state'), exact: true })).toBeDisabled();
   await page.keyboard.press('Space');
   await expect(tableToggle(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(regionOf(page).getByRole('table')).toBeVisible();

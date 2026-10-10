@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { basisKind, heightText, popupLine, stateWord } from '../src/features/station/state.ts';
+import { basisKind, heightText, popupLine, stateWord, valueStateWord } from '../src/features/station/state.ts';
 
 const basis = {
   source: 'NL-4',
@@ -25,6 +25,15 @@ describe('state text', () => {
     expect(popupLine('Waterstand', value, 'nl')).toBe(
       'Waterstand: verhoogd, RWS Waterinfo-legenda, geen officiële waarschuwing: <b>x</b>, (sectie)',
     );
+  });
+
+  it('a played value: the hour state with its section, or "no data" when unknown (#112)', () => {
+    const played = { state: 'high', basis: null, section: true } as never;
+    expect(popupLine('Waterstand', played, 'nl')).toBe('Waterstand: hoog, (sectie)');
+    const unknown = { state: 'no_ref', basis: null, section: false, stateUnknown: true } as never;
+    expect(popupLine('Waterstand', unknown, 'en')).toBe('Waterstand: no data');
+    expect(valueStateWord(unknown, 'nl')).toBe('geen gegevens');
+    expect(valueStateWord(played, 'en')).toBe('high');
   });
 
   it('height: NAP, an unverified zero, or nothing', () => {

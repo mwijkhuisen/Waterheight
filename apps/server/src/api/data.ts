@@ -16,7 +16,7 @@ import { assembleFrames, type FrameRow } from '../publish/render/frames.ts';
 import { channelViews } from './channels.ts';
 import { forecastHorizons } from './forecast-at.ts';
 import type { SeriesParams } from './params.ts';
-import { readStates, type StateRead, type StaticCache, snapshotValues } from './states.ts';
+import { readHourStates, readStates, type StateRead, type StaticCache, snapshotValues } from './states.ts';
 import { coded, iso, snapshot } from './util.ts';
 import type { Window } from './window.ts';
 
@@ -287,7 +287,12 @@ export type FramesRead = Omit<FramesAnswer, 'attribution'> & { readonly qcOf: Re
  * active series, one row per series with a value, null where an hour has none, nothing carried forward (P11b). The
  * qc bits ride along as a non-enumerable `qcOf`, so the body spread never carries them.
  */
-export async function readFrames(db: Kysely<DB>, family: ChannelAudience, p: { from: number; to: number }) {
+export async function readFrames(
+  db: Kysely<DB>,
+  family: ChannelAudience,
+  p: { from: number; to: number },
+  opts: Parameters<typeof readHourStates>[5],
+) {
   const V = channelViews(family, 'api');
   // Two reads, never a join of the two views: both repeat the series and source join behind a security barrier, the
   // planner estimates one row for it and re-runs the whole hourly view per series (quadratic: 5 s for 1,400 series on
@@ -302,13 +307,16 @@ export async function readFrames(db: Kysely<DB>, family: ChannelAudience, p: { f
     return r.rows.filter((row) => ids.has(row.series_id));
   });
   const { ids, vlast, qcOf } = assembleFrames(rows, p.from, p.to);
+  // #112: each value's state, classified from the family's rows (outside the read's transaction: its own snapshot).
+  const state = await readHourStates(db, family, { ids, vlast }, p.from, p.to, opts);
   const body = {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     from: iso(new Date(p.from)),
     to: iso(new Date(p.to)),
     stepSeconds: 3600 as const,
     series: ids,
     vlast,
+    state,
   };
   return Object.defineProperty(body, 'qcOf', { value: qcOf, enumerable: false }) as FramesRead;
 }

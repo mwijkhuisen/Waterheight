@@ -27,8 +27,11 @@ export type Audience = ChannelAudience | 'off';
 export type Touch = { series?: number; station?: string; from: number | null; to?: number };
 export type DirtyEntry = { kind: DirtyKind; audience: Audience; from: number; to: number; stations: readonly string[] };
 
-/** Why a day's version moved: the loader's revision, a registry change, or a narrowing (old versions go at once). */
-export type BumpReason = 'revision' | 'registry' | 'narrowed';
+/**
+ * Why a day's version moved: the loader's revision, a registry change, a narrowing (old versions go at once), or a new
+ * frames schema (#112: the old complete version stays named until the new one is complete, as for `registry`).
+ */
+export type BumpReason = 'revision' | 'registry' | 'narrowed' | 'schema';
 export type DayVersion = { v: number; reason: BumpReason; at: string };
 export const versionKey = (family: ChannelAudience) => `day_versions:${family}`;
 
@@ -72,7 +75,10 @@ export function dirtyEntriesOf(
   return entries;
 }
 
-/** Raises the version of each day by one (an absent day is version 1), in the caller's transaction. */
+/**
+ * Raises the version of each day by one (an absent day is version 1), in the caller's transaction. A `schema` bump
+ * keeps a `narrowed` reason (#112 review S1): the versions before a narrowing must still go at once.
+ */
 export async function bumpDays(
   tx: Tx,
   family: ChannelAudience,
@@ -83,7 +89,12 @@ export async function bumpDays(
   const list = [...new Set(days)];
   if (list.length === 0) return;
   const map = (await readMeta<Record<string, DayVersion>>(tx, versionKey(family))) ?? {};
-  for (const d of list) map[d] = { v: (map[d]?.v ?? 1) + 1, reason, at: now.toISOString() };
+  for (const d of list)
+    map[d] = {
+      v: (map[d]?.v ?? 1) + 1,
+      reason: reason === 'schema' && map[d]?.reason === 'narrowed' ? 'narrowed' : reason,
+      at: now.toISOString(),
+    };
   await writeMeta(tx, versionKey(family), map);
 }
 
@@ -211,4 +222,29 @@ export async function registryBump(tx: Tx, now: Date): Promise<Partial<Record<Ch
     await writeMeta(tx, visibleKey(family), cur);
   }
   return bumped;
+}
+
+/** The schema of the public frames the publisher writes (#112: 2 adds each hour's state). */
+export const FRAMES_SCHEMA = 2;
+const FRAMES_SCHEMA_KEY = 'frames_schema:public';
+/** How far back a schema change re-renders: the 14-day playback start and its 25 h Δh lead, rounded up. */
+const SCHEMA_BUMP_MS = 16 * DAY_MS;
+
+/**
+ * migrate's frames schema bump (#112), under the loader lock and before registryBump: the first run with a newer
+ * FRAMES_SCHEMA bumps the public days of the last 16 that may be settled (reason `schema`), so the publisher renders
+ * them again in the new shape, one per cycle, while the old complete versions stay served; then it stores the schema,
+ * and later runs bump nothing. Older settled days keep their old frames (the web plays them with the state unknown).
+ * A database never migrated before (no stored registry map yet) has rendered nothing: it only stores the schema.
+ * Returns the bumped days.
+ */
+export async function framesSchemaBump(tx: Tx, now: Date): Promise<string[]> {
+  const stored = await readMeta<number>(tx, FRAMES_SCHEMA_KEY);
+  if (stored !== undefined && stored >= FRAMES_SCHEMA) return [];
+  const first = (await readMeta<Visible>(tx, visibleKey('public'))) === undefined;
+  const nowMs = now.getTime();
+  const days = first ? [] : bumpedDays(Math.floor((nowMs - SCHEMA_BUMP_MS) / DAY_MS) * DAY_MS, nowMs, nowMs);
+  await bumpDays(tx, 'public', days, 'schema', now);
+  await writeMeta(tx, FRAMES_SCHEMA_KEY, FRAMES_SCHEMA);
+  return days;
 }

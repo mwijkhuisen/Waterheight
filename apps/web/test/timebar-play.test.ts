@@ -58,12 +58,10 @@ describe('stepHour', () => {
   });
 });
 
-describe('play is off in the State mode (D-1) and with reduced motion', () => {
-  it('is disabled for state, enabled for delta and q, always disabled when reduced', () => {
-    expect(playDisabled('state', false)).toBe(true);
-    expect(playDisabled('delta', false)).toBe(false);
-    expect(playDisabled('q', false)).toBe(false);
-    for (const mode of ['state', 'delta', 'q'] as const) expect(playDisabled(mode, true)).toBe(true);
+describe('play is off only with reduced motion (#112: the State mode plays too)', () => {
+  it('is enabled without reduced motion and disabled with it', () => {
+    expect(playDisabled(false)).toBe(false);
+    expect(playDisabled(true)).toBe(true);
   });
 });
 

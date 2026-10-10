@@ -1,6 +1,7 @@
 import type { FramesFile } from '@rws/contracts';
 import { sql } from 'kysely';
 import { valueSources } from '../../api/answer.ts';
+import { readHourStates } from '../../api/states.ts';
 import { iso } from '../../api/util.ts';
 import { attributionFor } from '../../attribution.ts';
 import { VIEWS } from '../../db/audience.ts';
@@ -10,7 +11,8 @@ import { readFacts } from './series.ts';
 
 // P9a: frames (A§8 Q5): the hourly rollup's last value per series and hour of [from, to), for the playback. One row
 // per display series with at least one value in the span (ids increasing), null where an hour has none; no dates in
-// the attribution, so an ended day's file stays a function of (day, version).
+// the attribution, so an ended day's file stays a function of (day, version). #112: each value's state code beside it
+// (readHourStates), from the public rows only.
 
 const HOUR_MS = 3_600_000;
 
@@ -56,13 +58,19 @@ export async function renderFrames(c: RenderCtx, from: number, to: number): Prom
   });
   // The qc bits of the kept hours per series: a filled hour names its fill source too (P9b, as the API does).
   const { ids, vlast, qcOf } = assembleFrames(kept, from, to);
+  const state = await readHourStates(c.db, c.family, { ids, vlast }, from, to, {
+    now: c.now,
+    sections: c.sections,
+    cache: c.cache,
+  });
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     from: iso(new Date(from)),
     to: iso(new Date(to)),
     stepSeconds: 3600,
     series: ids,
     vlast,
+    state,
     attribution: attributionFor(
       c.attribution,
       new Set(ids.flatMap((id) => valueSources((facts.get(id) as { source: string }).source, qcOf.get(id) ?? 0))),

@@ -213,26 +213,58 @@ export const Series = z.discriminatedUnion('res', [
 ]);
 export type Series = z.infer<typeof Series>;
 
+/** The code of a played hour's state (#112): set when the state comes from an area class (a section), not the gauge. */
+export const SECTION_BIT = 8;
+/** One hour's state in frames (#112): the index in STATES (0 no_ref … 5 extreme), plus SECTION_BIT for a section. */
+export const stateCode = (state: State, section: boolean): number =>
+  STATES.indexOf(state) + (section ? SECTION_BIT : 0);
+/** A valid code: 0–5 and 8–13 (6 and 7 are no state). */
+export const isStateCode = (c: number): boolean => Number.isInteger(c) && c >= 0 && c <= 13 && (c & 7) <= 5;
+/** The state and section flag of a code, or undefined for anything that is not a valid code. */
+export function stateOf(code: number): { state: State; section: boolean } | undefined {
+  if (!isStateCode(code)) return undefined;
+  return { state: STATES[code & 7] as State, section: (code & SECTION_BIT) !== 0 };
+}
+
+const framesFields = (source: z.ZodString, maxHours: number) => ({
+  from: iso,
+  to: iso,
+  stepSeconds: z.literal(3600),
+  series: z.array(SeriesId).max(MAX_POINTS),
+  vlast: z.array(z.array(z.number().nullable()).max(maxHours)).max(MAX_POINTS),
+  attribution: z.array(attributionEntry(source)).max(500),
+});
+
 /**
  * Hourly playback frames (A§8 Q5: the hourly rollup's `vlast`), one row per series, one entry per hour of [from, to).
  * One shape for the static files (`maxHours` 120: a settled day or recent.json) and /api/v1/frames (336: 14 days);
  * a family's instance takes its source-id schema. Refined by `checkFrames` after any `.extend` (Zod 4 refuses to
- * extend a refined object).
+ * extend a refined object). Version 2 (#112) adds `state`, parallel to `vlast`: each hour's state code (`stateCode`),
+ * classified as of the last instant of its hour; null exactly where `vlast` is. No basis or provider text.
  */
 export const framesObject = (source: z.ZodString, maxHours: number) =>
   z.strictObject({
-    schemaVersion: z.literal(1),
-    from: iso,
-    to: iso,
-    stepSeconds: z.literal(3600),
-    series: z.array(SeriesId).max(MAX_POINTS),
-    vlast: z.array(z.array(z.number().nullable()).max(maxHours)).max(MAX_POINTS),
-    attribution: z.array(attributionEntry(source)).max(500),
+    schemaVersion: z.literal(2),
+    ...framesFields(source, maxHours),
+    state: z.array(z.array(z.number().int().nullable()).max(maxHours)).max(MAX_POINTS),
   });
 
-/** Whole hours from → to, each series once, one row per series and one entry per hour. */
+/** The frames of before #112 (no `state`): only the static readers accept them (`FramesFileAny`), as "state unknown". */
+export const framesObjectV1 = (source: z.ZodString, maxHours: number) =>
+  z.strictObject({ schemaVersion: z.literal(1), ...framesFields(source, maxHours) });
+
+/**
+ * Whole hours from → to, each series once, one row per series and one entry per hour; with `state` (v2) also one
+ * state row per series, a valid code exactly where `vlast` has a value and null where it has none.
+ */
 export function checkFrames(
-  f: { from: string; to: string; series: readonly number[]; vlast: readonly (readonly (number | null)[])[] },
+  f: {
+    from: string;
+    to: string;
+    series: readonly number[];
+    vlast: readonly (readonly (number | null)[])[];
+    state?: readonly (readonly (number | null)[])[];
+  },
   ctx: z.RefinementCtx,
 ): void {
   const hours = (Date.parse(f.to) - Date.parse(f.from)) / 3_600_000;
@@ -240,6 +272,17 @@ export function checkFrames(
   if (new Set(f.series).size !== f.series.length) ctx.addIssue({ code: 'custom', message: 'a series is listed twice' });
   if (f.vlast.length !== f.series.length) ctx.addIssue({ code: 'custom', message: 'one row per series' });
   if (f.vlast.some((r) => r.length !== hours)) ctx.addIssue({ code: 'custom', message: 'one entry per hour' });
+  if (f.state === undefined) return;
+  if (f.state.length !== f.series.length) ctx.addIssue({ code: 'custom', message: 'one state row per series' });
+  const aligned = f.state.every((row, i) => {
+    const values = f.vlast[i];
+    return (
+      values !== undefined &&
+      row.length === values.length &&
+      row.every((c, h) => (c === null ? values[h] === null : values[h] !== null && isStateCode(c)))
+    );
+  });
+  if (!aligned) ctx.addIssue({ code: 'custom', message: 'a state code exactly where a value is' });
 }
 
 /**

@@ -236,7 +236,7 @@
             "type": "string"
           },
           "schemaVersion": {
-            "const": 1,
+            "const": 2,
             "type": "number"
           },
           "series": {
@@ -244,6 +244,26 @@
               "maximum": 2147483647,
               "minimum": 1,
               "type": "integer"
+            },
+            "maxItems": 20000,
+            "type": "array"
+          },
+          "state": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "maxItems": 336,
+              "type": "array"
             },
             "maxItems": 20000,
             "type": "array"
@@ -279,7 +299,8 @@
           "stepSeconds",
           "series",
           "vlast",
-          "attribution"
+          "attribution",
+          "state"
         ],
         "type": "object"
       },

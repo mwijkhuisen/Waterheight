@@ -142,7 +142,7 @@ function Viewer({ locale }: { locale: Locale }) {
   );
   const setPlay = useCallback((speed: Speed) => setUrl({ play: speed }), [setUrl]);
 
-  // P11b: hourly frames playback (Δh and Q modes, D-1). While it plays, the values come from the frames (bucket
+  // P11b: hourly frames playback (every mode since #112: each hour carries its state). While it plays, the values come from the frames (bucket
   // t − 1 h, R12) and no snapshot, change or warnings file is asked; paused, the snapshot path returns.
   const framesNow = useRef<FrameStore | undefined>(undefined);
   // The e2e build holds play on its first hour when a spec sets window.__rwsPlayHold first (the visual scenes): a
@@ -166,10 +166,6 @@ function Viewer({ locale }: { locale: Locale }) {
   framesNow.current = frames;
   // Until the frames of the first hour are in, the paused snapshot stays on screen (no blank map at the start).
   const played = playing && frames !== undefined && t !== undefined && frames.ready(t);
-  const { pause } = playback;
-  useEffect(() => {
-    if (mode === 'state' && playing) pause();
-  }, [mode, playing, pause]);
 
   // The data follows `t` once it has settled: a drag or a held key asks only for where it stops.
   const settled = useDebounced(t, FETCH_DEBOUNCE_MS);
@@ -491,7 +487,6 @@ function Viewer({ locale }: { locale: Locale }) {
             epoch={range.epoch}
             live={isLive}
             onChange={setT}
-            mode={mode}
             playback={playback}
           />
         </div>

@@ -9,7 +9,7 @@ import { CustomChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import { init, use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { DH_COLOUR, type DhBin, REACH_NODATA_COLOUR } from '../../legend/palette.ts';
+import { DH_COLOUR, type DhBin, LADDER, REACH_NODATA_COLOUR, STATE_COLOUR } from '../../legend/palette.ts';
 import type { Cell } from './grid.ts';
 import type { Column, Gap } from './path.ts';
 
@@ -28,6 +28,8 @@ const LABEL_PX = 16;
 const STEPS = [1, 2, 3, 6, 12, 24, 48];
 /** A cell with no change known (the grey of the map's no-data reaches); the data holds a bin or this. */
 const NO_BIN = 9;
+/** A State cell carries STATE_BIN + the ladder level in the same slot. */
+const STATE_BIN = 10;
 const INK = '#0e3a4b';
 const PAPER = '#f4f1ea';
 /** The stripes of a tidal column (palette.ts REACH_HATCH_COLOURS[0] as hex: zrender's colour parser wants commas). */
@@ -38,6 +40,8 @@ export interface HovData {
   gaps: readonly Gap[];
   /** [row][column], rows ascending in time (the last row is drawn at the top). */
   cells: readonly (readonly Cell[])[];
+  /** State mode: the ladder level (null: no data) per [row][column]; the colour then follows it, not the Δ bin. */
+  levels?: readonly (readonly (number | null)[])[] | undefined;
   /** The local-time label of each row. */
   rowLabels: readonly string[];
   /** The label of each column: the station name, with the owner badge text appended on an owner column. */
@@ -108,7 +112,12 @@ export function createHovChart(el: HTMLElement, onCell: (column: number, row: nu
     const [cx, cy] = pixel(api, x, row);
     const w = Math.max(pixel(api, x + hw, row)[0] - pixel(api, x - hw, row)[0], MIN_PX);
     const h = (api.size?.([0, 1]) as number[] | undefined)?.[1] ?? 0;
-    const fill = bin === NO_BIN ? REACH_NODATA_COLOUR : DH_COLOUR[bin as DhBin];
+    const fill =
+      bin === NO_BIN
+        ? REACH_NODATA_COLOUR
+        : bin >= STATE_BIN
+          ? STATE_COLOUR[LADDER[bin - STATE_BIN] ?? 'no_ref']
+          : DH_COLOUR[bin as DhBin];
     // A fresh decal per element: zrender keeps its pattern on the object.
     const decal = {
       symbol: 'rect',
@@ -223,7 +232,11 @@ export function createHovChart(el: HTMLElement, onCell: (column: number, row: nu
           xs[ci] ?? 0,
           row,
           halves[ci] ?? 0,
-          cell.bin ?? NO_BIN,
+          d.levels === undefined
+            ? (cell.bin ?? NO_BIN)
+            : (d.levels[row]?.[ci] ?? null) === null
+              ? NO_BIN
+              : STATE_BIN + (d.levels[row]?.[ci] ?? 0),
           d.columns[ci]?.tidal ? 1 : 0,
           ci,
         ]),

@@ -42,6 +42,10 @@
 }
 
 .colour {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
   font-weight: 600;
 }
 
@@ -192,4 +196,28 @@
   .sources {
     max-height: 1.3rem;
   }
+}
+
+/* The State legend of the panel: the map's state colours, then the no-data grey. */
+.legend {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 1px solid #333;
 }

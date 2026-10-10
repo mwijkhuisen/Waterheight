@@ -1,6 +1,6 @@
 import {
   FramesAnswer,
-  FramesFile,
+  FramesFileAny,
   LatestFile,
   MetaAnswer,
   SeriesAnswer,
@@ -55,8 +55,11 @@ export interface Contracts {
   SnapshotAnswer: Parser<z.infer<typeof SnapshotAnswer>>;
   SeriesAnswer: Parser<z.infer<typeof SeriesAnswer>>;
   SeriesForecastAnswer: Parser<z.infer<typeof SeriesForecastAnswer>>;
-  /** P11b: a settled day's or recent.json's hourly frames (the owner family has no static frames: never parses). */
-  FramesFile: Parser<FramesFile>;
+  /**
+   * P11b: a settled day's or recent.json's hourly frames (the owner family has no static frames: never parses); a
+   * version 1 file (before #112) is read with its states unknown.
+   */
+  FramesFile: Parser<FramesFileAny>;
   /** P11b: /api/v1/frames. */
   FramesAnswer: Parser<z.infer<typeof FramesAnswer>>;
   /** A source no view shows (the owner canary): its stations, series, runs, areas and credits are dropped on read. */
@@ -254,7 +257,7 @@ export const PUBLIC_CONTRACTS: Contracts = {
   SnapshotAnswer,
   SeriesAnswer,
   SeriesForecastAnswer,
-  FramesFile,
+  FramesFile: FramesFileAny,
   FramesAnswer,
   hidden: () => false,
 };

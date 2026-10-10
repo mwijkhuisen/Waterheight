@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { seriesHash } from '../apps/server/src/publish/render/stations.ts';
+import { isStateCode } from '../packages/contracts/src/api.ts';
 import { FramesFile, StaticMeta, StaticStations } from '../packages/contracts/src/static.ts';
 import { prng, run, SCENES, sceneStations, synthesize } from '../scripts/synthesize-frames.ts';
 
@@ -56,6 +57,24 @@ describe('synthesize-frames', () => {
         expect(f.series).toEqual([...f.series].sort((x, y) => x - y));
       }
     }
+  });
+
+  it('writes schemaVersion 2 with a state row per series: aligned, valid codes, null exactly where the value is', () => {
+    for (const scene of Object.keys(SCENES) as (keyof typeof SCENES)[]) {
+      for (const n of readdirSync(join(a, scene)).filter((x) => x.startsWith('frames-') && !x.endsWith('.meta.json'))) {
+        const raw = read(a, scene, n);
+        expect(raw.schemaVersion).toBe(2);
+        const f = FramesFile.parse(raw);
+        expect(f.state).toHaveLength(f.series.length);
+        for (const [r, row] of f.state.entries()) {
+          for (const [h, code] of row.entries()) {
+            expect(code === null).toBe((f.vlast[r]?.[h] ?? null) === null);
+            if (code !== null) expect(isStateCode(code)).toBe(true);
+          }
+        }
+      }
+    }
+    // (deterministic: the byte-identity test above covers the state rows too)
   });
 
   it('uses real fixture station ids on the four rivers, with an H and a Q series each', () => {

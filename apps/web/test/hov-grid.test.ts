@@ -1,6 +1,6 @@
 import type { ApiStation } from '@rws/contracts';
 import { describe, expect, it } from 'vitest';
-import { buildGrid, hoursOf, hovFetch, hovRows } from '../src/features/flow/hovmoller/grid.ts';
+import { buildGrid, buildStateGrid, hoursOf, hovFetch, hovRows } from '../src/features/flow/hovmoller/grid.ts';
 import type { Column } from '../src/features/flow/hovmoller/path.ts';
 import { playRange } from '../src/features/flow/playback/engine.ts';
 import { buildFrameStore, type FrameStore, type FramesChunk } from '../src/lib/data/frames.ts';
@@ -270,5 +270,85 @@ describe('buildGrid: valuesAt calls', () => {
     expect(asked.length).toBe(55);
     expect(new Set(asked).size).toBe(55);
     expect(asked.length).toBeLessThan(2 * hours.length);
+  });
+});
+
+// --- buildStateGrid (#112 D-3) -------------------------------------------------------------------------------------
+
+/** A chunk whose series carry a state code per hour (`codes` beside `data`; v2), or none (`v1`: a pre-#112 file). */
+const stateChunkOf = (
+  series: { id: number; data: Record<number, number>; codes?: Record<number, number> }[],
+  v1 = false,
+): FramesChunk => ({
+  ...chunkOf([{ id: 'x', series: series.map((s) => ({ id: s.id, quantity: 'H' as const, data: s.data })) }]),
+  ...(v1
+    ? {}
+    : {
+        state: series.map((s) =>
+          Array.from({ length: LEN }, (_, i) => (s.data[i] === undefined ? null : (s.codes?.[i] ?? 0))),
+        ),
+      }),
+});
+const stateStation = (id: string, ids: number[]): ApiStation =>
+  ({
+    id,
+    series: ids.map((sid) => ({ id: sid, quantity: 'H', stalenessLimitSeconds: 48 * 3600 })),
+  }) as unknown as ApiStation;
+const levelsOf = (chunks: FramesChunk[], stations: ApiStation[], hours: number[]) =>
+  buildStateGrid(
+    stations.map((st, i) => colOf(st.id, i)),
+    stations,
+    hours,
+    buildFrameStore(chunks, [{ from: T0, to: T0 + LEN * H }], stations),
+  );
+
+describe('buildStateGrid', () => {
+  it("gives the level of the played hour's bucket, and a carried value the level of its own hour", () => {
+    const st = stateStation('nl.s.a', [901]);
+    const chunk = stateChunkOf([{ id: 901, data: { 3: 100, 4: 120 }, codes: { 3: 2, 4: 4 } }]);
+    // t = T0+5h shows bucket 4 (high); t = T0+8h carries bucket 4 (still its own state, high); t = T0+4h shows bucket 3.
+    expect(levelsOf([chunk], [st], [T0 + 4 * H, T0 + 5 * H, T0 + 8 * H])).toEqual([[2], [4], [4]]);
+  });
+
+  it('keeps no_ref as level 0 (a state), and reads a section code by its level', () => {
+    const st = stateStation('nl.s.b', [902]);
+    const chunk = stateChunkOf([{ id: 902, data: { 3: 100, 4: 100 }, codes: { 3: 0, 4: 3 + 8 } }]);
+    expect(levelsOf([chunk], [st], [T0 + 4 * H, T0 + 5 * H])).toEqual([[0], [3]]);
+  });
+
+  it("takes the station's highest series, whatever the series order", () => {
+    for (const ids of [
+      [903, 904],
+      [904, 903],
+    ]) {
+      const st = stateStation('nl.s.c', ids);
+      const chunk = stateChunkOf([
+        { id: 903, data: { 4: 100 }, codes: { 4: 2 } },
+        { id: 904, data: { 4: 100 }, codes: { 4: 5 } },
+      ]);
+      expect(levelsOf([chunk], [st], [T0 + 5 * H])).toEqual([[5]]);
+    }
+  });
+
+  it('is null (no data) for a v1 chunk, an hour before the data and a column whose station is unknown', () => {
+    const st = stateStation('nl.s.d', [905]);
+    const v1 = stateChunkOf([{ id: 905, data: { 4: 100 } }], true);
+    expect(levelsOf([v1], [st], [T0 + 5 * H])).toEqual([[null]]);
+    const v2 = stateChunkOf([{ id: 905, data: { 4: 100 }, codes: { 4: 3 } }]);
+    expect(levelsOf([v2], [st], [T0 + 2 * H])).toEqual([[null]]);
+    const grid = buildStateGrid(
+      [colOf('nl.s.unknown', 0)],
+      [st],
+      [T0 + 5 * H],
+      buildFrameStore([v2], [{ from: T0, to: T0 + LEN * H }], [st]),
+    );
+    expect(grid).toEqual([[null]]);
+  });
+
+  it('ignores a series whose state is unknown beside one whose state is known', () => {
+    const st = stateStation('nl.s.e', [906, 907]);
+    const v1 = stateChunkOf([{ id: 906, data: { 4: 100 } }], true);
+    const v2 = stateChunkOf([{ id: 907, data: { 4: 100 }, codes: { 4: 1 } }]);
+    expect(levelsOf([v1, v2], [st], [T0 + 5 * H])).toEqual([[1]]);
   });
 });

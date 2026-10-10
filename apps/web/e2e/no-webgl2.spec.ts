@@ -4,6 +4,7 @@ import {
   expectNoSeriousAxe,
   FRAMES_FILE,
   finish,
+  msg,
   open,
   pickStation,
   SNAPSHOT_PATH,
@@ -129,6 +130,28 @@ test('without WebGL2 the table plays hour by hour from the frames, with no snaps
   await page.getByRole('button', { name: 'Pauzeren', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Afspelen', exact: true })).toBeVisible();
   const during = s.log.requests.slice(mark, stop).map((u) => new URL(u).pathname);
+  expect(during.filter((p) => SNAPSHOT_PATH.test(p))).toEqual([]);
+  expect(during.filter((p) => FRAMES_FILE.test(p)).length).toBeGreaterThan(0);
+  await finish(page, s);
+});
+
+// #112: the State mode plays from the frames' state codes too: Play is enabled and the hostile station's NL-4 class
+// (100-1000 cm is elevated) shows as the played state word, with no snapshot request and no basis text.
+test('without WebGL2 the table plays in the State mode from the frames', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'dh');
+  await open(page, '/?mode=state&t=2026-10-25T02:00Z');
+  await expect(page.locator('.maplibregl-canvas')).toHaveCount(0);
+  const play = page.getByRole('button', { name: 'Afspelen', exact: true });
+  await expect(play).toBeEnabled();
+  const row = page.locator('table tbody tr').filter({ hasText: XSS });
+  await expect(row).toHaveCount(1);
+  const mark = s.log.requests.length;
+  await play.click();
+  await expect(page.getByRole('button', { name: 'Pauzeren', exact: true })).toBeVisible();
+  await expect(row).toContainText(msg('nl', 'played_note'));
+  await expect(row).toContainText(msg('nl', 'state_elevated'));
+  await expect(page.locator('body')).not.toContainText('onerror=alert(3)');
+  const during = s.log.requests.slice(mark).map((u) => new URL(u).pathname);
   expect(during.filter((p) => SNAPSHOT_PATH.test(p))).toEqual([]);
   expect(during.filter((p) => FRAMES_FILE.test(p)).length).toBeGreaterThan(0);
   await finish(page, s);

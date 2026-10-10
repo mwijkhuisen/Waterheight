@@ -7,6 +7,7 @@ import {
   checkFrames,
   DATE_KINDS,
   framesObject,
+  framesObjectV1,
   HealthSourceId,
   MAX_POINTS,
   Meta,
@@ -173,6 +174,15 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
 
   /** Hourly playback frames (A§8 Q5: the hourly rollup's `vlast`), as /api/v1/frames carries them (api.ts); ≤ 5 days. */
   const FramesFile = framesObject(source, 24 * 5).superRefine(checkFrames);
+  /**
+   * What a reader of the static frames accepts (#112): version 2, or a version 1 file written before it (no `state`:
+   * the web plays its values with the state unknown). Only the readers use it (the web, verify-prod, record-frames);
+   * the publisher writes and validates version 2 only.
+   */
+  const FramesFileAny = z.discriminatedUnion('schemaVersion', [
+    framesObjectV1(source, 24 * 5).superRefine(checkFrames),
+    FramesFile,
+  ]);
 
   const Run = latest.shape.runs.element;
   /** series/{station}/recent.json: 7 days of raw observations, the latest run and the references valid now. */
@@ -264,6 +274,7 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
     StaticMeta,
     StaticStations,
     FramesFile,
+    FramesFileAny,
     StationRecent,
     StaticForecastLatest,
   };
@@ -280,6 +291,8 @@ export const StaticStations = PUBLIC.StaticStations;
 export type StaticStations = z.infer<typeof StaticStations>;
 export const FramesFile = PUBLIC.FramesFile;
 export type FramesFile = z.infer<typeof FramesFile>;
+export const FramesFileAny = PUBLIC.FramesFileAny;
+export type FramesFileAny = z.infer<typeof FramesFileAny>;
 export const StationRecent = PUBLIC.StationRecent;
 export type StationRecent = z.infer<typeof StationRecent>;
 export const StaticForecastLatest = PUBLIC.StaticForecastLatest;

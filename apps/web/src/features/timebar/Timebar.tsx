@@ -9,7 +9,6 @@ import {
   STEP_MS,
   wallInstant,
 } from '../../lib/time/time.ts';
-import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { SPEEDS, type Speed } from '../flow/playback/engine.ts';
@@ -74,21 +73,18 @@ interface Props {
   /** P10a: live mode (no `t` in the URL): the page follows meta.now; "Nu" returns to it. */
   live: boolean;
   onChange: (t: number) => void;
-  /** P11b: the map mode (D-1: no play in the State mode). */
-  mode: Mode;
   /** P11b: hourly frames playback (App owns it). */
   playback: Playback;
 }
 
-export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, onChange, mode, playback }: Props) {
+export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, onChange, playback }: Props) {
   const id = useId();
   const [missing, setMissing] = useState(false);
   // P10e D7: collapsed at the start (the time, a short slider, the steps, play and "Nu"); the rest on request.
   const [expanded, setExpanded] = useState(false);
   const reduced = useReducedMotion();
   const { playing, dir, pause } = playback;
-  const offState = mode === 'state';
-  const off = playDisabled(mode, reduced);
+  const off = playDisabled(reduced);
   const local = useMemo(() => amsterdam(t), [t]);
   // Temporal zone conversions are the time bar's costliest work: once per t, not once per render (P10a Lighthouse).
   const twins = useMemo(() => localInstants(local.date, local.time), [local]);
@@ -142,9 +138,7 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
   const blocked = (d: Direction) => !(playing && dir === d) && !canPlay(d, playT, playback.range);
   const back = stepHour(t, -1, start, end);
   const fwd = stepHour(t, 1, start, end);
-  const hintId = `${id}-hint`;
-  const playDesc =
-    [offState ? hintId : '', reduced ? `${id}-reduced` : ''].filter((x) => x !== '').join(' ') || undefined;
+  const playDesc = reduced ? `${id}-reduced` : undefined;
 
   // The bar's real height, collapsed or expanded (its notes and the DST choice come and go), is --timebar-h: the
   // legend and the attribution buttons stand above it and a scrolled table keeps a focused row clear of it
@@ -372,12 +366,6 @@ export function Timebar({ locale, t, start, now, end, noForecast, epoch, live, o
           </>
         )}
       </div>
-      {/* Why play is off is said in both states (D-1 and reduced motion). */}
-      {offState && (
-        <p id={hintId} className={styles.note}>
-          {m.play_state_hint({}, { locale })}
-        </p>
-      )}
       {reduced && (
         <p id={`${id}-reduced`} className={styles.note}>
           {m.play_reduced_motion({}, { locale })}

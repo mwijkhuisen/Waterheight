@@ -1,8 +1,9 @@
-import type { ApiStation, SeriesMeta, Snapshot } from '@rws/contracts';
+import type { ApiStation, SeriesMeta } from '@rws/contracts';
 import { SUSPECT_BITS } from '@rws/core/qc';
 import { useMemo, useState } from 'react';
 import type { Change } from '../../lib/data/change.ts';
 import type { WebSources } from '../../lib/data/contracts.ts';
+import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
 import { basisLabel, referenceLabel, useOwnerLabels } from '../../lib/labels/labels.ts';
@@ -19,7 +20,7 @@ import { FORECAST_COLOUR, MEASURED_COLOUR } from './colours.ts';
 import { bandText, forecastValue, issueText } from './forecast.ts';
 import { creditLines, dhValue, trendGlyph } from './provenance.ts';
 import { SeriesTable } from './SeriesTable.tsx';
-import { heightText, stateWord } from './state.ts';
+import { heightText, stateWord, valueStateWord } from './state.ts';
 import styles from './station.module.css';
 import { referenceMarks } from './thresholds.ts';
 import { type RecentSeries, useSeriesData } from './useSeriesData.ts';
@@ -28,7 +29,7 @@ import { formatValue, quantityLabel, unitLabel } from './value.ts';
 // One series of the station panel (P10d): its heading and last measurement, the chart or the table, the legends of the
 // lines and of the thresholds, and the facts. Every string that came from data is a React text node.
 
-type Value = Snapshot['values'][number];
+type Value = PlayedValue;
 
 interface Props {
   locale: Locale;
@@ -306,13 +307,13 @@ export function SeriesSection({
         )}
         {forecasts === undefined && value !== undefined && (
           <>
+            <dt>{m.panel_state({}, o)}</dt>
+            <dd>
+              {valueStateWord(value, locale)}
+              {value.section && ` ${m.section_marker({}, o)}`}
+            </dd>
             {!played && (
               <>
-                <dt>{m.panel_state({}, o)}</dt>
-                <dd>
-                  {stateWord(value.state, locale)}
-                  {value.section && ` ${m.section_marker({}, o)}`}
-                </dd>
                 {value.basis !== null && (
                   <>
                     <dt>{m.panel_basis({}, o)}</dt>

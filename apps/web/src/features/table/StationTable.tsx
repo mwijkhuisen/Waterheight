@@ -1,6 +1,7 @@
-import type { ApiStation, Snapshot } from '@rws/contracts';
+import type { ApiStation } from '@rws/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import type { Change } from '../../lib/data/change.ts';
+import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { Lapse, StationState } from '../../lib/stationStates.ts';
 import { formatAge, formatLocal } from '../../lib/time/time.ts';
@@ -21,7 +22,7 @@ import styles from './table.module.css';
 // selects the station. No column is sortable: values with different zeros are
 // not comparable (catalogue §4.7).
 
-type Value = Snapshot['values'][number];
+type Value = PlayedValue;
 
 interface Props {
   locale: Locale;
@@ -123,8 +124,8 @@ export function StationTable({
             const lapse = value === undefined ? lapsed.get(series.id) : undefined;
             const modeCell = () => {
               if (mode === 'state') {
-                // Frames carry no state: the word would be a false "no reference".
-                if (played) return m.played_note({}, o);
+                // A played value from a version 1 frame has no state (#112): no data, never a false "no reference".
+                if (played && value?.stateUnknown === true) return m.reach_nodata({}, o);
                 const st = forecasts === undefined ? value?.state : forecast?.state;
                 return st == null ? '–' : stateWord[st]({}, o);
               }
@@ -187,6 +188,7 @@ export function StationTable({
                 )}
                 <td>
                   {state?.section && <span>{m.section_badge({}, o)} </span>}
+                  {played && mode === 'state' && <span>{m.played_note({}, o)} </span>}
                   {state?.owner && <OwnerBadge locale={locale} />}
                   {/* A carried value's note; a lapsed series says its own (KG-233), one note per row. */}
                   {state?.stale && state.has && lapse === undefined && <span>{m.stale_note({}, o)} </span>}

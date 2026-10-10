@@ -1,4 +1,4 @@
-import type { ClassCoverage, Snapshot } from '@rws/contracts';
+import { type ClassCoverage, dayOf, isSettled, type Snapshot, stateCode } from '@rws/contracts';
 import {
   type AreaIn,
   attachArea,
@@ -8,7 +8,9 @@ import {
   classify,
   classSeries,
   type Datum,
+  monthDay,
   napHeight,
+  OWNER_ONLY_SOURCES,
   PERMISSION_REQUIRED,
   type RefIn,
 } from '@rws/core';
@@ -16,7 +18,7 @@ import { type Kysely, sql } from 'kysely';
 import { type AttributionRow, attributionRows, type SourceDate, sourceDates } from '../attribution.ts';
 import { type ChannelAudience, OBS_AT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
-import { iso, snapshot } from './util.ts';
+import { coded, iso, snapshot } from './util.ts';
 
 // The classified state of every series at t, for ONE audience family (A§7.4 item 11; PHASES P7b): the public
 // outputs pass `'public'` and read pub_* only, the owner view (P9) passes `'owner'` and reads own_* only. The family
@@ -170,6 +172,9 @@ type WarningRow = {
   /** md5 of the stored geometry, for the sources whose areas attach by polygon; null otherwise. */
   geom_md5: string | null;
 };
+const WARNING_COLUMNS = sql`id::text AS id, source_id, area_key, name, level_raw,
+               CASE WHEN source_id IN ('LU-5', 'DE-6', 'DE-10') OR area_key LIKE 'hydro\\_region:%'
+                    THEN md5(geometry_geojson) END AS geom_md5`;
 
 export type SeriesState = {
   series: number;
@@ -192,6 +197,77 @@ function parseGeometry(text: string | null): unknown {
   } catch {
     return null;
   }
+}
+
+const seriesByStation = (series: readonly SeriesRow[]) => {
+  const out = new Map<string, SeriesRow[]>();
+  for (const s of series) out.set(s.station_id, [...(out.get(s.station_id) ?? []), s]);
+  return out;
+};
+
+const refIn = (r: RefRow): RefIn => ({
+  source: r.source_id,
+  kind: r.kind,
+  value: r.value,
+  unit: r.unit,
+  convention: r.percentile_convention,
+  period: r.p_from === null ? null : [r.p_from, r.p_to],
+  seasonFrom: r.season_from_md,
+  seasonTo: r.season_to_md,
+  priority: r.priority,
+  label: r.basis_label,
+});
+
+const areaIn = (w: WarningRow, fresh: boolean): AreaIn => ({
+  source: w.source_id,
+  key: w.area_key,
+  name: w.name,
+  levelRaw: w.level_raw,
+  fresh,
+});
+
+/**
+ * The stations each warning attaches to (the static entry's map, or a fresh one without the cache); a polygon not
+ * seen before is read and parsed once.
+ */
+async function attachWarnings<W extends WarningRow>(
+  tx: Kysely<DB>,
+  family: ChannelAudience,
+  warnings: readonly W[],
+  fixed: Static,
+  sections: ReadonlyMap<string, string>,
+): Promise<{ w: W; ids: string[] }[]> {
+  const { attached } = fixed;
+  const keyOf = (w: WarningRow) => w.geom_md5 ?? `${w.source_id}:${w.area_key}`;
+  // One row per geometry not seen before: rows sharing a polygon (one LU-5 zone in several alerts) fetch it once.
+  const missing = [
+    ...new Map(
+      warnings.flatMap((w) => (w.geom_md5 !== null && !attached.has(w.geom_md5) ? [[w.geom_md5, w.id]] : [])),
+    ).values(),
+  ];
+  const geometry = new Map(
+    missing.length === 0
+      ? []
+      : (
+          await sql<{ md5: string; geometry_geojson: string | null }>`
+              SELECT md5(geometry_geojson) AS md5, geometry_geojson FROM ${sql.table(VIEWS[family].warning)}
+              WHERE id = ANY(${missing}::bigint[])`.execute(tx)
+        ).rows.map((g) => [g.md5, g.geometry_geojson]),
+  );
+  return warnings.map((w) => {
+    const key = keyOf(w);
+    const known = attached.get(key);
+    if (known !== undefined) return { w, ids: known };
+    // A polygon is attached only from the geometry this read fetched; without it nothing is kept (review SR-2).
+    if (w.geom_md5 !== null && !geometry.has(w.geom_md5)) return { w, ids: [] };
+    const ids = attachArea(
+      { source: w.source_id, key: w.area_key, geometry: parseGeometry(geometry.get(w.geom_md5 ?? '') ?? null) },
+      fixed.stations,
+      sections,
+    );
+    attached.set(key, ids);
+    return { w, ids };
+  });
 }
 
 /**
@@ -231,46 +307,12 @@ export async function readStates(
       : await snapshot(db, async (tx) => {
           const warnings = (
             await sql<WarningRow>`
-        SELECT id::text AS id, source_id, area_key, name, level_raw,
-               CASE WHEN source_id IN ('LU-5', 'DE-6', 'DE-10') OR area_key LIKE 'hydro\\_region:%'
-                    THEN md5(geometry_geojson) END AS geom_md5
-        FROM ${sql.table(V.warning)} WHERE valid @> ${at}::timestamptz ORDER BY id`.execute(tx)
+        SELECT ${WARNING_COLUMNS} FROM ${sql.table(V.warning)} WHERE valid @> ${at}::timestamptz ORDER BY id`.execute(
+              tx,
+            )
           ).rows;
-          // The stations each area attaches to (the static entry's map, or a fresh one without the cache); a polygon not
-          // seen before is read and parsed once.
-          const { attached } = fixed;
-          const keyOf = (w: WarningRow) => w.geom_md5 ?? `${w.source_id}:${w.area_key}`;
-          // One row per geometry not seen before: rows sharing a polygon (one LU-5 zone in several alerts) fetch it once.
-          const missing = [
-            ...new Map(
-              warnings.flatMap((w) => (w.geom_md5 !== null && !attached.has(w.geom_md5) ? [[w.geom_md5, w.id]] : [])),
-            ).values(),
-          ];
-          const geometry = new Map(
-            missing.length === 0
-              ? []
-              : (
-                  await sql<{ md5: string; geometry_geojson: string | null }>`
-              SELECT md5(geometry_geojson) AS md5, geometry_geojson FROM ${sql.table(V.warning)}
-              WHERE id = ANY(${missing}::bigint[])`.execute(tx)
-                ).rows.map((g) => [g.md5, g.geometry_geojson]),
-          );
-          const areas = warnings.map((w) => {
-            const key = keyOf(w);
-            const known = attached.get(key);
-            if (known !== undefined) return { w, ids: known };
-            // A polygon is attached only from the geometry this read fetched; without it nothing is kept (review SR-2).
-            if (w.geom_md5 !== null && !geometry.has(w.geom_md5)) return { w, ids: [] };
-            const ids = attachArea(
-              { source: w.source_id, key: w.area_key, geometry: parseGeometry(geometry.get(w.geom_md5 ?? '') ?? null) },
-              stations,
-              opts.sections,
-            );
-            attached.set(key, ids);
-            return { w, ids };
-          });
           return {
-            areas,
+            areas: await attachWarnings(tx, family, warnings, fixed, opts.sections),
             obs: (
               await sql<ObsRow>`SELECT series_id, ts, value, qc FROM ${sql.id(OBS_AT[family])}(${at}::timestamptz)`.execute(
                 tx,
@@ -302,25 +344,13 @@ export async function readStates(
   };
 
   const stationOf = new Map(stations.map((s) => [s.id, s]));
-  const seriesOf = new Map<string, SeriesRow[]>();
-  for (const s of series) seriesOf.set(s.station_id, [...(seriesOf.get(s.station_id) ?? []), s]);
+  const seriesOf = seriesByStation(series);
   const obsOf = new Map(rows.obs.map((o) => [o.series_id, o]));
   const zeroOf = new Map(zeros.map((z) => [z.series_id, z]));
   const refsOf = new Map<number, RefIn[]>();
   for (const r of refs) {
     const list = refsOf.get(r.series_id) ?? [];
-    list.push({
-      source: r.source_id,
-      kind: r.kind,
-      value: r.value,
-      unit: r.unit,
-      convention: r.percentile_convention,
-      period: r.p_from === null ? null : [r.p_from, r.p_to],
-      seasonFrom: r.season_from_md,
-      seasonTo: r.season_to_md,
-      priority: r.priority,
-      label: r.basis_label,
-    });
+    list.push(refIn(r));
     refsOf.set(r.series_id, list);
   }
   // A station's gauge class reaches one of its series (classSeries).
@@ -336,10 +366,7 @@ export async function readStates(
   const areasOf = new Map<string, AreaIn[]>();
   for (const { w, ids } of rows.areas) {
     for (const id of ids) {
-      areasOf.set(id, [
-        ...(areasOf.get(id) ?? []),
-        { source: w.source_id, key: w.area_key, name: w.name, levelRaw: w.level_raw, fresh: fresh(w.source_id) },
-      ]);
+      areasOf.set(id, [...(areasOf.get(id) ?? []), areaIn(w, fresh(w.source_id))]);
     }
   }
 
@@ -410,6 +437,225 @@ export function snapshotValues(read: StateRead): Snapshot['values'] {
       },
     ];
   });
+}
+
+// --- The state of each frames hour (#112) ------------------------------------------------------------------------
+
+const HOUR_MS = 3_600_000;
+
+/**
+ * The codes of settled days, per process: a settled day is immutable per (family, day, day version), so its codes
+ * are kept under exactly that key, newest use last. A day holds one Int8Array of 24 per series (-1: not computed).
+ * ponytail: a bounded LRU of whole days (≈ 1,400 series × 24 bytes each); a longer playback window or many more
+ * series would want a byte bound instead of a day count.
+ */
+export class HourMemo {
+  readonly #days = new Map<string, Map<number, Int8Array>>();
+  readonly #maxDays: number;
+  constructor(maxDays = 32) {
+    this.#maxDays = maxDays;
+  }
+  day(key: string): Map<number, Int8Array> {
+    let hit = this.#days.get(key);
+    if (hit !== undefined) this.#days.delete(key);
+    else hit = new Map();
+    this.#days.set(key, hit);
+    for (const old of this.#days.keys()) {
+      if (this.#days.size <= this.#maxDays) break;
+      this.#days.delete(old);
+    }
+    return hit;
+  }
+}
+
+type ClassAt = { ts: number; code: string | null };
+type RangedWarning = Ranged<WarningRow>;
+
+/**
+ * The state code (`stateCode`) of every non-null cell of frames over [from, to), aligned with `frames.ids`: the value
+ * of hour h classified as the snapshot at the last instant of that hour would classify it (#112 C1, ts* = h + 1 h −
+ * 1 ms; the partial current hour at now): the references valid then, the latest class row per station and source at
+ * or before then, the warnings valid then, never judged by fetch freshness (a past t), age 0 and qc 0 (they only set
+ * flags). The values are the caller's (the display or the api views); the rows behind the states always come from
+ * VIEWS[family], as readStates reads them. A series with no reference, class or area in the whole range is no_ref
+ * without classify(). With `memo` and `versionOf`, the cells of settled days are taken from and kept in the memo;
+ * `yieldEvery` lets the event loop run every that many series (the API).
+ */
+export async function readHourStates(
+  db: Kysely<DB>,
+  family: ChannelAudience,
+  frames: { readonly ids: readonly number[]; readonly vlast: readonly (readonly (number | null)[])[] },
+  from: number,
+  to: number,
+  opts: {
+    now: number;
+    sections: ReadonlyMap<string, string>;
+    cache?: StaticCache | undefined;
+    memo?: HourMemo | undefined;
+    versionOf?: ((day: string) => number) | undefined;
+    yieldEvery?: number | undefined;
+  },
+): Promise<(number | null)[][]> {
+  const hours = Math.max(0, Math.round((to - from) / HOUR_MS));
+  const codes: (number | null)[][] = frames.vlast.map((row) => row.map((v) => (v === null ? null : -1)));
+  // The memo's day of each hour (settled days only), or undefined.
+  const memoDays: (Map<number, Int8Array> | undefined)[] = [];
+  const memoHour: number[] = [];
+  for (let h = 0; h < hours; h++) {
+    const start = from + h * HOUR_MS;
+    const day = dayOf(start);
+    memoDays.push(
+      opts.memo !== undefined && opts.versionOf !== undefined && isSettled(day, opts.now)
+        ? opts.memo.day(`${family}|${day}|${opts.versionOf(day)}`)
+        : undefined,
+    );
+    memoHour.push(Math.floor((start - Date.parse(`${day}T00:00:00Z`)) / HOUR_MS));
+  }
+  let open = false;
+  frames.ids.forEach((id, i) => {
+    const row = codes[i] as (number | null)[];
+    for (let h = 0; h < hours; h++) {
+      if (row[h] === null) continue;
+      const kept = memoDays[h]?.get(id)?.[memoHour[h] as number] ?? -1;
+      if (kept >= 0) row[h] = kept;
+      else open = true;
+    }
+  });
+  if (!open) return codes;
+
+  const fixed = await (opts.cache?.get(db, family) ?? readStatic(db, family));
+  const V = VIEWS[family];
+  const span = { from: new Date(from), to: new Date(to) };
+  const rows = await snapshot(db, async (tx) => {
+    const warnings = (
+      await sql<RangedWarning>`
+        SELECT ${WARNING_COLUMNS}, ${RANGE} FROM ${sql.table(V.warning)}
+        WHERE valid && tstzrange(${span.from}::timestamptz, ${span.to}::timestamptz, '[)') ORDER BY id`.execute(tx)
+    ).rows;
+    // The latest class row per station and source at `from`, then every later one inside the span, oldest first.
+    const before = await sql<ClassRow & { ts: Date }>`
+      SELECT DISTINCT ON (subject_id, source_id) subject_id, source_id, provider_code, ts
+      FROM ${sql.table(V.class)} WHERE subject_type = 'station' AND ts <= ${span.from}::timestamptz
+      ORDER BY subject_id, source_id, ts DESC`.execute(tx);
+    const inside = await sql<ClassRow & { ts: Date }>`
+      SELECT subject_id, source_id, provider_code, ts
+      FROM ${sql.table(V.class)}
+      WHERE subject_type = 'station' AND ts > ${span.from}::timestamptz AND ts < ${span.to}::timestamptz
+      ORDER BY ts`.execute(tx);
+    return {
+      areas: await attachWarnings(tx, family, warnings, fixed, opts.sections),
+      classes: [...before.rows, ...inside.rows],
+    };
+  });
+
+  const seriesById = new Map(fixed.series.map((s) => [s.id, s]));
+  const seriesOf = seriesByStation(fixed.series);
+  const stationOf = new Map(fixed.stations.map((s) => [s.id, s]));
+  const refsOf = new Map<number, { r: Ranged<RefRow>; in: RefIn }[]>();
+  for (const r of fixed.refs) refsOf.set(r.series_id, [...(refsOf.get(r.series_id) ?? []), { r, in: refIn(r) }]);
+  // Per target series and source (in source order, as readStates' DISTINCT ON orders them): the class rows by time.
+  const classesOf = new Map<number, Map<string, ClassAt[]>>();
+  for (const c of rows.classes) {
+    const target = classSeries(c.source_id, seriesOf.get(c.subject_id) ?? []);
+    if (target === undefined) continue;
+    const bySource = classesOf.get(target.id) ?? new Map<string, ClassAt[]>();
+    bySource.set(c.source_id, [...(bySource.get(c.source_id) ?? []), { ts: c.ts.getTime(), code: c.provider_code }]);
+    classesOf.set(target.id, bySource);
+  }
+  const areasOf = new Map<string, RangedWarning[]>();
+  for (const { w, ids } of rows.areas) for (const id of ids) areasOf.set(id, [...(areasOf.get(id) ?? []), w]);
+
+  // The NL-4 season day of each hour's instant, computed once per hour, not per cell.
+  const instantOf = (h: number) => Math.min(from + (h + 1) * HOUR_MS - 1, opts.now);
+  const mdOf: number[] = [];
+  for (let h = 0; h < hours; h++) mdOf.push(monthDay(instantOf(h)));
+  for (let i = 0; i < frames.ids.length; i++) {
+    if (opts.yieldEvery !== undefined && i > 0 && i % opts.yieldEvery === 0)
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    const id = frames.ids[i] as number;
+    const row = codes[i] as (number | null)[];
+    const values = frames.vlast[i] as readonly (number | null)[];
+    const s = seriesById.get(id);
+    const refs = refsOf.get(id) ?? [];
+    const classes = [...(classesOf.get(id) ?? [])].sort(([a], [b]) => (a < b ? -1 : 1));
+    const areas = s === undefined ? [] : (areasOf.get(s.station_id) ?? []);
+    const st = s === undefined ? undefined : stationOf.get(s.station_id);
+    // classify() compares the value only with reference values (<, <=, >= and NL-4's [from, to)), so with the same
+    // rows the state depends on the value only through its place among this series' reference values: the codes
+    // are kept per (rows valid at the instant, NL-4 season day, that place), exactly as classify() would answer.
+    const thresholds = [...new Set(refs.map((x) => x.r.value))].sort((a, b) => a - b);
+    const nl4 = refs.some((x) => x.r.source_id === 'NL-4');
+    const known = new Map<string, number>();
+    for (let h = 0; h < hours; h++) {
+      if (row[h] !== -1) continue;
+      let code = 0;
+      // The fast path: nothing could classify this series in the whole range (or it is not in the family's series).
+      if (s !== undefined && (refs.length > 0 || classes.length > 0 || areas.length > 0)) {
+        const ts = instantOf(h);
+        const value = values[h] as number;
+        const validRefs = refs.filter((x) => validAt(x.r, ts));
+        const validClasses = classes.flatMap(([source, list]) => {
+          let at: string | null = null;
+          for (const k of list) if (k.ts <= ts) at = k.code;
+          return at === null ? [] : [{ source, code: at, fresh: true }];
+        });
+        const validAreas = areas.filter((w) => validAt(w, ts));
+        let below = 0;
+        let equal = false;
+        for (const x of thresholds) {
+          if (x < value) below += 1;
+          else {
+            equal = x === value;
+            break;
+          }
+        }
+        const key = [
+          validRefs.map((x) => refs.indexOf(x)).join(','),
+          validClasses.map((c) => `${c.source}:${c.code}`).join(','),
+          validAreas.map((w) => w.id).join(','),
+          nl4 ? mdOf[h] : '',
+          `${below}${equal ? '=' : ''}`,
+        ].join('|');
+        const kept = known.get(key);
+        if (kept !== undefined) code = kept;
+        else {
+          const c = classify(
+            {
+              quantity: s.quantity,
+              valueKind: s.value_kind,
+              value,
+              qc: 0,
+              ageMs: 0,
+              stalenessMs: s.staleness_ms,
+              t: ts,
+              refs: validRefs.map((x) => x.in),
+              classes: validClasses,
+              areas: validAreas.map((w) => areaIn(w, true)),
+              tidal: flagOf(st?.flags, 'tidal'),
+              impounded: flagOf(st?.flags, 'impounded'),
+            },
+            family,
+          );
+          // The public boundary (as publicSnapshot's, review SR-5): a public state shaped by an owner-only source
+          // fails the read closed; the public views and classify() already keep such rows out.
+          if (family === 'public' && c.sources.some((x) => OWNER_ONLY_SOURCES.has(x))) throw coded('owner_basis');
+          code = stateCode(c.state, c.section);
+          known.set(key, code);
+        }
+      }
+      row[h] = code;
+      const day = memoDays[h];
+      if (day !== undefined) {
+        let kept = day.get(id);
+        if (kept === undefined) {
+          kept = new Int8Array(24).fill(-1);
+          day.set(id, kept);
+        }
+        kept[memoHour[h] as number] = code;
+      }
+    }
+  }
+  return codes;
 }
 
 type Share = ClassCoverage['tier1'];

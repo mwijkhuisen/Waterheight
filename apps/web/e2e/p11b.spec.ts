@@ -37,7 +37,7 @@ import {
 //        and a day file that 404s is covered by exactly one API call for its range;
 //   R2   a frames file with unknown series ids or misaligned rows maps no value (a canary series least of all);
 //   URL  a deep link restores the hour and the speed, paused;
-//   D-1  the State mode plays nothing (Play disabled, a hint says why), and a switch to it pauses;
+//   D-1  the State mode plays too (#112: the frames carry a state code per series and hour), Play stays on a switch to it;
 //   gates  axe 0 serious/critical and the keyboard on the playback controls, the hostile station inert while playing,
 //          the credits of the played hours, 0 CSP violations and same-origin requests (finish).
 // The reach colouring reads window.__rws.map.getFeatureState (the e2e build's hook); `window.__rwsPlayHold` holds playback
@@ -86,6 +86,7 @@ interface Frames {
   to: string;
   series: number[];
   vlast: (number | null)[][];
+  state: (number | null)[][];
 }
 
 // ---------------------------------------------------------------- B1: tidal reaches
@@ -204,6 +205,7 @@ test('meuse.23 is coloured once both its ends have a discharge (Chooz given one 
     const hours = (Date.parse(f.to) - Date.parse(f.from)) / 3_600_000;
     f.series.push(Q_ID);
     f.vlast.push(Array.from({ length: hours }, () => 55));
+    f.state.push(Array.from({ length: hours }, () => 2));
     await fulfilJson(route, f);
   });
   await held(page, deep(MID, 'q'));
@@ -312,6 +314,7 @@ test('R2: a frames file with unknown series ids maps no value; a canary row in i
     const hours = (Date.parse(f.to) - Date.parse(f.from)) / 3_600_000;
     f.series = [...f.series.map((id) => id + 50_000_000), 99_999_999];
     f.vlast = [...f.vlast, Array.from({ length: hours }, () => 123456.789)];
+    f.state = [...f.state, Array.from({ length: hours }, () => 2)];
     await fulfilJson(route, f);
   });
   await playHold(page);
@@ -353,6 +356,35 @@ test('R2: a frames file with misaligned rows is not used; the API covers its day
   await expect.poll(() => urlsFrom(s, mark).filter((u) => u.pathname === FRAMES_API).length).toBe(1);
   const api = urlsFrom(s, mark).filter((u) => u.pathname === FRAMES_API)[0] as URL;
   // (the window starts 25 h before the held hour; the dropped file's days are cut to it)
+  expect(api.searchParams.get('from')).toBe('2026-10-24T11:00:00Z');
+  await expect(panelOf(page).getByText(nl('played_value_note')).first()).toBeVisible();
+  await expect.poll(() => featureState(page, XSS_ID)).toMatchObject({ has: true });
+  await expect(page.locator('body')).not.toContainText('424242');
+  await finish(page, s);
+});
+
+test('R2: a frames file whose state rows alone are misaligned is not used either (C7)', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  // Only the state rows are one hour short, vlast is intact: the contract's alignment check still fails, the file is
+  // dropped whole (its recognisable values never show) and the API covers its days.
+  await page.route('**/data/v1/frames/recent.json', async (route) => {
+    const f = await json<Frames>(route);
+    f.vlast = f.vlast.map((row) => row.map((v) => (v === null ? null : 424242)));
+    f.state = f.state.map((row) => row.slice(0, -1));
+    await fulfilJson(route, f);
+  });
+  await playHold(page);
+  await open(page, deep(MID, 'delta', `&s=${XSS_ID}`));
+  await mapReady(page);
+  const mark = s.log.requests.length;
+  await play(page).click();
+  await expect(pause(page)).toBeVisible();
+  await expect.poll(() => urlsFrom(s, mark).filter((u) => u.pathname === FRAMES_API).length).toBe(1);
+  const api = urlsFrom(s, mark).filter((u) => u.pathname === FRAMES_API)[0] as URL;
   expect(api.searchParams.get('from')).toBe('2026-10-24T11:00:00Z');
   await expect(panelOf(page).getByText(nl('played_value_note')).first()).toBeVisible();
   await expect.poll(() => featureState(page, XSS_ID)).toMatchObject({ has: true });
@@ -411,41 +443,61 @@ test('URL: the speed select writes play=; the live view carries no play key', as
 
 // ---------------------------------------------------------------- D-1: the State mode
 
-test('D-1: in the State mode Play is disabled and a hint says why; a switch to it pauses', async ({
+test('D-1: the State mode plays (forward and reverse); a switch to it keeps playing; a paused hour steps', async ({
   page,
   context,
   baseURL,
 }) => {
   const s = await start(page, context, baseURL, 'dh');
-  await open(page, deep(MID, 'state'));
-  const hint = page.getByText(nl('play_state_hint'), { exact: true });
-  await expect(hint).toBeVisible();
-  await expect(play(page)).toBeDisabled();
-  const describedBy = await play(page).getAttribute('aria-describedby');
-  expect(describedBy?.split(' ')).toContain((await hint.getAttribute('id')) ?? 'no-id');
-  await expandTimebar(page);
-  await expect(page.getByRole('button', { name: nl('play_reverse'), exact: true })).toBeDisabled();
-  // Δh: playable again, the hint gone.
-  await chooseMode(page, 'delta');
+  // 13 days back at the slow speed (9 h/s, ~35 s to the end): playback outlasts the switch and the Pause click.
+  await open(page, deep('2026-10-13T12:00Z', 'state', '&play=slow'));
   await expect(play(page)).toBeEnabled();
-  await expect(hint).toHaveCount(0);
+  await expandTimebar(page);
+  await expect(page.getByRole('button', { name: nl('play_reverse'), exact: true })).toBeEnabled();
+  // Δh: playing, then the switch to the State mode does not pause, and t keeps moving on.
+  await chooseMode(page, 'delta');
   await play(page).click();
   await expect(pause(page)).toBeVisible();
-  // Back to the State mode while playing: it pauses (no states in the frames).
   await chooseMode(page, 'state');
+  await expect(pause(page)).toBeVisible();
+  const t0 = param(page, 't');
+  await expect.poll(() => param(page, 't')).not.toBe(t0);
+  // Pause, then the paused hour steps in the State mode.
+  await pause(page).click();
   await paused(page);
-  await expect(play(page)).toBeDisabled();
-  await expect(hint).toBeVisible();
-  // Stepping a paused hour works in the State mode.
   const before = param(page, 't');
   await page.getByRole('button', { name: nl('step_forward'), exact: true }).click();
   await expect.poll(() => param(page, 't')).not.toBe(before);
   await finish(page, s);
 });
 
+test('D-1: played in the State mode, the marker and the table show the hour state, never its basis', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'dh');
+  // Held on its first hour, so the played hour stays on screen while it is asserted.
+  await playHold(page);
+  await open(page, deep(MID, 'state'));
+  await mapReady(page);
+  await play(page).click();
+  await expect(pause(page)).toBeVisible();
+  // The hostile station's NL-4 class makes any value of 100-1000 cm "elevated": its marker has level 3 while played,
+  // its table cell says so beside the played note, and its basis label (the payload's text) appears nowhere.
+  await expect.poll(() => featureState(page, XSS_ID)).toMatchObject({ has: true, level: 3 });
+  await chooseView(page, 'table');
+  const row = page.getByRole('row').filter({ hasText: XSS });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText(nl('state_elevated'));
+  await expect(row).toContainText(nl('played_note'));
+  await expect(page.locator('body')).not.toContainText('onerror=alert(3)');
+  await finish(page, s);
+});
+
 // ---------------------------------------------------------------- the played hour on screen
 
-test('a played hour: values without state, the played notes, the credits of the played hours, no snapshot', async ({
+test("a played hour: the value with its hour's state, the played notes, the credits of the played hours, no snapshot", async ({
   page,
   context,
   baseURL,
@@ -454,7 +506,7 @@ test('a played hour: values without state, the played notes, the credits of the 
   await playHold(page);
   await open(page, deep(MID, 'delta', `&s=${XSS_ID}`));
   await mapReady(page);
-  // Paused: the snapshot's value carries a state, the credits have no section of the played hours.
+  // Paused: the snapshot's value carries a state and its basis, the credits have no section of the played hours.
   await expect(panelOf(page).getByText(nl('played_value_note'))).toHaveCount(0);
   const credits = await openAttribution(page);
   await expect(credits.getByRole('heading', { name: nl('played_sources'), exact: true })).toHaveCount(0);
@@ -462,8 +514,11 @@ test('a played hour: values without state, the played notes, the credits of the 
   await play(page).click();
   await expect(pause(page)).toBeVisible();
   const mark = s.log.requests.length;
-  // The panel says the value is a played-back hour value, without a state.
+  // The panel says the value is a played-back hour value, shows the state of that hour and no basis row.
   await expect(panelOf(page).getByText(nl('played_value_note'), { exact: false }).first()).toBeVisible();
+  await expect(panelOf(page).getByText(nl('panel_state'), { exact: true }).first()).toBeVisible();
+  await expect(panelOf(page).getByText(nl('state_elevated'), { exact: true }).first()).toBeVisible();
+  await expect(panelOf(page).getByText(nl('panel_basis'), { exact: true })).toHaveCount(0);
   // The credits list the sources of the played hours first.
   await openAttribution(page);
   await expect(attributionPanel(page).getByRole('heading', { name: nl('played_sources'), exact: true })).toBeVisible();

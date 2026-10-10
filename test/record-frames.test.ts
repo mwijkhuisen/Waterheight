@@ -137,6 +137,22 @@ describe('record-frames', () => {
     expect(lines.at(-1)).toBe(`requests: 4/${MAX_REQUESTS}`);
   });
 
+  it('accepts a day file of either schema (v2 as synthesised, v1 without state) and refuses a v2 without state', async () => {
+    const v2 = JSON.parse(body('frames-2026-10-10-v1.synthetic.json').toString());
+    expect(v2.schemaVersion).toBe(2);
+    const v1 = { ...v2, schemaVersion: 1, state: undefined };
+    for (const [file, ok] of [
+      [v2, true],
+      [v1, true],
+      [{ ...v2, state: undefined }, false],
+    ] as const) {
+      serve({ '/data/v1/frames/2026-10-10/v1.json': () => HttpResponse.json(file) });
+      const dir = out();
+      expect(await run(['--out', dir, '--days', '2026-10-10'], {}, () => {})).toBe(ok ? 0 : 1);
+      expect(existsSync(join(dir, 'frames-2026-10-10-v1.json'))).toBe(ok);
+    }
+  });
+
   it('writes nothing for a body that fails the public contract', async () => {
     const bad = JSON.parse(body('frames-2026-10-10-v1.synthetic.json').toString());
     bad.vlast.pop();

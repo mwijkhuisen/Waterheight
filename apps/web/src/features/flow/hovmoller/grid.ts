@@ -2,7 +2,7 @@ import type { ApiStation } from '@rws/contracts';
 import { changesAt } from '../../../lib/data/change.ts';
 import type { FrameStore } from '../../../lib/data/frames.ts';
 import { ceilHour, DAY_MS, floorHour, HOUR_MS } from '../../../lib/time/time.ts';
-import { type DhBin, dhBin } from '../../legend/palette.ts';
+import { type DhBin, dhBin, levelOf } from '../../legend/palette.ts';
 import type { Column } from './path.ts';
 
 // P11c (issue #26): the rows and cells of the Hovmöller panel. Rows are whole UTC hours of the playback range, one
@@ -93,6 +93,38 @@ export function buildGrid(
       const change = series === undefined ? null : (changes.get(series.id) ?? null);
       if (series === undefined || change === null) return GREY;
       return { bin: dhBin(change, series.quantity), change: change.dh, quantity: series.quantity };
+    });
+  });
+}
+
+/**
+ * The played state of each station and hour, by [row][column]: the ladder level (0 no_ref … 5 extreme) of the
+ * station's highest-state series, a gauge state winning a tie over a section state (the map marker's rule,
+ * lib/stationStates.ts). null: no value, or only a legacy (v1) value whose state is unknown: the "no data" cell.
+ */
+export function buildStateGrid(
+  columns: readonly Column[],
+  stations: readonly ApiStation[],
+  hours: readonly number[],
+  frames: Pick<FrameStore, 'valuesAt'>,
+): (number | null)[][] {
+  const byId = new Map(stations.map((s) => [s.id, s]));
+  const sts = columns.map((c) => byId.get(c.id));
+  return hours.map((h) => {
+    const all = frames.valuesAt(h);
+    return sts.map((st) => {
+      let level: number | null = null;
+      let section = false;
+      for (const s of st?.series ?? []) {
+        const v = all.get(s.id);
+        if (v === undefined || v.stateUnknown) continue;
+        const l = levelOf(v.state);
+        if (level === null || l > level || (l === level && !v.section && section)) {
+          level = l;
+          section = v.section;
+        }
+      }
+      return level;
     });
   });
 }

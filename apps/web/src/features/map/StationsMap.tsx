@@ -1,8 +1,9 @@
-import type { ApiStation, Snapshot } from '@rws/contracts';
+import type { ApiStation } from '@rws/contracts';
 import type { MapLayerMouseEvent, Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReachGraph } from '../../lib/data/api.ts';
 import type { Change } from '../../lib/data/change.ts';
+import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
 import type { StationState } from '../../lib/stationStates.ts';
@@ -46,7 +47,7 @@ interface Props {
   flow: boolean;
   /** A click on a river sets `?river=` (plan C17). */
   onRiver: (id: string | undefined) => void;
-  values: ReadonlyMap<number, Snapshot['values'][number]>;
+  values: ReadonlyMap<number, PlayedValue>;
   /** After now (P8b): the forecasts at t by series; undefined for a t up to now. */
   forecasts: ReadonlyMap<number, SnapshotForecast> | undefined;
   selected: ApiStation | undefined;

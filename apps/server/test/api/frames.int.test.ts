@@ -1,4 +1,4 @@
-import { CANARIES, FRAMES_MAX_HOURS, FramesAnswer } from '@rws/contracts';
+import { CANARIES, FRAMES_MAX_HOURS, FramesAnswer, stateCode } from '@rws/contracts';
 import { OwnerFramesAnswer } from '@rws/contracts/api-owner';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Limiter } from '../../src/api/limiter.ts';
@@ -61,6 +61,20 @@ beforeAll(async () => {
       [id, v, mine.map(iso)],
     );
   }
+  // #112: an hour of ids.public with 400 cm (public MNW 65 / MHW 544: normal; the owner-only LU-4 orange at 350: a state) and
+  // that owner-only reference (synthetic).
+  await t.admin.query(
+    `INSERT INTO obs_1h (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
+     VALUES ($1, $2, 400, 400, 400, 400, 4, 1) ON CONFLICT (series_id, bucket) DO NOTHING`,
+    [ids.public, iso(TO - 5 * HOUR)],
+  );
+  await t.admin.query(
+    `INSERT INTO reference_value (series_id, source_id, kind, value, unit, semantics, period, valid)
+     VALUES ($1, 'LU-4', 'LU4_ORANGE', 350, 'cm', 'operational', NULL, tstzrange('2020-01-01', NULL)),
+            ($1, 'DE-1', 'MNW', 65, 'cm', 'statistical', '[2010-11-01,2020-11-01)', tstzrange('2020-01-01', NULL)),
+            ($1, 'DE-1', 'MHW', 544, 'cm', 'statistical', '[2010-11-01,2020-11-01)', tstzrange('2020-01-01', NULL))`,
+    [ids.public],
+  );
   const owned = openApiDb({ DATABASE_URL: t.urlFor('rws_owner_api') }, undefined, 'owner');
   const open = openApiDb({ DATABASE_URL: t.urlFor('rws_api') });
   if (typeof owned === 'string' || typeof open === 'string') throw new Error('no database');
@@ -193,5 +207,77 @@ describe('/api/v1/frames, owner', () => {
   it('the cap is the same: 336 hours', async () => {
     expect(FRAMES_MAX_HOURS).toBe(336);
     expect((await json(owner, `/api/v1/frames?${span(TO - 14 * DAY - HOUR, TO)}`)).body.error).toBe('span_too_long');
+  });
+});
+
+describe('/api/v1/frames, state codes (#112)', () => {
+  const at = TO - 5 * HOUR; // an hour of ids.public with a value between the owner-only 350 and the public MHW 725
+  const SETTLED_HOUR = TO - 7 * DAY + 5 * HOUR;
+  const recent = `/api/v1/frames?${span(TO - 3 * DAY, TO)}`;
+  const settled = `/api/v1/frames?${span(TO - 8 * DAY, TO - 5 * DAY)}`;
+  const cellOf = (
+    body: { series: number[]; vlast: (number | null)[][]; state: (number | null)[][] },
+    start: number,
+    ms: number,
+  ) => {
+    const row = body.series.indexOf(ids.public as number);
+    const hour = Math.round((ms - start) / HOUR);
+    return { value: body.vlast[row]?.[hour], code: body.state[row]?.[hour] };
+  };
+
+  it('is version 2 with a state row per series, a code exactly where a value is, in the public and owner answers', async () => {
+    for (const [app, parse] of [
+      [pub, (b: unknown) => FramesAnswer.parse(b)],
+      [owner, (b: unknown) => OwnerFramesAnswer.parse(b)],
+    ] as const) {
+      const a = await json(app, recent);
+      expect(a.status).toBe(200);
+      const body = parse(a.body);
+      expect(body.schemaVersion).toBe(2);
+      expect(body.state.length).toBe(body.series.length);
+      for (const [i, row] of body.vlast.entries())
+        for (const [hour, v] of row.entries()) expect(body.state[i]?.[hour] === null, `${i}/${hour}`).toBe(v === null);
+    }
+  });
+
+  it('a classified series gets its code, the owner-only reference counts in the owner answer only', async () => {
+    const pubCell = cellOf(FramesAnswer.parse((await json(pub, recent)).body), TO - 3 * DAY, at);
+    const ownCell = cellOf(OwnerFramesAnswer.parse((await json(owner, recent)).body), TO - 3 * DAY, at);
+    expect(pubCell.value).toBe(400);
+    // 400 cm is between the public MNW 65 and MHW 544 cm: normal; the owner-only LU-4 level of 350 cm makes it more
+    expect(pubCell.code).toBe(stateCode('normal', false));
+    expect(ownCell.value).toBe(400);
+    expect(ownCell.code).not.toBe(pubCell.code);
+    expect(ownCell.code).toBeGreaterThan(pubCell.code as number);
+    // the owner answer never leaks into the public one: no owner-only series, value or audience
+    const text = (await json(pub, recent)).text;
+    expect(text).not.toContain('"audience"');
+  });
+
+  it('keeps the settled days per version: the same body again, a version bump recomputes', async () => {
+    const first = await json(pub, settled);
+    const code = (b: Record<string, unknown>) => cellOf(b as never, TO - 8 * DAY, SETTLED_HOUR);
+    const before = code(first.body);
+    expect(before.value).toBe(100);
+    expect(before.code).toBe(stateCode('normal', false));
+    expect((await json(pub, settled)).text).toBe(first.text);
+    // The hour's value changes behind the day's version: the answer for that version stays as it was
+    await t.admin.query('UPDATE obs_1h SET vlast = 800 WHERE series_id = $1 AND bucket = $2', [
+      ids.public,
+      iso(SETTLED_HOUR),
+    ]);
+    try {
+      expect((await json(pub, settled)).text).toBe(first.text);
+      versions.set(new Map([[iso(SETTLED_HOUR).slice(0, 10), 3]])); // 3: version 2's key was used by the test above
+      const bumped = code((await json(pub, settled)).body);
+      expect(bumped.value).toBe(800);
+      expect(bumped.code).toBe(stateCode('elevated', false)); // over the public MHW 544
+    } finally {
+      versions.set(new Map());
+      await t.admin.query('UPDATE obs_1h SET vlast = 100 WHERE series_id = $1 AND bucket = $2', [
+        ids.public,
+        iso(SETTLED_HOUR),
+      ]);
+    }
   });
 });

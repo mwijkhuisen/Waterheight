@@ -1,5 +1,6 @@
-import type { ApiStation, Snapshot } from '@rws/contracts';
+import type { ApiStation } from '@rws/contracts';
 import type { Change } from '../../lib/data/change.ts';
+import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { StationState } from '../../lib/stationStates.ts';
 import type { Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
@@ -11,7 +12,6 @@ import { formatNumber, formatValue, unitLabel } from '../station/value.ts';
 // hollow marker or an icon is never the only cue. Everything is plain text for text nodes (invariant 3).
 
 type Series = ApiStation['series'][number];
-type Value = Snapshot['values'][number];
 
 const trendWord = (trend: NonNullable<Change>['trend'], locale: Locale): string =>
   ({ rising: m.trend_rising, falling: m.trend_falling, steady: m.trend_steady })[trend]({}, { locale });
@@ -48,7 +48,7 @@ export function badgeLine({ state, tidal, impounded }: BadgeInput, locale: Local
 export interface ModeLinesInput {
   mode: Mode;
   series: readonly Series[];
-  values: ReadonlyMap<number, Value>;
+  values: ReadonlyMap<number, PlayedValue>;
   changes: ReadonlyMap<number, Change> | undefined;
   locale: Locale;
   /** The quantity word of a series ("water level", "discharge"). */

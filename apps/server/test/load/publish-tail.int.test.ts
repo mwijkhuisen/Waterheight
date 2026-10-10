@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VIEWS } from '../../src/db/audience.ts';
 import type { Db } from '../../src/db/pool.ts';
 import { CANARY_KEY } from '../../src/load/canary.ts';
+import { bumpedDays } from '../../src/load/dirty.ts';
 import { publishTail } from '../../src/load/migrate.ts';
 import { type Harness, harness } from './harness.ts';
 
@@ -19,6 +20,8 @@ const versions = async (family: 'public' | 'owner') =>
   (await h.t.admin.query('SELECT value FROM app_meta WHERE key = $1', [`day_versions:${family}`])).rows[0]?.value as
     | Record<string, { v: number; reason: string }>
     | undefined;
+const framesSchema = async () =>
+  (await h.t.admin.query("SELECT value FROM app_meta WHERE key = 'frames_schema:public'")).rows[0]?.value;
 const counts = async () => {
   const n: number[] = [];
   for (const t of [
@@ -48,14 +51,16 @@ afterAll(async () => {
 describe('migrate publish tail', { timeout: 60_000 }, () => {
   it('seeds the owner canary once, stores the visible registry and bumps nothing on the first run', async () => {
     const first = await publishTail(migrator.db, NOW);
-    expect(first).toEqual({ canaries: 1, bumped: {}, pruned: 0 });
+    expect(first).toEqual({ canaries: 1, schema: [], bumped: {}, pruned: 0 });
     const before = await counts();
-    expect(await publishTail(migrator.db, NOW)).toEqual({ canaries: 1, bumped: {}, pruned: 0 });
+    expect(await publishTail(migrator.db, NOW)).toEqual({ canaries: 1, schema: [], bumped: {}, pruned: 0 });
     expect(await counts()).toEqual(before);
     expect(await versions('public')).toBeUndefined();
     expect(await versions('owner')).toBeUndefined();
     const { rows } = await h.t.admin.query("SELECT key FROM app_meta WHERE key LIKE 'registry_visible:%' ORDER BY key");
     expect(rows.map((r) => r.key)).toEqual(['registry_visible:owner', 'registry_visible:public']);
+    // #112: a fresh database renders nothing yet, so the frames schema is only stored.
+    expect(await framesSchema()).toBe(2);
   });
 
   it('shows the canary to the owner family and never to the public one', async () => {
@@ -125,5 +130,49 @@ describe('migrate publish tail', { timeout: 60_000 }, () => {
         ('owner', 'obs', '2026-09-30', '2026-09-30', '2026-10-01T12:01:00Z')`);
     expect((await publishTail(migrator.db, NOW)).pruned).toBe(1);
     expect(await h.count('publish_dirty')).toBe(1);
+  });
+
+  it('a database migrated before #112 bumps the last 16 public days once, reason schema, and nothing else', async () => {
+    const days = bumpedDays(
+      Math.floor((NOW.getTime() - 16 * 86_400_000) / 86_400_000) * 86_400_000,
+      NOW.getTime(),
+      NOW.getTime(),
+    );
+    expect(days[0]).toBe('2026-09-18');
+    expect(days.at(-1)).toBe('2026-10-02'); // days that began 48 h or more before now
+    const pubBefore = (await versions('public')) ?? {};
+    const ownBefore = await versions('owner');
+    await h.t.admin.query("DELETE FROM app_meta WHERE key = 'frames_schema:public'"); // a pre-#112 database
+    const tail = await publishTail(migrator.db, NOW);
+    expect(tail).toMatchObject({ schema: days, bumped: {} });
+    const pub = (await versions('public')) ?? {};
+    for (const d of Object.keys(pub)) {
+      if (days.includes(d)) {
+        expect(pub[d], d).toMatchObject({ v: (pubBefore[d]?.v ?? 1) + 1, reason: 'schema' });
+      } else expect(pub[d], d).toEqual(pubBefore[d]); // older days untouched
+    }
+    for (const d of days) expect(pub[d]?.reason, d).toBe('schema');
+    expect(await versions('owner')).toEqual(ownBefore);
+    expect(await framesSchema()).toBe(2);
+    // once: the next run bumps nothing
+    expect(await publishTail(migrator.db, NOW)).toMatchObject({ schema: [], bumped: {} });
+    expect((await versions('public')) ?? {}).toEqual(pub);
+  });
+
+  it('the schema bump keeps a pending narrowing as narrowed, so its older versions still go at once (review S1)', async () => {
+    const before = (await versions('public')) ?? {};
+    const map = {
+      ...before,
+      '2026-10-01': { v: (before['2026-10-01']?.v ?? 1) + 1, reason: 'narrowed', at: NOW.toISOString() },
+    };
+    await h.t.admin.query("UPDATE app_meta SET value = $1::jsonb WHERE key = 'day_versions:public'", [
+      JSON.stringify(map),
+    ]);
+    await h.t.admin.query("DELETE FROM app_meta WHERE key = 'frames_schema:public'");
+    const tail = await publishTail(migrator.db, NOW);
+    expect(tail.schema).toContain('2026-10-01');
+    const pub = (await versions('public')) ?? {};
+    expect(pub['2026-10-01']).toMatchObject({ v: (map['2026-10-01']?.v ?? 1) + 1, reason: 'narrowed' });
+    expect(pub['2026-09-30']?.reason).toBe('schema');
   });
 });

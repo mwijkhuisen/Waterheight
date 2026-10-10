@@ -5,7 +5,7 @@ import { type Kysely, sql } from 'kysely';
 import type { DB } from '../db/generated.ts';
 import { type DbConfig, dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { syncOwnerCanary } from './canary.ts';
-import { DATA_FLOOR, registryBump } from './dirty.ts';
+import { DATA_FLOOR, framesSchemaBump, registryBump } from './dirty.ts';
 import { RegistryError, readRegistry, readRiverRegistry, syncRegistry } from './registry-sync.ts';
 import { lock } from './store.ts';
 
@@ -85,7 +85,7 @@ export async function runMigrate(
     );
     const tail = await publishTail(db);
     log(
-      `migrate: publish tail (${tail.canaries} owner canary source(s), public bump ${tail.bumped.public ?? 'none'}, owner bump ${tail.bumped.owner ?? 'none'}, ${tail.pruned} dirty row(s) pruned)`,
+      `migrate: publish tail (${tail.canaries} owner canary source(s), public bump ${tail.bumped.public ?? 'none'}, owner bump ${tail.bumped.owner ?? 'none'}, frames schema bump ${tail.schema.length} day(s), ${tail.pruned} dirty row(s) pruned)`,
     );
     return 0;
   } catch (err) {
@@ -97,14 +97,19 @@ export async function runMigrate(
   }
 }
 
-/** The P9a tail: canary, registry bump (it reads the canary's series) and the 3-day prune of publish_dirty (§9 C4). */
+/**
+ * The P9a tail: canary, registry bump (it reads the canary's series), the frames schema bump (#112) and the 3-day
+ * prune of publish_dirty (§9 C4).
+ */
 export async function publishTail(db: Kysely<DB>, now = new Date()) {
   return db.transaction().execute(async (tx) => {
     await lock(tx);
     const canaries = await syncOwnerCanary(tx);
+    // The schema bump first: it reads whether a registry map was ever stored, which registryBump then stores.
+    const schema = await framesSchemaBump(tx, now);
     const bumped = await registryBump(tx, now);
     const pruned = await sql`
       DELETE FROM publish_dirty WHERE created_at < ${now}::timestamptz - interval '3 days'`.execute(tx);
-    return { canaries, bumped, pruned: Number(pruned.numAffectedRows ?? 0n) };
+    return { canaries, bumped, schema, pruned: Number(pruned.numAffectedRows ?? 0n) };
   });
 }

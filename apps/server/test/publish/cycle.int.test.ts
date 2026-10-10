@@ -35,6 +35,13 @@ const columns = {
   zero: [],
 };
 const iso = (ms: number) => new Date(ms).toISOString();
+// one rws_publish pool for every test of the file: the role allows 6 connections, and every dbAs call opens a pool of
+// 2 that stays open (idle connections linger 10 s) until the harness closes (#121's CI: "too many connections")
+let shared: ReturnType<Harness['dbAs']> | undefined;
+const pubDb = () => {
+  shared ??= h.dbAs('rws_publish');
+  return shared;
+};
 
 function fake(over: Partial<Renderers> = {}): Renderers {
   const log =
@@ -62,12 +69,13 @@ function fake(over: Partial<Renderers> = {}): Renderers {
     })),
     snapshot: log('snapshot', (_c, t: number) => ({ schemaVersion: 1, t: iso(t), ...columns, attribution })),
     frames: log('frames', (_c, from: number, to: number) => ({
-      schemaVersion: 1,
+      schemaVersion: 2,
       from: iso(from),
       to: iso(to),
       stepSeconds: 3600,
       series: [],
       vlast: [],
+      state: [],
       attribution,
     })),
     forecast: log('forecast', (c) => ({ schemaVersion: 1, now: iso(c.now), runs: [], attribution })),
@@ -115,14 +123,12 @@ function fake(over: Partial<Renderers> = {}): Renderers {
 
 const read = (rel: string) => JSON.parse(readFileSync(join(dir, 'v1', rel), 'utf8'));
 const ls = (rel: string) => readdirSync(join(dir, rel)).sort();
-const setVersions = (family: string, map: Record<string, number>) =>
+const setVersions = (family: string, map: Record<string, number>, reason = 'revision') =>
   h.t.admin.query(
     `INSERT INTO app_meta (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
     [
       `day_versions:${family}`,
-      JSON.stringify(
-        Object.fromEntries(Object.entries(map).map(([d, v]) => [d, { v, reason: 'revision', at: iso(NOW) }])),
-      ),
+      JSON.stringify(Object.fromEntries(Object.entries(map).map(([d, v]) => [d, { v, reason, at: iso(NOW) }]))),
     ],
   );
 
@@ -142,7 +148,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('publish cycle', { timeout: 120_000 }, () => {
   it('writes the whole public tree, the settled day with its marker, and meta.json last', async () => {
-    const db = h.dbAs('rws_publish');
+    const db = pubDb();
     await publishOnce(db.db, 'public', dir, { now: NOW, render: fake() });
     expect(calls.at(-1)).toBe('meta');
     expect(calls.at(-2)).toBe('status');
@@ -215,7 +221,7 @@ describe('publish cycle', { timeout: 120_000 }, () => {
   });
 
   it('renders a bumped day under its new version, keeps the old one 1 h, then prunes it', async () => {
-    const db = h.dbAs('rws_publish');
+    const db = pubDb();
     await publishOnce(db.db, 'public', dir, { now: NOW, render: fake() });
     await setVersions('public', { '2026-10-01': 2 });
     await publishOnce(db.db, 'public', dir, { now: NOW + 60_000, render: fake() });
@@ -229,8 +235,97 @@ describe('publish cycle', { timeout: 120_000 }, () => {
     await setVersions('public', {});
   });
 
+  it('re-renders recent frames for an obs, reference, class or warning row in the unsettled span, not for an older one', async () => {
+    const db = pubDb();
+    const errors: Record<string, unknown>[] = [];
+    const p = new Publisher({
+      db: db.db,
+      family: 'public',
+      out: new Output(dir),
+      render: fake(),
+      window: new DisplayWindow(db.db, undefined, 'public'),
+      now: () => NOW,
+      build: 'dev',
+      sections: new Map(),
+      cache: new StaticCache(60_000, () => NOW),
+      inputs: undefined,
+      log: { error: (o: Record<string, unknown>) => errors.push(o) },
+      budgetMs: Number.POSITIVE_INFINITY,
+      settledPerCycle: 1,
+      strict: false,
+    });
+    const framesCalls = async () => {
+      calls = [];
+      await p.cycle();
+      return calls.filter((c) => c === 'frames').length;
+    };
+    const dirty = (kind: string, toMs: number) =>
+      h.t.admin.query(`INSERT INTO publish_dirty (family, kind, from_ts, to_ts) VALUES ('public', $1, $2, $2)`, [
+        kind,
+        new Date(toMs),
+      ]);
+    expect(await framesCalls()).toBe(2); // the first cycle: recent.json and the settled day 2026-10-01
+    expect(await framesCalls()).toBe(0); // nothing changed
+    // older than unsettledStart(NOW) (2026-10-02): the frames file does not hold that hour
+    const old = Date.parse('2026-10-01T10:00:00Z');
+    for (const kind of ['class', 'reference', 'warning', 'obs']) await dirty(kind, old);
+    expect(await framesCalls()).toBe(0);
+    // a kind that does not change frames
+    await dirty('forecast', NOW);
+    expect(await framesCalls()).toBe(0);
+    for (const kind of ['class', 'reference', 'warning', 'obs']) {
+      await dirty(kind, Date.parse('2026-10-03T00:00:00Z'));
+      expect(await framesCalls(), kind).toBe(1);
+      expect(await framesCalls(), kind).toBe(0);
+    }
+    expect(errors).toEqual([]);
+  });
+
+  // meta is sparse (1 is left out): the old complete v1 stays served and named, as for a registry bump.
+  it.each([
+    ['schema', {}],
+    ['registry', {}],
+  ])(
+    'a %s bump names the old complete version in meta until the new one is complete',
+    async (reason, whileRendering) => {
+      const db = pubDb();
+      await publishOnce(db.db, 'public', dir, { now: NOW, render: fake() });
+      expect(read('meta.json').dayVersions).toEqual({});
+      await setVersions('public', { '2026-10-01': 2 }, reason);
+      const failing = fake({
+        snapshot: async (_c, t) => {
+          if (dayOf(t) === '2026-10-01') throw coded('render_failed');
+          return { schemaVersion: 1, t: iso(t), ...columns, attribution };
+        },
+      });
+      // not strict: a failing step is logged and the cycle goes on
+      const p = new Publisher({
+        db: db.db,
+        family: 'public',
+        out: new Output(dir),
+        render: failing,
+        window: new DisplayWindow(db.db, undefined, 'public'),
+        now: () => NOW + 60_000,
+        build: 'dev',
+        sections: new Map(),
+        cache: new StaticCache(60_000, () => NOW),
+        inputs: undefined,
+        log: { error: () => undefined },
+        budgetMs: Number.POSITIVE_INFINITY,
+        settledPerCycle: 1,
+        strict: false,
+      });
+      await p.cycle();
+      expect(ls('v1/settled/2026-10-01')).toEqual(['v1']);
+      expect(read('meta.json').dayVersions).toEqual(whileRendering);
+      await publishOnce(db.db, 'public', dir, { now: NOW + 120_000, render: fake() });
+      expect(read('meta.json').dayVersions).toEqual({ '2026-10-01': 2 });
+      await setVersions('public', {});
+    },
+  );
+
   it('drops a version bumped while it renders, and meta never names it', async () => {
-    const db = h.dbAs('rws_publish');
+    const db = pubDb();
     let bumped = false;
     const render = fake({
       snapshot: async (_c, t) => {
@@ -250,7 +345,7 @@ describe('publish cycle', { timeout: 120_000 }, () => {
   });
 
   it('skips one failing bucket or station, never the rest; a failing hot step makes meta degraded (CR-1, CR-2)', async () => {
-    const db = h.dbAs('rws_publish');
+    const db = pubDb();
     const bad = Date.parse('2026-10-03T12:00:00Z');
     const errors: Record<string, unknown>[] = [];
     const render = fake({
@@ -310,7 +405,7 @@ describe('publish cycle', { timeout: 120_000 }, () => {
           ],
         }),
       });
-    const pub = h.dbAs('rws_publish');
+    const pub = pubDb();
     await expect(
       publishOnce(pub.db, 'public', dir, { now: NOW, render: withValue(CANARIES.owner.real) }),
     ).rejects.toThrow('canary_in_output');
