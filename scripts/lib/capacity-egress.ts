@@ -171,7 +171,7 @@ export function renderSection(b: Baseline): string {
     ...CLASSES.map((c) => `| ${c} | ${b.requests[c]} | ${mb(b.bytes[c])} |`),
     `| **Session** | ${CLASSES.reduce((n, c) => n + b.requests[c], 0)} | **${mb(b.total_bytes)}** |`,
     '',
-    'CI fails when the session total grows by more than 20% over the baseline; a class above 20% is reported (WARN), because the classes move with the time of day between runs (`EGRESS_UPDATE=1` rewrites the baseline; the change is reviewed like any other). A cold cache is the worst case: a returning visitor re-fetches no hashed asset.',
+    'CI fails when the session total grows by more than 20% over the baseline; a class above 20% is reported (WARN), because the classes move with the time of day between runs (`EGRESS_UPDATE=1` rewrites the baseline; the change is reviewed like any other). A cold cache is the worst case: a returning visitor re-fetches no hashed asset. The session has no dwell time, while an open live view re-polls its data every 60 s, so the figures below are a lower bound for long visits (review CR-7).',
     '',
     '### Inputs',
     '',

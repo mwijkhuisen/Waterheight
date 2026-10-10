@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # verify-owner.sh: the owner's check of the owner site over WireGuard (P12a, issue #27 criterion 11; ADR-0017,
 # docs/runbooks/owner-exposure.md). Run it ON AN OWNER DEVICE with the tunnel up. Nobody else runs it; no agent has
-# a tunnel. Prints one PASS/FAIL line per check, exits 1 on any FAIL; attach the output (without the password,
-# which it never prints) to issue #27 together with `sudo wg show wg0` and `sudo rws-wg-peer list` from the VPS.
+# a tunnel. Prints one PASS/FAIL line per check, exits 1 on any FAIL. Issue #27 is public: post there only the count
+# of PASS and FAIL lines; the full output names owner sources, and `sudo wg show wg0` names the devices and their
+# endpoint addresses, so both stay in the owner's private notes (review SR-5). It never prints the password.
 #
 # Usage: scripts/verify-owner.sh <domain> [--cacert <caddy-owner root.crt>] [--password-file <file>]
 #                                [--address 10.66.0.1] [--max-age-min 180] [--skip-tunnel-down]

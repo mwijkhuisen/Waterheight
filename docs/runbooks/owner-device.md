@@ -25,7 +25,7 @@ ssh ops@<vps> 'sudo rws-wg-peer add laptop' > laptop.conf
 ssh ops@<vps> 'sudo docker exec rws-caddy-owner-1 cat /data/caddy/pki/authorities/local/root.crt' > owner-root.crt
 ```
 
-  Import `owner-root.crt` as a trusted root in the device's OS or browser store, or pass it to curl (`--cacert owner-root.crt`) and to `scripts/verify-owner.sh --cacert`. Check the fingerprint against the VPS (`openssl x509 -in owner-root.crt -noout -fingerprint -sha256` on both) once. The CA lives in the `caddy_owner_data` volume: it survives restarts and deploys; a restore from backup makes a new one (re-export).
+  The root has no name constraint and its key lives online in the `caddy_owner_data` volume: whoever gets that key can impersonate **any** site to a store that trusts the root (review SR-4). So import it only into a dedicated browser profile used for the owner site, never into the device's system store, or pass it to curl (`--cacert owner-root.crt`) and to `scripts/verify-owner.sh --cacert`. Check the fingerprint against the VPS (`openssl x509 -in owner-root.crt -noout -fingerprint -sha256` on both) once. The CA lives in the `caddy_owner_data` volume: it survives restarts and deploys; a restore from backup makes a new one (re-export).
 - Open `https://owner.<domain>`; the browser asks for the owner password.
 
 ## List and revoke

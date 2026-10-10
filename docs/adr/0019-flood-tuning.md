@@ -56,6 +56,7 @@ A crowd saturates the API through the limiter (six honest addresses cannot: the 
 
 ## Consequences
 
-- A change of a role's connection limit or of `max_connections` fails `migrate` (and CI) when the budget breaks; the owner re-runs `bootstrap.sh` after a release that changes `roles.sql`.
+- A change of a role's connection limit or of `max_connections` that breaks the budget fails CI (`roles.int.test.ts`, the standing guard). The guard migration checks the budget once, when a database first applies it: a later `roles.sql` edit is caught by CI, not by `migrate` (review CR-5). Its margin of 5 covers PostgreSQL's 3 `superuser_reserved_connections`. The owner re-runs `bootstrap.sh` after a release that changes `roles.sql`.
+- **What the lag evidence does and does not show** (review CR-6). The loader lag in `/api/v1/health` is the p95 over the last hour of loaded lines, and the fake upstream feeds five specs, so the k6 runs prove that a saturated API and Caddy take no CPU or connections from the loader, not that the loader keeps up with a burst of payloads; the flood drill's replay of its fixtures during the k6 flood scenario is the nearest to that (lag p95 11.5 s).
 - The brownout is a host file and a timer: bootstrap installs them (mode `auto`).
 - The k6 jobs run on every PR that touches `apps/server/**`, `packages/contracts/**`, `deploy/**` or the workflow, so a regression of the shape above fails CI.

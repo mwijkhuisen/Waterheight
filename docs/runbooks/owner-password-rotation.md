@@ -17,7 +17,7 @@ sudo mv -f /etc/rws/secrets/owner_basic_auth.new /etc/rws/secrets/owner_basic_au
 sudo docker restart rws-caddy-owner-1
 ```
 
-Use a long random password from the password manager (20+ characters; no `"` or `\`, which `scripts/verify-owner.sh` refuses). The mount is a single-file bind: the replaced file is seen only after the restart (`mv` swaps the inode), which is why the container restarts. A wrong file makes caddy-owner refuse to start (it fails closed; the public site is unaffected).
+Use a long random password from the password manager (at least 32 characters, as `docs/security/secrets.md` and T-WG-1 say; no `"` or `\`, which `scripts/verify-owner.sh` refuses). The mount is a single-file bind: the replaced file is seen only after the restart (`mv` swaps the inode), which is why the container restarts. A wrong file makes caddy-owner refuse to start (it fails closed; the public site is unaffected).
 
 ## Check
 
