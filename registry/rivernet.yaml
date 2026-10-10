@@ -7,7 +7,7 @@
 #   sources, km_to_nl_entry the km to its NL entry node (negative below it). Owner-audience rows identify
 #   the station only (river, reach, km). reaches: cut at public stations only; id <river>.<seq>.
 version: 1
-fixture: {"source_run":"https://github.com/mwijkhuisen/Waterheight/actions/runs/37071962474","ways_sha256":"1b84d8339c3ef2eadc55cd23b30bb574bf437af91d9052e66ae2e9251f1496aa","osm_replication_timestamp":"2026-10-01T20:22:06Z"}
+fixture: {"source_run":"https://github.com/mwijkhuisen/Waterheight/actions/runs/38006225186","ways_sha256":"b48c28e0533914ffd18ba26bb6f38160cff6cfea4146df78964834a09faa0451","osm_replication_timestamp":"2026-10-09T20:21:04Z"}
 stations:
   - {"id":"be.spw.1046","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.1081","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -40,15 +40,15 @@ stations:
   - {"id":"be.spw.5572","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.5771","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.5796","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.5803","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":129.06,"km_to_nl_entry":22.78,"nl_entry_node":"eijsden"}
-  - {"id":"be.spw.5804","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":128.86,"km_to_nl_entry":22.99,"nl_entry_node":"eijsden"}
-  - {"id":"be.spw.5806","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":128.4,"km_to_nl_entry":23.44,"nl_entry_node":"eijsden"}
-  - {"id":"be.spw.5808","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":128.21,"km_to_nl_entry":23.64,"nl_entry_node":"eijsden"}
-  - {"id":"be.spw.5811","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":127.27,"km_to_nl_entry":24.58,"nl_entry_node":"eijsden"}
-  - {"id":"be.spw.5826","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":125.81,"km_to_nl_entry":26.04,"nl_entry_node":"eijsden"}
-  - {"id":"be.spw.5857","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":118.03,"km_to_nl_entry":33.82,"nl_entry_node":"eijsden"}
-  - {"id":"be.spw.5896","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":102.73,"km_to_nl_entry":49.11,"nl_entry_node":"eijsden"}
-  - {"id":"be.spw.5904","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":101.47,"km_to_nl_entry":50.37,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.5803","rule":"name","river":"ourthe","reach":"ourthe.3","km_official":null,"km_official_system":null,"km_graph":129.06,"km_to_nl_entry":22.78,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.5804","rule":"name","river":"ourthe","reach":"ourthe.3","km_official":null,"km_official_system":null,"km_graph":128.86,"km_to_nl_entry":22.99,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.5806","rule":"name","river":"ourthe","reach":"ourthe.3","km_official":null,"km_official_system":null,"km_graph":128.4,"km_to_nl_entry":23.44,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.5808","rule":"name","river":"ourthe","reach":"ourthe.2","km_official":null,"km_official_system":null,"km_graph":128.21,"km_to_nl_entry":23.64,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.5811","rule":"name","river":"ourthe","reach":"ourthe.2","km_official":null,"km_official_system":null,"km_graph":127.27,"km_to_nl_entry":24.58,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.5826","rule":"name","river":"ourthe","reach":"ourthe.2","km_official":null,"km_official_system":null,"km_graph":125.81,"km_to_nl_entry":26.04,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.5857","rule":"name","river":"ourthe","reach":"ourthe.2","km_official":null,"km_official_system":null,"km_graph":118.03,"km_to_nl_entry":33.82,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.5896","rule":"name","river":"ourthe","reach":"ourthe.2","km_official":null,"km_official_system":null,"km_graph":102.73,"km_to_nl_entry":49.11,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.5904","rule":"name","river":"ourthe","reach":"ourthe.2","km_official":null,"km_official_system":null,"km_graph":101.47,"km_to_nl_entry":50.37,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.5921","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":91.57,"km_to_nl_entry":60.28,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.5922","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":89.99,"km_to_nl_entry":61.85,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.5953","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":68.99,"km_to_nl_entry":82.85,"nl_entry_node":"eijsden"}
@@ -57,21 +57,21 @@ stations:
   - {"id":"be.spw.5997","rule":"name","river":"ourthe","reach":"ourthe.1","km_official":null,"km_official_system":null,"km_graph":2.12,"km_to_nl_entry":149.72,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.6021","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.6122","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6228","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6229","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6353","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6387","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6392","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.640601","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"be.spw.6228","rule":"name","river":"vesdre","reach":"vesdre.1","km_official":null,"km_official_system":null,"km_graph":66.29,"km_to_nl_entry":29.61,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.6229","rule":"name","river":"vesdre","reach":"vesdre.1","km_official":null,"km_official_system":null,"km_graph":66.17,"km_to_nl_entry":29.73,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.6353","rule":"name","river":"vesdre","reach":"vesdre.1","km_official":null,"km_official_system":null,"km_graph":30.27,"km_to_nl_entry":65.62,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.6387","rule":"name","river":"vesdre","reach":"vesdre.1","km_official":null,"km_official_system":null,"km_graph":21.71,"km_to_nl_entry":74.19,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.6392","rule":"name","river":"vesdre","reach":"vesdre.1","km_official":null,"km_official_system":null,"km_graph":20.66,"km_to_nl_entry":75.24,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.640601","rule":"name","river":"vesdre","reach":"vesdre.1","km_official":null,"km_official_system":null,"km_graph":17.06,"km_to_nl_entry":78.84,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.6438","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.6517","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.6526","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.656601","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6621","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6651","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6671","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6732","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.6753","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"be.spw.6621","rule":"name","river":"ambleve","reach":"ambleve.1","km_official":null,"km_official_system":null,"km_graph":79.65,"km_to_nl_entry":56.37,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.6651","rule":"name","river":"ambleve","reach":"ambleve.1","km_official":null,"km_official_system":null,"km_graph":73.63,"km_to_nl_entry":62.39,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.6671","rule":"name","river":"ambleve","reach":"ambleve.1","km_official":null,"km_official_system":null,"km_graph":58.3,"km_to_nl_entry":77.72,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.6732","rule":"name","river":"ambleve","reach":"ambleve.1","km_official":null,"km_official_system":null,"km_graph":41.86,"km_to_nl_entry":94.16,"nl_entry_node":"eijsden"}
+  - {"id":"be.spw.6753","rule":"name","river":"ambleve","reach":"ambleve.1","km_official":null,"km_official_system":null,"km_graph":27.97,"km_to_nl_entry":108.05,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.6804","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.6832","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.6933","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -219,7 +219,7 @@ stations:
   - {"id":"be.spw.L6450","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L6461","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L6470","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.L6510","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"be.spw.L6510","rule":"name","river":"ambleve","reach":"ambleve.1","km_official":null,"km_official_system":null,"km_graph":41.86,"km_to_nl_entry":94.16,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.L6520","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L6530","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L6550","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -258,7 +258,7 @@ stations:
   - {"id":"be.spw.L7120","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7130","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7140","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.L7150","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"be.spw.L7150","rule":"name","river":"vesdre","reach":"vesdre.1","km_official":null,"km_official_system":null,"km_graph":43.04,"km_to_nl_entry":52.86,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.L7161","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7180","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7190","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -268,7 +268,7 @@ stations:
   - {"id":"be.spw.L7231","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7241","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7260","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.L7280","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"be.spw.L7280","rule":"name","river":"ambleve","reach":"ambleve.1","km_official":null,"km_official_system":null,"km_graph":15.19,"km_to_nl_entry":120.83,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.L7290","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7300","rule":"name","river":"semois","reach":"semois.4","km_official":null,"km_official_system":null,"km_graph":96.08,"km_to_nl_entry":310.54,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.L7310","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -291,7 +291,7 @@ stations:
   - {"id":"be.spw.L7640","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7650","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7660","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"be.spw.L7670","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"be.spw.L7670","rule":"name","river":"ambleve","reach":"ambleve.1","km_official":null,"km_official_system":null,"km_graph":48.66,"km_to_nl_entry":87.36,"nl_entry_node":"eijsden"}
   - {"id":"be.spw.L7680","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7690","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.L7750","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -1711,7 +1711,7 @@ reaches:
   - {"id":"aare.10","river":"aare","seq":10,"up_station":null,"down_station":null,"length_km":1.203,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"aare.11","river":"aare","seq":11,"up_station":null,"down_station":"ch.bafu.2205","length_km":1.553,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"aare.12","river":"aare","seq":12,"up_station":"ch.bafu.2205","down_station":null,"length_km":12.676,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"ahr.1","river":"ahr","seq":1,"up_station":null,"down_station":null,"length_km":84.896,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"ahr.1","river":"ahr","seq":1,"up_station":null,"down_station":null,"length_km":84.881,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"alzette.1","river":"alzette","seq":1,"up_station":null,"down_station":null,"length_km":0.305,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"alzette.2","river":"alzette","seq":2,"up_station":null,"down_station":"lu.age.livange","length_km":19.374,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"alzette.3","river":"alzette","seq":3,"up_station":"lu.age.livange","down_station":null,"length_km":5.406,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
@@ -1724,6 +1724,7 @@ reaches:
   - {"id":"alzette.10","river":"alzette","seq":10,"up_station":"lu.age.steinsel","down_station":"lu.age.mersch","length_km":10.775,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"alzette.11","river":"alzette","seq":11,"up_station":"lu.age.mersch","down_station":"lu.age.ettelbruck-alzette","length_km":15.228,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"alzette.12","river":"alzette","seq":12,"up_station":"lu.age.ettelbruck-alzette","down_station":null,"length_km":1.134,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"ambleve.1","river":"ambleve","seq":1,"up_station":null,"down_station":null,"length_km":85.324,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"berkel.1","river":"berkel","seq":1,"up_station":null,"down_station":"de.lanuk.9284100000100","length_km":7.5,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"berkel.2","river":"berkel","seq":2,"up_station":"de.lanuk.9284100000100","down_station":"de.lanuk.9284300000010","length_km":17.118,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"berkel.3","river":"berkel","seq":3,"up_station":"de.lanuk.9284300000010","down_station":"de.lanuk.9284590000200","length_km":19.735,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
@@ -1963,7 +1964,7 @@ reaches:
   - {"id":"main.12","river":"main","seq":12,"up_station":"de.wsv.24700335","down_station":"de.wsv.24700404","length_km":25.417,"flags":{"tidal":false,"impounded":true,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"main.13","river":"main","seq":13,"up_station":"de.wsv.24700404","down_station":"de.wsv.24900108","length_km":25.474,"flags":{"tidal":false,"impounded":true,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"main.14","river":"main","seq":14,"up_station":"de.wsv.24900108","down_station":null,"length_km":12.584,"flags":{"tidal":false,"impounded":true,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"mark.1","river":"mark","seq":1,"up_station":null,"down_station":null,"length_km":22.278,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"mark.1","river":"mark","seq":1,"up_station":null,"down_station":null,"length_km":22.28,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"mark.2","river":"mark","seq":2,"up_station":null,"down_station":null,"length_km":48.627,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"merkske.1","river":"merkske","seq":1,"up_station":null,"down_station":null,"length_km":16.241,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"meurthe.1","river":"meurthe","seq":1,"up_station":null,"down_station":"fr.sandre.A600101001","length_km":19.089,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
@@ -2193,7 +2194,9 @@ reaches:
   - {"id":"our.4","river":"our","seq":4,"up_station":null,"down_station":null,"length_km":0.281,"flags":{"tidal":false,"impounded":false,"bifurcation":true},"travel_time_h":null,"travel_time_source":null}
   - {"id":"our.5","river":"our","seq":5,"up_station":null,"down_station":"lu.age.vianden","length_km":18.086,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"our.6","river":"our","seq":6,"up_station":"lu.age.vianden","down_station":null,"length_km":12.048,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"ourthe.1","river":"ourthe","seq":1,"up_station":null,"down_station":null,"length_km":130.982,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"ourthe.1","river":"ourthe","seq":1,"up_station":null,"down_station":null,"length_km":101.147,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"ourthe.2","river":"ourthe","seq":2,"up_station":null,"down_station":null,"length_km":27.108,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"ourthe.3","river":"ourthe","seq":3,"up_station":null,"down_station":null,"length_km":2.726,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"pannerdensch-kanaal.1","river":"pannerdensch-kanaal","seq":1,"up_station":null,"down_station":"nl.rws.pannerden.pannerdenschkanaal","length_km":0.572,"flags":{"tidal":false,"impounded":false,"bifurcation":true},"travel_time_h":null,"travel_time_source":null}
   - {"id":"pannerdensch-kanaal.2","river":"pannerdensch-kanaal","seq":2,"up_station":"nl.rws.pannerden.pannerdenschkanaal","down_station":null,"length_km":5.676,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"prum.1","river":"prum","seq":1,"up_station":null,"down_station":null,"length_km":94.063,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
@@ -2393,6 +2396,7 @@ reaches:
   - {"id":"vechte.5","river":"vechte","seq":5,"up_station":"nl.rws.holtheme.vecht","down_station":"nl.rws.ommen.vecht","length_km":31.429,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"vechte.6","river":"vechte","seq":6,"up_station":"nl.rws.ommen.vecht","down_station":"nl.rws.dalfsen.vechterweerd","length_km":16.592,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"vechte.7","river":"vechte","seq":7,"up_station":"nl.rws.dalfsen.vechterweerd","down_station":null,"length_km":11.076,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"vesdre.1","river":"vesdre","seq":1,"up_station":null,"down_station":null,"length_km":72.31,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"viroin.1","river":"viroin","seq":1,"up_station":null,"down_station":"fr.sandre.B713000201","length_km":31.93,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"viroin.2","river":"viroin","seq":2,"up_station":"fr.sandre.B713000201","down_station":"fr.sandre.B713000301","length_km":10.413,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"viroin.3","river":"viroin","seq":3,"up_station":"fr.sandre.B713000301","down_station":"fr.sandre.B713000101","length_km":15.667,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}

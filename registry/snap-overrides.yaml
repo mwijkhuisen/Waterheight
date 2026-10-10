@@ -208,6 +208,8 @@ waters:
   - { source: BE-3, water_name: "Moyenne Semois", river: semois, reason: "SPW Semois reach (Bouillon, Chiny, Herbeumont, Lacuisine); within 24 m of the Semois on the fixture" }
   - { source: BE-3, water_name: "Haute Semois", river: semois, reason: "SPW Semois reach (Tintigny, Sainte-Marie); within 11 m of the Semois on the fixture" }
   - { source: BE-3, water_name: "Semois", river: semois, reason: "SPW Semois (Etalle, Chantemelle); within 4 m of the Semois on the fixture" }
+  - { source: BE-3, water_name: "Vesdre", river: vesdre, reason: "SPW Vesdre (#110 item 4, KG-163): 7 gauges from Eupen to Chaudfontaine; every station with it lies within 154 m of the Vesdre on the fixture (OSM 2026-10-09)" }
+  - { source: BE-3, water_name: "Amblève", river: ambleve, reason: "SPW Amblève (#110 item 4, KG-163): 8 gauges from Monteneau to Martinrive; every station with it lies within 25 m of the Amblève on the fixture (OSM 2026-10-09)" }
   - { source: BE-3, water_name: "Basse Sambre", river: sambre, reason: "SPW Sambre reach (catalogue §3.3 item 10: Monceau, Châtelet, Salzinnes-Ronet); within 33 m of the Sambre on the fixture" }
   - { source: BE-3, water_name: "Haute Sambre", river: sambre, reason: "SPW Sambre reach (Solre, Landelies); within 17 m of the Sambre on the fixture" }
   - { source: BE-3, water_name: "Chiers", river: chiers, reason: "SPW Chiers at Torgny (catalogue §0.6); 8 m from the Chiers on the fixture" }
