@@ -106,6 +106,10 @@ test('the owner site: hourly playback reads the owner frames api only, its answe
   await page.goto(`/?t=${t}Z&s=be.spw.5447&mode=delta&play=normal`);
   await expect(page.getByRole('slider', { name: 'Tijdlijn' })).toBeVisible();
   const play = page.getByRole('button', { name: msg('nl', 'play'), exact: true });
+  // Paused on the map, the page reads the frames of t's days for the travel-time shift (#112, App.tsx shiftWindow), and
+  // Play drops that read (its fetch is aborted). It finishes first, so the frames answer awaited below is the
+  // playback's own (#119: an aborted one has no body) and no shift read is asked twice.
+  await page.waitForLoadState('networkidle');
   // The owner frames answer itself: the played hours of the seeded SPW gauges (run.sh writes 321 for be.spw.5447 and
   // be.spw.5451). After the play the page is paused and reads its snapshot, whose own freshness rules decide what the
   // panel shows, so the played value is checked in the answer the playback used.
