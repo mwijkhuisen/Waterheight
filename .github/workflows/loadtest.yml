@@ -19,15 +19,19 @@ name: loadtest
 
 on:
   pull_request:
+    # Everything the stack, the web bundle, the drill and the egress profile are built from (review CR-1: a bundle- or
+    # crosswalk-only change must run the egress guard and the drill too).
     paths:
       - apps/server/**
-      - packages/contracts/**
+      - apps/web/**
+      - packages/**
+      - db/**
       - deploy/**
       - registry/**
+      - pnpm-lock.yaml
       - scripts/seed-loadtest.ts
       - scripts/flood-drill*
       - scripts/lib/**
-      - apps/web/e2e/**
       - docs/capacity-egress.json
       - .github/workflows/loadtest.yml
   workflow_dispatch:
