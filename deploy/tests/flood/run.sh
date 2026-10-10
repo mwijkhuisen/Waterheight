@@ -14,8 +14,8 @@
 #   5. the cancel phase: the AGE Cancel and the TEST message; flood-check.mjs (closed): the alert is closed, the TEST
 #      never appeared; it prints "PASS flood-check";
 #   6. Playwright in the pinned image (apps/web/e2e/flood-drill.spec.ts): the flood scenes of the page, with a visual
-#      baseline. While apps/web/e2e/visual/__screenshots__ holds no flood-drill-*.png the run WRITES them
-#      (--update-snapshots) and says so: the first run of this job produces the baselines, to commit from the artifact.
+#      baseline. A missing flood-drill-*.png is written and its test FAILS (Playwright's default, the project's rule for
+#      visual baselines): commit it from the job's artifact after looking at it; a committed one is never rewritten.
 # Needs PLAYWRIGHT_IMAGE (ci.yml's deploy job value; sudo --preserve-env=PLAYWRIGHT_IMAGE). FLOOD_WAIT_S (default 900)
 # is how long flood-check.mjs waits for each phase to reach the files.
 # Usage: sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/flood/run.sh
@@ -116,28 +116,20 @@ endstep
 
 step "Playwright: the flood scenes of the page, visual baseline (pinned image)"
 shopt -s nullglob
-baselines=("$repo"/apps/web/e2e/visual/__screenshots__/flood-drill-*.png)
-update=()
-if ((${#baselines[@]} < 2)); then
-  update=(--update-snapshots)
-  echo "::warning::no flood-drill baseline in apps/web/e2e/visual/__screenshots__: this run writes them (commit them from the job's artifact)"
-fi
+before=("$repo"/apps/web/e2e/visual/__screenshots__/flood-drill-*.png)
 ui_rc=0
 docker run --rm --init --network host --ipc=host --add-host "$domain:$RWS_E2E_CADDY_IP" \
   -e CI=true -e E2E_COMPOSE=1 -e E2E_SPEC=flood-drill -e "E2E_COMPOSE_URL=https://$domain" -e DRILL_NOW="$now" \
   -v "$repo:/work" -w /work/apps/web \
   "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
-  node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium "${update[@]}" || ui_rc=$?
-((ui_rc == 0)) || fail "flood-drill.spec.ts failed (exit $ui_rc)"
-written=(
-  "$repo"/apps/web/e2e/visual/__screenshots__/flood-drill-*.png
-)
-((${#written[@]} >= 2)) || fail "flood-drill.spec.ts left no flood-drill-*.png"
-if ((${#update[@]} > 0)); then
-  proof "flood-drill.spec.ts in the pinned image: the Kaub and Bellinzona scenes passed and their baselines were WRITTEN (${written[*]##*/}): commit apps/web/e2e/visual/__screenshots__/flood-drill-*.png from the artifact"
-else
-  proof "flood-drill.spec.ts in the pinned image (Chromium, host network, $domain -> $RWS_E2E_CADDY_IP): the panel of Kaub says extreem from the LHP class 4 and the panel of station 2020 shows the BAFU storm run at its peak, both equal to their baselines (0.2 % of the pixels), no request left the origin"
+  node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium || ui_rc=$?
+after=("$repo"/apps/web/e2e/visual/__screenshots__/flood-drill-*.png)
+if ((${#after[@]} > ${#before[@]})); then
+  fail "flood-drill.spec.ts WROTE a missing baseline (now: ${after[*]##*/}); look at it in the job's artifact and commit it"
 fi
+((ui_rc == 0)) || fail "flood-drill.spec.ts failed (exit $ui_rc)"
+((${#before[@]} >= 2)) || fail "flood-drill.spec.ts: only ${#before[@]} flood-drill-*.png baseline(s) committed"
+proof "flood-drill.spec.ts in the pinned image (Chromium, host network, $domain -> $RWS_E2E_CADDY_IP): the panel of Kaub says extreem from the LHP class 4 and the panel of station 2020 shows the BAFU storm run at its peak, both equal to their committed baselines (0.2 % of the pixels), no request left the origin"
 endstep
 
 echo "flood drill done"

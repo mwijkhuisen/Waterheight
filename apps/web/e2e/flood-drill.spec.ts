@@ -13,7 +13,7 @@ import { msg, panelOf } from './helpers.ts';
 // Everything that moves with the clock or the synthetic observations (the measured value and its time, the age, the
 // chart) is outside the screenshot or masked; the words and the forecast value are the drill's. The baselines are
 // apps/web/e2e/visual/__screenshots__/flood-drill-*.png, written by the first run of the drill job in the pinned image
-// (run.sh passes --update-snapshots while there are none) and committed from its artifact; after that a difference
+// (a missing one is written and its test fails) and committed from its artifact; after that a difference
 // above 0.2 % of the pixels (playwright.config.ts, compose mode) fails the job. Skipped unless E2E_COMPOSE=1 and the
 // drill clock is known.
 
