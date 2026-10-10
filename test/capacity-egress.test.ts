@@ -59,7 +59,7 @@ describe('egress profile', () => {
     expect(p.total_bytes).toBe(5_305_000);
   });
 
-  it('passes up to 1.2 x the baseline and fails above it, in total or per class', () => {
+  it('passes up to 1.2 x the baseline and fails above it in total; a class above it is a warning', () => {
     const b = base();
     const same = compare(b, b);
     expect(same.ok).toBe(true);
@@ -79,13 +79,19 @@ describe('egress profile', () => {
     expect(compare(scaled(1.19), b).ok).toBe(true);
     const over = compare(scaled(1.21), b);
     expect(over.ok).toBe(false);
-    expect(over.lines.filter((l) => l.startsWith('FAIL')).map((l) => l.split(':')[0])).toEqual([
+    expect(over.lines.filter((l) => /^(FAIL|WARN)/.test(l)).map((l) => l.split(':')[0])).toEqual([
       'FAIL total',
-      'FAIL tiles',
-      'FAIL assets',
-      'FAIL data',
-      'FAIL api',
+      'WARN tiles',
+      'WARN assets',
+      'WARN data',
+      'WARN api',
     ]);
+    // One class far over its limit with the total inside it (the data class of a run that spans two days) passes.
+    const oneClass = { ...b, bytes: { ...b.bytes, data: b.bytes.data * 2 }, total_bytes: b.total_bytes + b.bytes.data };
+    expect(oneClass.total_bytes).toBeLessThanOrEqual(b.total_bytes * 1.2);
+    const warned = compare(oneClass, b);
+    expect(warned.ok).toBe(true);
+    expect(warned.lines.filter((l) => /^(FAIL|WARN)/.test(l)).map((l) => l.split(':')[0])).toEqual(['WARN data']);
   });
 
   it('rejects a malformed baseline by field name', () => {

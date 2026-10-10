@@ -19,7 +19,7 @@ Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 
 | other | 1 | 0.00 |
 | **Session** | 116 | **4.47** |
 
-CI fails when the total or a class grows by more than 20% over the baseline (`EGRESS_UPDATE=1` rewrites it; the change is reviewed like any other). A cold cache is the worst case: a returning visitor re-fetches no hashed asset.
+CI fails when the session total grows by more than 20% over the baseline; a class above 20% is reported (WARN), because the classes move with the time of day between runs (`EGRESS_UPDATE=1` rewrites the baseline; the change is reviewed like any other). A cold cache is the worst case: a returning visitor re-fetches no hashed asset.
 
 ### Inputs
 

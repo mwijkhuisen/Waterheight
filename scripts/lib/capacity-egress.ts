@@ -126,12 +126,16 @@ export function compare(profile: Profile, baseline: Profile): { ok: boolean; lin
     ['total', profile.total_bytes, baseline.total_bytes],
     ...CLASSES.map((c): [string, number, number] => [c, profile.bytes[c], baseline.bytes[c]]),
   ];
+  // Only the total fails: the classes move with the wall clock (a day of playback spans one or two days of frames
+  // files, zoom and pan ask 37 to 43 tile ranges) by up to a third between CI runs, while the total stays within 5 %.
+  // A class over its limit is a WARN for the reviewer.
   let ok = true;
   const lines = rows.map(([name, now, was]) => {
     const limit = Math.max(was * GROWTH_LIMIT, name === 'total' ? 0 : CLASS_FLOOR);
     const pass = now <= limit;
-    ok &&= pass;
-    return `${pass ? 'PASS' : 'FAIL'} ${name}: ${now} B vs baseline ${was} B (limit ${Math.round(limit)} B)`;
+    if (name === 'total') ok = pass;
+    const verdict = pass ? 'PASS' : name === 'total' ? 'FAIL' : 'WARN';
+    return `${verdict} ${name}: ${now} B vs baseline ${was} B (limit ${Math.round(limit)} B)`;
   });
   return { ok, lines };
 }
@@ -167,7 +171,7 @@ export function renderSection(b: Baseline): string {
     ...CLASSES.map((c) => `| ${c} | ${b.requests[c]} | ${mb(b.bytes[c])} |`),
     `| **Session** | ${CLASSES.reduce((n, c) => n + b.requests[c], 0)} | **${mb(b.total_bytes)}** |`,
     '',
-    'CI fails when the total or a class grows by more than 20% over the baseline (`EGRESS_UPDATE=1` rewrites it; the change is reviewed like any other). A cold cache is the worst case: a returning visitor re-fetches no hashed asset.',
+    'CI fails when the session total grows by more than 20% over the baseline; a class above 20% is reported (WARN), because the classes move with the time of day between runs (`EGRESS_UPDATE=1` rewrites the baseline; the change is reviewed like any other). A cold cache is the worst case: a returning visitor re-fetches no hashed asset.',
     '',
     '### Inputs',
     '',

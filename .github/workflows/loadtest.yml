@@ -134,7 +134,7 @@ jobs:
       - name: k6 (release tarball, sha256-checked)
         run: deploy/tests/loadtest/install-k6.sh "$RUNNER_TEMP"
       # D6: the egress profile on the fresh stack, cold cache. The spec writes egress-profile.json into EGRESS_OUT (mounted into the
-      # container as /egress-out) and fails when a class grew more than 20 % against docs/capacity-egress.json.
+      # container as /egress-out) and fails when the session total grew more than 20 % against docs/capacity-egress.json (a class: WARN).
       - name: Egress profile (Playwright, pinned image, cold cache)
         run: |
           set -euo pipefail
