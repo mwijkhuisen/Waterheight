@@ -739,6 +739,7 @@ describe('determinism and the generated file', () => {
       [
         `reaches-${VERSION}.json`,
         `rivers-${VERSION}.geojson.gz`,
+        'reach-bins.geojsonseq',
         'rivers.geojsonseq',
         'snap-report.json',
         'VERSION',
