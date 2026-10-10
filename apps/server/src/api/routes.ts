@@ -46,7 +46,7 @@ import {
   versionParam,
 } from './params.ts';
 import { Saturated, type Semaphore } from './semaphore.ts';
-import type { Static, StaticCache } from './states.ts';
+import { HourMemo, type Static, type StaticCache } from './states.ts';
 import { coded, validated } from './util.ts';
 import { type DayVersions, IMMUTABLE, isImmutable, readVersionTag, spannedDays, versionTag } from './versions.ts';
 import type { DisplayWindow, Window } from './window.ts';
@@ -204,6 +204,8 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
   };
   /** The versions part of a key: the in-memory version of each spanned day (a bump makes a new key). */
   const vstate = (days: readonly string[]) => versionTag(days, (d) => deps.versions?.versionOf(d) ?? 1);
+  /** #112: the state codes of settled frames days, per app (readHourStates). */
+  const hourMemo = new HourMemo();
 
   /**
    * One data route: `plan` validates the request without the database and names its cache key; then the cached
@@ -393,7 +395,17 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
       at: p.to,
       days,
       v: versionParam(c.req.url),
-      read: (db) => readFrames(db, family, p),
+      read: (db) =>
+        readFrames(db, family, p, {
+          now,
+          sections: deps.sections,
+          cache: deps.cache,
+          // The settled days' state codes are kept per day version (#112); without loaded versions nothing is kept.
+          ...(deps.versions === undefined
+            ? {}
+            : { memo: hourMemo, versionOf: (d: string) => deps.versions?.versionOf(d) ?? 1 }),
+          yieldEvery: 200,
+        }),
     };
   });
 

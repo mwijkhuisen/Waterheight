@@ -68,6 +68,9 @@ import type { Output } from './write.ts';
 // contract and a public body is refused when it holds a canary rendering, before anything is written.
 
 /** What a renderer gets: the family's read-only connection, the cycle's clock and the boot-time tables. */
+/** The dirty kinds that change recent frames: their values (obs) and their states (#112). */
+const FRAMES_KINDS: ReadonlySet<string> = new Set(['obs', 'reference', 'class', 'warning']);
+
 export type RenderCtx = {
   db: Kysely<DB>;
   family: ChannelAudience;
@@ -326,7 +329,8 @@ export class Publisher {
       for (const t of dirtyBuckets(rows, now)) this.#buckets.add(t);
       for (const r of rows) {
         for (const s of r.stations) this.#stations.add(s);
-        if (r.kind === 'obs' && r.to_ts.getTime() >= unsettledStart(now)) this.#framesDirty = true;
+        // #112: the frames carry each hour's state, so a reference, class or warning reaching the span re-renders them.
+        if (FRAMES_KINDS.has(r.kind) && r.to_ts.getTime() >= unsettledStart(now)) this.#framesDirty = true;
       }
       const last = rows.at(-1);
       if (last !== undefined) this.#cursor = last.id;
