@@ -86,6 +86,10 @@ readonly DOMAIN=rivierstanden.example IP4=203.0.114.10 IP6=2a0a:e5c0:ffff::10
 # Extra client addresses in the outside namespace "ext" (P9b): distinct sources for the rate limit proof and the load test.
 # Not private, so the API keys them as themselves (a private peer is the gateway key, a 100x bucket).
 readonly CLIENT_IPS=(203.0.114.11 203.0.114.12 203.0.114.13 203.0.114.14 203.0.114.15 203.0.114.16)
+# P12a: the saturation phase's distributed clients, one k6 --local-ips range per process (6 x 21 addresses, each kept
+# under its own limiter buckets): six honest addresses cannot saturate the API through the limiter, a crowd can.
+readonly SAT_RANGES=(203.0.114.128-203.0.114.148 203.0.114.149-203.0.114.169 203.0.114.170-203.0.114.190
+  203.0.114.191-203.0.114.211 203.0.114.212-203.0.114.232 203.0.114.233-203.0.114.253)
 readonly LOADTEST_OVERLAY=$repo/deploy/tests/loadtest/compose.loadtest.yaml
 # P12a: the fake upstream (capture's providers and hc-ping.com) and the flood drill's registry; CI only.
 readonly FAKE_OVERLAY=$e2e/compose.fake.yaml DRILL_OVERLAY=$repo/deploy/tests/flood/compose.drill.yaml
@@ -390,6 +394,8 @@ for a in "${CLIENT_IPS[@]}"; do
   ip -n ext addr add "$a/32" dev vext1
   ip route add "$a/32" via 10.99.0.2
 done
+for n in $(seq 128 253); do ip -n ext addr add "203.0.114.$n/32" dev vext1; done
+ip route add 203.0.114.128/25 via 10.99.0.2
 sysctl -qw net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1
 # P12a: a stand-in for the WireGuard interface (a veth named wg0 holding 10.66.0.1/24, its peer 10.66.0.2 in the
 # namespace `wgpeer`), so compose can publish the owner site on 10.66.0.1:443 and the firewall's wg0 rules have an
@@ -518,6 +524,10 @@ if [[ -n $mode ]]; then
     echo "RWS_E2E_CA=/ci/pki/pebble-root.pem"
     echo "RWS_E2E_CADDY_IP=$IP4"
     echo "RWS_E2E_CLIENT_IPS=$client_ips"
+    echo "RWS_E2E_SAT_RANGES=$(
+      IFS=,
+      echo "${SAT_RANGES[*]}"
+    )"
     echo "RWS_E2E_CLIENT_NETNS=ext"
     echo "RWS_E2E_OWNER_CA=/ci/owner-root.crt"
     echo "RWS_E2E_MODE=$mode"

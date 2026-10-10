@@ -5,7 +5,8 @@
 #   run-k6.sh <k6 binary> <out dir> [NAME=value ...]
 # The NAME=value pairs go to every k6 process (SCENARIO, DURATION, LENIENT, MAP_ASSETS, ...; see k6.js). ABUSER_INDEX=n
 # makes process n run SCENARIO=abusive (with ABUSE_ROTATE if given) while the others run SCENARIO=normal; it is no k6
-# variable. Why a namespace: a request from the host to a published port is masqueraded to the bridge gateway, which
+# variable. SCENARIO=saturation gives process n the n-th range of RWS_E2E_SAT_RANGES (21 addresses) instead of its one
+# address. Why a namespace: a request from the host to a published port is masqueraded to the bridge gateway, which
 # the limiter keys as one shared client; from `ext` every address is seen as itself.
 set -euo pipefail
 
@@ -25,7 +26,7 @@ shift 2
 }
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-kv=() abuser=''
+kv=() abuser='' saturation=''
 for a in "$@"; do
   [[ $a =~ ^[A-Z][A-Z0-9_]*=[A-Za-z0-9_.:/@,-]*$ ]] || {
     echo "run-k6: bad argument '$a'" >&2
@@ -33,6 +34,7 @@ for a in "$@"; do
   }
   case $a in
     ABUSER_INDEX=*) abuser=${a#*=} ;;
+    SCENARIO=saturation) saturation=1 kv+=("$a") ;;
     *) kv+=("$a") ;;
   esac
 done
@@ -56,6 +58,14 @@ if [[ -n $abuser ]]; then
     exit 64
   }
 fi
+local_ips=("${ips[@]}")
+if [[ -n $saturation ]]; then
+  IFS=, read -r -a local_ips <<<"${RWS_E2E_SAT_RANGES:-}"
+  ((${#local_ips[@]} == ${#ips[@]})) || {
+    echo "run-k6: RWS_E2E_SAT_RANGES has ${#local_ips[@]} ranges for ${#ips[@]} clients" >&2
+    exit 1
+  }
+fi
 install -d -m 0755 "$out"
 
 pids=()
@@ -66,7 +76,7 @@ for i in "${!ips[@]}"; do
   fi
   ip netns exec "$RWS_E2E_CLIENT_NETNS" env SSL_CERT_FILE="$RWS_E2E_CA" BASE="https://$RWS_E2E_DOMAIN" \
     CADDY_IP="$RWS_E2E_CADDY_IP" CLIENT="$i" CLIENTS="${#ips[@]}" OUT_DIR="$out" "${kv[@]}" "${role[@]}" \
-    "$k6" run --quiet --no-color --local-ips "${ips[$i]}" "$here/k6.js" >"$out/k6-$i.log" 2>&1 &
+    "$k6" run --quiet --no-color --local-ips "${local_ips[$i]}" "$here/k6.js" >"$out/k6-$i.log" 2>&1 &
   pids+=($!)
 done
 rc=0
@@ -77,7 +87,7 @@ for i in "${!pids[@]}"; do
   }
 done
 for i in "${!ips[@]}"; do
-  echo "== client $i (${ips[$i]})"
+  echo "== client $i (${local_ips[$i]})"
   tail -n 25 "$out/k6-$i.log"
 done
 chmod -R a+rX "$out"

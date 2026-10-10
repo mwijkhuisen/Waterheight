@@ -13,8 +13,9 @@
 //   flood       CI (flood drill). Visitor sessions, SESSIONS_PER_S (1) per process: meta, latest, tiles manifest,
 //               style assets (sprite, glyphs), ~30 PMTiles Range requests, 5 slider steps (API snapshot), 2 /series
 //               calls, with think time. p95 < 300 ms, errors < 0.1 %, lag (below).
-//   saturation  CI. Every client at the edge of its limiter (SAT_RPS, 28 r/s) with cache-missing wide /series, /frames
-//               and snapshot calls to saturate the API; only the loader lag is judged (p95 < 120 s). With
+//   saturation  CI. A crowd: each process sends SAT_RPS (126 r/s) from its range of 21 addresses (run-k6.sh), about
+//               6 r/s per address, inside the limiter, of cache-missing wide /series, /frames and snapshot calls to
+//               saturate the API; only the loader lag is judged (p95 < 120 s). With
 //               SATURATION_REQUIRE=1 the run also fails unless the API showed pressure (a 503, a 504 or an answer over
 //               one second), so that "lag while saturated" is never claimed for an idle API.
 //   production  Owner-triggered, one process against a live site (BASE): static files only, PROD_RPS (1000) r/s incl.
@@ -53,7 +54,7 @@ const STATIC_RPS = Number(__ENV.STATIC_RPS || 300);
 const API_RPS = Number(__ENV.API_RPS || 50);
 const ABUSE_RPS = Number(__ENV.ABUSE_RPS || 300);
 const ABUSE_ROTATE = __ENV.ABUSE_ROTATE === '1';
-const SAT_RPS = Number(__ENV.SAT_RPS || 28);
+const SAT_RPS = Number(__ENV.SAT_RPS || 126);
 const SESSIONS_PER_S = Number(__ENV.SESSIONS_PER_S || 1);
 const PROD_RPS = Number(__ENV.PROD_RPS || 1000);
 const HEALTH_EVERY_S = Number(__ENV.HEALTH_EVERY_S || 10);
