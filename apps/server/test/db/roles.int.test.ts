@@ -2,9 +2,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { CANARIES, CANARY_RENDERINGS } from '@rws/contracts';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 import { FORECAST_AT, familyViews, VIEWS } from '../../src/db/audience.ts';
 import { OWNER_CANARY, OWNER_CANARY_REAL, seedAudienceFixture, WITHHELD_CANARY } from './seed.ts';
-import { createTestDb, LOGIN_ROLES, sqlState, type TestDb, testPassword } from './testdb.ts';
+import { createTestDb, LOGIN_ROLES, sqlState, type TestDb, testPassword, upMigrations } from './testdb.ts';
 
 // Roles and privileges (issue #17, A§12.2): real scram-sha-256 logins, so each
 // role's own settings apply. 42501 is "permission denied".
@@ -615,5 +616,64 @@ describe('the database itself', () => {
       "SELECT prosecdef, proconfig, pg_get_userbyid(proowner) AS owner FROM pg_proc WHERE proname = 'ensure_partitions'",
     );
     expect(rows).toEqual([{ prosecdef: true, proconfig: ['search_path=pg_catalog, pg_temp'], owner: 'rws_owner' }]);
+  });
+});
+
+// The connection budget (P12a, ADR-0019): roles.sql is authoritative for the limits, the db service of
+// deploy/compose.yaml for max_connections, and the guard migration refuses a pair that no longer fits.
+describe('connection budget', () => {
+  const read = (rel: string) => readFileSync(new URL(`../../../../${rel}`, import.meta.url), 'utf8');
+  const limits = new Map(
+    [...read('deploy/postgres/roles.sql').matchAll(/^ALTER ROLE (\w+)\s+LOGIN .*CONNECTION LIMIT (\d+);/gm)].map(
+      (m) => [m[1] as string, Number(m[2])] as const,
+    ),
+  );
+  const compose = parseYaml(read('deploy/compose.yaml')) as { services: { db: { command: string[] } } };
+  const maxConnections = Number(
+    compose.services.db.command.map((c) => /^max_connections=(\d+)$/.exec(c)?.[1]).find((v) => v !== undefined),
+  );
+  const MARGIN = 5;
+  const guard = upMigrations().find((m) => m.file.endsWith('_connection_budget_guard.sql'))?.sql ?? '';
+
+  it('the public api cannot starve the loader, the publishers and the owner api', () => {
+    const lim = (r: string) => limits.get(r) ?? Number.NaN;
+    expect(maxConnections).toBeGreaterThan(0);
+    for (const r of ['rws_api', 'rws_load', 'rws_publish', 'rws_owner_api']) expect(lim(r), r).toBeGreaterThan(0);
+    expect(lim('rws_api')).toBeLessThanOrEqual(
+      maxConnections - (lim('rws_load') + lim('rws_publish') + lim('rws_owner_api')) - MARGIN,
+    );
+    // Every limit together stays inside max_connections as well.
+    expect([...limits.values()].reduce((a, b) => a + b, 0) + MARGIN).toBeLessThanOrEqual(maxConnections);
+  });
+
+  it('the guard passes on the roles.sql limits and changes nothing', async () => {
+    expect(guard).toContain('connection budget');
+    await t.admin.query(guard);
+  });
+
+  it('the guard raises when the budget is violated or a limit is missing (rolled back, never kept)', async () => {
+    const m = Number((await t.admin.query("SELECT current_setting('max_connections') AS m")).rows[0].m);
+    const attempts = [
+      `ALTER ROLE rws_api CONNECTION LIMIT ${m}`,
+      'ALTER ROLE rws_load CONNECTION LIMIT -1',
+      'ALTER ROLE rws_owner_api CONNECTION LIMIT -1',
+    ];
+    for (const alter of attempts) {
+      await t.admin.query('BEGIN');
+      try {
+        await t.admin.query(alter);
+        await expect(t.admin.query(guard), alter).rejects.toThrow(/connection budget/);
+      } finally {
+        await t.admin.query('ROLLBACK');
+      }
+    }
+    const { rows } = await t.admin.query(
+      "SELECT rolname, rolconnlimit FROM pg_roles WHERE rolname IN ('rws_api','rws_load','rws_owner_api') ORDER BY 1",
+    );
+    expect(rows).toEqual([
+      { rolname: 'rws_api', rolconnlimit: limits.get('rws_api') },
+      { rolname: 'rws_load', rolconnlimit: limits.get('rws_load') },
+      { rolname: 'rws_owner_api', rolconnlimit: limits.get('rws_owner_api') },
+    ]);
   });
 });
