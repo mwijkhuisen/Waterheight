@@ -133,6 +133,63 @@ jobs:
         with:
           category: /language:${{ matrix.language }}
 
+  # P12a: the weekly rescan of what is deployed. The PR gate (release.yml build-pr) sees only the
+  # day a dependency was pinned; a new advisory against an old image shows up here. It scans the
+  # images of the latest release manifest (public GHCR packages, pulled anonymously, by digest),
+  # not a fresh build, so it costs no build and is exactly what the VPS runs. It is not part of
+  # the aggregate `security` check (a new advisory must never block an unrelated PR); a red run
+  # is the signal: bump the pin, or the owner decides (docs/risk-register.md). No ignore entries.
+  grype-weekly:
+    name: grype-weekly
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      SYFT_VERSION: 1.52.0
+      SYFT_SHA256: caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d
+      GRYPE_VERSION: 0.119.0
+      GRYPE_SHA256: 3fa2dc4b924621ab65404cf08d0b8438d896d80ab949c9d5a4ca283c36004c9b
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Install Syft and Grype (pinned, sha256-checked)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          for t in syft grype; do
+            case $t in
+              syft) v=$SYFT_VERSION sha=$SYFT_SHA256 repo=anchore/syft ;;
+              grype) v=$GRYPE_VERSION sha=$GRYPE_SHA256 repo=anchore/grype ;;
+            esac
+            tarball="${t}_${v}_linux_amd64.tar.gz"
+            curl --proto '=https' -fsSL -o "$RUNNER_TEMP/$tarball" "https://github.com/$repo/releases/download/v$v/$tarball"
+            echo "$sha  $RUNNER_TEMP/$tarball" | sha256sum -c -
+            tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP/bin" "$t"
+          done
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+      - name: Scan the three images of the latest release (fixable High or Critical fails)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          syft --version
+          grype --version
+          mkdir "$RUNNER_TEMP/rel"
+          gh release download --repo "$GH_REPO" --pattern release-manifest.json --dir "$RUNNER_TEMP/rel"
+          fail=0
+          for name in server web backup; do
+            ref=$(jq -r --arg n "$name" '.images[$n]' "$RUNNER_TEMP/rel/release-manifest.json")
+            [[ $ref =~ ^ghcr\.io/mwijkhuisen/waterheight/$name@sha256:[0-9a-f]{64}$ ]] || { echo "::error::unexpected image reference for $name" >&2; exit 1; }
+            syft "registry:$ref" -o "syft-json=$RUNNER_TEMP/sbom-$name.json" -q
+            echo "$name: $(jq '.artifacts | length' "$RUNNER_TEMP/sbom-$name.json") packages in the SBOM"
+            grype "sbom:$RUNNER_TEMP/sbom-$name.json" --only-fixed --fail-on high || fail=1
+          done
+          exit "$fail"
+
   security:
     name: security
     if: always()
