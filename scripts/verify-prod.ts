@@ -1830,7 +1830,8 @@ export function checkStaticSeries(r: ApiRead<StationRecent> | undefined, id: str
 
 /**
  * warnings/latest.geojson (application/geo+json, max-age=60), yesterday's dated file when it exists (immutable) and
- * today.json (#86: the live class, `day` today; written every cycle, so missing is a FAIL).
+ * today.json (#86: the live class, `day` today; written every cycle, so missing is a FAIL). Today is meta.json's day,
+ * fetched before today.json: a run in the minute after 00:00 UTC can see the two disagree (a FAIL; run it again).
  */
 export function checkStaticWarnings(
   latest: ApiRead<WarningsFile>,

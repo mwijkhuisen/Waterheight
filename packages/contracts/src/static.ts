@@ -219,9 +219,9 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
 
   /**
    * warnings/latest.geojson (the areas valid at generatedAt, `day` null), warnings/YYYY-MM-DD.json (every area valid
-   * during that ended UTC day, written once) and warnings/today.json (the same for the current UTC day so far, `day`
-   * that day, rewritten every cycle): a GeoJSON FeatureCollection with the schema fields as foreign members. Every
-   * text is the provider's, untrusted: data only (invariant 3).
+   * during that ended UTC day, written once) and warnings/today.json (the same for the current UTC day, as loaded so
+   * far, `day` that day, rewritten every cycle): a GeoJSON FeatureCollection with the schema fields as foreign members.
+   * Every text is the provider's, untrusted: data only (invariant 3).
    */
   const WarningsFile = z.strictObject({
     type: z.literal('FeatureCollection'),

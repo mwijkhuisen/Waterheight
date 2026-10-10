@@ -36,7 +36,8 @@ import {
 // headers with the e2e api behind it (a fixed clock: NOW) and the seeds of apps/server/test/e2e/public-seed.ts:
 //   fr.sandre.D015850001   FR-1, gauge zero IGN69 (never a NAP height), in FR-5 section AP1 (a section state);
 //   de.wsv.23300130        DE-1 (Rhine, Basel), LHP class HE:3 and the DE-6 areas e2e-4 (German name with the XSS string), e2e-2;
-//   e2e-river              a DE-6 river alert (LineString); e2e-ended valid 2026-10-25 06:00-18:00Z, only in its dated file.
+//   e2e-river              a DE-6 river alert (LineString); e2e-ended valid 2026-10-25 06:00-18:00Z, only in its dated file;
+//   e2e-today              valid 05:00-08:00Z on NOW's day, only in warnings/today.json (#86).
 // Mode switching, the legend, forecasts labelled, time-aware warnings, deep links, the French station, the keyboard, axe,
 // the inert XSS fixture, the display-only series, live mode, the DST night, the attribution and the river layers.
 // (The default mode comes from status.json: the e2e publisher states "dh", i.e. the change mode.)

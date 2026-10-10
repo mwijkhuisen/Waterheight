@@ -2,8 +2,8 @@ import { dayOf, floorBucket, type WarningsFile } from '@rws/contracts';
 
 // Warning areas at a quantised t (P10a T5). Pure: "now" is meta.now, never the browser's clock. Each family's publisher
 // writes, every cycle, warnings/latest.geojson (the areas valid at its generation time) and warnings/today.json (every
-// area valid during the current UTC day so far, #86), and warnings/YYYY-MM-DD.json (every area valid during that UTC
-// day) once, after the day ended. So:
+// area valid at some time of the current UTC day, as loaded so far, #86), and warnings/YYYY-MM-DD.json (every area
+// valid during that UTC day) once, after the day ended. So:
 // - t in the current bucket: latest.geojson;
 // - t earlier today: today.json, when its `day` is t's (at midnight it may already hold the next day);
 // - t in an ended UTC day: the dated file (areas issued on an earlier day and still valid are in it by overlap).

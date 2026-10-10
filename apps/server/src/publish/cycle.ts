@@ -291,8 +291,8 @@ export class Publisher {
     await this.#step('forecast', async () => {
       await this.#put(c, 'forecast', 'forecast/latest.json', await d.render.forecast(c));
     });
-    // today.json: the current UTC day so far (#86), rewritten every cycle under a fixed name, so a dated name is only
-    // ever written once its day has ended and stays immutable.
+    // today.json: the areas of the current UTC day, as loaded so far (#86), rewritten every cycle under a fixed name,
+    // so a dated name is only ever written once its day has ended and stays immutable.
     await this.#step('warnings', async () => {
       await this.#put(c, 'warnings', 'warnings/latest.geojson', await d.render.warnings(c, null));
       await this.#put(c, 'warnings', 'warnings/today.json', await d.render.warnings(c, dayOf(now)));
