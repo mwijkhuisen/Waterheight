@@ -449,7 +449,8 @@ test('D-1: the State mode plays (forward and reverse); a switch to it keeps play
   baseURL,
 }) => {
   const s = await start(page, context, baseURL, 'dh');
-  await open(page, deep(MID, 'state'));
+  // 13 days back at the slow speed (9 h/s, ~35 s to the end): playback outlasts the switch and the Pause click.
+  await open(page, deep('2026-10-13T12:00Z', 'state', '&play=slow'));
   await expect(play(page)).toBeEnabled();
   await expandTimebar(page);
   await expect(page.getByRole('button', { name: nl('play_reverse'), exact: true })).toBeEnabled();
