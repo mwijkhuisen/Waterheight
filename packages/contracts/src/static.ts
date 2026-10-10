@@ -212,6 +212,16 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
                   priority: z.number().int(),
                   /** "WSV MNW 2010–2020": untrusted text, data only. */
                   label: z.string().min(1).max(700).nullable(),
+                  /**
+                   * #99: the season the row holds in (NL-4), MMDD in Europe/Amsterdam, both ends inclusive, wrapping
+                   * the year when from > to. Absent: the whole year.
+                   */
+                  season: z
+                    .strictObject({
+                      from: z.number().int().min(101).max(1231),
+                      to: z.number().int().min(101).max(1231),
+                    })
+                    .optional(),
                 }),
               )
               .max(100),

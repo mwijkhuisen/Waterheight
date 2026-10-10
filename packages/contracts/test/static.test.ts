@@ -204,6 +204,37 @@ describe('warnings files', () => {
   });
 });
 
+describe('series/{station}/recent.json references', () => {
+  const file = (season?: unknown) => ({
+    schemaVersion: 1,
+    station: 'nl.rws.lobith.bovenrijn.tolkamer',
+    from: '2026-10-03T12:00:00Z',
+    to: '2026-10-10T12:00:00Z',
+    series: [
+      {
+        id: 1,
+        source: 'NL-1',
+        ts: [],
+        value: [],
+        qc: [],
+        run: null,
+        references: [
+          { source: 'NL-4', kind: 'NL4_TO', value: 720, unit: 'cm', priority: 4, label: 'Verlaagd (<720cm)', season },
+        ],
+      },
+    ],
+    attribution: [],
+  });
+
+  it('takes an optional MMDD season (#99) and refuses an impossible one', () => {
+    expect(StationRecent.safeParse(file()).success).toBe(true);
+    expect(StationRecent.safeParse(file({ from: 1001, to: 430 })).success).toBe(true);
+    expect(StationRecent.safeParse(file({ from: 1301, to: 430 })).success).toBe(false);
+    expect(StationRecent.safeParse(file({ from: '10-01', to: '04-30' })).success).toBe(false);
+    expect(StationRecent.safeParse(file({ from: 1001, to: 430, year: 2026 })).success).toBe(false);
+  });
+});
+
 describe('every file contract has a JSON Schema', () => {
   it.each(
     Object.entries({

@@ -14,6 +14,7 @@ import {
   referenceRole,
 } from './crosswalk.ts';
 import { SUSPECT_BITS } from './qc.ts';
+import { inSeason, monthDay } from './season.ts';
 
 // The pure classifier (ADR-0009; PHASES P7b): one ordinal state per value, `no_ref < low < normal < elevated < high
 // < extreme`, with the basis it was taken from. No I/O: the server reads the rows valid at t through one view family
@@ -207,15 +208,7 @@ function setCandidate(
   return { group, lo, hi, point, basis: { source, kind: group, measure, ref, label } };
 }
 
-/** The MMDD of an instant in Europe/Amsterdam, the calendar of the NL-4 seasons. */
-export function monthDay(t: number): number {
-  const z = Temporal.Instant.fromEpochMilliseconds(t).toZonedDateTimeISO('Europe/Amsterdam');
-  return z.month * 100 + z.day;
-}
-
-/** A season `from`–`to` (MMDD, both inclusive; wraps the year when from > to) contains `md`. */
-export const inSeason = (md: number, from: number, to: number) =>
-  from <= to ? md >= from && md <= to : md >= from || md <= to;
+export { inSeason, monthDay };
 
 /** The NL-4 stem of a workbook label: the label without its bracketed bound (cut at the first `(`). */
 export const nl4Stem = (label: string) => {

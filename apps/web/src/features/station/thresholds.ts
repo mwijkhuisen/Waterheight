@@ -1,4 +1,5 @@
 import type { State, StationRecent } from '@rws/contracts';
+import { inSeason, monthDay } from '@rws/core/season';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { LADDER, STATE_COLOUR } from '../legend/palette.ts';
@@ -9,7 +10,8 @@ import { formatNumber } from './value.ts';
 // The thresholds of one series (P10d, closes #88): the lines, the zones between them and the legend rows. A reference
 // is a line; where the registry gives it a role (METHOD_REFERENCES: `<=`/`<` low, `>=` elevated, high or extreme) it
 // also opens a zone, and an NL-4 class is a zone between its From and To bounds. A reference with no role is a line
-// only. Values arrive in canonical units; `conv` brings one to the native unit. Nothing here draws.
+// only. A seasonal reference counts only when its season holds at t (#99); the others are left out. Values arrive in
+// canonical units; `conv` brings one to the native unit. Nothing here draws.
 
 type Ref = StationRecent['series'][number]['references'][number];
 
@@ -52,6 +54,8 @@ export interface MarkOptions {
   locale: Locale;
   /** The series' unit with its zero ("cm NAP"). */
   unit: string;
+  /** The selected time (epoch ms): it picks the season of a seasonal reference, in Europe/Amsterdam. */
+  t: number;
 }
 
 /** The reference's quantity unit in canonical terms: cm for a stage or level, m³/s for a discharge; else not shown. */
@@ -98,7 +102,12 @@ interface Pending {
 
 export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
   const { locale } = o;
-  const usable = refs.filter((r) => canonicalUnit(r.unit, o.quantity)).map((r) => ({ r, v: o.conv(r.value) }));
+  const md = monthDay(o.t);
+  const usable = refs
+    .filter(
+      (r) => canonicalUnit(r.unit, o.quantity) && (r.season === undefined || inSeason(md, r.season.from, r.season.to)),
+    )
+    .map((r) => ({ r, v: o.conv(r.value) }));
   const lines = usable.map(({ r, v }) => ({
     value: v,
     text:
@@ -162,13 +171,14 @@ export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
   }
   pending.push(...merged.values());
 
-  // NL-4 classes: the From and To rows of one priority are one class, unless it has several bounds (a season).
+  // NL-4 classes: the From and To rows of one priority are one class, unless it still has several bounds (a file
+  // without seasons, or two seasons that share an edge day).
   const nl4 = usable.filter(({ r }) => r.source === 'NL-4' && (r.kind === 'NL4_FROM' || r.kind === 'NL4_TO'));
   for (const priority of new Set(nl4.map(({ r }) => r.priority))) {
     const group = nl4.filter(({ r }) => r.priority === priority);
     const froms = new Set(group.filter(({ r }) => r.kind === 'NL4_FROM').map(({ v }) => v));
     const tos = new Set(group.filter(({ r }) => r.kind === 'NL4_TO').map(({ v }) => v));
-    if (froms.size > 1 || tos.size > 1 || froms.size + tos.size === 0) continue; // seasonal (KG-249): lines only
+    if (froms.size > 1 || tos.size > 1 || froms.size + tos.size === 0) continue; // ambiguous: lines only
     const label = group.find(({ r }) => r.label !== null)?.r.label ?? null;
     if (label === null) continue;
     const stem = stemOf(label);
@@ -197,7 +207,7 @@ export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
     ...(p.raws.length === 0 ? {} : { raw: p.raws.join(' / ') }),
     ...(p.owner ? { owner: true as const } : {}),
   }));
-  // Every other reference is a line row: shown-only kinds, kinds with no role, a seasonal class.
+  // Every other reference is a line row: shown-only kinds, kinds with no role, an ambiguous NL-4 class.
   for (const { r, v } of [...usable].sort((a, b) => a.v - b.v)) {
     if (zoned.has(r)) continue;
     const name = nameOf(r);
