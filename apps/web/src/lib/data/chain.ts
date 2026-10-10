@@ -237,8 +237,9 @@ export async function loadStatusPage(
 }
 
 /**
- * The warning areas valid at `t` (warnings.ts chooses the file): the dated file of an ended UTC day, else
- * latest.geojson filtered to `t`. A dated file that is missing (404) falls back to latest.geojson, marked incomplete.
+ * The warning areas valid at `t` (warnings.ts chooses the file): latest.geojson at the current bucket, else the file of
+ * t's UTC day (today.json or the dated file). That file missing (404), or today.json already of the next day, falls
+ * back to latest.geojson filtered to `t`, marked incomplete.
  */
 export async function loadWarnings(
   f: Fetcher,
@@ -247,7 +248,7 @@ export async function loadWarnings(
   signal?: AbortSignal,
   c: Contracts = PUBLIC_CONTRACTS,
 ): Promise<WarningsAt> {
-  const choice = warningsSource(t, Date.parse(meta.now), c.datedWarnings);
+  const choice = warningsSource(t, Date.parse(meta.now));
   const read = async (path: string) => (await getJson(f, `${STATIC}warnings/${path}`, c.WarningsFile, signal)).data;
   const visible = (w: WarningsAt): WarningsAt => ({
     ...w,
@@ -255,13 +256,14 @@ export async function loadWarnings(
   });
   if (choice.kind === 'dated') {
     try {
-      return visible(warningsAt(await read(choice.path), t, false));
+      const file = await read(choice.path);
+      if (file.day === choice.day) return visible(warningsAt(file, t, false));
     } catch (e) {
       if (aborted(signal) || !(e instanceof HttpError && e.status === 404)) throw e;
-      return visible(warningsAt(await read('latest.geojson'), t, true));
     }
+    return visible(warningsAt(await read('latest.geojson'), t, true));
   }
-  return visible(warningsAt(await read('latest.geojson'), t, choice.incomplete));
+  return visible(warningsAt(await read('latest.geojson'), t, false));
 }
 
 /** series/<station>/recent.json: 7 days of raw values, the run and the references of each series of one station. */
