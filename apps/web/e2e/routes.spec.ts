@@ -1,6 +1,6 @@
 import { type APIResponse, expect, test } from '@playwright/test';
 import { PAGE_ROUTES } from '../src/lib/routes.ts';
-import { siteHeaders } from './headers.ts';
+import { productionCsp, securityTxt, siteHeaders } from './headers.ts';
 
 // P4b routes (issue #19): what the site answers for the api, the assets, the app routes and everything else,
 // against the stand-in for Caddy (server.ts) locally and the real Caddy with site.caddy in CI. No browser is
@@ -184,6 +184,11 @@ test('the pages answer 200 with the shell of their language; /en redirects to /e
       expect(res.headers()['content-type'], r[lang]).toMatch(/^text\/html/);
       expect(await res.text(), r[lang]).toContain(`<html lang="${lang}"`);
       expectSiteHeaders(res);
+      // ADR-0016: no inline script or style is ever allowed, on any page.
+      const csp = res.headers()['content-security-policy'] ?? '';
+      expect(csp, r[lang]).not.toContain("'unsafe-inline'");
+      expect(csp, r[lang]).not.toContain("'unsafe-eval'");
+      expect(csp, r[lang]).toBe(productionCsp());
     }
   // The shells are served for the pages, and /index.html is the map as well.
   expect((await request.get('/index.html')).status()).toBe(200);
@@ -251,6 +256,25 @@ test('the pages and the 404 shells are revalidated on every use (no-cache); the 
   expect((await request.get('/api/v1/meta')).headers()['cache-control']).toBe('public, max-age=60');
   for (const path of ['/assets/no-such-file.js', '/tiles/x', '/status/x', '/api/x'])
     expect((await request.get(path)).headers()['cache-control'], path).toBeUndefined();
+});
+
+// P12a, RFC 9116: the one file under /.well-known; every other dotfile stays a 404 (the route sits before it).
+test('/.well-known/security.txt is plain text with the site headers; any other dotfile is a 404', async ({
+  request,
+}) => {
+  const res = await request.get('/.well-known/security.txt');
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toBe('text/plain; charset=utf-8');
+  expect(res.headers()['cache-control']).toBe('no-cache');
+  expectSiteHeaders(res);
+  const body = await res.text();
+  expect(body).toBe(securityTxt('localhost'));
+  expect(body).toMatch(/^Contact: mailto:security@localhost$/m);
+  for (const path of ['/.well-known/other', '/.well-known/', '/.env', '/.well-known/security.txt.bak']) {
+    const miss = await request.get(path);
+    expect(miss.status(), path).toBe(404);
+    expect(miss.headers()['content-type'] ?? '', path).not.toMatch(/html/);
+  }
 });
 
 test('/third-party-notices.txt is plain text and names maplibre-gl@6.11.2', async ({ request }) => {

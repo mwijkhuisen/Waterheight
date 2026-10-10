@@ -26,7 +26,7 @@ import { extname, isAbsolute, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGzip } from 'node:zlib';
 import { PAGE_ROUTES } from '../src/lib/routes.ts';
-import { siteHeaders } from './headers.ts';
+import { securityTxt, siteHeaders } from './headers.ts';
 import { prepareRivers, prepareTiles } from './prepare-tiles.ts';
 
 const port = Number(process.env.E2E_PORT ?? 4443);
@@ -80,6 +80,8 @@ const SHELL_404 = /^\/+(en\/+)?404\.html$/i;
 /** What /runtime-config.json says in the e2e runs: CI's Caddy containers get the same values (ci.yml job e2e). */
 const E2E_OPERATOR = 'E2E Operator';
 const E2E_CONTACT = 'ci@rivierstanden.example';
+/** RWS_DOMAIN of the CI Caddy (ci.yml e2e job): the host in security.txt. */
+const SECURITY_DOMAIN = 'localhost';
 /** site.caddy's @api: the path as sent, under /api/v1/, with no dot segment. */
 const API = (path: string) => path.startsWith('/api/v1/') && !path.includes('/.');
 const BODY_MAX = 1024;
@@ -270,6 +272,14 @@ const server = createServer(
     const asset = file(www, path);
     if (path === '/assets' || path.startsWith('/assets/'))
       return asset === undefined ? send(res, 404) : serve(res, asset, range, IMMUTABLE);
+    // site.caddy's @security_txt (P12a): the one file under /.well-known, before the dotfile 404; the owner site has none.
+    if (!owner && path === '/.well-known/security.txt')
+      return send(
+        res,
+        200,
+        { 'content-type': 'text/plain; charset=utf-8', 'cache-control': NO_CACHE },
+        securityTxt(SECURITY_DOMAIN),
+      );
     if (/\/\./.test(path)) return send(res, 404);
     // site.caddy's catch-all, in its order: @page_nl, @page_en, @file (never a 404 shell), @dotted, @not_found_en, the
     // Dutch 404 shell.
