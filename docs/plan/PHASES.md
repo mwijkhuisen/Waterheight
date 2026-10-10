@@ -2860,7 +2860,7 @@ What the P11c build (issue #26, branch `claude/p11c-hovmoller`, stacked on PR #1
 
 ## 38. Amendment: fix #110, travel-time v2 and the Ourthe join (2026-10-10)
 
-What PR 1 of issue #110 (the follow-ups of P11a, KG-262 to KG-265) settled. PR 2 holds the Vesdre and Amblève; KG-163 stays open here.
+What PR 1 of issue #110 (the follow-ups of P11a, KG-262 to KG-265) settled. PR 2 (#115, below) holds the Vesdre and Amblève.
 
 **Owner decisions (2026-10-10, binding for this PR).**
 - **Published anchors only.** The v2 data are the sourced catalogue §3.7 anchors: no low-water legs (map-rivers' own cross-correlation), no map-rivers medians, no UNVERIFIED figure. Chalaines to Chiers is left out (no gauge at the confluence); Namur or Ourthe to Borgharen is left out (owner-only SPW gauges can never be in the public reaches file).
@@ -2881,3 +2881,10 @@ What PR 1 of issue #110 (the follow-ups of P11a, KG-262 to KG-265) settled. PR 2
 **Production needs** a geo release published from main (`geo.yml` `rivernet-publish`: a `workflow_dispatch` on main, or the monthly cron) and `rws-rivers-refresh` on the VPS. Until then production serves the old file (7 ranges, no Ourthe join). The e2e river tiles `tools/geo/fixtures/rivers-fixture.pmtiles` carry the old reach ids until the lead replaces them from CI.
 
 **Gaps:** KG-262, KG-263, KG-264 and KG-265 close in #110 (KG-262 and KG-265 show in production after the geo release); KG-161 narrows (the Ourthe is joined); KG-274 (the time shift of the reach colours) stays open.
+
+**PR 2 (#115): the Vesdre and the Amblève, with a fixture refresh.**
+- **Registry.** `registry/rivers.yaml` gains `vesdre` (Q707598, OSM relation 12117339, "Vesder" / "Vesdre") and `ambleve` (Q461361, relation 12641506, "Amblève"), both `parent_river_id: ourthe`. `registry/snap-overrides.yaml` `waters` maps the BE-3 label "Vesdre" to `vesdre` (7 gauges, all within 154 m of the river) and "Amblève" to `ambleve` (8 gauges, all within 25 m). The distances in the `reason`s were measured on the earlier fixture (OSM 2026-10-01).
+- **Fixture refresh.** The four `tools/geo/fixtures/rivernet.*` files are the artifact of `geo.yml` run 38006225186 (`workflow_dispatch` on `claude/fix-110-vesdre-ambleve`, OSM 2026-10-09T20:21:04Z; PBF 2,073,740 bytes). The refresh changed almost nothing else: only the lengths of `ahr.1` and `mark.1` by metres; the Meuse and every other reach id are unchanged. The readers' golden moved from 6,672 ways and 223 relations to 6,724 and 225; the bifurcation golden is unchanged.
+- **Reach split of the Ourthe.** The Ourthe (130.98 km) is now cut at its two confluences, which are shared OSM nodes (no join needed): `ourthe.1` (101.147 km, to the Amblève at Comblain), `ourthe.2` (27.108 km, to the Vesdre at Chênée) and `ourthe.3` (2.726 km, to the Ourthe join onto `meuse.27`). New reaches `ambleve.1` (85.3 km) and `vesdre.1` (72.3 km) carry no public station. The 15 Ourthe SPW gauges sit on parts of `ourthe.1` to `ourthe.3`; the BE-3 placement rises by the 15 new gauges (87 added points); the owner Eijsden chain has a Vesdre and an Amblève group, nested in the Ourthe's, in graph order.
+- **Production needs** a geo release published from main and `rws-rivers-refresh`, as for the Ourthe join; until then it serves the old file.
+- **Gaps:** KG-163 narrows to the unmapped Ourthe and Dendre headwater labels; KG-164 now names OSM 2026-10-09.
