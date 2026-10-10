@@ -149,9 +149,10 @@ export interface FrameStore {
    * The values at the whole hour `t` in the Snapshot's shape: the value of bucket t − 1 h, else the last non-null
    * bucket before it, while younger than the series' stalenessLimitSeconds (ageSeconds from t); `ts` is the end of
    * the bucket it came from; `state` and `section` those of that bucket's hour (#112: a carried value shows the state
-   * of its own hour), `stateUnknown` from a version 1 chunk; `basis` null, `qc` 0. An absent series has no entry.
+   * of its own hour), `stateUnknown` from a version 1 chunk; `basis` null, `qc` 0. An absent series has no entry;
+   * `only` limits the walk to those series (#112: the shifted ends).
    */
-  valuesAt(t: number): Map<number, PlayedValue>;
+  valuesAt(t: number, only?: ReadonlySet<number>): Map<number, PlayedValue>;
   /** The union of the loaded answers' attribution rows. */
   attribution(): readonly AttributionEntry[];
   /** Series ids dropped by the check (unknown ids, misaligned rows). */
@@ -218,10 +219,11 @@ export function buildFrameStore(
     const b = Math.floor(t / HOUR_MS) * HOUR_MS - HOUR_MS;
     return answered.some((r) => r.from <= b && b < r.to);
   };
-  const valuesAt = (t: number) => {
+  const valuesAt = (t: number, only?: ReadonlySet<number>) => {
     const out = new Map<number, PlayedValue>();
     const newest = Math.floor(t / HOUR_MS) * HOUR_MS - HOUR_MS;
     for (const [series, m] of buckets) {
+      if (only !== undefined && !only.has(series)) continue;
       const limitMs = (limit.get(series) as number) * 1000;
       const oldest = first.get(series) as number;
       for (let b = newest; b >= oldest; b -= HOUR_MS) {

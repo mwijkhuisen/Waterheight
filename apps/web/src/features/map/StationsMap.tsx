@@ -13,11 +13,12 @@ import { RIVER_ID } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import type { FlowHandle } from '../flow/flowLayer.ts';
+import type { Shift } from '../flow/reaches/colour.ts';
 import type { ReachHandle } from '../flow/reaches/reachLayer.ts';
 import { forecastLine } from '../station/forecast.ts';
 import styles from './map.module.css';
 import { badgeLine, changeLine, modeLines } from './popup.ts';
-import { highlightRiver, RIVERS, RIVERS_HIGHLIGHT, showRivers } from './rivers.ts';
+import { hasReachBins, highlightRiver, RIVERS, RIVERS_HIGHLIGHT, showRivers } from './rivers.ts';
 import { SOURCE, setStationMode, showStations } from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
 import { showWarnings, WARNINGS_FILL } from './warnings.ts';
@@ -58,6 +59,8 @@ interface Props {
   onFailure: (code: string) => void;
   /** P11b: every station of the site (hidden ones too: they still end a span of the reach colouring). */
   allStations: readonly ApiStation[];
+  /** #112: the travel-time shift of the reach colouring (none: unshifted). */
+  shift?: Shift | undefined;
   /** P11b: the values are played-back hourly frames (the popup says so). */
   played: boolean;
 }
@@ -80,6 +83,7 @@ export function StationsMap({
   onClose,
   onFailure,
   allStations,
+  shift,
   played,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -186,7 +190,7 @@ export function StationsMap({
     import('../flow/reaches/reachLayer.ts')
       .then(({ addReaches }) => {
         if (gone || map.getLayer(RIVERS) === undefined) return;
-        reachLayer.current = addReaches(map, RIVERS_HIGHLIGHT);
+        reachLayer.current = addReaches(map, RIVERS_HIGHLIGHT, hasReachBins(location.origin, riverTiles));
         setReachesOn(true);
       })
       .catch(none);
@@ -207,8 +211,8 @@ export function StationsMap({
   }, [map, riverTiles]);
   useEffect(() => {
     if (reachesOn && graph !== undefined)
-      reachLayer.current?.update({ graph, mode, stations: allStations, values, changes });
-  }, [reachesOn, graph, mode, allStations, values, changes]);
+      reachLayer.current?.update({ graph, mode, stations: allStations, values, changes, shift });
+  }, [reachesOn, graph, mode, allStations, values, changes, shift]);
   useEffect(() => {
     flowLayer.current?.setEnabled(flow);
   }, [flow]);

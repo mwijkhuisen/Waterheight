@@ -377,6 +377,7 @@
   "played_sources": "Sources of the played hours",
   "reach_legend_heading": "River between stations",
   "reach_interpolated": "colour estimated between the two stations",
+  "reach_shifted": "time-shifted, indicative: between two gauges with a sourced travel time the upstream gauge is read earlier",
   "reach_nodata": "no data",
   "reach_tidal": "tidal, not interpolated",
   "reach_impounded": "impounded",

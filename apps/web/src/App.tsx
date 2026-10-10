@@ -5,6 +5,9 @@ import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
 import { FlowToggle } from './features/flow/FlowToggle.tsx';
 import { playRange, type Speed } from './features/flow/playback/engine.ts';
 import { usePlayback } from './features/flow/playback/usePlayback.ts';
+import type { HourValues, Shift } from './features/flow/reaches/colour.ts';
+import { maxShift, spanShift } from './features/flow/reaches/shift.ts';
+import { spansOf } from './features/flow/reaches/spans.ts';
 import toggleStyles from './features/flow/toggle.module.css';
 import { Layout } from './features/layout/Layout.tsx';
 import { Legend } from './features/legend/Legend.tsx';
@@ -26,6 +29,8 @@ import {
   useMeta,
   useMode,
   useOwnerSources,
+  useReachGraph,
+  useReachTravel,
   useRiver,
   useRivers,
   useSnapshot,
@@ -38,7 +43,7 @@ import type { FrameStore } from './lib/data/frames.ts';
 import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
 import { pathOf, routeOf } from './lib/routes.ts';
 import { hiddenKey, lapses, stationStates, visibleStations } from './lib/stationStates.ts';
-import { DAY_MS, floorHour, quantise } from './lib/time/time.ts';
+import { ceilHour, DAY_MS, floorHour, HOUR_MS, quantise } from './lib/time/time.ts';
 import { searchOf } from './lib/url/url.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
 import { m } from './paraglide/messages.js';
@@ -152,6 +157,23 @@ function Viewer({ locale }: { locale: Locale }) {
       !(import.meta.env.MODE === 'e2e' && window.__rwsPlayHold === true) && (framesNow.current?.ready(h) ?? false),
     [],
   );
+  // #112 item 3: the spans a sourced travel time names exactly are shifted; the frames then reach `shiftMax` hours
+  // further back (0: none shifted, nothing more is asked).
+  const graph = useReachGraph().data;
+  const travel = useReachTravel().data;
+  const { shiftMax, shiftSeries } = useMemo(() => {
+    if (graph === undefined || stations.data === undefined) return { shiftMax: 0, shiftSeries: new Set<number>() };
+    const spans = spansOf(graph, new Set(stations.data.stations.map((s) => s.id)));
+    // The series of the shifted spans' up ends: the only ones read at an earlier hour.
+    const ups = new Set<string>();
+    for (const fs of spans.values())
+      for (const span of [fs.span, ...fs.bins])
+        if (span !== null && spanShift(span, travel) !== null) for (const id of span.up) ups.add(id);
+    const series = new Set(
+      stations.data.stations.filter((st) => ups.has(st.id)).flatMap((st) => st.series.map((x) => x.id)),
+    );
+    return { shiftMax: maxShift(spans, travel), shiftSeries: series };
+  }, [graph, stations.data, travel]);
   const playback = usePlayback({
     t: url.t === undefined ? undefined : t,
     displayStart: range?.start ?? 0,
@@ -160,6 +182,7 @@ function Viewer({ locale }: { locale: Locale }) {
     ready,
     onT: setT,
     onSpeed: setPlay,
+    extraLeadHours: shiftMax,
   });
   const playing = playback.playing;
   const frames = useFrames(playback.window, meta.data, stations.data?.stations);
@@ -212,6 +235,53 @@ function Viewer({ locale }: { locale: Locale }) {
     [playedValues, frames, t, quantity],
   );
   const changes = playedValues === undefined ? snapChanges : playedChanges;
+  // #112 item 3: the hours before t that a shifted span's up end is read at: from the playback frames while they play,
+  // else from a frames read of [t − shiftMax − 25 h, t) around the settled t. Paused, the down end is the snapshot's
+  // value at t and the up end the frames' value of its hour. Nothing is read when no span is shifted, when no reach is
+  // coloured (the table, no WebGL2, no river tiles) or for a t after now (forecasts: no observed value to shift). The
+  // window is whole UTC days (framesPlan reads whole day files anyway), so a scrubbed t rebuilds no frame store until
+  // its day changes; its end stays at or before now (the owner's API refuses a later one).
+  const reachesShown = webgl && !mapFailed && view === 'map' && rivers.data?.manifest.current.tiles.file !== undefined;
+  const shiftDay = asked === undefined ? undefined : Math.floor(asked / DAY_MS) * DAY_MS;
+  const shiftWindow = useMemo(
+    () =>
+      asked === undefined ||
+      shiftDay === undefined ||
+      shiftMax === 0 ||
+      range === undefined ||
+      !reachesShown ||
+      asked > range.now
+        ? undefined
+        : {
+            from: Math.max(ceilHour(range.start), Math.floor((shiftDay - (shiftMax + 25) * HOUR_MS) / DAY_MS) * DAY_MS),
+            to: Math.min(shiftDay + DAY_MS, floorHour(range.now)),
+          },
+    [asked, shiftDay, shiftMax, range, reachesShown],
+  );
+  const shiftFrames = useFrames(
+    shiftWindow !== undefined && shiftWindow.from < shiftWindow.to ? shiftWindow : undefined,
+    meta.data,
+    stations.data?.stations,
+  );
+  const pastStore = playing ? frames : shiftFrames;
+  const shift = useMemo((): Shift | undefined => {
+    if (shiftMax === 0 || t === undefined || pastStore === undefined) return undefined;
+    const store = pastStore;
+    const hours = new Map<number, HourValues | undefined>();
+    const past = (k: number): HourValues | undefined => {
+      if (hours.has(k)) return hours.get(k);
+      const at = t - k * HOUR_MS;
+      let out: HourValues | undefined;
+      if (store.ready(at)) {
+        const values = store.valuesAt(at, shiftSeries);
+        const before = store.valuesAt(at - DAY_MS, shiftSeries);
+        out = { values, changes: changesAt(quantity, [...values.values()], [...before.values()]) };
+      }
+      hours.set(k, out);
+      return out;
+    };
+    return { travel, past };
+  }, [shiftMax, shiftSeries, t, pastStore, travel, quantity]);
   const warnings = useWarnings(asked, meta.data, isLive).data;
   // KG-233: latest.json's age of the newest value of a series with none at t; a station with nothing newer than
   // 25 hours is hidden (map, table, search), and the selected one stays open by its link.
@@ -303,6 +373,7 @@ function Viewer({ locale }: { locale: Locale }) {
         owner={owner}
         warnings={(warnings?.features.length ?? 0) > 0}
         reaches={onMap && riverTiles !== undefined}
+        shifted={shiftMax > 0}
       />
     );
 
@@ -397,6 +468,7 @@ function Viewer({ locale }: { locale: Locale }) {
                   onFailure={failed}
                   allStations={sorted}
                   played={played}
+                  shift={shift}
                 />
               ) : (
                 <StationTable

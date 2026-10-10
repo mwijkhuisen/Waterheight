@@ -5,7 +5,8 @@ import type { ReachGraph } from '../../../lib/data/contracts.ts';
 import type { Mode } from '../../../lib/url/url.ts';
 import { REACH_CASING_COLOUR, REACH_IMPOUNDED_COLOUR, REACH_NODATA_COLOUR } from '../../legend/palette.ts';
 import { reachHatchIcon } from '../../map/icons.ts';
-import { type ReachPaint, reachPaints } from './colour.ts';
+import { BIN_MINZOOM, BINS_LAYER } from './bins.ts';
+import { binPaints, type ReachPaint, reachPaints, type Shift } from './colour.ts';
 import { type FeatureSpan, spansOf } from './spans.ts';
 
 // The reach colouring on the map (P11b, issue #26): four line layers over the `rivers` source (promoteId
@@ -13,6 +14,9 @@ import { type FeatureSpan, spansOf } from './spans.ts';
 // (neutral) and `rivers-reach-tidal` (a hatch pattern on the tile's `tidal` flag, static). Each reach's paint is
 // feature-state `{k, c, w}`, written only for the reaches whose paint changed. A lazy chunk, loaded with the flow
 // layer once the river layer exists (StationsMap). No HTML, no provider text.
+// #112: when the installed archive has the `reach_bins` layer (`bins` resolves true), the same five layers are drawn
+// from it from zoom BIN_MINZOOM on (`-bin` ids, butt caps so adjacent bins never overlap), each bin painted at its own
+// position on its span, and the per-reach layers keep the zooms below; an archive without it keeps today's colouring.
 
 type Value = Snapshot['values'][number];
 
@@ -25,6 +29,8 @@ export interface ReachInput {
   stations: readonly ApiStation[];
   values: ReadonlyMap<number, Value>;
   changes: ReadonlyMap<number, Change> | undefined;
+  /** #112: the travel-time shift of the spans a sourced travel time names exactly; none: unshifted. */
+  shift?: Shift | undefined;
 }
 
 export interface ReachHandle {
@@ -126,6 +132,19 @@ export const reachLayers = (): LayerSpecification[] => [
   },
 ];
 
+/** The bin copies of the five layers (#112): source-layer `reach_bins`, from BIN_MINZOOM, butt caps. */
+export const binLayers = (): LayerSpecification[] =>
+  reachLayers().map((l) => {
+    const line = l as Extract<LayerSpecification, { type: 'line' }>;
+    return {
+      ...line,
+      id: `${line.id}-bin`,
+      'source-layer': BINS_LAYER,
+      minzoom: BIN_MINZOOM,
+      layout: { ...line.layout, 'line-cap': 'butt' },
+    };
+  });
+
 const stateOf = (p: ReachPaint) => (p.k === 'v' ? { k: 'v', c: p.colour, w: p.width } : { k: p.k, c: '#0000', w: 1 });
 
 interface Spans {
@@ -134,8 +153,34 @@ interface Spans {
   out: Map<string, FeatureSpan>;
 }
 
-/** Adds the four layers before `beforeId` (when it exists). */
-export function addReaches(map: MapLibreMap, beforeId: string): ReachHandle {
+/** Writes the feature-states of `paints` whose key changed against `written` and removes the gone ones. */
+function write(
+  map: MapLibreMap,
+  sourceLayer: string,
+  paints: ReadonlyMap<string, ReachPaint>,
+  written: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const target = (id: string) => ({ source: SOURCE, sourceLayer, id });
+  const next = new Map<string, string>();
+  for (const [id, paint] of paints) {
+    const st = stateOf(paint);
+    const key = `${st.k}|${st.c}|${st.w}`;
+    next.set(id, key);
+    if (written.get(id) !== key) map.setFeatureState(target(id), st);
+  }
+  for (const id of written.keys()) if (!next.has(id)) map.removeFeatureState(target(id));
+  return next;
+}
+
+/**
+ * Adds the five layers before `beforeId` (when it exists); once `bins` resolves true (the archive has `reach_bins`),
+ * their bin copies too, the per-reach ones limited to the zooms below BIN_MINZOOM.
+ */
+export function addReaches(
+  map: MapLibreMap,
+  beforeId: string,
+  bins: Promise<boolean> = Promise.resolve(false),
+): ReachHandle {
   const before = map.getLayer(beforeId) === undefined ? undefined : beforeId;
   if (!map.hasImage(REACH_HATCH)) map.addImage(REACH_HATCH, reachHatchIcon(), { pixelRatio: 1 });
   for (const layer of reachLayers()) map.addLayer(layer, before);
@@ -143,10 +188,13 @@ export function addReaches(map: MapLibreMap, beforeId: string): ReachHandle {
   let disposed = false;
   let spans: Spans | undefined;
   let written = new Map<string, string>();
-  const target = (id: string) => ({ source: SOURCE, sourceLayer: SOURCE_LAYER, id });
+  let binsOn = false;
+  let writtenBins = new Map<string, string>();
+  let last: ReachInput | undefined;
 
-  return {
+  const handle: ReachHandle = {
     update(input) {
+      last = input;
       if (disposed || map.getSource(SOURCE) === undefined) return;
       // The spans depend on the graph and the set of station ids only; the lookup keeps the newest station objects.
       const same =
@@ -158,27 +206,54 @@ export function addReaches(map: MapLibreMap, beforeId: string): ReachHandle {
         const by = new Map(input.stations.map((s) => [s.id, s]));
         spans = { graph: input.graph, by, out: spansOf(input.graph, new Set(by.keys())) };
       } else for (const s of input.stations) spans.by.set(s.id, s);
-      const paints = reachPaints(spans.out, input.mode, input.values, input.changes, spans.by);
-      const next = new Map<string, string>();
-      for (const [id, paint] of paints) {
-        const st = stateOf(paint);
-        const key = `${st.k}|${st.c}|${st.w}`;
-        next.set(id, key);
-        if (written.get(id) !== key) map.setFeatureState(target(id), st);
-      }
-      for (const id of written.keys()) if (!next.has(id)) map.removeFeatureState(target(id));
-      written = next;
+      // With bins the per-reach layers are drawn below BIN_MINZOOM and the bins from it on: each set is written only
+      // near its zooms (thousands of writes an hour of playback for nothing otherwise), and a zoom across catches up
+      // (`onZoom`).
+      const zoom = map.getZoom();
+      if (!binsOn || zoom < BIN_MINZOOM + 0.5)
+        written = write(
+          map,
+          SOURCE_LAYER,
+          reachPaints(spans.out, input.mode, input.values, input.changes, spans.by, input.shift),
+          written,
+        );
+      if (binsOn && zoom >= BIN_MINZOOM - 0.5)
+        writtenBins = write(
+          map,
+          BINS_LAYER,
+          binPaints(spans.out, input.mode, input.values, input.changes, spans.by, input.shift),
+          writtenBins,
+        );
     },
     dispose() {
       if (disposed) return;
       disposed = true;
+      map.off('zoomend', onZoom);
       // StationsMap disposes on unmount, which may run after map.remove(): a removed map has no style to ask.
       try {
-        for (const l of reachLayers()) if (map.getLayer(l.id) !== undefined) map.removeLayer(l.id);
+        for (const l of [...binLayers(), ...reachLayers()]) if (map.getLayer(l.id) !== undefined) map.removeLayer(l.id);
         if (map.hasImage(REACH_HATCH)) map.removeImage(REACH_HATCH);
       } catch {
         // the map is already gone, and its layers with it
       }
     },
   };
+  function onZoom() {
+    if (last !== undefined) handle.update(last);
+  }
+  // The archive's layers are known a moment later (a metadata read): until then, and for an archive without bins,
+  // the per-reach layers paint at every zoom.
+  void bins.then((has) => {
+    if (!has || disposed || map.getSource(SOURCE) === undefined) return;
+    try {
+      for (const layer of binLayers()) map.addLayer(layer, before);
+      for (const l of reachLayers()) map.setLayerZoomRange(l.id, 0, BIN_MINZOOM);
+      binsOn = true;
+      map.on('zoomend', onZoom);
+      if (last !== undefined) handle.update(last);
+    } catch {
+      // the map went away meanwhile
+    }
+  });
+  return handle;
 }

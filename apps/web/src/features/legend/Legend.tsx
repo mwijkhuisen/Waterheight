@@ -24,6 +24,8 @@ import {
 export interface LegendProps {
   /** P11b: the reaches are coloured on the map (the river layer is shown): their legend entries. */
   reaches?: boolean;
+  /** #112: a span of the reaches is time-shifted by a sourced travel time: the "tijdverschoven, indicatief" note. */
+  shifted?: boolean;
   locale: Locale;
   mode: Mode;
   /** t is after now: the forecast marker key replaces the value keys. */
@@ -98,7 +100,7 @@ function LineKey({ kind }: { kind: 'nodata' | 'tidal' | 'impounded' }) {
 
 const reachWord = { nodata: m.reach_nodata, tidal: m.reach_tidal, impounded: m.reach_impounded } as const;
 
-export function Legend({ reaches, locale, mode, forecast, owner, warnings }: LegendProps) {
+export function Legend({ reaches, shifted, locale, mode, forecast, owner, warnings }: LegendProps) {
   const o = { locale };
   return (
     <details className={`${styles.legend} ${styles.floating}`}>
@@ -169,6 +171,7 @@ export function Legend({ reaches, locale, mode, forecast, owner, warnings }: Leg
             ))}
           </ul>
           <p className={styles.note}>{m.reach_interpolated({}, o)}</p>
+          {shifted && <p className={styles.note}>{m.reach_shifted({}, o)}</p>}
         </>
       )}
       {warnings && (

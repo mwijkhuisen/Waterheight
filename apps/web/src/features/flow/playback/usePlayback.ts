@@ -37,6 +37,8 @@ export interface PlaybackOptions {
   onT: (t: number) => void;
   /** Play started or the speed changed: the URL's `play`. */
   onSpeed: (speed: Speed) => void;
+  /** Hours of extra history the frames must reach before the lead (#112: the largest travel-time shift); default 0. */
+  extraLeadHours?: number;
 }
 
 /** A hold shorter than this is not worth a word: frames normally arrive within a tick or two. */
@@ -79,10 +81,11 @@ export function usePlayback(o: PlaybackOptions): Playback {
       engine.current?.dispose();
       clearHold();
       const floor = ceilHour(o.displayStart);
+      const lead = LEAD_MS + (o.extraLeadHours ?? 0) * HOUR_MS;
       const window =
         dir === 1
-          ? { from: Math.max(floor, from - LEAD_MS), to: range.end }
-          : { from: Math.max(floor, range.start - LEAD_MS), to: from };
+          ? { from: Math.max(floor, from - lead), to: range.end }
+          : { from: Math.max(floor, range.start - lead), to: from };
       const e = createEngine({
         host,
         range,
