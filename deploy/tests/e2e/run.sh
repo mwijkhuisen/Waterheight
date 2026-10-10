@@ -481,7 +481,8 @@ if [[ -n $mode ]]; then
   wait_for "/api/v1/health through Caddy" 120 outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/api/v1/health"
   wait_for "publish's first meta.json" 240 test -s /srv/rws/public/www/v1/meta.json
   wait_for "publish-owner's first meta.json" 240 test -s /srv/rws/owner/www/v1/meta.json
-  # caddy-owner's own CA, as isolation.sh reads it (it is reachable on rws_edge only; no published port).
+  # caddy-owner's own CA, as isolation.sh reads it (caddy-owner is on rws_owner_public and rws_owner_edge, and
+  # published on 10.66.0.1:443 only; P12a).
   docker exec rws-caddy-owner-1 cat /data/caddy/pki/authorities/local/root.crt >/ci/owner-root.crt
   client_ips=$(
     IFS=,
@@ -1159,7 +1160,21 @@ proof "Caddy's masked access log (IPv4 /24, IPv6 /48) shows the runner's own pre
 
 step "The owner canary sweep (P9b): every public output, every encoding; the owner outputs; the logs"
 docker exec rws-caddy-owner-1 cat /data/caddy/pki/authorities/local/root.crt >/ci/owner-root.crt
-sweep_run=(docker run --rm --network rws_edge -e RWS_DOMAIN="$DOMAIN" -e OWNER_PW -e PUBLIC_CA=/pebble-root.pem -e OWNER_CA=/owner-root.crt
+# P12a: caddy-owner is no longer on rws_edge (the public caddy's network) but on rws_owner_public. The sweep needs the
+# public caddy (rws_edge) and caddy-owner (rws_owner_public), so its container joins both: created on rws_edge,
+# connected to rws_owner_public, then started (docker run takes one --network). Arguments as for `docker run`.
+owner_net_run() {
+  local id rc=0
+  id=$(docker create --network rws_edge "$@") || return 1
+  docker network connect rws_owner_public "$id" || {
+    docker rm -f "$id" >/dev/null
+    return 1
+  }
+  docker start -a "$id" || rc=$?
+  docker rm -f "$id" >/dev/null
+  return "$rc"
+}
+sweep_run=(owner_net_run -e RWS_DOMAIN="$DOMAIN" -e OWNER_PW -e PUBLIC_CA=/pebble-root.pem -e OWNER_CA=/owner-root.crt
   -v "$e2e/api-sweep.mjs:/sweep.mjs:ro" -v /ci/pki/pebble-root.pem:/pebble-root.pem:ro -v /ci/owner-root.crt:/owner-root.crt:ro)
 "${sweep_run[@]}" --entrypoint /nodejs/bin/node rws-server:ci /sweep.mjs | tee /ci/api-sweep.out ||
   fail "api-sweep.mjs exited non-zero (its FAIL lines are above)"
@@ -1217,15 +1232,15 @@ wait_for "api healthy again" 240 healthy api
 proof "with the api container stopped, Playwright in the pinned image (host network, $DOMAIN -> $IP4) opened /?t=<now + 1 h>: the map canvas drew and the degraded banner showed (degraded.spec.ts); the api started again and is healthy"
 
 step "Owner smoke (P10a): the production build behind caddy-owner, one browser"
-# caddy-owner is reachable on rws_edge only (no published port); the browser stays on the host network and
-# resolves owner.$DOMAIN to the container's rws_edge address (never joins the network). The password is passed
+# P12a: caddy-owner is published on the WireGuard address only (10.66.0.1:443, the veth stand-in of wg-veth.sh); the
+# browser stays on the host network and resolves owner.$DOMAIN to 10.66.0.1, the way the owner's device does through
+# its hosts file, and uses the standard port. The password is passed
 # by name; the spec (owner-smoke.spec.ts, selected by E2E_OWNER_SMOKE=1) checks runtime-config and the banner.
-owner_ip=$(docker inspect -f '{{(index .NetworkSettings.Networks "rws_edge").IPAddress}}' rws-caddy-owner-1)
-[[ $owner_ip =~ ^[0-9.]+$ ]] || fail "no rws_edge address for caddy-owner: $owner_ip"
+owner_ip=10.66.0.1
 E2E_OWNER_PW=$OWNER_PW docker run --rm --init --network host --ipc=host --add-host "owner.$DOMAIN:$owner_ip" --add-host "$DOMAIN:$IP4" \
-  -e CI=true -e E2E_COMPOSE=1 -e E2E_OWNER_SMOKE=1 -e "E2E_OWNER_URL=https://owner.$DOMAIN:8443" -e "E2E_COMPOSE_URL=https://$DOMAIN" -e E2E_OWNER_PW \
+  -e CI=true -e E2E_COMPOSE=1 -e E2E_OWNER_SMOKE=1 -e "E2E_OWNER_URL=https://owner.$DOMAIN" -e "E2E_COMPOSE_URL=https://$DOMAIN" -e E2E_OWNER_PW \
   -v "$repo:/work" -w /work/apps/web \
   "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
   node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium ||
   fail "the owner smoke (owner-smoke.spec.ts) failed"
-proof "owner smoke: Playwright (Chromium, host network, owner.$DOMAIN -> $owner_ip) signed in to caddy-owner on the production build: /runtime-config.json says owner and the owner banner shows (owner-smoke.spec.ts)"
+proof "owner smoke: Playwright (Chromium, host network, https://owner.$DOMAIN, hosts entry -> $owner_ip: the WireGuard address, port 443) signed in to caddy-owner on the production build: /runtime-config.json says owner and the owner banner shows (owner-smoke.spec.ts)"

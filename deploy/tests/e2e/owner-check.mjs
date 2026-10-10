@@ -1,5 +1,5 @@
 // CI only (deploy/tests/e2e/isolation.sh): run inside the server image on the
-// rws_edge network. Talks to caddy-owner (SNI owner.<domain>; the certificate is
+// rws_owner_public network (P12a: caddy-owner is off the public edge). Talks to caddy-owner (SNI owner.<domain>; the certificate is
 // verified against caddy-owner's own `tls internal` root, OWNER_CA) and checks
 // the owner site's gate: every
 // request without or with wrong credentials is a 401 with both owner headers,

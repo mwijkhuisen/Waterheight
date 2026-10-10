@@ -83,7 +83,7 @@ printf 'docker %s\n' "$*" >>"$FIX/calls"
 file='' sub='' wait=0
 while (($#)); do
   case $1 in
-    -f) file=$2; shift ;;
+    -f) [[ -n $file ]] || file=$2; shift ;; # the first: the owner overlay (P12a) is a second -f
     --wait) wait=1 ;;
     pull | up | run | config | exec) [[ -n $sub ]] || sub=$1 ;;
   esac
@@ -116,6 +116,12 @@ case $sub in
     ;;
 esac
 STUB
+cat >"$T/stubs/ip" <<'STUB'
+#!/usr/bin/env bash
+# `ip -4 -o addr show dev wg0 up` (wg0_ready in rws-lib.sh): the WireGuard address while $FIX/wg0 exists.
+[[ -e $FIX/wg0 ]] && echo '7: wg0    inet 10.66.0.1/24 scope global wg0\       valid_lft forever preferred_lft forever'
+exit 0
+STUB
 cat >"$T/stubs/rws-status-copy" <<'STUB'
 #!/usr/bin/env bash
 echo status-copy >>"$FIX/calls"
@@ -125,7 +131,7 @@ chmod +x "$T/stubs"/*
 # ---------------------------------------------------------------- fixtures
 # mkrel <tag> [flags]: a release on the fake GitHub; flags: broken badsig badsha
 # badtag, db (services db, load, migrate: a P2a release), api (service api),
-# host=<word> (the content of a host file, deploy/host/x.conf), build=<word>
+# owner (deploy/compose.owner.yaml, the P12a overlay), host=<word> (the content of a host file, deploy/host/x.conf), build=<word>
 # (the content of files that are not host files: image build inputs and CI-only
 # tests). Without db and api it is a P1b release.
 mkrel() {
@@ -137,6 +143,9 @@ mkrel() {
     [[ " $flags " != *" db "* ]] || printf '  db: {}\n  load: {}\n  migrate: {}\n'
     [[ " $flags " != *" api "* ]] || printf '  api: {}\n'
   } >"$C/bundles/$tag/deploy/compose.yaml"
+  if [[ " $flags " == *" owner "* ]]; then
+    printf '# overlay\nservices:\n  caddy-owner: {}\n' >"$C/bundles/$tag/deploy/compose.owner.yaml"
+  fi
   if [[ $flags == *host=* ]]; then
     word=${flags#*host=}
     printf '%s\n' "${word%% *}" >"$C/bundles/$tag/deploy/host/x.conf"
@@ -720,6 +729,40 @@ RWS_ROLES_SQL=$C/missing.sql run rws-update
 expect_rc 1
 expect_grep "no installed roles.sql" "$C/out"
 expect_no_grep "exec -T db" "$FIX/calls"
+
+# ---------------------------------------------------------------- the owner overlay (P12a)
+# owner_calls: the compose calls that carried the overlay as a second -f.
+owner_calls() { grep -cE '^docker compose .* -f [^ ]*/compose\.owner\.yaml ' "$FIX/calls" || true; }
+owner_case() { # <label> <RWS_OWNER_SITE line or ''> <wg0 up: 1|0> <release flags>
+  case_ "$1"
+  setup
+  [[ -z $2 ]] || echo "$2" >>"$C/etc/rws.env"
+  if (($3)); then touch "$FIX/wg0"; fi
+  mkrel $T1 "$4"
+  latest $T1
+  run rws-update
+  expect_rc 0
+  expect_state current $T1
+}
+
+owner_case "owner overlay: default (no RWS_OWNER_SITE), wg0 up: staged next to compose.yaml, never used" "" 1 owner
+[[ -f $RWS_STATE_DIR/releases/$T1/compose.owner.yaml ]] || fail "stage_release did not copy compose.owner.yaml"
+[[ $(owner_calls) == 0 ]] || fail "the overlay was used by default"
+
+owner_case "owner overlay: RWS_OWNER_SITE=off, wg0 up: not used" "RWS_OWNER_SITE=off" 1 owner
+[[ $(owner_calls) == 0 ]] || fail "the overlay was used with RWS_OWNER_SITE=off"
+
+owner_case "owner overlay: RWS_OWNER_SITE=on and wg0 up with 10.66.0.1: pull, has_service and up carry it" "RWS_OWNER_SITE=on" 1 owner
+[[ $(owner_calls) -ge 3 ]] || fail "the overlay was not used by pull, config and up: $(owner_calls) calls"
+expect_grep "compose .* -f [^ ]*/compose\\.owner\\.yaml .*up -d --remove-orphans" "$FIX/calls"
+expect_no_grep "wg0 is not up" "$C/out"
+
+owner_case "owner overlay: RWS_OWNER_SITE=on but wg0 down: left out (fail closed), deploy still green, a log line says why" "RWS_OWNER_SITE=on" 0 owner
+[[ $(owner_calls) == 0 ]] || fail "the overlay was used with wg0 down"
+expect_grep "RWS_OWNER_SITE=on but wg0 is not up" "$C/out"
+
+owner_case "owner overlay: RWS_OWNER_SITE=on, a release without the overlay (an older one): nothing to add, no failure" "RWS_OWNER_SITE=on" 1 ""
+[[ $(owner_calls) == 0 ]] || fail "an overlay appeared from nowhere"
 
 echo "$labels cases, $failures failures"
 ((failures == 0))

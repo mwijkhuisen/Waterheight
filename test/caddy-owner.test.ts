@@ -133,8 +133,9 @@ describe('owner site isolation', () => {
       '/srv/rws/tiles:/srv/rws/tiles:ro',
       '/srv/rws/public/data/v1/rivers:/srv/rws/public/data/v1/rivers:ro',
     ]);
-    expect(owner?.ports).toBeUndefined();
-    expect(owner?.networks).toEqual(['edge', 'owner_edge']);
+    // P12a: the only published port is the WireGuard address (never a public one), and the site is off `edge`.
+    expect(owner?.ports).toEqual(['10.66.0.1:443:8443/tcp']);
+    expect(owner?.networks).toEqual(['owner_public', 'owner_edge']);
     expect(owner?.secrets).toEqual(['owner_basic_auth']);
   });
 
@@ -300,5 +301,49 @@ describe('the owner site pages and runtime config (P10b)', () => {
       expect(env?.RWS_OPERATOR_NAME).toBe(`\${RWS_OPERATOR_NAME:-}`);
       expect(env?.RWS_CDN_NAME).toBe(`\${RWS_CDN_NAME:-}`);
     }
+  });
+});
+
+describe('the owner site is reachable over WireGuard only (P12a)', () => {
+  it("has a CSP without 'unsafe-inline' and 'unsafe-eval'", () => {
+    const csp = /Content-Security-Policy "([^"]*)"/.exec(ownerSite)?.[1] ?? '';
+    expect(csp).not.toBe('');
+    expect(csp).not.toContain("'unsafe-inline'");
+    expect(csp).not.toContain("'unsafe-eval'");
+  });
+
+  it('is published on 10.66.0.1 alone, from a bridge of its own that the egress rules do not accept', () => {
+    type File = {
+      services: Record<string, { ports?: string[]; networks?: string[] }>;
+      networks?: Record<string, { internal?: boolean; driver_opts?: Record<string, string> }>;
+    };
+    const overlay = parse(read('deploy/compose.owner.yaml')) as File;
+    expect(overlay.services['caddy-owner']?.networks).not.toContain('edge');
+    expect(overlay.networks?.owner_public?.internal).toBeUndefined();
+    expect(overlay.networks?.owner_public?.driver_opts?.['com.docker.network.bridge.name']).toBe('rws-owner-pub');
+    // from_containers accepts egress only from these two bridges.
+    expect(read('deploy/host/nftables.conf')).toMatch(/iifname \{ "rws-egress", "rws-public" \} tcp dport 443 accept/);
+    expect(Object.values(overlay.services).flatMap((s) => s.ports ?? [])).toEqual(['10.66.0.1:443:8443/tcp']);
+  });
+
+  it('is firewalled: udp 51820 in, wg0 only for 10.66.0.1, one forward accept on the original destination', () => {
+    const fw = read('deploy/host/nftables.conf');
+    expect(fw).toContain('udp dport 51820 accept');
+    expect(fw).toMatch(/hook prerouting priority -150[\s\S]*ip daddr 10\.66\.0\.1 iifname != \{ "wg0", "lo" \} drop/);
+    expect(fw).toContain(
+      'iifname "wg0" meta l4proto tcp ct original ip daddr 10.66.0.1 ct original proto-dst 443 accept',
+    );
+    expect(fw).toContain('iifname "wg0" oifname != "rws-owner-pub" drop');
+    const chain = /chain to_containers \{([\s\S]*?)\n\t\}/.exec(fw)?.[1] ?? '';
+    expect(chain.trimEnd().endsWith('drop')).toBe(true);
+    expect(chain.indexOf('ct original proto-dst 443 accept')).toBeGreaterThan(0);
+  });
+
+  it('wg0 is up before Docker, the template holds no key, and the overlay is off by default', () => {
+    expect(read('deploy/host/docker-rws.conf')).toMatch(/^Wants=wg-quick@wg0\.service$/m);
+    const tpl = read('deploy/host/wireguard/wg0.conf.template').replaceAll(/#.*$/gm, '');
+    expect(tpl).toContain('Address = 10.66.0.1/24');
+    expect(tpl).not.toMatch(/PrivateKey|PresharedKey|\[Peer\]/);
+    expect(read('deploy/host/bootstrap.sh')).toContain('RWS_OWNER_SITE=off');
   });
 });

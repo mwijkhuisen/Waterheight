@@ -113,7 +113,7 @@ enable_only() {
 echo "bootstrap from $bundle$( ((DRY_RUN)) && echo ' (dry run)')"
 
 # ------------------------------------------------------------------ packages
-packages=(ca-certificates curl jq zstd chrony unattended-upgrades needrestart apparmor apparmor-utils nftables sudo openssh-server)
+packages=(ca-certificates curl jq zstd chrony unattended-upgrades needrestart apparmor apparmor-utils nftables sudo openssh-server wireguard-tools)
 missing=()
 for p in "${packages[@]}"; do
   dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q 'install ok installed' || missing+=("$p")
@@ -187,6 +187,8 @@ if [[ -n $uplink ]]; then
 fi
 install_file "$bundle/deploy/host/apt-unattended-rws.conf" /etc/apt/apt.conf.d/52rws-unattended 0644 || true
 install_file "$bundle/deploy/host/needrestart-rws.conf" /etc/needrestart/conf.d/rws.conf 0644 || true
+# WP-Tune (P12a): further sysctls (net.core.somaxconn and friends) go into deploy/host/sysctl-rws.conf, installed
+# above; per-service nofile limits belong in deploy/compose.yaml (ulimits), not here.
 enable_now chrony.service
 enable_now unattended-upgrades.service
 
@@ -214,6 +216,14 @@ ensure_dir /srv/rws/raw 0750 65532 65532
 ensure_dir /srv/rws/public 0755 0 0
 ensure_dir /srv/rws/public/status 0755 65532 65532
 ensure_dir /srv/rws/public/ops 0755 0 0
+# The brownout flag (P12a; A§9.2): `mode` (on|off|auto) and, while the brownout is on, `active`. Root writes it
+# (rws-brownout); caddy, api and publish mount the directory read-only, so both files stay world-readable.
+ensure_dir /srv/rws/brownout 0755 0 0
+if [[ -f /srv/rws/brownout/mode ]]; then
+  ok "/srv/rws/brownout/mode (never overwritten)"
+else
+  fix "/srv/rws/brownout/mode (auto)" install -m 0644 -o 0 -g 0 <(echo auto) /srv/rws/brownout/mode
+fi
 ensure_dir /srv/rws/owner 0750 65532 65532
 ensure_dir /srv/rws/owner/status 0750 65532 65532
 # The basemap (P3): Caddy serves /srv/rws/tiles read-only; only the basemap-promote job (uid 65532, no network)
@@ -318,6 +328,7 @@ RWS_TRUSTED_PROXIES=
 RWS_RESTIC_REPOSITORY=
 RWS_S3_REGION=
 RWS_BACKUP=off
+RWS_OWNER_SITE=off
 EOF
     chmod 0644 /etc/rws/rws.env
   }
@@ -380,6 +391,36 @@ enable_now rws-firewall.service
 if ((fw_changed && !DRY_RUN)); then systemctl reload rws-firewall.service; fi
 enable_now rws-resolvers.path
 enable_only rws-resolvers.service
+
+# ------------------------------------------------------------------ WireGuard (the owner site's only way in; P12a)
+# The server key is made once, with a umask that never lets it exist readable, and is never printed or overwritten.
+# wg0.conf holds no secret (PostUp reads the key and the peer file), so it is replaced on every run; the peers in
+# wg0.peers.conf are rws-wg-peer's and are never touched here. Nothing opens the owner site until the owner sets
+# RWS_OWNER_SITE=on in rws.env (rws_compose in rws-lib.sh) and adds a device (docs/runbooks/owner-device.md).
+ensure_dir /etc/wireguard 0700 0 0
+if [[ -s /etc/wireguard/wg0.key ]]; then
+  if [[ $(stat -c '%a %u %g' /etc/wireguard/wg0.key) == "600 0 0" ]]; then
+    ok "/etc/wireguard/wg0.key"
+  else
+    fix "/etc/wireguard/wg0.key (root 0600)" chmod 0600 /etc/wireguard/wg0.key
+    ((DRY_RUN)) || chown 0:0 /etc/wireguard/wg0.key
+  fi
+else
+  wg_key() { (umask 077 && wg genkey >/etc/wireguard/wg0.key); }
+  fix "/etc/wireguard/wg0.key (generated)" wg_key
+fi
+if [[ -e /etc/wireguard/wg0.peers.conf ]]; then
+  ok "/etc/wireguard/wg0.peers.conf (rws-wg-peer's, never overwritten)"
+else
+  fix "/etc/wireguard/wg0.peers.conf (empty)" install -m 0600 -o 0 -g 0 /dev/null /etc/wireguard/wg0.peers.conf
+fi
+wg_conf_changed=0
+install_file "$bundle/deploy/host/wireguard/wg0.conf.template" /etc/wireguard/wg0.conf 0600 && wg_conf_changed=1
+if ((wg_conf_changed && !DRY_RUN)) && systemctl is-active --quiet wg-quick@wg0.service; then
+  # A changed interface section only takes effect on a new up (the peers come back from wg0.peers.conf).
+  systemctl restart wg-quick@wg0.service && echo "changed  wg-quick@wg0 restarted"
+fi
+enable_now wg-quick@wg0.service
 
 # ------------------------------------------------------------------ Docker, Compose, cosign
 ensure_dir /etc/docker 0755 0 0
@@ -444,7 +485,7 @@ else
 fi
 # The basemap and rivers refresh timers are installed with the other units but not enabled here: the owner enables
 # each after the first manual run of rws-basemap-refresh and rws-rivers-refresh.
-for unit in rws-status-copy.path rws-update.timer rws-backup.timer rws-restore-drill.timer rws-tick.timer; do
+for unit in rws-status-copy.path rws-update.timer rws-backup.timer rws-restore-drill.timer rws-tick.timer rws-brownout.timer; do
   enable_now "$unit"
 done
 
