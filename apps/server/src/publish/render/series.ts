@@ -50,6 +50,8 @@ type RefRow = {
   unit: string;
   priority: number;
   basis_label: string | null;
+  season_from_md: number;
+  season_to_md: number;
 };
 
 /** series/{id}/recent.json: seven days of raw observations, the run forecast/latest.json shows, the references now. */
@@ -66,10 +68,10 @@ export async function renderStation(c: RenderCtx, id: string): Promise<StationRe
       ? []
       : (
           await sql<RefRow>`
-            SELECT series_id, source_id, kind, value, unit, priority, basis_label
+            SELECT series_id, source_id, kind, value, unit, priority, basis_label, season_from_md, season_to_md
             FROM ${sql.table(v.reference)}
             WHERE series_id = ANY(${ids}::int[]) AND valid @> ${new Date(c.now)}::timestamptz
-            ORDER BY series_id, priority, source_id, kind`.execute(c.db)
+            ORDER BY series_id, priority, source_id, kind, season_from_md, season_to_md`.execute(c.db)
         ).rows;
   const series: StationRecent['series'] = [];
   for (const f of facts) {
@@ -100,6 +102,10 @@ export async function renderStation(c: RenderCtx, id: string): Promise<StationRe
           unit: r.unit,
           priority: r.priority,
           label: r.basis_label === null || r.basis_label === '' ? null : r.basis_label,
+          // Every season valid now (#99): the web picks the one that holds at its t.
+          ...(r.season_from_md === 101 && r.season_to_md === 1231
+            ? {}
+            : { season: { from: r.season_from_md, to: r.season_to_md } }),
         })),
     });
   }

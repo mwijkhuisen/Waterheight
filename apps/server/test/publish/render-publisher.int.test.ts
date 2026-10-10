@@ -297,6 +297,30 @@ describe('renderers', { timeout: 120_000 }, () => {
     expect(other.series[0]?.references.some((x) => x.label?.startsWith('TEST'))).toBe(false);
   });
 
+  it('station: a seasonal reference carries its season, a whole-year one none (#99)', async () => {
+    await h.t.admin.query(
+      `INSERT INTO reference_value (series_id, source_id, kind, value, unit, semantics, season_from_md, season_to_md,
+                                    priority, valid, basis_label) VALUES
+         ($1, 'NL-4', 'NL4_TO', 720, 'cm', 'provider_class', 1001, 430, 90, tstzrange('2020-01-01', NULL), 'TEST win'),
+         ($1, 'NL-4', 'NL4_TO', 745, 'cm', 'provider_class', 801, 831, 90, tstzrange('2020-01-01', NULL), 'TEST aug'),
+         ($1, 'NL-4', 'NL4_FROM', 1200, 'cm', 'provider_class', 101, 1231, 91, tstzrange('2020-01-01', NULL), 'TEST all')`,
+      [ids.a],
+    );
+    try {
+      const r = StationRecent.parse(await renderStation(await ctx('public'), stationA));
+      const by = new Map(r.series[0]?.references.map((x) => [x.label, x]));
+      expect(by.get('TEST aug')?.season).toEqual({ from: 801, to: 831 });
+      expect(by.get('TEST win')?.season).toEqual({ from: 1001, to: 430 });
+      expect(by.get('TEST all')).not.toHaveProperty('season');
+      expect(by.get('TEST MNW')).not.toHaveProperty('season');
+      // one order for one data (by season after the kind), so the file's bytes do not move between cycles
+      const labels = [...by.keys()];
+      expect(labels.indexOf('TEST aug')).toBeLessThan(labels.indexOf('TEST win'));
+    } finally {
+      await h.t.admin.query(`DELETE FROM reference_value WHERE series_id = $1 AND priority IN (90, 91)`, [ids.a]);
+    }
+  });
+
   it('meta: the API meta plus the static fields, attribution of its sources', async () => {
     const m = StaticMeta.parse(
       await renderMeta(await ctx('public'), { dayVersions: { '2026-10-01': 0 }, degraded: true, latestFrom: iso(NOW) }),
