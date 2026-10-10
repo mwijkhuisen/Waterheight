@@ -48,7 +48,13 @@ test('the panel of Kaub says extreme from the class 4 of the LHP', async ({ page
   await expect(fact(facts, nl('panel_basis'))).toContainText('RP:4');
   await expect(facts).toHaveScreenshot('flood-drill-kaub.png', {
     caret: 'hide',
-    mask: [fact(facts, nl('measured_at')), fact(facts, nl('age'))],
+    // The height and the 24 h change come from the synthetic observations, which move with the clock.
+    mask: [
+      fact(facts, nl('measured_at')),
+      fact(facts, nl('age')),
+      fact(facts, nl('panel_height')),
+      fact(facts, nl('panel_dh')),
+    ],
   });
   await expectClean(page, log);
 });
