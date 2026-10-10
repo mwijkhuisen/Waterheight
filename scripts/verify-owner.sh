@@ -47,6 +47,8 @@ else
   echo >&2
 fi
 [[ -n $password && $password != *'"'* && $password != *\\* ]] || { echo "the password is empty or holds a quote or backslash" >&2; exit 64; }
+# The rule of docs/security/secrets.md and T-WG-1 (review R2-3): a shorter owner password fails this check.
+((${#password} >= 32)) || { echo "FAIL password length: under 32 characters (docs/runbooks/owner-password-rotation.md)" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT

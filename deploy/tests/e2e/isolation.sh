@@ -198,6 +198,9 @@ fi
 # Nor DNS, which could carry data out (review SR-1): a lookup sent straight to the host's resolver gets no answer.
 res4=$(nft -j list set inet rws resolvers4 | jq -r '[.nftables[] | .set? // empty | .elem[]?] | first // empty')
 [[ $res4 =~ ^[0-9.]+$ ]] || fail "no address in the resolvers4 set: $res4"
+# The tools exist, so a refusal below is the firewall's, not a missing applet (review R2-1).
+docker exec rws-caddy-owner-1 sh -c 'command -v nslookup && command -v timeout' >/dev/null ||
+  fail "caddy-owner has no nslookup or timeout: the DNS check would prove nothing"
 if docker exec rws-caddy-owner-1 timeout 15 nslookup example.com "$res4" >/dev/null 2>&1; then
   fail "caddy-owner resolved a name through $res4 (DNS is a way out)"
 fi

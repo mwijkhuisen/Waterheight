@@ -122,12 +122,14 @@ docker run --rm --init --network host --ipc=host --add-host "$domain:$RWS_E2E_CA
   -e CI=true -e E2E_COMPOSE=1 -e E2E_SPEC=flood-drill -e "E2E_COMPOSE_URL=https://$domain" -e DRILL_NOW="$now" \
   -v "$repo:/work" -w /work/apps/web \
   "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
-  node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium || ui_rc=$?
+  node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium 2>&1 | tee /ci/flood-pw.out || ui_rc=$?
 after=("$repo"/apps/web/e2e/visual/__screenshots__/flood-drill-*.png)
 if ((${#after[@]} > ${#before[@]})); then
   fail "flood-drill.spec.ts WROTE a missing baseline (now: ${after[*]##*/}); look at it in the job's artifact and commit it"
 fi
 ((ui_rc == 0)) || fail "flood-drill.spec.ts failed (exit $ui_rc)"
+# Both scenes ran: Playwright exits 0 when every test is skipped (review R2-2).
+grep -qE '^ *2 passed' /ci/flood-pw.out || fail "flood-drill.spec.ts did not pass both scenes (skipped or filtered)"
 ((${#before[@]} >= 2)) || fail "flood-drill.spec.ts: only ${#before[@]} flood-drill-*.png baseline(s) committed"
 proof "flood-drill.spec.ts in the pinned image (Chromium, host network, $domain -> $RWS_E2E_CADDY_IP): the panel of Kaub says extreem from the LHP class 4 and the panel of station 2020 shows the BAFU storm run at its peak, both equal to their committed baselines (0.2 % of the pixels), no request left the origin"
 endstep
