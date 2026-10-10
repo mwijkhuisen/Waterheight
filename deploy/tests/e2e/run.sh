@@ -324,6 +324,7 @@ RWS_PUBLIC_IPV6=$IP6
 RWS_RESTIC_REPOSITORY=s3:https://minio/rws-raw/restic
 RWS_S3_REGION=us-east-1
 RWS_BACKUP=on
+RWS_OWNER_SITE=on
 EOF
 grep -q ' minio$' /etc/hosts || echo '172.30.99.10 minio' >>/etc/hosts
 load_env
@@ -390,6 +391,10 @@ for a in "${CLIENT_IPS[@]}"; do
   ip route add "$a/32" via 10.99.0.2
 done
 sysctl -qw net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1
+# P12a: a stand-in for the WireGuard interface (a veth named wg0 holding 10.66.0.1/24, its peer 10.66.0.2 in the
+# namespace `wgpeer`), so compose can publish the owner site on 10.66.0.1:443 and the firewall's wg0 rules have an
+# interface to match; isolation.sh proves the owner site answers there and nowhere else.
+"$e2e/wg-veth.sh" || fail "wg-veth.sh"
 
 step "Host firewall: deploy/host/nftables.conf next to Docker's own tables"
 nft -c -f "$repo/deploy/host/nftables.conf"
