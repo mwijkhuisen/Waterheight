@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { binCount } from '../src/features/flow/reaches/bins.ts';
 import { spansOf } from '../src/features/flow/reaches/spans.ts';
 import { type ReachGraph, ReachGraphFile } from '../src/lib/data/contracts.ts';
 
@@ -184,5 +185,84 @@ describe('spansOf on small graphs', () => {
     expect(m.get('x.7')?.span).toMatchObject({ up: ['B'], down: ['D'], lengthKm: 30 });
     expect(m.get('x.7')?.span?.pos).toBeCloseTo(10 / 30, 10); // 20 - 10 into part 2
     expect(m.get('x.8')?.span).toBeNull();
+  });
+});
+
+describe('the bins of a reach (#112)', () => {
+  it("number binCount(length_km) on the fixture release, the span being the bins' common run", () => {
+    for (const r of graph.reaches) {
+      const fs = spans.get(r.id);
+      expect(fs?.bins.length, r.id).toBe(binCount(r.length_km));
+    }
+    expect(spans.get('rhine.56')?.bins).toHaveLength(8);
+  });
+
+  it('puts bin i at (i + 0.5) / n of the reach, so pos increases along them', () => {
+    const fs = spans.get('rhine.56');
+    expect(fs?.bins.map((b) => b?.pos)).toEqual(Array.from({ length: 8 }, (_, i) => expect.closeTo((i + 0.5) / 8, 9)));
+    // a 1-bin reach is its midpoint; every bin of a multi-bin reach lies on the reach's own span
+    for (const [id, f] of spans) {
+      if (f.span === null) continue;
+      const ps = f.bins.map((b) => b?.pos ?? Number.NaN);
+      if (ps.some(Number.isNaN)) continue;
+      expect(ps, id).toEqual([...ps].sort((a, b) => a - b));
+      for (const b of f.bins) expect(b?.up, id).toEqual(f.span.up);
+    }
+  });
+
+  it('maps the centres onto the span by the lengths before the reach (small graph)', () => {
+    const g = tiny(
+      [
+        re('x.1', 'A', null, [], ['x.2'], 10),
+        re('x.2', null, null, ['x.1'], ['x.3'], 30),
+        re('x.3', 'B', null, ['x.2'], [], 10),
+      ],
+      [st('A', 'x.1', 0), st('B', 'x.3', 0)],
+    );
+    const bins = spansOf(g, new Set(['A', 'B'])).get('x.2')?.bins ?? [];
+    expect(bins).toHaveLength(8); // 30 km / 500 m = 60, clamped to 8
+    bins.forEach((b, i) => {
+      expect(b?.pos).toBeCloseTo((10 + (i + 0.5) * 3.75) / 40, 10);
+    });
+  });
+
+  it('gives a reach of unknown length one bin with pos null', () => {
+    const g = tiny(
+      [re('x.1', 'A', null, [], ['x.2'], null), re('x.2', 'B', null, ['x.1'], [], 5)],
+      [st('A', 'x.1', 0), st('B', 'x.2', 0)],
+    );
+    const fs = spansOf(g, new Set(['A', 'B'])).get('x.1');
+    expect(fs?.bins).toHaveLength(1);
+    expect(fs?.bins[0]?.pos).toBeNull();
+  });
+
+  it('puts a short reach in one bin at its midpoint', () => {
+    const g = tiny(
+      [
+        re('x.1', 'A', null, [], ['x.2'], 0.4),
+        re('x.2', null, null, ['x.1'], ['x.3'], 0.4),
+        re('x.3', 'B', null, ['x.2'], [], 0.4),
+      ],
+      [st('A', 'x.1', 0), st('B', 'x.3', 0)],
+    );
+    const fs = spansOf(g, new Set(['A', 'B'])).get('x.2');
+    expect(fs?.bins).toHaveLength(1);
+    expect(fs?.bins[0]).toEqual(fs?.span);
+  });
+
+  it("on a cut reach takes each bin's span from the part that holds its centre", () => {
+    // x.7 = x.7-1 (A to B, 10 km) + x.7-2 (B to D, 30 km): 40 km, 8 bins of 5 km; centres 2.5, 7.5 | 12.5 ... 37.5
+    const parts = [
+      { ...re('x.7-1', 'A', 'B', [], ['x.7-2'], 10), part_of: 'x.7' },
+      { ...re('x.7-2', 'B', 'D', ['x.7-1'], ['x.8'], 30), part_of: 'x.7' },
+      re('x.8', 'D', null, ['x.7-2'], [], 5),
+    ];
+    const g = tiny(parts, [st('A', 'x.7-1', 0), st('B', 'x.7-2', 0), st('D', 'x.8', 0)]);
+    const bins = spansOf(g, new Set(['A', 'B', 'D'])).get('x.7')?.bins ?? [];
+    expect(bins).toHaveLength(8);
+    expect(bins.map((b) => b?.up)).toEqual([['A'], ['A'], ['B'], ['B'], ['B'], ['B'], ['B'], ['B']]);
+    expect(bins[0]?.pos).toBeCloseTo(2.5 / 10, 10);
+    expect(bins[2]?.pos).toBeCloseTo(2.5 / 30, 10);
+    expect(bins[7]?.pos).toBeCloseTo(27.5 / 30, 10);
   });
 });

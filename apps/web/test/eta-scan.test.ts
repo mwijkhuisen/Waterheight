@@ -49,6 +49,18 @@ describe('the site texts', () => {
     expect(scanEta(items)).toEqual([]);
   });
 
+  it('the time-shift legend note (#112) says indicative and holds no ETA, as a travel row too', () => {
+    for (const [l, word] of [
+      ['nl', 'indicatief'],
+      ['en', 'indicative'],
+    ] as const) {
+      const text = (json(join(web, 'messages', `${l}.json`)) as Record<string, unknown>).reach_shifted;
+      expect(typeof text, l).toBe('string');
+      expect(text as string, l).toContain(word);
+      expect(scanEta([{ where: `${l}:reach_shifted`, text: text as string, travelRow: true }])).toEqual([]);
+    }
+  });
+
   it('every golden prior and every fixture travel pair, as travel rows', () => {
     const file = json(join(import.meta.dirname, '..', '..', '..', 'test', 'fixtures', 'reaches-fixture.json'));
     const pairs = ReachTravel.parse(file).travel_times;

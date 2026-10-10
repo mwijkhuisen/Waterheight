@@ -10,6 +10,7 @@ import { CANARY_RENDERINGS } from '../packages/contracts/src/canaries.ts';
 import { checkReaches, ReachesFile } from '../packages/contracts/src/reaches.ts';
 import { validateRivernet } from '../packages/contracts/src/rivernet.ts';
 import { generate, RIVERNET_PATH } from '../scripts/gen-rivernet.ts';
+import { binCount } from '../tools/geo/rivernet/bins.ts';
 import { buildFromFiles, canonicalJson, readRivers, readWays } from '../tools/geo/rivernet/build.ts';
 import type { WayFeature } from '../tools/geo/rivernet/geojsonseq.ts';
 import type { LonLat } from '../tools/geo/rivernet/network.ts';
@@ -758,6 +759,44 @@ describe('determinism and the generated file', () => {
         expect(sorted(c, n), `${n} reversed`).toBe(sorted(a, n));
       else expect(readFileSync(join(c, n)).equals(readFileSync(join(a, n))), `${n} reversed`).toBe(true);
     }
+  });
+
+  it('writes reach-bins.geojsonseq: binCount(length) bins per drawn reach, with no property but the four', SLOW, () => {
+    const lines = read(outputs(placed), 'reach-bins.geojsonseq').trim().split('\n');
+    const feats = lines.map(
+      (l) =>
+        JSON.parse(l) as {
+          tippecanoe: { minzoom: number };
+          properties: Record<string, unknown>;
+          geometry: { coordinates: unknown[] };
+        },
+    );
+    const drawn = placed.reaches.filter((r) => r.coords.length >= 2);
+    expect(drawn.length).toBeGreaterThan(600);
+    const want = drawn.reduce((a, r) => a + binCount(Math.round(r.length_m) / 1000), 0);
+    expect(feats).toHaveLength(want);
+    const segs = new Set(feats.map((f) => f.properties.seg));
+    expect(segs.size).toBe(feats.length);
+    const by = new Map<string, typeof feats>();
+    for (const f of feats)
+      by.set(f.properties.reach_id as string, [...(by.get(f.properties.reach_id as string) ?? []), f]);
+    expect(by.size).toBe(drawn.length);
+    for (const r of drawn) {
+      const bins = by.get(r.id) ?? [];
+      expect(bins.length, r.id).toBe(binCount(Math.round(r.length_m) / 1000));
+      for (const [i, f] of bins.entries()) {
+        expect(f.properties, `${r.id}/${i}`).toEqual({
+          reach_id: r.id,
+          bin: i,
+          seg: `${r.id}/${i}`,
+          tidal: r.flags.tidal,
+        });
+        expect(f.tippecanoe).toEqual({ minzoom: 8 });
+        expect(f.geometry.coordinates.length).toBeGreaterThanOrEqual(2);
+      }
+    }
+    // no station id or other provider-derived text anywhere in the file (invariants 8, 11)
+    for (const sid of stations.slice(0, 50).map((x) => x.id)) expect(lines.join('\n')).not.toContain(sid);
   });
 
   it('writes a reaches file that the schema and its cross-checks accept', SLOW, () => {
