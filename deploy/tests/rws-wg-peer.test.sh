@@ -107,7 +107,7 @@ ok "invalid names are refused (case, leading dash, space, ;, .., empty, dot, 40 
 echo "list"
 printf '%s 1780000000\n' "$cpub" >"$FIX/handshakes"
 run list
-[[ $rc == 0 ]] && grep -qE "^laptop +10\.66\.0\.2 +2026-.* $cpub$" "$C/out" && grep -qE '^phone +10\.66\.0\.3 +never ' "$C/out" && ok "list: name, address, handshake or never, public key" || fail "list: $(cat "$C/out")"
+[[ $rc == 0 ]] && grep -qE '^laptop +10\.66\.0\.2 +2026-' "$C/out" && grep -qF -- " $cpub" "$C/out" && grep -qE '^phone +10\.66\.0\.3 +never ' "$C/out" && ok "list: name, address, handshake or never, public key" || fail "list: $(cat "$C/out")"
 
 echo "revoke"
 run revoke laptop

@@ -62,13 +62,15 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-    env:
-      OUT: ${{ runner.temp }}/loadtest
-      EGRESS_OUT: ${{ runner.temp }}/egress
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
+      # The runner context is not available in a job's env: the output directories come from RUNNER_TEMP here.
+      - name: Output directories
+        run: |
+          echo "OUT=$RUNNER_TEMP/loadtest" >>"$GITHUB_ENV"
+          echo "EGRESS_OUT=$RUNNER_TEMP/egress" >>"$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -231,13 +233,14 @@ jobs:
     permissions:
       contents: read
     env:
-      OUT: ${{ runner.temp }}/loadtest
       # How long the k6 flood scenario runs: it must outlast the drill (deploy/tests/flood/run.sh).
       FLOOD_DURATION: 12m
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
+      - name: Output directory
+        run: echo "OUT=$RUNNER_TEMP/loadtest" >>"$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

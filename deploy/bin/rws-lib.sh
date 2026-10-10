@@ -136,9 +136,9 @@ rws_compose() {
     dir=$RWS_STATE_DIR/releases/$2
     shift 2
   fi
-  local -a files=(-f "$dir/compose.yaml")
-  if [[ -f $dir/compose.owner.yaml ]] && owner_site_on; then files+=(-f "$dir/compose.owner.yaml"); fi
-  docker compose -p rws --project-directory "$dir" "${files[@]}" \
+  local -a compose_files=(-f "$dir/compose.yaml")
+  if [[ -f $dir/compose.owner.yaml ]] && owner_site_on; then compose_files+=(-f "$dir/compose.owner.yaml"); fi
+  docker compose -p rws --project-directory "$dir" "${compose_files[@]}" \
     --env-file "$RWS_ETC/rws.env" --env-file "$dir/images.env" "$@"
 }
 
