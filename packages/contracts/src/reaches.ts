@@ -46,8 +46,16 @@ export const TravelRange = z
   .refine(([lo, hi]) => lo < hi, 'a travel time is a range lo < hi');
 /** A travel time's value (#110): a range [lo, hi], or one value, which then names its condition in `label`. */
 export const TravelValue = z.union([z.number().positive(), TravelRange]);
+// Reviewed display text, as the registry's names: trimmed, no markup, no control or format characters.
+const LabelText = z
+  .string()
+  .min(1)
+  .max(80)
+  .refine((s) => s === s.trim(), 'label has leading or trailing whitespace')
+  .refine((s) => !/[<>]/.test(s), 'label holds < or >')
+  .refine((s) => !/[\p{Cc}\p{Cf}]/u.test(s), 'label holds a control or format character');
 /** The condition or event a value holds for ("piek juli 2021"), NL and EN: reviewed registry text, no provider string. */
-export const TravelLabel = z.strictObject({ nl: Name, en: Name });
+export const TravelLabel = z.strictObject({ nl: LabelText, en: LabelText });
 
 /** What the schema cannot say alone: exactly one unit (`h` hours, `d` days), and a label on every single value. */
 export function travelShapeProblem(t: { h?: unknown; d?: unknown; label?: unknown }): string | null {

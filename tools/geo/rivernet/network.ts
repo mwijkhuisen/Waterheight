@@ -152,8 +152,10 @@ export function buildNetwork(edgeList: readonly Edge[], rivers: RiversFile): Net
   // Joins: the sink of `river` nearest `at` → the nearest node of `to_river` that is not upstream of it.
   const ends = (id: string) => edges.get(id) ?? (joins.find((j) => j.id === id) as JoinEdge);
   const joins: JoinEdge[] = [];
+  // Sinks and targets come from drawn edges only: an earlier join is in riverEdges too (#110: two joins onto one river).
+  const drawn = (river: string) => (riverEdges.get(river) ?? []).filter((id) => edges.has(id));
   for (const [k, j] of (rivers.joins ?? []).entries()) {
-    const own = riverEdges.get(j.river) ?? [];
+    const own = drawn(j.river);
     const ownOut = new Set(own.map((id) => (edges.get(id) as Edge).from));
     const sinks = [...new Set(own.map((id) => (edges.get(id) as Edge).to))]
       .filter((n) => !ownOut.has(n))
@@ -163,9 +165,7 @@ export function buildNetwork(edgeList: readonly Edge[], rivers: RiversFile): Net
       throw new BuildError('join_unplaced', [j.river]);
     const up = ancestors(inn, ends, from);
     const targets = [
-      ...new Set(
-        (riverEdges.get(j.to_river) ?? []).flatMap((id) => [(edges.get(id) as Edge).from, (edges.get(id) as Edge).to]),
-      ),
+      ...new Set(drawn(j.to_river).flatMap((id) => [(edges.get(id) as Edge).from, (edges.get(id) as Edge).to])),
     ]
       .filter((n) => n !== from && !up.has(n))
       .sort(byString);
