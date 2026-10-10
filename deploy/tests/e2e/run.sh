@@ -66,10 +66,13 @@
 #     clause (the owner side shows them), then the api, publish and caddy logs and
 #     the public access log grepped for the same terms.
 # The stack keeps running afterwards for scripts/verify-prod.ts.
-# RWS_E2E_MODE=loadtest (P9b, .github/workflows/loadtest.yml; sudo must preserve it): the same
-# stack with the overlay deploy/tests/loadtest/compose.loadtest.yaml added, up to both
-# publishers' first meta.json; no proof section runs. It writes /ci/loadtest.env, prints
-# "loadtest stack ready" and exits 0 with the stack running (nothing is torn down).
+# RWS_E2E_MODE=loadtest|drill|chaos (P9b, P12a; .github/workflows/loadtest.yml; sudo must preserve it): the same
+# stack with the overlays deploy/tests/loadtest/compose.loadtest.yaml and deploy/tests/e2e/compose.fake.yaml added
+# (the fake upstream on 203.0.115.0/24 that capture fetches from and the watchdog pings, with a throw-away ping key),
+# drill also deploy/tests/flood/compose.drill.yaml (the drill registry), up to both publishers' first meta.json; no
+# proof section runs. It writes /ci/e2e-stack (the marker scripts/flood-drill.ts insists on) and /ci/loadtest.env,
+# prints "loadtest stack ready" and exits 0 with the stack running (nothing is torn down); the workflow job drives
+# its mode from there.
 # Usage: sudo deploy/tests/e2e/run.sh
 set -euo pipefail
 
@@ -84,16 +87,20 @@ readonly DOMAIN=rivierstanden.example IP4=203.0.114.10 IP6=2a0a:e5c0:ffff::10
 # Not private, so the API keys them as themselves (a private peer is the gateway key, a 100x bucket).
 readonly CLIENT_IPS=(203.0.114.11 203.0.114.12 203.0.114.13 203.0.114.14 203.0.114.15 203.0.114.16)
 readonly LOADTEST_OVERLAY=$repo/deploy/tests/loadtest/compose.loadtest.yaml
+# P12a: the fake upstream (capture's providers and hc-ping.com) and the flood drill's registry; CI only.
+readonly FAKE_OVERLAY=$e2e/compose.fake.yaml DRILL_OVERLAY=$repo/deploy/tests/flood/compose.drill.yaml
+readonly FAKE_IP=203.0.115.10
 readonly DOCKER_APT=5:29.8.1-1~ubuntu.24.04~noble CONTAINERD_APT=2.3.5-1~ubuntu.24.04~noble
 readonly COMPOSE_APT=5.5.1-1~ubuntu.24.04~noble
-# P9b: unset or empty is the normal run, `loadtest` the load-test stack (see the header); anything else is refused.
+# P9b, P12a: unset or empty is the normal run; loadtest, drill and chaos the stack of loadtest.yml's jobs (see the
+# header); anything else is refused.
 mode=${RWS_E2E_MODE:-}
-[[ -z $mode || $mode == loadtest ]] || {
-  echo "::error::e2e: RWS_E2E_MODE must be empty or loadtest"
+[[ -z $mode || $mode == loadtest || $mode == drill || $mode == chaos ]] || {
+  echo "::error::e2e: RWS_E2E_MODE must be empty, loadtest, drill or chaos"
   exit 1
 }
 # The Playwright image of the e2e job (ci.yml hands it in; test/e2e-pins.test.ts keeps both jobs on one value).
-[[ $mode == loadtest ]] || : "${PLAYWRIGHT_IMAGE:?set PLAYWRIGHT_IMAGE (ci.yml deploy job)}"
+[[ -n $mode ]] || : "${PLAYWRIGHT_IMAGE:?set PLAYWRIGHT_IMAGE (ci.yml deploy job)}"
 readonly MC_IMAGE=cgr.dev/chainguard/minio-client@sha256:be51ef820151a708a8e140037e3746862a8c1dd5e624f84b404a1d71bcefb167
 # The build image's Node (the job's own node is not on sudo's PATH): runs scripts/fixture-archive.ts.
 readonly NODE_IMAGE=node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1
@@ -129,7 +136,7 @@ on_exit() {
   if ((rc != 0)); then
     echo "::group::diagnostics"
     docker compose -p rws ps -a 2>/dev/null || true
-    for s in caddy capture watchdog db load api api-owner publish publish-owner caddy-owner pebble minio; do docker logs --tail 60 "rws-$s-1" 2>&1 | sed "s/^/$s| /" || true; done
+    for s in caddy capture watchdog db load api api-owner publish publish-owner caddy-owner pebble minio fake-upstream; do docker logs --tail 60 "rws-$s-1" 2>&1 | sed "s/^/$s| /" || true; done
     find /srv/rws/tiles -maxdepth 2 -printf '%M %u:%g %s %p\n' 2>&1 | head -n 20 || true
     systemctl status --no-pager rws-status-copy.path rws-status-copy.service 2>&1 | tail -n 20 || true
     nft list ruleset 2>/dev/null | head -n 200 || true
@@ -140,7 +147,8 @@ on_exit() {
 }
 trap on_exit EXIT
 ((EUID == 0)) || fail "run as root"
-[[ $mode != loadtest ]] || [[ -f $LOADTEST_OVERLAY ]] || fail "loadtest mode needs $LOADTEST_OVERLAY (deploy/tests/loadtest/compose.loadtest.yaml)"
+[[ -z $mode ]] || [[ -f $LOADTEST_OVERLAY && -f $FAKE_OVERLAY ]] || fail "mode $mode needs $LOADTEST_OVERLAY and $FAKE_OVERLAY"
+[[ $mode != drill ]] || [[ -f $DRILL_OVERLAY ]] || fail "drill mode needs $DRILL_OVERLAY"
 
 # ------------------------------------------------------------------ Docker
 step "Docker Engine 29.8.1 and Compose 5.5.1 from Docker's apt repository"
@@ -209,6 +217,16 @@ for name in pebble minio; do
 done
 cp /ci/pki/minio.crt /ci/pki/minio/public.crt
 cp /ci/pki/minio.key /ci/pki/minio/private.key
+# P12a: the fake upstream's routes, bodies and certificate (one SAN per faked host, signed by this CA) in /ci/fake;
+# /ci/fake/ca-bundle.pem is what capture and the watchdog trust on top of the system roots (NODE_EXTRA_CA_CERTS).
+# Only public certificates and the fake's own throw-away key are there, never ca.key.
+if [[ -n $mode ]]; then
+  "$e2e/fake-upstream/setup.sh" /ci/fake "$repo" "$NODE_IMAGE" || fail "fake-upstream/setup.sh"
+fi
+# The drill's registry (scripts/flood-drill.ts's test-only station) in /ci/flood, before migrate syncs it.
+if [[ $mode == drill ]]; then
+  "$repo/deploy/tests/flood/setup.sh" /ci/flood "$repo" || fail "flood/setup.sh"
+fi
 chmod -R a+rX /ci
 chmod 0644 /ci/pki/*.key /ci/pki/minio/private.key
 
@@ -222,6 +240,8 @@ done
 install -d -m 0755 /srv/rws
 mountpoint -q /srv/rws || mount -t tmpfs -o size=2g,mode=0755 tmpfs /srv/rws
 install -d -m 0755 /srv/rws/public /srv/rws/public/ops /etc/rws
+# P12a: the brownout flag directory, root's (deploy/bin/rws-brownout); caddy, api and publish mount it read-only.
+install -d -m 0755 -o 0 -g 0 /srv/rws/brownout
 install -d -m 0700 /etc/rws/secrets "$RWS_STATE_DIR" "$RWS_STATE_DIR/releases"
 install -d -m 0750 -o 65532 -g 65532 /srv/rws/raw /srv/rws/owner /srv/rws/owner/status
 install -d -m 0755 -o 65532 -g 65532 /srv/rws/public/status
@@ -270,7 +290,8 @@ put_secret() {
   printf '%b' "$3" >"/etc/rws/secrets/$1"
 }
 vps_secret=$(openssl rand -hex 20)
-put_secret hc_ping_key 61001 ''
+# Empty: no ping leaves the runner. P12a's modes ping the fake healthchecks with a throw-away key (16+ characters).
+if [[ -n $mode ]]; then put_secret hc_ping_key 61001 "ci$(openssl rand -hex 12)\n"; else put_secret hc_ping_key 61001 ''; fi
 put_secret rws_x_api_key 61002 "$(cat /proc/sys/kernel/random/uuid)\n"
 put_secret restic_password 61003 "ci-$(openssl rand -hex 16)\n"
 put_secret s3_credentials 61003 "[default]\naws_access_key_id = rws-vps\naws_secret_access_key = $vps_secret\n"
@@ -388,7 +409,8 @@ docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$repo/deploy/compose.ow
 proof "docker compose config -q: deploy/compose.yaml alone (production until P12a) and with the owner overlay deploy/compose.owner.yaml valid with the host settings and image digests"
 # --profile jobs: `config` leaves out services of inactive profiles (the backup job) otherwise.
 extra_files=()
-[[ $mode != loadtest ]] || extra_files=(-f "$LOADTEST_OVERLAY")
+[[ -z $mode ]] || extra_files=(-f "$LOADTEST_OVERLAY" -f "$FAKE_OVERLAY")
+[[ $mode != drill ]] || extra_files+=(-f "$DRILL_OVERLAY")
 docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$e2e/compose.ci.yaml" -f "$repo/deploy/compose.owner.yaml" "${extra_files[@]}" \
   --env-file /etc/rws/rws.env --env-file "$REL/images.env" --profile jobs config >"$REL/compose.yaml"
 grep -q '^  backup:' "$REL/compose.yaml" || fail "the merged compose file has no backup service"
@@ -434,14 +456,21 @@ fetch_root() {
     https://pebble:15000/roots/0 >/ci/pki/pebble-root.pem && [[ -s /ci/pki/pebble-root.pem ]]
 }
 wait_for "Pebble's root" 60 fetch_root
+# P12a: the watchdog probes the site (Pebble's chain) and pings the fake healthchecks (the CI CA): one bundle of both,
+# read by Node at start, so the two that use it start again.
+if [[ -n $mode ]]; then
+  cat /ci/pki/ca.pem /ci/pki/pebble-root.pem >/ci/fake/ca-bundle.pem
+  rws_compose restart capture watchdog
+  for s in capture watchdog; do wait_for "$s healthy again" 120 healthy "$s"; done
+fi
 outside() { ip netns exec ext curl -fsS --max-time 10 --cacert /ci/pki/pebble-root.pem "$@"; }
 wait_for "the ACME certificate" 240 outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/healthz"
 issuer=$(ip netns exec ext openssl s_client -connect "$IP4:443" -servername "$DOMAIN" </dev/null 2>/dev/null |
   openssl x509 -noout -issuer 2>/dev/null)
 proof "caddy runs as uid 65533 with CapEff=CapPrm=0 (cap_drop ALL, nothing added) and still binds 80/443; it obtained a certificate from Pebble over ACME HTTP-01 through the published port ($issuer)"
 
-# ------------------------------------------------------------------ the load-test stack (P9b)
-if [[ $mode == loadtest ]]; then
+# ------------------------------------------------------------------ the load-test stack (P9b, P12a)
+if [[ -n $mode ]]; then
   step "Load-test stack: data loaded, both publishers' first files, /ci/loadtest.env"
   wait_for "observations from the DE-1 fixture archive" 300 obs_loaded
   wait_for "/api/v1/health through Caddy" 120 outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/api/v1/health"
@@ -460,8 +489,14 @@ if [[ $mode == loadtest ]]; then
     echo "RWS_E2E_CLIENT_IPS=$client_ips"
     echo "RWS_E2E_CLIENT_NETNS=ext"
     echo "RWS_E2E_OWNER_CA=/ci/owner-root.crt"
+    echo "RWS_E2E_MODE=$mode"
+    echo "RWS_E2E_FAKE_IP=$FAKE_IP"
+    echo "RWS_E2E_REPO=$repo"
+    echo "RWS_E2E_NODE_IMAGE=$NODE_IMAGE"
   } >/ci/loadtest.env
   cat /ci/loadtest.env
+  # The marker scripts/flood-drill.ts and the chaos suite refuse to run without (outside /srv/rws: never in an archive).
+  printf '{"mode":"%s","domain":"%s"}\n' "$mode" "$DOMAIN" >/ci/e2e-stack
   echo "loadtest stack ready"
   exit 0
 fi

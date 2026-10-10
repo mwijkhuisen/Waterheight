@@ -382,6 +382,7 @@ describe('ApiError', () => {
       'rate_limited',
       'too_large',
       'unsupported_type',
+      'brownout',
     ]);
     for (const error of API_ERROR_CODES)
       expect(ApiError.parse({ error, attribution: [] })).toEqual({ error, attribution: [] });

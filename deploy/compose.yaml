@@ -81,6 +81,9 @@ services:
       # so the publisher's .tmp and .state and anything of the owner stay unseen.
       - /srv/rws/public/www/v1:/srv/rws/public/www/v1:ro
       - /srv/rws/public/downloads:/srv/rws/public/downloads:ro
+      # P12a (A§9.2): the brownout flag directory, root's (deploy/bin/rws-brownout); Caddy raises the mutable TTLs
+      # while `active` exists. Read-only for caddy, api and publish; the owner side never mounts it.
+      - /srv/rws/brownout:/run/rws-brownout:ro
       - caddy_data:/data
       - caddy_config:/config
     networks: [public, edge]
@@ -356,6 +359,9 @@ services:
       RWS_DB_PORT: "5432"
       RWS_DB_NAME: rws
     secrets: [db_rws_api]
+    # P12a: the brownout flag (apps/server/src/brownout/flag.ts reads /run/rws-brownout/active).
+    volumes:
+      - /srv/rws/brownout:/run/rws-brownout:ro
     networks: [edge, db]
     depends_on:
       db:
@@ -383,6 +389,8 @@ services:
     volumes:
       - /srv/rws/public/www:/srv/www
       - /srv/rws/public/ops:/srv/ops:ro
+      # P12a: the brownout flag, for meta.json's `brownout`.
+      - /srv/rws/brownout:/run/rws-brownout:ro
     networks: [db]
     depends_on:
       db:
