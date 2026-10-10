@@ -29,6 +29,10 @@
     "./datums": {
       "rws-dist": "./dist/datums.js",
       "default": "./src/datums.ts"
+    },
+    "./season": {
+      "rws-dist": "./dist/season.js",
+      "default": "./src/season.ts"
     }
   },
   "dependencies": {

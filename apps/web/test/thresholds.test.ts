@@ -23,6 +23,7 @@ const opts = (over: Partial<MarkOptions> = {}): MarkOptions => ({
   owner: () => false,
   locale: 'en',
   unit: 'cm NAP',
+  t: Date.UTC(2026, 9, 10, 12),
   ...over,
 });
 const marks = (refs: Refs, over: Partial<MarkOptions> = {}) => referenceMarks(refs, opts(over));
@@ -170,7 +171,7 @@ describe('referenceMarks: NL-4 classes', () => {
     expect(k.lines).toHaveLength(10);
   });
 
-  it('a class with several bounds at one priority is seasonal: lines only, the others stay zones', () => {
+  it('without seasons (a file before #99), a class with several bounds at one priority is lines only', () => {
     const k = marks([
       ...cls(0, 'Laagwater (< 100cm)', null, 100),
       // Lobith-Q-like: "Normaal" has one From per season
@@ -222,6 +223,80 @@ describe('referenceMarks: NL-4 classes', () => {
       ['normal', 100, 300],
       ['elevated', 250, 400],
     ]);
+  });
+
+  describe('seasons (#99)', () => {
+    const season = (refs: Refs, from: number, to: number) => refs.map((r) => ({ ...r, season: { from, to } })) as Refs;
+    // Lobith-H-like: one whole-year class above, and "Verlaagd" and "Normaal" per season.
+    const lobith = [
+      ...cls(3, 'Licht verhoogd (>1200cm)', 1200, 1300),
+      ...season([...cls(4, 'Verlaagd (<810cm)', null, 810), ...cls(5, 'Normaal (810 - 1200cm)', 810, 1200)], 501, 531),
+      ...season([...cls(4, 'Verlaagd (<770cm)', null, 770), ...cls(5, 'Normaal (770 - 1200cm)', 770, 1200)], 701, 731),
+      ...season([...cls(4, 'Verlaagd (<745cm)', null, 745), ...cls(5, 'Normaal (745 - 1200cm)', 745, 1200)], 801, 831),
+      ...season([...cls(4, 'Verlaagd (<720cm)', null, 720), ...cls(5, 'Normaal (720 - 1200cm)', 720, 1200)], 1001, 430),
+    ];
+    const at = (t: number) => marks(lobith, { t });
+    const iso = (s: string) => Date.parse(s);
+
+    it.each([
+      ['May', '2026-05-15T12:00:00Z', 810],
+      ['July', '2026-07-15T12:00:00Z', 770],
+      ['August', '2026-08-15T12:00:00Z', 745],
+      ['the winter, before the new year', '2026-12-15T12:00:00Z', 720],
+      ['the winter, after the new year', '2027-02-15T12:00:00Z', 720],
+    ])('in %s the seasonal classes are one zone each, with that season’s bounds', (_, t, edge) => {
+      const k = at(iso(t));
+      expect(k.zones.map(bounds)).toEqual([
+        ['low', null, edge],
+        ['normal', edge, 1200],
+        ['elevated', 1200, 1300],
+      ]);
+      // the other seasons' rows are left out: no line, no legend row
+      expect(k.lines.map((l) => l.value).sort((a, b) => a - b)).toEqual([edge, edge, 1200, 1200, 1300]);
+      expect(k.items.every((i) => i.kind === 'zone')).toBe(true);
+    });
+
+    it('outside every season (June here) only the whole-year class is left', () => {
+      const k = at(iso('2026-06-15T12:00:00Z'));
+      expect(k.zones.map(bounds)).toEqual([['elevated', 1200, 1300]]);
+      expect(k.lines).toHaveLength(2);
+    });
+
+    it.each([
+      // summer time (CEST, UTC+2): the day turns at 22:00Z, while UTC still says the earlier date
+      ['July → August', '2026-07-31T21:59:59.999Z', 770, '2026-07-31T22:00:00Z', 745],
+      ['the winter → May', '2027-04-30T21:59:59.999Z', 720, '2027-04-30T22:00:00Z', 810],
+      ['August → nothing', '2026-08-31T21:59:59.999Z', 745, '2026-08-31T22:00:00Z', null],
+      ['nothing → the winter', '2026-09-30T21:59:59.999Z', null, '2026-09-30T22:00:00Z', 720],
+    ])('the edge %s turns at midnight in Amsterdam', (_, before, a, after, b) => {
+      const low = (t: string) => at(iso(t)).zones.find((z) => z.level === 'low')?.to ?? null;
+      expect(low(before)).toBe(a);
+      expect(low(after)).toBe(b);
+    });
+
+    it('across the October DST change the edge turns at midnight CET (23:00Z), not CEST', () => {
+      // Clocks go back on 2026-10-25 at 01:00Z; a season edge on the 26th follows the winter offset.
+      const refs = [
+        ...season(cls(5, 'Normaal (700 - 1200cm)', 700, 1200), 401, 1025),
+        ...season(cls(5, 'Normaal (720 - 1200cm)', 720, 1200), 1026, 331),
+      ];
+      const from = (t: string) => marks(refs, { t: iso(t) }).zones.map((z) => z.from);
+      expect(from('2026-10-25T00:30:00Z')).toEqual([700]); // 02:30 CEST, before the change
+      expect(from('2026-10-25T22:59:59.999Z')).toEqual([700]); // 23:59 CET on the 25th
+      expect(from('2026-10-25T23:00:00Z')).toEqual([720]); // 00:00 CET on the 26th
+      // and in spring, after clocks go forward on 2027-03-28, the edge on 1 April turns at 22:00Z (CEST)
+      expect(from('2027-03-31T21:59:59.999Z')).toEqual([720]);
+      expect(from('2027-03-31T22:00:00Z')).toEqual([700]);
+    });
+
+    it('two seasons that share an edge day (hellevoetsluis 315–715, 715–315) are lines on that day only', () => {
+      const refs = [
+        ...season(cls(3, 'Normaal (0 - 80cm)', 0, 80), 315, 715),
+        ...season(cls(3, 'Normaal (0 - 90cm)', 0, 90), 715, 315),
+      ];
+      expect(marks(refs, { t: iso('2026-07-15T12:00:00Z') }).zones).toEqual([]);
+      expect(marks(refs, { t: iso('2026-07-16T12:00:00Z') }).zones.map(bounds)).toEqual([['normal', 0, 90]]);
+    });
   });
 
   it('writes the legend text in the page language, with the unit and its zero', () => {

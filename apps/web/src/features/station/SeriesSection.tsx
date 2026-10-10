@@ -131,8 +131,9 @@ export function SeriesSection({
         owner: (s) => ownerSources.has(s),
         locale,
         unit,
+        t,
       }),
-    [recent, series.quantity, data.conv, ownerLabels, ownerSources, locale, unit],
+    [recent, series.quantity, data.conv, ownerLabels, ownerSources, locale, unit, t],
   );
   const run = data.run;
   const runText =
