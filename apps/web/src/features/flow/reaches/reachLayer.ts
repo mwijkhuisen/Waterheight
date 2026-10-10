@@ -206,18 +206,16 @@ export function addReaches(
         const by = new Map(input.stations.map((s) => [s.id, s]));
         spans = { graph: input.graph, by, out: spansOf(input.graph, new Set(by.keys())) };
       } else for (const s of input.stations) spans.by.set(s.id, s);
-      // With bins the per-reach layers are drawn below BIN_MINZOOM and the bins from it on: each set is written only
-      // near its zooms (thousands of writes an hour of playback for nothing otherwise), and a zoom across catches up
-      // (`onZoom`).
-      const zoom = map.getZoom();
-      if (!binsOn || zoom < BIN_MINZOOM + 0.5)
-        written = write(
-          map,
-          SOURCE_LAYER,
-          reachPaints(spans.out, input.mode, input.values, input.changes, spans.by, input.shift),
-          written,
-        );
-      if (binsOn && zoom >= BIN_MINZOOM - 0.5)
+      // The per-reach states are written at every zoom: the base river line steps aside where a reach has one
+      // (rivers.ts BASE_OPACITY), under the bins too. The bins are drawn from BIN_MINZOOM on: further out their states
+      // are left as written (thousands of writes an hour of playback for nothing), and a zoom in catches up (`onZoom`).
+      written = write(
+        map,
+        SOURCE_LAYER,
+        reachPaints(spans.out, input.mode, input.values, input.changes, spans.by, input.shift),
+        written,
+      );
+      if (binsOn && map.getZoom() >= BIN_MINZOOM - 0.5)
         writtenBins = write(
           map,
           BINS_LAYER,

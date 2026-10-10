@@ -264,13 +264,17 @@ function Viewer({ locale }: { locale: Locale }) {
     stations.data?.stations,
   );
   const pastStore = playing ? frames : shiftFrames;
+  // The t the values on screen are of: the played hour, or the settled t of the snapshot (a scrub between two settled
+  // t keeps both ends at the same instant). While the earlier hours load, a shifted end has none: "no data".
+  const shiftT = playing ? t : asked;
   const shift = useMemo((): Shift | undefined => {
-    if (shiftMax === 0 || t === undefined || pastStore === undefined) return undefined;
+    if (shiftMax === 0 || shiftT === undefined) return undefined;
+    if (pastStore === undefined) return { travel, past: () => undefined };
     const store = pastStore;
     const hours = new Map<number, HourValues | undefined>();
     const past = (k: number): HourValues | undefined => {
       if (hours.has(k)) return hours.get(k);
-      const at = t - k * HOUR_MS;
+      const at = shiftT - k * HOUR_MS;
       let out: HourValues | undefined;
       if (store.ready(at)) {
         const values = store.valuesAt(at, shiftSeries);
@@ -281,7 +285,7 @@ function Viewer({ locale }: { locale: Locale }) {
       return out;
     };
     return { travel, past };
-  }, [shiftMax, shiftSeries, t, pastStore, travel, quantity]);
+  }, [shiftMax, shiftSeries, shiftT, pastStore, travel, quantity]);
   const warnings = useWarnings(asked, meta.data, isLive).data;
   // KG-233: latest.json's age of the newest value of a series with none at t; a station with nothing newer than
   // 25 hours is hidden (map, table, search), and the selected one stays open by its link.

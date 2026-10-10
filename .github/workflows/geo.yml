@@ -160,7 +160,8 @@ jobs:
           [[ -s $RUNNER_TEMP/nonpublic1.txt ]] || { echo "empty non-public list" >&2; exit 1; }
           gzip -dc "$RUNNER_TEMP/p6b1/rivers-$ver.geojson.gz" >"$RUNNER_TEMP/p6b1/download.json"
           if grep -F -f "$RUNNER_TEMP/nonpublic1.txt" "$RUNNER_TEMP/p6b1/decoded.json" "$RUNNER_TEMP/p6b1/reaches-$ver.json" \
-            "$RUNNER_TEMP/p6b1/download.json" "$RUNNER_TEMP/p6b1/snap-report.json" >/dev/null; then
+            "$RUNNER_TEMP/p6b1/download.json" "$RUNNER_TEMP/p6b1/snap-report.json" \
+            "$RUNNER_TEMP/p6b1/reach-bins.geojsonseq" >/dev/null; then
             echo "a non-public station id occurs in a public output" >&2
             exit 1
           fi

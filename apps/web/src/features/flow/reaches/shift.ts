@@ -10,13 +10,19 @@ import type { FeatureSpan, Span } from './spans.ts';
 
 type TravelTime = ReachTravelData['travel_times'][number];
 
-/** The shift of one sourced travel time in whole hours, or null for a derived figure. */
+/**
+ * The longest shift used (#112 review): the frames reach this much further back, so a garbled travel time in the
+ * leniently parsed reaches file can never widen them past four days; a longer one leaves its span unshifted.
+ */
+export const MAX_SHIFT_H = 96;
+
+/** The shift of one sourced travel time in whole hours, or null for a derived figure or one over MAX_SHIFT_H. */
 export function shiftHours(t: Pick<TravelTime, 'h' | 'd' | 'derived'>): number | null {
   if (t.derived === true) return null;
   const v = t.h ?? t.d;
   if (v === undefined) return null;
-  const hours = (Array.isArray(v) ? (v[0] + v[1]) / 2 : v) * (t.h === undefined ? 24 : 1);
-  return Math.round(hours);
+  const hours = Math.round((Array.isArray(v) ? (v[0] + v[1]) / 2 : v) * (t.h === undefined ? 24 : 1));
+  return hours > MAX_SHIFT_H ? null : hours;
 }
 
 /** The shift of a span: the first sourced travel time that names exactly its two ends, or null (unshifted). */

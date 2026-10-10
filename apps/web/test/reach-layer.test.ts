@@ -249,7 +249,7 @@ describe('addReaches with bins', () => {
     expect(sets(f.calls).map((c) => (c.args[0] as { sourceLayer: string }).sourceLayer)).toEqual(['rivers']);
   });
   it('true: adds the bin layers, limits the reach layers to [0, 8), writes bin states on the next update', async () => {
-    const f = fakeMap({ zoom: 8 }); // both sets are written near BIN_MINZOOM
+    const f = fakeMap({ zoom: 8 });
     const h = addReaches(f.map, 'rivers-highlight', Promise.resolve(true));
     paints.current = new Map<string, unknown>([['a', v('#111111')]]);
     paints.bins = new Map<string, unknown>([
@@ -287,7 +287,7 @@ describe('addReaches with bins', () => {
     expect(sets(f.calls).map((c) => c.args[0])).toEqual([{ source: 'rivers', sourceLayer: 'rivers', id: 'a' }]);
     f.zoomTo(9);
     expect(sets(f.calls).map((c) => c.args[0])).toContainEqual(binTarget('a/0'));
-    // at a bin zoom the per-reach states wait for a zoom back out
+    // at a bin zoom the per-reach states are written too (the base line steps aside where a reach has one)
     const before = sets(f.calls).length;
     paints.current = new Map<string, unknown>([['a', v('#999999')]]);
     paints.bins = new Map<string, unknown>([['a/0', v('#aaaaaa')]]);
@@ -296,9 +296,7 @@ describe('addReaches with bins', () => {
       sets(f.calls)
         .slice(before)
         .map((c) => c.args[0]),
-    ).toEqual([binTarget('a/0')]);
-    f.zoomTo(6);
-    expect(sets(f.calls).at(-1)?.args[0]).toEqual({ source: 'rivers', sourceLayer: 'rivers', id: 'a' });
+    ).toEqual([{ source: 'rivers', sourceLayer: 'rivers', id: 'a' }, binTarget('a/0')]);
     h.dispose();
     expect(only(f.calls, 'off').map((c) => c.args[0])).toEqual(['zoomend']);
   });

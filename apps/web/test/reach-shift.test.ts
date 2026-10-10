@@ -23,7 +23,12 @@ describe('shiftHours', () => {
   it('is a single value rounded, days times 24, and null for a derived figure', () => {
     expect(shiftHours({ h: 3.5, label: { nl: 'a', en: 'a' } } as never)).toBe(4);
     expect(shiftHours({ h: 23 })).toBe(23);
-    expect(shiftHours({ d: [4, 5] })).toBe(108);
+    expect(shiftHours({ d: [3, 4] })).toBe(84);
+    // over MAX_SHIFT_H (96 h, review round 1): unshifted, so a garbled figure never widens the frames
+    expect(shiftHours({ d: [4, 5] })).toBeNull();
+    expect(shiftHours({ h: 96 })).toBe(96);
+    expect(shiftHours({ h: 97 })).toBeNull();
+    expect(shiftHours({ h: 1e6 })).toBeNull();
     expect(shiftHours({ d: 2, label: { nl: 'a', en: 'a' } } as never)).toBe(48);
     expect(shiftHours({ h: [4, 5], derived: true })).toBeNull();
     expect(shiftHours({ d: [4, 5], derived: true })).toBeNull();
