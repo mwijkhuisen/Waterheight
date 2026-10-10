@@ -118,7 +118,7 @@ for (const locale of ['nl', 'en'] as const) {
       expect(names.get(id), `${id} is published`).toMatch(pattern);
       await expect(rowName(stationRows.nth(i)), `row ${i + 1}`).toHaveText(names.get(id) ?? '');
     }
-    await expect(rows.nth(2).locator('summary')).toContainText('Lippe');
+    await expect(rows.nth(2).locator(':scope > details > summary')).toContainText('Lippe');
     await expect(chain.locator('xpath=./ul/li[not(button) and not(details)]')).toHaveCount(0);
     await expect(chain.locator('details[open]')).toHaveCount(0);
 

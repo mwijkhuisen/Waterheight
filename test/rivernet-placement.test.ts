@@ -210,14 +210,35 @@ describe(`canal traps (stations within 1 km of a trap way: ${trapCounts})`, () =
   it('puts every placed station on an edge of its own river', SLOW, () => {
     const placedRules = new Set(['override', 'name', 'official_km']);
     const some = placed.stations.filter((s) => placedRules.has(s.rule));
-    expect(some.length).toBeGreaterThan(400);
+    expect(some.length).toBeGreaterThan(761);
     const wrong = some.filter((s) => s.river === null || !edgeOf(s).rivers.includes(s.river)).map((s) => s.id);
     expect(wrong).toEqual([]);
   });
 
+  it('keeps the Alsace La Thur and La Sauer off the Swiss thur and the Moselle sauer', SLOW, () => {
+    for (const [name, alsace, other] of [
+      ['La Thur', 'thur-alsace', 'thur'],
+      ['La Sauer', 'sauer-alsace', 'sauer'],
+    ] as const) {
+      const fr = placed.stations.filter((s) => {
+        const i = inputs.get(s.id);
+        return i?.source === 'FR-1' && i.water_name === name;
+      });
+      expect(fr.length, name).toBeGreaterThan(0);
+      expect(
+        fr.filter((s) => s.river === other),
+        name,
+      ).toEqual([]);
+      expect(
+        fr.filter((s) => s.river !== null && s.river !== alsace).map((s) => s.id),
+        name,
+      ).toEqual([]);
+    }
+  });
+
   it('places by name only on the river that the published water body names', SLOW, () => {
     const byName = placed.stations.filter((s) => s.rule === 'name');
-    expect(byName.length).toBeGreaterThan(200);
+    expect(byName.length).toBeGreaterThan(607);
     const wrong = byName
       .filter((s) => riverOf(net, overridesFile, inputs.get(s.id) as never) !== s.river)
       .map((s) => s.id);
@@ -647,14 +668,26 @@ describe('owner and off audiences', () => {
       .filter((y) => y.km > lo && y.km < hi)
       .sort((a, b) => Math.abs(a.km - mid) - Math.abs(b.km - mid))[0]?.x;
     expect(e, 'a Rhine edge between Koeln and Duesseldorf').toBeDefined();
-    const m = (e as NonNullable<typeof e>).coords[Math.floor((e as NonNullable<typeof e>).coords.length / 2)] as LonLat;
-    const canary = station('nl.canary.owner', [m[0], m[1] + 100 / 110_574], {
-      source: 'BE-3',
-      audience: 'owner',
-      public: false,
-      water_name: null,
-      river_hint: null,
-    });
+    const cs = (e as NonNullable<typeof e>).coords;
+    const k = Math.floor(cs.length / 2);
+    const m = cs[k] as LonLat;
+    // 100 m to the side of the line (perpendicular to the local direction): a fixed offset to the north can land
+    // 28 m from another stretch of a long edge at a bend
+    const cosLat = Math.cos((m[1] * Math.PI) / 180);
+    const dx = ((cs[k + 1] as LonLat)[0] - (cs[k - 1] as LonLat)[0]) * cosLat * 111_320;
+    const dy = ((cs[k + 1] as LonLat)[1] - (cs[k - 1] as LonLat)[1]) * 110_574;
+    const len = Math.hypot(dx, dy);
+    const canary = station(
+      'nl.canary.owner',
+      [m[0] - ((dy / len) * 100) / (cosLat * 111_320), m[1] + ((dx / len) * 100) / 110_574],
+      {
+        source: 'BE-3',
+        audience: 'owner',
+        public: false,
+        water_name: null,
+        river_hint: null,
+      },
+    );
     const withCanary = place(build.edges, rivers, [...stations, canary], {
       ...overridesFile,
       stations: [...overridesFile.stations, { station: 'nl.canary.owner', river: 'rhine', reason: 'canary' }],
@@ -688,11 +721,11 @@ describe('flags and travel times', () => {
     const emmerich = placed.reaches.find(
       (r) => r.up_station === 'de.wsv.2790020' && r.down_station === 'nl.rws.lobith.bovenrijn.tolkamer',
     );
-    expect(emmerich?.id).toBe('rhine.56');
+    expect(emmerich?.id).toBe('rhine.59');
     expect(emmerich?.travel_time_h).toEqual([1, 9]);
     const pairs = new Set((rivers.travel_times ?? []).map((t) => `${t.from_station}>${t.to_station}`));
     const timed = placed.reaches.filter((r) => r.travel_time_h !== null);
-    expect(timed.map((r) => r.id)).toEqual(['rhine.56']);
+    expect(timed.map((r) => r.id)).toEqual(['rhine.59']);
     for (const r of timed) expect(pairs.has(`${r.up_station}>${r.down_station}`), r.id).toBe(true);
   });
 

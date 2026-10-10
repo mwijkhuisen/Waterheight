@@ -98,9 +98,9 @@ describe('on the fixture release', () => {
   const spans = spansOf(graph, new Set(graph.stations.map((s) => s.id)));
   const shifted = [...spans].filter(([, f]) => spanShift(f.span, travel) !== null);
 
-  it('has 22 travel times and exactly one shifted span: Emmerich to Lobith, 5 h, on rhine.56', () => {
+  it('has 22 travel times and exactly one shifted span: Emmerich to Lobith, 5 h, on rhine.59', () => {
     expect(travel.travel_times).toHaveLength(22);
-    expect(shifted.map(([id]) => id)).toEqual(['rhine.56']);
+    expect(shifted.map(([id]) => id)).toEqual(['rhine.59']);
     const s = shifted[0]?.[1].span;
     expect(s?.up).toContain('de.wsv.2790020');
     expect(s?.down).toContain('nl.rws.lobith.bovenrijn.tolkamer');

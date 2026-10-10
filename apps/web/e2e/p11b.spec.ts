@@ -51,7 +51,7 @@ const XSS_ID = 'nl.e2e.xss';
 const ranged = (river: string, from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => `${river}.${from + i}`);
 /** The tidal reaches of the fixture release (PHASES §P11b: Scheldt, Ems, Lek delta members, the Meuse delta). */
-const TIDAL = [...ranged('scheldt', 9, 13), ...ranged('ems', 23, 33), ...ranged('lek', 4, 6), 'meuse.56'];
+const TIDAL = [...ranged('scheldt', 9, 13), ...ranged('ems', 24, 34), ...ranged('lek', 4, 6), 'meuse.56'];
 /** Chooz to Eijsden: 139.2 km, over GAP_KM (120) and without a station between them. */
 const GAP = ranged('meuse', 24, 27);
 const MID = '2026-10-25T12:00Z';
@@ -303,7 +303,7 @@ test('B2: a day file that answers 404 is read from the API with exactly one call
 
 // ---------------------------------------------------------------- #112 PR B: bins and the shift label
 
-test('#112: the legend says the shift is indicative; the bins of rhine.56 are painted at zoom 8 and the reach layer ends there', async ({
+test('#112: the legend says the shift is indicative; the bins of rhine.59 are painted at zoom 8 and the reach layer ends there', async ({
   page,
   context,
   baseURL,
@@ -311,7 +311,7 @@ test('#112: the legend says the shift is indicative; the bins of rhine.56 are pa
   const s = await start(page, context, baseURL, 'dh');
   await open(page, deep());
   await mapReady(page);
-  await reachesPainted(page, ['rhine.56']);
+  await reachesPainted(page, ['rhine.59']);
   // The legend (collapsed by default) names the shift, with the word that says it is no forecast.
   await page.locator('summary', { hasText: nl('legend_heading') }).click();
   await expect(page.getByText(nl('reach_shifted'), { exact: true })).toBeVisible();
@@ -326,7 +326,7 @@ test('#112: the legend says the shift is indicative; the bins of rhine.56 are pa
     map.jumpTo({ center: [6.1, 51.85], zoom: 10 });
     await idle;
   });
-  const ids = Array.from({ length: 8 }, (_, i) => `rhine.56/${i}`);
+  const ids = Array.from({ length: 8 }, (_, i) => `rhine.59/${i}`);
   await expect
     .poll(async () => (await Promise.all(ids.map((id) => binState(page, id)))).every((st) => st !== null), {
       timeout: 30_000,
