@@ -50,7 +50,7 @@ sudo docker compose -p rws up -d publish
 
 ## 4. The owner publisher
 
-`publish-owner` writes `/srv/rws/owner/www/v1` only (its one public mount, `/srv/rws/public/data/v1/rivers` at `/srv/rivers`, is read-only: P11a): no settled, frames or dated warnings files, and `dayVersions` is its own sparse map. Its healthcheck `owner-publisher` reads only the mtime of that `meta.json`, so it needs the owner overlay (`deploy/compose.owner.yaml`) running. The owner site (`owner.<domain>`, `caddy-owner`) stays off in production until P12a (no `owner_basic_auth` secret; bootstrap does not create it). Everything above applies with the owner tree and `docker compose -p rws logs publish-owner`; `verify-prod.sh` never reads the owner tree, and nothing owner-side may be copied to the public tree.
+`publish-owner` writes `/srv/rws/owner/www/v1` only (its one public mount, `/srv/rws/public/data/v1/rivers` at `/srv/rivers`, is read-only: P11a): no settled or frames files (since #86 it writes `warnings/today.json` and the ended days' dated warnings files as the public publisher does), and `dayVersions` is its own sparse map. Its healthcheck `owner-publisher` reads only the mtime of that `meta.json`, so it needs the owner overlay (`deploy/compose.owner.yaml`) running. The owner site (`owner.<domain>`, `caddy-owner`) stays off in production until P12a (no `owner_basic_auth` secret; bootstrap does not create it). Everything above applies with the owner tree and `docker compose -p rws logs publish-owner`; `verify-prod.sh` never reads the owner tree, and nothing owner-side may be copied to the public tree.
 
 ### The owner variant of the reaches file (P11a)
 
