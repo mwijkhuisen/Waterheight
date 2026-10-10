@@ -337,7 +337,8 @@ test('CLICK: a click on a cell of the chart pauses playback, moves t to that hou
   // Paused, with that station open and its column outlined, and t on a row hour of the chart.
   await expect(play(page)).toBeVisible();
   await expect.poll(() => param(page, 't')).not.toBe(before);
-  expect(param(page, 's')).toBe(KOELN);
+  // t and s are written apart: wait for s too (Firefox CI read it in between, #117/#121).
+  await expect.poll(() => param(page, 's')).toBe(KOELN);
   expect(param(page, 'hov')).toBe('rhine-waal');
   await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText((await namesOf(page)).get(KOELN) ?? '?');
   const state = await stateOf(page);
