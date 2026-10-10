@@ -922,36 +922,36 @@ rivers:
     names:
       DE-7: ["Alme"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Alme"
+    osm_relation_id: 379697
+    osm_way_name: null
     wikidata: Q562271
     parent_river_id: lippe
     km_direction: none
-    evidence: "Wikidata Q562271 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q562271 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r379697 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: ahse
     name_nl: "Ahse"
     name_en: "Ahse"
     names:
       DE-7: ["Ahse"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Ahse"
+    osm_relation_id: 379867
+    osm_way_name: null
     wikidata: Q402939
     parent_river_id: lippe
     km_direction: none
-    evidence: "Wikidata Q402939 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q402939 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r379867 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: stever
     name_nl: "Stever"
     name_en: "Stever"
     names:
       DE-7: ["Stever"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Stever"
+    osm_relation_id: 380458
+    osm_way_name: null
     wikidata: Q314777
     parent_river_id: lippe
     km_direction: none
-    evidence: "Wikidata Q314777 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q314777 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r380458 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: wupper
     name_nl: "Wupper"
     name_en: "Wupper"
@@ -970,12 +970,12 @@ rivers:
     names:
       DE-7: ["Hönne"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Hönne"
+    osm_relation_id: 2722542
+    osm_way_name: null
     wikidata: Q562288
     parent_river_id: ruhr
     km_direction: none
-    evidence: "Wikidata Q562288 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q562288 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r2722542 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: lenne
     name_nl: "Lenne"
     name_en: "Lenne"
@@ -1054,12 +1054,12 @@ rivers:
     names:
       FR-1: ["La Doller"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Doller"
+    osm_relation_id: 1314038
+    osm_way_name: null
     wikidata: Q1235724
     parent_river_id: ill
     km_direction: none
-    evidence: "Wikidata Q1235724 (no P402; P403 Q668472 Ill), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q1235724 (no P402; P403 Q668472 Ill), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r1314038 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: thur-alsace
     name_nl: "Thur (Elzas)"
     name_en: "Thur (Alsace)"
@@ -1090,12 +1090,12 @@ rivers:
     names:
       FR-1: ["La Lauch"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Lauch"
+    osm_relation_id: 6824914
+    osm_way_name: null
     wikidata: Q836973
     parent_river_id: ill
     km_direction: none
-    evidence: "Wikidata Q836973 (no P402; P403 Q668472 Ill), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q836973 (no P402; P403 Q668472 Ill), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r6824914 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: bruche
     name_nl: "Bruche"
     name_en: "Bruche"
@@ -1126,12 +1126,12 @@ rivers:
     names:
       FR-1: ["La Sauer"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Sauer"
+    osm_relation_id: 1916171
+    osm_way_name: null
     wikidata: Q705057
     parent_river_id: rhine
     km_direction: none
-    evidence: "Wikidata Q705057 (no P402; P403 Q584 Rhine), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); the Alsatian Sauer, not the Luxembourg sauer (Q158847, mouth Moselle); rejected Q895872 (mouth Altenau)"
+    evidence: "Wikidata Q705057 (no P402; P403 Q584 Rhine), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); the Alsatian Sauer, not the Luxembourg sauer (Q158847, mouth Moselle); rejected Q895872 (mouth Altenau); relation r1916171 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: seille
     name_nl: "Seille"
     name_en: "Seille"
@@ -1162,24 +1162,24 @@ rivers:
     names:
       FR-1: ["La Vezouze"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Vezouze"
+    osm_relation_id: 6831466
+    osm_way_name: null
     wikidata: Q1568007
     parent_river_id: meurthe
     km_direction: none
-    evidence: "Wikidata Q1568007 (no P402; P403 Q1160441 Meurthe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q1568007 (no P402; P403 Q1160441 Meurthe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r6831466 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: mortagne
     name_nl: "Mortagne"
     name_en: "Mortagne"
     names:
       FR-1: ["La Mortagne"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Mortagne"
+    osm_relation_id: 3294511
+    osm_way_name: null
     wikidata: Q1567683
     parent_river_id: meurthe
     km_direction: none
-    evidence: "Wikidata Q1567683 (no P402; P403 Q1160441 Meurthe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); rejected namesakes Q215535 (no mouth), Q3324523 (mouth Dordogne)"
+    evidence: "Wikidata Q1567683 (no P402; P403 Q1160441 Meurthe), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); rejected namesakes Q215535 (no mouth), Q3324523 (mouth Dordogne); relation r3294511 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: nied
     name_nl: "Nied"
     name_en: "Nied"
@@ -1198,24 +1198,24 @@ rivers:
     names:
       FR-1: ["Helpe Majeure"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Helpe Majeure"
+    osm_relation_id: 1243336
+    osm_way_name: null
     wikidata: Q950632
     parent_river_id: sambre
     km_direction: none
-    evidence: "Wikidata Q950632 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q950632 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r1243336 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: helpe-mineure
     name_nl: "Helpe Mineure"
     name_en: "Helpe Mineure"
     names:
       FR-1: ["Helpe Mineure"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Helpe Mineure"
+    osm_relation_id: 1200090
+    osm_way_name: null
     wikidata: Q1604526
     parent_river_id: sambre
     km_direction: none
-    evidence: "Wikidata Q1604526 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q1604526 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r1200090 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: lawe
     name_nl: "Lawe"
     name_en: "Lawe"
@@ -1235,12 +1235,12 @@ rivers:
       CH-1: ["Emme"]
       CH-2: ["Emme"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Emme"
+    osm_relation_id: 2198014
+    osm_way_name: null
     wikidata: Q688240
     parent_river_id: aare
     km_direction: none
-    evidence: "Wikidata Q688240 (no P402; P403 Q1675 Aare), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q688240 (no P402; P403 Q1675 Aare), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); relation r2198014 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
   - id: murg
     name_nl: "Murg"
     name_en: "Murg"
@@ -1282,12 +1282,12 @@ rivers:
     names:
       DE-7: ["Swistbach"]
     aliases: ["Swistbach"]
-    osm_relation_id: null
-    osm_way_name: "Swistbach"
+    osm_relation_id: 1490814
+    osm_way_name: null
     wikidata: Q878251
     parent_river_id: erft
     km_direction: none
-    evidence: "Wikidata Q878251 (no P402; P403 Q708840 Erft), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); its label is Swist, LANUK names it Swistbach"
+    evidence: "Wikidata Q878251 (no P402; P403 Q708840 Erft), SPARQL 2026-10-10 (tools/geo/rivernet/lookup-wikidata.ts); its label is Swist, LANUK names it Swistbach; relation r1490814 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38070604210, rivernet-fixture artifact)"
 excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283
@@ -1306,6 +1306,11 @@ joins:
     to_river: meuse
     max_m: 150
     reason: "KG-161, KG-265 (#110 item 3): the Ourthe relation 2246211 ends at its sink n1637515679 (5.5797, 50.6231) at Liège without sharing a node with the Meuse: the Meuse there is one way, w524363778 (16.0 km, n720478241 to n334511303), whose ends lie 4.2 and 8.5 km away. Its vertex nearest the sink, 97 m off, becomes a node and the join lands there (measured on the fixture 2026-10-01). The Ourthe SPW gauges (owner) need it for their path to Eijsden"
+  - river: seille
+    at: [6.1851181, 49.1260889]
+    to_river: moselle
+    max_m: 1000
+    reason: "KG-161 (#100): the Seille relation 1263866 ends at its sink n1534461346 (6.1851, 49.1261) in Metz without sharing a node with the curated Moselle; the nearest vertex of a moselle way is n832540662 on w183201571 (6.1732, 49.1296), 947 m away (measured on the extract of geo.yml run 38070604210, 2026-10-10). The FR-1 Seille gauges (Metz Pont Lothaire 20 m from the Seille) need it for a path to the Moselle"
 travel_times:
   # Rhine → Lobith, flood peaks (GWIO 85.006 appendix 1, read from the scan for #110): each range holds every value the
   # note does not strike through, in whole hours rounded outward (Emmerich keeps a floor of 1 h).
