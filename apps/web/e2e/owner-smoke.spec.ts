@@ -129,11 +129,20 @@ test('the owner site: hourly playback reads the owner frames api only, its answe
       expect(state[i]?.[h] === null, `a code exactly where a value is (${i}, ${h})`).toBe(v === null);
   // The engine plays to the end of the page's range and stops by itself: t has moved and the Play button is back. The
   // end is the last whole hour of meta.now (the publisher's clock, which may trail this one past an hour boundary), so
-  // t is within an hour of this clock's hour, or gone when that hour is the page's now (live).
+  // t is within an hour of this clock's hour, or gone when that hour is the page's now (live). The URL follows t at
+  // most once per 400 ms (useUrlState's WRITE_MS) and the engine plays an hour per 83 ms, so the played end reaches
+  // the URL a moment after the Play button is back: poll it (#119: a single read saw t two or three hours short).
   await expect.poll(() => new URL(page.url()).searchParams.get('t'), { timeout: 60_000 }).not.toBe(`${t}Z`);
   await expect(play).toBeVisible({ timeout: 60_000 });
-  const played = new URL(page.url()).searchParams.get('t');
-  if (played !== null) expect(Date.parse(played)).toBeGreaterThanOrEqual(Math.floor(Date.now() / hour) * hour - hour);
+  await expect
+    .poll(
+      () => {
+        const played = new URL(page.url()).searchParams.get('t');
+        return played === null ? Number.POSITIVE_INFINITY : Date.parse(played);
+      },
+      { timeout: 5_000, message: 'the played t (live counts as the end)' },
+    )
+    .toBeGreaterThanOrEqual(Math.floor(Date.now() / hour) * hour - hour);
   const frames = log.requests.filter((u) => /\/(api\/v1|data\/v1)\/frames/.test(new URL(u).pathname));
   const api = frames.filter((u) => new URL(u).pathname === '/api/v1/frames');
   expect(api.length, 'the owner frames api was asked').toBeGreaterThanOrEqual(1);
