@@ -197,6 +197,16 @@ stations:
   # CH-1 and CH-2 (BAFU names the water body; only the case where the name matches a different river than the gauge is on)
   - { station: ch.bafu.2471, unsnapped: true, reason: "Murg at Murgenthal is the Aare tributary (Wikidata Q1953660), not the curated Thurgau murg (Q685327) that the name matches; 86.6 km from the murg, 1256 m from the aare on the fixture (OSM 2026-10-10) [U: an uncurated river]" }
   - { station: ch.bafu-pq.2471, unsnapped: true, reason: "Murg at Murgenthal is the Aare tributary (Wikidata Q1953660), not the curated Thurgau murg (Q685327) that the name matches; 86.6 km from the murg, 1256 m from the aare on the fixture (OSM 2026-10-10) [U: an uncurated river]" }
+  # Tier-1 gauges (#100) deliberately left without an entry: the name rule matches their curated river, but no edge of it
+  # lies within 500 m, so they stay `no_edge_within_500m` and are placed by themselves once OSM covers them (an
+  # `unsnapped` entry would keep them out after such a fix). Measured on the fixture (OSM 2026-10-10); KG-250; three are
+  # pinned in test/fixtures/rivernet-golden.yaml, so a change shows in review.
+  #   de.lanuk.2782370000100 Weine, de.lanuk.2782700000100 Niederntudorf, de.lanuk.2782900000200 Neuhaus2 (Alme): 6.3,
+  #     17.1 and 27.5 km from the kept alme; relation r379697 has a member without a waterway tag and its 54 empty-role
+  #     ways below it do not connect to the main stream
+  #   de.lanuk.2736135100100 Egerpohl (Wupper): 1.7 km above the start of relation r410329, 4 m from a way named Wipper
+  #   fr.sandre.A973121001 Ancerville, fr.sandre.A975201001 Condé-Northen ("La Nied"): on the Nied française, 15.1 and
+  #     1.7 km above the curated nied, which starts at the confluence
 waters:
   - { source: BE-3, water_name: "Haute Meuse (amont Dinant)", river: meuse, reason: "SPW label of the Meuse reach (catalogue §3.3 items 7-20); every station with it lies within 160 m of the Meuse on the fixture" }
   - { source: BE-3, water_name: "Haute Meuse (aval Dinant)", river: meuse, reason: "SPW label of the Meuse reach (catalogue §3.3 items 7-20); every station with it lies within 160 m of the Meuse on the fixture" }

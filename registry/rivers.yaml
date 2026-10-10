@@ -1281,7 +1281,7 @@ rivers:
     name_en: "Swist"
     names:
       DE-7: ["Swistbach"]
-    aliases: ["Swistbach"]
+    aliases: []
     osm_relation_id: 1490814
     osm_way_name: null
     wikidata: Q878251
