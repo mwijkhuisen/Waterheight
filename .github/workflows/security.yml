@@ -155,6 +155,10 @@ jobs:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
+      # Only for .grype.yaml (the owner-approved, expiring rules of R-095).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Syft and Grype (pinned, sha256-checked)
         run: |
           set -euo pipefail
@@ -186,7 +190,7 @@ jobs:
             [[ $ref =~ ^ghcr\.io/mwijkhuisen/waterheight/$name@sha256:[0-9a-f]{64}$ ]] || { echo "::error::unexpected image reference for $name" >&2; exit 1; }
             syft "registry:$ref" -o "syft-json=$RUNNER_TEMP/sbom-$name.json" -q
             echo "$name: $(jq '.artifacts | length' "$RUNNER_TEMP/sbom-$name.json") packages in the SBOM"
-            grype "sbom:$RUNNER_TEMP/sbom-$name.json" --only-fixed --fail-on high || fail=1
+            grype -c .grype.yaml "sbom:$RUNNER_TEMP/sbom-$name.json" --only-fixed --fail-on high || fail=1
           done
           exit "$fail"
 

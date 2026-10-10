@@ -88,8 +88,9 @@ jobs:
           grype --version
           syft "docker:rws-scan/$TARGET:pr" -o "syft-json=$RUNNER_TEMP/sbom-$TARGET.json" -q
           echo "$TARGET: $(jq '.artifacts | length' "$RUNNER_TEMP/sbom-$TARGET.json") packages in the SBOM"
-          # No ignore entries: a finding is fixed by a bump, or the owner decides (docs/risk-register.md).
-          grype "sbom:$RUNNER_TEMP/sbom-$TARGET.json" --only-fixed --fail-on high
+          # .grype.yaml: only the owner-approved, expiring rules of R-095 (test/grype-ignore.test.ts); a new finding is fixed by
+          # a bump, or the owner decides (docs/risk-register.md).
+          grype -c .grype.yaml "sbom:$RUNNER_TEMP/sbom-$TARGET.json" --only-fixed --fail-on high
 
   build:
     name: build, push and sign
