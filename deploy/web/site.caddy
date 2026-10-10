@@ -403,13 +403,15 @@
 	# name, a dot-led segment, a directory and any other /data/v1 path is a 404
 	# with no Cache-Control and no listing. Short classes
 	# revalidate; a settled day, its frames file and a dated warnings file never
-	# change under their name: immutable. (`uri` runs before the inner handles.)
+	# change under their name: immutable (the current day's warnings are
+	# warnings/today.json, rewritten every cycle: live, #86). (`uri` runs before
+	# the inner handles.)
 	@data path_regexp ^/data/v1(/|$)
 	handle @data {
 		uri strip_prefix /data
 		@data_live {
 			method GET HEAD
-			expression `{path} == '/v1/meta.json' || {path} == '/v1/latest.json'`
+			expression `{path} in ['/v1/meta.json', '/v1/latest.json', '/v1/warnings/today.json']`
 			file {
 				root /srv/rws/public/www
 				try_files {path}

@@ -4,9 +4,10 @@ import { attributionFor, sourceDates } from '../../attribution.ts';
 import { VIEWS } from '../../db/audience.ts';
 import type { RenderCtx } from '../cycle.ts';
 
-// P9a (A§9.1): warnings/latest.geojson (the areas valid now) and warnings/YYYY-MM-DD.json (the areas valid at any
-// time of an ended UTC day, written once). One GeoJSON feature per area row; every text is the provider's and is
-// data only (invariant 3). A geometry that is not one of the contract's shapes is null, never passed on.
+// P9a (A§9.1): warnings/latest.geojson (the areas valid now) and the areas valid at any time of one UTC day:
+// warnings/YYYY-MM-DD.json once the day has ended (written once), warnings/today.json for the current day (#86). One
+// GeoJSON feature per area row; every text is the provider's and is data only (invariant 3). A geometry that is not
+// one of the contract's shapes is null, never passed on.
 
 type Row = {
   source_id: string;

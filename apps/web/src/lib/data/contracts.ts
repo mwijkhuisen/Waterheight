@@ -59,8 +59,6 @@ export interface Contracts {
   FramesFile: Parser<FramesFile>;
   /** P11b: /api/v1/frames. */
   FramesAnswer: Parser<z.infer<typeof FramesAnswer>>;
-  /** The publisher writes a dated warnings file per ended UTC day for this family (the owner's has none). */
-  datedWarnings: boolean;
   /** A source no view shows (the owner canary): its stations, series, runs, areas and credits are dropped on read. */
   hidden(source: string): boolean;
 }
@@ -258,7 +256,6 @@ export const PUBLIC_CONTRACTS: Contracts = {
   SeriesForecastAnswer,
   FramesFile,
   FramesAnswer,
-  datedWarnings: true,
   hidden: () => false,
 };
 

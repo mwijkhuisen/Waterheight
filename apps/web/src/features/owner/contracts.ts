@@ -78,6 +78,5 @@ export const OWNER_CONTRACTS: Contracts = {
   // P11b: publish-owner writes no frames (the owner host reads /api/v1/frames only), so no static file parses.
   FramesFile: z.never(),
   FramesAnswer: API.Frames.extend(audience).superRefine(checkFrames),
-  datedWarnings: false,
   hidden: (source) => CANARY.test(source),
 };

@@ -285,7 +285,7 @@
   "lhp_class": "LHP-klasse {n}",
   "class_from": "klasse van {label}",
   "label_translation": "{raw} — {ours}",
-  "warnings_incomplete": "Waarschuwingen eerder vandaag mogelijk onvolledig",
+  "warnings_incomplete": "Waarschuwingen op dit tijdstip mogelijk onvolledig",
   "section_badge": "sectie",
   "owner_banner": "Persoonlijk gebruik — niet delen",
   "owner_banner_label": "Eigenaarsweergave",

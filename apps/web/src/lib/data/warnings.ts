@@ -1,12 +1,14 @@
 import { dayOf, floorBucket, type WarningsFile } from '@rws/contracts';
 
-// Warning areas at a quantised t (P10a T5). Pure: "now" is meta.now, never the browser's clock. The publisher writes
-// warnings/latest.geojson (the areas valid at its generation time) every cycle and warnings/YYYY-MM-DD.json (every
-// area valid during that ended UTC day) once, for the public family only. So:
-// - t in an ended UTC day: the dated file (areas issued on an earlier day and still valid are in it by overlap);
+// Warning areas at a quantised t (P10a T5). Pure: "now" is meta.now, never the browser's clock. Each family's publisher
+// writes, every cycle, warnings/latest.geojson (the areas valid at its generation time) and warnings/today.json (every
+// area valid at some time of the current UTC day, as loaded so far, #86), and warnings/YYYY-MM-DD.json (every area
+// valid during that UTC day) once, after the day ended. So:
 // - t in the current bucket: latest.geojson;
-// - t earlier today, or any past t on the owner site: latest.geojson filtered to t, which lacks the areas that ended
-//   before it was written: the page says "may be incomplete" (a contract gap recorded in docs/known-gaps.md).
+// - t earlier today: today.json, when its `day` is t's (at midnight it may already hold the next day);
+// - t in an ended UTC day: the dated file (areas issued on an earlier day and still valid are in it by overlap).
+// A missing file (or today.json of another day) falls back to latest.geojson filtered to t, which lacks the areas that
+// ended before it was written: the page then says "may be incomplete".
 
 export type WarningFeature = WarningsFile['features'][number];
 export interface WarningsAt {
@@ -16,13 +18,13 @@ export interface WarningsAt {
   incomplete: boolean;
 }
 
-export type WarningsSource = { kind: 'latest'; incomplete: boolean } | { kind: 'dated'; path: string };
+/** latest.geojson, or the file of t's UTC day (`path`), whose `day` must be `day`. */
+export type WarningsSource = { kind: 'latest' } | { kind: 'dated'; day: string; path: string };
 
-export function warningsSource(t: number, now: number, dated: boolean): WarningsSource {
-  if (t >= floorBucket(now)) return { kind: 'latest', incomplete: false };
+export function warningsSource(t: number, now: number): WarningsSource {
+  if (t >= floorBucket(now)) return { kind: 'latest' };
   const day = dayOf(t);
-  if (dated && day < dayOf(now)) return { kind: 'dated', path: `${day}.json` };
-  return { kind: 'latest', incomplete: true };
+  return { kind: 'dated', day, path: day < dayOf(now) ? `${day}.json` : 'today.json' };
 }
 
 /** `from ≤ t < to` (an open `to` never ends). */

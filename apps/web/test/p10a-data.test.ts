@@ -51,12 +51,39 @@ function fake(table: Record<string, { status?: number; body?: unknown }>) {
 }
 
 describe('warnings at t', () => {
-  it('chooses latest for the current bucket, the dated file for an ended day, latest marked incomplete otherwise', () => {
-    expect(warningsSource(NOW, NOW, true)).toEqual({ kind: 'latest', incomplete: false });
-    expect(warningsSource(T('2026-10-25T23:50:00Z'), NOW, true)).toEqual({ kind: 'dated', path: '2026-10-25.json' });
-    expect(warningsSource(T('2026-10-26T00:00:00Z'), NOW, true)).toEqual({ kind: 'latest', incomplete: true });
-    // The owner family has no dated files: a past day is latest, incomplete.
-    expect(warningsSource(T('2026-10-25T23:50:00Z'), NOW, false)).toEqual({ kind: 'latest', incomplete: true });
+  it("chooses latest for the current bucket, today.json earlier today, an ended day's dated file", () => {
+    expect(warningsSource(NOW, NOW)).toEqual({ kind: 'latest' });
+    expect(warningsSource(T('2026-10-26T11:50:00Z'), NOW)).toEqual({
+      kind: 'dated',
+      day: '2026-10-26',
+      path: 'today.json',
+    });
+    expect(warningsSource(T('2026-10-26T00:00:00Z'), NOW)).toMatchObject({ path: 'today.json' });
+    expect(warningsSource(T('2026-10-25T23:50:00Z'), NOW)).toEqual({
+      kind: 'dated',
+      day: '2026-10-25',
+      path: '2026-10-25.json',
+    });
+  });
+
+  it('an area that ended at 08:00 today shows at 07:00 from today.json, complete, on both families (#86)', async () => {
+    const ended = feature({ area: 'ended', from: '2026-10-26T05:00:00Z', to: '2026-10-26T08:00:00Z' });
+    for (const c of [PUBLIC_CONTRACTS, OWNER_CONTRACTS]) {
+      const { f, asked } = fake({ '/data/v1/warnings/today.json': { body: warningsFile([ended], '2026-10-26') } });
+      const w = await loadWarnings(f, T('2026-10-26T07:00:00Z'), { now: '2026-10-26T12:00:00Z' }, undefined, c);
+      expect(asked).toEqual(['/data/v1/warnings/today.json']);
+      expect(w).toMatchObject({ incomplete: false, features: [{ properties: { area: 'ended' } }] });
+    }
+  });
+
+  it('today.json of another day (just past midnight) falls back to latest, marked incomplete', async () => {
+    const { f, asked } = fake({
+      '/data/v1/warnings/today.json': { body: warningsFile([], '2026-10-27') },
+      '/data/v1/warnings/latest.geojson': { body: warningsFile([feature()]) },
+    });
+    const w = await loadWarnings(f, T('2026-10-26T07:00:00Z'), { now: '2026-10-26T23:59:00Z' });
+    expect(asked).toEqual(['/data/v1/warnings/today.json', '/data/v1/warnings/latest.geojson']);
+    expect(w).toMatchObject({ incomplete: true, features: [{ properties: { area: 'a1' } }] });
   });
 
   it('holds from ≤ t < to, an open to never ends, one row per (source, area), the latest from wins', () => {
@@ -429,7 +456,6 @@ describe('the owner record (plan C1)', () => {
     expect(OWNER_CONTRACTS.hidden('CANARY-OWNER')).toBe(true);
     expect(OWNER_CONTRACTS.hidden('BE-3')).toBe(false);
     expect(PUBLIC_CONTRACTS.hidden('CANARY-OWNER')).toBe(false);
-    expect(OWNER_CONTRACTS.datedWarnings).toBe(false);
   });
 
   it('drops canary stations, series, meta sources and credits on read', async () => {

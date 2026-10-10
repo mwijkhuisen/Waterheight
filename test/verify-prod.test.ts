@@ -4216,6 +4216,25 @@ describe('verify-prod: the static publisher (P9a)', () => {
     expect(checkStaticWarnings(rd(undefined, ['content-type "application/json"']), undefined)).toMatchObject({
       ok: false,
     });
+    // #86: today.json, the live class, today's day; missing is a FAIL.
+    const todayFile = { ...dated, day: '2026-10-04' };
+    const today = (page: ReturnType<typeof file>) => ({
+      day: '2026-10-04',
+      read: readStatic(page, WarningsFile, STATIC_CACHE.live),
+    });
+    ok('static warnings', checkStaticWarnings(latest, undefined, today(file(todayFile, STATIC_CACHE.live))));
+    expect(checkStaticWarnings(latest, undefined, today(file(dated, STATIC_CACHE.live)))).toMatchObject({
+      ok: false,
+      detail: /today\.json: day 2026-10-03, not 2026-10-04/,
+    });
+    expect(checkStaticWarnings(latest, undefined, today(file(todayFile, STATIC_CACHE.immutable)))).toMatchObject({
+      ok: false,
+      detail: /today\.json: cache-control/,
+    });
+    expect(checkStaticWarnings(latest, undefined, today(file('', '', 'text/plain', { status: 404 })))).toMatchObject({
+      ok: false,
+      detail: /today\.json: status 404/,
+    });
   });
 
   it('static status: the class, the contract and no owner source', () => {

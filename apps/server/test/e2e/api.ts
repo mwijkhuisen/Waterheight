@@ -389,6 +389,9 @@ try {
   )
     throw new Error('self-check: warnings/latest.geojson lacks the seeded areas');
   if (!ended.includes('e2e-ended')) throw new Error(`self-check: warnings/${ENDED_DAY}.json lacks the ended area`);
+  const today = await file('warnings/today.json');
+  if (!today.includes('"day":"2026-10-26"') || !today.includes('e2e-today') || latest.includes('e2e-today'))
+    throw new Error('self-check: warnings/today.json lacks the area that ended earlier today');
   if (!snapshot.values.some((v) => v.basis?.label.includes('LHP')))
     throw new Error('self-check: no DE-6 class state in the snapshot');
   if (CANARY_RENDERINGS.some((c) => latest.includes(c))) throw new Error('self-check: a canary in a public file');
@@ -414,6 +417,11 @@ try {
     );
     if (!variant.includes('"be.spw.5447"') || !variant.includes('"be.spw.5451"'))
       throw new Error('self-check: the owner reaches variant lacks the SPW gauges of Eijsden');
+    // #86: the owner family writes today's and the ended days' warnings files too.
+    const ownerToday = await readFile(join(OWNER_DIR, 'v1', 'warnings', 'today.json'), 'utf8');
+    const ownerEnded = await readFile(join(OWNER_DIR, 'v1', 'warnings', `${ENDED_DAY}.json`), 'utf8');
+    if (!ownerToday.includes('e2e-today') || !ownerEnded.includes('e2e-ended'))
+      throw new Error("self-check: the owner warnings files lack today's or the ended day's area");
   }
 
   const listening = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {

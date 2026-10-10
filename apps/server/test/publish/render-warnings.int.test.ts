@@ -1,4 +1,4 @@
-import { WarningsFile } from '@rws/contracts';
+import { dayOf, WarningsFile } from '@rws/contracts';
 import { OwnerWarningsFile } from '@rws/contracts/static-owner';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from '../../src/db/pool.ts';
@@ -8,13 +8,15 @@ import { type Harness, harness } from '../load/harness.ts';
 import { ctxFor, NOW } from './s2-ctx.ts';
 
 // P9a: warnings/latest.geojson and the dated files against the real views: latest = valid now, a dated file = valid at
-// any time of that UTC day, a bad geometry is null, and the public files never hold an owner source's area.
+// any time of that UTC day, a bad geometry is null, and the public files never hold an owner source's area. #86: the
+// current day's file (today.json) holds an area that ended earlier today, on both families.
 
 let h: Harness;
 let pubDb: Db;
 let ownDb: Db;
 const POLYGON = '{"type":"Polygon","coordinates":[[[6,51],[7,51],[7,52],[6,51]]]}';
 const OWNER_AREA = 'owner-only-area-x';
+const OWNER_ENDED = 'owner-ended-area-y';
 
 async function area(source: string, key: string, valid: string, geometry: string | null, level: number | null) {
   await h.t.admin.query(
@@ -33,6 +35,9 @@ beforeAll(async () => {
   await area('DE-6', 'area-b', '[2026-10-03T22:00Z,2026-10-04T01:00Z)', 'not json', 2);
   await area('DE-6', 'area-c', '[2026-10-01T00:00Z,2026-10-02T00:00Z)', '{"type":"Polygon","coordinates":"x"}', null);
   await area('BE-3', OWNER_AREA, '[2026-10-04T10:00Z,)', POLYGON, 4);
+  // Ended at 08:00 on NOW's day (2026-10-04, NOW 12:05): in no latest.geojson, in that day's file.
+  await area('DE-6', 'area-d', '[2026-10-04T05:00Z,2026-10-04T08:00Z)', POLYGON, 2);
+  await area('BE-3', OWNER_ENDED, '[2026-10-04T05:00Z,2026-10-04T08:00Z)', POLYGON, 2);
   await h.t.admin.query(
     `INSERT INTO source_health (source_id, detail) VALUES ('DE-6', '{"provider_updated": "2026-10-04T12:30:00.000Z"}')
      ON CONFLICT (source_id) DO UPDATE SET detail = source_health.detail || EXCLUDED.detail`,
@@ -73,7 +78,7 @@ describe('warnings files', { timeout: 120_000 }, () => {
     const ctx = await ctxFor(pubDb, 'public');
     const day = async (d: string) => warnings(ctx, d);
     expect(props(await day('2026-10-03'))).toEqual(['area-b']);
-    expect(props(await day('2026-10-04'))).toEqual(['area-a', 'area-b']);
+    expect(props(await day('2026-10-04'))).toEqual(['area-a', 'area-b', 'area-d']);
     expect(props(await day('2026-10-02'))).toEqual([]);
     expect(props(await day('2026-10-01'))).toEqual(['area-c']);
     const b = WarningsFile.parse(await day('2026-10-03'));
@@ -90,5 +95,29 @@ describe('warnings files', { timeout: 120_000 }, () => {
     const body = await warnings(ctx, null);
     OwnerWarningsFile.parse(body);
     expect(props(body).sort()).toEqual(['area-a', OWNER_AREA]);
+  });
+
+  it('the current day so far (today.json) holds an area that ended at 08:00, valid at 07:00, public and owner', async () => {
+    const today = dayOf(NOW);
+    const at7 = Date.parse(`${today}T07:00:00Z`);
+    const validAt7 = (body: unknown) =>
+      (body as WarningsFile).features
+        .filter(
+          (f) =>
+            Date.parse(f.properties.from) <= at7 && (f.properties.to === null || at7 < Date.parse(f.properties.to)),
+        )
+        .map((f) => f.properties.area)
+        .sort();
+    const pub = WarningsFile.parse(await warnings(await ctxFor(pubDb, 'public'), today));
+    expect(pub.day).toBe(today);
+    expect(pub.features.find((f) => f.properties.area === 'area-d')?.properties).toMatchObject({
+      from: '2026-10-04T05:00:00.000Z',
+      to: '2026-10-04T08:00:00.000Z',
+    });
+    expect(validAt7(pub)).toEqual(['area-d']);
+    expect(JSON.stringify(pub)).not.toContain(OWNER_ENDED);
+    const own = OwnerWarningsFile.parse(await warnings(await ctxFor(ownDb, 'owner'), today));
+    expect(own.day).toBe(today);
+    expect(validAt7(own)).toEqual(['area-d', OWNER_ENDED]);
   });
 });

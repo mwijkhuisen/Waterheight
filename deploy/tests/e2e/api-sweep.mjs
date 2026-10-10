@@ -374,6 +374,7 @@ const required = [
   'stations.json',
   'forecast/latest.json',
   'warnings/latest.geojson',
+  'warnings/today.json',
   'sources.json',
   'status.json',
 ];

@@ -298,7 +298,14 @@ export const useWarnings = (t: number | undefined, meta: Pick<WebMeta, 'now'> | 
   const c = useContracts();
   const bucket = meta === undefined ? undefined : floorBucket(Date.parse(meta.now));
   return useQuery({
-    queryKey: ['warnings', c?.audience, t, t !== undefined && bucket !== undefined && t >= bucket ? 'latest' : 'at'],
+    // The day of meta.now too: after midnight UTC a fallback cached for t (today.json of the next day) is asked again.
+    queryKey: [
+      'warnings',
+      c?.audience,
+      t,
+      t !== undefined && bucket !== undefined && t >= bucket ? 'latest' : 'at',
+      meta === undefined ? undefined : dayOf(Date.parse(meta.now)),
+    ],
     queryFn: ({ signal }) => loadWarnings(browserFetch, t ?? 0, meta as WebMeta, signal, c),
     enabled: c !== undefined && t !== undefined && meta !== undefined && t <= (bucket ?? 0),
     placeholderData: keepPreviousData,

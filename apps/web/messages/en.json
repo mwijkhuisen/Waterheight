@@ -285,7 +285,7 @@
   "lhp_class": "LHP class {n}",
   "class_from": "class from {label}",
   "label_translation": "{raw} — {ours}",
-  "warnings_incomplete": "Earlier warnings today may be incomplete",
+  "warnings_incomplete": "Warnings at this time may be incomplete",
   "section_badge": "section",
   "owner_banner": "Personal use only — do not share",
   "owner_banner_label": "Owner view",

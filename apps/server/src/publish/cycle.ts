@@ -63,9 +63,10 @@ import type { Output } from './write.ts';
 // P9a: one publisher loop per family (A§9.1), at most once a minute. It only reads (invariant 2): the family's views
 // through VIEWS[family], its dirty rows after an in-memory cursor and its day versions. A cycle renders the hot set
 // (stations hourly, latest, forecast, warnings, sources), the recent buckets the dirty rows reach (newest first,
-// within a time budget; the rest waits in memory), the dirty stations' files, the recent frames, at most one settled
-// day (public), prunes, and writes status.json and then meta.json last. Every body is validated against the family's
-// contract and a public body is refused when it holds a canary rendering, before anything is written.
+// within a time budget; the rest waits in memory), the dirty stations' files, the ended days' warnings, the recent
+// frames, at most one settled day (public), prunes, and writes status.json and then meta.json last. Every body is
+// validated against the family's contract and a public body is refused when it holds a canary rendering, before
+// anything is written.
 
 /** What a renderer gets: the family's read-only connection, the cycle's clock and the boot-time tables. */
 export type RenderCtx = {
@@ -112,7 +113,7 @@ export type Renderers = {
   /** Hourly frames over [from, to). */
   frames(c: RenderCtx, from: number, to: number): Promise<unknown>;
   forecast(c: RenderCtx): Promise<unknown>;
-  /** warnings/latest.geojson (day null) or an ended day's warnings/YYYY-MM-DD.json. */
+  /** warnings/latest.geojson (day null), else the areas valid during that UTC day (today.json, YYYY-MM-DD.json). */
   warnings(c: RenderCtx, day: string | null): Promise<unknown>;
   sources(c: RenderCtx): Promise<unknown>;
   /** series/{station}/recent.json. */
@@ -290,8 +291,11 @@ export class Publisher {
     await this.#step('forecast', async () => {
       await this.#put(c, 'forecast', 'forecast/latest.json', await d.render.forecast(c));
     });
+    // today.json: the areas of the current UTC day, as loaded so far (#86), rewritten every cycle under a fixed name,
+    // so a dated name is only ever written once its day has ended and stays immutable.
     await this.#step('warnings', async () => {
       await this.#put(c, 'warnings', 'warnings/latest.geojson', await d.render.warnings(c, null));
+      await this.#put(c, 'warnings', 'warnings/today.json', await d.render.warnings(c, dayOf(now)));
     });
     await this.#step('sources', async () => {
       await this.#put(c, 'sources', 'sources.json', await d.render.sources(c));
@@ -355,7 +359,16 @@ export class Publisher {
     if (this.#buckets.size === 0) this.#behindSince = undefined;
     else this.#behindSince ??= now;
 
-    // 4. Public only: the recent frames, the ended days' warnings and at most `settledPerCycle` settled days.
+    // 4. Both families: the ended days' warnings, each written once. Public only: the recent frames and at most
+    // `settledPerCycle` settled days.
+    await this.#step('warnings-days', async () => {
+      for (let day = dayStartMs(dayOf(window.displayStartMs)); day + DAY_MS <= now; day += DAY_MS) {
+        const name = dayOf(day);
+        if (this.#warningDays.has(name)) continue;
+        await this.#put(c, 'warnings', `warnings/${name}.json`, await d.render.warnings(c, name), false);
+        this.#warningDays.add(name);
+      }
+    });
     let versions = new Map<string, Version>();
     let complete: Complete = new Map();
     let settled: string[] = [];
@@ -369,14 +382,6 @@ export class Publisher {
           this.#framesDirty = false;
           this.#framesSpan = `${from}/${to}`;
         });
-      await this.#step('warnings-days', async () => {
-        for (let day = dayStartMs(dayOf(window.displayStartMs)); day + DAY_MS <= now; day += DAY_MS) {
-          const name = dayOf(day);
-          if (this.#warningDays.has(name)) continue;
-          await this.#put(c, 'warnings', `warnings/${name}.json`, await d.render.warnings(c, name), false);
-          this.#warningDays.add(name);
-        }
-      });
       settled = settledDays(window.displayStartMs, now);
       versions = await this.#versions();
       complete = await this.#complete();

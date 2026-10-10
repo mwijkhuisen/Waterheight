@@ -56,6 +56,18 @@ const AREAS: [...Area, valid: string, issued: string][] = [
     '[2026-10-25T06:00Z,2026-10-25T18:00Z)',
     '2026-10-25T06:00Z',
   ],
+  // Ended at 08:00 on NOW's day (#86): in no latest.geojson, only in warnings/today.json, on both families.
+  [
+    'DE-6',
+    'e2e-today',
+    'Heute beendete Warnung',
+    POLYGON,
+    3,
+    '3',
+    'Beendet',
+    '[2026-10-26T05:00Z,2026-10-26T08:00Z)',
+    '2026-10-26T05:00Z',
+  ],
 ];
 
 export async function seedPublic(admin: Client, now: string): Promise<void> {
