@@ -1,0 +1,13 @@
+# WireGuard for the owner site (P12a; A§11.5, ADR-0017), installed by bootstrap.sh as
+# /etc/wireguard/wg0.conf (root 0600) and brought up by wg-quick@wg0.service.
+#
+# The host is 10.66.0.1; each owner device is one /32 in 10.66.0.0/24 (rws-wg-peer).
+# The server's private key is /etc/wireguard/wg0.key (root 0600, made once by bootstrap.sh,
+# never in this file, the repository or a log); the peers are in /etc/wireguard/wg0.peers.conf,
+# which only rws-wg-peer writes. This file therefore holds no secret and is replaced on
+# every bootstrap run. Only the owner's devices are ever peers.
+[Interface]
+Address = 10.66.0.1/24
+ListenPort = 51820
+PostUp = wg set %i private-key /etc/wireguard/wg0.key
+PostUp = [ ! -s /etc/wireguard/wg0.peers.conf ] || wg addconf %i /etc/wireguard/wg0.peers.conf

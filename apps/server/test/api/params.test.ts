@@ -8,6 +8,7 @@ import {
   SKEW_MS,
   seriesForecastParams,
   seriesParams,
+  slowed,
   snapshotParams,
   TO_AHEAD_MS,
 } from '../../src/api/params.ts';
@@ -532,5 +533,51 @@ describe('agePolicy', () => {
       expect(header).not.toContain('immutable');
       expect(header).toMatch(/^public, max-age=/);
     }
+  });
+});
+
+describe('seriesParams: the brownout (P12a)', () => {
+  const start = Date.parse('2026-08-24T00:00:00Z');
+  const brown = (span: number, res?: string) =>
+    outcome(() => seriesParams('1', `${BASE}/series/1?${range(start, start + span, res)}`, FAR, start, true));
+  const resOf = (span: number, res?: string) =>
+    seriesParams('1', `${BASE}/series/1?${range(start, start + span, res)}`, FAR, start, true).res;
+
+  it('refuses an explicit res=raw as brownout (503), before any span rule', () => {
+    expect(brown(DAY, 'raw')).toBe('brownout');
+    expect(brown(40 * DAY, 'raw')).toBe('brownout');
+    try {
+      seriesParams('1', `${BASE}/series/1?${range(start, start + DAY, 'raw')}`, FAR, start, true);
+    } catch (err) {
+      expect((err as Refused).status).toBe(503);
+    }
+  });
+
+  it('never picks raw for a default resolution, and caps the span at 30 days', () => {
+    expect(resOf(BUCKET_MS)).toBe('1h');
+    expect(resOf(14 * DAY)).toBe('1h');
+    expect(resOf(30 * DAY)).toBe('1h');
+    expect(resOf(30 * DAY, '1d')).toBe('1d');
+    expect(brown(30 * DAY + BUCKET_MS)).toBe('span_too_long');
+    expect(brown(30 * DAY + BUCKET_MS, '1h')).toBe('span_too_long');
+    expect(brown(366 * DAY, '1d')).toBe('span_too_long');
+  });
+
+  it('is the old behaviour without the flag', () => {
+    expect(ser('1', range(start, start + DAY), FAR, start).res).toBe('raw');
+    expect(serOutcome('1', range(start, start + 40 * DAY), FAR, start)).toBe('ok');
+  });
+});
+
+describe('slowed', () => {
+  it('lengthens every mutable max-age and never adds immutable', () => {
+    expect(slowed({ header: 'public, max-age=60, stale-while-revalidate=300', ttlMs: 60_000 })).toEqual({
+      header: 'public, max-age=300, stale-while-revalidate=300',
+      ttlMs: 300_000,
+    });
+    expect(slowed({ header: 'public, max-age=600', ttlMs: 600_000 }).header).toBe('public, max-age=3000');
+    expect(slowed({ header: 'public, max-age=300', ttlMs: 300_000 }).header).toBe('public, max-age=1500');
+    expect(slowed({ header: 'public, max-age=86400', ttlMs: 86_400_000 }).header).toBe('public, max-age=86400');
+    expect(slowed(agePolicy(NOW, NOW)).header).not.toContain('immutable');
   });
 });

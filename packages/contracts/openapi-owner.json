@@ -117,7 +117,8 @@
               "internal",
               "rate_limited",
               "too_large",
-              "unsupported_type"
+              "unsupported_type",
+              "brownout"
             ],
             "type": "string"
           }

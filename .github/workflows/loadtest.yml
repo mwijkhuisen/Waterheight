@@ -1,8 +1,17 @@
-# Load test (issue #24, P9b; PHASES §28): k6 against the real compose stack on a CI runner, with a synthetic seed.
-# 300 requests/s of static files (meta 30 %, latest 40 %, recent 20 %, settled 10 %) and 30 requests/s of the API
-# (snapshot 50 %, meta 20 %, stations 10 %, series 10 %, forecast 10 %) for 2 minutes, from 6 k6 processes on 6
-# distinct local addresses, so the API's per-client limiter works as it does in production and is never disabled.
-# p95 under 200 ms and not one failed request (a 429 counts) or the job fails.
+# Load, drill and chaos tests (issue #24, P9b; issue #27, P12a; PHASES §28, §41): k6 and the compose end-to-end stack
+# (deploy/tests/e2e/run.sh in RWS_E2E_MODE loadtest, drill or chaos, with the fake upstream feeding capture) on a CI runner.
+#   loadtest    stack -> seed -> egress profile (cold cache) -> brownout auto-arm (the real rws-brownout.timer) ->
+#               wait for a loader lag -> k6 normal 15 min (50 r/s API + 300 r/s static over 6 clients on 6 addresses:
+#               p95 < 300 ms, errors < 0.1 %, loader lag p95 < 120 s) -> abusive client A/B/A/B plus a header-rotating
+#               variant (429 for the abuser, others' p95 +10 % at most: compare-p95.mjs) -> saturation (lag p95 < 120 s
+#               while the API is saturated) -> oom-restart.sh -> hardening.sh --ci.
+#   drill       stack in drill mode -> deploy/tests/flood/run.sh (the flood drill) with the k6 flood scenario running at
+#               the same time; both must pass -> oom-restart.sh -> hardening.sh --ci.
+#   chaos       stack -> deploy/tests/e2e/chaos.sh (api stopped, database stopped 10 min, a provider blackholed) ->
+#               oom-restart.sh (the dependants of the database may restart) -> hardening.sh --ci.
+#   production  workflow_dispatch with mode production only, in the `production` environment (owner approval), no
+#               secrets: k6 static-only burst against vars.LOADTEST_TARGET, 1,000 r/s for 15 min incl. PMTiles Range
+#               requests, polite User-Agent, aborts at errors > 1 % or a red /api/v1/health.
 # Hardening as in ci.yml: top-level permissions {}, contents: read, harden-runner first, persist-credentials: false,
 # no caches, no secrets, no expressions inside run: (values come in through env:), actions pinned to full SHAs, and
 # the k6 release tarball checked against a pinned sha256 (the BOM row: k6, binary).
@@ -14,8 +23,20 @@ on:
       - apps/server/**
       - packages/contracts/**
       - deploy/**
+      - registry/**
+      - scripts/seed-loadtest.ts
+      - scripts/flood-drill*
+      - scripts/lib/**
+      - apps/web/e2e/**
+      - docs/capacity-egress.json
       - .github/workflows/loadtest.yml
   workflow_dispatch:
+    inputs:
+      mode:
+        description: ci runs loadtest, drill and chaos; production runs the static burst against vars.LOADTEST_TARGET
+        type: choice
+        options: [ci, production]
+        default: ci
 
 permissions: {}
 
@@ -27,20 +48,29 @@ defaults:
   run:
     shell: bash
 
+env:
+  K6_VERSION: 1.8.1
+  K6_SHA256: b02cd649a0e391576909502e9b7760d3fb9e1fd14d179e3da18ee4a185f4c583
+  # The same image as ci.yml's e2e and deploy jobs (test/e2e-pins.test.ts).
+  PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+
 jobs:
   loadtest:
     name: loadtest
+    if: github.event_name == 'pull_request' || inputs.mode == 'ci'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
-    env:
-      K6_VERSION: 1.8.1
-      K6_SHA256: b02cd649a0e391576909502e9b7760d3fb9e1fd14d179e3da18ee4a185f4c583
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
+      # The runner context is not available in a job's env: the output directories come from RUNNER_TEMP here.
+      - name: Output directories
+        run: |
+          echo "OUT=$RUNNER_TEMP/loadtest" >>"$GITHUB_ENV"
+          echo "EGRESS_OUT=$RUNNER_TEMP/egress" >>"$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -56,7 +86,7 @@ jobs:
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       # run.sh installs nftables and zstd itself, with Docker.
       - run: pnpm install --frozen-lockfile
-      - name: The stack (Docker 29.8.1, firewall, Pebble, compose, both publishers' first meta.json), left running
+      - name: The stack (Docker 29.8.1, firewall, Pebble, compose, the fake upstream, both publishers' first meta.json), left running
         env:
           RWS_E2E_MODE: loadtest
         run: sudo --preserve-env=RWS_E2E_MODE deploy/tests/e2e/run.sh | tee "$RUNNER_TEMP/stack.log"
@@ -64,6 +94,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '^loadtest stack ready' "$RUNNER_TEMP/stack.log"
+          mkdir -p "$OUT" # ours: the root-run scripts create their subdirectories in it
           sudo cat /ci/loadtest.env >"$RUNNER_TEMP/loadtest.env"
           set -a; . "$RUNNER_TEMP/loadtest.env"; set +a
           IFS=, read -r -a ips <<<"$RWS_E2E_CLIENT_IPS"
@@ -101,35 +132,298 @@ jobs:
           done
           echo "::warning::no settled day was complete after 5 minutes; the settled share falls back to recent"
       - name: k6 (release tarball, sha256-checked)
+        run: deploy/tests/loadtest/install-k6.sh "$RUNNER_TEMP"
+      # D6: the egress profile on the fresh stack, cold cache. The spec writes egress-profile.json into EGRESS_OUT (mounted into the
+      # container as /egress-out) and fails when a class grew more than 20 % against docs/capacity-egress.json.
+      - name: Egress profile (Playwright, pinned image, cold cache)
         run: |
           set -euo pipefail
-          curl -fsSL -o "$RUNNER_TEMP/k6.tgz" "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz"
-          echo "$K6_SHA256  $RUNNER_TEMP/k6.tgz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/k6.tgz" -C "$RUNNER_TEMP" --strip-components=1 --wildcards '*/k6'
-          "$RUNNER_TEMP/k6" version
+          mkdir -p "$EGRESS_OUT"
+          chmod a+rwx "$EGRESS_OUT"
+          sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/loadtest/pw-spec.sh egress \
+            -e EGRESS_OUT=/egress-out/egress-profile.json -v "$EGRESS_OUT:/egress-out"
+      # Right after the stack, while the 5-minute window of the access log holds little else: the real rws-brownout.timer
+      # arms the flag from the 5xx of a stopped api, meta.json and Caddy follow (deploy/tests/loadtest/brownout-e2e.sh).
+      - name: Brownout auto-arm (the real rws-brownout.timer on the real Caddy access log)
+        run: sudo deploy/tests/loadtest/brownout-e2e.sh | tee "$RUNNER_TEMP/brownout.log"
+      # Capture fetches on its cron ticks (10-15 min), so the first loader lag can take that long; k6 requires one.
+      - name: Wait for a loader lag in /api/v1/health
+        run: sudo deploy/tests/loadtest/wait-health.sh 1500
       # The six addresses live on vext1 inside the namespace `ext` (not on a host interface): from the host, traffic
       # would reach Caddy masqueraded as the bridge gateway, which the limiter keys as one shared client. So k6 runs
       # in the namespace (the filesystem is shared), as root, one process per address.
-      - name: Load, 6 k6 clients on 6 local addresses in the client namespace for 2 minutes (TLS verified against the e2e root)
+      - name: k6 normal, 6 clients on 6 addresses for 15 minutes (50 r/s API + 300 r/s static; TLS verified against the e2e root)
+        run: sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/normal" SCENARIO=normal DURATION=15m
+      # A, B, A, B and a rotating-header window of 2 minutes each, the normal mix on every client; in B one client (5)
+      # hammers /series and /frames. LENIENT: the other clients are judged by compare-p95.mjs, not by thresholds; the
+      # abuser is judged by its own (at least half of its answers 429).
+      - name: k6 abusive client, A/B/A/B and a header-rotating variant
         run: |
           set -euo pipefail
-          set -a; . "$RUNNER_TEMP/loadtest.env"; set +a
-          out=$RUNNER_TEMP/loadtest
-          mkdir -p "$out"
-          IFS=, read -r -a ips <<<"$RWS_E2E_CLIENT_IPS"
-          pids=()
-          for i in "${!ips[@]}"; do
-            sudo ip netns exec "$RWS_E2E_CLIENT_NETNS" env SSL_CERT_FILE="$RWS_E2E_CA" BASE="https://$RWS_E2E_DOMAIN" \
-              CADDY_IP="$RWS_E2E_CADDY_IP" CLIENT="$i" OUT_DIR="$out" \
-              "$RUNNER_TEMP/k6" run --quiet --no-color --local-ips "${ips[$i]}" deploy/tests/loadtest/k6.js \
-              >"$out/k6-$i.log" 2>&1 &
-            pids+=($!)
-          done
-          rc=0
-          for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
-          for i in "${!ips[@]}"; do echo "== client $i (${ips[$i]})"; tail -n 20 "$out/k6-$i.log"; done
-          exit "$rc"
+          win() { local w=$1; shift; sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/abuse/$w" LENIENT=1 DURATION=2m "$@"; }
+          win A1
+          win B1 ABUSER_INDEX=5
+          win A2
+          win B2 ABUSER_INDEX=5
+          win R ABUSER_INDEX=5 ABUSE_ROTATE=1
+      - name: Others' p95 with and without the abusive client (at most +10 %)
+        run: |
+          node deploy/tests/loadtest/compare-p95.mjs --abuser 5 --base "$OUT/abuse/A1" "$OUT/abuse/A2" \
+            --abuse "$OUT/abuse/B1" "$OUT/abuse/B2" "$OUT/abuse/R" | tee "$OUT/compare-p95.txt"
+      # Every client at its limiter with cache-missing wide calls; the sampler shows what the database made of it.
+      - name: k6 saturation, loader lag while the api is saturated
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          (
+            while sleep 10; do
+              date -u +%T
+              sudo docker exec rws-db-1 psql -XAtq -U postgres -d rws -c "select usename, state, count(*) from pg_stat_activity where usename is not null group by 1, 2 order by 1, 2" || true
+              sudo docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' || true
+            done
+          ) >"$OUT/saturation-db.log" 2>&1 &
+          sampler=$!
+          trap 'kill "$sampler" 2>/dev/null || true' EXIT
+          sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/saturation" SCENARIO=saturation DURATION=3m SATURATION_REQUIRE=1
+      - name: No container OOM-killed or restarted
+        run: sudo deploy/tests/loadtest/oom-restart.sh
+      - name: Hardening of every service (docker inspect)
+        run: sudo deploy/tests/hardening.sh --ci
       - name: The summaries in the job summary
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in "$OUT"/*/summary-*.txt "$OUT"/*/*/summary-*.txt; do
+            { echo "### ${f#"$OUT"/}"; echo '```'; cat "$f"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+          done
+          for f in "$OUT/compare-p95.txt" "$RUNNER_TEMP/brownout.log"; do
+            [[ -f $f ]] && { echo "### ${f##*/}"; echo '```'; tail -n 40 "$f"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+          done
+          true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: k6-summary-loadtest
+          path: |
+            ${{ runner.temp }}/loadtest/
+            ${{ runner.temp }}/brownout.log
+          retention-days: 14
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: egress-profile
+          path: ${{ runner.temp }}/egress/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Container logs
+        if: failure()
+        run: |
+          sudo docker compose -p rws ps -a || true
+          for c in $(sudo docker ps -a --filter label=com.docker.compose.project=rws --format '{{.Names}}'); do
+            echo "::group::$c"; sudo docker logs --tail 60 "$c" 2>&1 || true; echo "::endgroup::"
+          done
+          sudo tail -n 20 /ci/fake/state/hits.jsonl || true
+
+  drill:
+    name: drill
+    if: github.event_name == 'pull_request' || inputs.mode == 'ci'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      # How long the k6 flood scenario runs: it must outlast the drill (deploy/tests/flood/run.sh).
+      FLOOD_DURATION: 12m
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Output directory
+        run: echo "OUT=$RUNNER_TEMP/loadtest" >>"$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: The stack in drill mode (the drill registry on top of the fake upstream), left running
+        env:
+          RWS_E2E_MODE: drill
+        run: sudo --preserve-env=RWS_E2E_MODE deploy/tests/e2e/run.sh | tee "$RUNNER_TEMP/stack.log"
+      - name: The stack's coordinates
+        run: |
+          set -euo pipefail
+          grep -q '^loadtest stack ready' "$RUNNER_TEMP/stack.log"
+          sudo cat /ci/loadtest.env >"$RUNNER_TEMP/loadtest.env"
+          set -a; . "$RUNNER_TEMP/loadtest.env"; set +a
+          jq -e '.mode == "drill"' < <(sudo cat /ci/e2e-stack)
+      - name: k6 (release tarball, sha256-checked)
+        run: deploy/tests/loadtest/install-k6.sh "$RUNNER_TEMP"
+      - name: Wait for a loader lag in /api/v1/health
+        run: sudo deploy/tests/loadtest/wait-health.sh 1500
+      # The k6 flood scenario starts first and keeps running while the drill replays, loads, publishes and checks the UI.
+      # Both must pass. MAP_ASSETS: the pinned map glyphs and sprites of the web image (registry/basemap.yaml's commit).
+      - name: Flood drill with the k6 flood scenario running at the same time
+        run: |
+          set -euo pipefail
+          assets="/assets/map/$(awk '$1 == "commit:" { print substr($2, 1, 7); exit }' registry/basemap.yaml)"
+          mkdir -p "$OUT"
+          sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/flood" SCENARIO=flood "DURATION=$FLOOD_DURATION" "MAP_ASSETS=$assets" \
+            >"$OUT/flood-k6.log" 2>&1 &
+          k6pid=$!
+          sleep 30
+          drill_rc=0
+          sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/flood/run.sh || drill_rc=$?
+          k6_rc=0
+          wait "$k6pid" || k6_rc=$?
+          echo "::group::k6 flood"; cat "$OUT/flood-k6.log"; echo "::endgroup::"
+          echo "flood drill exit $drill_rc, k6 flood exit $k6_rc"
+          ((drill_rc == 0 && k6_rc == 0))
+      - name: No container OOM-killed or restarted
+        run: sudo deploy/tests/loadtest/oom-restart.sh
+      - name: Hardening of every service (docker inspect)
+        run: sudo deploy/tests/hardening.sh --ci
+      - name: The summaries in the job summary
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in "$OUT"/*/summary-*.txt; do
+            { echo "### ${f#"$OUT"/}"; echo '```'; cat "$f"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: k6-summary-drill
+          path: ${{ runner.temp }}/loadtest/
+          retention-days: 14
+          if-no-files-found: warn
+      # The flood scene's screenshots (actual/diff) and the Playwright results, for the visual baselines.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: flood-drill-playwright
+          path: |
+            apps/web/test-results/
+            apps/web/e2e/visual/__screenshots__/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Container logs
+        if: failure()
+        run: |
+          sudo docker compose -p rws ps -a || true
+          for c in $(sudo docker ps -a --filter label=com.docker.compose.project=rws --format '{{.Names}}'); do
+            echo "::group::$c"; sudo docker logs --tail 60 "$c" 2>&1 || true; echo "::endgroup::"
+          done
+
+  chaos:
+    name: chaos
+    if: github.event_name == 'pull_request' || inputs.mode == 'ci'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install pnpm (pinned native binary, sha512-checked)
+        run: |
+          scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
+          echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: The stack in chaos mode (fake upstream, throw-away ping key), left running
+        env:
+          RWS_E2E_MODE: chaos
+        run: sudo --preserve-env=RWS_E2E_MODE deploy/tests/e2e/run.sh | tee "$RUNNER_TEMP/stack.log"
+      - name: The stack's coordinates
+        run: |
+          set -euo pipefail
+          grep -q '^loadtest stack ready' "$RUNNER_TEMP/stack.log"
+          jq -e '.mode == "chaos"' < <(sudo cat /ci/e2e-stack)
+      # api stopped; database stopped 10 min (manifest keeps growing, then 0 duplicates and 0 Q7 gaps); a provider host
+      # blackholed (status 0 hits, stale capture status, stale source, a /fail ping after the blackhole).
+      - name: Chaos (deploy/tests/e2e/chaos.sh)
+        run: sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/e2e/chaos.sh | tee "$RUNNER_TEMP/chaos.log"
+      # What the chaos stopped may be restarted by the daemon (the database's dependants); an OOM kill never is excused.
+      - name: No container OOM-killed; no restart of a service chaos did not touch
+        run: sudo deploy/tests/loadtest/oom-restart.sh --allow-restart api,api-owner,load,publish,publish-owner,watchdog
+      - name: Hardening of every service (docker inspect)
+        run: sudo deploy/tests/hardening.sh --ci
+      - name: The chaos evidence in the job summary
+        if: always()
+        run: |
+          [[ -f $RUNNER_TEMP/chaos.log ]] || exit 0
+          { echo '### chaos'; echo '```'; grep -E '^(PROOF|- )' "$RUNNER_TEMP/chaos.log" | tail -n 40; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: chaos-log
+          path: ${{ runner.temp }}/chaos.log
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Container logs
+        if: failure()
+        run: |
+          sudo docker compose -p rws ps -a || true
+          for c in $(sudo docker ps -a --filter label=com.docker.compose.project=rws --format '{{.Names}}'); do
+            echo "::group::$c"; sudo docker logs --tail 60 "$c" 2>&1 || true; echo "::endgroup::"
+          done
+          sudo tail -n 40 /ci/fake/state/hits.jsonl || true
+
+  # Owner-triggered (Actions > loadtest > Run workflow > mode production): a static-only burst against the live site.
+  # No secrets, no write permission; the target is the repository variable LOADTEST_TARGET (https://<host>), never an input,
+  # so the workflow cannot be pointed at a third party. The `production` environment needs the owner's approval, and the
+  # job queues behind a running one instead of cancelling it.
+  production:
+    name: production
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'production'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    environment: production
+    permissions:
+      contents: read
+    concurrency:
+      group: loadtest-production
+      cancel-in-progress: false
+    env:
+      TARGET: ${{ vars.LOADTEST_TARGET }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The target (a repository variable, https and a host name)
+        run: |
+          set -euo pipefail
+          [[ $TARGET =~ ^https://[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$ ]] || { echo "::error::vars.LOADTEST_TARGET must be https://<host name> (no path, port or address)"; exit 1; }
+      - name: k6 (release tarball, sha256-checked)
+        run: deploy/tests/loadtest/install-k6.sh "$RUNNER_TEMP"
+      - name: k6 production, static files only, 1,000 r/s for 15 minutes (aborts at errors > 1 % or a red health)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/loadtest"
+          export BASE="$TARGET" SCENARIO=production DURATION=15m CLIENT=0 CLIENTS=1 OUT_DIR="$RUNNER_TEMP/loadtest"
+          export MAP_ASSETS="/assets/map/$(awk '$1 == "commit:" { print substr($2, 1, 7); exit }' registry/basemap.yaml)"
+          export UA="rivierstanden-loadtest/1 (+https://github.com/$REPOSITORY; owner-triggered k6 static burst)"
+          "$RUNNER_TEMP/k6" run --quiet --no-color deploy/tests/loadtest/k6.js
+      - name: The summary in the job summary
         if: always()
         run: |
           shopt -s nullglob
@@ -139,12 +433,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: k6-summary
+          name: k6-summary-production
           path: ${{ runner.temp }}/loadtest/
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: warn
-      - name: Caddy's and the api's logs
-        if: failure()
-        run: |
-          sudo docker logs rws-caddy-1 2>&1 | tail -n 60 || true
-          sudo docker logs rws-api-1 2>&1 | tail -n 60 || true

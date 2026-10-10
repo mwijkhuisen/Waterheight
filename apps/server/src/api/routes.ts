@@ -23,6 +23,7 @@ import type { Context, Hono } from 'hono';
 import type { Kysely } from 'kysely';
 import type { Logger } from 'pino';
 import type { z } from 'zod';
+import { brownoutActive } from '../brownout/flag.ts';
 import type { ChannelAudience } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
@@ -42,6 +43,7 @@ import {
   Refused,
   seriesForecastParams,
   seriesParams,
+  slowed,
   snapshotParams,
   versionParam,
 } from './params.ts';
@@ -83,6 +85,11 @@ export type ApiDeps = {
   semaphore: Semaphore;
   /** The per-client token buckets; off (undefined) unless the role passes one (tests keep a fixed clock, C1). */
   limiter: Limiter | undefined;
+  /**
+   * The brownout flag (P12a, A§9.2), public family only: the owner family never applies it, whatever is passed.
+   * Default: the process flag of RWS_BROWNOUT_DIR.
+   */
+  brownout?: () => boolean;
 };
 
 const NO_STORE = 'no-store';
@@ -132,7 +139,9 @@ export function refuse(
 
 /** A failure inside a route: its own refusal, a 503 busy with Retry-After when saturated, else 503 unavailable. */
 export function failure(c: Context, err: unknown): Response {
-  if (err instanceof Refused) return refuse(c, err.status, err.code);
+  // The evaluator of the brownout ignores a 503 with this header, so a refusal never keeps the brownout armed (D4).
+  if (err instanceof Refused)
+    return refuse(c, err.status, err.code, err.code === 'brownout' ? { 'X-Brownout': '1' } : {});
   if (err instanceof Busy || err instanceof Saturated) return refuse(c, 503, 'busy', { 'Retry-After': RETRY_BUSY });
   return refuse(c, 503, 'unavailable');
 }
@@ -169,6 +178,7 @@ type Plan = {
  */
 export function registerApi(app: Hono, deps: ApiDeps): void {
   const family = deps.family;
+  const brownout = family === 'owner' ? () => false : (deps.brownout ?? brownoutActive);
   const lru = new Lru({
     maxEntries: LRU_ENTRIES,
     maxBytes: LRU_BYTES,
@@ -215,7 +225,8 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
   const route = (path: string, name: string, plan: (c: Context) => Plan) =>
     app.get(path, async (c) => {
       try {
-        const p = plan(c);
+        const planned = plan(c);
+        const p = brownout() ? { ...planned, policy: slowed(planned.policy) } : planned;
         // The in-memory versions the key was built from (the same instant as plan()).
         const keyVersions = p.days === undefined ? undefined : vstate(p.days);
         const db = deps.db;
@@ -362,7 +373,7 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
 
   route('/api/v1/series/:id', 'series', (c): Plan => {
     const now = deps.now().getTime();
-    const p = seriesParams(c.req.param('id') ?? '', c.req.url, now, window().displayStartMs);
+    const p = seriesParams(c.req.param('id') ?? '', c.req.url, now, window().displayStartMs, brownout());
     const days = spannedDays(p.from, p.to);
     return {
       key: `series|${p.id}|${p.res}|${p.from}|${p.to}|${vstate(days)}`,
@@ -417,7 +428,7 @@ export function registerApi(app: Hono, deps: ApiDeps): void {
     }
     return c.body(openapi, 200, {
       'Content-Type': 'application/json',
-      'Cache-Control': family === 'owner' ? OWNER_CACHE : FIXED.openapi.header,
+      'Cache-Control': family === 'owner' ? OWNER_CACHE : (brownout() ? slowed(FIXED.openapi) : FIXED.openapi).header,
     });
   });
 

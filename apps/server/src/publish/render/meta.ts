@@ -15,6 +15,7 @@ export async function renderMeta(c: RenderCtx, m: MetaInput): Promise<StaticMeta
     dayVersions: m.dayVersions,
     degraded: m.degraded,
     latestFrom: m.latestFrom,
+    ...(m.brownout === undefined ? {} : { brownout: m.brownout }),
     attribution: attributionFor(
       c.attribution,
       meta.sources.map((s) => s.id),

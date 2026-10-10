@@ -30,3 +30,15 @@ export const productionCsp = (): string => {
   if (csp === undefined) throw new Error('site.caddy sends no CSP');
   return csp;
 };
+
+/**
+ * The body of /.well-known/security.txt (P12a, RFC 9116) as site.caddy's heredoc holds it, with the domain placeholder
+ * filled in: the stand-in serves it and routes.spec.ts compares the real Caddy's answer with it.
+ * test/security-txt.test.ts checks its content.
+ */
+export function securityTxt(domain: string): string {
+  const body = /respond <<SECURITY\n([\s\S]*?)\n\t*SECURITY 200/.exec(readFileSync(siteCaddy, 'utf8'))?.[1];
+  if (body === undefined) throw new Error('site.caddy has no security.txt');
+  // Caddy drops the heredoc's last newline; the blank line before the marker leaves exactly one at the end.
+  return body.replaceAll(/^\t+/gm, '').replaceAll('{$RWS_DOMAIN}', domain);
+}

@@ -32,6 +32,8 @@ export const API_ERROR_CODES = [
   'rate_limited',
   'too_large',
   'unsupported_type',
+  // P12a: a request the brownout refuses (A§9.2): `res=raw` while the brownout flag is on (503).
+  'brownout',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 

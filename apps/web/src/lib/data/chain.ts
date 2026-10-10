@@ -62,7 +62,12 @@ async function staticThenApi<T>(
 }
 
 /** meta.json, or the API's meta with no settled versions and no degraded flag. */
-export type WebMeta = Meta & { dayVersions: Record<string, number>; degraded: boolean };
+export type WebMeta = Meta & {
+  dayVersions: Record<string, number>;
+  degraded: boolean;
+  /** P12a: the server is in brownout (meta.json says so; the API's meta never does): the history is limited. */
+  brownout?: boolean | undefined;
+};
 
 const visibleMeta = (meta: WebMeta, c: Contracts): WebMeta => ({
   ...meta,

@@ -181,6 +181,7 @@ describe('the A§12.2 headers', () => {
     expect(expected['content-security-policy']).toBe(
       "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp",
     );
+    expect(expected['content-security-policy']).not.toContain("'unsafe-inline'");
     expect(expected).toMatchObject({
       'strict-transport-security': 'max-age=31536000; includeSubDomains',
       'x-content-type-options': 'nosniff',
@@ -3453,6 +3454,7 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       at('\thandle @rivers_other {'),
       at('\thandle @rivers_download {'),
       at('\thandle @downloads_other {'),
+      at('\thandle @security_txt {'),
       at('\thandle @dotfiles {'),
       at('\thandle @assets {'),
       at('\thandle @assets_miss {'),
@@ -3476,8 +3478,12 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       '/assets/.secret.js',
       '/assets/map/.DS_Store',
       '/.well-known/x',
+      '/.well-known/security.txt.bak',
     ])
       expect(dot.test(path), path).toBe(true);
+    // The one exception is its own exact route, before the dotfile 404 (P12a, test/security-txt.test.ts): the file
+    // is /.well-known/security.txt and nothing else under a dot-led segment.
+    expect(site).toContain("@security_txt expression `{path} == '/.well-known/security.txt'`");
     for (const path of ['/', '/index.html', '/en/', '/assets/main-Bj_Syg2T.js', MAP_ASSET_PATH, '/assets/x.y.js'])
       expect(dot.test(decodeURIComponent(path)), path).toBe(false);
   });
@@ -3693,8 +3699,10 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       TILE_CACHE,
       'public, max-age=60',
       'public, max-age=30',
+      'no-cache', // /.well-known/security.txt (P12a)
       TILE_CACHE,
       'no-cache',
+      'no-store', // the host-less 421 catch-all (P12a)
     ]);
     const directives = site.split('\n').filter((l) => !l.trim().startsWith('#'));
     expect(directives.join('\n')).not.toMatch(/\bbrowse\b/);

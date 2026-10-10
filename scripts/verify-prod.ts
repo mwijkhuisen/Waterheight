@@ -105,6 +105,8 @@ import {
   type TilesManifest,
   TilesManifestError,
 } from '../packages/core/src/tiles-manifest.ts';
+import { keepEgressBlock } from './lib/capacity-egress.ts';
+import { checkOwnerListener } from './lib/verify-owner-listener.ts';
 
 const root = join(import.meta.dirname, '..');
 export const CERT_MIN_DAYS = 14;
@@ -403,6 +405,16 @@ export function soak(status: CaptureStatus, ops: OpsStatus): { results: Result[]
 }
 
 const GB = 1e9;
+/** Writes docs/capacity.md; the marked egress block of the file already there (P12a, capacity-egress.ts) is kept. */
+export function writeCapacity(file: string, markdown: string): void {
+  let existing: string | null = null;
+  try {
+    existing = readFileSync(file, 'utf8');
+  } catch {
+    // no file yet
+  }
+  writeFileSync(file, keepEgressBlock(existing, markdown));
+}
 /** docs/capacity.md from >= 2 complete UTC days of days[] (issue #16 criterion; gap item 16). */
 export function capacity(
   status: CaptureStatus,
@@ -2419,6 +2431,7 @@ export const CHECKS = [
   `pages <path>: each of the ${PAGE_PATHS.length} paths of PAGE_ROUTES (apps/web/src/lib/routes.ts: ${PAGE_PATHS.map((p) => p.path).join(' ')}) is fetched once and is 200 with <html lang> "nl" (the Dutch paths) or "en" (the English ones), every A§12.2 header byte for byte and X-Robots-Tag: noindex (/ and /en/ reuse the fetch of headers / and /en/)`,
   `not found: ${NOT_FOUND_PATHS.map((p) => p.path).join(' and ')} are 404 with the 404 shell of their language (<html lang>), every A§12.2 header byte for byte, Cache-Control: no-cache, and a body that never holds the path's last segment`,
   'healthz: GET /healthz answers 200',
+  'owner listener (P12a, criterion 10): on every public IPv4/IPv6 address, TCP 443 with SNI and Host owner.<domain> fails the handshake or answers 421 (never 200 or 401), TCP 8443 is closed, owner.<domain> has no public DNS record, and robots.txt, the sitemap, sources.json and status.json name no owner-audience source (skipped with --resolve)',
   'http: http:// redirects to https://',
   'status capture.json / ops.json: 200, Cache-Control: no-store, the exact contract fields',
   'freshness: every public spec succeeded within 3 × cadence_s',
@@ -2555,6 +2568,9 @@ async function main(argv: string[]): Promise<number> {
 
   if (mode === 'default') {
     results.push(...(await tlsChecks(domain, net)));
+    // P12a: the owner site is reachable over WireGuard only (scripts/lib/verify-owner-listener.ts). It probes the real
+    // public addresses, so a run pinned to one address (--resolve, CI) skips it.
+    if (net.resolve === undefined) results.push(...(await checkOwnerListener(domain, ownerTerms(registry))));
     const expected = expectedHeaders(readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'));
     // P10b: one fetch of each page and of the two 404 probes; headers, pages, not found, noindex and the entry script of
     // `/` below all read these.
@@ -2877,7 +2893,7 @@ async function main(argv: string[]): Promise<number> {
     for (const id of TWIN_IDS) results.push(checkTwin(twinSources, now, id));
   } else if (cap?.success) {
     const c = capacity(cap.data, registry, now.toISOString().slice(0, 10), ownerBytes);
-    if (out !== undefined && c.ok) writeFileSync(out, c.markdown);
+    if (out !== undefined && c.ok) writeCapacity(out, c.markdown);
     else console.log(c.markdown);
     results.push(c.ok ? pass('capacity', out ?? 'printed') : miss('capacity', c.markdown));
   }

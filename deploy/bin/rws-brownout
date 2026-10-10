@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# rws-brownout on|off|auto|status|evaluate (rws-brownout.timer runs `evaluate` every 15 s; P12a, issue #27; A§9.2).
+# The brownout flag of the flood mode. /srv/rws/brownout/ (root 0755) holds `mode` (on|off|auto) and `active`, a
+# file that exists exactly while the brownout is on; api, publish and caddy mount the directory read-only.
+#   on / off   set the mode and create / remove `active`. A manual mode overrides the automatic one.
+#   auto       set the mode and leave `active` as it is: `evaluate` decides from the next run.
+#   status     mode, active and the 5-minute window (reads only; no root needed with a readable log).
+#   evaluate   acts only in mode auto (a missing mode file counts as auto). Reads what Caddy appended to its access
+#              log since the last run (inode + offset in the state file; a rotation or truncation restarts at 0,
+#              the first run starts at most 4 MiB before the end; never a full re-read), counts the requests to
+#              /api/v1/* and the 5xx among them in 15 s buckets, and
+#                arms    when 5xx / requests > 2 % over the last 5 min with at least 200 requests,
+#                disarms when that share has been < 0.5 % (or there were no requests) for 10 minutes in a row.
+#              The 503 answers that carry `X-Brownout` (the brownout's own refusals) are left out of both numbers,
+#              so a brownout never keeps itself armed. Only counts reach the journal, one line per transition.
+# Paths and the clock move for the offline test (deploy/tests/rws-brownout.test.sh): RWS_BROWNOUT_DIR,
+# RWS_BROWNOUT_LOG, RWS_BROWNOUT_STATE, RWS_NOW (epoch seconds), RWS_STATE_DIR, RWS_LOCK_DIR.
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+readonly DIR=${RWS_BROWNOUT_DIR:-$RWS_SRV/brownout}
+# The caddy_data volume of the compose project `rws`, where site.caddy writes /data/access/access.log.
+readonly LOG=${RWS_BROWNOUT_LOG:-/var/lib/docker/volumes/rws_caddy_data/_data/access/access.log}
+readonly STATE=${RWS_BROWNOUT_STATE:-$RWS_STATE_DIR/brownout}
+readonly BUCKET=15 WINDOW=300 CALM_FOR=600 MIN_REQUESTS=200
+readonly MAX_READ=4194304 # ponytail: sampled tail beyond 4 MiB per run (~20k req/s); the share stays representative
+
+usage() {
+  echo "usage: rws-brownout on|off|auto|status|evaluate" >&2
+  exit 64
+}
+
+now() {
+  local t=${RWS_NOW:-}
+  [[ -n $t ]] || t=$(date -u +%s)
+  [[ $t =~ ^[0-9]{1,12}$ ]] || die "RWS_NOW is not epoch seconds"
+  printf '%s' "$t"
+}
+
+check_dir() {
+  [[ ! -L $DIR ]] || die "the flag directory is a symlink"
+  [[ ${1:-} == ro ]] || mkdir -m 0755 -- "$DIR" 2>/dev/null || [[ -d $DIR ]] || die "cannot create the flag directory"
+  [[ ! -d $DIR/active ]] || die "active is a directory"
+}
+
+read_mode() { # prints on|off|auto; a missing file is auto, a malformed one fails
+  local m=auto
+  if [[ -f $DIR/mode && ! -L $DIR/mode ]]; then
+    IFS= read -r m <"$DIR/mode" || true
+  fi
+  [[ $m =~ ^(on|off|auto)$ ]] || die "the mode file is malformed"
+  printf '%s' "$m"
+}
+
+set_mode() { rm -f -- "$STATE/calm"; printf '%s\n' "$1" | write_atomic "$DIR/mode" 0644; }
+is_active() { [[ -f $DIR/active ]]; }
+activate() { is_active || printf '1\n' | write_atomic "$DIR/active" 0644; }
+deactivate() { rm -f -- "$DIR/active"; }
+
+# window_sums <now> <prune 0|1>: prints "requests 5xx" of the last 5 min; with prune=1 the buckets file drops the older ones.
+window_sums() {
+  local f=$STATE/buckets out=/dev/null
+  [[ -f $f ]] || {
+    echo "0 0"
+    return 0
+  }
+  [[ $2 == 1 ]] && out=$f.new
+  awk -v now="$1" -v w=$WINDOW -v out="$out" '
+    NF == 3 && $1 >= now - w {
+      print > out
+      if ($1 <= now) { t += $2; e += $3 }
+    }
+    END { printf "%d %d\n", t, e }' "$f"
+  if [[ $2 == 1 ]]; then
+    [[ -f $out ]] || : >"$out"
+    mv -f -- "$out" "$f"
+  fi
+}
+
+# ingest: reads the log tail not yet seen and appends "<bucket> <requests> <5xx>" lines to the buckets file.
+ingest() {
+  local inode size off=0 saved_inode='' saved_off chunk complete len
+  [[ -f $LOG && ! -L $LOG ]] || return 0
+  read -r inode size < <(stat -c '%i %s' -- "$LOG")
+  if [[ -f $STATE/pos ]] && read -r saved_inode saved_off <"$STATE/pos" &&
+    [[ $saved_inode =~ ^[0-9]+$ && $saved_off =~ ^[0-9]+$ ]]; then
+    if [[ $saved_inode == "$inode" && $saved_off -le $size ]]; then off=$saved_off; else off=0; fi
+  else
+    off=$((size > MAX_READ ? size - MAX_READ : 0))
+  fi
+  ((size - off > MAX_READ)) && off=$((size - MAX_READ))
+  len=$((size - off))
+  if ((len > 0)); then
+    chunk=$(
+      tail -c +$((off + 1)) -- "$LOG" | head -c "$len"
+      printf x
+    )
+    chunk=${chunk%x}
+    complete=${chunk%"${chunk##*$'\n'}"} # up to the last newline: a half-written line waits for the next run
+    [[ -n $complete || ${#chunk} -lt $MAX_READ ]] || complete=$chunk # a single line over 4 MiB is skipped
+    if [[ -n $complete ]]; then
+      printf '%s' "$complete" | jq -Rrn --argjson bk "$BUCKET" '
+        [ inputs | fromjson? | select(type == "object")
+          | select(((.request.uri? // "") | type == "string") and ((.request.uri? // "") | startswith("/api/v1/")))
+          | select((.ts | type) == "number" and (.status | type) == "number")
+          | select(((.status == 503) and (((.resp_headers? | objects) // {}) | keys | map(ascii_downcase) | index("x-brownout") != null)) | not)
+          | [((.ts / $bk | floor) * $bk), (if .status >= 500 and .status <= 599 then 1 else 0 end)] ]
+        | group_by(.[0])[] | "\(.[0][0]) \(length) \(map(.[1]) | add)"' >>"$STATE/buckets"
+      off=$((off + ${#complete}))
+    fi
+  fi
+  printf '%s %s\n' "$inode" "$off" | write_atomic "$STATE/pos" 0600
+}
+
+evaluate() {
+  local mode t tot err since
+  mode=$(read_mode)
+  [[ $mode == auto ]] || return 0
+  t=$(now)
+  mkdir -m 0700 -- "$STATE" 2>/dev/null || [[ -d $STATE && ! -L $STATE ]] || die "cannot create the state directory"
+  ingest
+  read -r tot err < <(window_sums "$t" 1)
+  if ! is_active; then
+    rm -f -- "$STATE/calm"
+    if ((tot >= MIN_REQUESTS && err * 50 > tot)); then
+      activate
+      log "brownout on: 5xx $err of $tot API requests in 5 min"
+    fi
+  elif ((tot == 0 || err * 200 < tot)); then # calm: remember since when
+    [[ -s $STATE/calm ]] || printf '%s\n' "$t" | write_atomic "$STATE/calm" 0600
+    read -r since <"$STATE/calm"
+    if [[ $since =~ ^[0-9]+$ ]] && ((t - since >= CALM_FOR)); then
+      deactivate
+      rm -f -- "$STATE/calm"
+      log "brownout off: calm for $((t - since)) s"
+    fi
+  else
+    rm -f -- "$STATE/calm"
+  fi
+}
+
+status() {
+  local t tot err mode
+  mode=$(read_mode)
+  t=$(now)
+  read -r tot err < <(window_sums "$t" 0)
+  echo "mode: $mode"
+  if is_active; then echo "active: yes"; else echo "active: no"; fi
+  awk -v t="$tot" -v e="$err" 'BEGIN { printf "window 5 min: requests=%d 5xx=%d share=%.2f%%\n", t, e, t ? 100 * e / t : 0 }'
+  if [[ -s $STATE/calm ]]; then echo "calm since: $(cat "$STATE/calm")"; fi
+}
+
+cmd=${1:-}
+[[ $# -le 1 ]] || usage
+case $cmd in
+  status) check_dir ro; status; exit 0 ;;
+  on | off | auto | evaluate) ;;
+  *) usage ;;
+esac
+
+exec 9>"$(lockfile brownout)"
+flock -w 10 9 || die "another rws-brownout is running"
+check_dir
+case $cmd in
+  on)
+    set_mode on
+    activate
+    log "brownout on (manual)"
+    ;;
+  off)
+    set_mode off
+    deactivate
+    log "brownout off (manual)"
+    ;;
+  auto)
+    set_mode auto
+    log "brownout mode auto"
+    ;;
+  evaluate) evaluate ;;
+esac

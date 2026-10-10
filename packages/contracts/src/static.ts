@@ -158,6 +158,11 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
     degraded: z.boolean(),
     /** The newest loaded_at of the family's batches that the latest.json render saw (null before the first). */
     latestFrom: iso.nullable(),
+    /**
+     * P12a (A§9.2): the brownout flag was on when this file was written: the API serves shorter spans, no raw
+     * resolution, and longer TTLs; the web shows its banner and clamps the history view. Absent means off.
+     */
+    brownout: z.boolean().optional(),
     attribution,
   });
 

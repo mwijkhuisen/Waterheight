@@ -51,6 +51,8 @@ export async function publishOnce(
     /** The owner family's read-only rivers directory (production /srv/rivers); unset: no owner reaches step. */
     riversDir?: string;
     rivernet?: CycleDeps['rivernet'];
+    /** The brownout flag for meta.json (P12a); default: the process flag. */
+    brownout?: () => boolean;
   },
 ): Promise<void> {
   const base: Base = {
@@ -64,6 +66,7 @@ export async function publishOnce(
     inputs: opts.inputs,
     riversDir: opts.riversDir,
     rivernet: opts.rivernet,
+    brownout: opts.brownout,
     log: { error: () => undefined },
   };
   await publisher(base, {

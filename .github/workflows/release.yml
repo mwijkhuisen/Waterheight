@@ -1,5 +1,6 @@
 # Release (A§11.2, ADR-0008; issue #16 P1b). Pull requests build the three
-# images without pushing. On main: build and push by digest to GHCR with an SBOM
+# images without pushing and scan each with Syft + Grype (P12a: a fixable High or
+# Critical finding fails; security.yml repeats it weekly on the released images). On main: build and push by digest to GHCR with an SBOM
 # and max provenance, cosign keyless signing and a provenance attestation; then
 # `promote` waits for the owner's approval (environment production) and
 # publishes prod-<UTC yyyymmddTHHMMSSZ> with a signed release-manifest.json and
@@ -53,8 +54,43 @@ jobs:
           file: deploy/${{ matrix.target }}/Dockerfile
           platforms: linux/amd64
           push: false
+          # P12a: loaded into the runner's Docker so Syft and Grype scan the exact image.
+          load: true
+          tags: rws-scan/${{ matrix.target }}:pr
           provenance: false
           sbom: false
+      - name: Install Syft and Grype (pinned, sha256-checked)
+        env:
+          SYFT_VERSION: 1.52.0
+          SYFT_SHA256: caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d
+          GRYPE_VERSION: 0.119.0
+          GRYPE_SHA256: 3fa2dc4b924621ab65404cf08d0b8438d896d80ab949c9d5a4ca283c36004c9b
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          for t in syft grype; do
+            case $t in
+              syft) v=$SYFT_VERSION sha=$SYFT_SHA256 repo=anchore/syft ;;
+              grype) v=$GRYPE_VERSION sha=$GRYPE_SHA256 repo=anchore/grype ;;
+            esac
+            tarball="${t}_${v}_linux_amd64.tar.gz"
+            curl --proto '=https' -fsSL -o "$RUNNER_TEMP/$tarball" "https://github.com/$repo/releases/download/v$v/$tarball"
+            echo "$sha  $RUNNER_TEMP/$tarball" | sha256sum -c -
+            tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP/bin" "$t"
+          done
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+      - name: Syft SBOM, then Grype fails on any fixable High or Critical finding
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          syft --version
+          grype --version
+          syft "docker:rws-scan/$TARGET:pr" -o "syft-json=$RUNNER_TEMP/sbom-$TARGET.json" -q
+          echo "$TARGET: $(jq '.artifacts | length' "$RUNNER_TEMP/sbom-$TARGET.json") packages in the SBOM"
+          # .grype.yaml: only the owner-approved, expiring rules of R-095 (test/grype-ignore.test.ts); a new finding is fixed by
+          # a bump, or the owner decides (docs/risk-register.md).
+          grype -c .grype.yaml "sbom:$RUNNER_TEMP/sbom-$TARGET.json" --only-fixed --fail-on high
 
   build:
     name: build, push and sign

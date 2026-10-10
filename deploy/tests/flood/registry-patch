@@ -1,0 +1,18 @@
+The flood drill's registry (P12a, issue #27; applied by setup.sh to a COPY of registry/, never to registry/ itself).
+Station 2020 (Bellinzona on the Ticino, outside the basin) is an audience "off" row of CH-1 for scope. The storm-Ciaran
+figure of BAFU is that station's discharge forecast, so the drill makes its discharge series 2020/Q public in the copy
+that migrate, load, publish, publish-owner, api and api-owner read (compose.drill.yaml): the CH-4 run then reaches
+forecast/latest.json and the forecast band. The water-level series 2020/W stays off. Test-only: nothing of it is in
+registry/, the images or a deployment.
+
+--- a/stations/ch-1.yaml
++++ b/stations/ch-1.yaml
+@@ -507,7 +507,7 @@
+     expected_forecast_source: CH-4
+     licence_gate: open
+     first_release: false
+-    audience: "off"
++    audience: public
+     datum: null
+     gauge_zero: []
+   - id: ch.bafu.2021
