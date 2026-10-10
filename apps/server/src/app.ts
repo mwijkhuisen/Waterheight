@@ -40,6 +40,8 @@ export type AppDeps = {
    * their own, and every other caller keeps its fixed clock and no client header (C1).
    */
   limiter?: Limiter;
+  /** The brownout flag (P12a), public family only; default: the process flag of RWS_BROWNOUT_DIR. Tests flip it. */
+  brownout?: () => boolean;
 };
 
 /**
@@ -69,6 +71,7 @@ export function createApp(deps: AppDeps = {}): Hono {
     cache,
     semaphore,
     limiter: deps.limiter,
+    ...(deps.brownout === undefined ? {} : { brownout: deps.brownout }),
   });
   registerHealth(app, { family, db: deps.db, now, log: deps.log, sections, cache, semaphore });
   return app;

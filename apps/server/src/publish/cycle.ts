@@ -39,6 +39,7 @@ import type { StaticCache } from '../api/states.ts';
 import { coded, validated } from '../api/util.ts';
 import type { DisplayWindow, Window } from '../api/window.ts';
 import { type AttributionRow, attributionRows } from '../attribution.ts';
+import { brownoutActive } from '../brownout/flag.ts';
 import { type ChannelAudience, REACHES_VARIANT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
@@ -100,7 +101,13 @@ export type PublisherStatus = {
   /** Bytes under settled/ and frames/ (plain files and their siblings). */
   settledBytes: number;
 };
-export type MetaInput = { dayVersions: Record<string, number>; degraded: boolean; latestFrom: string | null };
+export type MetaInput = {
+  dayVersions: Record<string, number>;
+  degraded: boolean;
+  latestFrom: string | null;
+  /** The brownout flag (P12a); set by the public family only, so the owner meta.json never carries it. */
+  brownout?: boolean;
+};
 
 /**
  * The renderers (render/*.ts): each reads and returns one body; the cycle validates and writes it. Recent and settled
@@ -201,6 +208,8 @@ export type CycleDeps = {
   /** rivernet.yaml for that step; the image's registry by default (a test passes its own). */
   rivernet?: (() => Rivernet | null) | undefined;
   log: Pick<Logger, 'error'>;
+  /** The brownout flag for meta.json (P12a, public family only); default: the process flag of RWS_BROWNOUT_DIR. */
+  brownout?: (() => boolean) | undefined;
   /** The time a cycle may spend on recent buckets and station files (production 35 s; publishOnce no limit). */
   budgetMs: number;
   /** Settled days per cycle (production 1; publishOnce every pending day). */
@@ -434,7 +443,13 @@ export class Publisher {
         c,
         'meta',
         'meta.json',
-        await d.render.meta(c, { dayVersions, degraded, latestFrom: this.#latestFrom }),
+        await d.render.meta(c, {
+          dayVersions,
+          degraded,
+          latestFrom: this.#latestFrom,
+          // The flag only labels the file: no step is skipped or slowed by it (warnings, DE-6, run every cycle).
+          ...(d.family === 'public' ? { brownout: (d.brownout ?? brownoutActive)() } : {}),
+        }),
       );
     });
     this.#lastCycleMs = Date.now() - started;

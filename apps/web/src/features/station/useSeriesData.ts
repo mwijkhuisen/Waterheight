@@ -1,7 +1,7 @@
 import type { SeriesMeta, StationRecent } from '@rws/contracts';
 import { floorBucket } from '@rws/contracts';
 import { useMemo } from 'react';
-import { useDebounced, useForecastAsOf, useSeries } from '../../lib/data/api.ts';
+import { useDebounced, useForecastAsOf, useMeta, useSeries } from '../../lib/data/api.ts';
 import { historySource } from '../../lib/data/change.ts';
 import {
   type ForecastView,
@@ -49,13 +49,15 @@ interface Input {
 export function useSeriesData({ series, t, span, serverNow, recent, recentFailed }: Input): SeriesData {
   const api = series.api ?? true;
   const source = historySource(t, serverNow, api);
+  // P12a: in a brownout the API refuses raw, so the history is asked hourly (the last value of each hour).
+  const brownout = useMeta().data?.brownout === true;
   // 'none': nothing older than recent.json for a display-only series, and no request for it.
-  const older = useSeries(series.id, span.from, span.to, source === 'api');
+  const older = useSeries(series.id, span.from, span.to, source === 'api', brownout);
   const firstRecent = recent === undefined || recent.ts.length === 0 ? undefined : Date.parse(recent.ts[0] as string);
   // The API is asked only when the series has data from before recent.json's first point (`dataSince`).
   const since = series.dataSince === null ? undefined : Date.parse(series.dataSince);
   const gap = source === 'recent' && recentGap(span.from, firstRecent, since);
-  const earlier = useSeries(series.id, span.from, firstRecent ?? span.from, gap && api);
+  const earlier = useSeries(series.id, span.from, firstRecent ?? span.from, gap && api, brownout);
   // The now bucket and after: the run of recent.json (the one forecast/latest.json shows). An earlier t asks the API
   // for the run as of that t, once the slider has stopped (review round 1: a held key sent one request per step).
   const future = t >= floorBucket(serverNow);
@@ -69,15 +71,23 @@ export function useSeriesData({ series, t, span, serverNow, recent, recentFailed
   const conv = useMemo(() => (v: number) => nativeValue(v, series), [series]);
   const points = useMemo(() => {
     const raw = (d: typeof older.data): Pt[] =>
-      d?.res === 'raw'
-        ? observedPoints(
-            d.points.map((p) => p.ts),
-            d.points.map((p) => p.value),
-            conv,
-            span.from,
-            span.to,
-          )
-        : [];
+      d === undefined
+        ? []
+        : d.res === 'raw'
+          ? observedPoints(
+              d.points.map((p) => p.ts),
+              d.points.map((p) => p.value),
+              conv,
+              span.from,
+              span.to,
+            )
+          : observedPoints(
+              d.points.map((p) => p.bucket),
+              d.points.map((p) => p.vlast),
+              conv,
+              span.from,
+              span.to,
+            );
     if (source === 'api') return raw(older.data);
     const own = recent === undefined ? [] : observedPoints(recent.ts, recent.value, conv, span.from, span.to);
     return gap && api ? mergeHistory(raw(earlier.data), own) : own;
