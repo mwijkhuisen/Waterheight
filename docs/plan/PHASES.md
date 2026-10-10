@@ -2888,3 +2888,54 @@ What PR 1 of issue #110 (the follow-ups of P11a, KG-262 to KG-265) settled. PR 2
 - **Reach split of the Ourthe.** The Ourthe (130.98 km) is now cut at its two confluences, which are shared OSM nodes (no join needed): `ourthe.1` (101.147 km, to the Amblève at Comblain), `ourthe.2` (27.108 km, to the Vesdre at Chênée) and `ourthe.3` (2.726 km, to the Ourthe join onto `meuse.27`). New reaches `ambleve.1` (85.3 km) and `vesdre.1` (72.3 km) carry no public station. The 15 Ourthe SPW gauges sit on parts of `ourthe.1` to `ourthe.3`; the BE-3 placement rises by the 15 new gauges (87 added points); the owner Eijsden chain has a Vesdre and an Amblève group, nested in the Ourthe's, in graph order.
 - **Production needs** a geo release published from main and `rws-rivers-refresh`, as for the Ourthe join; until then it serves the old file.
 - **Gaps:** KG-163 narrows to the unmapped Ourthe and Dendre headwater labels; KG-164 now names OSM 2026-10-09.
+
+## 39. Amendment: fix #112 PR A, per-hour state in frames (2026-10-10)
+
+What PR A of issue #112 built: item 1 (a state code per series and hour in the frames, so playback runs in the State mode) and the Hovmöller State choice. PR B (the tile position bins and the travel-time shift) is separate and not described here.
+
+**Owner decisions (2026-10-10, binding).**
+- **D-1 Two PRs.** PR A is item 1 plus D-3 (server, contracts, web; no geo release; "Part of #112"). PR B is items 2 and 3 ("Closes #112").
+- **D-2 The played hour shows the state and the section badge.** Frames gain a state code per series and hour (`no_ref` to `extreme`, plus a bit when the state comes from an area class). Table, chain, popup, panel, markers and reaches show the played state; the basis text, the class label and the `area` beside a gauge state stay hidden behind the existing "played back" badge. No provider text enters frames.
+- **D-3 The Hovmöller State choice is enabled** and the cells are coloured by the played state ladder (KG-282 closes).
+- **Reviewers** (workflow default): Sonnet (high) for the code review and Sonnet (high) for the security review, read-only; the lead fixes small findings.
+
+**What changed.**
+- **Contract** (`packages/contracts/src/api.ts`, `static.ts`): `framesObject` is `schemaVersion: 2` with a `state` matrix parallel to `vlast`. Code = `STATES.indexOf(state)` (0 `no_ref`, 1 `low`, 2 `normal`, 3 `elevated`, 4 `high`, 5 `extreme`) plus `SECTION_BIT` (8) when the state comes from an area class; the valid codes are exactly 0 to 5 and 8 to 13 (`stateCode`, `isStateCode`, `stateOf`). `checkFrames` also demands one `state` row per series and a valid code exactly where `vlast` holds a value and `null` exactly where it is null. `FramesFile`, `FramesAnswer` and `OwnerFramesAnswer` are v2 only; `framesObjectV1` and `FramesFileAny` (a discriminated union of the refined v1 and v2 shapes) exist for the static readers only: the web's static parser, verify-prod's settled-day reads and the frames recorder.
+- **Classifier** (`apps/server/src/api/states.ts`): the shared builders of `readStates` were extracted without changing its answers, and `readHourStates(db, family, {ids, vlast}, from, to, opts)` classifies a whole range in one read snapshot (warnings overlapping the range, the latest class row before `from` and every one inside it, refs and series from the `StaticCache`), in process, per hour. A series with no ref, class or area in the range is code 0 without `classify`.
+- **Producers:** `renderFrames` (`publish/render/frames.ts`, display views for the values) and `readFrames` (`api/data.ts`, api views) both write v2 with `state`. The refs, classes and warnings always come from `VIEWS[family]`; the values come from the caller's views.
+- **Re-render:** `#framesDirty` is also set by dirty `reference`, `class` and `warning` rows that reach the unsettled span. `BumpReason` gains `'schema'` (like `'registry'`: the old complete version stays named until the new one completes). `framesSchemaBump` runs in `migrate`'s `publishTail`, before `registryBump`.
+- **Web:** the frame store decodes the code of the bucket a value came from; a v1 chunk gives values with the state unknown (shown as no data in the State mode, never as `no_ref`); `playDisabled(reduced)` no longer looks at the mode, the State-mode hints (`play_state_hint`, `hov_state_hint`) are gone; the Hovmöller State choice is on, with a state reader beside the Δ one in `grid.ts`.
+
+**Where the build differs from the issue's proposal, and why.**
+
+| # | Issue or plan said | Built | Why |
+|---|---|---|---|
+| C1 | The state "of the hour" | The cell of hour h is classified at the instant h + 1 h - 1 ms (the partial current hour at `min(that, now)`) | `pub_obs_at` takes `ts <= t` and a stamp exactly on :00 is common (10-minute and hourly sources); at t = h + 1 h the snapshot would take the next hour's :00 value, while bucket h holds the last value before it (§36 R12). The cell therefore equals the snapshot at the last instant the value belongs to |
+| C3 | Re-render on `obs` dirty rows | `recent.json` also re-renders on `reference`, `class` and `warning` rows reaching the unsettled span | The state is derived from them; a new class or warning changes a cell without any new value |
+| C4 | "Bump the day versions of rendered days" | A one-time bump of the last 16 public days (reason `schema`), stored under the meta key `frames_schema:public`; a database never migrated before bumps nothing and only stores the schema | 16 days cover the 14-day playback start and its 25 h Δh lead; a fresh database has rendered nothing, so a bump would only waste cycles |
+| C5 | State of a v1 file unspecified | A v1 file is "state unknown" and shows as no data in the State mode, never as `no_ref` | `no_ref` means "this series has no reference", a statement about the data; a day rendered before the schema says nothing about it |
+| C6 | One shape | Strict v2 in the publisher and the API; `FramesFileAny` (v1 or v2) only in the static readers | A publisher that could write v1 would hide a regression; the readers must still parse the days not yet re-rendered and the recorded low-water scene |
+| C13 | Each non-null cell has a state | The partial current hour (never played) is classified at `now` | Its last instant is still in the future; classifying at now keeps `state` non-null exactly where `vlast` is |
+| C14 | Views unspecified | Rows (refs, classes, warnings) from `VIEWS[family]`, values from the caller's views | The same split as `readStates`; the publisher's values come from the display views and the API's from the api views (§36 R11) |
+| D-2 | "`state` and `basis` for the played hour" | No basis in frames | Basis text is provider-derived; the issue mentions it, the owner decision keeps it out. The played hour shows the state word and the section badge only |
+| Memo | A bounded LRU per (family, day, version) in both processes | An exact per-series memo inside `readHourStates` (key: the valid rows, the NL-4 season day and the value's place among the series' reference values; classify compares a value only with reference values, so this is exact); a settled-day memo (`HourMemo`, key `family|day|version`) in the API route only, used when the day versions are known; none in the publisher | A settled day renders once per version in the publisher, so a memo there would never hit; in the API, repeated 14-day requests reuse the settled days |
+| Owner | Public frames never hold an owner-shaped state | In the public family a code whose state an owner-only source shaped throws `owner_basis` (fail closed, as `publicSnapshot`) | Belt and braces beside the public views and the `family: 'public'` classify rule (invariants 8 and 11) |
+
+**Measured (L0, the `bench-q1` style seed: 1,500 series, half with 4 DE-1 references, a third with DE-6 classes, 200 warnings; random values).** Real data compresses better and repeats values, so these are upper bounds.
+- A `recent.json` render (82.5k cells): the state codes take 127 to 208 ms wall. A settled day: 89 to 155 ms.
+- A 14-day `/api/v1/frames`: cold 1.7 to 1.9 s CPU in total, warm (settled days from the memo) 1.3 to 1.4 s. The 2 s `statement_timeout` does not bound Node CPU; the heavy rate class, the semaphore and the single flight still apply.
+- Sizes: a settled day 418 KiB plain (169 KiB gzip) against 344 KiB (161 KiB gzip) in v1; 7 days 2.85 MB (1.14 MB gzip); 14 days 5.7 MB, under `MAX_FRAMES_BYTES` (16 MiB). The A§8 Q5 estimate (370 KB gzip for 3,000 × 72) predates the state rows and is for the values alone.
+
+**Criteria (#112 "Verify", item 1).**
+
+| # | Criterion | Evidence |
+|---|---|---|
+| 1a | State mode: Play enabled; reaches, markers, table and chain show the played state | evidence: see PR |
+| 1b | A frames file without the new row fails the strict parse | evidence: see PR |
+| 1c | The 7-day size within `MAX_FRAMES_BYTES` and the Q5 order of magnitude | evidence: see PR (measured above) |
+| 1d | The played state equals the snapshot state of the same hour | evidence: see PR |
+| 1e | The canary sweeps stay green; no owner state in a public file | evidence: see PR |
+
+**Upgrade.** No host file and no migration file: the bump runs in `migrate` (`publishTail`, under the loader lock) and logs `frames schema bump N day(s)`. It marks the public days of the last 16 (the unsettled ones included, which only get an early version) with reason `schema`; the publisher then re-renders about 14 settled days at one per cycle, and each day also re-renders its 144 snapshot files (the `registryBump` load pattern), while the old complete versions stay named and served. Meanwhile the web plays those days from the v1 frames with the state unknown: Δh and Q work, the State mode shows no data for those hours. Days older than the bump window keep v1 for good. A second `migrate` bumps nothing.
+
+**Gaps:** KG-270, KG-280 and KG-282 close; KG-292 to KG-296 open (see `docs/known-gaps.md`).
