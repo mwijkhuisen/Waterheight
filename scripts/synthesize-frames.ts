@@ -3,7 +3,7 @@
 //   meta.json, stations.json   the public static shapes (StaticMeta, StaticStations; `now` is 3 days after the scene
 //                              so its days are settled), stations = real ids from test/fixtures/reaches-fixture.json
 //                              on the Rhine, Waal, IJssel and Meuse, with generated series ids (H and Q);
-//   frames-<day>-v1.synthetic.json   one FramesFile per UTC day;
+//   frames-<day>-v1.synthetic.json   one FramesFile (schemaVersion 2, with a toy `state` row per series) per UTC day;
 //   <file minus .json>.meta.json     { synthetic: true, seed, scene } for each of them.
 // Scenes: `flood` (a wave travelling downstream over 3 days, H and Q rising then falling) and `dst` (2026-10-24…26:
 // the day file of 2026-10-25 holds both 00:00Z and 01:00Z, the hours of the local clock change, with distinct values).
@@ -22,6 +22,8 @@ export const SCENES = {
   flood: { first: '2026-10-10', days: 3 },
   dst: { first: '2026-10-24', days: 3 },
 } as const;
+/** The limits of the toy state ladder: a value under the first limit is low (1), over the last extreme (5). */
+const LADDER = { H: [255, 350, 450, 550], Q: [1900, 3500, 5000, 6500] } as const;
 export type Scene = keyof typeof SCENES;
 
 /** mulberry32: a 32-bit seeded PRNG in [0, 1). */
@@ -160,13 +162,20 @@ export function synthesize(out: string, seed: number): string[] {
       });
       // Distinct hours at the DST night: 00:00Z and 01:00Z of the day file never share a value.
       for (const row of vlast) if (typeof row[0] === 'number' && row[0] === row[1]) row[1] = row[0] + 0.01;
+      // The toy ladder of the scene (no_ref 0 is never used): codes 1 (low) to 5 (extreme) by fixed thresholds of the
+      // value, H in cm then Q in m3/s alternately; null exactly where the value is null. No section bit.
+      const state = vlast.map((row, r) =>
+        row.map((v) => (v === null ? null : LADDER[r % 2 === 0 ? 'H' : 'Q'].filter((limit) => v >= limit).length + 1)),
+      );
+      // (the file name's v1 is the DAY version, not the schema)
       put(`frames-${dayOf(from)}-v1.synthetic.json`, {
-        schemaVersion: 1,
+        schemaVersion: 2,
         from: iso(from),
         to: iso(from + 24 * HOUR),
         stepSeconds: 3600,
         series: ids,
         vlast,
+        state,
         attribution: [entry],
       });
     }

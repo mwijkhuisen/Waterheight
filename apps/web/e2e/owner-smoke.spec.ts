@@ -113,9 +113,22 @@ test('the owner site: hourly playback reads the owner frames api only, its answe
     timeout: 60_000,
   });
   await play.click();
-  const body = (await (await answer).json()) as { audience?: string; vlast?: (number | null)[][] };
+  const body = (await (await answer).json()) as {
+    audience?: string;
+    vlast?: (number | null)[][];
+    state?: (number | null)[][];
+  };
   expect(body.audience, 'an owner answer').toBe('owner');
   expect((body.vlast ?? []).flat(), 'the seeded SPW value is played').toContain(321);
+  // #112: the owner answer carries each hour's state code, exactly where a value is (the owner family's own rows).
+  const vlast = body.vlast ?? [];
+  const state = body.state ?? [];
+  expect(state.length, 'one state row per series').toBe(vlast.length);
+  vlast.forEach((row, i) =>
+    row.forEach((v, h) =>
+      expect(state[i]?.[h] === null, `a code exactly where a value is (${i}, ${h})`).toBe(v === null),
+    ),
+  );
   // The engine plays to the end of the page's range and stops by itself: t has moved and the Play button is back. The
   // end is the last whole hour of meta.now (the publisher's clock, which may trail this one past an hour boundary), so
   // t is within an hour of this clock's hour, or gone when that hour is the page's now (live).

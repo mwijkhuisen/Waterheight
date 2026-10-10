@@ -391,6 +391,7 @@ export interface HovHook {
     id: string,
     iso: string,
   ): { bin: number | null; change: number | null; quantity: 'H' | 'Q' | null } | undefined;
+  levelAt(id: string, iso: string): number | null;
   pixelOf(id: string, iso: string): [number, number] | undefined;
 }
 export type HovW = Window & { __rwsHov?: HovHook };

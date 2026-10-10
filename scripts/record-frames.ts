@@ -12,7 +12,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   DAY_RE,
-  FramesFile,
+  FramesFileAny,
   framesPath,
   isSettled,
   StaticMeta,
@@ -135,9 +135,9 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv, log: Log = con
         log(`${day}: skipped, status ${res.status}`);
         continue;
       }
-      let file: FramesFile | undefined;
+      let file: FramesFileAny | undefined;
       keep(`frames-${day}-v${v}.json`, res.url, res.body, (d) => {
-        file = FramesFile.parse(d);
+        file = FramesFileAny.parse(d);
       });
       if (a.report !== undefined && file !== undefined) {
         const row = file.vlast[file.series.indexOf(a.report)];
