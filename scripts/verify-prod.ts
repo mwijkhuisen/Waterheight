@@ -105,6 +105,7 @@ import {
   type TilesManifest,
   TilesManifestError,
 } from '../packages/core/src/tiles-manifest.ts';
+import { keepEgressBlock } from './lib/capacity-egress.ts';
 
 const root = join(import.meta.dirname, '..');
 export const CERT_MIN_DAYS = 14;
@@ -403,6 +404,16 @@ export function soak(status: CaptureStatus, ops: OpsStatus): { results: Result[]
 }
 
 const GB = 1e9;
+/** Writes docs/capacity.md; the marked egress block of the file already there (P12a, capacity-egress.ts) is kept. */
+export function writeCapacity(file: string, markdown: string): void {
+  let existing: string | null = null;
+  try {
+    existing = readFileSync(file, 'utf8');
+  } catch {
+    // no file yet
+  }
+  writeFileSync(file, keepEgressBlock(existing, markdown));
+}
 /** docs/capacity.md from >= 2 complete UTC days of days[] (issue #16 criterion; gap item 16). */
 export function capacity(
   status: CaptureStatus,
@@ -2877,7 +2888,7 @@ async function main(argv: string[]): Promise<number> {
     for (const id of TWIN_IDS) results.push(checkTwin(twinSources, now, id));
   } else if (cap?.success) {
     const c = capacity(cap.data, registry, now.toISOString().slice(0, 10), ownerBytes);
-    if (out !== undefined && c.ok) writeFileSync(out, c.markdown);
+    if (out !== undefined && c.ok) writeCapacity(out, c.markdown);
     else console.log(c.markdown);
     results.push(c.ok ? pass('capacity', out ?? 'printed') : miss('capacity', c.markdown));
   }
