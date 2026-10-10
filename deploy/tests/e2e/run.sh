@@ -179,10 +179,22 @@ nft flush ruleset 2>/dev/null || true
 ip link delete docker0 2>/dev/null || true
 install -m 0644 "$repo/deploy/host/daemon.json" /etc/docker/daemon.json
 apt-get update -qq
+# The package scripts start no service (policy-rc.d 101): their restart of docker.service right after containerd's
+# failed now and then on the runners ("Job for docker.service failed", P12a), which ended the install. This script
+# starts containerd, then docker, and tries docker three times.
+printf '#!/bin/sh\nexit 101\n' >/usr/sbin/policy-rc.d
+chmod 0755 /usr/sbin/policy-rc.d
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --allow-downgrades --allow-change-held-packages \
   "docker-ce=$DOCKER_APT" "docker-ce-cli=$DOCKER_APT" "containerd.io=$CONTAINERD_APT" \
   "docker-compose-plugin=$COMPOSE_APT" docker-buildx-plugin nftables zstd >/dev/null
-systemctl restart docker
+rm -f /usr/sbin/policy-rc.d
+systemctl restart containerd
+for try in 1 2 3; do
+  systemctl reset-failed docker.service docker.socket 2>/dev/null || true
+  systemctl restart docker && break
+  ((try < 3)) || fail "docker.service did not start in 3 tries: $(systemctl status docker.service --no-pager 2>&1 | tail -n 5)"
+  sleep 5
+done
 nft list tables | tr '\n' ' '
 echo
 [[ $(docker version --format '{{.Server.Version}}') == 29.8.1 ]] || fail "Docker $(docker version --format '{{.Server.Version}}')"
