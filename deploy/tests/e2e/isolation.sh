@@ -195,4 +195,10 @@ fi
 if docker exec rws-caddy-owner-1 wget -q -T 6 -O /dev/null http://www.example.com 2>/dev/null; then
   fail "caddy-owner reached the internet (TCP 80)"
 fi
-pass "the public caddy cannot reach caddy-owner (different bridge), and caddy-owner reaches no outside address on 443 or 80 (rws-owner-pub is neither rws-public nor rws-egress in from_containers)"
+# Nor DNS, which could carry data out (review SR-1): a lookup sent straight to the host's resolver gets no answer.
+res4=$(nft -j list set inet rws resolvers4 | jq -r '[.nftables[] | .set? // empty | .elem[]?] | first // empty')
+[[ $res4 =~ ^[0-9.]+$ ]] || fail "no address in the resolvers4 set: $res4"
+if docker exec rws-caddy-owner-1 timeout 15 nslookup example.com "$res4" >/dev/null 2>&1; then
+  fail "caddy-owner resolved a name through $res4 (DNS is a way out)"
+fi
+pass "the public caddy cannot reach caddy-owner (different bridge), and caddy-owner reaches no outside address on 443 or 80 and gets no DNS answer from the host resolver $res4 (from_containers drops rws-owner-pub before its resolver rules)"

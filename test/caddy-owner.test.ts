@@ -330,14 +330,18 @@ describe('the owner site is reachable over WireGuard only (P12a)', () => {
     const fw = read('deploy/host/nftables.conf');
     expect(fw).toContain('udp dport 51820 accept');
     expect(fw).toMatch(/hook prerouting priority -150[\s\S]*ip daddr 10\.66\.0\.1 iifname != \{ "wg0", "lo" \} drop/);
-    // The one exception: replies of a tracked connection (the host's own to the site), never a new one.
-    expect(fw.match(/ip daddr 10\.66\.0\.1 iifname != \{ "wg0", "lo" \} .*accept/g)).toEqual([
-      'ip daddr 10.66.0.1 iifname != { "wg0", "lo" } ct state established,related ct direction reply accept',
+    // The one exception: replies of a tracked connection (the host's own to the site) on its bridge, never a new one.
+    expect(fw.match(/ip daddr 10\.66\.0\.1 iifname [^\n]*accept/g)).toEqual([
+      'ip daddr 10.66.0.1 iifname "rws-owner-pub" ct state established,related ct direction reply accept',
     ]);
     expect(fw).toContain(
       'iifname "wg0" meta l4proto tcp ct original ip daddr 10.66.0.1 ct original proto-dst 443 accept',
     );
     expect(fw).toContain('iifname "wg0" oifname != "rws-owner-pub" drop');
+    // The owner site's bridge gets no way out, DNS included (review SR-1): dropped before the resolver accepts.
+    const fromContainers = fw.slice(fw.indexOf('chain from_containers'));
+    expect(fromContainers.indexOf('iifname "rws-owner-pub" drop')).toBeGreaterThan(0);
+    expect(fromContainers.indexOf('iifname "rws-owner-pub" drop')).toBeLessThan(fromContainers.indexOf('th dport 53'));
     const chain = /chain to_containers \{([\s\S]*?)\n\t\}/.exec(fw)?.[1] ?? '';
     expect(chain.trimEnd().endsWith('drop')).toBe(true);
     expect(chain.indexOf('ct original proto-dst 443 accept')).toBeGreaterThan(0);
