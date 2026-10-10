@@ -240,6 +240,18 @@ export const featureState = (page: Page, id: string) =>
     }
   }, id);
 
+/** The `area` of every warning feature the map holds at the current t (jumps over Basel so its tiles are loaded). */
+export async function warningAreas(page: Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const map = (window as unknown as W).__rws?.map;
+    if (!map) throw new Error('no map');
+    const idle = new Promise<void>((r) => map.once('idle', r));
+    map.jumpTo({ center: [7.4, 47.6], zoom: 7 });
+    await idle;
+    return [...new Set(map.querySourceFeatures('warnings').map((f) => String(f.properties.area)))].sort();
+  });
+}
+
 /** The map has its stations and the snapshot of the first `t` has arrived (nl.e2e.xss has a value from 2026-10-24). */
 export async function mapReady(page: Page) {
   // The map mounts only near the viewport (useMapLibre); on the owner site the banner and the brand header (P10c)

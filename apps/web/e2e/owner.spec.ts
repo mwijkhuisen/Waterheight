@@ -21,6 +21,7 @@ import {
   slider,
   start,
   type W,
+  warningAreas,
   XSS,
 } from './helpers.ts';
 
@@ -196,6 +197,26 @@ test('the LU-3 band and the LU-4 threshold of an LU-1 series carry the badge in 
   await settled(page);
   await expect.poll(async () => (await chartNames()).lines.filter((l) => l.includes(badge)).length).toBe(1);
   expect((await chartNames()).lines.filter((l) => l.includes('e2e orange'))).toHaveLength(1);
+  await finish(page, s);
+});
+
+test('warning areas of an earlier day and of earlier today show from their files, never marked incomplete (#86)', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  // 07:00 today (today.json): the area that ended at 08:00 and the open-ended one issued the day before.
+  await open(page, `/?t=${at(-5)}&mode=state`);
+  await mapReady(page);
+  await expect.poll(() => warningAreas(page)).toEqual(['e2e-2', 'e2e-today']);
+  await expect(page.getByText(msg('nl', 'warnings_incomplete'), { exact: true })).toHaveCount(0);
+  // 2026-10-25 08:00Z (an ended day: its dated file, which the owner family writes too).
+  await page.goto('/?t=2026-10-25T08:00Z&mode=state');
+  await expect(slider(page)).toBeVisible();
+  await mapReady(page);
+  await expect.poll(() => warningAreas(page)).toEqual(['e2e-2', 'e2e-ended']);
+  await expect(page.getByText(msg('nl', 'warnings_incomplete'), { exact: true })).toHaveCount(0);
   await finish(page, s);
 });
 

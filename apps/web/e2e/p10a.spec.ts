@@ -27,6 +27,7 @@ import {
   timebarTime,
   viewSummary,
   type W,
+  warningAreas,
   where,
   XSS,
 } from './helpers.ts';
@@ -87,18 +88,6 @@ async function withRivers(page: Page) {
       { id: 'e2e-xss-river', name_nl: XSS, name_en: XSS, parent_river_id: null, km_direction: 'none' },
     ];
     await route.fulfill({ response: res, json: body });
-  });
-}
-
-/** The `area` of every warning feature the map holds at the current t (jumps over Basel so its tiles are loaded). */
-async function warningAreas(page: Page): Promise<string[]> {
-  return page.evaluate(async () => {
-    const map = (window as unknown as W).__rws?.map;
-    if (!map) throw new Error('no map');
-    const idle = new Promise<void>((r) => map.once('idle', r));
-    map.jumpTo({ center: [7.4, 47.6], zoom: 7 });
-    await idle;
-    return [...new Set(map.querySourceFeatures('warnings').map((f) => String(f.properties.area)))].sort();
   });
 }
 
@@ -274,7 +263,7 @@ test('a forecast after now is labelled with its agency, its issue or fetch time 
 
 // ---------------------------------------------------------------- warnings follow t
 
-test('warning areas follow t: an area shows between its from and its to, an earlier day shows from its dated file', async ({
+test('warning areas follow t: an area shows between its from and its to, from the file of its day', async ({
   page,
   context,
   baseURL,
@@ -312,6 +301,12 @@ test('warning areas follow t: an area shows between its from and its to, an earl
   await expect(slider(page)).toBeVisible();
   await mapReady(page);
   await expect.poll(() => warningAreas(page)).toEqual([]);
+  await expect(page.getByText(msg('nl', 'warnings_incomplete'), { exact: true })).toHaveCount(0);
+  // Earlier today (#86, today.json): the area that ended at 08:00 shows at 07:00, and nothing is said to be incomplete.
+  await page.goto('/?t=2026-10-26T07:00Z&mode=state');
+  await expect(slider(page)).toBeVisible();
+  await mapReady(page);
+  await expect.poll(() => warningAreas(page)).toEqual(['e2e-2', 'e2e-today']);
   await expect(page.getByText(msg('nl', 'warnings_incomplete'), { exact: true })).toHaveCount(0);
   await finish(page, s);
 });
