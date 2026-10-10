@@ -1040,7 +1040,7 @@ wait_for "the owner canary in the owner latest.json" 240 owner_latest_has_canary
 ! grep -rqE '777777\.(777|75)' /srv/rws/public/www/v1 || fail "the owner canary is in a public static file"
 [[ $(stat -c '%a %u:%g' /srv/rws/public/www/v1/meta.json /srv/rws/owner/www/v1/meta.json | sort -u) == '644 65532:65532' ]] ||
   fail "meta.json modes: $(stat -c '%n %a %u:%g' /srv/rws/public/www/v1/meta.json /srv/rws/owner/www/v1/meta.json | tr '\n' ' ')"
-env DOMAIN="$DOMAIN" IP4="$IP4" "$e2e/isolation.sh"
+env DOMAIN="$DOMAIN" IP4="$IP4" IP6="$IP6" "$e2e/isolation.sh"
 proof "isolation.sh: publish and publish-owner each mount only their own audience's tree, no write crosses the roots, the public listener serves no owner content for SNI owner.$DOMAIN, caddy-owner answers 401 with private no-store and noindex nofollow on every path without credentials and 200 with the owner canary with them; the owner canary is in no public static file"
 
 # P11a (issue #26 C5): the river release the public site serves is the installed fixture, byte for byte, and neither it nor

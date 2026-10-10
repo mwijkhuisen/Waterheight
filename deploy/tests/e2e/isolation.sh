@@ -18,11 +18,11 @@
 #      a peer reaches nothing else (no public site, no container address, no
 #      other port of the host); caddy-owner is off the public caddy's network
 #      and has no way out.
-# Environment: DOMAIN, IP4, OWNER_PW (the throw-away password); the namespaces
+# Environment: DOMAIN, IP4, IP6, OWNER_PW (the throw-away password); the namespaces
 # "ext" and "wgpeer" and /ci/pki/pebble-root.pem are run.sh's.
 set -euo pipefail
 
-: "${DOMAIN:?}" "${IP4:?}" "${OWNER_PW:?}"
+: "${DOMAIN:?}" "${IP4:?}" "${IP6:?}" "${OWNER_PW:?}"
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 pass() { printf 'PASS %s\n' "$*"; }
 fail() {

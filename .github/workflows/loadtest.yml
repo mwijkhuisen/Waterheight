@@ -133,7 +133,7 @@ jobs:
           echo "::warning::no settled day was complete after 5 minutes; the settled share falls back to recent"
       - name: k6 (release tarball, sha256-checked)
         run: deploy/tests/loadtest/install-k6.sh "$RUNNER_TEMP"
-      # D6: the egress profile on the fresh stack, cold cache. The spec writes its profile to EGRESS_OUT (mounted into the
+      # D6: the egress profile on the fresh stack, cold cache. The spec writes egress-profile.json into EGRESS_OUT (mounted into the
       # container as /egress-out) and fails when a class grew more than 20 % against docs/capacity-egress.json.
       - name: Egress profile (Playwright, pinned image, cold cache)
         run: |
@@ -141,7 +141,7 @@ jobs:
           mkdir -p "$EGRESS_OUT"
           chmod a+rwx "$EGRESS_OUT"
           sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/loadtest/pw-spec.sh egress \
-            -e EGRESS_OUT=/egress-out -v "$EGRESS_OUT:/egress-out"
+            -e EGRESS_OUT=/egress-out/egress-profile.json -v "$EGRESS_OUT:/egress-out"
       # Right after the stack, while the 5-minute window of the access log holds little else: the real rws-brownout.timer
       # arms the flag from the 5xx of a stopped api, meta.json and Caddy follow (deploy/tests/loadtest/brownout-e2e.sh).
       - name: Brownout auto-arm (the real rws-brownout.timer on the real Caddy access log)
