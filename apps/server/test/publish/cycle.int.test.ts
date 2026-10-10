@@ -176,7 +176,9 @@ describe('publish cycle', { timeout: 120_000 }, () => {
       '2026-10-01.json',
       '2026-10-02.json',
       '2026-10-03.json',
+      'today.json',
     ]);
+    expect(read('warnings/today.json').day).toBe('2026-10-04');
     expect(ls('.state')).toEqual(['settled-2026-10-01-v1.done']);
     expect(ls('.tmp')).toEqual([]);
     const meta = read('meta.json');
@@ -304,12 +306,20 @@ describe('publish cycle', { timeout: 120_000 }, () => {
     await expect(
       publishOnce(own.db, 'owner', dir, { now: NOW, render: withValue(CANARIES.withheld.text) }),
     ).rejects.toThrow('canary_in_output');
-    // The owner family: no settled files, no frames, no dated warnings; meta has the version map, never 0.
+    // The owner family: no settled files, no frames; the ended days' warnings and today's (#86); meta has the version
+    // map, never 0.
     rmSync(dir, { recursive: true, force: true });
     await publishOnce(own.db, 'owner', dir, { now: NOW, render: withValue(CANARIES.owner.text) });
     expect(ls('v1').filter((f) => !f.includes('.json'))).toEqual(['forecast', 'recent', 'warnings']);
     expect(ls('v1/recent')).toEqual(['2026-10-02', '2026-10-03', '2026-10-04']);
-    expect(ls('v1/warnings')).toEqual(['latest.geojson', 'latest.geojson.gz', 'latest.geojson.zst']);
+    expect(ls('v1/warnings').filter((f) => /\.(geo)?json$/.test(f))).toEqual([
+      '2026-10-01.json',
+      '2026-10-02.json',
+      '2026-10-03.json',
+      'latest.geojson',
+      'today.json',
+    ]);
+    expect(read('warnings/today.json').day).toBe('2026-10-04');
     expect(read('meta.json').dayVersions).toEqual({});
   });
 });
