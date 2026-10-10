@@ -228,8 +228,8 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | actions/attest-build-provenance | action | 4.2.2 | installed | 4d101475d8b20a2381f78447822ac1eab6504dd8 | MIT | release.yml |
 | actions/upload-artifact | action | 7.0.1 | installed | 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a | MIT | geo.yml |
 | actions/download-artifact | action | 8.0.1 | installed | 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c | MIT | geo.yml |
-| syft | binary | 1.52.0 | planned | – | Apache-2.0 | P12 (P1b SBOMs come from buildkit-syft-scanner) |
-| grype | binary | 0.119.0 | planned | – | Apache-2.0 | P12 gate, deferred by the owner in P1b (risk register) |
+| syft | binary | 1.52.0 | installed | caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d | Apache-2.0 | P12a: release.yml build-pr and security.yml grype-weekly (`syft_1.52.0_linux_amd64.tar.gz` sha256; tool only); the release SBOMs still come from buildkit-syft-scanner |
+| grype | binary | 0.119.0 | installed | 3fa2dc4b924621ab65404cf08d0b8438d896d80ab949c9d5a4ca283c36004c9b | Apache-2.0 | P12a: `--only-fixed --fail-on high` in release.yml build-pr and security.yml grype-weekly (`grype_0.119.0_linux_amd64.tar.gz` sha256; tool only) |
 | restic | binary | 0.19.1 | installed | f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c | BSD-2-Clause | backup image (`restic_0.19.1_linux_amd64.bz2` sha256) |
 | go-pmtiles | binary | 1.31.2 | installed | 3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f | BSD-3-Clause | server image `/app/bin/pmtiles` (`go-pmtiles_1.31.2_Linux_x86_64.tar.gz` sha256; statically linked): the `basemap` role (P3) |
 | osmium-tool | binary | 1.19.1 | installed | e629d2f3e500ffa5df6f1b1689161ab3dea3a82f66beec2b453a74b8d782f949 | GPL-3.0 | `tools/geo/Dockerfile` (CI only; source tag tarball, never distributed) |
