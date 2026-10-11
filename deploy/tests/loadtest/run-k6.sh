@@ -6,7 +6,8 @@
 # The NAME=value pairs go to every k6 process (SCENARIO, DURATION, LENIENT, MAP_ASSETS, ...; see k6.js). ABUSER_INDEX=n
 # makes process n run SCENARIO=abusive (with ABUSE_ROTATE if given) while the others run SCENARIO=normal; it is no k6
 # variable. SCENARIO=saturation gives process n the n-th range of RWS_E2E_SAT_RANGES (21 addresses) instead of its one
-# address. Why a namespace: a request from the host to a published port is masqueraded to the bridge gateway, which
+# address. SCENARIO=edge runs one process, on the first address only (#132: the honest visitor beside the crowd).
+# Why a namespace: a request from the host to a published port is masqueraded to the bridge gateway, which
 # the limiter keys as one shared client; from `ext` every address is seen as itself.
 set -euo pipefail
 
@@ -26,7 +27,7 @@ shift 2
 }
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-kv=() abuser='' saturation=''
+kv=() abuser='' saturation='' edge=''
 for a in "$@"; do
   [[ $a =~ ^[A-Z][A-Z0-9_]*=[A-Za-z0-9_.:/@,-]*$ ]] || {
     echo "run-k6: bad argument '$a'" >&2
@@ -35,6 +36,7 @@ for a in "$@"; do
   case $a in
     ABUSER_INDEX=*) abuser=${a#*=} ;;
     SCENARIO=saturation) saturation=1 kv+=("$a") ;;
+    SCENARIO=edge) edge=1 kv+=("$a") ;;
     *) kv+=("$a") ;;
   esac
 done
@@ -66,6 +68,7 @@ if [[ -n $saturation ]]; then
     exit 1
   }
 fi
+[[ -z $edge ]] || ips=("${ips[0]}") local_ips=("${ips[0]}")
 install -d -m 0755 "$out"
 
 pids=()
