@@ -61,13 +61,17 @@ esac
 STUB
 cat >"$T/stubs/docker" <<'STUB'
 #!/usr/bin/env bash
-# `compose ... run ... backup init`: restic's answer is $FIX/restic (denied | allowed | other).
+# `compose ... run ... backup init`: restic's answer is $FIX/restic (denied | denied-code | allowed | forbidden |
+# local-denied | other).
 printf 'docker %s\n' "$*" >>"$FIX/calls"
 case " $* " in
   *" backup init "*)
     case $(cat "$FIX/restic") in
       denied) echo "Fatal: create repository failed: Access Denied. (secret $SECRET_FOR_TEST must never be printed)" >&2; exit 1 ;;
+      denied-code) echo "Fatal: create repository failed: client.PutObject: AccessDenied" >&2; exit 1 ;;
       allowed) echo "created restic repository"; exit 0 ;;
+      forbidden) echo "Fatal: create repository failed: 403 Forbidden (a proxy page)" >&2; exit 1 ;;
+      local-denied) echo "Fatal: unable to create cache dir: mkdir /cache/restic: permission denied" >&2; exit 1 ;;
       *) echo "Fatal: dial tcp: lookup failed" >&2; exit 1 ;;
     esac
     ;;
@@ -247,17 +251,44 @@ expect_rc 0
 case_ "bucket key: a key that can write fails; a failure that is no refusal is not proof; no key is a SKIP"
 setup
 echo allowed >"$FIX/restic"
-run "$DRILL"
+run "$DRILL" --production prod.example.org
 fails_only "bucket key"
 expect_grep "CAN write"
+# CR-7: only S3's AccessDenied is a refusal; a 403 from something else, a local permission error or any other error is not
+for answer in other forbidden local-denied; do
+  setup
+  echo "$answer" >"$FIX/restic"
+  run "$DRILL" --production prod.example.org
+  fails_only "bucket key"
+  expect_grep "not proved"
+done
 setup
-echo other >"$FIX/restic"
+echo denied-code >"$FIX/restic"
+run "$DRILL" --production prod.example.org
+expect_rc 0
+expect_row "bucket key" PASS
+# SR-6: no probe without --production, or when the domain row did not pass (this may be production)
+setup
 run "$DRILL"
-fails_only "bucket key"
-expect_grep "not proved"
+expect_rc 0
+expect_row "bucket key" SKIP
+expect_grep "without --production"
+! grep -q "backup init" "$FIX/calls" || fail "the probe ran without --production"
+setup
+sed -i "s/^RWS_DOMAIN=.*/RWS_DOMAIN=prod.example.org/" "$RWS_ETC/rws.env"
+run "$DRILL" --production prod.example.org
+expect_rc 1
+expect_row domain FAIL
+expect_row "bucket key" SKIP
+expect_grep "domain row did not pass"
+! grep -q "backup init" "$FIX/calls" || fail "the probe ran although the domain row failed"
+setup
+run "$DRILL" --production "$DRILL"
+expect_row "bucket key" SKIP
+! grep -q "backup init" "$FIX/calls" || fail "the probe ran on the production hostname"
 setup
 : >"$C/etc/secrets/s3_credentials"
-run "$DRILL"
+run "$DRILL" --production prod.example.org
 expect_rc 0
 expect_row "bucket key" SKIP
 ! grep -q "backup init" "$FIX/calls" || fail "restic ran without a key"

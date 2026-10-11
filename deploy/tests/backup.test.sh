@@ -90,6 +90,10 @@ printf 'docker %s\n' "$*" >>"$FIX/calls"
 # a replay prints $FIX/replay-<source> (default: a zero summary after an alert line) or exits $FIX/replay-rc-<source>;
 # `exec` answers readiness, pg_restore ($FIX/restore-fails), the checksum query ($FIX/sums-<n>, else $FIX/sums), the
 # sanity query ($FIX/sanity, else "t|<dump mtime - 1 h>") and other psql stdin (appended to $FIX/psql-stdin).
+# Review SR-3/SR-4: pg_restore writes the sha256 of what it read to $FIX/restore-in; with $FIX/restore-blocks it marks
+# $FIX/restoring and waits (up to 30 s) until a `docker rm` marks $FIX/killed, then fails; with $FIX/swap-dump, `run -d`
+# (after the lock is released) replaces the restored dump's path with other bytes; `compose exec -T db psql` answers
+# $FIX/livedb (the live database's size) or fails.
 if [[ $1 == run ]]; then
   args=("$@")
   for ((i = 0; i < ${#args[@]}; i++)); do
@@ -100,6 +104,10 @@ if [[ $1 == run ]]; then
   done
   if [[ " $* " == *" -d "* ]]; then
     flock -n "$RWS_LOCK_DIR/rws-backup.lock" true || echo held >>"$FIX/lock-held"
+    if [[ -e $FIX/swap-dump ]]; then
+      rm -f "$RWS_SRV/backup/drill/data/db/rws.dump"
+      printf 'swapped after the lock' >"$RWS_SRV/backup/drill/data/db/rws.dump"
+    fi
     [[ ! -e $FIX/pg-fails ]] || exit 1
     exit 0
   fi
@@ -114,8 +122,13 @@ if [[ $1 == exec ]]; then
   case " $* " in
     *" sh -c "*) exit 0 ;;
     *" pg_restore "*)
-      cat >/dev/null
+      sha256sum | cut -d' ' -f1 >"$FIX/restore-in"
       [[ ! -e $FIX/restore-fails ]] || exit 1
+      if [[ -e $FIX/restore-blocks ]]; then
+        : >"$FIX/restoring"
+        for _ in $(seq 300); do [[ -e $FIX/killed ]] && exit 1; sleep 0.1; done
+        exit 1
+      fi
       ;;
     *" day="*)
       n=$(($(cat "$FIX/sums-n" 2>/dev/null || echo 0) + 1))
@@ -133,6 +146,7 @@ if [[ $1 == exec ]]; then
 fi
 case $1 in
   ps) cat "$FIX/unhealthy" 2>/dev/null || true; exit 0 ;;
+  rm) : >"$FIX/killed"; exit 0 ;;
   restart) exit 0 ;;
   network) [[ $2 != create || ! -e $FIX/net-fails ]] || exit 1; exit 0 ;;
   compose) ;;
@@ -140,6 +154,7 @@ case $1 in
 esac
 case " $* " in
   *" config --services "*) cat "$FIX/services" 2>/dev/null || true; exit 0 ;;
+  *" exec -T db psql "*) [[ -e $FIX/livedb ]] || exit 1; cat "$FIX/livedb"; exit 0 ;;
   *" exec -T db pg_dumpall "* | *" exec -T db pg_dump "*)
     [[ ! -e $FIX/dump-fails ]] || { echo "pg_dump: error: a message that must never be logged" >&2; exit 1; }
     [[ ! -e $FIX/dump-empty ]] || exit 0
@@ -181,6 +196,8 @@ case $1 in
       mkdir -p "$(dirname "$drill$path")"
       cp -p "$src" "$drill$path"
     done <"$drill/.include"
+    [[ ! -e $FIX/plant-link ]] || ln -sfn /etc/hostname "$drill/data/raw/planted"
+    [[ ! -e $FIX/plant-fifo || -e $drill/data/raw/planted ]] || mkfifo "$drill/data/raw/planted"
     victim=$(find "$drill/data/raw" -name '*.zst' -print -quit)
     if [[ -e $FIX/corrupt && -n $victim ]]; then printf 'x' | zstd -q -c >"$victim"; fi
     ;;
@@ -189,8 +206,11 @@ esac
 STUB
 cat >"$T/stubs/df" <<'STUB'
 #!/usr/bin/env bash
-# `df [-B1] --output=pcent[,avail] <dir>`: $FIX/df ("<pcent> <avail bytes>") or 40 % used and 1 TiB free.
-read -r pct avail <"$FIX/df" 2>/dev/null || { pct=40% avail=1099511627776; }
+# `df [-B1] --output=pcent[,avail] <dir>`: $FIX/df ("<pcent> <avail bytes>") or 40 % used and 1 TiB free; once
+# pg_restore runs ($FIX/restoring), $FIX/df-restoring when it exists.
+f=$FIX/df
+[[ ! -e $FIX/restoring || ! -e $FIX/df-restoring ]] || f=$FIX/df-restoring
+read -r pct avail <"$f" 2>/dev/null || { pct=40% avail=1099511627776; }
 case " $* " in
   *" --output=pcent,avail "*) printf 'Use%%  Avail\n%s %s\n' "$pct" "$avail" ;;
   *) printf 'Use%%\n%s\n' "$pct" ;;
@@ -564,6 +584,78 @@ expect_rc 1
 expect_grep "/restore-drill/fail disk$" "$FIX/pings"
 expect_no_grep "backup restore|network create" "$FIX/calls"
 [[ -z $(find "$RWS_SRV/backup/drill" -mindepth 1) ]] || fail "the scratch directory was not emptied"
+
+case_ "restore drill: free space below 125 % of the live database (over 3 x the dump): /fail disk, no restore (SR-3)"
+setup_db
+echo 1000000000 >"$FIX/livedb"
+echo "40% 1200000000" >"$FIX/df"
+run rws-restore-drill --force
+expect_rc 1
+expect_grep "/restore-drill/fail disk$" "$FIX/pings"
+expect_grep "less than 125 % of the live database \(1192 MiB\)" "$C/out"
+expect_no_grep "backup restore|network create" "$FIX/calls"
+expect_grep "^docker compose .*exec -T db psql -X -At -w -U rws_backup -d rws -c SELECT pg_database_size\(current_database\(\)\)$" "$FIX/calls"
+# enough room for it: the drill runs; an unreadable size falls back to the dump (every other case here)
+setup_db
+echo 1000000000 >"$FIX/livedb"
+echo "40% 1250000001" >"$FIX/df"
+run rws-restore-drill --force
+expect_rc 0
+setup_db
+echo 'not a number' >"$FIX/livedb"
+run rws-restore-drill --force
+expect_rc 0
+expect_grep "live database size is not readable" "$C/out"
+
+case_ "restore drill: /srv/rws over 90 % during pg_restore: the watcher removes the containers, /fail disk (SR-3)"
+setup_db
+touch "$FIX/restore-blocks"
+echo '91% 1099511627776' >"$FIX/df-restoring"
+RWS_DRILL_WATCH_S=0.2 run rws-restore-drill --force
+expect_rc 1
+expect_grep "/restore-drill/fail disk$" "$FIX/pings"
+expect_no_grep "/fail dump_restore" "$FIX/pings"
+expect_grep "91 % full during the drill \(over 90 %\): its containers are removed" "$C/out"
+expect_no_grep "replay --source" "$FIX/calls"
+[[ $(grep -c '^docker rm -f rws-drill-replay-' "$FIX/calls") -ge 2 ]] || fail "the watcher did not remove the containers before the teardown"
+expect_teardown
+[[ ! -e $RWS_SRV/public/ops/ops.json ]] || expect_eq "$(ops '.drill')" null
+
+case_ "restore drill: a link or a FIFO in the restored tree fails dump_restore under the lock; later path swaps are not read (SR-4)"
+for plant in plant-link plant-fifo; do
+  setup_db
+  touch "$FIX/$plant"
+  run rws-restore-drill --force
+  expect_rc 1
+  expect_grep "/restore-drill/fail dump_restore$" "$FIX/pings"
+  expect_grep "not a regular file or a directory" "$C/out"
+  expect_no_grep "network create" "$FIX/calls"
+  [[ -z $(find "$RWS_SRV/backup/drill" -mindepth 1) ]] || fail "the scratch directory was not emptied"
+done
+setup_db
+want=$(sha256sum <"$FIX/db/rws.dump" | cut -d' ' -f1)
+touch "$FIX/swap-dump"
+run rws-restore-drill --force
+expect_rc 0
+expect_eq "$(cat "$FIX/restore-in")" "$want"
+expect_grep "^chown -h 0:0 -- $RWS_SRV/backup/drill/data/db/rws\.dump $RWS_SRV/backup/drill/data/db/globals\.sql$" "$FIX/calls"
+expect_grep "^chown -h 999:999 -- $RWS_SRV/backup/drill/pg$" "$FIX/calls"
+[[ ! -e $FIX/lock-held ]] || fail "the rws-backup lock was still held while the throwaway postgres ran"
+
+case_ "restore drill: a failed part 2 records no drill, so the next timer run is not skipped (SR-8)"
+setup_db
+printf 'f|1\n' >"$FIX/sanity"
+run rws-restore-drill --force
+expect_rc 1
+expect_grep "/restore-drill/fail sanity$" "$FIX/pings"
+[[ ! -e $RWS_SRV/public/ops/ops.json ]] || expect_eq "$(ops '.drill')" null
+rm "$FIX/sanity"
+: >"$FIX/pings"
+run rws-restore-drill
+expect_rc 0
+expect_no_grep "next one due later" "$C/out"
+expect_grep "/restore-drill ok$" "$FIX/pings"
+expect_eq "$(ops '.drill | [.sampled, .matched]')" '[100,100]'
 
 case_ "restore drill: the snapshot has no dump, or pg_restore fails: /fail dump_restore, teardown"
 setup_db

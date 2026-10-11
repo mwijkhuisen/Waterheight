@@ -14,14 +14,19 @@
 #   timers        rws-backup, rws-update and rws-restore-drill timers are disabled or masked, and not active
 #   pings         /etc/rws/secrets/hc_ping_key and hc_api_key are absent or empty (no healthchecks ping can go out)
 #   owner port    nothing listens on 10.66.0.1:443 (TCP) or on UDP 51820 (WireGuard)
-#   bucket key    a restic write with the host's bucket key is refused (SKIP when no key is configured)
+#   bucket key    a restic write with the host's bucket key is refused as S3 AccessDenied (SKIP when no key is
+#                 configured, or unless the domain row passed and --production was given)
 #   capture skip  RWS_CAPTURE_SKIP covers CH-1 and NL-1, and /status/capture.json lists no spec of theirs
 #   q7 <ID>       the Q7 coverage gaps of /api/v1/health/sources: none for each source of Q7_SOURCES the drill captures
 #
 # It prints a table (check, result, detail) and exits 1 when any row is FAIL; SKIP rows do not fail but the owner
 # reads their reason. It prints counts, instants and fixed words only: never a key, a URL with a key, or a payload.
 # The bucket-key probe runs `restic init` against a sibling repository prefix; a key that CAN write leaves one small
-# object there (Object Lock keeps it 30 days) and the row says FAIL: replace the key with a read-only one.
+# object there (Object Lock keeps it 30 days) and the row says FAIL: replace the key with a read-only one. Review SR-6:
+# it runs only when this host is shown not to be production (the domain row passed AND --production <domain> was
+# given), so it can never write into the bucket from production itself. Only S3's AccessDenied counts as a refusal
+# (review CR-7: restic prints minio-go's "Access Denied." or the code AccessDenied); any other error, a local
+# "permission denied" included (that is the host's cache or files, not the bucket), is FAIL: read-only not proved.
 #
 # Exit: 0 all PASS or SKIP, 1 a FAIL, 64 usage.
 set -euo pipefail
@@ -59,7 +64,7 @@ for tool in curl jq ss systemctl awk; do
 done
 [[ $RWS_ETC != /etc/rws || $EUID == 0 ]] || die "run as root (sudo): the secrets directory is root-only"
 
-rows=() failed=0
+rows=() failed=0 domain_ok=0
 # row <check> <PASS|FAIL|SKIP> <detail>
 row() {
   rows+=("$(printf '%-30s %-6s %s' "$1" "$2" "$3")")
@@ -80,6 +85,7 @@ elif [[ ${RWS_DOMAIN:-} != "$host" ]]; then
   row domain FAIL "rws.env RWS_DOMAIN is not the drill hostname"
 else
   row domain PASS "RWS_DOMAIN is the drill hostname"
+  domain_ok=1
 fi
 
 # --- noindex (and the prelaunch phase)
@@ -135,6 +141,10 @@ bucket=''
 if ((env_ok)); then bucket=$(backup_ready 2>/dev/null && printf '%s' "$BUCKET_HOST") || bucket=''; fi
 if [[ -z $bucket || ! -s $RWS_ETC/secrets/s3_credentials ]]; then
   row "bucket key" SKIP "no bucket key configured here (RWS_BACKUP off or s3_credentials empty): read-only not proved"
+elif [[ -z $production ]]; then
+  row "bucket key" SKIP "probe not run without --production <domain> (it must not write from production): read-only not proved"
+elif ((!domain_ok)); then
+  row "bucket key" SKIP "probe not run: the domain row did not pass, so this may be production: read-only not proved"
 else
   rc=0
   (allow_bucket "$bucket") >/dev/null 2>&1 || rc=$?
@@ -144,8 +154,8 @@ else
     out=$(rws_compose run --rm --no-deps -T -e "RESTIC_REPOSITORY=${RWS_RESTIC_REPOSITORY}-write-probe" backup init 2>&1) && rc=0 || rc=$?
     if ((rc == 0)); then
       row "bucket key" FAIL "the key CAN write (a probe repository was created): use a read-only key"
-    elif grep -qiE 'access ?denied|forbidden|403|not authorized|not allowed' <<<"$out"; then
-      row "bucket key" PASS "a restic write was refused"
+    elif grep -qE '(^|[^A-Za-z])(AccessDenied|Access Denied\.)' <<<"$out"; then
+      row "bucket key" PASS "a restic write was refused (S3 AccessDenied)"
     else
       row "bucket key" FAIL "the write failed, but not as a refusal: read-only not proved"
     fi
