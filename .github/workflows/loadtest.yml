@@ -189,7 +189,7 @@ jobs:
           sampler=$!
           trap 'kill "$sampler" 2>/dev/null || true' EXIT
           sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/saturation" SCENARIO=saturation DURATION=3m SATURATION_REQUIRE=1
-      # #132, KG-313: the first P12a crowd again (10 x the rate in flight, about 7,600 TLS connections from 126 addresses),
+      # #132, KG-313: the first P12a crowd again (1,264 visitors per process, about 7,600 TLS connections from 126 addresses),
       # judged by an honest visitor on 203.0.114.11 beside it: static files and /api/v1/health must keep answering. The
       # sampler shows Caddy's memory and the crowd's established connections.
       - name: k6 crowd, static files and health beside an open-model crowd
@@ -205,7 +205,7 @@ jobs:
           ) >"$OUT/crowd-stats.log" 2>&1 &
           sampler=$!
           trap 'kill "$sampler" 2>/dev/null || true' EXIT
-          sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/crowd" SCENARIO=saturation DURATION=3m SAT_INFLIGHT=10 LENIENT=1 &
+          sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/crowd" SCENARIO=saturation DURATION=3m SAT_VUS=1264 LENIENT=1 &
           crowd=$!
           sleep 45 # the crowd's connections build up first
           rc=0
