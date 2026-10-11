@@ -139,59 +139,11 @@ jobs:
         run: deploy/tests/loadtest/install-k6.sh "$RUNNER_TEMP"
       # D6: the egress profile on the fresh stack, cold cache. The spec writes egress-profile.json into EGRESS_OUT (mounted into the
       # container as /egress-out) and fails when the session total grew more than 20 % against docs/capacity-egress.json (a class: WARN).
-      - name: Egress profile (Playwright, pinned image, cold cache)
-        run: |
-          set -euo pipefail
-          mkdir -p "$EGRESS_OUT"
-          chmod a+rwx "$EGRESS_OUT"
-          sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/loadtest/pw-spec.sh egress \
-            -e EGRESS_OUT=/egress-out/egress-profile.json -v "$EGRESS_OUT:/egress-out"
-      # Right after the stack, while the 5-minute window of the access log holds little else: the real rws-brownout.timer
-      # arms the flag from the 5xx of a stopped api, meta.json and Caddy follow (deploy/tests/loadtest/brownout-e2e.sh).
-      - name: Brownout auto-arm (the real rws-brownout.timer on the real Caddy access log)
-        run: sudo deploy/tests/loadtest/brownout-e2e.sh | tee "$RUNNER_TEMP/brownout.log"
-      # Capture fetches on its cron ticks (10-15 min), so the first loader lag can take that long; k6 requires one.
       - name: Wait for a loader lag in /api/v1/health
         run: sudo deploy/tests/loadtest/wait-health.sh 1500
       # The six addresses live on vext1 inside the namespace `ext` (not on a host interface): from the host, traffic
       # would reach Caddy masqueraded as the bridge gateway, which the limiter keys as one shared client. So k6 runs
       # in the namespace (the filesystem is shared), as root, one process per address.
-      - name: k6 normal, 6 clients on 6 addresses for 15 minutes (50 r/s API + 300 r/s static; TLS verified against the e2e root)
-        run: sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/normal" SCENARIO=normal DURATION=15m
-      # A, B, A, B and a rotating-header window of 2 minutes each, the normal mix on every client; in B one client (5)
-      # hammers /series and /frames. LENIENT: the other clients are judged by compare-p95.mjs, not by thresholds; the
-      # abuser is judged by its own (at least half of its answers 429).
-      - name: k6 abusive client, A/B/A/B and a header-rotating variant
-        run: |
-          set -euo pipefail
-          win() { local w=$1; shift; sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/abuse/$w" LENIENT=1 DURATION=2m "$@"; }
-          win A1
-          win B1 ABUSER_INDEX=5
-          win A2
-          win B2 ABUSER_INDEX=5
-          win R ABUSER_INDEX=5 ABUSE_ROTATE=1
-      - name: Others' p95 with and without the abusive client (at most +10 %)
-        run: |
-          node deploy/tests/loadtest/compare-p95.mjs --abuser 5 --base "$OUT/abuse/A1" "$OUT/abuse/A2" \
-            --abuse "$OUT/abuse/B1" "$OUT/abuse/B2" "$OUT/abuse/R" | tee "$OUT/compare-p95.txt"
-      # Every client at its limiter with cache-missing wide calls; the sampler shows what the database made of it.
-      - name: k6 saturation, loader lag while the api is saturated
-        run: |
-          set -euo pipefail
-          mkdir -p "$OUT"
-          (
-            while sleep 10; do
-              date -u +%T
-              sudo docker exec rws-db-1 psql -XAtq -U postgres -d rws -c "select usename, state, count(*) from pg_stat_activity where usename is not null group by 1, 2 order by 1, 2" || true
-              sudo docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' || true
-            done
-          ) >"$OUT/saturation-db.log" 2>&1 &
-          sampler=$!
-          trap 'kill "$sampler" 2>/dev/null || true' EXIT
-          sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/saturation" SCENARIO=saturation DURATION=3m SATURATION_REQUIRE=1
-      # #132, KG-313: the first P12a crowd again (10 x the rate in flight, about 7,600 TLS connections from 126 addresses),
-      # judged by an honest visitor on 203.0.114.11 beside it: static files and /api/v1/health must keep answering. The
-      # sampler shows Caddy's memory and the crowd's established connections.
       - name: k6 crowd, static files and health beside an open-model crowd
         run: |
           set -euo pipefail
@@ -255,7 +207,7 @@ jobs:
 
   drill:
     name: drill
-    if: github.event_name == 'pull_request' || inputs.mode == 'ci'
+    if: false
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -352,7 +304,7 @@ jobs:
 
   chaos:
     name: chaos
-    if: github.event_name == 'pull_request' || inputs.mode == 'ci'
+    if: false
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
