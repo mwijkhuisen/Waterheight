@@ -127,7 +127,9 @@ export const SourcesFile = z.strictObject({ sources: z.array(Source).min(1) });
 
 /**
  * The launch gate (P12b, catalogue §0.2): sources whose public reuse needs the provider's consent or a notice. Public,
- * each needs registry/permissions/<ID>.md granting `audience: public`, whatever the baseline says.
+ * each needs registry/permissions/<ID>.md granting `audience: public`, whatever the baseline says. `validateRegistry`
+ * applies the same rule to every source whose baseline licence kind is not open (review SR-9: an allow-list, so a
+ * source missing here, such as NL-3, DE-16, DE-17 or CH-10, is still gated by its licence).
  */
 export const GATED: ReadonlySet<string> = new Set([
   'DE-2', // §0.2: BfG terms, source credit and a free copy (Belegexemplar)
@@ -166,13 +168,19 @@ export function defaultChannels(source: Pick<Source, 'audience' | 'permission_re
  * registry may use no more. The original e-mail stays in the owner's archive,
  * never in this public repository, and no person is named.
  */
+/** A filled-in free-text field: not empty, and no `TODO` left from a template (review SR-10). */
+const Filled = z
+  .string()
+  .min(1)
+  .refine((v) => !/\bTODO\b/i.test(v), { message: 'a TODO is left in (fill it in from the original)' });
+
 export const PermissionRecord = z.strictObject({
   source: SourceId,
   /** The granting organisation, e.g. "LfU Rheinland-Pfalz". */
-  granted_by: z.string().min(1),
+  granted_by: Filled,
   granted_on: IsoDate,
   /** Where the original lives, e.g. "e-mail of 2026-10-07, owner's mail archive". */
-  evidence: z.string().min(1),
+  evidence: Filled,
   /** The widest audience the permission allows. */
   audience: Audience,
   display: z.boolean(),
@@ -194,7 +202,7 @@ export const WithholdingRecord = z.strictObject({
   withheld: z.array(z.string().min(1).max(120)).min(1).max(50),
   audience: z.literal('off'),
   /** The catalogue clauses and the owner actions (C-numbers) that would lift it; no person is named. */
-  basis: z.string().min(1).max(2000),
+  basis: Filled.max(2000),
   recorded_on: IsoDate,
 });
 export type WithholdingRecord = z.infer<typeof WithholdingRecord>;
@@ -291,8 +299,19 @@ export function validateRegistry(
       problems.push(`${at}: audience ${s.audience} exceeds the ${record.audience} its permission record grants`);
     }
     // The launch gate: independent of the baseline, so editing baseline.ts alone never makes a gated source public.
-    if (GATED.has(s.id) && s.audience === 'public' && record?.audience !== 'public') {
-      problems.push(`${at}: gated (catalogue §0.2), public only with registry/permissions/${s.id}.md granting public`);
+    if (s.audience === 'public' && record?.audience !== 'public') {
+      if (GATED.has(s.id)) {
+        problems.push(
+          `${at}: gated (catalogue §0.2), public only with registry/permissions/${s.id}.md granting public`,
+        );
+      } else if (
+        baseline !== undefined &&
+        !(baseline.licence_kind !== null && OPEN_LICENCE_KINDS.includes(baseline.licence_kind))
+      ) {
+        problems.push(
+          `${at}: baseline licence kind ${baseline.licence_kind} is not open (§0.7), public only with registry/permissions/${s.id}.md granting public`,
+        );
+      }
     }
 
     // Audience (invariants 8 and 11; ADR-0017).

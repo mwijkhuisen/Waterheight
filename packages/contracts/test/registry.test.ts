@@ -11,7 +11,14 @@ import {
   table08,
 } from '../../../test/catalogue.ts';
 import { BASELINE } from '../src/baseline.ts';
-import { CHANNELS, defaultChannels, GATED, type Source, validateRegistry } from '../src/registry.ts';
+import {
+  CHANNELS,
+  defaultChannels,
+  GATED,
+  OPEN_LICENCE_KINDS,
+  type Source,
+  validateRegistry,
+} from '../src/registry.ts';
 
 const read = (file: string) => readFileSync(`${repoRoot}registry/${file}`, 'utf8');
 const permissionRecords = readPermissionRecords(parse);
@@ -311,6 +318,8 @@ describe('permission records and the baseline (invariant 8)', () => {
     ['a record without evidence', { source: 'DE-12', granted_by: 'x', granted_on: '2026-09-01' }, /evidence/],
     ['a record for another source', grant('DE-9').get('DE-9'), /source is DE-9, expected DE-12/],
     ['a record dated in the future', grant('DE-12', { granted_on: '2999-01-01' }).get('DE-12'), /in the future/],
+    ['a TODO left in granted_by', grant('DE-12', { granted_by: 'TODO' }).get('DE-12'), /TODO is left in/],
+    ['a TODO left in evidence', grant('DE-12', { evidence: "e-mail of todo, owner's archive" }).get('DE-12'), /TODO/],
   ])('reject %s', (_, record, message) => {
     const flip = (s: Record<string, unknown>) => Object.assign(s, { audience: 'public', capture_enabled: true });
     const problems = problemsWith('DE-12', flip, new Map([['DE-12', record]]));
@@ -344,6 +353,12 @@ describe('permission records and the baseline (invariant 8)', () => {
   it('gate none of the 19 open sources public since P0, and only registered sources', () => {
     expect(PUBLIC).toHaveLength(19);
     for (const id of PUBLIC) expect([id, GATED.has(id)]).toEqual([id, false]);
+    // all 19 have an open baseline licence, so the licence-kind rule does not touch them either
+    for (const id of PUBLIC) {
+      const kind = BASELINE[id]?.licence_kind ?? null;
+      expect([id, kind !== null && OPEN_LICENCE_KINDS.includes(kind)]).toEqual([id, true]);
+    }
+    expect(registry.problems).toEqual([]);
     for (const id of GATED) expect([id, byId.has(id)]).toEqual([id, true]);
   });
 
@@ -355,6 +370,19 @@ describe('permission records and the baseline (invariant 8)', () => {
     expect(problemsWith(id, flip, without(id))).toMatch(new RegExp(`${id}: gated .*registry/permissions/${id}\\.md`));
     expect(problemsWith(id, flip, grant(id, over))).toBe('');
   });
+
+  // Review SR-9: GATED is the §0.2 list; every source whose baseline licence kind is not open is gated as well.
+  it.each(['NL-3', 'NL-5', 'DE-16', 'DE-17', 'CH-10', 'NL-6'])(
+    'gate %s by its non-open baseline licence: public fails without a record and passes with one',
+    (id) => {
+      expect(GATED.has(id)).toBe(false);
+      expect(problemsWith(id, offPublic, without(id))).toMatch(
+        new RegExp(`${id}: baseline licence kind \\S+ is not open .*registry/permissions/${id}\\.md granting public`),
+      );
+      expect(problemsWith(id, offPublic, grant(id))).toBe('');
+      expect(problemsWith(id, offPublic, grant(id, { audience: 'owner' }))).toMatch(/is not open/);
+    },
+  );
 
   it('gate a channel wider than the record grants', () => {
     expect(problemsWith('DE-2', de2Public, grant('DE-2', { history_export: true }))).toMatch(
@@ -378,6 +406,12 @@ describe('permission records and the baseline (invariant 8)', () => {
       const be2 = problemsWith('BE-2', offPublic, without('BE-2'));
       expect(be2).not.toMatch(/differs from/);
       expect(be2).toMatch(/BE-2: gated/);
+    });
+    // NL-3 (unlicensed, not in GATED): with baseline.ts edited, only the licence-kind rule stops it.
+    asPublic('NL-3', () => {
+      expect(problemsWith('NL-3', offPublic, without('NL-3'))).toBe(
+        'source NL-3: baseline licence kind unlicensed is not open (§0.7), public only with registry/permissions/NL-3.md granting public',
+      );
     });
     // A public DE-2 with every channel at its (closed) bfg-terms default: no channel rule fires, the gate does.
     const dark = (s: Record<string, unknown>) =>

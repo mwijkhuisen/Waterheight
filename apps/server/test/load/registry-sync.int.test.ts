@@ -556,6 +556,16 @@ describe('registry sync', { timeout: 60_000 }, () => {
       const template = read(new URL('../../../../registry/permissions/DE-2.md.template', import.meta.url), 'utf8');
       writeFileSync(`${flip.dir}/permissions/DE-2.md`, template);
       expect(() => readRegistry(flip.url)).toThrow(/permissions\/DE-2\.md: not a valid permission record/);
+      // Dates, audience and channels filled, a free-text field still TODO (review SR-10): no record either.
+      for (const key of ['granted_by', 'evidence']) {
+        writeFileSync(
+          `${flip.dir}/permissions/DE-2.md`,
+          filledTemplate().replace(new RegExp(`^${key}: .*$`, 'm'), () => `${key}: "TODO"`),
+        );
+        expect(() => readRegistry(flip.url), key).toThrow(
+          /permissions\/DE-2\.md: not a valid permission record.*TODO/s,
+        );
+      }
       // A duplicate key in the front matter is no record either (yaml's uniqueKeys).
       writeFileSync(
         `${flip.dir}/permissions/DE-2.md`,
