@@ -1,10 +1,12 @@
 # Load, drill and chaos tests (issue #24, P9b; issue #27, P12a; PHASES §28, §42): k6 and the compose end-to-end stack
 # (deploy/tests/e2e/run.sh in RWS_E2E_MODE loadtest, drill or chaos, with the fake upstream feeding capture) on a CI runner.
 #   loadtest    stack -> seed -> egress profile (cold cache) -> brownout auto-arm (the real rws-brownout.timer) ->
-#               wait for a loader lag -> k6 normal 15 min (50 r/s API + 300 r/s static over 6 clients on 6 address ranges:
-#               p95 < 300 ms, errors < 0.1 %, loader lag p95 < 120 s) -> abusive client A/B/A/B plus a header-rotating
-#               variant (429 for the abuser, others' p95 +10 % at most: compare-p95.mjs) -> saturation (lag p95 < 120 s
-#               while the API is saturated) -> oom-restart.sh -> hardening.sh --ci.
+#               wait for a loader lag -> k6 normal 15 min (50 r/s API + 300 r/s static over 6 clients on 6 address
+#               ranges: p95 < 300 ms, errors < 0.1 %, loader lag p95 < 120 s) -> abusive client A/B/A/B plus a
+#               header-rotating variant (429 for the abuser, others' p95 +10 % at most: compare-p95.mjs) -> saturation
+#               (lag p95 < 120 s while the API is saturated) -> crowd and edge (#132: an honest visitor's static files
+#               and health keep answering beside a crowd of 126 addresses, which must reach 3,000 established
+#               connections) -> oom-restart.sh -> hardening.sh --ci.
 #   drill       stack in drill mode -> deploy/tests/flood/run.sh (the flood drill) with the k6 flood scenario running at
 #               the same time; both must pass -> oom-restart.sh -> hardening.sh --ci.
 #   chaos       stack -> deploy/tests/e2e/chaos.sh (api stopped, database stopped 10 min, a provider blackholed) ->
@@ -190,15 +192,17 @@ jobs:
           sampler=$!
           trap 'kill "$sampler" 2>/dev/null || true' EXIT
           sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/saturation" SCENARIO=saturation DURATION=3m SATURATION_REQUIRE=1
-      # #132, KG-313: the first P12a crowd again (1,264 visitors per process, about 7,600 TLS connections from 126 addresses),
-      # judged by an honest visitor on 203.0.114.11 beside it: static files and /api/v1/health must keep answering. The
-      # sampler shows Caddy's memory and the crowd's established connections.
+      # #132, KG-313: the first P12a crowd again (1,264 visitors per process, about 7,600 TLS connections from 126
+      # addresses), judged by an honest visitor on 203.0.114.11 beside it: static files and /api/v1/health must keep
+      # answering. The sampler logs Caddy's memory and the crowd's established connections every 5 s; the step prints
+      # both peaks and fails unless the crowd reached 3,000 connections, so an idle site never passes (review CR-3).
       - name: k6 crowd, static files and health beside an open-model crowd
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           set -a; . "$RUNNER_TEMP/loadtest.env"; set +a
           (
-            while sleep 10; do
+            while sleep 5; do
               date -u +%T
               sudo docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' || true
               echo "established: $(sudo ip netns exec "$RWS_E2E_CLIENT_NETNS" ss -Htn state established | wc -l)"
@@ -211,8 +215,19 @@ jobs:
           sleep 45 # the crowd's connections build up first
           rc=0
           sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/edge" SCENARIO=edge DURATION=2m || rc=1
-          wait "$crowd" || true # lenient: only the edge probe judges
-          grep -E 'rws-caddy|established' "$OUT/crowd-stats.log" | tail -n 6 || true
+          wait "$crowd" || true # lenient: the edge probe and the crowd's peak judge
+          kill "$sampler" 2>/dev/null || true
+          # docker's MemUsage reads like "mem=467.6MiB / 640MiB"; MiB, with KiB and GiB converted.
+          read -r mem est < <(awk '
+            $1 == "rws-caddy-1" {
+              m = $3; sub(/^mem=/, "", m); v = m + 0
+              if (m ~ /GiB$/) v *= 1024; else if (m ~ /KiB$/) v /= 1024; else if (m !~ /MiB$/) v /= 1048576
+              if (v > mem) mem = v
+            }
+            $1 == "established:" && $2 + 0 > est { est = $2 + 0 }
+            END { printf "%.1f %d\n", mem, est }' "$OUT/crowd-stats.log")
+          echo "crowd peaks: caddy ${mem} MiB, ${est} established connections"
+          ((est >= 3000)) || { echo "the crowd peaked at $est connections (< 3,000): the edge probe proves nothing" >&2; rc=1; }
           exit "$rc"
       - name: No container OOM-killed or restarted
         run: sudo deploy/tests/loadtest/oom-restart.sh

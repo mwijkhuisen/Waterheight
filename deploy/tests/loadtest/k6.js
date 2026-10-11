@@ -1,8 +1,8 @@
 // P9b/P12a load test (k6 1.8.1, .github/workflows/loadtest.yml). One k6 process = one client. In CI there are six per
 // scenario, each on its own range of 21 local addresses (--local-ips, deploy/tests/loadtest/run-k6.sh): the limiter
 // is never disabled or fed a header, and no address holds more than the 32 connections to 443 that nftables.conf
-// allows a source (#132). The abuser and the edge probe are one real client each and keep one address. TLS is verified (SSL_CERT_FILE = the e2e
-// root; `insecureSkipTLSVerify` is never set). SCENARIO selects what the process does:
+// allows a source (#132). The abuser and the edge probe are one real client each and keep one address. TLS is
+// verified (SSL_CERT_FILE = the e2e root; `insecureSkipTLSVerify` is never set). SCENARIO selects the process's job:
 //
 //   normal      CI. STATIC_RPS (300) static + API_RPS (50) API requests per second over all CLIENTS processes (each
 //               does 1/CLIENTS of it) for DURATION (15m): static meta 30 %, latest 40 %, recent 20 %, settled 10 %;
@@ -24,14 +24,16 @@
 //               n / SAT_RPS seconds (the same rate), so the connection count does not hang on how slow the API is.
 //               1264 is the first P12a run's peak (about 7,600 in all); with LENIENT=1, the edge probe judges it.
 //   edge        CI (#132). One process on an honest address while the crowd runs: EDGE_RPS (2) r/s of meta.json,
-//               latest.json and /api/v1/health, each with a 10 s timeout. Static files must answer 200 within 2 s
-//               (edge_static_ok >= 99 %) and health must answer at all (200 or the 503 `busy`; edge_health_ok >= 95 %).
+//               latest.json and /api/v1/health, each with a 10 s timeout, at most 24 VUs. Static files must answer
+//               200 within 2 s, the wait for a connection, TCP and TLS included (edge_static_ok >= 99 %), and health
+//               must answer at all (200 or the 503 `busy`; edge_health_ok >= 95 %).
 //   production  Owner-triggered, one process against a live site (BASE): static files only, PROD_RPS (1000) r/s incl.
 //               PMTiles Range requests, DURATION (15m), a polite User-Agent (UA). p95 < 300 ms, errors < 0.1 %;
 //               aborts at once when errors exceed 1 % or /api/v1/health goes red (non-200 or `down`, or no longer `ok`
 //               when it was at the start). No API call but that health sample. At most 26 + 4 (health) VUs: one
 //               address may hold 32 connections to 443 (#132), so 1,000 r/s needs answers within about 26 ms; over
-//               that the run shows dropped iterations, not the site's capacity.
+//               that the run drops iterations, which the summary reports and no threshold judges (the runner's
+//               distance, not the site's capacity).
 //
 // Loader lag (normal, flood, saturation): a sampler reads /api/v1/health every HEALTH_EVERY_S (10 s) and REQUIRES a
 // non-null loader.lag_p95_s and a generated_at younger than 5 minutes: either missing is a failed check (health_ok),
@@ -76,6 +78,7 @@ const SAT_VUS = Number(__ENV.SAT_VUS || 0);
 const EDGE_RPS = Number(__ENV.EDGE_RPS || 2);
 const SESSIONS_PER_S = Number(__ENV.SESSIONS_PER_S || 1);
 const PROD_RPS = Number(__ENV.PROD_RPS || 1000);
+const PROD_VUS = 26; // + 4 health VUs: under the 32 connections to 443 one address may hold (#132)
 const HEALTH_EVERY_S = Number(__ENV.HEALTH_EVERY_S || 10);
 const MAP_ASSETS = __ENV.MAP_ASSETS || '';
 if (MAP_ASSETS !== '' && !/^\/assets\/map\/[0-9a-f]{7}$/.test(MAP_ASSETS))
@@ -214,18 +217,19 @@ if (SCENARIO === 'normal') {
   healthThresholds();
   if (__ENV.SATURATION_REQUIRE === '1') thresholds.api_pressure = ['count>=1'];
 } else if (SCENARIO === 'edge') {
-  scenarios.edge = arrival('edgeProbe', EDGE_RPS, 4, 64);
+  scenarios.edge = arrival('edgeProbe', EDGE_RPS, 4, 24);
   keepKinds(['static_meta', 'static_latest', 'health']);
   thresholds.edge_static_ok = ['rate>=0.99'];
   thresholds.edge_health_ok = ['rate>=0.95'];
 } else {
-  scenarios.static = arrival('prodMix', PROD_RPS, 26, 26);
+  scenarios.static = arrival('prodMix', PROD_RPS, PROD_VUS, PROD_VUS);
   scenarios.health = healthScenario('prodHealth');
   keepKinds(['static_meta', 'static_latest', 'static_recent', 'static_settled', 'tile_range', 'map_asset']);
   thresholds['http_req_duration{scenario:static}'] = ['p(95)<300'];
   thresholds.http_req_failed = ['rate<0.001', { threshold: 'rate<0.01', abortOnFail: true, delayAbortEval: '20s' }];
   thresholds.health_red = [{ threshold: 'rate==0', abortOnFail: true, delayAbortEval: '5s' }];
-  thresholds.dropped_iterations = ['count==0'];
+  // No dropped_iterations threshold: PROD_VUS from one address are the cap's limit, not the site's (review CR-2); the
+  // summary reports them.
 }
 
 export const options = {
@@ -526,7 +530,11 @@ export function edgeProbe() {
   ]);
   const res = get(path, kind, { timeout: '10s', responseCallback: http.expectedStatuses(200, 503) });
   if (kind === 'health') edgeHealthOk.add(res.status === 200 || res.status === 503);
-  else edgeStaticOk.add(res.status === 200 && res.timings.duration < 2000);
+  else {
+    // A crowd shows in the wait for a connection and in TCP and TLS, which timings.duration leaves out.
+    const t = res.timings;
+    edgeStaticOk.add(res.status === 200 && t.blocked + t.connecting + t.tls_handshaking + t.duration < 2000);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------- flood
@@ -646,7 +654,12 @@ export function handleSummary(summary) {
     lines.push(
       `edge: static ok ${m('edge_static_ok')?.values.rate ?? 'n/a'}, health answered ${m('edge_health_ok')?.values.rate ?? 'n/a'}`,
     );
-  if (SCENARIO === 'production') lines.push(`health red rate: ${m('health_red')?.values.rate ?? 'n/a'}`);
+  if (SCENARIO === 'production') {
+    lines.push(`health red rate: ${m('health_red')?.values.rate ?? 'n/a'}`);
+    lines.push(
+      `dropped iterations: ${count('dropped_iterations')} (report only: one address may hold 32 connections to 443, nftables.conf #132, so ${PROD_VUS} VUs carry ${PROD_RPS} r/s only while answers take under ${Math.floor((PROD_VUS * 1000) / PROD_RPS)} ms)`,
+    );
+  }
   lines.push(
     `settled_fallback: ${count('settled_fallback') ? 'yes (no complete settled day; its 10 % went to recent)' : 'no'}`,
   );
