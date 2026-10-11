@@ -28,6 +28,7 @@ import {
   validateBasemap,
   WarningsFile,
 } from '../packages/contracts/src/index.ts';
+import type { StaticSources } from '../packages/contracts/src/static-owner.ts';
 import { TILE_FILE_RE, type TileFile, type TilesManifest } from '../packages/core/src/tiles-manifest.ts';
 import {
   API_SOURCES,
@@ -45,9 +46,11 @@ import {
   checkBelgianSet,
   checkBuild,
   checkBytes,
+  checkCacheControl,
   checkCapture,
   checkClassCoverage,
   checkCoverage,
+  checkDe2Credit,
   checkForecastCh4,
   checkForecastCoverage,
   checkForecastNl1,
@@ -58,12 +61,15 @@ import {
   checkInterval,
   checkIntervalDe6,
   checkLabelOffset,
+  checkLegalPages,
   checkLoaderLag,
   checkMapAsset,
   checkMeta,
   checkNoindex,
   checkNotFound,
+  checkOg,
   checkOpenapi,
+  checkOwnerDocs,
   checkOwnerHealth,
   checkOwnerIds,
   checkOwnerLeak,
@@ -76,7 +82,10 @@ import {
   checkRiversManifest,
   checkRiversReaches,
   checkRiversTiles,
+  checkRobots,
   checkRuntimeConfig,
+  checkSecurityTxt,
+  checkSitemap,
   checkSnapshot,
   checkSourceHealth,
   checkStates,
@@ -105,6 +114,8 @@ import {
   DE7_BYTES_MAX,
   DE7_INTERVAL_MIN_S,
   DE7_SPEC,
+  DEFAULT_PROFILE,
+  de2Registry,
   entryScript,
   expectedHeaders,
   FORECAST_CH4_MAX_AGE_S,
@@ -116,6 +127,7 @@ import {
   GEOJSON,
   INTERVAL_MIN_S,
   INTERVAL_SPEC,
+  LEGAL_PATHS,
   leaks,
   leakTerms,
   MANIFEST_CACHE,
@@ -129,6 +141,7 @@ import {
   OWNER_CANARY,
   OWNER_SOURCES_MIN,
   OWNER_STATION_PREFIXES,
+  ownerAgencies,
   ownerKeys,
   ownerSourceIds,
   ownerStationIds,
@@ -137,6 +150,9 @@ import {
   PARAM_CASES,
   type Page,
   PMTILES_MAGIC,
+  PROFILES,
+  type Profile,
+  pngSize,
   RERENDER_MAX_S,
   RIVERS_DOWNLOAD_RANGE,
   RUNTIME_CONFIG_KEYS,
@@ -154,6 +170,7 @@ import {
   STATIONS_CACHE,
   sampleCapture,
   settledAsk,
+  siteChecks,
   snapshotAt,
   soak,
   staleSpecs,
@@ -175,6 +192,13 @@ const architecture = readFileSync(join(repoRoot, 'docs/plan/ARCHITECTURE.md'), '
 const expected = expectedHeaders(architecture);
 const registry = loadRegistry();
 const NOW = new Date('2026-10-02T12:00:00Z');
+/**
+ * P12b (A7): the owner sources and their hosts come from registry/sources.yaml, so that the DE-2 flip (an owner source
+ * becoming public, E1) changes no test here. These named ones are owner sources whatever happens to DE-2 (DE-3 is the
+ * BfG's, under its terms, for good).
+ */
+const OWNER_FIXED = ['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-3'] as const;
+const ownerHosts = () => ownerSourceIds(registry).flatMap((id) => registry.hosts.get(id) ?? []);
 
 describe('the A§12.2 headers', () => {
   it('reads the CSP and the other headers verbatim from ARCHITECTURE.md', () => {
@@ -202,9 +226,27 @@ describe('the A§12.2 headers', () => {
     // A value may hold Caddyfile-escaped quotes (Reporting-Endpoints "csp=\"/api/v1/beacon\"").
     for (const [, name = '', value = ''] of block.matchAll(/^\t\t([A-Za-z-]+) "((?:[^"\\]|\\.)*)"$/gm))
       sent[name.toLowerCase()] = value.replaceAll(/\\(.)/g, '$1');
-    expect(sent).toEqual(expected);
+    // P12b: X-Robots-Tag is the phase file's (deploy/web/phase-<phase>.caddy, test/launch-phase.test.ts), not this block's:
+    // what the block sends is the launch profile's set, and the prelaunch one adds noindex.
+    expect(sent).toEqual(expectedHeaders(architecture, 'launch'));
+    expect({ ...sent, 'x-robots-tag': 'noindex' }).toEqual(expected);
     expect(block).toMatch(/^\t\t-Server$/m);
     expect(site.toLowerCase()).not.toContain('access-control-');
+  });
+
+  it('the launch profile expects the same eight headers and no X-Robots-Tag, and refuses one (P12b)', () => {
+    const launch = expectedHeaders(architecture, 'launch');
+    expect(Object.keys(launch)).toHaveLength(8);
+    expect(launch['x-robots-tag']).toBeUndefined();
+    expect({ ...launch, 'x-robots-tag': 'noindex' }).toEqual(expected);
+    expect(expectedHeaders(architecture)).toEqual(expected);
+    expect(checkHeaders('/', 200, launch, launch)).toMatchObject({ ok: true, detail: /no X-Robots-Tag/ });
+    expect(checkHeaders('/', 200, { ...launch, 'x-robots-tag': 'noindex' }, launch)).toMatchObject({
+      ok: false,
+      detail: /x-robots-tag: "noindex", want none/,
+    });
+    // the prelaunch profile still insists on noindex
+    expect(checkHeaders('/', 200, launch, expected)).toMatchObject({ ok: false, detail: /x-robots-tag: null/ });
   });
 
   it('passes exact headers and names every difference', () => {
@@ -461,16 +503,16 @@ describe('owner isolation in /status/*', () => {
       'LU-2',
       'LU-3',
       'LU-4',
-      'DE-2',
       'DE-3',
       'lu-3-percentile',
       'be-3-values',
       'hydrometrie.wallonie.be',
       'inondations.public.lu',
-      'vorhersage.bafg.de',
       OWNER_CANARY,
     ])
       expect(terms).toContain(t);
+    // every owner source of the registry, wherever it is, and its hosts
+    for (const t of [...ownerSourceIds(registry), ...ownerHosts()]) expect(terms).toContain(t);
     for (const t of ['NL-1', 'CH-1', 'lu-1-csv']) expect(terms).not.toContain(t);
   });
 
@@ -483,9 +525,10 @@ describe('owner isolation in /status/*', () => {
   it('finds nothing in a real public capture.json, and every owner source in the owner one', () => {
     const { pub, owner } = statusCycle();
     expect(leaks(JSON.stringify(pub), ownerTerms(registry))).toEqual([]);
-    expect(leaks(JSON.stringify(owner), ownerTerms(registry))).toEqual(
-      expect.arrayContaining(['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3']),
-    );
+    // (every owner source that has a capture spec: the owner file names it)
+    const captured = [...new Set(registry.specs.filter((sp) => sp.audience === 'owner').map((sp) => sp.source))];
+    expect(captured).toEqual(expect.arrayContaining([...OWNER_FIXED]));
+    expect(leaks(JSON.stringify(owner), ownerTerms(registry))).toEqual(expect.arrayContaining(captured));
   });
 
   it('matches whole identifiers only', () => {
@@ -2463,7 +2506,7 @@ describe('forecast NL-1 and forecast coverage (P8a)', () => {
         {},
         ids.map((r, i) => (i === 3 ? reach(r, { sources: [id] }) : reach(r))),
       );
-    for (const id of ['DE-2', 'DE-3', 'LU-3', 'LU-4', 'LU-2', 'BE-3']) {
+    for (const id of [...ownerSourceIds(registry)]) {
       expect(owners, id).toContain(id);
       const r = checkForecastCoverage(sourcesDoc({ forecast_coverage: named(id) }), owners);
       expect(r.ok, id).toBe(false);
@@ -2473,7 +2516,14 @@ describe('forecast NL-1 and forecast coverage (P8a)', () => {
       {},
       ids.map((r, i) => (i === 3 ? reach(r, { after_permission: ['BfG'] }) : reach(r))),
     );
-    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: agency }), owners)).toMatchObject({ ok: false });
+    // The agencies come from the registry: BfG while only DE-3 (owner) has that provider, none once DE-2 is public too.
+    const forbidden = ownerAgencies();
+    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: agency }), owners)).toMatchObject({
+      ok: forbidden.length === 0,
+    });
+    expect(checkForecastCoverage(sourcesDoc({ forecast_coverage: agency }), owners, undefined, ['BfG'])).toMatchObject({
+      ok: false,
+    });
     const allowed = coverage(
       {},
       ids.map((r, i) =>
@@ -2652,13 +2702,32 @@ describe('noindex', () => {
   it('names every path that lacks it, whatever its status, and a network error', () => {
     expect(checkNoindex(all({ '/api': answer(404, null) }))).toMatchObject({
       ok: false,
-      detail: '/api: x-robots-tag null',
+      detail: '/api: x-robots-tag null, want "noindex"',
     });
     expect(checkNoindex(all({ '/en/': answer(200, 'noindex, nofollow'), '/tiles': answer(404, 'all') })).detail).toBe(
-      '/en/: x-robots-tag "noindex, nofollow"; /tiles: x-robots-tag "all"',
+      '/en/: x-robots-tag "noindex, nofollow", want "noindex"; /tiles: x-robots-tag "all", want "noindex"',
     );
     expect(checkNoindex(all({ '/': 'ECONNRESET' })).detail).toBe('/: ECONNRESET');
     expect(checkNoindex({}).ok).toBe(false);
+  });
+
+  it('the launch profile wants none on / and /en/ and noindex on /api and /tiles (P12b, A13)', () => {
+    const launch = (over: Record<string, Page | string> = {}) =>
+      all({ '/': answer(200, null), '/en/': answer(200, null), ...over });
+    expect(checkNoindex(launch(), 'launch')).toMatchObject({
+      check: 'noindex',
+      ok: true,
+      detail: /launch: no X-Robots-Tag/,
+    });
+    expect(checkNoindex(launch({ '/': answer(200) }), 'launch')).toMatchObject({
+      ok: false,
+      detail: '/: x-robots-tag "noindex", want null',
+    });
+    expect(checkNoindex(launch({ '/tiles': answer(404, null) }), 'launch').detail).toBe(
+      '/tiles: x-robots-tag null, want "noindex"',
+    );
+    // and prelaunch is the default
+    expect(checkNoindex(launch())).toMatchObject({ ok: false });
   });
 });
 
@@ -2965,7 +3034,7 @@ describe('owner sources and owner stations (P5c)', () => {
     ({ stations: [...stationsDoc().stations, stationDoc(id, 'BE', [seriesDoc(9, 'NL-1', 'H')])] }) as unknown;
 
   it('ownerSourceIds: the owner-audience sources of registry/sources.yaml, and no public one', () => {
-    expect(ownerIds).toEqual(expect.arrayContaining(['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3']));
+    expect(ownerIds).toEqual(expect.arrayContaining([...OWNER_FIXED]));
     for (const id of ['NL-1', 'LU-1', 'DE-1']) expect(ownerIds).not.toContain(id);
     expect(ownerIds.length).toBeGreaterThanOrEqual(OWNER_SOURCES_MIN);
   });
@@ -3274,12 +3343,14 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
     // An error route gets no site header block: it repeats the A§12.2 set byte for byte (review SEC-1), and any
     // other 502, 503 or 504 answers its status without naming Caddy.
     const siteHeaders = rules('header').slice(1);
-    expect(siteHeaders).toContain('X-Robots-Tag "noindex"');
+    // (P12b: X-Robots-Tag is the phase file's, imported again here: test/launch-phase.test.ts)
+    expect(siteHeaders).not.toContain('X-Robots-Tag "noindex"');
     expect(rules('handle_errors 502 503 504')).toEqual([
       'handle_errors 502 503 504 {',
       'header {',
       ...siteHeaders,
       '}',
+      'import phase-{$RWS_SITE_PHASE:prelaunch}.caddy errors',
       "@snapshot_down expression `{http.request.orig_uri.path} == '/api/v1/snapshot'`",
       'handle @snapshot_down {',
       'header X-Degraded "1"',
@@ -3603,7 +3674,12 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       'file_server',
     ]);
     // The catch-all that serves the HTML pages sets one header: they are revalidated on every use.
-    expect(rules('handle').filter((l) => l.startsWith('header'))).toEqual(['header Cache-Control "no-cache"']);
+    // (P12b: and the two 404 shells say noindex in both phases, the only other header lines of the catch-all)
+    expect(rules('handle').filter((l) => l.startsWith('header'))).toEqual([
+      'header Cache-Control "no-cache"',
+      'header X-Robots-Tag "noindex"',
+      'header X-Robots-Tag "noindex"',
+    ]);
   });
 
   it('answers 404 for any other /assets path, never the app (an HTML 200 would be cached as the asset; P4b)', () => {
@@ -3629,11 +3705,25 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       '@page_nl expression <the list>',
       'handle @page_nl {',
       'rewrite * /index.html',
+      // P12b: the templates module fills the Open Graph URLs of the three HTML shells (test/launch-phase.test.ts)
+      'templates {',
+      'between [[ ]]',
+      '}',
       'file_server',
       '}',
       '@page_en expression <the list>',
       'handle @page_en {',
       'rewrite * /en/index.html',
+      'templates {',
+      'between [[ ]]',
+      '}',
+      'file_server',
+      '}',
+      "@shells expression `{path} in ['/index.html', '/en/index.html']`",
+      'handle @shells {',
+      'templates {',
+      'between [[ ]]',
+      '}',
       'file_server',
       '}',
       '@file {',
@@ -3651,12 +3741,14 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
       '}',
       '@not_found_en path_regexp ^/en/',
       'handle @not_found_en {',
+      'header X-Robots-Tag "noindex"',
       'rewrite * /en/404.html',
       'file_server {',
       'status 404',
       '}',
       '}',
       'handle {',
+      'header X-Robots-Tag "noindex"',
       'rewrite * /404.html',
       'file_server {',
       'status 404',
@@ -4003,8 +4095,16 @@ describe('verify-prod: the static publisher (P9a)', () => {
     const terms = staticLeakTerms(registry);
     expect(leakTerms(registry)).toContain('inondations.public.lu');
     expect(terms).not.toContain('inondations.public.lu');
-    for (const t of ['LU-2', 'LU-3', 'LU-4', 'BE-3', 'DE-2', 'lu-3-percentile', 'vorhersage.bafg.de', OWNER_CANARY])
-      expect(terms).toContain(t);
+    for (const t of [...OWNER_FIXED, 'lu-3-percentile', OWNER_CANARY]) expect(terms).toContain(t);
+    for (const t of ownerSourceIds(registry)) expect(terms, t).toContain(t);
+    // a host only owner sources fetch from is a term; one a public source shares (LU-1's AGE) is not
+    const publicHosts = new Set(
+      [...registry.sources]
+        .filter(([, src]) => src.audience === 'public')
+        .flatMap(([id]) => registry.hosts.get(id) ?? []),
+    );
+    for (const h of ownerHosts().filter((x) => !publicHosts.has(x))) expect(terms, h).toContain(h);
+    expect(publicHosts.has('inondations.public.lu')).toBe(true);
     expect(leaks('{"licence":{"url":"https://inondations.public.lu/fr/support/aspects-legaux.html"}}', terms)).toEqual(
       [],
     );
@@ -4502,5 +4602,588 @@ describe('verify-prod: the static publisher (P9a)', () => {
     expect(
       checkOwnerLeak({ '/data/v1/meta.json': '{"a":1}', '/data/v1/status.json': `{"x":"${OWNER_CANARY}"}` }, terms),
     ).toMatchObject({ ok: false, detail: /status\.json/ });
+  });
+});
+
+// ---------------------------------------------------------------- the launch profile (P12b, issue #27)
+// `--profile prelaunch|launch`: what the public site must be, judged offline on the real text of the phase file, the
+// shells, og.png and site.caddy's security.txt, so that the checks and the files cannot drift apart. The network half runs
+// in deploy/tests/e2e/run.sh (both profiles against the compose stack) and the CI deploy job (prelaunch).
+
+describe('the launch profile (P12b)', () => {
+  const domain = 'rivierstanden.example';
+  const read = (rel: string) => readFileSync(join(repoRoot, rel), 'utf8');
+  const phaseLaunch = read('deploy/web/phase-launch.caddy');
+  const heredoc = (src: string, marker: string) =>
+    new RegExp(`respond <<${marker}\\n([\\s\\S]*?)\\n\\t*${marker} (?:200)`)
+      .exec(src)?.[1]
+      ?.replaceAll(/^\t+/gm, '')
+      .replaceAll('{$RWS_DOMAIN}', domain) ?? '';
+  const robotsBody = heredoc(phaseLaunch, 'ROBOTS');
+  const sitemapBody = heredoc(phaseLaunch, 'SITEMAP');
+  const securityBody = heredoc(read('deploy/web/site.caddy'), 'SECURITY');
+  const ogPng = readFileSync(join(repoRoot, 'apps/web/public/og.png'));
+  const terms = ownerTerms(registry);
+
+  const page = (body: string, headers: Record<string, string> = {}, status = 200): Page => ({
+    status,
+    headers,
+    body,
+  });
+  const robots = (over: Record<string, string> = {}, body = robotsBody) =>
+    page(body, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=300', ...over });
+  const sitemap = (over: Record<string, string> = {}, body = sitemapBody) =>
+    page(body, { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=300', ...over });
+  /** The shells as Caddy's templates module serves them: the messages filled in (as Vite does), RWS_DOMAIN as configured. */
+  const shell = (file: string) =>
+    read(file)
+      .replaceAll(/%m:[a-z0-9_]+%/g, 'text')
+      .replaceAll('[[env `RWS_DOMAIN`]]', domain);
+  const image = (over: Partial<Page> = {}): Page => ({
+    status: 200,
+    headers: { 'content-type': 'image/png' },
+    body: '',
+    bytes: ogPng,
+    ...over,
+  });
+
+  it('the profiles are prelaunch and launch, and prelaunch is the default until the launch flip', () => {
+    expect([...PROFILES]).toEqual(['prelaunch', 'launch']);
+    expect(DEFAULT_PROFILE).toBe('prelaunch');
+  });
+
+  describe('robots', () => {
+    it('prelaunch: a 404 passes, a served file fails', () => {
+      expect(checkRobots(page('', {}, 404), domain, 'prelaunch', terms)).toMatchObject({ check: 'robots', ok: true });
+      expect(checkRobots(robots(), domain, 'prelaunch', terms)).toMatchObject({ ok: false, detail: /status 200/ });
+      expect(checkRobots('ECONNRESET', domain, 'prelaunch', terms)).toEqual({
+        check: 'robots',
+        ok: false,
+        detail: 'ECONNRESET',
+      });
+    });
+
+    it('launch: the real answer of phase-launch.caddy passes', () => {
+      expect(robotsBody).toContain(`Sitemap: https://${domain}/sitemap.xml`);
+      expect(checkRobots(robots(), domain, 'launch', terms)).toMatchObject({ check: 'robots', ok: true });
+    });
+
+    it.each([
+      ['a 404', () => page('', {}, 404), /status 404/],
+      ['text/html', () => robots({ 'content-type': 'text/html' }), /content-type "text\/html"/],
+      ['no cache', () => robots({ 'cache-control': 'no-cache' }), /cache-control "no-cache"/],
+      ['noindex on it', () => robots({ 'x-robots-tag': 'noindex' }), /x-robots-tag "noindex"/],
+      [
+        'a Sitemap of another host (Host injection)',
+        () => robots({}, robotsBody.replace(domain, 'evil.example')),
+        /Sitemap lines/,
+      ],
+      [
+        'no Disallow /api/',
+        () => robots({}, robotsBody.replace('Disallow: /api/', 'Disallow: /x/')),
+        /no "Disallow: \/api\/"/,
+      ],
+      [
+        'no User-agent',
+        () => robots({}, robotsBody.replace('User-agent: *', 'User-agent: bot')),
+        /no "User-agent: \*"/,
+      ],
+      ['two Sitemap lines', () => robots({}, `${robotsBody}Sitemap: https://${domain}/other.xml\n`), /Sitemap lines/],
+      ['an owner source', () => robots({}, `${robotsBody}# BE-3\n`), /owner source or host/],
+      ['an owner hostname', () => robots({}, `${robotsBody}# https://owner.${domain}/\n`), /owner source or host/],
+    ])('launch fails on %s', (_n, make, re) => {
+      expect(checkRobots(make(), domain, 'launch', terms)).toMatchObject({ ok: false, detail: re });
+    });
+  });
+
+  describe('sitemap', () => {
+    it('prelaunch: a 404 passes, a served file fails', () => {
+      expect(checkSitemap(page('', {}, 404), domain, 'prelaunch', terms)).toMatchObject({ check: 'sitemap', ok: true });
+      expect(checkSitemap(sitemap(), domain, 'prelaunch', terms)).toMatchObject({ ok: false });
+    });
+
+    it('launch: the real answer lists the 18 pages of PAGE_ROUTES with hreflang nl, en and x-default and passes', () => {
+      expect(sitemapBody.match(/<url>/g)).toHaveLength(18);
+      const r = checkSitemap(sitemap(), domain, 'launch', terms);
+      expect(r).toMatchObject({ check: 'sitemap', ok: true });
+      expect(r.detail).toContain('18 pages');
+    });
+
+    it.each([
+      [
+        'a page missing',
+        () => sitemap({}, sitemapBody.replace(/<url><loc>https:\/\/[^<]+\/over<\/loc>.*<\/url>\n/, '')),
+        /not those of PAGE_ROUTES/,
+      ],
+      [
+        'another domain (Host injection)',
+        () => sitemap({}, sitemapBody.replaceAll(domain, 'evil.example')),
+        /not those of PAGE_ROUTES/,
+      ],
+      [
+        'a foreign URL',
+        () => sitemap({}, sitemapBody.replace('</urlset>', '<url><loc>https://evil.example/</loc></url></urlset>')),
+        /URL host/,
+      ],
+      [
+        'a wrong alternate',
+        () => sitemap({}, sitemapBody.replace('hreflang="x-default"', 'hreflang="fr"')),
+        /alternates/,
+      ],
+      [
+        'an owner source',
+        () => sitemap({}, sitemapBody.replace('<url>', '<!-- LU-2 --><url>')),
+        /owner source or host/,
+      ],
+      ['no cache', () => sitemap({ 'cache-control': 'no-store' }), /cache-control "no-store"/],
+      ['text/plain', () => sitemap({ 'content-type': 'text/plain' }), /content-type/],
+    ])('launch fails on %s', (_n, make, re) => {
+      expect(checkSitemap(make(), domain, 'launch', terms)).toMatchObject({ ok: false, detail: re });
+    });
+  });
+
+  describe('legal pages, security.txt, og, cache-control', () => {
+    const shellPage = (lang: string, status = 200): Page => ({
+      status,
+      headers: { 'cache-control': 'no-cache' },
+      body: `<!doctype html><html lang="${lang}"><head></head></html>`,
+    });
+    const site = (): Record<string, Page | string> => ({
+      ...Object.fromEntries(PAGE_PATHS.map(({ path, lang }) => [path, shellPage(lang)])),
+      '/': page(shell('apps/web/index.html'), { 'cache-control': 'no-cache' }),
+      '/en/': page(shell('apps/web/en/index.html'), { 'cache-control': 'no-cache' }),
+    });
+
+    it('legal pages: the four pages in both languages are 200 in their language', () => {
+      expect([...LEGAL_PATHS].sort()).toEqual(
+        [
+          '/disclaimer',
+          '/colofon',
+          '/privacy',
+          '/toegankelijkheid',
+          '/en/disclaimer',
+          '/en/colophon',
+          '/en/privacy',
+          '/en/accessibility',
+        ].sort(),
+      );
+      expect(checkLegalPages(site())).toMatchObject({ check: 'legal pages', ok: true });
+      expect(checkLegalPages({ ...site(), '/privacy': shellPage('nl', 404) })).toMatchObject({
+        ok: false,
+        detail: /\/privacy: status 404/,
+      });
+      expect(checkLegalPages({ ...site(), '/en/colophon': shellPage('nl') })).toMatchObject({
+        ok: false,
+        detail: /\/en\/colophon/,
+      });
+      expect(checkLegalPages({ ...site(), '/colofon': 'ECONNRESET' })).toMatchObject({
+        ok: false,
+        detail: /ECONNRESET/,
+      });
+    });
+
+    it('security.txt: the real answer of site.caddy passes; a missing Contact, a past Expires or another Canonical fails', () => {
+      const txt = (body: string, over: Record<string, string> = {}) =>
+        page(body, { 'content-type': 'text/plain; charset=utf-8', ...over });
+      expect(checkSecurityTxt(txt(securityBody), domain, new Date('2026-12-04T00:00:00Z'))).toMatchObject({
+        check: 'security.txt',
+        ok: true,
+        detail: /Expires 2027-09-30/,
+      });
+      const at = new Date('2026-12-04T00:00:00Z');
+      expect(checkSecurityTxt(txt(securityBody.replaceAll('Contact:', 'X:')), domain, at).detail).toMatch(/no Contact/);
+      expect(checkSecurityTxt(txt(securityBody), domain, new Date('2027-10-01T00:00:00Z')).detail).toMatch(
+        /Expires is in the past/,
+      );
+      expect(checkSecurityTxt(txt(securityBody), 'evil.example', at).detail).toMatch(/Canonical/);
+      expect(checkSecurityTxt(txt(securityBody, { 'content-type': 'text/html' }), domain, at).detail).toMatch(
+        /content-type/,
+      );
+      expect(checkSecurityTxt(page('', {}, 404), domain, at).detail).toMatch(/status 404/);
+    });
+
+    it('og: the shells and og.png of the repository pass; a relative or foreign og:image, a left delimiter or a wrong PNG fails', () => {
+      expect(checkOg(site(), image(), domain)).toMatchObject({ check: 'og', ok: true });
+      const withHome = (body: string) => ({ ...site(), '/': page(body) });
+      const home = shell('apps/web/index.html');
+      expect(checkOg(withHome(home.replace(`https://${domain}/og.png`, '/og.png')), image(), domain).detail).toMatch(
+        /og:image "\/og.png"/,
+      );
+      expect(
+        checkOg(withHome(home.replace(`https://${domain}/og.png`, 'https://evil.example/og.png')), image(), domain).ok,
+      ).toBe(false);
+      expect(
+        checkOg(
+          withHome(home.replace(`https://${domain}/og.png`, 'https://[[env `RWS_DOMAIN`]]/og.png')),
+          image(),
+          domain,
+        ).detail,
+      ).toMatch(/delimiter/);
+      expect(
+        checkOg(withHome(home.replace('og:type" content="website"', 'og:type" content="x"')), image(), domain).detail,
+      ).toMatch(/og:type/);
+      expect(checkOg(site(), image({ headers: { 'content-type': 'image/jpeg' } }), domain).detail).toMatch(
+        /content-type/,
+      );
+      expect(checkOg(site(), image({ status: 404 }), domain).detail).toMatch(/status 404/);
+      expect(checkOg(site(), image({ bytes: Buffer.from('not a png at all, just bytes') }), domain).detail).toMatch(
+        /not a PNG/,
+      );
+      const small = Buffer.from(ogPng);
+      small.writeUInt32BE(600, 16);
+      expect(checkOg(site(), image({ bytes: small }), domain).detail).toMatch(/600 x 630, want 1200 x 630/);
+      expect(checkOg(site(), 'ECONNRESET', domain).detail).toMatch(/ECONNRESET/);
+      expect(pngSize(ogPng)).toEqual({ width: 1200, height: 630 });
+      expect(pngSize(undefined)).toBeUndefined();
+    });
+
+    it('cache-control: the pages revalidate; in launch robots.txt and the sitemap are public, max-age=300', () => {
+      expect(checkCacheControl(site(), 'prelaunch', undefined, undefined)).toMatchObject({
+        check: 'cache-control',
+        ok: true,
+      });
+      expect(checkCacheControl(site(), 'launch', robots(), sitemap())).toMatchObject({ ok: true });
+      expect(checkCacheControl(site(), 'launch', robots({ 'cache-control': 'no-cache' }), sitemap()).detail).toMatch(
+        /\/robots.txt/,
+      );
+      expect(checkCacheControl(site(), 'launch', robots(), undefined).detail).toMatch(/\/sitemap.xml: not fetched/);
+      const stale = { ...site(), '/en/': page('', { 'cache-control': 'public, max-age=300' }) };
+      expect(checkCacheControl(stale, 'prelaunch', undefined, undefined).detail).toMatch(
+        /\/en\/: cache-control "public, max-age=300", want no-cache/,
+      );
+    });
+  });
+
+  describe('de-2 credit', () => {
+    const credit = 'Wasserstandsvorhersage: Bundesanstalt für Gewässerkunde (BfG)';
+    const listed = (text: string, id = 'DE-2'): ApiRead<StaticSources> => ({
+      problems: [],
+      data: {
+        schemaVersion: 1,
+        generatedAt: '2026-12-04T00:00:00.000Z',
+        attribution: [],
+        sources: [
+          {
+            id,
+            name: 'x',
+            provider: 'x',
+            licence: { kind: null, url: null },
+            attribution: [{ lang: 'de', text, url: null, required: true }],
+            dateKind: null,
+            date: null,
+            dateText: null,
+          },
+        ],
+      } as unknown as StaticSources,
+    });
+
+    it('is N/A with its reason while DE-2 is an owner source, whatever sources.json holds', () => {
+      const r = checkDe2Credit({ audience: 'owner', credit }, undefined);
+      expect(r).toMatchObject({ check: 'de-2 credit', ok: 'n/a' });
+      expect(r.detail).toMatch(/audience owner/);
+      expect(r.detail).toMatch(/until E1/);
+    });
+
+    it('once DE-2 is public, sources.json must list it with the registry credit, verbatim and required', () => {
+      const pub = { audience: 'public', credit };
+      expect(checkDe2Credit(pub, listed(credit))).toMatchObject({ ok: true });
+      expect(checkDe2Credit(pub, listed('BfG'))).toMatchObject({ ok: false, detail: /without the credit/ });
+      expect(checkDe2Credit(pub, listed(credit, 'DE-1'))).toMatchObject({ ok: false, detail: /not in sources.json/ });
+      expect(checkDe2Credit(pub, undefined)).toMatchObject({ ok: false, detail: /unreadable/ });
+      expect(checkDe2Credit(undefined, undefined)).toMatchObject({ ok: false });
+    });
+
+    it('reads the registry row: the credit is the one the catalogue gives, the audience owner or public', () => {
+      const row = de2Registry();
+      expect(row?.credit).toBe(credit);
+      expect(['owner', 'public']).toContain(row?.audience);
+    });
+  });
+
+  describe('owner docs', () => {
+    const doc = (body: string, status = 200) => page(body, {}, status);
+    const clean = () => ({
+      '/robots.txt': doc('', 404),
+      '/sitemap.xml': doc('', 404),
+      '/data/v1/sources.json': doc('{"sources":[]}'),
+      '/data/v1/status.json': doc('{"publisher":{}}'),
+    });
+
+    it('passes with robots.txt and the sitemap absent (prelaunch) or served (launch), and counts the documents', () => {
+      expect(checkOwnerDocs(clean(), domain, staticLeakTerms(registry))).toMatchObject({
+        check: 'owner docs',
+        ok: true,
+        detail: /^2 of 4 documents served/,
+      });
+      const served = { ...clean(), '/robots.txt': doc(robotsBody), '/sitemap.xml': doc(sitemapBody) };
+      expect(checkOwnerDocs(served, domain, staticLeakTerms(registry))).toMatchObject({ ok: true, detail: /^4 of 4/ });
+    });
+
+    it('fails on an owner source, spec, canary or hostname in any of the four, and on an unreadable one', () => {
+      const t = staticLeakTerms(registry);
+      const ownerId = ownerSourceIds(registry)[0] ?? 'BE-3';
+      for (const [path, body] of [
+        ['/data/v1/sources.json', `{"id":"${ownerId}"}`],
+        ['/data/v1/status.json', `{"v":${OWNER_CANARY}}`],
+        ['/robots.txt', `Sitemap: https://owner.${domain}/sitemap.xml`],
+        ['/sitemap.xml', `<loc>https://owner.${domain}/</loc>`],
+      ] as const) {
+        const r = checkOwnerDocs({ ...clean(), [path]: doc(body) }, domain, t);
+        expect(r.ok, path).toBe(false);
+        expect(r.detail, path).toContain(path);
+      }
+      expect(checkOwnerDocs({ ...clean(), '/data/v1/status.json': 'ECONNRESET' }, domain, t).ok).toBe(false);
+      expect(checkOwnerDocs({ ...clean(), '/data/v1/status.json': doc('', 500) }, domain, t).detail).toMatch(
+        /status 500/,
+      );
+      // only robots.txt and the sitemap may be absent
+      expect(checkOwnerDocs({ ...clean(), '/data/v1/sources.json': doc('', 404) }, domain, t).detail).toMatch(
+        /sources.json: status 404/,
+      );
+    });
+
+    it('does not take the word owner in prose for a hostname', () => {
+      expect(
+        checkOwnerDocs({ ...clean(), '/data/v1/sources.json': doc('{"t":"the data owner. See"}') }, domain, []),
+      ).toMatchObject({
+        ok: true,
+      });
+    });
+  });
+
+  describe('the owner agencies of the forecast coverage check (A7)', () => {
+    it('are read from the registry: BfG while an owner source is the BfG’s, and nothing else', () => {
+      const agencies = ownerAgencies();
+      expect(agencies.length === 0 || agencies.join() === 'BfG').toBe(true);
+      const withBfg = (agenciesList: string[]) =>
+        checkForecastCoverage(
+          sourcesDoc({
+            forecast_coverage: {
+              total: { stations: 30, covered: 15 },
+              countries: [{ country: 'NL', stations: 30, covered: 15 }],
+              reaches: reachIds().map((id, i) => ({
+                id,
+                names: { nl: id, en: id },
+                no_official_forecast: false,
+                sources: [],
+                stations: 2,
+                covered: 1,
+                after_permission: i === 0 ? ['BfG'] : [],
+                none_publishes: [],
+              })),
+              other: { stations: 0, covered: 0 },
+            } as unknown as HealthSources['forecast_coverage'],
+          }),
+          ownerSourceIds(registry),
+          reachIds(),
+          agenciesList,
+        );
+      expect(withBfg(['BfG'])).toMatchObject({ ok: false, detail: /BfG/ });
+      expect(withBfg([])).toMatchObject({ ok: true });
+    });
+
+    it('name BfG only while no public source has the same provider (after the DE-2 flip BfG is a public credit)', () => {
+      const de3 = { audience: 'owner', provider: 'bfg' };
+      expect(ownerAgencies([de3, { audience: 'owner', provider: 'bfg' }])).toEqual(['BfG']);
+      expect(ownerAgencies([de3, { audience: 'owner', provider: 'age' }])).toEqual(['BfG']);
+      expect(ownerAgencies([de3, { audience: 'public', provider: 'bfg' }])).toEqual([]);
+      expect(ownerAgencies([{ audience: 'public', provider: 'bfg' }])).toEqual([]);
+      expect(ownerAgencies([])).toEqual([]);
+    });
+  });
+
+  describe('siteChecks, both profiles, against a stub of the public site', () => {
+    /** The public site as a profile makes it: pages, 404 shells, data 404s, robots.txt, the sitemap, og.png, security.txt. */
+    function world(profile: Profile, tweak: (path: string, p: Page) => Page = (_p, x) => x) {
+      const base = expectedHeaders(architecture, profile);
+      const robotsTag = (data: boolean): Record<string, string> =>
+        profile === 'prelaunch' || data ? { 'x-robots-tag': 'noindex' } : {};
+      const pageHeaders = { ...base, 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' };
+      const files = new Map<string, Page>();
+      for (const { path, lang } of PAGE_PATHS)
+        files.set(path, {
+          status: 200,
+          headers: { ...pageHeaders },
+          body:
+            path === '/'
+              ? shell('apps/web/index.html')
+              : path === '/en/'
+                ? shell('apps/web/en/index.html')
+                : `<!doctype html><html lang="${lang}"></html>`,
+        });
+      for (const { path, lang } of NOT_FOUND_PATHS)
+        files.set(path, {
+          status: 404,
+          headers: { ...pageHeaders, ...robotsTag(true) },
+          body: `<!doctype html><html lang="${lang}"></html>`,
+        });
+      for (const path of ['/api', '/tiles'])
+        files.set(path, { status: 404, headers: { ...base, ...robotsTag(true) }, body: '' });
+      files.set('/robots.txt', profile === 'launch' ? robots() : page('', {}, 404));
+      files.set('/sitemap.xml', profile === 'launch' ? sitemap() : page('', {}, 404));
+      files.set('/.well-known/security.txt', page(securityBody, { 'content-type': 'text/plain; charset=utf-8' }));
+      files.set('/og.png', image());
+      files.set('/data/v1/sources.json', page('{}', { 'content-type': 'application/json' }));
+      files.set('/data/v1/status.json', page('{}', { 'content-type': 'application/json' }));
+      for (const [path, p] of files) files.set(path, tweak(path, p));
+      const site = Object.fromEntries(
+        [...PAGE_PATHS, ...NOT_FOUND_PATHS].map(({ path }) => [path, files.get(path) as Page]),
+      );
+      return { site, fetch: async (path: string) => files.get(path) ?? 'ECONNREFUSED' };
+    }
+    const run = async (profile: Profile, tweak?: (path: string, p: Page) => Page) => {
+      const w = world(profile, tweak);
+      return siteChecks(w.fetch, domain, registry, profile, w.site, architecture, new Date('2026-12-04T00:00:00Z'));
+    };
+    const NAMES = [
+      'headers /',
+      'headers /en/',
+      'not found',
+      'noindex',
+      'robots',
+      'sitemap',
+      'legal pages',
+      'security.txt',
+      'og',
+      'cache-control',
+      'de-2 credit',
+      'owner docs',
+    ];
+
+    it.each(PROFILES)(
+      '%s: every check of the profile passes on the site that profile makes (de-2 credit is judged above)',
+      async (profile) => {
+        const results = await run(profile);
+        const names = results.map((r) => r.check);
+        for (const n of NAMES) expect(names, n).toContain(n);
+        expect(names.filter((n) => n.startsWith('pages '))).toHaveLength(18);
+        expect(new Set(names).size).toBe(names.length);
+        for (const r of results.filter((x) => x.check !== 'de-2 credit'))
+          expect(r, r.check).toMatchObject({ ok: true });
+        expect(
+          results.find((r) => r.check === 'de-2 credit')?.ok === 'n/a' || de2Registry()?.audience === 'public',
+        ).toBe(true);
+      },
+    );
+
+    it('each profile refuses the other one: launch headers fail prelaunch and the reverse', async () => {
+      const w = world('launch');
+      const asPre = await siteChecks(
+        w.fetch,
+        domain,
+        registry,
+        'prelaunch',
+        w.site,
+        architecture,
+        new Date('2026-12-04T00:00:00Z'),
+      );
+      for (const n of ['headers /', 'headers /en/', 'noindex', 'robots', 'sitemap'])
+        expect(asPre.find((r) => r.check === n)?.ok, n).toBe(false);
+      const p = world('prelaunch');
+      const asLaunch = await siteChecks(
+        p.fetch,
+        domain,
+        registry,
+        'launch',
+        p.site,
+        architecture,
+        new Date('2026-12-04T00:00:00Z'),
+      );
+      for (const n of ['headers /', 'headers /en/', 'noindex', 'robots', 'sitemap', 'cache-control'])
+        expect(asLaunch.find((r) => r.check === n)?.ok, n).toBe(false);
+    });
+
+    it('launch: noindex on a page fails the headers, the page and noindex checks; a missing noindex on /api fails noindex', async () => {
+      const noisy = await run('launch', (path, p) =>
+        path === '/over' ? { ...p, headers: { ...p.headers, 'x-robots-tag': 'noindex' } } : p,
+      );
+      expect(noisy.find((r) => r.check === 'pages /over')).toMatchObject({ ok: false, detail: /x-robots-tag/ });
+      const quiet = await run('launch', (path, p) => {
+        if (path !== '/api') return p;
+        const { 'x-robots-tag': _t, ...headers } = p.headers;
+        return { ...p, headers };
+      });
+      expect(quiet.find((r) => r.check === 'noindex')).toMatchObject({ ok: false, detail: /\/api: x-robots-tag null/ });
+    });
+
+    it('both profiles: a 404 shell without noindex fails not found', async () => {
+      for (const profile of PROFILES) {
+        const r = await run(profile, (path, p) => {
+          if (path !== '/rws-verify-geen-pagina') return p;
+          const { 'x-robots-tag': _t, ...headers } = p.headers;
+          return { ...p, headers };
+        });
+        expect(
+          r.find((x) => x.check === 'not found'),
+          profile,
+        ).toMatchObject({ ok: false, detail: /x-robots-tag/ });
+      }
+    });
+
+    it('both profiles: an owner hostname in sources.json fails owner docs; so does an unreachable og.png fail og', async () => {
+      for (const profile of PROFILES) {
+        const leak = await run(profile, (path, p) =>
+          path === '/data/v1/sources.json' ? { ...p, body: `{"x":"https://owner.${domain}/"}` } : p,
+        );
+        expect(
+          leak.find((x) => x.check === 'owner docs'),
+          profile,
+        ).toMatchObject({ ok: false });
+        const noImage = await run(profile, (path, p) => (path === '/og.png' ? { ...p, status: 404 } : p));
+        expect(
+          noImage.find((x) => x.check === 'og'),
+          profile,
+        ).toMatchObject({ ok: false, detail: /og.png: status 404/ });
+      }
+    });
+  });
+
+  it('--dry-run lists every new check once, and --profile and --site in the header and usage', () => {
+    for (const n of [
+      'robots',
+      'sitemap',
+      'legal pages',
+      'security.txt',
+      'og',
+      'cache-control',
+      'de-2 credit',
+      'owner docs',
+    ])
+      expect(
+        CHECKS.filter((c) => c.startsWith(`${n} (P12b`)),
+        n,
+      ).toHaveLength(1);
+    expect(CHECKS.find((c) => c.startsWith('headers / and /en/'))).toMatch(/--profile launch/);
+    const source = read('scripts/verify-prod.ts');
+    expect(source).toContain('--profile prelaunch|launch');
+    expect(source).toContain("else if (a === '--site') mode = 'site';");
+  });
+
+  it('the CI deploy job requires a PASS for the checks of the default profile, and de-2 credit as PASS or N/A', () => {
+    const ci = read('.github/workflows/ci.yml');
+    const required = /for check in ([^;]*?); do/s.exec(ci.slice(ci.indexOf("'api meta'") - 20))?.[1] ?? '';
+    const names = required.match(/'([^']+)'/g)?.map((x) => x.slice(1, -1)) ?? [];
+    for (const n of ['robots', 'sitemap', 'legal pages', 'security.txt', 'og', 'cache-control', 'owner docs']) {
+      expect(names, n).toContain(n);
+      expect(
+        CHECKS.some((c) => c.startsWith(`${n} (P12b`)),
+        n,
+      ).toBe(true);
+    }
+    expect(ci).toContain("grep -qE '^(PASS|N/A) de-2 credit '");
+    // none of them is in the allow-list of checks that may fail without live data
+    const allow = /grep -vE '\^FAIL \(([^)]*)\) '/.exec(ci)?.[1] ?? '';
+    for (const n of [
+      'robots',
+      'sitemap',
+      'legal pages',
+      'security.txt',
+      'og',
+      'cache-control',
+      'owner docs',
+      'de-2 credit',
+    ])
+      expect(allow.split('|'), n).not.toContain(n);
+    expect(allow.length).toBeGreaterThan(100);
   });
 });

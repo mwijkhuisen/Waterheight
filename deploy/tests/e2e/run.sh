@@ -21,7 +21,9 @@
 #     served, a burst of writes does not disarm the path unit and rws-tick
 #     re-arms it; the rws-deploy smoke test passes;
 #   - restic reads its keys from AWS_SHARED_CREDENTIALS_FILE and writes to an
-#     Object Lock bucket; the restore drill matches 100 of 100; the VPS key
+#     Object Lock bucket; the restore drill matches 100 of 100, restores the
+#     nightly dump into a throwaway postgres and replays a settled day into it
+#     without a change (P12b); the VPS key
 #     cannot remove a version (object-lock-prune.sh);
 #   - the watchdog's probe through DNS and TLS passes;
 #   - (P2a) the database path of rws-lib.sh (db_up: db healthy, roles and
@@ -216,7 +218,16 @@ for image in server web backup; do
 done
 docker run --rm -e RWS_DOMAIN=$DOMAIN -e RWS_CONTACT_EMAIL=contact@$DOMAIN rws-web:ci \
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
-proof "caddy validate: deploy/web/Caddyfile + site.caddy valid inside the web image"
+# P12b: both phases of the go-public switch are valid, and a value that names no phase file stops Caddy.
+for phase in prelaunch launch; do
+  docker run --rm -e RWS_DOMAIN=$DOMAIN -e RWS_CONTACT_EMAIL=contact@$DOMAIN -e RWS_SITE_PHASE=$phase rws-web:ci \
+    caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail "caddy validate in phase $phase"
+done
+if docker run --rm -e RWS_DOMAIN=$DOMAIN -e RWS_CONTACT_EMAIL=contact@$DOMAIN -e RWS_SITE_PHASE=typo rws-web:ci \
+  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
+  fail "caddy validated RWS_SITE_PHASE=typo"
+fi
+proof "caddy validate: deploy/web/Caddyfile + site.caddy valid inside the web image, in both phases (RWS_SITE_PHASE prelaunch and launch, and unset = prelaunch); a value that names no phase file stops Caddy"
 docker run --rm --entrypoint /nodejs/bin/node rws-server:ci /app/apps/server/dist/main.js capture --dry-run | tail -n 1
 proof "server image: capture --dry-run loads every spec from /app/registry next to /app/apps/server/dist (the P1a layout)"
 
@@ -1014,8 +1025,6 @@ dumps=/srv/rws/backup/db
 [[ $(stat -c '%a %u %g' "$dumps/rws.dump" "$dumps/globals.sql" | sort -u) == '440 0 61003' ]] ||
   fail "dump files: $(stat -c '%n %a %u %g' "$dumps"/* | tr '\n' ' ')"
 [[ $(head -c 5 "$dumps/rws.dump") == PGDMP ]] || fail "rws.dump is not a custom-format dump"
-tables=$(rws_compose exec -T db pg_restore -l <"$dumps/rws.dump" | grep -c ' TABLE DATA ' || true)
-((tables > 0)) || fail "pg_restore -l lists no table data in rws.dump"
 grep -q '^CREATE ROLE rws_api;' "$dumps/globals.sql" || fail "globals.sql lacks the roles"
 ! grep -q 'SCRAM-SHA-256' "$dumps/globals.sql" || fail "globals.sql carries a password hash"
 read_dump() {
@@ -1028,12 +1037,24 @@ snapshot=$(rws_compose run --rm --no-deps -T backup ls latest /data/db)
 for f in rws.dump globals.sql; do
   grep -qx "/data/db/$f" <<<"$snapshot" || fail "the latest snapshot has no /data/db/$f"
 done
-proof "the nightly dump: pg_dump -Fc --no-large-objects and pg_dumpall --globals-only --no-role-passwords as rws_backup (peer, no password) wrote rws.dump (custom format, $tables TABLE DATA entries by pg_restore -l) and globals.sql (the roles, no password hash), root:61003 0440 in root's /srv/rws/backup: uid 65532 cannot read them, the backup job's gid can, and restic's latest snapshot holds /data/db"
-drill=$("$repo/deploy/bin/rws-restore-drill" --force | tail -n 1)
-[[ $drill == 'restore drill: sampled 100, matched 100' ]] || fail "drill: $drill"
+proof "the nightly dump: pg_dump -Fc --no-large-objects and pg_dumpall --globals-only --no-role-passwords as rws_backup (peer, no password) wrote rws.dump (custom format; the drill below restores it) and globals.sql (the roles, no password hash), root:61003 0440 in root's /srv/rws/backup: uid 65532 cannot read them, the backup job's gid can, and restic's latest snapshot holds /data/db"
+# P12b (plan A8-A10): the drill also restores this dump into a throwaway PostgreSQL on an internal network of its
+# own and replays a settled day into it. This stack's observations are the fixture archive's (recorded days ago;
+# capture has no internet), so its freshness bound is their age, rounded up, plus 1 h (26 h in production).
+age_h=$(psql_su "select greatest(ceil(extract(epoch from now() - max(ts)) / 3600)::int + 1, 26) from obs")
+[[ $age_h =~ ^[0-9]+$ ]] || fail "no observation age: $age_h"
+drill_out=$(RWS_DRILL_MAX_AGE_H=$age_h "$repo/deploy/bin/rws-restore-drill" --force) || fail "rws-restore-drill failed: $drill_out"
+echo "$drill_out"
+grep -qx 'restore drill: sampled 100, matched 100' <<<"$drill_out" || fail "drill: no 100 of 100 raw objects"
+grep -qx 'restore drill: dump restored, sanity ok' <<<"$drill_out" || fail "drill: the dump was not restored"
+drill_replay=$(grep '^restore drill: replay of ' <<<"$drill_out") || fail "drill: no replay line"
+[[ $drill_replay =~ \(([1-9][0-9]*)\ sources.*n_new\ 0,\ n_changed\ 0,\ quarantined\ 0,\ checksums\ equal$ ]] ||
+  fail "drill: $drill_replay"
 jq -e '.drill.sampled == 100 and .drill.matched == 100' /srv/rws/public/ops/ops.json >/dev/null || fail "ops.json drill"
 [[ -z $(find /srv/rws/backup/drill -mindepth 1) ]] || fail "the drill left files behind"
-proof "forced restore drill: $drill (sha256 of zstd -dc against the manifest), written to ops.json, scratch emptied"
+[[ -z $(docker ps -aq --filter label=rws.drill) && -z $(docker network ls -q --filter label=rws.drill) ]] ||
+  fail "the drill left a container or network behind"
+proof "forced restore drill: 100 of 100 raw objects (sha256 of zstd -dc against the manifest) in ops.json; the dump restored from restic into a throwaway postgres:18.6 (1 GB, 128 pids, read-only, no capability) on an --internal network of its own, globals.sql before pg_restore, sanity ok (roles, tables, newest observation within ${age_h} h); ${drill_replay#restore drill: } (P2 md5 per source and month in the copy, before and after); containers, network and scratch removed"
 prune=$(CURL_CA_BUNDLE=/ci/pki/ca.pem "$repo/deploy/tests/object-lock-prune.sh")
 echo "$prune"
 [[ $(grep -c '^PASS ' <<<"$prune") == 5 ]] || fail "object-lock-prune.sh: not 5 PASS lines"
@@ -1273,3 +1294,48 @@ E2E_OWNER_PW=$OWNER_PW docker run --rm --init --network host --ipc=host --add-ho
   node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium ||
   fail "the owner smoke (owner-smoke.spec.ts) failed"
 proof "owner smoke: Playwright (Chromium, host network, https://owner.$DOMAIN, hosts entry -> $owner_ip: the WireGuard address, port 443) signed in to caddy-owner on the production build: /runtime-config.json says owner and the owner banner shows (owner-smoke.spec.ts)"
+
+step "Go public (P12b): verify-prod's public-site checks in both profiles, caddy recreated in between"
+# The switch is RWS_SITE_PHASE on the caddy service (deploy/compose.yaml, default prelaunch; site.caddy imports
+# phase-<phase>.caddy). The merged file the stack runs from ($REL/compose.yaml, rendered above) holds the value; the
+# launch phase is that value changed here and the service recreated, then put back, so that the deploy job's own
+# verify-prod run after this script (profile prelaunch, the default) judges the production phase. verify-prod runs in the
+# build image's Node on the host network, with the repository read-only (CI only: Docker). `--site` is its public-site
+# checks: headers, pages, not found, noindex, robots, sitemap, legal pages, security.txt, og, cache-control, de-2 credit and
+# owner docs. checkOwnerListener is not part of it (it probes real public addresses; --resolve skips it).
+phase_of() { sed -n 's/^      RWS_SITE_PHASE: //p' "$REL/compose.yaml"; }
+set_phase() {
+  [[ $(phase_of) == "$1" ]] && return 0
+  sed -i "s/^      RWS_SITE_PHASE: .*/      RWS_SITE_PHASE: $1/" "$REL/compose.yaml"
+  [[ $(phase_of) == "$1" ]] || fail "could not set RWS_SITE_PHASE: $1 in the merged compose file"
+  rws_compose up -d --no-deps --force-recreate caddy
+  wait_for "caddy healthy in phase $1" 120 healthy caddy
+  wait_for "https answers in phase $1" 120 outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/healthz"
+}
+verify_site() { # profile
+  docker run --rm --network host -v "$repo:/work:ro" -v /ci/pki:/ci/pki:ro -w /work "$NODE_IMAGE" \
+    node scripts/verify-prod.ts "$DOMAIN" --resolve "$IP4" --ca /ci/pki/pebble-root.pem --site --profile "$1" |
+    tee "/ci/verify-site-$1.out" || true
+  ! grep -q '^FAIL' "/ci/verify-site-$1.out" || fail "verify-prod --site --profile $1 has FAIL lines (above)"
+  for check in 'headers /' 'headers /en/' 'pages /' 'not found' 'noindex' 'robots' 'sitemap' 'legal pages' 'security.txt' \
+    'og' 'cache-control' 'owner docs'; do
+    grep -qE "^PASS $check " "/ci/verify-site-$1.out" || fail "verify-prod --site --profile $1: no PASS for $check"
+  done
+  grep -qE '^(PASS|N/A) de-2 credit ' "/ci/verify-site-$1.out" || fail "verify-prod --site --profile $1: no de-2 credit line"
+}
+[[ $(phase_of) == prelaunch ]] || fail "the stack does not run in the prelaunch phase before the switch test ($(phase_of))"
+verify_site prelaunch
+grep -qE '^PASS robots .*404' /ci/verify-site-prelaunch.out || fail "prelaunch: robots.txt is not the 404"
+grep -qE '^PASS sitemap .*404' /ci/verify-site-prelaunch.out || fail "prelaunch: sitemap.xml is not the 404"
+set_phase launch
+verify_site launch
+grep -qE '^PASS robots .*Sitemap of ' /ci/verify-site-launch.out || fail "launch: robots.txt is not the served one"
+grep -qE '^PASS sitemap .*18 pages' /ci/verify-site-launch.out || fail "launch: the sitemap does not list the 18 pages"
+# invariant 11 on the launch documents, from outside: no owner hostname or owner-audience source in robots.txt or the sitemap
+for doc in robots.txt sitemap.xml; do
+  outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/$doc" >"/ci/launch-$doc"
+  ! grep -qiE "owner\.|CANARY|BE-3|LU-2|LU-3|LU-4|DE-2|DE-3" "/ci/launch-$doc" || fail "launch: /$doc names an owner source or host"
+done
+set_phase prelaunch
+verify_site prelaunch
+proof "go-public switch (RWS_SITE_PHASE on caddy, deploy/web/phase-<phase>.caddy): verify-prod.ts --site --profile prelaunch on the stack passed (noindex everywhere; robots.txt and sitemap.xml 404; legal pages, security.txt, og, cache-control, owner docs); caddy recreated with launch: --profile launch passed (no X-Robots-Tag on the 18 pages, noindex on /api and /tiles and the 404 shells, robots.txt with Disallow /api/ and the Sitemap of $DOMAIN, the sitemap with the 18 pages and hreflang, og tags absolute, no owner source or host in either document); caddy recreated with prelaunch again for the deploy job's own verify-prod run (checkOwnerListener skipped: --resolve)"
