@@ -116,8 +116,8 @@ stations:
   - { station: lu.age.clervaux, unsnapped: true, reason: "catalogue §3.2: Clervaux 35 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
   - { station: lu.age.troisvierges, unsnapped: true, reason: "catalogue §3.2: Troisvierges 37 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
   - { station: lu.age.schoenfels, unsnapped: true, reason: "catalogue §3.2: Mamer at Schoenfels 5 (Alzette tributary); not a curated river" }
-  - { station: lu.age.hunnebuer, river: eisch, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); AGE publishes no water name; nearest eisch edge 5 m, alzette 2415 m on the fixture (OSM 2026-10-11)" }
-  - { station: lu.age.eischen, river: eisch, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); AGE publishes no water name; nearest eisch edge 13 m, alzette 16991 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age.hunnebuer, river: eisch, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 2415 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age.eischen, river: eisch, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 16991 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age.reichlange, river: attert, reason: "catalogue §3.2: Attert at Reichlange 9 (Alzette tributary); AGE publishes no water name; nearest attert edge 7 m, wark 6478 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age.bissen, river: attert, reason: "catalogue §3.2: Attert at Bissen 10 (Alzette tributary); AGE publishes no water name; nearest attert edge 4 m, alzette 3852 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age.niederfeulen, river: wark, reason: "catalogue §3.2: Wark at Niederfeulen 27 (Alzette tributary); AGE publishes no water name; nearest wark edge 5 m on the fixture (OSM 2026-10-10)" }
@@ -156,8 +156,8 @@ stations:
   - { station: lu.age-json.clervaux, unsnapped: true, reason: "catalogue §3.2: Clervaux 35 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
   - { station: lu.age-json.troisvierges, unsnapped: true, reason: "catalogue §3.2: Troisvierges 37 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
   - { station: lu.age-json.schoenfels, unsnapped: true, reason: "catalogue §3.2: Mamer at Schoenfels 5 (Alzette tributary); not a curated river" }
-  - { station: lu.age-json.hunnebuer, river: eisch, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); AGE publishes no water name; nearest eisch edge 5 m, alzette 2415 m on the fixture (OSM 2026-10-11)" }
-  - { station: lu.age-json.eischen, river: eisch, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); AGE publishes no water name; nearest eisch edge 13 m, alzette 16991 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age-json.hunnebuer, river: eisch, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 2415 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age-json.eischen, river: eisch, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 16991 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age-json.reichlange, river: attert, reason: "catalogue §3.2: Attert at Reichlange 9 (Alzette tributary); AGE publishes no water name; nearest attert edge 7 m, wark 6478 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age-json.bissen, river: attert, reason: "catalogue §3.2: Attert at Bissen 10 (Alzette tributary); AGE publishes no water name; nearest attert edge 4 m, alzette 3852 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age-json.niederfeulen, river: wark, reason: "catalogue §3.2: Wark at Niederfeulen 27 (Alzette tributary); AGE publishes no water name; nearest wark edge 5 m on the fixture (OSM 2026-10-10)" }

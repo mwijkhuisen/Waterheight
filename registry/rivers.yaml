@@ -1709,7 +1709,7 @@ rivers:
     wikidata: Q1311008
     parent_river_id: alzette
     km_direction: none
-    evidence: "Wikidata Q1311008 (no P402; P403 Q450722 Alzette), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); LU-1 publishes no water name: placed by station override; no relation carries it in the extract; the main stem is way 33826974 tagged wikidata=<this id> and name=L'Eisch (geo.yml run 38123404612, rivernet-fixture artifact); six short ways named Eisch carry the QID too and are not selected"
+    evidence: "Wikidata Q1311008 (no P402; P403 Q450722 Alzette), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); LU-1 publishes no water name: placed by station override; no relation carries it in the extract; the main stem is way 33826974 tagged wikidata=<this id> and name=L'Eisch (geo.yml run 38123404612, rivernet-fixture artifact); the upper course (six ways named Eisch, 11.1 km, also tagged with the QID, ending 37 m short of the main stem) is not selected: the selection takes one name"
   - id: wiltz
     name_nl: "Wiltz"
     name_en: "Wiltz"
