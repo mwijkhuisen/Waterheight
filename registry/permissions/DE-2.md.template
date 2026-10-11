@@ -1,0 +1,35 @@
+---
+# Copy to registry/permissions/DE-2.md only in the E1 flip commit (plan §9), with every TODO filled in from the
+# owner's E1 details. Never invent a field. readRegistry reads *.md only, so this template is ignored, and a copy
+# with a TODO left in it fails the registry check (CI).
+# Never wider than BfG's C6 answer: a channel BfG does not name stays false, and the registry may use no more.
+source: DE-2
+granted_by: TODO # the granting organisation, e.g. "Bundesanstalt für Gewässerkunde (BfG)"
+granted_on: TODO # YYYY-MM-DD, quoted: the date of BfG's answer (or of the Belegexemplar notice, per C6)
+evidence: TODO # where the original lives, e.g. "e-mail of YYYY-MM-DD, owner's mail archive"; never its text or a name
+audience: TODO # "public"
+display: TODO # true or false, as BfG's C6 answer grants
+api: TODO # true or false, as BfG's C6 answer grants
+bulk_export: TODO # true or false, as BfG's C6 answer grants
+history_export: TODO # true or false, as BfG's C6 answer grants
+---
+
+# DE-2: BfG water-level forecasts (WV) on the public site
+
+A **grant record** (P12b gate, catalogue §0.2 and §0.8): DE-2 is in `GATED`
+(`packages/contracts/src/registry.ts`), so `registry/sources.yaml` may set it to `audience: public` only with
+this file granting `public`. The channels in `sources.yaml` may be no wider than the front matter above, and the
+front matter never wider than BfG's C6 answer.
+
+| Field | Value |
+|---|---|
+| Belegexemplar notice sent (E1) | TODO (YYYY-MM-DD) |
+| Sent to | vorhersage@bafg.de |
+| Site URL named in the notice | TODO (https://…) |
+| Screenshot (Playwright `apps/web/e2e/de2-beleg.spec.ts`, kept by the owner) | TODO (where it is kept; never committed) |
+| BfG reply (C6) | TODO (where it is kept, e.g. "owner's mail archive"; never its text or a person's name) |
+| Channels granted | TODO (display, api, bulk_export, history_export as BfG's answer names them; the rest stay off) |
+| WV above HSW / Marke II (capped values, C6) | TODO (BfG's answer; until then no cap detection exists) |
+
+The credit shown with every DE-2 forecast is the registry's `attribution_text`, verbatim:
+"Wasserstandsvorhersage: Bundesanstalt für Gewässerkunde (BfG)".

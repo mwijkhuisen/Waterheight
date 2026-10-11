@@ -11,7 +11,7 @@ import {
   table08,
 } from '../../../test/catalogue.ts';
 import { BASELINE } from '../src/baseline.ts';
-import { CHANNELS, defaultChannels, type Source, validateRegistry } from '../src/registry.ts';
+import { CHANNELS, defaultChannels, GATED, type Source, validateRegistry } from '../src/registry.ts';
 
 const read = (file: string) => readFileSync(`${repoRoot}registry/${file}`, 'utf8');
 const permissionRecords = readPermissionRecords(parse);
@@ -24,18 +24,24 @@ const sources = registry.sources;
 const byId = new Map(sources.map((s) => [s.id, s]));
 const real = sources.filter((s) => s.canary !== true);
 
-/** Validate a copy of sources.yaml with one source changed. */
+/**
+ * Validate a copy of sources.yaml with one source changed. `records` replace the committed permission records of
+ * their IDs (undefined: that ID has none), so a test holds whatever registry/permissions/ grants (P12b: the DE-2 flip).
+ */
 function problemsWith(
   id: string,
   change: (s: Record<string, unknown>) => void,
-  records: ReadonlyMap<string, unknown> = permissionRecords,
+  records: ReadonlyMap<string, unknown> = new Map(),
 ) {
   const copy = structuredClone(sourcesInput);
   const target = copy.sources.find((s) => s.id === id);
   if (target === undefined) throw new Error(`no source ${id}`);
   change(target);
-  return validateRegistry(providersInput, copy, { permissionRecords: records, today }).problems.join('\n');
+  const all = new Map(permissionRecords);
+  for (const [k, v] of records) v === undefined ? all.delete(k) : all.set(k, v);
+  return validateRegistry(providersInput, copy, { permissionRecords: all, today }).problems.join('\n');
 }
+const without = (id: string) => new Map([[id, undefined]]);
 
 /** A well-formed permission record (front matter of registry/permissions/<ID>.md). */
 const grant = (source: string, over: Record<string, unknown> = {}) =>
@@ -333,7 +339,105 @@ describe('permission records and the baseline (invariant 8)', () => {
     }
     expect(Object.keys(BASELINE).sort()).toEqual(sources.map((s) => s.id).sort());
   });
+
+  // The launch gate (P12b, catalogue §0.2): a gated source is public only with a record granting public.
+  it('gate none of the 19 open sources public since P0, and only registered sources', () => {
+    expect(PUBLIC).toHaveLength(19);
+    for (const id of PUBLIC) expect([id, GATED.has(id)]).toEqual([id, false]);
+    for (const id of GATED) expect([id, byId.has(id)]).toEqual([id, true]);
+  });
+
+  it.each([
+    ['DE-2', de2Public, { api: true, history_export: true }],
+    ['DE-10', offPublic, {}],
+    ['DE-12', offPublic, {}],
+  ] as const)('gate %s: public fails without a record and passes with one', (id, flip, over) => {
+    expect(problemsWith(id, flip, without(id))).toMatch(new RegExp(`${id}: gated .*registry/permissions/${id}\\.md`));
+    expect(problemsWith(id, flip, grant(id, over))).toBe('');
+  });
+
+  it('gate a channel wider than the record grants', () => {
+    expect(problemsWith('DE-2', de2Public, grant('DE-2', { history_export: true }))).toMatch(
+      /DE-2: api is on, but its permission record does not grant it/,
+    );
+  });
+
+  it('gate even when baseline.ts is edited to public (the bypass the gate closes)', () => {
+    const baseline = BASELINE as Record<string, { audience: string; licence_kind: string | null }>;
+    const asPublic = (id: string, run: () => void) => {
+      const saved = baseline[id];
+      baseline[id] = { ...(saved as { licence_kind: string | null }), audience: 'public' };
+      try {
+        run();
+      } finally {
+        baseline[id] = saved as { audience: string; licence_kind: string | null };
+      }
+    };
+    // BE-2's licence is open, so its §0.7 defaults are all on: only the gate stops it.
+    asPublic('BE-2', () => {
+      const be2 = problemsWith('BE-2', offPublic, without('BE-2'));
+      expect(be2).not.toMatch(/differs from/);
+      expect(be2).toMatch(/BE-2: gated/);
+    });
+    // A public DE-2 with every channel at its (closed) bfg-terms default: no channel rule fires, the gate does.
+    const dark = (s: Record<string, unknown>) =>
+      Object.assign(de2Public(s), { display: false, api: false, history_export: false, history_window: 'P31D' });
+    asPublic('DE-2', () => {
+      expect(problemsWith('DE-2', dark, without('DE-2'))).toBe(
+        'source DE-2: gated (catalogue §0.2), public only with registry/permissions/DE-2.md granting public',
+      );
+      expect(problemsWith('DE-2', de2Public, grant('DE-2', { api: true, history_export: true }))).toBe('');
+    });
+  });
+
+  it('gate a record whose audience is narrower, names another source or an unknown one', () => {
+    expect(
+      problemsWith('DE-2', de2Public, grant('DE-2', { audience: 'owner', api: true, history_export: true })),
+    ).toMatch(/DE-2: gated/);
+    const other = problemsWith('DE-2', de2Public, new Map([['DE-2', grant('DE-3').get('DE-3')]]));
+    expect(other).toMatch(/source is DE-3, expected DE-2/);
+    expect(other).toMatch(/DE-2: gated/);
+    expect(problemsWith('DE-2', () => undefined, grant('DE-99'))).toMatch(/permissions\/DE-99\.md: no such source/);
+  });
+
+  it('gate YAML-level bypass attempts: duplicate keys, merge keys, case, a second entry; aliases resolve and stay gated', () => {
+    const block = (text: string, id: string, edit: (b: string) => string) => {
+      const found = new RegExp(`  - id: ${id}\\n[\\s\\S]*?(?=\\n  - id: )`).exec(text)?.[0];
+      if (found === undefined) throw new Error(`no block ${id}`);
+      return text.replace(found, () => edit(found));
+    };
+    // DE-3: gated, owner, and no record (DE-2's flip leaves it so).
+    const check = (text: string) =>
+      validateRegistry(providersInput, parse(text), { permissionRecords, today }).problems.join('\n');
+    const de3 = (edit: (b: string) => string) => block(rawSources, 'DE-3', edit);
+    const swap = (b: string, to: string) => b.replace('    audience: owner\n', () => `${to}\n`);
+
+    expect(permissionRecords.has('DE-3')).toBe(false);
+    expect(() => parse(de3((b) => swap(b, '    audience: owner\n    audience: public')))).toThrow(/unique/);
+    expect(check(de3((b) => swap(b, '    <<: { audience: public }\n    audience: owner')))).toMatch(/<</);
+    expect(check(de3((b) => swap(b, '    audience: Public')))).toMatch(/audience/);
+    const twice = de3(
+      (b) =>
+        `${b}\n${swap(b, '    audience: public').replace(/private_basis:[\s\S]*?retrieved: "[0-9-]+"/, 'private_basis: null')}`,
+    );
+    expect(check(twice)).toMatch(/source DE-3: duplicate/);
+    expect(check(twice)).toMatch(/DE-3: gated/);
+    const anchored = block(rawSources, 'DE-1', (b) => b.replace('audience: public', 'audience: &pub public'));
+    const aliased = block(anchored, 'DE-3', (b) => swap(b, '    audience: *pub'));
+    expect(parse(aliased).sources.find((s: { id: string }) => s.id === 'DE-3').audience).toBe('public');
+    expect(check(aliased)).toMatch(/DE-3: gated/);
+  });
 });
+
+/** DE-2 as the E1 flip makes it: public, its private_basis removed, its channels unchanged (the record must grant them). */
+function de2Public(s: Record<string, unknown>) {
+  return Object.assign(s, { audience: 'public', private_basis: null });
+}
+
+/** An `off` source made public: captured, and (its history_export off) declaring its provider's window. */
+function offPublic(s: Record<string, unknown>) {
+  return Object.assign(s, { audience: 'public', capture_enabled: true, history_window: 'P31D' });
+}
 
 describe('withholding records (P5b: registry/permissions/LU-1.md)', () => {
   const withheld = (over: Record<string, unknown> = {}) =>

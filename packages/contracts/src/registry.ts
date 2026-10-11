@@ -125,6 +125,26 @@ export type Source = z.infer<typeof Source>;
 export const ProvidersFile = z.strictObject({ providers: z.array(Provider).min(1) });
 export const SourcesFile = z.strictObject({ sources: z.array(Source).min(1) });
 
+/**
+ * The launch gate (P12b, catalogue §0.2): sources whose public reuse needs the provider's consent or a notice. Public,
+ * each needs registry/permissions/<ID>.md granting `audience: public`, whatever the baseline says.
+ */
+export const GATED: ReadonlySet<string> = new Set([
+  'DE-2', // §0.2: BfG terms, source credit and a free copy (Belegexemplar)
+  'DE-3', // §0.2: BfG terms, source credit and a free copy (Belegexemplar)
+  'DE-9', // §0.2: NLWKN Impressum forbids passing data on and storing it
+  'DE-10', // §0.2: LfU RLP Impressum, reproduction only with consent
+  'DE-12', // §0.2: LUBW Impressum requires consent
+  'DE-13', // §0.2: Bayern LfU Impressum requires consent
+  'DE-14', // §0.2: Saarland Impressum requires consent
+  'BE-1', // §0.2: HIC TYPE 3, credentials and a User Agreement
+  'BE-2', // §0.2: VMM, a token for automated querying
+  'BE-3', // §0.2: SPW mentions légales, prior written consent
+  'LU-2', // §0.2: AGE CGU, written authorisation
+  'LU-3', // §0.2: AGE CGU, written authorisation
+  'LU-4', // §0.2: AGE CGU, written authorisation
+]);
+
 const RANK: Record<Audience, number> = { public: 2, owner: 1, off: 0 };
 
 /** True when `narrow` is the same as or narrower than `wide` (public > owner > off). */
@@ -269,6 +289,10 @@ export function validateRegistry(
     }
     if (record !== undefined && !audienceWithin(s.audience, record.audience)) {
       problems.push(`${at}: audience ${s.audience} exceeds the ${record.audience} its permission record grants`);
+    }
+    // The launch gate: independent of the baseline, so editing baseline.ts alone never makes a gated source public.
+    if (GATED.has(s.id) && s.audience === 'public' && record?.audience !== 'public') {
+      problems.push(`${at}: gated (catalogue §0.2), public only with registry/permissions/${s.id}.md granting public`);
     }
 
     // Audience (invariants 8 and 11; ADR-0017).

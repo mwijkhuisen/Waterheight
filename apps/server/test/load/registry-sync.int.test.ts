@@ -48,9 +48,15 @@ describe('registry sync', { timeout: 60_000 }, () => {
       }))
       .sort((a, b) => (String(a.id) < String(b.id) ? -1 : 1));
     expect(rows).toEqual(expected);
-    // The owner sources of the plan carry their verbatim clause.
+    // The owner sources of the registry (CANARY-OWNER and DE-3 among them) carry their verbatim clause.
     const owner = rows.filter((r) => r.audience === 'owner').map((r) => r.id);
-    expect(owner).toEqual(['BE-3', 'CANARY-OWNER', 'DE-2', 'DE-3', 'LU-2', 'LU-3', 'LU-4']);
+    expect(owner).toEqual(
+      sources
+        .filter((s) => s.audience === 'owner')
+        .map((s) => s.id)
+        .sort(),
+    );
+    expect(owner).toEqual(expect.arrayContaining(['CANARY-OWNER', 'DE-3']));
     for (const r of rows) expect(r.private_basis === null, r.id).toBe(r.audience !== 'owner');
   });
 
@@ -521,8 +527,8 @@ describe('registry sync', { timeout: 60_000 }, () => {
     );
     expect(() => readRegistry(url)).toThrow(/registry is not valid/);
     writeFileSync(`${dir}/sources.yaml`, sources);
-    // registry/permissions already holds the LU-1 withholding record (P5b): a record that grants nothing it knows
-    // of is refused, whatever the folder held before.
+    // registry/permissions already holds the LU-1 withholding record (P5b): a record that is neither a valid grant
+    // nor a withholding record is refused, whatever the folder held before.
     mkdirSync(`${dir}/permissions`, { recursive: true });
     writeFileSync(`${dir}/permissions/BE-3.md`, '---\nsource: BE-3\n---\n');
     expect(() => readRegistry(url)).toThrow(/permissions/);
@@ -534,5 +540,56 @@ describe('registry sync', { timeout: 60_000 }, () => {
     expect(() => readRegistry(url)).toThrow(/permissions\/LU-1\.md: Diekirch is not audience off/);
     writeFileSync(`${dir}/permissions/LU-1.md`, record.replace('[Bollendorf, Gemünd_Our]', '[Bollendorf, Nowhere]'));
     expect(() => readRegistry(url)).toThrow(/permissions\/LU-1\.md: Nowhere is not a registered series/);
+  });
+
+  it('applies a DE-2 grant record from a temp registry (P12b, §8 A1); the committed template is never read', async () => {
+    const { existsSync, readFileSync: read, writeFileSync } = await import('node:fs');
+    const { de2FlipRegistry, filledTemplate } = await import('../publish/de2-flip.ts');
+    // The real registry holds the template beside LU-1.md; readRegistry reads *.md only.
+    expect(existsSync(new URL('../../../../registry/permissions/DE-2.md.template', import.meta.url))).toBe(true);
+    const flip = de2FlipRegistry(false);
+    try {
+      expect(existsSync(`${flip.dir}/permissions/DE-2.md.template`)).toBe(true);
+      // Public without the record: the gate (catalogue §0.2) and the baseline refuse it.
+      expect(() => readRegistry(flip.url)).toThrow(/source DE-2: gated .*registry\/permissions\/DE-2\.md/);
+      // The template copied as it is: every TODO is invalid, so a half-filled record fails closed.
+      const template = read(new URL('../../../../registry/permissions/DE-2.md.template', import.meta.url), 'utf8');
+      writeFileSync(`${flip.dir}/permissions/DE-2.md`, template);
+      expect(() => readRegistry(flip.url)).toThrow(/permissions\/DE-2\.md: not a valid permission record/);
+      // A duplicate key in the front matter is no record either (yaml's uniqueKeys).
+      writeFileSync(
+        `${flip.dir}/permissions/DE-2.md`,
+        filledTemplate().replace('audience: "public"', () => 'audience: "public"\naudience: "owner"'),
+      );
+      expect(() => readRegistry(flip.url)).toThrow(/permissions\/DE-2\.md: not a valid permission record/);
+      // A record that grants less than sources.yaml uses (api off) fails; the filled template passes.
+      writeFileSync(
+        `${flip.dir}/permissions/DE-2.md`,
+        filledTemplate().replace('api: true', () => 'api: false'),
+      );
+      expect(() => readRegistry(flip.url)).toThrow(/DE-2: api is on, but its permission record does not grant it/);
+      writeFileSync(`${flip.dir}/permissions/DE-2.md`, filledTemplate());
+      const registry = readRegistry(flip.url);
+      expect(registry.sources.find((s) => s.id === 'DE-2')).toMatchObject({ audience: 'public', private_basis: null });
+      // The sync copies it as it is; the real registry restores its own row.
+      const migrator = h.dbAs('rws_migrator', 1);
+      try {
+        await syncRegistry(migrator.db, registry);
+        expect((await h.t.admin.query(`SELECT audience, private_basis FROM source WHERE id = 'DE-2'`)).rows).toEqual([
+          { audience: 'public', private_basis: null },
+        ]);
+        const credit = await h.t.admin.query(`SELECT text FROM ${VIEWS.public.attribution} WHERE source_id = 'DE-2'`);
+        expect(credit.rows).toEqual([{ text: 'Wasserstandsvorhersage: Bundesanstalt für Gewässerkunde (BfG)' }]);
+      } finally {
+        await syncRegistry(migrator.db, readRegistry());
+        await migrator.close();
+      }
+      const real = readRegistry().sources.find((s) => s.id === 'DE-2')?.audience;
+      expect((await h.t.admin.query(`SELECT audience FROM source WHERE id = 'DE-2'`)).rows).toEqual([
+        { audience: real },
+      ]);
+    } finally {
+      flip.remove();
+    }
   });
 });
