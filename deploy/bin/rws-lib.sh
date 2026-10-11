@@ -120,14 +120,25 @@ tag_epoch() {
   date -u -d "${t:5:4}-${t:9:2}-${t:11:2}T${t:14:2}:${t:16:2}:${t:18:2}Z" +%s
 }
 
-# docker compose on a release directory (default: the active one), as project "rws".
+# The owner site (P12a, A§11.5): RWS_OWNER_SITE=on in rws.env (read here, not through load_env, so every
+# caller sees it) and the WireGuard interface wg0 up with 10.66.0.1, the address compose.owner.yaml publishes
+# on. Off by default. Anything else leaves the overlay out, and the next `up --remove-orphans` removes the owner
+# containers: fail closed, and the public site never waits for the owner's.
+owner_env_on() { grep -qxF 'RWS_OWNER_SITE=on' "$RWS_ETC/rws.env" 2>/dev/null; }
+wg0_ready() { ip -4 -o addr show dev wg0 up 2>/dev/null | grep -q '[[:space:]]inet 10\.66\.0\.1/'; }
+owner_site_on() { owner_env_on && wg0_ready; }
+
+# docker compose on a release directory (default: the active one), as project "rws". The owner overlay
+# (stage_release copies it next to compose.yaml) is added only while owner_site_on.
 rws_compose() {
   local dir=$RWS_STATE_DIR/active
   if [[ ${1:-} == --release ]]; then
     dir=$RWS_STATE_DIR/releases/$2
     shift 2
   fi
-  docker compose -p rws --project-directory "$dir" -f "$dir/compose.yaml" \
+  local -a compose_files=(-f "$dir/compose.yaml")
+  if [[ -f $dir/compose.owner.yaml ]] && owner_site_on; then compose_files+=(-f "$dir/compose.owner.yaml"); fi
+  docker compose -p rws --project-directory "$dir" "${compose_files[@]}" \
     --env-file "$RWS_ETC/rws.env" --env-file "$dir/images.env" "$@"
 }
 
@@ -249,6 +260,8 @@ stage_release() {
     return 1
   fi
   cp "$stage/deploy/compose.yaml" "$src/release-manifest.json" "$stage/"
+  # The owner overlay (P12a) beside it, when the release has one; rws_compose decides whether to use it.
+  [[ ! -f $stage/deploy/compose.owner.yaml ]] || cp "$stage/deploy/compose.owner.yaml" "$stage/"
   jq -r '"RWS_SERVER_IMAGE=\(.images.server)\nRWS_WEB_IMAGE=\(.images.web)\nRWS_BACKUP_IMAGE=\(.images.backup)"' \
     "$src/release-manifest.json" >"$stage/images.env"
   if [[ -e $RWS_STATE_DIR/releases/$tag ]]; then
@@ -452,6 +465,9 @@ deploy_release() {
   fi
   cur=$(state_get current)
   set_active "$tag"
+  if owner_env_on && ! wg0_ready; then
+    log "owner site: RWS_OWNER_SITE=on but wg0 is not up with 10.66.0.1: the owner overlay is left out and its containers are removed (docs/runbooks/owner-exposure.md)"
+  fi
   # t0 after `up`: the replaced capture container has stopped by then, so only
   # the running release can write a newer capture.json.
   if db_up && rws_compose up -d --remove-orphans && t0=$(date -u +%s) && smoke "$t0"; then

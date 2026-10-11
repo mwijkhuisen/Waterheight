@@ -356,6 +356,10 @@ jobs:
           systemd-analyze verify --man=no --recursive-errors=no deploy/systemd/*
       - name: End to end on Docker 29.8.1 (nftables, Pebble ACME, MinIO Object Lock, restic, watchdog, publishers, owner site, degraded)
         run: sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/e2e/run.sh
+      # P12a (criterion 9 in CI): docker inspect of every service and job of the running stack; the CI stand-ins are the
+      # only exemptions (deploy/tests/hardening.sh --ci).
+      - name: Container hardening audit (deploy/tests/hardening.sh --ci)
+        run: sudo deploy/tests/hardening.sh --ci
       - name: scripts/verify-prod.ts against the running stack
         run: |
           node scripts/verify-prod.ts rivierstanden.example --resolve 203.0.114.10 --ca /ci/pki/pebble-root.pem \

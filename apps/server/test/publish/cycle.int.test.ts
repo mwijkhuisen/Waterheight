@@ -208,6 +208,26 @@ describe('publish cycle', { timeout: 120_000 }, () => {
     walk(dir);
   });
 
+  it('brownout (P12a): public meta.json carries the flag, the owner one never does, and no step is skipped', async () => {
+    const db = pubDb();
+    await publishOnce(db.db, 'public', dir, { now: NOW, render: fake(), brownout: () => false });
+    const normal = [...calls];
+    expect(read('meta.json').brownout).toBe(false);
+
+    calls = [];
+    rmSync(dir, { recursive: true, force: true });
+    await publishOnce(db.db, 'public', dir, { now: NOW, render: fake(), brownout: () => true });
+    expect(read('meta.json').brownout).toBe(true);
+    // The same renderers in the same order: the warnings step (DE-6) runs (today.json and latest.geojson at least), and nothing is dropped.
+    expect(calls).toEqual(normal);
+    expect(calls.filter((c) => c === 'warnings').length).toBeGreaterThanOrEqual(2);
+    expect(ls('v1/warnings')).toContain('today.json');
+
+    rmSync(dir, { recursive: true, force: true });
+    await publishOnce(h.dbAs('rws_owner_api').db, 'owner', dir, { now: NOW, render: fake(), brownout: () => true });
+    expect('brownout' in read('meta.json')).toBe(false);
+  });
+
   it('at midnight UTC today.json moves to the new day and the ended day gets its dated file, across a restart', async () => {
     // #86: publishOnce is a new process each time, so its start lists warnings/ again (today.json is no dated name).
     const db = h.dbAs('rws_publish');

@@ -406,6 +406,14 @@
 	# change under their name: immutable (the current day's warnings are
 	# warnings/today.json, rewritten every cycle: live, #86). (`uri` runs before
 	# the inner handles.)
+	#
+	# Brownout (P12a, A§9.2, docs/runbooks/brownout.md): while the flag file
+	# /run/rws-brownout/active exists (the host's rws-brownout creates it, the
+	# directory is mounted read-only), each mutable class answers a second, longer
+	# Cache-Control that replaces the first (a header directive later in a route
+	# wins), so a CDN or the browser absorbs a flood. Never `immutable` on a
+	# mutable URL; /v1/meta.json is exempt (it carries the flag itself, so the
+	# banner appears within 60 s); the immutable classes do not change.
 	@data path_regexp ^/data/v1(/|$)
 	handle @data {
 		uri strip_prefix /data
@@ -417,8 +425,16 @@
 				try_files {path}
 			}
 		}
+		@brownout_live {
+			file {
+				root /run/rws-brownout
+				try_files /active
+			}
+			not path /v1/meta.json
+		}
 		handle @data_live {
 			header Cache-Control "public, max-age=60, stale-while-revalidate=300"
+			header @brownout_live >Cache-Control "public, max-age=300, stale-while-revalidate=600"
 			root * /srv/rws/public/www
 			file_server {
 				precompressed zstd gzip
@@ -432,8 +448,15 @@
 				try_files {path}
 			}
 		}
+		@brownout_recent {
+			file {
+				root /run/rws-brownout
+				try_files /active
+			}
+		}
 		handle @data_recent {
 			header Cache-Control "public, max-age=300, stale-while-revalidate=600"
+			header @brownout_recent >Cache-Control "public, max-age=900, stale-while-revalidate=1800"
 			root * /srv/rws/public/www
 			file_server {
 				precompressed zstd gzip
@@ -447,8 +470,15 @@
 				try_files {path}
 			}
 		}
+		@brownout_slow {
+			file {
+				root /run/rws-brownout
+				try_files /active
+			}
+		}
 		handle @data_slow {
 			header Cache-Control "public, max-age=300"
+			header @brownout_slow >Cache-Control "public, max-age=900"
 			root * /srv/rws/public/www
 			file_server {
 				precompressed zstd gzip
@@ -477,8 +507,15 @@
 				try_files {path}
 			}
 		}
+		@brownout_warnings {
+			file {
+				root /run/rws-brownout
+				try_files /active
+			}
+		}
 		handle @data_warnings {
 			header Cache-Control "public, max-age=60"
+			header @brownout_warnings >Cache-Control "public, max-age=300"
 			header Content-Type "application/geo+json"
 			root * /srv/rws/public/www
 			file_server {
@@ -493,8 +530,15 @@
 				try_files {path}
 			}
 		}
+		@brownout_status {
+			file {
+				root /run/rws-brownout
+				try_files /active
+			}
+		}
 		handle @data_status {
 			header Cache-Control "public, max-age=30"
+			header @brownout_status >Cache-Control "public, max-age=120"
 			root * /srv/rws/public/www
 			file_server {
 				precompressed zstd gzip
@@ -505,11 +549,29 @@
 		}
 	}
 
+	# security.txt (RFC 9116, P12a): the one file under /.well-known, a fixed
+	# answer from here (nothing on disk), exactly this path as sent, before the
+	# dotfile 404 below. test/security-txt.test.ts parses it out of this file and
+	# fails 30 days before Expires (renew it by hand, at most one year ahead).
+	@security_txt expression `{path} == '/.well-known/security.txt'`
+	handle @security_txt {
+		header Content-Type "text/plain; charset=utf-8"
+		header Cache-Control "no-cache"
+		respond <<SECURITY
+			Contact: mailto:security@{$RWS_DOMAIN}
+			Contact: https://github.com/mwijkhuisen/Waterheight/security/advisories/new
+			Expires: 2027-09-30T00:00:00.000Z
+			Preferred-Languages: nl, en
+			Canonical: https://{$RWS_DOMAIN}/.well-known/security.txt
+
+			SECURITY 200
+	}
+
 	# No dotfile from the web root or /assets: a path with a segment that
 	# starts with "." (the path decoded and cleaned, as file_server reads it)
 	# is a 404, whatever /srv/www holds. ACME challenges are answered before
-	# any route; a file under /.well-known would need its own route above this
-	# one. A regexp, not a path matcher: Caddy re-sorts path-only matchers
+	# any route; the one file under /.well-known is the route above.
+	# A regexp, not a path matcher: Caddy re-sorts path-only matchers
 	# (a probe put `path */.*` after @assets) but keeps this order.
 	@dotfiles path_regexp /\.
 	handle @dotfiles {
@@ -599,4 +661,15 @@
 http://127.0.0.1:8081 {
 	bind 127.0.0.1
 	respond /healthz 200
+}
+
+# Any other Host or SNI (P12a, A§12.2): 421 Misdirected Request, never a page. owner.<domain> pointed at a
+# public address lands here, or fails the TLS handshake: there is no certificate for a name that is not
+# {$RWS_DOMAIN} (no on-demand TLS, no default_sni), so over HTTPS only a client that sends the right SNI
+# but another Host gets this answer. ACME HTTP-01 is answered before any route, and the real domain's
+# :80 -> https redirect keeps its host-matched route, which sorts before this host-less block.
+:80, :443 {
+	header -Server
+	header Cache-Control "no-store"
+	respond 421
 }

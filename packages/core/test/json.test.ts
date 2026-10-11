@@ -71,6 +71,12 @@ describe('parseJsonArray and cappedArray', () => {
     );
   });
 
+  it('turns a schema that throws on hostile input into drift, not a TypeError', () => {
+    // Zod 4 runs `.max()` on a non-string whose `length` cannot become a number (the FR-1 fuzz counterexample).
+    const item = z.strictObject({ code: z.string().max(20) });
+    expect(codeOf(() => parseJsonArray('[{"code":{"length":{"toString":0}}}]', item, caps))).toBe('invalid_type at 0');
+  });
+
   it('checks an array length before its elements: a long wrong-shaped array is one issue', () => {
     const result = z.object({ tags: cappedArray(z.string(), 3) }).safeParse({ tags: Array(10_000).fill(0) });
     expect(result.success).toBe(false);

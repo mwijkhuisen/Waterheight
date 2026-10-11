@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# The flood drill (P12a, issue #27; the work is in scripts/flood-drill.ts): replays the recorded flood fixtures, shifted to
+# the drill clock, into the raw archive of the compose end-to-end stack. CI only: it runs on the host of
+# deploy/tests/e2e/run.sh in RWS_E2E_MODE=drill, as root, with the stack running, and refuses everything else:
+#   - RWS_E2E=1 must be set (deploy/tests/flood/run.sh does), /ci/e2e-stack must exist and say mode drill and the domain
+#     rivierstanden.example, and /ci/loadtest.env must name it too (checked again by the TypeScript, inside the container);
+#   - the Node of the container is the stack's build image ($RWS_E2E_NODE_IMAGE of /ci/loadtest.env), with no network, the
+#     repository read-only, a read-only root and no capability, as the user the archive belongs to (65532); only
+#     /srv/rws/raw is writable.
+# The loader tails the manifest, so the appended lines load like a capture's. Afterwards the owner and modes of the new
+# objects are set as run.sh sets them after fixture-archive.ts (65532, directories 0750, files 0640).
+# Usage: scripts/flood-drill [--phase main|cancel|all] [--now <UTC instant>]
+set -euo pipefail
+
+refuse() {
+  echo "flood-drill: refused: $*" >&2
+  exit 78
+}
+
+[[ ${RWS_E2E:-} == 1 ]] || refuse "RWS_E2E=1 is not set"
+[[ -f /ci/e2e-stack && -f /ci/loadtest.env ]] || refuse "/ci/e2e-stack or /ci/loadtest.env is missing: this is not the compose end-to-end stack"
+[[ $(id -u) == 0 ]] || refuse "not root"
+grep -q '"mode":"drill"' /ci/e2e-stack || refuse "/ci/e2e-stack does not say mode drill"
+set -a
+# shellcheck source=/dev/null
+. /ci/loadtest.env
+set +a
+[[ ${RWS_E2E_DOMAIN:-} == rivierstanden.example ]] || refuse "the stack's domain is not rivierstanden.example"
+[[ -n ${RWS_E2E_NODE_IMAGE:-} && -n ${RWS_E2E_REPO:-} ]] || refuse "/ci/loadtest.env names no node image or repository"
+repo=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+[[ $repo == "$RWS_E2E_REPO" ]] || refuse "this is not the stack's repository"
+
+docker run --rm --network none --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+  --user 65532:65532 -e RWS_E2E=1 -e RWS_E2E_DOMAIN \
+  -v "$repo:$repo:ro" -v /ci/e2e-stack:/ci/e2e-stack:ro -v /srv/rws/raw:/srv/rws/raw -w "$repo" \
+  --entrypoint node "$RWS_E2E_NODE_IMAGE" scripts/flood-drill.ts "$@" /srv/rws/raw
+
+chown -R 65532:65532 /srv/rws/raw
+find /srv/rws/raw -type d -exec chmod 0750 {} +
+find /srv/rws/raw -type f -exec chmod 0640 {} +

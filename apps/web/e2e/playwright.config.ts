@@ -27,7 +27,14 @@ const ownerPublish = join(tmpdir(), 'rws-e2e-owner-publish');
 
 /** Files each kind of project runs. The public ones never run an owner spec (no credentials) or the tool specs. */
 const OWNER = /owner[^/]*\.spec\.ts$/;
-const PUBLIC_IGNORE = /(owner[^/]*|cvd|screens|lighthouse|fps|no-webgl2|visual)\.spec\.ts$/;
+const PUBLIC_IGNORE =
+  /(owner[^/]*|cvd|screens|lighthouse|fps|no-webgl2|visual|flood-drill|egress|chaos[^/]*)\.spec\.ts$/;
+
+// P12a: in compose mode E2E_SPEC names the one spec to run (default degraded): flood-drill, egress or a chaos spec
+// need the compose stack (loadtest.yml), so the other modes never run them (PUBLIC_IGNORE).
+const composeSpec = process.env.E2E_SPEC ?? 'degraded';
+if (!/^[a-z0-9-]+$/.test(composeSpec)) throw new Error(`E2E_SPEC: ${composeSpec}`);
+const COMPOSE_SPEC = new RegExp(`(^|/)${composeSpec}\\.spec\\.ts$`);
 
 // P11b (issue #26 B3): the visual-regression project runs in CI's e2e job (its baselines come from the pinned Playwright
 // image there) and locally only with VISUAL=1: a baseline made on another machine would never match.
@@ -64,7 +71,7 @@ const ownerUse = {
 
 export default defineConfig({
   testDir: '.',
-  testMatch: compose ? (smoke ? /owner-smoke\.spec\.ts$/ : /degraded\.spec\.ts$/) : /\.spec\.ts$/,
+  testMatch: compose ? (smoke ? /owner-smoke\.spec\.ts$/ : COMPOSE_SPEC) : /\.spec\.ts$/,
   timeout: 120_000,
   expect: { timeout: 20_000 },
   retries: 0,
@@ -77,7 +84,16 @@ export default defineConfig({
   use: { baseURL: external ?? 'https://localhost:4443', ignoreHTTPSErrors: true },
   projects: [
     // (compose mode: the one project the deploy job names, `--project=chromium`)
-    { name: 'chromium', testIgnore: compose ? [] : PUBLIC_IGNORE, use: chromium },
+    // In compose mode it also holds P12a's flood scene (flood-drill.spec.ts): its baselines under visual/__screenshots__
+    // come from the pinned image of loadtest.yml's drill job, with the visual project's tolerance.
+    compose
+      ? {
+          name: 'chromium',
+          snapshotPathTemplate: '{testDir}/visual/__screenshots__/{arg}{ext}',
+          expect: { toHaveScreenshot: { animations: 'disabled' as const, maxDiffPixelRatio: 0.002 } },
+          use: chromium,
+        }
+      : { name: 'chromium', testIgnore: PUBLIC_IGNORE, use: chromium },
     ...(compose
       ? []
       : [

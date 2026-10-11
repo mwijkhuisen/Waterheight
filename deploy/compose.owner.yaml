@@ -1,14 +1,17 @@
 # The owner site overlay (P9a; plan decision 2, A§11.1 and A§11.5 deviation).
 # Used with `-f deploy/compose.yaml -f deploy/compose.owner.yaml`: by the CI
-# deploy job's run.sh, and in production only from P12a (WireGuard-only). While
-# production runs compose.yaml alone, no owner site, owner secret or owner mount
-# exists in the public stack, and a missing owner_basic_auth file cannot take
-# the public Caddy down (caddy-owner itself fails closed without it).
+# deploy job's run.sh, and in production (rws_compose in rws-lib.sh) only while
+# RWS_OWNER_SITE=on in rws.env AND the WireGuard interface wg0 holds 10.66.0.1
+# (P12a). Without that, no owner site, owner secret or owner mount exists in the
+# public stack, and a missing owner_basic_auth file cannot take the public Caddy
+# down (caddy-owner itself fails closed without it).
 #
 # caddy-owner is the web image with its own Caddyfile (Caddyfile.owner):
 # basic_auth at the site level, the §12.2 headers plus `private, no-store` and
-# `noindex, nofollow` on every response, no published port (P12a binds it to the
-# WireGuard address). It mounts the owner publisher's served tree (v1), the basemap
+# `noindex, nofollow` on every response. Its one published port is
+# 10.66.0.1:443 (the WireGuard address, container port 8443): nothing is bound on
+# a public address, and deploy/host/nftables.conf drops anything for 10.66.0.1
+# that does not arrive on wg0. It mounts the owner publisher's served tree (v1), the basemap
 # tiles and the river files, all read-only (P10a, KG-213); nothing else of /srv/rws/public.
 #
 # api-owner (P9b, plan C15) is the owner API: the same server image as `api` with
@@ -48,7 +51,13 @@ services:
       - /srv/rws/public/data/v1/rivers:/srv/rws/public/data/v1/rivers:ro
       - caddy_owner_data:/data
       - caddy_owner_config:/config
-    networks: [edge, owner_edge]
+    # Not on `edge` (the public caddy's network): owner_public is a bridge of its own, outside rws-public and
+    # rws-egress, so the firewall's from_containers still drops everything it sends outward (TCP 443 is
+    # accepted only from rws-egress and rws-public). Not internal: Docker publishes no port of a container
+    # whose networks are all internal.
+    networks: [owner_public, owner_edge]
+    ports:
+      - "10.66.0.1:443:8443/tcp"
     mem_limit: 128m
     cpus: 0.5
     pids_limit: 128
@@ -97,6 +106,10 @@ services:
     networks: [db, owner_db]
 
 networks:
+  # caddy-owner only: the bridge its published port (10.66.0.1:443) needs; see above.
+  owner_public:
+    driver_opts:
+      com.docker.network.bridge.name: rws-owner-pub
   # caddy-owner and api-owner only (C15); internal, so no route out either.
   owner_edge:
     internal: true

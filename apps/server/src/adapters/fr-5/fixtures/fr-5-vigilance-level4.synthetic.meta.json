@@ -1,0 +1,13 @@
+{
+  "spec": "fr-5-vigilance",
+  "variant": "default",
+  "source": "FR-5",
+  "synthetic": true,
+  "status": 200,
+  "content_type": "application/json; charset=utf-8",
+  "url": "https://web.archive.org/web/20231211164225id_/https://www.vigicrues.gouv.fr/services/InfoVigiCru.geojson/",
+  "derived_from": "fr-5-vigilance-archive.raw (the 56 sections of registry/vigicrues-sections.yaml, real geometries and keys, all at level 1) in the structure of fr-5-vigilance-wayback.raw (the Wayback capture of the December 2023 floods): its property spelling (LbEntCru, TypEnSup_1, ...), numeric ids, null feature ids, no DtHrInfoVigiCru and no RefInfoVigiCru, so a fetch dates the map",
+  "note": "[U] Hand-edited, deterministic (scripts/lib/shift-fr5.ts, checked by test/flood-drill.test.ts): the Wayback body lists none of our 56 sections (the loader refuses it, too_few_areas), so the flood drill needs a map that lists them all. NivInfViCr raised on five sections: SA16 and LO13 to 2 (jaune), LO10 and LO24 to 3 (orange, the levels of the 2023 flood), LO19 to 4 (rouge, which no recording has). Replaced by a real payload if one is archived.",
+  "bytes": 400352,
+  "trimmed": false
+}

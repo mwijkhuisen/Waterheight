@@ -64,7 +64,16 @@ export const cappedArray = <T extends z.ZodType>(item: T, max: number) =>
  * so a document of the wrong shape stops at its first bad element.
  */
 export function parseStrict<T>(schema: z.ZodType<T>, value: unknown, at: readonly (string | number)[] = []): T {
-  const result = schema.safeParse(value);
+  let result: ReturnType<typeof schema.safeParse>;
+  try {
+    result = schema.safeParse(value);
+  } catch (err) {
+    // Zod 4 still runs a string's length check after its type check failed: an object whose `length` cannot become
+    // a number (`{"length": {"toString": 0}}`, found by the FR-1 fuzz test) throws a TypeError out of safeParse.
+    // Hostile input is drift, never a crash.
+    if (err instanceof SchemaDrift) throw err;
+    throw new SchemaDrift('invalid_type', at.map(String).join('.'));
+  }
   if (result.success) return result.data;
   const issue = result.error.issues[0];
   throw new SchemaDrift(issue?.code ?? 'invalid', [...at, ...(issue?.path ?? [])].map(String).join('.'));

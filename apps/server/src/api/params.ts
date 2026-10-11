@@ -24,14 +24,19 @@ import type { z } from 'zod';
 
 /** A request the API refuses with a fixed code. */
 export class Refused extends Error {
-  readonly status: 400 | 404;
+  readonly status: 400 | 404 | 503;
   readonly code: ApiErrorCode;
-  constructor(code: ApiErrorCode, status: 400 | 404 = 400) {
+  constructor(code: ApiErrorCode, status: 400 | 404 | 503 = 400) {
     super(code);
     this.code = code;
     this.status = status;
   }
 }
+
+/** The longest /series span while the brownout is on (P12a, A§9.2), whatever the resolution. */
+export const BROWNOUT_SPAN_MS = 30 * 86_400_000;
+/** Mutable max-ages are this many times longer while the brownout is on (an hour at most; a day stays a day). */
+export const BROWNOUT_TTL_FACTOR = 5;
 
 /** How far ahead of the server's clock `t` may be: a client clock that runs a little fast still works. */
 export const SKEW_MS = 5 * 60_000;
@@ -107,8 +112,17 @@ export type SeriesParams = { id: number; from: number; to: number; res: Resoluti
  * /series/{id}: an int4 id; `from` and `to` floored to the grid, from ≥
  * displayStart, to ≤ now + 10 min, from < to; the span within the cap of
  * `res`, which defaults to the finest resolution whose cap holds it.
+ * Brownout (P12a): an explicit `res=raw` is refused (503 `brownout`), the default never picks raw, and no span passes
+ * 30 days (`span_too_long`, the existing refusal: the contract has no clamp, and an answer for another span than the
+ * one asked would be silently wrong).
  */
-export function seriesParams(rawId: string, url: string, nowMs: number, displayStartMs: number): SeriesParams {
+export function seriesParams(
+  rawId: string,
+  url: string,
+  nowMs: number,
+  displayStartMs: number,
+  brownout = false,
+): SeriesParams {
   const q = parsed(SeriesQuery, queryOf(url));
   const id = Number(parsed(SeriesPath, { id: rawId }).id);
   if (id > SERIES_ID_MAX) throw new Refused('bad_parameter');
@@ -119,8 +133,10 @@ export function seriesParams(rawId: string, url: string, nowMs: number, displayS
   if (from < displayStartMs || toMs > nowMs + TO_AHEAD_MS) throw new Refused('out_of_range');
   if (from >= to) throw new Refused('bad_parameter');
   const span = to - from;
-  const res = q.res ?? RESOLUTIONS.find((r) => span <= SPAN_CAP_MS[r]);
-  if (res === undefined || span > SPAN_CAP_MS[res]) throw new Refused('span_too_long');
+  if (brownout && q.res === 'raw') throw new Refused('brownout', 503);
+  const res = q.res ?? RESOLUTIONS.find((r) => !(brownout && r === 'raw') && span <= SPAN_CAP_MS[r]);
+  if (res === undefined || span > SPAN_CAP_MS[res] || (brownout && span > BROWNOUT_SPAN_MS))
+    throw new Refused('span_too_long');
   return { id, from, to, res };
 }
 
@@ -154,6 +170,12 @@ export function agePolicy(instantMs: number, nowMs: number): CachePolicy {
     return { header: 'public, max-age=60, stale-while-revalidate=300', ttlMs: 60_000 };
   if (nowMs - instantMs < H48_MS) return { header: 'public, max-age=600', ttlMs: 600_000 };
   return { header: 'public, max-age=86400', ttlMs: 86_400_000 };
+}
+
+/** The policy while the brownout is on: every max-age (and the in-process TTL) longer, never `immutable`. */
+export function slowed(p: CachePolicy): CachePolicy {
+  const ttlMs = Math.min(p.ttlMs * BROWNOUT_TTL_FACTOR, Math.max(p.ttlMs, 3_600_000));
+  return { header: p.header.replace(/max-age=\d+/, `max-age=${ttlMs / 1000}`), ttlMs };
 }
 
 /** The longest raw query string (`?` included) any route takes; longer is a 400 before anything is parsed (P9b). */

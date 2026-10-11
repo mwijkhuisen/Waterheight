@@ -1,0 +1,11 @@
+[Unit]
+Description=rws: evaluate the brownout flag every 15 seconds
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=15s
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

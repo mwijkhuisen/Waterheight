@@ -1,0 +1,29 @@
+# CI only: the overlay deploy/tests/e2e/run.sh merges onto deploy/compose.yaml, compose.ci.yaml, compose.owner.yaml and
+# the loadtest and fake-upstream overlays for RWS_E2E_MODE=drill (.github/workflows/loadtest.yml, job drill). Never part
+# of a deployment.
+#
+# The flood drill's registry (deploy/tests/flood/setup.sh writes it to /ci/flood/registry): a copy of registry/ in which
+# station 2020 of CH-1 (Bellinzona, Ticino, outside the basin) has a public discharge series, so that the storm-Ciaran
+# forecast of CH-4 can be drilled. Every service that reads the registry of the database or of the published outputs
+# gets the copy over /app/registry (the server image's registry directory, deploy/server/Dockerfile): migrate syncs it
+# into the database, load and the four readers agree with that database. capture is left alone (its specs do not
+# change, and it is cut off from the internet anyway).
+services:
+  migrate:
+    volumes:
+      - /ci/flood/registry:/app/registry:ro
+  load:
+    volumes:
+      - /ci/flood/registry:/app/registry:ro
+  publish:
+    volumes:
+      - /ci/flood/registry:/app/registry:ro
+  publish-owner:
+    volumes:
+      - /ci/flood/registry:/app/registry:ro
+  api:
+    volumes:
+      - /ci/flood/registry:/app/registry:ro
+  api-owner:
+    volumes:
+      - /ci/flood/registry:/app/registry:ro
