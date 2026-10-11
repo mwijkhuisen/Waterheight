@@ -114,16 +114,20 @@ describe('shiftWall', () => {
       fc.assert(
         fc.property(fc.integer(MS), WHOLE_SECONDS, (ms, d) => {
           const at = Math.floor(ms / 1000) * 1000;
-          const z = Temporal.Instant.fromEpochMilliseconds(at).toZonedDateTimeISO(zone);
           const p = (n: number) => String(n).padStart(2, '0');
           const sep = shape === 'space' ? '-' : '/';
           const tail = shape === 'slash' ? '.000' : '';
-          const input = `${z.year}${sep}${p(z.month)}${sep}${p(z.day)} ${p(z.hour)}:${p(z.minute)}:${p(z.second)}${tail}`;
+          const local = (i: number) => {
+            const z = Temporal.Instant.fromEpochMilliseconds(i).toZonedDateTimeISO(zone);
+            return `${z.year}${sep}${p(z.month)}${sep}${p(z.day)} ${p(z.hour)}:${p(z.minute)}:${p(z.second)}${tail}`;
+          };
+          const input = local(at);
           // A wall time in the repeated hour reads as its later occurrence: not an input this property is about.
           fc.pre(wallMs(input, shape, zone) === at);
           const out = shiftWall(input, d, zone, shape);
-          expect(wallMs(out, shape, zone)).toBe(at + d);
-          expect(shiftWall(out, -d, zone, shape)).toBe(input);
+          expect(out).toBe(local(at + d));
+          // The way back holds unless the output itself is in a repeated hour (it reads as the later occurrence).
+          if (wallMs(out, shape, zone) === at + d) expect(shiftWall(out, -d, zone, shape)).toBe(input);
         }),
         { numRuns: 300 },
       );
