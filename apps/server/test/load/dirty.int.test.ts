@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -195,5 +196,50 @@ describe('registry bumps in the migrate tail (§9 C10)', { timeout: 120_000 }, (
     // The added series is in the stored map now: removing the owner-only one narrows the owner family alone.
     await q(`DELETE FROM series WHERE provider_key = 'p9a-added-owner'`);
     expect((await publishTail(migrator.db, now)).bumped).toEqual({ owner: 'narrowed' });
+  });
+
+  it('a forecast-only source made public (the DE-2 flip, §8 A11) bumps nothing; a credit a day file names still does', async () => {
+    const migrator = h.dbAs('rws_migrator', 1);
+    const now = new Date(NOW);
+    const both = { public: 'registry', owner: 'registry' };
+    expect((await publishTail(migrator.db, now)).bumped).toEqual({});
+    const before = { pub: await versions('public'), own: await versions('owner') };
+    // DE-3 stands in for DE-2 (owner before and after DE-2's flip, and forecast-only the same way: its runs sit on DE-1
+    // series): made public, its attribution row enters the public view, but it has no series of its own.
+    const basis = (await q(`SELECT private_basis FROM source WHERE id = 'DE-3'`)).rows[0]?.private_basis;
+    await q(`UPDATE source SET audience = 'public', private_basis = NULL WHERE id = 'DE-3'`);
+    expect((await q(`SELECT count(*)::int AS n FROM series WHERE source_id = 'DE-3'`)).rows).toEqual([{ n: 0 }]);
+    expect((await q(`SELECT 1 FROM ${VIEWS.public.attribution} WHERE source_id = 'DE-3'`)).rows).toHaveLength(1);
+    expect((await publishTail(migrator.db, now)).bumped).toEqual({});
+    expect({ pub: await versions('public'), own: await versions('owner') }).toEqual(before);
+    // A credit of a series' source (NL-1), or of a fill source without series (CH-3 fills CH-1), re-versions the days.
+    for (const id of ['NL-1', 'CH-3']) {
+      await q(`UPDATE attribution SET text = text || ' (test)' WHERE source_id = $1`, [id]);
+      expect([id, (await publishTail(migrator.db, now)).bumped]).toEqual([id, both]);
+      await q(`UPDATE attribution SET text = left(text, -7) WHERE source_id = $1`, [id]);
+      expect([id, (await publishTail(migrator.db, now)).bumped]).toEqual([id, both]);
+    }
+    // A map stored before P12b holds one digest of every attribution row: unchanged it bumps nothing, else it does.
+    const legacy = async (digest: (full: string) => string) => {
+      for (const family of ['public', 'owner'] as const) {
+        const { rows } = await q(
+          `SELECT source_id, ord, lang, text, url, needs_date, date_kind, logo_allowed, required
+           FROM ${VIEWS[family].attribution} ORDER BY source_id, ord`,
+        );
+        const full = createHash('sha256').update(JSON.stringify(rows)).digest('hex').slice(0, 16);
+        await q(
+          `UPDATE app_meta SET value = (value - 'dayAttribution') || jsonb_build_object('attribution', $2::text)
+           WHERE key = $1`,
+          [`registry_visible:${family}`, digest(full)],
+        );
+      }
+      return (await publishTail(migrator.db, now)).bumped;
+    };
+    expect(await legacy((full) => full)).toEqual({});
+    expect(await legacy(() => 'stale')).toEqual(both);
+    expect((await publishTail(migrator.db, now)).bumped).toEqual({});
+    await q(`UPDATE source SET audience = 'owner', private_basis = $1::jsonb WHERE id = 'DE-3'`, [
+      JSON.stringify(basis),
+    ]);
   });
 });

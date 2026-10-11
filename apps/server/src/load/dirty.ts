@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { type RawBuilder, sql } from 'kysely';
 import { CHANNEL_AUDIENCES, type ChannelAudience, VIEWS } from '../db/audience.ts';
+import { FILLED_BY } from './adapters.ts';
 import { readMeta, type Tx, writeMeta } from './store.ts';
 
 // P9a: what the publishers must render again (A§9.1 "Cache versioning"). The loader's writers note what they
@@ -146,9 +147,17 @@ export async function markDirty(tx: Tx, now: Date, entries: readonly DirtyEntry[
 
 /**
  * What a settled file depends on besides loaded rows (§9 C10), per family: each visible series' staleness (seconds)
- * and effective history_export, and digests of the NL-4 class bounds and the family's attribution rows.
+ * and effective history_export, and digests of the NL-4 class bounds and of the attribution rows a day file can name
+ * (`dayAttribution`, P12b §8 A11: the sources of the visible series and their fill sources, as `valueSources` names
+ * them; a forecast-only source such as DE-2 is in no day file). A map stored before P12b has `attribution`, the
+ * digest of every attribution row, instead.
  */
-export type Visible = { series: Record<string, [number, boolean]>; nl4: string; attribution: string };
+export type Visible = {
+  series: Record<string, [number, boolean]>;
+  nl4: string;
+  dayAttribution: string;
+  attribution?: string;
+};
 export const visibleKey = (family: ChannelAudience) => `registry_visible:${family}`;
 
 async function digest(tx: Tx, query: RawBuilder<unknown>): Promise<string> {
@@ -164,7 +173,7 @@ export function visibilityChange(old: Visible, cur: Visible): BumpReason | undef
     if (now === undefined || (history && !now[1])) return 'narrowed';
     if (now[0] !== stale || now[1] !== history) reason = 'registry';
   }
-  return reason ?? (old.nl4 !== cur.nl4 || old.attribution !== cur.attribution ? 'registry' : undefined);
+  return reason ?? (old.nl4 !== cur.nl4 || old.dayAttribution !== cur.dayAttribution ? 'registry' : undefined);
 }
 
 /**
@@ -185,20 +194,29 @@ export async function registryBump(tx: Tx, now: Date): Promise<Partial<Record<Ch
   const bumped: Partial<Record<ChannelAudience, BumpReason>> = {};
   for (const family of CHANNEL_AUDIENCES) {
     const v = VIEWS[family];
-    const { rows } = await sql<{ id: number; staleness_s: number; lic_history_export: boolean }>`
-      SELECT id, EXTRACT(EPOCH FROM staleness_limit)::double precision AS staleness_s, lic_history_export
+    const { rows } = await sql<{ id: number; source_id: string; staleness_s: number; lic_history_export: boolean }>`
+      SELECT id, source_id, EXTRACT(EPOCH FROM staleness_limit)::double precision AS staleness_s, lic_history_export
       FROM ${sql.table(v.series)}`.execute(tx);
-    const cur: Visible = {
-      series: Object.fromEntries(rows.map((r) => [String(r.id), [r.staleness_s, r.lic_history_export]])),
-      nl4,
-      attribution: await digest(
+    const own = new Set(rows.map((r) => r.source_id));
+    const named = [...new Set([...own, ...[...own].flatMap((s) => FILLED_BY.get(s) ?? [])])].sort();
+    const attribution = (only: string[] | null) =>
+      digest(
         tx,
         sql`
           SELECT source_id, ord, lang, text, url, needs_date, date_kind, logo_allowed, required
-          FROM ${sql.table(v.attribution)} ORDER BY source_id, ord`,
-      ),
+          FROM ${sql.table(v.attribution)}
+          ${only === null ? sql`` : sql`WHERE source_id = ANY(${only}::text[])`}
+          ORDER BY source_id, ord`,
+      );
+    const cur: Visible = {
+      series: Object.fromEntries(rows.map((r) => [String(r.id), [r.staleness_s, r.lic_history_export]])),
+      nl4,
+      dayAttribution: await attribution(named),
     };
-    const old = await readMeta<Visible>(tx, visibleKey(family));
+    let old = await readMeta<Visible>(tx, visibleKey(family));
+    // A pre-P12b map: its digest of every row decides once (unchanged means no bump), then the scoped one is stored.
+    if (old !== undefined && old.dayAttribution === undefined)
+      old = { ...old, dayAttribution: old.attribution === (await attribution(null)) ? cur.dayAttribution : '' };
     let reason = old === undefined ? undefined : visibilityChange(old, cur);
     // An added series that already holds data older than 48 h (a widening; review CR-3): its settled days lack it,
     // and a replay of the same values would change no row, so nothing else would bump them.
