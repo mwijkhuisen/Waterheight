@@ -386,20 +386,19 @@ export const useForecastAsOf = (id: number | undefined, asof: number | undefined
   });
 };
 
+/** The /series URL: raw, or hourly while the brownout is on (the API refuses raw then, P12a). */
+export const seriesPath = (id: number, from: number, to: number, brownout = false) =>
+  `/api/v1/series/${id}?from=${toUrlT(from)}&to=${toUrlT(to)}&res=${brownout ? '1h' : 'raw'}`;
+
 /**
- * One series over [from, to), raw. The id comes only from the stations answer, and the caller asks only for a
+ * One series over [from, to), raw (hourly in a brownout). The id comes only from the stations answer, and the caller asks only for a
  * series whose `api` flag is on (a display-only series is never asked: historySource in change.ts).
  */
-export const useSeries = (id: number, from: number, to: number, enabled = true) => {
+export const useSeries = (id: number, from: number, to: number, enabled = true, brownout = false) => {
   const c = useContracts();
   return useQuery({
-    queryKey: ['series', c?.audience, id, from, to],
-    queryFn: ({ signal }) =>
-      getJson(
-        `/api/v1/series/${id}?from=${toUrlT(from)}&to=${toUrlT(to)}&res=raw`,
-        (c as Contracts).SeriesAnswer,
-        signal,
-      ),
+    queryKey: ['series', c?.audience, id, from, to, brownout],
+    queryFn: ({ signal }) => getJson(seriesPath(id, from, to, brownout), (c as Contracts).SeriesAnswer, signal),
     enabled: c !== undefined && enabled,
     staleTime: 60_000,
   });

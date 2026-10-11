@@ -1,0 +1,13 @@
+# Evaluates Caddy's access log for the automatic brownout (P12a, issue #27). Runs as root: it reads the caddy_data volume and writes /srv/rws/brownout.
+[Unit]
+Description=rws: evaluate the API error share and switch the brownout flag (mode auto only)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rws-brownout evaluate
+TimeoutStartSec=1min
+UMask=0077
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=full
+NoNewPrivileges=yes

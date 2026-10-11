@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# rws-wg-peer add <name> | list | revoke <name>  (P12a, issue #27; A§11.5, ADR-0017)
+# The owner's WireGuard devices, the only way to the owner site (docs/runbooks/owner-device.md). Run as root.
+#   add <name>     makes a key pair and a preshared key for a new device, adds the peer (10.66.0.N/32, the next
+#                  free address) to /etc/wireguard/wg0.peers.conf and to the running wg0, and prints the device's
+#                  whole client config ONCE on stdout. The device's private key lives only in this process and in
+#                  that output: it is never written to a file, a log or argv (it reaches `wg pubkey` on stdin).
+#                  The notes go to stderr, so `rws-wg-peer add laptop >laptop.conf` keeps the config clean.
+#   list           name, address, last handshake and public key of every device.
+#   revoke <name>  removes the peer from the file and from the running wg0 (its session ends at once).
+# A device is named [a-z][a-z0-9-]{0,30}. The server key is /etc/wireguard/wg0.key (bootstrap.sh). The file and
+# the running interface change under one lock; a failed live change puts the file back.
+# Needs root (the key and the peer file are 0600). Paths and the wg binary move for the offline test
+# (deploy/tests/rws-wg-peer.test.sh): RWS_WG, RWS_WG_DIR.
+set -euo pipefail
+# shellcheck source=deploy/bin/rws-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/rws-lib.sh"
+
+readonly WG=${RWS_WG:-wg} WG_DIR=${RWS_WG_DIR:-/etc/wireguard} IFACE=wg0 SERVER_IP=10.66.0.1 PORT=51820
+readonly PEERS=$WG_DIR/wg0.peers.conf
+readonly KEY_RE='^[A-Za-z0-9+/]{43}=$' NAME_RE='^[a-z][a-z0-9-]{0,30}$'
+
+usage() {
+  echo "usage: rws-wg-peer add <name> | list | revoke <name>" >&2
+  exit 64
+}
+
+# name pubkey address, one line per peer of the file.
+peer_table() {
+  [[ -f $PEERS ]] || return 0
+  awk '
+    /^# rws-wg-peer name=/ { split($3, n, "="); name = n[2] }
+    $1 == "PublicKey" { pub = $3 }
+    $1 == "AllowedIPs" { sub("/32", "", $3); print name, pub, $3; name = pub = "" }
+  ' "$PEERS"
+}
+live() { "$WG" show "$IFACE" >/dev/null 2>&1; }
+
+cmd_add() {
+  local name=$1 table ip n priv pub psk spub endpoint block old
+  [[ $name =~ $NAME_RE ]] || die "a device name is [a-z][a-z0-9-]{0,30}"
+  load_env || die "no readable $RWS_ETC/rws.env"
+  [[ ${RWS_PUBLIC_IPV4:-} =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "RWS_PUBLIC_IPV4 is not set in rws.env"
+  [[ -s $WG_DIR/wg0.key ]] || die "no server key $WG_DIR/wg0.key (bootstrap.sh makes it)"
+  endpoint=$RWS_PUBLIC_IPV4:$PORT
+  (
+    flock -w 30 9 || die "another rws-wg-peer is running"
+    table=$(peer_table)
+    if grep -q "^$name " <<<"$table"; then die "a device named $name exists (rws-wg-peer revoke $name first)"; fi
+    ip=''
+    for n in $(seq 2 254); do
+      if ! grep -q " 10\.66\.0\.$n\$" <<<"$table"; then
+        ip=10.66.0.$n
+        break
+      fi
+    done
+    [[ -n $ip ]] || die "no free address in 10.66.0.0/24"
+    priv=$("$WG" genkey)
+    pub=$(printf '%s\n' "$priv" | "$WG" pubkey)
+    psk=$("$WG" genpsk)
+    spub=$("$WG" pubkey <"$WG_DIR/wg0.key")
+    [[ $priv =~ $KEY_RE && $pub =~ $KEY_RE && $psk =~ $KEY_RE && $spub =~ $KEY_RE ]] || die "wg returned a malformed key"
+    block=$(printf '# rws-wg-peer name=%s added=%s\n[Peer]\nPublicKey = %s\nPresharedKey = %s\nAllowedIPs = %s/32\n' \
+      "$name" "$(now_iso)" "$pub" "$psk" "$ip")
+    old=''
+    [[ ! -f $PEERS ]] || old=$(<"$PEERS")
+    printf '%s%s\n\n' "${old:+$old$'\n\n'}" "$block" | write_atomic "$PEERS" 0600
+    if live; then
+      if ! printf '%s\n' "$block" | "$WG" addconf "$IFACE" /dev/stdin; then
+        printf '%s' "${old:+$old$'\n\n'}" | write_atomic "$PEERS" 0600
+        die "wg addconf failed: the peer is not added"
+      fi
+    else
+      log "$IFACE is down: the peer is in $PEERS and comes up with wg-quick@$IFACE"
+    fi
+    printf '[Interface]\nPrivateKey = %s\nAddress = %s/32\n\n[Peer]\nPublicKey = %s\nPresharedKey = %s\nEndpoint = %s\nAllowedIPs = %s/32\nPersistentKeepalive = 25\n' \
+      "$priv" "$ip" "$spub" "$psk" "$endpoint" "$SERVER_IP"
+    log "added device $name ($ip). The config above is shown once; on the device, make owner.${RWS_DOMAIN:-<domain>} resolve to $SERVER_IP (hosts file) and trust the owner CA (docs/runbooks/owner-device.md)"
+  ) 9>"$(lockfile rws-wg-peer)"
+}
+
+cmd_list() {
+  local table hs name pub ip when
+  table=$(peer_table)
+  hs=''
+  if live; then hs=$("$WG" show "$IFACE" latest-handshakes 2>/dev/null || true); fi
+  printf '%-32s %-12s %-20s %s\n' NAME ADDRESS "LAST HANDSHAKE" PUBLIC-KEY
+  while read -r name pub ip; do
+    [[ -n $name ]] || continue
+    when=$(awk -v k="$pub" '$1 == k { print $2 }' <<<"$hs")
+    if [[ $when =~ ^[1-9][0-9]*$ ]]; then when=$(date -u -d "@$when" +%Y-%m-%dT%H:%M:%SZ); else when=never; fi
+    printf '%-32s %-12s %-20s %s\n' "$name" "$ip" "$when" "$pub"
+  done <<<"$table"
+}
+
+cmd_revoke() {
+  local name=$1 pub
+  [[ $name =~ $NAME_RE ]] || die "a device name is [a-z][a-z0-9-]{0,30}"
+  (
+    flock -w 30 9 || die "another rws-wg-peer is running"
+    pub=$(peer_table | awk -v n="$name" '$1 == n { print $2 }')
+    [[ $pub =~ $KEY_RE ]] || die "no device named $name"
+    awk -v n="$name" 'BEGIN { RS = ""; ORS = "\n\n" } $0 !~ ("^# rws-wg-peer name=" n " ")' "$PEERS" | write_atomic "$PEERS" 0600
+    if live; then "$WG" set "$IFACE" peer "$pub" remove || die "wg set peer remove failed: $name is out of $PEERS but may still be connected: wg-quick down/up $IFACE"; fi
+    log "revoked device $name"
+  ) 9>"$(lockfile rws-wg-peer)"
+}
+
+case ${1:-} in
+  add) [[ $# == 2 ]] || usage; cmd_add "$2" ;;
+  list) [[ $# == 1 ]] || usage; cmd_list ;;
+  revoke) [[ $# == 2 ]] || usage; cmd_revoke "$2" ;;
+  *) usage ;;
+esac

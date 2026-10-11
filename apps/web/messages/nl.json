@@ -248,6 +248,7 @@
   "col_forecast": "Verwachting",
   "degraded_banner": "Gegevens van de server zijn tijdelijk niet actueel of onvolledig; de waarden kunnen achterlopen.",
   "degraded_standin": "De server is niet bereikbaar. Dit zijn de laatst bekende waarden, voor {time}, niet voor het gekozen tijdstip.",
+  "brownout_banner": "Grote drukte: de site draait in een beperkte stand. Grafieken gaan hooguit 30 dagen terug en de fijnste resolutie staat uit; de kaart werkt gewoon.",
   "mode_label": "Kaartweergave",
   "mode_state": "Toestand",
   "mode_delta": "Verandering in 24 uur",

@@ -1,0 +1,81 @@
+# CI only (P12a, issue #27): the overlay deploy/tests/e2e/run.sh merges onto deploy/compose.yaml in the loadtest,
+# drill and chaos modes (RWS_E2E_MODE; .github/workflows/loadtest.yml), after compose.ci.yaml. Never part of a
+# deployment; no production file may name it, extra_hosts or NODE_EXTRA_CA_CERTS (test/fake-upstream.test.ts).
+#
+# fake-upstream is the one server capture and the watchdog reach for the faked provider hosts and for hc-ping.com
+# (deploy/tests/e2e/fake-upstream/): the hosts resolve to it through extra_hosts, its certificate comes from the
+# throw-away CI CA, and only that CA's certificate (never the key) is mounted, as the bundle NODE_EXTRA_CA_CERTS
+# names. Its network "fake" is internal (no route out) on 203.0.115.0/24, an address block the SSRF guard accepts as
+# public. Compose appends to the lists of the earlier files: capture is on ci-internal + fake (compose.ci.yaml cut it
+# off from egress), the watchdog on egress + fake (it still probes the site) and keeps compose.ci.yaml's host entry.
+# The hardening of compose.yaml's x-hardening is spelled out: an overlay file cannot use the base file's anchors.
+
+x-fake-hosts: &fake-hosts
+  - "www.pegelonline.wsv.de:203.0.115.10"
+  - "www.hydrodaten.admin.ch:203.0.115.10"
+  - "inondations.public.lu:203.0.115.10"
+  - "geo.rijkswaterstaat.nl:203.0.115.10"
+  - "hc-ping.com:203.0.115.10"
+
+services:
+  fake-upstream:
+    image: ${RWS_SERVER_IMAGE:?}
+    entrypoint: ["/nodejs/bin/node", "/fake/server.mjs"]
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 443
+    volumes:
+      - /ci/fake/www:/fake:ro
+      # hits.jsonl: the one thing it writes (owner 65532).
+      - /ci/fake/state:/state
+      # `blackhole`, one hostname per line: written by the test driver as root.
+      - /ci/fake/control:/control:ro
+    networks:
+      fake:
+        ipv4_address: 203.0.115.10
+    mem_limit: 64m
+    cpus: 0.25
+    pids_limit: 32
+    healthcheck:
+      # No shell in distroless: Node asks its own loopback health route (never a hit, never blackholed).
+      test:
+        - CMD
+        - /nodejs/bin/node
+        - -e
+        - "require('node:https').get({host:'127.0.0.1',port:443,path:'/_health',rejectUnauthorized:false},(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  capture:
+    networks: [fake]
+    extra_hosts: *fake-hosts
+    environment:
+      NODE_EXTRA_CA_CERTS: /ci/fake/ca-bundle.pem
+    volumes:
+      - /ci/fake/ca-bundle.pem:/ci/fake/ca-bundle.pem:ro
+
+  watchdog:
+    networks: [fake]
+    extra_hosts: *fake-hosts
+    environment:
+      NODE_EXTRA_CA_CERTS: /ci/fake/ca-bundle.pem
+    volumes:
+      - /ci/fake/ca-bundle.pem:/ci/fake/ca-bundle.pem:ro
+
+networks:
+  fake:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-fake
+    ipam:
+      config:
+        - subnet: 203.0.115.0/24

@@ -248,6 +248,7 @@
   "col_forecast": "Forecast",
   "degraded_banner": "Data from the server is temporarily out of date or incomplete; values may lag behind.",
   "degraded_standin": "The server cannot be reached. These are the latest known values, for {time}, not for the chosen time.",
+  "brownout_banner": "High demand: the site is in a reduced mode. Charts reach back at most 30 days and the finest resolution is off; the map is unaffected.",
   "mode_label": "Map mode",
   "mode_state": "State",
   "mode_delta": "Change over 24 hours",

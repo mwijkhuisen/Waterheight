@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './App.module.css';
 import { Attribution } from './features/attribution/Attribution.tsx';
+import { BrownoutBanner } from './features/banner/BrownoutBanner.tsx';
 import { DegradedBanner } from './features/banner/DegradedBanner.tsx';
 import { FlowToggle } from './features/flow/FlowToggle.tsx';
 import { playRange, type Speed } from './features/flow/playback/engine.ts';
@@ -451,6 +452,7 @@ function Viewer({ locale }: { locale: Locale }) {
                 degraded={meta.data?.degraded === true || snapshot.data?.degraded === true}
                 standInAt={snapshot.data?.standIn === true ? Date.parse(snapshot.data.t) : undefined}
               />
+              <BrownoutBanner locale={locale} brownout={meta.data?.brownout === true} />
             </div>
           </div>
           <div className={loading ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={loading}>
