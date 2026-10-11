@@ -111,21 +111,21 @@ stations:
   - { station: lu.age.stadtbredimus, river: moselle, reason: "catalogue §3.2: SN_Stadtbredimus in the Moselle table (rows 8, 9 and 11); nearest moselle edge 76 m on the fixture (OSM 2026-10-01), next other curated river alzette 14179 m" }
   - { station: lu.age.grevenmacher, river: moselle, reason: "catalogue §3.2: SN_Grevenmacher in the Moselle table (rows 8, 9 and 11); nearest moselle edge 57 m on the fixture (OSM 2026-10-01), next other curated river sauer 6291 m" }
   - { station: lu.age.wasserbillig, river: moselle, max_m: 500, reason: "catalogue §3.2: Wasserbillig (Moselle), row 12, \"above the Sauer confluence (inference)\"; the gauge is 51 m from the Sauer and 134 m from the Moselle, so the table row decides, not distance; nearest moselle edge 134 m on the fixture (OSM 2026-10-01), next other curated river sauer 51 m" }
-  - { station: lu.age.wiltz, unsnapped: true, reason: "catalogue §3.2: Wiltz 38 is on the Wiltz (a Sauer tributary); not a curated river" }
-  - { station: lu.age.kautenbach, unsnapped: true, reason: "catalogue §3.2: Kautenbach 14 follows Wiltz on the Wiltz; not a curated river" }
-  - { station: lu.age.clervaux, unsnapped: true, reason: "catalogue §3.2: Clervaux 35 is on the Clerve; not a curated river" }
-  - { station: lu.age.troisvierges, unsnapped: true, reason: "catalogue §3.2: Troisvierges 37 is on the Clerve; not a curated river" }
+  - { station: lu.age.wiltz, river: wiltz, reason: "catalogue §3.2: Wiltz 38 is on the Wiltz (a Sauer tributary); AGE publishes no water name; nearest wiltz edge 6 m, sauer 6286 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age.kautenbach, river: wiltz, reason: "catalogue §3.2: Kautenbach 14 follows Wiltz on the Wiltz; AGE publishes no water name; nearest wiltz edge 5 m, sauer 2429 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age.clervaux, unsnapped: true, reason: "catalogue §3.2: Clervaux 35 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
+  - { station: lu.age.troisvierges, unsnapped: true, reason: "catalogue §3.2: Troisvierges 37 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
   - { station: lu.age.schoenfels, unsnapped: true, reason: "catalogue §3.2: Mamer at Schoenfels 5 (Alzette tributary); not a curated river" }
-  - { station: lu.age.hunnebuer, unsnapped: true, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); not a curated river" }
-  - { station: lu.age.eischen, unsnapped: true, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); not a curated river" }
-  - { station: lu.age.reichlange, unsnapped: true, reason: "catalogue §3.2: Attert at Reichlange 9 (Alzette tributary); not a curated river" }
-  - { station: lu.age.bissen, unsnapped: true, reason: "catalogue §3.2: Attert at Bissen 10 (Alzette tributary); not a curated river" }
+  - { station: lu.age.hunnebuer, river: eisch, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 2415 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age.eischen, river: eisch, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 16991 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age.reichlange, river: attert, reason: "catalogue §3.2: Attert at Reichlange 9 (Alzette tributary); AGE publishes no water name; nearest attert edge 7 m, wark 6478 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age.bissen, river: attert, reason: "catalogue §3.2: Attert at Bissen 10 (Alzette tributary); AGE publishes no water name; nearest attert edge 4 m, alzette 3852 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age.niederfeulen, river: wark, reason: "catalogue §3.2: Wark at Niederfeulen 27 (Alzette tributary); AGE publishes no water name; nearest wark edge 5 m on the fixture (OSM 2026-10-10)" }
   - { station: lu.age.welscheid, river: wark, reason: "catalogue §3.2: Wark at Welscheid 28; AGE publishes no water name; nearest wark edge 4 m on the fixture (OSM 2026-10-10)" }
   - { station: lu.age.welscheid-village, river: wark, reason: "catalogue §3.2: Wark at Welscheid-Village 29; AGE publishes no water name; nearest wark edge 5 m on the fixture (OSM 2026-10-10)" }
   - { station: lu.age.ettelbruck-wark, river: wark, reason: "catalogue §3.2: Ettelbrück/Wark 41 is on the Wark; AGE publishes no water name; nearest wark edge 6 m on the fixture (OSM 2026-10-10)" }
-  - { station: lu.age.larochette, unsnapped: true, reason: "catalogue §3.2: Ernz at Larochette 43 (Sauer tributary); not a curated river" }
-  - { station: lu.age.mullerthal, unsnapped: true, reason: "catalogue §3.2: Ernz at Müllerthal 39 (Sauer tributary); not a curated river" }
+  - { station: lu.age.larochette, unsnapped: true, reason: "catalogue §3.2: Ernz at Larochette 43 (Sauer tributary), the White Ernz (Q252318); not a curated river: the extract holds no OSM relation or way tagged with its QID (#126)" }
+  - { station: lu.age.mullerthal, unsnapped: true, reason: "catalogue §3.2: Ernz at Müllerthal 39 (Sauer tributary), the Black Ernz (Q2671282); not a curated river: the extract holds no OSM relation or way tagged with its QID (#126)" }
   - { station: lu.age.roodt-sur-syre, unsnapped: true, reason: "catalogue §3.2: Syre: Roodt-Syre 52; the curated syre is one OSM way, the only one tagged with its QID (Q1772641), 1319 m away" }
   - { station: lu.age.ubersyren, unsnapped: true, reason: "catalogue §3.2: Syre: Uebersyren 109; the curated syre is one OSM way, the only one tagged with its QID (Q1772641), 6145 m away" }
   - { station: lu.age.mertert, river: syre, reason: "catalogue §3.2: Syre: Mertert 32, the catalogue lists it on the Syre; AGE publishes no water name; nearest syre edge 11 m, moselle 696 m on the fixture (OSM 2026-10-10)" }
@@ -151,21 +151,21 @@ stations:
   - { station: lu.age-json.stadtbredimus, river: moselle, reason: "catalogue §3.2: SN_Stadtbredimus in the Moselle table (rows 8, 9 and 11); nearest moselle edge 76 m on the fixture (OSM 2026-10-01), next other curated river alzette 14179 m" }
   - { station: lu.age-json.grevenmacher, river: moselle, reason: "catalogue §3.2: SN_Grevenmacher in the Moselle table (rows 8, 9 and 11); nearest moselle edge 57 m on the fixture (OSM 2026-10-01), next other curated river sauer 6291 m" }
   - { station: lu.age-json.wasserbillig, river: moselle, max_m: 500, reason: "catalogue §3.2: Wasserbillig (Moselle), row 12, \"above the Sauer confluence (inference)\"; the gauge is 51 m from the Sauer and 134 m from the Moselle, so the table row decides, not distance; nearest moselle edge 134 m on the fixture (OSM 2026-10-01), next other curated river sauer 51 m" }
-  - { station: lu.age-json.wiltz, unsnapped: true, reason: "catalogue §3.2: Wiltz 38 is on the Wiltz (a Sauer tributary); not a curated river" }
-  - { station: lu.age-json.kautenbach, unsnapped: true, reason: "catalogue §3.2: Kautenbach 14 follows Wiltz on the Wiltz; not a curated river" }
-  - { station: lu.age-json.clervaux, unsnapped: true, reason: "catalogue §3.2: Clervaux 35 is on the Clerve; not a curated river" }
-  - { station: lu.age-json.troisvierges, unsnapped: true, reason: "catalogue §3.2: Troisvierges 37 is on the Clerve; not a curated river" }
+  - { station: lu.age-json.wiltz, river: wiltz, reason: "catalogue §3.2: Wiltz 38 is on the Wiltz (a Sauer tributary); AGE publishes no water name; nearest wiltz edge 6 m, sauer 6286 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age-json.kautenbach, river: wiltz, reason: "catalogue §3.2: Kautenbach 14 follows Wiltz on the Wiltz; AGE publishes no water name; nearest wiltz edge 5 m, sauer 2429 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age-json.clervaux, unsnapped: true, reason: "catalogue §3.2: Clervaux 35 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
+  - { station: lu.age-json.troisvierges, unsnapped: true, reason: "catalogue §3.2: Troisvierges 37 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
   - { station: lu.age-json.schoenfels, unsnapped: true, reason: "catalogue §3.2: Mamer at Schoenfels 5 (Alzette tributary); not a curated river" }
-  - { station: lu.age-json.hunnebuer, unsnapped: true, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); not a curated river" }
-  - { station: lu.age-json.eischen, unsnapped: true, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); not a curated river" }
-  - { station: lu.age-json.reichlange, unsnapped: true, reason: "catalogue §3.2: Attert at Reichlange 9 (Alzette tributary); not a curated river" }
-  - { station: lu.age-json.bissen, unsnapped: true, reason: "catalogue §3.2: Attert at Bissen 10 (Alzette tributary); not a curated river" }
+  - { station: lu.age-json.hunnebuer, river: eisch, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 2415 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age-json.eischen, river: eisch, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 16991 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age-json.reichlange, river: attert, reason: "catalogue §3.2: Attert at Reichlange 9 (Alzette tributary); AGE publishes no water name; nearest attert edge 7 m, wark 6478 m on the fixture (OSM 2026-10-11)" }
+  - { station: lu.age-json.bissen, river: attert, reason: "catalogue §3.2: Attert at Bissen 10 (Alzette tributary); AGE publishes no water name; nearest attert edge 4 m, alzette 3852 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age-json.niederfeulen, river: wark, reason: "catalogue §3.2: Wark at Niederfeulen 27 (Alzette tributary); AGE publishes no water name; nearest wark edge 5 m on the fixture (OSM 2026-10-10)" }
   - { station: lu.age-json.welscheid, river: wark, reason: "catalogue §3.2: Wark at Welscheid 28; AGE publishes no water name; nearest wark edge 4 m on the fixture (OSM 2026-10-10)" }
   - { station: lu.age-json.welscheid-village, river: wark, reason: "catalogue §3.2: Wark at Welscheid-Village 29; AGE publishes no water name; nearest wark edge 5 m on the fixture (OSM 2026-10-10)" }
   - { station: lu.age-json.ettelbruck-wark, river: wark, reason: "catalogue §3.2: Ettelbrück/Wark 41 is on the Wark; AGE publishes no water name; nearest wark edge 6 m on the fixture (OSM 2026-10-10)" }
-  - { station: lu.age-json.larochette, unsnapped: true, reason: "catalogue §3.2: Ernz at Larochette 43 (Sauer tributary); not a curated river" }
-  - { station: lu.age-json.mullerthal, unsnapped: true, reason: "catalogue §3.2: Ernz at Müllerthal 39 (Sauer tributary); not a curated river" }
+  - { station: lu.age-json.larochette, unsnapped: true, reason: "catalogue §3.2: Ernz at Larochette 43 (Sauer tributary), the White Ernz (Q252318); not a curated river: the extract holds no OSM relation or way tagged with its QID (#126)" }
+  - { station: lu.age-json.mullerthal, unsnapped: true, reason: "catalogue §3.2: Ernz at Müllerthal 39 (Sauer tributary), the Black Ernz (Q2671282); not a curated river: the extract holds no OSM relation or way tagged with its QID (#126)" }
   - { station: lu.age-json.roodt-sur-syre, unsnapped: true, reason: "catalogue §3.2: Syre: Roodt-Syre 52; the curated syre is one OSM way, the only one tagged with its QID (Q1772641), 1319 m away" }
   - { station: lu.age-json.ubersyren, unsnapped: true, reason: "catalogue §3.2: Syre: Uebersyren 109; the curated syre is one OSM way, the only one tagged with its QID (Q1772641), 6145 m away" }
   - { station: lu.age-json.mertert, river: syre, reason: "catalogue §3.2: Syre: Mertert 32, the catalogue lists it on the Syre; AGE publishes no water name; nearest syre edge 11 m, moselle 696 m on the fixture (OSM 2026-10-10)" }
@@ -184,6 +184,8 @@ stations:
   - { station: fr.sandre.B610000801, unsnapped: true, reason: "Belgian partner \"La Semoy en Belgique [Straimont]\" (catalogue §0.6, Semois, Q only): the position (5.381, 49.793) is 5.6 km from the nearest Semois edge, so it does not lie on the curated Semois [U]" }
   - { station: fr.sandre.A900105050, unsnapped: true, reason: "\"La Sarre à Laneuveville-lès-Lorquin\": the position is 2.5 km from the nearest Saar edge (the graph's Saar relation starts downstream of it), so there is no edge to place it on" }
   - { station: fr.sandre.E201000501, unsnapped: true, reason: "KG-160: FR-1 \"Rivière Scarpe\" (La Scarpe à Anzin-Saint-Aubin) is the upper Scarpe, which is not in the graph (the Scarpe relation is La Scarpe Canalisée); nearest Scarpe edge 4319 m" }
+  - { station: fr.sandre.A973121001, river: nied-francaise, reason: "FR-1 names it \"La Nied\" (the curated nied's spelling), but Ancerville lies on the Nied française, 15.1 km above the confluence where nied starts; nearest nied-francaise edge 0 m, nied-allemande 10467 m on the fixture (OSM 2026-10-11)" }
+  - { station: fr.sandre.A975201001, river: nied-francaise, reason: "FR-1 names it \"La Nied\" (the curated nied's spelling), but Condé-Northen lies on the Nied française, 1.7 km above the confluence where nied starts; nearest nied-francaise edge 1 m, nied-allemande 1442 m, nied 1702 m on the fixture (OSM 2026-10-11)" }
   # DE-1 (named by PEGELONLINE; only the stations whose name does not place them, or whose edge is farther than 500 m)
   - { station: de.wsv.3770030, river: ems, reason: "DE-1 water body DEK, but docs/sources/research/de-pegelonline.md and catalogue §3.5 put Herbrum Hafendamm on the Ems \"at the tidal limit\"; 71 m from a DEK edge and 129 m from the Ems edge, so the document decides, not distance [U]; nearest ems edge 129 m on the fixture (OSM 2026-10-01), next other curated river dortmund-ems-kanal 71 m" }
   - { station: de.wsv.3770040, river: ems, reason: "DE-1 water body DEK (DEK-km 217.86), but \"Rhede (Ems at the tidal limit)\" in docs/sources/research/de-pegelonline.md; 3359 m from the nearest DEK edge; nearest ems edge 30 m on the fixture (OSM 2026-10-01), next other curated river dortmund-ems-kanal 3359 m" }
@@ -197,16 +199,17 @@ stations:
   # CH-1 and CH-2 (BAFU names the water body; only the case where the name matches a different river than the gauge is on)
   - { station: ch.bafu.2471, unsnapped: true, reason: "Murg at Murgenthal is the Aare tributary (Wikidata Q1953660), not the curated Thurgau murg (Q685327) that the name matches; 86.6 km from the murg, 1256 m from the aare on the fixture (OSM 2026-10-10) [U: an uncurated river]" }
   - { station: ch.bafu-pq.2471, unsnapped: true, reason: "Murg at Murgenthal is the Aare tributary (Wikidata Q1953660), not the curated Thurgau murg (Q685327) that the name matches; 86.6 km from the murg, 1256 m from the aare on the fixture (OSM 2026-10-10) [U: an uncurated river]" }
+  - { station: ch.bafu.2305, river: glatt-thur, reason: "BAFU names the water body Glatt, which the name rule gives to the curated Rhine glatt (Q680765); Herisau Zellersmühle lies on the Thur Glatt (Q1529837); nearest glatt-thur edge 5 m, sitter 4909 m, glatt 45336 m on the fixture (OSM 2026-10-11)" }
+  - { station: ch.bafu-pq.2305, river: glatt-thur, reason: "BAFU names the water body Glatt, which the name rule gives to the curated Rhine glatt (Q680765); Herisau Zellersmühle lies on the Thur Glatt (Q1529837); nearest glatt-thur edge 5 m, sitter 4909 m, glatt 45336 m on the fixture (OSM 2026-10-11)" }
   # Tier-1 gauges (#100) deliberately left without an entry: the name rule matches their curated river, but no edge of it
   # lies within 500 m, so they stay `no_edge_within_500m` and are placed by themselves once OSM covers them (an
-  # `unsnapped` entry would keep them out after such a fix). Measured on the fixture (OSM 2026-10-10); KG-250; all six
-  # are pinned in test/fixtures/rivernet-golden.yaml, so a change shows in review.
+  # `unsnapped` entry would keep them out after such a fix). Measured on the fixture (OSM 2026-10-10); KG-250; all four
+  # are pinned in test/fixtures/rivernet-golden.yaml, so a change shows in review. (#126 placed the two Nied française
+  # gauges of this list, Ancerville and Condé-Northen, on the new nied-francaise by override above.)
   #   de.lanuk.2782370000100 Weine, de.lanuk.2782700000100 Niederntudorf, de.lanuk.2782900000200 Neuhaus2 (Alme): 6.3,
   #     17.1 and 27.5 km from the kept alme; relation r379697 has a member without a waterway tag and its 54 empty-role
   #     ways below it do not connect to the main stream
   #   de.lanuk.2736135100100 Egerpohl (Wupper): 1.7 km above the start of relation r410329, 4 m from a way named Wipper
-  #   fr.sandre.A973121001 Ancerville, fr.sandre.A975201001 Condé-Northen ("La Nied"): on the Nied française, 15.1 and
-  #     1.7 km above the curated nied, which starts at the confluence
 waters:
   - { source: BE-3, water_name: "Haute Meuse (amont Dinant)", river: meuse, reason: "SPW label of the Meuse reach (catalogue §3.3 items 7-20); every station with it lies within 160 m of the Meuse on the fixture" }
   - { source: BE-3, water_name: "Haute Meuse (aval Dinant)", river: meuse, reason: "SPW label of the Meuse reach (catalogue §3.3 items 7-20); every station with it lies within 160 m of the Meuse on the fixture" }

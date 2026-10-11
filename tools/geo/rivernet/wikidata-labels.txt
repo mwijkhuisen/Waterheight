@@ -167,6 +167,62 @@ fr:Wark
 lb:Syr
 de:Syr
 fr:Syre
+# Stage 2 (#126)
+de:Angel
+de:Hessel
+de:Baarbach
+de:Bröl
+de:Dhünn
+de:Düssel
+de:Ennepe
+de:Ferndorfbach
+de:Gieseler
+de:Hesperbach
+de:Neffelbach
+de:Nette
+de:Vichtbach
+fr:Giessen
+fr:Mossig
+fr:Weiss
+fr:Zorn
+fr:Loison
+fr:Mouzon
+fr:Vair
+fr:Arentèle
+fr:Arentele
+fr:Ruisseau l'Arentele
+fr:Eichel
+fr:Ruisseau l'Eichel
+fr:Woigot
+fr:Ruisseau le Woigot
+fr:Yron
+fr:Nied allemande
+fr:Nied française
+fr:Clarence
+fr:Hogneau
+fr:Solre
+de:Glatt
+de:Töss
+de:Hinterrhein
+de:Sitter
+de:Kleine Emme
+de:Lorze
+de:Saane
+fr:Sarine
+fr:Attert
+lb:Attert
+fr:Eisch
+lb:Äisch
+de:Eisch
+fr:Ernz Noire
+de:Schwarze Ernz
+fr:Ernz Blanche
+de:Weiße Ernz
+fr:Wiltz
+lb:Wolz
+fr:Clerve
+de:Clerve
+lb:Klierf
 # Canals
 nl:Julianakanaal
 nl:Albertkanaal
