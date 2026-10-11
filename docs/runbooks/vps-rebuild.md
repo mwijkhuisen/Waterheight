@@ -129,6 +129,7 @@ disabled
 | `RWS_CAPTURE_SKIP` | not set | `CH-1,NL-1` |
 | `RWS_SITE_PHASE` | not set (follows the compose default: the phase the release serves) | `prelaunch` (pinned: the drill is never indexed, even after the launch flip) |
 | `RWS_OWNER_SITE` | `on` in §11 | not set |
+| `RWS_TRUSTED_PROXIES` | as production: the proxy in front of the site (KG-228, `api.md` §6); then `sudo rws-trusted-proxies` exempts it from the connection cap at once (else `rws-tick` within 10 minutes) | not set, unless a proxy fronts the drill host |
 
 `RWS_SITE_PHASE` is read by the web container only (the phase files of the web image); on the production VPS it stays unset, so the reviewed compose default decides. `RWS_CAPTURE_SKIP` is a comma-separated list of catalogue source IDs. The capture role leaves out the specs of those sources and only those: it can never add a target, and an unknown or malformed ID stops capture at start with exit 78 and a fixed code (`RWS_CAPTURE_SKIP_MALFORMED`, `RWS_CAPTURE_SKIP_UNKNOWN`). It is never set in production.
 

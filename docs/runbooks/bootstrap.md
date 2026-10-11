@@ -341,5 +341,5 @@ Do this on the VPS that runs the P12b (or a later) release. No new secret, migra
    sudo journalctl -u rws-firewall --since -10min | grep 'connection cap'    # 1 IPv4 and 0 IPv6 trusted proxy ranges
    ```
 
-   An empty `trusted4` behind a proxy means the value was refused (the journal says which entry, by number): fix the line and run `sudo rws-trusted-proxies`.
+   An empty `trusted4` behind a proxy means the value was refused (the journal says which entry, by number; bootstrap also ends with a warning that nothing is exempt): fix the line and run `sudo rws-trusted-proxies`. A malformed `rws.env` (the journal says `rws.env: malformed line`) or a failing `nft` leaves the sets as they were, not empty.
 4. From outside: `scripts/verify-prod.sh <domain>`, then `docs/runbooks/api.md` §6 with `.request.client_ip`: visitors' prefixes, and `limiter_gateway_key` at 0.
