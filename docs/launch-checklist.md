@@ -61,8 +61,8 @@ Signed (owner): ______________________  Date: ____-__-__
 
 ## 2. Permissions, notices and legal pages
 
-- [ ] [owner] C1 to C13 answered, or past their go/no-go date with the fallback of [`docs/permissions.md`](permissions.md) applied and recorded there (C13: 2026-10-31 for CH-2 and CH-5, 2026-11-06 for CH-4).
-- [ ] [owner] **E1**: the BfG Belegexemplar is sent ([`e1-bfg-belegexemplar`](legal/requests/e1-bfg-belegexemplar.md)) and `registry/permissions/DE-2.md` is recorded from `registry/permissions/DE-2.md.template`. DE-2 stays `owner` until that record exists (the GATED rule in `packages/contracts/src/registry.ts`); leave this box open to launch with DE-2 as an owner source.
+- [ ] [owner] C1 to C13 answered, or past their go/no-go date with the fallback of [`docs/permissions.md`](permissions.md) applied and recorded there (C13: 2026-10-31 for CH-2 and CH-5, 2026-11-06 for CH-4). **The test of the fallbacks is date-blind:** `test/launch-checklist.test.ts` proves which registry state each outcome leads to, not that a date has passed or that you applied it. For every go/no-go decision, set the registry yourself (permission records, `audience` and channel flags) and run `pnpm check` before you sign; nothing fails on its own when you forget.
+- [ ] [owner] **E1**: the BfG Belegexemplar is sent ([`e1-bfg-belegexemplar`](legal/requests/e1-bfg-belegexemplar.md)) and `registry/permissions/DE-2.md` is recorded from `registry/permissions/DE-2.md.template`. DE-2 stays `owner` until that record exists (the gate in `packages/contracts/src/registry.ts`: `GATED` plus every source whose baseline licence kind is not open; a record whose text fields still say TODO is refused); leave this box open to launch with DE-2 as an owner source. **At the flip, the DE-2 runs captured in the owner period become public history**, within the `history_export` channel the record grants; the flip PR says so.
 - [ ] [owner] **E2**: the go-live notice is sent to RWS, ITZBund and BAFU ([`e2-go-live`](legal/requests/e2-go-live.md)); date: ____-__-__.
 - [ ] [owner] **E5**: the disclaimer, colophon (operator name and contact) and privacy notice are approved in NL and EN, and the privacy notice matches the logging configuration (`test/privacy-policy.test.ts` holds the numbers to `deploy/web/site.caddy`). Approved on: ____-__-__. Text changes are owner work.
 - [ ] [owner] `RWS_OPERATOR_NAME` and `RWS_CONTACT_EMAIL` are set in `/etc/rws/rws.env` (the colophon and `verify-prod` `runtime config` PASS).
@@ -80,7 +80,10 @@ Signed (owner): ______________________  Date: ____-__-__
 
 ## 4. Security
 
-- [ ] [owner] [`docs/security/launch-verdict.md`](security/launch-verdict.md) is filled in by the security review and shows no open High or Critical finding.
+- [ ] [owner] [`docs/security/launch-verdict.md`](security/launch-verdict.md) is filled in by the security review and shows no open High or Critical finding. (Round 1: SR-1 and SR-7 below are open launch preconditions, owner actions.)
+- [ ] [owner] **SR-1**: `scripts/gh-settings.sh --check` prints no drift: rulesets, branch protection with `ci` and `security` required, secret scanning with push protection, and the `production` environment with its reviewers. On 2026-10-11 the agent's read-only check reported drift (no ruleset, no branch protection, scanning off, no reviewers); that may be a token without admin rights, so confirm with an admin token and run `scripts/gh-settings.sh` until the check is clean. KG-025, R-002, KG-333.
+- [ ] [owner] **SR-7**: the web image runs Caddy 2.11.7 or newer (issue #131, after the 7-day release-age rule) and the Grype scan was run again on the release you launch; R-095's accepted findings expire 2026-11-10. KG-334.
+- [ ] [owner] **CAA**: the zone's `CAA` record allows `letsencrypt.org` only (read it with `dig CAA <domain>`; no tooling checks it). KG-335.
 - [ ] [owner] `sudo deploy/tests/hardening.sh --prod` passes on the VPS (every container hardened; only `caddy` and `caddy-owner` publish ports).
 - [ ] [owner] `scripts/verify-owner.sh <domain>` (on an owner device, tunnel up) shows no FAIL. Post only the PASS and FAIL counts; the output stays in your private notes.
 - [ ] [owner] `sudo wg show wg0` lists exactly your own device(s) and no other peer. Paste it into your private notes only (it names devices and endpoint addresses).
@@ -93,7 +96,8 @@ Signed (owner): ______________________  Date: ____-__-__
 
 - [ ] [owner] **Restore drill**: `sudo rws-restore-drill --force` restores the raw sample and the database dump into a throw-away database and replays a settled day, and passes (`/status/ops.json` shows the drill). At: ____-__-__ __:__ UTC. Runbook: [`restore`](runbooks/restore.md).
 - [ ] [owner] **E3**: the timed rebuild drill on a temporary VPS is done ([`vps-rebuild`](runbooks/vps-rebuild.md)): `sudo deploy/tests/rebuild-check.sh <drill hostname>` shows no FAIL, the timing sheet is filled in from your clock ([`docs/drills/rebuild-timing-sheet.md`](drills/rebuild-timing-sheet.md), copied to `docs/drills/rebuild-<date>.md`), the total is at most 240 minutes with 0 Q7 gaps in the judged sources, and the temporary VPS is deleted. Date: ____-__-__.
-- [ ] [owner] **Alert drill**: `sudo deploy/tests/alert-drill.sh` was run, and every healthchecks.io alert in its receipt table reached you (last column filled in). The grace values stand as in [`docs/ops/alert-tuning.md`](ops/alert-tuning.md). Date: ____-__-__.
+- [ ] [owner] **All 18 checks are up** on the healthchecks.io dashboard, before the alert drill and again before you sign. The export of 2026-10-11 showed eight checks without a success ping and three down flips each on `watchdog`, `cert` and `disk`, which may be standing alerts, and unexplained down flips on `cap-fr` (18) and `update` (14); write the cause of each in the issue ([`docs/ops/alert-tuning.md`](ops/alert-tuning.md), KG-321).
+- [ ] [owner] **Alert drill**: run only when the dashboard is all green (the restoring ping would hide a real outage of the same check). `sudo deploy/tests/alert-drill.sh` was run, and every healthchecks.io alert in its receipt table reached you (last column filled in). The grace values stand as in [`docs/ops/alert-tuning.md`](ops/alert-tuning.md). Date: ____-__-__.
 - [ ] [owner] The runbooks for a provider outage, a DST check and a VPS rebuild exist and were read ([`provider-outage`](runbooks/provider-outage.md), [`dst-check`](runbooks/dst-check.md), [`vps-rebuild`](runbooks/vps-rebuild.md)).
 
 Signed (owner): ______________________  Date: ____-__-__
@@ -101,7 +105,7 @@ Signed (owner): ______________________  Date: ____-__-__
 ## 6. The public site, before and after the switch
 
 - [ ] [agent-prod] Before the switch: `scripts/verify-prod.sh <domain> --profile prelaunch` is all PASS (noindex everywhere, no `robots.txt` or sitemap, no owner source named).
-- [ ] [owner] The launch commit is reviewed and merged (the one change of the `RWS_SITE_PHASE` default; `rws.env` never sets it) and deployed: `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`.
+- [ ] [owner] The launch commit is reviewed and merged (the one change of the `RWS_SITE_PHASE` default; production's `rws.env` never sets it, while the rebuild drill's pins `prelaunch`: [`vps-rebuild`](runbooks/vps-rebuild.md) §4) and deployed: `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`.
 - [ ] [agent-prod] After the switch: `scripts/verify-prod.sh <domain> --profile launch` is all PASS (pages without `X-Robots-Tag`; `/api`, `/data`, `/status/`, `/tiles` and the 404 shells still `noindex`; `robots.txt`, the sitemap and the Open Graph image in place; `robots.txt`, the sitemap, `sources.json` and `status.json` name no owner source or host).
 - [ ] [owner] No CDN is armed: `https://<domain>/runtime-config.json` shows `"cdn":""`, and the privacy page says so (D20, [`cdn-break-glass`](runbooks/cdn-break-glass.md)).
 

@@ -5,6 +5,10 @@
 # and touches no service: only pings. A trap restores every check it failed on any exit, an interrupted drill
 # included. Prints a receipt table on stdout; the owner fills in the last column.
 #
+# Run it only when the healthchecks.io dashboard is all green: the restoring success ping turns a check up again,
+# so a real outage of the same check would stay hidden until timeout + grace has passed (docs/ops/alert-tuning.md).
+# The script does not read the dashboard.
+#
 # The ping key reaches curl through a config on stdin, never argv (as `ping` in deploy/bin/rws-lib.sh does) and is
 # never printed. RWS_PING_SLUGS of `ping` cannot reach cap-* or load, so this script sends its own requests.
 #

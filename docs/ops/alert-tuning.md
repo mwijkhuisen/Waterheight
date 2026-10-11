@@ -2,6 +2,8 @@
 
 State: **tuned from the owner's export `hc-lateness-2026-10-11.json` (2026-10-11, plan §1a.1); every grace stays 2 × timeout.** The export holds at most the last 50 success pings per check (healthchecks.io keeps the last 100 pings), so each window is 8–48 h, not the whole soak. In it the largest lateness over a timeout was 600 s (`cap-nl`, one missed 10-minute tick, half its grace); every other measured check was at most 43 s late. No measured check needs more grace, and the data is too short to justify less, so `deploy/healthchecks.yaml`, `deploy/bin/rws-hc-sync` and `test/healthchecks.test.ts` are unchanged. Eight checks had no success ping in the window (see the table); they could not be measured. Known gap: [U] a longer soak export for those eight.
 
+**Read this before you trust the table: possibly standing alerts.** Eight of the 18 checks had **no success ping at all** in the export (`cap-owner`, `backup`, `restore-drill`, `watchdog`, `cert`, `disk`, `load`, `publisher`), and `watchdog`, `cert` and `disk` each show 3 down flips. A check with no success ping and a down flip may simply be down on the dashboard now, that is, a standing alert, not a check that is merely hard to measure. `cap-fr` (18 down flips) and `update` (14) also flipped down often; those come from `/fail` pings and their cause is **not yet explained**. The owner checks the healthchecks.io dashboard (Action A6) and writes the cause of each of these in the issue: until then the table says nothing about whether those checks work. [U] KG-321.
+
 A check alerts after `timeout + grace` without a ping. With grace = 2 × timeout that is 3 × the cadence of the job.
 
 ## The table (all 18 checks)
@@ -51,5 +53,7 @@ After the commit the owner runs `deploy/bin/rws-hc-sync` from the workstation (a
 ## Alert drill
 
 `deploy/tests/alert-drill.sh` (owner, on the VPS, `sudo`) sends a synthetic `/fail` ping to every check of `deploy/healthchecks.yaml`, holds (default 60 s) and then sends a success ping to each, so every check is green again. It induces no outage, and a trap restores the checks on any exit. It prints a receipt table: slug, /fail sent UTC, success sent UTC, and a last column the owner fills in when the alert arrives. `--only <slug>` drills one check; `--dry-run --hc-base http://127.0.0.1:<port>` pings a local stub only (the offline test, `deploy/tests/alert-drill.test.sh`).
+
+**Run the drill only when the dashboard is all green.** The restoring success ping that ends the drill turns a check up again, and that would hide a real outage of the same check until `timeout + grace` has passed. So before the drill every one of the 18 checks must be up on the healthchecks.io dashboard (explain or fix any that is not; see above), and nobody should be mid-incident. `alert-drill.sh` does not look at the dashboard itself.
 
 The drill proves delivery (integration, mail or phone), not timing: a synthetic `/fail` alerts at once, whatever the grace. The alert delay (`timeout + grace`) is judged from the soak data above. The receipt table is evidence for the launch checklist; [U] real alert receipts: only the owner can confirm them.

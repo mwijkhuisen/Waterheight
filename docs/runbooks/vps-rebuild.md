@@ -8,7 +8,7 @@
 This is the one document that strings the others together: `bootstrap.md` (the host), `restore.md` (the data), `replay.md`, `basemap.md`, `geo-refresh.md`, `owner-device.md`, `deploy-rollback.md`. Where a step is long there, this page gives the command and the check and names the section. **Owner only; no agent has production access.**
 
 **The two modes.**
-- **Real rebuild**: the production domain, nothing skipped, the owner site brought back (§11) and DNS moved (§12).
+- **Real rebuild**: the production domain, nothing skipped, DNS moved first (§5: the deploy needs a certificate for the production name), the owner site brought back (§11) and the DNS cut-over verified (§12).
 - **Drill (E3)**: a second, temporary VPS under its own hostname, the production bucket through a read-only key, no pings, no backups, no owner port, no indexing, and `RWS_CAPTURE_SKIP=CH-1,NL-1` so that it does not spend the providers' budget next to production. Every step says what differs. Fill `docs/drills/rebuild-timing-sheet.md` while you go (it ships empty; never fill it from memory).
 
 **What is and is not in the backup.** One restic snapshot per hour holds `/data/raw` (the raw archive, RPO ≤ 1 h) and `/data/db` (`rws.dump` and `globals.sql`, the nightly dump, RPO ≤ 24 h for the database). **Not in it:** the TLS and ACME state (`caddy_data`; KG-055: Caddy asks Let's Encrypt again), the basemap (`/srv/rws/tiles`), the river files (`/srv/rws/public/data/v1/rivers`, `/srv/rws/public/downloads`), the published tree and the owner tree (the publishers regenerate them), `/etc/rws/secrets` and `/etc/rws/rws.env` (your password manager), the WireGuard server key and peers (§11). The map and the rivers are fetched again (§10).
@@ -25,14 +25,14 @@ The minutes are measured by you, never estimated: copy each row's start and end 
 | 2 | Secrets (A7) and bootstrap again | owner | TODO (E3) |
 | 3 | Quiet the host: timers (and, on the drill, WireGuard) off | owner | TODO (E3) |
 | 4 | `rws.env` | owner | TODO (E3) |
-| 5 | `rws-deploy` the verified release; stop `capture` and `load` | owner | TODO (E3) |
+| 5 | Real rebuild: DNS cut-over first; `rws-deploy` the verified release; stop `capture` and `load` | owner | TODO (E3) |
 | 6 | Restore the snapshot: raw (RPO ≤ 1 h), dump (≤ 24 h) | owner | TODO (E3) |
 | 7 | Restore the database (route B) | owner | TODO (E3) |
 | 8 | Replay since the dump (the loader catches up) | owner | TODO (E3) |
 | 9 | Start capture, load and api again; the D19 window | owner | TODO (E3) |
 | 10 | The basemap and the river files | owner | TODO (E3) |
 | 11 | WireGuard and the owner site (real rebuild only) | owner | TODO (E3) |
-| 12 | DNS cut-over (real rebuild; the drill only creates its own name) | owner | TODO (E3) |
+| 12 | DNS check and TTL restore (real rebuild; the drill's own name exists before T0) | owner | TODO (E3) |
 | 13 | `verify-prod.sh <domain> --profile …` | owner | TODO (E3) |
 | 14 | The Q7 gap check (and `rebuild-check.sh` on the drill) | owner | TODO (E3) |
 
@@ -42,7 +42,7 @@ The minutes are measured by you, never estimated: copy each row's start and end 
    - a hostname that is not production's, e.g. `drill.<your domain>`, with `A` and `AAAA` records to the drill VPS (the `CAA` record of the zone already allows Let's Encrypt). It must be a valid `RWS_DOMAIN` (lower case, a real domain). Let's Encrypt allows five certificates a week for one exact hostname: use a new name when you repeat the drill;
    - a **read-only bucket key** (get and list on the bucket, no put, no delete) from the provider, never the VPS key of production (which may put and delete) and never the workstation key. Create it for the drill and delete it after;
    - the drill is **never indexed**: it must serve the prelaunch phase (`X-Robots-Tag: noindex`). `rebuild-check.sh` fails `noindex` otherwise.
-2. **For a real cut-over (planned rebuild, or this drill's cut-over practice): lower the TTL 24 hours before.** Set the TTL of the `A` and `AAAA` records of the production domain to 300 s a day ahead, so the move in §12 takes minutes to propagate. A real disaster has no such lead time: then the TTL you had is the time you wait.
+2. **For a real cut-over (planned rebuild, or this drill's cut-over practice): lower the TTL 24 hours before.** Set the TTL of the `A` and `AAAA` records of the production domain to 300 s a day ahead, so the move at the start of §5 takes minutes to propagate. A real disaster has no such lead time: then the TTL you had is the time you wait.
 3. Have ready: the password manager entries for every secret of `bootstrap.md` §3, the restic repository password, the bucket endpoint and region, the release tag (or the GitHub release page), and a second terminal.
 4. **Production budgets.** Production uses about 375 of the 400 requests an hour that Rijkswaterstaat allows on `ddapi20-waterwebservices.rijkswaterstaat.nl` (`docs/plan/ARCHITECTURE.md` §7.3). Whether RWS counts that limit **per API key or per IP is not known** ([U], KG to be recorded by the owner): until it is, the drill must not capture NL-1 at all (and CH-1 is skipped because LINDAS wants one request per 10 minutes, never faster). That is what `RWS_CAPTURE_SKIP` is for (§4).
 
@@ -127,22 +127,33 @@ disabled
 | `RWS_RESTIC_REPOSITORY`, `RWS_S3_REGION` | as production | as production (the bucket is the source of the restore) |
 | `RWS_BACKUP` | `on` (the restore commands need it; the backup timer stays off until §9) | `on` (restore only: the key cannot write) |
 | `RWS_CAPTURE_SKIP` | not set | `CH-1,NL-1` |
+| `RWS_SITE_PHASE` | not set (follows the compose default: the phase the release serves) | `prelaunch` (pinned: the drill is never indexed, even after the launch flip) |
 | `RWS_OWNER_SITE` | `on` in §11 | not set |
 
-`RWS_CAPTURE_SKIP` is a comma-separated list of catalogue source IDs. The capture role leaves out the specs of those sources and only those: it can never add a target, and an unknown or malformed ID stops capture at start with exit 78 and a fixed code (`RWS_CAPTURE_SKIP_MALFORMED`, `RWS_CAPTURE_SKIP_UNKNOWN`). It is never set in production.
+`RWS_SITE_PHASE` is read by the web container only (the phase files of the web image); on the production VPS it stays unset, so the reviewed compose default decides. `RWS_CAPTURE_SKIP` is a comma-separated list of catalogue source IDs. The capture role leaves out the specs of those sources and only those: it can never add a target, and an unknown or malformed ID stops capture at start with exit 78 and a fixed code (`RWS_CAPTURE_SKIP_MALFORMED`, `RWS_CAPTURE_SKIP_UNKNOWN`). It is never set in production.
 
 ```bash
 sudo grep -c '^RWS_CAPTURE_SKIP=CH-1,NL-1$' /etc/rws/rws.env    # drill: 1; real rebuild: 0
+sudo grep -c '^RWS_SITE_PHASE=prelaunch$' /etc/rws/rws.env       # drill: 1; real rebuild: 0
 sudo rws-update --dry-run
 ```
 
 ```text
 1
+1
 ```
 
-**Check:** the grep prints what the column says; `rws-update --dry-run` no longer says "rws.env is not complete".
+**Check:** the two greps print what the column says (on the drill `1` and `1`; on a real rebuild `0` and `0`); `rws-update --dry-run` no longer says "rws.env is not complete". The drill pin is what keeps `rebuild-check.sh` `noindex` PASS after the launch flip, when the compose default is `launch`.
 
-## 5. Deploy the verified release
+## 5. DNS (real rebuild), then deploy the verified release
+
+**Real rebuild: cut DNS over first.** `rws-deploy`'s smoke test needs `/healthz` over a valid certificate for the production name (it only pins the connection to `RWS_PUBLIC_IPV4`; it does not skip TLS), and the new VPS has no ACME state (it is not in the backup, KG-055; KG-323). Caddy can only get that certificate once the name points at the new VPS. So, before `rws-deploy`, with the TTL lowered (Before the clock starts, step 2), change the `A` and `AAAA` records of the production domain to the new VPS's addresses (`RWS_PUBLIC_IPV4`, `RWS_PUBLIC_IPV6` in `rws.env`). The site then shows the empty, restoring stack until §9: for a real disaster the old VPS is gone anyway; a planned move that must keep the old VPS serving is rehearsed as the drill instead. Until the certificate is in (about a minute after the first start), judge the new stack without TLS: `sudo docker compose -p rws ps` and `docker exec` into the containers (§7), never `curl -k` or a check that needs a valid certificate. There is no `owner.<domain>` record, ever (`owner-device.md`).
+
+```bash
+dig +short A <domain>; dig +short AAAA <domain>     # the new VPS's addresses, from two public resolvers
+```
+
+**Drill:** nothing to do; the drill hostname's records exist from "Before the clock starts" and the production records are not touched.
 
 `rws-deploy` verifies the manifest and all three images against the release workflow's identity `https://github.com/mwijkhuisen/Waterheight/.github/workflows/release.yml@refs/heads/main` with the issuer `https://token.actions.githubusercontent.com` before it pulls by digest, creates the empty database, runs the migrations and the registry sync, and starts the stack (`deploy-rollback.md`). Use the tag that §1 verified:
 
@@ -208,7 +219,7 @@ The last command stops `capture` and `load` again (the deploy started them): the
 … (pg_restore prints nothing on success)
 ```
 
-**Check:** `sudo docker exec rws-db-1 psql -X -U postgres -d rws -Atc "select count(*) from series"` prints a number above 0; the deploy ended with its smoke test; `curl -s https://<domain>/api/v1/health` answers JSON.
+**Check:** `sudo docker exec rws-db-1 psql -X -U postgres -d rws -Atc "select count(*) from series"` prints a number above 0; the deploy ended with its smoke test; `curl -s https://<domain>/api/v1/health` answers JSON (the DNS and certificate of §5 are in place on a real rebuild and on the drill).
 
 ## 8. Replay since the dump
 
@@ -238,7 +249,7 @@ sudo rws-restore-drill --force                            # every sampled object
 curl -s https://<domain>/status/capture.json | jq -r '.generated_at'
 ```
 
-Capture's start-up recovery records any object without a manifest line, and each spec's gap-stretch window then refetches what the provider still keeps (5 to 40 days). The D19 window is the snapshot time from §6 to the first successful capture after this step; write both instants in the daily report. **Drill:** leave the three timers disabled and do not run `rws-restore-drill`.
+`rws-restore-drill` restores into a throw-away database on the same disk as the raw archive: it watches the disk and aborts when use passes 90 % (`disk-full.md`), and records the drill as done only after both of its parts have run. Capture's start-up recovery records any object without a manifest line, and each spec's gap-stretch window then refetches what the provider still keeps (5 to 40 days). The D19 window is the snapshot time from §6 to the first successful capture after this step; write both instants in the daily report. **Drill:** leave the three timers disabled and do not run `rws-restore-drill`.
 
 ```text
 … every sampled object matched    (real rebuild; the output of rws-restore-drill)
@@ -287,16 +298,16 @@ Every device config holds the old server public key: revoke and re-add each devi
 
 **Check:** `sudo wg show wg0` lists only your own devices; `scripts/verify-owner.sh` has no FAIL; `verify-prod.sh` `owner listener` passes (§13).
 
-## 12. DNS cut-over
+## 12. DNS check and TTL restore
 
-**Real rebuild.** With the TTL lowered (Before the clock starts, step 2) change the `A` and `AAAA` records of the production domain to the new VPS's addresses (`RWS_PUBLIC_IPV4`, `RWS_PUBLIC_IPV6` in `rws.env`). Caddy can only get its certificate once the name points at it (the ACME state was not in the backup, KG-055): expect a minute of TLS errors, then restore the TTL. There is no `owner.<domain>` record, ever (`owner-device.md`).
+**Real rebuild.** The cut-over itself was the first thing of §5. Here you verify it and put the TTL back (300 s was for the move; use the value you had). The `A` and `AAAA` records must answer the new VPS's addresses from at least two public resolvers, and the certificate must be valid (no `-k`).
 
 ```bash
-dig +short A <domain>; dig +short AAAA <domain>
+dig @1.1.1.1 +short A <domain>; dig @9.9.9.9 +short AAAA <domain>
 curl -sI https://<domain>/healthz | head -1
 ```
 
-**Drill.** The drill hostname's own records were created in "Before the clock starts"; the production records are not touched.
+**Drill.** The drill hostname's own records were created in "Before the clock starts"; the production records are not touched, and there is nothing to put back.
 
 ```text
 203.0.113.7                      (the new VPS's IPv4)
@@ -304,7 +315,7 @@ curl -sI https://<domain>/healthz | head -1
 HTTP/2 200
 ```
 
-**Check:** both lookups return the new addresses from at least two public resolvers (`dig @1.1.1.1`, `dig @9.9.9.9`); `/healthz` is a 200 over a valid certificate (no `-k`).
+**Check:** both lookups return the new addresses from both resolvers; `/healthz` is a 200 over a valid certificate.
 
 ## 13. verify-prod
 
@@ -318,7 +329,9 @@ scripts/verify-prod.sh <domain> --profile prelaunch      # or --profile launch a
 PASS … (every line PASS)
 ```
 
-**Check:** no FAIL. Lines that need data the rebuild has not collected yet (the 72 h soak, `--soak`) are not part of this run. The fresh-data lines (`tier-1`, `freshness`, `loader lag`) need the loader caught up (§8). Judge any other FAIL against `docs/known-gaps.md` and `docs/risk-register.md` before you call the step passed.
+**Expected FAILs on the drill (skipped sources, not judged).** The drill does not capture NL-1 and CH-1 (`RWS_CAPTURE_SKIP`), so their data stops at the snapshot and the checks that need it fresh fail by design: `health NL-1`, `tier-1 NL-1`, `fresh NL-1`, `forecast NL-1`, `belgian set` (its NL-1 locations), and `health CH-1`, `tier-1 CH-1`, `coverage CH-1`, `fresh CH-1`, `interval CH-1` (no download of `ch-1-lindas` yet: a FAIL), `forecast CH-4` (its series are the CH-1 stations'). Write them in the sheet as "expected: skipped"; any other FAIL is judged as below. `replay NL-1` and the DE-1, FR-1, DE-7 and LU-1 lines must pass. **Other providers see a second IP.** The drill captures every other source from a second address, and its gap-stretch refetch (§9) is a burst of back-fill requests on top of production's schedule. Each provider's polite limits are the same code as production's, but run the drill once, keep it short, delete the VPS afterwards (below) and do not repeat it in quick succession.
+
+**Check:** no FAIL other than those. Lines that need data the rebuild has not collected yet (the 72 h soak, `--soak`) are not part of this run. The fresh-data lines (`tier-1`, `freshness`, `loader lag`) need the loader caught up (§8). Judge any other FAIL against `docs/known-gaps.md` and `docs/risk-register.md` before you call the step passed.
 
 ## 14. The Q7 gap check
 
