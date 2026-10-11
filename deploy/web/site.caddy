@@ -621,8 +621,8 @@
 	# /status/*, /tiles and /assets never get here. Nested handle blocks are tried
 	# in this order (none has a path matcher, so Caddy does not re-sort them).
 	#
-	# P12b: the three HTML shells that carry the Open Graph tags (apps/web/index.html, en/index.html) go through
-	# the templates module with the delimiters [[ ]], so that og:image and og:url are absolute URLs of the
+	# P12b: the three HTML shells that carry the Open Graph tags (apps/web/index.html, en/index.html; no og:url: one shell serves every page) go through
+	# the templates module with the delimiters [[ ]], so that og:image is an absolute URL of the
 	# configured domain: the one expression in the files is [[env `RWS_DOMAIN`]] (test/launch-phase.test.ts
 	# fails on any other [[ in them). The module sees these three answers and no other file. The two 404 shells
 	# say noindex in both phases (their status is known only here).

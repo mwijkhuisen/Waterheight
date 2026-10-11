@@ -51,7 +51,7 @@ test('robots.txt: plain text, 5 minutes, the sitemap of the configured domain, /
   const body = await res.text();
   expect(body).toBe(robotsTxt(host));
   expect(body).toMatch(/^User-agent: \*$/m);
-  expect(body).toMatch(/^Disallow: \/api\/$/m);
+  for (const dir of ['api', 'tiles', 'data', 'downloads']) expect(body).toContain(`\nDisallow: /${dir}/\n`);
   expect(body).toContain(`Sitemap: ${origin}/sitemap.xml\n`);
   expect(body).not.toMatch(OWNER_ID);
 });
@@ -125,7 +125,8 @@ for (const locale of ['nl', 'en'] as const)
     const meta = (property: string) => page.locator(`meta[property="${property}"]`).getAttribute('content');
     // the rendered value, as a crawler reads it
     expect(await meta('og:image')).toBe(`${origin}/og.png`);
-    expect(await meta('og:url')).toBe(`${origin}${path}`);
+    // no og:url: one shell serves every page of a language, so it would name the wrong one (the sitemap does)
+    expect(await page.locator('meta[property="og:url"]').count()).toBe(0);
     expect(await meta('og:title')).toBe(msg(locale, 'site_title'));
     expect(await meta('og:description')).toBe(msg(locale, 'meta_description'));
     expect(await meta('og:type')).toBe('website');

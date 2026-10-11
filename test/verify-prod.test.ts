@@ -123,6 +123,7 @@ import {
   FORECAST_NL1_MAX_AGE_S,
   FRESH_MAX_AGE_BY_SOURCE,
   FRESH_MAX_AGE_S,
+  formatResult,
   freshLimit,
   GEOJSON,
   INTERVAL_MIN_S,
@@ -465,7 +466,7 @@ describe('the page checks', () => {
   it('the --dry-run list has one entry for each, and ci.yml requires both', () => {
     expect(CHECKS.filter((c) => c.startsWith('pages <path>:'))).toHaveLength(1);
     expect(CHECKS.filter((c) => c.startsWith('not found:'))).toHaveLength(1);
-    const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+    const ci = readFileSync(join(repoRoot, 'deploy/tests/e2e/verify-gate.sh'), 'utf8');
     const required = /for check in ([^;]*?); do/s.exec(ci.slice(ci.indexOf("'api meta'") - 20))?.[1] ?? '';
     expect(required.match(/'([^']+)'/g)).toEqual(expect.arrayContaining(["'pages'", "'not found'"]));
     // The tolerated-FAIL list never excuses them: they must PASS against the CI stack.
@@ -3204,15 +3205,14 @@ describe('owner sources and owner stations (P5c)', () => {
   });
 
   it('ci.yml lets only `owner health` fail in the deploy job: `owner sources`, `owner stations` and `owner leak` must PASS', () => {
-    const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+    const ci = readFileSync(join(repoRoot, 'deploy/tests/e2e/verify-gate.sh'), 'utf8');
     const list = /grep -vE '\^FAIL \(([^)]+)\) '/.exec(ci)?.[1]?.split('|');
     expect(list).toBeDefined();
     expect(list).toContain('owner health');
     expect(list).not.toContain('owner sources');
     expect(list).not.toContain('owner stations');
     expect(list).not.toContain('owner leak');
-    for (const name of ['owner leak', 'owner sources', 'owner stations'])
-      expect(ci).toContain(`grep -qE '^PASS ${name} '`);
+    for (const name of ['owner leak', 'owner sources', 'owner stations']) expect(ci).toContain(`need '^PASS ${name} '`);
   });
 });
 
@@ -4588,7 +4588,7 @@ describe('verify-prod: the static publisher (P9a)', () => {
         CHECKS.filter((c) => c.startsWith(`${n}:`)),
         n,
       ).toHaveLength(1);
-    const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+    const ci = readFileSync(join(repoRoot, 'deploy/tests/e2e/verify-gate.sh'), 'utf8');
     const required = /for check in ([^;]*?); do/s.exec(ci.slice(ci.indexOf("'api meta'") - 20))?.[1] ?? '';
     for (const n of required
       .match(/'([^']+)'/g)
@@ -4682,6 +4682,16 @@ describe('the launch profile (P12b)', () => {
         'no Disallow /api/',
         () => robots({}, robotsBody.replace('Disallow: /api/', 'Disallow: /x/')),
         /no "Disallow: \/api\/"/,
+      ],
+      [
+        'no Disallow /tiles/',
+        () => robots({}, robotsBody.replace('Disallow: /tiles/\n', '')),
+        /no "Disallow: \/tiles\/"/,
+      ],
+      [
+        'no Disallow /downloads/',
+        () => robots({}, robotsBody.replace('Disallow: /downloads/', 'Disallow: /download/')),
+        /no "Disallow: \/downloads\/"/,
       ],
       [
         'no User-agent',
@@ -4822,6 +4832,10 @@ describe('the launch profile (P12b)', () => {
       expect(
         checkOg(withHome(home.replace('og:type" content="website"', 'og:type" content="x"')), image(), domain).detail,
       ).toMatch(/og:type/);
+      const ogUrl = `<meta property="og:url" content="https://${domain}/" />`;
+      expect(checkOg(withHome(home.replace('</head>', `${ogUrl}</head>`)), image(), domain).detail).toMatch(
+        /og:url .*want none/,
+      );
       expect(checkOg(site(), image({ headers: { 'content-type': 'image/jpeg' } }), domain).detail).toMatch(
         /content-type/,
       );
@@ -5159,8 +5173,41 @@ describe('the launch profile (P12b)', () => {
     expect(source).toContain("else if (a === '--site') mode = 'site';");
   });
 
-  it('the CI deploy job requires a PASS for the checks of the default profile, and de-2 credit as PASS or N/A', () => {
+  it('prints a four-character status column, and the de-2 credit regex of CI and run.sh matches PASS and N/A, not FAIL', () => {
+    const line = (ok: boolean | 'n/a') => formatResult({ check: 'de-2 credit', ok, detail: 'why' });
+    expect(line(true)).toBe('PASS de-2 credit — why');
+    expect(line('n/a')).toBe('N/A  de-2 credit — why');
+    expect(line(false)).toBe('FAIL de-2 credit — why');
+    expect(formatResult({ check: 'og', ok: true, detail: '' })).toBe('PASS og');
+    for (const file of ['deploy/tests/e2e/verify-gate.sh', 'deploy/tests/e2e/run.sh']) {
+      const src = /(?:grep -qE|need) '(\^\(PASS\|N\/A\)[^']*de-2 credit )'/.exec(read(file))?.[1];
+      expect(src, file).toBeDefined();
+      const re = new RegExp(src ?? '$^');
+      expect(re.test(line(true)), file).toBe(true);
+      expect(re.test(line('n/a')), file).toBe(true);
+      expect(re.test(line(false)), file).toBe(false);
+    }
+  });
+
+  it('the CI deploy job and run.sh share one gate, and the deploy job uses the profile of the phase run.sh found', () => {
     const ci = read('.github/workflows/ci.yml');
+    expect(ci).toContain('phase=$(cat /ci/site-phase)');
+    expect(ci).toContain('--ca /ci/pki/pebble-root.pem --profile "$phase"');
+    expect(ci).toContain('deploy/tests/e2e/verify-gate.sh "$RUNNER_TEMP/verify-prod.txt"');
+    expect(ci).not.toContain("grep -vE '^FAIL (");
+    const run = read('deploy/tests/e2e/run.sh');
+    expect(run).toContain('printf \'%s\\n\' "$initial" >/ci/site-phase');
+    expect(run).toContain('verify_prod /ci/verify-full-launch.out --profile launch');
+    expect(run).toContain('"$e2e/verify-gate.sh" /ci/verify-full-launch.out');
+    // run.sh starts from the phase of the merged compose file, not a fixed one, and puts it back
+    expect(run).not.toContain('[[ $(phase_of) == prelaunch ]]');
+    expect(run).toMatch(
+      /verify_site "\$initial"\nset_phase "\$other"\nverify_site "\$other"\nset_phase "\$initial"\nverify_site "\$initial"\n/,
+    );
+  });
+
+  it('the deploy gate requires a PASS for the checks of the default profile, and de-2 credit as PASS or N/A', () => {
+    const ci = read('deploy/tests/e2e/verify-gate.sh');
     const required = /for check in ([^;]*?); do/s.exec(ci.slice(ci.indexOf("'api meta'") - 20))?.[1] ?? '';
     const names = required.match(/'([^']+)'/g)?.map((x) => x.slice(1, -1)) ?? [];
     for (const n of ['robots', 'sitemap', 'legal pages', 'security.txt', 'og', 'cache-control', 'owner docs']) {
@@ -5170,7 +5217,7 @@ describe('the launch profile (P12b)', () => {
         n,
       ).toBe(true);
     }
-    expect(ci).toContain("grep -qE '^(PASS|N/A) de-2 credit '");
+    expect(ci).toContain("need '^(PASS|N/A) +de-2 credit '");
     // none of them is in the allow-list of checks that may fail without live data
     const allow = /grep -vE '\^FAIL \(([^)]*)\) '/.exec(ci)?.[1] ?? '';
     for (const n of [

@@ -189,6 +189,15 @@ export const OTHER_GB = { database: 28, basemap: 9, static: 5 };
 export const DISK_GB = 200;
 
 export type Result = { check: string; ok: boolean | 'n/a'; detail: string };
+
+/**
+ * One printed line: a four-character status column (`PASS`, `FAIL`, or `N/A` padded to four), one space, the check and
+ * its detail. Consumers (the CI deploy job, deploy/tests/e2e/run.sh) match `N/A` with ` +` because of that padding;
+ * test/verify-prod.test.ts runs their regexes against this function.
+ */
+export function formatResult(r: Result): string {
+  return `${r.ok === 'n/a' ? 'N/A ' : r.ok ? 'PASS' : 'FAIL'} ${r.check}${r.detail ? ` — ${r.detail}` : ''}`;
+}
 const pass = (check: string, detail = ''): Result => ({ check, ok: true, detail });
 const miss = (check: string, detail: string): Result => ({ check, ok: false, detail });
 
@@ -2482,6 +2491,8 @@ export const LEGAL_PATHS: readonly string[] = PAGE_ROUTES.filter((r) =>
 ).flatMap((r) => [r.nl, r.en]);
 /** Cache-Control of robots.txt and sitemap.xml (A§9.1; deploy/web/phase-launch.caddy), and of every page. */
 export const ROBOTS_CACHE = 'public, max-age=300';
+/** The machine paths robots.txt keeps crawlers out of in the launch phase (deploy/web/phase-launch.caddy). */
+export const ROBOTS_DISALLOW = ['/api/', '/tiles/', '/data/', '/downloads/'] as const;
 export const PAGE_CACHE = 'no-cache';
 /** The paths of the launch phase that are not pages and say noindex (the pages must not). */
 export const NOINDEX_DATA_PATHS = ['/api', '/tiles'] as const;
@@ -2505,7 +2516,7 @@ const pageOf = (got: Readonly<Record<string, Page | string>>, path: string) => g
 
 /**
  * `robots`: prelaunch has none (the bare 404 of a missing file); launch serves it: 200 `text/plain; charset=utf-8`,
- * `Cache-Control: public, max-age=300`, no noindex, the lines `User-agent: *`, `Disallow: /api/` and one `Sitemap:` of
+ * `Cache-Control: public, max-age=300`, no noindex, the lines `User-agent: *`, `Disallow:` of each ROBOTS_DISALLOW path and one `Sitemap:` of
  * the domain asked for, and no owner-audience term or hostname (invariant 11).
  */
 export function checkRobots(
@@ -2529,7 +2540,7 @@ export function checkRobots(
   if (page.headers['x-robots-tag'] !== undefined) problems.push(`x-robots-tag ${show(page.headers['x-robots-tag'])}`);
   const lines = page.body.split('\n').map((l) => l.trim());
   if (!lines.includes('User-agent: *')) problems.push('no "User-agent: *"');
-  if (!lines.includes('Disallow: /api/')) problems.push('no "Disallow: /api/"');
+  for (const dir of ROBOTS_DISALLOW) if (!lines.includes(`Disallow: ${dir}`)) problems.push(`no "Disallow: ${dir}"`);
   const maps = lines.filter((l) => /^sitemap:/i.test(l));
   if (maps.length !== 1 || maps[0] !== `Sitemap: https://${domain}/sitemap.xml`)
     problems.push(
@@ -2540,7 +2551,7 @@ export function checkRobots(
   return problems.length === 0
     ? pass(
         check,
-        `200, text/plain, ${ROBOTS_CACHE}, User-agent *, Disallow /api/, the Sitemap of ${domain}, no owner term`,
+        `200, text/plain, ${ROBOTS_CACHE}, User-agent *, Disallow ${ROBOTS_DISALLOW.join(' ')}, the Sitemap of ${domain}, no owner term`,
       )
     : miss(check, problems.join('; '));
 }
@@ -2685,8 +2696,8 @@ export function pngSize(bytes: Buffer | undefined): { width: number; height: num
 }
 
 /**
- * `og`: the Open Graph tags of `/` and `/en/` (type website, title, description, an absolute og:url and og:image of the
- * domain asked for, twitter:card summary_large_image) and the image itself: 200 `image/png` from the same origin, a
+ * `og`: the Open Graph tags of `/` and `/en/` (type website, title, description, an absolute og:image of the domain
+ * asked for, no og:url (one shell serves every page of a language, so it would name the wrong page), twitter:card summary_large_image) and the image itself: 200 `image/png` from the same origin, a
  * PNG of 1200 x 630. No template delimiter is left in the page (Caddy's templates module made the URLs).
  */
 export function checkOg(
@@ -2696,10 +2707,7 @@ export function checkOg(
 ): Result {
   const check = 'og';
   const problems: string[] = [];
-  for (const [path, url] of [
-    ['/', `https://${domain}/`],
-    ['/en/', `https://${domain}/en/`],
-  ] as const) {
+  for (const path of ['/', '/en/']) {
     const page = got[path];
     if (page === undefined || typeof page === 'string') {
       problems.push(`${path}: ${page ?? 'not fetched'}`);
@@ -2708,7 +2716,7 @@ export function checkOg(
     const tags = metaTags(page.body);
     if (tags.get('og:type') !== 'website') problems.push(`${path}: og:type ${show(tags.get('og:type'))}`);
     for (const t of ['og:title', 'og:description']) if ((tags.get(t) ?? '') === '') problems.push(`${path}: no ${t}`);
-    if (tags.get('og:url') !== url) problems.push(`${path}: og:url ${show(tags.get('og:url'))}, want ${url}`);
+    if (tags.has('og:url')) problems.push(`${path}: og:url ${show(tags.get('og:url'))}, want none`);
     if (tags.get('og:image') !== `https://${domain}/og.png`)
       problems.push(`${path}: og:image ${show(tags.get('og:image'))}, want https://${domain}/og.png`);
     if (tags.get('twitter:card') !== 'summary_large_image')
@@ -2728,7 +2736,7 @@ export function checkOg(
   return problems.length === 0
     ? pass(
         check,
-        `og:type, title, description, an absolute og:url and og:image on ${domain}, twitter:card on / and /en/; og.png is a 1200 x 630 image/png from the same origin`,
+        `og:type, title, description, an absolute og:image on ${domain} and no og:url, twitter:card on / and /en/; og.png is a 1200 x 630 image/png from the same origin`,
       )
     : miss(check, problems.join('; '));
 }
@@ -2914,11 +2922,11 @@ export const CHECKS = [
   'headers / and /en/: 200 and every A§12.2 header byte for byte (CSP from ARCHITECTURE.md), no CORS, no Server, and X-Robots-Tag: noindex (--profile prelaunch, the default) or none (--profile launch)',
   `pages <path>: each of the ${PAGE_PATHS.length} paths of PAGE_ROUTES (apps/web/src/lib/routes.ts: ${PAGE_PATHS.map((p) => p.path).join(' ')}) is fetched once and is 200 with <html lang> "nl" (the Dutch paths) or "en" (the English ones), every A§12.2 header byte for byte and X-Robots-Tag: noindex (prelaunch) or none (launch) (/ and /en/ reuse the fetch of headers / and /en/)`,
   `not found: ${NOT_FOUND_PATHS.map((p) => p.path).join(' and ')} are 404 with the 404 shell of their language (<html lang>), every A§12.2 header byte for byte and X-Robots-Tag: noindex in both profiles, Cache-Control: no-cache, and a body that never holds the path's last segment`,
-  `robots (P12b): --profile prelaunch: /robots.txt is a 404; --profile launch: 200 text/plain; charset=utf-8, ${ROBOTS_CACHE}, no X-Robots-Tag, "User-agent: *", "Disallow: /api/", exactly one "Sitemap: https://<domain>/sitemap.xml", and no owner source, spec, canary or owner.<domain> in it`,
+  `robots (P12b): --profile prelaunch: /robots.txt is a 404; --profile launch: 200 text/plain; charset=utf-8, ${ROBOTS_CACHE}, no X-Robots-Tag, "User-agent: *", "Disallow:" /api/, /tiles/, /data/ and /downloads/, exactly one "Sitemap: https://<domain>/sitemap.xml", and no owner source, spec, canary or owner.<domain> in it`,
   `sitemap (P12b): prelaunch: /sitemap.xml is a 404; launch: 200 application/xml; charset=utf-8, ${ROBOTS_CACHE}, exactly the ${PAGE_PATHS.length} pages of PAGE_ROUTES as https://<domain><path>, each with hreflang nl, en and x-default (= the Dutch path), every URL on the domain, no owner term`,
   `legal pages (P12b, E5): the disclaimer, colophon, privacy and accessibility pages (${LEGAL_PATHS.join(' ')}) are 200 with the shell of their language`,
   'security.txt (P12b, RFC 9116): /.well-known/security.txt is 200 text/plain; charset=utf-8 with a Contact, an Expires in the future and the Canonical of this domain',
-  'og (P12b): / and /en/ carry og:type website, og:title, og:description, an absolute og:url and og:image of this domain and twitter:card summary_large_image, no template delimiter left; /og.png is 200 image/png, a PNG of 1200 x 630',
+  'og (P12b): / and /en/ carry og:type website, og:title, og:description, an absolute og:image of this domain, no og:url, and twitter:card summary_large_image, no template delimiter left; /og.png is 200 image/png, a PNG of 1200 x 630',
   `cache-control (P12b, A§9.1): / and /en/ are ${PAGE_CACHE}; in the launch profile robots.txt and sitemap.xml are ${ROBOTS_CACHE}`,
   'de-2 credit (P12b): N/A with its reason while DE-2 is an owner source in registry/sources.yaml; once it is public, /data/v1/sources.json lists DE-2 with the registry credit verbatim as a required attribution',
   'owner docs (P12b, invariant 11; both profiles, works under --resolve): robots.txt and the sitemap (when served), /data/v1/sources.json and /data/v1/status.json name no owner source, spec, canary or owner.<domain> hostname',
@@ -3410,9 +3418,7 @@ async function main(argv: string[]): Promise<number> {
     results.push(c.ok ? pass('capacity', out ?? 'printed') : miss('capacity', c.markdown));
   }
 
-  for (const r of results) {
-    console.log(`${r.ok === 'n/a' ? 'N/A ' : r.ok ? 'PASS' : 'FAIL'} ${r.check}${r.detail ? ` — ${r.detail}` : ''}`);
-  }
+  for (const r of results) console.log(formatResult(r));
   const failed = results.filter((r) => r.ok === false).length;
   console.log(`verify-prod: ${results.length} checks, ${failed} failed (${domain}, ${now.toISOString()})`);
   return failed === 0 ? 0 : 1;

@@ -1295,14 +1295,16 @@ E2E_OWNER_PW=$OWNER_PW docker run --rm --init --network host --ipc=host --add-ho
   fail "the owner smoke (owner-smoke.spec.ts) failed"
 proof "owner smoke: Playwright (Chromium, host network, https://owner.$DOMAIN, hosts entry -> $owner_ip: the WireGuard address, port 443) signed in to caddy-owner on the production build: /runtime-config.json says owner and the owner banner shows (owner-smoke.spec.ts)"
 
-step "Go public (P12b): verify-prod's public-site checks in both profiles, caddy recreated in between"
-# The switch is RWS_SITE_PHASE on the caddy service (deploy/compose.yaml, default prelaunch; site.caddy imports
-# phase-<phase>.caddy). The merged file the stack runs from ($REL/compose.yaml, rendered above) holds the value; the
-# launch phase is that value changed here and the service recreated, then put back, so that the deploy job's own
-# verify-prod run after this script (profile prelaunch, the default) judges the production phase. verify-prod runs in the
-# build image's Node on the host network, with the repository read-only (CI only: Docker). `--site` is its public-site
-# checks: headers, pages, not found, noindex, robots, sitemap, legal pages, security.txt, og, cache-control, de-2 credit and
-# owner docs. checkOwnerListener is not part of it (it probes real public addresses; --resolve skips it).
+step "Go public (P12b): verify-prod's public-site checks in both profiles from the stack's phase, caddy recreated in between"
+# The switch is RWS_SITE_PHASE on the caddy service (deploy/compose.yaml, default prelaunch until the launch flip;
+# site.caddy imports phase-<phase>.caddy). The merged file the stack runs from ($REL/compose.yaml, rendered above)
+# holds the value. Review CR-4: this step starts from whatever phase that default gives, tests that phase, the other one
+# (the value changed here and caddy recreated) and the first one again, and leaves it in place; /ci/site-phase tells the
+# deploy job's own verify-prod run (after this script) which profile to use. So the launch flip changes only the compose
+# default and DEFAULT_PROFILE. verify-prod runs in the build image's Node on the host network, with the repository
+# read-only (CI only: Docker). `--site` is its public-site checks: headers, pages, not found, noindex, robots, sitemap,
+# legal pages, security.txt, og, cache-control, de-2 credit and owner docs. checkOwnerListener is not part of it (it
+# probes real public addresses; --resolve skips it).
 phase_of() { sed -n 's/^      RWS_SITE_PHASE: //p' "$REL/compose.yaml"; }
 set_phase() {
   [[ $(phase_of) == "$1" ]] && return 0
@@ -1312,30 +1314,51 @@ set_phase() {
   wait_for "caddy healthy in phase $1" 120 healthy caddy
   wait_for "https answers in phase $1" 120 outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/healthz"
 }
-verify_site() { # profile
+verify_prod() { # output file, verify-prod arguments after the domain
+  local out=$1
+  shift
   docker run --rm --network host -v "$repo:/work:ro" -v /ci/pki:/ci/pki:ro -w /work "$NODE_IMAGE" \
-    node scripts/verify-prod.ts "$DOMAIN" --resolve "$IP4" --ca /ci/pki/pebble-root.pem --site --profile "$1" |
-    tee "/ci/verify-site-$1.out" || true
+    node scripts/verify-prod.ts "$DOMAIN" --resolve "$IP4" --ca /ci/pki/pebble-root.pem "$@" | tee "$out" || true
+}
+verify_site() { # profile
+  verify_prod "/ci/verify-site-$1.out" --site --profile "$1"
   ! grep -q '^FAIL' "/ci/verify-site-$1.out" || fail "verify-prod --site --profile $1 has FAIL lines (above)"
   for check in 'headers /' 'headers /en/' 'pages /' 'not found' 'noindex' 'robots' 'sitemap' 'legal pages' 'security.txt' \
     'og' 'cache-control' 'owner docs'; do
     grep -qE "^PASS $check " "/ci/verify-site-$1.out" || fail "verify-prod --site --profile $1: no PASS for $check"
   done
-  grep -qE '^(PASS|N/A) de-2 credit ' "/ci/verify-site-$1.out" || fail "verify-prod --site --profile $1: no de-2 credit line"
+  # N/A is printed padded to the four-character status column (formatResult in verify-prod.ts), hence ` +`
+  grep -qE '^(PASS|N/A) +de-2 credit ' "/ci/verify-site-$1.out" || fail "verify-prod --site --profile $1: no de-2 credit line"
+  case $1 in
+  prelaunch)
+    grep -qE '^PASS robots .*404' /ci/verify-site-prelaunch.out || fail "prelaunch: robots.txt is not the 404"
+    grep -qE '^PASS sitemap .*404' /ci/verify-site-prelaunch.out || fail "prelaunch: sitemap.xml is not the 404"
+    ;;
+  launch)
+    grep -qE '^PASS robots .*Sitemap of ' /ci/verify-site-launch.out || fail "launch: robots.txt is not the served one"
+    grep -qE '^PASS sitemap .*18 pages' /ci/verify-site-launch.out || fail "launch: the sitemap does not list the 18 pages"
+    # invariant 11 on the launch documents, from outside: no owner hostname or owner-audience source in either
+    for doc in robots.txt sitemap.xml; do
+      outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/$doc" >"/ci/launch-$doc"
+      ! grep -qiE "owner\.|CANARY|BE-3|LU-2|LU-3|LU-4|DE-2|DE-3" "/ci/launch-$doc" || fail "launch: /$doc names an owner source or host"
+    done
+    # Review CR-9: one full-mode run in the launch profile (the owner negatives, the data routes, noindex on the data
+    # paths), judged by the deploy job's own gate (verify-gate.sh: the same allow-list and required PASS lines).
+    verify_prod /ci/verify-full-launch.out --profile launch
+    "$e2e/verify-gate.sh" /ci/verify-full-launch.out || fail "verify-prod --profile launch (full mode) failed the deploy gate (above)"
+    ;;
+  esac
 }
-[[ $(phase_of) == prelaunch ]] || fail "the stack does not run in the prelaunch phase before the switch test ($(phase_of))"
-verify_site prelaunch
-grep -qE '^PASS robots .*404' /ci/verify-site-prelaunch.out || fail "prelaunch: robots.txt is not the 404"
-grep -qE '^PASS sitemap .*404' /ci/verify-site-prelaunch.out || fail "prelaunch: sitemap.xml is not the 404"
-set_phase launch
-verify_site launch
-grep -qE '^PASS robots .*Sitemap of ' /ci/verify-site-launch.out || fail "launch: robots.txt is not the served one"
-grep -qE '^PASS sitemap .*18 pages' /ci/verify-site-launch.out || fail "launch: the sitemap does not list the 18 pages"
-# invariant 11 on the launch documents, from outside: no owner hostname or owner-audience source in robots.txt or the sitemap
-for doc in robots.txt sitemap.xml; do
-  outside --resolve "$DOMAIN:443:$IP4" "https://$DOMAIN/$doc" >"/ci/launch-$doc"
-  ! grep -qiE "owner\.|CANARY|BE-3|LU-2|LU-3|LU-4|DE-2|DE-3" "/ci/launch-$doc" || fail "launch: /$doc names an owner source or host"
-done
-set_phase prelaunch
-verify_site prelaunch
-proof "go-public switch (RWS_SITE_PHASE on caddy, deploy/web/phase-<phase>.caddy): verify-prod.ts --site --profile prelaunch on the stack passed (noindex everywhere; robots.txt and sitemap.xml 404; legal pages, security.txt, og, cache-control, owner docs); caddy recreated with launch: --profile launch passed (no X-Robots-Tag on the 18 pages, noindex on /api and /tiles and the 404 shells, robots.txt with Disallow /api/ and the Sitemap of $DOMAIN, the sitemap with the 18 pages and hreflang, og tags absolute, no owner source or host in either document); caddy recreated with prelaunch again for the deploy job's own verify-prod run (checkOwnerListener skipped: --resolve)"
+initial=$(phase_of)
+case $initial in
+prelaunch) other=launch ;;
+launch) other=prelaunch ;;
+*) fail "the merged compose file has no known RWS_SITE_PHASE ($initial)" ;;
+esac
+verify_site "$initial"
+set_phase "$other"
+verify_site "$other"
+set_phase "$initial"
+verify_site "$initial"
+printf '%s\n' "$initial" >/ci/site-phase
+proof "go-public switch (RWS_SITE_PHASE on caddy, deploy/web/phase-<phase>.caddy), from the stack's phase $initial to $other and back: verify-prod.ts --site --profile prelaunch passed (noindex everywhere; robots.txt and sitemap.xml 404; legal pages, security.txt, og, cache-control, owner docs); --profile launch passed (no X-Robots-Tag on the 18 pages, noindex on /api and /tiles and the 404 shells, robots.txt with Disallow /api/, /tiles/, /data/ and /downloads/ and the Sitemap of $DOMAIN, the sitemap with the 18 pages and hreflang, og:image absolute and no og:url, no owner source or host in either document), and one full-mode --profile launch run passed the deploy job's gate (verify-gate.sh); caddy left in $initial for the deploy job's own verify-prod run with --profile $initial (/ci/site-phase; checkOwnerListener skipped: --resolve)"

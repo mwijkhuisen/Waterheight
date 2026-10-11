@@ -23,6 +23,9 @@ handle @robots_{args[0]} {
 	respond <<ROBOTS
 		User-agent: *
 		Disallow: /api/
+		Disallow: /tiles/
+		Disallow: /data/
+		Disallow: /downloads/
 
 		Sitemap: https://{$RWS_DOMAIN}/sitemap.xml
 

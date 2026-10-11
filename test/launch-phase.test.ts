@@ -96,8 +96,17 @@ describe('the phase files', () => {
     // every absolute URL of the launch phase starts at the configured domain
     const urls = [...code(launch).matchAll(/https?:\/\/[^\s"<]+/g)].map((m) => m[0]);
     expect(urls.length).toBeGreaterThan(0);
-    for (const u of urls.filter((u) => !u.startsWith('http://www.sitemaps.org') && !u.startsWith('http://www.w3.org')))
-      expect(u, u).toMatch(/^https:\/\/\{\$RWS_DOMAIN\}(\/|$)/);
+    // the XML namespace names are the only exception (exact scheme and host, parsed)
+    const XMLNS = new Set(['www.sitemaps.org', 'www.w3.org']);
+    const xmlns = (u: string) => {
+      try {
+        const url = new URL(u);
+        return url.protocol === 'http:' && XMLNS.has(url.host);
+      } catch {
+        return false;
+      }
+    };
+    for (const u of urls.filter((u) => !xmlns(u))) expect(u, u).toMatch(/^https:\/\/\{\$RWS_DOMAIN\}(\/|$)/);
   });
 
   it('keep every named matcher unique per import site ({args[0]}), so a double import is valid', () => {
@@ -142,9 +151,11 @@ describe('the phase files', () => {
       expect(c.match(/header Cache-Control "public, max-age=300"/g)).toHaveLength(2);
     });
 
-    it('robots.txt: all agents, /api/ disallowed, the sitemap of the configured domain', () => {
+    it('robots.txt: all agents, /api/, /tiles/, /data/ and /downloads/ disallowed, the sitemap of the configured domain', () => {
       const body = /respond <<ROBOTS\n([\s\S]*?)\n\t*ROBOTS 200/.exec(launch)?.[1]?.replaceAll(/^\t+/gm, '');
-      expect(body).toBe('User-agent: *\nDisallow: /api/\n\nSitemap: https://{$RWS_DOMAIN}/sitemap.xml\n');
+      expect(body).toBe(
+        'User-agent: *\nDisallow: /api/\nDisallow: /tiles/\nDisallow: /data/\nDisallow: /downloads/\n\nSitemap: https://{$RWS_DOMAIN}/sitemap.xml\n',
+      );
     });
 
     it('sitemap.xml: exactly the pages of apps/web/src/lib/routes.ts in both languages, each with hreflang nl, en, x-default', () => {
@@ -154,7 +165,7 @@ describe('the phase files', () => {
       expect(entries).toHaveLength(PAGE_ROUTES.length * 2);
       const want = PAGE_ROUTES.flatMap((r) => [r.nl, r.en]).sort();
       expect(
-        entries.map((e) => /<loc>([^<]+)<\/loc>/.exec(e)?.[1]?.replace('https://{$RWS_DOMAIN}', '')).sort(),
+        entries.map((e) => /<loc>([^<]+)<\/loc>/.exec(e)?.[1]?.replaceAll('https://{$RWS_DOMAIN}', '')).sort(),
       ).toEqual(want);
       for (const r of PAGE_ROUTES)
         for (const lang of ['nl', 'en'] as const) {
@@ -186,19 +197,18 @@ describe('the phase files', () => {
 
 describe('the Open Graph tags', () => {
   const SHELLS = ['apps/web/index.html', 'apps/web/en/index.html'];
-  /** The one template expression the files may hold: the domain, in two absolute URLs. */
+  /** The one template expression the files may hold: the domain, in the absolute og:image URL. */
   const ALLOWED = 'https://[[env `RWS_DOMAIN`]]';
 
-  it.each(SHELLS)('%s has no [[ or ]] outside the two allowed expressions', (file) => {
+  it.each(SHELLS)('%s has no [[ or ]] outside the one allowed expression, and no og:url', (file) => {
     const html = read(file);
-    expect(html.split(ALLOWED).length - 1).toBe(2);
+    expect(html.split(ALLOWED).length - 1).toBe(1);
     const rest = html.replaceAll(ALLOWED, '');
     expect(rest).not.toContain('[[');
     expect(rest).not.toContain(']]');
     expect(html).toContain(`<meta property="og:image" content="${ALLOWED}/og.png" />`);
-    expect(html).toMatch(
-      new RegExp(`<meta property="og:url" content="${ALLOWED.replace(/[[\]`]/g, '\\$&')}/(en/)?" />`),
-    );
+    // one shell serves every page of its language, so an og:url would name the wrong page (CR-10)
+    expect(html).not.toContain('og:url');
     for (const tag of ['og:type', 'og:title', 'og:description', 'og:site_name'])
       expect(html, tag).toMatch(new RegExp(`<meta property="${tag}" content="[^"]+" />`));
     // title and description are the page's own messages (no new text), twitter:card is the large image
