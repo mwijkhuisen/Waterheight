@@ -141,12 +141,9 @@ export function probeTls(address: string, port: number, domain: string, timeoutM
       resolve(p);
     };
     const host = `owner.${domain}`;
-    const socket = tlsConnect(
-      { host: address, port, servername: host, timeout: timeoutMs },
-      () => {
-        socket.write(`GET / HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\nUser-Agent: verify-prod\r\n\r\n`);
-      },
-    );
+    const socket = tlsConnect({ host: address, port, servername: host, timeout: timeoutMs }, () => {
+      socket.write(`GET / HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\nUser-Agent: verify-prod\r\n\r\n`);
+    });
     let buf = '';
     socket.on('data', (c) => {
       buf += c.toString('latin1');
