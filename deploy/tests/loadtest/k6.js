@@ -17,9 +17,10 @@
 //               6 r/s per address, inside the limiter, of cache-missing wide /series, /frames and snapshot calls to
 //               saturate the API; only the loader lag is judged (p95 < 120 s). With
 //               SATURATION_REQUIRE=1 the run also fails unless the API showed pressure (a 503, a 504 or an answer over
-//               one second), so that "lag while saturated" is never claimed for an idle API. SAT_INFLIGHT (2) sets the
-//               requests in flight per process as a multiple of SAT_RPS; the crowd step (#132) uses 10, the open model
-//               of the first P12a run (about 7,600 connections), with LENIENT=1: the edge probe judges it.
+//               one second), so that "lag while saturated" is never claimed for an idle API. SAT_VUS=n (the crowd step,
+//               #132) holds n connections per process instead: n visitors, each sending one of those calls about every
+//               n / SAT_RPS seconds (the same rate), so the connection count does not hang on how slow the API is.
+//               1264 is the first P12a run's peak (about 7,600 in all); with LENIENT=1, the edge probe judges it.
 //   edge        CI (#132). One process on an honest address while the crowd runs: EDGE_RPS (2) r/s of meta.json,
 //               latest.json and /api/v1/health, each with a 10 s timeout. Static files must answer 200 within 2 s
 //               (edge_static_ok >= 99 %) and health must answer at all (200 or the 503 `busy`; edge_health_ok >= 95 %).
@@ -67,7 +68,7 @@ const API_RPS = Number(__ENV.API_RPS || 50);
 const ABUSE_RPS = Number(__ENV.ABUSE_RPS || 300);
 const ABUSE_ROTATE = __ENV.ABUSE_ROTATE === '1';
 const SAT_RPS = Number(__ENV.SAT_RPS || 126);
-const SAT_INFLIGHT = Number(__ENV.SAT_INFLIGHT || 2);
+const SAT_VUS = Number(__ENV.SAT_VUS || 0);
 const EDGE_RPS = Number(__ENV.EDGE_RPS || 2);
 const SESSIONS_PER_S = Number(__ENV.SESSIONS_PER_S || 1);
 const PROD_RPS = Number(__ENV.PROD_RPS || 1000);
@@ -79,19 +80,9 @@ const clean = (n, what) => {
   if (!Number.isFinite(n) || n <= 0) throw new Error(`${what} must be a positive number`);
   return n;
 };
-for (const n of [
-  STATIC_RPS,
-  API_RPS,
-  ABUSE_RPS,
-  SAT_RPS,
-  SAT_INFLIGHT,
-  EDGE_RPS,
-  SESSIONS_PER_S,
-  PROD_RPS,
-  HEALTH_EVERY_S,
-  CLIENTS,
-])
+for (const n of [STATIC_RPS, API_RPS, ABUSE_RPS, SAT_RPS, EDGE_RPS, SESSIONS_PER_S, PROD_RPS, HEALTH_EVERY_S, CLIENTS])
   clean(n, 'a rate');
+if (!Number.isInteger(SAT_VUS) || SAT_VUS < 0 || SAT_VUS > 5000) throw new Error('SAT_VUS must be 0 to 5000');
 
 const seconds = (text) => {
   const m = /^([0-9]+)(s|m|h)$/.exec(text);
@@ -209,8 +200,11 @@ if (SCENARIO === 'normal') {
 } else if (SCENARIO === 'saturation') {
   // At most 2 x SAT_RPS requests in flight per process (about 1,500 in all): enough to saturate the API, which answers a
   // 503 `busy` once its permits are taken. Ten times as many (P12a, first run) filled the 256 MiB of Caddy with TLS
-  // connections and measured Caddy, not the API (KG-313); SAT_INFLIGHT=10 is that crowd again (#132).
-  scenarios.saturate = arrival('saturate', SAT_RPS, SAT_RPS, SAT_RPS * SAT_INFLIGHT);
+  // connections and measured Caddy, not the API (KG-313); SAT_VUS holds that crowd's connections on purpose (#132).
+  scenarios.saturate =
+    SAT_VUS > 0
+      ? { executor: 'constant-vus', exec: 'crowdVisitor', vus: SAT_VUS, duration: DURATION }
+      : arrival('saturate', SAT_RPS, SAT_RPS, SAT_RPS * 2);
   scenarios.health = healthScenario('healthSample');
   keepKinds(['api_snapshot', 'api_series', 'api_frames']);
   healthThresholds();
@@ -509,6 +503,12 @@ export function saturate(data) {
   params.tags = { kind: kind === 'series' ? 'api_series' : kind === 'frames' ? 'api_frames' : 'api_snapshot' };
   const res = get(path, params.tags.kind, params);
   if (res.status === 503 || res.status === 504 || res.timings.duration >= 1000) apiPressure.add(1);
+}
+
+/** One of SAT_VUS visitors: a saturating call, then a pause that keeps the process at about SAT_RPS (#132). */
+export function crowdVisitor(data) {
+  saturate(data);
+  sleep((SAT_VUS / SAT_RPS) * (0.5 + Math.random()));
 }
 
 // ---------------------------------------------------------------------------------------------- edge
