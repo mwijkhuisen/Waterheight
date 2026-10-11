@@ -347,6 +347,7 @@ function mapFiles() {
 
 /** Everything a request may name, from what the stack actually serves (files that exist, series with the api flag). */
 export function setup() {
+  if (SCENARIO === 'edge') return {}; // the probe itself is the measurement: no setup request
   const meta = getJson('/data/v1/meta.json');
   const data = { now: Date.parse(meta.now), startedAt: Date.now(), displayStart: Date.parse(meta.displayStart) };
   if (SCENARIO !== 'production' && SCENARIO !== 'edge') {

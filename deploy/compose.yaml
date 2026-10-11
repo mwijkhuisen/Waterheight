@@ -65,6 +65,8 @@ services:
       RWS_CDN_NAME: ${RWS_CDN_NAME:-}
       # KG-228: the reverse proxy in front of the site, if any (CIDRs); empty trusts nobody.
       RWS_TRUSTED_PROXIES: ${RWS_TRUSTED_PROXIES:-}
+      # #132 (ADR-0019 §5): the Go heap's soft limit, about 90 % of mem_limit, so Caddy collects before the kernel kills.
+      GOMEMLIMIT: 460MiB
     # Only directories no networked role writes: the root-owned status directory
     # (never capture's public/status, where a planted symlink would make Caddy
     # serve any file it can read) and the tiles directory, which only
@@ -87,7 +89,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks: [public, edge]
-    mem_limit: 256m
+    # #132: 512m with GOMEMLIMIT and the per-source cap in nftables.conf; neither held a crowd alone (ADR-0019 §5).
+    mem_limit: 512m
     cpus: 1.0
     pids_limit: 256
     healthcheck:
