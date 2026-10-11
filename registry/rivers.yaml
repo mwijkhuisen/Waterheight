@@ -1299,7 +1299,7 @@ rivers:
     wikidata: Q531391
     parent_river_id: werse
     km_direction: none
-    evidence: "Wikidata Q531391 (P402 18785075; P403 Q2452 Werse), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |"
+    evidence: "Wikidata Q531391 (P402 18785075; P403 Q2452 Werse), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: hessel
     name_nl: "Hessel"
     name_en: "Hessel"
@@ -1311,7 +1311,7 @@ rivers:
     wikidata: Q321328
     parent_river_id: ems
     km_direction: none
-    evidence: "Wikidata Q321328 (P402 13592837; P403 Q1648 Ems), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |"
+    evidence: "Wikidata Q321328 (P402 13592837; P403 Q1648 Ems), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: broel
     name_nl: "Bröl"
     name_en: "Bröl"
@@ -1323,7 +1323,7 @@ rivers:
     wikidata: Q153109
     parent_river_id: sieg
     km_direction: none
-    evidence: "Wikidata Q153109 (P402 3343879; P403 Q152484 Sieg), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |"
+    evidence: "Wikidata Q153109 (P402 3343879; P403 Q152484 Sieg), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: dhuenn
     name_nl: "Dhünn"
     name_en: "Dhünn"
@@ -1335,7 +1335,7 @@ rivers:
     wikidata: Q316493
     parent_river_id: wupper
     km_direction: none
-    evidence: "Wikidata Q316493 (P402 1462357; P403 Q639374 Wupper), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |"
+    evidence: "Wikidata Q316493 (P402 1462357; P403 Q639374 Wupper), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: ennepe
     name_nl: "Ennepe"
     name_en: "Ennepe"
@@ -1347,7 +1347,7 @@ rivers:
     wikidata: Q562319
     parent_river_id: volme
     km_direction: none
-    evidence: "Wikidata Q562319 (P402 5213947; P403 Q562283 Volme), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |"
+    evidence: "Wikidata Q562319 (P402 5213947; P403 Q562283 Volme), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: ferndorfbach
     name_nl: "Ferndorfbach"
     name_en: "Ferndorfbach"
@@ -1359,7 +1359,7 @@ rivers:
     wikidata: Q896170
     parent_river_id: sieg
     km_direction: none
-    evidence: "Wikidata Q896170 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r10647098 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q896170 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r10647098 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: gieseler
     name_nl: "Gieseler"
     name_en: "Gieseler"
@@ -1371,7 +1371,7 @@ rivers:
     wikidata: Q15111623
     parent_river_id: lippe
     km_direction: none
-    evidence: "Wikidata Q15111623 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r379747 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q15111623 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r379747 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: neffelbach
     name_nl: "Neffelbach"
     name_en: "Neffelbach"
@@ -1383,7 +1383,7 @@ rivers:
     wikidata: Q881409
     parent_river_id: erft
     km_direction: none
-    evidence: "Wikidata Q881409 (no P402; P403 Q708840 Erft), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r3718313 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q881409 (no P402; P403 Q708840 Erft), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r3718313 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: nette-niers
     name_nl: "Nette"
     name_en: "Nette"
@@ -1407,7 +1407,7 @@ rivers:
     wikidata: Q151161
     parent_river_id: inde
     km_direction: none
-    evidence: "Wikidata Q151161 (P402 10966665; P403 Q153317 Inde), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |"
+    evidence: "Wikidata Q151161 (P402 10966665; P403 Q153317 Inde), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: giessen
     name_nl: "Giessen"
     name_en: "Giessen"
@@ -1419,7 +1419,7 @@ rivers:
     wikidata: Q1523406
     parent_river_id: ill
     km_direction: none
-    evidence: "Wikidata Q1523406 (P402 1263465; P403 Q668472 Ill), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |"
+    evidence: "Wikidata Q1523406 (P402 1263465; P403 Q668472 Ill), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: mossig
     name_nl: "Mossig"
     name_en: "Mossig"
@@ -1431,7 +1431,7 @@ rivers:
     wikidata: Q1949463
     parent_river_id: bruche
     km_direction: none
-    evidence: "Wikidata Q1949463 (no P402; P403 Q746324 Bruche), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r1075243 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q1949463 (no P402; P403 Q746324 Bruche), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r1075243 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: weiss
     name_nl: "Weiss"
     name_en: "Weiss"
@@ -1443,7 +1443,7 @@ rivers:
     wikidata: Q2556484
     parent_river_id: fecht
     km_direction: none
-    evidence: "Wikidata Q2556484 (no P402; P403 Q1399427 Fecht), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r8467581 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q2556484 (no P402; P403 Q1399427 Fecht), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r8467581 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: zorn
     name_nl: "Zorn"
     name_en: "Zorn"
@@ -1455,7 +1455,7 @@ rivers:
     wikidata: Q226757
     parent_river_id: moder
     km_direction: none
-    evidence: "Wikidata Q226757 (no P402; P403 Q1462580 Moder), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r1085898 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q226757 (no P402; P403 Q1462580 Moder), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r1085898 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: loison
     name_nl: "Loison"
     name_en: "Loison"
@@ -1491,7 +1491,7 @@ rivers:
     wikidata: Q1518750
     parent_river_id: meuse
     km_direction: none
-    evidence: "Wikidata Q1518750 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r3304000 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q1518750 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r3304000 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: arentele
     name_nl: "Arentèle"
     name_en: "Arentèle"
@@ -1515,7 +1515,7 @@ rivers:
     wikidata: Q1301328
     parent_river_id: saar
     km_direction: none
-    evidence: "Wikidata Q1301328 (no P402; P403 Q153972 Saar), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r7107813 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q1301328 (no P402; P403 Q153972 Saar), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r7107813 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: woigot
     name_nl: "Woigot"
     name_en: "Woigot"
@@ -1527,7 +1527,7 @@ rivers:
     wikidata: Q3569584
     parent_river_id: orne
     km_direction: none
-    evidence: "Wikidata Q3569584 (no P402; P403 Q1047027 Orne), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r8469365 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q3569584 (no P402; P403 Q1047027 Orne), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r8469365 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: yron
     name_nl: "Yron"
     name_en: "Yron"
@@ -1539,7 +1539,7 @@ rivers:
     wikidata: Q3573033
     parent_river_id: orne
     km_direction: none
-    evidence: "Wikidata Q3573033 (no P402; P403 Q1047027 Orne), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r1263359 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q3573033 (no P402; P403 Q1047027 Orne), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r1263359 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: nied-allemande
     name_nl: "Nied Allemande"
     name_en: "Nied allemande"
@@ -1551,7 +1551,7 @@ rivers:
     wikidata: Q1987506
     parent_river_id: nied
     km_direction: none
-    evidence: "Wikidata Q1987506 (no P402; P403 Q210312 Nied), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r2349433 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q1987506 (no P402; P403 Q210312 Nied), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r2349433 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: nied-francaise
     name_nl: "Nied française"
     name_en: "Nied française"
@@ -1586,7 +1586,7 @@ rivers:
     wikidata: Q3139167
     parent_river_id: haine
     km_direction: none
-    evidence: "Wikidata Q3139167 (no P402; P403 Q1569447 Haine), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r7044256 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q3139167 (no P402; P403 Q1569447 Haine), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r7044256 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: solre
     name_nl: "Solre"
     name_en: "Solre"
@@ -1598,7 +1598,7 @@ rivers:
     wikidata: Q122680
     parent_river_id: sambre
     km_direction: none
-    evidence: "Wikidata Q122680 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r6911316 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q122680 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r6911316 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: glatt
     name_nl: "Glatt"
     name_en: "Glatt"
@@ -1613,7 +1613,7 @@ rivers:
     km_direction: none
     evidence: "Wikidata Q680765 (no P402; P403 Q584 Rhine), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); the Rhine Glatt (Rheinsfelden 2415); namesake Q1529837 is glatt-thur, Q317747 is the Neckar Glatt; relation r2207450 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: glatt-thur
-    name_nl: "Glatt"
+    name_nl: "Glatt (Thur)"
     name_en: "Glatt (Thur)"
     names: {}
     aliases: []
@@ -1648,7 +1648,7 @@ rivers:
     wikidata: Q351526
     parent_river_id: thur
     km_direction: none
-    evidence: "Wikidata Q351526 (P402 2202569; P403 Q14339 Thur), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |"
+    evidence: "Wikidata Q351526 (P402 2202569; P403 Q14339 Thur), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts)"
   - id: kleine-emme
     name_nl: "Kleine Emme"
     name_en: "Kleine Emme"
@@ -1661,7 +1661,7 @@ rivers:
     wikidata: Q16943
     parent_river_id: reuss
     km_direction: none
-    evidence: "Wikidata Q16943 (no P402; P403 Q4015 Reuss), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r2205220 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q16943 (no P402; P403 Q4015 Reuss), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r2205220 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: lorze
     name_nl: "Lorze"
     name_en: "Lorze"
@@ -1674,7 +1674,7 @@ rivers:
     wikidata: Q670886
     parent_river_id: reuss
     km_direction: none
-    evidence: "Wikidata Q670886 (no P402; P403 Q4015 Reuss), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); |; relation r2198017 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+    evidence: "Wikidata Q670886 (no P402; P403 Q4015 Reuss), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); relation r2198017 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
   - id: saane
     name_nl: "Saane"
     name_en: "Saane/Sarine"
@@ -1699,6 +1699,17 @@ rivers:
     parent_river_id: alzette
     km_direction: none
     evidence: "Wikidata Q836787 (no P402; P403 Q450722 Alzette), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); LU-1 publishes no water name: placed by station override; relation r19704535 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38123404612, rivernet-fixture artifact)"
+  - id: eisch
+    name_nl: "Eisch"
+    name_en: "Eisch"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "L'Eisch"
+    wikidata: Q1311008
+    parent_river_id: alzette
+    km_direction: none
+    evidence: "Wikidata Q1311008 (no P402; P403 Q450722 Alzette), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); LU-1 publishes no water name: placed by station override; no relation carries it in the extract; the main stem is way 33826974 tagged wikidata=<this id> and name=L'Eisch (geo.yml run 38123404612, rivernet-fixture artifact); six short ways named Eisch carry the QID too and are not selected"
   - id: wiltz
     name_nl: "Wiltz"
     name_en: "Wiltz"
@@ -1717,6 +1728,27 @@ excluded:
   - name: "Voer"
     wikidata: Q540657
     reason: "No relation or way carries wikidata=Q540657 in the extract (geo.yml run 37061144664). Nominatim (2026-10-02, q Voer, layer natural, bounded to 5.68-5.92 E, 50.70-50.80 N around Voeren and Eijsden) finds five waterway=stream ways named Voer in Voeren (307446181, 867058350, 41420346, 549778722, 1298076436), none with a wikidata tag, and no relation; unbounded (countrycodes be,nl) it finds the Voer at Leuven (Q3562063, a Dijle tributary). The rules refuse a name-only selection. D21 river, resolve by hand for P13"
+  - name: "Töss"
+    wikidata: Q688107
+    reason: "Wikidata P402 12713637 is not a type=waterway relation in the extract (relation_missing, geo.yml run 38123404612) and no way carries wikidata=Q688107 (#126)"
+  - name: "Düssel"
+    wikidata: Q701645
+    reason: "Wikidata P402 1697757 is not a type=waterway relation in the extract (relation_missing, geo.yml run 38123404612) and no way carries wikidata=Q701645 (#126)"
+  - name: "Baarbach"
+    wikidata: Q314927
+    reason: "No relation or way carries wikidata=Q314927 in the extract (geo.yml run 38123404612); no P402 (#126)"
+  - name: "Hesperbach"
+    wikidata: Q1615644
+    reason: "No relation or way carries wikidata=Q1615644 in the extract (geo.yml run 38123404612); no P402 (#126)"
+  - name: "White Ernz"
+    wikidata: Q252318
+    reason: "No relation or way carries wikidata=Q252318 in the extract (geo.yml run 38123404612); no P402; LU-1 Larochette lies on it (#126)"
+  - name: "Black Ernz"
+    wikidata: Q2671282
+    reason: "No relation or way carries wikidata=Q2671282 in the extract (geo.yml run 38123404612); no P402; LU-1 Müllerthal lies on it (#126)"
+  - name: "Clerve"
+    wikidata: Q1719767
+    reason: "No relation or way carries wikidata=Q1719767 in the extract (geo.yml run 38123404612); no P402; LU-1 Clervaux and Troisvierges lie on it (#126)"
 joins:
   - river: scheldt
     at: [3.2870075, 50.2241826]
