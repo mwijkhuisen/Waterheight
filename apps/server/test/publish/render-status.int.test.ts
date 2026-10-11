@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import { CANARIES } from '@rws/contracts';
 import { OwnerStatusFile, StatusFile } from '@rws/contracts/status';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { attributionCellText } from '../../../../test/catalogue.ts';
 import type { Db } from '../../src/db/pool.ts';
 import { publishTail } from '../../src/load/migrate.ts';
+import { readRegistry } from '../../src/load/registry-sync.ts';
 import type { PublisherStatus } from '../../src/publish/cycle.ts';
 import { readInput, status } from '../../src/publish/render/status.ts';
 import { type Harness, harness } from '../load/harness.ts';
@@ -180,5 +182,41 @@ describe('status.json', { timeout: 120_000 }, () => {
     expect(file.sources[0]?.status).toBe('degraded');
     expect(JSON.stringify(body)).not.toContain('ownerSources');
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('status.json attribution (launch checklist)', { timeout: 120_000 }, () => {
+  it('names only public sources, each with its exact §1b attribution and the date its licence asks for', async () => {
+    const registry = readRegistry().sources.filter((s) => s.canary !== true);
+    const publicIds = new Map(registry.filter((s) => s.audience === 'public').map((s) => [s.id, s]));
+    // Two dated licences beside DE-1: CH-1 (retrieval date) and FR-3 (the newest observation as the update).
+    await h.t.admin.query(
+      `INSERT INTO source_health (source_id, status, last_fetch_ok, newest_ts) VALUES
+         ('CH-1', 'ok', $1, NULL), ('FR-3', 'ok', NULL, $2)`,
+      ['2026-10-04T11:55:00Z', '2026-10-04T11:40:00Z'],
+    );
+    try {
+      const file = StatusFile.parse(await pubStatus(undefined));
+      expect(file.sources.map((x) => x.id).sort()).toEqual(['CH-1', 'DE-1', 'FR-3']);
+      for (const { id } of file.sources) expect(publicIds.has(id), id).toBe(true);
+      for (const id of ['CH-1', 'DE-1', 'FR-3']) {
+        const reg = publicIds.get(id);
+        const texts = [reg?.attribution_text, ...(reg?.attribution_variants.map((v) => v.text) ?? [])].filter(
+          (t) => t !== null && t !== undefined,
+        );
+        const entries = file.attribution.filter((a) => a.source === id);
+        expect([id, entries.map((a) => a.text)]).toEqual([id, texts]);
+        for (const t of texts) expect([id, attributionCellText(id).includes(t)]).toEqual([id, true]);
+      }
+      const date = (id: string) => file.attribution.find((a) => a.source === id)?.date;
+      expect(date('CH-1')).toBe('2026-10-04T11:55:00.000Z');
+      expect(date('FR-3')).toBe('2026-10-04T11:40:00.000Z');
+      expect(date('DE-1')).toBeNull();
+      const text = JSON.stringify(file);
+      for (const id of OWNER_IDS) expect(text, id).not.toContain(`"${id}"`);
+      for (const c of [CANARIES.owner.real, CANARIES.withheld.real]) expect(text).not.toContain(c);
+    } finally {
+      await h.t.admin.query("DELETE FROM source_health WHERE source_id IN ('CH-1', 'FR-3')");
+    }
   });
 });

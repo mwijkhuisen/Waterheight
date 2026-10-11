@@ -1,7 +1,9 @@
 import { CANARIES } from '@rws/contracts';
 import { OwnerStaticSources, StaticSources } from '@rws/contracts/static-owner';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { attributionCellText } from '../../../../test/catalogue.ts';
 import { publishTail } from '../../src/load/migrate.ts';
+import { readRegistry } from '../../src/load/registry-sync.ts';
 import { sources } from '../../src/publish/render/sources.ts';
 import { type Harness, harness } from '../load/harness.ts';
 import { ctxFor, NOW, OWNER_IDS } from './s2-ctx.ts';
@@ -22,6 +24,13 @@ beforeAll(async () => {
   await h.t.admin.query(
     `INSERT INTO source_health (source_id, detail) VALUES ('DE-6', '{"provider_updated": "2026-10-04T12:30:00.000Z"}')
      ON CONFLICT (source_id) DO UPDATE SET detail = source_health.detail || EXCLUDED.detail`,
+  );
+  // The dated licences of two public sources (P12b, launch checklist): CH-1 asks for the retrieval date, FR-3 for the
+  // provider's last update (no provider_updated stored, so the newest observation).
+  await h.t.admin.query(
+    `INSERT INTO source_health (source_id, last_fetch_ok, newest_ts) VALUES
+       ('CH-1', '2026-10-04T11:55:00Z', NULL), ('FR-3', NULL, '2026-10-04T11:40:00Z')
+     ON CONFLICT (source_id) DO UPDATE SET last_fetch_ok = EXCLUDED.last_fetch_ok, newest_ts = EXCLUDED.newest_ts`,
   );
   clauses = (
     await h.t.admin.query(`SELECT private_basis->>'clause' AS c FROM source WHERE private_basis IS NOT NULL`)
@@ -59,6 +68,28 @@ describe('sources.json', { timeout: 120_000 }, () => {
       expect(body.attribution.filter((a) => a.source === s.id).map((a) => a.text)).toEqual(
         s.attribution.map((a) => a.text),
       );
+  });
+
+  // P12b, launch checklist: what the public file shows is exactly the public sources, each credited as §1b says.
+  it('holds only public sources, each with its exact §1b attribution and the date its licence asks for', () => {
+    const registry = readRegistry().sources.filter((s) => s.canary !== true);
+    const wanted = new Map(registry.filter((s) => s.audience === 'public').map((s) => [s.id, s]));
+    const body = StaticSources.parse(pub);
+    expect(body.sources.map((s) => s.id).sort()).toEqual([...wanted.keys()].sort());
+    for (const s of body.sources) {
+      const reg = wanted.get(s.id);
+      const texts = [reg?.attribution_text, ...(reg?.attribution_variants.map((v) => v.text) ?? [])].filter(
+        (t) => t !== null && t !== undefined,
+      );
+      expect([s.id, s.attribution.map((a) => a.text)]).toEqual([s.id, texts]);
+      for (const t of texts) expect([s.id, attributionCellText(s.id).includes(t)]).toEqual([s.id, true]);
+      const kind = reg?.needs_last_updated ? 'update' : reg?.needs_retrieval_date ? 'retrieval' : null;
+      expect([s.id, s.dateKind]).toEqual([s.id, texts.length === 0 ? null : kind]);
+      if (kind === null) expect([s.id, s.date]).toEqual([s.id, null]);
+    }
+    const by = new Map(body.sources.map((s) => [s.id, s]));
+    expect(by.get('CH-1')).toMatchObject({ dateKind: 'retrieval', date: '2026-10-04T11:55:00.000Z' });
+    expect(by.get('FR-3')).toMatchObject({ dateKind: 'update', date: '2026-10-04T11:40:00.000Z' });
   });
 
   it('DE-6 shows "Stand: TT.MM.JJJJ hh:mm" in Europe/Berlin from the stored provider update', () => {
