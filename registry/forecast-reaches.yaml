@@ -13,8 +13,9 @@
 #   after_permission  the agencies whose permission would add forecasts (the "After a permission" column)
 #   none_publishes    the agencies of the "Not available" column (they publish none, or none we may use); the
 #                 "longer RWS fan forecasts" of the Dutch Rhine branches are a product, not an agency, and are left out
-# There is no `stations` override: a station belongs to a row by its river, country and km alone (C14). `wark`, `wied`
-# and `nette` are no river of registry/rivers.yaml, so no station carries them as its river.
+# There is no `stations` override: a station belongs to a row by its river, country and km alone (C14). `wied` and
+# `nette` are no river of registry/rivers.yaml, so no station carries them as its river; `wark` is one since #100 but
+# has no row here, so its stations fall to `other`.
 version: 1
 reaches:
   - id: swiss-rhine-aare

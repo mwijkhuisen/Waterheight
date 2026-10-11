@@ -1,4 +1,4 @@
-# Load, drill and chaos tests (issue #24, P9b; issue #27, P12a; PHASES §28, §41): k6 and the compose end-to-end stack
+# Load, drill and chaos tests (issue #24, P9b; issue #27, P12a; PHASES §28, §42): k6 and the compose end-to-end stack
 # (deploy/tests/e2e/run.sh in RWS_E2E_MODE loadtest, drill or chaos, with the fake upstream feeding capture) on a CI runner.
 #   loadtest    stack -> seed -> egress profile (cold cache) -> brownout auto-arm (the real rws-brownout.timer) ->
 #               wait for a loader lag -> k6 normal 15 min (50 r/s API + 300 r/s static over 6 clients on 6 addresses:
