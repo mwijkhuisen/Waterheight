@@ -19,21 +19,21 @@ export const E2E_RIVERS = '20261003';
 const fixtures = fileURLToPath(new URL('../../../tools/geo/fixtures/', import.meta.url));
 // P11a (issue #26): the river release is the committed fixture one, whose reach ids the tiles carry (read by path, no
 // tools/geo import): test/fixtures/reaches-fixture.json (version 20261003, regenerated and compared by
-// test/reaches-fixture.test.ts) and tools/geo/fixtures/rivers-fixture.pmtiles (714 reaches, layers `rivers` and `reach_bins`).
+// test/reaches-fixture.test.ts) and tools/geo/fixtures/rivers-fixture.pmtiles (907 reaches, layers `rivers` and `reach_bins`).
 const reachesFixture = fileURLToPath(new URL('../../../test/fixtures/reaches-fixture.json', import.meta.url));
 
 /**
  * The reaches file as the e2e site serves it: the committed release plus two e2e stations on the Rhine above Lobith
  * (P11a, issue #26), so that their names render in a chain row. The hostile one (nl.e2e.xss) sits at the head of
- * rhine.47, between Koeln and Bonn; the ordinary one (nl.e2e.dst) at the head of rhine.44, between Andernach and
+ * rhine.49, between Koeln and Bonn; the ordinary one (nl.e2e.dst) at the head of rhine.46, between Andernach and
  * Remagen. Both reaches have no station of their own in the release (a confluence starts them), so the stations
  * become their `up_station_id`: the chain names a row by the station a reach starts at. Every other row is as built.
  * P11c: each also has its `km_to_nl_entry` (the Rhine's km_graph + km_to_nl_entry is the constant 1069.59 in the
  * release), so the stations are columns of the "Langs de rivier" Rhine paths and the hostile name reaches its axis.
  */
 export const E2E_CHAIN: readonly [station: string, reach: string, kmToNlEntry: number][] = [
-  ['nl.e2e.xss', 'rhine.47', 204.1],
-  ['nl.e2e.dst', 'rhine.44', 234.27],
+  ['nl.e2e.xss', 'rhine.49', 204.1],
+  ['nl.e2e.dst', 'rhine.46', 234.27],
 ];
 function e2eReaches(release: ReachesFile): ReachesFile {
   const stations = [...release.stations];

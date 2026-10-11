@@ -10,19 +10,19 @@
       "url": "https://download.geofabrik.de/europe/france/alsace-latest.osm.pbf"
     },
     {
-      "bytes": 649737639,
+      "bytes": 649819607,
       "id": "baden-wuerttemberg",
-      "md5": "1b78c11241df7d63a30885cb352d942a",
-      "replication_timestamp": "2026-10-08T20:21:06Z",
-      "sha256": "bad6d0e57a4d3800868d21e895d09e2e53e68699647a493ca8248deecd9afec2",
+      "md5": "d1347c9797c6186623b79b8d0cd623ef",
+      "replication_timestamp": "2026-10-09T20:21:04Z",
+      "sha256": "c973ae68fa27cc51c5de1188f4696ce8e8e87545c1ed47df1807519ccfc5bf91",
       "url": "https://download.geofabrik.de/europe/germany/baden-wuerttemberg-latest.osm.pbf"
     },
     {
-      "bytes": 854197504,
+      "bytes": 854331153,
       "id": "bayern",
-      "md5": "cdc2e4ad952505104c7f251c371877a2",
-      "replication_timestamp": "2026-10-08T20:21:06Z",
-      "sha256": "1e0f8110519cea2682dd6f7713e4ab308cee6083357cb066c6d883ec7ad44271",
+      "md5": "3860395ce65371746db48535bc2adbaf",
+      "replication_timestamp": "2026-10-09T20:21:04Z",
+      "sha256": "bc80c38fdf5aa93a8083bc9fbff30c03c5ebde9054bd7716835a75b3edd2a72e",
       "url": "https://download.geofabrik.de/europe/germany/bayern-latest.osm.pbf"
     },
     {

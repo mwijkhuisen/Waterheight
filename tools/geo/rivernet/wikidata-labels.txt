@@ -132,6 +132,41 @@ fr:Blies
 fr:Orne
 fr:Meurthe
 de:Dortmund-Ems-Kanal
+# Tier-1 tributaries (#100, KG-250): water bodies with >= 3 shown public gauges
+de:Alme
+de:Wupper
+de:Hönne
+de:Inde
+de:Lenne
+de:Volme
+de:Ahse
+de:Stever
+de:Swist
+de:Urft
+de:Werse
+fr:Fecht
+fr:Doller
+fr:Helpe Majeure
+fr:Lawe
+fr:Seille
+fr:Thur
+fr:Vezouze
+fr:Bruche
+fr:Helpe Mineure
+fr:Largue
+fr:Lauch
+fr:Madon
+fr:Moder
+fr:Mortagne
+fr:Nied
+de:Emme
+de:Murg
+lb:Wark
+de:Wark
+fr:Wark
+lb:Syr
+de:Syr
+fr:Syre
 # Canals
 nl:Julianakanaal
 nl:Albertkanaal
