@@ -35,7 +35,7 @@ const reach = (id: string): FeatureSpan => {
 const ev = (v: number, ageS = 0, limitS = 3600): EndValue => ({ v, ageS, limitS });
 const ids = (from: string, a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => `${from}.${a + i}`);
 
-const TIDAL = [...ids('scheldt', 9, 13), ...ids('ems', 24, 34), ...ids('lek', 4, 6), 'meuse.56'];
+const TIDAL = [...ids('scheldt', 9, 13), ...ids('ems', 25, 35), ...ids('lek', 4, 6), 'meuse.59'];
 const MODES = ['state', 'delta', 'q'] as const;
 const colourOf = (p: ReachPaint) => (p.k === 'v' ? p.colour : p.k);
 
@@ -68,8 +68,8 @@ describe('the tidal reaches', () => {
 });
 
 describe('no data', () => {
-  const meuse29 = reach('meuse.29'); // 8 km, ordinary, pos 0.5
-  const meuse20 = reach('meuse.20');
+  const meuse29 = reach('meuse.32'); // 8 km, ordinary, pos 0.5
+  const meuse20 = reach('meuse.23');
 
   it('is stale, missing or without a reference', () => {
     for (const mode of MODES) {
@@ -100,12 +100,12 @@ describe('no data', () => {
     expect(meuse20.span?.lengthKm).toBeLessThan(120);
   });
 
-  it('is the 139 km Chooz to Eijsden gap on the public file, while meuse.23 is coloured', () => {
-    for (const id of ['meuse.24', 'meuse.25', 'meuse.26', 'meuse.27'])
+  it('is the 139 km Chooz to Eijsden gap on the public file, while meuse.26 is coloured', () => {
+    for (const id of ['meuse.27', 'meuse.28', 'meuse.29', 'meuse.30'])
       for (const mode of MODES)
         expect(reachColour(reach(id), [ev(2), ev(3)], mode), `${id} ${mode}`).toEqual({ k: 'nodata' });
-    expect(reachColour(reach('meuse.23'), [ev(2), ev(3)], 'state').k).toBe('v');
-    expect(reachColour(reach('meuse.23'), [ev(2), ev(3)], 'q').k).toBe('v');
+    expect(reachColour(reach('meuse.26'), [ev(2), ev(3)], 'state').k).toBe('v');
+    expect(reachColour(reach('meuse.26'), [ev(2), ev(3)], 'q').k).toBe('v');
     expect(reach('scheldt.8').span?.lengthKm).toBeGreaterThan(120);
   });
 
@@ -122,25 +122,25 @@ describe('no data', () => {
 
 describe('impounded reaches', () => {
   it('are neutral in the change mode, and coloured in the others (the server class, the discharge)', () => {
-    for (const id of ids('meuse', 23, 23)) {
+    for (const id of ids('meuse', 26, 26)) {
       expect(reach(id).impounded).toBe(true);
       expect(reachColour(reach(id), [ev(40), ev(-40)], 'delta')).toEqual({ k: 'impounded' });
       expect(reachColour(reach(id), [ev(2), ev(2)], 'state').k).toBe('v');
       expect(reachColour(reach(id), [ev(2), ev(2)], 'q').k).toBe('v');
     }
     // even with missing ends: "gestuwd" needs no data
-    expect(reachColour(reach('meuse.23'), [undefined, undefined], 'delta')).toEqual({ k: 'impounded' });
+    expect(reachColour(reach('meuse.26'), [undefined, undefined], 'delta')).toEqual({ k: 'impounded' });
   });
 });
 
 describe('the modes', () => {
-  const r = reach('meuse.29'); // pos 0.5
-  const r20 = reach('meuse.20'); // pos about 0.94
+  const r = reach('meuse.32'); // pos 0.5
+  const r20 = reach('meuse.23'); // pos about 0.94
 
   it('state: the level is rounded from the ends and stays within them', () => {
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 5 }), fc.integer({ min: 1, max: 5 }), (a, b) => {
-        for (const fs of [r, r20, reach('meuse.21'), reach('rhine.4')]) {
+        for (const fs of [r, r20, reach('meuse.24'), reach('rhine.5')]) {
           const p = reachColour(fs, [ev(a), ev(b)], 'state');
           if (fs.span === null || fs.span.pos === null) continue;
           expect(p.k).toBe('v');
@@ -186,7 +186,7 @@ describe('the modes', () => {
 });
 
 describe('endValues', () => {
-  const grp = reach('meuse.23'); // up B720000001 + B720000004, down B720000002
+  const grp = reach('meuse.26'); // up B720000001 + B720000004, down B720000002
   let n = 1;
   const station = (id: string, ...series: ['H' | 'Q', number][]) =>
     ({
@@ -347,8 +347,8 @@ describe('binPaints (#112)', () => {
   });
 
   describe('with the travel-time shift', () => {
-    // rhine.59: Emmerich to Lobith, T = 5 h, bins at pos (i + 0.5) / 8, so k = round(5 pos) = 0 1 2 2 3 3 4 5
-    const rhine = new Map([['rhine.59', reach('rhine.59')]]);
+    // rhine.61: Emmerich to Lobith, T = 5 h, bins at pos (i + 0.5) / 8, so k = round(5 pos) = 0 1 2 2 3 3 4 5
+    const rhine = new Map([['rhine.61', reach('rhine.61')]]);
     const emmerich = station('de.wsv.2790020');
     const lobith = station('nl.rws.lobith.bovenrijn.tolkamer');
     const sb = new Map([emmerich, lobith].map((s) => [s.id, s]));
@@ -385,7 +385,7 @@ describe('binPaints (#112)', () => {
       expect(paints[0]).toEqual(plain[0]);
       expect(paints[7]?.[1]).not.toEqual(plain[7]?.[1]);
       // and it is the past value: the past has an up end only, so the down end (read at t) is `now`'s Lobith
-      const bin7 = { ...reach('rhine.59'), span: reach('rhine.59').bins[7] ?? null };
+      const bin7 = { ...reach('rhine.61'), span: reach('rhine.61').bins[7] ?? null };
       expect(paints[7]?.[1]).toEqual(reachColour(bin7, [ev(60), ev(0)], 'delta'));
     });
 

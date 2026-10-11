@@ -51,9 +51,9 @@ const XSS_ID = 'nl.e2e.xss';
 const ranged = (river: string, from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => `${river}.${from + i}`);
 /** The tidal reaches of the fixture release (PHASES §P11b: Scheldt, Ems, Lek delta members, the Meuse delta). */
-const TIDAL = [...ranged('scheldt', 9, 13), ...ranged('ems', 24, 34), ...ranged('lek', 4, 6), 'meuse.56'];
+const TIDAL = [...ranged('scheldt', 9, 13), ...ranged('ems', 25, 35), ...ranged('lek', 4, 6), 'meuse.59'];
 /** Chooz to Eijsden: 139.2 km, over GAP_KM (120) and without a station between them. */
-const GAP = ranged('meuse', 24, 27);
+const GAP = ranged('meuse', 27, 30);
 const MID = '2026-10-25T12:00Z';
 
 const deep = (t = MID, mode = 'delta', extra = '') => `/?mode=${mode}&t=${t}${extra}`;
@@ -159,32 +159,32 @@ test('the Chooz to Eijsden gap is grey in every mode; the impounded Meuse is neu
   const s = await start(page, context, baseURL, 'dh');
   await open(page, deep());
   await mapReady(page);
-  await reachesPainted(page, [...GAP, 'meuse.23', 'meuse.28', 'rhine.4']);
+  await reachesPainted(page, [...GAP, 'meuse.26', 'meuse.31', 'rhine.5']);
   // The Δh mode: the gap is checked before the impounded rule, so it is `nodata`; the short reaches are `impounded`.
   expect(await reachKinds(page, GAP)).toEqual({
-    'meuse.24': 'nodata',
-    'meuse.25': 'nodata',
-    'meuse.26': 'nodata',
     'meuse.27': 'nodata',
+    'meuse.28': 'nodata',
+    'meuse.29': 'nodata',
+    'meuse.30': 'nodata',
   });
-  expect(await reachKinds(page, ['meuse.23', 'meuse.28'])).toEqual({
-    'meuse.23': 'impounded',
-    'meuse.28': 'impounded',
+  expect(await reachKinds(page, ['meuse.26', 'meuse.31'])).toEqual({
+    'meuse.26': 'impounded',
+    'meuse.31': 'impounded',
   });
-  // An ordinary free-flowing reach is coloured (rhine.4: the longest Rhine span, 104.6 km, under GAP_KM).
-  expect((await reachState(page, 'rhine.4'))?.k).toBe('v');
+  // An ordinary free-flowing reach is coloured (rhine.5: the longest Rhine span, 104.6 km, under GAP_KM).
+  expect((await reachState(page, 'rhine.5'))?.k).toBe('v');
   await chooseMode(page, 'q');
-  await expect.poll(async () => (await reachState(page, 'meuse.28'))?.k).not.toBe('impounded');
+  await expect.poll(async () => (await reachState(page, 'meuse.31'))?.k).not.toBe('impounded');
   expect(await reachKinds(page, GAP)).toEqual({
-    'meuse.24': 'nodata',
-    'meuse.25': 'nodata',
-    'meuse.26': 'nodata',
     'meuse.27': 'nodata',
+    'meuse.28': 'nodata',
+    'meuse.29': 'nodata',
+    'meuse.30': 'nodata',
   });
   await finish(page, s);
 });
 
-test('meuse.23 is coloured once both its ends have a discharge (Chooz given one by a routed stations and frames file)', async ({
+test('meuse.26 is coloured once both its ends have a discharge (Chooz given one by a routed stations and frames file)', async ({
   page,
   context,
   baseURL,
@@ -211,16 +211,16 @@ test('meuse.23 is coloured once both its ends have a discharge (Chooz given one 
     await fulfilJson(route, f);
   });
   await held(page, deep(MID, 'q'));
-  await reachesPainted(page, ['meuse.23', 'meuse.28']);
-  await expect.poll(async () => (await reachState(page, 'meuse.23'))?.k).toBe('v');
-  const st = await reachState(page, 'meuse.23');
+  await reachesPainted(page, ['meuse.26', 'meuse.31']);
+  await expect.poll(async () => (await reachState(page, 'meuse.26'))?.k).toBe('v');
+  const st = await reachState(page, 'meuse.26');
   expect(st?.c).toMatch(/^#[0-9a-f]{6}$/i);
   // The gap stays grey whatever the ends hold.
   expect(await reachKinds(page, GAP)).toEqual({
-    'meuse.24': 'nodata',
-    'meuse.25': 'nodata',
-    'meuse.26': 'nodata',
     'meuse.27': 'nodata',
+    'meuse.28': 'nodata',
+    'meuse.29': 'nodata',
+    'meuse.30': 'nodata',
   });
   await finish(page, s);
 });
@@ -303,7 +303,7 @@ test('B2: a day file that answers 404 is read from the API with exactly one call
 
 // ---------------------------------------------------------------- #112 PR B: bins and the shift label
 
-test('#112: the legend says the shift is indicative; the bins of rhine.59 are painted at zoom 8 and the reach layer ends there', async ({
+test('#112: the legend says the shift is indicative; the bins of rhine.61 are painted at zoom 8 and the reach layer ends there', async ({
   page,
   context,
   baseURL,
@@ -311,7 +311,7 @@ test('#112: the legend says the shift is indicative; the bins of rhine.59 are pa
   const s = await start(page, context, baseURL, 'dh');
   await open(page, deep());
   await mapReady(page);
-  await reachesPainted(page, ['rhine.59']);
+  await reachesPainted(page, ['rhine.61']);
   // The legend (collapsed by default) names the shift, with the word that says it is no forecast.
   await page.locator('summary', { hasText: nl('legend_heading') }).click();
   await expect(page.getByText(nl('reach_shifted'), { exact: true })).toBeVisible();
@@ -326,7 +326,7 @@ test('#112: the legend says the shift is indicative; the bins of rhine.59 are pa
     map.jumpTo({ center: [6.1, 51.85], zoom: 10 });
     await idle;
   });
-  const ids = Array.from({ length: 8 }, (_, i) => `rhine.59/${i}`);
+  const ids = Array.from({ length: 8 }, (_, i) => `rhine.61/${i}`);
   await expect
     .poll(async () => (await Promise.all(ids.map((id) => binState(page, id)))).every((st) => st !== null), {
       timeout: 30_000,

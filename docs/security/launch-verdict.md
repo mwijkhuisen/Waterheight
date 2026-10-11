@@ -33,7 +33,7 @@ The table above is the review record and is kept as written. The PR fixed these 
 | SR-9 (= CR-13) | fixed | the gate also covers every source whose baseline licence kind is not open |
 | SR-10 | fixed | a permission record whose string fields say `TODO` is refused |
 | SR-11 | fixed | `robots.txt` also disallows `/tiles/`, `/data/` and `/downloads/` |
-| SR-12 | recorded | the DE-2 flip PR states that owner-period DE-2 runs become public history, within the granted `history_export` channel (PHASES section 43.1, E1) |
+| SR-12 | recorded | the DE-2 flip PR states that owner-period DE-2 runs become public history, within the granted `history_export` channel (PHASES section 44.1, E1) |
 | SR-1 | open, owner | run `scripts/gh-settings.sh` until `--check` is clean, confirmed with an admin token (KG-333, KG-025, R-002) |
 | SR-7 | open, owner | Caddy 2.11.7 or newer deployed (#131) and Grype re-run (KG-334, R-095) |
 | CAA | open, owner | the zone's `CAA` record allows `letsencrypt.org` only; no tooling (KG-335) |

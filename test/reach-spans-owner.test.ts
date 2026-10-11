@@ -34,8 +34,8 @@ describe('spansOf on the owner variant', () => {
     for (const r of ownerGraph.reaches) if (r.part_of !== undefined) expect(owner.has(r.id)).toBe(false);
   });
 
-  it('maps meuse.24 to 27 onto the SPW span that holds their midpoint', () => {
-    for (const id of ['meuse.24', 'meuse.25', 'meuse.26', 'meuse.27']) {
+  it('maps meuse.27 to 30 onto the SPW span that holds their midpoint', () => {
+    for (const id of ['meuse.27', 'meuse.28', 'meuse.29', 'meuse.30']) {
       const parts = ownerGraph.reaches.filter((r) => r.part_of === id);
       const fs = owner.get(id);
       expect(fs?.impounded, id).toBe(true);
@@ -49,17 +49,17 @@ describe('spansOf on the owner variant', () => {
         id,
       ).toBe(true);
     }
-    expect([...ownerGraph.reaches].some((r) => r.part_of === 'meuse.25')).toBe(true);
+    expect([...ownerGraph.reaches].some((r) => r.part_of === 'meuse.28')).toBe(true);
   });
 
   it('colours them: impounded in the change mode, a value in the discharge mode', () => {
-    const fs = owner.get('meuse.25');
-    if (fs === undefined) throw new Error('meuse.25');
+    const fs = owner.get('meuse.28');
+    if (fs === undefined) throw new Error('meuse.28');
     expect(fs.span?.lengthKm).toBeLessThan(GAP_KM);
     expect(reachColour(fs, [ev(5), ev(9)], 'delta')).toEqual({ k: 'impounded' });
     expect(reachColour(fs, [ev(50), ev(90)], 'q').k).toBe('v');
     // the public file keeps the 139 km gap
-    expect(reachColour(pub.get('meuse.25') as NonNullable<ReturnType<typeof pub.get>>, [ev(50), ev(90)], 'q').k).toBe(
+    expect(reachColour(pub.get('meuse.28') as NonNullable<ReturnType<typeof pub.get>>, [ev(50), ev(90)], 'q').k).toBe(
       'nodata',
     );
   });
@@ -76,8 +76,8 @@ describe('the bins on the owner variant (#112)', () => {
 
   it("takes each bin's span from the part that holds its centre: different groups across the cut", () => {
     const differing = cut.filter((id) => groups(id).size > 1);
-    expect(differing).toContain('meuse.25');
-    expect(owner.get('meuse.25')?.bins.every((b) => b !== null)).toBe(true);
+    expect(differing).toContain('meuse.28');
+    expect(owner.get('meuse.28')?.bins.every((b) => b !== null)).toBe(true);
     for (const id of differing) {
       const parts = ownerGraph.reaches.filter((r) => r.part_of === id);
       expect(parts.length, id).toBeGreaterThan(1);
@@ -90,7 +90,7 @@ describe('the bins on the owner variant (#112)', () => {
   });
 
   it('keeps one span group for every bin of the same reach on the public file', () => {
-    for (const id of ['meuse.24', 'meuse.25', 'meuse.26', 'meuse.27'])
+    for (const id of ['meuse.27', 'meuse.28', 'meuse.29', 'meuse.30'])
       expect(new Set((pub.get(id)?.bins ?? []).map((b) => JSON.stringify([b?.up, b?.down]))).size, id).toBe(1);
   });
 });

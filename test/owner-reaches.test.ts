@@ -221,7 +221,7 @@ describe('the Eijsden chain of the owner variant (F1, F2)', () => {
     const parents = new Set(['ourthe.1', 'ourthe.2', 'ourthe.3']);
     expect(ourthe.every((s) => parents.has(reachOf(s.reach_id as string)?.part_of as string))).toBe(true);
     // The Ourthe is cut at the Amblève and the Vesdre; its last reach joins the Meuse.
-    expect(release.reaches.find((r) => r.id === 'ourthe.3')?.downstream).toEqual(['meuse.27']);
+    expect(release.reaches.find((r) => r.id === 'ourthe.3')?.downstream).toEqual(['meuse.30']);
     const group = groups(nodes).find((g) => g.kind === 'group' && g.riverId === 'ourthe');
     expect(group).toBeDefined();
     // The Vesdre and the Amblève are groups nested in the Ourthe's: its own rows are its direct stations.
