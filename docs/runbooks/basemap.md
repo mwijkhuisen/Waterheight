@@ -84,6 +84,18 @@ Three runs, from `ssh ops@<domain>`. A run takes hours: the timer's unit stops i
 
    It picks the newest eligible build, promotes it and makes the older build the previous one. From the third extract on, the oldest one is deleted (`retention_deleted`).
 
+   **Check:** the manifest names the new build as current and the older one as previous, and the files match their hashes:
+
+   ```bash
+   curl -fsS https://<domain>/tiles/manifest.json | jq '{current: .current.build, previous: .previous.build}'
+   cd /srv/rws/tiles && jq -r '(.current, (.previous // empty)) | .basemap, .planet | "\(.sha256)  \(.file)"' manifest.json | sha256sum -c -
+   ```
+
+   ```text
+   {"current": "<newest build>", "previous": "<the older build>"}
+   <file>: OK   (four lines)
+   ```
+
 To start a run that survives a dropped session, run it under systemd instead, and read it with the journal (a unit started this way writes to the journal, not to the terminal):
 
 ```bash
@@ -143,6 +155,18 @@ Journal lines: `basemap rollback: promoting the previous build again`, the role'
 - **A second rollback undoes the first.** To return to the build you rolled away from, roll back again. `--build` with that build (the previous one) is refused before anything is downloaded (`build_is_previous`, §1): a fresh extract of it could differ byte for byte from the files still on disk (`exists_different`).
 - `--rollback` takes no other flag (exit 64).
 - **A scheduled run does not undo it, for a while.** Without `--build` the job skips the build you rolled away from (`rolled_back_build`) and any build older than the current one (`not_newer`). The next quarterly run finds a newer build, fetches it and makes it current: the rolled-back state lasts only until then. To stay on the older extract longer, stop the timer (`sudo systemctl disable --now rws-basemap-refresh.timer`) and enable it again (§7) when you want refreshes back.
+- **Check the rollback** (look before and after, so you see the swap):
+
+  ```bash
+  curl -fsS https://<domain>/tiles/manifest.json | jq '{current: .current.build, previous: .previous.build}'
+  scripts/verify-prod.sh <domain>
+  ```
+
+  ```text
+  {"current": "<the build that was previous>", "previous": "<the build you rolled away from>"}
+  ```
+
+  The two builds trade places, and the `tiles *` lines of `verify-prod` pass. Browsers see it within 60 seconds (the manifest's cache lifetime).
 - After a rollback, run `scripts/verify-prod.sh <domain>`. The map itself is checked by looking at it; before P4 there is no production page that draws it.
 
 ## 7. Later runs and the timer

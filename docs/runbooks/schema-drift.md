@@ -158,6 +158,19 @@ The NL-1 codes of §3 (P2b):
 | `time_axis` (LU-1) | Compare the labels of the payload (§2, on the VPS) with an earlier one. If AGE changed the file, change the axis rule in `apps/server/src/adapters/lu-1/normalise.ts` in a PR with a fixture and a golden (adapter `version` bumped), deploy, then replay LU-1 from the day of the first alert. Never relax the axis check to make a payload pass |
 | A ZIP code (`zip_*`, DE-7 and `de-8-hydro`) | Read the member list of the archived object (decompress it with `zstd -dc` as in §2, on the VPS only, and list the ZIP). A new or renamed member is a reviewed change of `registry/capture.yaml` (the spec's `zip.members`) and of the loader entry in `apps/server/src/load/adapters.ts`, with a fixture; then replay. A ZIP that is truncated or hostile is not replayed |
 
+**Check each decision before you move on** (a fix that does not change the log is not a fix):
+
+```bash
+sudo docker logs --since 15m rws-load-1 2>&1 | grep -E '"alert":"[a-z_]+"' | tail -n 10
+curl -s https://<domain>/api/v1/health/sources | jq '.quarantined_batches'
+```
+
+```text
+no new line of the alert you fixed after the release started; quarantined_batches does not grow
+```
+
+A line that still appears after the deploy means the fix did not reach the loader (`sudo docker ps --format '{{.Names}} {{.Image}}'` shows the running release) or the cause is another one: go back to §2.
+
 ## 5. Replay after the fix
 
 `docs/runbooks/replay.md`. A quarantined payload that now parses becomes `ok`.

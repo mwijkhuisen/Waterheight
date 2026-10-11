@@ -22,11 +22,12 @@ sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -Atc "SELECT pg_size_pre
 | Drill scratch | `sudo find /srv/rws/backup/drill -mindepth 1 -delete` | Always temporary |
 | Basemap staging (P3) | `sudo find /srv/rws/tiles/.staging -mindepth 1 -delete`, while no basemap refresh runs (`sudo docker ps --filter name=basemap`) | The leftovers of an interrupted fetch; the next refresh empties it first anyway (an extract that waits for a failed `promote` is lost with it: a fetch again). The rest of `/srv/rws/tiles` is not spare: the current and the previous extract take about 9 GB, so never delete a file that `manifest.json` names (`docs/runbooks/basemap.md`) |
 
-**Never** delete anything under `/srv/rws/raw` by hand. Retention pruning of the obs window belongs to the pruner of the `load` role (§4), which is a dry run until you switch it on, and a forever class is never pruned. Never drop or detach database partitions to save space (`docs/runbooks/partition-maintenance.md`). Check first that the last backup is fresh (`/status/ops.json` `last_backup` < 1 h).
+**Never** delete anything under `/srv/rws/raw` by hand. Retention pruning of the obs window belongs to the pruner of the `load` role (§4), which is a dry run until you switch it on, and a forever class is never pruned. Never drop or detach database partitions to save space (`docs/runbooks/partition-maintenance.md`). Check first that the last backup is fresh: `curl -s https://<domain>/status/ops.json | jq .last_backup` is less than 1 h old.
 
 ## 3. Lasting fixes
 
 - Grow the volume at the provider (A3), then `resize2fs`.
+  **Check:** `df -h /srv/rws` shows the new size and `curl -s https://<domain>/status/ops.json | jq .disk_pct` is below 75 within 10 minutes (`rws-tick` refreshes it); the `disk` healthchecks check turns green.
 - Compare with `docs/capacity.md` (the measured bytes per day and the year-1 projection). If one spec dominates (NRW `messwerte.zip`), switch it to a smaller delta source in a PR (PHASES §P1 risks).
 
 ## 4. The retention pruner (`load`, from P2a)
@@ -64,3 +65,17 @@ It **never** deletes:
 Nothing is old enough to be a candidate until 90 days after the first capture, so the first weeks of a dry run show `candidates: 0`.
 
 **After it is switched on, deleted objects cannot be replayed** (`object_missing`); the observations stay in the database and in the dump. From then on, rebuild a database from the dump, not from the archive alone (`docs/runbooks/restore.md` §3). To stop it, remove the variable in a PR.
+
+## 5. Verify
+
+```bash
+df -h /srv/rws
+curl -s https://<domain>/status/ops.json | jq '{disk_pct, last_backup}'
+curl -s https://<domain>/status/capture.json | jq -r '.specs[] | "\(.spec) \(.last_success) \(.last_failure_status)"'
+```
+
+```text
+Use% and disk_pct below 75; every capture spec has a fresh last_success and no write failure
+```
+
+After a full disk (ENOSPC), payloads due while capture could not write are lost (D19): look at `coverage.gaps` in `/api/v1/health/sources` and at `docs/runbooks/provider-outage.md` §3 for what a fill window still refills.
