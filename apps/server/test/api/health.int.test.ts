@@ -20,6 +20,7 @@ import { computeHealth, LagWindow, storeChecksums } from '../../src/load/health.
 import { Loader } from '../../src/load/pipeline.ts';
 import { storeProviderUpdated } from '../../src/load/store.ts';
 import { type Harness, harness } from '../load/harness.ts';
+import { OWNER_IDS } from '../publish/s2-ctx.ts';
 
 // GET /api/v1/health and /api/v1/health/sources against a real database, read as
 // the real `rws_api` login: public sources only, the owner sources as two counts.
@@ -84,7 +85,8 @@ const sourcesDoc = (wire: unknown): HealthSources => {
 };
 const admin = async (text: string, values: unknown[] = []) => (await h.t.admin.query(text, values)).rows;
 
-const OWNER_IDS = ['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3', 'CANARY-OWNER'];
+/** The captured owner sources of the registry, the canary aside (P12b, A20: derived, never a hand-kept list). */
+const OWNER_CAPTURED = OWNER_IDS.filter((id) => !id.startsWith('CANARY-')).length;
 const NEVER = [
   ...OWNER_IDS,
   'be-3-levels',
@@ -163,8 +165,8 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
         last_commit: expect.stringMatching(/Z$/),
       },
       sources: expect.objectContaining({ ok: 1, degraded: 0, down: 0 }),
-      // Six captured owner sources: LU-3 answered, LU-4 only ever failed, the others were not fetched.
-      owner_sources: { healthy: 1, total: 6 },
+      // The captured owner sources: LU-3 answered, LU-4 only ever failed, the others were not fetched.
+      owner_sources: { healthy: 1, total: OWNER_CAPTURED },
       quarantined: 0,
       twins: { ok: 0, failing: 0 },
     });
@@ -195,7 +197,7 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
     expect(doc.generated_at).toBe(NOW.toISOString());
     expect(doc.quarantined_batches).toEqual([]);
     expect(doc.twins).toEqual([]);
-    expect(doc.owner_sources).toEqual({ healthy: 1, total: 6 });
+    expect(doc.owner_sources).toEqual({ healthy: 1, total: OWNER_CAPTURED });
     // A source that was never fetched: its 41 tier-1 series are all without a value, and it has no checksum.
     expect(doc.sources.find((s) => s.id === 'NL-1')).toMatchObject({
       status: 'unknown',
@@ -355,8 +357,8 @@ describe('owner isolation (invariant 11) and the withheld canary', () => {
     for (const text of [health, sources]) for (const term of NEVER) expect(text, term).not.toContain(term);
     // The public numbers are unchanged, except the owner counts: LU-3 is degraded now.
     const [healthAfter, sourcesAfter] = (await read()) as [Health, HealthSources];
-    expect(healthAfter.owner_sources).toEqual({ healthy: 0, total: 6 });
-    expect(sourcesAfter.owner_sources).toEqual({ healthy: 0, total: 6 });
+    expect(healthAfter.owner_sources).toEqual({ healthy: 0, total: OWNER_CAPTURED });
+    expect(sourcesAfter.owner_sources).toEqual({ healthy: 0, total: OWNER_CAPTURED });
     expect({ ...healthAfter, owner_sources: healthBefore.owner_sources }).toEqual(healthBefore);
     // The withheld canary series is NL-1's (tier 1, with a value), yet NL-1's tier-1 numbers do not count it and
     // NL-1 has no checksum of it: every public source reads exactly as before.

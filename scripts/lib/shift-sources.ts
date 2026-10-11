@@ -10,7 +10,8 @@
 //   LU-5   sent, effective, onset and expires of a CAP message, and the `sent` inside <references> (Europe/Luxembourg);
 //   CH-4   every ISO time of the Plotly figure (the traces' x, the layout's shapes, ticks and annotations), rendered in
 //          Europe/Berlin local time as BAFU labels them;
-//   DE-2   `initialized` and `timestamp` of each point (Europe/Berlin, as PEGELONLINE labels them).
+//   DE-2   `initialized` and `timestamp` of each point (Europe/Berlin, as PEGELONLINE labels them);
+//   DE-3   the `dd.mm.yyyy 00:00` row labels (a fixed +01:00 all year) by whole days, and the header's issue date.
 
 import { isIsoOffset, isoMs, shiftCap, shiftEpoch, shiftIso, shiftStamp, shiftWall, wallMs } from './shift.ts';
 
@@ -177,4 +178,51 @@ export function shiftDe2(body: Uint8Array, deltaMs: number): Buffer {
     onString(p, 'timestamp', (s) => shiftIso(s, deltaMs, BERLIN));
   }
   return bytes(points);
+}
+
+// --- DE-3 ---------------------------------------------------------------------------------------------------------
+
+const DE3_DAY = 24 * 3_600_000;
+const DE3_HOUR = 3_600_000;
+const DE3_ROW = /^(\d{2})\.(\d{2})\.(\d{4}) (\d{2}):(\d{2});/;
+const DE3_HEADER = /^# Probabilistische Wasserstandsvorhersage vom \d{4}-\d{2}-\d{2} GMT\+1$/;
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** A row label `dd.mm.yyyy hh:mm` in BfG's fixed +01:00, as UTC ms. */
+function de3Ms(m: RegExpExecArray): number {
+  return Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4]) - 1, Number(m[5]));
+}
+
+/** The first row's label (the first forecast day, 00:00 at +01:00): the instant the file is about. */
+export function anchorDe3(body: Uint8Array): number {
+  for (const l of Buffer.from(body).toString('latin1').split('\n')) {
+    const m = DE3_ROW.exec(l);
+    if (m !== null) return de3Ms(m);
+  }
+  throw new Error('DE-3: no row');
+}
+
+/**
+ * Moves the file by WHOLE days, rounded down: the labels are midnights at a fixed +01:00 all year, so a day count keeps
+ * every row a midnight and the first row is never after the instant the drill puts it at. The header's issue date is
+ * rewritten to the day before the first row (the placeholder of a synthetic fixture is no date).
+ */
+export function shiftDe3(body: Uint8Array, deltaMs: number): Buffer {
+  const days = Math.floor(deltaMs / DE3_DAY);
+  const label = (ms: number) => new Date(ms + DE3_HOUR);
+  const first = label(anchorDe3(body) + (days - 1) * DE3_DAY);
+  const out = Buffer.from(body)
+    .toString('latin1')
+    .split('\n')
+    .map((l) => {
+      const m = DE3_ROW.exec(l);
+      if (m !== null) {
+        const d = label(de3Ms(m) + days * DE3_DAY);
+        return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)}.${d.getUTCFullYear()} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())};${l.slice(m[0].length)}`;
+      }
+      if (DE3_HEADER.test(l.replace(/\r$/, '')))
+        return `# Probabilistische Wasserstandsvorhersage vom ${first.getUTCFullYear()}-${pad2(first.getUTCMonth() + 1)}-${pad2(first.getUTCDate())} GMT+1${l.endsWith('\r') ? '\r' : ''}`;
+      return l;
+    });
+  return Buffer.from(out.join('\n'), 'latin1');
 }

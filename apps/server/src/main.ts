@@ -8,7 +8,14 @@ import { createApp } from './app.ts';
 import { Archive } from './archive/writer.ts';
 import { runBasemap } from './basemap/index.ts';
 import { budgets, schedule } from './capture/budget.ts';
-import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from './capture/env.ts';
+import {
+  applyCaptureSkip,
+  captureEnv,
+  captureUserAgent,
+  EXIT_CONFIG,
+  parseCaptureSkip,
+  readSecret,
+} from './capture/env.ts';
 import { Pinger } from './capture/pings.ts';
 import { Counters } from './capture/runner.ts';
 import { startRecorder } from './capture/scheduler.ts';
@@ -96,9 +103,21 @@ async function capture(
     log(`capture: ${cfg}`);
     return EXIT_CONFIG;
   }
+  const skip = parseCaptureSkip(env);
+  if (typeof skip === 'string') {
+    log(`capture: ${skip}`);
+    return EXIT_CONFIG;
+  }
   process.umask(0o027);
-  const registry = loadRegistry();
+  // The rebuild drill's RWS_CAPTURE_SKIP (A19) only removes specs, here and nowhere else.
+  const narrowed = applyCaptureSkip(loadRegistry(), skip);
+  if (typeof narrowed === 'string') {
+    log(`capture: ${narrowed}`);
+    return EXIT_CONFIG;
+  }
+  const registry = narrowed;
   const logger = pino({ base: { role: 'capture' } });
+  if (skip.length > 0) logger.warn({ skip }, 'RWS_CAPTURE_SKIP: these sources are not captured (drill only)');
   const userAgent = captureUserAgent(cfg);
   const sourceHeaders = new Map<string, Record<string, string>>();
   for (const [source, headers] of registry.secretHeaders) {

@@ -8,6 +8,7 @@ import { publishTail } from '../../src/load/migrate.ts';
 import { publishOnce } from '../../src/publish/index.ts';
 import { RENDERERS } from '../../src/publish/render/index.ts';
 import { type Harness, harness } from '../load/harness.ts';
+import { OWNER_IDS } from './s2-ctx.ts';
 import { contract, walk } from './tree.ts';
 
 // P9a (plan §4.10, "the file canaries"): both publishers on a seeded database, every file of both trees walked
@@ -197,6 +198,24 @@ describe('the files of both publishers', { timeout: 300_000 }, () => {
     for (const [rel, text] of all('public')) for (const s of never) expect(text, `${rel} has ${s}`).not.toContain(s);
     for (const [rel, body] of parsed('public')) {
       expect(idsIn(rel, body), rel).not.toContain(ids.ownerOnly);
+    }
+  });
+
+  // P12b, launch checklist: the two files that name sources hold public sources only, whichever way the canaries run.
+  it('public: sources.json and status.json name only public sources and neither canary', async () => {
+    const pub = new Set(
+      (await q("SELECT id FROM source WHERE audience = 'public' AND NOT canary")).rows.map((r) => r.id as string),
+    );
+    const files = trees.public.files;
+    const sources = JSON.parse(files.get('sources.json') as string) as { sources: { id: string }[] };
+    const status = JSON.parse(files.get('status.json') as string) as { sources: { id: string }[] };
+    expect(sources.sources.map((s) => s.id).sort()).toEqual([...pub].sort());
+    for (const { id } of [...sources.sources, ...status.sources]) expect(pub.has(id), id).toBe(true);
+    for (const rel of ['sources.json', 'status.json']) {
+      const text = files.get(rel) as string;
+      for (const c of [CANARIES.owner.text, CANARIES.owner.real, CANARIES.withheld.text, CANARIES.withheld.real])
+        expect(text, `${rel} has ${c}`).not.toContain(c);
+      for (const id of OWNER_IDS) expect(text, `${rel} names ${id}`).not.toContain(`"${id}"`);
     }
   });
 

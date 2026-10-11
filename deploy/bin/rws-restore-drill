@@ -1,13 +1,67 @@
 #!/usr/bin/env bash
-# rws-restore-drill (rws-restore-drill.timer, monthly; A§11.3; issue #16 P1b).
-# Restores a random sample of 100 raw objects from the latest snapshot into a
-# scratch directory and checks that sha256(zstd -dc object) equals the sha256 in
-# the manifest line that recorded it. The lines come from the newest manifest
-# day and up to 2 random older ones, so the sample spans the archive while the
-# restore stays small. Only lines older than the snapshot (minus 10 min) are
-# sampled, so an object written during the backup cannot count as missing. The result goes to /status/ops.json as counts only
-# (drill {at, sampled, matched}); the scratch directory, which may hold
-# owner-audience payloads, never leaves the VPS and is always emptied.
+# rws-restore-drill (rws-restore-drill.timer, monthly; A§11.3; issue #16 P1b, issue #27 P12b).
+#
+# Part 1, the raw archive: restores a random sample of 100 raw objects from the
+# latest snapshot into a scratch directory and checks that sha256(zstd -dc
+# object) equals the sha256 in the manifest line that recorded it. The lines
+# come from the newest manifest day and up to 2 random older ones, so the sample
+# spans the archive while the restore stays small. Only lines older than the
+# snapshot (minus 10 min) are sampled, so an object written during the backup
+# cannot count as missing. The result goes to /status/ops.json as counts only
+# (drill {at, sampled, matched}; the shape never changes, plan A3).
+#
+# Part 2, the database dump (P12b, plan A8-A10; while the active release has a
+# db service): the same snapshot's /data/db/{rws.dump,globals.sql} are restored
+# too, and only these restic restores hold the rws-backup lock (the hourly
+# backup waits for nothing else, RPO 1 h). Before the lock goes (review SR-4:
+# the scratch tree is the backup container's uid 65532), any restored entry
+# that is not a regular file or a directory fails dump_restore, the dump and
+# globals.sql must be regular files (no symlink), become root's (chown -h,
+# 0600) and are opened, so pg_restore and psql read the inodes checked here
+# whatever happens to the paths later. Then, with no lock:
+#   - a throwaway PostgreSQL (compose.yaml's db image, same digest) on a new
+#     --internal network rws-drill-<run> of its own (no route anywhere, no other
+#     container on it but the replay below): memory and pids limited, read-only
+#     root, no capability, its data directory under the scratch directory,
+#     initdb with the builtin C.UTF-8 locale. Its passwords are random, made
+#     here, and reach Docker only in env files and psql only on stdin, never argv;
+#   - globals.sql (the roles, no passwords) before pg_restore, then the
+#     installed roles.sql (the database settings and grants, as db_prepare);
+#   - sanity: the roles and the main tables are there, and the newest
+#     observation is at most 26 h older than the dump (RWS_DRILL_MAX_AGE_H, for
+#     the CI stack's fixture data only);
+#   - the replay check: a settled UTC day D (D + 1 d <= dump time - 48 h; the
+#     newest such manifest day with payloads). The P2 md5 of the observations of
+#     D per source and month (deploy/postgres/restore-drill-checksum.sql, pinned
+#     to computeChecksums by test/restore-drill-sql.test.ts) is taken by psql in
+#     the throwaway container; every source with payloads in the manifest days
+#     D .. D+2 is replayed (the server image's `replay` role, as rws_load, on the
+#     drill network only, the raw archive mounted read-only); each replay must
+#     print n_new 0, n_changed 0 and quarantined 0, and the md5s must not change.
+#     Later revisions: the loader's upsert keeps the row of the newest fetch
+#     (fetched_at, then batch id; store.ts upsertObs), so a replay of older
+#     payloads never overwrites a revision fetched after D+2 that the dump
+#     holds, and a replay of the payload that holds a row rewrites it only if
+#     today's parser reads it differently. Nothing is deleted. A false FAIL is
+#     possible when a parser changed since the dump, a payload of those days is
+#     still quarantined, or the loader was behind when the dump was taken.
+# A difference names the source and month only, never a value. Each stage's
+# failure pings /fail with a fixed code: disk (over 75 % used, or less free
+# space than 3 x the dump or LIVE_PCT % of the live database, whichever is
+# larger; or, during pg_restore and the replay, a watcher saw /srv/rws over
+# 90 % used and removed the drill's containers: review SR-3), dump_restore,
+# sanity, replay. ops.json's drill {at, sampled, matched} is written when the
+# whole drill passed, or with the counts when part 1 found a mismatch, never
+# before part 2 has run (review SR-8: a failed part 2 keeps the next timer run
+# due instead of waiting 25 days). A trap removes the
+# containers, the network and the scratch data on every exit. Nothing here
+# mounts the public or owner trees or uses the production database's volume or
+# network. The scratch directory, which may hold owner-audience payloads and
+# data, never leaves the VPS and is always emptied.
+#
+# Time: the unit allows 2 h (TimeoutStartSec, ProtectSystem=full, PrivateTmp:
+# env files stay client-side, bind sources are under /srv/rws). The restore and
+# the replay stop at 105 min (BUDGET_S) and fail, so the trap still runs in time.
 #
 # Usage: rws-restore-drill [--force | --dry-run]
 #   --force    run now even if a drill ran in the last 25 days (owner, A§11.3)
@@ -18,6 +72,21 @@ set -euo pipefail
 
 readonly SAMPLE=100
 readonly KEY_RE='^raw/[A-Z]{2}-[0-9]{1,2}/[a-z0-9]+(-[a-z0-9]+)*/[0-9]{4}/[0-9]{2}/[0-9]{2}/[0-9]{6}Z-[0-9a-f]{16}\.zst$'
+readonly SOURCE_RE='^(NL|DE|BE|FR|LU|CH)-[1-9][0-9]?$'
+# compose.yaml's db image, the same digest (backup.test.sh keeps them equal).
+readonly PG_IMAGE=postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+CHECKSUM_SQL=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../postgres/restore-drill-checksum.sql
+readonly CHECKSUM_SQL
+readonly BUDGET_S=6300
+readonly MAX_AGE_H=${RWS_DRILL_MAX_AGE_H:-26}
+[[ $MAX_AGE_H =~ ^[1-9][0-9]{0,5}$ ]] || die "RWS_DRILL_MAX_AGE_H must be a whole number of hours"
+# Free space before part 2: at least 3 x the compressed dump and LIVE_PCT % of the live database (its indexes are
+# rebuilt; WAL comes on top, bounded by max_wal_size). A calibration knob: raise it if a drill ever trips the watcher.
+readonly LIVE_PCT=125
+# The disk watcher during pg_restore and the replay: its interval (seconds; the tests shorten it) and its limit.
+readonly WATCH_S=${RWS_DRILL_WATCH_S:-10}
+[[ $WATCH_S =~ ^([1-9][0-9]{0,3}(\.[0-9]{1,3})?|0\.[0-9]{0,2}[1-9])$ ]] || die "RWS_DRILL_WATCH_S must be a positive number of seconds"
+readonly WATCH_MAX_PCT=90
 force=0
 case ${1:-} in
   --force) force=1 ;;
@@ -42,30 +111,123 @@ if ((!force)) && [[ -n $last ]] && (($(date -u +%s) - $(date -u -d "$last" +%s) 
   exit 0
 fi
 if ((DRY_RUN)); then
-  log "dry-run: would restore $SAMPLE objects from the latest snapshot at $BUCKET_HOST"
+  log "dry-run: would restore $SAMPLE objects from the latest snapshot at $BUCKET_HOST and, with a db, the dump into a throwaway PostgreSQL, then replay one settled day into it"
   exit 0
+fi
+
+exec 8>"$(lockfile rws-restore-drill)"
+flock -n 8 || die "another restore drill is running"
+
+scratch=$RWS_SRV/backup/drill
+run='' pgenv='' loadenv='' sample='' diskflag='' watcher=''
+wipe() { find "$scratch" -mindepth 1 -delete 2>/dev/null || true; }
+cleanup() {
+  local f
+  [[ -z $watcher ]] || kill "$watcher" 2>/dev/null || true
+  watcher=''
+  if [[ -n $run ]]; then
+    docker rm -f "rws-drill-replay-$run" "rws-drill-pg-$run" >/dev/null 2>&1 || true
+    docker network rm "rws-drill-$run" >/dev/null 2>&1 || true
+  fi
+  for f in "$pgenv" "$loadenv" "$sample" "$diskflag"; do [[ -z $f ]] || rm -f -- "$f"; done
+  wipe
+}
+fail() {
+  # Whatever failed after the watcher removed the containers, the cause is the disk.
+  if [[ -n $diskflag && -s $diskflag ]]; then set -- disk; fi
+  cleanup
+  ping restore-drill fail "$1"
+  die "restore drill failed: $1"
+}
+# disk_check <bytes> <what>: at most 75 % of /srv/rws used and at least <bytes> (<what>) free.
+disk_check() {
+  local pct avail
+  read -r pct avail < <(df -B1 --output=pcent,avail -- "$RWS_SRV" | tail -n 1) || true
+  pct=${pct%\%}
+  [[ $pct =~ ^[0-9]+$ && $avail =~ ^[0-9]+$ ]] || fail disk
+  if ((pct > 75)); then
+    log "$RWS_SRV is $pct % full (over 75 %): no drill"
+    fail disk
+  fi
+  if ((avail < $1)); then
+    log "$RWS_SRV has $((avail >> 20)) MiB free, less than $2 ($(($1 >> 20)) MiB): no drill"
+    fail disk
+  fi
+}
+# watch_disk (in the background, during pg_restore and the replay): above WATCH_MAX_PCT % of /srv/rws used, it marks
+# $diskflag and removes the drill's containers, so the stage running fails and fail() reports disk.
+watch_disk() {
+  local pct nap=''
+  # cleanup's kill (TERM) ends the sleep too, so no stray process keeps the drill's output open.
+  trap - EXIT INT
+  trap '[[ -z $nap ]] || kill "$nap" 2>/dev/null; exit 0' TERM
+  # Never hold the drill's lock or the dump descriptors: an orphaned watcher (the parent SIGKILLed) would block every
+  # later drill. It also ends as soon as the parent is gone.
+  exec 6<&- 7<&- 8>&-
+  while kill -0 "$$" 2>/dev/null; do
+    sleep "$WATCH_S" &
+    nap=$!
+    wait "$nap" || true
+    nap=''
+    pct=$(df --output=pcent -- "$RWS_SRV" 2>/dev/null | tail -n 1 | tr -dc '0-9') || pct=''
+    if [[ $pct =~ ^[0-9]+$ ]] && ((pct > WATCH_MAX_PCT)); then
+      echo full >"$diskflag"
+      log "$RWS_SRV is $pct % full during the drill (over $WATCH_MAX_PCT %): its containers are removed"
+      docker rm -f "rws-drill-replay-$run" "rws-drill-pg-$run" >/dev/null 2>&1 || true
+      return 0
+    fi
+  done
+}
+# record_drill: the counts of part 1 into ops.json (A3; the shape never changes).
+record_drill() {
+  # shellcheck disable=SC2016 # a jq filter, not shell
+  ops_update --arg at "$(now_iso)" --argjson s "$sampled" --argjson m "$matched" \
+    '.drill = {at: $at, sampled: $s, matched: $m}'
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
+# Leftovers of a run that was killed (SIGKILL skips the trap): its containers and network, then its data.
+docker ps -aq --filter label=rws.drill | xargs -r docker rm -f >/dev/null 2>&1 || true
+docker network ls -q --filter label=rws.drill | xargs -r docker network rm >/dev/null 2>&1 || true
+wipe
+ping restore-drill start
+disk_check 0 'nothing'
+db=0 live_bytes=''
+if has_service db; then
+  db=1
+  # The live database's size, the way rws-backup reaches it (rws_backup over the db container's socket): the restored
+  # copy rebuilds every index, so it may take more than 3 x the compressed dump (review SR-3).
+  live_bytes=$(rws_compose exec -T db psql -X -At -w -U rws_backup -d rws \
+    -c 'SELECT pg_database_size(current_database())' 2>/dev/null) || live_bytes=''
+  [[ $live_bytes =~ ^[1-9][0-9]{0,15}$ ]] || {
+    log "the live database size is not readable: free space sized from the dump only"
+    live_bytes=''
+  }
 fi
 
 exec 9>"$(lockfile rws-backup)"
 flock -w 3000 9 || die "a backup is still running"
 allow_bucket "$BUCKET_HOST"
 
-scratch=$RWS_SRV/backup/drill
-wipe() { find "$scratch" -mindepth 1 -delete 2>/dev/null || true; }
-fail() {
-  wipe
-  ping restore-drill fail "$1"
-  die "restore drill failed: $1"
-}
-wipe
-trap wipe EXIT
-ping restore-drill start
-
 snapshot=$(rws_compose run --rm --no-deps -T backup snapshots --latest 1 --host rws --json) || fail snapshots
 id=$(jq -r '.[-1].id // empty' <<<"$snapshot")
 time=$(jq -r '.[-1].time // empty' <<<"$snapshot")
 [[ $id =~ ^[0-9a-f]{64}$ && -n $time ]] || fail no_snapshot
 cutoff=$(($(date -u -d "$time" +%s) - 600))
+
+if ((db)); then
+  dump_bytes=$(rws_compose run --rm --no-deps -T backup ls --json "$id" /data/db |
+    jq -rn 'first(inputs | select(type == "object" and .type == "file" and .path == "/data/db/rws.dump") | .size) // empty') ||
+    fail dump_restore
+  [[ $dump_bytes =~ ^[1-9][0-9]{0,15}$ ]] || fail dump_restore
+  need=$((3 * dump_bytes)) what='3 x the dump'
+  if [[ -n $live_bytes ]] && ((live_bytes * LIVE_PCT / 100 > need)); then
+    need=$((live_bytes * LIVE_PCT / 100)) what="$LIVE_PCT % of the live database"
+  fi
+  disk_check "$need" "$what"
+fi
 
 # The manifest days in the snapshot: the newest plus up to 2 random older ones.
 days=$(rws_compose run --rm --no-deps -T backup ls --json "$id" /data/raw/_manifest |
@@ -100,6 +262,29 @@ done <"$sample" >"$include"
 chmod 0644 "$include"
 rws_compose run --rm --no-deps -T backup restore "$id" --target /restore --include-file /restore/.include >/dev/null ||
   fail restore_objects
+restored=restore_objects
+if ((db)); then
+  restored=dump_restore
+  printf '/data/db/rws.dump\n/data/db/globals.sql\n' >"$include"
+  rws_compose run --rm --no-deps -T backup restore "$id" --target /restore --include-file /restore/.include >/dev/null ||
+    fail dump_restore
+fi
+# Review SR-4, still under the lock: the restore wrote only regular files and directories; the dump and globals.sql are
+# regular files, become root's and are opened here (fds 6 and 7), so later reads see these inodes, not the paths.
+odd=$(find "$scratch" -mindepth 1 ! -type f ! -type d -print -quit 2>/dev/null) || odd=error
+if [[ -n $odd ]]; then
+  log "the restored tree holds an entry that is not a regular file or a directory"
+  fail "$restored"
+fi
+if ((db)); then
+  dump=$scratch/data/db/rws.dump globals=$scratch/data/db/globals.sql
+  for f in "$dump" "$globals"; do [[ -f $f && ! -L $f && -s $f ]] || fail dump_restore; done
+  { chown -h 0:0 -- "$dump" "$globals" && chmod 0600 -- "$dump" "$globals"; } || fail dump_restore
+  exec 6<"$dump" 7<"$globals" || fail dump_restore
+  dump_at=$(stat -L -c %Y /dev/fd/6) || fail dump_restore
+fi
+# The restic part is done: the hourly backup may run again (A10).
+exec 9>&-
 
 matched=0
 while read -r key sha; do
@@ -107,11 +292,162 @@ while read -r key sha; do
   got=$(zstd -dc -- "$file" 2>/dev/null | sha256sum) || continue
   [[ ${got%% *} == "$sha" ]] && matched=$((matched + 1))
 done <"$sample"
-rm -f -- "$sample"
 
-# shellcheck disable=SC2016 # a jq filter, not shell
-ops_update --arg at "$(now_iso)" --argjson s "$sampled" --argjson m "$matched" \
-  '.drill = {at: $at, sampled: $s, matched: $m}'
+# A mismatch is recorded with its counts (the status page shows it); a pass waits for part 2 (review SR-8).
+((matched == sampled)) || record_drill
 echo "restore drill: sampled $sampled, matched $matched"
 ((matched == sampled)) || fail mismatch
+if ((!db)); then
+  record_drill
+  ping restore-drill
+  exit 0
+fi
+
+# ------------------------------------------------------------------ part 2: the dump, in a throwaway PostgreSQL
+[[ -f $RWS_ROLES_SQL && -f $CHECKSUM_SQL ]] || fail dump_restore
+server_image=$(sed -n 's/^RWS_SERVER_IMAGE=//p' "$RWS_STATE_DIR/active/images.env" 2>/dev/null | head -n 1 || true)
+[[ $server_image =~ ^[a-z0-9][a-z0-9./_-]*(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$ ]] || fail replay
+hex() { od -An -tx1 -N"$1" /dev/urandom | tr -d ' \n'; }
+run=$(hex 3)
+run=${run:0:5}
+net=rws-drill-$run pg=rws-drill-pg-$run
+pgenv=$(mktemp)
+loadenv=$(mktemp)
+load_pw=$(hex 32)
+printf 'POSTGRES_PASSWORD=%s\nPOSTGRES_INITDB_ARGS=%s\n' "$(hex 32)" \
+  '--locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C.UTF-8 --encoding=UTF8' >"$pgenv"
+printf 'DATABASE_URL=postgres://rws_load:%s@%s:5432/rws\n' "$load_pw" "$pg" >"$loadenv"
+left() { local s=$((BUDGET_S - SECONDS)); printf '%s' $((s > 0 ? s : 1)); }
+psql_pg() { docker exec -i "$pg" psql -X -q -v ON_ERROR_STOP=1 -U postgres "$@"; }
+
+{ mkdir -m 0700 -- "$scratch/pg" && chown -h 999:999 -- "$scratch/pg"; } || fail dump_restore
+# The bridge is named rws-*, so the host firewall's rules for container bridges apply to it as well.
+docker network create --internal --label rws.drill=1 -o "com.docker.network.bridge.name=$net" "$net" >/dev/null ||
+  fail dump_restore
+docker run -d --rm --name "$pg" --label rws.drill=1 --network "$net" \
+  --user 999:999 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --memory 1g --memory-swap 1g --pids-limit 128 --cpus 1 --shm-size 128m \
+  --tmpfs /tmp:size=16m,mode=1777 --tmpfs /var/run/postgresql:size=1m,uid=999,gid=999,mode=0775 \
+  -v "$scratch/pg:/var/lib/postgresql" --env-file "$pgenv" \
+  "$PG_IMAGE" postgres -c 'listen_addresses=*' -c max_connections=20 -c shared_buffers=128MB -c work_mem=16MB \
+  -c maintenance_work_mem=256MB -c fsync=off -c synchronous_commit=off -c full_page_writes=off \
+  -c log_statement=none -c log_min_error_statement=panic >/dev/null || fail dump_restore
+# PID 1 is postgres only once the entrypoint's first-run set-up (initdb, its socket-only server) is done.
+ready_by=$((SECONDS + 180))
+until docker exec "$pg" sh -c 'grep -qx postgres /proc/1/comm && pg_isready -q' >/dev/null 2>&1; do
+  ((SECONDS < ready_by)) || fail dump_restore
+  sleep 2
+done
+# The roles first (CREATE ROLE postgres fails, as it exists: no ON_ERROR_STOP; the sanity query checks them), then
+# the database as restore.md route B creates it, the dump, and roles.sql with rws_load's password, as db_prepare.
+docker exec -i "$pg" psql -X -q -U postgres -d postgres -f - <&7 >/dev/null 2>&1 || fail dump_restore
+exec 7<&-
+printf '%s\n' "CREATE DATABASE rws TEMPLATE template0 OWNER rws_owner LOCALE_PROVIDER builtin BUILTIN_LOCALE 'C.UTF-8' ENCODING 'UTF8';" |
+  psql_pg -d postgres -f - >/dev/null 2>&1 || fail dump_restore
+# From here to the end of the replay the restored database grows: the watcher removes the containers above 90 %.
+diskflag=$(mktemp)
+watch_disk &
+watcher=$!
+timeout "$(left)" docker exec -i "$pg" pg_restore -U postgres -d rws --exit-on-error <&6 >/dev/null 2>&1 ||
+  fail dump_restore
+exec 6<&-
+{
+  printf '%s\n' "SET log_statement = 'none';" "SET log_min_error_statement = 'panic';"
+  cat -- "$RWS_ROLES_SQL"
+  printf "\nALTER ROLE rws_load PASSWORD '%s';\n" "$load_pw"
+} | psql_pg -1 -d rws -f - >/dev/null 2>&1 || fail dump_restore
+
+# Sanity: every application role, rows in the main tables, and the newest observation's epoch.
+sanity=$(printf '%s\n' "SELECT (SELECT count(*) FROM pg_roles WHERE rolname IN ('rws_owner', 'rws_migrator', 'rws_load',
+    'rws_publish', 'rws_api', 'rws_owner_api', 'rws_backup')) = 7
+  AND EXISTS (SELECT FROM schema_migrations) AND EXISTS (SELECT FROM provider) AND EXISTS (SELECT FROM source)
+  AND EXISTS (SELECT FROM station) AND EXISTS (SELECT FROM series) AND EXISTS (SELECT FROM ingest_batch)
+  AND EXISTS (SELECT FROM load_cursor) AND EXISTS (SELECT FROM obs) AND EXISTS (SELECT FROM obs_latest),
+  COALESCE((SELECT extract(epoch FROM max(ts))::bigint FROM obs), 0);" | psql_pg -At -d rws -f - 2>/dev/null) ||
+  fail sanity
+[[ $sanity =~ ^t\|([0-9]+)$ ]] || fail sanity
+if ((BASH_REMATCH[1] < dump_at - MAX_AGE_H * 3600)); then
+  log "the newest observation in the dump is more than $MAX_AGE_H h older than the dump"
+  fail sanity
+fi
+echo "restore drill: dump restored, sanity ok"
+
+# The settled day: the newest manifest day D with payloads such that D + 1 d <= dump time - 48 h.
+manifests=$RWS_SRV/raw/_manifest
+payloads() { # <manifest day>...: the sources with an archived payload (an object, no error, status < 400)
+  local d
+  for d in "$@"; do [[ ! -f $manifests/$d.jsonl ]] || cat -- "$manifests/$d.jsonl"; done |
+    jq -rR 'fromjson? | select(type == "object" and (.key | type) == "string" and .error == null
+      and (.status == null or (.status | type == "number" and . < 400))) | .source | strings' 2>/dev/null | sort -u
+}
+max_day=$(date -u -d "@$((dump_at - 72 * 3600))" +%F)
+day=''
+while IFS= read -r f; do
+  d=${f%.jsonl}
+  [[ $d =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && ! $d > $max_day ]] || continue
+  if [[ -n $(payloads "$d") ]]; then
+    day=$d
+    break
+  fi
+done < <(find "$manifests" -maxdepth 1 -name '*.jsonl' -type f -printf '%f\n' 2>/dev/null | sort -r | head -n 400)
+if [[ -z $day ]]; then
+  log "no settled manifest day with payloads"
+  fail replay
+fi
+day1=$(date -u -d "$day + 1 day" +%F)
+day2=$(date -u -d "$day + 2 days" +%F)
+mapfile -t sources < <(payloads "$day" "$day1" "$day2")
+
+sums() { docker exec -i "$pg" psql -X -q -At -F ' ' -v ON_ERROR_STOP=1 -U postgres -d rws -v "day=$day" -f - <"$CHECKSUM_SQL" 2>/dev/null; }
+before=$(sums) || fail replay
+replayed=0 skipped=0 bad=0
+for src in "${sources[@]}"; do
+  [[ $src =~ $SOURCE_RE ]] || continue
+  if ((SECONDS >= BUDGET_S)); then
+    log "the replay did not finish within the drill's time budget"
+    fail replay
+  fi
+  rc=0
+  out=$(timeout "$(left)" docker run --rm --name "rws-drill-replay-$run" --label rws.drill=1 --network "$net" \
+    --user 65532:65532 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+    --memory 768m --memory-swap 768m --pids-limit 64 --cpus 1 --tmpfs /tmp:size=16m,mode=1777 \
+    -e RWS_RAW_DIR=/data/raw --env-file "$loadenv" -v "$RWS_SRV/raw:/data/raw:ro" \
+    "$server_image" replay --source "$src" --from "$day" --to "$day2" 2>/dev/null) || rc=$?
+  # 64: no load adapter for that source (NL-4, say): nothing of it is in the database.
+  if ((rc == 64)); then
+    skipped=$((skipped + 1))
+    continue
+  fi
+  if ((rc != 0)); then
+    log "replay of $src failed (exit $rc)"
+    fail replay
+  fi
+  # The replay's JSON summary is its last line (pino's alert lines come before it).
+  res=$(tail -n 1 <<<"$out" | jq -c --arg s "$src" '
+    select(type == "object" and .source == $s and ([.n_new, .n_changed, .quarantined] | all(type == "number")))
+    | [.n_new, .n_changed, .quarantined]' 2>/dev/null) || res=''
+  if ! [[ $res =~ ^\[([0-9]+),([0-9]+),([0-9]+)\]$ ]]; then
+    log "replay of $src: no summary"
+    fail replay
+  fi
+  if ((BASH_REMATCH[1] + BASH_REMATCH[2] + BASH_REMATCH[3] > 0)); then
+    log "replay of $src: n_new ${BASH_REMATCH[1]}, n_changed ${BASH_REMATCH[2]}, quarantined ${BASH_REMATCH[3]}"
+    bad=1
+  fi
+  replayed=$((replayed + 1))
+done
+after=$(sums) || fail replay
+while IFS=' ' read -r src month; do
+  [[ $src =~ $SOURCE_RE && $month =~ ^[0-9]{4}-[0-9]{2}$ ]] || src=other month=''
+  log "checksum differs after the replay: $src $month"
+  bad=1
+done < <(diff <(printf '%s\n' "$before") <(printf '%s\n' "$after") | awk '/^[<>] / { print $2, $3 }' | sort -u)
+if ((replayed == 0)); then
+  log "no source of the days $day .. $day2 could be replayed"
+  fail replay
+fi
+((bad == 0)) || fail replay
+[[ ! -s $diskflag ]] || fail disk
+record_drill
+echo "restore drill: replay of $day .. $day2 ($replayed sources, $skipped without a loader): n_new 0, n_changed 0, quarantined 0, checksums equal"
 ping restore-drill

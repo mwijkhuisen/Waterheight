@@ -280,7 +280,7 @@ It verifies the manifest and the three images, pulls by digest, starts the servi
 sudo sed -i 's/^RWS_BACKUP=off$/RWS_BACKUP=on/' /etc/rws/rws.env
 sudo rws-backup --init                 # once: creates the restic repository
 sudo rws-backup                        # first backup (then hourly at :17)
-sudo rws-restore-drill --force         # restores 100 random objects and compares them
+sudo rws-restore-drill --force         # restores 100 random objects and compares them, then (P12b) restores the dump and replays a settled day (up to 105 min)
 sudo /usr/local/lib/rws/deploy/tests/object-lock-prune.sh   # the VPS key cannot remove versions
 ```
 

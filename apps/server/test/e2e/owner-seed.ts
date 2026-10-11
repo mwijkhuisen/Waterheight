@@ -77,16 +77,16 @@ export async function seedOwner(admin: Client, from: string, now: string): Promi
   );
   if (basis.rowCount !== 1) throw new Error(`seed: no owner source ${XSS_SOURCE}`);
 
-  // The health of the six personal-use sources (the canary has none), so that the owner site's Status page lists them
-  // and the public one counts them (`ownerSources`, which no spec pins): a mix of states, last fetch at NOW.
-  const health: [source: string, status: 'ok' | 'degraded' | 'down', failures: number][] = [
-    ['BE-3', 'ok', 0],
-    ['LU-2', 'ok', 0],
-    ['LU-3', 'ok', 0],
-    ['LU-4', 'degraded', 1],
-    ['DE-2', 'ok', 0],
-    ['DE-3', 'down', 5],
-  ];
+  // The health of the personal-use sources the registry sync wrote (the canary has none), so that the owner site's
+  // Status page lists them and the public one counts them (`ownerSources`, which no spec pins): a mix of states, last
+  // fetch at NOW. Read from the database, never a list (P12b: DE-2 leaves the owner audience at its flip).
+  const MIX: Record<string, ['degraded' | 'down', number]> = { 'LU-4': ['degraded', 1], 'DE-3': ['down', 5] };
+  const owners = await admin.query<{ id: string }>(
+    `SELECT id FROM source WHERE audience = 'owner' AND NOT canary ORDER BY id`,
+  );
+  const health: [source: string, status: 'ok' | 'degraded' | 'down', failures: number][] = owners.rows.map(
+    ({ id }) => [id, ...(MIX[id] ?? ['ok', 0])] as [string, 'ok' | 'degraded' | 'down', number],
+  );
   for (const [source, status, failures] of health) {
     const done = await admin.query(
       `INSERT INTO source_health (source_id, last_fetch_ok, newest_ts, consecutive_failures, status)

@@ -61,6 +61,19 @@ curl -s https://<domain>/data/v1/meta.json | jq .brownout          # true within
 curl -s -o /dev/null -w '%{http_code}\n' 'https://<domain>/api/v1/series?...&res=raw'   # 503 while on
 ```
 
+**When the brownout is not enough** (the origin itself is down or saturated even for static files), the next step is the CDN in front of the static trees (D20): `docs/runbooks/cdn-break-glass.md`. Switch the brownout `on` first, then follow that runbook; the two do not conflict. After the flood, `sudo rws-brownout auto`, and the CDN back to its resting state (the last step of the break-glass runbook).
+
+Check both from outside:
+
+```bash
+curl -s https://<domain>/data/v1/meta.json | jq .brownout
+scripts/verify-prod.sh <domain>
+```
+
+```text
+true      (while on; false after auto has disarmed it)
+```
+
 ## 4. What auto does
 
 `rws-brownout.timer` runs `rws-brownout evaluate` every 15 seconds as root. It acts only when `mode` is `auto`.

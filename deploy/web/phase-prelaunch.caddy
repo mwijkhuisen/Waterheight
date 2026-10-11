@@ -1,0 +1,7 @@
+# The prelaunch phase of the public site (P12b, A§9.1; RWS_SITE_PHASE=prelaunch in deploy/compose.yaml, the default
+# of site.caddy's `import phase-{$RWS_SITE_PHASE:prelaunch}.caddy`). Every response says noindex, and robots.txt and
+# sitemap.xml are the bare 404 of any missing file (the catch-all of site.caddy). site.caddy imports this file
+# twice, in the site block and in handle_errors, each time with an argument ({args[0]}: main or errors) that makes
+# the named matchers of phase-launch.caddy unique; this phase has none. test/launch-phase.test.ts keeps the pair
+# in step.
+header X-Robots-Tag "noindex"

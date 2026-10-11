@@ -1,0 +1,66 @@
+# The launch phase of the public site (P12b, A§9.1; RWS_SITE_PHASE=launch in deploy/compose.yaml, one commit after the
+# owner signs the launch checklist, E4). The pages are indexable: no X-Robots-Tag on them. Everything that is data,
+# not a page, keeps noindex: /api, /data, /status/*, /tiles, /downloads and /runtime-config.json (the pattern of
+# @noindex below; scripts/verify-prod.ts NOINDEX_PATHS), and the two 404 shells say it in site.caddy itself. robots.txt
+# and sitemap.xml are fixed answers from here, nothing on disk, with absolute URLs from the configured domain
+# ({$RWS_DOMAIN}, read when Caddy parses this file, as in security.txt) and never from the Host header, so a forged
+# Host cannot put another name in them (T-LAUNCH-1; test/launch-phase.test.ts greps for {host}). The sitemap lists the
+# nine pages in both languages, every entry with its hreflang alternates (nl, en, x-default = nl), the paths of
+# apps/web/src/lib/routes.ts (the same test); no owner source or host is ever named. Cache-Control public, max-age=300.
+# site.caddy imports this file twice, in the site block and in handle_errors, with an argument ({args[0]}: main or
+# errors) that keeps the named matchers unique; the routes are never reached from the error route.
+@noindex_{args[0]} path /api /api/* /data /data/* /status/* /tiles /tiles/* /downloads /downloads/* /runtime-config.json
+header @noindex_{args[0]} X-Robots-Tag "noindex"
+
+# GET and HEAD only: any other method falls through to the 405 guard of site.caddy.
+@robots_{args[0]} {
+	method GET HEAD
+	expression `{path} == '/robots.txt'`
+}
+handle @robots_{args[0]} {
+	header Content-Type "text/plain; charset=utf-8"
+	header Cache-Control "public, max-age=300"
+	respond <<ROBOTS
+		User-agent: *
+		Disallow: /api/
+		Disallow: /tiles/
+		Disallow: /data/
+		Disallow: /downloads/
+
+		Sitemap: https://{$RWS_DOMAIN}/sitemap.xml
+
+		ROBOTS 200
+}
+
+@sitemap_{args[0]} {
+	method GET HEAD
+	expression `{path} == '/sitemap.xml'`
+}
+handle @sitemap_{args[0]} {
+	header Content-Type "application/xml; charset=utf-8"
+	header Cache-Control "public, max-age=300"
+	respond <<SITEMAP
+		<?xml version="1.0" encoding="UTF-8"?>
+		<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+		<url><loc>https://{$RWS_DOMAIN}/</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/en/</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/over</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/over"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/about"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/over"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/en/about</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/over"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/about"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/over"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/bronnen</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/bronnen"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/sources"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/bronnen"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/en/sources</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/bronnen"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/sources"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/bronnen"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/methode</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/methode"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/method"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/methode"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/en/method</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/methode"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/method"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/methode"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/disclaimer</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/disclaimer"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/disclaimer"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/disclaimer"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/en/disclaimer</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/disclaimer"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/disclaimer"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/disclaimer"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/colofon</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/colofon"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/colophon"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/colofon"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/en/colophon</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/colofon"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/colophon"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/colofon"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/privacy</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/privacy"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/privacy"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/privacy"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/en/privacy</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/privacy"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/privacy"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/privacy"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/status</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/status"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/status"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/status"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/en/status</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/status"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/status"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/status"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/toegankelijkheid</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/toegankelijkheid"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/accessibility"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/toegankelijkheid"/></url>
+		<url><loc>https://{$RWS_DOMAIN}/en/accessibility</loc><xhtml:link rel="alternate" hreflang="nl" href="https://{$RWS_DOMAIN}/toegankelijkheid"/><xhtml:link rel="alternate" hreflang="en" href="https://{$RWS_DOMAIN}/en/accessibility"/><xhtml:link rel="alternate" hreflang="x-default" href="https://{$RWS_DOMAIN}/toegankelijkheid"/></url>
+		</urlset>
+
+		SITEMAP 200
+}

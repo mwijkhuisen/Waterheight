@@ -209,18 +209,17 @@ describe('registry/permissions in the sync (readRegistry)', { timeout: 30_000 },
   }
   const front = (lines: string) => `---\n${lines}\n---\n# record\n`;
 
-  it('applies no grant yet (P13): a grant record stops the sync', () => {
+  it('reads a grant record (P12b, §8 A1) and applies only what sources.yaml uses: a grant alone widens nothing', () => {
     const grant = front(
       'source: DE-12\ngranted_by: Test\ngranted_on: "2026-09-01"\nevidence: test\naudience: public\ndisplay: true\napi: false\nbulk_export: false\nhistory_export: false',
     );
-    expect(withFile('permissions/DE-12.md', grant)).toThrow(
-      'registry/permissions holds a record that is not a withholding record (grants are P13)',
-    );
+    const registry = withFile('permissions/DE-12.md', grant)() as ReturnType<typeof readRegistry>;
+    expect(registry.sources.find((s) => s.id === 'DE-12')?.audience).toBe('off');
   });
 
-  it('a record without front matter, or with a malformed one, is not a withholding record either (review CR-7)', () => {
+  it('a record without front matter, or with a malformed one, fails the sync (review CR-7)', () => {
     for (const text of ['# no front matter\n', front('source: LU-1\nwithheld: Bollendorf'), front('[')])
-      expect(withFile('permissions/LU-1.md', text)).toThrow(/is not a withholding record \(grants are P13\)/);
+      expect(withFile('permissions/LU-1.md', text)).toThrow(/permissions\/LU-1\.md: not a valid permission record/);
   });
 
   it('a withholding record must name registered series that are off', () => {
