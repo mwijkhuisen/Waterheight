@@ -99,6 +99,7 @@ RWS_DOMAIN=$DRILL
 RWS_BACKUP=on
 RWS_RESTIC_REPOSITORY=s3:https://s3.bucket.example/rws-raw/restic
 RWS_CAPTURE_SKIP=CH-1,NL-1
+RWS_SITE_PHASE=prelaunch
 EOF
   : >"$C/etc/secrets/hc_ping_key"
   printf '[default]\naws_access_key_id = %s\n' "$SECRET" >"$C/etc/secrets/s3_credentials"
@@ -198,7 +199,13 @@ expect_row "q7 DE-1" FAIL
 
 case_ "noindex: the launch phase on a drill fails even with the header"
 setup
-echo RWS_SITE_PHASE=launch >>"$RWS_ETC/rws.env"
+sed -i 's/^RWS_SITE_PHASE=.*/RWS_SITE_PHASE=launch/' "$RWS_ETC/rws.env"
+run "$DRILL"
+fails_only noindex
+
+case_ "noindex: an unpinned phase on a drill fails (the compose default is launch after E4)"
+setup
+sed -i '/^RWS_SITE_PHASE=/d' "$RWS_ETC/rws.env"
 run "$DRILL"
 fails_only noindex
 

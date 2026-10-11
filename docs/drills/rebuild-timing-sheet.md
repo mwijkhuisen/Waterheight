@@ -30,7 +30,7 @@ The record of one timed run of `docs/runbooks/vps-rebuild.md`: the **owner** fil
    | CH-1 | none (latest only; gap-filled from CH-3, 40 days) | 40 days by CH-3 | no: **skipped on the drill** |
 
    **CH-1 and NL-1 are skipped on the drill** (`RWS_CAPTURE_SKIP=CH-1,NL-1`: the production budget at Rijkswaterstaat is about 375 of 400 requests an hour, and LINDAS wants one request per 10 minutes, never faster; whether RWS counts per key or per IP is unknown). The drill therefore does **not** judge them. A **real rebuild** skips nothing and judges all six.
-3. Every row below has its check output pasted and `pass` ticked. The drill's guard rails (`deploy/tests/rebuild-check.sh`) are all PASS (a SKIP is read and explained in the notes).
+3. Every row below has its check output pasted and `pass` ticked. The drill's guard rails (`deploy/tests/rebuild-check.sh`) are all PASS (a SKIP is read and explained in the notes). Run it with `--production <production domain>`: without it the `bucket key` row is a SKIP, and that row must be PASS.
 
 ## Timings
 

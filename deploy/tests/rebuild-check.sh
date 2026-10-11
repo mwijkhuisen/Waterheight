@@ -90,8 +90,9 @@ fi
 
 # --- noindex (and the prelaunch phase)
 headers=$(curl --proto '=https' --tlsv1.2 -sS -I --max-time 15 "https://$host/" 2>/dev/null || true)
-if [[ ${RWS_SITE_PHASE:-prelaunch} != prelaunch ]]; then
-  row noindex FAIL "RWS_SITE_PHASE is not prelaunch on the drill"
+if [[ ${RWS_SITE_PHASE:-} != prelaunch ]]; then
+  # Unset follows the compose default, which is launch after E4: the drill must pin it.
+  row noindex FAIL "RWS_SITE_PHASE=prelaunch is not pinned in the drill's rws.env"
 elif grep -qiE '^x-robots-tag:.*noindex' <<<"$headers"; then
   row noindex PASS "X-Robots-Tag noindex on /"
 else

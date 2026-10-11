@@ -85,7 +85,7 @@ readonly MAX_AGE_H=${RWS_DRILL_MAX_AGE_H:-26}
 readonly LIVE_PCT=125
 # The disk watcher during pg_restore and the replay: its interval (seconds; the tests shorten it) and its limit.
 readonly WATCH_S=${RWS_DRILL_WATCH_S:-10}
-[[ $WATCH_S =~ ^[0-9]{1,4}(\.[0-9]{1,3})?$ ]] || die "RWS_DRILL_WATCH_S must be a number of seconds"
+[[ $WATCH_S =~ ^([1-9][0-9]{0,3}(\.[0-9]{1,3})?|0\.[0-9]{0,2}[1-9])$ ]] || die "RWS_DRILL_WATCH_S must be a positive number of seconds"
 readonly WATCH_MAX_PCT=90
 force=0
 case ${1:-} in
@@ -161,7 +161,10 @@ watch_disk() {
   # cleanup's kill (TERM) ends the sleep too, so no stray process keeps the drill's output open.
   trap - EXIT INT
   trap '[[ -z $nap ]] || kill "$nap" 2>/dev/null; exit 0' TERM
-  while :; do
+  # Never hold the drill's lock or the dump descriptors: an orphaned watcher (the parent SIGKILLed) would block every
+  # later drill. It also ends as soon as the parent is gone.
+  exec 6<&- 7<&- 8>&-
+  while kill -0 "$$" 2>/dev/null; do
     sleep "$WATCH_S" &
     nap=$!
     wait "$nap" || true
