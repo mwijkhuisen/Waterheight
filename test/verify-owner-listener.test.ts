@@ -23,6 +23,10 @@ describe('classify443', () => {
     }
     expect(classify443('203.0.113.1', { kind: 'answered', status: 421, wwwAuthenticate: true }).ok).toBe(false);
   });
+  it('fails a handshake that completed with a certificate for the owner name, trusted or not', () => {
+    expect(classify443('203.0.113.1', { kind: 'certificate' }).ok).toBe(false);
+    expect(classify8443('203.0.113.1', { kind: 'certificate' }).ok).toBe(false);
+  });
   it('fails a refusal or timeout of the public listener, and is n/a where the address is unreachable', () => {
     expect(classify443('203.0.113.1', { kind: 'refused' }).ok).toBe(false);
     expect(classify443('203.0.113.1', { kind: 'timeout' }).ok).toBe(false);

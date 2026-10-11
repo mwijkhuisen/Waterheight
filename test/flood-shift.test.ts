@@ -221,8 +221,8 @@ describe('CAP (LU-5)', () => {
     const out = shiftLu5(Buffer.from(xml), 7_200_000).toString('utf8');
     const strip = (s: string) =>
       s
-        .replace(/<(sent|effective|onset|expires|identifier)>[^<]*<\/\1>/g, '')
-        .replace(/<references>[^<]*<\/references>/g, '');
+        .replace(/<(sent|effective|onset|expires|identifier)>[^<]*<\/\1>/g, '§')
+        .replace(/<references>[^<]*<\/references>/g, '§');
     expect(strip(out)).toBe(strip(xml));
     expect(out).not.toBe(xml);
   });

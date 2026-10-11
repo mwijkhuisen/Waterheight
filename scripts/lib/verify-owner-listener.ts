@@ -12,6 +12,8 @@ import type { Result } from '../verify-prod.ts';
 export type Probe =
   | { kind: 'answered'; status: number; wwwAuthenticate: boolean }
   | { kind: 'handshake-failed' }
+  /** The handshake completed with a certificate this client does not trust for owner.<domain>. */
+  | { kind: 'certificate' }
   | { kind: 'refused' }
   | { kind: 'timeout' }
   | { kind: 'unreachable' };
@@ -31,6 +33,11 @@ export function classify443(address: string, p: Probe): Result {
       return fail(
         check,
         `answered ${p.status}${p.wwwAuthenticate ? ' with a credentials challenge' : ''}, expected a failed handshake or 421`,
+      );
+    case 'certificate':
+      return fail(
+        check,
+        'the handshake for SNI owner.<domain> completed with a certificate: something on the public address holds one for the owner name',
       );
     case 'unreachable':
       return na(check, 'address not reachable from here');
@@ -108,6 +115,21 @@ export async function checkOwnerListener(
 // ---------------------------------------------------------------- the network (not unit-tested; the CI e2e and the
 // real run exercise it)
 const UNREACHABLE = new Set(['ENETUNREACH', 'EADDRNOTAVAIL', 'EHOSTUNREACH']);
+// Certificate verification errors: the server finished its side of the handshake for owner.<domain>. Verification
+// stays on (no rejectUnauthorized: false): the public Caddy refuses the handshake for an unknown SNI, so any
+// certificate offered for the owner name, trusted or not, is the leak this check looks for.
+const CERTIFICATE = new Set([
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'CERT_HAS_EXPIRED',
+  'CERT_NOT_YET_VALID',
+  'CERT_UNTRUSTED',
+  'CERT_REJECTED',
+]);
 
 export function probeTls(address: string, port: number, domain: string, timeoutMs = 8000): Promise<Probe> {
   return new Promise((resolve) => {
@@ -120,7 +142,7 @@ export function probeTls(address: string, port: number, domain: string, timeoutM
     };
     const host = `owner.${domain}`;
     const socket = tlsConnect(
-      { host: address, port, servername: host, rejectUnauthorized: false, timeout: timeoutMs },
+      { host: address, port, servername: host, timeout: timeoutMs },
       () => {
         socket.write(`GET / HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\nUser-Agent: verify-prod\r\n\r\n`);
       },
@@ -144,6 +166,7 @@ export function probeTls(address: string, port: number, domain: string, timeoutM
       if (e.code === 'ECONNREFUSED') finish({ kind: 'refused' });
       else if (e.code && UNREACHABLE.has(e.code)) finish({ kind: 'unreachable' });
       else if (e.code === 'ETIMEDOUT') finish({ kind: 'timeout' });
+      else if (e.code && CERTIFICATE.has(e.code)) finish({ kind: 'certificate' });
       else finish({ kind: 'handshake-failed' });
     });
   });
