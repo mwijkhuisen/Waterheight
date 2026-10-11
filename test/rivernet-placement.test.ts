@@ -210,7 +210,7 @@ describe(`canal traps (stations within 1 km of a trap way: ${trapCounts})`, () =
   it('puts every placed station on an edge of its own river', SLOW, () => {
     const placedRules = new Set(['override', 'name', 'official_km']);
     const some = placed.stations.filter((s) => placedRules.has(s.rule));
-    expect(some.length).toBeGreaterThan(851);
+    expect(some.length).toBeGreaterThan(855);
     const wrong = some.filter((s) => s.river === null || !edgeOf(s).rivers.includes(s.river)).map((s) => s.id);
     expect(wrong).toEqual([]);
   });

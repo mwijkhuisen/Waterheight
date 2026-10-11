@@ -7,7 +7,7 @@
 #   sources, km_to_nl_entry the km to its NL entry node (negative below it). Owner-audience rows identify
 #   the station only (river, reach, km). reaches: cut at public stations only; id <river>.<seq>.
 version: 1
-fixture: {"source_run":"https://github.com/mwijkhuisen/Waterheight/actions/runs/38124486332","ways_sha256":"b98599fff2f67def53b3ae19e9f06f02561d4dad4f49f0d3026d78d3adb3ca83","osm_replication_timestamp":"2026-10-09T20:21:04Z"}
+fixture: {"source_run":"https://github.com/mwijkhuisen/Waterheight/actions/runs/38127563889","ways_sha256":"708479cc11bcf97681234108244d7996480650a8d62b1dabcb8972998b25a734","osm_replication_timestamp":"2026-10-09T20:21:04Z"}
 stations:
   - {"id":"be.spw.1046","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.1081","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -1549,14 +1549,14 @@ stations:
   - {"id":"lu.age-json.clervaux","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age-json.dasbourg","rule":"override","river":"our","reach":"our.2","km_official":null,"km_official_system":null,"km_graph":66.47,"km_to_nl_entry":556.34,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.diekirch","rule":"override","river":"sauer","reach":"sauer.13","km_official":null,"km_official_system":null,"km_graph":112.73,"km_to_nl_entry":531.78,"nl_entry_node":"lobith"}
-  - {"id":"lu.age-json.eischen","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"lu.age-json.eischen","rule":"override","river":"eisch","reach":"eisch.2","km_official":null,"km_official_system":null,"km_graph":7.1,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age-json.esch-sure","rule":"override","river":"sauer","reach":"sauer.5","km_official":null,"km_official_system":null,"km_graph":70.8,"km_to_nl_entry":573.71,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.ettelbruck-alzette","rule":"override","river":"alzette","reach":"alzette.13","km_official":null,"km_official_system":null,"km_graph":72.32,"km_to_nl_entry":537.34,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.ettelbruck-wark","rule":"override","river":"wark","reach":"wark.6","km_official":null,"km_official_system":null,"km_graph":18.4,"km_to_nl_entry":537.65,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.grevenmacher","rule":"override","river":"moselle","reach":"moselle.42","km_official":null,"km_official_system":null,"km_graph":343.82,"km_to_nl_entry":482.9,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.heiderscheidergrund","rule":"override","river":"sauer","reach":"sauer.6","km_official":null,"km_official_system":null,"km_graph":75.56,"km_to_nl_entry":568.95,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.hesperange","rule":"override","river":"alzette","reach":"alzette.7","km_official":null,"km_official_system":null,"km_graph":28.38,"km_to_nl_entry":581.29,"nl_entry_node":"lobith"}
-  - {"id":"lu.age-json.hunnebuer","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"lu.age-json.hunnebuer","rule":"override","river":"eisch","reach":"eisch.3","km_official":null,"km_official_system":null,"km_graph":33.06,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age-json.kautenbach","rule":"override","river":"wiltz","reach":"wiltz.3","km_official":null,"km_official_system":null,"km_graph":18.72,"km_to_nl_entry":560.8,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.larochette","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age-json.livange","rule":"override","river":"alzette","reach":"alzette.3","km_official":null,"km_official_system":null,"km_graph":19.37,"km_to_nl_entry":590.28,"nl_entry_node":"lobith"}
@@ -1589,7 +1589,7 @@ stations:
   - {"id":"lu.age.clervaux","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age.dasbourg","rule":"override","river":"our","reach":"our.2","km_official":null,"km_official_system":null,"km_graph":66.47,"km_to_nl_entry":556.34,"nl_entry_node":"lobith"}
   - {"id":"lu.age.diekirch","rule":"override","river":"sauer","reach":"sauer.13","km_official":null,"km_official_system":null,"km_graph":112.73,"km_to_nl_entry":531.78,"nl_entry_node":"lobith"}
-  - {"id":"lu.age.eischen","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"lu.age.eischen","rule":"override","river":"eisch","reach":"eisch.2","km_official":null,"km_official_system":null,"km_graph":7.1,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age.esch-sure","rule":"override","river":"sauer","reach":"sauer.5","km_official":null,"km_official_system":null,"km_graph":70.8,"km_to_nl_entry":573.71,"nl_entry_node":"lobith"}
   - {"id":"lu.age.ettelbruck-alzette","rule":"override","river":"alzette","reach":"alzette.13","km_official":null,"km_official_system":null,"km_graph":72.32,"km_to_nl_entry":537.34,"nl_entry_node":"lobith"}
   - {"id":"lu.age.ettelbruck-wark","rule":"override","river":"wark","reach":"wark.6","km_official":null,"km_official_system":null,"km_graph":18.4,"km_to_nl_entry":537.65,"nl_entry_node":"lobith"}
@@ -1597,7 +1597,7 @@ stations:
   - {"id":"lu.age.grevenmacher","rule":"override","river":"moselle","reach":"moselle.42","km_official":null,"km_official_system":null,"km_graph":343.82,"km_to_nl_entry":482.9,"nl_entry_node":"lobith"}
   - {"id":"lu.age.heiderscheidergrund","rule":"override","river":"sauer","reach":"sauer.6","km_official":null,"km_official_system":null,"km_graph":75.56,"km_to_nl_entry":568.95,"nl_entry_node":"lobith"}
   - {"id":"lu.age.hesperange","rule":"override","river":"alzette","reach":"alzette.7","km_official":null,"km_official_system":null,"km_graph":28.38,"km_to_nl_entry":581.29,"nl_entry_node":"lobith"}
-  - {"id":"lu.age.hunnebuer","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"lu.age.hunnebuer","rule":"override","river":"eisch","reach":"eisch.3","km_official":null,"km_official_system":null,"km_graph":33.06,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age.kautenbach","rule":"override","river":"wiltz","reach":"wiltz.3","km_official":null,"km_official_system":null,"km_graph":18.72,"km_to_nl_entry":560.8,"nl_entry_node":"lobith"}
   - {"id":"lu.age.larochette","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age.livange","rule":"override","river":"alzette","reach":"alzette.3","km_official":null,"km_official_system":null,"km_graph":19.37,"km_to_nl_entry":590.28,"nl_entry_node":"lobith"}
@@ -1845,6 +1845,9 @@ reaches:
   - {"id":"eichel.1","river":"eichel","seq":1,"up_station":null,"down_station":"fr.sandre.A923205040","length_km":16.783,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"eichel.2","river":"eichel","seq":2,"up_station":"fr.sandre.A923205040","down_station":"fr.sandre.A926000101","length_km":11.001,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"eichel.3","river":"eichel","seq":3,"up_station":"fr.sandre.A926000101","down_station":null,"length_km":5.266,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"eisch.1","river":"eisch","seq":1,"up_station":null,"down_station":"lu.age.eischen","length_km":7.097,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"eisch.2","river":"eisch","seq":2,"up_station":"lu.age.eischen","down_station":"lu.age.hunnebuer","length_km":25.968,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"eisch.3","river":"eisch","seq":3,"up_station":"lu.age.hunnebuer","down_station":null,"length_km":3.418,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"emme.1","river":"emme","seq":1,"up_station":null,"down_station":"ch.bafu.2409","length_km":26.608,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"emme.2","river":"emme","seq":2,"up_station":"ch.bafu.2409","down_station":"ch.bafu.2070","length_km":12.378,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"emme.3","river":"emme","seq":3,"up_station":"ch.bafu.2070","down_station":"ch.bafu.2155","length_km":32.424,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
