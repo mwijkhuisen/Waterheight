@@ -24,7 +24,7 @@ export const WITHHELD_KEYS = ['withheld', 'narrowedOff', 'mirror', 'twin'] as co
 /** Things that must never be visible through a public view, in any column. */
 export const NEVER_PUBLIC = [
   'LU-4',
-  'DE-2',
+  'DE-3',
   'BE-3',
   'CANARY-OWNER',
   'DE-9',
@@ -74,7 +74,7 @@ export async function seedAudienceFixture(admin: pg.Client): Promise<Record<stri
       ('NL-1', 'rws', 'public obs', 'public', NULL, true, true, true, true, '0', true, false),
       ('DE-1', 'wsv', 'public obs', 'public', NULL, true, true, true, true, '0', true, false),
       ('LU-4', 'age', 'owner thresholds', 'owner', ${BASIS}, true, true, false, true, '0', true, false),
-      ('DE-2', 'bfg', 'owner forecasts', 'owner', ${BASIS}, true, true, false, true, '0', true, false),
+      ('DE-3', 'bfg', 'owner forecasts', 'owner', ${BASIS}, true, true, false, true, '0', true, false),
       ('BE-3', 'spw', 'owner obs', 'owner', ${BASIS}, true, true, false, true, '0', true, false),
       ('CANARY-OWNER', 'canary', 'owner canary', 'owner', ${BASIS}, true, true, false, true, '0', true, true),
       ('DE-9', 'nlwkn', 'off', 'off', NULL, false, false, false, false, '0', false, false),
@@ -188,7 +188,7 @@ export async function seedAudienceFixture(admin: pg.Client): Promise<Record<stri
     );
   };
   await run(ids.public, 'NL-1', 200);
-  await run(ids.public, 'DE-2', 201); // an owner run on a public series
+  await run(ids.public, 'DE-3', 201); // an owner run on a public series (DE-3: DE-2 goes public at its flip, P12b)
   await run(ids.onlyOwner, 'NL-1', 202); // a public run on an owner series
   await run(ids.ownerCanary, 'CANARY-OWNER', OWNER_CANARY);
   for (const key of WITHHELD_KEYS) await run(ids[key], 'NL-1', WITHHELD_CANARY);
@@ -207,7 +207,7 @@ export async function seedAudienceFixture(admin: pg.Client): Promise<Record<stri
       ('area', 'area-1', now(), 'LU-4', 'OWNER_CLASS', 2);
     INSERT INTO source_health (source_id, status, last_fetch_ok) VALUES
       ('NL-1', 'ok', now()), ('DE-1', 'ok', now()), ('BE-3', 'ok', now()), ('LU-4', 'down', now()),
-      ('DE-2', 'ok', now()), ('CANARY-OWNER', 'ok', now());
+      ('DE-3', 'ok', now()), ('CANARY-OWNER', 'ok', now());
     INSERT INTO ingest_batch (source_id, spec_id, archive_key, fetched_at, adapter_version, parse_status) VALUES
       ('NL-1', 'spec-public', 'raw/NL-1/spec-public/2026/10/01/000000Z-aaaaaaaaaaaaaaaa.zst', now(), 1, 'ok'),
       ('BE-3', 'spec-owner', 'raw/BE-3/spec-owner/2026/10/01/000000Z-bbbbbbbbbbbbbbbb.zst', now(), 1, 'quarantined');

@@ -11,7 +11,8 @@ import { fixture, fixtureFor, registry, STAGE2 } from './helpers.ts';
 const HTML_ERROR = Buffer.from(
   '<!DOCTYPE html>\n<html><head><title>503 Service Unavailable</title></head><body><h1>Service Unavailable</h1><p>Please try again later.</p></body></html>\n',
 );
-const OWNER_SOURCES = ['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3'];
+/** The owner-audience sources with a spec, from the registry (P12b, A20: never a hand-kept list). */
+const OWNER_SOURCES = [...new Set(registry.specs.filter((s) => s.audience === 'owner').map((s) => s.source))];
 
 describe.each(registry.specs.map((s) => [s.id, s] as const))('%s', (_, s) => {
   const f = fixtureFor(s);
@@ -87,6 +88,7 @@ describe('Vigicrues errors in HTTP 200', () => {
   });
 
   it('keeps no owner-audience fixture that is not synthetic (invariants 9, 11)', () => {
+    expect(OWNER_SOURCES).toEqual(expect.arrayContaining(['BE-3', 'DE-3', 'LU-2']));
     for (const source of OWNER_SOURCES) {
       const dir = new URL(`../../src/adapters/${source.toLowerCase()}/fixtures/`, import.meta.url).pathname;
       const raws = readdirSync(dir).filter((f) => f.endsWith('.raw'));

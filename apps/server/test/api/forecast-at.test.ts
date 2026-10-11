@@ -1,6 +1,7 @@
 import { FORECAST_PRECEDENCE, Meta, SnapshotForecast } from '@rws/contracts';
 import { FORECAST_FLAGS, FORECAST_SOURCES } from '@rws/core';
 import { describe, expect, it } from 'vitest';
+import { visibleSources } from '../../src/api/forecast.ts';
 import {
   type ForecastRules,
   forecastHorizons,
@@ -326,12 +327,16 @@ describe('heldForecast: how a picked row is shown', () => {
 });
 
 describe('forecastHorizons: the /meta list of a family', () => {
-  it('the public family lists CH-4, FR-4 and NL-1 at 48 hours, and no owner source', () => {
-    expect(forecastHorizons('public')).toEqual([
-      { source: 'CH-4', hours: 48 },
-      { source: 'FR-4', hours: 48 },
-      { source: 'NL-1', hours: 48 },
-    ]);
+  it('the public family lists CH-4, FR-4 and NL-1 at 48 hours (and DE-2 once its record makes it public), no owner source', () => {
+    // Derived from the registry's audiences, so the DE-2 flip (P12b, plan §9) changes no line here.
+    const pub = visibleSources('public');
+    const forecasting = ['CH-4', 'DE-2', 'DE-3', 'FR-4', 'LU-3', 'NL-1'];
+    expect(forecastHorizons('public')).toEqual(
+      forecasting.filter((s) => pub.has(s)).map((source) => ({ source, hours: 48 })),
+    );
+    const listed = forecastHorizons('public').map((h) => h.source);
+    expect(listed).toEqual(expect.arrayContaining(['CH-4', 'FR-4', 'NL-1']));
+    for (const owner of ['DE-3', 'LU-3']) expect(listed).not.toContain(owner);
   });
 
   it('the owner family adds DE-2, DE-3 and LU-3, and never a source that does not forecast (the canary)', () => {

@@ -209,7 +209,7 @@ Every `/snapshot`, `/series` or CSV response republishes the ingested data. Seve
 - Store **per-source licence flags** on the source table and inherit them per series: `display`, `api`, `bulk_export`, `history_export`, `attribution_text`, `attribution_url`, `needs_last_updated`, `needs_retrieval_date`.
 - The API and export layer **filter on those flags**. A source permitted "for display only" appears on the map but never in `/series` or CSV.
 - Every response carries the attribution and the "last updated"/"Stand"/retrieval date wherever a licence requires it: Etalab/Vigicrues (date of last update), LHP ("Stand" from `updated` plus a clickable link), HIC (retrieval date), BfG (credit; Belegexemplar), CH (Bezugsdatum), LU-Alert ("LU-Alert").
-- Default flags for the first-release sources: all four flags on for CC0 / DL-DE Zero / Etalab / CC BY / Modellicentie sources (with attribution); `api` and exports off for anything received under a written permission until the permission says otherwise.
+- Default flags for the first-release sources: all four flags on for CC0 / DL-DE Zero / Etalab / CC BY / Modellicentie / Swiss open-use (`ch-open-use`) sources (with attribution); `api` and exports off for anything received under a written permission until the permission says otherwise.
 
 ### 0.8 Private (owner-only) use without consent [V, 2026-09-23/24]
 

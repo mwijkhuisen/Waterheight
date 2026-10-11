@@ -16,6 +16,9 @@
 // (basic auth, user `owner`, on every path), E2E_OWNER_PUBLISH_DIR (the owner tree under /data/v1) and E2E_OWNER_API_PORT
 // (default 4482): the headers of owner.caddy (Cache-Control "private, no-store" on every response, as its `defer`
 // does), /runtime-config.json = owner, /api/v1 to the owner API.
+// P12b: E2E_SITE_PHASE=launch (default prelaunch) is the launch phase of deploy/web/phase-launch.caddy: no X-Robots-Tag on
+// the pages (it stays on the data paths and the 404 shells), robots.txt and sitemap.xml, as Caddy's `respond` of that file
+// has them; the Open Graph URLs of the shells carry this server's own origin (the templates module fills RWS_DOMAIN in).
 // Usage: node e2e/server.ts   (from apps/web; E2E_PORT overrides 4443)
 import { execFileSync } from 'node:child_process';
 import { createReadStream, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
@@ -24,13 +27,16 @@ import { createServer } from 'node:https';
 import { tmpdir } from 'node:os';
 import { extname, isAbsolute, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createGzip } from 'node:zlib';
+import { createGzip, gzipSync } from 'node:zlib';
 import { PAGE_ROUTES } from '../src/lib/routes.ts';
-import { securityTxt, siteHeaders } from './headers.ts';
+import { fillShell, robotsTag, robotsTxt, securityTxt, siteHeaders, sitemapXml, sitePhase } from './headers.ts';
 import { prepareRivers, prepareTiles } from './prepare-tiles.ts';
 
 const port = Number(process.env.E2E_PORT ?? 4443);
 const owner = process.env.E2E_OWNER === '1';
+const phase = sitePhase();
+/** RWS_DOMAIN of this stand-in for the Open Graph and sitemap URLs: the origin the browser reaches it at. */
+const SHELL_DOMAIN = `localhost:${port}`;
 const apiPort = Number(owner ? (process.env.E2E_OWNER_API_PORT ?? 4482) : (process.env.E2E_API_PORT ?? 4480));
 const ownerAuth = `Basic ${Buffer.from(`owner:${process.env.E2E_OWNER_PW ?? ''}`).toString('base64')}`;
 if (owner && !process.env.E2E_OWNER_PW) throw new Error('E2E_OWNER=1 needs E2E_OWNER_PW');
@@ -123,6 +129,17 @@ function file(root: string, urlPath: string): string | undefined {
   }
 }
 
+/** An HTML shell as Caddy's templates module answers it: RWS_DOMAIN filled in (the owner site has no template). */
+function shell(res: ServerResponse, path: string) {
+  const html = readFileSync(path, 'utf8');
+  const body = owner ? html : fillShell(html, SHELL_DOMAIN);
+  const accepts = /\bgzip\b/.test(String(res.req.headers['accept-encoding'] ?? ''));
+  const head = { 'content-type': TYPES['.html'] ?? 'text/html', 'cache-control': NO_CACHE };
+  if (!accepts) return send(res, 200, head, body);
+  res.writeHead(200, { ...head, 'content-encoding': 'gzip', vary: 'Accept-Encoding' });
+  res.end(gzipSync(body));
+}
+
 function serve(res: ServerResponse, path: string, range: string | undefined, cache?: string, status = 200) {
   const size = statSync(path).size;
   const base: Record<string, string | number> = { 'content-type': TYPES[extname(path)] ?? 'application/octet-stream' };
@@ -197,6 +214,23 @@ const server = createServer(
   { key: readFileSync(join(tmp, 'key')), cert: readFileSync(join(tmp, 'cert')) },
   (req, res) => {
     for (const [name, value] of headers) res.setHeader(name, value);
+    if (!owner) {
+      // phase-<phase>.caddy: X-Robots-Tag by path and status (an HTML 404 is a 404 shell), set when the status is known.
+      const writeHead = res.writeHead.bind(res) as (status: number, extra?: Record<string, unknown>) => ServerResponse;
+      res.writeHead = ((status: number, extra?: Record<string, unknown>) => {
+        let at = '/';
+        try {
+          at = decodeURIComponent(new URL(req.url ?? '/', 'https://localhost').pathname);
+        } catch {
+          // a malformed escape is a 400 before any route
+        }
+        const type = String(extra?.['content-type'] ?? res.getHeader('content-type') ?? '');
+        const tag = robotsTag(phase, at, status, /^text\/html/.test(type));
+        if (tag === undefined) res.removeHeader('x-robots-tag');
+        else res.setHeader('x-robots-tag', tag);
+        return writeHead(status, extra);
+      }) as ServerResponse['writeHead'];
+    }
     if (owner) {
       // owner.caddy's `defer`: whatever a route sets, the answer is private, no-store.
       const writeHead = res.writeHead.bind(res) as (status: number, extra?: Record<string, unknown>) => ServerResponse;
@@ -221,6 +255,21 @@ const server = createServer(
     if (req.method === 'POST' && new URL(req.url ?? '/', 'https://localhost').pathname === BEACON)
       return proxy(req, res, BEACON_MAX);
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { allow: 'GET, HEAD' });
+    // phase-launch.caddy: two fixed answers (the prelaunch phase has none: both are the bare 404 of a missing file).
+    if (!owner && phase === 'launch' && path === '/robots.txt')
+      return send(
+        res,
+        200,
+        { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=300' },
+        robotsTxt(SHELL_DOMAIN),
+      );
+    if (!owner && phase === 'launch' && path === '/sitemap.xml')
+      return send(
+        res,
+        200,
+        { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=300' },
+        sitemapXml(SHELL_DOMAIN),
+      );
     if (API(path)) return proxy(req, res);
     if (/^\/api(\/|$)/i.test(path)) return send(res, 404);
     if (path === '/healthz') return send(res, 200);
@@ -283,13 +332,15 @@ const server = createServer(
     if (/\/\./.test(path)) return send(res, 404);
     // site.caddy's catch-all, in its order: @page_nl, @page_en, @file (never a 404 shell), @dotted, @not_found_en, the
     // Dutch 404 shell.
-    if (PAGE_NL.has(path)) return serve(res, join(www, 'index.html'), undefined, NO_CACHE);
-    if (PAGE_EN.has(path)) return serve(res, join(www, 'en/index.html'), undefined, NO_CACHE);
+    // (the templates module fills the Open Graph URLs into the page shells and the two shell files; not the owner site's)
+    if (PAGE_NL.has(path)) return shell(res, join(www, 'index.html'));
+    if (PAGE_EN.has(path)) return shell(res, join(www, 'en/index.html'));
+    if (path === '/index.html' || path === '/en/index.html') return shell(res, join(www, path));
     // @file's `not expression {path}.contains('//')`: a doubled slash is never a file (review round 1).
-    const shell = SHELL_404.test(path) || path.includes('//');
-    if (asset !== undefined && !shell) return serve(res, asset, range, NO_CACHE);
+    const shell404 = SHELL_404.test(path) || path.includes('//');
+    if (asset !== undefined && !shell404) return serve(res, asset, range, NO_CACHE);
     // A directory without its slash: file_server's redirect (/en → /en/).
-    if (!shell && !path.endsWith('/') && file(www, `${path}/`) !== undefined)
+    if (!shell404 && !path.endsWith('/') && file(www, `${path}/`) !== undefined)
       return send(res, 308, { location: `${path}/`, 'cache-control': NO_CACHE });
     if (/\.[^/]*$/.test(path)) return send(res, 404, { 'cache-control': NO_CACHE });
     return serve(res, join(www, path.startsWith('/en/') ? 'en/404.html' : '404.html'), undefined, NO_CACHE, 404);

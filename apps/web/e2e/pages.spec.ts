@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
+import { parse } from 'yaml';
 import { PAGE_ROUTES, type RouteId } from '../src/lib/routes.ts';
 import {
   barNav,
@@ -48,8 +50,20 @@ const NOT_FOUND = [
 const VIEW = '?t=2026-10-25T01:30Z&s=nl.e2e.dst&mode=q';
 const OPERATOR = 'E2E Operator';
 const CONTACT = 'ci@rivierstanden.example';
-/** The ids of the personal-use sources and the owner canary: none may appear on a public page. */
-const OWNER_ID = /\b(?:BE-3|LU-2|LU-3|LU-4|DE-2|DE-3)\b|CANARY/;
+/**
+ * The ids of the personal-use sources and the owner canary: none may appear on a public page. Read from
+ * registry/sources.yaml (P12b, A20: DE-2's flip changes no line here).
+ */
+const OWNER_ID = new RegExp(
+  `\\b(?:${(
+    parse(readFileSync(new URL('../../../registry/sources.yaml', import.meta.url), 'utf8')) as {
+      sources: { id: string; audience: string }[];
+    }
+  ).sources
+    .filter((s) => s.audience === 'owner' && !s.id.startsWith('CANARY-'))
+    .map((s) => s.id)
+    .join('|')})\\b|CANARY`,
+);
 
 test.beforeEach(async ({ page, browserName }) => {
   // WebKit must run without Temporal to prove the polyfill path (as in app.spec.ts).

@@ -12,7 +12,7 @@ import { E2E_DOMAIN, MARKER, main, plan, refusal, SCENES, writeDrill } from '../
 import { deriveLevel4, RAISED } from '../scripts/lib/shift-fr5.ts';
 import {
   anchorCap,
-  anchorDe2,
+  anchorDe3,
   anchorDe6,
   anchorDe6Events,
   CIARAN_DE,
@@ -113,7 +113,7 @@ describe('refusal', () => {
 describe('the scenes', () => {
   const planned = plan(NOW);
 
-  it('are the set of the issue: DE-6 (test server, class 4, class-less, alerts), FR-5, the AGE alerts with Cancel and TEST, CH-4 Ciaran, DE-2', () => {
+  it('are the set of the issue: DE-6 (test server, class 4, class-less, alerts), FR-5, the AGE alerts with Cancel and TEST, CH-4 Ciaran, DE-3', () => {
     expect(SCENES.map((s) => s.fixture)).toEqual([
       'de-6-stations-test',
       'de-6-stations-class4.synthetic',
@@ -125,13 +125,13 @@ describe('the scenes', () => {
       'lu-5-cap-20250909-080450-cancel',
       'lu-5-cap-20260202-095833-alert-test',
       'ch-4-forecast-ciaran-it',
-      'de-2-wv-truncated.synthetic',
+      'de-3-files-kaub.synthetic',
     ]);
     expect(SCENES.filter((s) => s.phase === 'cancel').map((s) => s.fixture)).toEqual([
       'lu-5-cap-20250909-080450-cancel',
       'lu-5-cap-20260202-095833-alert-test',
     ]);
-    expect(SCENES.filter((s) => s.owner).map((s) => s.source)).toEqual(['DE-2']);
+    expect(SCENES.filter((s) => s.owner).map((s) => s.source)).toEqual(['DE-3']);
   });
 
   it('put each payload\'s anchor "lead" before the drill clock, none after it (invariant 4), by one offset per payload', () => {
@@ -154,7 +154,11 @@ describe('the scenes', () => {
     expect(at('de-6-stations-test').placed).toBe(NOW - 35 * 60_000);
     expect(anchorCap(at('lu-5-cap-20250908-231502-alert-lvl1').body)).toBe(NOW - 9 * 3600_000);
     expect(anchorCap(at('lu-5-cap-20260202-095833-alert-test').body)).toBe(NOW - 5 * 60_000);
-    expect(anchorDe2(at('de-2-wv-truncated.synthetic').body)).toBe(NOW - 10 * 60_000);
+    // DE-3's file moves by whole days (rounded down): its first day is the latest midnight (CET) not after the drill clock.
+    const de3 = at('de-3-files-kaub.synthetic');
+    expect(anchorDe3(de3.body)).toBeLessThanOrEqual(de3.placed);
+    expect(de3.placed - anchorDe3(de3.body)).toBeLessThan(24 * 3600_000);
+    expect(new Date(anchorDe3(de3.body)).toISOString().slice(11)).toBe('23:00:00.000Z');
     // Every CAP `sent` of the drill is before the fetch; the Cancel is after the alert it closes and before the drill clock.
     expect(anchorCap(at('lu-5-cap-20250909-080450-cancel').body)).toBeLessThan(NOW);
     expect(anchorCap(at('lu-5-cap-20250909-080450-cancel').body)).toBeGreaterThan(
@@ -183,7 +187,7 @@ describe('the scenes', () => {
     expect(plan(NOW + 60_000).map((p) => sha256(p.body))).not.toEqual(planned.map((p) => sha256(p.body)));
   });
 
-  it('the CH-4 scene is the German figure production fetches, the DE-2 scene is owner audience and synthetic', () => {
+  it('the CH-4 scene is the German figure production fetches, the DE-3 scene is owner audience and synthetic', () => {
     const ch4 = planned.find((p) => p.scene.source === 'CH-4') as (typeof planned)[number];
     expect(ch4.variant).toBe('2020');
     expect(ch4.url).toBe('https://www.hydrodaten.admin.ch/plots/q_forecast/2020_q_forecast_de.json');
@@ -192,14 +196,13 @@ describe('the scenes', () => {
     ).toEqual([...LAYOUT_DE]);
     expect([...CIARAN_DE]).toEqual([...LAYOUT_DE]);
     const meta = JSON.parse(
-      readFileSync(new URL('de-2/fixtures/de-2-wv-truncated.synthetic.meta.json', FIXTURES), 'utf8'),
+      readFileSync(new URL('de-3/fixtures/de-3-files-kaub.synthetic.meta.json', FIXTURES), 'utf8'),
     ) as { synthetic: boolean };
     expect(meta.synthetic).toBe(true);
-    const de2 = planned.find((p) => p.scene.source === 'DE-2') as (typeof planned)[number];
-    expect(de2.scene.owner).toBe(true);
-    expect(de2.url).toMatch(
-      /^https:\/\/www\.pegelonline\.wsv\.de\/webservices\/rest-api\/v2\/stations\/[0-9a-f-]{36}\/WV\/measurements\.json$/,
-    );
+    const de3 = planned.find((p) => p.scene.source === 'DE-3') as (typeof planned)[number];
+    expect(de3.scene.owner).toBe(true);
+    expect(de3.url).toBe('https://vorhersage.bafg.de/14-Tage-Vorhersage/Kaub_Quantile_25700100.csv');
+    expect(de3.variant).toBe('14-Tage-Vorhersage/Kaub_Quantile_25700100.csv');
   });
 });
 

@@ -29,7 +29,8 @@ describe('owner site headers', () => {
 
   it('equal the public set except X-Robots-Tag, the Referrer-Policy and the two owner additions', () => {
     const robots = (l: string) => l.startsWith('X-Robots-Tag ') || l.startsWith('Referrer-Policy ');
-    expect(pub.filter(robots)).toEqual(['Referrer-Policy "strict-origin-when-cross-origin"', 'X-Robots-Tag "noindex"']);
+    // (P12b: the public header block has no X-Robots-Tag any more: deploy/web/phase-<phase>.caddy sets it, test/launch-phase.test.ts)
+    expect(pub.filter(robots)).toEqual(['Referrer-Policy "strict-origin-when-cross-origin"']);
     expect(own.filter(robots)).toEqual(['Referrer-Policy "no-referrer"', 'X-Robots-Tag "noindex, nofollow"']);
     // Cache-Control and `defer` (so a proxied answer cannot override it) are the additions.
     expect(own.filter((l) => !robots(l) && l !== 'Cache-Control "private, no-store"' && l !== 'defer')).toEqual(
@@ -235,10 +236,19 @@ describe('the owner site pages and runtime config (P10b)', () => {
       .filter((l) => l !== '' && !l.startsWith('#'));
   }
   const code = (src: string) => src.replaceAll(/^\s*#.*$/gm, '');
+  /**
+   * What P12b adds to the public catch-all only: the templates module on the HTML shells (Open Graph URLs from RWS_DOMAIN),
+   * the @shells route for it, and the 404 shells' own noindex (the owner header block has it on every response).
+   */
+  const withoutP12b = (src: string) =>
+    src
+      .replaceAll(/^\t+templates \{\n\t+between \[\[ \]\]\n\t+\}\n/gm, '')
+      .replace(/^\t+@shells expression .*\n\t+handle @shells \{\n\t+file_server\n\t+\}\n/m, '')
+      .replaceAll(/^\t+header X-Robots-Tag "noindex"\n/gm, '');
 
   it('serves the same page allowlist, files and 404 shells as the public site, and sets no Cache-Control itself', () => {
     const own = catchAll(ownerSite);
-    const pub = catchAll(publicSite);
+    const pub = catchAll(withoutP12b(publicSite));
     // The public catch-all sets `no-cache`; the owner one has no such line, because its `defer`red header block makes
     // every answer "private, no-store".
     expect(pub.filter((l) => l.includes('Cache-Control'))).toEqual(['header Cache-Control "no-cache"']);

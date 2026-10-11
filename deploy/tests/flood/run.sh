@@ -9,7 +9,7 @@
 #   3. the loader reads them, the publishers render them, Caddy serves them: the Vigicrues and AGE areas are in
 #      warnings/latest.geojson, fetched from outside like a visitor's browser would;
 #   4. deploy/tests/e2e/flood-check.mjs (open): every fixture station and area is at its level in latest.json and
-#      warnings/latest.geojson, the northern AGE alert is still open, the CH-4 run is in the forecast band, DE-2 is in
+#      warnings/latest.geojson, the northern AGE alert is still open, the CH-4 run is in the forecast band, DE-3 is in
 #      the owner tree and in no public byte, the owner canary is in the owner tree only;
 #   5. the cancel phase: the AGE Cancel and the TEST message; flood-check.mjs (closed): the alert is closed, the TEST
 #      never appeared; it prints "PASS flood-check";
@@ -84,7 +84,7 @@ step "The flood drill, main phase"
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 printf '%s\n' "$now" >/ci/flood-now
 "$repo/scripts/flood-drill" --phase main --now "$now"
-proof "scripts/flood-drill --phase main --now $now: the DE-6 test-server stations and alerts, the class-4 and class-less synthetic stations, the Vigicrues map with sections at levels 2, 3 and 4, the AGE red (Sud) and orange (Nord) alerts, the CH-4 storm-Ciaran run of station 2020 and the DE-2 owner run, every timestamp shifted to the drill clock, written through the recorder's Archive (refused outside the drill stack: RWS_E2E=1, /ci/e2e-stack mode drill)"
+proof "scripts/flood-drill --phase main --now $now: the DE-6 test-server stations and alerts, the class-4 and class-less synthetic stations, the Vigicrues map with sections at levels 2, 3 and 4, the AGE red (Sud) and orange (Nord) alerts, the CH-4 storm-Ciaran run of station 2020 and the DE-3 owner file, every timestamp shifted to the drill clock, written through the recorder's Archive (refused outside the drill stack: RWS_E2E=1, /ci/e2e-stack mode drill)"
 endstep
 
 step "The loader and the publishers have rendered it; Caddy serves it"
@@ -103,7 +103,7 @@ step "flood-check.mjs open: levels of every fixture station and area, the open a
 check open | tee /ci/flood-check-open.out || fail "flood-check.mjs open exited non-zero (its FAIL lines are above)"
 [[ $(grep -c '^FAIL' /ci/flood-check-open.out || true) == 0 ]] || fail "flood-check.mjs open"
 grep -q '^PASS flood-check-open$' /ci/flood-check-open.out || fail "flood-check.mjs open did not finish"
-proof "flood-check.mjs open: $(grep -c '^PASS' /ci/flood-check-open.out) PASS lines, no FAIL: DE-6 classes (Kaub RP 4 extreme, Giessen and Greven elevated), the 40 LHP alert areas, the 56 Vigicrues sections (levels 2, 3, 4) and their stations, the AGE zones Sud (extreme) and Nord (high) and their stations, the CH-4 run of station 2020 (median peak 476.4, maximum 800.3, above the first threshold band of 700 m3/s) in the public forecast, the DE-2 run in the owner tree only, the owner canary in the owner tree only"
+proof "flood-check.mjs open: $(grep -c '^PASS' /ci/flood-check-open.out) PASS lines, no FAIL: DE-6 classes (Kaub RP 4 extreme, Giessen and Greven elevated), the 40 LHP alert areas, the 56 Vigicrues sections (levels 2, 3, 4) and their stations, the AGE zones Sud (extreme) and Nord (high) and their stations, the CH-4 run of station 2020 (median peak 476.4, maximum 800.3, above the first threshold band of 700 m3/s) in the public forecast, the DE-3 file in the owner tree only, the owner canary in the owner tree only"
 endstep
 
 step "The flood drill, cancel phase: the AGE Cancel and the TEST message"

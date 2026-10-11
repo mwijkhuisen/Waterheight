@@ -378,8 +378,9 @@ beforeAll(async () => {
   await bafu(id.chw as number);
 
   // --- Owner runs on public series -------------------------------------------------------------------------------
-  // Emmerich: DE-2's Friday run (49 points two hours apart to Tuesday 05:00Z; the owner canary at Monday 09:00Z; the
-  // provider's own segment ends Monday 12:00Z) and a DE-3 run of the morning (daily means for fifteen days).
+  // Emmerich: DE-2's Friday run (49 points two hours apart to Tuesday 05:00Z; the provider's own segment ends Monday
+  // 12:00Z) and a DE-3 run of the morning (daily means for fifteen days; the owner canary on Wednesday 00:00Z). The
+  // canary sits in the DE-3 run, which stays owner, never in DE-2's (P12b: DE-2 goes public at its flip, plan §9).
   await seedRun({
     series: id.emmerich as number,
     source: 'DE-2',
@@ -388,9 +389,9 @@ beforeAll(async () => {
     kind: 'deterministic',
     stepS: 7200,
     segmentEnd: '2026-10-05T12:00:00Z',
-    points: grid(FRIDAY, 49, 2 * H, (i) => ({ value: i === 38 ? CANARIES.owner.value : 300 + i })),
+    points: grid(FRIDAY, 49, 2 * H, (i) => ({ value: 300 + i })),
   });
-  const de3 = (series: number, base: number) =>
+  const de3 = (series: number, base: number, canary = false) =>
     seedRun({
       series,
       source: 'DE-3',
@@ -399,7 +400,7 @@ beforeAll(async () => {
       kind: 'quantiles',
       stepS: 86_400,
       points: grid('2026-10-05T00:00:00Z', 15, 24 * H, (i) => ({
-        value: base + i,
+        value: canary && i === 2 ? CANARIES.owner.value : base + i,
         p10: base - 20 + i,
         p25: base - 10 + i,
         p50: base + i,
@@ -407,7 +408,7 @@ beforeAll(async () => {
         p90: base + 20 + i,
       })),
     });
-  await de3(id.emmerich as number, 500);
+  await de3(id.emmerich as number, 500, true);
   await de3(id.koeln as number, 800);
   // Diekirch: LU-3's 46 hourly steps from 06:00Z with a band; the point at 11:00Z is below the provider's floor.
   await seedRun({
@@ -678,14 +679,14 @@ describe('classification of a forecast value', { timeout: 120_000 }, () => {
 describe('the future snapshot, owner family', { timeout: 120_000 }, () => {
   const LU3_LIMIT = new Map([['lu.age.diekirch', 24]]);
 
-  it('shows DE-2 where DE-2 and DE-3 both forecast the series, with its estimate marks and the owner canary', async () => {
+  it('shows DE-2 where DE-2 and DE-3 both forecast the series, with its estimate marks', async () => {
     const snap = await futureOwn(T('2026-10-05T09:30:00Z'));
     const f = entry(snap, id.emmerich as number);
     expect(f).toMatchObject({
       source: 'DE-2',
       agency: 'BfG',
       ts: '2026-10-05T09:00:00.000Z',
-      value: Number(CANARIES.owner.real),
+      value: 300 + 38,
       issuedAt: FRIDAY.replace('Z', '.000Z'),
       issuedInferred: false,
       providerSegmentEnd: '2026-10-05T12:00:00.000Z',
@@ -694,8 +695,6 @@ describe('the future snapshot, owner family', { timeout: 120_000 }, () => {
       // the run ends Tuesday 05:00Z, before now + 48 h
       horizonEnd: '2026-10-06T05:00:00.000Z',
     });
-    // the owner family sees the canary, in the DE-2 run on a public series
-    expect(JSON.stringify(snap)).toContain(CANARIES.owner.real);
     // after the provider's own segment: an estimate, still DE-2
     const later = entry(await futureOwn(T('2026-10-05T15:30:00Z')), id.emmerich as number);
     expect(later).toMatchObject({ source: 'DE-2', ts: '2026-10-05T15:00:00.000Z', value: 300 + 41, estimate: true });
@@ -740,6 +739,14 @@ describe('the future snapshot, owner family', { timeout: 120_000 }, () => {
     expect(entry(await futureOwn(T('2026-10-05T11:00:00Z'), late - 60_000), id.emmerich as number)).toMatchObject({
       source: 'DE-2',
     });
+    // the owner family sees the canary of the DE-3 run on a public series (Wednesday 00:00Z, held to now + 48 h)
+    const wednesday = await futureOwn(T('2026-10-07T05:00:00Z'));
+    expect(entry(wednesday, id.emmerich as number)).toMatchObject({
+      source: 'DE-3',
+      ts: '2026-10-07T00:00:00.000Z',
+      value: Number(CANARIES.owner.real),
+    });
+    expect(JSON.stringify(wednesday)).toContain(CANARIES.owner.real);
   });
 
   it('cuts an LU-3 run at its display limit, shows a below-floor point with no number, and cuts nothing without a limit', async () => {
@@ -970,7 +977,7 @@ describe('readSeriesForecast', { timeout: 120_000 }, () => {
     expect((await readSeriesForecast(pub.db, 'public', zalt, NOW))?.run).not.toBeNull();
   });
 
-  it('owner: DE-2 with its segment end and the canary, DE-3 after it is superseded or when asof is later, never before it is known', async () => {
+  it('owner: DE-2 with its segment end, DE-3 (with the canary) after it is superseded or when asof is later, never before it is known', async () => {
     const emmerich = id.emmerich as number;
     const de2 = await ownRead(emmerich, NOW);
     expect(SeriesForecast.safeParse(de2).success).toBe(true);
@@ -985,9 +992,9 @@ describe('readSeriesForecast', { timeout: 120_000 }, () => {
       bandKind: null,
       horizonEnd: '2026-10-06T05:00:00.000Z',
     });
-    // Friday 05:00Z to Tuesday 05:00Z every two hours: 49 points, the canary at Monday 09:00Z (index 38)
+    // Friday 05:00Z to Tuesday 05:00Z every two hours: 49 points
     expect(de2?.run?.points).toHaveLength(49);
-    expect(de2?.run?.points[38]).toMatchObject({ ts: '2026-10-05T09:00:00.000Z', value: Number(CANARIES.owner.real) });
+    expect(de2?.run?.points[38]).toMatchObject({ ts: '2026-10-05T09:00:00.000Z', value: 300 + 38 });
     // superseded on Monday at 10:00Z: DE-3 (daily means), cut at asof + 48 h
     const late = await ownRead(emmerich, T('2026-10-05T10:00:00Z'));
     expect(late?.run).toMatchObject({ source: 'DE-3', kind: 'quantiles', stepSeconds: 86_400, bandKind: 'p10p90' });
@@ -998,6 +1005,7 @@ describe('readSeriesForecast', { timeout: 120_000 }, () => {
       '2026-10-07T00:00:00.000Z',
     ]);
     expect(late?.run?.points[0]).toEqual({ ts: '2026-10-05T00:00:00.000Z', value: 500, lo: 480, hi: 520, flags: 0 });
+    expect(late?.run?.points[2]).toMatchObject({ ts: '2026-10-07T00:00:00.000Z', value: Number(CANARIES.owner.real) });
     // Saturday: DE-3 was fetched on Monday morning, so it is not known; DE-2 is still the run
     const saturday = await ownRead(emmerich, T('2026-10-03T12:00:00Z'));
     expect(saturday?.run?.source).toBe('DE-2');

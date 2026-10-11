@@ -226,7 +226,7 @@ for (const locale of LOCALES)
         owners.has(x.id) ? 1 : 0,
       );
     }
-    // The seed gives each of the six a row (owner-seed.ts): none is missing from the page.
+    // The seed gives each of them a row (owner-seed.ts): none is missing from the page.
     const ids = new Set(listed.map((x) => x.id));
     for (const id of OWNER_IDS) expect(ids.has(id), `${id} has a health row`).toBe(true);
     // The owner file lists the sources instead of counting them, and shows both families' coverage side by side.

@@ -402,11 +402,11 @@ describe('buildForecastLatest: property', () => {
 describe('the visibility guard (review SEC-2)', () => {
   it('passes the family’s own sources and refuses any other with a fixed code', () => {
     expect(() => assertVisible(['NL-1', 'NL-1'], visibleSources('public'))).not.toThrow();
-    for (const source of ['DE-2', 'DE-3', 'LU-3', 'CANARY-OWNER', 'NL-3'])
+    for (const source of ['DE-3', 'LU-3', 'CANARY-OWNER', 'NL-3'])
       expect(() => assertVisible(['NL-1', source], visibleSources('public')), source).toThrow(
         expect.objectContaining({ code: 'owner_source' }),
       );
-    expect(() => assertVisible(['NL-1', 'DE-2', 'LU-3', 'CANARY-OWNER'], visibleSources('owner'))).not.toThrow();
+    expect(() => assertVisible(['NL-1', 'DE-3', 'LU-3', 'CANARY-OWNER'], visibleSources('owner'))).not.toThrow();
     expect(() => assertVisible([], visibleSources('public'))).not.toThrow();
   });
 });

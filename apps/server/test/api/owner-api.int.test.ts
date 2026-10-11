@@ -52,16 +52,16 @@ beforeAll(async () => {
       ('DE-1', 0, 'de', 'DE1-ATTRIBUTION', false, NULL, false),
       ('CH-1', 0, 'de', 'CH1-ATTRIBUTION', true, 'retrieval', true),
       ('BE-3', 0, 'fr', 'Sources des donnees : Service public de Wallonie (SPW)', false, NULL, true),
-      ('DE-2', 0, 'de', 'BfG-CREDIT', false, NULL, true),
+      ('DE-3', 0, 'de', 'BfG-CREDIT', false, NULL, true),
       ('CANARY-OWNER', 0, 'nl', 'OWNERCANARY-ATTRIBUTION', false, NULL, true)`);
   await t.admin.query(`UPDATE app_meta SET value = to_jsonb($1::text) WHERE key = 'display_start'`, [
     iso(NOW - 50 * DAY),
   ]);
   // Runs issued before the current bucket, so that the default asof (now's bucket) sees them: the owner canary's own,
-  // and an owner run (DE-2, the BfG credit) on a public series.
+  // and an owner run (DE-3, the BfG credit) on a public series.
   for (const [series, source, value] of [
     [ids.ownerCanary, 'CANARY-OWNER', CANARIES.owner.value],
-    [ids.public, 'DE-2', 201],
+    [ids.public, 'DE-3', 201],
   ] as const) {
     const run = await t.admin.query<{ id: string }>(
       `INSERT INTO forecast_run (series_id, source_id, issued_at, first_valid, last_valid, fetched_at, content_hash, kind)
@@ -187,11 +187,11 @@ describe('the owner API serves every route as the owner role', () => {
     const run = await json(owner, `/api/v1/series/${ids.ownerCanary}/forecast`);
     expect((run.body.attribution as { source: string }[]).map((a) => a.source)).toEqual(['CANARY-OWNER']);
     expect(run.text).toContain(OWNER_CANARY_REAL);
-    // An owner run (DE-2) on a public series: the owner API names it and its credit; the public API never does.
+    // An owner run (DE-3) on a public series: the owner API names it and its credit; the public API never does.
     const bfg = await json(owner, `/api/v1/series/${ids.public}/forecast`);
-    expect((bfg.body.attribution as { source: string }[]).map((a) => a.source).sort()).toEqual(['DE-2', 'NL-1']);
-    expect((bfg.body.run as { source: string }).source).toBe('DE-2');
-    expect((await json(pub, `/api/v1/series/${ids.public}/forecast`)).text).not.toMatch(/DE-2|BfG/);
+    expect((bfg.body.attribution as { source: string }[]).map((a) => a.source).sort()).toEqual(['DE-3', 'NL-1']);
+    expect((bfg.body.run as { source: string }).source).toBe('DE-3');
+    expect((await json(pub, `/api/v1/series/${ids.public}/forecast`)).text).not.toMatch(/DE-3|BfG/);
     // The owner API holds the public rows too, and none of the withheld ones.
     const everything = [
       snap.text,

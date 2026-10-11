@@ -1,11 +1,14 @@
-# The public site (A§12.2; issue #16 P1b). Every A§12.2 header, noindex until
-# the public launch (P12), /healthz, the two coarse status files, (P2a, P4b) the
+# The public site (A§12.2; issue #16 P1b). Every A§12.2 header, /healthz, the two coarse status files, (P2a, P4b) the
 # api under /api/v1/, (P3) the basemap tiles and the immutable assets, (P4b) the
 # web app with its fallback for app routes, and (P9a) the static publisher's
 # files under /data/v1/ with /runtime-config.json. No CORS headers, no owner
 # site: that is deploy/web/owner.caddy in its own container (compose.owner.yaml;
 # WireGuard-only from P12a). scripts/verify-prod.ts compares these headers with
 # A§12.2 byte for byte; the header block also applies to the proxied responses.
+# P12b: what the launch changes is one file, chosen by RWS_SITE_PHASE (prelaunch or launch, set on the caddy service of
+# deploy/compose.yaml; unset is prelaunch, a typo stops Caddy: the file is not found): X-Robots-Tag, robots.txt and
+# sitemap.xml are in deploy/web/phase-<phase>.caddy, imported below and in handle_errors. The header block therefore
+# holds no X-Robots-Tag.
 {$RWS_DOMAIN} {
 	header {
 		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp"
@@ -16,9 +19,9 @@
 		Cross-Origin-Opener-Policy "same-origin"
 		Cross-Origin-Resource-Policy "same-origin"
 		Reporting-Endpoints "csp=\"/api/v1/beacon\""
-		X-Robots-Tag "noindex"
 		-Server
 	}
+	import phase-{$RWS_SITE_PHASE:prelaunch}.caddy main
 
 	# Access log with masked addresses (IPv4 /24, IPv6 /48), one file a day, kept 14 days (A§12.2 privacy).
 	log {
@@ -212,9 +215,10 @@
 			Cross-Origin-Opener-Policy "same-origin"
 			Cross-Origin-Resource-Policy "same-origin"
 			Reporting-Endpoints "csp=\"/api/v1/beacon\""
-			X-Robots-Tag "noindex"
 			-Server
 		}
+		# X-Robots-Tag of the phase (these errors come from /api: noindex in both phases).
+		import phase-{$RWS_SITE_PHASE:prelaunch}.caddy errors
 		@snapshot_down expression `{http.request.orig_uri.path} == '/api/v1/snapshot'`
 		handle @snapshot_down {
 			header X-Degraded "1"
@@ -616,17 +620,36 @@
 	# past a deploy would ask for asset names the new image no longer has. /api,
 	# /status/*, /tiles and /assets never get here. Nested handle blocks are tried
 	# in this order (none has a path matcher, so Caddy does not re-sort them).
+	#
+	# P12b: the three HTML shells that carry the Open Graph tags (apps/web/index.html, en/index.html; no og:url: one shell serves every page) go through
+	# the templates module with the delimiters [[ ]], so that og:image is an absolute URL of the
+	# configured domain: the one expression in the files is [[env `RWS_DOMAIN`]] (test/launch-phase.test.ts
+	# fails on any other [[ in them). The module sees these three answers and no other file. The two 404 shells
+	# say noindex in both phases (their status is known only here).
 	handle {
 		header Cache-Control "no-cache"
 		root * /srv/www
 		@page_nl expression `{path} in ['/', '/over', '/bronnen', '/methode', '/disclaimer', '/colofon', '/privacy', '/status', '/toegankelijkheid']`
 		handle @page_nl {
 			rewrite * /index.html
+			templates {
+				between [[ ]]
+			}
 			file_server
 		}
 		@page_en expression `{path} in ['/en/', '/en/about', '/en/sources', '/en/method', '/en/disclaimer', '/en/colophon', '/en/privacy', '/en/status', '/en/accessibility']`
 		handle @page_en {
 			rewrite * /en/index.html
+			templates {
+				between [[ ]]
+			}
+			file_server
+		}
+		@shells expression `{path} in ['/index.html', '/en/index.html']`
+		handle @shells {
+			templates {
+				between [[ ]]
+			}
 			file_server
 		}
 		@file {
@@ -643,12 +666,14 @@
 		}
 		@not_found_en path_regexp ^/en/
 		handle @not_found_en {
+			header X-Robots-Tag "noindex"
 			rewrite * /en/404.html
 			file_server {
 				status 404
 			}
 		}
 		handle {
+			header X-Robots-Tag "noindex"
 			rewrite * /404.html
 			file_server {
 				status 404

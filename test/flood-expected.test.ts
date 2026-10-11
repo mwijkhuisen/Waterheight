@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { normalise as normaliseCh4 } from '../apps/server/src/adapters/ch-4/normalise.ts';
 import { parseForecast as parseCh4 } from '../apps/server/src/adapters/ch-4/parse.ts';
-import { normalise as normaliseDe2 } from '../apps/server/src/adapters/de-2/normalise.ts';
-import { parseForecast as parseDe2 } from '../apps/server/src/adapters/de-2/parse.ts';
+import { normalise as normaliseDe3 } from '../apps/server/src/adapters/de-3/normalise.ts';
+import { parseTable as parseDe3 } from '../apps/server/src/adapters/de-3/parse.ts';
 import { normaliseAlerts, normaliseStations } from '../apps/server/src/adapters/de-6/normalise.ts';
 import { parseAlerts, parseStations } from '../apps/server/src/adapters/de-6/parse.ts';
 import { normaliseVigilance } from '../apps/server/src/adapters/fr-5/normalise.ts';
@@ -63,9 +63,12 @@ type Expected = {
     station: string;
     source: string;
     agency: string;
+    fixture: string;
     points: number;
     valueMin: number;
     valueMax: number;
+    /** What forecast/latest.json (48 hours) carries of the file: its first days. */
+    latest: { points: number; valueMin: number; valueMax: number };
     canary: string[];
   };
 };
@@ -296,19 +299,29 @@ describe('expected.json against the real adapters on the shifted payloads', () =
     expect(Date.parse(peak?.ts ?? '') - NOW).toBe((8 * 3600 + 26 * 60 + 43) * 1000);
   });
 
-  it('DE-2: the truncated run sits on Kaub, current at the drill clock, nothing dropped', () => {
+  it('DE-3: the Kaub file sits on the stage series of Kaub, nothing dropped, issued at the fetch', () => {
     const o = expected.owner;
-    const out = normaliseDe2(parseDe2(scene('de-2-wv-truncated.synthetic').body), {
-      variant: '1d26e504-7f9e-480a-b52c-5932be6549ab',
-    });
+    const p = scene(o.fixture);
+    expect(p.variant).toBe('14-Tage-Vorhersage/Kaub_Quantile_25700100.csv');
+    const out = normaliseDe3(parseDe3(p.body), { variant: p.variant, keyOf: (n) => `de.wsv.${n}/W` });
     expect(out.dropped).toEqual({});
     const run = out.forecasts?.[0];
     expect(run?.target).toBe('DE-1');
+    expect(run?.series).toBe(`${o.station}/W`);
     expect(run?.points).toHaveLength(o.points);
     expect(Math.min(...(run?.points ?? []).map((x) => x.value as number))).toBe(o.valueMin);
     expect(Math.max(...(run?.points ?? []).map((x) => x.value as number))).toBe(o.valueMax);
-    expect(Date.parse(run?.issuedAt ?? '')).toBe(NOW - 10 * 60_000);
-    const checked = checkRun(run as NonNullable<typeof run>, NOW, FORECAST_SOURCES['DE-2']);
+    // No issue time of its own: the loader infers it from the fetch (the drill clock). The first day is today's midnight.
+    expect(run?.issuedAt).toBeNull();
+    // forecast/latest.json cuts at now + 48 h: the days at or before it are the first three, wherever in its day now is.
+    const inLatest = (run?.points ?? []).filter((x) => Date.parse(x.ts) <= NOW + 48 * 3600_000);
+    expect(inLatest).toHaveLength(o.latest.points);
+    expect(Math.min(...inLatest.map((x) => x.value as number))).toBe(o.latest.valueMin);
+    expect(Math.max(...inLatest.map((x) => x.value as number))).toBe(o.latest.valueMax);
+    const first = Date.parse(run?.points[0]?.ts ?? '');
+    expect(first).toBeLessThanOrEqual(NOW);
+    expect(NOW - first).toBeLessThan(24 * 3600_000);
+    const checked = checkRun(run as NonNullable<typeof run>, NOW, FORECAST_SOURCES['DE-3']);
     expect(checked.dropped).toEqual({});
     // Kaub is the station of the LHP class 4 too: the same de.wsv.25700100.
     expect(o.station).toBe('de.wsv.25700100');

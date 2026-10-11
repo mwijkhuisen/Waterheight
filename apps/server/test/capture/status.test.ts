@@ -13,8 +13,11 @@ import { registry, spec } from './helpers.ts';
 // only the owner_specs count" (issue #16), plus the contract shape.
 
 const NOW = new Date('2026-10-02T12:00:30Z');
-const OWNER_SOURCES = ['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3', 'CANARY-OWNER'];
-const OWNER_HOSTS = ['hydrometrie.wallonie.be', 'inondations.public.lu', 'vorhersage.bafg.de'];
+// The owner sources and the hosts only they use, from the registry (P12b, A20: never a hand-kept list).
+const OWNER_SOURCES = [...registry.sources].filter(([, s]) => s.audience === 'owner').map(([id]) => id);
+const hostsOf = (audience: string) =>
+  [...registry.hosts].filter(([id]) => registry.sources.get(id)?.audience === audience).flatMap(([, h]) => h);
+const OWNER_HOSTS = [...new Set(hostsOf('owner'))].filter((h) => !hostsOf('public').includes(h));
 
 function cycle() {
   const root = mkdtempSync(join(tmpdir(), 'rws-status-'));
@@ -70,6 +73,8 @@ describe('status files', () => {
     const pub = readFileSync(join(paths.statusDir, 'capture.json'), 'utf8');
     const own = readFileSync(join(paths.ownerStatusDir, 'capture.json'), 'utf8');
     const ownerSpecs = registry.specs.filter((s) => s.audience === 'owner').map((s) => s.id);
+    expect(OWNER_SOURCES).toEqual(expect.arrayContaining(['BE-3', 'CANARY-OWNER', 'DE-3', 'LU-2']));
+    expect(OWNER_HOSTS).toEqual(expect.arrayContaining(['hydrometrie.wallonie.be', 'vorhersage.bafg.de']));
     for (const needle of [...OWNER_SOURCES, ...ownerSpecs, ...OWNER_HOSTS, 'private_basis', 'lu-2-json']) {
       expect(pub, needle).not.toContain(needle);
     }

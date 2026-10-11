@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { parse } from 'yaml';
 import { StaticCache } from '../../src/api/states.ts';
 import { attributionRows } from '../../src/attribution.ts';
 import type { ChannelAudience } from '../../src/db/audience.ts';
@@ -24,5 +26,14 @@ export async function ctxFor(db: Db, family: ChannelAudience, over: Partial<Rend
   };
 }
 
-/** The ids of the owner-audience sources of the registry (invariant 11: never in a public file). */
-export const OWNER_IDS = ['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3', 'CANARY-OWNER'];
+/**
+ * The ids of the owner-audience sources of the registry (invariant 11: never in a public file), read from
+ * registry/sources.yaml, never a hand-kept list (P12b, A20: DE-2 leaves it at its flip).
+ */
+export const OWNER_IDS: readonly string[] = (
+  parse(readFileSync(new URL('../../../../registry/sources.yaml', import.meta.url), 'utf8')) as {
+    sources: { id: string; audience: string }[];
+  }
+).sources
+  .filter((s) => s.audience === 'owner')
+  .map((s) => s.id);

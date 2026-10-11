@@ -11,7 +11,6 @@ import {
   validateRivers,
   validateStations,
   validateTwins,
-  WithholdingRecord,
 } from '@rws/contracts';
 import { durationMs, SchemaDrift, type SeriesDecl } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
@@ -55,13 +54,10 @@ export function readRegistry(
     try {
       record = front === undefined ? null : parse(front);
     } catch {
-      // Front matter that is not YAML is no withholding record either (review CR-7): the one refusal below.
+      // Front matter that is not YAML (duplicate keys included) is no record (review CR-7): validateRegistry refuses null.
     }
-    // A grant changes what may be published; this sync does not apply grants yet (P13). A withholding record
-    // (P5b) only narrows, and is checked against the station rows below.
-    if (!WithholdingRecord.safeParse(record).success) {
-      throw new RegistryError('registry/permissions holds a record that is not a withholding record (grants are P13)');
-    }
+    // A permission record (P12b) grants an audience and channels, applied by validateRegistry and nowhere else; a
+    // withholding record (P5b) only narrows, and is checked against the station rows below. Anything else fails there.
     records.set(file.slice(0, -3), record);
   }
   const registry = validateRegistry(yaml('providers.yaml'), yaml('sources.yaml'), {

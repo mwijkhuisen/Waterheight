@@ -25,7 +25,7 @@ describe('narrow', () => {
 });
 
 describe('visibilityChange', () => {
-  const base: Visible = { series: { '1': [3600, true], '2': [7200, false] }, nl4: 'a', attribution: 'b' };
+  const base: Visible = { series: { '1': [3600, true], '2': [7200, false] }, nl4: 'a', dayAttribution: 'b' };
   const with_ = (patch: Partial<Visible>): Visible => ({ ...base, ...patch });
   it('bumps nothing on pure additions', () => {
     expect(visibilityChange(base, base)).toBeUndefined();
@@ -40,7 +40,7 @@ describe('visibilityChange', () => {
     expect(visibilityChange(base, with_({ series: { '1': [60, true], '2': [7200, false] } }))).toBe('registry');
     expect(visibilityChange(base, with_({ series: { '1': [3600, true], '2': [7200, true] } }))).toBe('registry');
     expect(visibilityChange(base, with_({ nl4: 'x' }))).toBe('registry');
-    expect(visibilityChange(base, with_({ attribution: 'x' }))).toBe('registry');
+    expect(visibilityChange(base, with_({ dayAttribution: 'x' }))).toBe('registry');
   });
 });
 

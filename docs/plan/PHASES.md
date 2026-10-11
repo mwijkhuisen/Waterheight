@@ -1303,7 +1303,7 @@ P5c uses the P5 build model and the default P5 reviewers (as P5a): `opus` xhigh,
     - disclaimers, privacy and accessibility statements; the disclaimer, colophon and privacy texts approved by the owner (E5), and the privacy notice matching the real logging configuration;
     - the flood drill and the egress budget passed;
     - providers notified.
-  - **Going public**: remove `noindex` on the public site only (the owner site keeps `noindex, nofollow`); add `robots.txt`, a sitemap of public paths and an OpenGraph image; keep a "beta" label.
+  - **Going public**: remove `noindex` on the public site only (the owner site keeps `noindex, nofollow`); add `robots.txt`, a sitemap of public paths and an OpenGraph image; keep a "beta" label. (P12b, as built: the switch `RWS_SITE_PHASE`, the launch profile of `verify-prod` and the flip procedure are in §44; the launch itself is the E4 follow-up commit.)
 
 **Scope out:** new features.
 
@@ -1573,11 +1573,11 @@ Everything non-code the owner must do, with the phase each item gates. The e-mai
 | D7 | First flood event | When an NL-bound Vigicrues forecast, a Swiss warning section above level 1, or an LHP class ≥ 2 appears live, tell the agent: the archived payloads become regression fixtures (§10 R2) | when it happens | P7, P8 (fixtures; not blocking) |
 | D8 | Answer the gap-check decisions | D18 (crosswalk) before P7b; D21 (uncovered rivers) before P10b; D19 and D20 before P12 | D18 10-31; D21 11-10 (answered 2026-10-06); D19/D20 11-26 | P7b, P10b, P12 |
 | **E — Launch** | | | | |
-| E1 | Send the BfG Belegexemplar (C6) and record it | `registry/permissions/DE-2.md` | ≤ 12-03 | P12 (DE-2 from `owner` to `public`) |
+| E1 | Send the BfG Belegexemplar (C6) and record it | `registry/permissions/DE-2.md` | ≤ 12-03 | P12 (DE-2 from `owner` to `public`). P12b proves the gate (`GATED`, `DE-2.md.template`, the flip simulation) in CI; the flip is a one-commit follow-up after the answer (§44) |
 | E2 | Tell RWS, ITZBund and BAFU about go-live | Courtesy | 12-04 | – |
-| E3 | Timed rebuild drill on a temporary VPS | Delete the temporary VPS afterwards | ≤ 12-03 | P12 |
-| E4 | Sign the launch checklist | `docs/launch-checklist.md` | 12-04 | **Public launch** |
-| E5 | Approve the legal pages | The disclaimer, colophon (operator name and contact) and privacy notice in NL and EN (catalogue gap item 18); confirm the privacy notice matches the logging configuration | 11-25 | P10b, P12 (launch checklist) |
+| E3 | Timed rebuild drill on a temporary VPS | Delete the temporary VPS afterwards. Kit: `docs/runbooks/vps-rebuild.md`, `docs/drills/rebuild-timing-sheet.md`, `deploy/tests/rebuild-check.sh` (offline test in CI); the drill itself is owner work (KG-320) | ≤ 12-03 | P12 |
+| E4 | Sign the launch checklist | `docs/launch-checklist.md` (ships unticked; `test/launch-checklist.test.ts` holds it to the registry; `docs/security/launch-verdict.md` holds the security review verdict: E4 is blocked until the owner clears SR-1 and SR-7). After the signature a one-commit follow-up flips the site to `launch` (§44) | 12-04 | **Public launch** |
+| E5 | Approve the legal pages | The disclaimer, colophon (operator name and contact) and privacy notice in NL and EN (catalogue gap item 18); confirm the privacy notice matches the logging configuration. P12b: `test/privacy-policy.test.ts` checks the notice against the real Caddy and compose files; the approval date is an owner line in the checklist (KG-319) | 11-25 | P10b, P12 (launch checklist) |
 
 ---
 
@@ -3030,3 +3030,30 @@ What stage 2 of issue #100 (KG-250) built: 36 water bodies with exactly two show
 - **Bifurcations.** The 8 new nodes of the golden are 7 side channels inside one new river each (Zorn 2, Mouzon 2, Hessel, Nied française, Clarence) and the Yron's 47 m dead-end stub.
 - **Fixture refresh** from `geo.yml` run 38127563889; the station overrides, the generated files and the goldens follow it.
 - **Gaps:** KG-250 stays `accepted` with stage 3 (#127) and the lakes (#125) as follow-ups; KG-161 gains the Clarence, the Eisch and the fragments; KG-165 gains 14 stations without an entry node (95 → 109); KG-201 notes the 36 rivers are `other`; KG-272, KG-279, KG-265 and KG-301 follow the moved reach ids.
+
+## 44. Amendment: P12b reality, operations and launch (2026-10-11)
+
+What P12b built, with where each piece is proved. The new commands are in CLAUDE.md § Commands, the gaps are KG-317 to KG-336, the risks R-098 to R-100 and the threats T-LAUNCH-1..3, T-DRILL-1, T-DRILL-2 and T-GATE-1 (threat model v4.52).
+
+- **Registry gate (E1).** `GATED` in `packages/contracts/src/registry.ts` (13 sources) and, since review round 1 (SR-9), every source whose baseline licence kind is not open require a grant record for `audience: public` whatever `baseline.ts` says; `readRegistry` applies grant records; `registry/permissions/DE-2.md.template` is the form. Proved in CI by `packages/contracts/test/registry.test.ts`, `apps/server/test/load/registry-sync.int.test.ts` and the flip simulation `apps/server/test/publish/de2-flip.int.test.ts`. The attribution digest is now `dayAttribution` (KG-330). The flood drill's owner scene is DE-3 (KG-329).
+- **Go-public switch (E4).** `RWS_SITE_PHASE` on the caddy service; `deploy/web/phase-{prelaunch,launch}.caddy`; robots, sitemap and OG per A§9.1 and A§12.2; `verify-prod.sh --profile prelaunch|launch [--site]`. Proved in CI by `test/launch-phase.test.ts`, `apps/web/e2e/launch.spec.ts` and the compose stack in both phases; the production run after the flip is [agent-prod] (KG-318).
+- **Restore drill.** Restores the dump and replays a settled day (A§11.3). Proved in CI by `deploy/tests/backup.test.sh`, `test/restore-drill-sql.test.ts` and the restore block of `deploy/tests/e2e/run.sh`; the real duration is [owner] (KG-322). KG-054 closes.
+- **Rebuild kit (E3), alert drill, runbooks.** `deploy/tests/rebuild-check.sh`, `docs/runbooks/vps-rebuild.md`, `docs/drills/rebuild-timing-sheet.md`, `RWS_CAPTURE_SKIP`; `deploy/tests/alert-drill.sh`, `docs/ops/alert-tuning.md`; the runbooks provider-outage, dst-check, token-rotation and vps-rebuild plus extended basemap, brownout, schema-drift and disk-full, linted by `deploy/tests/runbooks-lint.test.sh`. The drills themselves and real alert receipts are [owner] (KG-320, KG-321).
+- **Launch checklist (E4/E5).** `docs/launch-checklist.md`, `docs/security/launch-verdict.md` (the security review's round 1 verdict, with the round 1 fixes) and `test/launch-checklist.test.ts`; `test/privacy-policy.test.ts` reads the real Caddy and compose files (KG-319).
+
+### 44.1 Flip procedure
+
+Both flips are one-commit follow-up PRs by the owner's go; an agent never merges them.
+
+**E1, DE-2 `owner` to `public`** (after the BfG answer). The commit changes:
+- `registry/sources.yaml`: DE-2 `audience: public`, `private_basis` removed, channels equal to the grant;
+- `registry/permissions/DE-2.md`: from the template, real values only (`granted_by`, `granted_on`, `evidence`, channels);
+- `deploy/owner-terms.json`: regenerate (it has no generator; a test pins it equal to `ownerTerms(registry)`): load the registry with `loadRegistry` (`apps/server/src/capture/specs.ts`), compute `ownerTerms` (`scripts/verify-prod.ts`) and write `{...doc, terms}`, keeping `note`. `ownerAgencies()` then allows BfG publicly while DE-3 stays owner;
+- tests that state DE-2 as owner: `apps/server/test/load/de-2.int.test.ts` (about lines 200-245), `api/forecast-at.int`, `forecast-latest.int`, `forecast.int`, `forecast-health.int` (about line 243), `fr-ch.int` (about line 414), and `publish/de2-flip.int` (becomes the real-registry check);
+- the DE-2 goldens (three real ones, or a `BELOW_STANDARD` pin plus a gap);
+- `docs/permissions.md` (C6 and E1 rows), `docs/launch-checklist.md` (remove DE-2 from table (c), add it to table (a) with D/A/B/H, tick E1; `test/launch-checklist.test.ts` is the tripwire) and the CLAUDE.md owner list (A22);
+- then the owner's E1 run of `apps/web/e2e/de2-beleg.spec.ts` (`E2E_DE2_BELEG=1`, `--project=cvd de2-beleg`).
+
+**The DE-2 runs captured in the owner period become public history at this flip**, within the `history_export` channel the grant record states (security review SR-12): the flip PR says so in its description, and the owner confirms the channel in the record before merging.
+
+**E4, site `prelaunch` to `launch`** (after the checklist is signed). The commit changes the compose default of `RWS_SITE_PHASE` and `DEFAULT_PROFILE` in `scripts/verify-prod.ts`, and nothing else: the drill host's pin `RWS_SITE_PHASE=prelaunch` is already in the runbook's `rws.env` table and check (`docs/runbooks/vps-rebuild.md` §4), and the deploy job and the compose end-to-end run follow the compose default, so the commit needs no change to `ci.yml` or `deploy/tests/e2e/run.sh`. Preconditions: the checklist's section 4 items SR-1 (`scripts/gh-settings.sh --check` clean) and SR-7 (Caddy 2.11.7 or newer deployed and Grype re-run) and the CAA record. Then deploy and run `scripts/verify-prod.sh <domain> --profile launch --site`.

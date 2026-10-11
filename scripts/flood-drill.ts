@@ -14,7 +14,7 @@
 // It refuses to run anywhere but the stack of deploy/tests/e2e/run.sh in drill mode: /ci/e2e-stack must exist and say
 // mode drill and the domain rivierstanden.example, RWS_E2E=1 must be set, and the wrapper hands in the domain of
 // /ci/loadtest.env. Nothing is fetched (the wrapper runs it with no network), and no fixture is read but the committed
-// ones. Fixtures of an owner-audience source (DE-2) are synthetic, as invariant 9 and 11 say.
+// ones. Fixtures of an owner-audience source (DE-3) are synthetic, as invariant 9 and 11 say.
 //
 // The main phase writes everything but the end of the AGE story; the cancel phase writes the Cancel of the northern
 // alert and the TEST message, so a check can see the alert open first (deploy/tests/flood/run.sh). The scenes:
@@ -24,7 +24,7 @@
 //   LU-5   the real AGE red alert of 2025-09-08 (Sud) and the orange one (Nord), the Cancel of the Nord alert, and the
 //          TEST message of 2026-02-02 (which must store nothing);
 //   CH-4   the storm-Ciaran run of station 2020 (the German layout), a test-only station of the drill registry;
-//   DE-2   the synthetic truncated run at Kaub (owner audience).
+//   DE-3   the synthetic 14-day quantile file of Kaub (owner audience; DE-2 was this scene until its flip to public).
 
 import { readFileSync } from 'node:fs';
 import type { ManifestLine } from '../apps/server/src/archive/manifest.ts';
@@ -32,12 +32,12 @@ import { Archive } from '../apps/server/src/archive/writer.ts';
 import { writePayload } from './fixture-archive.ts';
 import {
   anchorCap,
-  anchorDe2,
+  anchorDe3,
   anchorDe6,
   anchorDe6Events,
   ciaranToDe,
   shiftCh4,
-  shiftDe2,
+  shiftDe3,
   shiftDe6,
   shiftFr5,
   shiftLu5,
@@ -203,19 +203,19 @@ export const SCENES: readonly Scene[] = [
     shift: shiftCh4,
   },
   {
-    id: 'de-2-wv-truncated.synthetic',
-    source: 'DE-2',
-    spec: 'de-2-wv',
-    fixture: 'de-2-wv-truncated.synthetic',
+    id: 'de-3-files-kaub.synthetic',
+    source: 'DE-3',
+    spec: 'de-3-files',
+    fixture: 'de-3-files-kaub.synthetic',
     phase: 'main',
     owner: true,
-    // Kaub's PEGELONLINE uuid (the DE-1 stage series the run sits on).
-    variant: () => '1d26e504-7f9e-480a-b52c-5932be6549ab',
-    url: () =>
-      'https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/1d26e504-7f9e-480a-b52c-5932be6549ab/WV/measurements.json',
-    anchor: (body) => anchorDe2(body),
-    leadMs: 10 * MIN,
-    shift: shiftDe2,
+    // The file's path under https://vorhersage.bafg.de/ (the PEGELONLINE number names DE-1's Kaub, de.wsv.25700100).
+    variant: (meta) => meta.variant ?? '',
+    url: (meta) => `https://vorhersage.bafg.de/${meta.variant ?? ''}`,
+    // The first forecast day; the file moves by whole days (rounded down), so it is never after the fetch.
+    anchor: (body) => anchorDe3(body),
+    leadMs: 0,
+    shift: shiftDe3,
   },
 ];
 

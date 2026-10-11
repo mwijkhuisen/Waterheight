@@ -259,11 +259,11 @@ describe('the latest forecast run as of T (A§8 Q2)', () => {
     ).rows;
 
   it('returns the runs of visible primary series of its family, from sources of its family, and nothing else', async () => {
-    // The public family: NL-1's run on a public series. Not DE-2's run on the same series (an owner source), not NL-1's
+    // The public family: NL-1's run on a public series. Not DE-3's run on the same series (an owner source), not NL-1's
     // run on an owner series, not the owner canary's run, and none of the withheld ones (off, narrowed, mirror, twin).
     expect(await pairs(api, FORECAST_AT.public)).toEqual([{ series_id: ids.public, source_id: 'NL-1', value: 200 }]);
     expect(await pairs(owner, FORECAST_AT.owner)).toEqual([
-      { series_id: ids.public, source_id: 'DE-2', value: 201 },
+      { series_id: ids.public, source_id: 'DE-3', value: 201 },
       { series_id: ids.public, source_id: 'NL-1', value: 200 },
       { series_id: ids.ownerCanary, source_id: 'CANARY-OWNER', value: Number(OWNER_CANARY_REAL) },
       { series_id: ids.onlyOwner, source_id: 'NL-1', value: 202 },
@@ -373,7 +373,7 @@ describe('dependent rows are filtered by their own source AND their parent', () 
       expect(await column(api, `SELECT source_id FROM ${view}`), view).toEqual(['NL-1']);
     }
     expect(await column(owner, `SELECT source_id FROM ${OWN.forecastRun} WHERE series_id = $1`, [ids.public])).toEqual([
-      'DE-2',
+      'DE-3',
       'NL-1',
     ]);
     // …and the values follow their run.
@@ -413,7 +413,7 @@ describe('dependent rows are filtered by their own source AND their parent', () 
       'BE-3',
       'CANARY-OWNER',
       'DE-1',
-      'DE-2',
+      'DE-3',
       'LU-4',
       'NL-1',
     ]);
@@ -431,13 +431,13 @@ describe('dependent rows are filtered by their own source AND their parent', () 
   it('public health sees owner sources only as two counts', async () => {
     const { rows, fields } = await api.query(`SELECT * FROM ${PUBLIC_ONLY_VIEWS.ownerHealth}`);
     expect(fields.map((f) => f.name)).toEqual([...OWNER_HEALTH_COLUMNS]);
-    // BE-3, DE-2 ok; LU-4 down; the canary source is not counted.
+    // BE-3, DE-3 ok; LU-4 down; the canary source is not counted.
     expect(rows).toEqual([{ healthy: 2, total: 3 }]);
   });
 
   it('only the owner channel reads a private_basis', async () => {
     const { rows } = await owner.query(`SELECT source_id FROM ${OWNER_ONLY_VIEWS.privateBasis} ORDER BY 1`);
-    expect(rows.map((r) => r.source_id)).toEqual(['BE-3', 'CANARY-OWNER', 'DE-2', 'LU-4']);
+    expect(rows.map((r) => r.source_id)).toEqual(['BE-3', 'CANARY-OWNER', 'DE-3', 'LU-4']);
   });
 });
 
@@ -470,7 +470,7 @@ describe('sweeps over whole families', () => {
     expect(text).toContain(OWNER_CANARY_REAL);
     expect(await sweepAt(owner, OBS_AT.owner)).toContain(OWNER_CANARY_REAL);
     expect(forecast).toContain(OWNER_CANARY_REAL);
-    expect(forecast).toContain('"source_id":"DE-2"'); // an owner source's run on a public series
+    expect(forecast).toContain('"source_id":"DE-3"'); // an owner source's run on a public series
     expect(text).toContain('CANARY-OWNER');
     expect(text).toContain('SECRET-CLAUSE');
     expect(found(text, NEVER_OWNER)).toEqual([]);
@@ -841,13 +841,13 @@ describe('effective audience and channels: SQL equals packages/core effective()'
   });
 });
 
-// Invariant 11, P8a: an owner source's forecast run hangs on a series that is public. DE-2's run is on a DE-1 series,
+// Invariant 11, P8a: an owner source's forecast run hangs on a series that is public. DE-3's run is on a DE-1 series,
 // LU-3's on an LU-1 series (the way the registry attaches them), both valued with the owner canary. It is in the
 // owner run view, owner value view and owner latest-run function, and in no public one, for either public login.
 // This describe goes last: it adds public stations and series, which the exact lists above do not expect.
 describe('the owner canary as a forecast run on a public series', { timeout: 300_000 }, () => {
   let publish: pg.Client;
-  let de1: number; // the public DE-1 series that DE-2's canary run hangs on
+  let de1: number; // the public DE-1 series that DE-3's canary run hangs on
   let lu1: number; // the public LU-1 series that LU-3's canary run hangs on
   const HOUR = "date_trunc('hour', now())";
 
@@ -896,7 +896,7 @@ describe('the owner canary as a forecast run on a public series', { timeout: 300
     // Public runs on both series (a public reader sees the series and their forecast), then the owner canary runs.
     await run(de1, 'NL-1', { issued: false, hours: 48, kind: 'deterministic', value: 300 });
     await run(lu1, 'NL-1', { issued: false, hours: 48, kind: 'deterministic', value: 300 });
-    await run(de1, 'DE-2', { issued: true, hours: 96, kind: 'deterministic', value: OWNER_CANARY });
+    await run(de1, 'DE-3', { issued: true, hours: 96, kind: 'deterministic', value: OWNER_CANARY });
     await run(lu1, 'LU-3', { issued: false, hours: 48, kind: 'quantiles', value: OWNER_CANARY, band: OWNER_CANARY });
   });
 
@@ -909,7 +909,7 @@ describe('the owner canary as a forecast run on a public series', { timeout: 300
       [OWNER_CANARY, [de1, lu1]],
     );
     expect(rows).toEqual([
-      { series_id: de1, source_id: 'DE-2', n: 2, band: 0 },
+      { series_id: de1, source_id: 'DE-3', n: 2, band: 0 },
       { series_id: lu1, source_id: 'LU-3', n: 2, band: 2 },
     ]);
   });
@@ -953,13 +953,13 @@ describe('the owner canary as a forecast run on a public series', { timeout: 300
       (await sweepForecastAt(c, FORECAST_AT.public, FIXTURE_NOW)) +
       (await sweepForecastAt(c, FORECAST_AT.public, `${HOUR} + interval '90 minutes'`));
     expect(text).toContain('fc-canary'); // the series are in the sweep
-    expect(found(text, [...CANARY_RENDERINGS, 'DE-2', 'LU-3'])).toEqual([]);
+    expect(found(text, [...CANARY_RENDERINGS, 'DE-3', 'LU-3'])).toEqual([]);
   });
 
   it('is in the owner run view, value view and latest-run function (rws_owner_api), and the withheld canary is nowhere', async () => {
     for (const view of [OWN.forecastRun, OWN.api.forecastRun]) {
       expect(await column(owner, `SELECT source_id FROM ${view} WHERE series_id = $1`, [de1]), view).toEqual([
-        'DE-2',
+        'DE-3',
         'NL-1',
       ]);
       expect(await column(owner, `SELECT source_id FROM ${view} WHERE series_id = $1`, [lu1]), view).toEqual([
@@ -990,7 +990,7 @@ describe('the owner canary as a forecast run on a public series', { timeout: 300
     ).rows;
     const canary = Number(OWNER_CANARY_REAL);
     expect(rows).toEqual([
-      { series_id: de1, source_id: 'DE-2', value: canary, p30: null, p70: null },
+      { series_id: de1, source_id: 'DE-3', value: canary, p30: null, p70: null },
       { series_id: de1, source_id: 'NL-1', value: 300, p30: null, p70: null },
       { series_id: lu1, source_id: 'LU-3', value: canary, p30: canary, p70: canary },
       { series_id: lu1, source_id: 'NL-1', value: 300, p30: null, p70: null },
@@ -998,7 +998,7 @@ describe('the owner canary as a forecast run on a public series', { timeout: 300
     const text = (await sweep(owner, familyViews('owner'))) + (await sweepForecastAt(owner, FORECAST_AT.owner));
     expect(text).toContain(OWNER_CANARY_REAL);
     expect(found(text, [CANARIES.withheld.real, CANARIES.withheld.text])).toEqual([]);
-    expect(text).toContain('DE-2');
+    expect(text).toContain('DE-3');
     expect(text).toContain('LU-3');
   });
 });

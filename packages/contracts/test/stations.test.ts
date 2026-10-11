@@ -65,9 +65,9 @@ describe('station registry', () => {
     const copy = structuredClone(sample);
     const kaub = copy.stations.find((r) => r.id === 'de.wsv.25700100');
     if (kaub === undefined) throw new Error('no Kaub row');
-    kaub.expected_forecast_source = 'DE-2';
+    kaub.expected_forecast_source = 'DE-3';
     expect(validateStations(copy, sources).problems.join('\n')).toMatch(
-      /a public row may not name the owner source DE-2 as expected_forecast_source/,
+      /a public row may not name the owner source DE-3 as expected_forecast_source/,
     );
   });
 

@@ -39,6 +39,16 @@
 //   scripts/verify-prod.sh <domain> --interval   + interval DE-6: 3 samples of capture.json 15 min apart (about 30 min)
 //   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--out FILE]
 //                                                docs/capacity.md from >= 2 complete days
+//   scripts/verify-prod.sh <domain> --profile prelaunch|launch   (P12b; default prelaunch, until the launch flip) what the
+//                                                public site is expected to be: prelaunch is noindex everywhere with no
+//                                                robots.txt or sitemap, launch has no noindex on the pages (it stays on /api,
+//                                                /data, /status/, /tiles and the 404 shells), robots.txt and the sitemap.
+//                                                Both profiles check headers, pages, legal pages, security.txt, og,
+//                                                cache-control, de-2 credit (N/A while DE-2 is an owner source) and that
+//                                                no owner source or hostname is in robots.txt, the sitemap, sources.json
+//                                                or status.json (owner docs; the owner listener check keeps its own)
+//   scripts/verify-prod.sh <domain> --site       with --profile: only the public-site checks above (the compose stack's
+//                                                run.sh judges both profiles with it); no data, no soak
 //   scripts/verify-prod.sh <domain> --dry-run    list the checks; no network
 // CI only (the end-to-end test against a local stack): --resolve <ip> --ca <pem file>
 
@@ -179,13 +189,25 @@ export const OTHER_GB = { database: 28, basemap: 9, static: 5 };
 export const DISK_GB = 200;
 
 export type Result = { check: string; ok: boolean | 'n/a'; detail: string };
+
+/**
+ * One printed line: a four-character status column (`PASS`, `FAIL`, or `N/A` padded to four), one space, the check and
+ * its detail. Consumers (the CI deploy job, deploy/tests/e2e/run.sh) match `N/A` with ` +` because of that padding;
+ * test/verify-prod.test.ts runs their regexes against this function.
+ */
+export function formatResult(r: Result): string {
+  return `${r.ok === 'n/a' ? 'N/A ' : r.ok ? 'PASS' : 'FAIL'} ${r.check}${r.detail ? ` — ${r.detail}` : ''}`;
+}
 const pass = (check: string, detail = ''): Result => ({ check, ok: true, detail });
 const miss = (check: string, detail: string): Result => ({ check, ok: false, detail });
 
 // ---------------------------------------------------------------- pure checks
 
-/** The expected A§12.2 headers plus X-Robots-Tag: noindex (until the public launch, P12). */
-export function expectedHeaders(architecture: string): Record<string, string> {
+/**
+ * The expected A§12.2 headers plus X-Robots-Tag: noindex in the prelaunch profile (the default); the launch profile
+ * (P12b) leaves it out: a page has none (deploy/web/phase-launch.caddy), and checkHeaders then refuses one.
+ */
+export function expectedHeaders(architecture: string, profile: Profile = DEFAULT_PROFILE): Record<string, string> {
   const start = architecture.indexOf('- **HTTP headers** (Caddy):');
   const end = architecture.indexOf('- The owner site adds', start);
   if (start < 0 || end < 0) throw new Error('ARCHITECTURE.md: A§12.2 "HTTP headers" block not found');
@@ -196,7 +218,7 @@ export function expectedHeaders(architecture: string): Record<string, string> {
     if (m?.[1] === undefined) throw new Error(`ARCHITECTURE.md: A§12.2 lists no ${name}`);
     out[name.toLowerCase()] = m[1];
   }
-  out['x-robots-tag'] = 'noindex';
+  if (profile === 'prelaunch') out['x-robots-tag'] = 'noindex';
   return out;
 }
 
@@ -217,8 +239,14 @@ export function checkHeaders(
     if (name.startsWith('access-control-')) problems.push(`CORS header ${name}`);
   }
   if (headers.server !== undefined) problems.push(`server: ${JSON.stringify(headers.server)}`);
+  // (launch profile: a page has no X-Robots-Tag at all)
+  if (expected['x-robots-tag'] === undefined && headers['x-robots-tag'] !== undefined)
+    problems.push(`x-robots-tag: ${JSON.stringify(headers['x-robots-tag'])}, want none`);
   return problems.length === 0
-    ? pass(`headers ${path}`, 'every A§12.2 header exact, noindex, no CORS, no Server')
+    ? pass(
+        `headers ${path}`,
+        `every A§12.2 header exact, ${expected['x-robots-tag'] === undefined ? 'no X-Robots-Tag' : 'noindex'}, no CORS, no Server`,
+      )
     : miss(`headers ${path}`, problems.join('; '));
 }
 
@@ -258,7 +286,10 @@ export function checkPages(
     const seen = htmlLang(page.body);
     if (seen !== lang) problems.push(`<html lang> ${show(seen)}, want "${lang}"`);
     return problems.length === 0
-      ? pass(check, `200, <html lang="${lang}">, every A§12.2 header exact, noindex, no-cache`)
+      ? pass(
+          check,
+          `200, <html lang="${lang}">, every A§12.2 header exact, ${expected['x-robots-tag'] === undefined ? 'no X-Robots-Tag' : 'noindex'}, no-cache`,
+        )
       : miss(check, problems.join('; '));
   });
 }
@@ -273,13 +304,15 @@ export function checkNotFound(
 ): Result {
   const check = 'not found';
   const problems: string[] = [];
+  // the two 404 shells say noindex in both profiles (deploy/web/site.caddy sets it where their status is known)
+  const shellExpected = { ...expected, 'x-robots-tag': 'noindex' };
   for (const { path, lang } of NOT_FOUND_PATHS) {
     const page = got[path];
     if (page === undefined || typeof page === 'string') {
       problems.push(`${path}: ${page ?? 'not fetched'}`);
       continue;
     }
-    const headers = checkHeaders(path, page.status, page.headers, expected, 404);
+    const headers = checkHeaders(path, page.status, page.headers, shellExpected, 404);
     if (headers.ok !== true) problems.push(`${path}: ${headers.detail}`);
     if (page.headers['cache-control'] !== 'no-cache')
       problems.push(`${path}: cache-control ${show(page.headers['cache-control'])}`);
@@ -864,7 +897,10 @@ export function checkIntervalDe6(samples: readonly (CaptureStatus | undefined)[]
   return problems.length === 0 ? pass(check, `ages ${ages.join(', ')}`) : miss(check, problems.join('; '));
 }
 
-/** P5c: BE-3, LU-2, LU-3 and LU-4 at least are owner sources (DE-2 and DE-3 are too): fewer means a source went missing. */
+/**
+ * P5c: BE-3, LU-2, LU-3 and LU-4 at least are owner sources (DE-3, and until the owner flips it DE-2, are too): fewer
+ * means a source went missing. Which sources are owner sources is read from registry/sources.yaml everywhere else.
+ */
 export const OWNER_SOURCES_MIN = 4;
 /**
  * P5c: the station-id prefixes of the owner sources that have stations (BE-3 `be.spw.`, LU-2 `lu.age-json.`; LU-3 and
@@ -1502,13 +1538,15 @@ export const reachIds = (): string[] =>
 /**
  * P8a: /api/v1/health/sources carries the public forecast coverage (catalogue §0.5): present, one entry for each
  * reach row of registry/forecast-reaches.yaml in order, a reach without a visible source says what could change it
- * (`after_permission` or `none_publishes`), and no owner-audience source ID (nor `BfG`, the agency behind DE-2 and
- * DE-3) appears anywhere in it. It needs no fresh data, so it must PASS on the CI fixture data. Counts only.
+ * (`after_permission` or `none_publishes`), and no owner-audience source ID (nor the agency of an owner source,
+ * `BfG` while DE-3 is one: `ownerAgencies`, from the registry) appears anywhere in it. It needs no fresh data, so it
+ * must PASS on the CI fixture data. Counts only.
  */
 export function checkForecastCoverage(
   doc: HealthSources | undefined,
   ownerIds: readonly string[],
   expectedIds: readonly string[] = reachIds(),
+  agencies: readonly string[] = ownerAgencies(),
 ): Result {
   const check = 'forecast coverage';
   if (doc === undefined) return noDocument(check, 'health/sources');
@@ -1530,7 +1568,7 @@ export function checkForecastCoverage(
         : typeof v === 'object' && v !== null
           ? Object.entries(v).flatMap(([key, value]) => [key, ...strings(value)])
           : [];
-  const found = [...new Set(strings(c).flatMap((t) => leaks(t, [...ownerIds, 'BfG'])))];
+  const found = [...new Set(strings(c).flatMap((t) => leaks(t, [...ownerIds, ...agencies])))];
   if (found.length > 0) problems.push(`names an owner source or agency: ${found.join(', ')}`);
   const none = c.reaches.filter((r) => r.no_official_forecast).length;
   const detail =
@@ -1557,16 +1595,26 @@ export function checkApiParams(page: Page | string): Result {
   return problems.length === 0 ? pass(check, '400, the fixed body, no-store') : miss(check, problems.join('; '));
 }
 
-/** Every path answers with `X-Robots-Tag: noindex`, a 404 of Caddy's (`/api`, `/tiles`) as much as the pages. */
-export function checkNoindex(got: Readonly<Record<string, Page | string>>): Result {
+/**
+ * Prelaunch: every path answers with `X-Robots-Tag: noindex`, a 404 of Caddy's (`/api`, `/tiles`) as much as the pages.
+ * Launch (P12b): the pages (`/`, `/en/`) carry no X-Robots-Tag, and the data paths (`/api`, `/tiles`) still say noindex.
+ */
+export function checkNoindex(got: Readonly<Record<string, Page | string>>, profile: Profile = DEFAULT_PROFILE): Result {
   const lacking = NOINDEX_PATHS.flatMap((path) => {
     const page = got[path];
     if (page === undefined || typeof page === 'string') return [`${path}: ${page ?? 'not asked'}`];
     const tag = page.headers['x-robots-tag'];
-    return tag === 'noindex' ? [] : [`${path}: x-robots-tag ${show(tag)}`];
+    const want =
+      profile === 'prelaunch' || (NOINDEX_DATA_PATHS as readonly string[]).includes(path) ? 'noindex' : undefined;
+    return tag === want ? [] : [`${path}: x-robots-tag ${show(tag)}, want ${show(want)}`];
   });
   return lacking.length === 0
-    ? pass('noindex', `X-Robots-Tag: noindex on ${NOINDEX_PATHS.join(', ')}, whatever the status`)
+    ? pass(
+        'noindex',
+        profile === 'prelaunch'
+          ? `X-Robots-Tag: noindex on ${NOINDEX_PATHS.join(', ')}, whatever the status`
+          : `launch: no X-Robots-Tag on / and /en/; noindex on ${NOINDEX_DATA_PATHS.join(' and ')}`,
+      )
     : miss('noindex', lacking.join('; '));
 }
 
@@ -2423,13 +2471,465 @@ async function statusFile(domain: string, name: string, net: Net): Promise<{ res
   }
 }
 
+// ---------------------------------------------------------------- the launch profile (P12b, issue #27)
+
+/**
+ * `--profile` (P12b, A§9.1; docs/launch-checklist.md): what the public site is expected to be. `prelaunch` is the site
+ * in the open and not yet public (X-Robots-Tag: noindex on every response, no robots.txt, no sitemap.xml); `launch`
+ * is the public site (no noindex on the pages, robots.txt and sitemap.xml served; noindex stays on the data paths and
+ * the 404 shells). It follows RWS_SITE_PHASE in deploy/compose.yaml (deploy/web/phase-<phase>.caddy). The default is
+ * prelaunch until the commit that flips the site changes both.
+ */
+export const PROFILES = ['prelaunch', 'launch'] as const;
+export type Profile = (typeof PROFILES)[number];
+export const DEFAULT_PROFILE: Profile = 'prelaunch';
+
+/** The four legal pages of the launch checklist (E5), by their ids in apps/web/src/lib/routes.ts. */
+export const LEGAL_IDS = ['disclaimer', 'colophon', 'privacy', 'accessibility'] as const;
+export const LEGAL_PATHS: readonly string[] = PAGE_ROUTES.filter((r) =>
+  (LEGAL_IDS as readonly string[]).includes(r.id),
+).flatMap((r) => [r.nl, r.en]);
+/** Cache-Control of robots.txt and sitemap.xml (A§9.1; deploy/web/phase-launch.caddy), and of every page. */
+export const ROBOTS_CACHE = 'public, max-age=300';
+/** The machine paths robots.txt keeps crawlers out of in the launch phase (deploy/web/phase-launch.caddy). */
+export const ROBOTS_DISALLOW = ['/api/', '/tiles/', '/data/', '/downloads/'] as const;
+export const PAGE_CACHE = 'no-cache';
+/** The paths of the launch phase that are not pages and say noindex (the pages must not). */
+export const NOINDEX_DATA_PATHS = ['/api', '/tiles'] as const;
+/** Everything the profile checks fetch beyond the pages: robots.txt, the sitemap, security.txt, og.png and two documents. */
+export const PROFILE_PATHS = [
+  '/robots.txt',
+  '/sitemap.xml',
+  '/.well-known/security.txt',
+  '/og.png',
+  '/data/v1/sources.json',
+  '/data/v1/status.json',
+] as const;
+
+/** An owner host (`owner.<domain>`) or any owner-audience term in a public document (prose may say "owner" without a dot). */
+const OWNER_HOST = /\bowner\.[a-z0-9-]+\.[a-z]/i;
+const ownerNamed = (body: string, domain: string, terms: readonly string[]): string[] => [
+  ...leaks(body, terms),
+  ...(OWNER_HOST.test(body) || body.toLowerCase().includes(`owner.${domain.toLowerCase()}`) ? ['owner hostname'] : []),
+];
+const pageOf = (got: Readonly<Record<string, Page | string>>, path: string) => got[path];
+
+/**
+ * `robots`: prelaunch has none (the bare 404 of a missing file); launch serves it: 200 `text/plain; charset=utf-8`,
+ * `Cache-Control: public, max-age=300`, no noindex, the lines `User-agent: *`, `Disallow:` of each ROBOTS_DISALLOW path and one `Sitemap:` of
+ * the domain asked for, and no owner-audience term or hostname (invariant 11).
+ */
+export function checkRobots(
+  page: Page | string | undefined,
+  domain: string,
+  profile: Profile,
+  terms: readonly string[],
+): Result {
+  const check = 'robots';
+  if (page === undefined || typeof page === 'string') return miss(check, page ?? 'not fetched');
+  if (profile === 'prelaunch')
+    return page.status === 404
+      ? pass(check, '404: no robots.txt before the launch (prelaunch profile)')
+      : miss(check, `status ${page.status}: the prelaunch site serves no robots.txt`);
+  const problems: string[] = [];
+  if (page.status !== 200) problems.push(`status ${page.status}`);
+  if (page.headers['content-type'] !== 'text/plain; charset=utf-8')
+    problems.push(`content-type ${show(page.headers['content-type'])}`);
+  if (page.headers['cache-control'] !== ROBOTS_CACHE)
+    problems.push(`cache-control ${show(page.headers['cache-control'])}`);
+  if (page.headers['x-robots-tag'] !== undefined) problems.push(`x-robots-tag ${show(page.headers['x-robots-tag'])}`);
+  const lines = page.body.split('\n').map((l) => l.trim());
+  if (!lines.includes('User-agent: *')) problems.push('no "User-agent: *"');
+  for (const dir of ROBOTS_DISALLOW) if (!lines.includes(`Disallow: ${dir}`)) problems.push(`no "Disallow: ${dir}"`);
+  const maps = lines.filter((l) => /^sitemap:/i.test(l));
+  if (maps.length !== 1 || maps[0] !== `Sitemap: https://${domain}/sitemap.xml`)
+    problems.push(
+      `Sitemap lines ${JSON.stringify(maps.length === 0 ? null : maps.length)}, want exactly "Sitemap: https://${domain}/sitemap.xml"`,
+    );
+  const owner = ownerNamed(page.body, domain, terms);
+  if (owner.length > 0) problems.push(`names an owner source or host (${owner.length})`);
+  return problems.length === 0
+    ? pass(
+        check,
+        `200, text/plain, ${ROBOTS_CACHE}, User-agent *, Disallow ${ROBOTS_DISALLOW.join(' ')}, the Sitemap of ${domain}, no owner term`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/** The `<url>` entries of a sitemap: its `<loc>` and the `hreflang` and `href` of each alternate. */
+function sitemapEntries(xml: string): { loc: string; alternates: [string, string][] }[] {
+  return xml
+    .split('<url>')
+    .slice(1)
+    .map((entry) => ({
+      loc: /<loc>([^<]*)<\/loc>/.exec(entry)?.[1] ?? '',
+      alternates: [...entry.matchAll(/<xhtml:link rel="alternate" hreflang="([^"]*)" href="([^"]*)"\/>/g)].map(
+        (m): [string, string] => [m[1] ?? '', m[2] ?? ''],
+      ),
+    }));
+}
+
+/**
+ * `sitemap`: prelaunch has none (404). Launch: 200 `application/xml; charset=utf-8`, `Cache-Control: public,
+ * max-age=300`, exactly the pages of PAGE_ROUTES in both languages as `https://<domain><path>`, every entry with its
+ * alternates nl, en and x-default (= the Dutch path), every URL of the document on the domain, no owner term.
+ */
+export function checkSitemap(
+  page: Page | string | undefined,
+  domain: string,
+  profile: Profile,
+  terms: readonly string[],
+): Result {
+  const check = 'sitemap';
+  if (page === undefined || typeof page === 'string') return miss(check, page ?? 'not fetched');
+  if (profile === 'prelaunch')
+    return page.status === 404
+      ? pass(check, '404: no sitemap.xml before the launch (prelaunch profile)')
+      : miss(check, `status ${page.status}: the prelaunch site serves no sitemap.xml`);
+  const problems: string[] = [];
+  if (page.status !== 200) problems.push(`status ${page.status}`);
+  if (page.headers['content-type'] !== 'application/xml; charset=utf-8')
+    problems.push(`content-type ${show(page.headers['content-type'])}`);
+  if (page.headers['cache-control'] !== ROBOTS_CACHE)
+    problems.push(`cache-control ${show(page.headers['cache-control'])}`);
+  if (page.headers['x-robots-tag'] !== undefined) problems.push(`x-robots-tag ${show(page.headers['x-robots-tag'])}`);
+  const entries = sitemapEntries(page.body);
+  const abs = (path: string) => `https://${domain}${path}`;
+  const want = PAGE_ROUTES.flatMap((r) => [r.nl, r.en]).map(abs);
+  const got = entries.map((e) => e.loc);
+  if ([...got].sort().join(' ') !== [...want].sort().join(' '))
+    problems.push(
+      `the pages are not those of PAGE_ROUTES (${got.length} entries, ${want.length} expected, or another domain)`,
+    );
+  for (const r of PAGE_ROUTES)
+    for (const lang of ['nl', 'en'] as const) {
+      const entry = entries.find((e) => e.loc === abs(r[lang]));
+      const alt = JSON.stringify(entry?.alternates);
+      if (
+        entry !== undefined &&
+        alt !==
+          JSON.stringify([
+            ['nl', abs(r.nl)],
+            ['en', abs(r.en)],
+            ['x-default', abs(r.nl)],
+          ])
+      )
+        problems.push(`${r[lang]}: alternates ${alt}`);
+    }
+  // every URL in the file is on the domain, but the two namespace names of the root element
+  const hosts = [...page.body.replace(/<urlset[^>]*>/, '').matchAll(/https?:\/\/[^/"<\s]+/g)].map((m) => m[0]);
+  const foreign = [...new Set(hosts.filter((h) => h !== `https://${domain}`))];
+  if (foreign.length > 0) problems.push(`${foreign.length} URL host(s) other than ${domain}`);
+  const owner = ownerNamed(page.body, domain, terms);
+  if (owner.length > 0) problems.push(`names an owner source or host (${owner.length})`);
+  return problems.length === 0
+    ? pass(
+        check,
+        `200, application/xml, ${ROBOTS_CACHE}, the ${want.length} pages of PAGE_ROUTES on ${domain}, hreflang nl, en, x-default, no owner term`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/**
+ * `legal pages`: the disclaimer, colophon, privacy and accessibility pages (launch checklist, E5) answer 200 in both
+ * languages (`got` holds one fetch of each page path, as `pages <path>` reads them).
+ */
+export function checkLegalPages(got: Readonly<Record<string, Page | string>>): Result {
+  const check = 'legal pages';
+  const problems = LEGAL_PATHS.flatMap((path) => {
+    const page = pageOf(got, path);
+    if (page === undefined || typeof page === 'string') return [`${path}: ${page ?? 'not fetched'}`];
+    const lang = path.startsWith('/en/') ? 'en' : 'nl';
+    const seen = htmlLang(page.body);
+    return page.status === 200 && seen === lang ? [] : [`${path}: status ${page.status}, <html lang> ${show(seen)}`];
+  });
+  return problems.length === 0
+    ? pass(
+        check,
+        `${LEGAL_PATHS.length} paths (disclaimer, colophon, privacy, accessibility in nl and en): 200, the shell of their language`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/** `security.txt` (RFC 9116, P12a): 200 text/plain, a Contact, an Expires in the future, the Canonical of this domain. */
+export function checkSecurityTxt(page: Page | string | undefined, domain: string, now: Date): Result {
+  const check = 'security.txt';
+  if (page === undefined || typeof page === 'string') return miss(check, page ?? 'not fetched');
+  const problems: string[] = [];
+  if (page.status !== 200) problems.push(`status ${page.status}`);
+  if (page.headers['content-type'] !== 'text/plain; charset=utf-8')
+    problems.push(`content-type ${show(page.headers['content-type'])}`);
+  const field = (name: string) =>
+    page.body
+      .split('\n')
+      .filter((l) => l.startsWith(`${name}: `))
+      .map((l) => l.slice(name.length + 2).trim());
+  if (field('Contact').length === 0) problems.push('no Contact');
+  const expires = Date.parse(field('Expires')[0] ?? '');
+  if (Number.isNaN(expires)) problems.push('no valid Expires');
+  else if (expires <= now.getTime()) problems.push('Expires is in the past');
+  if (field('Canonical')[0] !== `https://${domain}/.well-known/security.txt`)
+    problems.push(`Canonical ${show(field('Canonical')[0])}`);
+  return problems.length === 0
+    ? pass(
+        check,
+        `200, text/plain, a Contact, Expires ${new Date(expires).toISOString().slice(0, 10)}, the Canonical of ${domain}`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/** The `<meta property|name content>` pairs of an HTML page (the shells' tags are written one to a line, double-quoted). */
+function metaTags(html: string): Map<string, string> {
+  const tags = new Map<string, string>();
+  for (const m of html.matchAll(/<meta\s+(?:property|name)="([^"]+)"\s+content="([^"]*)"\s*\/?>/g))
+    if (m[1] !== undefined && m[2] !== undefined) tags.set(m[1], m[2]);
+  return tags;
+}
+
+/** The size of a PNG from its IHDR, or undefined when the bytes are no PNG. */
+export function pngSize(bytes: Buffer | undefined): { width: number; height: number } | undefined {
+  if (bytes === undefined || bytes.length < 24) return undefined;
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (!signature.every((b, i) => bytes[i] === b) || bytes.subarray(12, 16).toString('latin1') !== 'IHDR')
+    return undefined;
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
+/**
+ * `og`: the Open Graph tags of `/` and `/en/` (type website, title, description, an absolute og:image of the domain
+ * asked for, no og:url (one shell serves every page of a language, so it would name the wrong page), twitter:card summary_large_image) and the image itself: 200 `image/png` from the same origin, a
+ * PNG of 1200 x 630. No template delimiter is left in the page (Caddy's templates module made the URLs).
+ */
+export function checkOg(
+  got: Readonly<Record<string, Page | string>>,
+  image: Page | string | undefined,
+  domain: string,
+): Result {
+  const check = 'og';
+  const problems: string[] = [];
+  for (const path of ['/', '/en/']) {
+    const page = got[path];
+    if (page === undefined || typeof page === 'string') {
+      problems.push(`${path}: ${page ?? 'not fetched'}`);
+      continue;
+    }
+    const tags = metaTags(page.body);
+    if (tags.get('og:type') !== 'website') problems.push(`${path}: og:type ${show(tags.get('og:type'))}`);
+    for (const t of ['og:title', 'og:description']) if ((tags.get(t) ?? '') === '') problems.push(`${path}: no ${t}`);
+    if (tags.has('og:url')) problems.push(`${path}: og:url ${show(tags.get('og:url'))}, want none`);
+    if (tags.get('og:image') !== `https://${domain}/og.png`)
+      problems.push(`${path}: og:image ${show(tags.get('og:image'))}, want https://${domain}/og.png`);
+    if (tags.get('twitter:card') !== 'summary_large_image')
+      problems.push(`${path}: twitter:card ${show(tags.get('twitter:card'))}`);
+    if (page.body.includes('[[') || page.body.includes(']]')) problems.push(`${path}: a template delimiter is left`);
+  }
+  if (image === undefined || typeof image === 'string') problems.push(`og.png: ${image ?? 'not fetched'}`);
+  else {
+    if (image.status !== 200) problems.push(`og.png: status ${image.status}`);
+    if (image.headers['content-type'] !== 'image/png')
+      problems.push(`og.png: content-type ${show(image.headers['content-type'])}`);
+    const size = pngSize(image.bytes);
+    if (size === undefined) problems.push('og.png: not a PNG');
+    else if (size.width !== 1200 || size.height !== 630)
+      problems.push(`og.png: ${size.width} x ${size.height}, want 1200 x 630`);
+  }
+  return problems.length === 0
+    ? pass(
+        check,
+        `og:type, title, description, an absolute og:image on ${domain} and no og:url, twitter:card on / and /en/; og.png is a 1200 x 630 image/png from the same origin`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/**
+ * `cache-control` (A§9.1): the pages revalidate (`no-cache`, so a page kept past a deploy never asks for vanished asset
+ * names), and in the launch profile robots.txt and sitemap.xml are `public, max-age=300`.
+ */
+export function checkCacheControl(
+  got: Readonly<Record<string, Page | string>>,
+  profile: Profile,
+  robots: Page | string | undefined,
+  sitemap: Page | string | undefined,
+): Result {
+  const check = 'cache-control';
+  const problems: string[] = [];
+  const want = (label: string, page: Page | string | undefined, cache: string) => {
+    if (page === undefined || typeof page === 'string') problems.push(`${label}: ${page ?? 'not fetched'}`);
+    else if (page.headers['cache-control'] !== cache)
+      problems.push(`${label}: cache-control ${show(page.headers['cache-control'])}, want ${cache}`);
+  };
+  for (const path of ['/', '/en/']) want(path, got[path], PAGE_CACHE);
+  if (profile === 'launch') {
+    want('/robots.txt', robots, ROBOTS_CACHE);
+    want('/sitemap.xml', sitemap, ROBOTS_CACHE);
+  }
+  return problems.length === 0
+    ? pass(
+        check,
+        `/ and /en/ ${PAGE_CACHE}${profile === 'launch' ? `; robots.txt and sitemap.xml ${ROBOTS_CACHE}` : ''}`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/** The DE-2 row of registry/sources.yaml: its audience and credit (the one file the DE-2 flip changes). */
+export function de2Registry(): { audience: string; credit: string } | undefined {
+  const doc = parseYaml(readFileSync(join(root, 'registry/sources.yaml'), 'utf8'), { maxAliasCount: 0 }) as {
+    sources?: { id?: string; audience?: string; attribution_text?: string }[];
+  };
+  const row = doc.sources?.find((s) => s.id === 'DE-2');
+  return row === undefined ? undefined : { audience: row.audience ?? '', credit: row.attribution_text ?? '' };
+}
+
+/**
+ * `de-2 credit`: N/A, with its reason, while DE-2 is an owner source (it is then in no public file: `owner leak` and
+ * `owner docs` judge that). Once the owner flips it (E1) sources.json must list DE-2 with the registry's credit, verbatim.
+ */
+export function checkDe2Credit(
+  de2: { audience: string; credit: string } | undefined,
+  sources: ApiRead<StaticSources> | undefined,
+): Result {
+  const check = 'de-2 credit';
+  if (de2 === undefined) return miss(check, 'DE-2 is not in registry/sources.yaml');
+  if (de2.audience !== 'public')
+    return {
+      check,
+      ok: 'n/a',
+      detail: `skipped: DE-2 is audience ${de2.audience} in registry/sources.yaml (an owner source until E1), so it is not in the public sources.json`,
+    };
+  if (sources?.data === undefined) return miss(check, 'DE-2 is public but sources.json is unreadable');
+  const entry = sources.data.sources.find((s) => s.id === 'DE-2');
+  if (entry === undefined) return miss(check, 'DE-2 is public but not in sources.json');
+  return entry.attribution.some((a) => a.text === de2.credit && a.required)
+    ? pass(check, 'sources.json lists DE-2 with the credit of the registry, verbatim')
+    : miss(check, 'sources.json lists DE-2 without the credit of the registry as a required attribution');
+}
+
+/**
+ * `owner docs` (both profiles, invariant 11): robots.txt and the sitemap (when served), sources.json and status.json name
+ * no owner-audience source, spec, canary or host, and no `owner.<domain>` hostname. Works under `--resolve`, unlike the
+ * owner listener's own copy of this probe.
+ */
+export function checkOwnerDocs(
+  docs: Readonly<Record<string, Page | string | undefined>>,
+  domain: string,
+  terms: readonly string[],
+): Result {
+  const check = 'owner docs';
+  const problems: string[] = [];
+  let read = 0;
+  for (const [path, page] of Object.entries(docs)) {
+    if (page === undefined || typeof page === 'string') {
+      problems.push(`${path}: ${page ?? 'not fetched'}`);
+      continue;
+    }
+    // robots.txt and the sitemap do not exist before the launch; the two JSON documents always do
+    if (page.status === 404 && (path === '/robots.txt' || path === '/sitemap.xml')) continue;
+    if (page.status !== 200) {
+      problems.push(`${path}: status ${page.status}`);
+      continue;
+    }
+    read += 1;
+    const owner = ownerNamed(page.body, domain, terms);
+    if (owner.length > 0) problems.push(`${path}: names an owner source, spec or host (${owner.length})`);
+  }
+  return problems.length === 0
+    ? pass(
+        check,
+        `${read} of ${Object.keys(docs).length} documents served (${Object.keys(docs).join(', ')}): none names an owner source or hostname`,
+      )
+    : miss(check, problems.join('; '));
+}
+
+/**
+ * The owner-audience agencies a public forecast report must not name (A7: from the registry, not a literal): the
+ * agency of a provider with an owner source and no public one. Once DE-2 is public (E1) BfG is its credit and the report
+ * may name it, while DE-3 stays an owner source: the owner-ID check still keeps DE-3 itself out. The same precedent as an
+ * owner host that a public source shares (P9a: inondations.public.lu, LU-1).
+ */
+export function ownerAgencies(
+  sources: readonly { audience?: string; provider?: string }[] = (
+    parseYaml(readFileSync(join(root, 'registry/sources.yaml'), 'utf8'), { maxAliasCount: 0 }) as {
+      sources?: { audience?: string; provider?: string }[];
+    }
+  ).sources ?? [],
+): string[] {
+  const owner = sources.some((s) => s.audience === 'owner' && s.provider === 'bfg');
+  const open = sources.some((s) => s.audience === 'public' && s.provider === 'bfg');
+  return owner && !open ? ['BfG'] : [];
+}
+
+/**
+ * The public-site checks of a profile, from one fetch of each page (`site`: the 18 pages and the two 404 probes): the
+ * headers of `/` and `/en/`, `pages`, `not found`, `noindex`, and the profile's own `robots`, `sitemap`, `legal pages`,
+ * `security.txt`, `og`, `cache-control`, `de-2 credit` and `owner docs`. `fetch` gets a path of the domain.
+ */
+export async function siteChecks(
+  fetchPath: (path: string) => Promise<Page | string>,
+  domain: string,
+  registry: Registry,
+  profile: Profile,
+  site: Record<string, Page | string>,
+  architecture: string,
+  now: Date,
+): Promise<Result[]> {
+  const expected = expectedHeaders(architecture, profile);
+  const results: Result[] = [];
+  for (const path of ['/', '/en/']) {
+    const page = site[path];
+    results.push(
+      page === undefined || typeof page === 'string'
+        ? miss(`headers ${path}`, page ?? 'not fetched')
+        : checkHeaders(path, page.status, page.headers, expected),
+    );
+  }
+  results.push(...checkPages(site, expected), checkNotFound(site, expected));
+  const extra: Record<string, Page | string> = {};
+  for (const path of PROFILE_PATHS) extra[path] = await fetchPath(path);
+  const noindex: Record<string, Page | string> = {};
+  for (const path of NOINDEX_PATHS) noindex[path] = site[path] ?? (await fetchPath(path));
+  const sources = extra['/data/v1/sources.json'];
+  const sourcesRead =
+    sources === undefined || typeof sources === 'string'
+      ? undefined
+      : readStatic(sources, StaticSources, STATIC_CACHE.slow);
+  results.push(
+    checkNoindex(noindex, profile),
+    checkRobots(extra['/robots.txt'], domain, profile, ownerTerms(registry)),
+    checkSitemap(extra['/sitemap.xml'], domain, profile, ownerTerms(registry)),
+    checkLegalPages(site),
+    checkSecurityTxt(extra['/.well-known/security.txt'], domain, now),
+    checkOg(site, extra['/og.png'], domain),
+    checkCacheControl(site, profile, extra['/robots.txt'], extra['/sitemap.xml']),
+    checkDe2Credit(de2Registry(), sourcesRead),
+    checkOwnerDocs(
+      {
+        '/robots.txt': extra['/robots.txt'],
+        '/sitemap.xml': extra['/sitemap.xml'],
+        '/data/v1/sources.json': extra['/data/v1/sources.json'],
+        '/data/v1/status.json': extra['/data/v1/status.json'],
+      },
+      domain,
+      staticLeakTerms(registry),
+    ),
+  );
+  return results;
+}
+
 // ---------------------------------------------------------------- main
 
 export const CHECKS = [
   'tls ipv4 / tls ipv6: a valid certificate for the domain on every A and AAAA address, >= 14 days left (IPv6 n/a without AAAA or route)',
-  'headers / and /en/: 200 and every A§12.2 header byte for byte (CSP from ARCHITECTURE.md), X-Robots-Tag: noindex, no CORS, no Server',
-  `pages <path>: each of the ${PAGE_PATHS.length} paths of PAGE_ROUTES (apps/web/src/lib/routes.ts: ${PAGE_PATHS.map((p) => p.path).join(' ')}) is fetched once and is 200 with <html lang> "nl" (the Dutch paths) or "en" (the English ones), every A§12.2 header byte for byte and X-Robots-Tag: noindex (/ and /en/ reuse the fetch of headers / and /en/)`,
-  `not found: ${NOT_FOUND_PATHS.map((p) => p.path).join(' and ')} are 404 with the 404 shell of their language (<html lang>), every A§12.2 header byte for byte, Cache-Control: no-cache, and a body that never holds the path's last segment`,
+  'headers / and /en/: 200 and every A§12.2 header byte for byte (CSP from ARCHITECTURE.md), no CORS, no Server, and X-Robots-Tag: noindex (--profile prelaunch, the default) or none (--profile launch)',
+  `pages <path>: each of the ${PAGE_PATHS.length} paths of PAGE_ROUTES (apps/web/src/lib/routes.ts: ${PAGE_PATHS.map((p) => p.path).join(' ')}) is fetched once and is 200 with <html lang> "nl" (the Dutch paths) or "en" (the English ones), every A§12.2 header byte for byte and X-Robots-Tag: noindex (prelaunch) or none (launch) (/ and /en/ reuse the fetch of headers / and /en/)`,
+  `not found: ${NOT_FOUND_PATHS.map((p) => p.path).join(' and ')} are 404 with the 404 shell of their language (<html lang>), every A§12.2 header byte for byte and X-Robots-Tag: noindex in both profiles, Cache-Control: no-cache, and a body that never holds the path's last segment`,
+  `robots (P12b): --profile prelaunch: /robots.txt is a 404; --profile launch: 200 text/plain; charset=utf-8, ${ROBOTS_CACHE}, no X-Robots-Tag, "User-agent: *", "Disallow:" /api/, /tiles/, /data/ and /downloads/, exactly one "Sitemap: https://<domain>/sitemap.xml", and no owner source, spec, canary or owner.<domain> in it`,
+  `sitemap (P12b): prelaunch: /sitemap.xml is a 404; launch: 200 application/xml; charset=utf-8, ${ROBOTS_CACHE}, exactly the ${PAGE_PATHS.length} pages of PAGE_ROUTES as https://<domain><path>, each with hreflang nl, en and x-default (= the Dutch path), every URL on the domain, no owner term`,
+  `legal pages (P12b, E5): the disclaimer, colophon, privacy and accessibility pages (${LEGAL_PATHS.join(' ')}) are 200 with the shell of their language`,
+  'security.txt (P12b, RFC 9116): /.well-known/security.txt is 200 text/plain; charset=utf-8 with a Contact, an Expires in the future and the Canonical of this domain',
+  'og (P12b): / and /en/ carry og:type website, og:title, og:description, an absolute og:image of this domain, no og:url, and twitter:card summary_large_image, no template delimiter left; /og.png is 200 image/png, a PNG of 1200 x 630',
+  `cache-control (P12b, A§9.1): / and /en/ are ${PAGE_CACHE}; in the launch profile robots.txt and sitemap.xml are ${ROBOTS_CACHE}`,
+  'de-2 credit (P12b): N/A with its reason while DE-2 is an owner source in registry/sources.yaml; once it is public, /data/v1/sources.json lists DE-2 with the registry credit verbatim as a required attribution',
+  'owner docs (P12b, invariant 11; both profiles, works under --resolve): robots.txt and the sitemap (when served), /data/v1/sources.json and /data/v1/status.json name no owner source, spec, canary or owner.<domain> hostname',
   'healthz: GET /healthz answers 200',
   'owner listener (P12a, criterion 10): on every public IPv4/IPv6 address, TCP 443 with SNI and Host owner.<domain> fails the handshake or answers 421 (never 200 or 401), TCP 8443 is closed, owner.<domain> has no public DNS record, and robots.txt, the sitemap, sources.json and status.json name no owner-audience source (skipped with --resolve)',
   'http: http:// redirects to https://',
@@ -2467,10 +2967,10 @@ export const CHECKS = [
   'class coverage: /api/v1/health/sources has a non-null classification (tier-1 ratio, how many are classed by a section only, mode, classed/stations per country; no stations is a PASS)',
   `forecast NL-1: /api/v1/health/sources lists NL-1 with a forecast whose newest run was issued at most ${FORECAST_NL1_MAX_AGE_S / 3600} h ago (RWS issues one run a day: the criterion is 30 h, owner decision 2026-10-03) and of whose series at least ${FORECAST_NL1_CURRENT_MIN * 100}% have a current run; needs live capture (numbers only)`,
   `forecast CH-4: /api/v1/health/sources lists CH-4 with a forecast whose newest run was issued at most ${FORECAST_CH4_MAX_AGE_S / 3600} h ago (BAFU starts a run every 2 to 6 hours, the capture is hourly) and that has a run on at least as many series as the registry expects (the seeded stations with a primary, non-off CH-1 series, less the ${CH4_NO_FORECAST.length} whose forecast figure answers 404 on both q_forecast and p_forecast); needs live capture (numbers only)`,
-  'forecast coverage: /api/v1/health/sources has a non-null forecast_coverage with one entry per reach row of registry/forecast-reaches.yaml in order, each reach without a visible source states after_permission or none_publishes, and no owner-audience source ID or BfG appears in it (needs no fresh data; counts only)',
+  "forecast coverage: /api/v1/health/sources has a non-null forecast_coverage with one entry per reach row of registry/forecast-reaches.yaml in order, each reach without a visible source states after_permission or none_publishes, and no owner-audience source ID or owner agency (BfG while an owner source is the BfG's) appears in it (needs no fresh data; counts only)",
   `api openapi: GET /api/v1/openapi.json is 200 with Cache-Control exactly "${OPENAPI_CACHE}" and openapi 3.1.0`,
   'api params: GET /api/v1/meta?x=1 is 400 {"error":"unknown_parameter","attribution":[]} with Cache-Control: no-store',
-  `noindex: ${NOINDEX_PATHS.join(', ')} each answer (the 404s of /api and /tiles too) with X-Robots-Tag: noindex`,
+  `noindex: ${NOINDEX_PATHS.join(', ')} each answer (the 404s of /api and /tiles too) with X-Robots-Tag: noindex (prelaunch); launch: / and /en/ none, /api and /tiles noindex`,
   ...['DE-1', 'NL-1', 'FR-1', 'CH-1', 'DE-7', 'LU-1'].map(
     (id) =>
       `fresh ${id}: in the "now" snapshot at least one ${id} series has a value no older than ${freshLimit(id)} s at the server's own now (/meta)`,
@@ -2518,7 +3018,7 @@ export const CHECKS = [
 
 function usage(): never {
   console.error(
-    'usage: scripts/verify-prod.sh <domain> [--soak | --capacity [--owner-bytes-per-day N] [--out FILE]] [--interval] [--dry-run]',
+    'usage: scripts/verify-prod.sh <domain> [--profile prelaunch|launch] [--site | --soak | --capacity [--owner-bytes-per-day N] [--out FILE]] [--interval] [--dry-run]',
   );
   process.exit(64);
 }
@@ -2528,7 +3028,8 @@ const pageBody = (page: Page | string | undefined) => (typeof page === 'object' 
 async function main(argv: string[]): Promise<number> {
   const net: Net = {};
   let domain = '';
-  let mode: 'default' | 'soak' | 'capacity' = 'default';
+  let mode: 'default' | 'soak' | 'capacity' | 'site' = 'default';
+  let profile: Profile = DEFAULT_PROFILE;
   let dry = false;
   let interval = false;
   let out: string | undefined;
@@ -2537,7 +3038,12 @@ async function main(argv: string[]): Promise<number> {
     const a = argv[i];
     const next = () => argv[++i] ?? usage();
     if (a === '--soak') mode = 'soak';
-    else if (a === '--capacity') mode = 'capacity';
+    else if (a === '--site') mode = 'site';
+    else if (a === '--profile') {
+      const p = next();
+      if (!(PROFILES as readonly string[]).includes(p)) usage();
+      profile = p as Profile;
+    } else if (a === '--capacity') mode = 'capacity';
     else if (a === '--dry-run') dry = true;
     else if (a === '--interval') interval = true;
     else if (a === '--out') out = next();
@@ -2571,21 +3077,22 @@ async function main(argv: string[]): Promise<number> {
     // P12a: the owner site is reachable over WireGuard only (scripts/lib/verify-owner-listener.ts). It probes the real
     // public addresses, so a run pinned to one address (--resolve, CI) skips it.
     if (net.resolve === undefined) results.push(...(await checkOwnerListener(domain, ownerTerms(registry))));
-    const expected = expectedHeaders(readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'));
     // P10b: one fetch of each page and of the two 404 probes; headers, pages, not found, noindex and the entry script of
-    // `/` below all read these.
+    // `/` below all read these. P12b: the public-site checks of the profile (siteChecks) read them too.
     const site: Record<string, Page | string> = {};
     for (const { path } of [...PAGE_PATHS, ...NOT_FOUND_PATHS])
       site[path] = await tryGet(`https://${domain}${path}`, net);
-    for (const path of ['/', '/en/']) {
-      const page = site[path];
-      results.push(
-        page === undefined || typeof page === 'string'
-          ? miss(`headers ${path}`, page ?? 'not fetched')
-          : checkHeaders(path, page.status, page.headers, expected),
-      );
-    }
-    results.push(...checkPages(site, expected), checkNotFound(site, expected));
+    results.push(
+      ...(await siteChecks(
+        (path) => tryGet(`https://${domain}${path}`, net),
+        domain,
+        registry,
+        profile,
+        site,
+        readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'),
+        now,
+      )),
+    );
     try {
       const h = await get(`https://${domain}/healthz`, net);
       results.push(h.status === 200 ? pass('healthz', '200') : miss('healthz', `status ${h.status}`));
@@ -2651,8 +3158,6 @@ async function main(argv: string[]): Promise<number> {
       snapPages[ask.name] = page;
       snapReads.set(ask.name, readSnapshot(ask, at.ms, page));
     }
-    const noindex: Record<string, Page | string> = {};
-    for (const path of NOINDEX_PATHS) noindex[path] = site[path] ?? (await api(path));
     results.push(
       checkMeta(metaRead),
       checkBuild(metaRead.data),
@@ -2666,7 +3171,6 @@ async function main(argv: string[]): Promise<number> {
       checkForecastCoverage(sources.data, ownerSourceIds(registry)),
       checkOpenapi(readApi(await api('/api/v1/openapi.json'), OpenApi31, OPENAPI_CACHE)),
       checkApiParams(await api('/api/v1/meta?x=1')),
-      checkNoindex(noindex),
       checkFresh('DE-1', snapReads.get('now')?.data, stationsRead.data, metaRead.data?.now),
       ...(['NL-1', 'FR-1', 'CH-1', 'DE-7', 'LU-1'] as const).map((id) =>
         checkFresh(id, snapReads.get('now')?.data, stationsRead.data, metaRead.data?.now),
@@ -2883,6 +3387,22 @@ async function main(argv: string[]): Promise<number> {
           )
         : { check: 'interval DE-6', ok: 'n/a', detail: 'skipped: slow (about 30 min); pass --interval' },
     );
+  } else if (mode === 'site') {
+    // P12b: only the public-site checks of the profile (the compose stack's run.sh judges both profiles with them).
+    const site: Record<string, Page | string> = {};
+    for (const { path } of [...PAGE_PATHS, ...NOT_FOUND_PATHS])
+      site[path] = await tryGet(`https://${domain}${path}`, net);
+    results.push(
+      ...(await siteChecks(
+        (path) => tryGet(`https://${domain}${path}`, net),
+        domain,
+        registry,
+        profile,
+        site,
+        readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'),
+        now,
+      )),
+    );
   } else if (mode === 'soak') {
     if (cap?.success && opsDoc?.success) {
       const s = soak(cap.data, opsDoc.data);
@@ -2898,9 +3418,7 @@ async function main(argv: string[]): Promise<number> {
     results.push(c.ok ? pass('capacity', out ?? 'printed') : miss('capacity', c.markdown));
   }
 
-  for (const r of results) {
-    console.log(`${r.ok === 'n/a' ? 'N/A ' : r.ok ? 'PASS' : 'FAIL'} ${r.check}${r.detail ? ` — ${r.detail}` : ''}`);
-  }
+  for (const r of results) console.log(formatResult(r));
   const failed = results.filter((r) => r.ok === false).length;
   console.log(`verify-prod: ${results.length} checks, ${failed} failed (${domain}, ${now.toISOString()})`);
   return failed === 0 ? 0 : 1;

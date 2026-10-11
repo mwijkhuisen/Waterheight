@@ -362,30 +362,15 @@ jobs:
         run: sudo deploy/tests/hardening.sh --ci
       - name: scripts/verify-prod.ts against the running stack
         run: |
-          node scripts/verify-prod.ts rivierstanden.example --resolve 203.0.114.10 --ca /ci/pki/pebble-root.pem \
+          # The profile of the phase the stack runs in: run.sh read it from the merged compose file (the default of
+          # deploy/compose.yaml), tested both phases and put it back (P12b, review CR-4), so the launch flip changes
+          # only that default and DEFAULT_PROFILE.
+          phase=$(cat /ci/site-phase)
+          [[ $phase == prelaunch || $phase == launch ]] || { echo "verify-prod: no site phase from run.sh ($phase)" >&2; exit 1; }
+          node scripts/verify-prod.ts rivierstanden.example --resolve 203.0.114.10 --ca /ci/pki/pebble-root.pem --profile "$phase" \
             | tee "$RUNNER_TEMP/verify-prod.txt" || true
-          # capture cannot succeed without internet in CI and the loaded data is a recorded fixture, so
-          # only the checks that need fresh production data may fail.
-          if grep '^FAIL' "$RUNNER_TEMP/verify-prod.txt" |
-            grep -vE '^FAIL (freshness|owner_specs|health DE-1|tier-1 DE-1|loader lag|replay DE-1|health NL-1|tier-1 NL-1|replay NL-1|health FR-1|health CH-1|tier-1 FR-1|tier-1 CH-1|coverage FR-1|coverage CH-1|interval CH-1|belgian set|fresh DE-1|fresh NL-1|fresh FR-1|fresh CH-1|api build|health DE-7|tier-1 DE-7|coverage DE-7|health LU-1|tier-1 LU-1|coverage LU-1|interval DE-7|bytes DE-7|fresh DE-7|fresh LU-1|label offset LU-1|owner health|forecast NL-1|forecast CH-4|rivers manifest|rivers tiles|rivers reaches|rivers download|static settled|static frames|static series|static lag|static rerender) '; then
-            echo "verify-prod failed a check other than the ones that need live data" >&2
-            exit 1
-          fi
-          grep -qE '^PASS headers / ' "$RUNNER_TEMP/verify-prod.txt"
-          grep -qE '^PASS owner leak ' "$RUNNER_TEMP/verify-prod.txt"
-          grep -qE '^PASS owner sources ' "$RUNNER_TEMP/verify-prod.txt"
-          grep -qE '^PASS owner stations ' "$RUNNER_TEMP/verify-prod.txt"
-          # "health" itself (the next word is the separator, not "params" or "DE-1").
-          grep -qE '^PASS health [^A-Za-z]' "$RUNNER_TEMP/verify-prod.txt"
-          grep -qE '^PASS health params ' "$RUNNER_TEMP/verify-prod.txt"
-          # P4b: the data routes through Caddy, their Cache-Control per age class, and noindex on every kind of path.
-          # P6b: the page's bundle carries the river-network licence text (no rivers data is installed in CI).
-          for check in 'api meta' 'api stations' 'api snapshot now' 'api snapshot 6h' 'api snapshot 3d' 'api openapi' \
-            'api params' 'noindex' 'rivers attribution' 'api states' 'class coverage' \
-            'static meta' 'static latest' 'static stations' 'static sources' 'static recent' 'static forecast' \
-            'static warnings' 'static status' 'static precompressed' 'runtime config' 'api sweep' 'pages' 'not found'; do
-            grep -qE "^PASS $check " "$RUNNER_TEMP/verify-prod.txt" || { echo "verify-prod: no PASS for $check" >&2; exit 1; }
-          done
+          # The allow-list of checks that need live data and the checks that must PASS: one file, shared with run.sh.
+          deploy/tests/e2e/verify-gate.sh "$RUNNER_TEMP/verify-prod.txt"
 
   # P3 (issue #18): the map spike under the exact production headers, served by
   # the real Caddy image and deploy/web/site.caddy over HTTPS (Caddy's local
@@ -453,29 +438,45 @@ jobs:
           done
           cat "$RUNNER_TEMP/e2e-api.log"
           exit 1
-      - name: Serve it through the real Caddy image and site.caddy (HTTPS on localhost; api:8080 is the runner)
+      # P12b (A4, A15): the site in both phases. e2e-caddy is prelaunch (the default of site.caddy: noindex, no robots.txt
+      # or sitemap) on 443, e2e-caddy-launch is RWS_SITE_PHASE=launch on 8444 (launch.spec.ts; its RWS_DOMAIN carries
+      # the port, so that the absolute URLs of robots.txt, the sitemap and the Open Graph tags are the origin the browser
+      # uses). Both read the phase snippets next to site.caddy.
+      - name: Serve it through the real Caddy image and site.caddy, in both phases (HTTPS on localhost:443 and :8444; api:8080 is the runner)
         run: |
           set -euo pipefail
           node apps/web/e2e/prepare-tiles.ts "$RUNNER_TEMP/tiles" "$RUNNER_TEMP/rivers" "$RUNNER_TEMP/downloads"
           mkdir -p "$RUNNER_TEMP/ops"
-          docker run -d --name e2e-caddy -p 127.0.0.1:443:443 --add-host=api:host-gateway \
-            -e RWS_DOMAIN=localhost -e RWS_CONTACT_EMAIL=ci@rivierstanden.example \
-            -e RWS_OPERATOR_NAME="E2E Operator" -e RWS_CDN_NAME= \
-            -v "$PWD/apps/web/e2e/Caddyfile.e2e:/etc/caddy/Caddyfile:ro" \
-            -v "$PWD/deploy/web/site.caddy:/etc/caddy/site.caddy:ro" \
-            -v "$PWD/apps/web/dist-e2e:/srv/www:ro" \
-            -v "$RUNNER_TEMP/tiles:/srv/rws/tiles:ro" \
-            -v "$RUNNER_TEMP/rivers:/srv/rws/public/data/v1/rivers:ro" \
-            -v "$RUNNER_TEMP/downloads:/srv/rws/public/downloads:ro" \
-            -v "$RUNNER_TEMP/ops:/srv/rws/public/ops:ro" \
-            -v "$RUNNER_TEMP/publish/v1:/srv/rws/public/www/v1:ro" \
-            "$CADDY_IMAGE" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
-          for _ in $(seq 1 30); do
-            if curl -fsSk -o /dev/null https://localhost/healthz; then exit 0; fi
-            sleep 1
+          serve() { # name port RWS_DOMAIN phase
+            docker run -d --name "$1" -p "127.0.0.1:$2:$2" --add-host=api:host-gateway \
+              -e RWS_DOMAIN="$3" -e RWS_SITE_PHASE="$4" -e RWS_CONTACT_EMAIL=ci@rivierstanden.example \
+              -e RWS_OPERATOR_NAME="E2E Operator" -e RWS_CDN_NAME= \
+              -v "$PWD/apps/web/e2e/Caddyfile.e2e:/etc/caddy/Caddyfile:ro" \
+              -v "$PWD/deploy/web/site.caddy:/etc/caddy/site.caddy:ro" \
+              -v "$PWD/deploy/web/phase-prelaunch.caddy:/etc/caddy/phase-prelaunch.caddy:ro" \
+              -v "$PWD/deploy/web/phase-launch.caddy:/etc/caddy/phase-launch.caddy:ro" \
+              -v "$PWD/apps/web/dist-e2e:/srv/www:ro" \
+              -v "$RUNNER_TEMP/tiles:/srv/rws/tiles:ro" \
+              -v "$RUNNER_TEMP/rivers:/srv/rws/public/data/v1/rivers:ro" \
+              -v "$RUNNER_TEMP/downloads:/srv/rws/public/downloads:ro" \
+              -v "$RUNNER_TEMP/ops:/srv/rws/public/ops:ro" \
+              -v "$RUNNER_TEMP/publish/v1:/srv/rws/public/www/v1:ro" \
+              "$CADDY_IMAGE" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+          }
+          serve e2e-caddy 443 localhost prelaunch
+          serve e2e-caddy-launch 8444 localhost:8444 launch
+          for url in https://localhost/healthz https://localhost:8444/healthz; do
+            up=false
+            for _ in $(seq 1 30); do
+              if curl -fsSk -o /dev/null "$url"; then up=true; break; fi
+              sleep 1
+            done
+            if [ "$up" != true ]; then
+              docker logs e2e-caddy
+              docker logs e2e-caddy-launch
+              exit 1
+            fi
           done
-          docker logs e2e-caddy
-          exit 1
       # P10a: the production owner site (deploy/web/owner.caddy: basic_auth, the owner headers, the owner tree, the
       # tiles and the river files) in a second real Caddy container. The password is made here, hashed in the Caddy
       # image and never printed or written to the repository; the secret file is the one-line `owner <hash>` that
@@ -521,7 +522,7 @@ jobs:
           # The password reaches the container by name only (-e E2E_OWNER_PW takes it from the step's environment).
           docker run --rm --init --network host --ipc=host \
             --add-host owner.localhost:127.0.0.1 \
-            -e CI=true -e E2E_BASE_URL=https://localhost \
+            -e CI=true -e E2E_BASE_URL=https://localhost -e E2E_BASE_URL_LAUNCH=https://localhost:8444 \
             -e E2E_OWNER_URL=https://owner.localhost:8443 -e E2E_OWNER_PW \
             -v "$PWD:/work" -w /work/apps/web \
             "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
@@ -549,6 +550,7 @@ jobs:
         if: failure()
         run: |
           docker logs e2e-caddy 2>&1 | tail -n 100
+          docker logs e2e-caddy-launch 2>&1 | tail -n 100
           docker logs e2e-caddy-owner 2>&1 | tail -n 100
           tail -n 100 "$RUNNER_TEMP/e2e-api.log"
           # Each failed test's page snapshot (error-context.md): what the browser showed, e.g. its own error page.

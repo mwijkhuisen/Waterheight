@@ -4,6 +4,7 @@ import { bareLine, recorded, writePayload } from '../../../../scripts/fixture-ar
 import { PUBLIC_ONLY_VIEWS, VIEWS } from '../../src/db/audience.ts';
 import { computeHealth, LagWindow, storeChecksums } from '../../src/load/health.ts';
 import { claimNightly } from '../../src/load/run.ts';
+import { OWNER_IDS } from '../publish/s2-ctx.ts';
 import { type Harness, harness, measurements } from './harness.ts';
 
 // Health is precomputed by the loader and read by the API as rws_api through
@@ -92,12 +93,12 @@ describe('source health', () => {
     );
     expect(ids).toContain('DE-1');
     expect(ids).toContain('NL-1');
-    for (const owner of ['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3', 'CANARY-OWNER'])
-      expect(ids).not.toContain(owner);
+    for (const owner of OWNER_IDS) expect(ids).not.toContain(owner);
     for (const off of ['NL-3', 'DE-9', 'DE-10']) expect(ids).not.toContain(off);
-    // Six captured owner sources; LU-3 answered, LU-4 only ever failed, the others have not been fetched at all.
+    // The captured owner sources of the registry (the canary aside); LU-3 answered, LU-4 only ever failed, the others
+    // have not been fetched at all.
     expect((await api.query(`SELECT * FROM ${PUBLIC_ONLY_VIEWS.ownerHealth}`)).rows).toEqual([
-      { healthy: 1, total: 6 },
+      { healthy: 1, total: OWNER_IDS.filter((id) => !id.startsWith('CANARY-')).length },
     ]);
     const owner = await h.t.connectAs('rws_owner_api');
     const own = Object.fromEntries(

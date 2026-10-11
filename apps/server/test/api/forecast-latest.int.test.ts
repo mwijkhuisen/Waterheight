@@ -142,8 +142,8 @@ beforeAll(async () => {
     stepS: 600,
     points: grid('2026-10-05T06:20:00Z', 6 * 47, 600_000, (i) => ({ value: 1000 + i })),
   });
-  // DE-2 (owner) on a public DE-1 series, Friday's run: 49 points two hours apart to Tuesday, an estimate after 48 h,
-  // one of them holding the owner canary.
+  // DE-2 (owner) on a public DE-1 series, Friday's run: 49 points two hours apart to Tuesday, an estimate after 48 h.
+  // The owner canary sits in the LU-3 run below, never in DE-2's (P12b: DE-2 goes public at its flip, plan §9).
   await seedRun({
     series: id.kaub as number,
     source: 'DE-2',
@@ -153,11 +153,12 @@ beforeAll(async () => {
     stepS: 7200,
     segmentEnd: '2026-10-04T05:00:00Z',
     points: grid(DE2_ISSUED, 49, 2 * H, (i) => ({
-      value: i === 3 ? CANARIES.owner.value : 300 + i,
+      value: 300 + i,
       flags: i > 24 ? FORECAST_FLAGS.ESTIMATE : 0,
     })),
   });
-  // LU-3 (owner) on a public LU-1 series: 46 hourly steps with a band; one point below the provider's floor.
+  // LU-3 (owner) on a public LU-1 series: 46 hourly steps with a band; one point below the provider's floor, one
+  // holding the owner canary.
   await seedRun({
     series: id.diekirch as number,
     source: 'LU-3',
@@ -166,7 +167,7 @@ beforeAll(async () => {
     kind: 'quantiles',
     stepS: 3600,
     points: grid('2026-10-05T06:00:00Z', 46, H, (i) => ({
-      value: 50 + i,
+      value: i === 3 ? CANARIES.owner.value : 50 + i,
       p10: 40 + i,
       p30: 45 + i,
       p50: 50 + i,
@@ -261,7 +262,7 @@ describe('forecast/latest.json through the database roles', { timeout: 300_000 }
     expect(de2?.validTs).toHaveLength(49);
     expect(de2?.flags.filter((f) => f === FORECAST_FLAGS.ESTIMATE)).toHaveLength(24);
     expect(de2?.flags.slice(0, 25).every((f) => f === 0)).toBe(true);
-    expect(de2?.value[3]).toBe(Number(CANARIES.owner.real));
+    expect(de2?.value[3]).toBe(300 + 3);
 
     const lu3 = by('LU-3');
     expect(lu3).toMatchObject({
@@ -284,6 +285,7 @@ describe('forecast/latest.json through the database roles', { timeout: 300_000 }
     expect(lu3?.band?.p10?.[5]).toBeNull();
     expect(lu3?.band?.p90?.[5]).toBeNull();
     expect(lu3?.value[4]).toBe(54);
+    expect(lu3?.value[3]).toBe(Number(CANARIES.owner.real));
     // without a limit nothing is cut
     const free = await readForecastLatest(own.db, 'owner', NOW, { limitsH: new Map() });
     expect(free.runs.find((r) => r.source === 'LU-3')?.validTs).toHaveLength(46);
