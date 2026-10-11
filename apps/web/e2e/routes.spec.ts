@@ -1,10 +1,14 @@
 import { type APIResponse, expect, test } from '@playwright/test';
 import { PAGE_ROUTES } from '../src/lib/routes.ts';
-import { productionCsp, securityTxt, siteHeaders } from './headers.ts';
+import { productionCsp, robotsTag, securityTxt, siteHeaders, sitePhase } from './headers.ts';
 
 // P4b routes (issue #19): what the site answers for the api, the assets, the app routes and everything else,
 // against the stand-in for Caddy (server.ts) locally and the real Caddy with site.caddy in CI. No browser is
 // needed: the `request` fixture runs once, in the chromium project. The e2e api's clock is 2026-10-26T12:00Z.
+// P12b: the site is in one of two phases (deploy/web/phase-<phase>.caddy; E2E_SITE_PHASE, default prelaunch, which is what
+// CI's public Caddy runs): prelaunch is noindex everywhere with no robots.txt or sitemap, launch drops noindex on the pages.
+// launch.spec.ts proves the launch phase against its own container.
+const PHASE = sitePhase();
 
 test.beforeEach(({ browserName }) => {
   test.skip(browserName !== 'chromium', 'no browser involved: runs once, in the chromium project');
@@ -13,7 +17,10 @@ test.beforeEach(({ browserName }) => {
 /** Every answer of the site, whatever its status, carries the A§12.2 headers and names no software. */
 function expectSiteHeaders(res: APIResponse) {
   const headers = res.headers();
-  expect(headers['x-robots-tag']).toBe('noindex');
+  const html = /^text\/html/.test(headers['content-type'] ?? '');
+  expect(headers['x-robots-tag'], 'X-Robots-Tag').toBe(
+    robotsTag(PHASE, decodeURIComponent(new URL(res.url()).pathname), res.status(), html),
+  );
   for (const [name, value] of siteHeaders()) expect(headers[name.toLowerCase()], name).toBe(value);
   expect(headers.server, 'no Server header').toBeUndefined();
   expect(headers.via, 'no Via header').toBeUndefined();
@@ -158,7 +165,8 @@ test('a miss under /assets, /tiles or /status/, and the files that do not exist,
     '/tiles',
     '/status/x',
     '/favicon.ico',
-    '/robots.txt',
+    // (prelaunch: robots.txt and the sitemap are two more missing files; launch serves them: launch.spec.ts)
+    ...(PHASE === 'prelaunch' ? ['/robots.txt', '/sitemap.xml'] : []),
     '/missing.txt',
     '/en/missing.png',
     '/404.html',

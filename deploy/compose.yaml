@@ -65,6 +65,11 @@ services:
       RWS_CDN_NAME: ${RWS_CDN_NAME:-}
       # KG-228: the reverse proxy in front of the site, if any (CIDRs); empty trusts nobody.
       RWS_TRUSTED_PROXIES: ${RWS_TRUSTED_PROXIES:-}
+      # P12b: the go-public switch (deploy/web/phase-<phase>.caddy, imported by site.caddy). The launch is one
+      # reviewed commit after the owner signs the checklist (E4): it changes this default from prelaunch (noindex,
+      # no robots.txt or sitemap) to launch. Production's rws.env never sets it; the rebuild drill's env file sets
+      # prelaunch to stay noindex (docs/runbooks/vps-rebuild.md).
+      RWS_SITE_PHASE: ${RWS_SITE_PHASE:-prelaunch}
     # Only directories no networked role writes: the root-owned status directory
     # (never capture's public/status, where a planted symlink would make Caddy
     # serve any file it can read) and the tiles directory, which only
@@ -109,6 +114,8 @@ services:
       RWS_OWNER_STATUS_DIR: /data/owner-status
       RWS_DOMAIN: ${RWS_DOMAIN:?}
       RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+      # Rebuild drill only (docs/runbooks/vps-rebuild.md): source IDs to leave out. Never set in production's rws.env.
+      RWS_CAPTURE_SKIP: ${RWS_CAPTURE_SKIP:-}
     secrets: [hc_ping_key, rws_x_api_key]
     volumes:
       - /srv/rws/raw:/data/raw

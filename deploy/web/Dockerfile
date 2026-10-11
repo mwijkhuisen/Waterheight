@@ -20,6 +20,7 @@ RUN cp /usr/bin/caddy /usr/bin/caddy.plain \
   && mv /usr/bin/caddy.plain /usr/bin/caddy \
   && mkdir -p /data/access /config \
   && chown -R 65533:65533 /data /config
-COPY deploy/web/Caddyfile deploy/web/site.caddy deploy/web/Caddyfile.owner deploy/web/owner.caddy /etc/caddy/
+# P12b: site.caddy imports phase-<RWS_SITE_PHASE>.caddy from its own directory: both phases ship, compose picks one.
+COPY deploy/web/Caddyfile deploy/web/site.caddy deploy/web/phase-prelaunch.caddy deploy/web/phase-launch.caddy deploy/web/Caddyfile.owner deploy/web/owner.caddy /etc/caddy/
 COPY --from=build /src/apps/web/dist /srv/www
 USER 65533:65533

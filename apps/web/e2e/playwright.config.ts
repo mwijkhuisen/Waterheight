@@ -8,6 +8,9 @@ import { defineConfig, devices } from '@playwright/test';
 // behind it (.github/workflows/ci.yml job e2e), and E2E_OWNER_URL to the real owner Caddy (owner.caddy, basic_auth);
 // without them the sandbox test server (server.ts) sends the same site.caddy headers, and a second instance of it in
 // owner mode stands in for owner.caddy. All of them are HTTPS.
+// P12b: launch.spec.ts needs the site in its launch phase (deploy/web/phase-launch.caddy): CI's second public Caddy
+// (E2E_BASE_URL_LAUNCH, port 8444), locally a third instance of the stand-in with E2E_SITE_PHASE=launch on 4445. The
+// other specs expect the prelaunch phase (E2E_SITE_PHASE, default prelaunch: routes.spec.ts).
 const external = process.env.E2E_BASE_URL;
 // E2E_COMPOSE=1 (P9a): the compose stack of the deploy job is already running at E2E_COMPOSE_URL; only degraded.spec.ts
 // runs, and no web server is started. With E2E_OWNER_SMOKE=1 (P10a, the same job's owner step) it is only
@@ -20,6 +23,7 @@ const viewport = { width: 1024, height: 768 };
 // The owner site: CI's real owner Caddy, or the stand-in on its own port. The password reaches the specs by the
 // environment (CI generates it and masks it); the local one is a fixed throw-away.
 const OWNER_PORT = 4444;
+const LAUNCH_PORT = 4445;
 const OWNER_API_PORT = 4482;
 const ownerUrl = process.env.E2E_OWNER_URL ?? (local ? `https://localhost:${OWNER_PORT}` : undefined);
 const ownerPw = process.env.E2E_OWNER_PW ?? (local ? 'e2e-owner-local' : undefined);
@@ -28,7 +32,7 @@ const ownerPublish = join(tmpdir(), 'rws-e2e-owner-publish');
 /** Files each kind of project runs. The public ones never run an owner spec (no credentials) or the tool specs. */
 const OWNER = /owner[^/]*\.spec\.ts$/;
 const PUBLIC_IGNORE =
-  /(owner[^/]*|cvd|screens|lighthouse|fps|no-webgl2|visual|flood-drill|egress|chaos[^/]*)\.spec\.ts$/;
+  /(owner[^/]*|cvd|screens|de2-beleg|lighthouse|fps|no-webgl2|visual|flood-drill|egress|chaos[^/]*)\.spec\.ts$/;
 
 // P12a: in compose mode E2E_SPEC names the one spec to run (default degraded): flood-drill, egress or a chaos spec
 // need the compose stack (loadtest.yml), so the other modes never run them (PUBLIC_IGNORE).
@@ -106,8 +110,9 @@ export default defineConfig({
             use: { ...chromium, launchOptions: { args: ['--disable-3d-apis'] } },
           },
           // The colour-vision-deficiency screenshots of the map and the legend (Chromium's CDP emulation), and P10d's
-          // screenshots of the viewer for the owner's visual check (screens.spec.ts).
-          { name: 'cvd', testMatch: /(cvd|screens)\.spec\.ts$/, use: chromium },
+          // screenshots of the viewer for the owner's visual check (screens.spec.ts), and P12b's on-demand captures of the BfG
+          // Belegexemplar notice (de2-beleg.spec.ts: it skips itself unless E2E_DE2_BELEG=1).
+          { name: 'cvd', testMatch: /(cvd|screens|de2-beleg)\.spec\.ts$/, use: chromium },
           // P11b (issue #26 B3, visual.spec.ts): three held playback scenes as screenshots, one fixed viewport, Chromium
           // only, baselines under visual/__screenshots__ (written by CI's pinned image, never by a developer machine).
           // maxDiffPixelRatio 0.002 (about 1,600 of 786,432 pixels) absorbs the software GL's anti-aliasing of the river
@@ -189,6 +194,16 @@ export default defineConfig({
             cwd: fileURLToPath(new URL('..', import.meta.url)),
             env: { E2E_API_PORT: '4480' },
             url: 'https://localhost:4443/healthz',
+            ignoreHTTPSErrors: true,
+            reuseExistingServer: false,
+            timeout: 60_000,
+          },
+          {
+            // The launch phase of the public site (launch.spec.ts): the same stand-in on its own port.
+            command: 'node e2e/server.ts',
+            cwd: fileURLToPath(new URL('..', import.meta.url)),
+            env: { E2E_API_PORT: '4480', E2E_PORT: String(LAUNCH_PORT), E2E_SITE_PHASE: 'launch' },
+            url: `https://localhost:${LAUNCH_PORT}/healthz`,
             ignoreHTTPSErrors: true,
             reuseExistingServer: false,
             timeout: 60_000,
