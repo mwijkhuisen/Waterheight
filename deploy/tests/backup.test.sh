@@ -879,18 +879,18 @@ expect_no_grep "." "$C/out"
 
 case_ "trusted proxies: the addresses and CIDRs of RWS_TRUSTED_PROXIES fill trusted4 and trusted6 (#132, KG-228)"
 setup
-echo 'RWS_TRUSTED_PROXIES=10.255.100.7/32  192.0.2.0/24 2001:DB8::/32 2001:db8:1:2:3:4:5:6 198.51.100.9 ::/0' >>"$RWS_ETC/rws.env"
+echo 'RWS_TRUSTED_PROXIES=10.255.100.7/32  192.0.2.0/24 2001:DB8::/32 2001:db8:1:2:3:4:5:6 198.51.100.9 10.0.0.0/8 2a00::/16' >>"$RWS_ETC/rws.env"
 run rws-trusted-proxies --dry-run
 expect_rc 0
 expect_eq "$(cat "$C/out")" "flush set inet rws trusted4
 flush set inet rws trusted6
-add element inet rws trusted4 { 10.255.100.7/32,192.0.2.0/24,198.51.100.9 }
-add element inet rws trusted6 { 2001:db8::/32,2001:db8:1:2:3:4:5:6,::/0 }"
+add element inet rws trusted4 { 10.255.100.7/32,192.0.2.0/24,198.51.100.9,10.0.0.0/8 }
+add element inet rws trusted6 { 2001:db8::/32,2001:db8:1:2:3:4:5:6,2a00::/16 }"
 expect_no_grep . "$FIX/nft"
 run rws-trusted-proxies
 expect_rc 0
-expect_grep "connection cap: 3 IPv4 and 3 IPv6 trusted proxy ranges exempt" "$C/out"
-expect_grep "^add element inet rws trusted4 \{ 10\.255\.100\.7/32,192\.0\.2\.0/24,198\.51\.100\.9 \}$" "$FIX/nft"
+expect_grep "connection cap: 4 IPv4 and 3 IPv6 trusted proxy ranges exempt" "$C/out"
+expect_grep "^add element inet rws trusted4 \{ 10\.255\.100\.7/32,192\.0\.2\.0/24,198\.51\.100\.9,10\.0\.0\.0/8 \}$" "$FIX/nft"
 run rws-trusted-proxies --quiet
 expect_rc 0
 expect_no_grep . "$C/out"
@@ -906,11 +906,11 @@ expect_grep "connection cap: 0 IPv4 and 0 IPv6" "$C/out"
 expect_eq "$(grep -c '^flush set inet rws trusted[46]$' "$FIX/nft")" 4
 expect_no_grep "add element" "$FIX/nft"
 
-case_ "trusted proxies: anything but an address or a CIDR is refused, both sets emptied, its text never logged"
+case_ "trusted proxies: anything but an address or a CIDR of IPv4 /8 or IPv6 /16 or longer is refused, both sets emptied, its text never logged (R2-SR-1)"
 setup
 for bad in example.com private_ranges '*' 1.2.3 300.1.1.1 010.0.0.1 10.0.0.1/33 1.2.3.4/ 1.2.3.4/024 1.2.3.4/24/1 \
   '1.2.3.4}' '1.2.3.4;' 192.0.2.1,192.0.2.2 2001:db8::1%eth0 ::ffff:192.0.2.1 1::2::3 1:2:3:4:5:6:7:8:9 \
-  1::2:3:4:5:6:7:8 12345:: 2001:db8::/129 fe80::g; do
+  1::2:3:4:5:6:7:8 12345:: 2001:db8::/129 fe80::g 0.0.0.0/0 10.0.0.0/7 ::/0 2000::/15; do
   sed -i '/^RWS_TRUSTED_PROXIES=/d' "$RWS_ETC/rws.env"
   echo "RWS_TRUSTED_PROXIES=192.0.2.10/32 $bad" >>"$RWS_ETC/rws.env"
   : >"$FIX/nft"

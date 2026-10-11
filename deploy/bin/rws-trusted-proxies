@@ -2,10 +2,12 @@
 # rws-trusted-proxies (rws-firewall.service and every rws-tick, as rws-resolvers; #132, KG-228).
 # Loads RWS_TRUSTED_PROXIES of /etc/rws/rws.env (the reverse proxies whose X-Forwarded-For Caddy
 # reads: CIDRs separated by spaces) into the nftables sets trusted4 and trusted6, which the
-# per-source connection cap of nftables.conf exempts: one proxy carries many visitors. Every entry
-# must be an IPv4 or IPv6 address with an optional prefix length; anything else (a name, which nft
-# would resolve, a zone id, a mapped address) empties both sets and fails: it never trusts more.
-# Empty or unset: both sets empty.
+# per-source connection cap of nftables.conf exempts over TCP: one proxy carries many visitors. Every
+# entry must be an IPv4 or IPv6 address with an optional prefix length of at least /8 (IPv4) or /16
+# (IPv6); anything else (a name, which nft would resolve, a zone id, a mapped address, 0.0.0.0/0 or
+# ::/0, which would switch the cap off for everyone) empties both sets and fails: it never trusts
+# more. Empty or unset: both sets empty. An unreadable or malformed rws.env (load_env dies) or a
+# failing nft leaves the sets as they were.
 #
 # Usage: rws-trusted-proxies [--dry-run] [--quiet]
 #   --quiet  log only a refused value (rws-tick, every 10 minutes)
@@ -42,8 +44,8 @@ ipv6() {
   IFS=: read -r -a g <<<"$a"
   ((${#g[@]} <= 7))
 }
-# Nothing, or `/` and a prefix length of at most $2.
-prefix() { [[ -z $1 ]] || { [[ $1 =~ ^/(0|[1-9][0-9]{0,2})$ ]] && ((${1#/} <= $2)); }; }
+# Nothing, or `/` and a prefix length from $3 to $2.
+prefix() { [[ -z $1 ]] || { [[ $1 =~ ^/[1-9][0-9]{0,2}$ ]] && ((${1#/} >= $3 && ${1#/} <= $2)); }; }
 
 unset RWS_TRUSTED_PROXIES
 load_env || true # no rws.env: nobody is trusted
@@ -52,9 +54,9 @@ v4=() v6=() bad=0 n=0
 for e in "${entries[@]}"; do
   n=$((n + 1)) e=${e,,}
   addr=${e%%/*}
-  if ipv4 "$addr" && prefix "${e#"$addr"}" 32; then
+  if ipv4 "$addr" && prefix "${e#"$addr"}" 32 8; then
     v4+=("$e")
-  elif ipv6 "$addr" && prefix "${e#"$addr"}" 128; then
+  elif ipv6 "$addr" && prefix "${e#"$addr"}" 128 16; then
     v6+=("$e")
   else
     bad=$n
@@ -69,6 +71,6 @@ batch='flush set inet rws trusted4'$'\n''flush set inet rws trusted6'$'\n'
 if ((DRY_RUN)); then printf '%s' "$batch"; else printf '%s' "$batch" | nft -f -; fi
 # The entry's number, never its text.
 ((bad == 0)) ||
-  die "RWS_TRUSTED_PROXIES entry $bad is not an IPv4 or IPv6 address or CIDR: no proxy is exempt from the connection cap"
+  die "RWS_TRUSTED_PROXIES entry $bad is not an IPv4 or IPv6 address or CIDR (IPv4 /8 or longer, IPv6 /16 or longer): no proxy is exempt from the connection cap"
 ((quiet || DRY_RUN)) ||
   log "connection cap: ${#v4[@]} IPv4 and ${#v6[@]} IPv6 trusted proxy ranges exempt (RWS_TRUSTED_PROXIES)"
