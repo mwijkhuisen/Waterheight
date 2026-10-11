@@ -145,6 +145,8 @@ test('without WebGL2 the table plays in the State mode from the frames', async (
   await expect(play).toBeEnabled();
   const row = page.locator('table tbody tr').filter({ hasText: XSS });
   await expect(row).toHaveCount(1);
+  // The paused snapshot of t is in before the mark: its request goes out after a debounce and must not count as played.
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   const mark = s.log.requests.length;
   await play.click();
   await expect(page.getByRole('button', { name: 'Pauzeren', exact: true })).toBeVisible();
