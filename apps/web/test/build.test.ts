@@ -353,7 +353,16 @@ describe('web build', () => {
         chunks.some((f) => f.startsWith(`assets/${part}-`)),
         part,
       ).toBe(true);
-    const id = /\b(?:BE-3|LU-2|LU-3|LU-4|DE-2|DE-3)\b/;
+    // The personal-use sources of the registry (P12b, A20: derived, so DE-2's flip changes no line here).
+    const personal = (
+      parse(readFileSync(new URL('../../../registry/sources.yaml', import.meta.url), 'utf8')) as {
+        sources: { id: string; audience: string }[];
+      }
+    ).sources
+      .filter((s) => s.audience === 'owner' && !s.id.startsWith('CANARY-'))
+      .map((s) => s.id);
+    expect(personal).toEqual(expect.arrayContaining(['BE-3', 'DE-3', 'LU-2', 'LU-3', 'LU-4']));
+    const id = new RegExp(`\\b(?:${personal.join('|')})\\b`);
     for (const file of chunks.filter((f) => f.endsWith('.js'))) {
       const code = page(file);
       expect(id.exec(code)?.[0], `${file}: a personal-use source id`).toBeUndefined();

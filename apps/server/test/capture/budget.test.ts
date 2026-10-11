@@ -273,7 +273,10 @@ describe('request budgets', () => {
 
   it('every owner-audience source with a spec has a private_basis', () => {
     const owners = [...new Set(registry.specs.filter((s) => s.audience === 'owner').map((s) => s.source))].sort();
-    expect(owners).toEqual(['BE-3', 'DE-2', 'DE-3', 'LU-2', 'LU-3', 'LU-4']);
+    // Every owner source of registry/sources.yaml (the canary aside) is captured: derived, never a list (P12b, A20).
+    const registered = [...registry.sources].filter(([id, s]) => s.audience === 'owner' && !id.startsWith('CANARY-'));
+    expect(owners).toEqual(registered.map(([id]) => id).sort());
+    expect(owners).toContain('DE-3');
     for (const id of owners) expect(registry.sources.get(id)?.private_basis, id).not.toBeNull();
   });
 });

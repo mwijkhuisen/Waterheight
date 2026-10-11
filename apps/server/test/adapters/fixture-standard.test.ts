@@ -238,7 +238,7 @@ describe('the fixture standard', () => {
   });
 
   it('the owner-audience sources are read from the registry', () => {
-    expect(ownerAdapters).toEqual(expect.arrayContaining(['be-3', 'de-2', 'de-3', 'lu-2', 'lu-3', 'lu-4']));
+    expect(ownerAdapters).toEqual(expect.arrayContaining(['be-3', 'de-3', 'lu-2', 'lu-3', 'lu-4']));
     for (const a of ownerAdapters) expect([a, ownerSources.includes(a)]).toEqual([a, true]);
   });
 

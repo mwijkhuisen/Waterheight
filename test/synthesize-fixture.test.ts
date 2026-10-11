@@ -610,19 +610,20 @@ describe('the export form of synthesize-fixture', { timeout: 30_000 }, () => {
       const smokeDir = join(tmp, `smoke-${counter}`);
       const outRoot = join(tmp, `out-${counter}`);
       mkdirSync(smokeDir, { recursive: true });
-      const o = { spec: 'de-2-wv', smokeDir, outRoot };
-      writeFileSync(join(smokeDir, 'de-2-wv.raw'), '[]');
+      // An owner JSON spec (LU-2; DE-2 leaves the owner audience at its flip, plan §9).
+      const o = { spec: 'lu-2-json', smokeDir, outRoot };
+      writeFileSync(join(smokeDir, 'lu-2-json.raw'), '[]');
       expect(refusal(() => synthesizeSmoke(o))).toBe(1);
-      writeFileSync(join(smokeDir, 'de-2-wv.raw'), '[{"a":"synthetic-1"}]');
+      writeFileSync(join(smokeDir, 'lu-2-json.raw'), '[{"a":"synthetic-1"}]');
       expect(refusal(() => synthesizeSmoke(o))).toBe(1);
       expect(readdirSync(tmp)).not.toContain(`out-${counter}`);
-      writeFileSync(join(smokeDir, 'de-2-wv.raw'), '[{"value": 1.5, "timestamp": "2026-09-29T10:00:00+02:00"}]');
+      writeFileSync(join(smokeDir, 'lu-2-json.raw'), '[{"value": 1.5, "timestamp": "2026-09-29T10:00:00+02:00"}]');
       expect(refusal(() => synthesizeSmoke(o))).toBeNull();
       expect(refusal(() => synthesizeSmoke(o))).toBe(1);
       expect(refusal(() => synthesizeSmoke({ ...o, force: true }))).toBeNull();
-      expect(readdirSync(join(outRoot, 'de-2', 'fixtures'))).toEqual([
-        'de-2-wv.synthetic.meta.json',
-        'de-2-wv.synthetic.raw',
+      expect(readdirSync(join(outRoot, 'lu-2', 'fixtures'))).toEqual([
+        'lu-2-json.synthetic.meta.json',
+        'lu-2-json.synthetic.raw',
       ]);
     });
 

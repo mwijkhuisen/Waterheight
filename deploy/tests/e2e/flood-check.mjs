@@ -3,7 +3,7 @@
 // the loader and the two publishers made of them and checks the criterion of the issue: every fixture station and area
 // reaches its expected level (deploy/tests/flood/expected.json, cross-checked against classify() by
 // test/flood-expected.test.ts), the AGE Cancel closes its alert, the TEST message never appears, the CH-4 storm run
-// shows in the forecast, and the owner-audience run of DE-2 is in the owner tree and in no public byte.
+// shows in the forecast, and the owner-audience run of DE-3 is in the owner tree and in no public byte.
 //
 //   node flood-check.mjs open     the AGE alert of the northern zone is still open (before the cancel phase)
 //   node flood-check.mjs closed   the Cancel has closed it and the TEST message is out; prints "PASS flood-check"
@@ -281,7 +281,7 @@ check('forecast/latest.json: the CH-4 storm run of station 2020 (public)', (w) =
   return bad;
 });
 
-check('DE-2 (owner audience): the run is in the owner tree and in no public byte', (w) => {
+check('DE-3 (owner audience): the run is in the owner tree and in no public byte', (w) => {
   const e = expected.owner;
   const st = w.stations.owner;
   const fc = w.forecast.owner;
@@ -292,15 +292,17 @@ check('DE-2 (owner audience): the run is in the owner tree and in no public byte
   const bad = [];
   if (run === undefined) bad.push(`no ${e.source} run for ${e.station} in the owner forecast/latest.json`);
   else {
+    // forecast/latest.json carries 48 hours: the first three days of the file's 14 (expected.owner.points).
+    const l = e.latest;
     if (
-      run.validTs.length !== e.points ||
-      Math.min(...run.value) !== e.valueMin ||
-      Math.max(...run.value) !== e.valueMax
+      run.validTs.length !== l.points ||
+      Math.min(...run.value) !== l.valueMin ||
+      Math.max(...run.value) !== l.valueMax
     )
-      bad.push('the run is not the truncated synthetic one');
+      bad.push('the run is not the first days of the synthetic Kaub file');
     if (run.agency !== e.agency) bad.push('agency');
-    // Issued 10 minutes before the drill clock, as the shifted payload states it.
-    if (Date.parse(run.issuedAt) !== drillNow - 10 * 60_000 || run.issuedInferred) bad.push('issue time');
+    // The file states no issue time: the loader infers it from the fetch, which is the drill clock.
+    if (Date.parse(run.issuedAt) !== drillNow || !run.issuedInferred) bad.push('issue time');
   }
   const pub = text('public', 'forecast/latest.json');
   const pubSources = text('public', 'sources.json');

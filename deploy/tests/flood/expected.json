@@ -921,12 +921,13 @@
   },
   "owner": {
     "station": "de.wsv.25700100",
-    "source": "DE-2",
+    "source": "DE-3",
     "agency": "BfG",
-    "fixture": "de-2-wv-truncated.synthetic",
-    "points": 13,
-    "valueMin": 530,
-    "valueMax": 549,
+    "fixture": "de-3-files-kaub.synthetic",
+    "points": 14,
+    "valueMin": 0,
+    "valueMax": 92,
+    "latest": { "points": 3, "valueMin": 1, "valueMax": 9 },
     "canary": ["777777.777", "777777.75"]
   }
 }

@@ -202,7 +202,7 @@ describe('the flood drill through the loader, the renderers and flood-check.mjs'
     expect(late.out).not.toMatch(/FAIL forecast\/latest\.json/);
   });
 
-  it('the CH-4 storm run is in the public forecast, the DE-2 run in the owner one only, the canary in the owner tree only', async () => {
+  it('the CH-4 storm run is in the public forecast, the DE-3 run in the owner one only, the canary in the owner tree only', async () => {
     const pubForecast = JSON.parse(readFileSync(join(open, 'public', 'v1', 'forecast', 'latest.json'), 'utf8')) as {
       runs: { source: string }[];
     };
@@ -210,8 +210,8 @@ describe('the flood drill through the loader, the renderers and flood-check.mjs'
       runs: { source: string }[];
     };
     expect(pubForecast.runs.map((r) => r.source)).toContain('CH-4');
-    expect(pubForecast.runs.map((r) => r.source)).not.toContain('DE-2');
-    expect(ownForecast.runs.map((r) => r.source)).toContain('DE-2');
+    expect(pubForecast.runs.map((r) => r.source)).not.toContain('DE-3');
+    expect(ownForecast.runs.map((r) => r.source)).toContain('DE-3');
     expect(ownForecast.runs.map((r) => r.source)).toContain('CH-4');
   });
 
@@ -244,18 +244,18 @@ describe('the flood drill through the loader, the renderers and flood-check.mjs'
     expect(early.out).toMatch(/Nord du Luxembourg: not in the file/);
   });
 
-  it('the checks see a broken drill: a CH-4 run that is not there, a DE-2 run in a public file, a canary in a public file', async () => {
+  it('the checks see a broken drill: a CH-4 run that is not there, a DE-3 run in a public file, a canary in a public file', async () => {
     const root = dir();
     await render(root);
     const pubForecast = join(root, 'public', 'v1', 'forecast', 'latest.json');
     const doc = JSON.parse(readFileSync(pubForecast, 'utf8')) as { runs: { source: string }[] };
     writeFileSync(pubForecast, JSON.stringify({ ...doc, runs: doc.runs.filter((r) => r.source !== 'CH-4') }));
-    writeFileSync(join(root, 'public', 'v1', 'sources.json'), '{"sources":[{"id":"DE-2"}]}');
+    writeFileSync(join(root, 'public', 'v1', 'sources.json'), '{"sources":[{"id":"DE-3"}]}');
     writeFileSync(join(root, 'public', 'v1', 'x.json'), '{"v":777777.75}');
     const r = floodCheck(root, 'closed');
     expect(r.status).toBe(1);
     expect(r.out).toMatch(/FAIL forecast\/latest\.json: the CH-4 storm run/);
-    expect(r.out).toMatch(/DE-2 is named in a public file/);
+    expect(r.out).toMatch(/DE-3 is named in a public file/);
     expect(r.out).toMatch(/a public file holds the canary/);
   });
 });
