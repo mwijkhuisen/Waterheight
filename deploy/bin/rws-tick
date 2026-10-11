@@ -10,7 +10,8 @@
 # 3. Restarts any container of the rws project that Docker reports unhealthy
 #    (a wedged recorder whose heartbeat stopped): Docker itself never restarts
 #    an unhealthy container, only one that exited.
-# 4. Backstops: reloads the container DNS allowlist (rws-resolvers), re-arms
+# 4. Backstops: reloads the container DNS allowlist (rws-resolvers) and the
+#    proxies exempt from the connection cap (rws-trusted-proxies), re-arms
 #    rws-status-copy.path if it is not active (a unit that hit a start or
 #    trigger limit stops watching for good) and publishes capture.json
 #    (rws-status-copy), in case an event was missed.
@@ -73,6 +74,7 @@ here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 dry=()
 ((!DRY_RUN)) || dry=(--dry-run)
 "$here/rws-resolvers" --quiet "${dry[@]}" || log "rws-resolvers failed"
+"$here/rws-trusted-proxies" --quiet "${dry[@]}" || log "rws-trusted-proxies failed"
 if ! systemctl is-active --quiet rws-status-copy.path; then
   if ((DRY_RUN)); then
     log "dry-run: would re-arm rws-status-copy.path"

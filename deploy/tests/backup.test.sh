@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Offline tests of rws-backup (with the nightly database dump), rws-restore-drill,
-# rws-tick, rws-resolvers, rws-status-copy, object-lock-prune.sh and the shared
+# rws-tick, rws-resolvers, rws-trusted-proxies, rws-status-copy, object-lock-prune.sh and the shared
 # ops.json writer (issue #16 P1b, P2a), and the restore drill's dump stage (P12b).
 # docker, nft, getent, curl, df and chown are stubs, and date answers
 # `date -u +%s` from $FIX/now when it exists; jq, zstd, sha256sum, shuf, flock,
@@ -737,6 +737,7 @@ expect_eq "$(ops 'keys')" '["disk_pct","drill","generated_at","last_backup"]'
 expect_grep "docker restart rws-capture-1" "$FIX/calls"
 expect_grep "^nft -f -$" "$FIX/calls"
 expect_grep "flush set inet rws resolvers4" "$FIX/nft"
+expect_grep "flush set inet rws trusted4" "$FIX/nft"
 expect_grep "rws-status-copy failed" "$C/out"
 expect_grep "^systemctl reset-failed rws-status-copy.path rws-status-copy.service$" "$FIX/calls"
 expect_grep "^systemctl start rws-status-copy.path$" "$FIX/calls"
@@ -745,14 +746,16 @@ run rws-tick
 expect_eq "$(grep -c '^systemctl start' "$FIX/calls")" 1
 expect_no_grep "^nft -f $RWS_ETC/nftables.conf$" "$FIX/calls"
 
-case_ "tick: a missing firewall table is restored, loudly, before the resolvers fill its sets (R2-S4)"
+case_ "tick: a missing firewall table is restored, loudly, before the resolvers and the trusted proxies fill its sets (R2-S4)"
 setup
 touch "$FIX/no-table"
+echo 'RWS_TRUSTED_PROXIES=10.255.100.7/32' >>"$RWS_ETC/rws.env"
 run rws-tick
 expect_rc 0
 expect_grep "the host firewall \(table inet rws\) is missing: loading $RWS_ETC/nftables.conf" "$C/out"
 expect_eq "$(grep -m 1 '^nft -f ' "$FIX/calls")" "nft -f $RWS_ETC/nftables.conf"
 expect_grep "^nft -f -$" "$FIX/calls"
+expect_grep "^add element inet rws trusted4 \{ 10\.255\.100\.7/32 \}$" "$FIX/nft"
 touch "$FIX/no-table"
 run rws-tick --dry-run
 expect_grep "dry-run: table inet rws is missing" "$C/out"
@@ -873,6 +876,50 @@ expect_grep "container DNS allowed to 1 IPv4 and 1 IPv6 resolvers" "$C/out"
 RWS_RESOLV_CONF=$C/real.conf run rws-resolvers --quiet
 expect_rc 0
 expect_no_grep "." "$C/out"
+
+case_ "trusted proxies: the addresses and CIDRs of RWS_TRUSTED_PROXIES fill trusted4 and trusted6 (#132, KG-228)"
+setup
+echo 'RWS_TRUSTED_PROXIES=10.255.100.7/32  192.0.2.0/24 2001:DB8::/32 2001:db8:1:2:3:4:5:6 198.51.100.9 ::/0' >>"$RWS_ETC/rws.env"
+run rws-trusted-proxies --dry-run
+expect_rc 0
+expect_eq "$(cat "$C/out")" "flush set inet rws trusted4
+flush set inet rws trusted6
+add element inet rws trusted4 { 10.255.100.7/32,192.0.2.0/24,198.51.100.9 }
+add element inet rws trusted6 { 2001:db8::/32,2001:db8:1:2:3:4:5:6,::/0 }"
+expect_no_grep . "$FIX/nft"
+run rws-trusted-proxies
+expect_rc 0
+expect_grep "connection cap: 3 IPv4 and 3 IPv6 trusted proxy ranges exempt" "$C/out"
+expect_grep "^add element inet rws trusted4 \{ 10\.255\.100\.7/32,192\.0\.2\.0/24,198\.51\.100\.9 \}$" "$FIX/nft"
+run rws-trusted-proxies --quiet
+expect_rc 0
+expect_no_grep . "$C/out"
+
+case_ "trusted proxies: empty, unset or only in the environment, both sets are emptied and nothing is added"
+setup
+RWS_TRUSTED_PROXIES=192.0.2.1/32 run rws-trusted-proxies
+expect_rc 0
+echo 'RWS_TRUSTED_PROXIES=' >>"$RWS_ETC/rws.env"
+run rws-trusted-proxies
+expect_rc 0
+expect_grep "connection cap: 0 IPv4 and 0 IPv6" "$C/out"
+expect_eq "$(grep -c '^flush set inet rws trusted[46]$' "$FIX/nft")" 4
+expect_no_grep "add element" "$FIX/nft"
+
+case_ "trusted proxies: anything but an address or a CIDR is refused, both sets emptied, its text never logged"
+setup
+for bad in example.com private_ranges '*' 1.2.3 300.1.1.1 010.0.0.1 10.0.0.1/33 1.2.3.4/ 1.2.3.4/024 1.2.3.4/24/1 \
+  '1.2.3.4}' '1.2.3.4;' 192.0.2.1,192.0.2.2 2001:db8::1%eth0 ::ffff:192.0.2.1 1::2::3 1:2:3:4:5:6:7:8:9 \
+  1::2:3:4:5:6:7:8 12345:: 2001:db8::/129 fe80::g; do
+  sed -i '/^RWS_TRUSTED_PROXIES=/d' "$RWS_ETC/rws.env"
+  echo "RWS_TRUSTED_PROXIES=192.0.2.10/32 $bad" >>"$RWS_ETC/rws.env"
+  : >"$FIX/nft"
+  run rws-trusted-proxies
+  [[ $rc == 1 ]] || fail "'$bad': exit $rc, expected 1"
+  grep -q "entry 2 is not an IPv4 or IPv6 address or CIDR" "$C/out" || fail "'$bad': no refusal"
+  ! grep -qF -- "$bad" "$C/out" || fail "'$bad': logged"
+  [[ $(cat "$FIX/nft") == $'flush set inet rws trusted4\nflush set inet rws trusted6' ]] || fail "'$bad': sets not emptied"
+done
 
 echo "$labels cases, $failures failures"
 ((failures == 0))
