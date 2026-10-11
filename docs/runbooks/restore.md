@@ -64,7 +64,7 @@ The last command also starts capture and load again: the raw archive is complete
 
 The dump carries the tables, the grants and the loader's cursor (`load_cursor`), so `load` carries on from where the dump was taken and closes the gap from the restored archive by itself. Objects and privileges come back owned by `rws_owner`, as in production. Check `curl -s https://<domain>/api/v1/health/sources | jq '.sources[] | {id, status, partitions}'`. The checksums of the partitions are recomputed once the loader has caught up with the manifest.
 
-The database commands (an empty database created like this one, `pg_restore` from a pipe, ownership and grants) were exercised against a throw-away PostgreSQL 18.6 cluster; the whole procedure has not run on a VPS. The monthly restore drill does not restore the dump yet (KG-054), and the Caddy certificates are not in the dump (KG-055): Caddy asks Let's Encrypt again.
+The database commands (an empty database created like this one, `pg_restore` from a pipe, ownership and grants) were exercised against a throw-away PostgreSQL 18.6 cluster; the whole procedure has not run on a VPS. Since P12b the monthly restore drill restores the dump too (KG-054 closed; `rws-restore-drill`, A§11.3). The Caddy certificates are not in the dump (KG-055, open for the owner to accept): Caddy asks Let's Encrypt again after DNS points at the new VPS.
 
 In both routes, replay anything still skipped or quarantined (`docs/runbooks/replay.md`), then empty the scratch directory (below).
 
@@ -73,7 +73,7 @@ In both routes, replay anything still skipped or quarantined (`docs/runbooks/rep
 ```bash
 sudo docker compose -p rws start capture load api
 sudo systemctl enable --now rws-update.timer rws-backup.timer rws-restore-drill.timer
-sudo rws-restore-drill --force        # sampled 100, matched 100
+sudo rws-restore-drill --force        # raw: sampled 100, matched 100; then the dump restore and the one-day replay (up to 105 min)
 sudo find /srv/rws/backup/drill -mindepth 1 -delete
 ```
 

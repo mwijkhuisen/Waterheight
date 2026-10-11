@@ -88,8 +88,10 @@ The chain: `rws-firewall` loads before Docker, which `Requires=` it. Docker rest
 
 ```bash
 sudo rws-restore-drill --force
-curl -s https://<domain>/status/ops.json | jq .drill       # sampled 100, matched 100
+curl -s https://<domain>/status/ops.json | jq .drill       # sampled 100, matched 100 (the shape is unchanged)
 ```
+
+Since P12b the drill also restores the dump into a throwaway database and replays a settled day. It takes up to 105 minutes (the unit allows 2 h) and needs about 1.75 GB of free RAM. A failure pings `restore-drill` with the code `disk`, `dump_restore`, `sanity` or `replay`; check the three false-FAIL causes first (a parser changed since the dump, a payload still quarantined, the loader behind at dump time; R-098). Record the real duration in #27 (KG-322).
 
 ## 7. Capacity: the owner-audience aggregate (for the `--capacity` docs PR)
 
