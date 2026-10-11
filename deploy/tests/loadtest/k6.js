@@ -1,6 +1,7 @@
 // P9b/P12a load test (k6 1.8.1, .github/workflows/loadtest.yml). One k6 process = one client. In CI there are six per
-// scenario, each on its own local address (--local-ips, deploy/tests/loadtest/run-k6.sh), so the API's per-client
-// limiter sees six distinct clients and is never disabled or fed a header. TLS is verified (SSL_CERT_FILE = the e2e
+// scenario, each on its own range of 21 local addresses (--local-ips, deploy/tests/loadtest/run-k6.sh): the limiter
+// is never disabled or fed a header, and no address holds more than the 32 connections to 443 that nftables.conf
+// allows a source (#132). The abuser and the edge probe are one real client each and keep one address. TLS is verified (SSL_CERT_FILE = the e2e
 // root; `insecureSkipTLSVerify` is never set). SCENARIO selects what the process does:
 //
 //   normal      CI. STATIC_RPS (300) static + API_RPS (50) API requests per second over all CLIENTS processes (each
@@ -10,6 +11,7 @@
 //   abusive     CI. One client hammers /series and /frames (ABUSE_RPS, 300 r/s, ten times the 30 r/s limit and sixty
 //               times the 5 r/s heavy one): at least half of the answers must be 429. ABUSE_ROTATE=1 sends a new
 //               X-Forwarded-For, X-Real-IP and True-Client-IP on every request: it must be throttled all the same.
+//               At most 28 VUs: one address, under the per-source cap of 32 connections (#132).
 //   flood       CI (flood drill). Visitor sessions, SESSIONS_PER_S (1) per process: meta, latest, tiles manifest,
 //               style assets (sprite, glyphs), ~30 PMTiles Range requests, 5 slider steps (API snapshot), 2 /series
 //               calls, with think time. p95 < 300 ms, errors < 0.1 %, lag (below).
@@ -27,7 +29,9 @@
 //   production  Owner-triggered, one process against a live site (BASE): static files only, PROD_RPS (1000) r/s incl.
 //               PMTiles Range requests, DURATION (15m), a polite User-Agent (UA). p95 < 300 ms, errors < 0.1 %;
 //               aborts at once when errors exceed 1 % or /api/v1/health goes red (non-200 or `down`, or no longer `ok`
-//               when it was at the start). No API call but that health sample.
+//               when it was at the start). No API call but that health sample. At most 26 + 4 (health) VUs: one
+//               address may hold 32 connections to 443 (#132), so 1,000 r/s needs answers within about 26 ms; over
+//               that the run shows dropped iterations, not the site's capacity.
 //
 // Loader lag (normal, flood, saturation): a sampler reads /api/v1/health every HEALTH_EVERY_S (10 s) and REQUIRES a
 // non-null loader.lag_p95_s and a generated_at younger than 5 minutes: either missing is a failed check (health_ok),
@@ -184,7 +188,7 @@ if (SCENARIO === 'normal') {
   th('dropped_iterations', 'counter', ['count==0']);
   healthThresholds();
 } else if (SCENARIO === 'abusive') {
-  scenarios.abuse = arrival('abuse', ABUSE_RPS, 20, 200);
+  scenarios.abuse = arrival('abuse', ABUSE_RPS, 20, 28);
   keepKinds(['abuse']);
   // Never lenient: the abuser must be throttled in every window.
   thresholds.abuse_429 = ['rate>0.5'];
@@ -215,7 +219,7 @@ if (SCENARIO === 'normal') {
   thresholds.edge_static_ok = ['rate>=0.99'];
   thresholds.edge_health_ok = ['rate>=0.95'];
 } else {
-  scenarios.static = arrival('prodMix', PROD_RPS, 200, 1500);
+  scenarios.static = arrival('prodMix', PROD_RPS, 26, 26);
   scenarios.health = healthScenario('prodHealth');
   keepKinds(['static_meta', 'static_latest', 'static_recent', 'static_settled', 'tile_range', 'map_asset']);
   thresholds['http_req_duration{scenario:static}'] = ['p(95)<300'];

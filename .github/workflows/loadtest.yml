@@ -1,7 +1,7 @@
 # Load, drill and chaos tests (issue #24, P9b; issue #27, P12a; PHASES §28, §42): k6 and the compose end-to-end stack
 # (deploy/tests/e2e/run.sh in RWS_E2E_MODE loadtest, drill or chaos, with the fake upstream feeding capture) on a CI runner.
 #   loadtest    stack -> seed -> egress profile (cold cache) -> brownout auto-arm (the real rws-brownout.timer) ->
-#               wait for a loader lag -> k6 normal 15 min (50 r/s API + 300 r/s static over 6 clients on 6 addresses:
+#               wait for a loader lag -> k6 normal 15 min (50 r/s API + 300 r/s static over 6 clients on 6 address ranges:
 #               p95 < 300 ms, errors < 0.1 %, loader lag p95 < 120 s) -> abusive client A/B/A/B plus a header-rotating
 #               variant (429 for the abuser, others' p95 +10 % at most: compare-p95.mjs) -> saturation (lag p95 < 120 s
 #               while the API is saturated) -> oom-restart.sh -> hardening.sh --ci.
@@ -153,10 +153,11 @@ jobs:
       # Capture fetches on its cron ticks (10-15 min), so the first loader lag can take that long; k6 requires one.
       - name: Wait for a loader lag in /api/v1/health
         run: sudo deploy/tests/loadtest/wait-health.sh 1500
-      # The six addresses live on vext1 inside the namespace `ext` (not on a host interface): from the host, traffic
+      # The client addresses live on vext1 inside the namespace `ext` (not on a host interface): from the host, traffic
       # would reach Caddy masqueraded as the bridge gateway, which the limiter keys as one shared client. So k6 runs
-      # in the namespace (the filesystem is shared), as root, one process per address.
-      - name: k6 normal, 6 clients on 6 addresses for 15 minutes (50 r/s API + 300 r/s static; TLS verified against the e2e root)
+      # in the namespace (the filesystem is shared), as root, one process per range of 21 addresses: one address may
+      # hold at most 32 connections to 443 (nftables.conf, #132), fewer than a process's VUs.
+      - name: k6 normal, 6 clients on 6 address ranges for 15 minutes (50 r/s API + 300 r/s static; TLS verified against the e2e root)
         run: sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/normal" SCENARIO=normal DURATION=15m
       # A, B, A, B and a rotating-header window of 2 minutes each, the normal mix on every client; in B one client (5)
       # hammers /series and /frames. LENIENT: the other clients are judged by compare-p95.mjs, not by thresholds; the

@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# CI only (P12a; .github/workflows/loadtest.yml; as root): runs k6.js as one process per client address in the client
+# CI only (P12a; .github/workflows/loadtest.yml; as root): runs k6.js as one process per client in the client
 # namespace `ext` (the stack's coordinates come from /ci/loadtest.env, written by deploy/tests/e2e/run.sh), waits for all,
 # prints the tail of every log and exits non-zero when any process failed (a breached threshold included).
 #   run-k6.sh <k6 binary> <out dir> [NAME=value ...]
 # The NAME=value pairs go to every k6 process (SCENARIO, DURATION, LENIENT, MAP_ASSETS, ...; see k6.js). ABUSER_INDEX=n
 # makes process n run SCENARIO=abusive (with ABUSE_ROTATE if given) while the others run SCENARIO=normal; it is no k6
-# variable. SCENARIO=saturation gives process n the n-th range of RWS_E2E_SAT_RANGES (21 addresses) instead of its one
-# address. SCENARIO=edge runs one process, on the first address only (#132: the honest visitor beside the crowd).
+# variable. Process n sends from the n-th range of RWS_E2E_SAT_RANGES (21 addresses): one process stands for many
+# visitors, and nftables.conf allows a source at most 32 concurrent connections to 443 (#132), which one address
+# running a whole client's VUs would exceed. Two processes stand for one real client and keep one address: the
+# abuser (its address of RWS_E2E_CLIENT_IPS, the limiter's key) and SCENARIO=edge, which runs one process on the
+# first address only (#132: the honest visitor beside the crowd).
 # Why a namespace: a request from the host to a published port is masqueraded to the bridge gateway, which
 # the limiter keys as one shared client; from `ext` every address is seen as itself.
 set -euo pipefail
@@ -27,7 +30,7 @@ shift 2
 }
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-kv=() abuser='' saturation='' edge=''
+kv=() abuser='' edge=''
 for a in "$@"; do
   [[ $a =~ ^[A-Z][A-Z0-9_]*=[A-Za-z0-9_.:/@,-]*$ ]] || {
     echo "run-k6: bad argument '$a'" >&2
@@ -35,7 +38,6 @@ for a in "$@"; do
   }
   case $a in
     ABUSER_INDEX=*) abuser=${a#*=} ;;
-    SCENARIO=saturation) saturation=1 kv+=("$a") ;;
     SCENARIO=edge) edge=1 kv+=("$a") ;;
     *) kv+=("$a") ;;
   esac
@@ -60,14 +62,12 @@ if [[ -n $abuser ]]; then
     exit 64
   }
 fi
-local_ips=("${ips[@]}")
-if [[ -n $saturation ]]; then
-  IFS=, read -r -a local_ips <<<"${RWS_E2E_SAT_RANGES:-}"
-  ((${#local_ips[@]} == ${#ips[@]})) || {
-    echo "run-k6: RWS_E2E_SAT_RANGES has ${#local_ips[@]} ranges for ${#ips[@]} clients" >&2
-    exit 1
-  }
-fi
+IFS=, read -r -a local_ips <<<"${RWS_E2E_SAT_RANGES:-}"
+((${#local_ips[@]} == ${#ips[@]})) || {
+  echo "run-k6: RWS_E2E_SAT_RANGES has ${#local_ips[@]} ranges for ${#ips[@]} clients" >&2
+  exit 1
+}
+[[ -z $abuser ]] || local_ips[abuser]=${ips[abuser]}
 [[ -z $edge ]] || ips=("${ips[0]}") local_ips=("${ips[0]}")
 install -d -m 0755 "$out"
 
