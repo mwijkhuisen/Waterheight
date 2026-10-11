@@ -73,7 +73,7 @@ Signed (owner): ______________________  Date: ____-__-__
 
 - [ ] [CI] The flood drill passed: `scripts/flood-drill` runs in the compose end-to-end stack (`RWS_E2E_MODE=drill`, `deploy/tests/flood/run.sh`, `.github/workflows/loadtest.yml`); it is CI only and refuses anything else. Run: ______________.
 - [ ] [owner] The egress budget in [`docs/capacity.md`](capacity.md) has the owner inputs filled in (`inputs` of `docs/capacity-egress.json`: uplink and monthly quota from the plan ordered in A3), and the flood-day peak is judged against D20.
-- [ ] [owner] The production k6 run passed: `.github/workflows/loadtest.yml`, `workflow_dispatch` with mode `production` (the `production` environment, your approval; static-only burst against `vars.LOADTEST_TARGET`). From one runner it may hold 32 connections to 443 (#132, KG-337): dropped iterations mean the runner's distance, not the site. Run: ______________.
+- [ ] [owner] The production k6 run passed: `.github/workflows/loadtest.yml`, `workflow_dispatch` with mode `production` (the `production` environment, your approval; static-only burst against `vars.LOADTEST_TARGET`). Dropped iterations are reported, not judged: from one runner the burst holds at most 26 + 4 connections to 443 (the cap of 32 per source, #132, KG-337), so they measure the runner's distance, not the site. Run: ______________.
 - [ ] [owner] The brownout and the CDN break-glass are read and understood: [`brownout`](runbooks/brownout.md), [`cdn-break-glass`](runbooks/cdn-break-glass.md) (pre-written, not armed).
 
 Signed (owner): ______________________  Date: ____-__-__

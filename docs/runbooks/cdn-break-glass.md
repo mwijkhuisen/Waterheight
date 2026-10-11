@@ -16,7 +16,7 @@ Agents never do this; it needs the registrar, the CDN account and the VPS (owner
 - Get the provider's **published list of edge address ranges** (CIDRs, IPv4 and IPv6) and where they announce changes. They are needed for `RWS_TRUSTED_PROXIES` (step 2).
 - Check that the provider can: cache by path pattern with everything else bypassing the cache, forward `Range` and `If-Range` to the origin and serve byte ranges from its cache (PMTiles), honour the origin's `Cache-Control`, never cache `4xx`/`5xx`, forward `/.well-known/acme-challenge/*` to the origin, and connect to the origin over HTTPS with certificate verification on.
 - Keep the DNS panel login and the CDN login in the owner's password manager only (`docs/security/secrets.md`).
-- **Origin authentication is a precondition** (review SR-3, R-097). Trusting the CDN's ranges in `RWS_TRUSTED_PROXIES` (step 2) means anyone who can send from those ranges, other customers of the same CDN included, can set `X-Forwarded-For` and spread one client over many limiter keys, as long as the origin is reachable directly. Arm only a provider that authenticates its pulls (authenticated origin pulls with a client certificate, or a secret header) **and** the matching origin check written and reviewed in a PR beforehand, or lock the origin's 80 and 443 to the CDN's ranges for the time it is armed (also a reviewed `nftables.conf` change, with its removal as the first rollback step). Neither exists today: until one does, D20 is armed only by a PR that adds it.
+- **Origin authentication is a precondition** (review SR-3, R-097). Trusting the CDN's ranges in `RWS_TRUSTED_PROXIES` (step 2) means anyone who can send from those ranges, other customers of the same CDN included, can set `X-Forwarded-For` and spread one client over many limiter keys, and passes the per-source connection cap (#132), as long as the origin is reachable directly. Arm only a provider that authenticates its pulls (authenticated origin pulls with a client certificate, or a secret header) **and** the matching origin check written and reviewed in a PR beforehand, or lock the origin's 80 and 443 to the CDN's ranges for the time it is armed (also a reviewed `nftables.conf` change, with its removal as the first rollback step). Neither exists today: until one does, D20 is armed only by a PR that adds it.
 
 ## 1. Lower the TTL first (a day ahead if possible)
 
@@ -24,12 +24,19 @@ At the registrar or DNS host, lower the TTL of the `A` and `AAAA` records of the
 
 ## 2. Origin side (VPS), before DNS changes
 
-1. **Trusted proxies.** Put the CDN's edge ranges in `/etc/rws/rws.env`: `RWS_TRUSTED_PROXIES=<cidr> <cidr> …` (space separated, IPv4 and IPv6). Without it every visitor looks like one CDN address: the per-client limiter would throttle everybody together and the masked access log would be useless. With it the public site reads `X-Forwarded-For` from those peers only and takes the right-most address that is not trusted (`docs/runbooks/api.md` §6, KG-228). A malformed value stops `caddy` at start, so run this step in a quiet hour.
+1. **Trusted proxies.** Put the CDN's edge ranges in `/etc/rws/rws.env`: `RWS_TRUSTED_PROXIES=<cidr> <cidr> …` (space separated, IPv4 and IPv6). Without it every visitor looks like one CDN address: the per-client limiter would throttle everybody together and the masked access log would be useless. With it the public site reads `X-Forwarded-For` from those peers only and takes the right-most address that is not trusted (`docs/runbooks/api.md` §6, KG-228). A malformed value stops `caddy` at start, so run this step in a quiet hour. Keep any proxy of yours that is still in front (KG-228) in the list.
+
+   The same variable feeds the firewall (#132): every CDN edge is the TCP peer of many visitors, and the per-source cap of 32 connections to 443 in `nftables.conf` would hold each edge to 32. `rws-trusted-proxies` loads the list into the exempt sets `trusted4` and `trusted6`; it runs every 10 minutes from `rws-tick`, but arm it at once and check it (an entry that is not an IPv4 or IPv6 address or CIDR empties both sets and exits 1):
+
+   ```bash
+   sudo rws-trusted-proxies
+   sudo nft list set inet rws trusted4; sudo nft list set inet rws trusted6   # the CDN's ranges
+   ```
 2. **Privacy page.** In the same file set `RWS_CDN_NAME=<name of the CDN>` (at most 80 characters; no `{`, `}`, `#`, `"` or `\`). The privacy page then names the CDN **first**, before anything else it says about processing, and states that every request to the site passes through the CDN, which sees visitors' IP addresses and all request paths, and caches only `/tiles/*` and `/assets/*`. If the page still says "no CDN" the change does not go live. Have the owner approve the text (E5).
 3. Redeploy the current release so Caddy reads both values: `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`.
 4. Check: `curl -s https://<domain>/runtime-config.json` shows `"cdn":"<name>"`; the privacy page in NL and EN names the CDN; `sudo docker logs rws-caddy-1 2>&1 | tail` shows no start error.
 5. **CAA and certificates.** The origin keeps its Let's Encrypt certificate (`CAA 0 issue "letsencrypt.org"`). If the CDN issues its own edge certificate, add a `CAA` `issue` record for **its** certificate authority before the cut-over, and keep the Let's Encrypt one: Caddy renews through the ACME HTTP-01 challenge on port 80 of the origin, so the pull zone must forward `/.well-known/acme-challenge/*` uncached to the origin, and port 80 must still reach the VPS. The CDN connects to the origin by its public name over HTTPS with verification on (never "flexible" or unverified origin TLS).
-6. The VPS firewall does not change; the origin stays reachable directly, which is the rollback path.
+6. The firewall's rules do not change; only its exempt sets now hold the CDN's ranges (item 1). The origin stays reachable directly, which is the rollback path.
 
 ## 3. Pull zone
 
@@ -56,7 +63,7 @@ Test the zone before any DNS change if the provider allows a test hostname or a 
 
 ## 5. While armed
 
-- Refresh `RWS_TRUSTED_PROXIES` whenever the provider announces new ranges (subscribe to its notices; check monthly). A range missing from the list degrades gracefully but wrongly: visitors behind it share one limiter key.
+- Refresh `RWS_TRUSTED_PROXIES` whenever the provider announces new ranges (subscribe to its notices; check monthly), then `sudo rws-trusted-proxies`. A range missing from the list degrades gracefully but wrongly: visitors behind it share one limiter key, and its edges are held to 32 connections each.
 - Keep the privacy page truthful: the CDN stays named while it serves traffic.
 - The brownout (P12a) still works: Caddy raises the TTLs of mutable paths, which the CDN does not cache anyway; `/tiles/*` and `/assets/*` are immutable.
 
@@ -64,6 +71,6 @@ Test the zone before any DNS change if the provider allows a test hostname or a 
 
 1. In the DNS panel **delete the CDN `CNAME` record** and restore the original `A` and `AAAA` records. Because the TTL was lowered (step 1), clients return within minutes.
 2. When `dig +short <domain>` from two resolvers shows the VPS addresses again and the CDN traffic is nil, disable the pull zone (or delete it) and remove the CDN's `CAA` record.
-3. Clear `RWS_CDN_NAME` (and `RWS_TRUSTED_PROXIES`, unless another proxy of yours is still in front) in `/etc/rws/rws.env` and `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`. Check that the privacy page again says that no CDN is used, **after** the DNS change has propagated and not before: the page must never be untrue in either direction.
+3. Clear `RWS_CDN_NAME` (and the CDN's ranges from `RWS_TRUSTED_PROXIES`, keeping any proxy of yours that is still in front) in `/etc/rws/rws.env` and `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`, then `sudo rws-trusted-proxies`, so the CDN's ranges are capped again at once (else within 10 minutes, by `rws-tick`); `sudo nft list set inet rws trusted4` holds only what is left. Check that the privacy page again says that no CDN is used, **after** the DNS change has propagated and not before: the page must never be untrue in either direction.
 4. Raise the TTL back to its normal value after a day of stable operation.
 5. Ask the provider to delete the logs it kept, in writing, and note the date.
