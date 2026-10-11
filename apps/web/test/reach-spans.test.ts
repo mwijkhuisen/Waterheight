@@ -34,18 +34,18 @@ describe('spansOf on the fixture release', () => {
     for (const [id, fs] of spans) if (fs.tidal === true) expect(fs.span === null || fs.span.tidal, id).toBe(true);
   });
 
-  it('measures the Chooz to Eijsden gap as meuse.24 to 27, 139 km, and the next stretch apart', () => {
-    for (const id of ['meuse.24', 'meuse.25', 'meuse.26', 'meuse.27']) {
+  it('measures the Chooz to Eijsden gap as meuse.27 to 30, 139 km, and the next stretch apart', () => {
+    for (const id of ['meuse.27', 'meuse.28', 'meuse.29', 'meuse.30']) {
       expect(at(id)?.up).toEqual(['fr.sandre.B720000002']);
       expect(at(id)?.down).toEqual(['nl.rws.eijsden.grens']);
       expect(at(id)?.lengthKm).toBeCloseTo(139.222, 3);
     }
-    expect(at('meuse.23')?.lengthKm).toBeCloseTo(2.323, 3);
-    expect(at('meuse.28')?.lengthKm).toBeCloseTo(0.174, 3);
+    expect(at('meuse.26')?.lengthKm).toBeCloseTo(2.323, 3);
+    expect(at('meuse.31')?.lengthKm).toBeCloseTo(0.174, 3);
   });
 
   it('groups co-located stations in file order at a span end', () => {
-    expect(at('meuse.23')?.up).toEqual(['fr.sandre.B720000001', 'fr.sandre.B720000004']);
+    expect(at('meuse.26')?.up).toEqual(['fr.sandre.B720000001', 'fr.sandre.B720000004']);
   });
 
   it('walks every arm of a bifurcation, a reach on two paths taking the first in walk order', () => {
@@ -69,12 +69,12 @@ describe('spansOf on the fixture release', () => {
 
   it('puts the midpoint of a reach on its span by the lengths before it', () => {
     const len = (id: string) => graph.reaches.find((r) => r.id === id)?.length_km ?? Number.NaN;
-    const total = len('meuse.24') + len('meuse.25') + len('meuse.26') + len('meuse.27');
-    expect(at('meuse.24')?.pos).toBeCloseTo(len('meuse.24') / 2 / total, 9);
-    expect(at('meuse.25')?.pos).toBeCloseTo((len('meuse.24') + len('meuse.25') / 2) / total, 9);
-    expect(at('meuse.26')?.pos).toBeCloseTo((len('meuse.24') + len('meuse.25') + len('meuse.26') / 2) / total, 9);
-    expect(at('meuse.27')?.pos).toBeCloseTo(
-      (len('meuse.24') + len('meuse.25') + len('meuse.26') + len('meuse.27') / 2) / total,
+    const total = len('meuse.27') + len('meuse.28') + len('meuse.29') + len('meuse.30');
+    expect(at('meuse.27')?.pos).toBeCloseTo(len('meuse.27') / 2 / total, 9);
+    expect(at('meuse.28')?.pos).toBeCloseTo((len('meuse.27') + len('meuse.28') / 2) / total, 9);
+    expect(at('meuse.29')?.pos).toBeCloseTo((len('meuse.27') + len('meuse.28') + len('meuse.29') / 2) / total, 9);
+    expect(at('meuse.30')?.pos).toBeCloseTo(
+      (len('meuse.27') + len('meuse.28') + len('meuse.29') + len('meuse.30') / 2) / total,
       9,
     );
   });
@@ -194,11 +194,11 @@ describe('the bins of a reach (#112)', () => {
       const fs = spans.get(r.id);
       expect(fs?.bins.length, r.id).toBe(binCount(r.length_km));
     }
-    expect(spans.get('rhine.59')?.bins).toHaveLength(8);
+    expect(spans.get('rhine.61')?.bins).toHaveLength(8);
   });
 
   it('puts bin i at (i + 0.5) / n of the reach, so pos increases along them', () => {
-    const fs = spans.get('rhine.59');
+    const fs = spans.get('rhine.61');
     expect(fs?.bins.map((b) => b?.pos)).toEqual(Array.from({ length: 8 }, (_, i) => expect.closeTo((i + 0.5) / 8, 9)));
     // a 1-bin reach is its midpoint; every bin of a multi-bin reach lies on the reach's own span
     for (const [id, f] of spans) {

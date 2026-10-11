@@ -86,7 +86,7 @@ describe('the fixture chains', () => {
         allGroups(sambre.children)
           .map((g) => g.kind === 'group' && g.riverId)
           .sort(),
-    ).toEqual(['hante', 'helpe-majeure', 'helpe-mineure', 'thure']);
+    ).toEqual(['hante', 'helpe-majeure', 'helpe-mineure', 'solre', 'thure']);
     expect(sambre?.kind === 'group' && idsOf(sambre.children)).toEqual(
       expect.arrayContaining(['fr.sandre.D016221001', 'fr.sandre.D022000101', 'fr.sandre.D022000201']),
     );
@@ -134,7 +134,8 @@ describe('the fixture chains', () => {
 
   it('is empty for a station the file does not place', () => {
     expect(chain(graph, rivers, 'nl.nowhere.x', everyone)).toEqual([]);
-    expect(chain(graph, rivers, 'fr.sandre.B110000001', everyone)).toEqual([]);
+    // A head gauge (the first Moselle gauge): nothing upstream. The Meuse head B110000001 has the Mouzon above it (#126).
+    expect(chain(graph, rivers, 'fr.sandre.A402061001', everyone)).toEqual([]);
   });
 });
 

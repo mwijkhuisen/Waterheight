@@ -210,7 +210,7 @@ describe(`canal traps (stations within 1 km of a trap way: ${trapCounts})`, () =
   it('puts every placed station on an edge of its own river', SLOW, () => {
     const placedRules = new Set(['override', 'name', 'official_km']);
     const some = placed.stations.filter((s) => placedRules.has(s.rule));
-    expect(some.length).toBeGreaterThan(761);
+    expect(some.length).toBeGreaterThan(851);
     const wrong = some.filter((s) => s.river === null || !edgeOf(s).rivers.includes(s.river)).map((s) => s.id);
     expect(wrong).toEqual([]);
   });
@@ -238,7 +238,7 @@ describe(`canal traps (stations within 1 km of a trap way: ${trapCounts})`, () =
 
   it('places by name only on the river that the published water body names', SLOW, () => {
     const byName = placed.stations.filter((s) => s.rule === 'name');
-    expect(byName.length).toBeGreaterThan(607);
+    expect(byName.length).toBeGreaterThan(685);
     const wrong = byName
       .filter((s) => riverOf(net, overridesFile, inputs.get(s.id) as never) !== s.river)
       .map((s) => s.id);
@@ -721,11 +721,11 @@ describe('flags and travel times', () => {
     const emmerich = placed.reaches.find(
       (r) => r.up_station === 'de.wsv.2790020' && r.down_station === 'nl.rws.lobith.bovenrijn.tolkamer',
     );
-    expect(emmerich?.id).toBe('rhine.59');
+    expect(emmerich?.id).toBe('rhine.61');
     expect(emmerich?.travel_time_h).toEqual([1, 9]);
     const pairs = new Set((rivers.travel_times ?? []).map((t) => `${t.from_station}>${t.to_station}`));
     const timed = placed.reaches.filter((r) => r.travel_time_h !== null);
-    expect(timed.map((r) => r.id)).toEqual(['rhine.59']);
+    expect(timed.map((r) => r.id)).toEqual(['rhine.61']);
     for (const r of timed) expect(pairs.has(`${r.up_station}>${r.down_station}`), r.id).toBe(true);
   });
 
