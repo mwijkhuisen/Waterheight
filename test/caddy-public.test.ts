@@ -84,7 +84,9 @@ describe('the host-less catch-all (A§12.2, criterion 10)', () => {
       .join('\n');
   // The block of a site address or snippet, from its line to the closing brace at the start of a line.
   const body = (text: string, address: string) =>
-    new RegExp(`^${address.replace(/[()]/g, '\\$&')} \\{\\n([\\s\\S]*?)\\n?\\}$`, 'm').exec(strip(text))?.[1] ?? '';
+    new RegExp(`^${address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{\\n([\\s\\S]*?)\\n?\\}$`, 'm').exec(
+      strip(text),
+    )?.[1] ?? '';
   const catchAll = body(HTTPS, ':80, :443');
 
   it('answers 421 for any Host or SNI that is not the domain, on both ports, with no site content', () => {
