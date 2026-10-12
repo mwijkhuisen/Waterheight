@@ -4,7 +4,7 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
-## #128 P10f, the Water Radar brand (PR pending)
+## #128 P10f, the Water Radar brand (PR #148)
 
 What P10f leaves (PHASES §46). It closes KG-326 and rewrites KG-245.
 
