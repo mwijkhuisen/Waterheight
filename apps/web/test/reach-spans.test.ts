@@ -194,11 +194,11 @@ describe('the bins of a reach (#112)', () => {
       const fs = spans.get(r.id);
       expect(fs?.bins.length, r.id).toBe(binCount(r.length_km));
     }
-    expect(spans.get('rhine.61')?.bins).toHaveLength(8);
+    expect(spans.get('rhine.62')?.bins).toHaveLength(8);
   });
 
   it('puts bin i at (i + 0.5) / n of the reach, so pos increases along them', () => {
-    const fs = spans.get('rhine.61');
+    const fs = spans.get('rhine.62');
     expect(fs?.bins.map((b) => b?.pos)).toEqual(Array.from({ length: 8 }, (_, i) => expect.closeTo((i + 0.5) / 8, 9)));
     // a 1-bin reach is its midpoint; every bin of a multi-bin reach lies on the reach's own span
     for (const [id, f] of spans) {

@@ -347,8 +347,8 @@ describe('binPaints (#112)', () => {
   });
 
   describe('with the travel-time shift', () => {
-    // rhine.61: Emmerich to Lobith, T = 5 h, bins at pos (i + 0.5) / 8, so k = round(5 pos) = 0 1 2 2 3 3 4 5
-    const rhine = new Map([['rhine.61', reach('rhine.61')]]);
+    // rhine.62: Emmerich to Lobith, T = 5 h, bins at pos (i + 0.5) / 8, so k = round(5 pos) = 0 1 2 2 3 3 4 5
+    const rhine = new Map([['rhine.62', reach('rhine.62')]]);
     const emmerich = station('de.wsv.2790020');
     const lobith = station('nl.rws.lobith.bovenrijn.tolkamer');
     const sb = new Map([emmerich, lobith].map((s) => [s.id, s]));
@@ -385,7 +385,7 @@ describe('binPaints (#112)', () => {
       expect(paints[0]).toEqual(plain[0]);
       expect(paints[7]?.[1]).not.toEqual(plain[7]?.[1]);
       // and it is the past value: the past has an up end only, so the down end (read at t) is `now`'s Lobith
-      const bin7 = { ...reach('rhine.61'), span: reach('rhine.61').bins[7] ?? null };
+      const bin7 = { ...reach('rhine.62'), span: reach('rhine.62').bins[7] ?? null };
       expect(paints[7]?.[1]).toEqual(reachColour(bin7, [ev(60), ev(0)], 'delta'));
     });
 
