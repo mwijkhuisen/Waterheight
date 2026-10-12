@@ -2560,7 +2560,7 @@ joins:
     at: [8.8809738, 51.6929961]
     to_river: ellerbach
     max_m: 510
-    reason: "KG-161 (#140): the Ellerbach relation 379700 has a gap: the sink n743541775 (8.8810, 51.6930) of its upper piece (10 edges) shares no node with its lower piece (21 edges, which reaches the Altenau); the nearest node of the lower piece, n13289226097, is 456 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). The DE-7 gauge Schwaney (de.lanuk.2782861000100) lies on the upper piece and needs it for a path to the Altenau"
+    reason: "KG-161 (#140): the Ellerbach relation 379700 has a gap: the sink n743541775 (8.8810, 51.6930) of its upper piece (10 edges) shares no node with its lower piece (21 edges, which reaches the Altenau); the nearest node of the lower piece, n462008863, is 462 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). The DE-7 gauge Schwaney (de.lanuk.2782861000100) lies on the upper piece and needs it for a path to the Altenau"
   - river: wapelbach
     at: [8.5430479, 51.8565294]
     to_river: wapelbach
