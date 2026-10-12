@@ -128,16 +128,38 @@ owner_env_on() { grep -qxF 'RWS_OWNER_SITE=on' "$RWS_ETC/rws.env" 2>/dev/null; }
 wg0_ready() { ip -4 -o addr show dev wg0 up 2>/dev/null | grep -q '[[:space:]]inet 10\.66\.0\.1/'; }
 owner_site_on() { owner_env_on && wg0_ready; }
 
+# The public edge (#109, ADR-0021, docs/runbooks/edge-switch.md): RWS_EDGE=direct (or no line: Caddy with its own
+# certificate on the public addresses) or tunnel (compose.tunnel.yaml: cloudflared in front, Caddy plain HTTP for it
+# alone). Read here like RWS_OWNER_SITE, so every caller sees it; the last line wins, as in load_env. Any other
+# value fails, and rws_compose stops before compose runs.
+edge_mode() {
+  local v
+  v=$(sed -n 's/^RWS_EDGE=//p' "$RWS_ETC/rws.env" 2>/dev/null | tail -n 1)
+  case $v in
+    '' | direct) printf direct ;;
+    tunnel) printf tunnel ;;
+    *) return 1 ;;
+  esac
+}
+
 # docker compose on a release directory (default: the active one), as project "rws". The owner overlay
-# (stage_release copies it next to compose.yaml) is added only while owner_site_on.
+# (stage_release copies it next to compose.yaml) is added only while owner_site_on. The tunnel overlay (#109) is
+# added while RWS_EDGE=tunnel, from the release's own deploy/ (a release staged before #109 has it there too, or
+# not at all): a release without it, or no token file, stops here, never falling back to the direct site.
 rws_compose() {
-  local dir=$RWS_STATE_DIR/active
+  local dir=$RWS_STATE_DIR/active edge
   if [[ ${1:-} == --release ]]; then
     dir=$RWS_STATE_DIR/releases/$2
     shift 2
   fi
+  edge=$(edge_mode) || die "rws.env: RWS_EDGE must be direct or tunnel"
   local -a compose_files=(-f "$dir/compose.yaml")
   if [[ -f $dir/compose.owner.yaml ]] && owner_site_on; then compose_files+=(-f "$dir/compose.owner.yaml"); fi
+  if [[ $edge == tunnel ]]; then
+    [[ -f $dir/deploy/compose.tunnel.yaml ]] || die "RWS_EDGE=tunnel, but the release has no deploy/compose.tunnel.yaml"
+    [[ -s $RWS_ETC/secrets/cf_tunnel_token ]] || die "RWS_EDGE=tunnel, but $RWS_ETC/secrets/cf_tunnel_token is empty"
+    compose_files+=(-f "$dir/deploy/compose.tunnel.yaml")
+  fi
   docker compose -p rws --project-directory "$dir" "${compose_files[@]}" \
     --env-file "$RWS_ETC/rws.env" --env-file "$dir/images.env" "$@"
 }
@@ -284,28 +306,33 @@ has_service() {
   grep -qxF -- "$1" <<<"$services"
 }
 
-# smoke <epoch>: /healthz answers 200 over real TLS and capture.json was written
+# smoke <epoch>: /healthz answers 200 over real TLS (#109: in tunnel mode over plain HTTP on 127.0.0.1:80, the only
+# port Caddy publishes there; cloudflared's own path is the watchdog's) and capture.json was written
 # after <epoch> (taken once `up -d` returned), within RWS_SMOKE_TIMEOUT seconds;
 # when the active release has an api, /api/v1/health also answers 200 with a
 # JSON status (any value: a first deploy is still loading). A P1b release, a
 # rollback target, has no api. It publishes capture's newest file itself
 # (rws-status-copy) before each try, so a deploy never depends on rws-status-copy.path.
 smoke() {
-  local t0=$1 deadline gen epoch resolve api=0
+  local t0=$1 deadline gen epoch resolve api=0 base
   if ((${RWS_INJECT_SMOKE_FAILURE:-0})); then
     log "smoke test: failure injected (rws-deploy --inject-smoke-failure)"
     return 1
   fi
   if has_service api; then api=1; fi
-  resolve=$RWS_DOMAIN:443:$RWS_PUBLIC_IPV4
+  if [[ $(edge_mode) == tunnel ]]; then
+    resolve=$RWS_DOMAIN:80:127.0.0.1 base=http://$RWS_DOMAIN
+  else
+    resolve=$RWS_DOMAIN:443:$RWS_PUBLIC_IPV4 base=https://$RWS_DOMAIN
+  fi
   deadline=$((SECONDS + ${RWS_SMOKE_TIMEOUT:-300}))
   while ((SECONDS < deadline)); do
     "$RWS_STATUS_COPY" >/dev/null || true
-    if curl -fsS -o /dev/null --max-time 10 --resolve "$resolve" "https://$RWS_DOMAIN/healthz" 2>/dev/null &&
-      gen=$(curl -fsS --max-time 10 --resolve "$resolve" "https://$RWS_DOMAIN/status/capture.json" 2>/dev/null |
+    if curl -fsS -o /dev/null --max-time 10 --resolve "$resolve" "$base/healthz" 2>/dev/null &&
+      gen=$(curl -fsS --max-time 10 --resolve "$resolve" "$base/status/capture.json" 2>/dev/null |
         jq -r '.generated_at | strings') &&
       epoch=$(date -u -d "$gen" +%s 2>/dev/null) && ((epoch > t0)) &&
-      { ((api == 0)) || curl -fsS --max-time 10 --resolve "$resolve" "https://$RWS_DOMAIN/api/v1/health" 2>/dev/null |
+      { ((api == 0)) || curl -fsS --max-time 10 --resolve "$resolve" "$base/api/v1/health" 2>/dev/null |
         jq -e '.status | type == "string"' >/dev/null 2>&1; }; then
       log "smoke test passed"
       return 0

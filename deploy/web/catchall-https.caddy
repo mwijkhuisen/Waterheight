@@ -1,0 +1,7 @@
+# The host-less catch-all of site.caddy (P12a, A§12.2), direct mode (#109: RWS_SITE_SCHEME unset): both ports.
+# catchall-http.caddy is the same block on :80 alone, for tunnel mode; test/caddy-public.test.ts holds them equal.
+:80, :443 {
+	header -Server
+	header Cache-Control "no-store"
+	respond 421
+}

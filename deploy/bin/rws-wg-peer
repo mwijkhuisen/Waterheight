@@ -43,6 +43,17 @@ cmd_add() {
   [[ ${RWS_PUBLIC_IPV4:-} =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "RWS_PUBLIC_IPV4 is not set in rws.env"
   [[ -s $WG_DIR/wg0.key ]] || die "no server key $WG_DIR/wg0.key (bootstrap.sh makes it)"
   endpoint=$RWS_PUBLIC_IPV4:$PORT
+  # #109: on a home line RWS_PUBLIC_IPV4 is a LAN address; RWS_WG_ENDPOINT (optional) is what a device dials instead:
+  # an IPv4 address or a DNS-only host name (a dynamic DNS name). Never the public site's name (behind Cloudflare's
+  # proxy no UDP arrives) and never owner.<anything> (the owner name has no public record).
+  if [[ -n ${RWS_WG_ENDPOINT:-} ]]; then
+    [[ $RWS_WG_ENDPOINT =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ||
+      $RWS_WG_ENDPOINT =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] ||
+      die "RWS_WG_ENDPOINT is not an IPv4 address or a lower-case host name"
+    [[ $RWS_WG_ENDPOINT != "${RWS_DOMAIN:-}" && $RWS_WG_ENDPOINT != owner.* ]] ||
+      die "RWS_WG_ENDPOINT must not be the public site's name or an owner name"
+    endpoint=$RWS_WG_ENDPOINT:$PORT
+  fi
   (
     flock -w 30 9 || die "another rws-wg-peer is running"
     table=$(peer_table)

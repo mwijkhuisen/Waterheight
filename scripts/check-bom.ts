@@ -234,6 +234,16 @@ export function checkBom(root: string): string[] {
   for (const [, image = ''] of workflows.matchAll(/^\s*image:\s*(\S+)/gm)) {
     if (!imageRows.has(image)) problems.push(`workflow image ${image}: no installed image row with that pin`);
   }
+  // Compose files (#109): every image is a release image from the signed manifest (images.env) or an installed image
+  // row's exact pin, digest included, so an overlay cannot bring an unpinned or unlisted image (cloudflared).
+  for (const { path, text } of deploy) {
+    if (!/\.ya?ml$/.test(path)) continue;
+    for (const [, image = ''] of text.matchAll(/^\s*image:\s*(\S+)/gm)) {
+      if (/^\$\{RWS_(?:WEB|SERVER|BACKUP)_IMAGE:\?\}$/.test(image)) continue;
+      if (!imageRows.has(image))
+        problems.push(`${path}: compose image ${image} has no installed image row with that pin`);
+    }
+  }
   for (const { path, text } of dockerfiles) {
     if (!/(?:^|\/)Dockerfile$/.test(path)) continue;
     for (const [, image = ''] of text.matchAll(/^FROM\s+(\S+)/gm)) {

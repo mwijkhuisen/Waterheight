@@ -1,0 +1,101 @@
+# The tunnel overlay (#109, ADR-0021): the public site behind a Cloudflare Tunnel, on a host with no inbound port.
+# rws_compose (deploy/bin/rws-lib.sh) adds it only while /etc/rws/rws.env says RWS_EDGE=tunnel; RWS_EDGE=direct or
+# unset leaves this file out and the stack is exactly compose.yaml (and the owner overlay), and any other value stops
+# rws_compose before compose runs. docs/runbooks/edge-switch.md switches both ways.
+#
+# cloudflared dials out to Cloudflare (TCP and UDP 7844, IPv4, nftables.conf `cftunnel4`) and carries every visitor's
+# request to caddy:80 over the internal network tunnel_edge, which only cloudflared and caddy join. It is on no
+# other network: not edge (api, whose X-Rws-Client is trusted from any peer, T-API-3), not db, not the owner's.
+# Caddy serves the site there in plain HTTP (RWS_SITE_SCHEME=http: one :80 server, no TLS listener, no ACME;
+# deploy/tests/caddy-edge.test.sh), trusts X-Forwarded-For from cloudflared's fixed address only (Cloudflare appends
+# the visitor's address, and the strict rule takes the right-most untrusted one) and publishes nothing but
+# 127.0.0.1:80 for the deploy smoke test: no RWS_EDGE mistake can serve plain HTTP on a public address. Compose
+# anchors do not cross files, so the hardening flags of compose.yaml (x-hardening) are repeated literally;
+# test/compose-tunnel.test.ts holds them.
+#
+# The token is the tunnel's root of trust (T-EDGE-1): whoever holds it can run a connector and receive visitors. It
+# is a file secret (/etc/rws/secrets/cf_tunnel_token, root:61011 0440, docs/runbooks/secrets-rotation.md), read with
+# --token-file, never an environment variable (cloudflared's --token and TUNNEL_TOKEN would take precedence over the
+# file, so neither is ever set). The ingress (the public hostname to http://caddy:80) lives in the Cloudflare dashboard
+# (remotely managed); whatever it says, cloudflared can reach nothing but caddy:80 and Cloudflare.
+services:
+  cloudflared:
+    # BOM row cloudflared 2026.9.3 (the multi-arch index digest); the image is distroless and runs as 65532.
+    image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+    entrypoint: [cloudflared, --no-autoupdate]
+    # --metrics on loopback: the container build binds 0.0.0.0:20241 by default, which caddy could then reach.
+    # --loglevel info: debug would log requests. --edge-ip-version 4: the tunnel network is IPv4 only.
+    command:
+      - tunnel
+      - --loglevel
+      - info
+      - --edge-ip-version
+      - "4"
+      - --metrics
+      - 127.0.0.1:20241
+      - run
+      - --token-file
+      - /run/secrets/cf_tunnel_token
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    user: "65532:65532"
+    group_add: ["61011"]
+    environment:
+      # The Go heap's soft limit, 90 % of mem_limit (ADR-0019 §5): collect before the kernel kills the only way in.
+      GOMEMLIMIT: 230MiB
+    secrets: [cf_tunnel_token]
+    networks:
+      tunnel: {}
+      tunnel_edge:
+        ipv4_address: 172.30.41.10
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 128
+    # No shell in the image: cloudflared's own `tunnel ready` asks the loopback metrics server for /ready (200 once a
+    # connection to Cloudflare is up). An unhealthy cloudflared is restarted by rws-tick.
+    healthcheck:
+      test: ["CMD", "cloudflared", "--no-autoupdate", "tunnel", "--metrics", "127.0.0.1:20241", "ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  caddy:
+    # Plain HTTP for cloudflared only: the trusted proxy is cloudflared's address (replacing RWS_TRUSTED_PROXIES of
+    # rws.env, which named the LAN proxy of direct mode), never the tunnel_edge range, whose gateway is the host.
+    environment:
+      RWS_SITE_SCHEME: http
+      RWS_TRUSTED_PROXIES: 172.30.41.10/32
+    networks: [tunnel_edge]
+    ports: !override
+      - "127.0.0.1:80:80/tcp"
+
+networks:
+  # cloudflared alone: TCP and UDP 7844 to Cloudflare's tunnel ranges and DNS to the host's resolvers (nftables.conf),
+  # nothing else. IPv4 only.
+  tunnel:
+    driver_opts:
+      com.docker.network.bridge.name: rws-tunnel
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      config:
+        - subnet: 172.30.40.0/24
+  # cloudflared and caddy only; internal, so no route out. cloudflared's address is fixed outside the range Docker
+  # hands out, so no other container can take it.
+  tunnel_edge:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: rws-tunnel-edge
+    ipam:
+      config:
+        - subnet: 172.30.41.0/24
+          ip_range: 172.30.41.128/25
+
+secrets:
+  cf_tunnel_token:
+    file: /etc/rws/secrets/cf_tunnel_token
