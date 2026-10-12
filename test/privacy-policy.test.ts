@@ -66,19 +66,16 @@ describe.each(['deploy/web/site.caddy', 'deploy/web/owner.caddy'])('%s access lo
 });
 
 // #133 (KG-314): Caddy's own log (stderr, kept by Docker's local driver) carries a request with reverse_proxy's warnings,
-// so it gets the access logs' masks, plus X-Rws-Client (the address Caddy sends the api) and the error text's addresses.
+// so it masks the addresses like the access logs, drops the request headers whole and replaces the error text's addresses.
 describe("Caddy's own log (deploy/web/default-log.caddy)", () => {
   const filter = read('deploy/web/default-log.caddy');
 
-  it('masks or deletes every field both access logs do, and X-Rws-Client', () => {
-    for (const file of ['deploy/web/site.caddy', 'deploy/web/owner.caddy']) {
-      const lines = logBlock(read(file))
-        .split('\n')
-        .filter((l) => l.startsWith('\t\t\trequest>'));
-      expect(lines.length).toBeGreaterThan(10);
-      for (const l of lines) expect([file, filter]).toEqual([file, expect.stringContaining(`\n\t\t${l.trim()}\n`)]);
-    }
-    expect(filter).toContain(`\n\t\trequest>headers>X-Rws-Client ip_mask ${LOG.ipv4} ${LOG.ipv6}\n`);
+  it('masks the request addresses to the published prefix lengths and drops every request header', () => {
+    for (const field of ['request>remote_ip', 'request>client_ip'])
+      expect(filter).toContain(`\n\t\t${field} ip_mask ${LOG.ipv4} ${LOG.ipv6}\n`);
+    expect(filter).toContain('\n\t\trequest>headers delete\n');
+    // The whole object goes, so no list of single headers can fall behind it.
+    expect(filter).not.toMatch(/request>headers>/);
   });
 
   it("replaces every address in an error text (Go's net errors, IPv4 and IPv6)", () => {
@@ -90,6 +87,9 @@ describe("Caddy's own log (deploy/web/default-log.caddy)", () => {
     );
     expect(mask('write tcp [2a0a:e5c0:ffff::10]:443->[2001:db8:1:2::5]:51234: write: connection reset by peer')).toBe(
       'write tcp [address]:443->[address]:51234: write: connection reset by peer',
+    );
+    expect(mask('dial tcp [fe80::1%eth0]:8080: connect: connection refused')).toBe(
+      'dial tcp [address]:8080: connect: connection refused',
     );
     expect(mask('reading: unexpected EOF')).toBe('reading: unexpected EOF');
   });

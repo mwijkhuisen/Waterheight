@@ -215,26 +215,30 @@ rm -f "$CONTROL/blackhole"
 endstep
 
 # ------------------------------------------------------------------ (d) Caddy's own log (#133, KG-314)
-# deploy/web/default-log.caddy gives Caddy's stderr, which Docker's local driver keeps, the access log's masks. The
-# container's config must hold it, and no address a chaos client used (10.99.0.2, the namespace's own, and
+# deploy/web/default-log.caddy masks the client addresses in Caddy's stderr, which Docker's local driver keeps. The
+# container's config must hold it, and no address a chaos client used (10.99.0.2 and fd99::2, the namespace's own, and
 # RWS_E2E_CLIENT_IPS) may be in that log in full, in a field or in an error text. Measured on Caddy 2.11.4, the 502s of
 # (a) that handle_errors answers log at debug only; what logs the request at warn is a visitor who leaves mid-answer, so
-# a slow reader on the first client address gives up on an uncompressed /api/v1/stations (best effort: an answer that
-# fits the socket buffers is sent in full before the reader leaves, and logs nothing).
+# a slow reader on the first client address gives up on an uncompressed /api/v1/stations. That part is best effort: an
+# answer that fits the socket buffers is sent in full before the reader leaves and logs nothing (a warning says so).
 step "(d) Caddy's stderr masks client addresses"
 docker exec rws-caddy-1 caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile 2>/dev/null |
   jq -e '.logging.logs.default.encoder | .format == "filter" and .fields["request>remote_ip"].filter == "ip_mask"
-    and .fields["request>headers>X-Rws-Client"].filter == "ip_mask" and .fields.error.filter == "regexp"' >/dev/null ||
+    and .fields["request>client_ip"].filter == "ip_mask" and .fields["request>headers"].filter == "delete"
+    and .fields.error.filter == "regexp"' >/dev/null ||
   fail "the default log of rws-caddy-1 has no address filter (deploy/web/default-log.caddy)"
 client=${RWS_E2E_CLIENT_IPS%%,*}
 outside --interface "$client" -H 'Accept-Encoding: identity' --limit-rate 2k --max-time 3 -o /dev/null \
   "https://$RWS_E2E_DOMAIN/api/v1/stations" 2>/dev/null || true
 sleep 2
-ips="10.99.0.2,$RWS_E2E_CLIENT_IPS"
+ips="10.99.0.2,fd99::2,$RWS_E2E_CLIENT_IPS"
 ips=${ips//./\\.}
 caddy_log=$(docker logs rws-caddy-1 2>&1)
+[[ -n $caddy_log ]] || fail "docker logs rws-caddy-1 is empty"
 full=$(grep -cE "(^|[^0-9.])(${ips//,/|})([^0-9]|\$)" <<<"$caddy_log" || true)
 ((full == 0)) || fail "Caddy's stderr holds $full lines with a full client address (deploy/web/default-log.caddy)"
 with_request=$(grep -c '"request":{' <<<"$caddy_log" || true)
-proof "Caddy's stderr: the default log of rws-caddy-1 masks remote_ip, client_ip, X-Forwarded-For and X-Rws-Client and replaces every address in an error text; $with_request of its lines carried a request (the /api/v1/stations that $client left mid-answer among them if the answer outgrew the socket buffers), and none holds a full chaos client address (10.99.0.2, $RWS_E2E_CLIENT_IPS)"
+((with_request > 0)) ||
+  echo "::warning::chaos (d): no line of Caddy's stderr carried a request (the /api/v1/stations answer fit the socket buffers); only the config check and the address grep held"
+proof "Caddy's stderr: the default log of rws-caddy-1 masks remote_ip and client_ip, drops the request headers and replaces every address in an error text (its config); $with_request of its lines carried a request (the /api/v1/stations that $client left mid-answer among them if the answer outgrew the socket buffers; best effort), and none holds a full chaos client address (10.99.0.2, fd99::2, $RWS_E2E_CLIENT_IPS)"
 endstep
