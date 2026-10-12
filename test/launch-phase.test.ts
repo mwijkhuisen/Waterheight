@@ -31,7 +31,7 @@ describe('site.caddy imports the phase at both sites', () => {
     const lines = code(site)
       .split('\n')
       .map((l, i) => [i, l.trim()] as const)
-      .filter(([, l]) => l.startsWith('import '));
+      .filter(([, l]) => l.startsWith('import phase-'));
     expect(lines.map(([, l]) => l)).toEqual([`${IMPORT} main`, `${IMPORT} errors`]);
     const lns = code(site).split('\n');
     const [main, errors] = lines.map(([i]) => i);
@@ -249,10 +249,29 @@ describe('every consumer of site.caddy sees both phase files', () => {
     for (const f of ['phase-prelaunch.caddy', 'phase-launch.caddy']) expect(ignore).toContain(`!deploy/web/${f}`);
   });
 
+  it('the web image copies both catch-all files (#109: https is direct mode, http is tunnel mode) and the context allows them', () => {
+    const docker = read('deploy/web/Dockerfile');
+    const copy = /^COPY (deploy\/web\/Caddyfile .*) \/etc\/caddy\/$/m.exec(docker)?.[1] ?? '';
+    const ignore = read('.dockerignore').split('\n');
+    for (const f of ['catchall-https.caddy', 'catchall-http.caddy']) {
+      expect(copy.split(' '), f).toContain(`deploy/web/${f}`);
+      expect(ignore).toContain(`!deploy/web/${f}`);
+    }
+    // site.caddy imports no other scheme file.
+    expect(
+      code(site)
+        .split('\n')
+        .filter((l) => l.startsWith('import catchall-')),
+    ).toEqual(['import catchall-{$RWS_SITE_SCHEME:https}.caddy']);
+  });
+
   it('the CI e2e job mounts both beside site.caddy and runs a launch container on 8444 (RWS_DOMAIN has the port)', () => {
     const ci = read('.github/workflows/ci.yml');
     for (const f of ['phase-prelaunch.caddy', 'phase-launch.caddy'])
       expect(ci).toContain(`-v "$PWD/deploy/web/${f}:/etc/caddy/${f}:ro"`);
+    // The e2e runs direct mode only (RWS_SITE_SCHEME unset): the https catch-all, never the http one.
+    expect(ci).toContain('-v "$PWD/deploy/web/catchall-https.caddy:/etc/caddy/catchall-https.caddy:ro"');
+    expect(ci).not.toContain('RWS_SITE_SCHEME');
     expect(ci).toContain('serve e2e-caddy 443 localhost prelaunch');
     expect(ci).toContain('serve e2e-caddy-launch 8444 localhost:8444 launch');
     expect(ci).toContain('-e E2E_BASE_URL_LAUNCH=https://localhost:8444');

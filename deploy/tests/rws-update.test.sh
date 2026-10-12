@@ -29,7 +29,7 @@ while (($#)); do
     -K) cfg=1; shift ;;
     --data-raw) body=$2; shift ;;
     --resolve | --max-time | --max-filesize | --retry | --proto | --proto-redir) shift ;;
-    https://*) url=$1 ;;
+    http://* | https://*) url=$1 ;;
   esac
   shift
 done
@@ -131,7 +131,7 @@ chmod +x "$T/stubs"/*
 # ---------------------------------------------------------------- fixtures
 # mkrel <tag> [flags]: a release on the fake GitHub; flags: broken badsig badsha
 # badtag, db (services db, load, migrate: a P2a release), api (service api),
-# owner (deploy/compose.owner.yaml, the P12a overlay), host=<word> (the content of a host file, deploy/host/x.conf), build=<word>
+# owner (deploy/compose.owner.yaml, the P12a overlay), tunnel (deploy/compose.tunnel.yaml, the #109 overlay), host=<word> (the content of a host file, deploy/host/x.conf), build=<word>
 # (the content of files that are not host files: image build inputs and CI-only
 # tests). Without db and api it is a P1b release.
 mkrel() {
@@ -145,6 +145,9 @@ mkrel() {
   } >"$C/bundles/$tag/deploy/compose.yaml"
   if [[ " $flags " == *" owner "* ]]; then
     printf '# overlay\nservices:\n  caddy-owner: {}\n' >"$C/bundles/$tag/deploy/compose.owner.yaml"
+  fi
+  if [[ " $flags " == *" tunnel "* ]]; then
+    printf '# overlay\nservices:\n  cloudflared: {}\n' >"$C/bundles/$tag/deploy/compose.tunnel.yaml"
   fi
   if [[ $flags == *host=* ]]; then
     word=${flags#*host=}
@@ -763,6 +766,104 @@ expect_grep "RWS_OWNER_SITE=on but wg0 is not up" "$C/out"
 
 owner_case "owner overlay: RWS_OWNER_SITE=on, a release without the overlay (an older one): nothing to add, no failure" "RWS_OWNER_SITE=on" 1 ""
 [[ $(owner_calls) == 0 ]] || fail "an overlay appeared from nowhere"
+
+# ---------------------------------------------------------------- the tunnel edge (#109)
+# tunnel_calls: the compose calls that carried the tunnel overlay (a second -f, from the release's own deploy/).
+tunnel_calls() { grep -cE '^docker compose .* -f [^ ]*/deploy/compose\.tunnel\.yaml ' "$FIX/calls" || true; }
+# tunnel_case <label> <RWS_EDGE line or ''> <token: full|empty|none> <release flags>: one first deploy.
+tunnel_case() {
+  case_ "$1"
+  setup
+  [[ -z $2 ]] || echo "$2" >>"$C/etc/rws.env"
+  case $3 in full) echo cf-token-value-0123456789 >"$C/etc/secrets/cf_tunnel_token" ;; empty) : >"$C/etc/secrets/cf_tunnel_token" ;; esac
+  mkrel $T1 "$4"
+  latest $T1
+  run rws-update
+}
+# rws_compose_direct <edge line> <release has overlay: 1|0> <token: full|empty>: rws_compose --release x config, from rws-lib.sh.
+rws_compose_direct() {
+  setup
+  [[ -z $1 ]] || echo "$1" >>"$C/etc/rws.env"
+  mkdir -p "$RWS_STATE_DIR/releases/x/deploy"
+  : >"$RWS_STATE_DIR/releases/x/compose.yaml"
+  : >"$RWS_STATE_DIR/releases/x/images.env"
+  if (($2)); then : >"$RWS_STATE_DIR/releases/x/deploy/compose.tunnel.yaml"; fi
+  case $3 in full) echo cf-token-value-0123456789 >"$C/etc/secrets/cf_tunnel_token" ;; empty) : >"$C/etc/secrets/cf_tunnel_token" ;; esac
+  rc=0
+  bash -c '. "$1" && rws_compose --release x config --services' _ "$bin/rws-lib.sh" >"$C/out" 2>&1 || rc=$?
+}
+
+case_ "tunnel edge: RWS_EDGE=bogus: rws_compose dies before docker is called"
+rws_compose_direct "RWS_EDGE=bogus" 1 full
+expect_rc 1
+expect_grep "RWS_EDGE must be direct or tunnel" "$C/out"
+expect_no_grep "^docker" "$FIX/calls"
+
+case_ "tunnel edge: RWS_EDGE=Tunnel (wrong case) is just as refused"
+rws_compose_direct "RWS_EDGE=Tunnel" 1 full
+expect_rc 1
+expect_no_grep "^docker" "$FIX/calls"
+
+case_ "tunnel edge: RWS_EDGE=tunnel adds the release's own overlay as a second -f"
+rws_compose_direct "RWS_EDGE=tunnel" 1 full
+expect_rc 0
+expect_grep "^docker compose -p rws --project-directory [^ ]*/releases/x -f [^ ]*/releases/x/compose\\.yaml -f [^ ]*/releases/x/deploy/compose\\.tunnel\\.yaml --env-file" "$FIX/calls"
+
+for edge in "" "RWS_EDGE=direct" "RWS_EDGE=" "RWS_EDGE=tunnel;RWS_EDGE=direct"; do
+  case_ "tunnel edge: no overlay for '$edge' (empty, direct, or tunnel then direct: the last line wins), even with the file and a token"
+  rws_compose_direct "${edge//;/$'\n'}" 1 full
+  expect_rc 0
+  expect_count "^docker compose " "$FIX/calls" 1
+  expect_no_grep "compose\\.tunnel\\.yaml" "$FIX/calls"
+done
+
+case_ "tunnel edge: RWS_EDGE=tunnel and a release without deploy/compose.tunnel.yaml: stops, no docker"
+rws_compose_direct "RWS_EDGE=tunnel" 0 full
+expect_rc 1
+expect_grep "the release has no deploy/compose\\.tunnel\\.yaml" "$C/out"
+expect_no_grep "^docker" "$FIX/calls"
+
+case_ "tunnel edge: RWS_EDGE=tunnel and an empty cf_tunnel_token: stops, no docker"
+rws_compose_direct "RWS_EDGE=tunnel" 1 empty
+expect_rc 1
+expect_grep "cf_tunnel_token is empty" "$C/out"
+expect_no_grep "^docker" "$FIX/calls"
+
+case_ "tunnel edge: RWS_EDGE=tunnel and no cf_tunnel_token file: stops, no docker"
+rws_compose_direct "RWS_EDGE=tunnel" 1 none
+expect_rc 1
+expect_grep "cf_tunnel_token is empty" "$C/out"
+expect_no_grep "^docker" "$FIX/calls"
+
+tunnel_case "tunnel edge: a deploy with RWS_EDGE=tunnel: pull, config and up carry the overlay; the smoke test asks 127.0.0.1:80 over plain http" "RWS_EDGE=tunnel" full "tunnel"
+expect_rc 0
+expect_state current $T1
+[[ $(tunnel_calls) -ge 3 ]] || fail "the overlay was not used by pull, config and up: $(tunnel_calls) calls"
+expect_grep "compose .* -f [^ ]*/deploy/compose\\.tunnel\\.yaml .*up -d --remove-orphans" "$FIX/calls"
+expect_grep "^curl .*--resolve rivierstanden\\.example:80:127\\.0\\.0\\.1 http://rivierstanden\\.example/healthz" "$FIX/calls"
+expect_no_grep "^curl .*https://rivierstanden\\.example" "$FIX/calls"
+expect_no_grep "^curl .*:443:" "$FIX/calls"
+grep -qF cf-token-value "$FIX/calls" "$C/out" && fail "the tunnel token was echoed"
+
+tunnel_case "tunnel edge: a deploy with RWS_EDGE=tunnel and an empty token fails (rolled back or refused), never serving the direct site" "RWS_EDGE=tunnel" empty "tunnel"
+expect_rc 1
+expect_no_grep "up -d" "$FIX/calls"
+expect_no_grep "^curl .*https://rivierstanden" "$FIX/calls"
+
+tunnel_case "tunnel edge: RWS_EDGE=direct with the overlay in the release: not used, the smoke test is https on the public address (unchanged)" "RWS_EDGE=direct" none "tunnel"
+expect_rc 0
+[[ $(tunnel_calls) == 0 ]] || fail "the overlay was used in direct mode"
+expect_grep "^curl .*--resolve rivierstanden\\.example:443:198\\.51\\.100\\.7 https://rivierstanden\\.example/healthz" "$FIX/calls"
+expect_no_grep "^curl .*http://rivierstanden" "$FIX/calls"
+
+tunnel_case "tunnel edge: no RWS_EDGE line at all (an old host): direct, https, no overlay" "" none "tunnel"
+expect_rc 0
+[[ $(tunnel_calls) == 0 ]] || fail "the overlay was used with no RWS_EDGE line"
+expect_grep "^curl .*--resolve rivierstanden\\.example:443:198\\.51\\.100\\.7 https://rivierstanden\\.example/healthz" "$FIX/calls"
+
+tunnel_case "tunnel edge: RWS_EDGE=bogus in a deploy: nothing is started" "RWS_EDGE=bogus" none "tunnel"
+expect_rc 1
+expect_no_grep "up -d" "$FIX/calls"
 
 echo "$labels cases, $failures failures"
 ((failures == 0))

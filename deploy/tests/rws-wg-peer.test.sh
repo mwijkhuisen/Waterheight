@@ -148,5 +148,32 @@ run add laptop
 run
 [[ $rc == 64 ]] && ok "no command: usage, 64" || fail "usage rc $rc"
 
+# #109: behind Cloudflare's proxy no UDP arrives at the site's name, and on a home line RWS_PUBLIC_IPV4 is a LAN
+# address, so RWS_WG_ENDPOINT (an IPv4 address or a lower-case DNS-only host name) is what a device dials.
+echo "RWS_WG_ENDPOINT (#109)"
+setup
+touch "$FIX/up"
+run add laptop
+grep -qx 'Endpoint = 198.51.100.7:51820' "$C/out" && ok "unset: the endpoint is RWS_PUBLIC_IPV4:51820 (unchanged)" || fail "default endpoint: $(cat "$C/out")"
+for good in home.example.net 203.0.113.9 a-b.c1.example.org; do
+  setup
+  touch "$FIX/up"
+  echo "RWS_WG_ENDPOINT=$good" >>"$C/etc/rws.env"
+  run add laptop
+  [[ $rc == 0 ]] && grep -qx "Endpoint = $good:51820" "$C/out" && ! grep -q '198.51.100.7' "$C/out" && ok "'$good' is the endpoint" || fail "endpoint '$good': rc $rc $(cat "$C/out" "$C/err")"
+done
+setup
+touch "$FIX/up"
+echo "RWS_WG_ENDPOINT=" >>"$C/etc/rws.env"
+run add laptop
+grep -qx 'Endpoint = 198.51.100.7:51820' "$C/out" && ok "empty: the default endpoint" || fail "empty endpoint: $(cat "$C/out")"
+for bad in Home.Example.NET 'a b' rivierstanden.example owner.rivierstanden.example owner.home.example.net 'x;y.example' 'home.example.net:51820' -a.example.net 'a..example.net' '999' 'home'; do
+  setup
+  touch "$FIX/up"
+  echo "RWS_WG_ENDPOINT=$bad" >>"$C/etc/rws.env"
+  run add laptop
+  if [[ $rc != 0 && $(cat "$C/err") == *RWS_WG_ENDPOINT* && ! -s $C/out && ! -e $RWS_WG_DIR/wg0.peers.conf && ! -s $FIX/live-conf ]]; then ok "'$bad' is refused, no peer added, no config printed"; else fail "endpoint '$bad' accepted or peer added: rc $rc $(cat "$C/out")"; fi
+done
+
 echo "$cases cases, $failures failures"
 ((failures == 0))

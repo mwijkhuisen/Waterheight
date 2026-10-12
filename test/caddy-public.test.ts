@@ -74,7 +74,17 @@ describe('brownout (A§9.2)', () => {
 });
 
 describe('the host-less catch-all (A§12.2, criterion 10)', () => {
-  const catchAll = /\n:80, :443 \{\n([\s\S]*?)\n\}\n/.exec(site)?.[1] ?? '';
+  // #109: the block is one of two files, chosen by RWS_SITE_SCHEME: both ports in direct mode, :80 alone in tunnel mode.
+  const HTTPS = readFileSync(join(repoRoot, 'deploy/web/catchall-https.caddy'), 'utf8');
+  const HTTP = readFileSync(join(repoRoot, 'deploy/web/catchall-http.caddy'), 'utf8');
+  const strip = (text: string) =>
+    text
+      .split('\n')
+      .filter((l) => !l.startsWith('#'))
+      .join('\n');
+  const body = (text: string, address: string) =>
+    new RegExp(`^${address} \\{\\n([\\s\\S]*?)\\n\\}\\n$`).exec(strip(text))?.[1] ?? '';
+  const catchAll = body(HTTPS, ':80, :443');
 
   it('answers 421 for any Host or SNI that is not the domain, on both ports, with no site content', () => {
     expect(catchAll).toContain('respond 421');
@@ -83,16 +93,39 @@ describe('the host-less catch-all (A§12.2, criterion 10)', () => {
     expect(catchAll).not.toMatch(/file_server|reverse_proxy|root /);
   });
 
+  it('is the same block on :80 alone in tunnel mode (no TLS listener), and nothing else', () => {
+    expect(body(HTTP, ':80')).not.toBe('');
+    expect(body(HTTP, ':80')).toBe(catchAll);
+    expect(strip(HTTP)).not.toMatch(/443/);
+  });
+
   it('is the last site, after the domain and the healthcheck listener', () => {
     const at = (s: string) => site.indexOf(s);
-    expect(at('\n{$RWS_DOMAIN} {\n')).toBeGreaterThanOrEqual(0);
-    expect(at('\n{$RWS_DOMAIN} {\n')).toBeLessThan(at('http://127.0.0.1:8081 {'));
-    expect(at('http://127.0.0.1:8081 {')).toBeLessThan(at('\n:80, :443 {\n'));
+    const domain = '\n{$RWS_SITE_SCHEME:https}://{$RWS_DOMAIN} {\n';
+    expect(at(domain)).toBeGreaterThanOrEqual(0);
+    expect(at(domain)).toBeLessThan(at('http://127.0.0.1:8081 {'));
+    expect(at('http://127.0.0.1:8081 {')).toBeLessThan(at('\nimport catchall-{$RWS_SITE_SCHEME:https}.caddy'));
+    expect(
+      code
+        .split('\n')
+        .filter((l) => l.trim() !== '')
+        .at(-1),
+    ).toBe('import catchall-{$RWS_SITE_SCHEME:https}.caddy');
+    // The catch-all is no longer written in site.caddy itself.
+    expect(code).not.toMatch(/^:80/m);
+  });
+
+  it('reads the scheme of its site address from RWS_SITE_SCHEME, https when unset', () => {
+    expect(code.split('\n').filter((l) => /^\S.* \{$/.test(l))).toEqual([
+      '{$RWS_SITE_SCHEME:https}://{$RWS_DOMAIN} {',
+      'http://127.0.0.1:8081 {',
+    ]);
   });
 
   it('uses no on-demand TLS and no default_sni: an unknown SNI fails the handshake', () => {
     expect(code).not.toMatch(/on_demand|default_sni|fallback_sni|\btls\b/);
-    expect(readFileSync(join(repoRoot, 'deploy/web/Caddyfile'), 'utf8')).not.toMatch(/on_demand|default_sni/);
+    for (const text of [HTTPS, HTTP, readFileSync(join(repoRoot, 'deploy/web/Caddyfile'), 'utf8')])
+      expect(text).not.toMatch(/on_demand|default_sni/);
   });
 });
 

@@ -137,6 +137,61 @@ ci_fleet | mutate minio '.HostConfig.Privileged = true' | expect "ci: minio not 
 ci_fleet | add mystery | expect "ci: an unknown container" ci 1 'FAIL mystery .*not a container of this stack'
 ci_fleet | mutate caddy-owner '.HostConfig.PortBindings = {"8443/tcp":[{"HostIp":"0.0.0.0","HostPort":"443"}]}' | expect "ci: the owner port off 10.66.0.1" ci 1 'FAIL caddy-owner'
 
+# #109: tunnel mode, cloudflared beside the stack: caddy publishes 127.0.0.1:80/tcp alone and joins rws_tunnel_edge,
+# cloudflared is on rws_tunnel and rws_tunnel_edge only, no container has the token in its environment.
+loop='{"80/tcp":[{"HostIp":"127.0.0.1","HostPort":"80"}]}'
+tunnel_fleet() {
+  fleet |
+    mutate caddy ".HostConfig.PortBindings = $loop | .NetworkSettings.Networks = {\"rws_public\": {}, \"rws_edge\": {}, \"rws_tunnel_edge\": {}}" |
+    add cloudflared '.Config.User = "65532:65532" | .NetworkSettings.Networks = {"rws_tunnel": {}, "rws_tunnel_edge": {}}'
+}
+tunnel_fleet | expect "prod: a tunnel stack (caddy on 127.0.0.1:80 only, cloudflared on its two networks) passes" prod 0 'OK, 15 container'
+tunnel_fleet | expect "prod: the table lists cloudflared and caddy on 127.0.0.1:80/tcp" prod 0 'caddy .*127\.0\.0\.1:80/tcp'
+tunnel_fleet | expect "ci: a tunnel stack passes" ci 0 'OK, 15 container'
+tunnel_fleet | mutate caddy '.HostConfig.PortBindings = {"80/tcp":[{"HostIp":"192.0.2.1","HostPort":"80"}]}' |
+  expect "tunnel: caddy publishing 80 on a public address fails" prod 1 'FAIL caddy .*tunnel mode, but 80/tcp is published on 192\.0\.2\.1'
+tunnel_fleet | mutate caddy ".HostConfig.PortBindings = $pub" |
+  expect "tunnel: caddy publishing 443 while cloudflared runs fails" prod 1 'FAIL caddy .*tunnel mode, but 443/tcp is published on 192\.0\.2\.1'
+tunnel_fleet | mutate caddy '.HostConfig.PortBindings = {"80/tcp":[{"HostIp":"127.0.0.1","HostPort":"80"}],"443/tcp":[{"HostIp":"127.0.0.1","HostPort":"443"}]}' |
+  expect "tunnel: caddy publishing 443 even on loopback fails" prod 1 'FAIL caddy .*tunnel mode, but 443/tcp'
+tunnel_fleet | mutate caddy ".HostConfig.PortBindings = $pub" |
+  expect "tunnel: the same fleet with the public ports and ci mode fails too" ci 1 'FAIL caddy .*tunnel mode'
+fleet | expect "direct: with no cloudflared, caddy keeps 80, 443/tcp and 443/udp" prod 0 'OK, 14 container'
+tunnel_fleet | mutate api '.NetworkSettings.Networks = {"rws_db": {}, "rws_tunnel_edge": {}}' |
+  expect "tunnel: api on rws_tunnel_edge fails" prod 1 'FAIL api .*on the tunnel network rws_tunnel_edge'
+tunnel_fleet | mutate db '.NetworkSettings.Networks = {"rws_db": {}, "rws_tunnel": {}}' |
+  expect "tunnel: db on rws_tunnel fails" prod 1 'FAIL db .*on the tunnel network rws_tunnel'
+tunnel_fleet | mutate caddy-owner '.NetworkSettings.Networks = {"rws_owner_edge": {}, "rws_tunnel_edge": {}}' |
+  expect "tunnel: caddy-owner on rws_tunnel_edge fails" prod 1 'FAIL caddy-owner .*on the tunnel network rws_tunnel_edge'
+tunnel_fleet | mutate cloudflared '.NetworkSettings.Networks = {"rws_tunnel": {}, "rws_tunnel_edge": {}, "rws_edge": {}}' |
+  expect "tunnel: cloudflared also on rws_edge fails" prod 1 'FAIL cloudflared .*on the network rws_edge'
+tunnel_fleet | mutate cloudflared '.NetworkSettings.Networks = {"rws_tunnel_edge": {}, "rws_db": {}}' |
+  expect "tunnel: cloudflared also on rws_db fails" prod 1 'FAIL cloudflared .*on the network rws_db'
+tunnel_fleet | mutate cloudflared '.Config.User = "root"' | expect "tunnel: cloudflared as root fails" prod 1 'FAIL cloudflared .*root'
+tunnel_fleet | mutate cloudflared '.HostConfig.ReadonlyRootfs = false' | expect "tunnel: cloudflared with a writable rootfs fails" prod 1 'FAIL cloudflared .*writable'
+tunnel_fleet | mutate cloudflared '.HostConfig.PortBindings = {"7844/tcp":[{"HostIp":"192.0.2.1","HostPort":"7844"}]}' |
+  expect "tunnel: cloudflared publishing a port fails" prod 1 'FAIL cloudflared .*publishes ports'
+# The token must not be in any environment, and the audit must not print it (a distinctive value, asserted absent).
+secret=tok-9f3a7c1e-must-never-be-printed
+for svc in cloudflared api caddy; do
+  tunnel_fleet | mutate "$svc" ".Config.Env = [\"TUNNEL_TOKEN=$secret\"]" |
+    expect "tunnel: TUNNEL_TOKEN in the environment of $svc fails" prod 1 "FAIL $svc .*TUNNEL_TOKEN is in the environment"
+  cases=$((cases + 1))
+  tunnel_fleet | mutate "$svc" ".Config.Env = [\"TUNNEL_TOKEN=$secret\"]" >"$T/inspect.json"
+  printed=$("$script" --prod 2>&1 || true)
+  if [[ -z $printed ]] || grep -qF -- "$secret" <<<"$printed"; then
+    failures=$((failures + 1))
+    echo "FAIL the token value is printed for $svc" >&2
+  else
+    echo "ok   the token value is never printed ($svc)"
+  fi
+done
+# Even without cloudflared (a stray container), the variable is a deviation.
+fleet | mutate api ".Config.Env = [\"TUNNEL_TOKEN=$secret\"]" | expect "direct: TUNNEL_TOKEN in any container fails" prod 1 'FAIL api .*TUNNEL_TOKEN is in the environment'
+# cloudflared is optional: not running is fine, and a network named like a tunnel one is a deviation without it.
+fleet | mutate api '.NetworkSettings.Networks = {"rws_db": {}, "rws_tunnel_edge": {}}' |
+  expect "direct: a service on a tunnel network fails" prod 1 'FAIL api .*on the tunnel network rws_tunnel_edge'
+
 # usage
 cases=$((cases + 1))
 if "$script" 2>/dev/null; then failures=$((failures + 1)); echo "FAIL usage: no argument must fail" >&2; else echo "ok   usage"; fi

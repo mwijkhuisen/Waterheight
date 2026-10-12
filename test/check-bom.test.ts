@@ -147,6 +147,32 @@ describe('check-bom', () => {
     expect(checkBom(dir).join('\n')).toMatch(/BOM row restic: pin f415[0-9a-f]+ with version 0\.19\.1 not found/);
   });
 
+  // #109: every compose image is a release variable or an installed row's exact pin, digest included.
+  it('fails on a compose image without an installed row', () => {
+    const dir = scratch();
+    edit(dir, 'deploy/compose.tunnel.yaml', '    image: cloudflare/cloudflared:', '    image: example/cloudflared:');
+    expect(checkBom(dir).join('\n')).toMatch(
+      /deploy\/compose\.tunnel\.yaml: compose image example\/cloudflared:2026\.9\.3@sha256:[0-9a-f]{64} has no installed image row/,
+    );
+  });
+
+  it('fails on a compose image without its digest', () => {
+    const dir = scratch();
+    edit(dir, 'deploy/compose.tunnel.yaml', /(image: cloudflare\/cloudflared:2026\.9\.3)@sha256:[0-9a-f]{64}/, '$1');
+    expect(checkBom(dir).join('\n')).toMatch(
+      /deploy\/compose\.tunnel\.yaml: compose image cloudflare\/cloudflared:2026\.9\.3 has no installed image row/,
+    );
+  });
+
+  it('fails on an image variable that is not one of the three release variables', () => {
+    const dir = scratch();
+    edit(dir, 'deploy/compose.tunnel.yaml', /image: cloudflare\/\S+/, 'image: $' + '{RWS_CLOUDFLARED_IMAGE:-x}');
+    expect(checkBom(dir).join('\n')).toMatch(/compose image \$\{RWS_CLOUDFLARED_IMAGE:-x\} has no installed image row/);
+    const dir2 = scratch();
+    edit(dir2, 'deploy/compose.yaml', /image: \$\{RWS_WEB_IMAGE:\?\}/, 'image: $' + '{RWS_WEB_IMAGE:-latest}');
+    expect(checkBom(dir2).join('\n')).toMatch(/compose image \$\{RWS_WEB_IMAGE:-latest\} has no installed image row/);
+  });
+
   it('fails on a duplicate row', () => {
     const dir = scratch();
     edit(dir, 'CLAUDE.md', /^(\| zod \| npm .*\n)/m, '$1$1');
