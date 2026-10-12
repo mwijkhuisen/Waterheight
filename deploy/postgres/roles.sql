@@ -56,6 +56,10 @@ ALTER ROLE rws_owner_api SET statement_timeout = '2s';
 ALTER ROLE rws_publish   SET temp_file_limit = '256MB';
 ALTER ROLE rws_api       SET temp_file_limit = '256MB';
 ALTER ROLE rws_owner_api SET temp_file_limit = '256MB';
+-- The backfill runner (P14a, review S7): its statements are single-row updates, the lease and the guard; a hung
+-- one or an open transaction must not hold a connection or a row for long. Session defaults, like the readers'.
+ALTER ROLE rws_backfill  SET statement_timeout = '5s';
+ALTER ROLE rws_backfill  SET idle_in_transaction_session_timeout = '30s';
 
 -- Nothing of ours is a large object. No application role may create, open or
 -- write one (a stray one would also fail the nightly dump). Function privileges

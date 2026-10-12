@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDb, sqlState, type TestDb } from './testdb.ts';
 
-// Partitions (issue #17; A§8): created only by ensure_partitions(), one per
-// UTC month from 2026-01-01 on and one per UTC year of obs before it (P14a
-// backfill); no default partition, so a row beyond the horizon fails loudly.
+// Partitions (issue #17; A§8): created only by ensure_partitions() (every live
+// caller, from 2000-01-01) and ensure_history_partitions() (the backfill's upsert,
+// from 1900-01-01; review C7), one per UTC month from 2026-01-01 on and one per
+// UTC year of obs before it (P14a backfill); no default partition, so a row
+// beyond the horizon fails loudly.
 
 let t: TestDb;
 let series: number;
@@ -125,9 +127,12 @@ describe('ensure_partitions', () => {
     expect(names).toContain('forecast_value_2026_08');
   });
 
-  it('before 2026 only obs gets a partition (yearly): 1999 is no longer refused, and forecast_value still gets none', async () => {
+  it('before 2026 only obs gets a partition (yearly): 1999 is refused on the live function, made by the history one, and forecast_value still gets none', async () => {
+    expect(await sqlState(t.admin, "SELECT ensure_partitions('1999-12-31T00:00:00Z', '1999-12-31T12:00:00Z')")).toBe(
+      '22023',
+    );
     const { rows } = await t.admin.query(
-      "SELECT ensure_partitions('1999-12-31T00:00:00Z', '1999-12-31T12:00:00Z') AS n",
+      "SELECT ensure_history_partitions('1999-12-31T00:00:00Z', '1999-12-31T12:00:00Z') AS n",
     );
     // obs_y1999 only: forecast_value has no partition below 2026-01-01, so its 2000 floor never matters.
     expect(rows).toEqual([{ n: 1 }]);
@@ -147,6 +152,13 @@ describe('ensure_partitions', () => {
         "INSERT INTO forecast_value (run_id, valid_ts, value) VALUES (1, '1999-12-31T23:45:00Z', 1)",
       ),
     ).toBe('23514');
+    // From 2000 on, the live function makes the same yearlies.
+    expect(
+      (await t.admin.query("SELECT ensure_partitions('2000-06-01T00:00:00Z', '2000-06-02T00:00:00Z') AS n")).rows,
+    ).toEqual([{ n: 1 }]);
+    expect((await partitions()).find((p) => p.name === 'obs_y2000')?.bound).toBe(
+      "FOR VALUES FROM ('2000-01-01 00:00:00+00') TO ('2001-01-01 00:00:00+00')",
+    );
   });
 
   it('refuses ranges that make no sense or would create a flood of partitions', async () => {
@@ -156,6 +168,9 @@ describe('ensure_partitions', () => {
     // The 3700-day span guard is for the monthly part (from 2026-01-01 on) only.
     expect(await call('2026-01-01T00:00:00Z', '2036-10-01T00:00:00Z')).toBe('22023');
     expect(await call('1899-12-31T23:59:59Z', '1900-01-01T00:00:00Z')).toBe('22023');
+    // The live floor (review C7): a live epoch-0 or 1999 timestamp fails loudly instead of making yearlies.
+    expect(await call('1970-01-01T00:00:00Z', '1970-01-01T00:00:00Z')).toBe('22023');
+    expect(await call('1999-12-31T23:59:59Z', '2000-01-01T00:00:00Z')).toBe('22023');
     expect(await call('2026-10-01T00:00:00Z', '2036-10-01T00:00:00Z')).toBe('22023');
     expect(await sqlState(t.admin, 'SELECT ensure_partitions(NULL, now())')).toBe('22023');
   });
@@ -178,14 +193,16 @@ describe('ensure_partitions', () => {
   });
 });
 
-// The yearly partitions of obs before the epoch (P14a, plan §3.8). Its own database: the guard test below puts a
-// hand-made monthly partition under the boundary, which the other cases must not see.
-describe('ensure_partitions: yearly obs partitions before 2026-01-01', { timeout: 60_000 }, () => {
+// The yearly partitions of obs before the epoch (P14a, plan §3.8), through the backfill's entry point
+// ensure_history_partitions (floor 1900); the live ensure_partitions makes the same yearlies from 2000 on. Its own
+// database: the guard test below puts a hand-made monthly partition under the boundary, which the other cases must
+// not see.
+describe('ensure_history_partitions: yearly obs partitions before 2026-01-01', { timeout: 60_000 }, () => {
   let y: TestDb;
   const call = (from: string, to: string) =>
-    y.admin.query<{ n: number }>('SELECT ensure_partitions($1::timestamptz, $2::timestamptz) AS n', [from, to]);
+    y.admin.query<{ n: number }>('SELECT ensure_history_partitions($1::timestamptz, $2::timestamptz) AS n', [from, to]);
   const state = (from: string, to: string) =>
-    sqlState(y.admin, 'SELECT ensure_partitions($1::timestamptz, $2::timestamptz)', [from, to]);
+    sqlState(y.admin, 'SELECT ensure_history_partitions($1::timestamptz, $2::timestamptz)', [from, to]);
   // Every leaf partition of obs with its bounds as UTC ISO strings, by lower bound.
   const tree = async () =>
     (
@@ -268,19 +285,35 @@ describe('ensure_partitions: yearly obs partitions before 2026-01-01', { timeout
     expect(await sqlState(y.admin, "INSERT INTO obs VALUES (1, '2026-03-01T00:00:00Z', 1, 0, 1)")).toBe('23514');
   });
 
-  it('is a locked-down SECURITY DEFINER function: prosecdef and the fixed search_path', async () => {
+  it('both are locked-down SECURITY DEFINER functions: prosecdef, the fixed search_path, EXECUTE as granted', async () => {
     const { rows } = await y.admin.query(
-      "SELECT prosecdef, proconfig, pg_get_userbyid(proowner) AS owner FROM pg_proc WHERE proname = 'ensure_partitions'",
+      `SELECT proname, prosecdef, proconfig, pg_get_userbyid(proowner) AS owner, proacl::text AS acl FROM pg_proc
+       WHERE proname IN ('ensure_partitions', 'ensure_history_partitions') ORDER BY 1`,
     );
-    expect(rows).toEqual([{ prosecdef: true, proconfig: ['search_path=pg_catalog, pg_temp'], owner: 'rws_owner' }]);
-    // The loader role may still call it, in any session zone.
+    const common = { prosecdef: true, proconfig: ['search_path=pg_catalog, pg_temp'], owner: 'rws_owner' };
+    expect(rows).toEqual([
+      { proname: 'ensure_history_partitions', ...common, acl: '{rws_owner=X/rws_owner,rws_load=X/rws_owner}' },
+      {
+        proname: 'ensure_partitions',
+        ...common,
+        acl: '{rws_owner=X/rws_owner,rws_load=X/rws_owner,rws_migrator=X/rws_owner}',
+      },
+    ]);
+    // The loader role may call the history one, in any session zone; the live one keeps its 2000 floor for it too.
     const load = await y.connectAs('rws_load');
     await load.query("SET TIME ZONE 'America/Los_Angeles'");
     expect(
-      (await load.query("SELECT ensure_partitions('1990-07-01T00:00:00Z', '1990-07-02T00:00:00Z') AS n")).rows,
+      (await load.query("SELECT ensure_history_partitions('1990-07-01T00:00:00Z', '1990-07-02T00:00:00Z') AS n")).rows,
     ).toEqual([{ n: 1 }]);
+    expect(await sqlState(load, "SELECT ensure_partitions('1990-07-01T00:00:00Z', '1990-07-02T00:00:00Z')")).toBe(
+      '22023',
+    );
     await load.end();
     expect((await tree())[0]).toEqual({ name: 'obs_y1990', lo: '1990-01-01T00:00:00Z', hi: '1991-01-01T00:00:00Z' });
+    // No other application role may call either.
+    const api = await y.connectAs('rws_api');
+    expect(await sqlState(api, "SELECT ensure_history_partitions('1990-07-01', '1990-07-02')")).toBe('42501');
+    await api.end();
   });
 
   it('refuses obs before 1900-01-01 and accepts 1900 itself', async () => {

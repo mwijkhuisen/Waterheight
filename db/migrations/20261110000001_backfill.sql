@@ -19,6 +19,7 @@ CREATE TABLE backfill_job (
   data_from timestamptz,                      -- probe result; NULL = not probed yet
   cursor_ts timestamptz NOT NULL,             -- end of the last committed chunk (= range_from at creation)
   chunks_done integer NOT NULL DEFAULT 0 CHECK (chunks_done >= 0),
+  chunks_with_data integer NOT NULL DEFAULT 0 CHECK (chunks_with_data >= 0), -- chunks that wrote a manifest line
   status text NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','running','paused','done','failed','aborted')),
   attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
   request_budget integer NOT NULL CHECK (request_budget > 0),
@@ -54,12 +55,27 @@ CREATE TABLE backfill_chunk (
   PRIMARY KEY (job_id, archive_key)
 );
 
+-- One runner per host (review C1/S1): advisory locks are revoked from PUBLIC (roles.sql), so a run holds a lease
+-- row per host it fetches from. It takes the row when it is free or expired (`until < now()`) or already its own,
+-- renews it to now() + 2 minutes before every request and gives it back at exit; a killed runner's lease lapses
+-- within 2 minutes. `holder` is a random id per process.
+CREATE TABLE backfill_lease (
+  host text PRIMARY KEY CHECK (host ~ '^[a-z0-9.-]{1,253}$'),
+  holder text NOT NULL CHECK (holder ~ '^[a-f0-9-]{1,64}$'),
+  until timestamptz NOT NULL
+);
+
 -- Which loader path a batch came through. A batch never changes its origin, so a row's kind (live, fill or backfill:
 -- qc bit 512 plus this) never changes with a confirmation; the health queries count `live` batches only.
 ALTER TABLE ingest_batch ADD COLUMN origin text NOT NULL DEFAULT 'live' CHECK (origin IN ('live','backfill'));
 
--- May the runner fetch now? 'ok', or why not: the loader is not computing health (its app_meta `loader` row is older
--- than 5 minutes), its backlog is long (oldest line over 600 s or more than 3 files), or the source is not healthy.
+-- May the runner fetch now? 'ok', or why not: `loader_lag` (the loader's app_meta `loader` row is older than 5 minutes
+-- or has no `computed_at`: fail closed), `backlog` (its oldest unread line is over 600 s old or more than 3 files
+-- wait), `unloaded` (an active job of the source, planned, running or paused, has more than 30 chunks with data that
+-- the ledger does not hold yet: archived and not loaded, or quarantined; review S6/C5, N1/N4) or `stale` (the source
+-- is not healthy). The 30 is the arithmetic of a healthy night: the runner writes at most 1 chunk/s, the loader reads
+-- every 10 s (TICK_MS) and for up to 20 s a tick (TICK_BUDGET_MS), so up to 10 chunks wait for the next tick and
+-- up to 30 while a tick is still reading; more than that is a loader that does not keep up, not a normal state.
 -- The runner holds no privilege on app_meta or source_health; this is its one window onto them, with the thresholds
 -- fixed here. SECURITY DEFINER, so: a fixed search_path with pg_temp last and every name schema-qualified.
 CREATE FUNCTION backfill_guard(p_source text) RETURNS text
@@ -70,9 +86,15 @@ SET search_path = pg_catalog, pg_temp
 AS $$
   SELECT CASE
     WHEN l.value IS NULL
-      OR (l.value ->> 'computed_at')::timestamptz < now() - interval '5 minutes' THEN 'loader_lag'
+      OR COALESCE((l.value ->> 'computed_at')::timestamptz, '-infinity') < now() - interval '5 minutes' THEN 'loader_lag'
     WHEN COALESCE((l.value ->> 'backlog_age_s')::numeric, 0) > 600
       OR COALESCE((l.value ->> 'backlog_files')::numeric, 0) > 3 THEN 'backlog'
+    WHEN EXISTS (
+        SELECT 1 FROM public.backfill_job j
+        WHERE j.source_id = p_source
+          AND j.status IN ('planned', 'running', 'paused')
+          AND j.chunks_with_data - (SELECT count(*) FROM public.backfill_chunk c WHERE c.job_id = j.id) > 30
+      ) THEN 'unloaded'
     WHEN h.status IS DISTINCT FROM 'ok' THEN 'stale'
     ELSE 'ok'
   END
@@ -83,12 +105,13 @@ $$;
 
 REVOKE ALL ON FUNCTION backfill_guard(text) FROM PUBLIC;
 
--- The runner: its job table (counts excluded) and the guard, nothing else (not even the registry tables: it resolves
--- series against the registry files).
+-- The runner: its job table (counts excluded), its lease and the guard, nothing else (not even the registry tables:
+-- it resolves series against the registry files).
 GRANT USAGE ON SCHEMA public TO rws_backfill;
 GRANT SELECT, INSERT ON backfill_job TO rws_backfill;
-GRANT UPDATE (cursor_ts, chunks_done, status, attempts, requests, data_from, last_error, started_at, updated_at,
-              finished_at) ON backfill_job TO rws_backfill;
+GRANT UPDATE (cursor_ts, chunks_done, chunks_with_data, status, attempts, requests, data_from, last_error, started_at,
+              updated_at, finished_at) ON backfill_job TO rws_backfill;
+GRANT SELECT, INSERT, UPDATE ON backfill_lease TO rws_backfill;
 GRANT USAGE ON SEQUENCE backfill_job_id_seq TO rws_backfill;
 GRANT EXECUTE ON FUNCTION backfill_guard(text) TO rws_backfill;
 
@@ -101,6 +124,7 @@ GRANT SELECT, INSERT, UPDATE ON backfill_chunk TO rws_load;
 
 DROP FUNCTION backfill_guard(text);
 DROP TABLE backfill_chunk;
+DROP TABLE backfill_lease;
 DROP TABLE backfill_job;
 ALTER TABLE ingest_batch DROP COLUMN origin;
 REVOKE USAGE ON SCHEMA public FROM rws_backfill;

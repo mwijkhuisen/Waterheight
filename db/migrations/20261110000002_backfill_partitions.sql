@@ -4,6 +4,11 @@
 -- of NL-1 history in monthly partitions would be hundreds of tables for the
 -- planner; yearly ones keep the count small and still prune.
 --
+--   * Two entry points, one body. ensure_history_partitions (the backfill's
+--     upsert only, EXECUTE to rws_load) goes down to 1900-01-01;
+--     ensure_partitions (every live caller) keeps the 2000-01-01 floor of
+--     20261003000005_partitions.sql (review C7: a live epoch-0 timestamp fails
+--     loudly instead of making decades of tables) and then runs the same body.
 --   * Constant boundary 2026-01-01T00:00:00Z. Below it, obs gets obs_yYYYY =
 --     [YYYY-01-01, YYYY+1-01-01), whole years only, so the result does not depend
 --     on the order or the ranges of the calls. From the boundary on, the monthly
@@ -13,16 +18,15 @@
 --     "nothing below 2026"), so an insert there fails loudly (23514). A call whose
 --     range starts below the boundary makes the obs yearlies and, from the
 --     boundary on, both tables' months.
---   * Lower bound 1900-01-01 for obs. The 3700-day span guard applies to the
---     monthly part [max(p_from, boundary), p_to] only; the yearly part is at
---     most 126 tables.
+--   * The 3700-day span guard applies to the monthly part [max(p_from,
+--     boundary), p_to] only; the yearly part is at most 126 tables.
 --   * Before the first yearly partition is made, the function reads the partition
 --     tree of obs and refuses (55000) if a MONTHLY partition lies below the
 --     boundary: a yearly one beside it could overlap, and a mixed layout is a
 --     decision for a human (partition-maintenance.md), not for a loader.
 --   * Still no default partition, SECURITY DEFINER, fixed search_path, the same
 --     grants (CREATE OR REPLACE keeps them).
-CREATE OR REPLACE FUNCTION ensure_partitions(p_from timestamptz, p_to timestamptz) RETURNS int
+CREATE FUNCTION ensure_history_partitions(p_from timestamptz, p_to timestamptz) RETURNS int
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
@@ -127,6 +131,23 @@ BEGIN
 END
 $$;
 
+REVOKE ALL ON FUNCTION ensure_history_partitions(timestamptz, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION ensure_history_partitions(timestamptz, timestamptz) TO rws_load;
+
+-- The live entry point: the 2000-01-01 floor, then the body above (called as the owner).
+CREATE OR REPLACE FUNCTION ensure_partitions(p_from timestamptz, p_to timestamptz) RETURNS int
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+  IF p_from < timestamptz '2000-01-01 00:00:00+00' THEN
+    RAISE EXCEPTION 'ensure_partitions: range outside the partition horizon' USING ERRCODE = '22023';
+  END IF;
+  RETURN public.ensure_history_partitions(p_from, p_to);
+END
+$$;
+
 -- migrate:down
 
 -- Back to the monthly-only body of 20261003000005_partitions.sql. The yearly
@@ -188,3 +209,5 @@ BEGIN
   RETURN created;
 END
 $$;
+
+DROP FUNCTION ensure_history_partitions(timestamptz, timestamptz);

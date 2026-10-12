@@ -673,6 +673,7 @@ describe('the database itself', () => {
       const reader = ['default_transaction_read_only=on', 'statement_timeout=2s', 'temp_file_limit=256MB'];
       expect(await settings()).toEqual([
         { role: 'rws_api', db: '', config: reader },
+        { role: 'rws_backfill', db: '', config: ['idle_in_transaction_session_timeout=30s', 'statement_timeout=5s'] },
         { role: 'rws_backup', db: '', config: ['default_transaction_read_only=on'] },
         { role: 'rws_migrator', db: '', config: ['role=rws_owner'] },
         { role: 'rws_owner_api', db: '', config: reader },

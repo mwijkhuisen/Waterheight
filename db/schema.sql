@@ -47,9 +47,15 @@ CREATE FUNCTION public.backfill_guard(p_source text) RETURNS text
     AS $$
   SELECT CASE
     WHEN l.value IS NULL
-      OR (l.value ->> 'computed_at')::timestamptz < now() - interval '5 minutes' THEN 'loader_lag'
+      OR COALESCE((l.value ->> 'computed_at')::timestamptz, '-infinity') < now() - interval '5 minutes' THEN 'loader_lag'
     WHEN COALESCE((l.value ->> 'backlog_age_s')::numeric, 0) > 600
       OR COALESCE((l.value ->> 'backlog_files')::numeric, 0) > 3 THEN 'backlog'
+    WHEN EXISTS (
+        SELECT 1 FROM public.backfill_job j
+        WHERE j.source_id = p_source
+          AND j.status IN ('planned', 'running', 'paused')
+          AND j.chunks_with_data - (SELECT count(*) FROM public.backfill_chunk c WHERE c.job_id = j.id) > 30
+      ) THEN 'unloaded'
     WHEN h.status IS DISTINCT FROM 'ok' THEN 'stale'
     ELSE 'ok'
   END
@@ -60,10 +66,10 @@ $$;
 
 
 --
--- Name: ensure_partitions(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+-- Name: ensure_history_partitions(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.ensure_partitions(p_from timestamp with time zone, p_to timestamp with time zone) RETURNS integer
+CREATE FUNCTION public.ensure_history_partitions(p_from timestamp with time zone, p_to timestamp with time zone) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'pg_temp'
     AS $$
@@ -164,6 +170,23 @@ BEGIN
     END LOOP;
   END IF;
   RETURN created;
+END
+$$;
+
+
+--
+-- Name: ensure_partitions(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ensure_partitions(p_from timestamp with time zone, p_to timestamp with time zone) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'pg_temp'
+    AS $$
+BEGIN
+  IF p_from < timestamptz '2000-01-01 00:00:00+00' THEN
+    RAISE EXCEPTION 'ensure_partitions: range outside the partition horizon' USING ERRCODE = '22023';
+  END IF;
+  RETURN public.ensure_history_partitions(p_from, p_to);
 END
 $$;
 
@@ -379,6 +402,7 @@ CREATE TABLE public.backfill_job (
     data_from timestamp with time zone,
     cursor_ts timestamp with time zone NOT NULL,
     chunks_done integer DEFAULT 0 NOT NULL,
+    chunks_with_data integer DEFAULT 0 NOT NULL,
     status text DEFAULT 'planned'::text NOT NULL,
     attempts integer DEFAULT 0 NOT NULL,
     request_budget integer NOT NULL,
@@ -399,6 +423,7 @@ CREATE TABLE public.backfill_job (
     CONSTRAINT backfill_job_check1 CHECK (((cursor_ts >= range_from) AND (cursor_ts <= range_to))),
     CONSTRAINT backfill_job_chunk_check CHECK ((chunk > '00:00:00'::interval)),
     CONSTRAINT backfill_job_chunks_done_check CHECK ((chunks_done >= 0)),
+    CONSTRAINT backfill_job_chunks_with_data_check CHECK ((chunks_with_data >= 0)),
     CONSTRAINT backfill_job_last_error_check CHECK ((last_error ~ '^[a-z_]{1,40}$'::text)),
     CONSTRAINT backfill_job_request_budget_check CHECK ((request_budget > 0)),
     CONSTRAINT backfill_job_requests_check CHECK ((requests >= 0)),
@@ -419,6 +444,19 @@ ALTER TABLE public.backfill_job ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY
     NO MINVALUE
     NO MAXVALUE
     CACHE 1
+);
+
+
+--
+-- Name: backfill_lease; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.backfill_lease (
+    host text NOT NULL,
+    holder text NOT NULL,
+    until timestamp with time zone NOT NULL,
+    CONSTRAINT backfill_lease_holder_check CHECK ((holder ~ '^[a-f0-9-]{1,64}$'::text)),
+    CONSTRAINT backfill_lease_host_check CHECK ((host ~ '^[a-z0-9.-]{1,253}$'::text))
 );
 
 
@@ -2116,6 +2154,14 @@ ALTER TABLE ONLY public.backfill_job
 
 ALTER TABLE ONLY public.backfill_job
     ADD CONSTRAINT backfill_job_spec_id_series_key_range_from_range_to_key UNIQUE (spec_id, series_key, range_from, range_to);
+
+
+--
+-- Name: backfill_lease backfill_lease_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_lease
+    ADD CONSTRAINT backfill_lease_pkey PRIMARY KEY (host);
 
 
 --

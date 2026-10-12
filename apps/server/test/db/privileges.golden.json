@@ -20,6 +20,10 @@
     "backfill_job_id_seq": {
       "rws_backfill": "USAGE"
     },
+    "backfill_lease": {
+      "rws_backfill": "SELECT,INSERT,UPDATE",
+      "rws_backup": "SELECT"
+    },
     "class_obs": {
       "rws_backup": "SELECT",
       "rws_load": "SELECT,INSERT,UPDATE"
@@ -385,6 +389,9 @@
   "functions": {
     "backfill_guard(text)": [
       "rws_backfill"
+    ],
+    "ensure_history_partitions(timestamp with time zone,timestamp with time zone)": [
+      "rws_load"
     ],
     "ensure_partitions(timestamp with time zone,timestamp with time zone)": [
       "rws_load",

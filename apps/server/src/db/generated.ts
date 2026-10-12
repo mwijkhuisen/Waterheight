@@ -64,6 +64,7 @@ export interface BackfillJob {
   attempts: Generated<number>;
   chunk: string;
   chunks_done: Generated<number>;
+  chunks_with_data: Generated<number>;
   created_at: Generated<Timestamp>;
   cursor_ts: Timestamp;
   data_from: Timestamp | null;
@@ -86,6 +87,12 @@ export interface BackfillJob {
   status: Generated<string>;
   unreconciled: Generated<number>;
   updated_at: Generated<Timestamp>;
+}
+
+export interface BackfillLease {
+  holder: string;
+  host: string;
+  until: Timestamp;
 }
 
 export interface ClassObs {
@@ -394,6 +401,7 @@ export interface DB {
   attribution: Attribution;
   backfill_chunk: BackfillChunk;
   backfill_job: BackfillJob;
+  backfill_lease: BackfillLease;
   class_obs: ClassObs;
   forecast_run: ForecastRun;
   forecast_value: ForecastValue;
