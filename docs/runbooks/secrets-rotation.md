@@ -36,7 +36,7 @@ sudo rws-deploy "$(sudo cat /var/lib/rws/current)"
 sudo docker restart rws-api-1
 ```
 
-**Check:** `sudo docker compose -p rws ps` shows the consumer healthy; `curl -s https://<domain>/api/v1/health` answers; `sudo stat` still shows `440 root:rws-db…`. **Old password is dead:** `rws-deploy` set the new password on the role in the database, so the old value no longer logs in (the integration test `roles.int.test.ts` proves the grants, not the rotation; this step is the proof). Rotate `db_rws_owner_api` (restart `rws-publish-owner-1` and `rws-api-owner-1`) the same way when the owner overlay is on.
+**Check:** `sudo docker compose -p rws ps` shows the consumer healthy; `curl -s https://<domain>/api/v1/health` answers; `sudo stat` still shows `440 root:rws-db…`. **Old password is dead:** `rws-deploy` set the new password on the role in the database, so the old value no longer logs in (the integration test `roles.int.test.ts` proves the grants, not the rotation; this step is the proof). Rotate `db_rws_owner_api` (restart `rws-publish-owner-1` and `rws-api-owner-1`) the same way when the owner overlay is on. Rotate `db_rws_backfill` (P14a, role `rws_backfill`, group `rws-dbbackfill`, gid 61011) the same way; its consumer is a one-shot job, so there is nothing to restart: **Check** with `backfill status` (`docs/runbooks/backfill.md` §4), which logs in as that role.
 
 ## 3. The owner `basic_auth` password
 
