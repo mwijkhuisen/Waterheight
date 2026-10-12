@@ -61,7 +61,7 @@ export function Layout({
   const bar = useRef<HTMLElement>(null);
   const strip = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    // The map carries the full title; every other view is "<page> · Rivierkijker" (BRAND.md §2).
+    // The map carries the full title; every other view is "<page> · Water Radar" (BRAND.md §2).
     document.title =
       id === 'home'
         ? m.site_title({}, { locale })
@@ -154,14 +154,14 @@ export function Layout({
   );
 }
 
-/** The logomark and the name in two colours, one word for a screen reader (the mark is decorative). */
+/** The logomark and the name in two colours, two words with a space, so a screen reader reads "Water Radar" (the mark
+ * is decorative). */
 function Name({ locale }: { locale: Locale }) {
   return (
     <>
       <Logo variant="light" size={32} />
       <span>
-        {m.name_lead({}, { locale })}
-        <span className={styles.accent}>{m.name_accent({}, { locale })}</span>
+        {m.name_lead({}, { locale })} <span className={styles.accent}>{m.name_accent({}, { locale })}</span>
       </span>
     </>
   );
