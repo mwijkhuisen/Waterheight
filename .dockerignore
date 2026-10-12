@@ -13,6 +13,7 @@
 !db/migrations/
 !scripts/install-pnpm.sh
 !deploy/web/Caddyfile
+!deploy/web/default-log.caddy
 !deploy/web/site.caddy
 !deploy/web/phase-prelaunch.caddy
 !deploy/web/phase-launch.caddy

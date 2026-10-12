@@ -266,3 +266,6 @@ nl:Albertkanaal
 fr:Canal Albert
 fr:Grand Canal d'Alsace
 nl:Zuid-Willemsvaart
+de:Linth
+de:Simme
+de:Kander

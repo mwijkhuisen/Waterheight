@@ -9,7 +9,8 @@
 #               connections while the probe runs) -> oom-restart.sh -> hardening.sh --ci.
 #   drill       stack in drill mode -> deploy/tests/flood/run.sh (the flood drill) with the k6 flood scenario running at
 #               the same time; both must pass -> oom-restart.sh -> hardening.sh --ci.
-#   chaos       stack -> deploy/tests/e2e/chaos.sh (api stopped, database stopped 10 min, a provider blackholed) ->
+#   chaos       stack -> deploy/tests/e2e/chaos.sh (api stopped, database stopped 10 min, a provider blackholed, then
+#               no full client address in Caddy's stderr, #133) ->
 #               oom-restart.sh (the dependants of the database may restart) -> hardening.sh --ci.
 #   production  workflow_dispatch with mode production only, in the `production` environment (owner approval), no
 #               secrets: k6 static-only burst against vars.LOADTEST_TARGET, 1,000 r/s for 15 min incl. PMTiles Range
@@ -405,7 +406,8 @@ jobs:
           grep -q '^loadtest stack ready' "$RUNNER_TEMP/stack.log"
           jq -e '.mode == "chaos"' < <(sudo cat /ci/e2e-stack)
       # api stopped; database stopped 10 min (manifest keeps growing, then 0 duplicates and 0 Q7 gaps); a provider host
-      # blackholed (status 0 hits, stale capture status, stale source, a /fail ping after the blackhole).
+      # blackholed (status 0 hits, stale capture status, stale source, a /fail ping after the blackhole); then Caddy's
+      # stderr holds no full client address (#133, KG-314).
       - name: Chaos (deploy/tests/e2e/chaos.sh)
         run: sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/e2e/chaos.sh | tee "$RUNNER_TEMP/chaos.log"
       # What the chaos stopped may be restarted by the daemon (the database's dependants); an OOM kill never is excused.

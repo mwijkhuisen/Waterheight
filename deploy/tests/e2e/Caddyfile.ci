@@ -14,6 +14,8 @@
 			idle 2m
 		}
 	}
+	# #133: Caddy's own log (stderr) masks client addresses like the access log (chaos.sh proves it).
+	import /etc/caddy/default-log.caddy
 }
 
 import /etc/caddy/site.caddy
