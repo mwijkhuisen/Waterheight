@@ -2038,84 +2038,72 @@ rivers:
     names:
       DE-7: ["Pader"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Pader"
+    osm_relation_id: 379709
+    osm_way_name: null
     wikidata: Q445637
     parent_river_id: lippe
     km_direction: none
-    evidence: "Wikidata Q445637 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q445637 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r379709 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: heder
     name_nl: "Heder"
     name_en: "Heder"
     names:
       DE-7: ["Heder"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Heder"
+    osm_relation_id: 379686
+    osm_way_name: null
     wikidata: Q879904
     parent_river_id: lippe
     km_direction: none
-    evidence: "Wikidata Q879904 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q879904 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r379686 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: thune
     name_nl: "Thune"
     name_en: "Thune"
     names:
       DE-7: ["Thune"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Thune"
+    osm_relation_id: 379711
+    osm_way_name: null
     wikidata: Q830056
     parent_river_id: lippe
     km_direction: none
-    evidence: "Wikidata Q830056 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q830056 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r379711 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: glenne
     name_nl: "Glenne"
     name_en: "Glenne"
     names:
-      DE-7: ["Glenne", "Haustenbach"]
+      DE-7: ["Glenne"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Glenne"
+    osm_relation_id: 379737
+    osm_way_name: null
     wikidata: Q1415804
     parent_river_id: lippe
     km_direction: none
-    evidence: "Wikidata Q1415804 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q831813 (into the Möhne); its Wikidata alias Haustenbach (SPARQL by id 2026-10-12, #140) is the upper course, where DE-7 Siedlingsheide1 de.lanuk.2784133000100 lies (LANUK code 2784…, the Glenne system)"
+    evidence: "Wikidata Q1415804 (no P402; P403 Q153945 Lippe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q831813 (into the Möhne); OSM maps the upper course, Wikidata alias Haustenbach, as relation r370365 \"Haustenbach\" with the same QID, so DE-7 Siedlingsheide1 de.lanuk.2784133000100 stays unplaced; relation r379737 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: liese
     name_nl: "Liese"
     name_en: "Liese"
     names:
       DE-7: ["Liese"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Liese"
+    osm_relation_id: 379731
+    osm_way_name: null
     wikidata: Q895649
     parent_river_id: glenne
     km_direction: none
-    evidence: "Wikidata Q895649 (no P402; P403 Q1415804 Glenne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
-  - id: krollbach
-    name_nl: "Krollbach"
-    name_en: "Krollbach"
-    names:
-      DE-7: ["Krollbach"]
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Krollbach"
-    wikidata: Q1789767
-    parent_river_id: glenne
-    km_direction: none
-    evidence: "Wikidata Q1789767 (no P402; no P403), SPARQL by id 2026-10-12 (#140); a river item (P31 Q4022) with no P402 and no P403 (SPARQL by id 2026-10-12, #140): the mouth is measured in the extract; LANUK code 2784149… lies in the Glenne system"
+    evidence: "Wikidata Q895649 (no P402; P403 Q1415804 Glenne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r379731 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: afte
     name_nl: "Afte"
     name_en: "Afte"
     names:
       DE-7: ["Afte"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Afte"
+    osm_relation_id: 4453153
+    osm_way_name: null
     wikidata: Q895644
     parent_river_id: alme
     km_direction: none
-    evidence: "Wikidata Q895644 (no P402; P403 Q562271 Alme), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q895644 (no P402; P403 Q562271 Alme), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r4453153 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: altenau
     name_nl: "Altenau"
     name_en: "Altenau"
@@ -2140,64 +2128,6 @@ rivers:
     parent_river_id: altenau
     km_direction: none
     evidence: "Wikidata Q875406 (P402 379700; P403 Q176841 Altenau), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q683133 (into the Saale)"
-  - id: sauer-altenau
-    name_nl: "Sauer (Altenau)"
-    name_en: "Sauer (Altenau)"
-    names: {}
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Sauer"
-    wikidata: Q895872
-    parent_river_id: altenau
-    km_direction: none
-    evidence: "Wikidata Q895872 (no P402; P403 Q176841 Altenau), SPARQL by id 2026-10-12 (#140); gaugeless connector that carries the Schmittwasser (owner 2026-10-12, #127); not the sauer (Q158847, Moselle) nor sauer-alsace (Q705057)"
-  - id: schmittwasser
-    name_nl: "Schmittwasser"
-    name_en: "Schmittwasser"
-    names:
-      DE-7: ["Schmittwasser"]
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Schmittwasser"
-    wikidata: Q2246551
-    parent_river_id: sauer-altenau
-    km_direction: none
-    evidence: "Wikidata Q2246551 (no P402; P403 Q895872 Sauer), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
-  - id: funne
-    name_nl: "Funne"
-    name_en: "Funne"
-    names:
-      DE-7: ["Funne"]
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Funne"
-    wikidata: Q19280070
-    parent_river_id: stever
-    km_direction: none
-    evidence: "Wikidata Q19280070 (no P402; P403 Q314777 Stever), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
-  - id: kalflack
-    name_nl: "Kalflack"
-    name_en: "Kalflack"
-    names:
-      DE-7: ["Kalflack"]
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Kalflack"
-    wikidata: Q1910473
-    parent_river_id: rhine
-    km_direction: none
-    evidence: "Wikidata Q1910473 (no P402; P403 Q584 Rhine), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
-  - id: oude-maas-limburg
-    name_nl: "Oude Maas (Limburg)"
-    name_en: "Oude Maas (Limburg)"
-    names: {}
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Oude Maas"
-    wikidata: Q13973145
-    parent_river_id: meuse
-    km_direction: none
-    evidence: "Wikidata Q13973145 (no P402; P403 Q41986 Maas), SPARQL by id 2026-10-12 (#140); gaugeless connector, the old Meuse arm that carries the Geleenbeek (owner 2026-10-12, #127); not the Oude Maas of Rotterdam"
   - id: geleenbeek
     name_nl: "Geleenbeek"
     name_en: "Geleenbeek"
@@ -2206,9 +2136,9 @@ rivers:
     osm_relation_id: 5993916
     osm_way_name: null
     wikidata: Q2525052
-    parent_river_id: oude-maas-limburg
+    parent_river_id: meuse
     km_direction: none
-    evidence: "Wikidata Q2525052 (P402 5993916; P403 Q13973145 Oude Maas (Limburg)), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); gaugeless connector that carries the Rodebach (owner 2026-10-12, #127)"
+    evidence: "Wikidata Q2525052 (P402 5993916; P403 Q13973145 Oude Maas (Limburg), an old Meuse arm whose P403 is Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); gaugeless connector that carries the Rodebach (owner 2026-10-12, #127)"
   - id: rodebach
     name_nl: "Roode Beek"
     name_en: "Rodebach"
@@ -2227,12 +2157,12 @@ rivers:
     names:
       DE-7: ["Genfbach"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Genfbach"
+    osm_relation_id: 3509219
+    osm_way_name: null
     wikidata: Q15811638
     parent_river_id: urft
     km_direction: none
-    evidence: "Wikidata Q15811638 (no P402; P403 Q6236 Urft), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q15811638 (no P402; P403 Q6236 Urft), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3509219 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: olef
     name_nl: "Olef"
     name_en: "Olef"
@@ -2251,72 +2181,60 @@ rivers:
     names:
       DE-7: ["Platißbach"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Platißbach"
+    osm_relation_id: 4437599
+    osm_way_name: null
     wikidata: Q19298637
     parent_river_id: olef
     km_direction: none
-    evidence: "Wikidata Q19298637 (no P402; P403 Q466893 Olef), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
-  - id: reifferscheiderbach
-    name_nl: "Reifferscheiderbach"
-    name_en: "Reifferscheiderbach"
-    names:
-      DE-7: ["Reifferscheiderbach"]
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Reifferscheiderbach"
-    wikidata: Q58882853
-    parent_river_id: olef
-    km_direction: none
-    evidence: "Wikidata Q58882853 (no P402; P403 Q466893 Olef), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); Wikidata label \"Reifferscheider Bach\""
+    evidence: "Wikidata Q19298637 (no P402; P403 Q466893 Olef), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r4437599 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: wehebach
     name_nl: "Wehebach"
     name_en: "Wehebach"
     names:
       DE-7: ["Wehebach"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Wehebach"
+    osm_relation_id: 10988211
+    osm_way_name: null
     wikidata: Q1724509
     parent_river_id: inde
     km_direction: none
-    evidence: "Wikidata Q1724509 (no P402; P403 Q153317 Inde), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q1724509 (no P402; P403 Q153317 Inde), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r10988211 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: merzbach
     name_nl: "Merzbach"
     name_en: "Merzbach"
     names:
       DE-7: ["Merzbach"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Merzbach"
+    osm_relation_id: 10744587
+    osm_way_name: null
     wikidata: Q879164
     parent_river_id: rur
     km_direction: none
-    evidence: "Wikidata Q879164 (no P402; P403 Q152331 Rur), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q879164 (no P402; P403 Q152331 Rur), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r10744587 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: beeckfliess
     name_nl: "Beeckfließ"
     name_en: "Beeckfließ"
     names:
       DE-7: ["Beeckfließ"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Beeckfließ"
+    osm_relation_id: 384342
+    osm_way_name: null
     wikidata: Q814026
     parent_river_id: wurm
     km_direction: none
-    evidence: "Wikidata Q814026 (no P402; P403 Q153310 Wurm), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q814026 (no P402; P403 Q153310 Wurm), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r384342 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: broicher-bach
     name_nl: "Broicher Bach"
     name_en: "Broicher Bach"
     names:
       DE-7: ["Broicher Bach"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Broicher Bach"
+    osm_relation_id: 15807028
+    osm_way_name: null
     wikidata: Q925335
     parent_river_id: wurm
     km_direction: none
-    evidence: "Wikidata Q925335 (no P402; P403 Q153310 Wurm), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q925335 (no P402; P403 Q153310 Wurm), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r15807028 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: haarbach
     name_nl: "Haarbach"
     name_en: "Haarbach"
@@ -2347,12 +2265,12 @@ rivers:
     names:
       DE-7: ["Gelderner Fleuth"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Gelderner Fleuth"
+    osm_relation_id: 4759831
+    osm_way_name: null
     wikidata: Q1499477
     parent_river_id: niers
     km_direction: none
-    evidence: "Wikidata Q1499477 (no P402; P403 Q835333 Niers), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q1499477 (no P402; P403 Q835333 Niers), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r4759831 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: issumer-fleuth
     name_nl: "Issumer Fleuth"
     name_en: "Issumer Fleuth"
@@ -2371,36 +2289,36 @@ rivers:
     names:
       DE-7: ["Dalkebach"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Dalke"
+    osm_relation_id: 370389
+    osm_way_name: null
     wikidata: Q876305
     parent_river_id: ems
     km_direction: none
-    evidence: "Wikidata Q876305 (no P402; P403 Q1648 Ems), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); LANUK calls it \"Dalkebach\""
+    evidence: "Wikidata Q876305 (no P402; P403 Q1648 Ems), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); LANUK calls it \"Dalkebach\"; relation r370389 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: wapelbach
     name_nl: "Wapelbach"
     name_en: "Wapelbach"
     names:
       DE-7: ["Wapelbach"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Wapelbach"
+    osm_relation_id: 370350
+    osm_way_name: null
     wikidata: Q2548570
     parent_river_id: dalke
     km_direction: none
-    evidence: "Wikidata Q2548570 (no P402; P403 Q876305 Dalke), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q2548570 (no P402; P403 Q876305 Dalke), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r370350 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact); relation r12524087 (\"Wehrbach\") carries the same QID and is not selected"
   - id: oelbach
     name_nl: "Ölbach"
     name_en: "Ölbach"
     names:
       DE-7: ["Ölbach"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Ölbach"
+    osm_relation_id: 370339
+    osm_way_name: null
     wikidata: Q296787
     parent_river_id: wapelbach
     km_direction: none
-    evidence: "Wikidata Q296787 (no P402; P403 Q2548570 Wapelbach), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesakes Q15856023 (into the Berkel), Q27894960 (Muckbach), Q296781 (Rot); the gauge's LANUK code 3128… is the Wapelbach system's"
+    evidence: "Wikidata Q296787 (no P402; P403 Q2548570 Wapelbach), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesakes Q15856023 (into the Berkel), Q27894960 (Muckbach), Q296781 (Rot); the gauge's LANUK code 3128… is the Wapelbach system's; relation r370339 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: lutter-ems
     name_nl: "Lutter"
     name_en: "Lutter"
@@ -2419,36 +2337,36 @@ rivers:
     names:
       DE-7: ["Axtbach"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Axtbach"
+    osm_relation_id: 12535218
+    osm_way_name: null
     wikidata: Q792624
     parent_river_id: ems
     km_direction: none
-    evidence: "Wikidata Q792624 (no P402; P403 Q1648 Ems), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q792624 (no P402; P403 Q1648 Ems), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r12535218 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: muenstersche-aa
     name_nl: "Münstersche Aa"
     name_en: "Münstersche Aa"
     names:
       DE-7: ["Münstersche Aa"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Münstersche Aa"
+    osm_relation_id: 370487
+    osm_way_name: null
     wikidata: Q524842
     parent_river_id: ems
     km_direction: none
-    evidence: "Wikidata Q524842 (no P402; P403 Q1648 Ems), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q524842 (no P402; P403 Q1648 Ems), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r370487 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: glane
     name_nl: "Glane"
     name_en: "Glane"
     names:
       DE-7: ["Glane"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Glane"
+    osm_relation_id: 2353973
+    osm_way_name: null
     wikidata: Q257245
     parent_river_id: ems
     km_direction: none
-    evidence: "Wikidata Q257245 (no P402; P403 Q1648 Ems), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q257245 (no P402; P403 Q1648 Ems), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r2353973 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: grosse-aa
     name_nl: "Große Aa"
     name_en: "Große Aa"
@@ -2478,35 +2396,12 @@ rivers:
     names:
       DE-7: ["Bocholter Aa"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Bocholter Aa"
+    osm_relation_id: 10623937
+    osm_way_name: null
     wikidata: Q572262
     parent_river_id: oude-ijssel
     km_direction: none
-    evidence: "Wikidata Q572262 (no P402; P403 Q181067 Oude IJssel), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
-  - id: bielheimerbeek
-    name_nl: "Bielheimerbeek"
-    name_en: "Bielheimerbeek"
-    names: {}
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Bielheimerbeek"
-    wikidata: Q2673735
-    parent_river_id: oude-ijssel
-    km_direction: none
-    evidence: "Wikidata Q2673735 (no P402; P403 Q181067 Oude IJssel), SPARQL by id 2026-10-12 (#140); gaugeless connector that carries the Schlinge (owner 2026-10-12, #127)"
-  - id: schlinge
-    name_nl: "Boven-Slinge"
-    name_en: "Schlinge"
-    names:
-      DE-7: ["Schlinge"]
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Schlinge"
-    wikidata: Q285844
-    parent_river_id: bielheimerbeek
-    km_direction: none
-    evidence: "Wikidata Q285844 (no P402; P403 Q2673735 Bielheimerbeek), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q572262 (no P402; P403 Q181067 Oude IJssel), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r10623937 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38222297911, rivernet-fixture artifact)"
   - id: steinfurter-aa
     name_nl: "Steinfurter Aa"
     name_en: "Steinfurter Aa"
@@ -2568,6 +2463,24 @@ excluded:
   - name: "Anger"
     wikidata: Q260704
     reason: "Wikidata P402 941791 is not a type=waterway relation in the extract (relation_missing, geo.yml run 38211213229) and no way carries wikidata=Q260704; Wikidata has no P403 for it; DE-7 Ratingen de.lanuk.2756500000100 lies on it (#139)"
+  - name: "Funne"
+    wikidata: Q19280070
+    reason: "No relation or way carries wikidata=Q19280070 in the extract (geo.yml run 38222297911); no P402; DE-7 Selm-Ondrup de.lanuk.2788630000200 lies on it (#140)"
+  - name: "Kalflack"
+    wikidata: Q1910473
+    reason: "No relation or way carries wikidata=Q1910473 in the extract (geo.yml run 38222297911); no P402; DE-7 Marienbaum de.lanuk.2796300000100 lies on it (#140)"
+  - name: "Reifferscheider Bach"
+    wikidata: Q58882853
+    reason: "No relation or way carries wikidata=Q58882853 in the extract (geo.yml run 38222297911); no P402; DE-7 Reifferscheid2 de.lanuk.2822867000200 (water name Reifferscheiderbach) lies on it (#140)"
+  - name: "Schmittwasser"
+    wikidata: Q2246551
+    reason: "No relation or way carries wikidata=Q2246551 in the extract (geo.yml run 38222297911); no P402; DE-7 Herbram_W de.lanuk.2782846000100 lies on it, so its gaugeless parent, the Sauer of the Altenau (Q895872, relation r10816430), is not curated either (#140)"
+  - name: "Krollbach"
+    wikidata: Q1789767
+    reason: "Relation r370360 carries wikidata=Q1789767 in the extract (geo.yml run 38222297911), but it ends on relation r370365 \"Haustenbach\", the upper Glenne, which carries the Glenne QID Q1415804 next to the Glenne relation r379737 that the river glenne selects (one relation per river), so it cannot reach a curated river; no P402 or P403 on Wikidata; DE-7 Siedlingsheide2 de.lanuk.2784149100100 (#140)"
+  - name: "Schlinge"
+    wikidata: Q285844
+    reason: "Relation r14213627 (\"Boven-Slinge\") carries wikidata=Q285844 in the extract (geo.yml run 38222297911) but holds only the Dutch course (6.42-6.80 E): DE-7 Südlohn de.lanuk.9283215500100 lies 7.3 km upstream of it; its mouth, the Bielheimerbeek (Q2673735, into the Oude IJssel), has no relation or way in the extract (#140)"
 joins:
   - river: scheldt
     at: [3.2870075, 50.2241826]
@@ -2604,6 +2517,41 @@ joins:
     to_river: deilbach
     max_m: 300
     reason: "KG-161 (#139): one edge of the Deilbach relation 1239530 near its source is apart from the rest: its sink n4393469750 (7.1974, 51.3010) shares no node with the main piece (36 edges, which reaches the Ruhr and holds the DE-7 gauge Langenberg); the nearest node of the main piece, n2926198121, is 217 m away (measured on the extract of geo.yml run 38211213229, 2026-10-12). No gauge needs it; it keeps that reach on a path to the Ruhr"
+  - river: ellerbach
+    at: [8.8809738, 51.6929961]
+    to_river: ellerbach
+    max_m: 510
+    reason: "KG-161 (#140): the Ellerbach relation 379700 has a gap: the sink n743541775 (8.8810, 51.6930) of its upper piece (10 edges) shares no node with its lower piece (21 edges, which reaches the Altenau); the nearest node of the lower piece, n13289226097, is 456 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). The DE-7 gauge Schwaney (de.lanuk.2782861000100) lies on the upper piece and needs it for a path to the Altenau"
+  - river: wapelbach
+    at: [8.5430479, 51.8565294]
+    to_river: wapelbach
+    max_m: 190
+    reason: "KG-161 (#140): the Wapelbach relation 370350 has a gap: the sink n510814952 (8.5430, 51.8565) of its upper piece (26 edges) shares no node with its lower piece (17 edges, which reaches the Dalke); the nearest node of the lower piece, n13955495691, is 172 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). The DE-7 gauge Kaunitz (de.lanuk.3128100000100) lies on the upper piece and needs it for a path to the Dalke"
+  - river: thune
+    at: [8.685426, 51.7604585]
+    to_river: lippe
+    max_m: 760
+    reason: "KG-161 (#140): the sink n364436200 (8.6854, 51.7605) of the upper piece of the Thune relation 379711 (11 edges) shares no node with the Lippe, and its 2-edge lower piece, which touches the Lippe, is 1.5 km away; the nearest lippe vertex n551561420 on w319502250 is 686 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). The DE-7 gauge Neuhaus3 (de.lanuk.2783250000100) lies on that piece and needs it for a path to the Lippe"
+  - river: rodebach
+    at: [5.8320688, 51.0760334]
+    to_river: geleenbeek
+    max_m: 50
+    reason: "KG-161 (#140): the sink n1285847803 (5.8321, 51.0760) of the Rodebach relation 3487950 (122 edges) shares no node with the Geleenbeek, which itself ends 1,384 m from the Meuse at the Oude Maas arm, with no join (owner 2026-10-12); the nearest geleenbeek vertex n8420041180 on w276617276 is 42 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). The DE-7 gauge Suesterseel (de.lanuk.2818100000200) lies on the Rodebach and has no neighbour"
+  - river: oelbach
+    at: [8.6009143, 51.8984282]
+    to_river: oelbach
+    max_m: 160
+    reason: "KG-161 (#140): the Ölbach relation 370339 has a gap: the sink n409837924 (8.6009, 51.8984) of its stray piece (3 edges) shares no node with its main piece (15 edges, which reaches the Wapelbach and holds the DE-7 gauge Verl); the nearest node of the main piece, n409837921, is 137 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). No gauge needs it; it keeps that reach on a path to the Wapelbach"
+  - river: broicher-bach
+    at: [6.1675418, 50.8571523]
+    to_river: broicher-bach
+    max_m: 60
+    reason: "KG-161 (#140): the Broicher Bach relation 15807028 has a gap: the sink n8680310114 (6.1675, 50.8572) of its stray piece (10 edges) shares no node with its main piece (10 edges, which reaches the Wurm and holds the DE-7 gauge Herzogenrath_2); the nearest node of the main piece, n8680312637, is 46 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). No gauge needs it; it keeps those reaches on a path to the Wurm"
+  - river: pader
+    at: [8.7518495, 51.7205229]
+    to_river: pader
+    max_m: 30
+    reason: "KG-161 (#140): the Pader relation 379709 has a gap: the sink n298483394 (8.7518, 51.7205) of its stray piece (9 edges) shares no node with its main piece (87 edges, which reaches the Lippe and holds the DE-7 gauge Paderborn1); the nearest node of the main piece, n2559179165, is 14 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). No gauge needs it; it keeps those reaches on a path to the Lippe"
 travel_times:
   # Rhine → Lobith, flood peaks (GWIO 85.006 appendix 1, read from the scan for #110): each range holds every value the
   # note does not strike through, in whole hours rounded outward (Emmerich keeps a floor of 1 h).
