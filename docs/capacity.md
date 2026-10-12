@@ -46,3 +46,7 @@ Verdict: not decided until the owner fills in A3.
 
 If the flood-day peak exceeds 50% of the uplink **or** the month exceeds 50% of the traffic quota, arm a CDN pull zone for `/tiles/*` and `/assets/*` only (static, licence-neutral) under the same hostname, following `docs/runbooks/cdn-break-glass.md`, and name the CDN on the privacy page before it goes live. **Never switch to OpenFreeMap or any other third-party tile host**: that adds third-party browser requests (invariant 7) and changes the CSP.
 <!-- egress:end -->
+
+## Tunnel mode (#109, ADR-0021)
+
+The block above is measured against the origin's own uplink and is not regenerated for the tunnel. With `RWS_EDGE=tunnel` (`docs/runbooks/edge-switch.md`) Cloudflare carries the egress of the cached trees: `/assets/*` and `/data/*` are answered at its edge once cached, and the origin sees one request per object and edge location instead of one per visitor. The tiles bypass the cache (cache rule 1: `Range` on a cold miss of a cacheable object is dropped, and our tile routes answer 416 without one), so `/tiles/*`, the API and the pages still use the home line's uplink; in the egress table above the tiles row (43 of 116 requests, 2.92 of 4.47 MB per session) is the part the tunnel does not take off the line. Uncached tile ranges are also the part Cloudflare's Service-Specific Terms ("disproportionate large files", 2026-09-28) can be read against (R-102). The D20 rule above still decides when more is needed; in tunnel mode there is no pull zone to arm, and R2 or any other tile host stays out (invariant 7).

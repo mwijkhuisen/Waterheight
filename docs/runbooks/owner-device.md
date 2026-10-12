@@ -46,4 +46,4 @@ A lost or stolen device: revoke it first, then rotate the owner password (docs/r
 | `/etc/wireguard/wg0.key` | the server key (root `0600`) |
 | `/etc/wireguard/wg0.peers.conf` | the peers (root `0600`; only `rws-wg-peer` writes it; bootstrap never touches it) |
 
-The endpoint in a client config is `RWS_PUBLIC_IPV4` from `rws.env`, UDP `51820` (open in `deploy/host/nftables.conf`). Rotating the server key: `sudo rm /etc/wireguard/wg0.key`, run bootstrap, `sudo systemctl restart wg-quick@wg0`, and re-add every device (their configs hold the old server public key).
+The endpoint in a client config is `RWS_WG_ENDPOINT` from `rws.env` when it is set (an IPv4 address or a lower-case DNS-only host name; it may not be `RWS_DOMAIN` or start with `owner.`; needed in tunnel mode, where the public name is proxied by Cloudflare and carries no UDP, `docs/runbooks/edge-switch.md`), else `RWS_PUBLIC_IPV4`, UDP `51820` (open in `deploy/host/nftables.conf`). Rotating the server key: `sudo rm /etc/wireguard/wg0.key`, run bootstrap, `sudo systemctl restart wg-quick@wg0`, and re-add every device (their configs hold the old server public key).

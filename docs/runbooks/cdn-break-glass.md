@@ -1,5 +1,7 @@
 # CDN break-glass (D20)
 
+> **Tunnel mode (ADR-0021, #109).** With `RWS_EDGE=tunnel` the whole public host is already behind Cloudflare, so there is nothing to arm: caching follows the cache rules of `docs/runbooks/edge-switch.md` (§3), the privacy page names Cloudflare first, and the origin publishes loopback only. This runbook stays the **direct-mode** break-glass; R-097's precondition (origin authentication) applies only there.
+
 Pre-written, **not enabled**. It is armed only by decision D20: `docs/capacity.md` shows a flood-day peak above 50 % of the VPS uplink or a month above 50 % of the traffic quota, or the owner decides during a flood that bandwidth, not CPU, is the bottleneck. A pull zone in front of the **same public hostname** caches the two static, licence-neutral trees `/tiles/*` and `/assets/*` and nothing else. It still **proxies every request** of the hostname: it terminates TLS, so it sees every path, query string and visitor address and could alter any answer, the JavaScript included. Choose it as a processor you trust with all of that (review SR-3).
 
 Never, in any variant of this runbook:

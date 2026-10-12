@@ -63,6 +63,15 @@ Canonical procedure: `docs/runbooks/owner-password-rotation.md`. The drill's che
 - `restic_password`: only with a restore drill (`docs/runbooks/restore.md`).
 - SSH keys: add, test a second session, remove (`docs/runbooks/lost-ssh.md`).
 
-## 6. Record the drill
+## 6. The Cloudflare Tunnel token (`cf_tunnel_token`; only in tunnel mode, ADR-0021, `docs/runbooks/edge-switch.md`)
 
-Append to the issue or PR you are working in: date, which steps, and these lines of evidence (no secret values): the `stat` listing, `rws-wg-peer list` names, the healthchecks project status, the `401`/`200` results of step 3 and the `404` of step 1.4. Anything that did not behave as written is a finding: fix the runbook or the system, and note it in `docs/known-gaps.md`.
+Whoever holds the token can run a connector for the tunnel and receive a share of the site's visitors (T-EDGE-1), so a leaked token is rotated **at once**. Only the owner can rotate it: in the Cloudflare dashboard (Zero Trust, Networks, Tunnels) refresh the tunnel's token, which invalidates the old one.
+
+1. Copy the new token into the password manager only. Then write it into the file in place (the file keeps its inode, owner and mode): `sudoedit /etc/rws/secrets/cf_tunnel_token`, the token alone on one line. It is never put in `rws.env`, an environment variable, a command line or a ticket.
+2. `sudo docker restart rws-cloudflared-1`: the container reads the file when it starts (a redeploy does not recreate it, `up -d` recreates a container only when its configuration changes).
+3. **Check:** `sudo stat -c '%n %a %U:%G' /etc/rws/secrets/cf_tunnel_token` is `440 root:rws-cftunnel`; `sudo docker ps` shows `rws-cloudflared-1` healthy; the dashboard shows **one healthy connector and no unknown one** (an unknown connector means someone else runs the old token: refresh the token again and look at how it leaked). `curl -sI https://<domain>/` still answers 200.
+4. **Old token is dead.** The refresh in the dashboard ended the old token's connectors; the dashboard's connector list is the evidence. Delete the old token from the password manager.
+
+## 7. Record the drill
+
+Append to the issue or PR you are working in: date, which steps, and these lines of evidence (no secret values): the `stat` listing, `rws-wg-peer list` names, the healthchecks project status, the `401`/`200` results of step 3, the `404` of step 1.4 and, in tunnel mode, the connector list of step 6. Anything that did not behave as written is a finding: fix the runbook or the system, and note it in `docs/known-gaps.md`.

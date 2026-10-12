@@ -107,7 +107,7 @@ Signed (owner): ______________________  Date: ____-__-__
 - [ ] [agent-prod] Before the switch: `scripts/verify-prod.sh <domain> --profile prelaunch` is all PASS (noindex everywhere, no `robots.txt` or sitemap, no owner source named).
 - [ ] [owner] The launch commit is reviewed and merged (the one change of the `RWS_SITE_PHASE` default; production's `rws.env` never sets it, while the rebuild drill's pins `prelaunch`: [`vps-rebuild`](runbooks/vps-rebuild.md) §4) and deployed: `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`.
 - [ ] [agent-prod] After the switch: `scripts/verify-prod.sh <domain> --profile launch` is all PASS (pages without `X-Robots-Tag`; `/api`, `/data`, `/status/`, `/tiles` and the 404 shells still `noindex`; `robots.txt`, the sitemap and the Open Graph image in place; `robots.txt`, the sitemap, `sources.json` and `status.json` name no owner source or host).
-- [ ] [owner] No CDN is armed: `https://<domain>/runtime-config.json` shows `"cdn":""`, and the privacy page says so (D20, [`cdn-break-glass`](runbooks/cdn-break-glass.md)).
+- [ ] [owner] The privacy page says what is true about the CDN. Direct mode with no CDN armed: `https://<domain>/runtime-config.json` shows `"cdn":""` and the page says so (D20, [`cdn-break-glass`](runbooks/cdn-break-glass.md)). Tunnel mode (`RWS_EDGE=tunnel`, ADR-0021, [`edge-switch`](runbooks/edge-switch.md)): it shows `"cdn":"Cloudflare"`, the page names Cloudflare first in NL and EN (E5), `scripts/verify-prod.sh <domain> --edge cloudflare` is all PASS including the `edge` group and `owner listener`, and the router forwards only UDP 51820.
 
 Signed (owner): ______________________  Date: ____-__-__
 
