@@ -1,6 +1,6 @@
 # Water Radar — brand pack
 
-The owner's design document (issue #90, 2026-09-29) as the repository applies it (P10c, PHASES §31, D23), with the name and the mark of P10f (issue #128, PHASES §46). The design document is the source for everything P10f did not change; this file says where each part lives in the code and what the code checks.
+The owner's design document (issue #90, 2026-09-29) as the repository applies it (P10c, PHASES §31, D23), with the name and the mark of P10f (issue #128, PHASES §47). The design document is the source for everything P10f did not change; this file says where each part lives in the code and what the code checks.
 
 ## 1. Name and language
 
