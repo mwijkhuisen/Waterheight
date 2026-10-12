@@ -173,6 +173,16 @@ export const Detail = z.object({
       late: z.string().nullable(),
     })
     .optional(),
+  backfill: z
+    .object({
+      jobs: z.number(),
+      active: z.number(),
+      chunks_done: z.number(),
+      inserted: z.number(),
+      revised: z.number(),
+      unreconciled: z.number(),
+    })
+    .optional(),
   partitions: z.record(z.string(), z.object({ md5: z.string(), rows: z.number() })).optional(),
   partitions_at: z.string().optional(),
 });
@@ -331,6 +341,7 @@ export async function readFamilySources(
         min_interval_s: detail.min_interval_s ?? [],
         label_offset: detail.label_offset ?? null,
         forecast: detail.forecast ?? null,
+        ...(detail.backfill === undefined ? {} : { backfill: detail.backfill }),
         partitions: Object.entries(detail.partitions ?? {})
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([partition, p]) => ({ partition, md5: p.md5, rows: p.rows })),

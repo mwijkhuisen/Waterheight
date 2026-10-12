@@ -194,6 +194,20 @@ export const healthSources = (source: z.ZodString) =>
               late: z.iso.date().nullable(),
             })
             .nullable(),
+          /**
+           * Backfill jobs (P14a), for a source that has some (omitted otherwise): their number, those still active
+           * (planned, running or paused) and the sums of their chunks, inserted and revised rows and unreconciled chunks.
+           */
+          backfill: z
+            .strictObject({
+              jobs: count,
+              active: count,
+              chunks_done: count,
+              inserted: count,
+              revised: count,
+              unreconciled: count,
+            })
+            .optional(),
           partitions: z.array(Partition).max(240),
           partitions_at: iso.nullable(),
         }),

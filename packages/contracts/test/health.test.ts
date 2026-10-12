@@ -369,3 +369,23 @@ describe('HealthSources', () => {
       expect(HealthSources.safeParse(sources({ sources: [{ ...source, outage: bad }] })).success).toBe(false);
   });
 });
+
+describe('per-source backfill detail (P14a)', () => {
+  const doc = (backfill?: unknown) => ({
+    generated_at: null,
+    sources: [{ ...source, ...(backfill === undefined ? {} : { backfill }) }],
+    quarantined_batches: [],
+    twins: [],
+    classification: null,
+    forecast_coverage: null,
+    owner_sources: { healthy: 0, total: 0 },
+  });
+  const ok = { jobs: 2, active: 1, chunks_done: 8, inserted: 5, revised: 0, unreconciled: 0 };
+  it('is optional, strict and non-negative', () => {
+    expect(HealthSources.safeParse(doc()).success).toBe(true);
+    expect(HealthSources.safeParse(doc(ok)).success).toBe(true);
+    expect(HealthSources.safeParse(doc({ ...ok, extra: 1 })).success).toBe(false);
+    expect(HealthSources.safeParse(doc({ ...ok, revised: -1 })).success).toBe(false);
+    expect(HealthSources.safeParse(doc({ ...ok, jobs: 1.5 })).success).toBe(false);
+  });
+});
