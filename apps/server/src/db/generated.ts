@@ -45,6 +45,49 @@ export interface Attribution {
   url: string | null;
 }
 
+export interface BackfillChunk {
+  archive_key: string;
+  chunk_from: Timestamp;
+  chunk_to: Timestamp;
+  dropped: number;
+  inserted: number;
+  job_id: Int8;
+  kept: number;
+  loaded_at: Generated<Timestamp>;
+  provider_values: number;
+  reconciled: boolean;
+  revised: number;
+  skipped: number;
+}
+
+export interface BackfillJob {
+  attempts: Generated<number>;
+  chunk: string;
+  chunks_done: Generated<number>;
+  created_at: Generated<Timestamp>;
+  cursor_ts: Timestamp;
+  data_from: Timestamp | null;
+  dropped: Generated<Int8>;
+  finished_at: Timestamp | null;
+  id: Generated<Int8>;
+  inserted: Generated<Int8>;
+  last_error: string | null;
+  provider_values: Generated<Int8>;
+  range_from: Timestamp;
+  range_to: Timestamp;
+  request_budget: number;
+  requests: Generated<number>;
+  revised: Generated<Int8>;
+  series_key: string;
+  skipped: Generated<Int8>;
+  source_id: string;
+  spec_id: string;
+  started_at: Timestamp | null;
+  status: Generated<string>;
+  unreconciled: Generated<number>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface ClassObs {
   batch_id: Int8 | null;
   level_norm: number | null;
@@ -111,6 +154,7 @@ export interface IngestBatch {
   n_new: Generated<number>;
   n_rows: Generated<number>;
   n_skipped: Generated<number>;
+  origin: Generated<string>;
   parse_status: string;
   sha256: string | null;
   source_id: string;
@@ -348,6 +392,8 @@ export interface WarningArea {
 export interface DB {
   app_meta: AppMeta;
   attribution: Attribution;
+  backfill_chunk: BackfillChunk;
+  backfill_job: BackfillJob;
   class_obs: ClassObs;
   forecast_run: ForecastRun;
   forecast_value: ForecastValue;

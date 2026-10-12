@@ -38,6 +38,28 @@ CREATE TYPE public.audience AS ENUM (
 
 
 --
+-- Name: backfill_guard(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.backfill_guard(p_source text) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'pg_temp'
+    AS $$
+  SELECT CASE
+    WHEN l.value IS NULL
+      OR (l.value ->> 'computed_at')::timestamptz < now() - interval '5 minutes' THEN 'loader_lag'
+    WHEN COALESCE((l.value ->> 'backlog_age_s')::numeric, 0) > 600
+      OR COALESCE((l.value ->> 'backlog_files')::numeric, 0) > 3 THEN 'backlog'
+    WHEN h.status IS DISTINCT FROM 'ok' THEN 'stale'
+    ELSE 'ok'
+  END
+  FROM (SELECT 1) AS one
+  LEFT JOIN public.app_meta l ON l.key = 'loader'
+  LEFT JOIN public.source_health h ON h.source_id = p_source
+$$;
+
+
+--
 -- Name: ensure_partitions(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -46,9 +68,13 @@ CREATE FUNCTION public.ensure_partitions(p_from timestamp with time zone, p_to t
     SET search_path TO 'pg_catalog', 'pg_temp'
     AS $$
 DECLARE
+  boundary    CONSTANT timestamptz := timestamptz '2026-01-01 00:00:00+00';
   month_start timestamp;
   month_end   timestamp;
   last_month  timestamp;
+  year_start  timestamp;
+  last_year   timestamp;
+  m_from      timestamptz;
   parents     CONSTANT text[] := ARRAY['obs', 'forecast_value'];
   columns     CONSTANT text[] := ARRAY['ts', 'valid_ts'];
   parent      text;
@@ -61,39 +87,82 @@ BEGIN
   IF p_from IS NULL OR p_to IS NULL OR p_to < p_from THEN
     RAISE EXCEPTION 'ensure_partitions: bad range' USING ERRCODE = '22023';
   END IF;
-  IF p_from < timestamptz '2000-01-01 00:00:00+00'
-     OR p_to > now() + interval '400 days'
-     OR p_to - p_from > interval '3700 days' THEN
+  IF p_from < timestamptz '1900-01-01 00:00:00+00' OR p_to > now() + interval '400 days' THEN
+    RAISE EXCEPTION 'ensure_partitions: range outside the partition horizon' USING ERRCODE = '22023';
+  END IF;
+  IF p_to >= boundary AND p_to - greatest(p_from, boundary) > interval '3700 days' THEN
     RAISE EXCEPTION 'ensure_partitions: range outside the partition horizon' USING ERRCODE = '22023';
   END IF;
 
-  month_start := date_trunc('month', p_from AT TIME ZONE 'UTC');
-  last_month  := date_trunc('month', p_to AT TIME ZONE 'UTC');
-  WHILE month_start <= last_month LOOP
-    month_end := month_start + interval '1 month';
-    lo := month_start AT TIME ZONE 'UTC';
-    hi := month_end AT TIME ZONE 'UTC';
-    FOR i IN 1 .. 2 LOOP
-      parent := parents[i];
-      col := columns[i];
-      part := parent || '_' || to_char(month_start, 'YYYY_MM');
+  IF p_from < boundary THEN
+    -- A monthly obs partition below the boundary: refuse before creating anything.
+    IF EXISTS (
+      SELECT 1
+      FROM pg_partition_tree('public.obs'::regclass) pt
+      JOIN pg_class c ON c.oid = pt.relid
+      CROSS JOIN LATERAL regexp_match(
+        pg_get_expr(c.relpartbound, c.oid), 'FROM \(''([^'']+)''\) TO \(''([^'']+)''\)') AS b(m)
+      WHERE pt.isleaf AND b.m IS NOT NULL
+        AND b.m[2]::timestamptz <= boundary
+        AND b.m[2]::timestamptz <> ((b.m[1]::timestamptz AT TIME ZONE 'UTC') + interval '1 year') AT TIME ZONE 'UTC'
+    ) THEN
+      RAISE EXCEPTION 'ensure_partitions: a monthly obs partition exists below the yearly boundary'
+        USING ERRCODE = '55000';
+    END IF;
+
+    year_start := date_trunc('year', p_from AT TIME ZONE 'UTC');
+    last_year  := date_trunc('year', least(p_to, boundary - interval '1 microsecond') AT TIME ZONE 'UTC');
+    WHILE year_start <= last_year LOOP
+      lo := year_start AT TIME ZONE 'UTC';
+      hi := (year_start + interval '1 year') AT TIME ZONE 'UTC';
+      part := 'obs_y' || to_char(year_start, 'YYYY');
       IF to_regclass(format('public.%I', part)) IS NULL THEN
         EXECUTE format(
-          'CREATE TABLE public.%I (LIKE public.%I INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES)',
-          part, parent);
+          'CREATE TABLE public.%I (LIKE public.obs INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES)',
+          part);
         -- The matching CHECK lets ATTACH skip its validation scan.
         EXECUTE format(
-          'ALTER TABLE public.%I ADD CONSTRAINT %I CHECK (%I >= %L AND %I < %L)',
-          part, part || '_bounds', col, lo, col, hi);
+          'ALTER TABLE public.%I ADD CONSTRAINT %I CHECK (ts >= %L AND ts < %L)',
+          part, part || '_bounds', lo, hi);
         EXECUTE format(
-          'ALTER TABLE public.%I ATTACH PARTITION public.%I FOR VALUES FROM (%L) TO (%L)',
-          parent, part, lo, hi);
+          'ALTER TABLE public.obs ATTACH PARTITION public.%I FOR VALUES FROM (%L) TO (%L)',
+          part, lo, hi);
         EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT %I', part, part || '_bounds');
         created := created + 1;
       END IF;
+      year_start := year_start + interval '1 year';
     END LOOP;
-    month_start := month_end;
-  END LOOP;
+  END IF;
+
+  IF p_to >= boundary THEN
+    m_from := greatest(p_from, boundary);
+    month_start := date_trunc('month', m_from AT TIME ZONE 'UTC');
+    last_month  := date_trunc('month', p_to AT TIME ZONE 'UTC');
+    WHILE month_start <= last_month LOOP
+      month_end := month_start + interval '1 month';
+      lo := month_start AT TIME ZONE 'UTC';
+      hi := month_end AT TIME ZONE 'UTC';
+      FOR i IN 1 .. 2 LOOP
+        parent := parents[i];
+        col := columns[i];
+        part := parent || '_' || to_char(month_start, 'YYYY_MM');
+        IF to_regclass(format('public.%I', part)) IS NULL THEN
+          EXECUTE format(
+            'CREATE TABLE public.%I (LIKE public.%I INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES)',
+            part, parent);
+          EXECUTE format(
+            'ALTER TABLE public.%I ADD CONSTRAINT %I CHECK (%I >= %L AND %I < %L)',
+            part, part || '_bounds', col, lo, col, hi);
+          EXECUTE format(
+            'ALTER TABLE public.%I ATTACH PARTITION public.%I FOR VALUES FROM (%L) TO (%L)',
+            parent, part, lo, hi);
+          EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT %I', part, part || '_bounds');
+          created := created + 1;
+        END IF;
+      END LOOP;
+      month_start := month_end;
+    END LOOP;
+  END IF;
   RETURN created;
 END
 $$;
@@ -276,6 +345,84 @@ CREATE TABLE public.attribution (
 
 
 --
+-- Name: backfill_chunk; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.backfill_chunk (
+    job_id bigint NOT NULL,
+    archive_key text NOT NULL,
+    chunk_from timestamp with time zone NOT NULL,
+    chunk_to timestamp with time zone NOT NULL,
+    provider_values integer NOT NULL,
+    kept integer NOT NULL,
+    inserted integer NOT NULL,
+    revised integer NOT NULL,
+    skipped integer NOT NULL,
+    dropped integer NOT NULL,
+    reconciled boolean NOT NULL,
+    loaded_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: backfill_job; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.backfill_job (
+    id bigint NOT NULL,
+    spec_id text NOT NULL,
+    source_id text NOT NULL,
+    series_key text NOT NULL,
+    range_from timestamp with time zone NOT NULL,
+    range_to timestamp with time zone NOT NULL,
+    chunk interval NOT NULL,
+    data_from timestamp with time zone,
+    cursor_ts timestamp with time zone NOT NULL,
+    chunks_done integer DEFAULT 0 NOT NULL,
+    status text DEFAULT 'planned'::text NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    request_budget integer NOT NULL,
+    requests integer DEFAULT 0 NOT NULL,
+    provider_values bigint DEFAULT 0 NOT NULL,
+    inserted bigint DEFAULT 0 NOT NULL,
+    revised bigint DEFAULT 0 NOT NULL,
+    skipped bigint DEFAULT 0 NOT NULL,
+    dropped bigint DEFAULT 0 NOT NULL,
+    unreconciled integer DEFAULT 0 NOT NULL,
+    last_error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    started_at timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    finished_at timestamp with time zone,
+    CONSTRAINT backfill_job_attempts_check CHECK ((attempts >= 0)),
+    CONSTRAINT backfill_job_check CHECK ((range_from < range_to)),
+    CONSTRAINT backfill_job_check1 CHECK (((cursor_ts >= range_from) AND (cursor_ts <= range_to))),
+    CONSTRAINT backfill_job_chunk_check CHECK ((chunk > '00:00:00'::interval)),
+    CONSTRAINT backfill_job_chunks_done_check CHECK ((chunks_done >= 0)),
+    CONSTRAINT backfill_job_last_error_check CHECK ((last_error ~ '^[a-z_]{1,40}$'::text)),
+    CONSTRAINT backfill_job_request_budget_check CHECK ((request_budget > 0)),
+    CONSTRAINT backfill_job_requests_check CHECK ((requests >= 0)),
+    CONSTRAINT backfill_job_series_key_check CHECK (((length(series_key) >= 1) AND (length(series_key) <= 300))),
+    CONSTRAINT backfill_job_spec_id_check CHECK ((spec_id ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text)),
+    CONSTRAINT backfill_job_status_check CHECK ((status = ANY (ARRAY['planned'::text, 'running'::text, 'paused'::text, 'done'::text, 'failed'::text, 'aborted'::text])))
+);
+
+
+--
+-- Name: backfill_job_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.backfill_job ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.backfill_job_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: class_obs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -389,8 +536,10 @@ CREATE TABLE public.ingest_batch (
     n_skipped integer DEFAULT 0 NOT NULL,
     error text,
     loaded_at timestamp with time zone DEFAULT now() NOT NULL,
+    origin text DEFAULT 'live'::text NOT NULL,
     CONSTRAINT ingest_batch_error_check CHECK ((error ~ '^[a-z0-9_]{1,40}( at [A-Za-z0-9_.?\[\]-]{1,120})?$'::text)),
     CONSTRAINT ingest_batch_n_skipped_check CHECK ((n_skipped >= 0)),
+    CONSTRAINT ingest_batch_origin_check CHECK ((origin = ANY (ARRAY['live'::text, 'backfill'::text]))),
     CONSTRAINT ingest_batch_parse_status_check CHECK ((parse_status = ANY (ARRAY['ok'::text, 'quarantined'::text, 'skipped'::text]))),
     CONSTRAINT ingest_batch_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT ingest_batch_spec_id_check CHECK ((spec_id ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text))
@@ -1946,6 +2095,30 @@ ALTER TABLE ONLY public.attribution
 
 
 --
+-- Name: backfill_chunk backfill_chunk_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_chunk
+    ADD CONSTRAINT backfill_chunk_pkey PRIMARY KEY (job_id, archive_key);
+
+
+--
+-- Name: backfill_job backfill_job_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_job
+    ADD CONSTRAINT backfill_job_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: backfill_job backfill_job_spec_id_series_key_range_from_range_to_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_job
+    ADD CONSTRAINT backfill_job_spec_id_series_key_range_from_range_to_key UNIQUE (spec_id, series_key, range_from, range_to);
+
+
+--
 -- Name: class_obs class_obs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2298,6 +2471,22 @@ ALTER TABLE ONLY public.attribution
 
 
 --
+-- Name: backfill_chunk backfill_chunk_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_chunk
+    ADD CONSTRAINT backfill_chunk_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.backfill_job(id);
+
+
+--
+-- Name: backfill_job backfill_job_source_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backfill_job
+    ADD CONSTRAINT backfill_job_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.source(id);
+
+
+--
 -- Name: class_obs class_obs_source_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2565,4 +2754,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261107000001'),
     ('20261107000002'),
     ('20261108000001'),
-    ('20261109000001');
+    ('20261109000001'),
+    ('20261110000001'),
+    ('20261110000002');
