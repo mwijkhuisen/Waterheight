@@ -10,7 +10,8 @@ import { connect as tlsConnect } from 'node:tls';
 import type { Result } from '../verify-prod.ts';
 
 export type Probe =
-  | { kind: 'answered'; status: number; wwwAuthenticate: boolean }
+  /** `ownerHeaders`: an owner-site header came with it (X-Robots-Tag nofollow, Cache-Control private); only --edge cloudflare reads it. */
+  | { kind: 'answered'; status: number; wwwAuthenticate: boolean; ownerHeaders?: boolean }
   | { kind: 'handshake-failed' }
   /** The handshake completed with a certificate this client does not trust for owner.<domain>. */
   | { kind: 'certificate' }
@@ -54,6 +55,23 @@ export function classify8443(address: string, p: Probe): Result {
   return fail(check, p.kind === 'answered' ? `answered ${p.status}` : 'a TLS endpoint is listening');
 }
 
+/**
+ * Behind a CDN (--edge cloudflare, issue #109) the edge addresses accept TCP 443 and 8443 and hold a wildcard
+ * certificate, so a handshake or a CDN error page for owner.<domain> proves nothing. What would be a leak is our owner
+ * site answering through the edge: a 200 or 401, a credentials challenge or an owner-site header. Same check names.
+ */
+export function classifyEdge(port: 443 | 8443, address: string, p: Probe): Result {
+  const check = `owner listener ${port} ${address}`;
+  if (p.kind === 'unreachable') return na(check, 'address not reachable from here');
+  if (p.kind !== 'answered') return pass(check, `no owner answer through the edge (${p.kind})`);
+  if (p.status === 200 || p.status === 401 || p.wwwAuthenticate || p.ownerHeaders === true)
+    return fail(
+      check,
+      `answered ${p.status}${p.wwwAuthenticate ? ' with a credentials challenge' : ''}${p.ownerHeaders ? ' with owner-site headers' : ''}: the owner site is reachable through the edge`,
+    );
+  return pass(check, `edge answered ${p.status}, no owner site behind it`);
+}
+
 /** The owner hostname must have no public DNS record (the system resolver). */
 export function classifyDns(addresses: readonly string[], errorCode?: string): Result {
   const check = 'owner listener DNS';
@@ -95,13 +113,18 @@ export async function checkOwnerListener(
   domain: string,
   terms: readonly string[],
   io: Io = networkIo,
+  edge: 'direct' | 'cloudflare' = 'direct',
 ): Promise<Result[]> {
   const out: Result[] = [];
   const addresses = await io.addresses(domain);
   if (addresses.length === 0) out.push(fail('owner listener addresses', 'the domain has no public address'));
   for (const a of addresses) {
-    out.push(classify443(a, await io.probe(a, 443, domain)));
-    out.push(classify8443(a, await io.probe(a, 8443, domain)));
+    const p443 = await io.probe(a, 443, domain);
+    const p8443 = await io.probe(a, 8443, domain);
+    out.push(
+      edge === 'cloudflare' ? classifyEdge(443, a, p443) : classify443(a, p443),
+      edge === 'cloudflare' ? classifyEdge(8443, a, p8443) : classify8443(a, p8443),
+    );
   }
   const d = await io.dns(`owner.${domain}`);
   out.push(classifyDns(d.addresses, d.code));
@@ -153,7 +176,12 @@ export function probeTls(address: string, port: number, domain: string, timeoutM
       const m = /^HTTP\/[\d.]+ (\d{3})/.exec(head);
       finish(
         m
-          ? { kind: 'answered', status: Number(m[1]), wwwAuthenticate: /^www-authenticate:/im.test(head) }
+          ? {
+              kind: 'answered',
+              status: Number(m[1]),
+              wwwAuthenticate: /^www-authenticate:/im.test(head),
+              ownerHeaders: /^x-robots-tag:.*nofollow/im.test(head) || /^cache-control:.*private/im.test(head),
+            }
           : { kind: 'handshake-failed' },
       );
     });
