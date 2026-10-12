@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { OFFICIAL } from '../src/features/pages/official.ts';
 import { contactHref } from '../src/features/pages/parts/contact.ts';
@@ -55,5 +56,13 @@ describe('contactHref', () => {
       `contact@${'a'.repeat(250)}.org`,
     ])
       expect(contactHref(bad), String(bad)).toBeUndefined();
+  });
+});
+
+describe('the privacy page', () => {
+  it.each(['nl', 'en'] as const)('names the CDN first, right after the title (A§10), in %s', (locale) => {
+    const src = readFileSync(new URL(`../src/features/pages/content/${locale}/Privacy.tsx`, import.meta.url), 'utf8');
+    expect(src).toMatch(new RegExp(`<h1>Privacy</h1>\\s*<h2>CDN</h2>\\s*<Cdn locale="${locale}" />\\s*<h2>`));
+    expect(src.match(/<Cdn /g)).toHaveLength(1);
   });
 });
