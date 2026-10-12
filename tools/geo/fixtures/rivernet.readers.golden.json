@@ -1,7 +1,7 @@
 {
-  "ways": 9727,
-  "relations": 323,
-  "ways_sha256": "1e3f1e586c305e08dbefe33d2964deb330723c7592e421774a0571bc9e83ee9a",
-  "relations_sha256": "92393cdf4ec2068846a93c3a323d7599c0163dcfc1fd7fa58c671fc38c1a0fc6",
+  "ways": 9765,
+  "relations": 326,
+  "ways_sha256": "11f808d6224985a5296c0a214d42d80532994a833b1cec6020b693e330cda179",
+  "relations_sha256": "90b4ead7513e1e09ab6197e32f6b3585314f17ee6d5210230222eb4ccb87d2cd",
   "rhine": 269
 }
