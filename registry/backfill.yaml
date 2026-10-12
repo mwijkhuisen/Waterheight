@@ -1,0 +1,17 @@
+version: 1
+hosts:
+  ddapi20-waterwebservices.rijkswaterstaat.nl:
+    min_interval_ms: 1000        # ≤ 1 request/s (runner pacer)
+    max_per_hour: 3600           # on top of the live ≤ 400/h; the budget test asserts both
+    window_utc: { from: "22:00", to: "05:00" }
+specs:
+  - id: nl-1-backfill-obs
+    source: NL-1
+    version: 1
+    url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+    check_url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/CheckWaarnemingenAanwezig
+    select: { first_release: true, quantities: [WATHTE, Q], role: primary }
+    chunk: P40D
+    floor: "1990-01-01"
+    max_bytes: 4194304
+    retention: backfill

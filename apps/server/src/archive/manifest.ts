@@ -80,8 +80,10 @@ export const ManifestLine = z.strictObject({
   validity: z
     .strictObject({ ok: z.boolean(), reason: z.string().max(40).nullable(), count: count.nullable() })
     .nullable(),
-  retention: z.enum(['obs', 'forever']),
+  retention: z.enum(['obs', 'forever', 'backfill']),
   error: z.enum(ERROR_CODES).nullable(),
+  /** A backfill chunk (P14a): the job and the chunk's [from, to); the loader reconciles it against the job. */
+  backfill: z.strictObject({ job: z.number().int().positive(), chunk: count, from: iso, to: iso }).optional(),
 });
 export type ManifestLine = z.infer<typeof ManifestLine>;
 

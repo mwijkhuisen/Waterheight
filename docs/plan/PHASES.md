@@ -1450,7 +1450,7 @@ P5c uses the P5 build model and the default P5 reviewers (as P5a): `opus` xhigh,
 
   | Source | Route and limits |
   |---|---|
-  | NL-1 REST | ≤ 160k values per request (about 2.5-year chunks), 1 request/s |
+  | NL-1 REST | ≤ 160k values per request, 1 request/s. **P14a built it with P40D chunks, not about 2.5 years (§49: our parser caps)** |
   | DE-8 NRW | opengeodata `hydro` (resample irregular timestamps; `hydro/q` was seen as a listing only, so verify the download first) |
   | BE-3 KiWIS | ≤ 250k values per call; **owner audience** (private backfill is personal use under the SPW mentions légales, catalogue §0.8); the full-resolution `Cmd.*.Comp` series back to 1969–2007 |
   | BE-1/2 KiWIS | ≤ 250k values per call, with credentials; the audience of the source (owner until the agreement allows public) |
@@ -3116,3 +3116,66 @@ What batch B2 of stage 3 of KG-250 (umbrella #127; stacked on B1, #139) built: 3
 - **Bifurcations.** The golden gains 35 nodes, 59 → 94: side channels inside new rivers (Altenau 15, Pader 7, Heder 3, Lutter 3, Axtbach 2, Ölbach 2, Thune, Wapelbach and Dalke 1 each); none removed.
 - **Fixture refresh** from `geo.yml` run 38231302342; the placement bounds (894 → 925 and 724 → 755) and 13 golden rows follow it.
 - **Gaps:** KG-250 stays `accepted` with batches B3 to B5 (#141 to #143) as follow-ups; KG-161 gains the seven joins and the three detached rivers; KG-165 gains 17 stations without an entry node, 129 of 723 placed (112 of 692 before); KG-201 notes the 33 rivers are `other`; KG-301 is unchanged (`rhine.62`).
+
+## 49. Amendment: P14a backfill runner, row rules and NL-1 (2026-10-12)
+
+What P14a (issue #29, group P14a) built: the resumable backfill runner (`backfill` server role, `registry/backfill.yaml`, `backfill_job` and its ledger `backfill_chunk`), the row rules in the loader's upsert, yearly partitions below 2026-01-01, and the NL-1 history on top of them. The runbook is `docs/runbooks/backfill.md`; the rules are A§6 and A§8 Q6; the threat is T-BF-1 (trust boundary 7). The owner decisions of 2026-10-12: bit 512 plus `ingest_batch.origin` (no new qc bit); P40D chunks; validated is Gecontroleerd and Definitief; at most 5 live NL-1 requests (made by `scripts/smoke-capture.ts`, no X-API-KEY).
+
+- **Evidence ([CI]).**
+  - Backfill never changes a live row unless the provider-validated flag is set, and every such change is in `obs_revision`: `apps/server/test/load/backfill-precedence.int.test.ts` (the Q6 matrix, plus a fast-check property over random live, fill and backfill sequences in random orders: the same final `obs`, a revision for every live-row change, no live row changed by an unvalidated backfill row).
+  - Kill and restart resume with no duplicates and no gaps: `apps/server/test/backfill/resume.int.test.ts` with `backfill/crash-child.ts` (a real SIGKILL since review round 1, after the put, after the append and after the cursor; 9 of 9 tests green on 3 runs (about 15 s each), kills after the put, after the append, after the cursor and in the middle of a request; the row set equals the fixtures exactly once, the ledger is reconciled, a re-run gives 0 new and 0 revised).
+  - The per-provider rate budget holds, on top of the live 400 requests an hour: `apps/server/test/capture/budget.test.ts` (live stays above 300 and at most 400; backfill `min_interval_ms` at least 1000, `max_per_hour` at most 3600, the off-peak window) and `apps/server/test/backfill/pacer.test.ts` (fake clock: spacing, refused outside the window, stops at the budget).
+  - Partitions: `apps/server/test/db/partitions.int.test.ts`; rollups, `dayVersions` and D9: `apps/server/test/load/backfill-rollups.int.test.ts`; reconciliation and truncation: `apps/server/test/backfill/truncation.test.ts` and the ledger asserts of `resume.int.test.ts`; the dry-run: `apps/server/test/backfill/dry-run.test.ts`.
+- **[U] items** (also in `docs/known-gaps.md`): KG-339 (RWS at 160,000 values), KG-340 (where the 10-minute data starts per station), KG-341 (the `recover()` race on the shared day manifest), KG-342 (history under other methods is dropped), KG-343 (the [agent-prod] freshness check waits for the production run), KG-344 (the DB projection is computed, not measured), KG-345 (the order-independence assumption), KG-346 (a throttled run forgets its backoff on restart; review round 1). KG-122 is updated.
+- **Reality differs from the plan and the issue.**
+  - **Chunks are P40D, not about 2.5 years.** Our parser caps are 10,000 values per list and 150,000 nodes (about 11 nodes per value), so a 2.5-year chunk of 10-minute values would be cut. P40D holds 5,760 values per list, under 90 % of the cap. The caps stay (`JSON_CAPS`, 25 MiB wire and 100 MiB decoded). 13,776 chunks and 15,293 requests for NL-1 up to the data epoch, about 4.2 hours at 1 request/s. A truncated answer halves the chunk at its cursor down to one day (review round 1).
+  - **Validated means Gecontroleerd and Definitief** (qc bit 2, the mapping live and in the backfill since P2b). The issue's default was Definitief only; one bit and a single mapping won, because every qc bit is taken and live rows are Ongecontroleerd in practice.
+  - **Hoedanigheid NVT is sent for Q in the backfill only.** The smoke showed RWS answers 200 for Q with `Hoedanigheid NVT`; the live bodies are byte-identical to before (a test).
+  - **Fill detection moved to the batch's origin.** Bit 512 now means "not captured live from the series' own source"; `ingest_batch.origin` (`live` or `backfill`) tells a fill from a backfill row. The set of fill rows is found by bit 512 and `origin = 'live'` (replay.md §7, R-068).
+  - **Rollups stay inline per chunk.** A deferred drain would make the nightly `reconcileRollups` raise false `rollup_mismatch` alerts; each chunk is a bounded batch (one series, 40 days, about 960 hourly buckets), and `backfill_guard` throttles the runner while the loader lags.
+  - **Yearly partitions below a constant boundary 2026-01-01**, not one read from the catalog (that depended on call order and broke the existing tests), with a `pg_partition_tree` guard that raises if a monthly `obs` partition lies below it. `forecast_value` keeps none below 2026-01-01.
+  - **`dataSince` is clamped to `DATA_FLOOR`** (and `computeChecksums` reads from it): otherwise the public stations list would show 1990.
+  - **204 chunks write no manifest line**, so a `key: null` line never reaches fetch health; the cursor moves only.
+  - **History under other methods is dropped** (`unregistered_method`: F216, F009, F001, F029 are not registered series), counted and retained, never merged into the instantaneous series; registering them is the follow-up P14b (KG-342).
+  - **The role budget** goes from 38 to 40 of `max_connections` 40 (33 + 2 + 5, no headroom; pinned by `roles.int.test.ts`): `rws_backfill` has CONNECTION LIMIT 2, the running job plus a status, pause or abort call beside it. Host files change, so the owner re-runs `bootstrap.sh` after the deploy (it creates `db_rws_backfill`); nothing starts the service. A rollback to an older release counts the new manifest lines (`retention: backfill`, `backfill`) as bad lines.
+- **Left for later P14 PRs:** the other providers (DE-8, BE-3, BE-1/2, FR-2, CH-8, CH-9, LU-7 and so on), the climatology, and the storage ADR at about 50 GB.
+
+### Review round 1 (2026-10-12)
+
+Code review C1–C10 (Sonnet, high) and security review S1–S9 (Sonnet, high) on head 86f9cd2. No blocker or high finding. What was done:
+
+| Finding | Done |
+|---|---|
+| C1 = S1 (two runners) | A lease table `backfill_lease(host, holder, until)` in migration 000001 (`rws_backfill`: SELECT, INSERT, UPDATE; advisory locks stay revoked). `runBackfill` takes the lease of every host its runnable jobs use with an atomic `INSERT … ON CONFLICT … WHERE until < now() OR holder = me`, renews it to now + 2 min before every request and gives it back at exit; a run that cannot take it exits 1 with `stopped: busy`. A killed runner's lease lapses within 2 minutes (runbook; its false "a second run only waits on the pacer" is gone). Tests: `backfill/run.test.ts` (memory store), `backfill/resume.int.test.ts` (two runners, the second `busy`, after the lapse it proceeds) |
+| C2 + S2 (the job row, `--to`) | `DATA_EPOCH` (2026-10-02, `load/dirty.ts`, pinned to the `data_epoch` seed of `20261014000001_display_window.sql` by `backfill/spec.test.ts`); `plan` defaults `--to` to it and refuses a later one; `runJob` fails a job as `invalid_job` before any request unless its chunk is the spec's, its range lies in [spec floor, `DATA_EPOCH`] and its budget is at most the plan's. The fixed code is `invalid_job`, not `invalid`, which already names an invalid response body. T-BF-1's "never from the database" is corrected |
+| S3 (loader window) | `LoadContext.backfill` (the line's chunk cut at `DATA_EPOCH`, set by the pipeline for a backfill spec); the NL-1 backfill loader also cuts at the spec floor `NL1_BACKFILL_FLOOR` (pinned to `registry/backfill.yaml`) and drops the rest as `outside_backfill`, counted in `dropped`, so both identities hold. Tests: `adapters/nl-1-backfill-golden.test.ts`, `load/backfill-precedence.int.test.ts` |
+| C7 (partition floor) | `ensure_partitions` keeps the 2000-01-01 floor for every live caller and calls the body, now `ensure_history_partitions` (floor 1900, SECURITY DEFINER, fixed `search_path`, EXECUTE to `rws_load` only), which `upsertObs` calls in backfill mode only. Yearlies below 2026 come from either within its floor; the `pg_partition_tree` guard stays. `partitions.int.test.ts` and the privileges golden updated |
+| C3 (truncation) | A truncated answer, a parser cap error or the client's size cap halves the chunk at that cursor (40, 20, 10, 5, 2.5, 1.25, 1 day) and asks again; below a day the job fails `truncated`. Nothing is committed for a truncated answer; every request counts. `backfill/truncation.test.ts` |
+| C6 + S4 (backoff) | `stopped: throttled` (exit 1) when the client backs off past the window after a 403, 429, 451, 5xx or network failure; a request is counted only once it went out (not for a backoff, an open breaker or a refused URL; a request a kill interrupts is not counted). The runbook says a restart forgets the backoff |
+| C5 + S6 (unloaded chunks) | `backfill_job.chunks_with_data` (the runner's, in the cursor's update); `backfill_guard` says `backlog` when a job of the source has more than 2 chunks with data the ledger does not hold (round 2, N1: now its own verdict `unloaded` above 30, active jobs only). Health `detail.backfill` gains `chunks_with_data` and `quarantined` (backfill batches of the source set aside), optional in the contracts; OpenAPI regenerated |
+| S5 | `backfill_guard` fails closed when `computed_at` is missing (`COALESCE(…, '-infinity')`) |
+| S7 | `roles.sql`: `rws_backfill` gets `statement_timeout` 5 s and `idle_in_transaction_session_timeout` 30 s; the roles.int defaults list follows |
+| S8 | `loadBackfill` refuses a spec whose source is not `public` or has `history_export` off, or that selects a series narrowed to another audience (`backfill/spec.test.ts`) |
+| S9 | The compose and nftables comments name the backfill job; the threat model writes down any-address egress on 443, the `db` network and the read-write archive |
+| C8 | A comment at the `upsertObs` `ON CONFLICT`: race-free only because every obs writer holds the loader lock |
+| C9 | `crash-child.ts` dies by `process.kill(process.pid, 'SIGKILL')`; `resume.int.test.ts` asserts `signal === 'SIGKILL'` |
+| C4 | No code: with `--to` at most `DATA_EPOCH` a backfill never reaches the newest live point, so `obs_latest` never needs it (KG-345) |
+| C10 | Accepted as is: `budget.test.ts` asserts the backfill limit and the live at most 400 an hour separately; their sum is the policy, and `max_per_hour` 3600 equals the 1 request/s cap |
+
+The threat-model delta of the security review (items 1–8) is in v4.55. A budget-paused job is re-planned (abort, `plan --from` the cursor's day) instead of raised in SQL, since the runner refuses a budget above the plan's.
+
+### Review round 2 (2026-10-12)
+
+Combined code and security re-review of the round-1 fix diff (Sonnet, high), findings N1 to N6:
+
+| Finding | Done |
+|---|---|
+| N1 (the guard throttled the run to weeks) | `backfill_guard` has a verdict of its own for unloaded chunks, `unloaded`, above **30** chunks with data that the ledger does not hold; `loader_lag` and `backlog` (age, files) come first, `stale` last. 30 is the arithmetic of a healthy night: the runner writes at most 1 chunk/s, the loader ticks every 10 s (`TICK_MS`) and reads up to 20 s a tick (`TICK_BUDGET_MS`), so 10 to 30 chunks wait normally. The runner sleeps `UNLOADED_SLEEP_MS` (15 s) on `unloaded` and `GUARD_SLEEP_MS` (5 min) on the others, so the 4.2 h pace of §7 holds. Tests: `pacer.test.ts` (a loader ticking every 10 s on a fake clock: 154 requests in under 3 minutes, no sleep over 1 s; the short sleep), `resume.int.test.ts` (31 and 30) |
+| N2 (halved length for one cursor only) | `runJob` keeps the last working (halved) chunk length for the rest of the job; the halves cost requests, which the plan's 20 % can run out of (the job then pauses `budget` and is re-planned). `truncation.test.ts` |
+| N3 (cursor not validated) | `runJob` also needs `cursor_ts` in [max(`range_from`, floor), `range_to`], else `invalid_job`. `run.test.ts` |
+| N4 (aborted and failed jobs block the source) | Fixed with N1: the guard counts `planned`, `running` and `paused` jobs only. `resume.int.test.ts` |
+| N5 (SIGTERM, throwing release) | The `run` CLI sets a stop flag on SIGTERM and SIGINT (`RunOptions.stop`, `stopped: interrupted`, exit 0; the sleep wakes at once), polled at the top of each pass, never between put, append and cursor; the `finally` releases the lease and a throwing `release` no longer masks the original error. Runbook §3. `run.test.ts` |
+| N6 (a crash inside the fetch consumes no budget) | Accepted: the runbook already says `requests` may be one short after a crash |
+
+Migration 000001 was edited in place (none of this PR's migrations is merged); its sha256 in `test/migrations.test.ts`, `db/schema.sql` and `generated.ts` follow.
+

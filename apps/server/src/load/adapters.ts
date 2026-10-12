@@ -103,6 +103,11 @@ export type LoadContext = {
   zeroRegistry?: Registry;
   /** P7a: the registries of the spec's `refTarget` sources, by source (the series its references belong to). */
   refRegistries?: ReadonlyMap<string, Registry>;
+  /**
+   * P14a: the window [from, to) (UTC ms) a backfill payload's rows must lie in: the manifest line's `backfill` chunk
+   * (when it has one) cut at DATA_EPOCH. Set by the pipeline for a `backfill` spec only; the adapter adds its floor.
+   */
+  backfill?: { from: number; to: number };
 };
 
 /**
@@ -163,7 +168,20 @@ export type SpecLoader = {
     parts: number;
     run: (parts: readonly StagedPart[]) => { runs: ForecastRunIn[]; dropped: Record<string, number> };
   };
+  /**
+   * P14a: a backfill payload (history the runner fetched, apps/server/src/backfill/). The loader takes it out of the
+   * fetch health, opens its batch with origin `backfill`, writes its rows under the backfill row rules (store.ts
+   * upsertObs) and keeps the job's ledger; its `run` returns a Backfilled. Decided by the spec, never by the line.
+   */
+  backfill?: true;
 };
+
+/**
+ * P14a: a backfill payload's normalised rows with what the provider stated, per value (plan §3.6): `provider_values`,
+ * the values of every list; `unknown_values`, those of the lists the registry does not know (Normalised.unknown
+ * counts lists, and stays so: it feeds the batch's n_skipped).
+ */
+export type Backfilled = Normalised & { provider_values: number; unknown_values: number };
 
 export type LoadAdapter = {
   /** Bumped when parse or normalise changes what is stored; recorded on every batch. */
@@ -287,6 +305,45 @@ const nl1Observations: SpecLoader = {
   run: (b, c) => normaliseNl1(parseWaarnemingen(b), c),
 };
 
+/** P14a: the floor of spec nl-1-backfill-obs in registry/backfill.yaml (a test pins the two equal). */
+export const NL1_BACKFILL_FLOOR = '1990-01-01T00:00:00Z';
+const NL1_FLOOR_MS = Date.parse(NL1_BACKFILL_FLOOR);
+
+/**
+ * P14a: one `OphalenWaarnemingen` response of the backfill runner: the observation loader with no age limit and no
+ * `window` (it loads whole), and the per-value counts of its ledger. A list's `unknown` verdict depends on its
+ * metadata alone, so it is asked of the list without its values. A row outside [floor, DATA_EPOCH) or outside the
+ * line's chunk is dropped as `outside_backfill` (review S3: a forged or recovered line loads no other time), so the
+ * ledger's identities still hold.
+ */
+const nl1Backfill: SpecLoader = {
+  maxBytes: 4 * MIB,
+  needsVariant: false,
+  backfill: true,
+  run: (b, c): Backfilled => {
+    const lists = parseWaarnemingen(b);
+    const ctx = { ...c, maxAgeMs: null };
+    let unknown_values = 0;
+    for (const l of lists)
+      if (normaliseNl1([{ ...l, metingen: [] }], ctx).unknown > 0) unknown_values += l.metingen.length;
+    const out = normaliseNl1(lists, ctx);
+    const lo = Math.max(NL1_FLOOR_MS, c.backfill?.from ?? Number.NEGATIVE_INFINITY);
+    const hi = c.backfill?.to ?? Number.POSITIVE_INFINITY;
+    const obs = out.obs.filter((r) => {
+      const t = Date.parse(r.ts);
+      return t >= lo && t < hi;
+    });
+    if (obs.length < out.obs.length)
+      out.dropped.outside_backfill = (out.dropped.outside_backfill ?? 0) + out.obs.length - obs.length;
+    return {
+      ...out,
+      obs,
+      provider_values: lists.reduce((n, l) => n + l.metingen.length, 0),
+      unknown_values,
+    };
+  },
+};
+
 /**
  * P8a: one `verwachting` response (RWSM-F232): the lists name their own series, so a `recovered` line loads too; a run
  * attaches only to a registered primary series, any other series counts `unknown` (the spec's max_bytes, 1 MiB).
@@ -331,6 +388,7 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       'nl-1-obs-key': nl1Observations,
       'nl-1-obs-other': nl1Observations,
       'nl-1-obs-twin': nl1Observations,
+      'nl-1-backfill-obs': nl1Backfill,
     },
   },
   // Every page of an observations_tr walk is its own payload and names its own series; a recovered line loads too.

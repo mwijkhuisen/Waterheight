@@ -25,7 +25,7 @@ The order that gets capture live fastest:
 | **A4** | DNS: `A` and `AAAA` → the VPS; `CAA 0 issue "letsencrypt.org"`; DNSSEC if offered | `dig +short A <domain>`; `dig +short AAAA <domain>`; `dig +short CAA <domain>` |
 | **A5** | The EU S3 bucket, created **with Object Lock** (COMPLIANCE, 30 days), versioning on, reachable on port 443. Two keys: the **VPS key** with `deploy/host/s3-vps-key-policy.json` (replace `RWS_BUCKET`), and a **workstation key** for `restic forget --prune`. The restic repository password is generated and kept offline (password manager + paper) | The provider console shows versioning and the default retention. After step 6: `sudo /usr/local/lib/rws/deploy/tests/object-lock-prune.sh` prints five PASS lines |
 | **A6** | healthchecks.io: an account, a project with e-mail and phone/push integrations, and the project's **ping key** and an **API key** (read-write) | Step 7 creates the 18 checks from P9a; the project page lists them |
-| **A7** | The secrets on the VPS (step 3): four you fill, and from P2a six database passwords that `bootstrap.sh` generates | `sudo ls -l /etc/rws/secrets` |
+| **A7** | The secrets on the VPS (step 3): four you fill, and from P2a six database passwords (seven from P14a) that `bootstrap.sh` generates | `sudo ls -l /etc/rws/secrets` |
 | **B2** | GitHub environment `production`: required reviewer = you, deployment branch = `main`, **no secrets** | `scripts/gh-settings.sh --check` (from a checkout) |
 | **B4** | After the first release: set the three GHCR packages `waterheight/server`, `web` and `backup` to **public** (Package settings → Change visibility) | `curl -s 'https://ghcr.io/token?scope=repository:mwijkhuisen/waterheight/server:pull' \| grep -q '"token"' && echo public` |
 
@@ -79,7 +79,7 @@ What it does:
 - **Files:** `/srv/rws` and `/etc/rws/secrets` with the contract owners and modes; from P2a also `/srv/rws/backup/db` (`root:61003` 0750, the nightly dump; its parent `/srv/rws/backup` is `root:root` 0700 since review round 1: the backup job mounts only the subdirectories) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf` (world-readable, no secret in them; a running `db` re-reads them on SIGHUP).
 - **Settings:**
   - a generated `rws_x_api_key`, and a template `/etc/rws/rws.env`;
-  - from P2a, the six database passwords (`db_*`, step 3), generated once and never overwritten;
+  - from P2a, the six database passwords (seven from P14a: `db_rws_backfill`) (`db_*`, step 3), generated once and never overwritten;
   - the host scripts in `/usr/local/lib/rws/deploy`, with symlinks in `/usr/local/bin`;
   - the timers.
 
@@ -110,6 +110,7 @@ Use `sudoedit /etc/rws/secrets/<name>` for each file you fill (the ones the tabl
 | `db_rws_publish` | P2a, generated | nothing before P9 (gid 61007) |
 | `db_rws_api` | P2a, generated | api (gid 61008) |
 | `db_rws_owner_api` | P2a, generated | nothing before P9 (gid 61009) |
+| `db_rws_backfill` | P14a, generated | the `backfill` job (gid 61011, group `rws-dbbackfill`); a one-shot started by hand, never a daemon |
 
 Never fill a `db_*` file by hand. `bootstrap.sh` writes a value into a `db_*` file **only while it is empty**, in place (so the file keeps `root:<gid> 0440`), never overwrites one and never prints it. A `db_*` file that holds anything but 64 lowercase hex characters stops bootstrap and `rws-deploy` (`db_prepare_failed`): empty it (`: > file`) and run bootstrap again. `rws-deploy` sets each password on its role through `psql` on the `db` container's local socket, from stdin (never argv or the environment), before the migrations run.
 
@@ -128,7 +129,7 @@ sudo rws-deploy "$(sudo cat /var/lib/rws/current)"  # db_prepare sets the new pa
 sudo docker restart rws-api-1                       # the consumer reads its secret at start
 ```
 
-`db_rws_migrator` is read by the migrate job on every deploy: nothing to restart. `db_postgres` is used only when the cluster is first created, so rotating it changes nothing: leave it. `db_rws_publish` is read by `publish` and `db_rws_owner_api` by `publish-owner` (P9a; and `api-owner` from P9b): restart them after a rotation (`sudo docker restart rws-publish-1 rws-publish-owner-1`). Check that the consumer is healthy again: `sudo docker compose -p rws ps`.
+`db_rws_migrator` is read by the migrate job on every deploy: nothing to restart. `db_postgres` is used only when the cluster is first created, so rotating it changes nothing: leave it. `db_rws_publish` is read by `publish` and `db_rws_owner_api` by `publish-owner` (P9a; and `api-owner` from P9b): restart them after a rotation (`sudo docker restart rws-publish-1 rws-publish-owner-1`). `db_rws_backfill` (P14a) is read by `backfill` when it starts: nothing to restart, the next `run` reads the new value. Check that the consumer is healthy again: `sudo docker compose -p rws ps`.
 
 ## 4. Fill `/etc/rws/rws.env`
 
@@ -229,9 +230,9 @@ Do this on the VPS that already runs a P1b release. The installed P1b `rws-updat
    bundle/deploy/host/bootstrap.sh          # again: "0 change(s)"
    ```
 
-   It generates the six `db_*` secrets (`root:<gid> 0440`, gids 61004–61009), creates `/srv/rws/backup/db` (`root:61003` 0750; it makes `/srv/rws/backup` itself `root:root` 0700) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf`, installs the new host scripts (`rws-lib.sh` with the database steps, `rws-backup` with the nightly dump) and records the host files.
+   It generates the seven `db_*` secrets (`root:<gid> 0440`, gids 61004–61009 and 61011; the seventh, `db_rws_backfill`, is new in P14a, so re-run bootstrap after that release), creates `/srv/rws/backup/db` (`root:61003` 0750; it makes `/srv/rws/backup` itself `root:root` 0700) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf`, installs the new host scripts (`rws-lib.sh` with the database steps, `rws-backup` with the nightly dump) and records the host files.
 
-   **Check:** `sudo stat -c '%n %a %U:%G' /etc/rws/secrets/db_*` shows six files, each `440 root:rws-db…`; `ls -l /etc/rws/postgres`.
+   **Check:** `sudo stat -c '%n %a %U:%G' /etc/rws/secrets/db_*` shows seven files, each `440 root:rws-db…`; `ls -l /etc/rws/postgres`.
 
 5. Deploy the verified tag on purpose (`sudo rws-deploy prod-…`, the tag from step 3). It runs the steps of `rws-lib.sh`: verify, pull by digest, `up --wait db` (the first start creates the cluster; allow a couple of minutes), set the roles and passwords, `run migrate` (dbmate, then the partitions, then the registry sync), `up -d`, smoke test. Its failure codes are in `docs/runbooks/deploy-rollback.md`.
 

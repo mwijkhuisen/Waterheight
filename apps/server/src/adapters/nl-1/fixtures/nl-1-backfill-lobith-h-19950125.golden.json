@@ -1,0 +1,1599 @@
+{
+ "obs": [
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T00:00:00.000Z",
+   "value": 1321,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T01:00:00.000Z",
+   "value": 1329,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T02:00:00.000Z",
+   "value": 1337,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T03:00:00.000Z",
+   "value": 1344,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T04:00:00.000Z",
+   "value": 1352,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T05:00:00.000Z",
+   "value": 1359,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T06:00:00.000Z",
+   "value": 1366,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T07:00:00.000Z",
+   "value": 1372,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T08:00:00.000Z",
+   "value": 1380,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T09:00:00.000Z",
+   "value": 1386,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T10:00:00.000Z",
+   "value": 1393,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T11:00:00.000Z",
+   "value": 1399,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T12:00:00.000Z",
+   "value": 1405,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T13:00:00.000Z",
+   "value": 1410,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T14:00:00.000Z",
+   "value": 1415,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T15:00:00.000Z",
+   "value": 1419,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T16:00:00.000Z",
+   "value": 1424,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T17:00:00.000Z",
+   "value": 1428,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T18:00:00.000Z",
+   "value": 1432,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T19:00:00.000Z",
+   "value": 1436,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T20:00:00.000Z",
+   "value": 1440,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T21:00:00.000Z",
+   "value": 1443,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T22:00:00.000Z",
+   "value": 1447,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-25T23:00:00.000Z",
+   "value": 1450,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T00:00:00.000Z",
+   "value": 1453,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T01:00:00.000Z",
+   "value": 1455,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T02:00:00.000Z",
+   "value": 1457,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T03:00:00.000Z",
+   "value": 1459,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T04:00:00.000Z",
+   "value": 1461,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T05:00:00.000Z",
+   "value": 1462,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T06:00:00.000Z",
+   "value": 1464,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T07:00:00.000Z",
+   "value": 1467,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T08:00:00.000Z",
+   "value": 1470,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T09:00:00.000Z",
+   "value": 1473,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T10:00:00.000Z",
+   "value": 1476,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T11:00:00.000Z",
+   "value": 1478,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T12:00:00.000Z",
+   "value": 1480,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T13:00:00.000Z",
+   "value": 1482,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T14:00:00.000Z",
+   "value": 1483,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T15:00:00.000Z",
+   "value": 1484,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T16:00:00.000Z",
+   "value": 1485,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T17:00:00.000Z",
+   "value": 1486,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T18:00:00.000Z",
+   "value": 1487,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T19:00:00.000Z",
+   "value": 1487,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T20:00:00.000Z",
+   "value": 1488,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T21:00:00.000Z",
+   "value": 1488,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T22:00:00.000Z",
+   "value": 1490,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-26T23:00:00.000Z",
+   "value": 1491,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T00:00:00.000Z",
+   "value": 1491,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T01:00:00.000Z",
+   "value": 1493,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T02:00:00.000Z",
+   "value": 1494,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T03:00:00.000Z",
+   "value": 1496,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T04:00:00.000Z",
+   "value": 1497,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T05:00:00.000Z",
+   "value": 1498,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T06:00:00.000Z",
+   "value": 1499,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T07:00:00.000Z",
+   "value": 1501,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T08:00:00.000Z",
+   "value": 1502,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T09:00:00.000Z",
+   "value": 1503,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T10:00:00.000Z",
+   "value": 1504,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T11:00:00.000Z",
+   "value": 1505,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T12:00:00.000Z",
+   "value": 1506,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T13:00:00.000Z",
+   "value": 1507,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T14:00:00.000Z",
+   "value": 1509,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T15:00:00.000Z",
+   "value": 1510,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T16:00:00.000Z",
+   "value": 1512,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T17:00:00.000Z",
+   "value": 1513,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T18:00:00.000Z",
+   "value": 1515,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T19:00:00.000Z",
+   "value": 1516,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T20:00:00.000Z",
+   "value": 1518,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T21:00:00.000Z",
+   "value": 1521,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T22:00:00.000Z",
+   "value": 1523,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-27T23:00:00.000Z",
+   "value": 1525,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T00:00:00.000Z",
+   "value": 1526,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T01:00:00.000Z",
+   "value": 1528,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T02:00:00.000Z",
+   "value": 1530,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T03:00:00.000Z",
+   "value": 1532,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T04:00:00.000Z",
+   "value": 1534,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T05:00:00.000Z",
+   "value": 1536,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T06:00:00.000Z",
+   "value": 1538,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T07:00:00.000Z",
+   "value": 1541,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T08:00:00.000Z",
+   "value": 1543,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T09:00:00.000Z",
+   "value": 1545,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T10:00:00.000Z",
+   "value": 1548,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T11:00:00.000Z",
+   "value": 1551,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T12:00:00.000Z",
+   "value": 1553,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T13:00:00.000Z",
+   "value": 1555,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T14:00:00.000Z",
+   "value": 1557,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T15:00:00.000Z",
+   "value": 1558,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T16:00:00.000Z",
+   "value": 1561,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T17:00:00.000Z",
+   "value": 1562,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T18:00:00.000Z",
+   "value": 1564,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T19:00:00.000Z",
+   "value": 1568,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T20:00:00.000Z",
+   "value": 1572,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T21:00:00.000Z",
+   "value": 1575,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T22:00:00.000Z",
+   "value": 1578,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-28T23:00:00.000Z",
+   "value": 1581,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T00:00:00.000Z",
+   "value": 1583,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T01:00:00.000Z",
+   "value": 1586,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T02:00:00.000Z",
+   "value": 1588,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T03:00:00.000Z",
+   "value": 1590,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T04:00:00.000Z",
+   "value": 1593,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T05:00:00.000Z",
+   "value": 1596,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T06:00:00.000Z",
+   "value": 1598,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T07:00:00.000Z",
+   "value": 1601,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T08:00:00.000Z",
+   "value": 1603,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T09:00:00.000Z",
+   "value": 1605,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T10:00:00.000Z",
+   "value": 1606,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T11:00:00.000Z",
+   "value": 1608,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T12:00:00.000Z",
+   "value": 1610,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T13:00:00.000Z",
+   "value": 1611,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T14:00:00.000Z",
+   "value": 1613,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T15:00:00.000Z",
+   "value": 1615,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T16:00:00.000Z",
+   "value": 1616,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T17:00:00.000Z",
+   "value": 1618,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T18:00:00.000Z",
+   "value": 1619,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T19:00:00.000Z",
+   "value": 1620,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T20:00:00.000Z",
+   "value": 1622,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T21:00:00.000Z",
+   "value": 1622,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T22:00:00.000Z",
+   "value": 1624,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-29T23:00:00.000Z",
+   "value": 1625,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T00:00:00.000Z",
+   "value": 1626,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T01:00:00.000Z",
+   "value": 1628,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T02:00:00.000Z",
+   "value": 1629,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T03:00:00.000Z",
+   "value": 1631,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T04:00:00.000Z",
+   "value": 1632,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T05:00:00.000Z",
+   "value": 1633,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T06:00:00.000Z",
+   "value": 1634,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T07:00:00.000Z",
+   "value": 1636,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T08:00:00.000Z",
+   "value": 1637,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T09:00:00.000Z",
+   "value": 1639,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T10:00:00.000Z",
+   "value": 1640,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T11:00:00.000Z",
+   "value": 1642,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T12:00:00.000Z",
+   "value": 1643,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T13:00:00.000Z",
+   "value": 1644,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T14:00:00.000Z",
+   "value": 1645,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T15:00:00.000Z",
+   "value": 1647,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T16:00:00.000Z",
+   "value": 1648,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T17:00:00.000Z",
+   "value": 1649,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T18:00:00.000Z",
+   "value": 1650,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T19:00:00.000Z",
+   "value": 1651,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T20:00:00.000Z",
+   "value": 1652,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T21:00:00.000Z",
+   "value": 1653,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T22:00:00.000Z",
+   "value": 1654,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-30T23:00:00.000Z",
+   "value": 1655,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T00:00:00.000Z",
+   "value": 1656,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T01:00:00.000Z",
+   "value": 1657,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T02:00:00.000Z",
+   "value": 1658,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T03:00:00.000Z",
+   "value": 1659,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T04:00:00.000Z",
+   "value": 1659,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T05:00:00.000Z",
+   "value": 1661,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T06:00:00.000Z",
+   "value": 1661,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T07:00:00.000Z",
+   "value": 1662,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T08:00:00.000Z",
+   "value": 1662,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T09:00:00.000Z",
+   "value": 1663,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T10:00:00.000Z",
+   "value": 1664,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T11:00:00.000Z",
+   "value": 1664,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T12:00:00.000Z",
+   "value": 1665,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T13:00:00.000Z",
+   "value": 1665,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T14:00:00.000Z",
+   "value": 1665,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T15:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T16:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T17:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T18:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T19:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T20:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T21:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T22:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-01-31T23:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T00:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T01:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T02:00:00.000Z",
+   "value": 1666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T03:00:00.000Z",
+   "value": 1665,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T04:00:00.000Z",
+   "value": 1665,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T05:00:00.000Z",
+   "value": 1664,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T06:00:00.000Z",
+   "value": 1664,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T07:00:00.000Z",
+   "value": 1664,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T08:00:00.000Z",
+   "value": 1663,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T09:00:00.000Z",
+   "value": 1662,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T10:00:00.000Z",
+   "value": 1662,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T11:00:00.000Z",
+   "value": 1661,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T12:00:00.000Z",
+   "value": 1661,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T13:00:00.000Z",
+   "value": 1660,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T14:00:00.000Z",
+   "value": 1659,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T15:00:00.000Z",
+   "value": 1658,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T16:00:00.000Z",
+   "value": 1657,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T17:00:00.000Z",
+   "value": 1656,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T18:00:00.000Z",
+   "value": 1655,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T19:00:00.000Z",
+   "value": 1654,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T20:00:00.000Z",
+   "value": 1653,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T21:00:00.000Z",
+   "value": 1652,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T22:00:00.000Z",
+   "value": 1650,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-01T23:00:00.000Z",
+   "value": 1649,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T00:00:00.000Z",
+   "value": 1648,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T01:00:00.000Z",
+   "value": 1647,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T02:00:00.000Z",
+   "value": 1646,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T03:00:00.000Z",
+   "value": 1644,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T04:00:00.000Z",
+   "value": 1643,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T05:00:00.000Z",
+   "value": 1641,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T06:00:00.000Z",
+   "value": 1640,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T07:00:00.000Z",
+   "value": 1638,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T08:00:00.000Z",
+   "value": 1637,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T09:00:00.000Z",
+   "value": 1636,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T10:00:00.000Z",
+   "value": 1634,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T11:00:00.000Z",
+   "value": 1632,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T12:00:00.000Z",
+   "value": 1631,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T13:00:00.000Z",
+   "value": 1629,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T14:00:00.000Z",
+   "value": 1628,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T15:00:00.000Z",
+   "value": 1625,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T16:00:00.000Z",
+   "value": 1624,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T17:00:00.000Z",
+   "value": 1622,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T18:00:00.000Z",
+   "value": 1620,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T19:00:00.000Z",
+   "value": 1618,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T20:00:00.000Z",
+   "value": 1616,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T21:00:00.000Z",
+   "value": 1614,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T22:00:00.000Z",
+   "value": 1612,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-02T23:00:00.000Z",
+   "value": 1610,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T00:00:00.000Z",
+   "value": 1608,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T01:00:00.000Z",
+   "value": 1606,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T02:00:00.000Z",
+   "value": 1604,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T03:00:00.000Z",
+   "value": 1602,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T04:00:00.000Z",
+   "value": 1600,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T05:00:00.000Z",
+   "value": 1597,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T06:00:00.000Z",
+   "value": 1596,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T07:00:00.000Z",
+   "value": 1593,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T08:00:00.000Z",
+   "value": 1591,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T09:00:00.000Z",
+   "value": 1589,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T10:00:00.000Z",
+   "value": 1586,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T11:00:00.000Z",
+   "value": 1584,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T12:00:00.000Z",
+   "value": 1582,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T13:00:00.000Z",
+   "value": 1579,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T14:00:00.000Z",
+   "value": 1577,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T15:00:00.000Z",
+   "value": 1574,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T16:00:00.000Z",
+   "value": 1572,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T17:00:00.000Z",
+   "value": 1569,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T18:00:00.000Z",
+   "value": 1567,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T19:00:00.000Z",
+   "value": 1565,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T20:00:00.000Z",
+   "value": 1562,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T21:00:00.000Z",
+   "value": 1559,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T22:00:00.000Z",
+   "value": 1557,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-03T23:00:00.000Z",
+   "value": 1554,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T00:00:00.000Z",
+   "value": 1552,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T01:00:00.000Z",
+   "value": 1549,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T02:00:00.000Z",
+   "value": 1547,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T03:00:00.000Z",
+   "value": 1544,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T04:00:00.000Z",
+   "value": 1541,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T05:00:00.000Z",
+   "value": 1538,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T06:00:00.000Z",
+   "value": 1536,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T07:00:00.000Z",
+   "value": 1533,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T08:00:00.000Z",
+   "value": 1531,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T09:00:00.000Z",
+   "value": 1528,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T10:00:00.000Z",
+   "value": 1526,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T11:00:00.000Z",
+   "value": 1523,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T12:00:00.000Z",
+   "value": 1520,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T13:00:00.000Z",
+   "value": 1518,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T14:00:00.000Z",
+   "value": 1516,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T15:00:00.000Z",
+   "value": 1513,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T16:00:00.000Z",
+   "value": 1511,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T17:00:00.000Z",
+   "value": 1509,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T18:00:00.000Z",
+   "value": 1506,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T19:00:00.000Z",
+   "value": 1504,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T20:00:00.000Z",
+   "value": 1502,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T21:00:00.000Z",
+   "value": 1499,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T22:00:00.000Z",
+   "value": 1497,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-04T23:00:00.000Z",
+   "value": 1494,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F007",
+   "ts": "1995-02-05T00:00:00.000Z",
+   "value": 1492,
+   "qc": 2
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "provider_values": 265,
+ "unknown_values": 0
+}

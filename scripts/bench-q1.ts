@@ -139,7 +139,7 @@ try {
     .map((r: unknown[]) => String(r[0]))
     .join('\n');
   console.log(plan);
-  if (!/Index Scan Backward using obs_\d{4}_\d{2}_pkey/.test(plan)) {
+  if (!/Index Scan Backward using obs_(?:\d{4}_\d{2}|y\d{4})_pkey/.test(plan)) {
     console.error('bench-q1: FAIL: not a backward index scan on (series_id, ts)');
     failed = true;
   }

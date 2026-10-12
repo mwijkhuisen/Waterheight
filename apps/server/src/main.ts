@@ -6,6 +6,7 @@ import { DayVersions } from './api/versions.ts';
 import { DisplayWindow } from './api/window.ts';
 import { createApp } from './app.ts';
 import { Archive } from './archive/writer.ts';
+import { backfillMain } from './backfill/cli.ts';
 import { runBasemap } from './basemap/index.ts';
 import { budgets, schedule } from './capture/budget.ts';
 import {
@@ -40,6 +41,7 @@ export const ROLES = [
   'replay',
   'migrate',
   'basemap',
+  'backfill',
   'watchdog',
   'healthcheck',
 ] as const;
@@ -51,7 +53,9 @@ export { EXIT_CONFIG };
 const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; watchdog takes --once or --dry-run;
   api takes [--audience public|owner]; publish takes [--audience public|owner] [--once];
   replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD[THH:MM:SSZ]> --to <YYYY-MM-DD> [--dry-run];
-  basemap takes <fetch|promote|rollback> [--build <YYYYMMDD>] [--dry-run])`;
+  basemap takes <fetch|promote|rollback> [--build <YYYYMMDD>] [--dry-run];
+  backfill takes <plan|run|status|pause|resume|abort> (plan --spec <id> [--from D] [--to D] [--series key,…] [--dry-run];
+  run [--until <instant>]; pause|resume|abort --job <id>))`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
 const RWS_LIMIT = 400;
 
@@ -308,7 +312,7 @@ export function publishArgs(rest: readonly string[]): { family: 'public' | 'owne
 
 /**
  * Resolves with an exit code; `api`, `capture`, `load`, `publish` and `watchdog`
- * keep running until SIGINT or SIGTERM; `migrate`, `replay` and `basemap` are
+ * keep running until SIGINT or SIGTERM; `migrate`, `replay`, `basemap` and `backfill` are
  * one-shot (and `publish --once`).
  */
 export function run(
@@ -323,7 +327,13 @@ export function run(
   const publish = role === 'publish' ? publishArgs(rest) : undefined;
   const apiFamily = role === 'api' ? apiArgs(rest) : undefined;
   const takesArgs =
-    dry || once || publish !== undefined || apiFamily !== undefined || role === 'replay' || role === 'basemap';
+    dry ||
+    once ||
+    publish !== undefined ||
+    apiFamily !== undefined ||
+    role === 'replay' ||
+    role === 'basemap' ||
+    role === 'backfill';
   if (role === undefined || (rest.length > 0 && !takesArgs) || !(ROLES as readonly string[]).includes(role)) {
     log(USAGE);
     return Promise.resolve(EXIT_USAGE);
@@ -333,6 +343,7 @@ export function run(
   if (role === 'load') return runLoad(env, log);
   if (role === 'replay') return runReplay(rest, env, log);
   if (role === 'basemap') return runBasemap(rest, env, log);
+  if (role === 'backfill') return backfillMain(rest, env, log);
   if (role === 'watchdog') return runWatchdog(env, dry ? 'dry-run' : once ? 'once' : 'loop', log);
   if (publish !== undefined) return runPublisher(env, publish.family, publish.once, log);
   if (role === 'capture') {

@@ -1171,6 +1171,60 @@
             "items": {
               "additionalProperties": false,
               "properties": {
+                "backfill": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "active": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "chunks_done": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "chunks_with_data": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "inserted": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "jobs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "quarantined": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "revised": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "unreconciled": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "jobs",
+                    "active",
+                    "chunks_done",
+                    "inserted",
+                    "revised",
+                    "unreconciled"
+                  ],
+                  "type": "object"
+                },
                 "consecutive_failures": {
                   "maximum": 9007199254740991,
                   "minimum": 0,

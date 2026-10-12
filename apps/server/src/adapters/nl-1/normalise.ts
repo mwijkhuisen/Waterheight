@@ -61,6 +61,11 @@ export type Context = {
   registry: Registry;
   /** When the payload was fetched (UTC ms): the reference for "future" and "too old". */
   fetchedAt: number;
+  /**
+   * P14a: how old a value may be (ms; default MAX_AGE_MS). `null` drops nothing for its age: a backfill payload
+   * (spec nl-1-backfill-obs) asks for history on purpose. The future check stays.
+   */
+  maxAgeMs?: number | null;
 };
 
 // Maps and Sets, not objects: a provider string such as `constructor` must not find an inherited property.
@@ -108,6 +113,7 @@ type Sample = { value: number; qc: number };
 /** Every registered series of one `OphalenWaarnemingen` response. */
 export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normalised {
   const out = emptyNormalised();
+  const maxAge = ctx.maxAgeMs === undefined ? MAX_AGE_MS : ctx.maxAgeMs;
   /** A registered `<code>/<Grootheid>/<Hoedanigheid>`, whatever its method. */
   let combinations: Set<string> | undefined;
   const merged = new Map<string, { samples: Map<number, Sample>; conflicts: Set<number> }>();
@@ -173,7 +179,7 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
             ? 'unknown_quality'
             : isFuture(ts, ctx.fetchedAt)
               ? 'future'
-              : ts < ctx.fetchedAt - MAX_AGE_MS
+              : maxAge !== null && ts < ctx.fetchedAt - maxAge
                 ? 'too_old'
                 : series.conflicts.has(ts)
                   ? 'conflict'

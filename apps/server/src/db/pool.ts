@@ -7,7 +7,7 @@ import type { DB } from './generated.ts';
 // by the process (`load` is rws_load, `api` is rws_api, …) and its password is
 // a Compose file secret; it never comes from the environment or a command line.
 
-export type DbRole = 'rws_migrator' | 'rws_load' | 'rws_publish' | 'rws_api' | 'rws_owner_api';
+export type DbRole = 'rws_migrator' | 'rws_load' | 'rws_publish' | 'rws_api' | 'rws_owner_api' | 'rws_backfill';
 
 export type DbConfig = {
   host: string;
