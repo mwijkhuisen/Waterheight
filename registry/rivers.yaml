@@ -1760,6 +1760,305 @@ rivers:
     parent_river_id: kander
     km_direction: none
     evidence: "Wikidata Q869593 (P402 2205224; P403 Q668478 Kander), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); #125"
+  - id: hanfbach
+    name_nl: "Hanfbach"
+    name_en: "Hanfbach"
+    names:
+      DE-7: ["Hanfbach"]
+    aliases: []
+    osm_relation_id: 4521279
+    osm_way_name: null
+    wikidata: Q883438
+    parent_river_id: sieg
+    km_direction: none
+    evidence: "Wikidata Q883438 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r4521279 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: pleisbach
+    name_nl: "Pleisbach"
+    name_en: "Pleisbach"
+    names:
+      DE-7: ["Pleisbach"]
+    aliases: []
+    osm_relation_id: 3969567
+    osm_way_name: null
+    wikidata: Q880232
+    parent_river_id: sieg
+    km_direction: none
+    evidence: "Wikidata Q880232 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3969567 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: agger
+    name_nl: "Agger"
+    name_en: "Agger"
+    names:
+      DE-7: ["Agger"]
+    aliases: []
+    osm_relation_id: 386627
+    osm_way_name: null
+    wikidata: Q393161
+    parent_river_id: sieg
+    km_direction: none
+    evidence: "Wikidata Q393161 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r386627 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: doerspe
+    name_nl: "Dörspe"
+    name_en: "Dörspe"
+    names:
+      DE-7: ["Dörspe"]
+    aliases: []
+    osm_relation_id: 5195680
+    osm_way_name: null
+    wikidata: Q1271446
+    parent_river_id: agger
+    km_direction: none
+    evidence: "Wikidata Q1271446 (P402 5195680; P403 Q393161 Agger), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: suelz
+    name_nl: "Sülz"
+    name_en: "Sülz"
+    names:
+      DE-7: ["Sülz"]
+    aliases: []
+    osm_relation_id: 386639
+    osm_way_name: null
+    wikidata: Q153143
+    parent_river_id: agger
+    km_direction: none
+    evidence: "Wikidata Q153143 (P402 386639; P403 Q393161 Agger), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); two gauges, held back in #126 until the Agger is curated"
+  - id: kuertener-suelz
+    name_nl: "Kürtener Sülz"
+    name_en: "Kürtener Sülz"
+    names:
+      DE-7: ["Kürtener Sülz"]
+    aliases: []
+    osm_relation_id: 386656
+    osm_way_name: null
+    wikidata: Q631227
+    parent_river_id: suelz
+    km_direction: none
+    evidence: "Wikidata Q631227 (no P402; P403 Q153143 Sülz), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r386656 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: morsbach
+    name_nl: "Morsbach"
+    name_en: "Morsbach"
+    names:
+      DE-7: ["Morsbach"]
+    aliases: []
+    osm_relation_id: 10751634
+    osm_way_name: null
+    wikidata: Q895502
+    parent_river_id: wupper
+    km_direction: none
+    evidence: "Wikidata Q895502 (no P402; P403 Q639374 Wupper), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesakes Q11050 (the municipality) and Q65241406 (into the Urft); relation r10751634 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: itter
+    name_nl: "Itter"
+    name_en: "Itter"
+    names:
+      DE-7: ["Itter"]
+    aliases: []
+    osm_relation_id: 1494211
+    osm_way_name: null
+    wikidata: Q5122
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q5122 (P402 1494211; P403 Q584 Rhine), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesakes Q1675322 (Eder), Q895673 (Diemel), Q876271 (Neckar)"
+  - id: veybach
+    name_nl: "Veybach"
+    name_en: "Veybach"
+    names:
+      DE-7: ["Veybach"]
+    aliases: []
+    osm_relation_id: 3515721
+    osm_way_name: null
+    wikidata: Q875959
+    parent_river_id: erft
+    km_direction: none
+    evidence: "Wikidata Q875959 (no P402; P403 Q708840 Erft), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3515721 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: rotbach-erft
+    name_nl: "Rotbach"
+    name_en: "Rotbach"
+    names:
+      DE-7: ["Rotbach"]
+    aliases: []
+    osm_relation_id: 10799791
+    osm_way_name: null
+    wikidata: Q871120
+    parent_river_id: erft
+    km_direction: none
+    evidence: "Wikidata Q871120 (no P402; P403 Q708840 Erft), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q873782 (into the Rhine at Dinslaken); relation r10799791 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: gillbach
+    name_nl: "Gillbach"
+    name_en: "Gillbach"
+    names:
+      DE-7: ["Gillbach"]
+    aliases: []
+    osm_relation_id: 10661302
+    osm_way_name: null
+    wikidata: Q589054
+    parent_river_id: erft
+    km_direction: none
+    evidence: "Wikidata Q589054 (no P402; P403 Q708840 Erft), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r10661302 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: henne
+    name_nl: "Henne"
+    name_en: "Henne"
+    names:
+      DE-7: ["Henne"]
+    aliases: []
+    osm_relation_id: 10692053
+    osm_way_name: null
+    wikidata: Q317166
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q317166 (P402 10692053; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: neger
+    name_nl: "Neger"
+    name_en: "Neger"
+    names:
+      DE-7: ["Neger"]
+    aliases: []
+    osm_relation_id: 10759487
+    osm_way_name: null
+    wikidata: Q315416
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q315416 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q828407 (into the Bieke); relation r10759487 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: roehr
+    name_nl: "Röhr"
+    name_en: "Röhr"
+    names:
+      DE-7: ["Röhr"]
+    aliases: []
+    osm_relation_id: 10795260
+    osm_way_name: null
+    wikidata: Q323172
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q323172 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r10795260 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: wenne
+    name_nl: "Wenne"
+    name_en: "Wenne"
+    names:
+      DE-7: ["Wenne"]
+    aliases: []
+    osm_relation_id: 1363553
+    osm_way_name: null
+    wikidata: Q876480
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q876480 (P402 1363553; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: moehne
+    name_nl: "Möhne"
+    name_en: "Möhne"
+    names:
+      DE-7: ["Möhne"]
+    aliases: []
+    osm_relation_id: 364752
+    osm_way_name: null
+    wikidata: Q562385
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q562385 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r364752 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: hundem
+    name_nl: "Hundem"
+    name_en: "Hundem"
+    names:
+      DE-7: ["Hundem"]
+    aliases: []
+    osm_relation_id: 381041
+    osm_way_name: null
+    wikidata: Q873999
+    parent_river_id: lenne
+    km_direction: none
+    evidence: "Wikidata Q873999 (no P402; P403 Q239661 Lenne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r381041 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: deilbach
+    name_nl: "Deilbach"
+    name_en: "Deilbach"
+    names:
+      DE-7: ["Deilbach"]
+    aliases: []
+    osm_relation_id: 1239530
+    osm_way_name: null
+    wikidata: Q317515
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q317515 (P402 1239530; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: elbsche
+    name_nl: "Elbsche"
+    name_en: "Elbsche"
+    names:
+      DE-7: ["Elbsche"]
+    aliases: []
+    osm_relation_id: 3292867
+    osm_way_name: null
+    wikidata: Q1325422
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q1325422 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3292867 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: felderbach
+    name_nl: "Felderbach"
+    name_en: "Felderbach"
+    names:
+      DE-7: ["Felderbach"]
+    aliases: []
+    osm_relation_id: 6574772
+    osm_way_name: null
+    wikidata: Q872571
+    parent_river_id: deilbach
+    km_direction: none
+    evidence: "Wikidata Q872571 (P402 6574772; P403 Q317515 Deilbach), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: hardenberger-bach
+    name_nl: "Hardenberger Bach"
+    name_en: "Hardenberger Bach"
+    names:
+      DE-7: ["Hardenberger Bach"]
+    aliases: []
+    osm_relation_id: 10692324
+    osm_way_name: null
+    wikidata: Q1585078
+    parent_river_id: deilbach
+    km_direction: none
+    evidence: "Wikidata Q1585078 (no P402; P403 Q317515 Deilbach), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r10692324 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: wisserbach
+    name_nl: "Wisserbach"
+    name_en: "Wisserbach"
+    names:
+      DE-7: ["Wisserbach"]
+    aliases: []
+    osm_relation_id: 4269878
+    osm_way_name: null
+    wikidata: Q876936
+    parent_river_id: sieg
+    km_direction: none
+    evidence: "Wikidata Q876936 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); Wikidata label \"Wisser Bach\"; relation r4269878 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: oese
+    name_nl: "Öse"
+    name_en: "Öse"
+    names:
+      DE-7: ["Öse"]
+    aliases: []
+    osm_relation_id: 2713319
+    osm_way_name: null
+    wikidata: Q325103
+    parent_river_id: honne
+    km_direction: none
+    evidence: "Wikidata Q325103 (no P402; P403 Q562288 Hönne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q298096 (into the Nethe, Weser basin); relation r2713319 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38211213229, rivernet-fixture artifact)"
+  - id: else-lenne
+    name_nl: "Else"
+    name_en: "Else"
+    names: {}
+    aliases: []
+    osm_relation_id: 381249
+    osm_way_name: null
+    wikidata: Q830992
+    parent_river_id: lenne
+    km_direction: none
+    evidence: "Wikidata Q830992 (P402 381249; P403 Q239661 Lenne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); gaugeless connector that carries the Oester (owner 2026-10-12, #127); names {} because the only DE-7 \"Else\" station is on the Weser Else (Q448518, into the Werre)"
+  - id: oester
+    name_nl: "Oester"
+    name_en: "Oester"
+    names:
+      DE-7: ["Oester"]
+    aliases: []
+    osm_relation_id: 381253
+    osm_way_name: null
+    wikidata: Q1740857
+    parent_river_id: else-lenne
+    km_direction: none
+    evidence: "Wikidata Q1740857 (P402 381253; P403 Q830992 Else), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
 excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283
@@ -1788,6 +2087,27 @@ excluded:
   - name: "Clerve"
     wikidata: Q1719767
     reason: "No relation or way carries wikidata=Q1719767 in the extract (geo.yml run 38123404612); no P402; LU-1 Clervaux and Troisvierges lie on it (#126)"
+  - name: "Weiß"
+    wikidata: Q896143
+    reason: "No relation or way carries wikidata=Q896143 in the extract (geo.yml run 38211213229); no P402; DE-7 Niederdielfen de.lanuk.2721650000100 lies on it (#139)"
+  - name: "Steinagger"
+    wikidata: Q878053
+    reason: "No relation or way carries wikidata=Q878053 in the extract (geo.yml run 38211213229); no P402; DE-7 Oberagger de.lanuk.2728219000100 lies on it (#139)"
+  - name: "Eschweiler Bach"
+    wikidata: Q32751195
+    reason: "No relation or way carries wikidata=Q32751195 in the extract (geo.yml run 38211213229); no P402; DE-7 Moeschemer-Muehle de.lanuk.2741490000200 lies on it (#139)"
+  - name: "Waldbach"
+    wikidata: Q960899
+    reason: "No relation or way carries wikidata=Q960899 in the extract (geo.yml run 38211213229); no P402; DE-7 Endorf de.lanuk.2761829000100 lies on it (#139)"
+  - name: "Hasper Bach"
+    wikidata: Q44402799
+    reason: "No relation or way carries wikidata=Q44402799 in the extract (geo.yml run 38211213229); no P402; DE-7 Haspertalsperre_Zu de.lanuk.2768898001 lies on it (#139)"
+  - name: "Rinderbach"
+    wikidata: Q825859
+    reason: "No relation or way carries wikidata=Q825859 in the extract (geo.yml run 38211213229); no P402; DE-7 Essen-Kettwig de.lanuk.2769800000200 lies on it (#139)"
+  - name: "Anger"
+    wikidata: Q260704
+    reason: "Wikidata P402 941791 is not a type=waterway relation in the extract (relation_missing, geo.yml run 38211213229) and no way carries wikidata=Q260704; Wikidata has no P403 for it; DE-7 Ratingen de.lanuk.2756500000100 lies on it (#139)"
 joins:
   - river: scheldt
     at: [3.2870075, 50.2241826]
@@ -1804,6 +2124,26 @@ joins:
     to_river: moselle
     max_m: 1000
     reason: "KG-161 (#100): the Seille relation 1263866 ends at its sink n1534461346 (6.1851, 49.1261) in Metz without sharing a node with the curated Moselle; the nearest vertex of a moselle way is n832540662 on w183201571 (6.1732, 49.1296), 947 m away (measured on the extract of geo.yml run 38070604210, 2026-10-10). The FR-1 Seille gauges (Metz Pont Lothaire 20 m from the Seille) need it for a path to the Moselle"
+  - river: itter
+    at: [6.8739944, 51.1606804]
+    to_river: itter
+    max_m: 50
+    reason: "KG-161 (#139): the Itter relation 1494211 has a gap: the sink n248742407 (6.8740, 51.1607) of its upper piece (42 edges) shares no node with its lower piece (4 edges, which reaches the Rhine); the nearest node of the lower piece, n4460456433, is 21 m away (measured on the extract of geo.yml run 38211213229, 2026-10-12). The DE-7 gauge Hilden (de.lanuk.2738900000300) lies on the upper piece and needs it for a path to the Rhine"
+  - river: oester
+    at: [7.8205933, 51.1663613]
+    to_river: oester
+    max_m: 50
+    reason: "KG-161 (#139): the Oester relation 381253 has a gap at the Oester reservoir: the sink n4524644503 (7.8206, 51.1664) of its upper piece (15 edges) shares no node with its lower piece (20 edges, which reaches the Else); the nearest node of the lower piece, n4524644505, is 15 m away (measured on the extract of geo.yml run 38211213229, 2026-10-12). The DE-7 gauge at the reservoir inflow (de.lanuk.2766645000100) lies on the upper piece and needs it for a path to the Lenne"
+  - river: rotbach-erft
+    at: [6.6523924, 50.6573315]
+    to_river: rotbach-erft
+    max_m: 400
+    reason: "KG-161 (#139): the Rotbach relation 10799791 has a gap: the sink n2278228150 (6.6524, 50.6573) of its upper piece (39 edges) shares no node with its lower piece (10 edges, which reaches the Erft and holds the DE-7 gauge Friesheim); the nearest node of the lower piece, n11508309236, is 296 m away (measured on the extract of geo.yml run 38211213229, 2026-10-12). No gauge needs it; it keeps the upper reaches on a path to the Erft"
+  - river: deilbach
+    at: [7.1973975, 51.3010137]
+    to_river: deilbach
+    max_m: 300
+    reason: "KG-161 (#139): one edge of the Deilbach relation 1239530 near its source is apart from the rest: its sink n4393469750 (7.1974, 51.3010) shares no node with the main piece (36 edges, which reaches the Ruhr and holds the DE-7 gauge Langenberg); the nearest node of the main piece, n2926198121, is 217 m away (measured on the extract of geo.yml run 38211213229, 2026-10-12). No gauge needs it; it keeps that reach on a path to the Ruhr"
 travel_times:
   # Rhine → Lobith, flood peaks (GWIO 85.006 appendix 1, read from the scan for #110): each range holds every value the
   # note does not strike through, in whole hours rounded outward (Emmerich keeps a floor of 1 h).

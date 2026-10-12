@@ -303,7 +303,7 @@ test('B2: a day file that answers 404 is read from the API with exactly one call
 
 // ---------------------------------------------------------------- #112 PR B: bins and the shift label
 
-test('#112: the legend says the shift is indicative; the bins of rhine.61 are painted at zoom 8 and the reach layer ends there', async ({
+test('#112: the legend says the shift is indicative; the bins of rhine.62 are painted at zoom 8 and the reach layer ends there', async ({
   page,
   context,
   baseURL,
@@ -311,7 +311,7 @@ test('#112: the legend says the shift is indicative; the bins of rhine.61 are pa
   const s = await start(page, context, baseURL, 'dh');
   await open(page, deep());
   await mapReady(page);
-  await reachesPainted(page, ['rhine.61']);
+  await reachesPainted(page, ['rhine.62']);
   // The legend (collapsed by default) names the shift, with the word that says it is no forecast.
   await page.locator('summary', { hasText: nl('legend_heading') }).click();
   await expect(page.getByText(nl('reach_shifted'), { exact: true })).toBeVisible();
@@ -326,7 +326,7 @@ test('#112: the legend says the shift is indicative; the bins of rhine.61 are pa
     map.jumpTo({ center: [6.1, 51.85], zoom: 10 });
     await idle;
   });
-  const ids = Array.from({ length: 8 }, (_, i) => `rhine.61/${i}`);
+  const ids = Array.from({ length: 8 }, (_, i) => `rhine.62/${i}`);
   await expect
     .poll(async () => (await Promise.all(ids.map((id) => binState(page, id)))).every((st) => st !== null), {
       timeout: 30_000,
