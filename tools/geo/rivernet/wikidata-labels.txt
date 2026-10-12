@@ -266,6 +266,9 @@ nl:Albertkanaal
 fr:Canal Albert
 fr:Grand Canal d'Alsace
 nl:Zuid-Willemsvaart
+de:Linth
+de:Simme
+de:Kander
 # Stage 3 B2 (#140, KG-250): DE-7 Lippe, Lower Rhine, Maas, Ems and Vechte single-gauge tributaries and their connectors
 de:Beke
 de:Pader

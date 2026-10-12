@@ -20,6 +20,7 @@
 # count a gap between payloads loaded ok (by fetched_at, which survives a database outage because the manifest keeps it)
 # longer than max(3 x cadence, 30 min). The check below takes the 30-minute floor over the sources that had two or more
 # loaded payloads in the window, except the blackholed source, whose gap is the point of (c).
+# Then (d), #133: Caddy's stderr masks client addresses (deploy/web/default-log.caddy), with no full one in its log.
 # Environment: PLAYWRIGHT_IMAGE (required), CHAOS_DB_DOWN_S (600), CHAOS_SIGNAL_WAIT_S (2400, from the blackhole),
 # CHAOS_SPEC/CHAOS_HOST/CHAOS_SOURCE/CHAOS_GROUP (ch-2-pq, www.hydrodaten.admin.ch, CH-2, cap-ch).
 set -euo pipefail
@@ -211,4 +212,33 @@ for sig in hits spec source fail; do
 done
 proof "$HOST blackholed at ${t_bh}Z: the fake logged status-0 hits for it (${got[hits]}Z); $SPEC shows a failure and no success after the blackhole in /status/capture.json (${got[spec]}Z); $SOURCE is stale in /data/v1/status.json, status not ok with lastFetchOk before the blackhole (${got[source]}Z, was '$status_before'); and a /fail ping of $GROUP, dated after the blackhole, reached the fake healthchecks (${got[fail]}Z). The /fail alone is not causal: the group also holds specs the fake does not serve."
 rm -f "$CONTROL/blackhole"
+endstep
+
+# ------------------------------------------------------------------ (d) Caddy's own log (#133, KG-314)
+# deploy/web/default-log.caddy masks the client addresses in Caddy's stderr, which Docker's local driver keeps. The
+# container's config must hold it, and no address a chaos client used (10.99.0.2 and fd99::2, the namespace's own, and
+# RWS_E2E_CLIENT_IPS) may be in that log in full, in a field or in an error text. Measured on Caddy 2.11.4, the 502s of
+# (a) that handle_errors answers log at debug only; what logs the request at warn is a visitor who leaves mid-answer, so
+# a slow reader on the first client address gives up on an uncompressed /api/v1/stations. That part is best effort: an
+# answer that fits the socket buffers is sent in full before the reader leaves and logs nothing (a warning says so).
+step "(d) Caddy's stderr masks client addresses"
+docker exec rws-caddy-1 caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile 2>/dev/null |
+  jq -e '.logging.logs.default.encoder | .format == "filter" and .fields["request>remote_ip"].filter == "ip_mask"
+    and .fields["request>client_ip"].filter == "ip_mask" and .fields["request>headers"].filter == "delete"
+    and .fields.error.filter == "regexp"' >/dev/null ||
+  fail "the default log of rws-caddy-1 has no address filter (deploy/web/default-log.caddy)"
+client=${RWS_E2E_CLIENT_IPS%%,*}
+outside --interface "$client" -H 'Accept-Encoding: identity' --limit-rate 2k --max-time 3 -o /dev/null \
+  "https://$RWS_E2E_DOMAIN/api/v1/stations" 2>/dev/null || true
+sleep 2
+ips="10.99.0.2,fd99::2,$RWS_E2E_CLIENT_IPS"
+ips=${ips//./\\.}
+caddy_log=$(docker logs rws-caddy-1 2>&1)
+[[ -n $caddy_log ]] || fail "docker logs rws-caddy-1 is empty"
+full=$(grep -cE "(^|[^0-9.])(${ips//,/|})([^0-9]|\$)" <<<"$caddy_log" || true)
+((full == 0)) || fail "Caddy's stderr holds $full lines with a full client address (deploy/web/default-log.caddy)"
+with_request=$(grep -c '"request":{' <<<"$caddy_log" || true)
+((with_request > 0)) ||
+  echo "::warning::chaos (d): no line of Caddy's stderr carried a request (the /api/v1/stations answer fit the socket buffers); only the config check and the address grep held"
+proof "Caddy's stderr: the default log of rws-caddy-1 masks remote_ip and client_ip, drops the request headers and replaces every address in an error text (its config); $with_request of its lines carried a request (the /api/v1/stations that $client left mid-answer among them if the answer outgrew the socket buffers; best effort), and none holds a full chaos client address (10.99.0.2, fd99::2, $RWS_E2E_CLIENT_IPS)"
 endstep
