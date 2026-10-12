@@ -30,6 +30,7 @@ The owner site never goes behind Cloudflare: `owner.<domain>` gets no public DNS
 
    Expected: `0 issue "letsencrypt.org"` (ADR-0020, Caddy's certificate and a rollback) **beside** the records Cloudflare added for its own authorities. If only Let's Encrypt is listed, add no record by hand from memory: ask Cloudflare's dashboard (SSL/TLS, Edge Certificates) which authorities it will use, or remove the CAA records for the duration and put Let's Encrypt back afterwards.
 4. **TTL.** A day ahead, lower the TTL of the `A` and `AAAA` records of the public name to 60 seconds (they are DNS-only, TTL 300 from the domain change). Clients that still hold the old record fail for a few minutes after section 8; that is acceptable before the launch flip (E4), which is why this runs first.
+5. **The Cloudflare account is a root of trust** (T-EDGE-1, R-105): whoever controls it can repoint the apex, add an `owner.` record, rotate the tunnel token or add a connector, and inject scripts or poison the cache through Workers, Snippets or transform rules. Before the switch the owner has: two-factor sign-in with a hardware key (a TOTP app only if no key is available); the account's e-mail mailbox behind two-factor sign-in too (it resets everything else); one member of the account, the owner; **no API tokens**, or each one listed in the password manager and rotated together with the tunnel token (`docs/runbooks/secrets-rotation.md` §6); no Workers, Snippets, Page Rules or transform rules beyond the ones this runbook names. The account's **audit log** is read at every `verify-prod --edge cloudflare` run (section 9): any change the owner did not make is an incident.
 
 ## 2. The Cloudflare side
 
@@ -48,7 +49,7 @@ The owner applies these for the zone before the switch. Cloudflare changes defau
 | Area | Setting | Value | Why |
 |---|---|---|---|
 | SSL/TLS | Encryption mode | leave the zone's value | It does not apply to a tunnel: the origin is `http://caddy:80` inside the stack and the edge-to-origin leg never leaves the tunnel |
-| SSL/TLS | Always Use HTTPS | on | Visitors on plain HTTP are redirected at the edge |
+| SSL/TLS | Always Use HTTPS | on | Visitors on plain HTTP are redirected at the edge. If it were switched off by mistake, a plain-HTTP visit would be forwarded to Caddy, which in tunnel mode answers a request with `X-Forwarded-Proto: http` with a 308 to `https://` (the origin guard of `edge_site` in `deploy/web/edge-http.caddy`) and never serves it |
 | SSL/TLS | Minimum TLS version | 1.2 | |
 | SSL/TLS | TLS 1.3 | on | |
 | SSL/TLS | 0-RTT | off | Replay of early data |
@@ -67,8 +68,14 @@ The owner applies these for the zone before the switch. Cloudflare changes defau
 | Security | Browser Integrity Check | off | |
 | Security | Security level, "Under Attack" mode | never "Under Attack" (its challenge page breaks the API clients and the map) | |
 | Caching | Always Online | off | |
-| Rules | Managed Transforms | no visitor-location or other request headers added | |
+| Network | IP Geolocation | off | Else Cloudflare adds `Cf-Ipcountry` to every request and it lands in the 14-day access log |
+| Network | Pseudo IPv4 | off | Adds headers that carry a made-up address |
+| Rules | Managed Transforms: "Remove visitor IP headers" | off | It strips `X-Forwarded-For`: every visitor would then look like cloudflared's address, collapse onto the limiter's `unknown-gw` key and make the masked log useless |
+| Rules | Managed Transforms: "Add visitor location headers" and every other "Add ..." transform | off | Location headers would land in the access log |
+| Caching | Browser Cache TTL | Respect Existing Headers | Else Cloudflare overrides the origin's `Cache-Control` for browsers |
 | Tunnel | WARP and private-network routes, Access | none | Section 2 |
+
+**Which Cloudflare request headers reach our access log in tunnel mode** (the log filter keeps no other client-address header, `test/privacy-policy.test.ts`): `CF-Ray`, `CF-Visitor`, `CDN-Loop` and `Cf-Warp-Tag-Id` carry no visitor data; `Cf-Connecting-Ip` and `True-Client-Ip` are deleted by the filter; `Cf-Ipcountry` and the location headers are in the log unless the settings above are off, and the log filter was not changed (it would change direct mode's adapted Caddy JSON, which stays byte for byte). That is why those settings are rows of this table and a residual in T-API-3 and T-WEB-4.
 
 **Cache rules** (Rules, Cache Rules), **in this order** (Cloudflare applies them top to bottom and a later rule can override an earlier one):
 
@@ -76,7 +83,7 @@ The owner applies these for the zone before the switch. Cloudflare changes defau
 |---|---|---|---|
 | 1 | `/tiles/*` | Bypass cache | On a cold miss of a cacheable object Cloudflare drops `Range`, and our tile routes answer 416 without one (CLAUDE.md, the Caddy gotchas). The tiles are served by Caddy as before |
 | 2 | `/data/*` | Eligible for cache; Edge TTL "use cache-control header if present, bypass cache if not" | Our `/data/v1` files carry `Cache-Control`; our 404s carry none, so they are never cached |
-| 3 | `/assets/*` | Eligible for cache; respect origin (immutable) | Hashed files |
+| 3 | `/assets/*` | Eligible for cache; Edge TTL "use cache-control header if present, bypass cache if not" | The real assets carry `immutable`; our `/assets` 404 carries no `Cache-Control` and with "respect origin" would take Cloudflare's default TTL for a 404 status, so it must bypass |
 
 Everything else keeps the default: HTML, JSON, `/api`, `/status` and `/runtime-config.json` are not cached. The cached trees are static and licence-neutral. Never add a rule for `/api`, `/status`, health or an error status (a cached `503` or `429` would keep a recovered site down). If Cloudflare adds `NEL` or `Report-To` to answers and a response-header transform rule on the free plan cannot remove it, **stop here and roll back (section 10)**: the browser would send reports to a third party (invariant 7). That is the owner's decision to take, not a setting to live with.
 
@@ -100,7 +107,7 @@ sudoedit /etc/rws/rws.env
 
 `RWS_CDN_NAME` goes in **with** `RWS_EDGE=tunnel`, in the same deploy (section 5), never earlier: set while the site is still direct, the privacy page would say that every request passes through Cloudflare when none does. From that deploy on the site answers only through the tunnel, and Cloudflare sees no visitor's request before the DNS switch (section 8), so the page names Cloudflare first before Cloudflare sees anyone (A§12.2). The owner approves the NL and EN text (E5) beforehand, from the PR (the e2e test renders both); section 5 checks the runtime config over loopback, section 8 the pages themselves.
 
-`RWS_WG_ENDPOINT` is where the owner devices dial WireGuard (UDP 51820). A name that Cloudflare proxies cannot carry UDP, so `rws-wg-peer` refuses a value equal to `RWS_DOMAIN` or starting with `owner.`; use a separate DNS-only name (a dynamic-DNS name of the home line) or the address. Without it `rws-wg-peer` keeps using `RWS_PUBLIC_IPV4`. Existing owner devices keep the endpoint in their config: re-issue one (`docs/runbooks/owner-device.md`) if the address changes.
+`RWS_WG_ENDPOINT` is where the owner devices dial WireGuard (UDP 51820). A name that Cloudflare proxies cannot carry UDP, so `rws-wg-peer` refuses a value equal to `RWS_DOMAIN` or starting with `owner.`; use a separate DNS-only name or the address. **Choose the name so that it does not re-publish the home address under the site's own zone:** a name at a dynamic-DNS provider, or a non-guessable label, never an obvious one (`home.`, `vpn.`, `wg.`) in the `waterradar.io` zone. The home address stays discoverable anyway (DNS history of the old records, the WireGuard port), and a flood aimed at the home line bypasses Cloudflare (R-101, T-HOST-3). Without it `rws-wg-peer` keeps using `RWS_PUBLIC_IPV4`. Existing owner devices keep the endpoint in their config: re-issue one (`docs/runbooks/owner-device.md`) if the address changes.
 
 ## 5. Deploy in tunnel mode
 
@@ -121,6 +128,7 @@ Expected: the second `curl` prints `Cloudflare` (if it prints nothing, `RWS_CDN_
 sudo docker port rws-caddy-1                           # 80/tcp -> 127.0.0.1:80 and nothing else
 sudo docker inspect rws-cloudflared-1 | grep -c 'TUNNEL_TOKEN='    # 0: the token is not in the environment
 sudo nft list chain inet rws from_containers | grep 7844           # the one rule, from the tunnel bridge
+sudo deploy/tests/hardening.sh --prod                              # reads RWS_EDGE from rws.env: with tunnel, cloudflared must run and caddy may publish only 127.0.0.1:80/tcp
 ```
 
 In the Cloudflare dashboard the tunnel shows **one connector, healthy** (its connections to two Cloudflare locations are normal) and no second, unknown connector.
@@ -149,7 +157,7 @@ Expected: `HTTP/2 200`, `server: cloudflare`, the HSTS and CSP headers of A§12.
 scripts/verify-prod.sh waterradar.io --edge cloudflare
 ```
 
-Expected: every check PASS except the known fresh-data FAILs already recorded for production, including the whole `edge` group (`edge headers`, `edge html`, `edge tile range`, `edge not cached`, `edge runtime config cdn`) and `owner listener`. In `--edge cloudflare` mode the `Server` header may be `cloudflare` (absent also passes; anything else fails), and the owner listener check passes on a refused or failed connection and on any edge answer that is neither 200 nor 401 and carries no `WWW-Authenticate` and none of the owner headers; DNS must still show no public record for `owner.<domain>`. The agent can run this command; the owner reads the result.
+Expected: every check PASS except the known fresh-data FAILs already recorded for production, including the whole `edge` group (`edge headers`, `edge html`, `edge tile range`, `edge not cached`, `edge runtime config cdn`) and `owner listener`. In `--edge cloudflare` mode the `Server` header may be `cloudflare` (absent also passes; anything else fails), and the owner listener check passes on a refused or failed connection and on any edge answer that is neither 200 nor 401 and carries no `WWW-Authenticate` and none of the owner site's exact headers (`Cache-Control: private, no-store` and `X-Robots-Tag: noindex, nofollow`; a Cloudflare error page sends `Cache-Control: private, max-age=0, no-store, …`, which is no owner sign); DNS must still show no public record for `owner.<domain>`. `edge not cached` passes only an absent `cf-cache-status`, `DYNAMIC` or `BYPASS` (`HIT`, `MISS`, `EXPIRED`, `STALE`, `UPDATING`, `REVALIDATED` or anything else fails) and also probes a missing `/assets` file. Read the Cloudflare account's audit log for changes you did not make (section 1, item 5). The agent can run this command; the owner reads the result.
 
 When it is green, **close the router**:
 
@@ -171,7 +179,7 @@ When it is green, **close the router**:
    sudo docker compose -p rws logs --since 24h api | grep -c limiter_gateway_key
    ```
 
-   Expected: `client_ip` shows visitors' masked prefixes (/24 and /48), `remote_ip` shows `172.30.41.0` (the masked address of `cloudflared`), and `limiter_gateway_key` stays 0.
+   Expected: `client_ip` shows visitors' masked prefixes (/24 and /48), `remote_ip` shows `172.30.41.0` (the masked address of `cloudflared`), and `limiter_gateway_key` stays 0. Also assert that **no `client_ip` is a Cloudflare range** (the list at `cloudflare.com/ips`): if one is, Cloudflare's own hop is the last in `X-Forwarded-For` and the visitors collapse onto a few public addresses (check the Managed Transforms rows of section 3 and that nothing else sits in front of Cloudflare).
 
 Raise the TTL back to 300 after a day of stable operation. HSTS preload (ADR-0020) is considered only after the tunnel has been stable for the revisit period of that ADR.
 
@@ -206,9 +214,9 @@ The tunnel in the dashboard may stay (idle) or be deleted. The token file may st
 | `edge headers` | `NEL`, `Report-To`, `Set-Cookie` or `Speculation-Rules` on `/` or `/en/` | Find the setting in section 3 that was switched on; if it is `NEL` or `Report-To` and a response-header transform rule cannot remove it, roll back (section 10) |
 | `edge html` | The HTML holds `/cdn-cgi/`, `cloudflareinsights`, `rocket-loader`, `email-decode`, `challenge-platform`, `__cf_bm` or `beacon.min.js` | Switch off Rocket Loader, Email Obfuscation, Web Analytics or Bot Fight Mode; purge the cache for the HTML (it is not cached by default) |
 | `edge tile range` | A `Range` GET of the current tile file is not a 206 with the exact `Content-Range` and 1024 bytes (n/a before the first basemap refresh) | Check cache rule 1 (`/tiles/*` bypass) is first and on |
-| `edge not cached` | `/api/v1/health`, `/api/v1/meta`, `/status/capture.json` or a missing `/data/v1` file shows `cf-cache-status: HIT`, or the 404 is no 404 | Remove the cache rule that matches; never cache `/api`, `/status` or an error |
+| `edge not cached` | `/api/v1/health`, `/api/v1/meta`, `/status/capture.json`, a missing `/data/v1` file or a missing `/assets` file shows a `cf-cache-status` other than absent, `DYNAMIC` or `BYPASS` (`HIT`, `MISS`, `EXPIRED`, `STALE`, `UPDATING`, `REVALIDATED`), or the 404 is no 404 | Remove the cache rule that matches; cache rules 2 and 3 must be "use cache-control header if present, bypass cache if not"; never cache `/api`, `/status` or an error |
 | `edge runtime config cdn` | `/runtime-config.json` has an empty `cdn` | `RWS_CDN_NAME` is unset; section 4 |
-| `owner listener` | The owner name answers on the edge with owner content | Stop; check that no DNS record or tunnel route names `owner.<domain>` (incident: `docs/runbooks/owner-exposure.md`) |
+| `owner listener` | The owner name answers on the edge with `WWW-Authenticate` or the owner site's exact headers (`Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow`); a plain Cloudflare error page (404, 502, 530) is the safe state | Stop; check that no DNS record or tunnel route names `owner.<domain>` (incident: `docs/runbooks/owner-exposure.md`) |
 
 ## 12. Token rotation and what agents never do
 

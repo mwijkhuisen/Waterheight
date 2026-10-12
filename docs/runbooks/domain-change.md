@@ -21,6 +21,17 @@ dig +short CAA waterradar.io
 dig +short owner.waterradar.io          # empty
 ```
 
+## 1a. DNSSEC (before the proxied switch)
+
+A§12.2 asks for DNSSEC where the registrar supports it. Do it now, in direct mode, so that a problem is not mixed up with the tunnel switch: enable DNSSEC for the zone in the Cloudflare dashboard (DNS, Settings), add the DS record it shows at the registrar (unless Cloudflare is the registrar, in which case it does that itself), and check that the chain validates:
+
+```bash
+dig +dnssec +short DS waterradar.io @1.1.1.1
+delv waterradar.io A @1.1.1.1            # "fully validated"
+```
+
+A wrong or missing DS record makes validating resolvers refuse the name: remove the DS record at the registrar to undo it.
+
 ## 2. The LAN proxy and the router
 
 The site still reaches the host through the LAN Caddy proxy and the router's forwards (KG-228). Add the hostname `waterradar.io` to the proxy so that it forwards it to the host, and keep `RWS_TRUSTED_PROXIES` as it is (the proxy's address, `docs/runbooks/api.md` §6). The forwards of TCP 80 and 443 (and UDP 443) stay as they are; port 80 must reach Caddy for the certificate.
