@@ -88,19 +88,37 @@ async function plan(from: Date, to: Date): Promise<{ id: number; budget: number 
   return { id, budget };
 }
 
-/** The in-process runner on a fake clock; returns its requests. */
-async function run(start: number): Promise<Call[]> {
+const load = () => h.loader({ now: LOAD_NOW }).tick();
+
+/**
+ * The in-process runner on a fake clock, with the loader keeping up after every chunk as in production (the guard
+ * stops a runner more than 2 chunks with data ahead of the ledger, review S6); returns its requests and the lines
+ * loaded meanwhile.
+ */
+async function run(start: number): Promise<{ calls: Call[]; loaded: number }> {
   await setGuard();
   const clock = new Clock(start);
   const { client, calls } = fakeClient(clock, history);
+  let loaded = 0;
   const out = await withStore((store) =>
-    runBackfill({ config: CONFIG, store, archive: h.archive, client, now: clock.now, sleep: clock.sleep }),
+    runBackfill({
+      config: CONFIG,
+      store,
+      archive: h.archive,
+      client,
+      now: clock.now,
+      sleep: clock.sleep,
+      hooks: {
+        afterCursor: async () => {
+          loaded += (await load()).loaded;
+        },
+      },
+    }),
   );
   expect(out.stopped).toBe('done');
-  return calls;
+  return { calls, loaded };
 }
 
-const load = () => h.loader({ now: LOAD_NOW }).tick();
 const job = (id: number) => withStore((s) => s.get(id)) as Promise<Job>;
 const ledger = async (id: number) =>
   (
@@ -132,6 +150,12 @@ function orphans(): string[] {
     .map((f) => `raw/NL-1/${f}`)
     .filter((k) => !named.has(k));
 }
+/** Is a runner's lease of the RWS host live? */
+const leaseHeld = async () =>
+  (await h.t.admin.query<{ n: number }>('SELECT count(*)::int AS n FROM backfill_lease WHERE until > now()')).rows[0]
+    ?.n === 1;
+/** Every lease lapses now (what 2 minutes after a kill -9 would do). */
+const lapse = () => h.t.admin.query("UPDATE backfill_lease SET until = now() - interval '1 second'");
 /** Request spacing on the fake clock. */
 const gaps = (calls: readonly Call[]) => calls.slice(1).map((c, i) => c.at - (calls[i] as Call).at);
 
@@ -161,13 +185,16 @@ async function killAndResume(year: number, point: Point, nth: number) {
     ['--no-experimental-webstorage', CHILD, h.t.urlFor('rws_backfill'), h.raw, point, String(nth), String(NIGHT)],
     { timeout: 60_000 },
   );
-  expect(child.status, child.stderr.toString()).toBe(137);
+  expect(child.signal, child.stderr.toString()).toBe('SIGKILL');
   const before = JSON.parse(child.stdout.toString()) as Call[];
   const crashed = await job(id);
   expect(crashed.status).toBe('running');
+  // The killed runner's lease is still held: a new run is busy until it lapses (2 minutes; here made to lapse now).
+  expect(await leaseHeld()).toBe(true);
+  await lapse();
 
-  const after = await run(NIGHT + HOUR);
-  expect((await load()).loaded).toBeGreaterThan(0);
+  const { calls: after, loaded } = await run(NIGHT + HOUR);
+  expect(loaded + (await load()).loaded).toBeGreaterThan(0);
   expect(h.alerts).toEqual([]);
 
   // Every instant served, after normalise's drops (one gap per chunk), exactly once and with no gap; all history.
@@ -188,7 +215,8 @@ async function killAndResume(year: number, point: Point, nth: number) {
   });
   expect(done.cursor_ts).toEqual(to);
   // Every request counted, within the budget; at least 1 s apart on each runner's pacer, an hour between the two.
-  expect(done.requests).toBe(before.length + after.length);
+  // A request is counted once it returns: the one a kill interrupts inside the fetch is not.
+  expect(done.requests).toBe(before.length + after.length - (point === 'fetch' ? 1 : 0));
   expect(done.requests).toBeLessThanOrEqual(budget);
   for (const g of [...gaps(before), ...gaps(after)]) expect(g).toBeGreaterThanOrEqual(1000);
   expect(before[0]?.check).toBe(true);
@@ -246,7 +274,7 @@ describe('kill -9 and resume (plan §3.3 step 10)', { timeout: 120_000 }, () => 
     expect(l).toHaveLength(4);
   });
 
-  it('in the middle of a later chunk request: the request counts, nothing is archived, the chunk is fetched again', async () => {
+  it('in the middle of a later chunk request: the request is not counted, nothing is archived, the chunk is fetched again', async () => {
     const { before, after, ledger: l } = await killAndResume(2004, 'fetch', 3);
     expect(before).toHaveLength(4);
     expect(after).toHaveLength(2);
@@ -276,8 +304,8 @@ describe('kill -9 and resume (plan §3.3 step 10)', { timeout: 120_000 }, () => 
     const sums = await h.checksums();
     const obs = await h.count('obs');
     const revisions = await h.count('obs_revision');
-    await run(NIGHT + 3 * HOUR);
-    expect((await load()).loaded).toBe(4);
+    const { loaded } = await run(NIGHT + 3 * HOUR);
+    expect(loaded + (await load()).loaded).toBe(4);
     expect(await job(id)).toMatchObject({ status: 'done', inserted: 0, revised: 0, unreconciled: 0 });
     const l = await ledger(id);
     expect(l).toHaveLength(4);
@@ -353,9 +381,14 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
     }
   });
 
-  it('backfill_guard: loader_lag, backlog, stale and ok', async () => {
+  it('backfill_guard: loader_lag, backlog, unloaded, stale and ok', async () => {
     const verdict = () => withStore((s) => s.guard('NL-1'));
     await h.t.admin.query("DELETE FROM app_meta WHERE key = 'loader'");
+    expect(await verdict()).toBe('loader_lag');
+    // A loader row without computed_at fails closed (review S5).
+    await h.t.admin.query(
+      `INSERT INTO app_meta (key, value) VALUES ('loader', '{"backlog_age_s": 0, "backlog_files": 0}')`,
+    );
     expect(await verdict()).toBe('loader_lag');
     await setGuard({ computed: '6 min' });
     expect(await verdict()).toBe('loader_lag');
@@ -367,5 +400,92 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
     expect(await verdict()).toBe('stale');
     await setGuard();
     expect(await verdict()).toBe('ok');
+    // More than 30 chunks of an active job with data that the ledger does not hold (unloaded or quarantined; review
+    // C5/S6, N1): its own verdict. 30 is a loader that ticks every 10 s while the runner writes 1 chunk/s.
+    const { rows } = await h.t.admin.query<{ id: string; n: number; status: string }>(
+      `SELECT j.id, j.status, j.chunks_with_data - (SELECT count(*) FROM backfill_chunk c WHERE c.job_id = j.id)::int AS n
+       FROM backfill_job j WHERE j.source_id = 'NL-1' ORDER BY j.id LIMIT 1`,
+    );
+    const { id, n, status } = rows[0] as { id: string; n: number; status: string };
+    const setBehind = (k: number) =>
+      h.t.admin.query('UPDATE backfill_job SET chunks_with_data = chunks_with_data + $2 WHERE id = $1', [id, k]);
+    await setBehind(31 - n);
+    await h.t.admin.query("UPDATE backfill_job SET status = 'running' WHERE id = $1", [id]);
+    expect(await verdict()).toBe('unloaded');
+    // A paused job still counts, an aborted or failed one (quarantined chunks of a dead job) does not (review N4).
+    await h.t.admin.query("UPDATE backfill_job SET status = 'paused' WHERE id = $1", [id]);
+    expect(await verdict()).toBe('unloaded');
+    for (const dead of ['aborted', 'failed', 'done']) {
+      await h.t.admin.query('UPDATE backfill_job SET status = $2 WHERE id = $1', [id, dead]);
+      expect(await verdict(), dead).toBe('ok');
+    }
+    await h.t.admin.query('UPDATE backfill_job SET status = $2 WHERE id = $1', [id, status]);
+    // Precedence: a lagging loader or a long backlog says so first.
+    await setGuard({ files: 4 });
+    expect(await verdict()).toBe('backlog');
+    await setGuard();
+    await setBehind(-1);
+    expect(await verdict()).toBe('ok');
+    await setBehind(-(30 - n));
+  });
+
+  it('advance counts a chunk with data in the same update as the cursor', async () => {
+    const f = new Date('1998-01-01T00:00:00Z');
+    const { id } = await plan(f, new Date('1998-03-01T00:00:00Z'));
+    await withStore(async (s) => {
+      await s.advance(id, { cursor_ts: new Date('1998-02-10T00:00:00Z'), chunk: true, data: true });
+      await s.advance(id, { cursor_ts: new Date('1998-03-01T00:00:00Z'), chunk: true });
+      expect(await s.get(id)).toMatchObject({ chunks_done: 2, chunks_with_data: 1 });
+    });
+  });
+});
+
+describe('one runner per host: the lease (review C1/S1)', { timeout: 60_000 }, () => {
+  const HOST = CONFIG.specs[0]?.host as string;
+
+  it('a second runner is busy while the first holds the lease; after it lapses, the second proceeds', async () => {
+    await lapse();
+    const { id } = await plan(new Date('1997-01-01T00:00:00Z'), new Date('1997-02-01T00:00:00Z'));
+    // The first runner (another process: its own holder id) takes the lease and is still running.
+    expect(await withStore((s) => s.lease(HOST, 'aaaaaaaa-0000-0000-0000-000000000001'))).toBe(true);
+    await setGuard();
+    const clock = new Clock(NIGHT);
+    const { client, calls } = fakeClient(clock, history);
+    const second = () =>
+      withStore((store) =>
+        runBackfill({
+          config: CONFIG,
+          store,
+          archive: h.archive,
+          client,
+          now: clock.now,
+          sleep: clock.sleep,
+          holder: 'bbbbbbbb-0000-0000-0000-000000000002',
+        }),
+      );
+    expect((await second()).stopped).toBe('busy');
+    expect(calls).toHaveLength(0);
+    expect((await job(id)).status).toBe('planned');
+    // The first one's own renewal keeps it; another holder cannot take it, and cannot give it back either.
+    expect(await withStore((s) => s.lease(HOST, 'aaaaaaaa-0000-0000-0000-000000000001'))).toBe(true);
+    await withStore((s) => s.release(HOST, 'bbbbbbbb-0000-0000-0000-000000000002'));
+    expect(await leaseHeld()).toBe(true);
+    // Two minutes later (made to lapse now) the second runner proceeds, and gives the lease back at exit.
+    await lapse();
+    expect((await second()).stopped).toBe('done');
+    expect((await job(id)).status).toBe('done');
+    expect(await leaseHeld()).toBe(false);
+    const { rows } = await h.t.admin.query<{ holder: string }>('SELECT holder FROM backfill_lease');
+    expect(rows).toEqual([{ holder: 'bbbbbbbb-0000-0000-0000-000000000002' }]);
+  });
+
+  it('rws_backfill may not delete a lease', async () => {
+    await slotFree();
+    const c = await h.t.connectAs('rws_backfill');
+    try {
+      expect(await sqlState(c, 'DELETE FROM backfill_lease')).toBe('42501');
+    } finally {
+      await c.end();
+    }
   });
 });

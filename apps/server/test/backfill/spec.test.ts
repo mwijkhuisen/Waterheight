@@ -1,9 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { JSON_CAPS } from '../../src/adapters/nl-1/parse.ts';
 import { BYTES_PER_VALUE } from '../../src/backfill/project.ts';
 import { BackfillSpec, loadBackfill } from '../../src/backfill/spec.ts';
+import { NL1_BACKFILL_FLOOR } from '../../src/load/adapters.ts';
+import { DATA_EPOCH } from '../../src/load/dirty.ts';
 import { config, fixtureText, LOBITH_H, registry, SPEC } from './harness.ts';
 
 // registry/backfill.yaml: strict schema, hosts inside capture.yaml's allowlist (invariant 1), the series selection
@@ -120,5 +125,57 @@ describe('cap arithmetic (JSON_CAPS)', () => {
   it('and in bytes at most max_bytes', () => {
     expect((tenMinute + hourly) * BYTES_PER_VALUE).toBeLessThanOrEqual(spec.max_bytes);
     expect(spec.max_bytes).toBeLessThanOrEqual(25 * 1024 * 1024);
+  });
+});
+
+describe('the audience gate (review S8)', () => {
+  const REGISTRY = new URL('../../../../registry/', import.meta.url);
+  /** A copy of the registry with one file's text changed. */
+  const copy = (file: string, change: (text: string) => string): URL => {
+    const dir = mkdtempSync(join(tmpdir(), 'backfill-registry-'));
+    cpSync(REGISTRY, dir, { recursive: true });
+    writeFileSync(join(dir, file), change(readFileSync(join(dir, file), 'utf8')));
+    return pathToFileURL(`${dir}/`);
+  };
+  /** NL-1's block of sources.yaml with one key changed. */
+  const nl1 = (key: string, value: string) => (text: string) => {
+    const at = text.indexOf('  - id: NL-1\n');
+    const end = text.indexOf('\n  - id: ', at + 1);
+    return (
+      text.slice(0, at) +
+      text.slice(at, end).replace(new RegExp(`\\n    ${key}: .*`), `\n    ${key}: ${value}`) +
+      text.slice(end)
+    );
+  };
+
+  it('refuses a source that is not public, or whose history_export is off', () => {
+    expect(() => loadBackfill(registry.hosts, copy('sources.yaml', nl1('audience', 'owner')))).toThrow(
+      /NL-1 is not a public source/,
+    );
+    expect(() => loadBackfill(registry.hosts, copy('sources.yaml', nl1('history_export', 'false')))).toThrow(
+      /NL-1 has history_export off/,
+    );
+  });
+
+  it('refuses a selected series narrowed to the owner', () => {
+    const dir = copy('stations/nl-1.yaml', (text) => {
+      const at = text.indexOf(`provider_key: ${LOBITH_H}`);
+      const a = text.indexOf('    audience: public', at);
+      return `${text.slice(0, a)}    audience: owner${text.slice(a + '    audience: public'.length)}`;
+    });
+    expect(() => loadBackfill(registry.hosts, dir)).toThrow(/not public like its source/);
+  });
+});
+
+describe('the bounds the loader and the runner share', () => {
+  it('DATA_EPOCH is the data_epoch the display-window migration seeds', () => {
+    const seed = readFileSync(
+      new URL('../../../../db/migrations/20261014000001_display_window.sql', import.meta.url),
+      'utf8',
+    ).match(/\('data_epoch', '"([^"]+)"'\)/)?.[1];
+    expect(seed).toBe(DATA_EPOCH);
+  });
+  it('the NL-1 loader floor is the spec floor of registry/backfill.yaml', () => {
+    expect(NL1_BACKFILL_FLOOR).toBe(`${spec.floor}T00:00:00Z`);
   });
 });

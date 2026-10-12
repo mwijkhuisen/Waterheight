@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { ManifestLine } from '../../src/archive/manifest.ts';
 import { Archive } from '../../src/archive/writer.ts';
 import type { GuardVerdict, Job, JobStatus, JobStore, NewJob } from '../../src/backfill/job.ts';
+import { planChunks, probeYears, requestBudget } from '../../src/backfill/plan.ts';
 import type { LoadedBackfill } from '../../src/backfill/spec.ts';
 import { loadBackfill } from '../../src/backfill/spec.ts';
 import { loadRegistry } from '../../src/capture/specs.ts';
@@ -87,6 +88,8 @@ export class MemoryJobStore implements JobStore {
   readonly jobs = new Map<number, Job>();
   /** Guard verdicts handed out in order; `ok` once they are used up. */
   verdicts: GuardVerdict[] = [];
+  /** Host → holder of its lease (a lapse is a test deleting the entry). */
+  readonly leases = new Map<string, string>();
   private next = 1;
 
   async insert(j: NewJob) {
@@ -105,6 +108,7 @@ export class MemoryJobStore implements JobStore {
       data_from: null,
       cursor_ts: j.range_from,
       chunks_done: 0,
+      chunks_with_data: 0,
       status: 'planned',
       attempts: 0,
       requests: 0,
@@ -143,12 +147,13 @@ export class MemoryJobStore implements JobStore {
   async failAttempt(id: number) {
     return ++this.row(id).attempts;
   }
-  async advance(id: number, a: { cursor_ts: Date; data_from?: Date; chunk: boolean }) {
+  async advance(id: number, a: { cursor_ts: Date; data_from?: Date; chunk: boolean; data?: boolean }) {
     const j = this.row(id);
     if (a.cursor_ts > j.range_to || a.cursor_ts < j.range_from) throw new Error('cursor outside the range');
     j.cursor_ts = a.cursor_ts;
     if (a.data_from !== undefined) j.data_from = a.data_from;
     if (a.chunk) j.chunks_done += 1;
+    if (a.chunk && a.data === true) j.chunks_with_data += 1;
     j.attempts = 0;
   }
   async setStatus(id: number, to: JobStatus, error: string | null, only: readonly JobStatus[]) {
@@ -162,6 +167,15 @@ export class MemoryJobStore implements JobStore {
   async guard() {
     return this.verdicts.shift() ?? 'ok';
   }
+  async lease(host: string, holder: string) {
+    const by = this.leases.get(host);
+    if (by !== undefined && by !== holder) return false;
+    this.leases.set(host, holder);
+    return true;
+  }
+  async release(host: string, holder: string) {
+    if (this.leases.get(host) === holder) this.leases.delete(host);
+  }
 }
 
 export async function newJob(
@@ -169,14 +183,18 @@ export async function newJob(
   o: { series?: string; from?: string; to?: string; budget?: number } = {},
 ): Promise<number> {
   const spec = config.specs.find((s) => s.id === SPEC);
+  const from = new Date(`${o.from ?? '2026-05-01'}T00:00:00Z`);
+  const to = new Date(`${o.to ?? '2026-08-01'}T00:00:00Z`);
+  const chunkMs = spec?.chunk_ms ?? 0;
   const { id } = await store.insert({
     spec_id: SPEC,
     source_id: 'NL-1',
     series_key: o.series ?? LOBITH_H,
-    range_from: new Date(`${o.from ?? '2026-05-01'}T00:00:00Z`),
-    range_to: new Date(`${o.to ?? '2026-08-01'}T00:00:00Z`),
-    chunk_ms: spec?.chunk_ms ?? 0,
-    request_budget: o.budget ?? 50,
+    range_from: from,
+    range_to: to,
+    chunk_ms: chunkMs,
+    // The most the runner accepts for the range (review S2): the plan's budget.
+    request_budget: o.budget ?? requestBudget(planChunks(from, to, chunkMs).length, probeYears(from, to)),
   });
   return id;
 }

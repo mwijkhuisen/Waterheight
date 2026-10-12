@@ -196,7 +196,7 @@ describe('probe', () => {
   it('asks year by year, moves the cursor past years without data and stops at the first with data', async () => {
     const clock = new Clock();
     const store = new MemoryJobStore();
-    const id = await newJob(store, { from: '1990-01-01', to: '1993-01-01', budget: 500 });
+    const id = await newJob(store, { from: '1990-01-01', to: '1993-01-01' });
     const t = tempArchive();
     const years: string[] = [];
     const { client } = fakeClient(clock, (c) => {
@@ -240,10 +240,11 @@ describe('probe', () => {
 });
 
 describe('errors', () => {
+  // Jan–Jul 2026: six chunks and a budget of 9 (the plan's), room for the retries below.
   const failing = async (answer: (c: { check: boolean }, n: number) => Answer) => {
     const clock = new Clock();
     const store = new MemoryJobStore();
-    const id = await newJob(store);
+    const id = await newJob(store, { from: '2026-01-01' });
     const t = tempArchive();
     const { client, calls } = fakeClient(clock, (c, n) => (c.check ? normal(c) : answer(c, n)));
     const out = await go(clock, store, client, t.archive);
@@ -259,8 +260,8 @@ describe('errors', () => {
 
   it('a 5xx that clears on the 3rd attempt: the chunk commits and attempts reset', async () => {
     const r = await failing((_c, n) => (n < 4 ? { status: 503 } : normal({ check: false })));
-    expect(r.job).toMatchObject({ status: 'done', chunks_done: 3, attempts: 0 });
-    expect(r.lines.map((l) => l.backfill?.chunk)).toEqual([0, 1, 2]);
+    expect(r.job).toMatchObject({ status: 'done', chunks_done: 6, attempts: 0 });
+    expect(r.lines.map((l) => l.backfill?.chunk)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
   it('another 4xx fails at once with client_error', async () => {
@@ -328,5 +329,204 @@ describe('errors', () => {
     const out = await go(clock, store, client, t.archive);
     expect(out.jobs[0]).toMatchObject({ status: 'paused', chunks: 1 });
     expect(t.lines()).toHaveLength(1);
+  });
+});
+
+describe('one runner per host (review C1/S1)', () => {
+  const HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
+
+  it('a host whose lease another runner holds: busy before any request, and the job is not touched', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    const id = await newJob(store);
+    store.leases.set(HOST, 'someone-else');
+    const { client, calls } = fakeClient(clock, normal);
+    const out = await go(clock, store, client, tempArchive().archive);
+    expect(out).toMatchObject({ stopped: 'busy', jobs: [] });
+    expect(calls).toHaveLength(0);
+    expect(await store.get(id)).toMatchObject({ status: 'planned', requests: 0 });
+    // Once it lapses, the next run proceeds.
+    store.leases.delete(HOST);
+    expect((await go(clock, store, client, tempArchive().archive)).stopped).toBe('done');
+  });
+
+  it('holds the lease while it runs and gives it back at exit', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    await newJob(store);
+    const seen: (string | undefined)[] = [];
+    const { client } = fakeClient(clock, (c) => {
+      seen.push(store.leases.get(HOST));
+      return normal(c);
+    });
+    await runBackfill({
+      config: narrowed([LOBITH_H]),
+      store,
+      archive: tempArchive().archive,
+      client,
+      now: clock.now,
+      sleep: clock.sleep,
+      holder: 'me',
+    });
+    expect(seen).toEqual(['me', 'me', 'me', 'me']);
+    expect(store.leases.size).toBe(0);
+  });
+
+  it('a lease lost to another runner meanwhile (it lapsed during a long wait) stops the run as busy', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    await newJob(store);
+    const { client, calls } = fakeClient(clock, (c, n) => {
+      if (n === 2) store.leases.set(HOST, 'other');
+      return normal(c);
+    });
+    const out = await go(clock, store, client, tempArchive().archive);
+    expect(out.stopped).toBe('busy');
+    expect(calls).toHaveLength(2);
+    // Not ours to give back.
+    expect(store.leases.get(HOST)).toBe('other');
+  });
+});
+
+describe('a stop request (review N5)', () => {
+  it('ends the run between two chunks, never inside one, and gives the lease back', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    const id = await newJob(store); // three chunks
+    const t = tempArchive();
+    const { client } = fakeClient(clock, normal);
+    let stop = false;
+    // The flag rises while the first chunk is being committed: that chunk completes, then the loop ends.
+    const out = await runBackfill(
+      {
+        config: narrowed([LOBITH_H]),
+        store,
+        archive: t.archive,
+        client,
+        now: clock.now,
+        sleep: clock.sleep,
+        hooks: {
+          afterPut: async () => {
+            stop = true;
+          },
+        },
+      },
+      { stop: () => stop },
+    );
+    expect(out.stopped).toBe('interrupted');
+    expect(await store.get(id)).toMatchObject({ status: 'running', chunks_done: 1 });
+    expect(t.lines()).toHaveLength(1);
+    expect(store.leases.size).toBe(0);
+  });
+
+  it('a release that throws does not mask the result', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    await newJob(store);
+    store.release = async () => {
+      throw new Error('release failed');
+    };
+    const { client } = fakeClient(clock, normal);
+    const out = await go(clock, store, client, tempArchive().archive);
+    expect(out.stopped).toBe('done');
+  });
+});
+
+describe('the job row is not trusted (review S2)', () => {
+  const tampered = async (change: (j: Record<string, unknown>) => void) => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    const id = await newJob(store);
+    change(store.jobs.get(id) as unknown as Record<string, unknown>);
+    const { client, calls } = fakeClient(clock, normal);
+    await go(clock, store, client, tempArchive().archive);
+    expect(calls).toHaveLength(0);
+    return store.get(id);
+  };
+
+  it('a chunk other than the spec’s, a range below the floor or past DATA_EPOCH, a budget over the plan’s', async () => {
+    for (const change of [
+      (j: Record<string, unknown>) => {
+        j.chunk_ms = 100 * 365 * 86_400_000;
+      },
+      (j: Record<string, unknown>) => {
+        j.range_from = new Date('1989-12-31T00:00:00Z');
+        j.cursor_ts = j.range_from;
+      },
+      (j: Record<string, unknown>) => {
+        j.range_to = new Date('2026-10-02T00:00:01Z');
+      },
+      (j: Record<string, unknown>) => {
+        j.request_budget = 6;
+      },
+      // A cursor outside [max(range_from, floor), range_to] (review N3).
+      (j: Record<string, unknown>) => {
+        j.cursor_ts = new Date('2026-04-30T00:00:00Z');
+      },
+      (j: Record<string, unknown>) => {
+        j.cursor_ts = new Date('2026-08-02T00:00:00Z');
+      },
+    ])
+      expect(await tampered(change)).toMatchObject({ status: 'failed', last_error: 'invalid_job' });
+  });
+
+  it('the plan’s own budget and a range ending at DATA_EPOCH pass', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    const id = await newJob(store, { from: '2026-09-01', to: '2026-10-02' });
+    const { client } = fakeClient(clock, normal);
+    await go(clock, store, client, tempArchive().archive);
+    expect(await store.get(id)).toMatchObject({ status: 'done', chunks_done: 1 });
+  });
+});
+
+describe('throttled and the request count (review C6/S4)', () => {
+  it('a 429 and then the client backing off past the window: throttled, the unsent request not counted', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    const id = await newJob(store);
+    const { client, calls } = fakeClient(clock, (c, n) =>
+      c.check ? normal(c) : n === 2 ? { status: 429 } : { error: 'backoff' },
+    );
+    const out = await go(clock, store, client, tempArchive().archive);
+    expect(out.stopped).toBe('throttled');
+    expect(calls).toHaveLength(3);
+    expect(await store.get(id)).toMatchObject({ status: 'running', requests: 2 });
+  });
+
+  it('a backoff with no failure before it is the window closing, and counts nothing', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    const id = await newJob(store);
+    const { client } = fakeClient(clock, (c) => (c.check ? normal(c) : { error: 'backoff' }));
+    const out = await go(clock, store, client, tempArchive().archive);
+    expect(out.stopped).toBe('window_closed');
+    expect(await store.get(id)).toMatchObject({ requests: 1 });
+  });
+
+  it('an open breaker sent nothing either', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    const id = await newJob(store);
+    const { client } = fakeClient(clock, (c) => (c.check ? normal(c) : { error: 'breaker_open' }));
+    expect((await go(clock, store, client, tempArchive().archive)).stopped).toBe('breaker_open');
+    expect(await store.get(id)).toMatchObject({ requests: 1 });
+  });
+});
+
+describe('chunks_with_data (review C5/S6)', () => {
+  it('counts the chunks that wrote a manifest line, not a 204 or an empty list', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    const id = await newJob(store);
+    const { client } = fakeClient(clock, (c, n) =>
+      c.check || n === 2
+        ? normal(c)
+        : n === 3
+          ? { status: 204 }
+          : { status: 200, body: Buffer.from('{"Succesvol":true,"WaarnemingenLijst":[]}') },
+    );
+    await go(clock, store, client, tempArchive().archive);
+    expect(await store.get(id)).toMatchObject({ status: 'done', chunks_done: 3, chunks_with_data: 1 });
   });
 });

@@ -13,8 +13,8 @@ import {
   tempArchive,
 } from './harness.ts';
 
-// Plan §3.3 step 6: a response that may be cut short by a cap fails the job with `truncated` and commits nothing.
-// There is no halving: P40D of a 10-minute series sits at 58 % of the list cap.
+// Plan §3.3 step 6: a response that may be cut short by a cap commits nothing. Review C3: the chunk at that cursor is
+// halved and asked again, down to one day; below that the job fails `truncated`.
 
 const nl1 = PROVIDERS['NL-1'];
 if (nl1 === undefined) throw new Error('no NL-1 provider');
@@ -53,13 +53,14 @@ describe('inspect', () => {
   });
 });
 
-describe('a truncated chunk', () => {
+describe('a truncated chunk (review C3)', () => {
+  // Jan–Jul 2026 (six chunks, the plan's budget of 9): room for the halvings of one chunk.
   const run = async (answer: Parameters<typeof fakeClient>[1]) => {
     const clock = new Clock();
     const store = new MemoryJobStore();
-    const id = await newJob(store);
+    const id = await newJob(store, { from: '2026-01-01' });
     const t = tempArchive();
-    const { client } = fakeClient(clock, answer);
+    const { client, calls } = fakeClient(clock, answer);
     await runBackfill({
       config: narrowed([LOBITH_H]),
       store,
@@ -68,27 +69,46 @@ describe('a truncated chunk', () => {
       now: clock.now,
       sleep: clock.sleep,
     });
-    return { job: await store.get(id), t };
+    const periods = calls
+      .filter((c) => !c.check)
+      .map((c) => {
+        const p = JSON.parse(c.body ?? '{}').Periode;
+        return (Date.parse(p.Einddatumtijd) - Date.parse(p.Begindatumtijd)) / 86_400_000;
+      });
+    return { job: await store.get(id), t, periods };
   };
 
-  it('fails the job with truncated and commits nothing: no object, no line, the cursor stays', async () => {
-    const { job, t } = await run((c) => (c.check ? normal(c) : { status: 200, body: withValues(9500) }));
-    expect(job).toMatchObject({ status: 'failed', last_error: 'truncated', chunks_done: 0 });
-    expect(job?.cursor_ts.toISOString()).toBe('2026-05-01T00:00:00.000Z');
+  it('halves the chunk at the cursor down to a day, then fails truncated: nothing committed, every request counted', async () => {
+    const { job, t, periods } = await run((c) => (c.check ? normal(c) : { status: 200, body: withValues(9500) }));
+    expect(periods).toEqual([40, 20, 10, 5, 2.5, 1.25, 1]);
+    expect(job).toMatchObject({ status: 'failed', last_error: 'truncated', chunks_done: 0, requests: 8 });
+    expect(job?.cursor_ts.toISOString()).toBe('2026-01-01T00:00:00.000Z');
     expect(t.lines()).toHaveLength(0);
   });
 
-  it('the client cap (too_large, too_large_decoded) is the same failure', async () => {
+  it('the client cap (too_large, too_large_decoded) is the same', async () => {
     for (const error of ['too_large', 'too_large_decoded'] as const) {
-      const { job, t } = await run((c) => (c.check ? normal(c) : { error }));
+      const { job, t, periods } = await run((c) => (c.check ? normal(c) : { error }));
+      expect(periods).toHaveLength(7);
       expect(job).toMatchObject({ status: 'failed', last_error: 'truncated', chunks_done: 0 });
       expect(t.lines()).toHaveLength(0);
     }
   });
 
+  it('a half that fits commits, and the rest of the job keeps the half (review N2)', async () => {
+    const { job, t, periods } = await run((c, n) =>
+      c.check ? normal(c) : n === 2 ? { status: 200, body: withValues(9500) } : normal(c),
+    );
+    // 40 truncated, then 20 at that cursor and at every cursor after it. The halves cost requests: the plan's budget
+    // of 9 (six chunks of 40 days) ends the job `paused` after seven of them, to be re-planned from its cursor.
+    expect(periods).toEqual([40, ...Array(7).fill(20)]);
+    expect(job).toMatchObject({ status: 'paused', last_error: 'budget', chunks_done: 7, requests: 9 });
+    expect(t.lines()[0]?.backfill).toMatchObject({ from: '2026-01-01T00:00:00.000Z', to: '2026-01-21T00:00:00.000Z' });
+  });
+
   it('a chunk below the line commits as usual', async () => {
     const { job, t } = await run((c) => (c.check ? normal(c) : { status: 200, body: withValues(8999) }));
-    expect(job).toMatchObject({ status: 'done', chunks_done: 3 });
-    expect(t.lines()).toHaveLength(3);
+    expect(job).toMatchObject({ status: 'done', chunks_done: 6 });
+    expect(t.lines()).toHaveLength(6);
   });
 });

@@ -88,10 +88,18 @@ const StationsFile = z.looseObject({ stations: z.array(StationRow) });
 
 const QUANTITY = { WATHTE: 'H', Q: 'Q' } as const;
 
+/** sources.yaml, read for the audience gate only (the registry test validates it fully). */
+const SourcesFile = z.looseObject({
+  sources: z.array(
+    z.looseObject({ id: z.string(), audience: z.enum(['public', 'owner', 'off']), history_export: z.boolean() }),
+  ),
+});
+
 /**
  * The series a spec selects: its source's station rows with `first_release`, the asked quantity, `role: primary`
  * (never the TAW twin) and an audience other than `off`. A row whose key is not `<code>/<Grootheid>/<Hoedanigheid>/
- * <method>` is a registry fault.
+ * <method>`, or a selected row that is not `public` like its source (review S8: the ledger and `detail.backfill`
+ * count per source, so an owner-narrowed series would reach public health), is a registry fault.
  */
 export function resolveSeries(spec: BackfillSpec, dir: URL = REGISTRY_DIR): Series[] {
   const file = StationsFile.parse(
@@ -111,6 +119,8 @@ export function resolveSeries(spec: BackfillSpec, dir: URL = REGISTRY_DIR): Seri
     )
       throw new Error(`registry/stations: ${r.provider_key} is not a series key of ${r.provider_code}`);
     if (hoedanigheid === 'TAW') continue;
+    if (r.audience !== 'public')
+      throw new Error(`registry/stations: ${r.provider_key} is not public like its source; a backfill selects none`);
     out.push({
       series_key: r.provider_key,
       code,
@@ -125,13 +135,17 @@ export function resolveSeries(spec: BackfillSpec, dir: URL = REGISTRY_DIR): Seri
 
 /**
  * Reads and cross-checks registry/backfill.yaml. `captureHosts` is capture.yaml's `hosts` (Registry.hosts). Throws
- * on any problem: a host or URL outside its source's allowlist, a spec host without limits, an unknown source.
+ * on any problem: a host or URL outside its source's allowlist, a spec host without limits, an unknown source, a
+ * source that is not `public` or whose `history_export` channel is off (review S8; the owner channel has no backfill).
  */
 export function loadBackfill(
   captureHosts: ReadonlyMap<string, readonly string[]>,
   dir: URL = REGISTRY_DIR,
 ): LoadedBackfill {
   const file = BackfillFile.parse(parseYaml(readFileSync(new URL('backfill.yaml', dir), 'utf8')));
+  const sources = new Map(
+    SourcesFile.parse(parseYaml(readFileSync(new URL('sources.yaml', dir), 'utf8'))).sources.map((s) => [s.id, s]),
+  );
   const problems: string[] = [];
   const ids = new Set<string>();
   const specs: LoadedBackfillSpec[] = [];
@@ -150,7 +164,10 @@ export function loadBackfill(
     const limits = file.hosts[host];
     if (limits === undefined) problems.push(`${at}: no limits for host ${host}`);
     if (Number.isNaN(Date.parse(`${spec.floor}T00:00:00Z`))) problems.push(`${at}: bad floor`);
-    if (limits === undefined) continue;
+    const src = sources.get(spec.source);
+    if (src?.audience !== 'public') problems.push(`${at}: ${spec.source} is not a public source`);
+    if (src?.history_export !== true) problems.push(`${at}: ${spec.source} has history_export off`);
+    if (limits === undefined || src?.audience !== 'public') continue;
     specs.push({ ...spec, host, limits, chunk_ms: durationMs(spec.chunk), series: resolveSeries(spec, dir) });
   }
   for (const host of Object.keys(file.hosts)) {

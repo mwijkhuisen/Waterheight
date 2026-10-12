@@ -80,9 +80,9 @@ describe('plan --dry-run', () => {
         'db_bytes',
         'archive_bytes',
       ]);
-      // 1990-01-01 .. 2026-08-01 in 40-day chunks, plus one probe per calendar year (1990 … 2026).
-      expect(row.chunks).toBe(335);
-      expect(row.requests).toBe(335 + 37);
+      // 1990-01-01 .. 2026-10-02 (DATA_EPOCH) in 40-day chunks, plus one probe per calendar year (1990 … 2026).
+      expect(row.chunks).toBe(336);
+      expect(row.requests).toBe(336 + 37);
       expect(row.bytes).toBe(row.values * BYTES_PER_VALUE);
       expect(row.db_bytes).toBe(row.values * DB_BYTES_PER_ROW);
       expect(row.archive_bytes).toBe(Math.ceil(row.bytes / ZSTD_RATIO));
@@ -90,7 +90,7 @@ describe('plan --dry-run', () => {
     expect(totals).toMatchObject({
       spec: SPEC,
       from: '1990-01-01T00:00:00.000Z',
-      to: '2026-08-01T00:00:00.000Z',
+      to: '2026-10-02T00:00:00.000Z',
       series: rows.length,
     });
     for (const k of ['chunks', 'requests', 'values', 'bytes', 'db_bytes', 'archive_bytes'])
@@ -113,9 +113,10 @@ describe('plan --dry-run', () => {
     });
   });
 
-  it('refuses a range before the floor, an inverted range, a series the spec does not select, an unknown spec', async () => {
+  it('refuses a range before the floor or past the data epoch, an inverted range, a series the spec does not select, an unknown spec', async () => {
     for (const argv of [
       ['--spec', SPEC, '--from', '1989-12-31'],
+      ['--spec', SPEC, '--to', '2026-10-03'],
       ['--spec', SPEC, '--from', '2020-01-01', '--to', '2019-01-01'],
       ['--spec', SPEC, '--series', 'eijsden.grens/WATHTE/TAW/other:F007'],
       ['--spec', 'nope'],

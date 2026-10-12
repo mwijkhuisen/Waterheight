@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inWindow, Pacer, windowEnd } from '../../src/backfill/pacer.ts';
-import { GUARD_SLEEP_MS, runBackfill } from '../../src/backfill/run.ts';
+import { GUARD_SLEEP_MS, runBackfill, UNLOADED_SLEEP_MS } from '../../src/backfill/run.ts';
 import {
   Clock,
   fakeClient,
@@ -149,6 +149,47 @@ describe('runBackfill', () => {
     expect(out.guard_waits).toBe(2);
     expect(calls[0]?.at).toBeGreaterThanOrEqual(NIGHT + 2 * GUARD_SLEEP_MS);
     expect((await store.get(id))?.status).toBe('done');
+  });
+
+  it('waits only UNLOADED_SLEEP_MS when the loader has chunks to catch up on', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    store.verdicts = ['unloaded', 'unloaded', 'backlog'];
+    await newJob(store, { from: '2026-07-20', to: '2026-08-01' });
+    const { client } = fakeClient(clock, normal);
+    const out = await run(clock, store, client, tempArchive().archive);
+    expect(clock.slept.slice(0, 3)).toEqual([UNLOADED_SLEEP_MS, UNLOADED_SLEEP_MS, GUARD_SLEEP_MS]);
+    expect(out.guard_waits).toBe(3);
+  });
+
+  it('is not throttled by a loader that ticks every 10 s: about one chunk a second, no long sleep (review N1)', async () => {
+    const clock = new Clock();
+    // The loader reads every 10 s and then has loaded every chunk archived so far; the guard sees the ledger as of that
+    // tick, with the SQL's threshold (more than 30 chunks with data not in the ledger).
+    class TickingStore extends MemoryJobStore {
+      private lastTick = clock.t;
+      private loaded = 0;
+      override async guard() {
+        if (clock.t - this.lastTick >= 10_000) {
+          this.lastTick = clock.t;
+          this.loaded = [...this.jobs.values()].reduce((a, j) => a + j.chunks_with_data, 0);
+        }
+        const behind = [...this.jobs.values()].reduce((a, j) => a + j.chunks_with_data, 0) - this.loaded;
+        return behind > 30 ? 'unloaded' : 'ok';
+      }
+    }
+    const store = new TickingStore();
+    const id = await newJob(store, { from: '2010-01-01', to: '2026-10-02' }); // 153 chunks
+    const { client, calls } = fakeClient(clock, normal);
+    const t0 = clock.t;
+    const out = await run(clock, store, client, tempArchive().archive);
+    const job = await store.get(id);
+    expect(job).toMatchObject({ status: 'done', chunks_done: 153 });
+    expect(out.guard_waits).toBe(0);
+    expect(clock.slept.every((ms) => ms <= 1000)).toBe(true);
+    // 154 requests (the probe and the chunks) at 1 req/s: under 3 minutes, not the hours of 5-minute sleeps.
+    expect(calls).toHaveLength(154);
+    expect(clock.t - t0).toBeLessThan(180_000);
   });
 
   it('keeps the guard waiting to the end of the window, then stops without a request', async () => {

@@ -8,7 +8,7 @@ import type { DB } from '../db/generated.ts';
 
 export const STATUSES = ['planned', 'running', 'paused', 'done', 'failed', 'aborted'] as const;
 export type JobStatus = (typeof STATUSES)[number];
-export type GuardVerdict = 'ok' | 'loader_lag' | 'backlog' | 'stale';
+export type GuardVerdict = 'ok' | 'loader_lag' | 'backlog' | 'unloaded' | 'stale';
 /** `last_error`: a fixed code, never provider text (the column's CHECK). */
 export const ERROR_CODE = /^[a-z_]{1,40}$/;
 
@@ -28,6 +28,8 @@ export type Job = Omit<NewJob, 'request_budget'> & {
   /** End of the last committed chunk (range_from at creation). */
   cursor_ts: Date;
   chunks_done: number;
+  /** Chunks that wrote a manifest line; the guard compares them with the loader's ledger rows. */
+  chunks_with_data: number;
   status: JobStatus;
   attempts: number;
   request_budget: number;
@@ -50,19 +52,32 @@ export interface JobStore {
   runnable(): Promise<Job[]>;
   /** `running`, and `started_at` once. */
   start(id: number): Promise<void>;
-  /** One request is about to go out (counts against `request_budget`). */
+  /** One request went out (counts against `request_budget`). */
   addRequest(id: number): Promise<void>;
   /** A transient failure: `attempts` + 1, returned. */
   failAttempt(id: number): Promise<number>;
-  /** Moves the cursor (and sets `data_from` after the probe); `chunk` counts a committed chunk. Resets `attempts`. */
-  advance(id: number, a: { cursor_ts: Date; data_from?: Date; chunk: boolean }): Promise<void>;
+  /**
+   * Moves the cursor (and sets `data_from` after the probe); `chunk` counts a committed chunk, `data` one that wrote a
+   * manifest line (`chunks_with_data`), in the same update. Resets `attempts`.
+   */
+  advance(id: number, a: { cursor_ts: Date; data_from?: Date; chunk: boolean; data?: boolean }): Promise<void>;
   /**
    * Sets the status (and `last_error`) if the job is in one of `only`; false when it is not (changed meanwhile).
    * `done`, `failed` and `aborted` set `finished_at`; `planned` clears `attempts` and `last_error`.
    */
   setStatus(id: number, to: JobStatus, error: string | null, only: readonly JobStatus[]): Promise<boolean>;
   guard(source: string): Promise<GuardVerdict>;
+  /**
+   * The lease of a host (one runner per host, review C1/S1): taken when free, expired or already `holder`'s, and set
+   * to now + LEASE_MS. False when another runner holds it. `renew` is the same call before every request.
+   */
+  lease(host: string, holder: string): Promise<boolean>;
+  /** Gives the lease back (it lapses at once); a no-op when `holder` no longer holds it. */
+  release(host: string, holder: string): Promise<void>;
 }
+
+/** How long a lease outlives its last renewal: a killed runner's host is free again after this. */
+export const LEASE_MS = 120_000;
 
 type Row = {
   id: number;
@@ -75,6 +90,7 @@ type Row = {
   data_from: Date | null;
   cursor_ts: Date;
   chunks_done: number;
+  chunks_with_data: number;
   status: JobStatus;
   attempts: number;
   request_budget: number;
@@ -90,8 +106,8 @@ type Row = {
 
 // bigint counters come back as numbers through ::float8 (they stay far below 2^53).
 const COLUMNS = sql`id::float8 AS id, spec_id, source_id, series_key, range_from, range_to,
-  (extract(epoch from chunk) * 1000)::float8 AS chunk_ms, data_from, cursor_ts, chunks_done, status, attempts,
-  request_budget, requests, provider_values::float8 AS provider_values, inserted::float8 AS inserted,
+  (extract(epoch from chunk) * 1000)::float8 AS chunk_ms, data_from, cursor_ts, chunks_done, chunks_with_data,
+  status, attempts, request_budget, requests, provider_values::float8 AS provider_values, inserted::float8 AS inserted,
   revised::float8 AS revised, skipped::float8 AS skipped, dropped::float8 AS dropped, unreconciled, last_error`;
 
 export class SqlJobStore implements JobStore {
@@ -150,10 +166,12 @@ export class SqlJobStore implements JobStore {
     return r.rows[0]?.attempts ?? 0;
   }
 
-  async advance(id: number, a: { cursor_ts: Date; data_from?: Date; chunk: boolean }): Promise<void> {
+  async advance(id: number, a: { cursor_ts: Date; data_from?: Date; chunk: boolean; data?: boolean }): Promise<void> {
     const more = a.chunk ? 1 : 0;
+    const data = a.chunk && a.data === true ? 1 : 0;
     const dataFrom = a.data_from ?? null;
-    await sql`UPDATE backfill_job SET cursor_ts = ${a.cursor_ts}, chunks_done = chunks_done + ${more}, attempts = 0,
+    await sql`UPDATE backfill_job SET cursor_ts = ${a.cursor_ts}, chunks_done = chunks_done + ${more},
+        chunks_with_data = chunks_with_data + ${data}, attempts = 0,
         data_from = coalesce(${dataFrom}::timestamptz, data_from), updated_at = now()
       WHERE id = ${id}`.execute(this.db);
   }
@@ -172,6 +190,20 @@ export class SqlJobStore implements JobStore {
     const r = await sql<{ v: GuardVerdict }>`SELECT backfill_guard(${source}) AS v`.execute(this.db);
     const v = r.rows[0]?.v;
     // A verdict this code does not know is a stop, never an ok.
-    return v === 'ok' || v === 'loader_lag' || v === 'backlog' || v === 'stale' ? v : 'stale';
+    return v === 'ok' || v === 'loader_lag' || v === 'backlog' || v === 'unloaded' || v === 'stale' ? v : 'stale';
+  }
+
+  async lease(host: string, holder: string): Promise<boolean> {
+    const r = await sql`
+      INSERT INTO backfill_lease AS l (host, holder, until)
+      VALUES (${host}, ${holder}, now() + make_interval(secs => ${LEASE_MS / 1000}::float8))
+      ON CONFLICT (host) DO UPDATE SET holder = EXCLUDED.holder, until = EXCLUDED.until
+        WHERE l.until < now() OR l.holder = EXCLUDED.holder
+      RETURNING host`.execute(this.db);
+    return r.rows.length > 0;
+  }
+
+  async release(host: string, holder: string): Promise<void> {
+    await sql`UPDATE backfill_lease SET until = now() WHERE host = ${host} AND holder = ${holder}`.execute(this.db);
   }
 }

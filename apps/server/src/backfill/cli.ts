@@ -4,7 +4,7 @@ import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from '../captur
 import { loadRegistry, type Registry } from '../capture/specs.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { Client } from '../http/client.ts';
-import { DATA_FLOOR } from '../load/dirty.ts';
+import { DATA_EPOCH } from '../load/dirty.ts';
 import { type Job, type JobStatus, type JobStore, SqlJobStore } from './job.ts';
 import { planChunks, probeYears, requestBudget } from './plan.ts';
 import { project, totals } from './project.ts';
@@ -99,6 +99,7 @@ const jobLine = (j: Job) => ({
   data_from: j.data_from?.toISOString() ?? null,
   cursor: j.cursor_ts.toISOString(),
   chunks_done: j.chunks_done,
+  chunks_with_data: j.chunks_with_data,
   requests: j.requests,
   request_budget: j.request_budget,
   attempts: j.attempts,
@@ -111,15 +112,19 @@ const jobLine = (j: Job) => ({
   error: j.last_error,
 });
 
-/** The plan's range: --from (default the spec floor) up to --to (default DATA_FLOOR), or a usage error. */
+/**
+ * The plan's range: --from (default the spec floor) up to --to (default and at most DATA_EPOCH, the first production
+ * capture: the history meets the live rows there and never reaches past them), or a usage error.
+ */
 export function planRange(
   spec: LoadedBackfillSpec,
   from: string | null,
   to: string | null,
 ): { from: Date; to: Date } | string {
   const a = new Date(`${from ?? spec.floor}T00:00:00Z`);
-  const b = to === null ? new Date(DATA_FLOOR) : new Date(`${to}T00:00:00Z`);
+  const b = to === null ? new Date(DATA_EPOCH) : new Date(`${to}T00:00:00Z`);
   if (a < new Date(`${spec.floor}T00:00:00Z`)) return 'backfill plan: --from is before the spec floor';
+  if (b > new Date(DATA_EPOCH)) return 'backfill plan: --to is after the data epoch';
   if (!(a < b)) return 'backfill plan: --from must be before --to';
   return { from: a, to: b };
 }
@@ -279,6 +284,15 @@ export async function backfillMain(
           sourceHeaders.set(source, set);
         }
         const client = new Client({ hosts, userAgent: captureUserAgent(cap), sourceHeaders });
+        // SIGTERM (docker stop) and SIGINT (Ctrl-C): the loop ends between two chunks and the lease is released.
+        let interrupted = false;
+        let wake: (() => void) | undefined;
+        const onSignal = () => {
+          interrupted = true;
+          wake?.();
+        };
+        process.once('SIGTERM', onSignal);
+        process.once('SIGINT', onSignal);
         const result: RunResult = await runBackfill(
           {
             config: config as LoadedBackfill,
@@ -286,10 +300,21 @@ export async function backfillMain(
             archive: new Archive(cap.rawDir),
             client,
             now: () => new Date(),
-            sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
+            sleep: (ms) =>
+              new Promise<void>((r) => {
+                if (interrupted) return r();
+                const t = setTimeout(r, ms);
+                wake = () => {
+                  clearTimeout(t);
+                  r();
+                };
+              }),
           },
-          args.until === null ? {} : { until: args.until },
-        );
+          { ...(args.until === null ? {} : { until: args.until }), stop: () => interrupted },
+        ).finally(() => {
+          process.off('SIGTERM', onSignal);
+          process.off('SIGINT', onSignal);
+        });
         for (const j of result.jobs) print(j);
         print({
           totals: {
@@ -301,7 +326,9 @@ export async function backfillMain(
             guard_waits: result.guard_waits,
           },
         });
-        return result.jobs.some((j) => j.status === 'failed') || result.stopped === 'breaker_open' ? 1 : 0;
+        const stoppedBad =
+          result.stopped === 'breaker_open' || result.stopped === 'busy' || result.stopped === 'throttled';
+        return result.jobs.some((j) => j.status === 'failed') || stoppedBad ? 1 : 0;
       }
     }
   } catch (err) {

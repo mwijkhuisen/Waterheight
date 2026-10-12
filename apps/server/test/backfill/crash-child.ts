@@ -1,5 +1,5 @@
-// Child process of resume.int.test.ts: a backfill runner that dies with exit 137, as kill -9 would (no catch, no
-// cleanup), at one point of its n-th chunk. Before it dies it prints the requests it made (fake-clock times).
+// Child process of resume.int.test.ts: a backfill runner that dies by a real SIGKILL (kill -9: no catch, no
+// cleanup, its lease left to lapse), at one point of its n-th chunk. Before it dies it prints the requests it made (fake-clock times).
 // Arguments: the rws_backfill database URL, the raw dir, the point (afterPut, afterAppend, afterCursor, or fetch:
 // inside the n-th chunk request), n, and the fake clock's start (epoch ms).
 import { writeSync } from 'node:fs';
@@ -14,7 +14,8 @@ const clock = new Clock(Number(start));
 let seen = 0;
 const die = (): never => {
   writeSync(1, `${JSON.stringify(calls)}\n`);
-  process.exit(137);
+  process.kill(process.pid, 'SIGKILL');
+  throw new Error('not killed');
 };
 const at = (p: string) => async () => {
   if (p === point && ++seen === Number(nth)) die();
