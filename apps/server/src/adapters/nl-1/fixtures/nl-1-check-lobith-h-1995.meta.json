@@ -1,0 +1,14 @@
+{
+  "spec": "nl-1-backfill-obs",
+  "source": "NL-1",
+  "synthetic": false,
+  "recorded_at": "2026-10-12T11:46:05Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/CheckWaarnemingenAanwezig",
+  "bytes": 48,
+  "trimmed": false,
+  "request": {
+    "check": "1995"
+  }
+}

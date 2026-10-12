@@ -1,0 +1,10 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {
+  "unregistered_method": 251
+ },
+ "unknown": 0,
+ "provider_values": 251,
+ "unknown_values": 0
+}
