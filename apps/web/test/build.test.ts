@@ -54,11 +54,11 @@ describe('web build', () => {
   }, 60_000);
 
   it.each([
-    ['index.html', 'nl', 'Rivierkijker – Waterstanden en afvoer naar Nederland', 'geen officiële waarschuwingsdienst'],
+    ['index.html', 'nl', 'Water Radar – Waterstanden en afvoer naar Nederland', 'geen officiële waarschuwingsdienst'],
     [
       'en/index.html',
       'en',
-      'Rivierkijker – River levels &amp; discharge to the Netherlands',
+      'Water Radar – River levels &amp; discharge to the Netherlands',
       'not an official warning service',
     ],
   ])('%s is the static %s page shell with its title and <main>', (file, lang, title, notice) => {
@@ -66,7 +66,7 @@ describe('web build', () => {
     expect(html).toMatch(new RegExp(`<html lang="${lang}">`));
     expect(html).toContain(`<title>${title}</title>`);
     // The app mounts into #app and replaces the shell; until then (and without JavaScript) the page is this <main>.
-    expect(html).toMatch(/<div id="app">\s*<main>\s*<h1>Rivierkijker<\/h1>\s*<p>/);
+    expect(html).toMatch(/<div id="app">\s*<main>\s*<h1>Water Radar<\/h1>\s*<p>/);
     expect(html).toContain(notice);
     expect(html).not.toMatch(/%m:/);
   });
@@ -74,10 +74,10 @@ describe('web build', () => {
   // P10c: the brand's head on every shell: the meta description of its language, the SVG favicon from our origin
   // (there is no /favicon.ico: it stays a bare 404) and the theme colour Rivierblauw.
   it.each([
-    ['index.html', 'Rivierkijker toont bijna-realtime waterstanden en afvoer'],
-    ['en/index.html', 'Rivierkijker shows near-real-time river levels and discharge'],
-    ['404.html', 'Rivierkijker toont'],
-    ['en/404.html', 'Rivierkijker shows'],
+    ['index.html', 'Water Radar toont bijna-realtime waterstanden en afvoer'],
+    ['en/index.html', 'Water Radar shows near-real-time river levels and discharge'],
+    ['404.html', 'Water Radar toont'],
+    ['en/404.html', 'Water Radar shows'],
   ])('%s has the meta description, the favicon and the theme colour', (file, description) => {
     const html = page(file);
     expect(html).toMatch(new RegExp(`<meta name="description" content="${description}[^"]{40,}" />`));
@@ -96,11 +96,23 @@ describe('web build', () => {
     expect(notices).toContain('Source Sans 3 (font, @fontsource/source-sans-3)@5.3.0 — OFL-1.1');
   });
 
+  // P10f (#128): the public name is Water Radar since 2026-10-10. The old name is in no production file, in any case and
+  // any file type (a page, a chunk, the favicon's title, a text chunk of og.png), and the favicon names the new one.
+  it('names Water Radar and never the old name Rivierkijker in any production file', () => {
+    const files = readdirSync(out, { recursive: true, withFileTypes: true }).filter((e) => e.isFile());
+    expect(files.length).toBeGreaterThan(0);
+    for (const e of files) {
+      const path = join(e.parentPath, e.name);
+      expect(readFileSync(path, 'latin1').toLowerCase().includes('rivierkijker'), path).toBe(false);
+    }
+    expect(page('favicon.svg')).toContain('<title>Water Radar</title>');
+  });
+
   // P10b: Caddy serves these two with status 404 for any path that is no page. They hold the 404 page's own heading and
   // a link to the map, so the page says what it is before any script runs.
   it.each([
-    ['404.html', 'nl', 'Pagina niet gevonden', 'Rivierkijker', '/'],
-    ['en/404.html', 'en', 'Page not found', 'Rivierkijker', '/en/'],
+    ['404.html', 'nl', 'Pagina niet gevonden', 'Water Radar', '/'],
+    ['en/404.html', 'en', 'Page not found', 'Water Radar', '/en/'],
   ])(
     '%s is the static %s 404 shell: its title, its heading and a link to the map',
     (file, lang, heading, site, home) => {
