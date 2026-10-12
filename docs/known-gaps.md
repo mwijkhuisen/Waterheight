@@ -4,6 +4,14 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## #128 P10f, the Water Radar brand (PR pending)
+
+What P10f leaves (PHASES §46). It closes KG-326 and rewrites KG-245.
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-338 | web, ci | **The four visual baselines show the old top bar.** `dst-0000z`, `dst-0100z`, `flood-q` and `lowwater-delta` of `apps/web/e2e/visual.spec.ts` include the name and the mark, so the `visual` project fails until they are regenerated: CI writes the new PNGs on the first run (artifact `e2e-test-results`) | The owner looks at the four PNGs, then they are committed to `apps/web/e2e/visual/__screenshots__/` (the CLAUDE.md rule for baselines) | open |
+
 ## #132 Caddy memory and the per-source connection cap
 
 What the fix of #132 leaves (ADR-0019 §5). It closes KG-313.
@@ -27,7 +35,7 @@ What P12b leaves (`docs/plan/PHASES.md` §44). KG-054 closes; every row below is
 | KG-323 | backup | **KG-054 is closed; KG-055 stays open with its context.** The Caddy ACME state is still not in the dump; decision text for the owner to accept: Caddy re-issues the certificate after DNS points at the new VPS; for that reason a real rebuild cuts DNS over **before** `rws-deploy` (its smoke test needs a valid certificate; `vps-rebuild.md` §5). Also not in the backup and rebuilt or re-issued: tiles, rivers, `/etc/rws`, the WireGuard server key, the Caddy CA and `caddy_data` (`docs/runbooks/vps-rebuild.md`). | Owner accepts KG-055 | open |
 | KG-324 | forecast | **Capped `WV` detection: none.** How PEGELONLINE `WV` behaves at flood is C6's question to BfG; the gate does not detect a capped value. | BfG's answer to C6 | open |
 | KG-325 | web, ci | **`de2-beleg.spec.ts` runs on demand only (`E2E_DE2_BELEG=1`, `--project=cvd`).** A CI overlay with a synthetic public DE-2 is not wired: the e2e API has no `REGISTRY_DIR` override. | The owner's E1 run after the flip, or an env override for the e2e API | open |
-| KG-326 | web, brand | **`apps/web/public/og.png` (1200 × 630) carries the name "Rivierkijker" and must be redrawn by hand at the rename (#128).** | #128 (P10f) | open |
+| KG-326 | web, brand | **`apps/web/public/og.png` (1200 × 630) carries the name "Rivierkijker" and must be redrawn by hand at the rename (#128).** (Closed by #128, P10f: the card is redrawn with the new mark and "Water Radar", BRAND.md §4, and `build.test.ts` fails if any built file contains the old name.) | #128 (P10f) | closed in #128 |
 | KG-327 | web, owner | **The owner site serves `index.html` raw, so its `og:image` shows the literal template text (`og:url` was dropped in review round 1: one shell cannot name each page)** (`[[env ...]]`). Inert: WireGuard only, behind `basic_auth`, noindex. | Accept, or render the templates on the owner site | open |
 | KG-328 | ops, sources | **BE-1/BE-2 credential storage and rotation are undefined.** `docs/runbooks/token-rotation.md` carries a TODO for them. The DST nights 2027-03-28 and 2027-10-31 are manual checks (`docs/runbooks/dst-check.md`). | Owner decides where the credentials live when BE-1/BE-2 arrive | open |
 | KG-329 | ci, flood | **The flood drill no longer exercises a DE-2 run.** Its owner scene is DE-3 (`de-3-files-kaub.synthetic`); DE-2 after the flip is covered by `de2-flip.int` (the real-registry check). | Accept | open |
@@ -189,7 +197,7 @@ The issue called this gap KG-210, but KG-210 was already the publisher's frozen 
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-245 | brand, owner | **The name is not checked or registered.** rivierkijker.nl, .com and .eu returned no DNS record, which does not prove they are free; the BOIP register is not checked for the name | The owner checks and registers the domains (SIDN, registrar) and searches BOIP | open |
+| KG-245 | brand, owner | **The name's domains are not registered, and neither the name nor the mark is a registered trademark.** The register checks of 2026-10-10 (#128: BOIP and EUIPO through TMview, and the KvK trade register) found no mark that is or contains "waterradar" and no registration or trade name of that name, current or former; that is not a legal clearance. (Rewritten by #128 for Water Radar; it was about the old name.) | The owner registers the name's domains and, if wanted, the name or the mark at BOIP or EUIPO | open |
 | KG-246 | brand, owner | **The repository's About text is empty.** The document's short text is "Kijk mee met de rivieren richting Nederland." | The owner sets it, or says in the PR that an agent may (`gh repo edit --description`) | open |
 | KG-247 | web, brand | **No app-icon PNGs, web manifest or outlined lockups.** The site has the SVG favicon and the live-text lockup only | Render the PNGs once from the 96-unit SVG when home-screen install is wanted; the outlined lockups are the owner's export | open |
 | KG-248 | data, owner | **The LU station list on production was empty when checked (2026-10-06).** 37 public LU-1 stations are registered (`registry/stations/lu-1.yaml`); the list fills after the LU-1/LU-6 replays of KG-133, not with a code change | The owner re-checks the LU stations after the replays; if still empty, a bug issue | open |

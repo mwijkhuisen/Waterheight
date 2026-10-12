@@ -445,9 +445,9 @@ Deviations from A§3, decided in P0b: pnpm **12.5.1** instead of 12.6.0 (12.6.0 
 
 - Runbooks: `docs/runbooks/schema-drift.md`, `replay.md` (§11 the P8a forecast runs, §12 the P8b ones), `partition-maintenance.md`, `outage-drill.md`, `twin-failure.md`, `label-offset.md`, `owner-drift.md`, `reference-change.md`, `publisher.md` (P9a), `api.md` (P9b: the limits, 429 and 503, saturation, the client-address check, the owner API).
 
-## Brand (P10c, D23)
+## Brand (P10c, D23; P10f, #128)
 
-The public name is **Rivierkijker** (NL and EN; the repository and internal names stay Waterheight/rivierstanden). `docs/design/BRAND.md` is the brand pack: texts, tokens, logo, fonts and the signal set. Brand colours are tokens in `apps/web/src/styles/base.css` only (the logo SVGs aside): never a brand hex in a module, and Waterblauw (`--water`) only for large text and graphics, never small text. Signal colours (notices, errors, classes, warnings) are never brand colours (`apps/web/test/brand.test.ts`). The fonts are vendored woff2 in `apps/web/src/styles/fonts/`, pinned by `SHA256SUMS`, their OFL texts in the notices: never Google Fonts or a CDN (invariant 7).
+The public name is **Water Radar** (NL and EN, since 2026-10-10; before it Rivierkijker; the repository and internal names stay Waterheight/rivierstanden). In running text it is two words with capitals; on the site "Water" (`name_lead`) and "Radar" (`name_accent`) are two message keys in two colours with a space between them, and `apps/web/test/build.test.ts` fails if any built file contains the old name. The mark is a radar scope over water (`features/layout/Logo.tsx`, `public/favicon.svg`); `public/og.png` is a hand-made image that a change of the name or the mark redraws. `docs/design/BRAND.md` is the brand pack: texts, tokens, logo, fonts and the signal set. Brand colours are tokens in `apps/web/src/styles/base.css` only (the logo SVGs aside): never a brand hex in a module, and Waterblauw (`--water`) only for large text and graphics, never small text. Signal colours (notices, errors, classes, warnings) are never brand colours (`apps/web/test/brand.test.ts`). The fonts are vendored woff2 in `apps/web/src/styles/fonts/`, pinned by `SHA256SUMS`, their OFL texts in the notices: never Google Fonts or a CDN (invariant 7).
 
 ## Criterion tags, definition of done and workflow (PHASES §2)
 

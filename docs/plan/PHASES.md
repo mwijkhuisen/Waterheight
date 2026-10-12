@@ -1170,6 +1170,8 @@ P5c uses the P5 build model and the default P5 reviewers (as P5a): `opus` xhigh,
 
 - **P10e** (built; issue #101, the evidence in §33): the full-screen map under a sticky top bar (logo, name, the nine page links, beta, language, station search), the station panel as a right drawer, the timebar collapsed by default, the credits in a "Bronnen" disclosure instead of the footer, and a keyboard station search (an ARIA 1.2 combobox) that replaces the station `<select>`.
 
+- **P10f** (built; issue #128, the evidence in §46): the public name becomes Water Radar (D23 amended): the texts, the name in the top bar with a space between its two colours, a new mark and favicon, the Open Graph card, the brand pack and the docs.
+
 **Scope out:** flow animation, playback and Hovmöller (P11); accounts; notifications.
 
 **Acceptance criteria**
@@ -1525,7 +1527,7 @@ Defaults are recommended. "Needed by" is the phase whose build needs the answer.
 | D20 | Flood egress fallback (gap item 10) | Decide in advance from the P12 egress budget: if the flood-day peak exceeds 50% of the uplink or the month 50% of the quota, arm a CDN pull zone for `/tiles/*` and `/assets/*` only (static, licence-neutral) under the same hostname, disclosed on the privacy page. **No automatic switch to OpenFreeMap** (third-party browser requests, CSP change) | P12 |
 | D21 | **Rivers not covered in the first release** (catalogue gap item 14, §9 Q32) | **Accepted as proposed (owner, 2026-10-06; P10b).** Accept for the first release and list them on the Method page: the Kempen rivers entering NL directly (Mark, Dommel, Aa/Weerijs, Warmbeek, Keersop, Merkske, Voer) until VMM (P13); the RLP tributaries Ahr, Kyll, Prüm and Nahe with LHP classes only until RLP (P13); the NL water-board stretches through German upstream gauges and RWS (backlog, §9 Q10); canal transfers only at the RWS points (`smeermaas.zuidwillemsvaart`, `kanne`). **Austria and Liechtenstein** (Ill, Bregenzerach, Bodensee at Bregenz): out of scope for the first release; the Alpine Rhine and Bodensee come from CH-1 | P6, P10 (Method page), P13 |
 | D22 | **Hybrid audience** (decided by the owner, 2026-09-24; ADR-0017; catalogue §0.8) | **Decided:** keep the public site with the open sources exactly as planned, and add a login-only **owner view** that also shows the sources whose terms allow personal use: BE-3, LU-2, LU-3, LU-4, DE-3, DE-2 until the Belegexemplar, CH-2/CH-4/CH-5 if BAFU objects to public use, and BE-1/BE-2 once their credentials arrive. Only the owner uses it; giving anyone else access (credentials, a WireGuard peer, screenshots) is forbidden, because it would be distribution to third parties. Access: WireGuard only, then `basic_auth`. HIC and VMM are asked for credentials for a personal, non-commercial, private viewer (optionally also about public display); SPW and AGE are asked only for public display | P0 (registry), P1 (capture), P2, P5c, P7–P12, P13, P14 |
-| D23 | **Public name Rivierkijker** (issue #90, the owner's design document of 2026-09-29) | **Decided (owner, 2026-10-06; P10c).** The public site is Rivierkijker in NL and EN, with one translated subtitle; the repository, the packages, the user agent and the internal names keep theirs. The meta description says "forecasts and warnings where available" (not "official forecasts and alert levels" for every river); the map's colours stay and are documented as the signal set; the fonts are vendored woff2, sha256-pinned. `docs/design/BRAND.md`. |
+| D23 | **Public name Water Radar** (was Rivierkijker; issues #90 and #128, the owner's design document of 2026-09-29) | **Amended (owner, 2026-10-10; P10f, #128, §46): the public name is Water Radar**, the same in NL and EN, two words in running text, with a new mark (a radar scope over water) and the same colours; the internal names stay. **Decided first (owner, 2026-10-06; P10c).** The public site is Rivierkijker in NL and EN, with one translated subtitle; the repository, the packages, the user agent and the internal names keep theirs. The meta description says "forecasts and warnings where available" (not "official forecasts and alert levels" for every river); the map's colours stay and are documented as the signal set; the fonts are vendored woff2, sha256-pinned. `docs/design/BRAND.md`. |
 
 ### 6.2 Actions
 
@@ -3068,3 +3070,22 @@ What #125 (KG-250) built: the Linth, the Simme and the Simme's parent, the Kande
 - **Reach ids moved.** The Kander mouth cuts `aare.3` (now 47.18–67.67 km); the new `aare.4` runs from the mouth, and the old `aare.4–14` are now `aare.5–15` (no pin refers to them).
 - **Fixture refresh** from `geo.yml` run 38209008630; the generated files and the goldens follow it.
 - **Gaps:** KG-250 stays `accepted` with #127 as the follow-up; KG-161 gains the Linth; KG-165 gains 3 stations without an entry node (109 → 112).
+
+## 46. Amendment: P10f build, the Water Radar brand (2026-10-12)
+
+What the P10f build (issue #128, PR "P10f: Water Radar brand", `Closes #128`) settled. The owner renamed the public brand on 2026-10-10 (D23 amended): Rivierkijker becomes **Water Radar**, the same in NL and EN, because the roadmap (#61) adds the lakes, the delta, the coast and sea level, and the name should read the same in Dutch and English. Web and docs only: no API, contract, migration, registry or Caddy change. §31 keeps the history of P10c as it was built.
+
+**Owner decisions:** the name and its texts (the issue's table); the colours, the fonts and the internal names unchanged; the mark chosen on 2026-10-12 from three proposals shown as inline SVG at 64, 32 and 16 px and in the dark variant: "Sweep ring" (a round outline, a range ring and a sweep over a water half with a wave as its top edge and a white blip), over a solid scope disc and the eye with a sweep for an iris.
+
+**Where reality differs from the issue:**
+- **The Open Graph card is redrawn too** (`apps/web/public/og.png`, KG-326, closed). P12b added it after the issue was written, and it carried the old name and the eye. The new card keeps the old layout with the dark mark, the name in Bricolage Grotesque and the texts in Source Sans 3 (BRAND.md §4); it is 78 KB (the old one 247 KB), still 1200 × 630.
+- **The mark has no separate 32 px drawing**, as before: the top bar scales the 64 px drawing, which the proposals showed at 32 px.
+
+**Evidence ([CI]):**
+- `apps/web/test/build.test.ts`: the titles, the h1 and the meta description of the four shells and the 404 titles read "Water Radar"; a new case fails if any built file, of any type and in any case, contains "rivierkijker", and checks the favicon's `<title>Water Radar</title>`.
+- `apps/web/e2e/app.spec.ts`: the h1 reads "Water Radar" (with the space) on the map and on the static fallback page.
+- `apps/web/test/brand.test.ts` unchanged and green: no token or value changed (only the comments in `base.css` name "Water" and "Radar").
+- `test/launch-phase.test.ts`: the new `og.png` is a PNG of 1200 × 630 under 500 KB.
+- `pnpm check` (`check-i18n`: the space between the two name parts is a JSX expression, not a word).
+
+**[U] items:** the four visual baselines of `apps/web/e2e/visual.spec.ts` (`dst-0000z`, `dst-0100z`, `flood-q`, `lowwater-delta`) show the top bar, so they change: CI writes them, and the owner looks at the PNGs before they are committed (the CLAUDE.md rule for baselines; KG-338). Registering the name's domains and, if wanted, the mark stays with the owner (KG-245), as does the repository's About text.
