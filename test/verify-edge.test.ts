@@ -9,9 +9,16 @@ import {
   classifyEdgeHtml,
   classifyNotCached,
   classifyTileRange,
+  EDGE_MISSING_ASSET,
   EDGE_MISSING_PATH,
 } from '../scripts/lib/verify-edge.ts';
-import { checkOwnerListener, classifyEdge, type Io, type Probe } from '../scripts/lib/verify-owner-listener.ts';
+import {
+  checkOwnerListener,
+  classifyEdge,
+  type Io,
+  type Probe,
+  parseProbeHead,
+} from '../scripts/lib/verify-owner-listener.ts';
 import { CHECKS, checkHeaders, checkNotFound, checkPages, PAGE_PATHS, type Page } from '../scripts/verify-prod.ts';
 
 // Issue #109: the site behind a Cloudflare Tunnel (`--edge cloudflare`).
@@ -93,15 +100,16 @@ describe('edge tile range', () => {
 
 describe('edge not cached', () => {
   const dynamic = page({ headers: { 'cf-cache-status': 'DYNAMIC' } });
-  it('passes DYNAMIC, BYPASS, MISS, EXPIRED and an absent header', () => {
-    for (const v of ['DYNAMIC', 'BYPASS', 'MISS', 'EXPIRED', undefined])
+  it('passes DYNAMIC, BYPASS and an absent header', () => {
+    for (const v of ['DYNAMIC', 'BYPASS', 'bypass', undefined])
       expect(
         classifyNotCached('/api/v1/health', [page({ headers: { 'cf-cache-status': v } }), dynamic]).ok,
         `${v}`,
       ).toBe(true);
   });
-  it('fails a HIT on either read, in any case', () => {
-    for (const v of ['HIT', 'hit', ' Hit '])
+  // #109 review S3: MISS, EXPIRED, STALE, UPDATING and REVALIDATED mean Cloudflare held the answer as cacheable.
+  it('fails any cacheable status on either read, in any case', () => {
+    for (const v of ['HIT', 'hit', ' Hit ', 'MISS', 'EXPIRED', 'STALE', 'UPDATING', 'REVALIDATED', 'NONE'])
       for (const pages of [
         [page({ headers: { 'cf-cache-status': v } }), dynamic],
         [dynamic, page({ headers: { 'cf-cache-status': v } })],
@@ -148,7 +156,7 @@ describe('checkEdge', () => {
   const clean = (path: string, headers?: Readonly<Record<string, string>>): Page => {
     if (headers?.range !== undefined) return range();
     if (path === '/runtime-config.json') return page({ body: JSON.stringify({ cdn: 'Cloudflare' }) });
-    if (path === EDGE_MISSING_PATH) return page({ status: 404 });
+    if (path === EDGE_MISSING_PATH || path === EDGE_MISSING_ASSET) return page({ status: 404 });
     return page({ headers: { 'cf-cache-status': 'DYNAMIC' }, body: '<html></html>' });
   };
   const run = (get: (path: string, headers?: Readonly<Record<string, string>>) => Page | string) =>
@@ -167,6 +175,7 @@ describe('checkEdge', () => {
       'edge not cached /api/v1/meta',
       'edge not cached /status/capture.json',
       'edge not cached 404',
+      'edge not cached 404 /assets',
       'edge runtime config cdn',
     ]);
     expect(r.filter((x) => x.ok !== true)).toEqual([]);
@@ -180,6 +189,7 @@ describe('checkEdge', () => {
     expect(seen.filter((s) => s === `/tiles/${tile.file}|bytes=0-1023`)).toHaveLength(2);
     expect(seen.filter((s) => s.startsWith('/api/v1/health|'))).toHaveLength(2);
     expect(seen.filter((s) => s.startsWith(`${EDGE_MISSING_PATH}|`))).toHaveLength(2);
+    expect(seen.filter((s) => s.startsWith(`${EDGE_MISSING_ASSET}|`))).toHaveLength(2);
   });
   it('fails the check that sees the drift and only that one', async () => {
     const bad = async (over: (p: string, h?: Readonly<Record<string, string>>) => Page | undefined) =>
@@ -195,6 +205,11 @@ describe('checkEdge', () => {
     expect(
       await bad((p) => (p === '/api/v1/health' ? page({ headers: { 'cf-cache-status': 'HIT' } }) : undefined)),
     ).toEqual(['edge not cached /api/v1/health']);
+    expect(
+      await bad((p) =>
+        p === EDGE_MISSING_ASSET ? page({ status: 404, headers: { 'cf-cache-status': 'MISS' } }) : undefined,
+      ),
+    ).toEqual(['edge not cached 404 /assets']);
     expect(await bad((p) => (p === '/runtime-config.json' ? page({ body: '{"cdn":""}' }) : undefined))).toEqual([
       'edge runtime config cdn',
     ]);
@@ -295,6 +310,42 @@ describe('owner listener through the edge', () => {
     ])
       for (const port of [443, 8443] as const)
         expect(classifyEdge(port, addr, p).ok, `${port} ${JSON.stringify(p)}`).toBe(false);
+  });
+  // #109 review C2/S1: Cloudflare's own error pages carry Cache-Control: private, …; only the owner site's exact
+  // values count as owner headers, read from the answer as it comes off the wire.
+  it('parses a Cloudflare error page as no owner sign, and the owner site by its exact headers', () => {
+    const cloudflare = parseProbeHead(
+      [
+        'HTTP/1.1 530 <none>',
+        'Date: Mon, 12 Oct 2026 12:00:00 GMT',
+        'Content-Type: text/html; charset=UTF-8',
+        'Cache-Control: private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0',
+        'X-Frame-Options: SAMEORIGIN',
+        'Referrer-Policy: same-origin',
+        'Server: cloudflare',
+        'CF-RAY: 0123456789abcdef-AMS',
+      ].join('\r\n'),
+    );
+    expect(cloudflare).toEqual({ kind: 'answered', status: 530, wwwAuthenticate: false, ownerHeaders: false });
+    for (const port of [443, 8443] as const) expect(classifyEdge(port, addr, cloudflare).ok).toBe(true);
+    const owner401 = parseProbeHead(
+      [
+        'HTTP/1.1 401 Unauthorized',
+        'Cache-Control: private, no-store',
+        'Www-Authenticate: Basic realm="restricted"',
+        'X-Robots-Tag: noindex, nofollow',
+      ].join('\r\n'),
+    );
+    expect(owner401).toMatchObject({ status: 401, wwwAuthenticate: true, ownerHeaders: true });
+    for (const head of [
+      'HTTP/2 404\r\ncache-control: private, no-store',
+      'HTTP/2 403\r\nx-robots-tag: noindex, nofollow',
+    ]) {
+      const p = parseProbeHead(head);
+      expect(p, head).toMatchObject({ ownerHeaders: true });
+      expect(classifyEdge(443, addr, p).ok, head).toBe(false);
+    }
+    expect(parseProbeHead('\u0016\u0003\u0001 not http')).toEqual({ kind: 'handshake-failed' });
   });
   it('is n/a where the address is unreachable', () => {
     expect(classifyEdge(443, '2606:4700::1', { kind: 'unreachable' }).ok).toBe('n/a');

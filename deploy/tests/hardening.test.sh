@@ -19,6 +19,9 @@ esac
 STUB
 chmod +x "$T/bin/docker"
 export FIX=$T PATH=$T/bin:$PATH
+# hardening.sh reads RWS_EDGE from $RWS_ETC/rws.env (#109): none here unless a case writes one.
+mkdir -p "$T/etc"
+export RWS_ETC=$T/etc
 failures=0 cases=0
 
 # One hardened container of service $1.
@@ -186,6 +189,16 @@ for svc in cloudflared api caddy; do
     echo "ok   the token value is never printed ($svc)"
   fi
 done
+# Review C11: rws.env says RWS_EDGE=tunnel but cloudflared is not running: its absence fails and the tunnel
+# expectations hold (caddy's public ports too); the last RWS_EDGE line wins, as in rws-lib.sh.
+echo 'RWS_EDGE=tunnel' >"$RWS_ETC/rws.env"
+fleet | mutate caddy ".HostConfig.PortBindings = $loop" |
+  expect "tunnel in rws.env: no cloudflared running fails" prod 1 'missing service: cloudflared is not running'
+fleet | expect "tunnel in rws.env: caddy's public ports fail without cloudflared too" prod 1 'FAIL caddy .*tunnel mode'
+tunnel_fleet | expect "tunnel in rws.env: the tunnel stack passes" prod 0 'OK, 15 container'
+printf 'RWS_EDGE=tunnel\nRWS_EDGE=direct\n' >"$RWS_ETC/rws.env"
+fleet | expect "the last RWS_EDGE line wins (direct)" prod 0 'OK, 14 container'
+rm -f "$RWS_ETC/rws.env"
 # Even without cloudflared (a stray container), the variable is a deviation.
 fleet | mutate api ".Config.Env = [\"TUNNEL_TOKEN=$secret\"]" | expect "direct: TUNNEL_TOKEN in any container fails" prod 1 'FAIL api .*TUNNEL_TOKEN is in the environment'
 # cloudflared is optional: not running is fine, and a network named like a tunnel one is a deviation without it.

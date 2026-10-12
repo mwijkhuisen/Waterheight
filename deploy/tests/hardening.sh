@@ -34,6 +34,8 @@ case ${1:-} in
   *) echo "usage: ${0##*/} --prod|--ci" >&2; exit 2 ;;
 esac
 (($# == 1)) || { echo "usage: ${0##*/} --prod|--ci" >&2; exit 2; }
+# #109: the host's edge mode (the last RWS_EDGE line, as rws-lib.sh reads it). tunnel requires cloudflared to run.
+edge=$(sed -n 's/^RWS_EDGE=//p' "${RWS_ETC:-/etc/rws}/rws.env" 2>/dev/null | tail -n 1) || edge=''
 command -v docker >/dev/null || { echo "hardening: docker not found" >&2; exit 2; }
 command -v jq >/dev/null || { echo "hardening: jq not found" >&2; exit 2; }
 
@@ -61,8 +63,10 @@ def binds: [ ((.HostConfig.PortBindings // {}), (.NetworkSettings.Ports // {}))
 def strip: sub("^CAP_"; "");
 
 ([.[] | .Config.Labels["com.docker.compose.service"] // ""] | unique) as $present
-| ($present | index("cloudflared") != null) as $tunnel
-| ((required[] | select(. as $r | $present | index($r) | not)
+| ($edge == "tunnel" or ($present | index("cloudflared") != null)) as $tunnel
+| (if $edge == "tunnel" and ($present | index("cloudflared") | not)
+    then "fail\tmissing service: cloudflared is not running (rws.env says RWS_EDGE=tunnel)" else empty end),
+  ((required[] | select(. as $r | $present | index($r) | not)
     | "fail\tmissing service: \(.) is not running")),
   (.[] | . as $c
     | ($c.Config.Labels["com.docker.compose.service"] // "") as $svc
@@ -137,7 +141,7 @@ def strip: sub("^CAP_"; "");
          ("row\t\($svc)\t\($user)\t\($h.ReadonlyRootfs)\t\($drop | join(","))\t\($add | join(",") | if . == "" then "-" else . end)\t\(if ($sec | map(select(startswith("no-new-privileges"))) | length) > 0 then "yes" else "NO" end)\t\(($h.Memory // 0) / 1048576 | floor)M\t\(($h.NanoCpus // 0) / 1e9)\t\($h.PidsLimit // 0)\t\($b | map("\(.HostIp):\(.port)") | join(",") | if . == "" then "-" else . end)")
        ) end)'
 
-out=$(jq -r --arg mode "$mode" "$program" <<<"$inspected")
+out=$(jq -r --arg mode "$mode" --arg edge "$edge" "$program" <<<"$inspected")
 fails=$(grep -c '^fail' <<<"$out" || true)
 if ((fails > 0)); then
   grep '^fail' <<<"$out" | sed -e 's/^fail\t/FAIL /' | sort -u >&2

@@ -17,8 +17,8 @@
 !deploy/web/site.caddy
 !deploy/web/phase-prelaunch.caddy
 !deploy/web/phase-launch.caddy
-!deploy/web/catchall-https.caddy
-!deploy/web/catchall-http.caddy
+!deploy/web/edge-https.caddy
+!deploy/web/edge-http.caddy
 !deploy/web/Caddyfile.owner
 !deploy/web/owner.caddy
 

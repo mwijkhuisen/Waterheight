@@ -10,7 +10,7 @@ import { connect as tlsConnect } from 'node:tls';
 import type { Result } from '../verify-prod.ts';
 
 export type Probe =
-  /** `ownerHeaders`: an owner-site header came with it (X-Robots-Tag nofollow, Cache-Control private); only --edge cloudflare reads it. */
+  /** `ownerHeaders`: an owner-site header came with it, by its exact value (parseProbeHead); only --edge cloudflare reads it. */
   | { kind: 'answered'; status: number; wwwAuthenticate: boolean; ownerHeaders?: boolean }
   | { kind: 'handshake-failed' }
   /** The handshake completed with a certificate this client does not trust for owner.<domain>. */
@@ -154,6 +154,24 @@ const CERTIFICATE = new Set([
   'CERT_REJECTED',
 ]);
 
+/**
+ * The status line and headers of an answer, as a probe result. `ownerHeaders` holds only the owner site's exact values
+ * (owner.caddy: `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow`): Cloudflare's own error pages
+ * send `Cache-Control: private, max-age=0, no-store, …`, which is no owner sign (#109 review C2/S1).
+ */
+export function parseProbeHead(head: string): Probe {
+  const m = /^HTTP\/[\d.]+ (\d{3})/.exec(head);
+  if (!m) return { kind: 'handshake-failed' };
+  return {
+    kind: 'answered',
+    status: Number(m[1]),
+    wwwAuthenticate: /^www-authenticate:/im.test(head),
+    ownerHeaders:
+      /^x-robots-tag:[ \t]*noindex, nofollow[ \t]*\r?$/im.test(head) ||
+      /^cache-control:[ \t]*private, no-store[ \t]*\r?$/im.test(head),
+  };
+}
+
 export function probeTls(address: string, port: number, domain: string, timeoutMs = 8000): Promise<Probe> {
   return new Promise((resolve) => {
     let done = false;
@@ -172,18 +190,7 @@ export function probeTls(address: string, port: number, domain: string, timeoutM
       buf += c.toString('latin1');
       const end = buf.indexOf('\r\n\r\n');
       if (end < 0 && buf.length < 16_384) return;
-      const head = buf.slice(0, end < 0 ? buf.length : end);
-      const m = /^HTTP\/[\d.]+ (\d{3})/.exec(head);
-      finish(
-        m
-          ? {
-              kind: 'answered',
-              status: Number(m[1]),
-              wwwAuthenticate: /^www-authenticate:/im.test(head),
-              ownerHeaders: /^x-robots-tag:.*nofollow/im.test(head) || /^cache-control:.*private/im.test(head),
-            }
-          : { kind: 'handshake-failed' },
-      );
+      finish(parseProbeHead(buf.slice(0, end < 0 ? buf.length : end)));
     });
     socket.on('timeout', () => finish({ kind: 'timeout' }));
     socket.on('end', () => finish({ kind: 'handshake-failed' }));

@@ -155,7 +155,7 @@ setup
 touch "$FIX/up"
 run add laptop
 grep -qx 'Endpoint = 198.51.100.7:51820' "$C/out" && ok "unset: the endpoint is RWS_PUBLIC_IPV4:51820 (unchanged)" || fail "default endpoint: $(cat "$C/out")"
-for good in home.example.net 203.0.113.9 a-b.c1.example.org; do
+for good in home.example.net 203.0.113.9 a-b.c1.example.org 255.255.255.254 10.0.0.1; do
   setup
   touch "$FIX/up"
   echo "RWS_WG_ENDPOINT=$good" >>"$C/etc/rws.env"
@@ -167,7 +167,7 @@ touch "$FIX/up"
 echo "RWS_WG_ENDPOINT=" >>"$C/etc/rws.env"
 run add laptop
 grep -qx 'Endpoint = 198.51.100.7:51820' "$C/out" && ok "empty: the default endpoint" || fail "empty endpoint: $(cat "$C/out")"
-for bad in Home.Example.NET 'a b' rivierstanden.example owner.rivierstanden.example owner.home.example.net 'x;y.example' 'home.example.net:51820' -a.example.net 'a..example.net' '999' 'home'; do
+for bad in Home.Example.NET 'a b' rivierstanden.example owner.rivierstanden.example owner.home.example.net 'x;y.example' 'home.example.net:51820' -a.example.net 'a..example.net' '999' 'home' 999.1.1.1 203.0.113.256 01.2.3.4; do
   setup
   touch "$FIX/up"
   echo "RWS_WG_ENDPOINT=$bad" >>"$C/etc/rws.env"

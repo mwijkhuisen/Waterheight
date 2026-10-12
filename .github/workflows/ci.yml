@@ -461,7 +461,7 @@ jobs:
               -v "$PWD/deploy/web/site.caddy:/etc/caddy/site.caddy:ro" \
               -v "$PWD/deploy/web/phase-prelaunch.caddy:/etc/caddy/phase-prelaunch.caddy:ro" \
               -v "$PWD/deploy/web/phase-launch.caddy:/etc/caddy/phase-launch.caddy:ro" \
-              -v "$PWD/deploy/web/catchall-https.caddy:/etc/caddy/catchall-https.caddy:ro" \
+              -v "$PWD/deploy/web/edge-https.caddy:/etc/caddy/edge-https.caddy:ro" \
               -v "$PWD/apps/web/dist-e2e:/srv/www:ro" \
               -v "$RUNNER_TEMP/tiles:/srv/rws/tiles:ro" \
               -v "$RUNNER_TEMP/rivers:/srv/rws/public/data/v1/rivers:ro" \

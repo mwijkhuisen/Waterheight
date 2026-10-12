@@ -111,11 +111,13 @@ grep -qx '/tunnel-probe-xff 172.30.41.0 198.51.100.0' <<<"$seen" ||
 host_line=$(grep -F '/tunnel-probe-host ' <<<"$seen" | head -n 1)
 [[ -n $host_line ]] || fail "no log line for the host-side request"
 [[ $host_line != *6.6.6.0* ]] || fail "a host-side request to 127.0.0.1:80 was trusted with its X-Forwarded-For: $host_line"
-proof "Caddy's masked log: through cloudflared the client is the appended visitor (198.51.100.0, peer 172.30.41.0; the spoofed 6.6.6.6 ignored); a host-side request to 127.0.0.1:80 is its own peer, never its X-Forwarded-For (${host_line#* })"
+proof "Caddy's masked log: through cloudflared the client is the appended visitor (198.51.100.0, peer 172.30.41.0; the spoofed 6.6.6.6 ignored); a host-side request to 127.0.0.1:80 (which arrives from a bridge gateway, not from tunnel_edge) is logged as its own peer, not its X-Forwarded-For (${host_line#* }); that the trusted range is cloudflared's /32 and no wider is held by test/compose-tunnel.test.ts"
 echo "::endgroup::"
 
 echo "::group::The token never shows in docker inspect or the rendered compose config"
-if docker inspect rws-cloudflared-1 | grep -qF "$token" || ci_compose config | grep -qF "$token"; then
+inspect=$(docker inspect rws-cloudflared-1)
+config=$(ci_compose config)
+if grep -qF -- "$token" <<<"$inspect" || grep -qF -- "$token" <<<"$config"; then
   fail "the tunnel token appears in docker inspect or the compose config"
 fi
 proof "the tunnel token is in neither docker inspect nor the rendered compose config (a file secret, --token-file)"

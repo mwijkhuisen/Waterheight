@@ -1,7 +1,0 @@
-# The host-less catch-all of site.caddy (P12a, A§12.2), tunnel mode (#109: RWS_SITE_SCHEME=http in
-# deploy/compose.tunnel.yaml): :80 alone, so Caddy opens no TLS listener. catchall-https.caddy is direct mode.
-:80 {
-	header -Server
-	header Cache-Control "no-store"
-	respond 421
-}

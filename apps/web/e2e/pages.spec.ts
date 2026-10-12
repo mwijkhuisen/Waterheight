@@ -396,11 +396,36 @@ for (const locale of LOCALES) {
     );
     await page.goto(route('privacy'));
     await ready(page, 'privacy', locale);
-    await expectCdnFirst(page, msg(locale, 'privacy_cdn_named', { name: 'Cloudflare' }));
+    await expectCdnFirst(page, msg(locale, 'privacy_cdn_cloudflare'));
     await expect(main(page).locator('h2').first().locator('xpath=following-sibling::p[1]')).toContainText(
       'Data Privacy Framework',
     );
     await expect(main(page)).toContainText('Cloudflare');
+    await expect(main(page)).not.toContainText(msg(locale, 'privacy_cdn_none'));
+    await finish(page, s);
+  });
+
+  test(`the privacy page (${locale}) names an unknown CDN first, neutrally: no jurisdiction and no cache claim`, async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    const s = await start(page, context, baseURL);
+    await page.route('**/runtime-config.json', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'cache-control': 'no-cache' },
+        body: JSON.stringify({ audience: 'public', contact: CONTACT, operator: OPERATOR, cdn: 'Example CDN' }),
+      }),
+    );
+    await page.goto(route('privacy'));
+    await ready(page, 'privacy', locale);
+    await expectCdnFirst(page, msg(locale, 'privacy_cdn_named', { name: 'Example CDN' }));
+    const first = main(page).locator('h2').first().locator('xpath=following-sibling::p[1]');
+    await expect(first).not.toContainText('Data Privacy Framework');
+    await expect(first).not.toContainText('/assets');
+    await expect(main(page)).toContainText('Example CDN');
     await expect(main(page)).not.toContainText(msg(locale, 'privacy_cdn_none'));
     await finish(page, s);
   });

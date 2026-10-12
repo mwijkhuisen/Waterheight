@@ -75,15 +75,16 @@ describe('brownout (A§9.2)', () => {
 
 describe('the host-less catch-all (A§12.2, criterion 10)', () => {
   // #109: the block is one of two files, chosen by RWS_SITE_SCHEME: both ports in direct mode, :80 alone in tunnel mode.
-  const HTTPS = readFileSync(join(repoRoot, 'deploy/web/catchall-https.caddy'), 'utf8');
-  const HTTP = readFileSync(join(repoRoot, 'deploy/web/catchall-http.caddy'), 'utf8');
+  const HTTPS = readFileSync(join(repoRoot, 'deploy/web/edge-https.caddy'), 'utf8');
+  const HTTP = readFileSync(join(repoRoot, 'deploy/web/edge-http.caddy'), 'utf8');
   const strip = (text: string) =>
     text
       .split('\n')
       .filter((l) => !l.startsWith('#'))
       .join('\n');
+  // The block of a site address or snippet, from its line to the closing brace at the start of a line.
   const body = (text: string, address: string) =>
-    new RegExp(`^${address} \\{\\n([\\s\\S]*?)\\n\\}\\n$`).exec(strip(text))?.[1] ?? '';
+    new RegExp(`^${address.replace(/[()]/g, '\\$&')} \\{\\n([\\s\\S]*?)\\n?\\}$`, 'm').exec(strip(text))?.[1] ?? '';
   const catchAll = body(HTTPS, ':80, :443');
 
   it('answers 421 for any Host or SNI that is not the domain, on both ports, with no site content', () => {
@@ -99,20 +100,27 @@ describe('the host-less catch-all (A§12.2, criterion 10)', () => {
     expect(strip(HTTP)).not.toMatch(/443/);
   });
 
-  it('is the last site, after the domain and the healthcheck listener', () => {
-    const at = (s: string) => site.indexOf(s);
-    const domain = '\n{$RWS_SITE_SCHEME:https}://{$RWS_DOMAIN} {\n';
-    expect(at(domain)).toBeGreaterThanOrEqual(0);
-    expect(at(domain)).toBeLessThan(at('http://127.0.0.1:8081 {'));
-    expect(at('http://127.0.0.1:8081 {')).toBeLessThan(at('\nimport catchall-{$RWS_SITE_SCHEME:https}.caddy'));
-    expect(
-      code
-        .split('\n')
-        .filter((l) => l.trim() !== '')
-        .at(-1),
-    ).toBe('import catchall-{$RWS_SITE_SCHEME:https}.caddy');
+  it('comes from edge-<scheme>.caddy, imported before the domain (its snippet must exist first), not site.caddy', () => {
+    const lines = code.split('\n').filter((l) => l.trim() !== '');
+    expect(lines[0]).toBe('import edge-{$RWS_SITE_SCHEME:https}.caddy');
+    expect(lines[1]).toBe('{$RWS_SITE_SCHEME:https}://{$RWS_DOMAIN} {');
+    expect(code.indexOf('{$RWS_SITE_SCHEME:https}://{$RWS_DOMAIN} {')).toBeLessThan(
+      code.indexOf('http://127.0.0.1:8081 {'),
+    );
     // The catch-all is no longer written in site.caddy itself.
     expect(code).not.toMatch(/^:80/m);
+  });
+
+  it('edge_site is empty in direct mode and, in tunnel mode, only sends a plain-HTTP visit to https (review S6)', () => {
+    expect(body(HTTPS, '(edge_site)').trim()).toBe('');
+    expect(
+      body(HTTP, '(edge_site)')
+        .split('\n')
+        .map((l) => l.trim()),
+    ).toEqual(['@plain_http header X-Forwarded-Proto http', 'redir @plain_http https://{host}{uri} 308']);
+    // Imported once, inside the site block, right after the phase snippet.
+    expect(code.match(/^\s*import edge_site$/gm)).toHaveLength(1);
+    expect(code).toContain('\timport phase-{$RWS_SITE_PHASE:prelaunch}.caddy main\n\timport edge_site\n');
   });
 
   it('reads the scheme of its site address from RWS_SITE_SCHEME, https when unset', () => {
@@ -144,5 +152,18 @@ describe('the Content-Security-Policy (ADR-0016)', () => {
     const all = [...site.matchAll(/Content-Security-Policy "([^"]+)"/g)].map((m) => m[1]);
     expect(all).toHaveLength(2);
     expect(new Set(all).size).toBe(1);
+  });
+});
+
+describe('the CI Caddyfile (deploy/tests/e2e/Caddyfile.ci)', () => {
+  // #109 review C1: it had no trusted-proxy lines, so the CI stack never read a proxy's X-Forwarded-For.
+  const lines = (path: string) =>
+    readFileSync(join(repoRoot, path), 'utf8')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l !== '' && !l.startsWith('#') && !/^(email|acme_ca|acme_ca_root)\s/.test(l));
+
+  it('holds the production globals but for the ACME lines (email, acme_ca, acme_ca_root)', () => {
+    expect(lines('deploy/tests/e2e/Caddyfile.ci')).toEqual(lines('deploy/web/Caddyfile'));
   });
 });

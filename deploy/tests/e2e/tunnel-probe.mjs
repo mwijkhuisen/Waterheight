@@ -74,6 +74,12 @@ check(
     page.headers.server === undefined,
   `/ over plain HTTP: ${page.status}, HSTS and the CSP sent for Cloudflare to pass on, no Server`,
 );
+// Review S6: a plain-HTTP visit Cloudflare forwards (it sets X-Forwarded-Proto) is sent to https, never served.
+const plain = await get('/over?x=1', { 'x-forwarded-proto': 'http' });
+check(
+  plain.status === 308 && plain.headers.location === `https://${domain}/over?x=1`,
+  `X-Forwarded-Proto: http: ${plain.status} to ${plain.headers.location} (expected 308 to https)`,
+);
 const owner = await get('/', {}, `owner.${domain}`);
 check(owner.status === 421, `Host owner.${domain}: ${owner.status} from the catch-all (expected 421)`);
 

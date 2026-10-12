@@ -27,10 +27,20 @@ export const EDGE_HTML_NEEDLES = [
 export const EDGE_UNCACHED_PATHS = ['/api/v1/health', '/api/v1/meta', '/status/capture.json'] as const;
 /** A path under /data/ that does not exist: its 404 has no Cache-Control and must never be cached. */
 export const EDGE_MISSING_PATH = '/data/v1/rws-verify-no-file.json';
+/** The same under /assets/ (#109 review S3): Caddy's bare 404 there has no Cache-Control either. */
+export const EDGE_MISSING_ASSET = '/assets/rws-verify-no-file.js';
 export const EDGE_PAGES = ['/', '/en/'] as const;
 export const EDGE_TILE_RANGE = 'bytes=0-1023';
 
-const isHit = (p: Page) => (p.headers['cf-cache-status'] ?? '').trim().toLowerCase() === 'hit';
+// Not cached means no cf-cache-status, DYNAMIC or BYPASS (#109 review S3). Every other status (HIT, MISS, EXPIRED, STALE,
+// UPDATING, REVALIDATED) means Cloudflare held the answer as cacheable, which these routes must never be.
+const UNCACHED = new Set(['', 'dynamic', 'bypass']);
+const KNOWN = new Set(['hit', 'miss', 'expired', 'stale', 'updating', 'revalidated']);
+const cachedStatus = (p: Page): string | undefined => {
+  const s = (p.headers['cf-cache-status'] ?? '').trim().toLowerCase();
+  if (UNCACHED.has(s)) return undefined;
+  return KNOWN.has(s) ? s.toUpperCase() : 'another value';
+};
 
 /** `edge headers <path>`: none of EDGE_FORBIDDEN_HEADERS. */
 export function classifyEdgeHeaders(path: string, page: Page | string): Result {
@@ -75,7 +85,7 @@ export function classifyTileRange(file: { file: string; bytes: number } | undefi
     : fail(check, problems.join('; '));
 }
 
-/** `edge not cached <label>`: no answer is a cache HIT; with `want404` every answer is a 404 too. */
+/** `edge not cached <label>`: no answer was cacheable at the edge; with `want404` every answer is a 404 too. */
 export function classifyNotCached(label: string, pages: (Page | string)[], want404 = false): Result {
   const check = `edge not cached ${label}`;
   const problems: string[] = [];
@@ -84,11 +94,12 @@ export function classifyNotCached(label: string, pages: (Page | string)[], want4
       problems.push(`read ${i + 1}: ${p}`);
       continue;
     }
-    if (isHit(p)) problems.push(`read ${i + 1}: cf-cache-status HIT`);
+    const cached = cachedStatus(p);
+    if (cached !== undefined) problems.push(`read ${i + 1}: cf-cache-status ${cached}`);
     if (want404 && p.status !== 404) problems.push(`read ${i + 1}: status ${p.status}, want 404`);
   }
   return problems.length === 0
-    ? pass(check, `${pages.length} reads, never a cache HIT${want404 ? ', 404 each time' : ''}`)
+    ? pass(check, `${pages.length} reads, never cacheable at the edge${want404 ? ', 404 each time' : ''}`)
     : fail(check, problems.join('; '));
 }
 
@@ -126,6 +137,9 @@ export async function checkEdge(io: EdgeIo, tile: { file: string; bytes: number 
   out.push(classifyTileRange(tile, reads));
   for (const path of EDGE_UNCACHED_PATHS) out.push(classifyNotCached(path, [await io.get(path), await io.get(path)]));
   out.push(classifyNotCached('404', [await io.get(EDGE_MISSING_PATH), await io.get(EDGE_MISSING_PATH)], true));
+  out.push(
+    classifyNotCached('404 /assets', [await io.get(EDGE_MISSING_ASSET), await io.get(EDGE_MISSING_ASSET)], true),
+  );
   out.push(classifyEdgeCdn(await io.get('/runtime-config.json')));
   return out;
 }

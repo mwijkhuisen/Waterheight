@@ -131,10 +131,11 @@ owner_site_on() { owner_env_on && wg0_ready; }
 # The public edge (#109, ADR-0021, docs/runbooks/edge-switch.md): RWS_EDGE=direct (or no line: Caddy with its own
 # certificate on the public addresses) or tunnel (compose.tunnel.yaml: cloudflared in front, Caddy plain HTTP for it
 # alone). Read here like RWS_OWNER_SITE, so every caller sees it; the last line wins, as in load_env. Any other
-# value fails, and rws_compose stops before compose runs.
+# value fails, and rws_compose stops before compose runs. A missing rws.env reads as direct (compose and env_ready
+# fail on it anyway).
 edge_mode() {
   local v
-  v=$(sed -n 's/^RWS_EDGE=//p' "$RWS_ETC/rws.env" 2>/dev/null | tail -n 1)
+  v=$(sed -n 's/^RWS_EDGE=//p' "$RWS_ETC/rws.env" 2>/dev/null | tail -n 1) || v=''
   case $v in
     '' | direct) printf direct ;;
     tunnel) printf tunnel ;;

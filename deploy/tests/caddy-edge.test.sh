@@ -45,15 +45,16 @@ adapt() {
 }
 
 copy now
-# Today's text: the literal site address and the catch-all inline (its comment lines dropped).
+# Today's text: the literal site address, no edge import and no edge_site snippet, and the catch-all inline at the end
+# (where it was before #109).
 copy literal
 # shellcheck disable=SC2016 # Caddy placeholders, not shell expansions
-sed -i 's#^{$RWS_SITE_SCHEME:https}://{$RWS_DOMAIN} {$#{$RWS_DOMAIN} {#' "$T/literal/site.caddy"
-grep -v '^#' "$web/catchall-https.caddy" >"$T/catchall"
-sed -i -e "/^import catchall-{\$RWS_SITE_SCHEME:https}\.caddy\$/{r $T/catchall" -e 'd}' "$T/literal/site.caddy"
+sed -i -e 's#^{$RWS_SITE_SCHEME:https}://{$RWS_DOMAIN} {$#{$RWS_DOMAIN} {#' \
+  -e '/^import edge-{$RWS_SITE_SCHEME:https}\.caddy$/d' -e '/^[[:space:]]*import edge_site$/d' "$T/literal/site.caddy"
+sed -n '/^:80, :443 {$/,/^}$/p' "$web/edge-https.caddy" >>"$T/literal/site.caddy"
 # shellcheck disable=SC2016 # Caddy placeholders, not shell expansions
-if grep -v '^[[:space:]]*#' "$T/literal/site.caddy" | grep -q 'RWS_SITE_SCHEME' || ! grep -qx '{$RWS_DOMAIN} {' "$T/literal/site.caddy" ||
-  ! grep -qx ':80, :443 {' "$T/literal/site.caddy"; then
+if grep -v '^[[:space:]]*#' "$T/literal/site.caddy" | grep -qE 'RWS_SITE_SCHEME|edge_site|import edge-' ||
+  ! grep -qx '{$RWS_DOMAIN} {' "$T/literal/site.caddy" || ! grep -qx ':80, :443 {' "$T/literal/site.caddy"; then
   bad "the literal copy could not be made: site.caddy's edge lines changed shape"
 fi
 
@@ -94,6 +95,15 @@ if adapt now "$tunnel" RWS_SITE_SCHEME=http RWS_TRUSTED_PROXIES=172.30.41.10/32;
     ok "tunnel mode: the site answers on :80 for the domain"
   else
     bad "tunnel mode: the domain is not served on :80"
+  fi
+  # Review S6: a plain-HTTP visit Cloudflare forwards (X-Forwarded-Proto http) is a 308 to https, in tunnel mode only.
+  if jq -e '[.. | objects | select(.match? // [] | any(.header?["X-Forwarded-Proto"]? == ["http"]))
+      | .handle[] | select(.handler == "static_response" and .status_code == 308
+      and .headers.Location == ["https://{http.request.host}{http.request.uri}"])] | length == 1' "$tunnel" >/dev/null &&
+    ! grep -q 'X-Forwarded-Proto' "$T/direct-unset.json"; then
+    ok "tunnel mode: X-Forwarded-Proto http is a 308 to https; direct mode has no such route"
+  else
+    bad "tunnel mode: no 308 for X-Forwarded-Proto http (or direct mode has one)"
   fi
   if jq -e '[.apps.http.servers[].trusted_proxies.ranges] | all(. == ["172.30.41.10/32"])' "$tunnel" >/dev/null &&
     jq -e '[.apps.http.servers[].trusted_proxies_strict] | all(. == 1)' "$tunnel" >/dev/null; then
