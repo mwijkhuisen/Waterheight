@@ -65,6 +65,51 @@ describe.each(['deploy/web/site.caddy', 'deploy/web/owner.caddy'])('%s access lo
   });
 });
 
+// #133 (KG-314): Caddy's own log (stderr, kept by Docker's local driver) carries a request with reverse_proxy's warnings,
+// so it masks the addresses like the access logs, drops the request headers whole and replaces the error text's addresses.
+describe("Caddy's own log (deploy/web/default-log.caddy)", () => {
+  const filter = read('deploy/web/default-log.caddy');
+
+  it('masks the request addresses to the published prefix lengths and drops every request header', () => {
+    for (const field of ['request>remote_ip', 'request>client_ip'])
+      expect(filter).toContain(`\n\t\t${field} ip_mask ${LOG.ipv4} ${LOG.ipv6}\n`);
+    expect(filter).toContain('\n\t\trequest>headers delete\n');
+    // The whole object goes, so no list of single headers can fall behind it.
+    expect(filter).not.toMatch(/request>headers>/);
+  });
+
+  it("replaces every address in an error text (Go's net errors, IPv4 and IPv6)", () => {
+    const [, pattern, value] = /^\t\terror regexp `(.+)` (\S+)$/m.exec(filter) ?? [];
+    expect(value).toBe('[address]');
+    const mask = (s: string) => s.replaceAll(new RegExp(pattern ?? '$^', 'g'), value ?? '');
+    expect(mask('writing: write tcp 172.18.0.5:443->203.0.113.7:51234: write: broken pipe')).toBe(
+      'writing: write tcp [address]:443->[address]:51234: write: broken pipe',
+    );
+    expect(mask('write tcp [2a0a:e5c0:ffff::10]:443->[2001:db8:1:2::5]:51234: write: connection reset by peer')).toBe(
+      'write tcp [address]:443->[address]:51234: write: connection reset by peer',
+    );
+    expect(mask('dial tcp [fe80::1%eth0]:8080: connect: connection refused')).toBe(
+      'dial tcp [address]:8080: connect: connection refused',
+    );
+    expect(mask('reading: unexpected EOF')).toBe('reading: unexpected EOF');
+  });
+
+  it.each(['deploy/web/Caddyfile', 'deploy/web/Caddyfile.owner', 'deploy/tests/e2e/Caddyfile.ci'])(
+    'is imported in the global options of %s',
+    (file) => {
+      const globals = /^\{\n([\s\S]*?)^\}$/m.exec(read(file))?.[1] ?? '';
+      expect(globals).toContain('\n\timport /etc/caddy/default-log.caddy\n');
+    },
+  );
+
+  it('ships in the web image', () => {
+    expect(read('deploy/web/Dockerfile')).toMatch(
+      /^COPY deploy\/web\/Caddyfile deploy\/web\/default-log\.caddy .* \/etc\/caddy\/$/m,
+    );
+    expect(read('.dockerignore').split('\n')).toContain('!deploy/web/default-log.caddy');
+  });
+});
+
 describe('beacon cap', () => {
   it('is the same at the api as on the privacy page', () => {
     expect(BEACON_MAX_BYTES).toBe(LOG.beaconMaxBytes);
