@@ -1721,6 +1721,45 @@ rivers:
     parent_river_id: sauer
     km_direction: none
     evidence: "Wikidata Q1708483 (no P402; P403 Q158847 Sauer), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); LU-1 publishes no water name: placed by station override; namesake Q741589 is the commune; no relation carries it in the extract; ways tagged wikidata=<this id> and name=Wiltz (geo.yml run 38123404612, rivernet-fixture artifact)"
+  - id: linth
+    name_nl: "Linth"
+    name_en: "Linth"
+    names:
+      CH-1: ["Linth"]
+      CH-2: ["Linth"]
+    aliases: []
+    osm_relation_id: 2198016
+    osm_way_name: null
+    wikidata: Q14335
+    parent_river_id: limmat
+    km_direction: none
+    evidence: "Wikidata Q14335 (P402 2198016; P403 Q14407 Lake Zurich, whose outflow is the Limmat), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); #125"
+  - id: kander
+    name_nl: "Kander"
+    name_en: "Kander"
+    names:
+      CH-1: ["Kander"]
+      CH-2: ["Kander"]
+    aliases: []
+    osm_relation_id: 2205219
+    osm_way_name: null
+    wikidata: Q668478
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q668478 (no P402; P403 Q14426 Lake Thun, whose outflow is the Aare), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q650433 is the Kander of Baden-Württemberg (mouth Rhine); relation r2205219 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38165279934, rivernet-fixture artifact); the parent of the Simme (#125)"
+  - id: simme
+    name_nl: "Simme"
+    name_en: "Simme"
+    names:
+      CH-1: ["Simme"]
+      CH-2: ["Simme"]
+    aliases: []
+    osm_relation_id: 2205224
+    osm_way_name: null
+    wikidata: Q869593
+    parent_river_id: kander
+    km_direction: none
+    evidence: "Wikidata Q869593 (P402 2205224; P403 Q668478 Kander), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); #125"
 excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283

@@ -7,7 +7,7 @@
 #   sources, km_to_nl_entry the km to its NL entry node (negative below it). Owner-audience rows identify
 #   the station only (river, reach, km). reaches: cut at public stations only; id <river>.<seq>.
 version: 1
-fixture: {"source_run":"https://github.com/mwijkhuisen/Waterheight/actions/runs/38127563889","ways_sha256":"708479cc11bcf97681234108244d7996480650a8d62b1dabcb8972998b25a734","osm_replication_timestamp":"2026-10-09T20:21:04Z"}
+fixture: {"source_run":"https://github.com/mwijkhuisen/Waterheight/actions/runs/38209008630","ways_sha256":"ee04ce5a8d1d2007e53f6fc6fbdbcaf71ce0a49f5c1a344c79dbb44e7500e130","osm_replication_timestamp":"2026-10-11T20:21:06Z"}
 stations:
   - {"id":"be.spw.1046","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"be.spw.1081","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -345,7 +345,7 @@ stations:
   - {"id":"ch.bafu-pq.2007","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2009","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2011","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2016","rule":"name","river":"aare","reach":"aare.11","km_official":null,"km_official_system":null,"km_graph":262.2,"km_to_nl_entry":780.8,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu-pq.2016","rule":"name","river":"aare","reach":"aare.12","km_official":null,"km_official_system":null,"km_graph":262.2,"km_to_nl_entry":780.8,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2017","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2018","rule":"name","river":"reuss","reach":"reuss.8","km_official":null,"km_official_system":null,"km_graph":130.59,"km_to_nl_entry":789.92,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2019","rule":"name","river":"aare","reach":"aare.2","km_official":null,"km_official_system":null,"km_graph":29.45,"km_to_nl_entry":1013.55,"nl_entry_node":"lobith"}
@@ -358,8 +358,8 @@ stations:
   - {"id":"ch.bafu-pq.2026","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2027","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2028","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2029","rule":"name","river":"aare","reach":"aare.8","km_official":null,"km_official_system":null,"km_graph":162.63,"km_to_nl_entry":880.37,"nl_entry_node":"lobith"}
-  - {"id":"ch.bafu-pq.2030","rule":"name","river":"aare","reach":"aare.4","km_official":null,"km_official_system":null,"km_graph":73.93,"km_to_nl_entry":969.07,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu-pq.2029","rule":"name","river":"aare","reach":"aare.9","km_official":null,"km_official_system":null,"km_graph":162.63,"km_to_nl_entry":880.37,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu-pq.2030","rule":"name","river":"aare","reach":"aare.5","km_official":null,"km_official_system":null,"km_graph":73.93,"km_to_nl_entry":969.07,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2031","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2032","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2033","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -369,7 +369,7 @@ stations:
   - {"id":"ch.bafu-pq.2053","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2056","rule":"name","river":"reuss","reach":"reuss.3","km_official":null,"km_official_system":null,"km_graph":33.31,"km_to_nl_entry":887.21,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2057","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2063","rule":"name","river":"aare","reach":"aare.10","km_official":null,"km_official_system":null,"km_graph":216.29,"km_to_nl_entry":826.71,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu-pq.2063","rule":"name","river":"aare","reach":"aare.11","km_official":null,"km_official_system":null,"km_graph":216.29,"km_to_nl_entry":826.71,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2066","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2070","rule":"name","river":"emme","reach":"emme.3","km_official":null,"km_official_system":null,"km_graph":38.99,"km_to_nl_entry":890.5,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2072","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -377,7 +377,7 @@ stations:
   - {"id":"ch.bafu-pq.2074","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2078","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2084","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2085","rule":"name","river":"aare","reach":"aare.7","km_official":null,"km_official_system":null,"km_graph":148.44,"km_to_nl_entry":894.56,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu-pq.2085","rule":"name","river":"aare","reach":"aare.8","km_official":null,"km_official_system":null,"km_graph":148.44,"km_to_nl_entry":894.56,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2086","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2087","rule":"name","river":"reuss","reach":"reuss.2","km_official":null,"km_official_system":null,"km_graph":0.57,"km_to_nl_entry":919.95,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2088","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -387,7 +387,7 @@ stations:
   - {"id":"ch.bafu-pq.2099","rule":"name","river":"limmat","reach":"limmat.2","km_official":null,"km_official_system":null,"km_graph":3.21,"km_to_nl_entry":809.13,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2101","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2102","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2104","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu-pq.2104","rule":"name","river":"linth","reach":"linth.4","km_official":null,"km_official_system":null,"km_graph":39.81,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2105","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2106","rule":"name","river":"birs","reach":"birs.4","km_official":null,"km_official_system":null,"km_graph":69.9,"km_to_nl_entry":705.37,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2109","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -400,13 +400,13 @@ stations:
   - {"id":"ch.bafu-pq.2125","rule":"name","river":"lorze","reach":"lorze.5","km_official":null,"km_official_system":null,"km_graph":25.55,"km_to_nl_entry":824.74,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2126","rule":"name","river":"murg","reach":"murg.2","km_official":null,"km_official_system":null,"km_graph":18.82,"km_to_nl_entry":840.85,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2132","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2135","rule":"name","river":"aare","reach":"aare.5","km_official":null,"km_official_system":null,"km_graph":99.11,"km_to_nl_entry":943.89,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu-pq.2135","rule":"name","river":"aare","reach":"aare.6","km_official":null,"km_official_system":null,"km_graph":99.11,"km_to_nl_entry":943.89,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2137","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2139","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2141","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2143","rule":"name","river":"rhine","reach":"rhine.9","km_official":null,"km_official_system":null,"km_graph":296.01,"km_to_nl_entry":773.58,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2150","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2151","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu-pq.2151","rule":"name","river":"simme","reach":"simme.3","km_official":null,"km_official_system":null,"km_graph":35.01,"km_to_nl_entry":999.21,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2152","rule":"name","river":"reuss","reach":"reuss.4","km_official":null,"km_official_system":null,"km_graph":71.49,"km_to_nl_entry":849.02,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2154","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2155","rule":"name","river":"emme","reach":"emme.4","km_official":null,"km_official_system":null,"km_graph":71.41,"km_to_nl_entry":858.08,"nl_entry_node":"lobith"}
@@ -426,14 +426,14 @@ stations:
   - {"id":"ch.bafu-pq.2200","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2202","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2203","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2205","rule":"name","river":"aare","reach":"aare.14","km_official":null,"km_official_system":null,"km_graph":268.53,"km_to_nl_entry":774.47,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu-pq.2205","rule":"name","river":"aare","reach":"aare.15","km_official":null,"km_official_system":null,"km_graph":268.53,"km_to_nl_entry":774.47,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2206","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2207","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2208","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2209","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2210","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2215","rule":"name","river":"saane","reach":"saane.4","km_official":null,"km_official_system":null,"km_graph":116.5,"km_to_nl_entry":920.32,"nl_entry_node":"lobith"}
-  - {"id":"ch.bafu-pq.2219","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu-pq.2219","rule":"name","river":"simme","reach":"simme.2","km_official":null,"km_official_system":null,"km_graph":2.74,"km_to_nl_entry":1031.47,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2232","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2243","rule":"name","river":"limmat","reach":"limmat.3","km_official":null,"km_official_system":null,"km_graph":27.43,"km_to_nl_entry":784.9,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2244","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -466,7 +466,7 @@ stations:
   - {"id":"ch.bafu-pq.2347","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2349","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2351","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2352","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu-pq.2352","rule":"name","river":"linth","reach":"linth.2","km_official":null,"km_official_system":null,"km_graph":6.6,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2355","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2364","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2366","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -474,7 +474,7 @@ stations:
   - {"id":"ch.bafu-pq.2369","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2370","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2371","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2372","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu-pq.2372","rule":"name","river":"linth","reach":"linth.3","km_official":null,"km_official_system":null,"km_graph":31.8,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2374","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2378","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2384","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -517,7 +517,7 @@ stations:
   - {"id":"ch.bafu-pq.2485","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2486","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2487","rule":"name","river":"kleine-emme","reach":"kleine-emme.2","km_official":null,"km_official_system":null,"km_graph":13.41,"km_to_nl_entry":869.82,"nl_entry_node":"lobith"}
-  - {"id":"ch.bafu-pq.2488","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu-pq.2488","rule":"name","river":"simme","reach":"simme.4","km_official":null,"km_official_system":null,"km_graph":47.8,"km_to_nl_entry":986.42,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2490","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2491","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2493","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -546,14 +546,14 @@ stations:
   - {"id":"ch.bafu-pq.2639","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2640","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu-pq.2642","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu-pq.2646","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu-pq.2646","rule":"name","river":"kander","reach":"kander.2","km_official":null,"km_official_system":null,"km_graph":36.04,"km_to_nl_entry":986.61,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu-pq.2648","rule":"no_coordinates","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2004","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2007","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2009","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2011","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2014","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2016","rule":"name","river":"aare","reach":"aare.11","km_official":null,"km_official_system":null,"km_graph":262.2,"km_to_nl_entry":780.8,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu.2016","rule":"name","river":"aare","reach":"aare.12","km_official":null,"km_official_system":null,"km_graph":262.2,"km_to_nl_entry":780.8,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2017","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2018","rule":"name","river":"reuss","reach":"reuss.8","km_official":null,"km_official_system":null,"km_graph":130.59,"km_to_nl_entry":789.92,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2019","rule":"name","river":"aare","reach":"aare.2","km_official":null,"km_official_system":null,"km_graph":29.45,"km_to_nl_entry":1013.55,"nl_entry_node":"lobith"}
@@ -566,8 +566,8 @@ stations:
   - {"id":"ch.bafu.2026","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2027","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2028","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2029","rule":"name","river":"aare","reach":"aare.8","km_official":null,"km_official_system":null,"km_graph":162.63,"km_to_nl_entry":880.37,"nl_entry_node":"lobith"}
-  - {"id":"ch.bafu.2030","rule":"name","river":"aare","reach":"aare.4","km_official":null,"km_official_system":null,"km_graph":73.93,"km_to_nl_entry":969.07,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu.2029","rule":"name","river":"aare","reach":"aare.9","km_official":null,"km_official_system":null,"km_graph":162.63,"km_to_nl_entry":880.37,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu.2030","rule":"name","river":"aare","reach":"aare.5","km_official":null,"km_official_system":null,"km_graph":73.93,"km_to_nl_entry":969.07,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2031","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2032","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2033","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -578,7 +578,7 @@ stations:
   - {"id":"ch.bafu.2053","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2056","rule":"name","river":"reuss","reach":"reuss.3","km_official":null,"km_official_system":null,"km_graph":33.31,"km_to_nl_entry":887.21,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2057","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2063","rule":"name","river":"aare","reach":"aare.10","km_official":null,"km_official_system":null,"km_graph":216.29,"km_to_nl_entry":826.71,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu.2063","rule":"name","river":"aare","reach":"aare.11","km_official":null,"km_official_system":null,"km_graph":216.29,"km_to_nl_entry":826.71,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2066","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2068","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2070","rule":"name","river":"emme","reach":"emme.3","km_official":null,"km_official_system":null,"km_graph":38.99,"km_to_nl_entry":890.5,"nl_entry_node":"lobith"}
@@ -590,7 +590,7 @@ stations:
   - {"id":"ch.bafu.2081","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2082","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2084","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2085","rule":"name","river":"aare","reach":"aare.7","km_official":null,"km_official_system":null,"km_graph":148.44,"km_to_nl_entry":894.56,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu.2085","rule":"name","river":"aare","reach":"aare.8","km_official":null,"km_official_system":null,"km_graph":148.44,"km_to_nl_entry":894.56,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2086","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2087","rule":"name","river":"reuss","reach":"reuss.2","km_official":null,"km_official_system":null,"km_graph":0.57,"km_to_nl_entry":919.95,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2088","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -600,7 +600,7 @@ stations:
   - {"id":"ch.bafu.2099","rule":"name","river":"limmat","reach":"limmat.2","km_official":null,"km_official_system":null,"km_graph":3.21,"km_to_nl_entry":809.13,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2101","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2102","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2104","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu.2104","rule":"name","river":"linth","reach":"linth.4","km_official":null,"km_official_system":null,"km_graph":39.81,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2105","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2106","rule":"name","river":"birs","reach":"birs.4","km_official":null,"km_official_system":null,"km_graph":69.9,"km_to_nl_entry":705.37,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2109","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -614,13 +614,13 @@ stations:
   - {"id":"ch.bafu.2125","rule":"name","river":"lorze","reach":"lorze.5","km_official":null,"km_official_system":null,"km_graph":25.55,"km_to_nl_entry":824.74,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2126","rule":"name","river":"murg","reach":"murg.2","km_official":null,"km_official_system":null,"km_graph":18.82,"km_to_nl_entry":840.85,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2132","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2135","rule":"name","river":"aare","reach":"aare.5","km_official":null,"km_official_system":null,"km_graph":99.11,"km_to_nl_entry":943.89,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu.2135","rule":"name","river":"aare","reach":"aare.6","km_official":null,"km_official_system":null,"km_graph":99.11,"km_to_nl_entry":943.89,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2137","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2139","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2141","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2143","rule":"name","river":"rhine","reach":"rhine.9","km_official":null,"km_official_system":null,"km_graph":296.01,"km_to_nl_entry":773.58,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2150","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2151","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu.2151","rule":"name","river":"simme","reach":"simme.3","km_official":null,"km_official_system":null,"km_graph":35.01,"km_to_nl_entry":999.21,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2152","rule":"name","river":"reuss","reach":"reuss.4","km_official":null,"km_official_system":null,"km_graph":71.49,"km_to_nl_entry":849.02,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2154","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2155","rule":"name","river":"emme","reach":"emme.4","km_official":null,"km_official_system":null,"km_graph":71.41,"km_to_nl_entry":858.08,"nl_entry_node":"lobith"}
@@ -641,14 +641,14 @@ stations:
   - {"id":"ch.bafu.2200","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2202","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2203","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2205","rule":"name","river":"aare","reach":"aare.14","km_official":null,"km_official_system":null,"km_graph":268.53,"km_to_nl_entry":774.47,"nl_entry_node":"lobith"}
+  - {"id":"ch.bafu.2205","rule":"name","river":"aare","reach":"aare.15","km_official":null,"km_official_system":null,"km_graph":268.53,"km_to_nl_entry":774.47,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2206","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2207","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2208","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2209","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2210","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2215","rule":"name","river":"saane","reach":"saane.4","km_official":null,"km_official_system":null,"km_graph":116.5,"km_to_nl_entry":920.32,"nl_entry_node":"lobith"}
-  - {"id":"ch.bafu.2219","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu.2219","rule":"name","river":"simme","reach":"simme.2","km_official":null,"km_official_system":null,"km_graph":2.74,"km_to_nl_entry":1031.47,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2232","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2243","rule":"name","river":"limmat","reach":"limmat.3","km_official":null,"km_official_system":null,"km_graph":27.43,"km_to_nl_entry":784.9,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2244","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -684,7 +684,7 @@ stations:
   - {"id":"ch.bafu.2347","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2349","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2351","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2352","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu.2352","rule":"name","river":"linth","reach":"linth.2","km_official":null,"km_official_system":null,"km_graph":6.6,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2353","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2355","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2356","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -694,7 +694,7 @@ stations:
   - {"id":"ch.bafu.2369","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2370","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2371","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2372","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu.2372","rule":"name","river":"linth","reach":"linth.3","km_official":null,"km_official_system":null,"km_graph":31.8,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2374","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2378","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2384","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -739,7 +739,7 @@ stations:
   - {"id":"ch.bafu.2485","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2486","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2487","rule":"name","river":"kleine-emme","reach":"kleine-emme.2","km_official":null,"km_official_system":null,"km_graph":13.41,"km_to_nl_entry":869.82,"nl_entry_node":"lobith"}
-  - {"id":"ch.bafu.2488","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu.2488","rule":"name","river":"simme","reach":"simme.4","km_official":null,"km_official_system":null,"km_graph":47.8,"km_to_nl_entry":986.42,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2490","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2491","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2492","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
@@ -772,7 +772,7 @@ stations:
   - {"id":"ch.bafu.2639","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2640","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.2642","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"ch.bafu.2646","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
+  - {"id":"ch.bafu.2646","rule":"name","river":"kander","reach":"kander.2","km_official":null,"km_official_system":null,"km_graph":36.04,"km_to_nl_entry":986.61,"nl_entry_node":"lobith"}
   - {"id":"ch.bafu.2650","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"ch.bafu.520","rule":"water_not_in_rivers","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"de.lanuk.2581119000100","rule":"name","river":"lahn","reach":"lahn.2","km_official":null,"km_official_system":null,"km_graph":10.08,"km_to_nl_entry":513.6,"nl_entry_node":"lobith"}
@@ -1552,7 +1552,7 @@ stations:
   - {"id":"lu.age-json.eischen","rule":"override","river":"eisch","reach":"eisch.2","km_official":null,"km_official_system":null,"km_graph":7.1,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age-json.esch-sure","rule":"override","river":"sauer","reach":"sauer.5","km_official":null,"km_official_system":null,"km_graph":70.8,"km_to_nl_entry":573.71,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.ettelbruck-alzette","rule":"override","river":"alzette","reach":"alzette.13","km_official":null,"km_official_system":null,"km_graph":72.32,"km_to_nl_entry":537.34,"nl_entry_node":"lobith"}
-  - {"id":"lu.age-json.ettelbruck-wark","rule":"override","river":"wark","reach":"wark.6","km_official":null,"km_official_system":null,"km_graph":18.4,"km_to_nl_entry":537.65,"nl_entry_node":"lobith"}
+  - {"id":"lu.age-json.ettelbruck-wark","rule":"override","river":"wark","reach":"wark.6","km_official":null,"km_official_system":null,"km_graph":18.41,"km_to_nl_entry":537.65,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.grevenmacher","rule":"override","river":"moselle","reach":"moselle.42","km_official":null,"km_official_system":null,"km_graph":343.82,"km_to_nl_entry":482.9,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.heiderscheidergrund","rule":"override","river":"sauer","reach":"sauer.6","km_official":null,"km_official_system":null,"km_graph":75.56,"km_to_nl_entry":568.95,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.hesperange","rule":"override","river":"alzette","reach":"alzette.7","km_official":null,"km_official_system":null,"km_graph":28.38,"km_to_nl_entry":581.29,"nl_entry_node":"lobith"}
@@ -1565,7 +1565,7 @@ stations:
   - {"id":"lu.age-json.michelau","rule":"override","river":"sauer","reach":"sauer.11","km_official":null,"km_official_system":null,"km_graph":98.31,"km_to_nl_entry":546.2,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.mondorf-les-bains","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age-json.mullerthal","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"lu.age-json.niederfeulen","rule":"override","river":"wark","reach":"wark.3","km_official":null,"km_official_system":null,"km_graph":4.27,"km_to_nl_entry":551.79,"nl_entry_node":"lobith"}
+  - {"id":"lu.age-json.niederfeulen","rule":"override","river":"wark","reach":"wark.3","km_official":null,"km_official_system":null,"km_graph":4.28,"km_to_nl_entry":551.79,"nl_entry_node":"lobith"}
   - {"id":"lu.age-json.perl","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age-json.petange","rule":"override","river":"chiers","reach":"chiers.2","km_official":null,"km_official_system":null,"km_graph":10.49,"km_to_nl_entry":410.15,"nl_entry_node":"eijsden"}
   - {"id":"lu.age-json.pfaffenthal","rule":"override","river":"alzette","reach":"alzette.8","km_official":null,"km_official_system":null,"km_graph":38.69,"km_to_nl_entry":570.98,"nl_entry_node":"lobith"}
@@ -1592,7 +1592,7 @@ stations:
   - {"id":"lu.age.eischen","rule":"override","river":"eisch","reach":"eisch.2","km_official":null,"km_official_system":null,"km_graph":7.1,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age.esch-sure","rule":"override","river":"sauer","reach":"sauer.5","km_official":null,"km_official_system":null,"km_graph":70.8,"km_to_nl_entry":573.71,"nl_entry_node":"lobith"}
   - {"id":"lu.age.ettelbruck-alzette","rule":"override","river":"alzette","reach":"alzette.13","km_official":null,"km_official_system":null,"km_graph":72.32,"km_to_nl_entry":537.34,"nl_entry_node":"lobith"}
-  - {"id":"lu.age.ettelbruck-wark","rule":"override","river":"wark","reach":"wark.6","km_official":null,"km_official_system":null,"km_graph":18.4,"km_to_nl_entry":537.65,"nl_entry_node":"lobith"}
+  - {"id":"lu.age.ettelbruck-wark","rule":"override","river":"wark","reach":"wark.6","km_official":null,"km_official_system":null,"km_graph":18.41,"km_to_nl_entry":537.65,"nl_entry_node":"lobith"}
   - {"id":"lu.age.gemund-our","rule":"override","river":"our","reach":"our.5","km_official":null,"km_official_system":null,"km_graph":79.32,"km_to_nl_entry":543.55,"nl_entry_node":"lobith"}
   - {"id":"lu.age.grevenmacher","rule":"override","river":"moselle","reach":"moselle.42","km_official":null,"km_official_system":null,"km_graph":343.82,"km_to_nl_entry":482.9,"nl_entry_node":"lobith"}
   - {"id":"lu.age.heiderscheidergrund","rule":"override","river":"sauer","reach":"sauer.6","km_official":null,"km_official_system":null,"km_graph":75.56,"km_to_nl_entry":568.95,"nl_entry_node":"lobith"}
@@ -1606,7 +1606,7 @@ stations:
   - {"id":"lu.age.michelau","rule":"override","river":"sauer","reach":"sauer.11","km_official":null,"km_official_system":null,"km_graph":98.31,"km_to_nl_entry":546.2,"nl_entry_node":"lobith"}
   - {"id":"lu.age.mondorf-les-bains","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age.mullerthal","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
-  - {"id":"lu.age.niederfeulen","rule":"override","river":"wark","reach":"wark.3","km_official":null,"km_official_system":null,"km_graph":4.27,"km_to_nl_entry":551.79,"nl_entry_node":"lobith"}
+  - {"id":"lu.age.niederfeulen","rule":"override","river":"wark","reach":"wark.3","km_official":null,"km_official_system":null,"km_graph":4.28,"km_to_nl_entry":551.79,"nl_entry_node":"lobith"}
   - {"id":"lu.age.perl","rule":"unsnapped","river":null,"reach":null,"km_official":null,"km_official_system":null,"km_graph":null,"km_to_nl_entry":null,"nl_entry_node":null}
   - {"id":"lu.age.petange","rule":"override","river":"chiers","reach":"chiers.2","km_official":null,"km_official_system":null,"km_graph":10.49,"km_to_nl_entry":410.15,"nl_entry_node":"eijsden"}
   - {"id":"lu.age.pfaffenthal","rule":"override","river":"alzette","reach":"alzette.8","km_official":null,"km_official_system":null,"km_graph":38.69,"km_to_nl_entry":570.98,"nl_entry_node":"lobith"}
@@ -1701,18 +1701,19 @@ reaches:
   - {"id":"aa-of-weerijs.1","river":"aa-of-weerijs","seq":1,"up_station":null,"down_station":null,"length_km":23.772,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"aare.1","river":"aare","seq":1,"up_station":null,"down_station":"ch.bafu.2019","length_km":29.449,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"aare.2","river":"aare","seq":2,"up_station":"ch.bafu.2019","down_station":"ch.bafu.2457","length_km":17.731,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.3","river":"aare","seq":3,"up_station":"ch.bafu.2457","down_station":"ch.bafu.2030","length_km":26.748,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.4","river":"aare","seq":4,"up_station":"ch.bafu.2030","down_station":"ch.bafu.2135","length_km":25.184,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.5","river":"aare","seq":5,"up_station":"ch.bafu.2135","down_station":null,"length_km":33.06,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.6","river":"aare","seq":6,"up_station":null,"down_station":"ch.bafu.2085","length_km":16.265,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.7","river":"aare","seq":7,"up_station":"ch.bafu.2085","down_station":"ch.bafu.2029","length_km":14.195,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.8","river":"aare","seq":8,"up_station":"ch.bafu.2029","down_station":null,"length_km":30.008,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.9","river":"aare","seq":9,"up_station":null,"down_station":"ch.bafu.2063","length_km":23.645,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.10","river":"aare","seq":10,"up_station":"ch.bafu.2063","down_station":"ch.bafu.2016","length_km":45.911,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.11","river":"aare","seq":11,"up_station":"ch.bafu.2016","down_station":null,"length_km":3.58,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.12","river":"aare","seq":12,"up_station":null,"down_station":null,"length_km":1.203,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.13","river":"aare","seq":13,"up_station":null,"down_station":"ch.bafu.2205","length_km":1.553,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"aare.14","river":"aare","seq":14,"up_station":"ch.bafu.2205","down_station":null,"length_km":12.676,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.3","river":"aare","seq":3,"up_station":"ch.bafu.2457","down_station":null,"length_km":20.494,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.4","river":"aare","seq":4,"up_station":null,"down_station":"ch.bafu.2030","length_km":6.254,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.5","river":"aare","seq":5,"up_station":"ch.bafu.2030","down_station":"ch.bafu.2135","length_km":25.184,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.6","river":"aare","seq":6,"up_station":"ch.bafu.2135","down_station":null,"length_km":33.06,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.7","river":"aare","seq":7,"up_station":null,"down_station":"ch.bafu.2085","length_km":16.265,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.8","river":"aare","seq":8,"up_station":"ch.bafu.2085","down_station":"ch.bafu.2029","length_km":14.195,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.9","river":"aare","seq":9,"up_station":"ch.bafu.2029","down_station":null,"length_km":30.008,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.10","river":"aare","seq":10,"up_station":null,"down_station":"ch.bafu.2063","length_km":23.645,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.11","river":"aare","seq":11,"up_station":"ch.bafu.2063","down_station":"ch.bafu.2016","length_km":45.911,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.12","river":"aare","seq":12,"up_station":"ch.bafu.2016","down_station":null,"length_km":3.58,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.13","river":"aare","seq":13,"up_station":null,"down_station":null,"length_km":1.203,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.14","river":"aare","seq":14,"up_station":null,"down_station":"ch.bafu.2205","length_km":1.553,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"aare.15","river":"aare","seq":15,"up_station":"ch.bafu.2205","down_station":null,"length_km":12.676,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"ahr.1","river":"ahr","seq":1,"up_station":null,"down_station":null,"length_km":84.881,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"ahse.1","river":"ahse","seq":1,"up_station":null,"down_station":"de.lanuk.2786110000100","length_km":0.364,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"ahse.2","river":"ahse","seq":2,"up_station":"de.lanuk.2786110000100","down_station":"de.lanuk.2786330000100","length_km":13.835,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
@@ -1956,7 +1957,7 @@ reaches:
   - {"id":"hessel.5","river":"hessel","seq":5,"up_station":"de.lanuk.3166000000100","down_station":"de.lanuk.3169000000100","length_km":16.304,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"hessel.6","river":"hessel","seq":6,"up_station":"de.lanuk.3169000000100","down_station":null,"length_km":3.991,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"hinterrhein.1","river":"hinterrhein","seq":1,"up_station":null,"down_station":"ch.bafu.2631","length_km":11.091,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"hinterrhein.2","river":"hinterrhein","seq":2,"up_station":"ch.bafu.2631","down_station":"ch.bafu.2387","length_km":38.582,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"hinterrhein.2","river":"hinterrhein","seq":2,"up_station":"ch.bafu.2631","down_station":"ch.bafu.2387","length_km":38.581,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"hinterrhein.3","river":"hinterrhein","seq":3,"up_station":"ch.bafu.2387","down_station":null,"length_km":13.743,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"hogneau.1","river":"hogneau","seq":1,"up_station":null,"down_station":"fr.sandre.E182701002","length_km":18.576,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"hogneau.2","river":"hogneau","seq":2,"up_station":"fr.sandre.E182701002","down_station":"fr.sandre.E182702001","length_km":18.224,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
@@ -2017,6 +2018,9 @@ reaches:
   - {"id":"inde.7","river":"inde","seq":7,"up_station":"de.lanuk.2824590000400","down_station":"de.lanuk.2824900000300","length_km":7.433,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"inde.8","river":"inde","seq":8,"up_station":"de.lanuk.2824900000300","down_station":"de.lanuk.2824900000200","length_km":11.315,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"inde.9","river":"inde","seq":9,"up_station":"de.lanuk.2824900000200","down_station":null,"length_km":1.817,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"kander.1","river":"kander","seq":1,"up_station":null,"down_station":"ch.bafu.2646","length_km":36.039,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"kander.2","river":"kander","seq":2,"up_station":"ch.bafu.2646","down_station":null,"length_km":6.524,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"kander.3","river":"kander","seq":3,"up_station":null,"down_station":null,"length_km":4.762,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"keersop.1","river":"keersop","seq":1,"up_station":null,"down_station":null,"length_km":18.012,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"kleine-emme.1","river":"kleine-emme","seq":1,"up_station":null,"down_station":"ch.bafu.2487","length_km":13.412,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"kleine-emme.2","river":"kleine-emme","seq":2,"up_station":"ch.bafu.2487","down_station":"ch.bafu.2634","length_km":21.732,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
@@ -2078,6 +2082,10 @@ reaches:
   - {"id":"limmat.1","river":"limmat","seq":1,"up_station":null,"down_station":"ch.bafu.2099","length_km":3.207,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"limmat.2","river":"limmat","seq":2,"up_station":"ch.bafu.2099","down_station":"ch.bafu.2243","length_km":24.226,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"limmat.3","river":"limmat","seq":3,"up_station":"ch.bafu.2243","down_station":null,"length_km":8.878,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"linth.1","river":"linth","seq":1,"up_station":null,"down_station":"ch.bafu.2352","length_km":6.598,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"linth.2","river":"linth","seq":2,"up_station":"ch.bafu.2352","down_station":"ch.bafu.2372","length_km":25.201,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"linth.3","river":"linth","seq":3,"up_station":"ch.bafu.2372","down_station":"ch.bafu.2104","length_km":8.014,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"linth.4","river":"linth","seq":4,"up_station":"ch.bafu.2104","down_station":null,"length_km":16.133,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"lippe.1","river":"lippe","seq":1,"up_station":null,"down_station":"de.lanuk.2781100000100","length_km":0.129,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"lippe.2","river":"lippe","seq":2,"up_station":"de.lanuk.2781100000100","down_station":"de.lanuk.2781730000200","length_km":10.144,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"lippe.3","river":"lippe","seq":3,"up_station":"de.lanuk.2781730000200","down_station":"de.lanuk.2783390000100","length_km":9.292,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
@@ -2645,11 +2653,15 @@ reaches:
   - {"id":"sieg.2","river":"sieg","seq":2,"up_station":"de.lanuk.2721330000100","down_station":"de.lanuk.2721390000100","length_km":9.302,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"sieg.3","river":"sieg","seq":3,"up_station":"de.lanuk.2721390000100","down_station":null,"length_km":0.266,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"sieg.4","river":"sieg","seq":4,"up_station":null,"down_station":"de.lanuk.2721770000200","length_km":11.217,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"sieg.5","river":"sieg","seq":5,"up_station":"de.lanuk.2721770000200","down_station":"de.lanuk.2725910000100","length_km":82.102,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"sieg.5","river":"sieg","seq":5,"up_station":"de.lanuk.2721770000200","down_station":"de.lanuk.2725910000100","length_km":82.101,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"sieg.6","river":"sieg","seq":6,"up_station":"de.lanuk.2725910000100","down_station":null,"length_km":15.809,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"sieg.7","river":"sieg","seq":7,"up_station":null,"down_station":"de.lanuk.2727500000100","length_km":5.797,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"sieg.8","river":"sieg","seq":8,"up_station":"de.lanuk.2727500000100","down_station":"de.lanuk.2729100000100","length_km":9.228,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"sieg.9","river":"sieg","seq":9,"up_station":"de.lanuk.2729100000100","down_station":null,"length_km":8.703,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"simme.1","river":"simme","seq":1,"up_station":null,"down_station":"ch.bafu.2219","length_km":2.743,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"simme.2","river":"simme","seq":2,"up_station":"ch.bafu.2219","down_station":"ch.bafu.2151","length_km":32.265,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"simme.3","river":"simme","seq":3,"up_station":"ch.bafu.2151","down_station":"ch.bafu.2488","length_km":12.79,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"simme.4","river":"simme","seq":4,"up_station":"ch.bafu.2488","down_station":null,"length_km":6.33,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"sitter.1","river":"sitter","seq":1,"up_station":null,"down_station":"ch.bafu.2112","length_km":3.999,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"sitter.2","river":"sitter","seq":2,"up_station":"ch.bafu.2112","down_station":"ch.bafu.2468","length_km":16.599,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"sitter.3","river":"sitter","seq":3,"up_station":"ch.bafu.2468","down_station":null,"length_km":28.903,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
@@ -2733,7 +2745,7 @@ reaches:
   - {"id":"waal.6","river":"waal","seq":6,"up_station":"nl.rws.tiel.waal","down_station":"nl.rws.zaltbommel","length_km":19.361,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"waal.7","river":"waal","seq":7,"up_station":"nl.rws.zaltbommel","down_station":null,"length_km":17.496,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"wark.1","river":"wark","seq":1,"up_station":null,"down_station":null,"length_km":4.088,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
-  - {"id":"wark.2","river":"wark","seq":2,"up_station":null,"down_station":"lu.age.niederfeulen","length_km":4.27,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
+  - {"id":"wark.2","river":"wark","seq":2,"up_station":null,"down_station":"lu.age.niederfeulen","length_km":4.276,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"wark.3","river":"wark","seq":3,"up_station":"lu.age.niederfeulen","down_station":"lu.age.welscheid","length_km":4.907,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"wark.4","river":"wark","seq":4,"up_station":"lu.age.welscheid","down_station":"lu.age.welscheid-village","length_km":2.299,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
   - {"id":"wark.5","river":"wark","seq":5,"up_station":"lu.age.welscheid-village","down_station":"lu.age.ettelbruck-wark","length_km":6.928,"flags":{"tidal":false,"impounded":false,"bifurcation":false},"travel_time_h":null,"travel_time_source":null}
