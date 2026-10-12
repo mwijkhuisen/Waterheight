@@ -71,15 +71,15 @@
 /* The brand tokens (BRAND.md §3) and the signal set (BRAND.md §5). These are the only brand hex values in CSS; the
    logo SVGs carry their own. */
 :root {
-  --ink: #0e3a4b; /* Rivierblauw: text, the name's "Rivier", the subtitle */
+  --ink: #0e3a4b; /* Rivierblauw: text, the name's "Water", the subtitle */
   --muted: #46606b; /* secondary text */
   --paper: #f4f1ea; /* Gebroken wit */
   --line: #c9c3b6; /* borders: a warm neutral on the off-white */
   --accent: #17738a; /* links and small accent text */
   --accent-ink: #f4f1ea; /* text on --accent */
   --water: #1a7f96; /* Waterblauw: large text (from 24 px) and graphics only, never small text */
-  --water-dark: #4fb3c9; /* the iris water on Rivierblauw */
-  --name-dark: #7ccadb; /* "kijker" and links on Rivierblauw */
+  --water-dark: #4fb3c9; /* the mark's water on Rivierblauw */
+  --name-dark: #7ccadb; /* "Radar" and links on Rivierblauw */
   /* Signal set: notices and errors, never a brand colour (palette test). The map's class, Δh and alert colours are in
      features/legend/palette.ts and lib/labels. */
   --signal-caution-bg: #fff3cd;
