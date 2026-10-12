@@ -182,7 +182,10 @@ services:
   # `compose run`, never a daemon). It is the one service on both egress and db: it
   # fetches from the registered providers and loads through its own login, rws_backfill
   # (A§11.1, threat model trust boundary 7). It reads no visitor input; its targets come
-  # only from registry/ (invariant 1).
+  # only from registry/ (invariant 1), enforced in the process: egress allows 443 to any
+  # address. On db it sits beside api and the loader, and it mounts the raw archive
+  # read-write (it could append a line for any spec, as capture can; the loader's window
+  # bounds what a backfill line stores). One runner per host: a lease row in the database.
   backfill:
     <<: *hardening
     image: ${RWS_SERVER_IMAGE:?}
@@ -488,7 +491,8 @@ networks:
     internal: true
     driver_opts:
       com.docker.network.bridge.name: rws-db
-  # Capture and watchdog: tcp/443 and DNS to the host's resolvers only (nftables).
+  # Capture, watchdog and the backfill job: tcp/443 to any address and DNS to the host's
+  # resolvers only (nftables); the provider hosts are allowlisted in the process (registry/).
   egress:
     enable_ipv6: true
     driver_opts:

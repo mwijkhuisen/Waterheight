@@ -16,9 +16,9 @@ Nothing pages on a missing partition by itself: the loader creates them, and a f
 | Default partition | **None.** A row outside every partition fails loudly (SQLSTATE 23514), never lands somewhere unnoticed |
 | Who creates them | only `ensure_partitions(from, to)`, a `SECURITY DEFINER` function owned by `rws_owner`. Each partition is built beside its parent (`CREATE TABLE … LIKE … INCLUDING DEFAULTS, CONSTRAINTS, INDEXES`) and then attached, so readers of `obs` are not blocked |
 | When it runs | (1) the loader, for the time range of **every payload**, in the payload's own transaction; (2) the nightly job of `load`, once a UTC day after 02:00: from now to three months ahead; (3) `migrate`, at every deploy: from 2026-08-01 to three months ahead |
-| Bounds | `from` not before 1900-01-01, `to` not later than now plus 400 days; the monthly part (from 2026-01-01 on) at most 3,700 days wide, the yearly part has no span limit. Anything else raises 22023 |
+| Bounds | `from` not before 2000-01-01 for `ensure_partitions` (every live caller and `migrate`) and not before 1900-01-01 for `ensure_history_partitions` (the backfill's upsert only; review C7: a live epoch-0 timestamp fails loudly instead of making decades of tables), `to` not later than now plus 400 days; the monthly part (from 2026-01-01 on) at most 3,700 days wide, the yearly part has no span limit. Anything else raises 22023 |
 | Yearly guard | before it creates any yearly partition, `ensure_partitions` reads `pg_partition_tree('obs')` and raises `55000` if a **monthly** `obs` partition lies below 2026-01-01 (the layout would be mixed). A call that starts at or after 2026-01-01 never reads it |
-| Who may call it | `rws_load` and `rws_migrator` (EXECUTE is revoked from PUBLIC), and the superuser |
+| Who may call it | `ensure_partitions`: `rws_load` and `rws_migrator`; `ensure_history_partitions`: `rws_load` only (EXECUTE is revoked from PUBLIC), and the superuser. Both have one body: the live function checks its floor and calls the history one as the owner |
 | Retention | None for the database. Only the raw archive is pruned (`docs/runbooks/disk-full.md` §4). Never drop or detach a partition |
 
 ## 2. Look
