@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { OWNER_CACHE_CONTROL, OWNER_ROBOTS } from '../scripts/lib/verify-owner-listener.ts';
 import { repoRoot } from './catalogue.ts';
 
 // The owner site (P9a): its A§12.2 headers are the public site's, and only the
@@ -37,6 +38,10 @@ describe('owner site headers', () => {
       pub.filter((l) => !robots(l)),
     );
     expect(own).toContain('Cache-Control "private, no-store"');
+    // #109 review round 2: verify-prod's owner listener (--edge cloudflare) recognises the owner site by these exact
+    // values; changing them here without its constants would blind that check.
+    expect(own).toContain(`Cache-Control "${OWNER_CACHE_CONTROL}"`);
+    expect(own).toContain(`X-Robots-Tag "${OWNER_ROBOTS}"`);
   });
 
   it('are repeated in the error route, so a 401 and a 404 carry the same two headers', () => {
@@ -302,15 +307,19 @@ describe('the owner site pages and runtime config (P10b)', () => {
     expect(/handle \/runtime-config\.json \{\n([\s\S]*?)\n\t\}/.exec(ownerSite)?.[1]).not.toMatch(/Cache-Control/);
   });
 
-  it('passes the three values to both Caddy containers from the environment, the operator and the CDN optional', () => {
+  it('passes the values to both Caddy containers from the environment, the operator optional, the CDN the public one only', () => {
     type Svc = { environment?: Record<string, string> };
     const base = parse(read('deploy/compose.yaml')) as { services: Record<string, Svc> };
     const overlay = parse(read('deploy/compose.owner.yaml')) as { services: Record<string, Svc> };
-    for (const env of [base.services.caddy?.environment, overlay.services['caddy-owner']?.environment]) {
+    const publicEnv = base.services.caddy?.environment;
+    const ownerEnv = overlay.services['caddy-owner']?.environment;
+    for (const env of [publicEnv, ownerEnv]) {
       expect(env?.RWS_CONTACT_EMAIL).toBe(`\${RWS_CONTACT_EMAIL:?}`);
       expect(env?.RWS_OPERATOR_NAME).toBe(`\${RWS_OPERATOR_NAME:-}`);
-      expect(env?.RWS_CDN_NAME).toBe(`\${RWS_CDN_NAME:-}`);
     }
+    expect(publicEnv?.RWS_CDN_NAME).toBe(`\${RWS_CDN_NAME:-}`);
+    // #109 review round 2: the owner site is WireGuard-only and never behind a CDN, whatever the public site uses.
+    expect(ownerEnv?.RWS_CDN_NAME).toBe('');
   });
 });
 

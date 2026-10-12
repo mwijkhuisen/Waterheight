@@ -119,7 +119,11 @@ describe('the host-less catch-all (A§12.2, criterion 10)', () => {
       body(HTTP, '(edge_site)')
         .split('\n')
         .map((l) => l.trim()),
-    ).toEqual(['@plain_http header X-Forwarded-Proto http', 'redir @plain_http https://{host}{uri} 308']);
+    ).toEqual([
+      '@plain_http header X-Forwarded-Proto http',
+      'header @plain_http Cache-Control "no-store"',
+      'redir @plain_http https://{host}{uri} 308',
+    ]);
     // Imported once, inside the site block, right after the phase snippet.
     expect(code.match(/^\s*import edge_site$/gm)).toHaveLength(1);
     expect(code).toContain('\timport phase-{$RWS_SITE_PHASE:prelaunch}.caddy main\n\timport edge_site\n');

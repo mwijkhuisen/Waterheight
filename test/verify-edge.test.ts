@@ -140,6 +140,9 @@ describe('edge runtime config cdn', () => {
   });
   it('fails an empty, missing or non-text cdn, bad JSON and a bad status', () => {
     expect(classifyEdgeCdn(cfg('')).ok).toBe(false);
+    // Review round 2: only the exact name selects the Cloudflare privacy text (Cdn.tsx).
+    for (const name of ['cloudflare', 'Cloudflare, Inc.', 'Cloudflare ', 'Example CDN'])
+      expect(classifyEdgeCdn(cfg(name)).ok, name).toBe(false);
     expect(classifyEdgeCdn(cfg('  ')).ok).toBe(false);
     expect(classifyEdgeCdn(cfg(undefined)).ok).toBe(false);
     expect(classifyEdgeCdn(cfg(7)).ok).toBe(false);

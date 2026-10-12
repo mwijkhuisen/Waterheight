@@ -105,6 +105,13 @@ if adapt now "$tunnel" RWS_SITE_SCHEME=http RWS_TRUSTED_PROXIES=172.30.41.10/32;
   else
     bad "tunnel mode: no 308 for X-Forwarded-Proto http (or direct mode has one)"
   fi
+  if jq -e '[.. | objects | select(.match? // [] | any(.header?["X-Forwarded-Proto"]? == ["http"]))
+      | .handle[] | select(.handler == "headers" and .response.set["Cache-Control"] == ["no-store"])] | length == 1' \
+    "$tunnel" >/dev/null; then
+    ok "tunnel mode: the 308 carries Cache-Control: no-store"
+  else
+    bad "tunnel mode: the 308 has no Cache-Control: no-store"
+  fi
   if jq -e '[.apps.http.servers[].trusted_proxies.ranges] | all(. == ["172.30.41.10/32"])' "$tunnel" >/dev/null &&
     jq -e '[.apps.http.servers[].trusted_proxies_strict] | all(. == 1)' "$tunnel" >/dev/null; then
     ok "tunnel mode: the trusted proxy is exactly cloudflared's address, strict"

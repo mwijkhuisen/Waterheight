@@ -817,6 +817,14 @@ for edge in "" "RWS_EDGE=direct" "RWS_EDGE=" "RWS_EDGE=tunnel;RWS_EDGE=direct"; 
   expect_no_grep "compose\\.tunnel\\.yaml" "$FIX/calls"
 done
 
+case_ "tunnel edge: a missing rws.env reads as direct (round 2: compose and env_ready fail on it themselves)"
+setup
+rm -f "$C/etc/rws.env"
+rc=0
+bash -c '. "$1" && edge_mode' _ "$bin/rws-lib.sh" >"$C/out" 2>&1 || rc=$?
+expect_rc 0
+[[ $(cat "$C/out") == direct ]] || fail "edge_mode without rws.env printed: $(cat "$C/out")"
+
 case_ "tunnel edge: RWS_EDGE=tunnel and a release without deploy/compose.tunnel.yaml: stops, no docker"
 rws_compose_direct "RWS_EDGE=tunnel" 0 full
 expect_rc 1

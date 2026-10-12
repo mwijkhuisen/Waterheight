@@ -114,8 +114,11 @@ export function classifyEdgeCdn(page: Page | string): Result {
   } catch {
     return fail(check, 'not JSON');
   }
+  // Behind Cloudflare the privacy page must show its Cloudflare text, which only the exact name selects (Cdn.tsx;
+  // #109 review round 2): "cloudflare" or "Cloudflare, Inc." would show the neutral text with every other check green.
+  if (cdn === 'Cloudflare') return pass(check, 'cdn "Cloudflare"');
   return typeof cdn === 'string' && cdn.trim().length > 0
-    ? pass(check, `cdn ${JSON.stringify(cdn)}`)
+    ? fail(check, `cdn ${JSON.stringify(cdn)}, not exactly "Cloudflare": the privacy page shows the neutral CDN text`)
     : fail(check, 'cdn is empty or not a text: the privacy page would say "no CDN"');
 }
 

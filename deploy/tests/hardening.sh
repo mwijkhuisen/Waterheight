@@ -64,7 +64,9 @@ def strip: sub("^CAP_"; "");
 
 ([.[] | .Config.Labels["com.docker.compose.service"] // ""] | unique) as $present
 | ($edge == "tunnel" or ($present | index("cloudflared") != null)) as $tunnel
-| (if $edge == "tunnel" and ($present | index("cloudflared") | not)
+| (if (["", "direct", "tunnel"] | index($edge)) == null
+    then "fail\trws.env: RWS_EDGE is neither direct nor tunnel (rws-lib.sh refuses it too)" else empty end),
+  (if $edge == "tunnel" and ($present | index("cloudflared") | not)
     then "fail\tmissing service: cloudflared is not running (rws.env says RWS_EDGE=tunnel)" else empty end),
   ((required[] | select(. as $r | $present | index($r) | not)
     | "fail\tmissing service: \(.) is not running")),

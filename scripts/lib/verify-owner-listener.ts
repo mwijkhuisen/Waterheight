@@ -159,6 +159,14 @@ const CERTIFICATE = new Set([
  * (owner.caddy: `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow`): Cloudflare's own error pages
  * send `Cache-Control: private, max-age=0, no-store, …`, which is no owner sign (#109 review C2/S1).
  */
+/** owner.caddy's values on every answer; test/caddy-owner.test.ts holds owner.caddy to them. */
+export const OWNER_CACHE_CONTROL = 'private, no-store';
+export const OWNER_ROBOTS = 'noindex, nofollow';
+const exactHeader = (head: string, name: string, value: string) =>
+  new RegExp(`^${name}:[ \\t]*${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[ \\t]*\\r?$`, 'im').test(head);
+
+// Either header suffices (CR-5 of round 2 asked for both): the owner site sends both on every answer, and one exact
+// owner value through the edge is already a sign worth a FAIL; Cloudflare's own pages carry neither exact value.
 export function parseProbeHead(head: string): Probe {
   const m = /^HTTP\/[\d.]+ (\d{3})/.exec(head);
   if (!m) return { kind: 'handshake-failed' };
@@ -167,8 +175,7 @@ export function parseProbeHead(head: string): Probe {
     status: Number(m[1]),
     wwwAuthenticate: /^www-authenticate:/im.test(head),
     ownerHeaders:
-      /^x-robots-tag:[ \t]*noindex, nofollow[ \t]*\r?$/im.test(head) ||
-      /^cache-control:[ \t]*private, no-store[ \t]*\r?$/im.test(head),
+      exactHeader(head, 'x-robots-tag', OWNER_ROBOTS) || exactHeader(head, 'cache-control', OWNER_CACHE_CONTROL),
   };
 }
 

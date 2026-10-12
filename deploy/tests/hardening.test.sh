@@ -196,6 +196,11 @@ fleet | mutate caddy ".HostConfig.PortBindings = $loop" |
   expect "tunnel in rws.env: no cloudflared running fails" prod 1 'missing service: cloudflared is not running'
 fleet | expect "tunnel in rws.env: caddy's public ports fail without cloudflared too" prod 1 'FAIL caddy .*tunnel mode'
 tunnel_fleet | expect "tunnel in rws.env: the tunnel stack passes" prod 0 'OK, 15 container'
+# Round 2: a value rws-lib.sh refuses (a CRLF, a trailing space, quotes) is refused here too, never read as direct.
+for bad in $'RWS_EDGE=tunnel\r' 'RWS_EDGE=tunnel ' 'RWS_EDGE="tunnel"' 'RWS_EDGE=Tunnel'; do
+  printf '%s\n' "$bad" >"$RWS_ETC/rws.env"
+  fleet | expect "an unreadable RWS_EDGE line fails ($(printf '%q' "$bad"))" prod 1 'RWS_EDGE is neither direct nor tunnel'
+done
 printf 'RWS_EDGE=tunnel\nRWS_EDGE=direct\n' >"$RWS_ETC/rws.env"
 fleet | expect "the last RWS_EDGE line wins (direct)" prod 0 'OK, 14 container'
 rm -f "$RWS_ETC/rws.env"
