@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { kiwisUrlProblems, MAX_IDS, MAX_VALUES, MIN_STEP_MS } from '../../src/adapters/_shared/kiwis/request.ts';
 import { adapter as be3 } from '../../src/adapters/be-3/capture.ts';
+import { loadBackfill } from '../../src/backfill/spec.ts';
 import { budgets, requestsPerMinute } from '../../src/capture/budget.ts';
 import { baseRequest, variantKey } from '../../src/capture/specs.ts';
 import type { Row } from '../../src/http/types.ts';
@@ -35,6 +36,24 @@ describe('request budgets', () => {
     const rws = peak('ddapi20-waterwebservices.rijkswaterstaat.nl');
     expect(rws).toBeGreaterThan(300); // the whole tiered set is really counted
     expect(rws).toBeLessThanOrEqual(400);
+  });
+
+  it('RWS backfill (P14a): ≤ 1 request/s, ≤ 3600/h, only 20:00–06:00 UTC, on top of the live ≤ 400/h', () => {
+    const rws = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
+    const limits = loadBackfill(registry.hosts).hosts[rws];
+    expect(limits).toBeDefined();
+    expect(limits?.min_interval_ms).toBeGreaterThanOrEqual(1000);
+    expect(limits?.max_per_hour).toBeLessThanOrEqual(3600);
+    // 1 request/s is 3600 an hour: the two limits agree.
+    expect(3_600_000 / (limits?.min_interval_ms ?? 1)).toBeLessThanOrEqual(limits?.max_per_hour ?? 0);
+    const minutes = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+    const { from, to } = limits?.window_utc ?? { from: '00:00', to: '23:59' };
+    // The window wraps midnight and lies inside 20:00–06:00.
+    expect(minutes(from)).toBeGreaterThan(minutes(to));
+    expect(minutes(from)).toBeGreaterThanOrEqual(20 * 60);
+    expect(minutes(to)).toBeLessThanOrEqual(6 * 60);
+    // Live capture keeps its own budget in the same hour.
+    expect(peak(rws)).toBeLessThanOrEqual(400);
   });
 
   it('CH-1 (LINDAS) never runs more often than every 10 min', () => {

@@ -1,0 +1,313 @@
+import { SPEC_RE } from '../archive/manifest.ts';
+import { Archive } from '../archive/writer.ts';
+import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from '../capture/env.ts';
+import { loadRegistry, type Registry } from '../capture/specs.ts';
+import { dbConfig, errorCode, openDb } from '../db/pool.ts';
+import { Client } from '../http/client.ts';
+import { DATA_FLOOR } from '../load/dirty.ts';
+import { type Job, type JobStatus, type JobStore, SqlJobStore } from './job.ts';
+import { planChunks, probeYears, requestBudget } from './plan.ts';
+import { project, totals } from './project.ts';
+import { type RunResult, runBackfill } from './run.ts';
+import { type LoadedBackfill, type LoadedBackfillSpec, loadBackfill } from './spec.ts';
+
+// `backfill plan|run|status|pause|resume|abort` (P14a, plan §3.3): the history runner's command line. Arguments are
+// hand-rolled like replay's; every value is checked against a fixed pattern. Output is one JSON line per job and a
+// totals line, with fixed codes and never provider text. Exit codes: 0, 64 usage, 78 config, 1 failure.
+
+export const EXIT_USAGE = 64;
+
+export const BACKFILL_USAGE = `usage: backfill plan --spec <id> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--series key,…] [--dry-run]
+       backfill run [--until YYYY-MM-DDTHH:MM:SSZ]
+       backfill status
+       backfill pause|resume|abort --job <id>`;
+
+export type BackfillArgs =
+  | { cmd: 'plan'; spec: string; from: string | null; to: string | null; series: string[] | null; dryRun: boolean }
+  | { cmd: 'run'; until: Date | null }
+  | { cmd: 'status' }
+  | { cmd: 'pause' | 'resume' | 'abort'; job: number };
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const isDay = (v: string) =>
+  DAY.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v);
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+const isInstant = (v: string) =>
+  INSTANT.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString() === `${v.slice(0, 19)}.000Z`;
+/** A provider key: `<code>/<Grootheid>/<Hoedanigheid>/<method>`; nothing outside this alphabet. */
+const SERIES_KEY = /^[A-Za-z0-9._:/-]{1,300}$/;
+
+/** The arguments, or a usage error text. */
+export function parseBackfillArgs(argv: readonly string[]): BackfillArgs | string {
+  const [cmd, ...rest] = argv;
+  const flags = new Map<string, string>();
+  let dryRun = false;
+  for (let i = 0; i < rest.length; i += 1) {
+    const flag = rest[i] as string;
+    if (flag === '--dry-run' && cmd === 'plan' && !dryRun) {
+      dryRun = true;
+      continue;
+    }
+    const value = rest[++i];
+    if (!flag.startsWith('--') || value === undefined || flags.has(flag)) return `backfill ${cmd}: bad argument`;
+    flags.set(flag, value);
+  }
+  const allowed = (names: readonly string[]) => [...flags.keys()].every((k) => names.includes(k));
+  switch (cmd) {
+    case 'plan': {
+      const spec = flags.get('--spec');
+      const from = flags.get('--from') ?? null;
+      const to = flags.get('--to') ?? null;
+      const series = flags.get('--series')?.split(',') ?? null;
+      if (!allowed(['--spec', '--from', '--to', '--series']) || spec === undefined || !SPEC_RE.test(spec))
+        return 'backfill plan: --spec <id> is required; the others are --from, --to, --series and --dry-run';
+      if ((from !== null && !isDay(from)) || (to !== null && !isDay(to)))
+        return 'backfill plan: --from and --to are UTC days (YYYY-MM-DD)';
+      if (series !== null && !series.every((k) => SERIES_KEY.test(k)))
+        return 'backfill plan: --series is a list of keys';
+      return { cmd, spec, from, to, series, dryRun };
+    }
+    case 'run': {
+      const until = flags.get('--until') ?? null;
+      if (!allowed(['--until']) || (until !== null && !isInstant(until)))
+        return 'backfill run: --until is a UTC instant (YYYY-MM-DDTHH:MM:SSZ)';
+      return { cmd, until: until === null ? null : new Date(until) };
+    }
+    case 'status':
+      return rest.length === 0 ? { cmd } : 'backfill status takes no arguments';
+    case 'pause':
+    case 'resume':
+    case 'abort': {
+      const job = flags.get('--job') ?? '';
+      if (!allowed(['--job']) || !/^[1-9]\d{0,9}$/.test(job)) return `backfill ${cmd}: --job <id> is required`;
+      return { cmd, job: Number(job) };
+    }
+    default:
+      return BACKFILL_USAGE;
+  }
+}
+
+const print = (o: unknown) => console.log(JSON.stringify(o));
+
+const jobLine = (j: Job) => ({
+  job: j.id,
+  spec: j.spec_id,
+  series: j.series_key,
+  status: j.status,
+  range_from: j.range_from.toISOString(),
+  range_to: j.range_to.toISOString(),
+  data_from: j.data_from?.toISOString() ?? null,
+  cursor: j.cursor_ts.toISOString(),
+  chunks_done: j.chunks_done,
+  requests: j.requests,
+  request_budget: j.request_budget,
+  attempts: j.attempts,
+  provider_values: j.provider_values,
+  inserted: j.inserted,
+  revised: j.revised,
+  skipped: j.skipped,
+  dropped: j.dropped,
+  unreconciled: j.unreconciled,
+  error: j.last_error,
+});
+
+/** The plan's range: --from (default the spec floor) up to --to (default DATA_FLOOR), or a usage error. */
+export function planRange(
+  spec: LoadedBackfillSpec,
+  from: string | null,
+  to: string | null,
+): { from: Date; to: Date } | string {
+  const a = new Date(`${from ?? spec.floor}T00:00:00Z`);
+  const b = to === null ? new Date(DATA_FLOOR) : new Date(`${to}T00:00:00Z`);
+  if (a < new Date(`${spec.floor}T00:00:00Z`)) return 'backfill plan: --from is before the spec floor';
+  if (!(a < b)) return 'backfill plan: --from must be before --to';
+  return { from: a, to: b };
+}
+
+/** Plan: the dry-run needs neither the database nor the network. */
+async function plan(
+  args: Extract<BackfillArgs, { cmd: 'plan' }>,
+  config: LoadedBackfill,
+  jobs: JobStore | undefined,
+  log: (line: string) => void,
+): Promise<number> {
+  const spec = config.specs.find((s) => s.id === args.spec);
+  if (spec === undefined) {
+    log('backfill plan: --spec is not in registry/backfill.yaml');
+    return EXIT_USAGE;
+  }
+  const range = planRange(spec, args.from, args.to);
+  if (typeof range === 'string') {
+    log(range);
+    return EXIT_USAGE;
+  }
+  const chosen = args.series === null ? spec.series : spec.series.filter((s) => args.series?.includes(s.series_key));
+  if (args.series !== null && chosen.length !== new Set(args.series).size) {
+    log('backfill plan: --series names a key the spec does not select');
+    return EXIT_USAGE;
+  }
+  const rows = chosen.map((s) => project(s, range.from, range.to, spec.chunk_ms));
+  if (args.dryRun) {
+    for (const r of rows) print(r);
+    print({
+      totals: {
+        spec: spec.id,
+        from: range.from.toISOString(),
+        to: range.to.toISOString(),
+        ...totals(rows, spec.limits.min_interval_ms),
+      },
+    });
+    return 0;
+  }
+  if (jobs === undefined) return 1;
+  const chunks = planChunks(range.from, range.to, spec.chunk_ms).length;
+  const budget = requestBudget(chunks, probeYears(range.from, range.to));
+  let created = 0;
+  for (const s of chosen) {
+    const made = await jobs.insert({
+      spec_id: spec.id,
+      source_id: spec.source,
+      series_key: s.series_key,
+      range_from: range.from,
+      range_to: range.to,
+      chunk_ms: spec.chunk_ms,
+      request_budget: budget,
+    });
+    if (made.created) created += 1;
+    print({ job: made.id, series: s.series_key, created: made.created, chunks, request_budget: budget });
+  }
+  print({ totals: { spec: spec.id, jobs: chosen.length, created } });
+  return 0;
+}
+
+/** Sums of the jobs' progress, for the totals line. */
+function jobTotals(jobs: readonly Job[]) {
+  const by: Partial<Record<JobStatus, number>> = {};
+  for (const j of jobs) by[j.status] = (by[j.status] ?? 0) + 1;
+  const sum = (k: 'chunks_done' | 'requests' | 'inserted' | 'revised' | 'unreconciled') =>
+    jobs.reduce((a, j) => a + j[k], 0);
+  return {
+    jobs: jobs.length,
+    by_status: by,
+    chunks_done: sum('chunks_done'),
+    requests: sum('requests'),
+    inserted: sum('inserted'),
+    revised: sum('revised'),
+    unreconciled: sum('unreconciled'),
+  };
+}
+
+/** The `backfill` role (main.ts): arguments, config and the database, then the command. */
+export async function backfillMain(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>,
+  log: (line: string) => void,
+): Promise<number> {
+  const args = parseBackfillArgs(argv);
+  if (typeof args === 'string') {
+    log(args);
+    return EXIT_USAGE;
+  }
+  const needsRegistry = args.cmd === 'plan' || args.cmd === 'run';
+  let registry: Registry | undefined;
+  let config: LoadedBackfill | undefined;
+  if (needsRegistry) {
+    try {
+      registry = loadRegistry();
+      config = loadBackfill(registry.hosts);
+    } catch (err) {
+      log(`backfill: ${err instanceof Error ? err.message : 'registry is not valid'}`);
+      return EXIT_CONFIG;
+    }
+  }
+  if (args.cmd === 'plan' && args.dryRun) {
+    return plan(args, config as LoadedBackfill, undefined, log);
+  }
+  const cfg = dbConfig(env, 'rws_backfill');
+  if (typeof cfg === 'string') {
+    log(`backfill: ${cfg}`);
+    return EXIT_CONFIG;
+  }
+  let capture: ReturnType<typeof captureEnv> | undefined;
+  if (args.cmd === 'run') {
+    capture = captureEnv(env);
+    if (typeof capture === 'string') {
+      log(`backfill: ${capture}`);
+      return EXIT_CONFIG;
+    }
+  }
+  const { db, close } = openDb(cfg, { max: 1 });
+  const store = new SqlJobStore(db);
+  try {
+    switch (args.cmd) {
+      case 'plan':
+        return await plan(args, config as LoadedBackfill, store, log);
+      case 'status': {
+        const jobs = await store.list();
+        for (const j of jobs) print(jobLine(j));
+        print({ totals: jobTotals(jobs) });
+        return 0;
+      }
+      case 'pause':
+      case 'resume':
+      case 'abort': {
+        const to: JobStatus = args.cmd === 'pause' ? 'paused' : args.cmd === 'resume' ? 'planned' : 'aborted';
+        const only: JobStatus[] =
+          args.cmd === 'pause'
+            ? ['planned', 'running']
+            : args.cmd === 'resume'
+              ? ['paused', 'failed']
+              : ['planned', 'running', 'paused', 'failed'];
+        const changed = await store.setStatus(args.job, to, null, only);
+        print({ job: args.job, status: changed ? to : null, changed });
+        return changed ? 0 : 1;
+      }
+      case 'run': {
+        const reg = registry as Registry;
+        const cap = capture as Exclude<typeof capture, string | undefined>;
+        process.umask(0o027);
+        // The sources the specs name, with the allowlist and the secret headers live capture uses for them.
+        const sources = [...new Set((config as LoadedBackfill).specs.map((s) => s.source))];
+        const hosts = new Map(sources.map((s) => [s, reg.hosts.get(s) ?? []] as const));
+        const sourceHeaders = new Map<string, Record<string, string>>();
+        for (const source of sources) {
+          const set: Record<string, string> = {};
+          for (const [header, secret] of Object.entries(reg.secretHeaders.get(source) ?? {})) {
+            const value = readSecret(secret);
+            if (value !== undefined) set[header] = value;
+          }
+          sourceHeaders.set(source, set);
+        }
+        const client = new Client({ hosts, userAgent: captureUserAgent(cap), sourceHeaders });
+        const result: RunResult = await runBackfill(
+          {
+            config: config as LoadedBackfill,
+            store,
+            archive: new Archive(cap.rawDir),
+            client,
+            now: () => new Date(),
+            sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
+          },
+          args.until === null ? {} : { until: args.until },
+        );
+        for (const j of result.jobs) print(j);
+        print({
+          totals: {
+            stopped: result.stopped,
+            jobs: result.jobs.length,
+            chunks: result.jobs.reduce((a, j) => a + j.chunks, 0),
+            requests: result.jobs.reduce((a, j) => a + j.requests, 0),
+            failed: result.jobs.filter((j) => j.status === 'failed').length,
+            guard_waits: result.guard_waits,
+          },
+        });
+        return result.jobs.some((j) => j.status === 'failed') || result.stopped === 'breaker_open' ? 1 : 0;
+      }
+    }
+  } catch (err) {
+    log(`backfill: failed (${errorCode(err)})`);
+    return 1;
+  } finally {
+    await close();
+  }
+}

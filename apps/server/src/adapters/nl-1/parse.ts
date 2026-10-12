@@ -106,3 +106,10 @@ export function parseWaarnemingen(body: Uint8Array): Waarnemingen[] {
     };
   });
 }
+
+/** `CheckWaarnemingenAanwezig`: the answer is a STRING, "true" or "false" (catalogue §2.1; P14a probe). */
+const Check = z.strictObject({ Succesvol: z.literal(true), WaarnemingenAanwezig: z.enum(['true', 'false']) });
+
+export function parseCheck(body: Uint8Array): boolean {
+  return parseStrict(Check, boundedJson(decode(body), { maxNodes: 100, maxDepth: 3 })).WaarnemingenAanwezig === 'true';
+}
