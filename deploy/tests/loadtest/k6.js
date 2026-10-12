@@ -1,7 +1,8 @@
 // P9b/P12a load test (k6 1.8.1, .github/workflows/loadtest.yml). One k6 process = one client. In CI there are six per
-// scenario, each on its own local address (--local-ips, deploy/tests/loadtest/run-k6.sh), so the API's per-client
-// limiter sees six distinct clients and is never disabled or fed a header. TLS is verified (SSL_CERT_FILE = the e2e
-// root; `insecureSkipTLSVerify` is never set). SCENARIO selects what the process does:
+// scenario, each on its own range of 21 local addresses (--local-ips, deploy/tests/loadtest/run-k6.sh): the limiter
+// is never disabled or fed a header, and no address holds more than the 32 connections to 443 that nftables.conf
+// allows a source (#132). The abuser and the edge probe are one real client each and keep one address. TLS is
+// verified (SSL_CERT_FILE = the e2e root; `insecureSkipTLSVerify` is never set). SCENARIO selects the process's job:
 //
 //   normal      CI. STATIC_RPS (300) static + API_RPS (50) API requests per second over all CLIENTS processes (each
 //               does 1/CLIENTS of it) for DURATION (15m): static meta 30 %, latest 40 %, recent 20 %, settled 10 %;
@@ -10,6 +11,7 @@
 //   abusive     CI. One client hammers /series and /frames (ABUSE_RPS, 300 r/s, ten times the 30 r/s limit and sixty
 //               times the 5 r/s heavy one): at least half of the answers must be 429. ABUSE_ROTATE=1 sends a new
 //               X-Forwarded-For, X-Real-IP and True-Client-IP on every request: it must be throttled all the same.
+//               At most 28 VUs: one address, under the per-source cap of 32 connections (#132).
 //   flood       CI (flood drill). Visitor sessions, SESSIONS_PER_S (1) per process: meta, latest, tiles manifest,
 //               style assets (sprite, glyphs), ~30 PMTiles Range requests, 5 slider steps (API snapshot), 2 /series
 //               calls, with think time. p95 < 300 ms, errors < 0.1 %, lag (below).
@@ -17,11 +19,21 @@
 //               6 r/s per address, inside the limiter, of cache-missing wide /series, /frames and snapshot calls to
 //               saturate the API; only the loader lag is judged (p95 < 120 s). With
 //               SATURATION_REQUIRE=1 the run also fails unless the API showed pressure (a 503, a 504 or an answer over
-//               one second), so that "lag while saturated" is never claimed for an idle API.
+//               one second), so that "lag while saturated" is never claimed for an idle API. SAT_VUS=n (the crowd step,
+//               #132) holds n connections per process instead: n visitors, each sending one of those calls about every
+//               n / SAT_RPS seconds (the same rate), so the connection count does not hang on how slow the API is.
+//               1264 is the first P12a run's peak (about 7,600 in all); with LENIENT=1, the edge probe judges it.
+//   edge        CI (#132). One process on an honest address while the crowd runs: EDGE_RPS (2) r/s of meta.json,
+//               latest.json and /api/v1/health, each with a 10 s timeout, at most 24 VUs. Static files must answer
+//               200 within 2 s, the wait for a connection, TCP and TLS included (edge_static_ok >= 99 %), and health
+//               must answer at all (200 or the 503 `busy`; edge_health_ok >= 95 %).
 //   production  Owner-triggered, one process against a live site (BASE): static files only, PROD_RPS (1000) r/s incl.
 //               PMTiles Range requests, DURATION (15m), a polite User-Agent (UA). p95 < 300 ms, errors < 0.1 %;
 //               aborts at once when errors exceed 1 % or /api/v1/health goes red (non-200 or `down`, or no longer `ok`
-//               when it was at the start). No API call but that health sample.
+//               when it was at the start). No API call but that health sample. At most 26 + 4 (health) VUs: one
+//               address may hold 32 connections to 443 (#132), so 1,000 r/s needs answers within about 26 ms; over
+//               that the run drops iterations, which the summary reports and no threshold judges (the runner's
+//               distance, not the site's capacity).
 //
 // Loader lag (normal, flood, saturation): a sampler reads /api/v1/health every HEALTH_EVERY_S (10 s) and REQUIRES a
 // non-null loader.lag_p95_s and a generated_at younger than 5 minutes: either missing is a failed check (health_ok),
@@ -39,7 +51,7 @@ import { sleep } from 'k6';
 import http from 'k6/http';
 import { Counter, Rate, Trend } from 'k6/metrics';
 
-const SCENARIOS = ['normal', 'abusive', 'flood', 'saturation', 'production'];
+const SCENARIOS = ['normal', 'abusive', 'flood', 'saturation', 'edge', 'production'];
 const SCENARIO = __ENV.SCENARIO || 'normal';
 if (!SCENARIOS.includes(SCENARIO)) throw new Error(`SCENARIO must be one of ${SCENARIOS.join(', ')}`);
 const BASE = __ENV.BASE;
@@ -47,7 +59,14 @@ if (!BASE || !/^https:\/\/[a-z0-9.-]+$/.test(BASE)) throw new Error('BASE must b
 const CLIENT = __ENV.CLIENT || '0';
 const CLIENTS = Number(__ENV.CLIENTS || 6);
 const OUT_DIR = __ENV.OUT_DIR || '.';
-const DEFAULT_DURATION = { normal: '15m', abusive: '2m', flood: '12m', saturation: '3m', production: '15m' };
+const DEFAULT_DURATION = {
+  normal: '15m',
+  abusive: '2m',
+  flood: '12m',
+  saturation: '3m',
+  edge: '2m',
+  production: '15m',
+};
 const DURATION = __ENV.DURATION || DEFAULT_DURATION[SCENARIO];
 const LENIENT = __ENV.LENIENT === '1';
 const STATIC_RPS = Number(__ENV.STATIC_RPS || 300);
@@ -55,8 +74,11 @@ const API_RPS = Number(__ENV.API_RPS || 50);
 const ABUSE_RPS = Number(__ENV.ABUSE_RPS || 300);
 const ABUSE_ROTATE = __ENV.ABUSE_ROTATE === '1';
 const SAT_RPS = Number(__ENV.SAT_RPS || 126);
+const SAT_VUS = Number(__ENV.SAT_VUS || 0);
+const EDGE_RPS = Number(__ENV.EDGE_RPS || 2);
 const SESSIONS_PER_S = Number(__ENV.SESSIONS_PER_S || 1);
 const PROD_RPS = Number(__ENV.PROD_RPS || 1000);
+const PROD_VUS = 26; // + 4 health VUs: under the 32 connections to 443 one address may hold (#132)
 const HEALTH_EVERY_S = Number(__ENV.HEALTH_EVERY_S || 10);
 const MAP_ASSETS = __ENV.MAP_ASSETS || '';
 if (MAP_ASSETS !== '' && !/^\/assets\/map\/[0-9a-f]{7}$/.test(MAP_ASSETS))
@@ -65,8 +87,9 @@ const clean = (n, what) => {
   if (!Number.isFinite(n) || n <= 0) throw new Error(`${what} must be a positive number`);
   return n;
 };
-for (const n of [STATIC_RPS, API_RPS, ABUSE_RPS, SAT_RPS, SESSIONS_PER_S, PROD_RPS, HEALTH_EVERY_S, CLIENTS])
+for (const n of [STATIC_RPS, API_RPS, ABUSE_RPS, SAT_RPS, EDGE_RPS, SESSIONS_PER_S, PROD_RPS, HEALTH_EVERY_S, CLIENTS])
   clean(n, 'a rate');
+if (!Number.isInteger(SAT_VUS) || SAT_VUS < 0 || SAT_VUS > 5000) throw new Error('SAT_VUS must be 0 to 5000');
 
 const seconds = (text) => {
   const m = /^([0-9]+)(s|m|h)$/.exec(text);
@@ -90,6 +113,7 @@ const KINDS = [
   'tile_range',
   'map_asset',
   'abuse',
+  'health',
 ];
 
 // ---------------------------------------------------------------------------------------------- metrics
@@ -103,6 +127,8 @@ const healthOk = new Rate('health_ok');
 const healthSamples = new Counter('health_samples');
 const healthBusy = new Counter('health_busy');
 const healthRed = new Rate('health_red');
+const edgeStaticOk = new Rate('edge_static_ok');
+const edgeHealthOk = new Rate('edge_health_ok');
 
 // ---------------------------------------------------------------------------------------------- options
 /** constant-arrival-rate for `perSec` requests a second (tenths of a request resolve rates such as 50/6). */
@@ -165,7 +191,7 @@ if (SCENARIO === 'normal') {
   th('dropped_iterations', 'counter', ['count==0']);
   healthThresholds();
 } else if (SCENARIO === 'abusive') {
-  scenarios.abuse = arrival('abuse', ABUSE_RPS, 20, 200);
+  scenarios.abuse = arrival('abuse', ABUSE_RPS, 20, 28);
   keepKinds(['abuse']);
   // Never lenient: the abuser must be throttled in every window.
   thresholds.abuse_429 = ['rate>0.5'];
@@ -181,20 +207,29 @@ if (SCENARIO === 'normal') {
 } else if (SCENARIO === 'saturation') {
   // At most 2 x SAT_RPS requests in flight per process (about 1,500 in all): enough to saturate the API, which answers a
   // 503 `busy` once its permits are taken. Ten times as many (P12a, first run) filled the 256 MiB of Caddy with TLS
-  // connections and measured Caddy, not the API (KG-313).
-  scenarios.saturate = arrival('saturate', SAT_RPS, SAT_RPS, SAT_RPS * 2);
+  // connections and measured Caddy, not the API (KG-313); SAT_VUS holds that crowd's connections on purpose (#132).
+  scenarios.saturate =
+    SAT_VUS > 0
+      ? { executor: 'constant-vus', exec: 'crowdVisitor', vus: SAT_VUS, duration: DURATION }
+      : arrival('saturate', SAT_RPS, SAT_RPS, SAT_RPS * 2);
   scenarios.health = healthScenario('healthSample');
   keepKinds(['api_snapshot', 'api_series', 'api_frames']);
   healthThresholds();
   if (__ENV.SATURATION_REQUIRE === '1') thresholds.api_pressure = ['count>=1'];
+} else if (SCENARIO === 'edge') {
+  scenarios.edge = arrival('edgeProbe', EDGE_RPS, 4, 24);
+  keepKinds(['static_meta', 'static_latest', 'health']);
+  thresholds.edge_static_ok = ['rate>=0.99'];
+  thresholds.edge_health_ok = ['rate>=0.95'];
 } else {
-  scenarios.static = arrival('prodMix', PROD_RPS, 200, 1500);
+  scenarios.static = arrival('prodMix', PROD_RPS, PROD_VUS, PROD_VUS);
   scenarios.health = healthScenario('prodHealth');
   keepKinds(['static_meta', 'static_latest', 'static_recent', 'static_settled', 'tile_range', 'map_asset']);
   thresholds['http_req_duration{scenario:static}'] = ['p(95)<300'];
   thresholds.http_req_failed = ['rate<0.001', { threshold: 'rate<0.01', abortOnFail: true, delayAbortEval: '20s' }];
   thresholds.health_red = [{ threshold: 'rate==0', abortOnFail: true, delayAbortEval: '5s' }];
-  thresholds.dropped_iterations = ['count==0'];
+  // No dropped_iterations threshold: PROD_VUS from one address are the cap's limit, not the site's (review CR-2); the
+  // summary reports them.
 }
 
 export const options = {
@@ -320,9 +355,10 @@ function mapFiles() {
 
 /** Everything a request may name, from what the stack actually serves (files that exist, series with the api flag). */
 export function setup() {
+  if (SCENARIO === 'edge') return {}; // the probe itself is the measurement: no setup request
   const meta = getJson('/data/v1/meta.json');
   const data = { now: Date.parse(meta.now), startedAt: Date.now(), displayStart: Date.parse(meta.displayStart) };
-  if (SCENARIO !== 'production') {
+  if (SCENARIO !== 'production' && SCENARIO !== 'edge') {
     const stations = getJson('/data/v1/stations.json');
     data.series = stations.stations.flatMap((s) => s.series.filter((x) => x.api).map((x) => x.id));
     if (data.series.length === 0) throw new Error('setup: no series with the api flag');
@@ -478,6 +514,29 @@ export function saturate(data) {
   if (res.status === 503 || res.status === 504 || res.timings.duration >= 1000) apiPressure.add(1);
 }
 
+/** One of SAT_VUS visitors: a saturating call, then a pause that keeps the process at about SAT_RPS (#132). */
+export function crowdVisitor(data) {
+  saturate(data);
+  sleep((SAT_VUS / SAT_RPS) * (0.5 + Math.random()));
+}
+
+// ---------------------------------------------------------------------------------------------- edge
+/** What an honest visitor meets while the crowd runs: a static file, or health, by turns (#132). */
+export function edgeProbe() {
+  const [kind, path] = pick([
+    ['static_meta', '/data/v1/meta.json'],
+    ['static_latest', '/data/v1/latest.json'],
+    ['health', '/api/v1/health'],
+  ]);
+  const res = get(path, kind, { timeout: '10s', responseCallback: http.expectedStatuses(200, 503) });
+  if (kind === 'health') edgeHealthOk.add(res.status === 200 || res.status === 503);
+  else {
+    // A crowd shows in the wait for a connection and in TCP and TLS, which timings.duration leaves out.
+    const t = res.timings;
+    edgeStaticOk.add(res.status === 200 && t.blocked + t.connecting + t.tls_handshaking + t.duration < 2000);
+  }
+}
+
 // ---------------------------------------------------------------------------------------------- flood
 const range = (data) => {
   // pmtiles.js asks for an explicit `bytes=first-last` (Caddy serves nothing else): the header first, then directory and tile reads.
@@ -591,7 +650,16 @@ export function handleSummary(summary) {
     lines.push(
       `abuse 429 share: ${m('abuse_429')?.values.rate ?? 'n/a'}${ABUSE_ROTATE ? ' (rotating client headers)' : ''}`,
     );
-  if (SCENARIO === 'production') lines.push(`health red rate: ${m('health_red')?.values.rate ?? 'n/a'}`);
+  if (SCENARIO === 'edge')
+    lines.push(
+      `edge: static ok ${m('edge_static_ok')?.values.rate ?? 'n/a'}, health answered ${m('edge_health_ok')?.values.rate ?? 'n/a'}`,
+    );
+  if (SCENARIO === 'production') {
+    lines.push(`health red rate: ${m('health_red')?.values.rate ?? 'n/a'}`);
+    lines.push(
+      `dropped iterations: ${count('dropped_iterations')} (report only: one address may hold 32 connections to 443, nftables.conf #132, so ${PROD_VUS} VUs carry ${PROD_RPS} r/s only while answers take under ${Math.floor((PROD_VUS * 1000) / PROD_RPS)} ms)`,
+    );
+  }
   lines.push(
     `settled_fallback: ${count('settled_fallback') ? 'yes (no complete settled day; its 10 % went to recent)' : 'no'}`,
   );
