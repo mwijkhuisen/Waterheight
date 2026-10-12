@@ -1,6 +1,7 @@
 import { de2Late, de2Superseded, FORECAST_SOURCES, isCurrent, QC, RUHRORT_W } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import type { DB } from '../db/generated.ts';
+import { DATA_FLOOR } from './dirty.ts';
 import { type Intervals, lock } from './store.ts';
 
 // Health is precomputed here and only read by the API (A§9.2: no checksum or
@@ -94,7 +95,7 @@ export async function findOutages(
     WITH bucket AS (
       SELECT b.source_id, min(b.fetched_at) AS first, max(b.fetched_at) AS last
       FROM ingest_batch b
-      WHERE b.parse_status = 'ok' AND b.fetched_at > ${now}::timestamptz - interval '168 hours'
+      WHERE b.parse_status = 'ok' AND b.origin = 'live' AND b.fetched_at > ${now}::timestamptz - interval '168 hours'
         AND b.fetched_at <= ${now}::timestamptz
       GROUP BY b.source_id, date_bin(interval '5 minutes', b.fetched_at, timestamptz '2000-01-01 00:00:00+00')
     ), gap AS (
@@ -168,7 +169,7 @@ export async function findCoverage(
       WITH bucket AS (
         SELECT min(b.fetched_at) AS first, max(b.fetched_at) AS last
         FROM ingest_batch b
-        WHERE b.source_id = ${r.source_id} AND b.parse_status = 'ok'
+        WHERE b.source_id = ${r.source_id} AND b.parse_status = 'ok' AND b.origin = 'live'
           AND b.fetched_at >= ${r.from}::timestamptz AND b.fetched_at <= ${now}::timestamptz
         GROUP BY date_bin(interval '5 minutes', b.fetched_at, ${ORIGIN})
       ), gap AS (SELECT lag(last) OVER (ORDER BY first) AS "from", first AS "to" FROM bucket)
@@ -266,7 +267,8 @@ type Tier1 = { total: number; fresh: number; provider_stale: number };
 export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promise<void> {
   // Each tier-1 series: is its latest value fresh, and when was the payload fetched that last stated it. A latest
   // row that another source filled (bit 512: FR-3 into FR-1, CH-3 into CH-1) says nothing about the series' own
-  // source: it is neither fresh nor provider-stale, and its fetch counts as unknown (review CR-3).
+  // source: it is neither fresh nor provider-stale, and its fetch counts as unknown (review CR-3). A backfill row
+  // (512 too, P14a) never reaches obs_latest, and is history in any case.
   const tier1 = await sql<{ source_id: string; fresh: boolean; stated_at: Date | null; stated_by: string | null }>`
     SELECT s.source_id,
            COALESCE(l.ts > ${inputs.now}::timestamptz - s.staleness_limit AND (l.qc & ${QC.BACKFILLED}::int2) = 0,
@@ -320,7 +322,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
 
   const batches = await sql<{ source_id: string; quarantined: number; last_ok: Date | null }>`
     SELECT b.source_id, (count(*) FILTER (WHERE b.parse_status = 'quarantined'))::int AS quarantined,
-           max(b.fetched_at) FILTER (WHERE b.parse_status = 'ok') AS last_ok
+           max(b.fetched_at) FILTER (WHERE b.parse_status = 'ok' AND b.origin = 'live') AS last_ok
     FROM ingest_batch b GROUP BY b.source_id`.execute(db);
 
   const sources = await sql<{ id: string; has_series: boolean; last_fetch_ok: Date | null; failures: number | null }>`
@@ -339,6 +341,22 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
     else t.stale.push({ at: r.stated_at, spec: r.stated_by });
     tierOf.set(r.source_id, t);
   }
+  // P14a: the backfill jobs of each source (the numbers flow through the per-audience source_health views).
+  const jobs = await sql<{
+    source_id: string;
+    jobs: number;
+    active: number;
+    chunks_done: number;
+    inserted: number;
+    revised: number;
+    unreconciled: number;
+  }>`
+    SELECT source_id, count(*)::int AS jobs,
+           (count(*) FILTER (WHERE status IN ('planned', 'running', 'paused')))::int AS active,
+           sum(chunks_done)::int AS chunks_done, sum(inserted)::bigint::float8 AS inserted,
+           sum(revised)::bigint::float8 AS revised, sum(unreconciled)::int AS unreconciled
+    FROM backfill_job GROUP BY source_id`.execute(db);
+  const backfillOf = new Map(jobs.rows.map(({ source_id, ...b }) => [source_id, b]));
   const gapOf = new Map(gaps.rows.map((r) => [r.source_id, r.missing]));
   const forecasts = await forecastDetails(db, inputs.now);
   const raised: [string, Record<string, string | number>][] = [];
@@ -389,6 +407,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
         ...(src.has_series && outageOf.has(src.id) ? { outage: outageOf.get(src.id) } : {}),
         ...(inputs.coverage?.has(src.id) ? { coverage: inputs.coverage.get(src.id) } : {}),
         ...(forecasts.has(src.id) ? { forecast: forecasts.get(src.id) } : {}),
+        ...(backfillOf.has(src.id) ? { backfill: backfillOf.get(src.id) } : {}),
         min_interval_s: minIntervals(intervalsOf.get(src.id) ?? { last: {}, hours: {} }, inputs.now),
       };
       // `partitions` inside detail is written by the checksum job; this update keeps it.
@@ -400,7 +419,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
           quarantine_count = EXCLUDED.quarantine_count,
           lag_p95 = EXCLUDED.lag_p95,
           status = EXCLUDED.status,
-          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage' - 'coverage' - 'min_interval_s' - 'forecast')
+          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage' - 'coverage' - 'min_interval_s' - 'forecast' - 'backfill')
                    || EXCLUDED.detail,
           updated_at = EXCLUDED.updated_at`.execute(tx);
       // P8a: a due DE-2 run that missed its deadline raises `forecast_run_late` once per due day (the day is
@@ -436,7 +455,9 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
  * The checksum of every obs partition, per source: md5 over (series key, ts,
  * value, qc) in key and time order. It names a series by its registry key, not
  * its id, so a database rebuilt by replay gives the same checksum. Stored in
- * source_health.detail.partitions.
+ * source_health.detail.partitions. From DATA_FLOOR on only (P14a): a backfill's
+ * decades would be hashed every night and grow `partitions` by hundreds of
+ * months; the months before it are proved by replay equivalence from the archive.
  */
 // ponytail: one string_agg per (source, month); fine for DE-1 (under 1M rows a month). Before the
 // P5 sources load 3,000 series, switch to a rolling per-day hash kept by the upsert.
@@ -453,6 +474,7 @@ export async function computeChecksums(
     JOIN series s ON s.id = o.series_id
     JOIN source src ON src.id = s.source_id
     WHERE ${SAME_AUDIENCE} AND (${source ?? null}::text IS NULL OR s.source_id = ${source ?? null})
+      AND o.ts >= ${DATA_FLOOR}::timestamptz
     GROUP BY 1, 2`.execute(db);
   const out = new Map<string, Record<string, { md5: string; rows: number }>>();
   for (const r of rows) {

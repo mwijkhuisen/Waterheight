@@ -163,7 +163,20 @@ export type SpecLoader = {
     parts: number;
     run: (parts: readonly StagedPart[]) => { runs: ForecastRunIn[]; dropped: Record<string, number> };
   };
+  /**
+   * P14a: a backfill payload (history the runner fetched, apps/server/src/backfill/). The loader takes it out of the
+   * fetch health, opens its batch with origin `backfill`, writes its rows under the backfill row rules (store.ts
+   * upsertObs) and keeps the job's ledger; its `run` returns a Backfilled. Decided by the spec, never by the line.
+   */
+  backfill?: true;
 };
+
+/**
+ * P14a: a backfill payload's normalised rows with what the provider stated, per value (plan §3.6): `provider_values`,
+ * the values of every list; `unknown_values`, those of the lists the registry does not know (Normalised.unknown
+ * counts lists, and stays so: it feeds the batch's n_skipped).
+ */
+export type Backfilled = Normalised & { provider_values: number; unknown_values: number };
 
 export type LoadAdapter = {
   /** Bumped when parse or normalise changes what is stored; recorded on every batch. */
@@ -288,6 +301,29 @@ const nl1Observations: SpecLoader = {
 };
 
 /**
+ * P14a: one `OphalenWaarnemingen` response of the backfill runner: the observation loader with no age limit and no
+ * window (it loads whole), and the per-value counts of its ledger. A list's `unknown` verdict depends on its metadata
+ * alone, so it is asked of the list without its values.
+ */
+const nl1Backfill: SpecLoader = {
+  maxBytes: 4 * MIB,
+  needsVariant: false,
+  backfill: true,
+  run: (b, c): Backfilled => {
+    const lists = parseWaarnemingen(b);
+    const ctx = { ...c, maxAgeMs: null };
+    let unknown_values = 0;
+    for (const l of lists)
+      if (normaliseNl1([{ ...l, metingen: [] }], ctx).unknown > 0) unknown_values += l.metingen.length;
+    return {
+      ...normaliseNl1(lists, ctx),
+      provider_values: lists.reduce((n, l) => n + l.metingen.length, 0),
+      unknown_values,
+    };
+  },
+};
+
+/**
  * P8a: one `verwachting` response (RWSM-F232): the lists name their own series, so a `recovered` line loads too; a run
  * attaches only to a registered primary series, any other series counts `unknown` (the spec's max_bytes, 1 MiB).
  */
@@ -331,6 +367,7 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       'nl-1-obs-key': nl1Observations,
       'nl-1-obs-other': nl1Observations,
       'nl-1-obs-twin': nl1Observations,
+      'nl-1-backfill-obs': nl1Backfill,
     },
   },
   // Every page of an observations_tr walk is its own payload and names its own series; a recovered line loads too.
