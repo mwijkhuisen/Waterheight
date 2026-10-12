@@ -498,4 +498,10 @@ host_files "$bundle" >"$sums"
 install_file "$sums" /var/lib/rws/host-files.sha256 0600 || true
 rm -f -- "$sums"
 
+# The connection cap (#132) exempts only RWS_TRUSTED_PROXIES: a proxy or CDN missing from it carries every
+# visitor in 32 connections. Loud, since rws-trusted-proxies only logs (an empty or refused value adds nothing).
+if [[ $("$bundle/deploy/bin/rws-trusted-proxies" --dry-run || true) != *'add element'* ]]; then
+  printf 'warning  %s\n' "RWS_TRUSTED_PROXIES is empty or refused: no proxy is exempt from the connection cap. If a proxy or CDN fronts the site, set it first (docs/runbooks/bootstrap.md, \"the release with the connection cap\")" >&2
+fi
+
 echo "bootstrap: $changes change(s)$( ((DRY_RUN)) && echo ' would be made')"

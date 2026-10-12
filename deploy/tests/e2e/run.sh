@@ -431,7 +431,8 @@ nft -f "$repo/deploy/host/nftables.conf"
 nft -f "$repo/deploy/host/nftables.conf"
 install -m 0644 "$repo/deploy/host/nftables.conf" /etc/rws/nftables.conf
 "$repo/deploy/bin/rws-resolvers"
-proof "nft -c and a double load of deploy/host/nftables.conf succeed (idempotent); rws-resolvers filled the DNS allowlist: $(nft list set inet rws resolvers4 | grep -o 'elements = {[^}]*}' || echo none)"
+"$repo/deploy/bin/rws-trusted-proxies"
+proof "nft -c and a double load of deploy/host/nftables.conf succeed (idempotent); rws-resolvers filled the DNS allowlist: $(nft list set inet rws resolvers4 | grep -o 'elements = {[^}]*}' || echo none); rws-trusted-proxies left the cap's exemption empty (no RWS_TRUSTED_PROXIES): $(nft list set inet rws trusted4 | grep -o 'elements = {[^}]*}' || echo none)"
 
 # ------------------------------------------------------------------ release and stack
 step "A release directory as rws-deploy stages it, then compose up"

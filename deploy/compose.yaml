@@ -70,6 +70,8 @@ services:
       # no robots.txt or sitemap) to launch. Production's rws.env never sets it; the rebuild drill's env file sets
       # prelaunch to stay noindex (docs/runbooks/vps-rebuild.md).
       RWS_SITE_PHASE: ${RWS_SITE_PHASE:-prelaunch}
+      # #132 (ADR-0019 §5): the Go heap's soft limit, 90 % of mem_limit, so Caddy collects before the kernel kills.
+      GOMEMLIMIT: 576MiB
     # Only directories no networked role writes: the root-owned status directory
     # (never capture's public/status, where a planted symlink would make Caddy
     # serve any file it can read) and the tiles directory, which only
@@ -92,7 +94,9 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks: [public, edge]
-    mem_limit: 256m
+    # #132: 640m with GOMEMLIMIT and the per-source cap in nftables.conf; neither held a crowd alone, and 512m
+    # peaked at 506.7 MiB (ADR-0019 §5).
+    mem_limit: 640m
     cpus: 1.0
     pids_limit: 256
     healthcheck:

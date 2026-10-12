@@ -326,3 +326,20 @@ Do this on the VPS that already runs the P6b (or a later) release. No new secret
 2. Approve the `promote` job for the release; `rws-update` deploys it within 5 minutes. **Check:** `sudo docker compose -p rws ps` (caddy healthy) and, from any browser, `https://<domain>/over`, `/colofon` and `/en/privacy` show the pages, the colophon names your operator and your contact address, and `https://<domain>/niet-hier` is the 404 page.
 3. From outside: `scripts/verify-prod.sh <domain>`. The new lines are `pages <path>` (18, one per path of `apps/web/src/lib/routes.ts`) and `not found`, and `runtime config` now reads four keys: it FAILs while the operator is empty (`docs/runbooks/publisher.md`). A `FAIL pages <path>` or `FAIL not found` names the status, header or `<html lang>` that differs (the page list in `site.caddy` must equal `apps/web/src/lib/routes.ts`, which `test/page-routes.test.ts` checks): redeploy the previous release (`docs/runbooks/deploy-rollback.md`) and keep the output.
 4. A browser tab that still runs the P10a bundle reads the new `/runtime-config.json` as `public`, because the old bundle parses it as exactly one key. `index.html` is `no-cache`, so a reload loads the new bundle and fixes it. (The owner site, `caddy-owner`, serves the same file with `owner` and the same three values from `compose.owner.yaml`; it is not in production before P12a, KG-226.)
+
+## Later: the release with the connection cap (#132; owner)
+
+Do this on the VPS that runs the P12b (or a later) release. No new secret, migration or healthchecks check. The release gives caddy 640m (`compose.yaml`, deployed by `rws-update` as usual) and brings changed host files: `nftables.conf` with at most 32 concurrent connections to 443 per source (TCP and QUIC), the new `rws-trusted-proxies`, and a changed `rws-tick` and `rws-firewall.service`. The cap counts the TCP peer, so a reverse proxy in front of the site (production on 2026-10-06: a Caddy on the LAN, KG-228) must be exempt **before** the cap is installed, or every visitor shares the proxy's 32 connections (KG-337). The order matters:
+
+1. **First** put the proxy's address in `/etc/rws/rws.env` (`sudoedit /etc/rws/rws.env`), best before the release is deployed so its deploy reads it: `RWS_TRUSTED_PROXIES=<ip>/32` (several addresses or CIDRs separated by spaces; `docs/runbooks/api.md` §6). If the release is already deployed, set the line and run `sudo rws-deploy "$(sudo cat /var/lib/rws/current)"`. With no proxy in front, leave it empty.
+2. Approve the `promote` job for the release; `rws-update` deploys it within 5 minutes and pings `update` `/fail` with `host_files_changed` until step 3. **Check:** `sudo docker inspect -f '{{.HostConfig.Memory}}' rws-caddy-1` prints `671088640` (640 MiB).
+3. Run the release's bootstrap as in "a new release with changed host files" above, from the verified release directory, twice; the second run must say "0 change(s)". It installs the new `nftables.conf` and reloads `rws-firewall.service`, which loads the table and then runs `rws-trusted-proxies`. **Check:**
+
+   ```bash
+   sudo nft list set inet rws trusted4                                       # the proxy's address
+   sudo nft list chain inet rws to_containers | grep -c 'ct count over 32'   # 4
+   sudo journalctl -u rws-firewall --since -10min | grep 'connection cap'    # 1 IPv4 and 0 IPv6 trusted proxy ranges
+   ```
+
+   An empty `trusted4` behind a proxy means the value was refused (the journal says which entry, by number; bootstrap also ends with a warning that nothing is exempt): fix the line and run `sudo rws-trusted-proxies`. A malformed `rws.env` (the journal says `rws.env: malformed line`) or a failing `nft` leaves the sets as they were, not empty.
+4. From outside: `scripts/verify-prod.sh <domain>`, then `docs/runbooks/api.md` §6 with `.request.client_ip`: visitors' prefixes, and `limiter_gateway_key` at 0.
