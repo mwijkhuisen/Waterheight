@@ -50,7 +50,7 @@
   text-decoration: none;
 }
 
-/* "kijker" in Waterblauw: large text only (24 px, BRAND.md §3), so below 40rem, where the name shrinks, it takes the
+/* "Radar" in Waterblauw: large text only (24 px, BRAND.md §3), so below 40rem, where the name shrinks, it takes the
    accent that is allowed for small text. */
 .accent {
   color: var(--water);

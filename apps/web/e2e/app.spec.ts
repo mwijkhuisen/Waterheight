@@ -108,7 +108,7 @@ test('NL is the default: language, heading, banner, disclaimer, and t is now', a
   await open(page, '/');
 
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Rivierkijker');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Water Radar');
   // P10c: the subtitle under the name, and the two brand fonts loaded from our origin (the third-party check of this
   // test still passes).
   await expect(page.getByText('Waterstanden en afvoer van de rivieren naar Nederland', { exact: true })).toBeVisible();
@@ -1073,7 +1073,7 @@ test('when the Temporal polyfill cannot load, the page says so instead of stayin
   await page.goto('/');
   await expect(page.getByRole('alert')).toHaveText('De pagina kan niet worden geladen. Probeer het later opnieuw.');
   // The static page stays as it was, under the alert's text node.
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Rivierkijker');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Water Radar');
   await expect(page.locator('#app [role="alert"]')).toHaveCount(1);
   await expect(slider(page)).toHaveCount(0);
   await finish(page, s);

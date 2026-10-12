@@ -51,7 +51,7 @@ const XSS_ID = 'nl.e2e.xss';
 const ranged = (river: string, from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => `${river}.${from + i}`);
 /** The tidal reaches of the fixture release (PHASES §P11b: Scheldt, Ems, Lek delta members, the Meuse delta). */
-const TIDAL = [...ranged('scheldt', 9, 13), ...ranged('ems', 25, 35), ...ranged('lek', 4, 6), 'meuse.59'];
+const TIDAL = [...ranged('scheldt', 9, 13), ...ranged('ems', 30, 40), ...ranged('lek', 4, 6), 'meuse.59'];
 /** Chooz to Eijsden: 139.2 km, over GAP_KM (120) and without a station between them. */
 const GAP = ranged('meuse', 27, 30);
 const MID = '2026-10-25T12:00Z';
