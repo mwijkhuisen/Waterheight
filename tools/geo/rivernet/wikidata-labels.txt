@@ -269,3 +269,63 @@ nl:Zuid-Willemsvaart
 de:Linth
 de:Simme
 de:Kander
+# Stage 3 B2 (#140, KG-250): DE-7 Lippe, Lower Rhine, Maas, Ems and Vechte single-gauge tributaries and their connectors
+de:Beke
+de:Pader
+de:Rothebach
+de:Afte
+de:Altenau
+de:Ellerbach
+de:Schmittwasser
+de:Heder
+de:Thune
+de:Glenne
+de:Haustenbach
+de:Krollbach
+de:Liese
+de:Salzbach
+de:Funne
+de:Schermbecker Mühlenbach
+de:Kalflack
+de:Groesbecker Bach
+de:Groesbecker-Bach
+de:Rodebach
+nl:Roode Beek
+nl:Geleenbeek
+de:Genfbach
+de:Olef
+de:Platißbach
+de:Reifferscheider Bach
+de:Reifferscheiderbach
+de:Weidenbach
+de:Wehebach
+de:Merzbach
+de:Beeckfließ
+de:Broicher Bach
+de:Haarbach
+de:Beeckbach
+de:Gelderner Fleuth
+de:Issumer Fleuth
+de:Dalke
+de:Dalkebach
+de:Ölbach
+de:Wapelbach
+de:Lutter
+de:Abrooksbach
+de:Axtbach
+de:Münstersche Aa
+de:Glane
+de:Hopstener Aa
+de:Ibbenbürener Aa
+de:Hase
+de:Speller Aa
+de:Große Aa
+de:Bocholter Aa
+nl:Aa-strang
+de:Schlinge
+nl:Slinge
+nl:Boven Slinge
+nl:Groenlose Slinge
+de:Ahauser Aa
+de:Steinfurter Aa
+nl:Boven-Slinge
