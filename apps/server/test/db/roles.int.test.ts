@@ -392,6 +392,89 @@ describe('rws_load (the loader)', () => {
   });
 });
 
+// P14a: the backfill runner holds its job table (minus the loader's counts) and backfill_guard, nothing else.
+describe('rws_backfill (the backfill runner) and the job counts', () => {
+  const JOB = `INSERT INTO backfill_job (spec_id, source_id, series_key, range_from, range_to, chunk, cursor_ts,
+                                         request_budget)
+               VALUES ('nl-1-backfill-obs', 'NL-1', 'k', '2005-01-01', '2005-03-01', '40 days', '2005-01-01', 3)
+               RETURNING id`;
+
+  it('creates and steers jobs, but cannot touch the counts, the ledger, the registry or the data', async () => {
+    const runner = await t.connectAs('rws_backfill');
+    try {
+      const id = (await runner.query<{ id: string }>(JOB)).rows[0]?.id;
+      expect(
+        await sqlState(
+          runner,
+          `UPDATE backfill_job SET cursor_ts = '2005-02-10', chunks_done = 1, status = 'running', attempts = 0,
+             requests = 1, data_from = '2005-01-01', last_error = NULL, started_at = now(), updated_at = now(),
+             finished_at = NULL WHERE id = $1`,
+          [id],
+        ),
+      ).toBe('ok');
+      for (const col of ['provider_values', 'inserted', 'revised', 'skipped', 'dropped', 'unreconciled', 'spec_id'])
+        expect(await sqlState(runner, `UPDATE backfill_job SET ${col} = ${col} WHERE false`), col).toBe('42501');
+      expect(await sqlState(runner, 'DELETE FROM backfill_job')).toBe('42501');
+      expect(await sqlState(runner, 'SELECT 1 FROM backfill_chunk')).toBe('42501');
+      for (const table of ['source', 'series', 'obs', 'ingest_batch', 'app_meta', 'source_health'])
+        expect(await sqlState(runner, `SELECT 1 FROM ${table} LIMIT 1`), table).toBe('42501');
+      expect(await sqlState(runner, "SELECT ensure_partitions(now(), now() + interval '1 day')")).toBe('42501');
+      expect(await sqlState(runner, 'CREATE TEMP TABLE x (i int)')).toBe('42501');
+      // The guard: no loader row yet, so the loader is not computing health.
+      expect((await runner.query("SELECT backfill_guard('NL-1') AS g")).rows).toEqual([{ g: 'loader_lag' }]);
+      // The loader adds to the counts and nothing else of a job.
+      expect(
+        await sqlState(
+          load,
+          'UPDATE backfill_job SET provider_values = 1, inserted = 1, revised = 0, skipped = 0, dropped = 0, unreconciled = 0, updated_at = now() WHERE id = $1',
+          [id],
+        ),
+      ).toBe('ok');
+      for (const col of ['cursor_ts', 'status', 'requests'])
+        expect(await sqlState(load, `UPDATE backfill_job SET ${col} = ${col} WHERE false`), col).toBe('42501');
+      expect(await sqlState(load, 'DELETE FROM backfill_chunk')).toBe('42501');
+    } finally {
+      await runner.end();
+      await t.admin.query('DELETE FROM backfill_job');
+    }
+  });
+
+  it('backfill_guard is a locked-down SECURITY DEFINER function with fixed thresholds', async () => {
+    const { rows } = await t.admin.query(
+      "SELECT prosecdef, proconfig, pg_get_userbyid(proowner) AS owner FROM pg_proc WHERE proname = 'backfill_guard'",
+    );
+    expect(rows).toEqual([{ prosecdef: true, proconfig: ['search_path=pg_catalog, pg_temp'], owner: 'rws_owner' }]);
+    const guard = async () => (await t.admin.query("SELECT backfill_guard('NL-1') AS g")).rows[0]?.g;
+    const loader = (fields: string) =>
+      t.admin.query(
+        `INSERT INTO app_meta (key, value) VALUES ('loader', jsonb_build_object(${fields}))
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      );
+    const health = (status: string) =>
+      t.admin.query(
+        `INSERT INTO source_health (source_id, status) VALUES ('NL-1', $1)
+         ON CONFLICT (source_id) DO UPDATE SET status = EXCLUDED.status`,
+        [status],
+      );
+    try {
+      await loader("'computed_at', now() - interval '6 minutes', 'backlog_files', 0, 'backlog_age_s', null");
+      expect(await guard()).toBe('loader_lag');
+      await loader("'computed_at', now(), 'backlog_files', 4, 'backlog_age_s', 10");
+      expect(await guard()).toBe('backlog');
+      await loader("'computed_at', now(), 'backlog_files', 1, 'backlog_age_s', 601");
+      expect(await guard()).toBe('backlog');
+      await loader("'computed_at', now(), 'backlog_files', 3, 'backlog_age_s', 600");
+      await health('degraded');
+      expect(await guard()).toBe('stale');
+      await health('ok');
+      expect(await guard()).toBe('ok');
+    } finally {
+      await t.admin.query("DELETE FROM app_meta WHERE key = 'loader'");
+      await health('ok');
+    }
+  });
+});
+
 describe('rws_migrator and rws_backup', () => {
   it('rws_migrator acts as rws_owner from its first statement and owns nothing itself', async () => {
     const migrator = await t.connectAs('rws_migrator');
@@ -433,6 +516,7 @@ describe('rws_migrator and rws_backup', () => {
     };
     expect(rows).toEqual([
       { rolname: 'rws_api', rolcanlogin: true, ...off, rolconnlimit: 12 },
+      { rolname: 'rws_backfill', rolcanlogin: true, ...off, rolconnlimit: 2 },
       { rolname: 'rws_backup', rolcanlogin: true, ...off, rolconnlimit: 2 },
       { rolname: 'rws_load', rolcanlogin: true, ...off, rolconnlimit: 6 },
       { rolname: 'rws_migrator', rolcanlogin: true, ...off, rolconnlimit: 3 },

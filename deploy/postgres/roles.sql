@@ -11,7 +11,7 @@ DO $$
 DECLARE
   r text;
 BEGIN
-  FOREACH r IN ARRAY ARRAY['rws_owner', 'rws_migrator', 'rws_load', 'rws_publish', 'rws_api', 'rws_owner_api', 'rws_backup']
+  FOREACH r IN ARRAY ARRAY['rws_owner', 'rws_migrator', 'rws_load', 'rws_publish', 'rws_api', 'rws_owner_api', 'rws_backup', 'rws_backfill']
   LOOP
     IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = r) THEN
       EXECUTE pg_catalog.format('CREATE ROLE %I', r);
@@ -30,6 +30,9 @@ ALTER ROLE rws_publish   LOGIN   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATI
 ALTER ROLE rws_api       LOGIN   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT CONNECTION LIMIT 12;
 ALTER ROLE rws_owner_api LOGIN   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT CONNECTION LIMIT 4;
 ALTER ROLE rws_backup    LOGIN   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT CONNECTION LIMIT 2;
+-- P14a: the backfill runner, two connections: the running job and a status/pause/abort call beside it (its job table
+-- and backfill_guard only; the grants are in db/migrations).
+ALTER ROLE rws_backfill  LOGIN   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT CONNECTION LIMIT 2;
 
 -- The migrator acts as the object owner from its first statement, so dbmate's
 -- own table and every migrated object belong to rws_owner.
@@ -105,6 +108,6 @@ BEGIN
   -- shadow a name inside a SECURITY DEFINER function).
   EXECUTE pg_catalog.format('REVOKE ALL ON DATABASE %I FROM PUBLIC', db);
   EXECUTE pg_catalog.format(
-    'GRANT CONNECT ON DATABASE %I TO rws_migrator, rws_load, rws_publish, rws_api, rws_owner_api, rws_backup', db);
+    'GRANT CONNECT ON DATABASE %I TO rws_migrator, rws_load, rws_publish, rws_api, rws_owner_api, rws_backup, rws_backfill', db);
 END
 $$;

@@ -8,6 +8,18 @@
       "rws_backup": "SELECT",
       "rws_load": "SELECT"
     },
+    "backfill_chunk": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
+    "backfill_job": {
+      "rws_backfill": "SELECT,INSERT",
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT"
+    },
+    "backfill_job_id_seq": {
+      "rws_backfill": "USAGE"
+    },
     "class_obs": {
       "rws_backup": "SELECT",
       "rws_load": "SELECT,INSERT,UPDATE"
@@ -371,6 +383,9 @@
     }
   },
   "functions": {
+    "backfill_guard(text)": [
+      "rws_backfill"
+    ],
     "ensure_partitions(timestamp with time zone,timestamp with time zone)": [
       "rws_load",
       "rws_migrator"
@@ -392,6 +407,7 @@
   },
   "schema_public": {
     "rws_api": "USAGE",
+    "rws_backfill": "USAGE",
     "rws_backup": "USAGE",
     "rws_load": "USAGE",
     "rws_migrator": "",
