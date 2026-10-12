@@ -3057,3 +3057,14 @@ Both flips are one-commit follow-up PRs by the owner's go; an agent never merges
 **The DE-2 runs captured in the owner period become public history at this flip**, within the `history_export` channel the grant record states (security review SR-12): the flip PR says so in its description, and the owner confirms the channel in the record before merging.
 
 **E4, site `prelaunch` to `launch`** (after the checklist is signed). The commit changes the compose default of `RWS_SITE_PHASE` and `DEFAULT_PROFILE` in `scripts/verify-prod.ts`, and nothing else: the drill host's pin `RWS_SITE_PHASE=prelaunch` is already in the runbook's `rws.env` table and check (`docs/runbooks/vps-rebuild.md` §4), and the deploy job and the compose end-to-end run follow the compose default, so the commit needs no change to `ci.yml` or `deploy/tests/e2e/run.sh`. Preconditions: the checklist's section 4 items SR-1 (`scripts/gh-settings.sh --check` clean) and SR-7 (Caddy 2.11.7 or newer deployed and Grype re-run) and the CAA record. Then deploy and run `scripts/verify-prod.sh <domain> --profile launch --site`.
+
+## 45. Amendment: fix #125, the lake-linked Linth and Simme (2026-10-12)
+
+What #125 (KG-250) built: the Linth, the Simme and the Simme's parent, the Kander, are curated in `registry/rivers.yaml` as in §41 and §43 (Wikidata QID, P403 mouth as the namesake check; the P402 relations r2198016 and r2205224, and r2205219 for the Kander, which has no P402 but carries the QID in the extract of `geo.yml` run 38165279934). No pipeline step, server or web code changed.
+
+- **Result.** Shown public stations placed 660 → 667; with at least one neighbour 659 → 666 (CH-1 50 → 57). Rivers 134 → 137; reaches in `reaches-fixture.json` 1,080 → 1,092. Snap report of `geo.yml` run 38209008630, `counts.public`: name 525 → 532, water_not_in_rivers 308 → 301.
+- **Lakes.** The Kander's relation ends in a flowline on the Aare's Thunersee flowline (Swiss river relations carry lake flowlines: the Aare, the Rhine through the Bodensee, the Reuss through the Vierwaldstättersee), so the Kander and the Simme reach Lobith without a join. The Linth relation ends at the Zürichsee shore, about 35 km from the Limmat: it stays detached, without a join (owner, 2026-10-11; KG-161).
+- **Lake gauges** stay off the graph (`water_not_in_rivers`; owner, 2026-10-11): a lake level is not a river stage. The Areuse and the Orbe (into the Lac de Neuchâtel) move to stage 3 (#127).
+- **Reach ids moved.** The Kander mouth adds `aare.15` and shifts `aare.3–14` (no pin refers to them).
+- **Fixture refresh** from `geo.yml` run 38209008630; the generated files and the goldens follow it.
+- **Gaps:** KG-250 stays `accepted` with #127 as the follow-up; KG-161 gains the Linth; KG-165 gains 3 stations without an entry node (109 → 112).
