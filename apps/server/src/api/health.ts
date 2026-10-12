@@ -178,9 +178,11 @@ export const Detail = z.object({
       jobs: z.number(),
       active: z.number(),
       chunks_done: z.number(),
+      chunks_with_data: z.number().optional(),
       inserted: z.number(),
       revised: z.number(),
       unreconciled: z.number(),
+      quarantined: z.number().optional(),
     })
     .optional(),
   partitions: z.record(z.string(), z.object({ md5: z.string(), rows: z.number() })).optional(),

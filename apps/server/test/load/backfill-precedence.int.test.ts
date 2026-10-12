@@ -556,6 +556,27 @@ describe('a backfill payload is not a fetch of the source (plan §3.4)', { timeo
   });
 });
 
+describe('the load window of a backfill line (review S3)', { timeout: 60_000 }, () => {
+  it('stores no row outside the line’s chunk: a forged or misplaced line loads nothing there', async () => {
+    const at = new Date('2026-10-14T01:00:00Z');
+    const count = () => h.count("obs WHERE ts >= '2006-01-01' AND ts < '2007-01-01'");
+    const before = await count();
+    // The payload's values are in 2006-09; the line names a chunk that ends before them.
+    await putBackfill('NL-1', 'nl-1-backfill-obs', at, movedTo('nl-1-obs-key', '2006'), {
+      job: 999_999,
+      chunk: 0,
+      from: '2006-01-01T00:00:00.000Z',
+      to: '2006-09-01T00:00:00.000Z',
+    });
+    expect(await h.loader({ now: new Date(at.getTime() + 3_600_000) }).tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await count()).toBe(before);
+    const { rows } = await h.t.admin.query(
+      "SELECT n_new, n_rows FROM ingest_batch WHERE spec_id = 'nl-1-backfill-obs' ORDER BY id DESC LIMIT 1",
+    );
+    expect(rows).toEqual([{ n_new: 0, n_rows: 0 }]);
+  });
+});
+
 describe('audience (invariant 11)', { timeout: 60_000 }, () => {
   it('a backfill row of the owner canary series is in the owner views only', async () => {
     const migrator = h.dbAs('rws_migrator', 1);

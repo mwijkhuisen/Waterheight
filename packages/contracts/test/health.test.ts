@@ -387,5 +387,8 @@ describe('per-source backfill detail (P14a)', () => {
     expect(HealthSources.safeParse(doc({ ...ok, extra: 1 })).success).toBe(false);
     expect(HealthSources.safeParse(doc({ ...ok, revised: -1 })).success).toBe(false);
     expect(HealthSources.safeParse(doc({ ...ok, jobs: 1.5 })).success).toBe(false);
+    // Review round 1: chunks_with_data and quarantined, optional and non-negative.
+    expect(HealthSources.safeParse(doc({ ...ok, chunks_with_data: 6, quarantined: 1 })).success).toBe(true);
+    expect(HealthSources.safeParse(doc({ ...ok, quarantined: -1 })).success).toBe(false);
   });
 });

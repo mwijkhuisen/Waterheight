@@ -280,7 +280,10 @@ export async function upsertObs(
   const none: Written = { n_new: 0, n_changed: 0, newest: null, writes: 0, inserted: 0, revised: 0, skipped: off };
   if (sid.length === 0) return none;
   const sorted = [...ts].sort();
-  await sql`SELECT ensure_partitions(${sorted[0]}::timestamptz, ${sorted.at(-1)}::timestamptz)`.execute(tx);
+  // Live rows keep the 2000-01-01 partition floor; a backfill may go down to 1900 (review C7).
+  if (mode === 'backfill')
+    await sql`SELECT ensure_history_partitions(${sorted[0]}::timestamptz, ${sorted.at(-1)}::timestamptz)`.execute(tx);
+  else await sql`SELECT ensure_partitions(${sorted[0]}::timestamptz, ${sorted.at(-1)}::timestamptz)`.execute(tx);
 
   // N: the stored row's batch is older than this one, or is this very batch and the row differs.
   const newer = sql`(b.id IS NULL
@@ -332,6 +335,8 @@ export async function upsertObs(
     up AS (
       INSERT INTO obs AS o (series_id, ts, value, qc, batch_id)
       SELECT series_id, ts, value, qc, ${batch}::bigint FROM wins
+      -- No WHERE here: wins read the stored row, and nothing can change it before this write only because every
+      -- obs writer (live, fill, backfill, replay) holds the loader lock (review C8). A writer without it would race.
       ON CONFLICT (series_id, ts) DO UPDATE
         SET value = EXCLUDED.value, qc = EXCLUDED.qc, batch_id = EXCLUDED.batch_id
       RETURNING old.series_id AS old_series, old.value AS old_value, old.qc AS old_qc,

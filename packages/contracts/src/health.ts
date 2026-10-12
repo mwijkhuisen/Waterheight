@@ -196,16 +196,20 @@ export const healthSources = (source: z.ZodString) =>
             .nullable(),
           /**
            * Backfill jobs (P14a), for a source that has some (omitted otherwise): their number, those still active
-           * (planned, running or paused) and the sums of their chunks, inserted and revised rows and unreconciled chunks.
+           * (planned, running or paused) and the sums of their chunks, inserted and revised rows and unreconciled chunks;
+           * `chunks_with_data` (chunks that wrote a manifest line, compared with the ledger) and `quarantined` (backfill
+           * payloads the loader set aside) since review round 1.
            */
           backfill: z
             .strictObject({
               jobs: count,
               active: count,
               chunks_done: count,
+              chunks_with_data: count.optional(),
               inserted: count,
               revised: count,
               unreconciled: count,
+              quarantined: count.optional(),
             })
             .optional(),
           partitions: z.array(Partition).max(240),

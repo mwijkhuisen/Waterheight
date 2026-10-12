@@ -347,15 +347,21 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
     jobs: number;
     active: number;
     chunks_done: number;
+    chunks_with_data: number;
     inserted: number;
     revised: number;
     unreconciled: number;
+    quarantined: number;
   }>`
-    SELECT source_id, count(*)::int AS jobs,
-           (count(*) FILTER (WHERE status IN ('planned', 'running', 'paused')))::int AS active,
-           sum(chunks_done)::int AS chunks_done, sum(inserted)::bigint::float8 AS inserted,
-           sum(revised)::bigint::float8 AS revised, sum(unreconciled)::int AS unreconciled
-    FROM backfill_job GROUP BY source_id`.execute(db);
+    SELECT j.source_id, count(*)::int AS jobs,
+           (count(*) FILTER (WHERE j.status IN ('planned', 'running', 'paused')))::int AS active,
+           sum(j.chunks_done)::int AS chunks_done, sum(j.chunks_with_data)::int AS chunks_with_data,
+           sum(j.inserted)::bigint::float8 AS inserted, sum(j.revised)::bigint::float8 AS revised,
+           sum(j.unreconciled)::int AS unreconciled,
+           -- Backfill payloads the loader set aside: their chunks have no ledger row (review C5/S6).
+           (SELECT count(*)::int FROM ingest_batch b
+            WHERE b.source_id = j.source_id AND b.origin = 'backfill' AND b.parse_status = 'quarantined') AS quarantined
+    FROM backfill_job j GROUP BY j.source_id`.execute(db);
   const backfillOf = new Map(jobs.rows.map(({ source_id, ...b }) => [source_id, b]));
   const gapOf = new Map(gaps.rows.map((r) => [r.source_id, r.missing]));
   const forecasts = await forecastDetails(db, inputs.now);

@@ -12,6 +12,12 @@ import { readMeta, type Tx, writeMeta } from './store.ts';
 
 /** The first UTC month that may hold data (migrate's partition floor): an open-ended range starts here. */
 export const DATA_FLOOR = '2026-08-01T00:00:00Z';
+/**
+ * The first production capture (app_meta `data_epoch`, seeded by 20261014000001_display_window.sql; a test pins the
+ * two equal). P14a: the backfill never asks for or loads a value at or after it, so it never meets the live rows'
+ * newest point (review C2/S2/S3).
+ */
+export const DATA_EPOCH = '2026-10-02T00:00:00Z';
 const FLOOR_MS = Date.parse(DATA_FLOOR);
 /**
  * A revision of a day that began more than this before now bumps the day: a superset of "settled" (the day ended

@@ -11,13 +11,15 @@ import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 // `UPDATE_GOLDEN=1` rewrites them. The facts they show are in catalogue §2.1.
 
 const registry = registryOf('NL-1');
-const run = (name: string) => {
-  const { body, meta } = rawFixture('NL-1', name);
+const run = (name: string, backfill?: LoadContext['backfill'], edit?: (text: string) => string) => {
+  const { body: raw, meta } = rawFixture('NL-1', name);
+  const body = edit === undefined ? raw : new TextEncoder().encode(edit(new TextDecoder().decode(raw)));
   const ctx: LoadContext = {
     registry,
     fetchedAt: Date.parse(meta.recorded_at),
     variant: '',
     unitMismatch: new Set(),
+    ...(backfill === undefined ? {} : { backfill }),
   };
   const loader = LOAD_ADAPTERS['NL-1']?.specs['nl-1-backfill-obs'];
   if (loader === undefined) throw new Error('no nl-1-backfill-obs loader');
@@ -59,6 +61,32 @@ describe('backfill golden files (real payloads)', () => {
     expect(out.obs).toHaveLength(0);
     expect(out.provider_values).toBe(40);
     expect(out.dropped).toEqual({ unregistered_method: 40 });
+  });
+});
+
+describe('the load window (review S3)', () => {
+  const H95 = 'nl-1-backfill-lobith-h-19950125';
+  const balanced = (out: ReturnType<typeof run>) => {
+    const dropped = Object.values(out.dropped).reduce((n, v) => n + v, 0) + out.unknown_values;
+    expect(out.provider_values).toBe(out.obs.length + dropped);
+  };
+
+  it('rows outside the line’s chunk [from, to) are dropped as outside_backfill, and the ledger still balances', () => {
+    const from = Date.parse('1995-01-30T00:00:00Z');
+    const to = Date.parse('1995-02-01T00:00:00Z');
+    const out = run(H95, { from, to });
+    expect(out.obs).toHaveLength(48);
+    expect(out.obs.every((o) => Date.parse(o.ts) >= from && Date.parse(o.ts) < to)).toBe(true);
+    expect(out.dropped.outside_backfill).toBe(265 - 48);
+    balanced(out);
+  });
+
+  it('rows below the spec floor (1990-01-01) are dropped whatever the line says', () => {
+    const out = run(H95, undefined, (t) => t.replaceAll('"1995-', '"1985-'));
+    expect(out.provider_values).toBe(265);
+    expect(out.obs).toHaveLength(0);
+    expect(out.dropped.outside_backfill).toBe(265);
+    balanced(out);
   });
 });
 

@@ -8,6 +8,7 @@ import { errorCode } from '../db/pool.ts';
 import { type Backfilled, LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
 import {
   type Audience,
+  DATA_EPOCH,
   DATA_FLOOR,
   type DirtyEntry,
   type DirtyKind,
@@ -163,6 +164,7 @@ export const RETAINED = [
 ] as const;
 
 const FLOOR_MS = Date.parse(DATA_FLOOR);
+const EPOCH_MS = Date.parse(DATA_EPOCH);
 const NUL = String.fromCharCode(0);
 /** A text PostgreSQL cannot store: U+0000 (text and jsonb) or a lone surrogate (jsonb refuses `\ud800`). */
 const badString = (s: string) => s.includes(NUL) || !s.isWellFormed();
@@ -702,6 +704,15 @@ export class Loader {
         ...(refRegistries === undefined ? {} : { refRegistries }),
         ...(previous === null || spec.window === undefined ? {} : { since: previous.getTime() - spec.window }),
         ...(labelOffsets === undefined ? {} : { labelOffsets }),
+        // P14a: a backfill payload loads only inside its chunk (when the line names one) and before DATA_EPOCH.
+        ...(spec.backfill === true
+          ? {
+              backfill: {
+                from: line.backfill === undefined ? Number.NEGATIVE_INFINITY : Date.parse(line.backfill.from),
+                to: Math.min(EPOCH_MS, line.backfill === undefined ? EPOCH_MS : Date.parse(line.backfill.to)),
+              },
+            }
+          : {}),
       });
       // P8a: every forecast run passes the core bounds before anything is stored (drift quarantines the payload).
       checked = checkForecasts(result.forecasts, line.source, fetchedAt.getTime(), result.dropped);

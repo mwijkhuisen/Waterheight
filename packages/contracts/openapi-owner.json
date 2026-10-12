@@ -1093,12 +1093,22 @@
                       "minimum": 0,
                       "type": "integer"
                     },
+                    "chunks_with_data": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
                     "inserted": {
                       "maximum": 9007199254740991,
                       "minimum": 0,
                       "type": "integer"
                     },
                     "jobs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "quarantined": {
                       "maximum": 9007199254740991,
                       "minimum": 0,
                       "type": "integer"

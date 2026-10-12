@@ -22,8 +22,8 @@ const kysely = (user: 'rws_api' | 'rws_owner_api') =>
 const job = (source: string, spec: string, status: string, chunks: number, ins: number, rev: number, unrec: number) =>
   h.t.admin.query(
     `INSERT INTO backfill_job (spec_id, source_id, series_key, range_from, range_to, chunk, cursor_ts, chunks_done,
-                               status, request_budget, inserted, revised, unreconciled)
-     VALUES ($1, $2, 'k', '2026-01-01Z', '2026-02-01Z', '1 day', '2026-01-01Z', $3, $4, 100, $5, $6, $7)`,
+                               chunks_with_data, status, request_budget, inserted, revised, unreconciled)
+     VALUES ($1, $2, 'k', '2026-01-01Z', '2026-02-01Z', '1 day', '2026-01-01Z', $3, $3 - 1, $4, 100, $5, $6, $7)`,
     [spec, source, chunks, status, ins, rev, unrec],
   );
 
@@ -33,6 +33,12 @@ beforeAll(async () => {
   await job('NL-1', 'nl-1-q', 'running', 3, 1000, 20, 1);
   await job('NL-1', 'nl-1-r', 'done', 5, 4000, 30, 0);
   await job('BE-3', 'be-3-levels', 'paused', 7, 987654, 4321, 2);
+  // A backfill payload of NL-1 the loader set aside, and a live one that does not count (review C5/S6).
+  await h.t.admin.query(
+    `INSERT INTO ingest_batch (id, source_id, spec_id, archive_key, fetched_at, adapter_version, parse_status, origin)
+     VALUES (9001, 'NL-1', 'nl-1-backfill-obs', 'raw/x', now(), 1, 'quarantined', 'backfill'),
+            (9002, 'NL-1', 'nl-1-obs-key', 'raw/y', now(), 1, 'quarantined', 'live')`,
+  );
   await computeHealth(h.load.db, inputs);
 }, 60_000);
 afterAll(async () => {
@@ -47,9 +53,11 @@ describe('detail.backfill in health', { timeout: 60_000 }, () => {
       jobs: 2,
       active: 1,
       chunks_done: 8,
+      chunks_with_data: 6,
       inserted: 5000,
       revised: 50,
       unreconciled: 1,
+      quarantined: 1,
     });
     expect(JSON.stringify(pub)).not.toMatch(/987654|4321/);
     expect(pub.owner_sources.total).toBeGreaterThan(0);
@@ -59,9 +67,11 @@ describe('detail.backfill in health', { timeout: 60_000 }, () => {
       jobs: 1,
       active: 1,
       chunks_done: 7,
+      chunks_with_data: 6,
       inserted: 987654,
       revised: 4321,
       unreconciled: 2,
+      quarantined: 0,
     });
     expect(own.sources.find((s) => s.id === 'NL-1')?.backfill?.jobs).toBe(2);
   });
