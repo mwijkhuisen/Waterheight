@@ -1721,6 +1721,389 @@ rivers:
     parent_river_id: sauer
     km_direction: none
     evidence: "Wikidata Q1708483 (no P402; P403 Q158847 Sauer), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); LU-1 publishes no water name: placed by station override; namesake Q741589 is the commune; no relation carries it in the extract; ways tagged wikidata=<this id> and name=Wiltz (geo.yml run 38123404612, rivernet-fixture artifact)"
+  - id: weiss-sieg
+    name_nl: "Weiß"
+    name_en: "Weiß"
+    names:
+      DE-7: ["Weiß"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Weiß"
+    wikidata: Q896143
+    parent_river_id: sieg
+    km_direction: none
+    evidence: "Wikidata Q896143 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q130369368 (into the Rotach)"
+  - id: hanfbach
+    name_nl: "Hanfbach"
+    name_en: "Hanfbach"
+    names:
+      DE-7: ["Hanfbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Hanfbach"
+    wikidata: Q883438
+    parent_river_id: sieg
+    km_direction: none
+    evidence: "Wikidata Q883438 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: pleisbach
+    name_nl: "Pleisbach"
+    name_en: "Pleisbach"
+    names:
+      DE-7: ["Pleisbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Pleisbach"
+    wikidata: Q880232
+    parent_river_id: sieg
+    km_direction: none
+    evidence: "Wikidata Q880232 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: agger
+    name_nl: "Agger"
+    name_en: "Agger"
+    names:
+      DE-7: ["Agger"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Agger"
+    wikidata: Q393161
+    parent_river_id: sieg
+    km_direction: none
+    evidence: "Wikidata Q393161 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: doerspe
+    name_nl: "Dörspe"
+    name_en: "Dörspe"
+    names:
+      DE-7: ["Dörspe"]
+    aliases: []
+    osm_relation_id: 5195680
+    osm_way_name: null
+    wikidata: Q1271446
+    parent_river_id: agger
+    km_direction: none
+    evidence: "Wikidata Q1271446 (P402 5195680; P403 Q393161 Agger), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: suelz
+    name_nl: "Sülz"
+    name_en: "Sülz"
+    names:
+      DE-7: ["Sülz"]
+    aliases: []
+    osm_relation_id: 386639
+    osm_way_name: null
+    wikidata: Q153143
+    parent_river_id: agger
+    km_direction: none
+    evidence: "Wikidata Q153143 (P402 386639; P403 Q393161 Agger), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); two gauges, held back in #126 until the Agger is curated"
+  - id: kuertener-suelz
+    name_nl: "Kürtener Sülz"
+    name_en: "Kürtener Sülz"
+    names:
+      DE-7: ["Kürtener Sülz"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Kürtener Sülz"
+    wikidata: Q631227
+    parent_river_id: suelz
+    km_direction: none
+    evidence: "Wikidata Q631227 (no P402; P403 Q153143 Sülz), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: steinagger
+    name_nl: "Steinagger"
+    name_en: "Steinagger"
+    names:
+      DE-7: ["Steinagger"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Steinagger"
+    wikidata: Q878053
+    parent_river_id: agger
+    km_direction: none
+    evidence: "Wikidata Q878053 (no P402; P403 Q393161 Agger), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: morsbach
+    name_nl: "Morsbach"
+    name_en: "Morsbach"
+    names:
+      DE-7: ["Morsbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Morsbach"
+    wikidata: Q895502
+    parent_river_id: wupper
+    km_direction: none
+    evidence: "Wikidata Q895502 (no P402; P403 Q639374 Wupper), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesakes Q11050 (the municipality) and Q65241406 (into the Urft)"
+  - id: itter
+    name_nl: "Itter"
+    name_en: "Itter"
+    names:
+      DE-7: ["Itter"]
+    aliases: []
+    osm_relation_id: 1494211
+    osm_way_name: null
+    wikidata: Q5122
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q5122 (P402 1494211; P403 Q584 Rhine), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesakes Q1675322 (Eder), Q895673 (Diemel), Q876271 (Neckar)"
+  - id: eschweiler-bach
+    name_nl: "Eschweiler Bach"
+    name_en: "Eschweiler Bach"
+    names:
+      DE-7: ["Eschweiler Bach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Eschweiler Bach"
+    wikidata: Q32751195
+    parent_river_id: erft
+    km_direction: none
+    evidence: "Wikidata Q32751195 (no P402; P403 Q708840 Erft), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: veybach
+    name_nl: "Veybach"
+    name_en: "Veybach"
+    names:
+      DE-7: ["Veybach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Veybach"
+    wikidata: Q875959
+    parent_river_id: erft
+    km_direction: none
+    evidence: "Wikidata Q875959 (no P402; P403 Q708840 Erft), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: rotbach-erft
+    name_nl: "Rotbach"
+    name_en: "Rotbach"
+    names:
+      DE-7: ["Rotbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Rotbach"
+    wikidata: Q871120
+    parent_river_id: erft
+    km_direction: none
+    evidence: "Wikidata Q871120 (no P402; P403 Q708840 Erft), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q873782 (into the Rhine at Dinslaken)"
+  - id: gillbach
+    name_nl: "Gillbach"
+    name_en: "Gillbach"
+    names:
+      DE-7: ["Gillbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Gillbach"
+    wikidata: Q589054
+    parent_river_id: erft
+    km_direction: none
+    evidence: "Wikidata Q589054 (no P402; P403 Q708840 Erft), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: henne
+    name_nl: "Henne"
+    name_en: "Henne"
+    names:
+      DE-7: ["Henne"]
+    aliases: []
+    osm_relation_id: 10692053
+    osm_way_name: null
+    wikidata: Q317166
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q317166 (P402 10692053; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: neger
+    name_nl: "Neger"
+    name_en: "Neger"
+    names:
+      DE-7: ["Neger"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Neger"
+    wikidata: Q315416
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q315416 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q828407 (into the Bieke)"
+  - id: roehr
+    name_nl: "Röhr"
+    name_en: "Röhr"
+    names:
+      DE-7: ["Röhr"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Röhr"
+    wikidata: Q323172
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q323172 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: waldbach
+    name_nl: "Waldbach"
+    name_en: "Waldbach"
+    names:
+      DE-7: ["Waldbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Waldbach"
+    wikidata: Q960899
+    parent_river_id: roehr
+    km_direction: none
+    evidence: "Wikidata Q960899 (no P402; P403 Q323172 Röhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: wenne
+    name_nl: "Wenne"
+    name_en: "Wenne"
+    names:
+      DE-7: ["Wenne"]
+    aliases: []
+    osm_relation_id: 1363553
+    osm_way_name: null
+    wikidata: Q876480
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q876480 (P402 1363553; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: moehne
+    name_nl: "Möhne"
+    name_en: "Möhne"
+    names:
+      DE-7: ["Möhne"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Möhne"
+    wikidata: Q562385
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q562385 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: hundem
+    name_nl: "Hundem"
+    name_en: "Hundem"
+    names:
+      DE-7: ["Hundem"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Hundem"
+    wikidata: Q873999
+    parent_river_id: lenne
+    km_direction: none
+    evidence: "Wikidata Q873999 (no P402; P403 Q239661 Lenne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: hasper-bach
+    name_nl: "Hasper Bach"
+    name_en: "Hasper Bach"
+    names:
+      DE-7: ["Hasper Bach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Hasper Bach"
+    wikidata: Q44402799
+    parent_river_id: ennepe
+    km_direction: none
+    evidence: "Wikidata Q44402799 (no P402; P403 Q562319 Ennepe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: deilbach
+    name_nl: "Deilbach"
+    name_en: "Deilbach"
+    names:
+      DE-7: ["Deilbach"]
+    aliases: []
+    osm_relation_id: 1239530
+    osm_way_name: null
+    wikidata: Q317515
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q317515 (P402 1239530; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: elbsche
+    name_nl: "Elbsche"
+    name_en: "Elbsche"
+    names:
+      DE-7: ["Elbsche"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Elbsche"
+    wikidata: Q1325422
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q1325422 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: felderbach
+    name_nl: "Felderbach"
+    name_en: "Felderbach"
+    names:
+      DE-7: ["Felderbach"]
+    aliases: []
+    osm_relation_id: 6574772
+    osm_way_name: null
+    wikidata: Q872571
+    parent_river_id: deilbach
+    km_direction: none
+    evidence: "Wikidata Q872571 (P402 6574772; P403 Q317515 Deilbach), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: hardenberger-bach
+    name_nl: "Hardenberger Bach"
+    name_en: "Hardenberger Bach"
+    names:
+      DE-7: ["Hardenberger Bach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Hardenberger Bach"
+    wikidata: Q1585078
+    parent_river_id: deilbach
+    km_direction: none
+    evidence: "Wikidata Q1585078 (no P402; P403 Q317515 Deilbach), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: rinderbach
+    name_nl: "Rinderbach"
+    name_en: "Rinderbach"
+    names:
+      DE-7: ["Rinderbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Rinderbach"
+    wikidata: Q825859
+    parent_river_id: ruhr
+    km_direction: none
+    evidence: "Wikidata Q825859 (no P402; P403 Q1664 Ruhr), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q2153378 (into the Lohr)"
+  - id: wisserbach
+    name_nl: "Wisserbach"
+    name_en: "Wisserbach"
+    names:
+      DE-7: ["Wisserbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Wisserbach"
+    wikidata: Q876936
+    parent_river_id: sieg
+    km_direction: none
+    evidence: "Wikidata Q876936 (no P402; P403 Q152484 Sieg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); Wikidata label \"Wisser Bach\""
+  - id: oese
+    name_nl: "Öse"
+    name_en: "Öse"
+    names:
+      DE-7: ["Öse"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Öse"
+    wikidata: Q325103
+    parent_river_id: honne
+    km_direction: none
+    evidence: "Wikidata Q325103 (no P402; P403 Q562288 Hönne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q298096 (into the Nethe, Weser basin)"
+  - id: anger
+    name_nl: "Anger"
+    name_en: "Anger"
+    names:
+      DE-7: ["Anger"]
+    aliases: []
+    osm_relation_id: 941791
+    osm_way_name: null
+    wikidata: Q260704
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q260704 (P402 941791; no P403), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); Wikidata has no P403 for it: the mouth is measured in the extract; namesake Q537922 (Austria)"
+  - id: else-lenne
+    name_nl: "Else"
+    name_en: "Else"
+    names: {}
+    aliases: []
+    osm_relation_id: 381249
+    osm_way_name: null
+    wikidata: Q830992
+    parent_river_id: lenne
+    km_direction: none
+    evidence: "Wikidata Q830992 (P402 381249; P403 Q239661 Lenne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); gaugeless connector that carries the Oester (owner 2026-10-12, #127); names {} because the only DE-7 \"Else\" station is on the Weser Else (Q448518, into the Werre)"
+  - id: oester
+    name_nl: "Oester"
+    name_en: "Oester"
+    names:
+      DE-7: ["Oester"]
+    aliases: []
+    osm_relation_id: 381253
+    osm_way_name: null
+    wikidata: Q1740857
+    parent_river_id: else-lenne
+    km_direction: none
+    evidence: "Wikidata Q1740857 (P402 381253; P403 Q830992 Else), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
 excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283

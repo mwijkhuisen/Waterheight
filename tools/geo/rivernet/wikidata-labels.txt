@@ -223,6 +223,43 @@ lb:Wolz
 fr:Clerve
 de:Clerve
 lb:Klierf
+# Stage 3 B1 (#139, KG-250): DE-7 Sieg, Wupper, Erft and Ruhr single-gauge tributaries, the Sülz and the Else connector
+de:Weiß
+de:Wisserbach
+de:Wisser Bach
+de:Hanfbach
+de:Pleisbach
+de:Agger
+de:Dörspe
+de:Sülz
+de:Kürtener Sülz
+de:Steinagger
+de:Morsbach
+de:Itter
+de:Eschweiler Bach
+de:Veybach
+de:Rotbach
+de:Gillbach
+de:Anger
+de:Henne
+de:Neger
+de:Röhr
+de:Waldbach
+de:Wenne
+de:Möhne
+de:Öse
+de:Oese
+de:Hundem
+de:Oester
+de:Else
+de:Hasper Bach
+de:Hombecke
+de:Jubach
+de:Deilbach
+de:Elbsche
+de:Felderbach
+de:Hardenberger Bach
+de:Rinderbach
 # Canals
 nl:Julianakanaal
 nl:Albertkanaal
