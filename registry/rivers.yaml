@@ -1741,12 +1741,12 @@ rivers:
       CH-1: ["Kander"]
       CH-2: ["Kander"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Kander"
+    osm_relation_id: 2205219
+    osm_way_name: null
     wikidata: Q668478
     parent_river_id: aare
     km_direction: none
-    evidence: "Wikidata Q668478 (no P402; P403 Q14426 Lake Thun, whose outflow is the Aare), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q650433 is the Kander of Baden-Württemberg (mouth Rhine); the parent of the Simme (#125)"
+    evidence: "Wikidata Q668478 (no P402; P403 Q14426 Lake Thun, whose outflow is the Aare), SPARQL 2026-10-11 (tools/geo/rivernet/lookup-wikidata.ts); namesake Q650433 is the Kander of Baden-Württemberg (mouth Rhine); relation r2205219 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38165279934, rivernet-fixture artifact); the parent of the Simme (#125)"
   - id: simme
     name_nl: "Simme"
     name_en: "Simme"
