@@ -8,7 +8,7 @@
 
 - **The host is a home line.** Production runs on the owner's machine behind a home router (KG-228). Every visitor reaches it through a Caddy reverse proxy on the LAN and the router's forwards of TCP 80 and 443 (and UDP 443); `RWS_TRUSTED_PROXIES` names that proxy so the limiter and the masked log see visitors (`docs/runbooks/api.md` §6). The home address is public, changes with the line and is a direct target.
 - **D20 covers less than this.** D20 arms a CDN pull zone for `/tiles/*` and `/assets/*` only, as a flood fallback (`docs/runbooks/cdn-break-glass.md`). Its origin stays reachable directly, so R-097 makes origin authentication a precondition of arming it.
-- **The old domain goes.** The public domain moves to `waterradar.io`, whose zone has been on Cloudflare since registration (owner, 2026-10-12). `docs/runbooks/domain-change.md` does that step in direct mode, before this one.
+- **The old domain goes.** The public domain moves to `waterradar.io`, whose zone has been on Cloudflare since registration (owner, 2026-10-12). `docs/runbooks/domain-change.md` does that step in direct mode, before this one; `docs/runbooks/cutover-waterradar-tunnel.md` does both in one sitting (owner, 2026-10-14).
 - **A tunnel needs no inbound port.** `cloudflared` dials out to Cloudflare and carries the visitors' requests back over that connection, so the router can forward nothing but WireGuard (UDP 51820).
 
 ## Decision

@@ -2,7 +2,8 @@
 
 **Trigger:**
 - the owner moves the public site from the old `rk.` host name to `waterradar.io`, still in direct mode (Caddy on the home line, the router's forwards);
-- it comes **before** `docs/runbooks/edge-switch.md`, which puts the tunnel on the new name.
+- it comes **before** `docs/runbooks/edge-switch.md`, which puts the tunnel on the new name;
+- or neither: `docs/runbooks/cutover-waterradar-tunnel.md` does both in one sitting, without this direct-mode stop on the new name.
 
 An [owner] task: it needs the DNS zone, the router and the VPS. No code changes: every absolute URL of the site (robots, sitemap, `security.txt`, `og:image`) is built from `RWS_DOMAIN` when Caddy loads its config. The zone `waterradar.io` has been on Cloudflare since registration (owner, 2026-10-12, nameservers at Cloudflare); records there stay **DNS-only (grey cloud)** in this step.
 

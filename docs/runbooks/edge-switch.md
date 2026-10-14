@@ -13,7 +13,7 @@ The owner site never goes behind Cloudflare: `owner.<domain>` gets no public DNS
 
 ## 1. Prerequisites
 
-1. **Rollout step 1 is done:** the site runs in direct mode on `waterradar.io` and `scripts/verify-prod.sh waterradar.io` is as green as before (`docs/runbooks/domain-change.md`).
+1. **Rollout step 1 is done:** the site runs in direct mode on `waterradar.io` and `scripts/verify-prod.sh waterradar.io` is as green as before (`docs/runbooks/domain-change.md`). Or skip that step: `docs/runbooks/cutover-waterradar-tunnel.md` moves the old `rk.` site straight to `waterradar.io` behind the tunnel in one sitting, using this runbook's sections.
 2. **This release is deployed** (`rws-update` has installed it) and its host files are installed. They changed: `deploy/host/nftables.conf` (the set `cftunnel4` and its one rule), `deploy/bin/rws-lib.sh`, `deploy/bin/rws-wg-peer` and `deploy/host/bootstrap.sh`. Until bootstrap has run, `rws-update` pings `update` with `/fail` and `host_files_changed`. Run it from the verified release directory, twice; the second run must say "0 change(s)" (`docs/runbooks/bootstrap.md`, "a new release with changed host files"):
 
    ```bash
