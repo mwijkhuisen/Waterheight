@@ -47,7 +47,7 @@ CREATE FUNCTION public.backfill_guard(p_source text) RETURNS text
     AS $$
   SELECT CASE
     WHEN l.value IS NULL
-      OR COALESCE((l.value ->> 'computed_at')::timestamptz, '-infinity') < now() - interval '5 minutes' THEN 'loader_lag'
+      OR COALESCE((l.value ->> 'computed_at')::timestamptz, '-infinity') < now() - interval '150 seconds' THEN 'loader_lag'
     WHEN COALESCE((l.value ->> 'backlog_age_s')::numeric, 0) > 60
       OR COALESCE((l.value ->> 'backlog_files')::numeric, 0) > 3 THEN 'backlog'
     WHEN EXISTS (

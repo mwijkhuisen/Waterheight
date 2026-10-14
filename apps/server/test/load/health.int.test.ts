@@ -356,6 +356,35 @@ describe('Q7 with history (P14a fix)', { timeout: 120_000 }, () => {
     }
   });
 
+  // The oracle (review R5): the same scans with a vacuous lookback are the old, unbounded ones. `now` slides across the
+  // end of the loaded data at odd minutes, so the first bucket of the 24 h window starts before now − 24 h, and the
+  // outages slide so the day before them holds the data's last rows: a bound one step or a day too tight differs.
+  it('the bound changes no count: the scans without it agree over a sweep of now and outages', async () => {
+    const H = 3_600_000;
+    const NONE = 100 * 365 * 24 * H;
+    const t0 = Date.parse('2026-09-29T14:07:00Z');
+    const sorted = (rows: { source_id: string; missing: number }[]) =>
+      [...rows].sort((a, b) => a.source_id.localeCompare(b.source_id));
+    let total = 0;
+    for (let k = 0; k < 17; k++) {
+      const now = new Date(t0 + k * 3 * H);
+      const bounded = sorted((await q7Gaps(now).execute(h.load.db)).rows);
+      expect(bounded, now.toISOString()).toEqual(sorted((await q7Gaps(now, NONE).execute(h.load.db)).rows));
+      total += bounded.find((r) => r.source_id === 'DE-1')?.missing ?? 0;
+    }
+    for (let k = 0; k < 24; k++) {
+      const from = new Date(Date.parse('2026-09-29T12:00:00Z') + k * 1.5 * H);
+      const to = new Date(from.getTime() + 2 * H);
+      const now = new Date(to.getTime() + 4 * H);
+      const bounded = (await q7Outage('DE-1', from, to, now).execute(h.load.db)).rows;
+      expect(bounded, from.toISOString()).toEqual(
+        (await q7Outage('DE-1', from, to, now, NONE).execute(h.load.db)).rows,
+      );
+      total += bounded[0]?.missing ?? 0;
+    }
+    expect(total).toBeGreaterThan(0);
+  });
+
   it('EXPLAIN lists no history partition and none older than the lookback, but still scans obs', async () => {
     // The history partitions exist (idempotent), so their absence from the plan is the bound's doing.
     await h.t.admin.query("SELECT ensure_history_partitions('2003-01-01', '2004-01-01')");

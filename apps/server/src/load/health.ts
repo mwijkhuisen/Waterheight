@@ -258,8 +258,8 @@ export async function forecastDetails(db: Kysely<DB>, now: Date): Promise<Map<st
 
 /**
  * Q7 never looks further back than this (P14a fix). The 24 h form needs its window plus one step and the outage
- * form its staleness limit plus a day (the day before it) before the outage, both inside it while every step is at
- * most a day and every staleness limit at most 12 h (today PT1H and PT12H; `test/staleness-limit.test.ts` pins the
+ * form its staleness limit plus a day (the day before it) before the outage, both inside it while every step and
+ * every staleness limit is at most a day (today at most PT1H and PT12H; `test/staleness-limit.test.ts` pins the
  * registry under it). Without a constant bound the gap scan read every obs partition, history included, on each
  * pass: 45 s at 6.5 M backfilled rows, inside the single load loop.
  */
@@ -271,9 +271,12 @@ export const Q7_LOOKBACK_MS = 48 * 3_600_000;
 // g.b + step <= now - staleness. Both bounds are plain timestamptz parameters, so the planner prunes partitions
 // at plan time.
 
-/** Q7 over 24 h, per source (the statement computeHealth runs; exported so a test can EXPLAIN it). */
-export const q7Gaps = (now: Date) => {
-  const since = new Date(now.getTime() - Q7_LOOKBACK_MS);
+/**
+ * Q7 over 24 h, per source (the statement computeHealth runs; exported so a test can EXPLAIN it). `lookbackMs` is
+ * for that test only: a far longer one is the scan without the bound, its oracle.
+ */
+export const q7Gaps = (now: Date, lookbackMs = Q7_LOOKBACK_MS) => {
+  const since = new Date(now.getTime() - lookbackMs);
   return sql<{ source_id: string; missing: number }>`
     SELECT s.source_id, count(*)::int AS missing
     FROM series s
@@ -289,9 +292,9 @@ export const q7Gaps = (now: Date) => {
     GROUP BY s.source_id`;
 };
 
-/** Q7 over one source's outage [from, to] (a single row: the count). */
-export const q7Outage = (source: string, from: Date, to: Date, now: Date) => {
-  const since = new Date(from.getTime() - Q7_LOOKBACK_MS);
+/** Q7 over one source's outage [from, to] (a single row: the count; `lookbackMs` as for q7Gaps). */
+export const q7Outage = (source: string, from: Date, to: Date, now: Date, lookbackMs = Q7_LOOKBACK_MS) => {
+  const since = new Date(from.getTime() - lookbackMs);
   return sql<{ missing: number }>`
     SELECT count(*)::int AS missing
     FROM series s

@@ -36,7 +36,7 @@ const TICK_MS = 10_000;
  */
 const TICK_BUDGET_MS = 20_000;
 const HEALTH_MS = 60_000;
-/** The health pass runs inside the load loop, so one slower than this is live lag (P14a fix): it logs `health_slow`. */
+/** The health pass runs inside the load loop, so one slower than this is live lag (P14a fix): the alert `health_slow`. */
 const HEALTH_SLOW_MS = 10_000;
 /** The outage scan reads a week of batches: not on every health pass. */
 const OUTAGE_MS = 600_000;
@@ -173,7 +173,7 @@ export async function runLoad(
         // P8a: a staged LU-3 group whose five files never all arrived (a count only, never a value).
         for (const [source, n] of await pruneStagedParts(db, now)) alert('incomplete_run', { source, n });
         const ms = Math.round(performance.now() - started);
-        if (ms > HEALTH_SLOW_MS) logger.warn({ code: 'health_slow', ms }, 'health pass slow');
+        if (ms > HEALTH_SLOW_MS) alert('health_slow', { ms });
         lastHealth = now.getTime();
       }
       if (await claimNightly(db, now, backlog)) {

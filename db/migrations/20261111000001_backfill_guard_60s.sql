@@ -1,11 +1,12 @@
 -- migrate:up
 
--- The backfill guard's backlog limit goes from 600 s to 60 s (P14a fix). The guard reads the loader row that the
--- health pass writes once a minute, so the row it sees can be 60 s old; a backlog limit of 60 s keeps live lag under
--- the 120 s freshness limit. 600 s was five times that limit, so the runner went on starting chunks while live data
--- was already late (the first NL-1 night, 2026-10-12/13). Only the number changes: the body, SECURITY DEFINER, the
--- search_path, the owner, the REVOKE and the GRANT to rws_backfill (CREATE OR REPLACE keeps them) stay as in
--- 20261110000001_backfill.sql.
+-- The backfill guard pauses the runner sooner (P14a fix). `backlog`: the oldest unread manifest line is older than
+-- 60 s (it was 600 s, five times the 120 s freshness limit). `loader_lag`: the loader row is older than 150 s (it was
+-- 5 minutes); the health pass rewrites it every 60 to 90 s (about 130 s on the night it runs the nightly jobs), so an
+-- older row is a stalled load loop, and the runner no longer goes on from a stale row with a zero backlog. On the
+-- first NL-1 night (2026-10-12/13) the runner went on starting chunks while live data was late. Only these two
+-- numbers change: the body, SECURITY DEFINER, the search_path, the owner, the REVOKE and the GRANT to rws_backfill
+-- (CREATE OR REPLACE keeps them) stay as in 20261110000001_backfill.sql.
 CREATE OR REPLACE FUNCTION backfill_guard(p_source text) RETURNS text
 LANGUAGE sql
 STABLE
@@ -14,7 +15,7 @@ SET search_path = pg_catalog, pg_temp
 AS $$
   SELECT CASE
     WHEN l.value IS NULL
-      OR COALESCE((l.value ->> 'computed_at')::timestamptz, '-infinity') < now() - interval '5 minutes' THEN 'loader_lag'
+      OR COALESCE((l.value ->> 'computed_at')::timestamptz, '-infinity') < now() - interval '150 seconds' THEN 'loader_lag'
     WHEN COALESCE((l.value ->> 'backlog_age_s')::numeric, 0) > 60
       OR COALESCE((l.value ->> 'backlog_files')::numeric, 0) > 3 THEN 'backlog'
     WHEN EXISTS (
