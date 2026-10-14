@@ -12,6 +12,7 @@ import { type Kysely, sql } from 'kysely';
 import { type ChannelAudience, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { FILLED_BY, LOAD_ADAPTERS } from '../load/adapters.ts';
+import { DATA_FLOOR } from '../load/dirty.ts';
 import { assembleFrames, type FrameRow } from '../publish/render/frames.ts';
 import { channelViews } from './channels.ts';
 import { forecastHorizons } from './forecast-at.ts';
@@ -134,7 +135,8 @@ const flag = (flags: unknown, key: string): boolean | null => {
 /**
  * Stations with their active series. `dataSince` is the first UTC day with data
  * in the display channel (the daily rollup; the history window applies), not
- * the registration time.
+ * the registration time. Only from DATA_FLOOR on (P14a): a backfill of the
+ * history before it leaves the public window and this date as they were (D9).
  */
 // ponytail: dataSince is a GROUP BY over the whole daily rollup, cached 300 s; an uncached /stations took 580 ms at
 // 3,000 series × 365 days. Store the first-data day per series once the registry passes 1,000 active series or an
@@ -157,7 +159,8 @@ export async function readStations(db: Kysely<DB>, family: ChannelAudience): Pro
     ).rows,
     since: (
       await sql<{ series_id: number; since: Date }>`
-        SELECT series_id, min(bucket) AS since FROM ${sql.table(v.obs1d)} GROUP BY series_id`.execute(tx)
+        SELECT series_id, min(bucket) AS since FROM ${sql.table(v.obs1d)}
+        WHERE bucket >= ${DATA_FLOOR}::timestamptz GROUP BY series_id`.execute(tx)
     ).rows,
   }));
   const sinceOf = new Map(since.map((r) => [r.series_id, r.since]));

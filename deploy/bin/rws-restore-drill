@@ -359,7 +359,7 @@ exec 6<&-
 
 # Sanity: every application role, rows in the main tables, and the newest observation's epoch.
 sanity=$(printf '%s\n' "SELECT (SELECT count(*) FROM pg_roles WHERE rolname IN ('rws_owner', 'rws_migrator', 'rws_load',
-    'rws_publish', 'rws_api', 'rws_owner_api', 'rws_backup')) = 7
+    'rws_publish', 'rws_api', 'rws_owner_api', 'rws_backfill', 'rws_backup')) = 8
   AND EXISTS (SELECT FROM schema_migrations) AND EXISTS (SELECT FROM provider) AND EXISTS (SELECT FROM source)
   AND EXISTS (SELECT FROM station) AND EXISTS (SELECT FROM series) AND EXISTS (SELECT FROM ingest_batch)
   AND EXISTS (SELECT FROM load_cursor) AND EXISTS (SELECT FROM obs) AND EXISTS (SELECT FROM obs_latest),

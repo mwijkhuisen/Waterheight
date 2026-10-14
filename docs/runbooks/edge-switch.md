@@ -19,7 +19,7 @@ The owner site never goes behind Cloudflare: `owner.<domain>` gets no public DNS
    ```bash
    sudo /usr/local/lib/rws/deploy/host/bootstrap.sh
    sudo /usr/local/lib/rws/deploy/host/bootstrap.sh
-   sudo stat -c '%n %a %U:%G' /etc/rws/secrets/cf_tunnel_token    # 440 root:rws-cftunnel (gid 61011), empty for now
+   sudo stat -c '%n %a %U:%G' /etc/rws/secrets/cf_tunnel_token    # 440 root:rws-cftunnel (gid 61012), empty for now
    sudo nft list set inet rws cftunnel4                           # 198.41.192.0/24, 198.41.200.0/24
    ```
 3. **The zone's CAA records allow both authorities.** Cloudflare's Universal SSL certificate is issued by authorities of its own. When a zone has CAA records, Cloudflare adds the records for those authorities itself; without them Universal SSL cannot issue. Check after the zone is proxied and again after the switch:
@@ -30,7 +30,7 @@ The owner site never goes behind Cloudflare: `owner.<domain>` gets no public DNS
 
    Expected: `0 issue "letsencrypt.org"` (ADR-0020, Caddy's certificate and a rollback) **beside** the records Cloudflare added for its own authorities. If only Let's Encrypt is listed, add no record by hand from memory: ask Cloudflare's dashboard (SSL/TLS, Edge Certificates) which authorities it will use, or remove the CAA records for the duration and put Let's Encrypt back afterwards.
 4. **TTL.** A day ahead, lower the TTL of the `A` and `AAAA` records of the public name to 60 seconds (they are DNS-only, TTL 300 from the domain change). Clients that still hold the old record fail for a few minutes after section 8; that is acceptable before the launch flip (E4), which is why this runs first.
-5. **The Cloudflare account is a root of trust** (T-EDGE-1, R-105): whoever controls it can repoint the apex, add an `owner.` record, rotate the tunnel token or add a connector, and inject scripts or poison the cache through Workers, Snippets or transform rules. Before the switch the owner has: two-factor sign-in with a hardware key (a TOTP app only if no key is available); the account's e-mail mailbox behind two-factor sign-in too (it resets everything else); one member of the account, the owner; **no API tokens**, or each one listed in the password manager and rotated together with the tunnel token (`docs/runbooks/secrets-rotation.md` §6); no Workers, Snippets, Page Rules or transform rules beyond the ones this runbook names. The account's **Global API Key** (every account has one; it cannot be deleted, only rolled; it carries full account rights and is readable in the dashboard after a password re-entry) is never used: roll it at setup, at every tunnel-token rotation and after any suspected session compromise. The account's **audit log** is read at every `verify-prod --edge cloudflare` run (section 9): any change the owner did not make is an incident.
+5. **The Cloudflare account is a root of trust** (T-EDGE-1, R-106): whoever controls it can repoint the apex, add an `owner.` record, rotate the tunnel token or add a connector, and inject scripts or poison the cache through Workers, Snippets or transform rules. Before the switch the owner has: two-factor sign-in with a hardware key (a TOTP app only if no key is available); the account's e-mail mailbox behind two-factor sign-in too (it resets everything else); one member of the account, the owner; **no API tokens**, or each one listed in the password manager and rotated together with the tunnel token (`docs/runbooks/secrets-rotation.md` §6); no Workers, Snippets, Page Rules or transform rules beyond the ones this runbook names. The account's **Global API Key** (every account has one; it cannot be deleted, only rolled; it carries full account rights and is readable in the dashboard after a password re-entry) is never used: roll it at setup, at every tunnel-token rotation and after any suspected session compromise. The account's **audit log** is read at every `verify-prod --edge cloudflare` run (section 9): any change the owner did not make is an incident.
 
 ## 2. The Cloudflare side
 
@@ -90,7 +90,7 @@ Everything else keeps the default: HTML, JSON, `/api`, `/status` and `/runtime-c
 ## 4. The token and the `rws.env` lines
 
 ```bash
-sudoedit /etc/rws/secrets/cf_tunnel_token     # the token alone on one line, in place; bootstrap made the file root:61011 0440
+sudoedit /etc/rws/secrets/cf_tunnel_token     # the token alone on one line, in place; bootstrap made the file root:61012 0440
 sudo stat -c '%n %a %U:%G %s' /etc/rws/secrets/cf_tunnel_token
 ```
 
@@ -107,7 +107,7 @@ sudoedit /etc/rws/rws.env
 
 `RWS_CDN_NAME` goes in **with** `RWS_EDGE=tunnel`, in the same deploy (section 5), never earlier: set while the site is still direct, the privacy page would say that every request passes through Cloudflare when none does. From that deploy on the site answers only through the tunnel, and Cloudflare sees no visitor's request before the DNS switch (section 8), so the page names Cloudflare first before Cloudflare sees anyone (A§12.2). The owner approves the NL and EN text (E5) beforehand, from the PR (the e2e test renders both); section 5 checks the runtime config over loopback, section 8 the pages themselves.
 
-`RWS_WG_ENDPOINT` is where the owner devices dial WireGuard (UDP 51820). A name that Cloudflare proxies cannot carry UDP, so `rws-wg-peer` refuses a value equal to `RWS_DOMAIN` or starting with `owner.`; use a separate DNS-only name or the address. **Choose the name so that it does not re-publish the home address under the site's own zone:** a name at a dynamic-DNS provider, or a non-guessable label, never an obvious one (`home.`, `vpn.`, `wg.`) in the `waterradar.io` zone. The home address stays discoverable anyway (DNS history of the old records, the WireGuard port), and a flood aimed at the home line bypasses Cloudflare (R-101, T-HOST-3). Without it `rws-wg-peer` keeps using `RWS_PUBLIC_IPV4`. Existing owner devices keep the endpoint in their config: re-issue one (`docs/runbooks/owner-device.md`) if the address changes.
+`RWS_WG_ENDPOINT` is where the owner devices dial WireGuard (UDP 51820). A name that Cloudflare proxies cannot carry UDP, so `rws-wg-peer` refuses a value equal to `RWS_DOMAIN` or starting with `owner.`; use a separate DNS-only name or the address. **Choose the name so that it does not re-publish the home address under the site's own zone:** a name at a dynamic-DNS provider, or a non-guessable label, never an obvious one (`home.`, `vpn.`, `wg.`) in the `waterradar.io` zone. The home address stays discoverable anyway (DNS history of the old records, the WireGuard port), and a flood aimed at the home line bypasses Cloudflare (R-102, T-HOST-3). Without it `rws-wg-peer` keeps using `RWS_PUBLIC_IPV4`. Existing owner devices keep the endpoint in their config: re-issue one (`docs/runbooks/owner-device.md`) if the address changes.
 
 ## 5. Deploy in tunnel mode
 

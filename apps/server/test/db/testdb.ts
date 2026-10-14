@@ -11,7 +11,14 @@ const ROOT = new URL('../../../../', import.meta.url);
 export const MIGRATIONS_DIR = fileURLToPath(new URL('db/migrations/', ROOT));
 const ROLES_SQL = readFileSync(new URL('deploy/postgres/roles.sql', ROOT), 'utf8');
 
-export const LOGIN_ROLES = ['rws_migrator', 'rws_load', 'rws_publish', 'rws_api', 'rws_owner_api'] as const;
+export const LOGIN_ROLES = [
+  'rws_migrator',
+  'rws_load',
+  'rws_publish',
+  'rws_api',
+  'rws_owner_api',
+  'rws_backfill',
+] as const;
 export type LoginRole = (typeof LOGIN_ROLES)[number];
 
 /** Throw-away passwords of the test cluster: the roles have no usable password anywhere else. */

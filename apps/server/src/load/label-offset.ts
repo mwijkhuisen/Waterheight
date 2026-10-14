@@ -142,6 +142,7 @@ export async function detectLabelOffsets(
     WHERE ((series_id = ${lu} AND ts >= ${new Date(from)}::timestamptz AND ts < ${new Date(from + DAY_MS)}::timestamptz)
         OR (series_id = ${de} AND ts >= ${new Date(from - pad)}::timestamptz
             AND ts < ${new Date(from + DAY_MS + pad)}::timestamptz))
+      -- 512 rows (another source's fill, or a backfill of history) are not the labels whose offset is measured
       AND (qc & ${QC.BACKFILLED}::int2) = 0`.execute(db);
   const points = (id: number) =>
     rows.filter((r) => r.series_id === id).map((r) => ({ ts: r.ts.getTime(), value: r.value }));

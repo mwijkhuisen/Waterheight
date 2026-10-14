@@ -31,21 +31,23 @@ readonly LIB=/usr/local/lib/rws
 # Secret groups: a file secret keeps its host owner in the container, so each is
 # root:<gid> 0440 and only its consumer gets that gid (compose.yaml group_add).
 # The db_* passwords (P2a): db (the superuser's, read by initdb only), migrate,
-# load and api; db_rws_publish (the publisher) and db_rws_owner_api (publish-owner,
+# load and api; db_rws_backfill (P14a, gid 61011, the backfill job); db_rws_publish (the publisher) and db_rws_owner_api (publish-owner,
 # P9a; api-owner later) are read by P9a services. owner_basic_auth (P9a, gid 61010,
 # group rws-ownerauth) is the owner site's `owner <bcrypt>` line, read only by
 # caddy-owner (deploy/compose.owner.yaml, used in production from P12a): this
-# script creates the empty file and never fills it. cf_tunnel_token (#109, gid 61011,
+# script creates the empty file and never fills it. cf_tunnel_token (#109, gid 61012,
 # group rws-cftunnel) is the Cloudflare Tunnel token, read only by cloudflared
 # (deploy/compose.tunnel.yaml, used only while RWS_EDGE=tunnel): created empty, never
 # filled here; the owner pastes it (docs/runbooks/edge-switch.md).
 readonly -A SECRET_GID=(['hc_ping_key']=61001 ['rws_x_api_key']=61002 ['restic_password']=61003 ['s3_credentials']=61003
   ['db_postgres']=61004 ['db_rws_migrator']=61005 ['db_rws_load']=61006 ['db_rws_publish']=61007
-  ['db_rws_api']=61008 ['db_rws_owner_api']=61009 ['owner_basic_auth']=61010 ['cf_tunnel_token']=61011)
+  ['db_rws_api']=61008 ['db_rws_owner_api']=61009 ['owner_basic_auth']=61010
+  ['db_rws_backfill']=61011 ['cf_tunnel_token']=61012)
 readonly -A GROUP_GID=(['rws-hc']=61001 ['rws-rwskey']=61002 ['rws-backup']=61003
   ['rws-dbpostgres']=61004 ['rws-dbmigrator']=61005 ['rws-dbload']=61006 ['rws-dbpublish']=61007
-  ['rws-dbapi']=61008 ['rws-dbownerapi']=61009 ['rws-ownerauth']=61010 ['rws-cftunnel']=61011)
-readonly DB_SECRETS=(db_postgres db_rws_migrator db_rws_load db_rws_publish db_rws_api db_rws_owner_api)
+  ['rws-dbapi']=61008 ['rws-dbownerapi']=61009 ['rws-ownerauth']=61010 ['rws-dbbackfill']=61011
+  ['rws-cftunnel']=61012)
+readonly DB_SECRETS=(db_postgres db_rws_migrator db_rws_load db_rws_publish db_rws_api db_rws_owner_api db_rws_backfill)
 
 case ${1:-} in
   --dry-run) DRY_RUN=1 ;;

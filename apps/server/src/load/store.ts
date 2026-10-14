@@ -180,7 +180,20 @@ export type Written = {
   newest: Date | null;
   /** Every row written, confirmations and narrowed series included. */
   writes: number;
+  /**
+   * P14a, per input row whatever its series' audience (the backfill ledger, plan §3.6): `inserted`, a row written
+   * where the series had none or held a 512 row (fill or backfill), with a changed value or qc; `revised`, a live row
+   * whose value or qc changed (exactly the obs_revision rows); `skipped`, every other input row: an `off` series, a
+   * timestamp stated again later in the payload, a row the precedence rules keep out, and a confirmation. Each class is
+   * counted on its own, so inserted + revised + skipped = the input rows is a check, not a definition.
+   */
+  inserted: number;
+  revised: number;
+  skipped: number;
 };
+
+/** Which loader path the rows come through (P14a): a source's own payload, a gap-fill, or a backfill payload. */
+export type UpsertMode = 'live' | 'fill' | 'backfill';
 
 type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience' | 'staleness_ms'>;
 
@@ -189,8 +202,24 @@ type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience' | 'staleness_ms'>;
  * rollups of the touched buckets. Rules that keep it correct:
  *  - the input is `real[]`, so a value is compared as the type it is stored in;
  *  - a timestamp that occurs twice in one payload keeps its last value;
- *  - newest fetch wins: the stored row of a point is what the payload with the
- *    greatest (fetched_at, batch id) among all that stated it says. A point is
+ *  - a stored row has a kind: `live` (qc bit 512 clear), `fill` (512, its batch's
+ *    origin `live`: the FR-3 and CH-3 seeds) or `backfill` (512, origin
+ *    `backfill`, P14a). A batch never changes its origin, so a confirmation that
+ *    only moves batch_id keeps the kind. Whether an incoming row replaces the
+ *    stored one (`wins`), with N = "newest fetch wins" below and V = qc bit 2
+ *    (provider-validated: RWS Gecontroleerd and Definitief):
+ *
+ *      stored ↓ / incoming →  live                      fill        backfill
+ *      none                   insert                    insert      insert
+ *      live                   N                         no          V(in) ∧ ¬V(stored) ∧ differs
+ *      fill                   yes                       N           yes
+ *      backfill               unless V(stored) ∧ ¬V(in)  no          N
+ *
+ *    Under the assumption that the provider never takes a value back from
+ *    validated to unvalidated for one (series, ts), the final rows are the
+ *    same in every load order of live, fill and backfill payloads;
+ *  - newest fetch wins (N): the stored row of a point is what the payload with
+ *    the greatest (fetched_at, batch id) among all that stated it says. A point is
  *    written when the batch that holds it is older than this one, or is this
  *    very batch and the value or qc differs (a replay after a fix of the
  *    parser, the normaliser or a registry factor corrects what its own batch
@@ -202,16 +231,20 @@ type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience' | 'staleness_ms'>;
  *    row's batch_id moves to it (and obs_latest's, for the latest row), with no
  *    revision, no rollup and no count, so a late payload fetched in between
  *    cannot overwrite it;
- *  - a changed value or qc writes exactly one obs_revision row. The revision
- *    log records the changes of the stored value in the order they were
- *    stored, so it is the one thing here that depends on arrival order;
- *  - `fill` (P5a: the FR-3 and CH-3 seeds, into FR-1 and CH-1 series) marks
- *    every row with the backfilled bit (512). A fill row is written only where
- *    the series has no row or holds a fill row of an older fetch (newest fetch
- *    wins among fills), and any row of the series' own source replaces a fill
- *    row whatever its fetch time. Neither writes an obs_revision row: a fill
- *    is not a revision of the source's value. So the rows, rollups and
- *    revisions are the same in either load order of a source and its fill.
+ *  - every change of a live row's value or qc writes exactly one obs_revision
+ *    row, whoever changes it (a newer live payload, a validated backfill). The
+ *    revision log records the changes of the stored value in the order they
+ *    were stored, so it is the one thing here that depends on arrival order. A
+ *    change of a fill or backfill row is not a revision of the source's value;
+ *  - `fill` and `backfill` mark every row with the backfilled bit (512). A fill
+ *    row never replaces a live or backfill row, and any row of the series' own
+ *    source replaces a fill row whatever its fetch time, so the rows, rollups
+ *    and revisions are the same in either load order of a source and its fill;
+ *  - `backfill` leaves obs_latest alone: history never makes a series look
+ *    fresh or stale. The rollups of the buckets it changes are refreshed inline,
+ *    as for every other row (plan §3.7).
+ * Returns the audience-counted numbers of the batch (n_new, n_changed, newest,
+ * writes) and the per-row ledger classes (inserted, revised, skipped).
  */
 // ponytail: every re-statement of an unchanged point rewrites its batch_id (about six row updates per insert
 // for DE-1's hourly PT6H window, about 17 for FR-1's 15-minute PT4H window since #53; R-069). If obs bloat shows, keep the newest fetch per series in a coverage table,
@@ -222,30 +255,51 @@ export async function upsertObs(
   ids: ReadonlyMap<string, Series>,
   batch: string,
   fetchedAt: Date,
-  fill = false,
+  mode: UpsertMode = 'live',
   touched: Touch[] = [],
 ): Promise<Written> {
-  const none: Written = { n_new: 0, n_changed: 0, newest: null, writes: 0 };
   const sid: number[] = [];
   const ts: string[] = [];
   const value: number[] = [];
   const qc: number[] = [];
   const counted = new Set<number>();
+  let off = 0;
   for (const r of rows) {
     const series = ids.get(r.series);
     if (series === undefined || !Number.isFinite(r.value)) throw new RangeError('load: row outside the registry');
-    if (series.off) continue;
+    if (series.off) {
+      off += 1;
+      continue;
+    }
     if (series.sameAudience) counted.add(series.id);
     sid.push(series.id);
     ts.push(r.ts);
     value.push(r.value);
-    qc.push(fill ? r.qc | QC.BACKFILLED : r.qc);
+    qc.push(mode === 'live' ? r.qc : r.qc | QC.BACKFILLED);
   }
+  const none: Written = { n_new: 0, n_changed: 0, newest: null, writes: 0, inserted: 0, revised: 0, skipped: off };
   if (sid.length === 0) return none;
   const sorted = [...ts].sort();
-  await sql`SELECT ensure_partitions(${sorted[0]}::timestamptz, ${sorted.at(-1)}::timestamptz)`.execute(tx);
+  // Live rows keep the 2000-01-01 partition floor; a backfill may go down to 1900 (review C7).
+  if (mode === 'backfill')
+    await sql`SELECT ensure_history_partitions(${sorted[0]}::timestamptz, ${sorted.at(-1)}::timestamptz)`.execute(tx);
+  else await sql`SELECT ensure_partitions(${sorted[0]}::timestamptz, ${sorted.at(-1)}::timestamptz)`.execute(tx);
 
-  const { rows: written } = await sql<{ series_id: number; ts: Date; inserted: boolean; changed: boolean }>`
+  // N: the stored row's batch is older than this one, or is this very batch and the row differs.
+  const newer = sql`(b.id IS NULL
+                     OR (b.fetched_at, b.id) < (${fetchedAt}::timestamptz, ${batch}::bigint)
+                     OR (b.id = ${batch}::bigint AND (o.value, o.qc) IS DISTINCT FROM (i.value, i.qc)))`;
+  const BF = sql`${QC.BACKFILLED}::int2`;
+  const V = sql`${QC.VALIDATED}::int2`;
+  const { rows: result } = await sql<{
+    series_id: number | null;
+    ts: Date | null;
+    inserted: boolean | null;
+    changed: boolean | null;
+    revised: boolean | null;
+    n_distinct: number;
+    n_wins: number;
+  }>`
     WITH incoming AS (
       SELECT DISTINCT ON (i.series_id, i.ts) i.series_id, i.ts, i.value, i.qc
       FROM unnest(${sid}::int[], ${ts}::timestamptz[], ${value}::real[], ${qc}::int2[])
@@ -258,17 +312,31 @@ export async function upsertObs(
       LEFT JOIN obs o ON o.series_id = i.series_id AND o.ts = i.ts
       LEFT JOIN ingest_batch b ON b.id = o.batch_id
       WHERE o.series_id IS NULL
-         -- the source's own row replaces a fill row, whatever its fetch time
-         OR (NOT ${fill}::boolean AND (o.qc & ${QC.BACKFILLED}::int2) <> 0)
-         -- a fill row never replaces the source's own row
-         OR ((NOT ${fill}::boolean OR (o.qc & ${QC.BACKFILLED}::int2) <> 0)
-             AND (b.id IS NULL
-                  OR (b.fetched_at, b.id) < (${fetchedAt}::timestamptz, ${batch}::bigint)
-                  OR (b.id = ${batch}::bigint AND (o.value, o.qc) IS DISTINCT FROM (i.value, i.qc))))
+         OR CASE
+              -- a live row: a newer live fetch, or a validated backfill over an unvalidated value; never a fill
+              WHEN (o.qc & ${BF}) = 0 THEN
+                CASE ${mode}::text
+                  WHEN 'live' THEN ${newer}
+                  WHEN 'backfill' THEN (i.qc & ${V}) <> 0 AND (o.qc & ${V}) = 0
+                                       AND (o.value, o.qc) IS DISTINCT FROM (i.value, i.qc)
+                  ELSE false
+                END
+              -- a fill row: the series' own source replaces it whatever its fetch time; a newer fill too
+              WHEN COALESCE(b.origin, 'live') = 'live' THEN ${mode}::text <> 'fill' OR ${newer}
+              -- a backfill row: live unless it would take a validated value back; a newer backfill; never a fill
+              ELSE
+                CASE ${mode}::text
+                  WHEN 'live' THEN NOT ((o.qc & ${V}) <> 0 AND (i.qc & ${V}) = 0)
+                  WHEN 'backfill' THEN ${newer}
+                  ELSE false
+                END
+            END
     ),
     up AS (
       INSERT INTO obs AS o (series_id, ts, value, qc, batch_id)
       SELECT series_id, ts, value, qc, ${batch}::bigint FROM wins
+      -- No WHERE here: wins read the stored row, and nothing can change it before this write only because every
+      -- obs writer (live, fill, backfill, replay) holds the loader lock (review C8). A writer without it would race.
       ON CONFLICT (series_id, ts) DO UPDATE
         SET value = EXCLUDED.value, qc = EXCLUDED.qc, batch_id = EXCLUDED.batch_id
       RETURNING old.series_id AS old_series, old.value AS old_value, old.qc AS old_qc,
@@ -278,21 +346,44 @@ export async function upsertObs(
       INSERT INTO obs_revision (series_id, ts, old_value, new_value, old_qc, new_qc, batch_id)
       SELECT series_id, ts, old_value, value, old_qc, qc, ${batch}::bigint FROM up
       WHERE old_series IS NOT NULL AND (old_value, old_qc) IS DISTINCT FROM (value, qc)
-        AND (old_qc & ${QC.BACKFILLED}::int2) = 0 AND (qc & ${QC.BACKFILLED}::int2) = 0
+        AND (old_qc & ${BF}) = 0
     ),
     latest AS (
       INSERT INTO obs_latest AS l (series_id, ts, value, qc, batch_id)
       SELECT DISTINCT ON (series_id) series_id, ts, value, qc, ${batch}::bigint FROM up
+      WHERE ${mode}::text <> 'backfill'
       ORDER BY series_id, ts DESC
       ON CONFLICT (series_id) DO UPDATE
         SET ts = EXCLUDED.ts, value = EXCLUDED.value, qc = EXCLUDED.qc, batch_id = EXCLUDED.batch_id
         WHERE EXCLUDED.ts >= l.ts
     )
-    SELECT series_id, ts, old_series IS NULL OR (old_qc & ${QC.BACKFILLED}::int2) <> 0 AS inserted,
-           (old_value, old_qc) IS DISTINCT FROM (value, qc) AS changed
-    FROM up`.execute(tx);
+    SELECT w.series_id, w.ts, w.inserted, w.changed, w.changed AND NOT w.inserted AS revised,
+           (SELECT count(*) FROM incoming)::int AS n_distinct, (SELECT count(*) FROM wins)::int AS n_wins
+    FROM (SELECT 1) AS one
+    LEFT JOIN (SELECT series_id, ts, old_series IS NULL OR (old_qc & ${BF}) <> 0 AS inserted,
+                      (old_value, old_qc) IS DISTINCT FROM (value, qc) AS changed
+               FROM up) w ON true`.execute(tx);
+  const head = result[0] as { n_distinct: number; n_wins: number };
+  const written = result.flatMap((w) =>
+    w.series_id === null || w.ts === null
+      ? []
+      : [
+          {
+            series_id: w.series_id,
+            ts: w.ts,
+            inserted: w.inserted === true,
+            changed: w.changed === true,
+            revised: w.revised === true,
+          },
+        ],
+  );
+  // The ledger classes, each counted on its own: the payload's repeats, the rows the rules keep out, confirmations.
+  const inserted = written.filter((w) => w.changed && w.inserted).length;
+  const revised = written.filter((w) => w.revised).length;
+  const skipped =
+    off + (sid.length - head.n_distinct) + (head.n_distinct - head.n_wins) + written.filter((w) => !w.changed).length;
   const changed = written.filter((w) => w.changed);
-  if (changed.length === 0) return { ...none, writes: written.length };
+  if (changed.length === 0) return { ...none, writes: written.length, skipped };
   // P9a: a changed value at ts is what every bucket up to ts + the staleness limit shows (LOCF).
   const staleness = new Map([...ids.values()].map((s) => [s.id, s.staleness_ms]));
   for (const w of changed) {
@@ -338,7 +429,7 @@ export async function upsertObs(
   let newest: Date | null = null;
   for (const w of mine) if (newest === null || w.ts > newest) newest = w.ts;
   const n_new = mine.filter((w) => w.inserted).length;
-  return { n_new, n_changed: mine.length - n_new, newest, writes: written.length };
+  return { n_new, n_changed: mine.length - n_new, newest, writes: written.length, inserted, revised, skipped };
 }
 
 export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'changed';
@@ -456,6 +547,8 @@ export type BatchInput = {
   status: number | null;
   bytes: number | null;
   adapterVersion: number;
+  /** P14a: a backfill payload's batch (`ingest_batch.origin`; fixed at creation, never changed by a replay). */
+  origin?: 'live' | 'backfill';
 };
 
 export type BatchState = { id: string; existed: boolean; previous: string | null; skipped: number };
@@ -468,9 +561,9 @@ export async function openBatch(tx: Tx, b: BatchInput, status: 'ok' | 'quarantin
   if (row !== undefined) return { id: row.id, existed: true, previous: row.parse_status, skipped: row.n_skipped };
   const created = await sql<{ id: string }>`
     INSERT INTO ingest_batch (source_id, spec_id, archive_key, sha256, fetched_at, http_status, bytes, adapter_version,
-                              parse_status)
+                              parse_status, origin)
     VALUES (${b.source}, ${b.spec}, ${b.key}, ${b.sha256}, ${b.fetchedAt}, ${b.status}, ${b.bytes}, ${b.adapterVersion},
-            ${status})
+            ${status}, ${b.origin ?? 'live'})
     RETURNING id`.execute(tx);
   return { id: (created.rows[0] as { id: string }).id, existed: false, previous: null, skipped: 0 };
 }

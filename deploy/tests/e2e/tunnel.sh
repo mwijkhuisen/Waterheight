@@ -36,7 +36,7 @@ grep -qx "RWS_DOMAIN=$DOMAIN" /etc/rws/rws.env || fail "/etc/rws/rws.env is not 
 
 echo "::group::Switch the CI stack to RWS_EDGE=tunnel"
 token="ci-not-a-token-$(openssl rand -hex 16)"
-install -m 0440 -o 0 -g 61011 /dev/null /etc/rws/secrets/cf_tunnel_token
+install -m 0440 -o 0 -g 61012 /dev/null /etc/rws/secrets/cf_tunnel_token
 printf '%s\n' "$token" >/etc/rws/secrets/cf_tunnel_token
 sed -i '/^RWS_EDGE=/d' /etc/rws/rws.env
 echo 'RWS_EDGE=tunnel' >>/etc/rws/rws.env

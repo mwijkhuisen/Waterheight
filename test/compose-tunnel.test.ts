@@ -67,7 +67,7 @@ describe('cloudflared', () => {
     expect(cf.security_opt).toEqual(['no-new-privileges:true']);
     expect(cf.restart).toBeDefined();
     expect(cf.user).toBe('65532:65532');
-    expect(cf.group_add).toEqual(['61011']);
+    expect(cf.group_add).toEqual(['61012']);
     for (const key of ['mem_limit', 'cpus', 'pids_limit']) expect(cf[key], key).toBeDefined();
     expect(cf.healthcheck.test[0]).toBe('CMD');
     expect(cf.healthcheck.test).toContain('ready');
@@ -148,18 +148,18 @@ describe('the token secret and its group', () => {
     return Object.fromEntries([...body.matchAll(/\['([^']+)'\]=(\d+)/g)].map((m) => [m[1], Number(m[2])]));
   };
 
-  it('is the file /etc/rws/secrets/cf_tunnel_token, gid 61011 / group rws-cftunnel, used by nothing else', () => {
+  it('is the file /etc/rws/secrets/cf_tunnel_token, gid 61012 / group rws-cftunnel, used by nothing else', () => {
     expect(tunnel.doc.secrets).toEqual({ cf_tunnel_token: { file: '/etc/rws/secrets/cf_tunnel_token' } });
     const secrets = table('SECRET_GID');
     const groups = table('GROUP_GID');
-    expect(secrets.cf_tunnel_token).toBe(61011);
-    expect(groups['rws-cftunnel']).toBe(61011);
-    expect(Object.entries(secrets).filter(([, g]) => g === 61011)).toEqual([['cf_tunnel_token', 61011]]);
-    expect(Object.entries(groups).filter(([, g]) => g === 61011)).toEqual([['rws-cftunnel', 61011]]);
+    expect(secrets.cf_tunnel_token).toBe(61012);
+    expect(groups['rws-cftunnel']).toBe(61012);
+    expect(Object.entries(secrets).filter(([, g]) => g === 61012)).toEqual([['cf_tunnel_token', 61012]]);
+    expect(Object.entries(groups).filter(([, g]) => g === 61012)).toEqual([['rws-cftunnel', 61012]]);
     // Only cloudflared gets the gid.
     for (const rel of ['deploy/compose.yaml', 'deploy/compose.owner.yaml'])
       for (const [name, s] of Object.entries(load(rel).doc.services))
-        expect((s.group_add ?? []).map(String), `${rel} ${name}`).not.toContain('61011');
+        expect((s.group_add ?? []).map(String), `${rel} ${name}`).not.toContain('61012');
   });
 
   it('starts a new host in direct mode with no WireGuard endpoint override', () => {

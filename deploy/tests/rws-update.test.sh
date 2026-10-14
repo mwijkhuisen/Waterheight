@@ -181,7 +181,7 @@ bootstrapped() {
 }
 server_ref() { jq -r .images.server "$FIX/rel/$1/release-manifest.json"; }
 # The login roles' test passwords: 64 hex characters derived from the role name.
-readonly DB_ROLES=(rws_migrator rws_load rws_publish rws_api rws_owner_api)
+readonly DB_ROLES=(rws_migrator rws_load rws_publish rws_api rws_owner_api rws_backfill)
 dbpw() { printf '%s' "test-pw-$1" | sha256sum | cut -c1-64; }
 # The docker compose calls after the fixed prefix (-p ... --env-file images.env), without `config`
 # (has_service asks for the services of the "jobs" profile too).

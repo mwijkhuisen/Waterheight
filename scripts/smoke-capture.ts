@@ -5,6 +5,14 @@
 //
 //   node scripts/smoke-capture.ts --contact <e-mail> --info-url <https url> --spec <id> [--row <variant>] [--spec <id> …]
 //   node scripts/smoke-capture.ts --contact … --info-url … --discover <SOURCE-ID> <allowlisted https url>
+//   RWS_LIVE=1 node scripts/smoke-capture.ts --contact … --info-url … \
+//     --backfill <backfill spec> --series <provider_key> --from YYYY-MM-DD --to YYYY-MM-DD [--no-hoedanigheid]
+//     --check <backfill spec> --series <provider_key> --year YYYY      (items repeat; each takes the flags after it)
+//
+// The backfill mode (P14a) builds its requests with the runner's own builders from registry/backfill.yaml, sends
+// no X-API-KEY, needs RWS_LIVE=1 (never under CI), sends at most 5 requests per process (the owner's budget for
+// the whole PR) and starts them at least 1 s apart. Its payloads are written whole (never trimmed): choose short
+// windows. --no-hoedanigheid leaves the Hoedanigheid out of the body (the NVT test for Q).
 //
 // Every payload goes to the git-ignored .smoke/ first. A public spec's payload
 // is also written to apps/server/src/adapters/<id>/fixtures/<spec>.raw (with
@@ -16,20 +24,41 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { redactUrl } from '../apps/server/src/archive/manifest.ts';
 import { validate } from '../apps/server/src/archive/validity.ts';
+import { PROVIDERS } from '../apps/server/src/backfill/provider.ts';
+import { loadBackfill } from '../apps/server/src/backfill/spec.ts';
 import { requestFor } from '../apps/server/src/capture/adapters.ts';
 import { userAgent } from '../apps/server/src/capture/env.ts';
 import { loadRegistry, variantKey } from '../apps/server/src/capture/specs.ts';
 import { Client, METADATA_TIMEOUT_MS, TOTAL_TIMEOUT_MS } from '../apps/server/src/http/client.ts';
 
 const MAX_REQUESTS = 30;
+const BACKFILL_MAX_REQUESTS = 5;
+const BACKFILL_GAP_MS = 1100;
 const TRIM_BYTES = 1024 * 1024;
 const root = join(import.meta.dirname, '..');
+
+type Item = {
+  kind: 'backfill' | 'check';
+  spec: string;
+  series: string;
+  from?: string;
+  to?: string;
+  year?: string;
+  noHoedanigheid?: boolean;
+};
 
 function args(argv: string[]) {
   const specs: { id: string; row?: string }[] = [];
   let contact = '';
   let infoUrl = '';
   let discover: [string, string] | undefined;
+  const items: Item[] = [];
+  const lastItem = () => {
+    const last = items.at(-1);
+    if (last === undefined)
+      throw new Error('--series, --from, --to, --year and --no-hoedanigheid follow a --backfill or --check');
+    return last;
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--spec') specs.push({ id: argv[++i] ?? '' });
@@ -39,10 +68,17 @@ function args(argv: string[]) {
       last.row = argv[++i] ?? '';
     } else if (a === '--contact') contact = argv[++i] ?? '';
     else if (a === '--info-url') infoUrl = argv[++i] ?? '';
+    else if (a === '--backfill' || a === '--check')
+      items.push({ kind: a === '--check' ? 'check' : 'backfill', spec: argv[++i] ?? '', series: '' });
+    else if (a === '--series') lastItem().series = argv[++i] ?? '';
+    else if (a === '--from') lastItem().from = argv[++i] ?? '';
+    else if (a === '--to') lastItem().to = argv[++i] ?? '';
+    else if (a === '--year') lastItem().year = argv[++i] ?? '';
+    else if (a === '--no-hoedanigheid') lastItem().noHoedanigheid = true;
     else if (a === '--discover') discover = [argv[++i] ?? '', argv[++i] ?? ''];
     else throw new Error(`unknown argument ${a}`);
   }
-  return { specs, contact, infoUrl, discover };
+  return { specs, contact, infoUrl, discover, items };
 }
 
 /** Halves the longest array until the JSON fits in 1 MB; the structure stays. */
@@ -78,12 +114,86 @@ function trimCsv(text: string): string {
   return `${lines.slice(0, keep).join('\n')}\n`;
 }
 
+/** The P14a backfill and check requests: at most 5, 1 s apart, built from registry/backfill.yaml, no secret header. */
+async function backfill(client: Client, items: Item[], now: Date): Promise<number> {
+  if (process.env.RWS_LIVE !== '1') {
+    console.error('smoke-capture: the backfill mode needs RWS_LIVE=1');
+    return 2;
+  }
+  if (items.length > BACKFILL_MAX_REQUESTS) {
+    console.error(`smoke-capture: at most ${BACKFILL_MAX_REQUESTS} backfill/check requests per process`);
+    return 64;
+  }
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  const loaded = loadBackfill(loadRegistry().hosts);
+  // Resolve and build everything before the first request, so a mistake costs nothing.
+  const plan = items.map((it) => {
+    const spec = loaded.specs.find((s) => s.id === it.spec);
+    const base = spec?.series.find((s) => s.series_key === it.series);
+    if (spec === undefined || base === undefined)
+      throw new Error(`${it.spec} / ${it.series}: not in registry/backfill.yaml`);
+    const provider = PROVIDERS[spec.source];
+    if (provider === undefined) throw new Error(`${spec.source}: no backfill provider`);
+    const series = it.noHoedanigheid ? { ...base, hoedanigheid: undefined as unknown as string } : base;
+    const slug = `${base.code.split('.')[0]}-${base.quantity.toLowerCase()}${it.noHoedanigheid ? '-nohoed' : ''}`;
+    if (it.kind === 'check') {
+      if (!/^\d{4}$/.test(it.year ?? '')) throw new Error('--check needs --year YYYY');
+      const y = Number(it.year);
+      const req = provider.checkRequest(spec, series, new Date(Date.UTC(y, 0, 1)), new Date(Date.UTC(y + 1, 0, 1)));
+      return { it, spec, req, id: `${spec.source.toLowerCase()}-check-${slug}-${y}` };
+    }
+    if (!day.test(it.from ?? '') || !day.test(it.to ?? ''))
+      throw new Error('--backfill needs --from and --to as YYYY-MM-DD');
+    const chunk = { from: new Date(`${it.from}T00:00:00Z`), to: new Date(`${it.to}T00:00:00Z`) };
+    const req = provider.chunkRequest(spec, series, chunk, now);
+    return {
+      it,
+      spec,
+      req,
+      id: `${spec.source.toLowerCase()}-backfill-${slug}-${(it.from ?? '').replaceAll('-', '')}`,
+    };
+  });
+  let failed = 0;
+  let sent = 0;
+  for (const { it, spec, req, id } of plan) {
+    if (sent >= BACKFILL_MAX_REQUESTS) break;
+    if (sent > 0) await new Promise((r) => setTimeout(r, BACKFILL_GAP_MS));
+    sent += 1;
+    const r = await client.fetch(spec.source, req, { maxBytes: spec.max_bytes, timeoutMs: TOTAL_TIMEOUT_MS });
+    if (!r.ok) {
+      console.log(`${id}: FAILED ${r.error}`);
+      failed += 1;
+      continue;
+    }
+    const { res } = r;
+    writeFileSync(join(root, '.smoke', `${id}.raw`), res.body);
+    const meta = {
+      spec: spec.id,
+      source: spec.source,
+      synthetic: false,
+      recorded_at: now.toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      status: res.status,
+      content_type: res.headers['content-type'] ?? null,
+      url: redactUrl(res.url),
+      bytes: res.body.length,
+      trimmed: false,
+      request: it.kind === 'check' ? { check: it.year } : { from: it.from, to: it.to },
+    };
+    const dir = join(root, 'apps/server/src/adapters', spec.source.toLowerCase(), 'fixtures');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${id}.raw`), res.body);
+    writeFileSync(join(dir, `${id}.meta.json`), `${JSON.stringify(meta, null, 2)}\n`);
+    console.log(`${id}: ${res.status} ${res.body.length} B ${res.headers['content-type'] ?? '-'} → fixtures/${id}.raw`);
+  }
+  return failed === 0 ? 0 : 1;
+}
+
 async function main(): Promise<number> {
   if (process.env.CI) {
     console.error('smoke-capture: refuses to run under CI (live requests are opt-in and manual)');
     return 2;
   }
-  const { specs, contact, infoUrl, discover } = args(process.argv.slice(2));
+  const { specs, contact, infoUrl, discover, items } = args(process.argv.slice(2));
   if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(contact) || !infoUrl.startsWith('https://')) {
     console.error('smoke-capture: --contact <e-mail> and --info-url <https url> are required');
     return 64;
@@ -92,6 +202,8 @@ async function main(): Promise<number> {
   const client = new Client({ hosts: registry.hosts, userAgent: userAgent(infoUrl, contact) });
   mkdirSync(join(root, '.smoke'), { recursive: true });
   const now = new Date();
+
+  if (items.length > 0) return backfill(client, items, now);
 
   if (discover !== undefined) {
     const [source, url] = discover;

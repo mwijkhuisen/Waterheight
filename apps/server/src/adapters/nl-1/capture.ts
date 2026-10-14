@@ -15,7 +15,12 @@ export const adapter: Adapter = {
     const proces = params.proces === 'verwachting' ? 'verwachting' : 'meting';
     const aquo =
       row.quantity === 'Q'
-        ? { Grootheid: { Code: 'Q' }, ProcesType: proces }
+        ? {
+            Grootheid: { Code: 'Q' },
+            // Only the backfill names it (P14a: NVT); live bodies stay as they were.
+            ...(params.hoedanigheid === undefined ? {} : { Hoedanigheid: { Code: params.hoedanigheid } }),
+            ProcesType: proces,
+          }
         : {
             Compartiment: { Code: 'OW' },
             Grootheid: { Code: 'WATHTE' },
@@ -43,3 +48,25 @@ export const adapter: Adapter = {
     return { ...req, body: JSON.stringify(body) };
   },
 };
+
+/**
+ * The `CheckWaarnemingenAanwezig` body (P14a probe, research nl-rws §2.6): is there any value of this series'
+ * method in [from, to)? The method is the series' live one, so the probe finds where that method starts. The row
+ * carries `code`, `quantity` and `hoedanigheid` (NAP for H, NVT for Q when it names none).
+ */
+export function buildCheck(row: Readonly<Record<string, string>>, from: Date, to: Date, method?: string): string {
+  const q = row.quantity === 'Q';
+  return JSON.stringify({
+    LocatieLijst: [{ Code: row.code }],
+    AquoMetadataLijst: [
+      {
+        Compartiment: { Code: 'OW' },
+        Grootheid: { Code: q ? 'Q' : 'WATHTE' },
+        Hoedanigheid: { Code: row.hoedanigheid ?? (q ? 'NVT' : 'NAP') },
+        ProcesType: 'meting',
+        ...(method === undefined ? {} : { WaardeBepalingsMethode: { Code: method } }),
+      },
+    ],
+    Periode: { Begindatumtijd: utc(from), Einddatumtijd: utc(to) },
+  });
+}

@@ -5,8 +5,17 @@ import { ManifestLine } from '../archive/manifest.ts';
 import { ArchiveError, type ArchiveReader, type RawLine } from '../archive/reader.ts';
 import type { DB } from '../db/generated.ts';
 import { errorCode } from '../db/pool.ts';
-import { LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
-import { type Audience, type DirtyEntry, type DirtyKind, dirtyEntriesOf, markDirty, type Touch } from './dirty.ts';
+import { type Backfilled, LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
+import {
+  type Audience,
+  DATA_EPOCH,
+  DATA_FLOOR,
+  type DirtyEntry,
+  type DirtyKind,
+  dirtyEntriesOf,
+  markDirty,
+  type Touch,
+} from './dirty.ts';
 import {
   applyForecasts,
   type CheckedRun,
@@ -154,6 +163,8 @@ export const RETAINED = [
   'step_mismatch',
 ] as const;
 
+const FLOOR_MS = Date.parse(DATA_FLOOR);
+const EPOCH_MS = Date.parse(DATA_EPOCH);
 const NUL = String.fromCharCode(0);
 /** A text PostgreSQL cannot store: U+0000 (text and jsonb) or a lone surrogate (jsonb refuses `\ud800`). */
 const badString = (s: string) => s.includes(NUL) || !s.isWellFormed();
@@ -537,9 +548,20 @@ export class Loader {
         continue;
       }
       const fetchedAt = new Date(line.fetched_at.end ?? line.fetched_at.start);
-      const lag = () => this.deps.onLag?.(line.source, fetchedAt, this.deps.now().getTime() - fetchedAt.getTime());
+      // P14a: a backfill payload (decided by its spec: a recovered line has no `backfill` field) is history, not a
+      // fetch of the source: no request start, no fetch health, no lag sample.
+      const backfill = this.specOf(line.source, line.spec)?.spec.backfill === true;
+      const lag = () => {
+        if (!backfill) this.deps.onLag?.(line.source, fetchedAt, this.deps.now().getTime() - fetchedAt.getTime());
+      };
       // Every request of a scheduled run, whatever came back (dup_of, 304, an error): how often a spec asks.
-      if (line.seed !== true && line.recovered !== true && line.variant !== '' && !/#\d+$/.test(line.variant)) {
+      if (
+        !backfill &&
+        line.seed !== true &&
+        line.recovered !== true &&
+        line.variant !== '' &&
+        !/#\d+$/.test(line.variant)
+      ) {
         fold(line.source).starts.push({
           spec: line.spec,
           variant: line.variant,
@@ -548,9 +570,11 @@ export class Loader {
       }
       const plan = this.classify(line);
       if (plan.kind !== 'payload') {
-        const f = fold(line.source);
-        if (plan.kind === 'fetch_failed') f.failures += 1;
-        else markFetchOk(f, fetchedAt);
+        if (!backfill) {
+          const f = fold(line.source);
+          if (plan.kind === 'fetch_failed') f.failures += 1;
+          else markFetchOk(f, fetchedAt);
+        }
         folded = raw.end;
         lines += 1;
         lag();
@@ -561,7 +585,7 @@ export class Loader {
       const prior = await this.attemptOf(file, raw.end);
       if (prior.n >= MAX_TRIES) {
         // Two attempts failed or died: quarantine it without reading or parsing it, and move on.
-        const batch = batchInput(line, plan.adapterVersion, fetchedAt);
+        const batch = batchInput(line, plan.adapterVersion, fetchedAt, backfill);
         await flush(raw.end, (tx) => setBatchAside(tx, batch, 'quarantined', prior.code));
         this.deps.alert('quarantined', { ...ids, code: prior.code });
       } else {
@@ -569,7 +593,13 @@ export class Loader {
         await writeAttempt(this.deps.db, next);
         this.attempt = next;
         try {
-          const outcome = await this.payload(line, plan, fetchedAt, (work) => flush(raw.end, work), fold(line.source));
+          const outcome = await this.payload(
+            line,
+            plan,
+            fetchedAt,
+            (work) => flush(raw.end, work),
+            backfill ? undefined : fold(line.source),
+          );
           if (outcome.kind === 'loaded') loaded += 1;
         } catch (err) {
           // Nothing of this line was committed.
@@ -615,7 +645,7 @@ export class Loader {
     health?: FetchFold,
   ): Promise<Outcome> {
     if (line.key === null) return { kind: 'no_adapter' };
-    const batch = batchInput(line, adapterVersion, fetchedAt);
+    const batch = batchInput(line, adapterVersion, fetchedAt, spec.backfill === true);
     const ids = { source: line.source, spec: line.spec };
 
     const setAside = async (status: 'quarantined' | 'skipped', code: string, path = ''): Promise<Outcome> => {
@@ -674,6 +704,15 @@ export class Loader {
         ...(refRegistries === undefined ? {} : { refRegistries }),
         ...(previous === null || spec.window === undefined ? {} : { since: previous.getTime() - spec.window }),
         ...(labelOffsets === undefined ? {} : { labelOffsets }),
+        // P14a: a backfill payload loads only inside its chunk (when the line names one) and before DATA_EPOCH.
+        ...(spec.backfill === true
+          ? {
+              backfill: {
+                from: line.backfill === undefined ? Number.NEGATIVE_INFINITY : Date.parse(line.backfill.from),
+                to: Math.min(EPOCH_MS, line.backfill === undefined ? EPOCH_MS : Date.parse(line.backfill.to)),
+              },
+            }
+          : {}),
       });
       // P8a: every forecast run passes the core bounds before anything is stored (drift quarantines the payload).
       checked = checkForecasts(result.forecasts, line.source, fetchedAt.getTime(), result.dropped);
@@ -776,21 +815,35 @@ export class Loader {
       for (const list of Object.values(touches)) list.length = 0;
       const state = await openBatch(tx, batch, 'ok');
       // A large payload comes in chunks of whole series (Normalised.obsChunks): one upsert each, one batch.
-      let written: Written = { n_new: 0, n_changed: 0, newest: null, writes: 0 };
+      let written: Written = {
+        n_new: 0,
+        n_changed: 0,
+        newest: null,
+        writes: 0,
+        inserted: 0,
+        revised: 0,
+        skipped: 0,
+      };
+      let kept = 0;
+      const mode = spec.backfill === true ? 'backfill' : 'live';
       for (const part of obsParts(result)) {
-        const w = await upsertObs(tx, part, registry, state.id, fetchedAt, false, touches.obs);
+        const w = await upsertObs(tx, part, registry, state.id, fetchedAt, mode, touches.obs);
+        kept += part.length;
         written = {
           n_new: written.n_new + w.n_new,
           n_changed: written.n_changed + w.n_changed,
           newest:
             written.newest === null || (w.newest !== null && w.newest > written.newest) ? w.newest : written.newest,
           writes: written.writes + w.writes,
+          inserted: written.inserted + w.inserted,
+          revised: written.revised + w.revised,
+          skipped: written.skipped + w.skipped,
         };
       }
       const filled =
         fill.length === 0 || fillRegistry === undefined
           ? { n_new: 0, n_changed: 0, writes: 0 }
-          : await upsertObs(tx, fill, fillRegistry, state.id, fetchedAt, true, touches.obs);
+          : await upsertObs(tx, fill, fillRegistry, state.id, fetchedAt, 'fill', touches.obs);
       zeroChanges = await applyGaugeZeros(tx, result.gaugeZeros, zeroIds, state.id, fetchedAt, touches.gauge_zero);
       const refsApplied = await applyReferences(
         tx,
@@ -806,6 +859,9 @@ export class Loader {
       if (result.providerUpdated !== undefined) await storeProviderUpdated(tx, line.source, result.providerUpdated);
       const fw = await applyForecasts(tx, line.source, forecasts, state.id, fetchedAt, headDrops, touches.forecast);
       const staged = await this.stage(tx, line, spec, result, refRegistry, state.id, fetchedAt, touches.forecast);
+      // P14a: a backfill's change that ends before DATA_FLOOR is in no published file or day; markDirty would clip it
+      // onto the floor's first day (a dirty row and a bump of 2026-08-01 for every chunk of history).
+      if (spec.backfill === true) touches.obs = touches.obs.filter((t) => t.to === undefined || t.to >= FLOOR_MS);
       // P9a: what the publishers render again, and the settled days this payload revised (under the loader lock).
       const maps = [registry, fillRegistry, zeroRegistry, ...(refRegistries?.values() ?? [])];
       await markDirty(tx, this.deps.now(), await this.dirtyEntries(tx, line.source, touches, maps));
@@ -861,6 +917,18 @@ export class Loader {
       if (!state.existed || changed || state.previous !== 'ok') {
         await closeBatch(tx, state.id, batch, { status: 'ok', n_rows, n_new, n_changed, n_skipped, error: null });
       }
+      if (spec.backfill === true && line.backfill !== undefined) {
+        const stated = result as Backfilled;
+        const dropped = Object.values(result.dropped).reduce((n, v) => n + v, 0) + stated.unknown_values;
+        await recordChunk(tx, line, line.backfill, {
+          provider_values: stated.provider_values,
+          kept,
+          inserted: written.inserted,
+          revised: written.revised,
+          skipped: written.skipped,
+          dropped,
+        });
+      }
       if (health && written.newest !== null) {
         if (health.newestTs === null || written.newest > health.newestTs) health.newestTs = written.newest;
         if (written.n_new > 0 && (health.lastNewData === null || fetchedAt > health.lastNewData)) {
@@ -879,7 +947,8 @@ export class Loader {
       const declared = spec.driftSource === undefined ? registry : await this.registry(spec.driftSource);
       await this.reportDrift(line, spec.drift, body, declared, fetchedAt);
     }
-    for (const code of RETAINED) {
+    // A backfill payload's drops are counts only (its ledger row and the batch's n_skipped): history holds many.
+    for (const code of spec.backfill === true ? [] : RETAINED) {
       const n = result.dropped[code] ?? 0;
       if (n > 0) this.deps.alert(code, { ...ids, n });
     }
@@ -1041,7 +1110,39 @@ export function failureOf(err: unknown): { kind: 'payload' | 'stall'; code: stri
   return { kind: 'stall', code };
 }
 
-function batchInput(line: ManifestLine, adapterVersion: number, fetchedAt: Date): BatchInput {
+/**
+ * P14a: the ledger row of a backfill payload (plan §3.6) and, only when it is new, its counts added to the job, in the
+ * payload's transaction: a re-fetched or replayed archive key counts once. A line that names no job of its source and
+ * spec (a job aborted and deleted by hand, a forged line) loads without a ledger row. `reconciled`: every value the
+ * provider stated was either dropped by normalise or kept, and every kept row was inserted, revised or skipped.
+ */
+async function recordChunk(
+  tx: Tx,
+  line: ManifestLine,
+  chunk: NonNullable<ManifestLine['backfill']>,
+  c: { provider_values: number; kept: number; inserted: number; revised: number; skipped: number; dropped: number },
+): Promise<void> {
+  const reconciled = c.provider_values === c.kept + c.dropped && c.kept === c.inserted + c.revised + c.skipped;
+  await sql`
+    WITH job AS (
+      SELECT id FROM backfill_job WHERE id = ${chunk.job} AND source_id = ${line.source} AND spec_id = ${line.spec}
+    ), added AS (
+      INSERT INTO backfill_chunk (job_id, archive_key, chunk_from, chunk_to, provider_values, kept, inserted, revised,
+                                  skipped, dropped, reconciled)
+      SELECT id, ${line.key}, ${chunk.from}::timestamptz, ${chunk.to}::timestamptz, ${c.provider_values}, ${c.kept},
+             ${c.inserted}, ${c.revised}, ${c.skipped}, ${c.dropped}, ${reconciled}
+      FROM job
+      ON CONFLICT (job_id, archive_key) DO NOTHING
+      RETURNING job_id
+    )
+    UPDATE backfill_job j
+    SET provider_values = j.provider_values + ${c.provider_values}, inserted = j.inserted + ${c.inserted},
+        revised = j.revised + ${c.revised}, skipped = j.skipped + ${c.skipped}, dropped = j.dropped + ${c.dropped},
+        unreconciled = j.unreconciled + ${reconciled ? 0 : 1}, updated_at = now()
+    FROM added WHERE j.id = added.job_id`.execute(tx);
+}
+
+function batchInput(line: ManifestLine, adapterVersion: number, fetchedAt: Date, backfill = false): BatchInput {
   return {
     source: line.source,
     spec: line.spec,
@@ -1051,5 +1152,6 @@ function batchInput(line: ManifestLine, adapterVersion: number, fetchedAt: Date)
     status: line.status,
     bytes: line.bytes,
     adapterVersion,
+    ...(backfill ? { origin: 'backfill' as const } : {}),
   };
 }

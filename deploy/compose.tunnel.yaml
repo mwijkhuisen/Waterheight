@@ -14,7 +14,7 @@
 # test/compose-tunnel.test.ts holds them.
 #
 # The token is the tunnel's root of trust (T-EDGE-1): whoever holds it can run a connector and receive visitors. It
-# is a file secret (/etc/rws/secrets/cf_tunnel_token, root:61011 0440, docs/runbooks/secrets-rotation.md), read with
+# is a file secret (/etc/rws/secrets/cf_tunnel_token, root:61012 0440, docs/runbooks/secrets-rotation.md), read with
 # --token-file, never an environment variable (cloudflared's --token and TUNNEL_TOKEN would take precedence over the
 # file, so neither is ever set). The ingress (the public hostname to http://caddy:80) lives in the Cloudflare dashboard
 # (remotely managed); whatever it says, cloudflared can reach nothing but caddy:80 and Cloudflare.
@@ -44,7 +44,7 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     user: "65532:65532"
-    group_add: ["61011"]
+    group_add: ["61012"]
     environment:
       # The Go heap's soft limit, 90 % of mem_limit (ADR-0019 §5): collect before the kernel kills the only way in.
       GOMEMLIMIT: 230MiB

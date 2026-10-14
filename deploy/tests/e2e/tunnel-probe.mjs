@@ -54,9 +54,9 @@ const st = statSync('/run/secrets/cf_tunnel_token');
 check(
   (st.mode & 0o777) === 0o440 &&
     st.uid === 0 &&
-    st.gid === 61011 &&
+    st.gid === 61012 &&
     readFileSync('/run/secrets/cf_tunnel_token').length > 0,
-  'the token is /run/secrets/cf_tunnel_token, root:61011 0440, readable by the service (gid 61011 added)',
+  'the token is /run/secrets/cf_tunnel_token, root:61012 0440, readable by the service (gid 61012 added)',
 );
 check(
   !Object.keys(process.env).some((k) => k === 'TUNNEL_TOKEN' || k.startsWith('TUNNEL_')),

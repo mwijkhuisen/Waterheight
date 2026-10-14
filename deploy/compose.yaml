@@ -178,6 +178,39 @@ services:
     healthcheck:
       disable: true
 
+  # P14a: the one-shot history backfill (profile "jobs", started by hand with
+  # `compose run`, never a daemon). It is the one service on both egress and db: it
+  # fetches from the registered providers and loads through its own login, rws_backfill
+  # (A§11.1, threat model trust boundary 7). It reads no visitor input; its targets come
+  # only from registry/ (invariant 1), enforced in the process: egress allows 443 to any
+  # address. On db it sits beside api and the loader, and it mounts the raw archive
+  # read-write (it could append a line for any spec, as capture can; the loader's window
+  # bounds what a backfill line stores). One runner per host: a lease row in the database.
+  backfill:
+    <<: *hardening
+    image: ${RWS_SERVER_IMAGE:?}
+    command: [backfill]
+    profiles: [jobs]
+    restart: "no"
+    user: "65532:65532"
+    group_add: ["61002", "61011"]
+    environment:
+      RWS_RAW_DIR: /data/raw
+      RWS_DOMAIN: ${RWS_DOMAIN:?}
+      RWS_CONTACT_EMAIL: ${RWS_CONTACT_EMAIL:?}
+      RWS_DB_HOST: db
+      RWS_DB_PORT: "5432"
+      RWS_DB_NAME: rws
+    secrets: [db_rws_backfill, rws_x_api_key]
+    volumes:
+      - /srv/rws/raw:/data/raw
+    networks: [egress, db]
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 64
+    healthcheck:
+      disable: true
+
   # The basemap refresh (P3, ADR-0016): two jobs, never daemons, that
   # rws-basemap-refresh runs one after the other with `compose run` (profile
   # "jobs"). The server image's `basemap` role; go-pmtiles 1.31.2 is in the image.
@@ -458,7 +491,8 @@ networks:
     internal: true
     driver_opts:
       com.docker.network.bridge.name: rws-db
-  # Capture and watchdog: tcp/443 and DNS to the host's resolvers only (nftables).
+  # Capture, watchdog and the backfill job: tcp/443 to any address and DNS to the host's
+  # resolvers only (nftables); the provider hosts are allowlisted in the process (registry/).
   egress:
     enable_ipv6: true
     driver_opts:
@@ -500,6 +534,8 @@ secrets:
     file: /etc/rws/secrets/db_rws_publish
   db_rws_owner_api:
     file: /etc/rws/secrets/db_rws_owner_api
+  db_rws_backfill:
+    file: /etc/rws/secrets/db_rws_backfill
 
 volumes:
   caddy_data:
