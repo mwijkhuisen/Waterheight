@@ -68,6 +68,8 @@ sudo rws-deploy prod-20261001T120000Z    # any signed release, older ones includ
 
 `rws-deploy` takes the tag, never the title: to go back to, say, `v0.0.45`, open that release on GitHub and use its `prod-…` tag. This deploys the named release through the same checks. If it is older than the release that ran before it (a rollback), automatic updates skip everything up to the newer of that release and the latest one, so the rollback sticks until the next new release, also when GitHub cannot be reached at that moment. Redeploying the current release holds nothing back. To undo a hold, deploy the newest release on purpose.
 
+**In tunnel mode (`RWS_EDGE=tunnel`, ADR-0021) a rollback to a release from before #109 is refused:** that release has no `deploy/compose.tunnel.yaml`, and `rws_compose` stops rather than start the older stack without it (fail closed). Set `RWS_EDGE=direct` first and follow `docs/runbooks/edge-switch.md` §10 (router forwards, DNS, certificate), then roll back.
+
 A rollback changes only images and `compose.yaml`: the host files stay those of the newer release you bootstrapped. **Never run an older release's bootstrap**: it would install its older host scripts, units and firewall. While the hold lasts (`skip_upto` newer than `current`), the host-file check pauses, and it resumes once a newer release runs.
 
 ## Host files

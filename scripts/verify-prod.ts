@@ -49,6 +49,9 @@
 //                                                or status.json (owner docs; the owner listener check keeps its own)
 //   scripts/verify-prod.sh <domain> --site       with --profile: only the public-site checks above (the compose stack's
 //                                                run.sh judges both profiles with it); no data, no soak
+//   scripts/verify-prod.sh <domain> --edge direct|cloudflare   (issue #109; default direct) cloudflare: the site is behind
+//                                                a Cloudflare Tunnel; "Server: cloudflare" is accepted, the owner listener
+//                                                judges the edge, and the `edge` group runs (scripts/lib/verify-edge.ts)
 //   scripts/verify-prod.sh <domain> --dry-run    list the checks; no network
 // CI only (the end-to-end test against a local stack): --resolve <ip> --ca <pem file>
 
@@ -116,7 +119,8 @@ import {
   TilesManifestError,
 } from '../packages/core/src/tiles-manifest.ts';
 import { keepEgressBlock } from './lib/capacity-egress.ts';
-import { checkOwnerListener } from './lib/verify-owner-listener.ts';
+import { checkEdge } from './lib/verify-edge.ts';
+import { checkOwnerListener, networkIo } from './lib/verify-owner-listener.ts';
 
 const root = join(import.meta.dirname, '..');
 export const CERT_MIN_DAYS = 14;
@@ -222,12 +226,17 @@ export function expectedHeaders(architecture: string, profile: Profile = DEFAULT
   return out;
 }
 
+/** Where the site is served from: our own Caddy (`direct`) or behind a Cloudflare Tunnel (`cloudflare`, issue #109). */
+export const EDGES = ['direct', 'cloudflare'] as const;
+export type Edge = (typeof EDGES)[number];
+
 export function checkHeaders(
   path: string,
   status: number,
   headers: Readonly<Record<string, string | undefined>>,
   expected: Readonly<Record<string, string>>,
   wantStatus = 200,
+  edge: Edge = 'direct',
 ): Result {
   const problems: string[] = [];
   if (status !== wantStatus)
@@ -238,7 +247,9 @@ export function checkHeaders(
   for (const name of Object.keys(headers)) {
     if (name.startsWith('access-control-')) problems.push(`CORS header ${name}`);
   }
-  if (headers.server !== undefined) problems.push(`server: ${JSON.stringify(headers.server)}`);
+  // behind the Cloudflare edge (issue #109) the edge's own `Server: cloudflare` is the one allowed value
+  if (headers.server !== undefined && !(edge === 'cloudflare' && headers.server === 'cloudflare'))
+    problems.push(`server: ${JSON.stringify(headers.server)}`);
   // (launch profile: a page has no X-Robots-Tag at all)
   if (expected['x-robots-tag'] === undefined && headers['x-robots-tag'] !== undefined)
     problems.push(`x-robots-tag: ${JSON.stringify(headers['x-robots-tag'])}, want none`);
@@ -271,6 +282,7 @@ const htmlLang = (html: string): string | undefined => /<html(?:\s[^>]*)?\slang=
 export function checkPages(
   got: Readonly<Record<string, Page | string>>,
   expected: Readonly<Record<string, string>>,
+  edge: Edge = 'direct',
 ): Result[] {
   return PAGE_PATHS.map(({ path, lang }) => {
     const check = `pages ${path}`;
@@ -278,7 +290,7 @@ export function checkPages(
     if (page === undefined) return miss(check, 'not fetched');
     if (typeof page === 'string') return miss(check, page);
     const problems: string[] = [];
-    const headers = checkHeaders(path, page.status, page.headers, expected);
+    const headers = checkHeaders(path, page.status, page.headers, expected, 200, edge);
     if (headers.ok !== true) problems.push(headers.detail);
     // CR-6: a page a browser kept past a deploy would ask for asset names the new image no longer has.
     if (page.headers['cache-control'] !== 'no-cache')
@@ -301,6 +313,7 @@ export function checkPages(
 export function checkNotFound(
   got: Readonly<Record<string, Page | string>>,
   expected: Readonly<Record<string, string>>,
+  edge: Edge = 'direct',
 ): Result {
   const check = 'not found';
   const problems: string[] = [];
@@ -312,7 +325,7 @@ export function checkNotFound(
       problems.push(`${path}: ${page ?? 'not fetched'}`);
       continue;
     }
-    const headers = checkHeaders(path, page.status, page.headers, shellExpected, 404);
+    const headers = checkHeaders(path, page.status, page.headers, shellExpected, 404, edge);
     if (headers.ok !== true) problems.push(`${path}: ${headers.detail}`);
     if (page.headers['cache-control'] !== 'no-cache')
       problems.push(`${path}: cache-control ${show(page.headers['cache-control'])}`);
@@ -2871,6 +2884,7 @@ export async function siteChecks(
   site: Record<string, Page | string>,
   architecture: string,
   now: Date,
+  edge: Edge = 'direct',
 ): Promise<Result[]> {
   const expected = expectedHeaders(architecture, profile);
   const results: Result[] = [];
@@ -2879,10 +2893,10 @@ export async function siteChecks(
     results.push(
       page === undefined || typeof page === 'string'
         ? miss(`headers ${path}`, page ?? 'not fetched')
-        : checkHeaders(path, page.status, page.headers, expected),
+        : checkHeaders(path, page.status, page.headers, expected, 200, edge),
     );
   }
-  results.push(...checkPages(site, expected), checkNotFound(site, expected));
+  results.push(...checkPages(site, expected, edge), checkNotFound(site, expected, edge));
   const extra: Record<string, Page | string> = {};
   for (const path of PROFILE_PATHS) extra[path] = await fetchPath(path);
   const noindex: Record<string, Page | string> = {};
@@ -2932,6 +2946,7 @@ export const CHECKS = [
   'owner docs (P12b, invariant 11; both profiles, works under --resolve): robots.txt and the sitemap (when served), /data/v1/sources.json and /data/v1/status.json name no owner source, spec, canary or owner.<domain> hostname',
   'healthz: GET /healthz answers 200',
   'owner listener (P12a, criterion 10): on every public IPv4/IPv6 address, TCP 443 with SNI and Host owner.<domain> fails the handshake or answers 421 (never 200 or 401), TCP 8443 is closed, owner.<domain> has no public DNS record, and robots.txt, the sitemap, sources.json and status.json name no owner-audience source (skipped with --resolve)',
+  'edge (issue #109; only with --edge cloudflare, and then the Server header of headers / and /en/ may be exactly "cloudflare" and owner listener judges the edge: it fails on a 200, a 401, a credentials challenge or an owner-site header (the exact owner values) for owner.<domain>, never on a handshake failure or a CDN error page): edge headers / and /en/ carry none of NEL, Report-To, Set-Cookie, Speculation-Rules; edge html / and /en/ hold none of /cdn-cgi/, cloudflareinsights, rocket-loader, email-decode, challenge-platform, __cf_bm, beacon.min.js; edge tile range: the current basemap file read twice with Range bytes=0-1023 is 206, Content-Range bytes 0-1023/<size>, 1024 bytes (N/A without a manifest); edge not cached: /api/v1/health, /api/v1/meta, /status/capture.json and a missing /data/v1 and /assets file (404) read twice are never cacheable at the edge (cf-cache-status absent, DYNAMIC or BYPASS); edge runtime config cdn: /runtime-config.json names a CDN',
   'http: http:// redirects to https://',
   'status capture.json / ops.json: 200, Cache-Control: no-store, the exact contract fields',
   'freshness: every public spec succeeded within 3 × cadence_s',
@@ -3018,7 +3033,7 @@ export const CHECKS = [
 
 function usage(): never {
   console.error(
-    'usage: scripts/verify-prod.sh <domain> [--profile prelaunch|launch] [--site | --soak | --capacity [--owner-bytes-per-day N] [--out FILE]] [--interval] [--dry-run]',
+    'usage: scripts/verify-prod.sh <domain> [--profile prelaunch|launch] [--site | --soak | --capacity [--owner-bytes-per-day N] [--out FILE]] [--interval] [--edge direct|cloudflare] [--dry-run]',
   );
   process.exit(64);
 }
@@ -3030,6 +3045,7 @@ async function main(argv: string[]): Promise<number> {
   let domain = '';
   let mode: 'default' | 'soak' | 'capacity' | 'site' = 'default';
   let profile: Profile = DEFAULT_PROFILE;
+  let edge: Edge = 'direct';
   let dry = false;
   let interval = false;
   let out: string | undefined;
@@ -3043,6 +3059,10 @@ async function main(argv: string[]): Promise<number> {
       const p = next();
       if (!(PROFILES as readonly string[]).includes(p)) usage();
       profile = p as Profile;
+    } else if (a === '--edge') {
+      const e = next();
+      if (!(EDGES as readonly string[]).includes(e)) usage();
+      edge = e as Edge;
     } else if (a === '--capacity') mode = 'capacity';
     else if (a === '--dry-run') dry = true;
     else if (a === '--interval') interval = true;
@@ -3076,7 +3096,8 @@ async function main(argv: string[]): Promise<number> {
     results.push(...(await tlsChecks(domain, net)));
     // P12a: the owner site is reachable over WireGuard only (scripts/lib/verify-owner-listener.ts). It probes the real
     // public addresses, so a run pinned to one address (--resolve, CI) skips it.
-    if (net.resolve === undefined) results.push(...(await checkOwnerListener(domain, ownerTerms(registry))));
+    if (net.resolve === undefined)
+      results.push(...(await checkOwnerListener(domain, ownerTerms(registry), networkIo, edge)));
     // P10b: one fetch of each page and of the two 404 probes; headers, pages, not found, noindex and the entry script of
     // `/` below all read these. P12b: the public-site checks of the profile (siteChecks) read them too.
     const site: Record<string, Page | string> = {};
@@ -3091,6 +3112,7 @@ async function main(argv: string[]): Promise<number> {
         site,
         readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'),
         now,
+        edge,
       )),
     );
     try {
@@ -3194,6 +3216,14 @@ async function main(argv: string[]): Promise<number> {
     if (current !== undefined)
       for (const [label, headers] of TILE_416_REQUESTS) refused[label] = await tile(`/tiles/${current.file}`, headers);
     results.push(checkTiles404(missing), checkTiles416(current, refused), checkMapAsset(await tile(MAP_ASSET_PATH)));
+    // issue #109: what a Cloudflare edge could add or cache; nothing of it runs for a direct site
+    if (edge === 'cloudflare')
+      results.push(
+        ...(await checkEdge(
+          { get: (path, headers) => tile(path, headers) },
+          current === undefined ? undefined : { file: current.file, bytes: current.bytes },
+        )),
+      );
 
     // P6b: the rivers (A§9.1). The names come from the manifest only; the leak grep below reads their bodies too.
     const riversPage = await tile(RIVERS_MANIFEST_PATH);
@@ -3401,6 +3431,7 @@ async function main(argv: string[]): Promise<number> {
         site,
         readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'),
         now,
+        edge,
       )),
     );
   } else if (mode === 'soak') {

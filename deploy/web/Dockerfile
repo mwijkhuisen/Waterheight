@@ -21,6 +21,6 @@ RUN cp /usr/bin/caddy /usr/bin/caddy.plain \
   && mkdir -p /data/access /config \
   && chown -R 65533:65533 /data /config
 # P12b: site.caddy imports phase-<RWS_SITE_PHASE>.caddy from its own directory: both phases ship, compose picks one.
-COPY deploy/web/Caddyfile deploy/web/default-log.caddy deploy/web/site.caddy deploy/web/phase-prelaunch.caddy deploy/web/phase-launch.caddy deploy/web/Caddyfile.owner deploy/web/owner.caddy /etc/caddy/
+COPY deploy/web/Caddyfile deploy/web/default-log.caddy deploy/web/site.caddy deploy/web/phase-prelaunch.caddy deploy/web/phase-launch.caddy deploy/web/edge-https.caddy deploy/web/edge-http.caddy deploy/web/Caddyfile.owner deploy/web/owner.caddy /etc/caddy/
 COPY --from=build /src/apps/web/dist /srv/www
 USER 65533:65533

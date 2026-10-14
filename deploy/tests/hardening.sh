@@ -34,6 +34,8 @@ case ${1:-} in
   *) echo "usage: ${0##*/} --prod|--ci" >&2; exit 2 ;;
 esac
 (($# == 1)) || { echo "usage: ${0##*/} --prod|--ci" >&2; exit 2; }
+# #109: the host's edge mode (the last RWS_EDGE line, as rws-lib.sh reads it). tunnel requires cloudflared to run.
+edge=$(sed -n 's/^RWS_EDGE=//p' "${RWS_ETC:-/etc/rws}/rws.env" 2>/dev/null | tail -n 1) || edge=''
 command -v docker >/dev/null || { echo "hardening: docker not found" >&2; exit 2; }
 command -v jq >/dev/null || { echo "hardening: jq not found" >&2; exit 2; }
 
@@ -50,6 +52,7 @@ inspected=$(docker inspect $ids)
 program='
 def required: ["caddy","capture","watchdog","db","load","api","publish","publish-owner","caddy-owner","api-owner"];
 def jobs: ["migrate","backup","basemap","basemap-promote"];
+def optional: ["cloudflared"]; # #109: only while RWS_EDGE=tunnel (compose.tunnel.yaml)
 def standins: ["probe","pebble","challtestsrv","minio","fake-upstream"];
 def third: ["user","ro","caps","nnp","limits"];
 def exempt($s): if $mode != "ci" then [] else
@@ -60,7 +63,12 @@ def binds: [ ((.HostConfig.PortBindings // {}), (.NetworkSettings.Ports // {}))
 def strip: sub("^CAP_"; "");
 
 ([.[] | .Config.Labels["com.docker.compose.service"] // ""] | unique) as $present
-| ((required[] | select(. as $r | $present | index($r) | not)
+| ($edge == "tunnel" or ($present | index("cloudflared") != null)) as $tunnel
+| (if (["", "direct", "tunnel"] | index($edge)) == null
+    then "fail\trws.env: RWS_EDGE is neither direct nor tunnel (rws-lib.sh refuses it too)" else empty end),
+  (if $edge == "tunnel" and ($present | index("cloudflared") | not)
+    then "fail\tmissing service: cloudflared is not running (rws.env says RWS_EDGE=tunnel)" else empty end),
+  ((required[] | select(. as $r | $present | index($r) | not)
     | "fail\tmissing service: \(.) is not running")),
   (.[] | . as $c
     | ($c.Config.Labels["com.docker.compose.service"] // "") as $svc
@@ -79,7 +87,7 @@ def strip: sub("^CAP_"; "");
     | ($mode == "ci" and ($svc == "capture" or $svc == "watchdog")) as $ciwatch
     | def bad($check; $msg): if ($ex | index($check)) then empty else "fail\t\($id): \($msg)" end;
       if $svc == "" then "fail\t\($name): not labelled with a compose service"
-      elif ((required + jobs + (if $mode == "ci" then standins else [] end)) | index($svc) | not)
+      elif ((required + jobs + optional + (if $mode == "ci" then standins else [] end)) | index($svc) | not)
         then "fail\t\($id): not a container of this stack"
       else (
          (if (($user | split(":")[0]) // "") as $u | ($u == "" or $u == "root" or $u == "0")
@@ -114,6 +122,20 @@ def strip: sub("^CAP_"; "");
           elif $mode == "ci" and $svc == "probe" then
             ($b[] | select(.HostIp != "203.0.114.10") | "fail\t\($id): probe port \(.port) on \(.HostIp)")
           else empty end),
+         # #109: in tunnel mode Caddy publishes 127.0.0.1:80 alone (plain HTTP never on a public address), only caddy
+         # and cloudflared join the tunnel networks, cloudflared no other, and no container carries the token in
+         # its environment (docker inspect would show it; the value is never printed here).
+         (if $tunnel and $svc == "caddy" then
+            ($b[] | select((.HostIp == "127.0.0.1" and .port == "80/tcp") | not)
+              | "fail\t\($id): tunnel mode, but \(.port) is published on \(.HostIp) (only 127.0.0.1:80/tcp)")
+          else empty end),
+         ($nets[] | select(startswith("rws_tunnel")) | select(($svc == "cloudflared" or $svc == "caddy") | not)
+            | "fail\t\($id): on the tunnel network \(.)"),
+         (if $svc == "cloudflared" then
+            ($nets[] | select(. != "rws_tunnel" and . != "rws_tunnel_edge") | "fail\t\($id): on the network \(.)")
+          else empty end),
+         (if (($c.Config.Env // []) | map(select(startswith("TUNNEL_TOKEN="))) | length) > 0
+            then "fail\t\($id): TUNNEL_TOKEN is in the environment" else empty end),
          (if ($eh | length) > 0 and ($ciwatch | not) then "fail\t\($id): ExtraHosts set (\($eh | join(",")))" else empty end),
          (if ($ca | length) > 0 and ($ciwatch | not) then "fail\t\($id): NODE_EXTRA_CA_CERTS set" else empty end),
          ($nets[] | select(test("fake")) | select(($ciwatch or ($mode == "ci" and $svc == "fake-upstream")) | not)
@@ -121,7 +143,7 @@ def strip: sub("^CAP_"; "");
          ("row\t\($svc)\t\($user)\t\($h.ReadonlyRootfs)\t\($drop | join(","))\t\($add | join(",") | if . == "" then "-" else . end)\t\(if ($sec | map(select(startswith("no-new-privileges"))) | length) > 0 then "yes" else "NO" end)\t\(($h.Memory // 0) / 1048576 | floor)M\t\(($h.NanoCpus // 0) / 1e9)\t\($h.PidsLimit // 0)\t\($b | map("\(.HostIp):\(.port)") | join(",") | if . == "" then "-" else . end)")
        ) end)'
 
-out=$(jq -r --arg mode "$mode" "$program" <<<"$inspected")
+out=$(jq -r --arg mode "$mode" --arg edge "$edge" "$program" <<<"$inspected")
 fails=$(grep -c '^fail' <<<"$out" || true)
 if ((fails > 0)); then
   grep '^fail' <<<"$out" | sed -e 's/^fail\t/FAIL /' | sort -u >&2

@@ -19,7 +19,7 @@ import {
   StaticStations,
 } from '../packages/contracts/src/static.ts';
 
-export const HOST = 'https://rk.wijkhuisen.info';
+export const HOST = 'https://waterradar.io';
 export const USER_AGENT = 'Waterheight-fixture-recorder/1 (+https://github.com/mwijkhuisen/Waterheight)';
 export const MAX_REQUESTS = 20;
 export const MAX_BYTES = 16 * 1024 * 1024;

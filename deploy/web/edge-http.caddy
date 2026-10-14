@@ -1,0 +1,19 @@
+# What differs per edge mode (#109, ADR-0021), imported at the top of site.caddy as edge-{$RWS_SITE_SCHEME:https}.caddy.
+# This file is tunnel mode (RWS_SITE_SCHEME=http in deploy/compose.tunnel.yaml): edge-https.caddy is direct mode.
+
+# The site block's per-edge lines. Cloudflare sets X-Forwarded-Proto to the visitor's scheme; should "Always Use
+# HTTPS" ever be off in the dashboard, a plain-HTTP visit reaches us through the tunnel and is sent to https here
+# (review S6), never served in clear, and marked no-store so no cache rule can keep it (review round 2). A client's own
+# X-Forwarded-Proto can at most redirect itself.
+(edge_site) {
+	@plain_http header X-Forwarded-Proto http
+	header @plain_http Cache-Control "no-store"
+	redir @plain_http https://{host}{uri} 308
+}
+
+# The host-less catch-all (P12a, A§12.2) on :80 alone, so Caddy opens no TLS listener in tunnel mode.
+:80 {
+	header -Server
+	header Cache-Control "no-store"
+	respond 421
+}

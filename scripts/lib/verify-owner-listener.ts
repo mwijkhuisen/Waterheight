@@ -10,7 +10,8 @@ import { connect as tlsConnect } from 'node:tls';
 import type { Result } from '../verify-prod.ts';
 
 export type Probe =
-  | { kind: 'answered'; status: number; wwwAuthenticate: boolean }
+  /** `ownerHeaders`: an owner-site header came with it, by its exact value (parseProbeHead); only --edge cloudflare reads it. */
+  | { kind: 'answered'; status: number; wwwAuthenticate: boolean; ownerHeaders?: boolean }
   | { kind: 'handshake-failed' }
   /** The handshake completed with a certificate this client does not trust for owner.<domain>. */
   | { kind: 'certificate' }
@@ -54,6 +55,23 @@ export function classify8443(address: string, p: Probe): Result {
   return fail(check, p.kind === 'answered' ? `answered ${p.status}` : 'a TLS endpoint is listening');
 }
 
+/**
+ * Behind a CDN (--edge cloudflare, issue #109) the edge addresses accept TCP 443 and 8443 and hold a wildcard
+ * certificate, so a handshake or a CDN error page for owner.<domain> proves nothing. What would be a leak is our owner
+ * site answering through the edge: a 200 or 401, a credentials challenge or an owner-site header. Same check names.
+ */
+export function classifyEdge(port: 443 | 8443, address: string, p: Probe): Result {
+  const check = `owner listener ${port} ${address}`;
+  if (p.kind === 'unreachable') return na(check, 'address not reachable from here');
+  if (p.kind !== 'answered') return pass(check, `no owner answer through the edge (${p.kind})`);
+  if (p.status === 200 || p.status === 401 || p.wwwAuthenticate || p.ownerHeaders === true)
+    return fail(
+      check,
+      `answered ${p.status}${p.wwwAuthenticate ? ' with a credentials challenge' : ''}${p.ownerHeaders ? ' with owner-site headers' : ''}: the owner site is reachable through the edge`,
+    );
+  return pass(check, `edge answered ${p.status}, no owner site behind it`);
+}
+
 /** The owner hostname must have no public DNS record (the system resolver). */
 export function classifyDns(addresses: readonly string[], errorCode?: string): Result {
   const check = 'owner listener DNS';
@@ -95,13 +113,18 @@ export async function checkOwnerListener(
   domain: string,
   terms: readonly string[],
   io: Io = networkIo,
+  edge: 'direct' | 'cloudflare' = 'direct',
 ): Promise<Result[]> {
   const out: Result[] = [];
   const addresses = await io.addresses(domain);
   if (addresses.length === 0) out.push(fail('owner listener addresses', 'the domain has no public address'));
   for (const a of addresses) {
-    out.push(classify443(a, await io.probe(a, 443, domain)));
-    out.push(classify8443(a, await io.probe(a, 8443, domain)));
+    const p443 = await io.probe(a, 443, domain);
+    const p8443 = await io.probe(a, 8443, domain);
+    out.push(
+      edge === 'cloudflare' ? classifyEdge(443, a, p443) : classify443(a, p443),
+      edge === 'cloudflare' ? classifyEdge(8443, a, p8443) : classify8443(a, p8443),
+    );
   }
   const d = await io.dns(`owner.${domain}`);
   out.push(classifyDns(d.addresses, d.code));
@@ -131,6 +154,31 @@ const CERTIFICATE = new Set([
   'CERT_REJECTED',
 ]);
 
+/**
+ * The status line and headers of an answer, as a probe result. `ownerHeaders` holds only the owner site's exact values
+ * (owner.caddy: `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow`): Cloudflare's own error pages
+ * send `Cache-Control: private, max-age=0, no-store, …`, which is no owner sign (#109 review C2/S1).
+ */
+/** owner.caddy's values on every answer; test/caddy-owner.test.ts holds owner.caddy to them. */
+export const OWNER_CACHE_CONTROL = 'private, no-store';
+export const OWNER_ROBOTS = 'noindex, nofollow';
+const exactHeader = (head: string, name: string, value: string) =>
+  new RegExp(`^${name}:[ \\t]*${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[ \\t]*\\r?$`, 'im').test(head);
+
+// Either header suffices (CR-5 of round 2 asked for both): the owner site sends both on every answer, and one exact
+// owner value through the edge is already a sign worth a FAIL; Cloudflare's own pages carry neither exact value.
+export function parseProbeHead(head: string): Probe {
+  const m = /^HTTP\/[\d.]+ (\d{3})/.exec(head);
+  if (!m) return { kind: 'handshake-failed' };
+  return {
+    kind: 'answered',
+    status: Number(m[1]),
+    wwwAuthenticate: /^www-authenticate:/im.test(head),
+    ownerHeaders:
+      exactHeader(head, 'x-robots-tag', OWNER_ROBOTS) || exactHeader(head, 'cache-control', OWNER_CACHE_CONTROL),
+  };
+}
+
 export function probeTls(address: string, port: number, domain: string, timeoutMs = 8000): Promise<Probe> {
   return new Promise((resolve) => {
     let done = false;
@@ -149,13 +197,7 @@ export function probeTls(address: string, port: number, domain: string, timeoutM
       buf += c.toString('latin1');
       const end = buf.indexOf('\r\n\r\n');
       if (end < 0 && buf.length < 16_384) return;
-      const head = buf.slice(0, end < 0 ? buf.length : end);
-      const m = /^HTTP\/[\d.]+ (\d{3})/.exec(head);
-      finish(
-        m
-          ? { kind: 'answered', status: Number(m[1]), wwwAuthenticate: /^www-authenticate:/im.test(head) }
-          : { kind: 'handshake-failed' },
-      );
+      finish(parseProbeHead(buf.slice(0, end < 0 ? buf.length : end)));
     });
     socket.on('timeout', () => finish({ kind: 'timeout' }));
     socket.on('end', () => finish({ kind: 'handshake-failed' }));

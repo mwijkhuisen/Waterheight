@@ -1,0 +1,14 @@
+# What differs per edge mode (#109, ADR-0021), imported at the top of site.caddy as edge-{$RWS_SITE_SCHEME:https}.caddy.
+# This file is direct mode (RWS_SITE_SCHEME unset): edge-http.caddy is tunnel mode. test/caddy-public.test.ts holds the
+# two catch-alls equal but for their address.
+
+# The site block's per-edge lines: none in direct mode (Caddy's own :80 -> https redirect applies).
+(edge_site) {
+}
+
+# The host-less catch-all (P12a, A§12.2): any other Host or SNI is a 421, on both ports.
+:80, :443 {
+	header -Server
+	header Cache-Control "no-store"
+	respond 421
+}

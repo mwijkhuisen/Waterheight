@@ -371,6 +371,12 @@ jobs:
             | tee "$RUNNER_TEMP/verify-prod.txt" || true
           # The allow-list of checks that need live data and the checks that must PASS: one file, shared with run.sh.
           deploy/tests/e2e/verify-gate.sh "$RUNNER_TEMP/verify-prod.txt"
+      # #109: the same stack switched to RWS_EDGE=tunnel (compose.tunnel.yaml, cloudflared's service with the server
+      # image idling in its place), proved from cloudflared's address, then audited again in that mode.
+      - name: The tunnel edge (deploy/tests/e2e/tunnel.sh), then hardening.sh --ci in tunnel mode
+        run: |
+          sudo deploy/tests/e2e/tunnel.sh
+          sudo deploy/tests/hardening.sh --ci
 
   # P3 (issue #18): the map spike under the exact production headers, served by
   # the real Caddy image and deploy/web/site.caddy over HTTPS (Caddy's local
@@ -455,6 +461,7 @@ jobs:
               -v "$PWD/deploy/web/site.caddy:/etc/caddy/site.caddy:ro" \
               -v "$PWD/deploy/web/phase-prelaunch.caddy:/etc/caddy/phase-prelaunch.caddy:ro" \
               -v "$PWD/deploy/web/phase-launch.caddy:/etc/caddy/phase-launch.caddy:ro" \
+              -v "$PWD/deploy/web/edge-https.caddy:/etc/caddy/edge-https.caddy:ro" \
               -v "$PWD/apps/web/dist-e2e:/srv/www:ro" \
               -v "$RUNNER_TEMP/tiles:/srv/rws/tiles:ro" \
               -v "$RUNNER_TEMP/rivers:/srv/rws/public/data/v1/rivers:ro" \

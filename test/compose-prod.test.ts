@@ -9,10 +9,13 @@ import { repoRoot } from './catalogue.ts';
 // ingestion (capture, load, db) keeps the rest.
 
 type Service = Record<string, unknown> & { image?: string };
-const FILES = ['deploy/compose.yaml', 'deploy/compose.owner.yaml'];
+const FILES = ['deploy/compose.yaml', 'deploy/compose.owner.yaml', 'deploy/compose.tunnel.yaml'];
 const load = (rel: string) => {
   const text = readFileSync(join(repoRoot, rel), 'utf8');
-  return { text, doc: parse(text, { merge: true }) as { services: Record<string, Service>; networks?: object } };
+  return {
+    text,
+    doc: parse(text, { merge: true, logLevel: 'silent' }) as { services: Record<string, Service>; networks?: object },
+  };
 };
 
 describe.each(FILES)('%s', (rel) => {

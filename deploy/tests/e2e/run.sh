@@ -442,7 +442,12 @@ printf 'RWS_SERVER_IMAGE=rws-server:ci\nRWS_WEB_IMAGE=rws-web:ci\nRWS_BACKUP_IMA
 docker compose -p rws -f "$repo/deploy/compose.yaml" --env-file /etc/rws/rws.env --env-file "$REL/images.env" config -q
 docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$repo/deploy/compose.owner.yaml" \
   --env-file /etc/rws/rws.env --env-file "$REL/images.env" config -q
-proof "docker compose config -q: deploy/compose.yaml alone (production until P12a) and with the owner overlay deploy/compose.owner.yaml valid with the host settings and image digests"
+# #109: the tunnel overlay alone and with the owner overlay (tunnel.sh then runs the stack in that mode).
+docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$repo/deploy/compose.tunnel.yaml" \
+  --env-file /etc/rws/rws.env --env-file "$REL/images.env" config -q
+docker compose -p rws -f "$repo/deploy/compose.yaml" -f "$repo/deploy/compose.owner.yaml" -f "$repo/deploy/compose.tunnel.yaml" \
+  --env-file /etc/rws/rws.env --env-file "$REL/images.env" config -q
+proof "docker compose config -q: deploy/compose.yaml alone (production until P12a), with the owner overlay deploy/compose.owner.yaml, with the tunnel overlay deploy/compose.tunnel.yaml (#109) and with both, valid with the host settings and image digests"
 # --profile jobs: `config` leaves out services of inactive profiles (the backup job) otherwise.
 extra_files=()
 [[ -z $mode ]] || extra_files=(-f "$LOADTEST_OVERLAY" -f "$FAKE_OVERLAY")

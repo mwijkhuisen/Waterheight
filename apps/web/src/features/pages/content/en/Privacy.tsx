@@ -7,6 +7,9 @@ export default function Privacy() {
     <>
       <h1>Privacy</h1>
 
+      <h2>CDN</h2>
+      <Cdn locale="en" />
+
       <h2>Who is responsible</h2>
       <Contact locale="en" />
 
@@ -51,9 +54,6 @@ export default function Privacy() {
         which page it happened, which address was blocked and what your browser says about itself (such as the browser
         name); your IP address and the headers of the request are not in it.
       </p>
-
-      <h2>CDN</h2>
-      <Cdn locale="en" />
 
       <h2>Your rights</h2>
       <p>

@@ -15,6 +15,7 @@ The inventory is `docs/security/secrets.md`; this page only points. Rules for ev
 | owner site `basic_auth` password | `docs/runbooks/owner-password-rotation.md` |
 | WireGuard peer of a lost device | `docs/runbooks/owner-device.md` and `rws-wg-peer revoke <name>` |
 | SSH keys of `ops` | `docs/runbooks/lost-ssh.md` |
+| Cloudflare Tunnel token (`cf_tunnel_token`, tunnel mode, ADR-0021) | `docs/runbooks/secrets-rotation.md` §6 |
 | CDN and DNS logins, CDN purge token (D20) | the owner's password manager; `docs/runbooks/cdn-break-glass.md` |
 | `restic_password` | `docs/runbooks/restore.md` (a restic key change, restore-drill-checked) |
 
@@ -38,4 +39,4 @@ scripts/verify-prod.sh <domain>
 scripts/verify-owner.sh <domain> --cacert owner-root.crt
 ```
 
-Expected: green (the owner script from an owner device with the tunnel up). Record the date in the drill record (`docs/runbooks/secrets-rotation.md` §6).
+Expected: green (the owner script from an owner device with the tunnel up). Record the date in the drill record (`docs/runbooks/secrets-rotation.md` §7).
