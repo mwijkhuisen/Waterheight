@@ -76,7 +76,7 @@ What it does:
   - unattended-upgrades with a reboot at 03:40 UTC when needed, needrestart, and the sysctl baseline.
 - **Firewall:** `rws-firewall.service`, which replaces the masked `nftables.service`.
 - **Docker:** Docker 29.8.1, Compose 5.5.1 and containerd 2.3.5, pinned and held; cosign 3.1.3.
-- **Files:** `/srv/rws` and `/etc/rws/secrets` with the contract owners and modes; from P2a also `/srv/rws/backup/db` (`root:61003` 0750, the nightly dump; its parent `/srv/rws/backup` is `root:root` 0700 since review round 1: the backup job mounts only the subdirectories) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf` (world-readable, no secret in them; a running `db` re-reads them on SIGHUP).
+- **Files:** `/srv/rws` and `/etc/rws/secrets` with the contract owners and modes; from P2a also `/srv/rws/backup/db` (`root:61003` 0750, the nightly dump; its parent `/srv/rws/backup` is `root:root` 0700 since review round 1: the backup job mounts only the subdirectories) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf` (world-readable, no secret in them; a running `db` re-reads them on SIGHUP, which bootstrap sends with `docker exec rws-db-1 pg_ctl reload`). Never `docker kill` a stack container, whatever the signal: Docker then counts it as stopped by hand, and `restart: unless-stopped` leaves it down after the next reboot (#155; `sudo docker start <name>` clears that).
 - **Settings:**
   - a generated `rws_x_api_key`, and a template `/etc/rws/rws.env`;
   - from P2a, the six database passwords (seven from P14a: `db_rws_backfill`) (`db_*`, step 3), generated once and never overwritten;

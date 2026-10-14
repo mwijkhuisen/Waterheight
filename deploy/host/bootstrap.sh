@@ -309,10 +309,15 @@ pg_conf_changed=0
 for f in pg_hba.conf pg_ident.conf; do
   install_file "$bundle/deploy/postgres/$f" "/etc/rws/postgres/$f" 0644 && pg_conf_changed=1
 done
-# A running db reads them again on SIGHUP (the postmaster is its PID 1).
+# A running db reads them again on SIGHUP, sent by pg_ctl inside the container. Never `docker kill`: any signal
+# through Docker marks the container manually stopped, and an unless-stopped db then stays down after a reboot (#155).
 if ((pg_conf_changed && !DRY_RUN)) &&
   [[ $(docker inspect -f '{{.State.Running}}' rws-db-1 2>/dev/null || true) == true ]]; then
-  docker kill --signal HUP rws-db-1 >/dev/null && echo "changed  db reloaded its pg_hba.conf and pg_ident.conf"
+  if docker exec rws-db-1 pg_ctl reload >/dev/null; then
+    echo "changed  db reloaded its pg_hba.conf and pg_ident.conf"
+  else
+    printf 'warning  %s\n' "db did not reload its pg_hba.conf and pg_ident.conf: run sudo docker exec rws-db-1 pg_ctl reload" >&2
+  fi
 fi
 
 if [[ -f /etc/rws/rws.env ]]; then

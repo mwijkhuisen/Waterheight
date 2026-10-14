@@ -679,6 +679,15 @@ got=$(docker exec rws-api-1 /nodejs/bin/node -e "$pg_try")
 [[ $got == 'ok login:28P01 login:28000 sql:42501 sql:25006 sql:42501' ]] || fail "pg_hba and grants: $got"
 proof "db publishes no port (PortBindings empty) and sits only on rws_db and rws_owner_db (both internal); from the api container: rws_api logs in with its secret, a wrong password is refused (28P01), postgres over TCP is rejected by pg_hba (28000); rws_api cannot read the base table obs (42501), its session is read-only (25006) and even a read-write transaction cannot insert (42501)"
 
+step "db: bootstrap's reload of pg_hba.conf (#155) works in the hardened container and keeps it restartable"
+conf_before=$(psql_su 'select pg_conf_load_time()')
+conf_reloaded() { [[ $(psql_su 'select pg_conf_load_time()') != "$conf_before" ]]; }
+docker exec rws-db-1 pg_ctl reload >/dev/null || fail "pg_ctl reload in the db container"
+wait_for "db to re-read its configuration" 30 conf_reloaded
+db_cfg="$(docker info -f '{{.DockerRootDir}}')/containers/$(docker inspect -f '{{.Id}}' rws-db-1)/config.v2.json"
+jq -e '.HasBeenManuallyStopped == false' "$db_cfg" >/dev/null || fail "the reload marked db manually stopped"
+proof "docker exec rws-db-1 pg_ctl reload (as bootstrap.sh runs it) makes the postmaster re-read its configuration (pg_conf_load_time moved), and Docker's HasBeenManuallyStopped stays false, so restart: unless-stopped brings db back after a reboot"
+
 step "load turns the DE-1 fixture archive into observations; the api and the pages answer through Caddy"
 wait_for "observations from the DE-1 fixture archive" 300 obs_loaded
 api_url() { printf 'https://%s%s' "$DOMAIN" "$1"; }

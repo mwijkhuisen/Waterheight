@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
@@ -49,5 +49,19 @@ describe('the ingestion priority budget', () => {
     const api = doc.services.api?.cpus as number;
     const caddy = doc.services.caddy?.cpus as number;
     expect(api + caddy).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('the host scripts', () => {
+  it('never docker kill a container: any signal marks it manually stopped, so unless-stopped skips it at boot (#155)', () => {
+    const hits = readdirSync(join(repoRoot, 'deploy'), { recursive: true, encoding: 'utf8' })
+      .filter((rel) => !rel.startsWith('tests/') && statSync(join(repoRoot, 'deploy', rel)).isFile())
+      .flatMap((rel) =>
+        readFileSync(join(repoRoot, 'deploy', rel), 'utf8')
+          .split('\n')
+          .filter((l) => !/^\s*#/.test(l) && /docker\s+(container\s+)?kill\b/.test(l))
+          .map((l) => `${rel}: ${l.trim()}`),
+      );
+    expect(hits).toEqual([]);
   });
 });
