@@ -8,6 +8,11 @@
 	# P9b (review SEC-2): a slow client cannot hold a connection: 10 s for the headers and for a body (the largest
 	# accepted is the beacon's 8 KiB), 2 minutes idle between keep-alive requests.
 	servers {
+		# KG-228, #109: as deploy/web/Caddyfile, so the CI stack trusts exactly what production trusts (empty in the
+		# normal run; cloudflared's /32 from compose.tunnel.yaml in deploy/tests/e2e/tunnel.sh).
+		trusted_proxies static {$RWS_TRUSTED_PROXIES}
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
 		timeouts {
 			read_header 10s
 			read_body 10s

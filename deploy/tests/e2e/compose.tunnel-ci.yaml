@@ -1,0 +1,11 @@
+# CI only (deploy/tests/e2e/tunnel.sh, #109). cloudflared's service exactly as deploy/compose.tunnel.yaml defines it
+# (its networks, the fixed address 172.30.41.10, the hardening flags, the limits and the token secret), but the
+# server image idles in place of cloudflared: CI never dials Cloudflare. tunnel.sh runs its probe inside this
+# container (`docker exec`), so every request comes from where cloudflared's would.
+services:
+  cloudflared:
+    image: ${RWS_SERVER_IMAGE:?}
+    entrypoint: ["/nodejs/bin/node", "-e", "setInterval(() => {}, 1 << 30)"]
+    command: !reset []
+    healthcheck:
+      test: ["CMD", "/nodejs/bin/node", "-e", "0"]

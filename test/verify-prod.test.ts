@@ -3768,7 +3768,10 @@ describe('site.caddy: the api, tile, asset and page routes', () => {
   });
 
   it('has exactly the cache classes no-store, max-age=60, immutable (tile files, assets), no-cache (pages), no browse', () => {
-    const cache = [...site.matchAll(/^\s+header Cache-Control "(.*)"$/gm)].map((m) => m[1]);
+    // #109: the host-less catch-all is imported from edge-<scheme>.caddy at the end of site.caddy (both files hold
+    // the same block; test/caddy-public.test.ts keeps them equal), so it is read in its place.
+    const catchAll = readFileSync(join(repoRoot, 'deploy/web/edge-https.caddy'), 'utf8');
+    const cache = [...`${site}\n${catchAll}`.matchAll(/^\s+header Cache-Control "(.*)"$/gm)].map((m) => m[1]);
     // In file order: the status files, (P9a) /runtime-config.json and the degraded stand-in's two halves, the tiles
     // manifest, the basemap tiles, (P6b) the river tiles, the rivers manifest, the reaches file and the download,
     // (P9a) the static publisher's classes (live, recent, slow, immutable, warnings, status), then the assets and the

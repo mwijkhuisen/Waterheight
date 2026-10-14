@@ -9,7 +9,14 @@
 # deploy/compose.yaml; unset is prelaunch, a typo stops Caddy: the file is not found): X-Robots-Tag, robots.txt and
 # sitemap.xml are in deploy/web/phase-<phase>.caddy, imported below and in handle_errors. The header block therefore
 # holds no X-Robots-Tag.
-{$RWS_DOMAIN} {
+# #109 (ADR-0021): the edge. RWS_SITE_SCHEME is unset in direct mode (https: Caddy's certificate, the :80 redirect,
+# today's adapted config byte for byte) and http only in deploy/compose.tunnel.yaml, where cloudflared is the one
+# client: one plain :80 server and no TLS listener, no certificate, no ACME. Any other value stops Caddy (an
+# unknown scheme here, a missing edge-<scheme>.caddy): fail closed. deploy/tests/caddy-edge.test.sh adapts both.
+# edge-<scheme>.caddy holds what else differs per mode: the snippet edge_site (tunnel mode: a plain-HTTP visit
+# forwarded by Cloudflare is redirected to https) and the host-less 421 catch-all (see below).
+import edge-{$RWS_SITE_SCHEME:https}.caddy
+{$RWS_SITE_SCHEME:https}://{$RWS_DOMAIN} {
 	header {
 		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -22,6 +29,7 @@
 		-Server
 	}
 	import phase-{$RWS_SITE_PHASE:prelaunch}.caddy main
+	import edge_site
 
 	# Access log with masked addresses (IPv4 /24, IPv6 /48), one file a day, kept 14 days (A§12.2 privacy).
 	log {
@@ -693,8 +701,5 @@ http://127.0.0.1:8081 {
 # {$RWS_DOMAIN} (no on-demand TLS, no default_sni), so over HTTPS only a client that sends the right SNI
 # but another Host gets this answer. ACME HTTP-01 is answered before any route, and the real domain's
 # :80 -> https redirect keeps its host-matched route, which sorts before this host-less block.
-:80, :443 {
-	header -Server
-	header Cache-Control "no-store"
-	respond 421
-}
+# #109: the block is in edge-<scheme>.caddy (imported at the top): both ports in direct mode, :80 alone in
+# tunnel mode (no TLS listener).

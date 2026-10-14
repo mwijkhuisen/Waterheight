@@ -199,7 +199,9 @@ describe('no CDN unless the break-glass is armed (D20)', () => {
     // Armed means a name here and trusted proxies in /etc/rws/rws.env: neither has a committed value.
     expect(COMPOSE).toContain(dflt('RWS_CDN_NAME'));
     expect(COMPOSE).toContain(dflt('RWS_TRUSTED_PROXIES'));
-    expect(COMPOSE_OWNER).toContain(dflt('RWS_CDN_NAME'));
+    // #109 review round 2: the owner site is never behind a CDN, so its runtime config never names one.
+    expect(COMPOSE_OWNER).toContain('RWS_CDN_NAME: ""\n');
+    expect(COMPOSE_OWNER).not.toContain('${RWS_CDN_NAME');
     for (const file of ['deploy/host/bootstrap.sh', 'deploy/tests/e2e/run.sh'])
       for (const m of read(file).matchAll(/^\s*RWS_(?:CDN_NAME|TRUSTED_PROXIES)=(.*)$/gm))
         expect([file, m[1]]).toEqual([file, '']);

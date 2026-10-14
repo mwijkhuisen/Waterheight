@@ -7,7 +7,7 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-runbooks=(provider-outage dst-check token-rotation vps-rebuild basemap brownout schema-drift disk-full)
+runbooks=(provider-outage dst-check token-rotation vps-rebuild basemap brownout schema-drift disk-full edge-switch domain-change)
 failures=0
 fail() {
   echo "  FAIL: $*" >&2
@@ -27,9 +27,9 @@ for name in "${runbooks[@]}"; do
 
   # rws-* names: a command in deploy/bin or a unit in deploy/systemd. Container names (rws-db-1) and
   # the ad-hoc unit of the basemap runbook's systemd-run example and its lock name, the db_postgres
-  # secret's group and the release directory are not files; rws-lib is the sourced rws-lib.sh.
+  # secret's group, the tunnel token's group and the release directory are not files; rws-lib is the sourced rws-lib.sh.
   while IFS= read -r t; do
-    [[ $t =~ -[0-9]+$ || $t == rws-basemap-manual || $t == rws-basemap || $t == rws-dbpostgres || $t == rws-release ]] && continue
+    [[ $t =~ -[0-9]+$ || $t == rws-basemap-manual || $t == rws-basemap || $t == rws-dbpostgres || $t == rws-cftunnel || $t == rws-release ]] && continue
     [[ -e $repo/deploy/bin/$t || -e $repo/deploy/bin/$t.sh ]] ||
       compgen -G "$repo/deploy/systemd/$t.*" >/dev/null ||
       fail "$name.md: '$t' is neither deploy/bin/$t nor a unit under deploy/systemd"
