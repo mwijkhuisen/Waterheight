@@ -48,7 +48,7 @@ CREATE FUNCTION public.backfill_guard(p_source text) RETURNS text
   SELECT CASE
     WHEN l.value IS NULL
       OR COALESCE((l.value ->> 'computed_at')::timestamptz, '-infinity') < now() - interval '5 minutes' THEN 'loader_lag'
-    WHEN COALESCE((l.value ->> 'backlog_age_s')::numeric, 0) > 600
+    WHEN COALESCE((l.value ->> 'backlog_age_s')::numeric, 0) > 60
       OR COALESCE((l.value ->> 'backlog_files')::numeric, 0) > 3 THEN 'backlog'
     WHEN EXISTS (
         SELECT 1 FROM public.backfill_job j
@@ -2802,4 +2802,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261108000001'),
     ('20261109000001'),
     ('20261110000001'),
-    ('20261110000002');
+    ('20261110000002'),
+    ('20261111000001');

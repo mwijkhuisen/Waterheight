@@ -461,12 +461,15 @@ describe('rws_backfill (the backfill runner) and the job counts', () => {
       expect(await guard()).toBe('loader_lag');
       await loader("'computed_at', now(), 'backlog_files', 4, 'backlog_age_s', 10");
       expect(await guard()).toBe('backlog');
-      await loader("'computed_at', now(), 'backlog_files', 1, 'backlog_age_s', 601");
+      // 60 s (P14a fix): the loader row can be 60 s old, so this keeps live lag under the 120 s freshness limit.
+      await loader("'computed_at', now(), 'backlog_files', 1, 'backlog_age_s', 61");
       expect(await guard()).toBe('backlog');
-      await loader("'computed_at', now(), 'backlog_files', 3, 'backlog_age_s', 600");
+      await loader("'computed_at', now(), 'backlog_files', 3, 'backlog_age_s', 60");
       await health('degraded');
       expect(await guard()).toBe('stale');
       await health('ok');
+      expect(await guard()).toBe('ok');
+      await loader("'computed_at', now(), 'backlog_files', 3, 'backlog_age_s', 59");
       expect(await guard()).toBe('ok');
     } finally {
       await t.admin.query("DELETE FROM app_meta WHERE key = 'loader'");
