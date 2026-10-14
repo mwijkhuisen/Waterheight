@@ -59,7 +59,7 @@ describe('the host scripts', () => {
       .flatMap((rel) =>
         readFileSync(join(repoRoot, 'deploy', rel), 'utf8')
           .split('\n')
-          .filter((l) => !/^\s*#/.test(l) && /docker\s+(container\s+)?kill\b/.test(l))
+          .filter((l) => !/^\s*#/.test(l) && /\b(docker|rws_compose)\b.*\bkill\b/.test(l))
           .map((l) => `${rel}: ${l.trim()}`),
       );
     expect(hits).toEqual([]);
