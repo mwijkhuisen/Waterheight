@@ -1,8 +1,9 @@
+import { sql } from 'kysely';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareLine, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { PUBLIC_ONLY_VIEWS, VIEWS } from '../../src/db/audience.ts';
-import { computeHealth, LagWindow, storeChecksums } from '../../src/load/health.ts';
+import { computeHealth, LagWindow, Q7_LOOKBACK_MS, q7Gaps, q7Outage, storeChecksums } from '../../src/load/health.ts';
 import { claimNightly } from '../../src/load/run.ts';
 import { OWNER_IDS } from '../publish/s2-ctx.ts';
 import { type Harness, harness, measurements } from './harness.ts';
@@ -296,5 +297,110 @@ describe('lag window', () => {
     lag.add('DE-1', new Date('2026-10-04T12:00:00Z'), 86_400_000, now);
     expect(lag.p95(now).get('DE-1')).toBe(95_000);
     expect(lag.p95(new Date('2026-10-05T13:00:01Z')).size).toBe(0);
+  });
+});
+
+/** Every "Relation Name" in an EXPLAIN (FORMAT JSON) plan, whatever the node (scans, Append children, subplans). */
+function relations(node: unknown, out = new Set<string>()): Set<string> {
+  if (Array.isArray(node)) for (const n of node) relations(n, out);
+  else if (node !== null && typeof node === 'object') {
+    for (const [k, v] of Object.entries(node)) {
+      if (k === 'Relation Name' && typeof v === 'string') out.add(v);
+      else relations(v, out);
+    }
+  }
+  return out;
+}
+
+// P14a fix: the gap scan read every obs partition, history included (45 s at 6.5 M backfilled rows, inside the
+// load loop). A constant lower bound keeps it to the partitions of the last 48 h, with the same counts.
+describe('Q7 with history (P14a fix)', { timeout: 120_000 }, () => {
+  // Hours after the loaded data (about 13:30), so the outage form finds a series with data before it and counts the
+  // buckets after it.
+  const at = new Date('2026-09-29T20:00:00Z');
+  const outage = { from: new Date('2026-09-29T15:30:00Z'), to: new Date('2026-09-29T19:00:00Z') };
+  const counts = async () => {
+    await computeHealth(h.load.db, inputs({ now: at, outages: new Map([['DE-1', outage]]) }));
+    const d = (await de1()).detail;
+    return { gaps: d.missing_buckets_24h, outage: d.outage };
+  };
+
+  it('about 300k backfilled rows in 2003 change neither Q7 count', async () => {
+    const before = await counts();
+    expect(before.gaps).toBeGreaterThan(0);
+    expect(before.outage.missing_buckets).toBeGreaterThan(0);
+    await h.t.admin.query("SELECT ensure_history_partitions('2003-01-01', '2004-01-01')");
+    const batch = (
+      await h.t.admin.query<{ id: string }>(
+        `INSERT INTO ingest_batch (source_id, spec_id, archive_key, fetched_at, adapter_version, parse_status, origin)
+         VALUES ('DE-1', 'de-1-series', 'raw/DE-1/de-1-series/2026/09/29/120000Z-bbbbbbbbbbbbbbbb.zst', $1, 1, 'ok', 'backfill')
+         RETURNING id`,
+        [NOW],
+      )
+    ).rows[0]?.id;
+    try {
+      // Every tier-1 primary series of DE-1: 4,350 quarter-hours from 2003-01-01 (69 series, 300,150 rows).
+      await h.t.admin.query(
+        `INSERT INTO obs (series_id, ts, value, qc, batch_id)
+         SELECT s.id, timestamptz '2003-01-01 00:00:00+00' + n * interval '15 minutes', 1, 512, $1
+         FROM series s JOIN station st ON st.id = s.station_id AND st.tier = 1
+         CROSS JOIN generate_series(0, 4349) AS n
+         WHERE s.source_id = 'DE-1' AND s.active AND s.role = 'primary' AND s.audience IS NULL`,
+        [batch],
+      );
+      expect(await h.count('obs_y2003')).toBeGreaterThan(300_000);
+      expect(await counts()).toEqual(before);
+    } finally {
+      await h.t.admin.query('DELETE FROM obs WHERE batch_id = $1', [batch]);
+      await h.t.admin.query('DELETE FROM ingest_batch WHERE id = $1', [batch]);
+    }
+  });
+
+  // The oracle (review R5): the same scans with a vacuous lookback are the old, unbounded ones. `now` slides across the
+  // end of the loaded data at odd minutes, so the first bucket of the 24 h window starts before now − 24 h, and the
+  // outages slide so the day before them holds the data's last rows: a bound one step or a day too tight differs.
+  it('the bound changes no count: the scans without it agree over a sweep of now and outages', async () => {
+    const H = 3_600_000;
+    const NONE = 100 * 365 * 24 * H;
+    const t0 = Date.parse('2026-09-29T14:07:00Z');
+    const sorted = (rows: { source_id: string; missing: number }[]) =>
+      [...rows].sort((a, b) => a.source_id.localeCompare(b.source_id));
+    let total = 0;
+    for (let k = 0; k < 17; k++) {
+      const now = new Date(t0 + k * 3 * H);
+      const bounded = sorted((await q7Gaps(now).execute(h.load.db)).rows);
+      expect(bounded, now.toISOString()).toEqual(sorted((await q7Gaps(now, NONE).execute(h.load.db)).rows));
+      total += bounded.find((r) => r.source_id === 'DE-1')?.missing ?? 0;
+    }
+    for (let k = 0; k < 24; k++) {
+      const from = new Date(Date.parse('2026-09-29T12:00:00Z') + k * 1.5 * H);
+      const to = new Date(from.getTime() + 2 * H);
+      const now = new Date(to.getTime() + 4 * H);
+      const bounded = (await q7Outage('DE-1', from, to, now).execute(h.load.db)).rows;
+      expect(bounded, from.toISOString()).toEqual(
+        (await q7Outage('DE-1', from, to, now, NONE).execute(h.load.db)).rows,
+      );
+      total += bounded[0]?.missing ?? 0;
+    }
+    expect(total).toBeGreaterThan(0);
+  });
+
+  it('EXPLAIN lists no history partition and none older than the lookback, but still scans obs', async () => {
+    // The history partitions exist (idempotent), so their absence from the plan is the bound's doing.
+    await h.t.admin.query("SELECT ensure_history_partitions('2003-01-01', '2004-01-01')");
+    const monthOf = (d: Date) => `obs_${d.toISOString().slice(0, 4)}_${d.toISOString().slice(5, 7)}`;
+    const oldest = monthOf(new Date(at.getTime() - Q7_LOOKBACK_MS));
+    const plans = {
+      gaps: await sql`EXPLAIN (FORMAT JSON) ${q7Gaps(at)}`.execute(h.load.db),
+      outage: await sql`EXPLAIN (FORMAT JSON) ${q7Outage('DE-1', outage.from, outage.to, at)}`.execute(h.load.db),
+    };
+    for (const plan of Object.values(plans)) {
+      const rels = [...relations(plan.rows)];
+      const parts = rels.filter((r) => /^obs_(y\d{4}|\d{4}_\d{2})$/.test(r));
+      expect(parts.length).toBeGreaterThan(0);
+      expect(parts.filter((r) => /^obs_y/.test(r))).toEqual([]);
+      // Monthly names sort chronologically.
+      expect(parts.filter((r) => r < oldest)).toEqual([]);
+    }
   });
 });

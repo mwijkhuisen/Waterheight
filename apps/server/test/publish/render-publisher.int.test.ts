@@ -447,7 +447,10 @@ describe('static frames carry the API frames states (#112)', { timeout: 300_000 
 describe('history export (§9 C5)', { timeout: 120_000 }, () => {
   it('only latest.json and the station list carry a series without history_export, and only inside its window', async () => {
     await h.t.admin.query(`UPDATE series SET lic_override = '{"history_export": false}' WHERE id = $1`, [ids.b]);
-    await h.t.admin.query(`UPDATE source SET history_window = '240 hours' WHERE id = 'NL-1'`);
+    // The views count the window back from the real clock, not from NOW: 240 h past the fixture, however late the
+    // test runs (a fixed 240 h lapsed on 2026-10-14).
+    const hours = Math.ceil((Date.now() - NOW) / 3_600_000) + 240;
+    await h.t.admin.query(`UPDATE source SET history_window = make_interval(hours => $1) WHERE id = 'NL-1'`, [hours]);
     const c = await ctx('public');
     const stations = StaticStations.parse(await renderStations(c));
     expect(stations.stations.flatMap((s) => s.series.map((x) => x.id))).toContain(ids.b);
