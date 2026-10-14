@@ -256,6 +256,60 @@ export async function forecastDetails(db: Kysely<DB>, now: Date): Promise<Map<st
   return out;
 }
 
+/**
+ * Q7 never looks further back than this (P14a fix). The 24 h form needs its window plus one step and the outage
+ * form its staleness limit plus a day (the day before it) before the outage, both inside it while every step is at
+ * most a day and every staleness limit at most 12 h (today PT1H and PT12H; `test/staleness-limit.test.ts` pins the
+ * registry under it). Without a constant bound the gap scan read every obs partition, history included, on each
+ * pass: 45 s at 6.5 M backfilled rows, inside the single load loop.
+ */
+export const Q7_LOOKBACK_MS = 48 * 3_600_000;
+
+// Why the bound loses no bucket. 24 h form: g.b >= date_bin(step, now - 24 h) > now - 24 h - step >= now - 48 h,
+// and g.b + step <= now - staleness <= now. Outage form: g.b >= from - staleness - step >= from - 36 h, the
+// EXISTS window is [from - staleness - 24 h, from - staleness) within [from - 36 h, from), and
+// g.b + step <= now - staleness. Both bounds are plain timestamptz parameters, so the planner prunes partitions
+// at plan time.
+
+/** Q7 over 24 h, per source (the statement computeHealth runs; exported so a test can EXPLAIN it). */
+export const q7Gaps = (now: Date) => {
+  const since = new Date(now.getTime() - Q7_LOOKBACK_MS);
+  return sql<{ source_id: string; missing: number }>`
+    SELECT s.source_id, count(*)::int AS missing
+    FROM series s
+    JOIN source src ON src.id = s.source_id
+    JOIN station st ON st.id = s.station_id AND st.tier = 1
+    CROSS JOIN LATERAL generate_series(
+      date_bin(s.expected_step, ${now}::timestamptz - interval '24 hours', timestamptz '2000-01-01 00:00:00+00'),
+      ${now}::timestamptz - s.staleness_limit - s.expected_step,
+      s.expected_step) AS g(b)
+    WHERE s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}
+      AND NOT EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id AND o.ts >= g.b AND o.ts < g.b + s.expected_step
+                        AND o.ts >= ${since}::timestamptz AND o.ts < ${now}::timestamptz)
+    GROUP BY s.source_id`;
+};
+
+/** Q7 over one source's outage [from, to] (a single row: the count). */
+export const q7Outage = (source: string, from: Date, to: Date, now: Date) => {
+  const since = new Date(from.getTime() - Q7_LOOKBACK_MS);
+  return sql<{ missing: number }>`
+    SELECT count(*)::int AS missing
+    FROM series s
+    JOIN source src ON src.id = s.source_id
+    JOIN station st ON st.id = s.station_id AND st.tier = 1
+    CROSS JOIN LATERAL generate_series(
+      date_bin(s.expected_step, ${from}::timestamptz - s.staleness_limit, timestamptz '2000-01-01 00:00:00+00'),
+      LEAST(${to}::timestamptz, ${now}::timestamptz - s.staleness_limit - s.expected_step),
+      s.expected_step) AS g(b)
+    WHERE s.source_id = ${source} AND s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}
+      AND EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id
+                    AND o.ts >= ${from}::timestamptz - s.staleness_limit - interval '24 hours'
+                    AND o.ts < ${from}::timestamptz - s.staleness_limit
+                    AND o.ts >= ${since}::timestamptz AND o.ts < ${from}::timestamptz)
+      AND NOT EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id AND o.ts >= g.b AND o.ts < g.b + s.expected_step
+                        AND o.ts >= ${since}::timestamptz AND o.ts < ${now}::timestamptz)`;
+};
+
 type Tier1 = { total: number; fresh: number; provider_stale: number };
 
 /**
@@ -283,40 +337,14 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
     WHERE s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}`.execute(db);
 
   // Q7 (A§8): expected buckets without data over the last 24 h, up to the point where a value may still be on its way.
-  const gaps = await sql<{ source_id: string; missing: number }>`
-    SELECT s.source_id, count(*)::int AS missing
-    FROM series s
-    JOIN source src ON src.id = s.source_id
-    JOIN station st ON st.id = s.station_id AND st.tier = 1
-    CROSS JOIN LATERAL generate_series(
-      date_bin(s.expected_step, ${inputs.now}::timestamptz - interval '24 hours', timestamptz '2000-01-01 00:00:00+00'),
-      ${inputs.now}::timestamptz - s.staleness_limit - s.expected_step,
-      s.expected_step) AS g(b)
-    WHERE s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}
-      AND NOT EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id AND o.ts >= g.b AND o.ts < g.b + s.expected_step)
-    GROUP BY s.source_id`.execute(db);
+  const gaps = await q7Gaps(inputs.now).execute(db);
 
   // Q7 over each source's last outage: the buckets a payload fetched before the gap could not hold yet, up to
   // the first fetch after it, for the tier-1 series that had data in the day before (a series that was already
   // stale cannot be refilled and is not counted).
   const outageOf = new Map<string, { from: string; to: string; missing_buckets: number }>();
   for (const [source, { from, to }] of inputs.outages ?? []) {
-    const { rows } = await sql<{ missing: number }>`
-      SELECT count(*)::int AS missing
-      FROM series s
-      JOIN source src ON src.id = s.source_id
-      JOIN station st ON st.id = s.station_id AND st.tier = 1
-      CROSS JOIN LATERAL generate_series(
-        date_bin(s.expected_step, ${from}::timestamptz - s.staleness_limit, timestamptz '2000-01-01 00:00:00+00'),
-        LEAST(${to}::timestamptz, ${inputs.now}::timestamptz - s.staleness_limit - s.expected_step),
-        s.expected_step) AS g(b)
-      WHERE s.source_id = ${source} AND s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}
-        AND EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id
-                      AND o.ts >= ${from}::timestamptz - s.staleness_limit - interval '24 hours'
-                      AND o.ts < ${from}::timestamptz - s.staleness_limit)
-        AND NOT EXISTS (SELECT 1 FROM obs o WHERE o.series_id = s.id AND o.ts >= g.b AND o.ts < g.b + s.expected_step)`.execute(
-      db,
-    );
+    const { rows } = await q7Outage(source, from, to, inputs.now).execute(db);
     outageOf.set(source, { from: from.toISOString(), to: to.toISOString(), missing_buckets: rows[0]?.missing ?? 0 });
   }
 
