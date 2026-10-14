@@ -230,7 +230,7 @@ Do this on the VPS that already runs a P1b release. The installed P1b `rws-updat
    bundle/deploy/host/bootstrap.sh          # again: "0 change(s)"
    ```
 
-   It generates the seven `db_*` secrets (`root:<gid> 0440`, gids 61004–61009 and 61011; the seventh, `db_rws_backfill`, is new in P14a, so re-run bootstrap after that release), creates `/srv/rws/backup/db` (`root:61003` 0750; it makes `/srv/rws/backup` itself `root:root` 0700) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf`, installs the new host scripts (`rws-lib.sh` with the database steps, `rws-backup` with the nightly dump) and records the host files.
+   It generates the seven `db_*` secrets (`root:<gid> 0440`, gids 61004–61009 and 61011; the seventh, `db_rws_backfill`, is new in P14a: a release that brings a new role or secret needs its bootstrap run **before** that release is deployed, because its migration grants to the new role), creates `/srv/rws/backup/db` (`root:61003` 0750; it makes `/srv/rws/backup` itself `root:root` 0700) and `/etc/rws/postgres/{pg_hba,pg_ident}.conf`, installs the new host scripts (`rws-lib.sh` with the database steps, `rws-backup` with the nightly dump) and records the host files.
 
    **Check:** `sudo stat -c '%n %a %U:%G' /etc/rws/secrets/db_*` shows seven files, each `440 root:rws-db…`; `ls -l /etc/rws/postgres`.
 

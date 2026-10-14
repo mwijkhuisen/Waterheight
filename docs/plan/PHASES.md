@@ -3179,3 +3179,26 @@ Combined code and security re-review of the round-1 fix diff (Sonnet, high), fin
 
 Migration 000001 was edited in place (none of this PR's migrations is merged); its sha256 in `test/migrations.test.ts`, `db/schema.sql` and `generated.ts` follow.
 
+### Incident 2026-10-12/13 and the health-scan fix (issue #29)
+
+P14a was deployed on 2026-10-12 at 16:01Z. The first NL-1 backfill night ran from 22:01 to 05:00 UTC and inserted 7.29M history rows in 2,072 chunks (`revised` 0, `unreconciled` 0). Live freshness failed the [agent-prod] criterion (KG-343):
+
+| Live lag (`loaded_at - fetched_at`, `origin = 'live'`) | p50 | p95 |
+|---|---|---|
+| Night 10-11 to 10-12, and 10-12 16:00 to 21:59 UTC after the deploy | 5 s | 10 s |
+| 10-12 22:00 to 10-13 05:00 UTC (backfill) | 157 to 2,660 s | 743 to 3,598 s |
+| 10-13 07:00 UTC | 31 s | 53 s |
+| 10-14 11:41Z, no backfill for 30 h | - | 74 s (`/api/v1/health`) |
+
+NL-1 and up to nine other sources were `down` from 01:00 to 04:00 UTC. The loader logged no errors and PostgreSQL no lock waits.
+
+- **Root cause.** `computeHealth` runs every 60 s inside the single load loop. Its Q7 gap scan (and the outage variant) had `NOT EXISTS (SELECT 1 FROM obs ... o.ts >= g.b AND o.ts < g.b + step)` with `g.b` from a lateral `generate_series`: no constant `ts` bound, so the planner read every `obs` partition, history included. The cost grows with rows per tier-1 series times buckets times series, and the backfill put all 7.3M rows on 41 tier-1 NL-1 series. Reproduced on PostgreSQL 18: `computeHealth` 2.2 s without history, 43 to 45 s at 6.5M rows, 137 s at 21M. While the pass ran the loop loaded nothing, so the live lag was the tick budget (about 20 s) plus the pass: the 74 s that remained after the backfill. The live upsert (5 to 13 ms), `checkTwins`, `findOutages` and a backfill chunk load (about 0.1 s) were fine, and so was the P14a code alone (lag 10 s after the deploy).
+- **The guard did not protect live data.** `backfill_guard` paused at a backlog age above 600 s, five times the 120 s freshness limit, and read a loader row that the slow pass refreshed once per cycle.
+- **The fix.**
+  - Both Q7 scans (24 h and last outage, `EXISTS` and `NOT EXISTS`) carry a constant `o.ts` bound of `Q7_LOOKBACK_MS` (48 h), so every history partition is pruned. The counts are identical; at 21M rows Q7 takes about 845 ms. The registry's longest `expected_step` is PT1H and its longest `staleness_limit` PT12H, pinned by `test/staleness-limit.test.ts`, so 48 h covers every window.
+  - `backfill_guard` answers `backlog` above **60 s** (migration `20261111000001_backfill_guard_60s.sql`; the 3-file rule and the 30-chunk `unloaded` rule are unchanged): the guard reads a loader row up to 60 s old, so 60 s keeps the live lag under 120 s.
+  - `run.ts` logs `health_slow` (`ms`) when the health block takes more than 10 s.
+  - Evidence ([CI]): `health.int.test.ts` (about 300k backfilled rows in 2003 leave both counts unchanged, and `EXPLAIN` names no `obs_y...` partition), `roles.int.test.ts` (the guard at 59, 60 and 61 s), `test/staleness-limit.test.ts`.
+- **Process lesson.** A migration that names a new database role, or a release that needs a new secret, needs that release's bootstrap **before** its deploy (CLAUDE.md Gotchas, `docs/runbooks/bootstrap.md`).
+- **Not in this fix ([U], `docs/known-gaps.md`).** KG-353 (`findCoverage` grew from 0.5 s to 3 s), KG-354 (health still inside the load loop), KG-355 (job 7, Eijsden Q F216, `schema_drift` at chunk 2010-12-27; cross-reference KG-342).
+- **The [agent-prod] criterion stays open** until a backfill night passes with live lag within the limits (KG-343): the owner starts the next night (`docs/runbooks/backfill.md` §3) and the per-hour lag query of §6 is the evidence.
