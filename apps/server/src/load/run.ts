@@ -36,6 +36,8 @@ const TICK_MS = 10_000;
  */
 const TICK_BUDGET_MS = 20_000;
 const HEALTH_MS = 60_000;
+/** The health pass runs inside the load loop, so one slower than this is live lag (P14a fix): it logs `health_slow`. */
+const HEALTH_SLOW_MS = 10_000;
 /** The outage scan reads a week of batches: not on every health pass. */
 const OUTAGE_MS = 600_000;
 /** The nightly jobs run once per UTC day, after this hour. */
@@ -139,6 +141,7 @@ export async function runLoad(
         logger.info('caught up with the manifest: partition checksums stored');
       }
       if (now.getTime() - lastHealth >= HEALTH_MS) {
+        const started = performance.now();
         if (now.getTime() - lastOutages >= OUTAGE_MS) {
           // A failed scan keeps the last result and waits for its next slot, not the next 10-second tick, and the
           // health pass still runs (review of P2b). The loop has no test harness: this stays inline.
@@ -169,6 +172,8 @@ export async function runLoad(
         for (const twin of await checkTwins(db, now)) logger.error({ alert: 'twin_breach', twin }, 'alert');
         // P8a: a staged LU-3 group whose five files never all arrived (a count only, never a value).
         for (const [source, n] of await pruneStagedParts(db, now)) alert('incomplete_run', { source, n });
+        const ms = Math.round(performance.now() - started);
+        if (ms > HEALTH_SLOW_MS) logger.warn({ code: 'health_slow', ms }, 'health pass slow');
         lastHealth = now.getTime();
       }
       if (await claimNightly(db, now, backlog)) {
