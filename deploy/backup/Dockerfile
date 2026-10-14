@@ -1,7 +1,7 @@
 # Backup image: the restic binary on distroless static (A§11.1, A§11.3; issue #16
 # P1b). Our own image, so it is signed by release.yml like every other image the
 # VPS runs. The release asset is checked against its pinned sha256.
-FROM node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS restic
+FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS restic
 ARG RESTIC_VERSION=0.19.1
 ADD --checksum=sha256:f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c \
   https://github.com/restic/restic/releases/download/v${RESTIC_VERSION}/restic_${RESTIC_VERSION}_linux_amd64.bz2 \
