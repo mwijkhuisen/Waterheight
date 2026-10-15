@@ -2814,7 +2814,7 @@ joins:
     at: [3.4628286, 50.4842448]
     to_river: scarpe
     max_m: 50
-    reason: "KG-161 (#142): the sink n3352487860 (3.4628, 50.4842) of the Décours relation 9083480 (46 edges) shares no node with the Scarpe; the nearest scarpe vertex n929170170 on w277863461 is 41 m away (measured on the extract of geo.yml run 38783389922, 2026-10-15). That Scarpe piece is isolated (294 m, no station, no onward path; the Mortagne piece starts 1,027 m away, over the ~1 km cap), so the Bousignies and Lecelles gauges have no path until the Scarpe gap closes"
+    reason: "KG-161 (#142): the sink n3352487860 (3.4628, 50.4842) of the Décours relation 9083480 (46 edges) shares no node with the Scarpe; the nearest scarpe vertex n929170170 on w277863461 is 41 m away (measured on the extract of geo.yml run 38783389922, 2026-10-15). That Scarpe piece is isolated (294 m, no station, no onward path; the Mortagne piece starts 1,027 m away, over the ~1 km precedent), so the Bousignies and Lecelles gauges have no path until the Scarpe gap closes"
   - river: rhonelle
     at: [3.5302953, 50.3641125]
     to_river: scheldt
