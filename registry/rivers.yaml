@@ -2459,48 +2459,48 @@ rivers:
     names:
       FR-1: ["Ruisseau l'Aroffe"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "L'Aroffe"
+    osm_relation_id: 7022773
+    osm_way_name: null
     wikidata: Q697909
     parent_river_id: meuse
     km_direction: none
-    evidence: "Wikidata Q697909 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Aroffe Q1096090 has no P403"
+    evidence: "Wikidata Q697909 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Aroffe Q1096090 has no P403; relation r7022773 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: othain
     name_nl: "Othain"
     name_en: "Othain"
     names:
       FR-1: ["L'Othain"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "L'Othain"
+    osm_relation_id: 6966640
+    osm_way_name: null
     wikidata: Q1568556
     parent_river_id: chiers
     km_direction: none
-    evidence: "Wikidata Q1568556 (no P402; P403 Q635969 Chiers), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q1568556 (no P402; P403 Q635969 Chiers), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r6966640 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: crusnes
     name_nl: "Crusnes"
     name_en: "Crusnes"
     names:
       FR-1: ["La Crusnes"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Crusnes"
+    osm_relation_id: 7126209
+    osm_way_name: null
     wikidata: Q1142093
     parent_river_id: chiers
     km_direction: none
-    evidence: "Wikidata Q1142093 (no P402; P403 Q635969 Chiers), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Crusnes Q1026462 has no P403"
+    evidence: "Wikidata Q1142093 (no P402; P403 Q635969 Chiers), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Crusnes Q1026462 has no P403; relation r7126209 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: bar
     name_nl: "Bar"
     name_en: "Bar"
     names:
       FR-1: ["La Bar"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Bar"
+    osm_relation_id: 3644702
+    osm_way_name: null
     wikidata: Q1817620
     parent_river_id: meuse
     km_direction: none
-    evidence: "Wikidata Q1817620 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Bar items Q470315 and Q2604068 have no P403"
+    evidence: "Wikidata Q1817620 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Bar items Q470315 and Q2604068 have no P403; relation r3644702 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: sormonne
     name_nl: "Sormonne"
     name_en: "Sormonne"
@@ -2519,48 +2519,48 @@ rivers:
     names:
       FR-1: ["La Vence"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Vence"
+    osm_relation_id: 6847241
+    osm_way_name: null
     wikidata: Q3555398
     parent_river_id: meuse
     km_direction: none
-    evidence: "Wikidata Q3555398 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q18745532 (mouth Berre) and Q192368 (no P403)"
+    evidence: "Wikidata Q3555398 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q18745532 (mouth Berre) and Q192368 (no P403); relation r6847241 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: flamenne
     name_nl: "Flamenne"
     name_en: "Flamenne"
     names:
       FR-1: ["Flamenne"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Flamenne"
+    osm_relation_id: 9081659
+    osm_way_name: null
     wikidata: Q3073274
     parent_river_id: sambre
     km_direction: none
-    evidence: "Wikidata Q3073274 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q3073274 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r9081659 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: tarsy
     name_nl: "Tarsy"
     name_en: "Tarsy"
     names:
       FR-1: ["Tarsy"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "La Tarsy"
+    osm_relation_id: 9081535
+    osm_way_name: null
     wikidata: Q3515832
     parent_river_id: sambre
     km_direction: none
-    evidence: "Wikidata Q3515832 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q3515832 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r9081535 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: ecaillon
     name_nl: "Écaillon"
     name_en: "Écaillon"
     names:
       FR-1: ["écaillon"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "L'Écaillon"
+    osm_relation_id: 3947511
+    osm_way_name: null
     wikidata: Q273300
     parent_river_id: scheldt
     km_direction: none
-    evidence: "Wikidata Q273300 (no P402; P403 Q37620 Scheldt), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Écaillon Q1443097 has no P403"
+    evidence: "Wikidata Q273300 (no P402; P403 Q37620 Scheldt), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Écaillon Q1443097 has no P403; relation r3947511 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: rhonelle
     name_nl: "Rhonelle"
     name_en: "Rhonelle"
@@ -2579,12 +2579,12 @@ rivers:
     names:
       FR-1: ["rivière l'aunelle"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "L'Aunelle"
+    osm_relation_id: 7661913
+    osm_way_name: null
     wikidata: Q2871811
     parent_river_id: hogneau
     km_direction: none
-    evidence: "Wikidata Q2871811 (no P402; P403 Q3139167 Hogneau), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q2871811 (no P402; P403 Q3139167 Hogneau), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r7661913 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: selle
     name_nl: "Selle"
     name_en: "Selle"
@@ -2615,24 +2615,12 @@ rivers:
     names:
       FR-1: ["Becque de Steenwerck"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Becque de Steenwerck"
+    osm_relation_id: 12907001
+    osm_way_name: null
     wikidata: Q106947254
     parent_river_id: lys
     km_direction: none
-    evidence: "Wikidata Q106947254 (no P402; P403 Q208493 Lys), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
-  - id: bourre
-    name_nl: "Bourre"
-    name_en: "Bourre"
-    names:
-      FR-1: ["Bourre"]
-    aliases: []
-    osm_relation_id: 4510497
-    osm_way_name: null
-    wikidata: Q2922410
-    parent_river_id: lys
-    km_direction: none
-    evidence: "Wikidata Q2922410 (P402 4510497; P403 Q208493 Lys), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q106947254 (no P402; P403 Q208493 Lys), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r12907001 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: laquette
     name_nl: "Laquette"
     name_en: "Laquette"
@@ -2651,35 +2639,36 @@ rivers:
     names:
       FR-1: ["Meteren Becque"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "Meteren Becque"
+    osm_relation_id: 9381442
+    osm_way_name: null
     wikidata: Q3307344
     parent_river_id: lys
     km_direction: none
-    evidence: "Wikidata Q3307344 (no P402; P403 Q208493 Lys), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+    evidence: "Wikidata Q3307344 (no P402; P403 Q208493 Lys), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r9381442 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
   - id: decours
     name_nl: "Décours"
     name_en: "Décours"
-    names: {}
-    aliases: []
-    osm_relation_id: null
-    osm_way_name: "Le Décours"
+    names:
+      FR-1: ["Courant de l'Hopital"]
+    aliases: ["Courant de l'Hôpital"]
+    osm_relation_id: 9083480
+    osm_way_name: null
     wikidata: Q3042898
     parent_river_id: scarpe
     km_direction: none
-    evidence: "Wikidata Q3042898 (no P402; P403 Q1818615 Scarpe), SPARQL by id 2026-10-15 (#142); P31 river; the gaugeless connector of the Elnon (natural, the Kander precedent)"
+    evidence: "Wikidata Q3042898 (no P402; P403 Q1818615 Scarpe), SPARQL by id 2026-10-15 (#142); P31 river; carries the Elnon; relation r9083480 (type=waterway, OSM name \"Courant de l'Hôpital\") carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact), and FR-1 Bousignies (fr.sandre.E237601001, \"Courant de l'Hopital\") lies 2 m from it"
   - id: elnon
     name_nl: "Elnon"
     name_en: "Elnon"
     names:
       FR-1: ["Elnon"]
     aliases: []
-    osm_relation_id: null
-    osm_way_name: "L'Elnon"
+    osm_relation_id: 9083483
+    osm_way_name: null
     wikidata: Q3051616
     parent_river_id: decours
     km_direction: none
-    evidence: "Wikidata Q3051616 (no P402; P403 Q3042898 Décours), SPARQL by id 2026-10-15 (#142); P31 brook"
+    evidence: "Wikidata Q3051616 (no P402; P403 Q3042898 Décours), SPARQL by id 2026-10-15 (#142); P31 brook; relation r9083483 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
 excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283
@@ -2747,6 +2736,9 @@ excluded:
   - name: "Schlinge"
     wikidata: Q285844
     reason: "Relation r14213627 (\"Boven-Slinge\") carries wikidata=Q285844 in the extract (geo.yml run 38222297911) but holds only the Dutch course (6.42-6.80 E): DE-7 Südlohn de.lanuk.9283215500100 lies 7.3 km upstream of it; its mouth, the Bielheimerbeek (Q2673735, into the Oude IJssel), has no relation or way in the extract (#140)"
+  - name: "Bourre"
+    wikidata: Q2922410
+    reason: "Its P402 relation r4510497 (P403 Q208493 Lys) is in the extract (geo.yml run 38783389922) but ends at (2.5939, 50.6755), 4.5 km short of the Lys, and no way carries wikidata=Q2922410: FR-1 Merville (fr.sandre.E365851301, \"Bourre\") lies 4.2 km from it and 836 m from the Lys, on the lower Bourre, which FR-1 also gauges as the Canal d'Hazebrouck [La Bourre] (#142)"
 joins:
   - river: scheldt
     at: [3.2870075, 50.2241826]
@@ -2818,6 +2810,26 @@ joins:
     to_river: pader
     max_m: 30
     reason: "KG-161 (#140): the Pader relation 379709 has a gap: the sink n298483394 (8.7518, 51.7205) of its stray piece (9 edges) shares no node with its main piece (87 edges, which reaches the Lippe and holds the DE-7 gauge Paderborn1); the nearest node of the main piece, n2559179165, is 14 m away (measured on the extract of geo.yml run 38222297911, 2026-10-12). No gauge needs it; it keeps those reaches on a path to the Lippe"
+  - river: decours
+    at: [3.4628286, 50.4842448]
+    to_river: scarpe
+    max_m: 50
+    reason: "KG-161 (#142): the sink n3352487860 (3.4628, 50.4842) of the Décours relation 9083480 (46 edges) shares no node with the Scarpe; the nearest scarpe vertex n929170170 on w277863461 is 41 m away (measured on the extract of geo.yml run 38783389922, 2026-10-15). The FR-1 gauges Bousignies (fr.sandre.E237601001, on the Décours) and Lecelles (fr.sandre.E237721001, on the Elnon) need it for a path to the Scarpe"
+  - river: rhonelle
+    at: [3.5302953, 50.3641125]
+    to_river: scheldt
+    max_m: 1010
+    reason: "KG-161 (#142): the sink n2784878760 (3.5303, 50.3641) of the Rhonelle relation 6623637 (44 edges) shares no node with the Scheldt in Valenciennes; the nearest scheldt vertex n569201426 on w44893449 is 912 m away (measured on the extract of geo.yml run 38783389922, 2026-10-15; the Seille precedent, 947 m). The FR-1 gauge Aulnoy-lez-Valenciennes (fr.sandre.E176601001) needs it for a path to the Scheldt; the other sink, n4790065188, 1,097 m off, stays unjoined"
+  - river: othain
+    at: [5.4143347, 49.4989623]
+    to_river: othain
+    max_m: 900
+    reason: "KG-161 (#142): the Othain relation 6966640 has a gap: the sink n1477880420 (5.4143, 49.4990) of its upper piece (3 edges) shares no node with its lower piece (1 edge, which reaches the Chiers); the nearest node of the lower piece, n1477880859, is 810 m away (measured on the extract of geo.yml run 38783389922, 2026-10-15). The FR-1 gauge Othe (fr.sandre.B435201001) lies on the upper piece and needs it for a path to the Chiers"
+  - river: crusnes
+    at: [5.9151319, 49.4195262]
+    to_river: crusnes
+    max_m: 30
+    reason: "KG-161 (#142): the Crusnes relation 7126209 has a gap: the sink n10222130394 (5.9151, 49.4195) of its stray piece (5 edges) shares no node with its main piece (33 edges, which reaches the Chiers and holds the FR-1 gauge Pierrepont); the nearest node of the main piece, n10222130392, is 8 m away (measured on the extract of geo.yml run 38783389922, 2026-10-15). No gauge needs it; it keeps those reaches on a path to the Chiers"
 travel_times:
   # Rhine → Lobith, flood peaks (GWIO 85.006 appendix 1, read from the scan for #110): each range holds every value the
   # note does not strike through, in whole hours rounded outward (Emmerich keeps a floor of 1 h).
