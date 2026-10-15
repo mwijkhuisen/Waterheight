@@ -213,7 +213,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | zizmor | binary | 1.30.1 | installed | e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a | MIT | security.yml |
 | gitleaks | binary | 8.30.1 | installed | 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb | MIT | security.yml |
 | dbmate | binary | 2.36.0 | installed | h1:oWxpNxkPSJ57UNaP9x/Icj/Kw12QNiWVzNnBLWkHcLE= | MIT | the server image's `migrate` role: built from the release module (go.sum hash) by `go` with its `GO_FIXES`, cgo off (no SQLite driver), statically linked (#131, `deploy/server/Dockerfile`) |
-| dbmate (release) | binary | 2.36.0 | installed | 47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce | MIT | ci.yml round trip only (`dbmate-linux-amd64` sha256); never shipped |
+| dbmate (release) | binary | 2.36.0 | installed | 47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce | MIT | ci.yml round trip only (`dbmate-linux-amd64` sha256, with cgo; the shipped build has none, and nothing here uses SQLite); never shipped |
 | shellcheck | binary | 0.11.0 | installed | b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6 | GPL-3.0 | ci.yml (tool only) |
 | Docker Engine | tool | 29.8.1 | installed | 5:29.8.1-1~debian.13~trixie | Apache-2.0 | P1b host, `deploy/host/bootstrap.sh`: Docker's apt repository, key file sha256-pinned, packages held |
 | containerd.io | tool | 2.3.5 | installed | 2.3.5-1~debian.13~trixie | Apache-2.0 | P1b host (2.3.6 was under 7 days old at pin time) |

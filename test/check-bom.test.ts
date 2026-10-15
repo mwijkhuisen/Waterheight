@@ -149,6 +149,15 @@ describe('check-bom', () => {
     );
   });
 
+  // #131: check-bom finds the go row's pin in either file, so the two Go stages must not drift apart.
+  it('keeps the Go build stage of the backup and server images the same text', () => {
+    const stage = (f: string) =>
+      /^ARG GO_VERSION=[\s\S]*?^ARG GO_FIXES=.*$/m.exec(readFileSync(join(repoRoot, f), 'utf8'))?.[0];
+    const backup = stage('deploy/backup/Dockerfile');
+    expect(backup).toMatch(/GOPROXY=https:\/\/proxy\.golang\.org GOSUMDB=sum\.golang\.org/);
+    expect(stage('deploy/server/Dockerfile')).toBe(backup);
+  });
+
   // #109: every compose image is a release variable or an installed row's exact pin, digest included.
   it('fails on a compose image without an installed row', () => {
     const dir = scratch();

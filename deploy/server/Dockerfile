@@ -10,7 +10,8 @@
 # tarball is sha256-pinned, each module is checked against its pinned go.sum hash,
 # and every module download against the Go checksum database. GO_FIXES are the
 # fixed versions (each at least 7 days old). Back to the release binaries once
-# they clear Grype; keep GO_VERSION and GO_FIXES equal to deploy/backup/Dockerfile.
+# they clear Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same
+# text as in deploy/backup/Dockerfile (test/check-bom.test.ts).
 FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS go
 ARG GO_VERSION=1.27.2
 ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
@@ -21,7 +22,10 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && tar -C /usr/local -xzf /tmp/go.tar.gz \
   && mkdir -p /gosrc /gobin
-ENV PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local CGO_ENABLED=0
+# Only the Go module proxy, every download checked against the checksum database,
+# whatever the base image or a later layer sets; no toolchain download, no cgo.
+ENV PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS= \
+  GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GOPRIVATE= GONOPROXY= GONOSUMDB= GOINSECURE=
 ARG GO_FIXES="golang.org/x/net@v0.60.0 golang.org/x/crypto@v0.57.0 golang.org/x/text@v0.42.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.44.0"
 # Upstream builds dbmate with cgo for its SQLite driver only; we use PostgreSQL alone.
 ARG DBMATE_VERSION=2.36.0
@@ -30,7 +34,8 @@ RUN m=github.com/amacneil/dbmate/v2@v${DBMATE_VERSION} \
   && cp -r "$(go env GOMODCACHE)/$m" /gosrc/dbmate && chmod -R u+w /gosrc/dbmate && cd /gosrc/dbmate \
   && go get ${GO_FIXES} \
   && go build -trimpath -ldflags '-s' -o /gobin/dbmate .
-# The upstream release flags (.goreleaser.yml, its version stamp included).
+# goreleaser's default flags of the upstream release (.goreleaser.yml), with
+# main.version only (commit and date stay "none" and "unknown"; nothing reads them).
 ARG GO_PMTILES_VERSION=1.31.2
 RUN m=github.com/protomaps/go-pmtiles@v${GO_PMTILES_VERSION} \
   && go mod download -json "$m" | grep -F '"Sum": "h1:xYXagv2oKJarheCdOIGg8MvYRp8Y03MBs9jegxf4NDQ="' \
