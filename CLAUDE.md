@@ -202,8 +202,8 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @inlang/paraglide-js | npm | 2.25.4 | installed | – | MIT | apps/web |
 | @inlang/plugin-message-format | npm | 4.4.4 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
 | actions/checkout | action | 7.0.1 | installed | 3d3c42e5aac5ba805825da76410c181273ba90b1 | MIT | |
-| actions/setup-node | action | 7.0.0 | installed | 820762786026740c76f36085b0efc47a31fe5020 | MIT | `package-manager-cache: false` |
-| step-security/harden-runner | action | 2.21.1 | installed | e14015d583714f6e62063499dc959a02595150a1 | Apache-2.0 | audit mode |
+| actions/setup-node | action | 7.1.0 | installed | 949feb2413d6458794dcd2491c4babbbce0c15c1 | MIT | `package-manager-cache: false` |
+| step-security/harden-runner | action | 2.22.1 | installed | ccd8616d44fd3846e67624a50d5aad6d37bf2d25 | Apache-2.0 | audit mode |
 | github/codeql-action | action | 4.38.2 | installed | 2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 | MIT | public repository (D7) |
 | postgres | image | 18.6-trixie | installed | postgres:18.6-trixie@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 | PostgreSQL | CI service; P2 compose `db` |
 | pebble | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199 | MPL-2.0 | CI only: the ACME server of the deploy end-to-end test |
@@ -255,8 +255,8 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | docker/metadata-action | action | 6.2.0 | planned | – | Apache-2.0 | not needed in P1b (images are addressed by digest) |
 | sigstore/cosign-installer | action | 4.1.2 | installed | 6f9f17788090df1f26f669e9d70d6ae9567deba6 | Apache-2.0 | release.yml, with `cosign-release: v3.1.3` |
 | actions/attest-build-provenance | action | 4.2.2 | installed | 4d101475d8b20a2381f78447822ac1eab6504dd8 | MIT | release.yml |
-| actions/upload-artifact | action | 7.0.1 | installed | 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a | MIT | geo.yml |
-| actions/download-artifact | action | 8.0.1 | installed | 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c | MIT | geo.yml |
+| actions/upload-artifact | action | 7.0.2 | installed | cf430e030ddbb5b0abf93d22962f4752f3646cd9 | MIT | geo.yml |
+| actions/download-artifact | action | 8.0.2 | installed | 9000827ccba6bdab643e8b6fd33ac0654aef8333 | MIT | geo.yml |
 | syft | binary | 1.52.0 | installed | caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d | Apache-2.0 | P12a: release.yml build-pr and security.yml grype-weekly (`syft_1.52.0_linux_amd64.tar.gz` sha256; tool only); the release SBOMs still come from buildkit-syft-scanner |
 | grype | binary | 0.119.0 | installed | 3fa2dc4b924621ab65404cf08d0b8438d896d80ab949c9d5a4ca283c36004c9b | Apache-2.0 | P12a: `--only-fixed --fail-on high` in release.yml build-pr and security.yml grype-weekly (`grype_0.119.0_linux_amd64.tar.gz` sha256; tool only) |
 | restic | binary | 0.19.1 | installed | f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c | BSD-2-Clause | backup image (`restic_0.19.1_linux_amd64.bz2` sha256) |
