@@ -2453,6 +2453,542 @@ rivers:
     parent_river_id: vechte
     km_direction: none
     evidence: "Wikidata Q895892 (P402 10885261; P403 Q168904 Vechte), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: thalbach
+    name_nl: "Thalbach"
+    name_en: "Thalbach"
+    names:
+      FR-1: ["Ruisseau le Thalbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Thalbach"
+    wikidata: Q2408750
+    parent_river_id: ill
+    km_direction: none
+    evidence: "Wikidata Q2408750 (no P402; P403 Q668472 Ill), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: traubach
+    name_nl: "Traubach"
+    name_en: "Traubach"
+    names:
+      FR-1: ["Ruisseau le Traubach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Traubach"
+    wikidata: Q138660769
+    parent_river_id: largue
+    km_direction: none
+    evidence: "Wikidata Q138660769 (no P402; P403 Q127557 Largue), SPARQL by id 2026-10-15 (#141); Wikidata alias \"Ruisseau le Traubach\""
+  - id: andlau
+    name_nl: "Andlau"
+    name_en: "Andlau"
+    names:
+      FR-1: ["L'Andlau"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Andlau"
+    wikidata: Q492188
+    parent_river_id: ill
+    km_direction: none
+    evidence: "Wikidata Q492188 (no P402; P403 Q668472 Ill), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: bechine
+    name_nl: "Béchine"
+    name_en: "Béchine"
+    names:
+      FR-1: ["La Bechine"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Bechine"
+    wikidata: Q2929765
+    parent_river_id: weiss
+    km_direction: none
+    evidence: "Wikidata Q2929765 (no P402; P403 Q2556484 Weiss), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: liepvrette
+    name_nl: "Lièpvrette"
+    name_en: "Lièpvrette"
+    names:
+      FR-1: ["La Liepvrette"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Liepvrette"
+    wikidata: Q1866661
+    parent_river_id: giessen
+    km_direction: none
+    evidence: "Wikidata Q1866661 (no P402; P403 Q1523406 Giessen), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: ehn
+    name_nl: "Ehn"
+    name_en: "Ehn"
+    names:
+      FR-1: ["Ruisseau l'Ehn"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Ehn"
+    wikidata: Q3049281
+    parent_river_id: ill
+    km_direction: none
+    evidence: "Wikidata Q3049281 (no P402; P403 Q668472 Ill), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: petite-fecht
+    name_nl: "Petite Fecht"
+    name_en: "Petite Fecht"
+    names:
+      FR-1: ["Ruisseau la Petite Fecht"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Petite Fecht"
+    wikidata: Q138943783
+    parent_river_id: fecht
+    km_direction: none
+    evidence: "Wikidata Q138943783 (no P402; P403 Q1399427 Fecht), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: strengbach
+    name_nl: "Strengbach"
+    name_en: "Strengbach"
+    names:
+      FR-1: ["Ruisseau le Strengbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Strengbach"
+    wikidata: Q16678017
+    parent_river_id: fecht
+    km_direction: none
+    evidence: "Wikidata Q16678017 (no P402; P403 Q1399427 Fecht), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: lauter
+    name_nl: "Lauter"
+    name_en: "Lauter"
+    names:
+      FR-1: ["La Lauter"]
+    aliases: []
+    osm_relation_id: 2096257
+    osm_way_name: null
+    wikidata: Q563698
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q563698 (P402 2096257; P403 Q584 Rhine), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesakes in other basins (Neckar, Glan, Danube…); this one is the FR/DE border river into the Rhine at Lauterbourg"
+  - id: zinsel-du-sud
+    name_nl: "Zinsel du Sud"
+    name_en: "Zinsel du Sud"
+    names:
+      FR-1: ["La Zinsel du Sud"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Zinsel du Sud"
+    wikidata: Q27987333
+    parent_river_id: zorn
+    km_direction: none
+    evidence: "Wikidata Q27987333 (no P402; P403 Q226757 Zorn), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: eberbach
+    name_nl: "Eberbach"
+    name_en: "Eberbach"
+    names:
+      FR-1: ["Ruisseau l'Eberbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Eberbach"
+    wikidata: Q3046805
+    parent_river_id: sauer-alsace
+    km_direction: none
+    evidence: "Wikidata Q3046805 (no P402; P403 Q705057 Sauer), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: falkensteinbach
+    name_nl: "Falkensteinbach"
+    name_en: "Falkensteinbach"
+    names:
+      FR-1: ["Ruisseau le Falkensteinbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Falkensteinbach"
+    wikidata: Q1394316
+    parent_river_id: zinsel-du-nord
+    km_direction: none
+    evidence: "Wikidata Q1394316 (no P402; P403 Q2006757 Zinsel du Nord), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); Wikidata label \"Falkensteinerbach\", alias \"Ruisseau du Falkenstein\""
+  - id: zinsel-du-nord
+    name_nl: "Zinsel du Nord"
+    name_en: "Zinsel du Nord"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Zinsel du Nord"
+    wikidata: Q2006757
+    parent_river_id: moder
+    km_direction: none
+    evidence: "Wikidata Q2006757 (no P402; P403 Q1462580 Moder), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); gaugeless natural connector that carries the Falkensteinbach (owner 2026-10-12, #127)"
+  - id: seltzbach
+    name_nl: "Seltzbach"
+    name_en: "Seltzbach"
+    names:
+      FR-1: ["Ruisseau le Seltzbach"]
+    aliases: []
+    osm_relation_id: 1916168
+    osm_way_name: null
+    wikidata: Q2268728
+    parent_river_id: sauer-alsace
+    km_direction: none
+    evidence: "Wikidata Q2268728 (no P402; P403 Q705057 Sauer), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r1916168 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+  - id: aviere
+    name_nl: "Avière"
+    name_en: "Avière"
+    names:
+      FR-1: ["L'Aviere"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Aviere"
+    wikidata: Q791197
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q791197 (no P402; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: moselotte
+    name_nl: "Moselotte"
+    name_en: "Moselotte"
+    names:
+      FR-1: ["La Moselotte"]
+    aliases: []
+    osm_relation_id: 1108634
+    osm_way_name: null
+    wikidata: Q896979
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q896979 (P402 1108634; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: vologne
+    name_nl: "Vologne"
+    name_en: "Vologne"
+    names:
+      FR-1: ["La Vologne"]
+    aliases: []
+    osm_relation_id: 2770503
+    osm_way_name: null
+    wikidata: Q1192859
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q1192859 (P402 2770503; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: cleurie
+    name_nl: "Cleurie"
+    name_en: "Cleurie"
+    names:
+      FR-1: ["Ruisseau de la Cleurie"]
+    aliases: []
+    osm_relation_id: 2770501
+    osm_way_name: null
+    wikidata: Q541474
+    parent_river_id: moselotte
+    km_direction: none
+    evidence: "Wikidata Q541474 (no P402; P403 Q896979 Moselotte), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r2770501 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+  - id: neune
+    name_nl: "Neuné"
+    name_en: "Neuné"
+    names:
+      FR-1: ["Ruisseau le Neune"]
+    aliases: []
+    osm_relation_id: 3284400
+    osm_way_name: null
+    wikidata: Q1141675
+    parent_river_id: vologne
+    km_direction: none
+    evidence: "Wikidata Q1141675 (no P402; P403 Q1192859 Vologne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3284400 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+  - id: gitte
+    name_nl: "Gitte"
+    name_en: "Gitte"
+    names:
+      FR-1: ["Ruisseau la Gitte"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Gitte"
+    wikidata: Q1527753
+    parent_river_id: madon
+    km_direction: none
+    evidence: "Wikidata Q1527753 (no P402; P403 Q522089 Madon), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: blette
+    name_nl: "Blette"
+    name_en: "Blette"
+    names:
+      FR-1: ["La Blette"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Blette"
+    wikidata: Q883917
+    parent_river_id: vezouze
+    km_direction: none
+    evidence: "Wikidata Q883917 (no P402; P403 Q1568007 Vezouze), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: plaine
+    name_nl: "Plaine"
+    name_en: "Plaine"
+    names:
+      FR-1: ["La Plaine"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Plaine"
+    wikidata: Q1000027
+    parent_river_id: meurthe
+    km_direction: none
+    evidence: "Wikidata Q1000027 (no P402; P403 Q1160441 Meurthe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: sanon
+    name_nl: "Sanon"
+    name_en: "Sanon"
+    names:
+      FR-1: ["Le Sanon"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Sanon"
+    wikidata: Q2377937
+    parent_river_id: meurthe
+    km_direction: none
+    evidence: "Wikidata Q2377937 (no P402; P403 Q1160441 Meurthe), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: petite-seille
+    name_nl: "Petite Seille"
+    name_en: "Petite Seille"
+    names:
+      FR-1: ["La Petite Seille"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Petite Seille"
+    wikidata: Q1672443
+    parent_river_id: seille
+    km_direction: none
+    evidence: "Wikidata Q1672443 (no P402; P403 Q599492 Seille), SPARQL by id 2026-10-15 (#141)"
+  - id: esch
+    name_nl: "Esch"
+    name_en: "Esch"
+    names:
+      FR-1: ["Ruisseau d'Esche"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Esche"
+    wikidata: Q1366854
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q1366854 (no P402; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: rupt-de-mad
+    name_nl: "Rupt de Mad"
+    name_en: "Rupt de Mad"
+    names:
+      FR-1: ["Ruisseau le Rupt de Mad"]
+    aliases: []
+    osm_relation_id: 3295662
+    osm_way_name: null
+    wikidata: Q1475200
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q1475200 (no P402; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3295662 (type=waterway, name Ruisseau le Rupt de Mad, no wikidata tag) is a member of the moselle relation in the extract (geo.yml run 38231302342, the committed rivernet fixture); Wikidata has no P402"
+  - id: fensch
+    name_nl: "Fensch"
+    name_en: "Fensch"
+    names:
+      FR-1: ["La Fensch"]
+    aliases: []
+    osm_relation_id: 2770518
+    osm_way_name: null
+    wikidata: Q614255
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q614255 (P402 2770518; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: vallee-woigot
+    name_nl: "Ruisseau de la Vallée"
+    name_en: "Ruisseau de la Vallée"
+    names:
+      FR-1: ["Ruisseau de la Vallee"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Vallee"
+    wikidata: Q135338410
+    parent_river_id: woigot
+    km_direction: none
+    evidence: "Wikidata Q135338410 (no P402; P403 Q3569584 Woigot), SPARQL by id 2026-10-15 (#141)"
+  - id: vaux-orne
+    name_nl: "Ruisseau de Vaux"
+    name_en: "Ruisseau de Vaux"
+    names:
+      FR-1: ["Ruisseau de Vaux"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Vaux"
+    wikidata: Q3453060
+    parent_river_id: orne
+    km_direction: none
+    evidence: "Wikidata Q3453060 (no P402; P403 Q1047027 Orne), SPARQL by id 2026-10-15 (#141)"
+  - id: kiesel
+    name_nl: "Kiesel"
+    name_en: "Kiesel"
+    names:
+      FR-1: ["Ruisseau la Kiesel"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Kiesel"
+    wikidata: Q3196480
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q3196480 (no P402; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: canner
+    name_nl: "Canner"
+    name_en: "Canner"
+    names:
+      FR-1: ["Ruisseau le Canner"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Canner"
+    wikidata: Q1033384
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q1033384 (no P402; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: conroy
+    name_nl: "Conroy"
+    name_en: "Conroy"
+    names:
+      FR-1: ["Ruisseau le Conroy"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Conroy"
+    wikidata: Q2993641
+    parent_river_id: orne
+    km_direction: none
+    evidence: "Wikidata Q2993641 (no P402; P403 Q1047027 Orne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: veymerange
+    name_nl: "Veymerange"
+    name_en: "Veymerange"
+    names:
+      FR-1: ["Ruisseau le Veymerange"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Veymerange"
+    wikidata: Q17640436
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q17640436 (no P402; P403 Q1667 Moselle), SPARQL by id 2026-10-15 (#141)"
+  - id: albe
+    name_nl: "Albe"
+    name_en: "Albe"
+    names:
+      FR-1: ["L'Albe"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Albe"
+    wikidata: Q2637349
+    parent_river_id: saar
+    km_direction: none
+    evidence: "Wikidata Q2637349 (no P402; P403 Q153972 Saar), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: isch
+    name_nl: "Isch"
+    name_en: "Isch"
+    names:
+      FR-1: ["L'Isch"]
+    aliases: []
+    osm_relation_id: 1263487
+    osm_way_name: null
+    wikidata: Q201578
+    parent_river_id: saar
+    km_direction: none
+    evidence: "Wikidata Q201578 (no P402; P403 Q153972 Saar), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r1263487 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+  - id: bievre
+    name_nl: "Bièvre"
+    name_en: "Bièvre"
+    names:
+      FR-1: ["La Bievre"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Bievre"
+    wikidata: Q536220
+    parent_river_id: saar
+    km_direction: none
+    evidence: "Wikidata Q536220 (no P402; P403 Q153972 Saar), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); namesakes in other basins (Seine, Rhône, Bar, Beuvron); this one flows into the Saar"
+  - id: bisten
+    name_nl: "Bisten"
+    name_en: "Bisten"
+    names:
+      FR-1: ["La Bisten"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Bisten"
+    wikidata: Q318644
+    parent_river_id: saar
+    km_direction: none
+    evidence: "Wikidata Q318644 (no P402; P403 Q153972 Saar), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: horn
+    name_nl: "Horn"
+    name_en: "Horn"
+    names:
+      FR-1: ["La Horn"]
+    aliases: []
+    osm_relation_id: 2340171
+    osm_way_name: null
+    wikidata: Q1592334
+    parent_river_id: schwarzbach-blies
+    km_direction: none
+    evidence: "Wikidata Q1592334 (P402 2340171; P403 Q464507 Schwarzbach), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: schwarzbach-blies
+    name_nl: "Schwarzbach"
+    name_en: "Schwarzbach"
+    names: {}
+    aliases: []
+    osm_relation_id: 2341351
+    osm_way_name: null
+    wikidata: Q464507
+    parent_river_id: blies
+    km_direction: none
+    evidence: "Wikidata Q464507 (no P402; P403 Q585833 Blies), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); gaugeless natural connector that carries the Horn (owner 2026-10-12, #127); relation r2341351 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+  - id: sarre-rouge
+    name_nl: "Sarre Rouge"
+    name_en: "Sarre Rouge"
+    names:
+      FR-1: ["La Sarre Rouge"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Sarre Rouge"
+    wikidata: Q3473705
+    parent_river_id: saar
+    km_direction: none
+    evidence: "Wikidata Q3473705 (no P402; P403 Q153972 Saar), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: gondrexange
+    name_nl: "Ruisseau de Gondrexange"
+    name_en: "Ruisseau de Gondrexange"
+    names:
+      FR-1: ["Ruisseau de Gondrexange"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Gondrexange"
+    wikidata: Q125190477
+    parent_river_id: saar
+    km_direction: none
+    evidence: "Wikidata Q125190477 (no P402; P403 Q153972 Saar), SPARQL by id 2026-10-15 (#141); Wikidata alias \"Ruisseau de Gondrexange\""
+  - id: rosselle
+    name_nl: "Rosselle"
+    name_en: "Rosselle"
+    names:
+      FR-1: ["Ruisseau la Rosselle"]
+    aliases: []
+    osm_relation_id: 6927954
+    osm_way_name: null
+    wikidata: Q315093
+    parent_river_id: saar
+    km_direction: none
+    evidence: "Wikidata Q315093 (P402 6927954; P403 Q153972 Saar), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: gander
+    name_nl: "Gander"
+    name_en: "Gander"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Gander"
+    wikidata: Q1323916
+    parent_river_id: moselle
+    km_direction: none
+    evidence: "Wikidata Q1323916 (no P402; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); LU-1 publishes no water name: placed by station override"
+  - id: mamer
+    name_nl: "Mamer"
+    name_en: "Mamer"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Mamer"
+    wikidata: Q1888207
+    parent_river_id: alzette
+    km_direction: none
+    evidence: "Wikidata Q1888207 (no P402; P403 Q450722 Alzette), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); LU-1 publishes no water name: placed by station override"
+  - id: brenon
+    name_nl: "Brénon"
+    name_en: "Brénon"
+    names:
+      FR-1: ["Le Brenon"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Brenon"
+    wikidata: Q995687
+    parent_river_id: madon
+    km_direction: none
+    evidence: "Wikidata Q995687 (no P402; P403 Q522089 Madon), SPARQL by id 2026-10-15 (#141); not Q1151551, the commune Brenon (Var) whose relation r2144175 is a boundary"
 excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283
