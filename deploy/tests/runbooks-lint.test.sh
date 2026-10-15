@@ -7,7 +7,7 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-runbooks=(provider-outage dst-check token-rotation vps-rebuild basemap brownout schema-drift disk-full edge-switch domain-change)
+runbooks=(provider-outage dst-check token-rotation vps-rebuild basemap brownout schema-drift disk-full edge-switch domain-change cutover-waterradar-tunnel)
 failures=0
 fail() {
   echo "  FAIL: $*" >&2
