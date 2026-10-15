@@ -2,7 +2,7 @@
 # node:26 trixie-slim, run on distroless nodejs26 as uid 65532. Bases are pinned
 # by digest (CLAUDE.md bill of materials). Build context: the repository root,
 # through the allowlist in /.dockerignore.
-FROM node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS build
+FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS build
 # The `migrate` role runs the dbmate release binary (P2a, plan D1), checked
 # against its pinned sha256.
 ARG DBMATE_VERSION=2.36.0
@@ -39,7 +39,7 @@ RUN pnpm install --frozen-lockfile \
 # The layout is part of the P1a ↔ P1b contract: capture reads <root>/registry
 # next to <root>/apps/server/dist; migrate runs <root>/bin/dbmate on
 # <root>/db/migrations; basemap runs <root>/bin/pmtiles.
-FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:2ee7b2c54a3e37dfc248af81c9f6bcdcaa50abe4af44aa47a3388431031b9283
+FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:a3bb283a564754266646d6029c5b6aa4f760b9415dae1398db8d7f8142ee1375
 WORKDIR /app
 COPY --from=build /out /app
 # The workspace packages resolve to their compiled dist/ (Node does not strip

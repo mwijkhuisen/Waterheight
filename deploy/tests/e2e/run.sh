@@ -109,7 +109,7 @@ mode=${RWS_E2E_MODE:-}
 [[ -n $mode ]] || : "${PLAYWRIGHT_IMAGE:?set PLAYWRIGHT_IMAGE (ci.yml deploy job)}"
 readonly MC_IMAGE=cgr.dev/chainguard/minio-client@sha256:be51ef820151a708a8e140037e3746862a8c1dd5e624f84b404a1d71bcefb167
 # The build image's Node (the job's own node is not on sudo's PATH): runs scripts/fixture-archive.ts.
-readonly NODE_IMAGE=node:26.10.0-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1
+readonly NODE_IMAGE=node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33
 readonly REL=$RWS_STATE_DIR/releases/prod-ci
 
 proofs=()
@@ -206,7 +206,7 @@ proof "Docker $(docker version --format '{{.Server.Version}}') and Compose $(doc
 # ------------------------------------------------------------------ images
 step "Build the server, web and backup images"
 # A container on the default bridge must reach the internet under deploy/host/daemon.json.
-docker run --rm --entrypoint /bin/sh caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b \
+docker run --rm --entrypoint /bin/sh caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f \
   -c 'cat /etc/resolv.conf; wget -q -T 20 -O /dev/null https://deb.debian.org/ && echo "container egress ok"' ||
   echo "::warning::a container on the default bridge cannot reach deb.debian.org"
 for image in server web backup; do

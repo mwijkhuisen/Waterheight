@@ -1,9 +1,10 @@
 # Grype ignore list (P12a, owner decision 2026-10-10; docs/risk-register.md R-095).
 #
 # Exactly the fixable High and Critical findings of the first P12a scan (release.yml build-pr, run 38080740961),
-# all inside third-party binaries we install as released: caddy 2.11.4 (web image; newer images are under the
-# 7-day release-age rule until 2026-10-13), restic 0.19.1 (backup), dbmate 2.36.0 and go-pmtiles 1.31.2 (server),
-# which have no newer upstream release. Every rule names the vulnerability, the package, its version and type, so a
+# all inside third-party binaries we install as released: caddy 2.11.4 (web image), restic 0.19.1 (backup),
+# dbmate 2.36.0 and go-pmtiles 1.31.2 (server), which have no newer upstream release. Caddy 2.11.7 (#131, #158)
+# cleared most of the web rules; the owner carried R-095's acceptance to the same IDs in its Go stdlib go1.26.8 and
+# golang.org/x/net v0.59.0 (2026-10-15), fixed only in go1.26.9 and x/net v0.60.0, which no Caddy release has yet. Every rule names the vulnerability, the package, its version and type, so a
 # new finding, or the same one in another version, still fails the gate.
 #
 # expires: 2026-11-10
@@ -77,7 +78,7 @@ ignore:
       name: golang.org/x/crypto
       version: v0.49.0
       type: go-module
-  # golang.org/x/crypto v0.52.0 (go-module) in backup, web: restic 0.19.1; caddy 2.11.4 (caddy:2.11.4-alpine)
+  # golang.org/x/crypto v0.52.0 (go-module) in backup: restic 0.19.1
   - vulnerability: GO-2026-6303
     package:
       name: golang.org/x/crypto
@@ -140,7 +141,7 @@ ignore:
       name: golang.org/x/net
       version: v0.52.0
       type: go-module
-  # golang.org/x/net v0.55.0 (go-module) in backup, web: restic 0.19.1; caddy 2.11.4 (caddy:2.11.4-alpine)
+  # golang.org/x/net v0.55.0 (go-module) in backup: restic 0.19.1
   - vulnerability: GO-2026-5942
     package:
       name: golang.org/x/net
@@ -187,6 +188,27 @@ ignore:
       name: golang.org/x/net
       version: v0.58.0
       type: go-module
+  # golang.org/x/net v0.59.0 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine)
+  - vulnerability: GO-2026-6603
+    package:
+      name: golang.org/x/net
+      version: v0.59.0
+      type: go-module
+  - vulnerability: GO-2026-6610
+    package:
+      name: golang.org/x/net
+      version: v0.59.0
+      type: go-module
+  - vulnerability: GO-2026-6611
+    package:
+      name: golang.org/x/net
+      version: v0.59.0
+      type: go-module
+  - vulnerability: GO-2026-6612
+    package:
+      name: golang.org/x/net
+      version: v0.59.0
+      type: go-module
   # golang.org/x/text v0.35.0 (go-module) in server: dbmate 2.36.0 and go-pmtiles 1.31.2
   - vulnerability: GO-2026-5970
     package:
@@ -198,7 +220,7 @@ ignore:
       name: golang.org/x/text
       version: v0.35.0
       type: go-module
-  # golang.org/x/text v0.37.0 (go-module) in backup, web: restic 0.19.1; caddy 2.11.4 (caddy:2.11.4-alpine)
+  # golang.org/x/text v0.37.0 (go-module) in backup: restic 0.19.1
   - vulnerability: GO-2026-5970
     package:
       name: golang.org/x/text
@@ -224,22 +246,6 @@ ignore:
     package:
       name: google.golang.org/grpc
       version: v1.79.3
-      type: go-module
-  # google.golang.org/grpc v1.81.0 (go-module) in web: caddy 2.11.4 (caddy:2.11.4-alpine)
-  - vulnerability: GHSA-2v4p-qf9q-27wj
-    package:
-      name: google.golang.org/grpc
-      version: v1.81.0
-      type: go-module
-  - vulnerability: GHSA-hrxh-6v49-42gf
-    package:
-      name: google.golang.org/grpc
-      version: v1.81.0
-      type: go-module
-  - vulnerability: GHSA-vp52-pcj8-j9qc
-    package:
-      name: google.golang.org/grpc
-      version: v1.81.0
       type: go-module
   # google.golang.org/grpc v1.81.1 (go-module) in backup: restic 0.19.1
   - vulnerability: GHSA-2v4p-qf9q-27wj
@@ -398,102 +404,6 @@ ignore:
       name: stdlib
       version: go1.26.1
       type: go-module
-  # stdlib go1.26.3 (go-module) in web: caddy 2.11.4 (caddy:2.11.4-alpine)
-  - vulnerability: GO-2026-4970
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-5026
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-5037
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-5038
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-5942
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-5972
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6088
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6089
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6090
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6603
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6604
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6605
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6607
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6608
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6609
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6610
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6611
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6612
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
-  - vulnerability: GO-2026-6613
-    package:
-      name: stdlib
-      version: go1.26.3
-      type: go-module
   # stdlib go1.26.4 (go-module) in backup: restic 0.19.1
   - vulnerability: GO-2026-4970
     package:
@@ -580,6 +490,57 @@ ignore:
       name: stdlib
       version: go1.26.4
       type: go-module
+  # stdlib go1.26.8 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine)
+  - vulnerability: GO-2026-6603
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6604
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6605
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6607
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6608
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6609
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6610
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6611
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6612
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6613
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
   # stdlib go1.27.1 (go-module) in server: dbmate 2.36.0 and go-pmtiles 1.31.2
   - vulnerability: GO-2026-6603
     package:
@@ -631,7 +592,7 @@ ignore:
       name: stdlib
       version: go1.27.1
       type: go-module
-  # zlib 1.3.2-r0 (apk) in web: caddy 2.11.4 (caddy:2.11.4-alpine)
+  # zlib 1.3.2-r0 (apk) in web: caddy 2.11.7 (caddy:2.11.7-alpine)
   - vulnerability: CVE-2026-85091
     package:
       name: zlib
