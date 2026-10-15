@@ -70,7 +70,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       # The runner context is not available in a job's env: the output directories come from RUNNER_TEMP here.
@@ -81,7 +81,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
@@ -251,7 +251,7 @@ jobs:
             [[ -f $f ]] && { echo "### ${f##*/}"; echo '```'; tail -n 40 "$f"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
           done
           true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: k6-summary-loadtest
@@ -260,7 +260,7 @@ jobs:
             ${{ runner.temp }}/brownout.log
           retention-days: 14
           if-no-files-found: warn
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: egress-profile
@@ -287,7 +287,7 @@ jobs:
       # How long the k6 flood scenario runs: it must outlast the drill (deploy/tests/flood/run.sh).
       FLOOD_DURATION: 12m
     steps:
-      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Output directory
@@ -295,7 +295,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
@@ -348,7 +348,7 @@ jobs:
           for f in "$OUT"/*/summary-*.txt; do
             { echo "### ${f#"$OUT"/}"; echo '```'; cat "$f"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
           done
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: k6-summary-drill
@@ -356,7 +356,7 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
       # The flood scene's screenshots (actual/diff) and the Playwright results, for the visual baselines.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: flood-drill-playwright
@@ -381,13 +381,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
@@ -420,7 +420,7 @@ jobs:
         run: |
           [[ -f $RUNNER_TEMP/chaos.log ]] || exit 0
           { echo '### chaos'; echo '```'; grep -E '^(PROOF|- )' "$RUNNER_TEMP/chaos.log" | tail -n 40; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: chaos-log
@@ -455,7 +455,7 @@ jobs:
       TARGET: ${{ vars.LOADTEST_TARGET }}
       REPOSITORY: ${{ github.repository }}
     steps:
-      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -482,7 +482,7 @@ jobs:
           for f in "$RUNNER_TEMP"/loadtest/summary-*.txt; do
             { echo '```'; cat "$f"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
           done
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: k6-summary-production
