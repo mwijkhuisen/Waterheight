@@ -144,7 +144,9 @@ describe('check-bom', () => {
   it('fails when a Dockerfile pins a different binary than the BOM', () => {
     const dir = scratch();
     edit(dir, 'deploy/backup/Dockerfile', 'RESTIC_VERSION=0.19.1', 'RESTIC_VERSION=0.19.2');
-    expect(checkBom(dir).join('\n')).toMatch(/BOM row restic: pin f415[0-9a-f]+ with version 0\.19\.1 not found/);
+    expect(checkBom(dir).join('\n')).toMatch(
+      /BOM row restic: pin h1:LQKkar5\/gYxay1OCokAWPBNiLr1lTpt4fhdM4GWqSlY= with version 0\.19\.1 not found/,
+    );
   });
 
   // #109: every compose image is a release variable or an installed row's exact pin, digest included.

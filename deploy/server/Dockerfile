@@ -2,20 +2,43 @@
 # node:26 trixie-slim, run on distroless nodejs26 as uid 65532. Bases are pinned
 # by digest (CLAUDE.md bill of materials). Build context: the repository root,
 # through the allowlist in /.dockerignore.
-FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS build
-# The `migrate` role runs the dbmate release binary (P2a, plan D1), checked
-# against its pinned sha256.
+# The `migrate` role runs dbmate (P2a, plan D1) and the `basemap` role go-pmtiles
+# (P3, ADR-0016), both statically linked Go binaries.
+# #131 (R-095): both are built from their release modules, not taken as the
+# release binaries, because those carry High Grype findings (Go stdlib, x/net,
+# x/crypto, x/text, gRPC, otel/sdk) that no upstream release fixes yet. The Go
+# tarball is sha256-pinned, each module is checked against its pinned go.sum hash,
+# and every module download against the Go checksum database. GO_FIXES are the
+# fixed versions (each at least 7 days old). Back to the release binaries once
+# they clear Grype; keep GO_VERSION and GO_FIXES equal to deploy/backup/Dockerfile.
+FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS go
+ARG GO_VERSION=1.27.2
+ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
+  https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz \
+  /tmp/go.tar.gz
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && tar -C /usr/local -xzf /tmp/go.tar.gz \
+  && mkdir -p /gosrc /gobin
+ENV PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local CGO_ENABLED=0
+ARG GO_FIXES="golang.org/x/net@v0.60.0 golang.org/x/crypto@v0.57.0 golang.org/x/text@v0.42.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.44.0"
+# Upstream builds dbmate with cgo for its SQLite driver only; we use PostgreSQL alone.
 ARG DBMATE_VERSION=2.36.0
-ADD --checksum=sha256:47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce \
-  https://github.com/amacneil/dbmate/releases/download/v${DBMATE_VERSION}/dbmate-linux-amd64 \
-  /tmp/dbmate
-# The `basemap` role runs the go-pmtiles release binary (P3, ADR-0016) to extract
-# the regional and planet tiles, checked against its pinned sha256 (a statically
-# linked Go binary; the archive holds LICENSE, README.md and pmtiles).
+RUN m=github.com/amacneil/dbmate/v2@v${DBMATE_VERSION} \
+  && go mod download -json "$m" | grep -F '"Sum": "h1:oWxpNxkPSJ57UNaP9x/Icj/Kw12QNiWVzNnBLWkHcLE="' \
+  && cp -r "$(go env GOMODCACHE)/$m" /gosrc/dbmate && chmod -R u+w /gosrc/dbmate && cd /gosrc/dbmate \
+  && go get ${GO_FIXES} \
+  && go build -trimpath -ldflags '-s' -o /gobin/dbmate .
+# The upstream release flags (.goreleaser.yml, its version stamp included).
 ARG GO_PMTILES_VERSION=1.31.2
-ADD --checksum=sha256:3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f \
-  https://github.com/protomaps/go-pmtiles/releases/download/v${GO_PMTILES_VERSION}/go-pmtiles_${GO_PMTILES_VERSION}_Linux_x86_64.tar.gz \
-  /tmp/go-pmtiles.tar.gz
+RUN m=github.com/protomaps/go-pmtiles@v${GO_PMTILES_VERSION} \
+  && go mod download -json "$m" | grep -F '"Sum": "h1:xYXagv2oKJarheCdOIGg8MvYRp8Y03MBs9jegxf4NDQ="' \
+  && cp -r "$(go env GOMODCACHE)/$m" /gosrc/pmtiles && chmod -R u+w /gosrc/pmtiles && cd /gosrc/pmtiles \
+  && go get ${GO_FIXES} \
+  && go build -trimpath -ldflags "-s -w -X main.version=${GO_PMTILES_VERSION}" -o /gobin/pmtiles .
+
+FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS build
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
@@ -30,11 +53,8 @@ RUN pnpm install --frozen-lockfile \
   && node_modules/.bin/tsc -b apps/server \
   && pnpm --filter @rws/server deploy --prod /out/apps/server \
   && cp -r registry /out/registry \
-  && mkdir -p /out/db /out/bin \
-  && cp -r db/migrations /out/db/migrations \
-  && install -m 0755 /tmp/dbmate /out/bin/dbmate \
-  && tar -xzf /tmp/go-pmtiles.tar.gz -C /tmp pmtiles \
-  && install -m 0755 /tmp/pmtiles /out/bin/pmtiles
+  && mkdir -p /out/db \
+  && cp -r db/migrations /out/db/migrations
 
 # The layout is part of the P1a ↔ P1b contract: capture reads <root>/registry
 # next to <root>/apps/server/dist; migrate runs <root>/bin/dbmate on
@@ -42,6 +62,7 @@ RUN pnpm install --frozen-lockfile \
 FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:a3bb283a564754266646d6029c5b6aa4f760b9415dae1398db8d7f8142ee1375
 WORKDIR /app
 COPY --from=build /out /app
+COPY --from=go /gobin /app/bin
 # The workspace packages resolve to their compiled dist/ (Node does not strip
 # types inside node_modules); dev and tests keep running from src/.
 ENV NODE_OPTIONS=--conditions=rws-dist
