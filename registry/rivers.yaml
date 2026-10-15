@@ -2453,6 +2453,233 @@ rivers:
     parent_river_id: vechte
     km_direction: none
     evidence: "Wikidata Q895892 (P402 10885261; P403 Q168904 Vechte), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: aroffe
+    name_nl: "Aroffe"
+    name_en: "Aroffe"
+    names:
+      FR-1: ["Ruisseau l'Aroffe"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "L'Aroffe"
+    wikidata: Q697909
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q697909 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Aroffe Q1096090 has no P403"
+  - id: othain
+    name_nl: "Othain"
+    name_en: "Othain"
+    names:
+      FR-1: ["L'Othain"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "L'Othain"
+    wikidata: Q1568556
+    parent_river_id: chiers
+    km_direction: none
+    evidence: "Wikidata Q1568556 (no P402; P403 Q635969 Chiers), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: crusnes
+    name_nl: "Crusnes"
+    name_en: "Crusnes"
+    names:
+      FR-1: ["La Crusnes"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "La Crusnes"
+    wikidata: Q1142093
+    parent_river_id: chiers
+    km_direction: none
+    evidence: "Wikidata Q1142093 (no P402; P403 Q635969 Chiers), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Crusnes Q1026462 has no P403"
+  - id: bar
+    name_nl: "Bar"
+    name_en: "Bar"
+    names:
+      FR-1: ["La Bar"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "La Bar"
+    wikidata: Q1817620
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q1817620 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Bar items Q470315 and Q2604068 have no P403"
+  - id: sormonne
+    name_nl: "Sormonne"
+    name_en: "Sormonne"
+    names:
+      FR-1: ["La Sormonne"]
+    aliases: []
+    osm_relation_id: 6817931
+    osm_way_name: null
+    wikidata: Q1128949
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q1128949 (P402 6817931; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Sormonne Q1419160 has no P403"
+  - id: vence
+    name_nl: "Vence"
+    name_en: "Vence"
+    names:
+      FR-1: ["La Vence"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "La Vence"
+    wikidata: Q3555398
+    parent_river_id: meuse
+    km_direction: none
+    evidence: "Wikidata Q3555398 (no P402; P403 Q41986 Meuse), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q18745532 (mouth Berre) and Q192368 (no P403)"
+  - id: flamenne
+    name_nl: "Flamenne"
+    name_en: "Flamenne"
+    names:
+      FR-1: ["Flamenne"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "La Flamenne"
+    wikidata: Q3073274
+    parent_river_id: sambre
+    km_direction: none
+    evidence: "Wikidata Q3073274 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: tarsy
+    name_nl: "Tarsy"
+    name_en: "Tarsy"
+    names:
+      FR-1: ["Tarsy"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "La Tarsy"
+    wikidata: Q3515832
+    parent_river_id: sambre
+    km_direction: none
+    evidence: "Wikidata Q3515832 (no P402; P403 Q208267 Sambre), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: ecaillon
+    name_nl: "Écaillon"
+    name_en: "Écaillon"
+    names:
+      FR-1: ["écaillon"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "L'Écaillon"
+    wikidata: Q273300
+    parent_river_id: scheldt
+    km_direction: none
+    evidence: "Wikidata Q273300 (no P402; P403 Q37620 Scheldt), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Écaillon Q1443097 has no P403"
+  - id: rhonelle
+    name_nl: "Rhonelle"
+    name_en: "Rhonelle"
+    names:
+      FR-1: ["Rhonelle"]
+    aliases: []
+    osm_relation_id: 6623637
+    osm_way_name: null
+    wikidata: Q952662
+    parent_river_id: scheldt
+    km_direction: none
+    evidence: "Wikidata Q952662 (P402 6623637; P403 Q37620 Scheldt), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); Wikidata fr label Rhônelle"
+  - id: aunelle
+    name_nl: "Aunelle"
+    name_en: "Aunelle"
+    names:
+      FR-1: ["rivière l'aunelle"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "L'Aunelle"
+    wikidata: Q2871811
+    parent_river_id: hogneau
+    km_direction: none
+    evidence: "Wikidata Q2871811 (no P402; P403 Q3139167 Hogneau), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: selle
+    name_nl: "Selle"
+    name_en: "Selle"
+    names:
+      FR-1: ["Selle ou Escaut"]
+    aliases: []
+    osm_relation_id: 6906663
+    osm_way_name: null
+    wikidata: Q1550416
+    parent_river_id: scheldt
+    km_direction: none
+    evidence: "Wikidata Q1550416 (P402 6906663; P403 Q37620 Scheldt), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); rejected Q954049 (mouth Somme); the FR-1 station is La Selle à Denain"
+  - id: sensee
+    name_nl: "Sensée"
+    name_en: "Sensée"
+    names:
+      FR-1: ["Sensée"]
+    aliases: []
+    osm_relation_id: 1812718
+    osm_way_name: null
+    wikidata: Q1461589
+    parent_river_id: scheldt
+    km_direction: none
+    evidence: "Wikidata Q1461589 (P402 1812718; P403 Q37620 Scheldt), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); r1812718 is also the Scarpe's Wikidata P402 (see scarpe)"
+  - id: becque-de-steenwerck
+    name_nl: "Becque de Steenwerck"
+    name_en: "Becque de Steenwerck"
+    names:
+      FR-1: ["Becque de Steenwerck"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Becque de Steenwerck"
+    wikidata: Q106947254
+    parent_river_id: lys
+    km_direction: none
+    evidence: "Wikidata Q106947254 (no P402; P403 Q208493 Lys), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: bourre
+    name_nl: "Bourre"
+    name_en: "Bourre"
+    names:
+      FR-1: ["Bourre"]
+    aliases: []
+    osm_relation_id: 4510497
+    osm_way_name: null
+    wikidata: Q2922410
+    parent_river_id: lys
+    km_direction: none
+    evidence: "Wikidata Q2922410 (P402 4510497; P403 Q208493 Lys), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: laquette
+    name_nl: "Laquette"
+    name_en: "Laquette"
+    names:
+      FR-1: ["Laquette"]
+    aliases: []
+    osm_relation_id: 8127539
+    osm_way_name: null
+    wikidata: Q1136485
+    parent_river_id: lys
+    km_direction: none
+    evidence: "Wikidata Q1136485 (P402 8127539; P403 Q208493 Lys), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: meteren-becque
+    name_nl: "Meterenbeek"
+    name_en: "Meteren Becque"
+    names:
+      FR-1: ["Meteren Becque"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Meteren Becque"
+    wikidata: Q3307344
+    parent_river_id: lys
+    km_direction: none
+    evidence: "Wikidata Q3307344 (no P402; P403 Q208493 Lys), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: decours
+    name_nl: "Décours"
+    name_en: "Décours"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Le Décours"
+    wikidata: Q3042898
+    parent_river_id: scarpe
+    km_direction: none
+    evidence: "Wikidata Q3042898 (no P402; P403 Q1818615 Scarpe), SPARQL by id 2026-10-15 (#142); P31 river; the gaugeless connector of the Elnon (natural, the Kander precedent)"
+  - id: elnon
+    name_nl: "Elnon"
+    name_en: "Elnon"
+    names:
+      FR-1: ["Elnon"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "L'Elnon"
+    wikidata: Q3051616
+    parent_river_id: decours
+    km_direction: none
+    evidence: "Wikidata Q3051616 (no P402; P403 Q3042898 Décours), SPARQL by id 2026-10-15 (#142); P31 brook"
 excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283

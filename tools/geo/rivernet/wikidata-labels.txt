@@ -329,3 +329,30 @@ nl:Groenlose Slinge
 de:Ahauser Aa
 de:Steinfurter Aa
 nl:Boven-Slinge
+# Stage 3 B4 (#142, KG-250): FR-1 Meuse, Sambre and Scheldt single-gauge tributaries and the Décours connector
+fr:Aroffe
+fr:Othain
+fr:Crusnes
+fr:Bar
+fr:Sormonne
+fr:Vence
+fr:Flamenne
+fr:Tarsy
+fr:Écaillon
+fr:Rhônelle
+fr:Aunelle
+fr:Selle
+fr:Sensée
+fr:Becque de Steenwerck
+fr:Bourre
+fr:Laquette
+fr:Meteren Becque
+fr:Elnon
+fr:Décours
+fr:Surgeon
+fr:Souchez
+fr:Laque
+fr:Courant de Coutiches
+fr:Courant de l'Hôpital
+fr:Courant Frenelet
+fr:Vieille Lys
