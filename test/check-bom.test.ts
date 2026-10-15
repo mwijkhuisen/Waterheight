@@ -144,7 +144,18 @@ describe('check-bom', () => {
   it('fails when a Dockerfile pins a different binary than the BOM', () => {
     const dir = scratch();
     edit(dir, 'deploy/backup/Dockerfile', 'RESTIC_VERSION=0.19.1', 'RESTIC_VERSION=0.19.2');
-    expect(checkBom(dir).join('\n')).toMatch(/BOM row restic: pin f415[0-9a-f]+ with version 0\.19\.1 not found/);
+    expect(checkBom(dir).join('\n')).toMatch(
+      /BOM row restic: pin h1:LQKkar5\/gYxay1OCokAWPBNiLr1lTpt4fhdM4GWqSlY= with version 0\.19\.1 not found/,
+    );
+  });
+
+  // #131: check-bom finds the go row's pin in either file, so the two Go stages must not drift apart.
+  it('keeps the Go build stage of the backup and server images the same text', () => {
+    const stage = (f: string) =>
+      /^ARG GO_VERSION=[\s\S]*?^ARG GO_FIXES=.*$/m.exec(readFileSync(join(repoRoot, f), 'utf8'))?.[0];
+    const backup = stage('deploy/backup/Dockerfile');
+    expect(backup).toMatch(/GOPROXY=https:\/\/proxy\.golang\.org GOSUMDB=sum\.golang\.org/);
+    expect(stage('deploy/server/Dockerfile')).toBe(backup);
   });
 
   // #109: every compose image is a release variable or an installed row's exact pin, digest included.

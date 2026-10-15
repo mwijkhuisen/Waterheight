@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { isAbsolute } from 'node:path';
 import { BasemapError } from './errors.ts';
 
-// The go-pmtiles binary (/app/bin/pmtiles in the image, pinned by sha256). It is
+// The go-pmtiles binary (/app/bin/pmtiles in the image, built from its pinned module, #131). It is
 // started with an argument array, never through a shell, and with an environment
 // that holds only what Go needs; its output is read through a bound and never
 // forwarded beyond a short ASCII tail on failure.
