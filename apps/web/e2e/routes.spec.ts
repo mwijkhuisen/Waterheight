@@ -285,11 +285,11 @@ test('/.well-known/security.txt is plain text with the site headers; any other d
   }
 });
 
-test('/third-party-notices.txt is plain text and names maplibre-gl@6.11.2', async ({ request }) => {
+test('/third-party-notices.txt is plain text and names maplibre-gl@6.13.0', async ({ request }) => {
   const res = await request.get('/third-party-notices.txt');
   expect(res.status()).toBe(200);
   expect(res.headers()['content-type']).toMatch(/^text\/plain/);
-  expect(await res.text()).toContain('maplibre-gl@6.11.2');
+  expect(await res.text()).toContain('maplibre-gl@6.13.0');
   expectSiteHeaders(res);
 });
 

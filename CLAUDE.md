@@ -169,7 +169,7 @@ Enforced by `apps/server/test/adapters/fixture-standard.test.ts` (the meta rules
 - **Goldens are of real payloads only.** Real means recorded live by `scripts/smoke-capture.ts` (P1a), or exported from the production archive by the owner (Action D2) and imported by `node scripts/import-fixtures.ts <export dir>`, which checks the body's sha256 against the manifest line and writes a `.meta.json` with `from: archive`, `archive_key`, `source_sha256` and `trimmed`.
 - **Trimming only by a committed rule**, never by hand: `TRIM` in `import-fixtures.ts` (an FR-1 page keeps its first or its last n rows: page 1 of the walk its last, page 2 its first, so they meet at the cursor; FR-3 and CH-3 keep the last n points) and `scripts/trim-fixtures.ts` (two CH-2 subsets of the one real recording, CH-3 2091 by the CH-3 rule; from P5b the CSV and ZIP rules, kept in `scripts/import-fixtures.ts`: LU-1 rows and the last n labels, DE-7 whole station blocks re-zipped deterministically with `node:zlib`, DE-8 rows, LU-6 features; the P5b export is `IMPORTS_P5B`). The meta states the rule and the sha256 of what it was cut from. From P8a and P8b the forecast bodies are imported whole (`IMPORTS_P8A`, `IMPORTS_P8B`): a capture is a run, and a cut would change it.
 - **Synthetic payloads** (`*.synthetic.raw`, `synthetic: true` in the meta) are extra tests, never goldens, except the synthetic goldens that already exist (the DE-1, NL-1, NL-2 and NL-4 ones from P2), the DST-gate goldens and, from P5c, the goldens of the owner-source adapters (last bullet).
-- **At least 3 real goldens per adapter** (a normal one, an edge one, an empty or error one), **at least 90 % of the lines of each `parse.ts` and `normalise.ts`**, and **one fast-check property per parser**. Tests run offline (msw `onUnhandledRequest: 'error'`). An adapter that predates the standard or has no third real payload is pinned at its count in `BELOW_STANDARD` of the fixture-standard test (NL-2 and NL-4, from P2b), so that none can lose a golden. The adapters of owner sources are outside the real-golden count (next bullet).
+- **At least 3 real goldens per adapter** (a normal one, an edge one, an empty or error one), **at least 90 % of the lines of each `parse.ts` and `normalise.ts`**, and **one fast-check property per parser**. Tests run offline (msw `onUnhandledFrame: 'error'`). An adapter that predates the standard or has no third real payload is pinned at its count in `BELOW_STANDARD` of the fixture-standard test (NL-2 and NL-4, from P2b), so that none can lose a golden. The adapters of owner sources are outside the real-golden count (next bullet).
 - **Owner-audience fixtures are synthetic** (invariant 9), and since P5c a test holds it. The owner sources are read from `registry/sources.yaml` (`audience: owner`: BE-3, LU-2, LU-3, LU-4, DE-2 and DE-3 today, and every later one at once), never from a list. For each of their adapter folders `fixture-standard.test.ts` requires every entry of the `fixtures` folder to be a regular file named `*.synthetic.raw`, `*.synthetic.meta.json` or `*.synthetic.golden.json` (any other file, a subdirectory or a link fails: review CR-2), every meta to say `synthetic: true` and carry no `from` (a cut of a real payload) and no `recorded_at` (a recording), and a `source_sha256`, where there is one, to differ from the sha256 of the committed bytes (it fails on a planted real payload, a cut of one and a synthetic copy of its own source). The "at least 3 real goldens" rule becomes **at least 3 synthetic goldens** per owner adapter with a `parse.ts`, and the 90 % coverage and one-property rules stand. `pnpm fixtures:synth` makes them: real structure, every value replaced (never equal to the original), nothing printed but paths; its output carries `source_sha256` and `archive_key` and never `from`. **A kept key holds an identifier or a code, never prose** (P5c review round 1: the tool kept the LU-4 `label` text, which carries the vigilance threshold, and five real values sat in two fixtures of the PR branch until the branch was rebuilt, R-077). Since round 2 the rule names what is kept, never only what is refused: each kept key has one format in `VERBATIM`, a header row is kept only when it is all returnfield names, object keys are names of letters, and the LU-4 `operator`, `serviceStatus` and `forecastsCalcul` are generated (R2-SR-2 … R2-SR-5). Three guards hold it: the tool's free-text test (no `VERBATIM` key is free text), its leak scan (the command row above), and a tripwire in `fixture-standard.test.ts`: in every archive-derived fixture (a meta with `source_sha256`) every kept value matches its key's format and holds no value with a unit, a kept key outside `KEPT_WITH_DIGITS` (ids, station numbers, `ts_path`, the KiWIS zone codes, `forecastsLimit`, `legend`) holds no digit at all, every cell of a header row matches `HEADER_CELL`, and every object key matches `KEY` or is in `KEYS_ALLOWED`. All 16 archive-derived fixtures pass the hardened tool's refusals (round 2 regenerated them: 13 byte-identical, the 3 LU-4 pages with those three keys generated). A fixture made by hand is named `<name>.synthetic.raw` with a meta `{"spec", "source", "synthetic": true, "derived_from": "hand-made: …", "values": "every value generated (no archived payload)", "status": 200}`. Real owner payloads are read only on the owner's machines, outside the repository, and the owner deletes the export afterwards.
 
 ## Bill of materials
@@ -183,24 +183,24 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | pnpm | tool | 12.5.1 | installed | dcf914058a39cf8760b659d3348163ed01a9703500baa5f3f561958a03c309e71c127846891916980e75d364e66091edc093f72df984f9917d3c6796867f29f5 | MIT | native binary `@pnpm/exe.linux-x64` sha512 (`scripts/install-pnpm.sh`); 12.6.0 was under 7 days old at pin time |
 | postgresql-18 (apt.postgresql.org) | tool | 18 | installed | 0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76 | PostgreSQL | hook only; sha256 of the repository key file ACCC4CF8.asc |
 | typescript | npm | 6.0.3 | installed | – | Apache-2.0 | TS 7 forbidden |
-| @biomejs/biome | npm | 2.5.14 | installed | – | MIT OR Apache-2.0 | lint + format |
-| vitest | npm | 5.0.2 | installed | – | MIT | |
-| msw | npm | 2.15.0 | installed | – | MIT | `onUnhandledRequest: 'error'`; postinstall denied (`allowBuilds`) |
+| @biomejs/biome | npm | 2.5.15 | installed | – | MIT OR Apache-2.0 | lint + format |
+| vitest | npm | 5.0.3 | installed | – | MIT | |
+| msw | npm | 3.0.2 | installed | – | MIT | `onUnhandledFrame: 'error'`; postinstall denied (`allowBuilds`) |
 | yaml | npm | 2.9.1 | installed | – | ISC | registry and lockfile parsing; apps/server reads the registry at runtime (P1) |
-| @types/node | npm | 26.6.3 | installed | – | MIT | |
-| hono | npm | 4.13.11 | installed | – | MIT | apps/server |
+| @types/node | npm | 26.6.4 | installed | – | MIT | |
+| hono | npm | 4.13.13 | installed | – | MIT | apps/server |
 | @hono/node-server | npm | 2.1.3 | installed | – | MIT | apps/server |
-| pg | npm | 8.23.0 | installed | – | MIT | apps/server: PostgreSQL driver of migrate, load and api (P2a) |
+| pg | npm | 8.23.1 | installed | – | MIT | apps/server: PostgreSQL driver of migrate, load and api (P2a) |
 | @types/pg | npm | 8.23.1 | installed | – | MIT | |
 | zod | npm | 4.6.5 | installed | – | MIT | packages/contracts; apps/server manifest and spec schemas (P1); apps/web (P4b): `?s=` and the API answers, set `jitless` before any schema is built (its `new Function` probe is a CSP violation) |
 | react | npm | 19.3.0 | installed | – | MIT | apps/web |
 | react-dom | npm | 19.3.0 | installed | – | MIT | apps/web |
 | @types/react | npm | 19.3.0 | installed | – | MIT | |
 | @types/react-dom | npm | 19.3.0 | installed | – | MIT | |
-| vite | npm | 8.3.1 | installed | – | MIT | apps/web |
-| @vitejs/plugin-react | npm | 6.1.1 | installed | – | MIT | apps/web |
-| @inlang/paraglide-js | npm | 2.25.4 | installed | – | MIT | apps/web |
-| @inlang/plugin-message-format | npm | 4.4.4 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
+| vite | npm | 8.3.3 | installed | – | MIT | apps/web |
+| @vitejs/plugin-react | npm | 6.1.2 | installed | – | MIT | apps/web |
+| @inlang/paraglide-js | npm | 2.26.0 | installed | – | MIT | apps/web |
+| @inlang/plugin-message-format | npm | 4.4.5 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
 | actions/checkout | action | 7.0.1 | installed | 3d3c42e5aac5ba805825da76410c181273ba90b1 | MIT | |
 | actions/setup-node | action | 7.0.0 | installed | 820762786026740c76f36085b0efc47a31fe5020 | MIT | `package-manager-cache: false` |
 | step-security/harden-runner | action | 2.21.1 | installed | e14015d583714f6e62063499dc959a02595150a1 | Apache-2.0 | audit mode |
@@ -232,20 +232,20 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | csv-parse | npm | 7.0.2 | planned | – | MIT | P2/P5 |
 | fflate | npm | 0.8.3 | installed | – | MIT | apps/server: streamed ZIP guard (P1); the NL-4 converter reads the workbook through it (`readXlsx` in `http/guards.ts`, P2b; P5 parsers) |
 | proj4 | npm | 2.22.0 | planned | – | MIT | P5b did not need it: the EPSG:25832 columns of DE-8 are not read (the OpenHygon file has WGS84) |
-| pino | npm | 10.3.1 | installed | – | MIT | apps/server: JSON logs (P1) |
+| pino | npm | 10.4.0 | installed | – | MIT | apps/server: JSON logs (P1) |
 | kysely | npm | 0.29.6 | installed | – | MIT | apps/server: typed, parameterised SQL (`sql` templates; P2a) |
 | kysely-codegen | npm | 0.20.0 | installed | – | MIT | dev only: `pnpm db:types` writes `apps/server/src/db/generated.ts` (base tables; P2a) |
 | @hono/zod-openapi | npm | 1.6.3 | planned | – | MIT | P9; P4a uses Zod's `z.toJSONSchema` instead (owner, 2026-10-01) |
-| maplibre-gl | npm | 6.11.2 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
+| maplibre-gl | npm | 6.13.0 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
 | pmtiles | npm | 4.5.0 | installed | – | BSD-3-Clause | apps/web: the `pmtiles://` protocol through `addProtocol` (P3) |
 | @protomaps/basemaps | npm | 5.7.2 | installed | – | BSD-3-Clause | dev only: `tools/geo/basemap/build-style.ts` generates the NL and EN styles (flavour `white`; P3) |
-| @maplibre/maplibre-gl-style-spec | npm | 26.4.4 | installed | – | ISC | dev only: validates the generated styles; the exact version maplibre-gl 6.11.1 resolves (P3) |
+| @maplibre/maplibre-gl-style-spec | npm | 26.4.4 | installed | – | ISC | dev only: validates the generated styles; the exact version maplibre-gl resolves (P3) |
 | @tanstack/react-router | npm | 1.170.39 | planned | – | MIT | P10 at the earliest: P4b has two static pages and keeps `t` and `s` in `lib/url` without a router (owner, 2026-10-01) |
-| @tanstack/react-query | npm | 5.104.0 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
+| @tanstack/react-query | npm | 5.104.1 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
 | echarts | npm | 6.1.0 | installed | – | Apache-2.0 | apps/web: the station chart, a lazy chunk, tooltips `richText` only (P4b); 2 transitive (`zrender`, `tslib`) |
 | temporal-polyfill | npm | 1.0.5 | installed | – | MIT | apps/web `lib/time`: loaded only where `Temporal` is missing (WebKit; P3) |
 | fast-check | npm | 4.10.2 | installed | – | MIT | dev only: property and fuzz tests (P2a) |
-| @vitest/coverage-v8 | npm | 5.0.2 | installed | – | MIT | dev only: `pnpm test:coverage` (≥ 90% lines of every adapter's parse and normalise; P2a) |
+| @vitest/coverage-v8 | npm | 5.0.3 | installed | – | MIT | dev only: `pnpm test:coverage` (≥ 90% lines of every adapter's parse and normalise; P2a) |
 | @playwright/test | npm | 1.63.0 | installed | – | Apache-2.0 | dev only: `pnpm -F web e2e` (Chromium, Firefox, WebKit; P3, planned for P4) |
 | @axe-core/playwright | npm | 4.13.0 | installed | – | MPL-2.0 | dev only: axe on the spike pages (P3) and on three views of the real pages (P4b); the full accessibility pass is P10 |
 | lighthouse | npm | 13.5.0 | installed | – | Apache-2.0 | dev only: the Lighthouse spec of the CI `e2e` job (P10a; mobile, simulated 4G, local Chromium, reports to disk, no upload); 90 transitive packages (91 new lockfile entries with itself), no build script |

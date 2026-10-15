@@ -40,7 +40,7 @@ const ERR = (code: string) => `{"error":"${code}","attribution":[]}`;
 let nextClient = 10;
 const client = () => `203.0.113.${nextClient++}`;
 /**
- * One GET over a raw socket: the global fetch and node:http are intercepted by msw (onUnhandledRequest: 'error') in
+ * One GET over a raw socket: the global fetch and node:http are intercepted by msw (onUnhandledFrame: 'error') in
  * every test file, and this one talks to a real child process on loopback.
  */
 const rawGet = (port: number, path: string, headers: Record<string, string>) =>
