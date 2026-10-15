@@ -2738,7 +2738,7 @@ excluded:
     reason: "Relation r14213627 (\"Boven-Slinge\") carries wikidata=Q285844 in the extract (geo.yml run 38222297911) but holds only the Dutch course (6.42-6.80 E): DE-7 Südlohn de.lanuk.9283215500100 lies 7.3 km upstream of it; its mouth, the Bielheimerbeek (Q2673735, into the Oude IJssel), has no relation or way in the extract (#140)"
   - name: "Bourre"
     wikidata: Q2922410
-    reason: "Its P402 relation r4510497 (P403 Q208493 Lys) is in the extract (geo.yml run 38783389922) but ends at (2.5939, 50.6755), 4.5 km short of the Lys, and no way carries wikidata=Q2922410: FR-1 Merville (fr.sandre.E365851301, \"Bourre\") lies 4.2 km from it and 836 m from the Lys, on the lower Bourre, which FR-1 also gauges as the Canal d'Hazebrouck [La Bourre] (#142)"
+    reason: "Its P402 relation r4510497 (P403 Q208493 Lys) is in the extract (geo.yml run 38783389922) but ends at (2.5939, 50.6755), 4.5 km short of the Lys, and no way carries wikidata=Q2922410: FR-1 Merville (fr.sandre.E365851301, \"Bourre\") lies 4.2 km from it and 836 m from the Lys, on the lower Bourre, which FR-1 also gauges as the Canal d'Hazebrouck [La Bourre]; the relation's own tag is destination=Canal d'Hazebrouck (#142)"
 joins:
   - river: scheldt
     at: [3.2870075, 50.2241826]
@@ -2814,7 +2814,7 @@ joins:
     at: [3.4628286, 50.4842448]
     to_river: scarpe
     max_m: 50
-    reason: "KG-161 (#142): the sink n3352487860 (3.4628, 50.4842) of the Décours relation 9083480 (46 edges) shares no node with the Scarpe; the nearest scarpe vertex n929170170 on w277863461 is 41 m away (measured on the extract of geo.yml run 38783389922, 2026-10-15). The FR-1 gauges Bousignies (fr.sandre.E237601001, on the Décours) and Lecelles (fr.sandre.E237721001, on the Elnon) need it for a path to the Scarpe"
+    reason: "KG-161 (#142): the sink n3352487860 (3.4628, 50.4842) of the Décours relation 9083480 (46 edges) shares no node with the Scarpe; the nearest scarpe vertex n929170170 on w277863461 is 41 m away (measured on the extract of geo.yml run 38783389922, 2026-10-15). That Scarpe piece is isolated (294 m, no station, no onward path; the Mortagne piece starts 1,027 m away, over the ~1 km cap), so the Bousignies and Lecelles gauges have no path until the Scarpe gap closes"
   - river: rhonelle
     at: [3.5302953, 50.3641125]
     to_river: scheldt
