@@ -30,7 +30,7 @@ The owner site never goes behind Cloudflare: `owner.<domain>` gets no public DNS
 
    Expected: `0 issue "letsencrypt.org"` (ADR-0020, Caddy's certificate and a rollback) **beside** the records Cloudflare added for its own authorities. If only Let's Encrypt is listed, add no record by hand from memory: ask Cloudflare's dashboard (SSL/TLS, Edge Certificates) which authorities it will use, or remove the CAA records for the duration and put Let's Encrypt back afterwards.
 4. **TTL.** A day ahead, lower the TTL of the `A` and `AAAA` records of the public name to 60 seconds (they are DNS-only, TTL 300 from the domain change). Clients that still hold the old record fail for a few minutes after section 8; that is acceptable before the launch flip (E4), which is why this runs first.
-5. **The Cloudflare account is a root of trust** (T-EDGE-1, R-106): whoever controls it can repoint the apex, add an `owner.` record, rotate the tunnel token or add a connector, and inject scripts or poison the cache through Workers, Snippets or transform rules. Before the switch the owner has: two-factor sign-in with a hardware key (a TOTP app only if no key is available); the account's e-mail mailbox behind two-factor sign-in too (it resets everything else); one member of the account, the owner; **no API tokens**, or each one listed in the password manager and rotated together with the tunnel token (`docs/runbooks/secrets-rotation.md` §6); no Workers, Snippets, Page Rules or transform rules beyond the ones this runbook names. The account's **Global API Key** (every account has one; it cannot be deleted, only rolled; it carries full account rights and is readable in the dashboard after a password re-entry) is never used: roll it at setup, at every tunnel-token rotation and after any suspected session compromise. The account's **audit log** is read at every `verify-prod --edge cloudflare` run (section 9): any change the owner did not make is an incident.
+5. **The Cloudflare account is a root of trust** (T-EDGE-1, R-106): whoever controls it can repoint the apex, add an `owner.` record, rotate the tunnel token or add a connector, and inject scripts or poison the cache through Workers, Snippets or transform rules. Before the switch the owner has: two-factor sign-in with a hardware key (a TOTP app only if no key is available); the account's e-mail mailbox behind two-factor sign-in too (it resets everything else); one member of the account, the owner; **no API tokens**, or each one listed in the password manager and rotated together with the tunnel token (`docs/runbooks/secrets-rotation.md` §6), except a token made for one change of section 3.1, which lives for that change only and is deleted right after it; no Workers, Snippets, Page Rules or transform rules beyond the ones this runbook names. The account's **Global API Key** (every account has one; it cannot be deleted, only rolled; it carries full account rights and is readable in the dashboard after a password re-entry) is never used: roll it at setup, at every tunnel-token rotation and after any suspected session compromise. The account's **audit log** is read at every `verify-prod --edge cloudflare` run (section 9): any change the owner did not make is an incident. It shows times in the browser's local time, not UTC, and an entry's `request` and `response` fields show what changed.
 
 ## 2. The Cloudflare side
 
@@ -64,7 +64,10 @@ The owner applies these for the zone before the switch. Cloudflare changes defau
 | Speed | Crawler Hints | off | |
 | Zaraz | Zaraz | off, nothing configured | A third-party tag manager |
 | Analytics | Web Analytics | off (no automatic beacon, no `cloudflareinsights` script) | Invariant 7: no third-party request from the browser |
-| Security | Bot Fight Mode | off | Injects JavaScript and sets a `__cf_bm` cookie |
+| Security | Bot Fight Mode | off, and `enable_js` off with it (section 3.1) | Injects JavaScript and sets a `__cf_bm` cookie. Switching it on also sets `enable_js` (JavaScript Detections); switching it off in the dashboard leaves `enable_js` on, and its `/cdn-cgi/challenge-platform/` script stays in every page (measured 2026-10-15). A free zone has no dashboard switch for `enable_js` |
+| Security | AI Labyrinth | off | It adds hidden links to our HTML |
+| Security | Configure AI bot policies: Bot Preference Sync | off | It writes Cloudflare's directives into `robots.txt`; the prelaunch site has none (`verify-prod` check `robots` wants a 404) |
+| Security | Content Signals `robots.txt` (`cf_robots_variant`) | `off` (API only, section 3.1) | A free zone whose origin has no `robots.txt` serves Cloudflare's comment-only Content Signals file instead (`policy_only`, measured 2026-10-15); the dashboard has no switch for it |
 | Security | Browser Integrity Check | off | |
 | Security | Security level, "Under Attack" mode | never "Under Attack" (its challenge page breaks the API clients and the map) | |
 | Caching | Always Online | off | |
@@ -72,7 +75,8 @@ The owner applies these for the zone before the switch. Cloudflare changes defau
 | Network | Pseudo IPv4 | off | Its "Overwrite headers" mode rewrites `Cf-Connecting-IP` and `X-Forwarded-For` to a Class E pseudo address (240.0.0.0/4): the limiter and the masked log would key on pseudo addresses, and the `client_ip` check of §9.5 (no Cloudflare range) would not notice. Its "Add header" mode adds `Cf-Connecting-IPv6` with the visitor's full IPv6 address, which the access-log filter (frozen by the byte-identical rule for direct mode) does not delete |
 | Rules | Managed Transforms: "Remove visitor IP headers" | off | It strips `X-Forwarded-For`: every visitor would then look like cloudflared's address, collapse onto the limiter's `unknown-gw` key and make the masked log useless |
 | Rules | Managed Transforms: "Add visitor location headers" and every other "Add ..." transform | off | Location headers would land in the access log |
-| Caching | Browser Cache TTL | Respect Existing Headers | Else Cloudflare overrides the origin's `Cache-Control` for browsers |
+| Caching | Browser Cache TTL | Respect Existing Headers | Else Cloudflare overrides the origin's `Cache-Control` for browsers. The zone's default is 4 hours: an answer without `Cache-Control` (a 404, a `robots.txt`) gets `max-age=14400` |
+| Rules | Response Header Transform Rule "strip NEL" | all incoming requests: remove `NEL`, remove `Report-To` | A free zone adds both to every answer (measured 2026-10-15); see below the cache rules |
 | Tunnel | WARP and private-network routes, Access | none | Section 2 |
 
 **Which Cloudflare request headers reach our access log in tunnel mode** (the log filter keeps no other client-address header, `test/privacy-policy.test.ts`): `CF-Ray`, `CF-Visitor`, `CDN-Loop` and `Cf-Warp-Tag-Id` carry no visitor data; `Cf-Connecting-Ip` and `True-Client-Ip` are deleted by the filter; `Cf-Ipcountry` and the location headers are in the log unless the settings above are off, and the log filter was not changed (it would change direct mode's adapted Caddy JSON, which stays byte for byte). That is why those settings are rows of this table and a residual in T-API-3 and T-WEB-4.
@@ -85,7 +89,39 @@ The owner applies these for the zone before the switch. Cloudflare changes defau
 | 2 | `/data/*` | Eligible for cache; Edge TTL "use cache-control header if present, bypass cache if not" | Our `/data/v1` files carry `Cache-Control`; our 404s carry none, so they are never cached |
 | 3 | `/assets/*` | Eligible for cache; Edge TTL "use cache-control header if present, bypass cache if not" | The real assets carry `immutable`; our `/assets` 404 carries no `Cache-Control` and with "respect origin" would take Cloudflare's default TTL for a 404 status, so it must bypass |
 
-Everything else keeps the default: HTML, JSON, `/api`, `/status` and `/runtime-config.json` are not cached. The cached trees are static and licence-neutral. Never add a rule for `/api`, `/status`, health or an error status (a cached `503` or `429` would keep a recovered site down). If Cloudflare adds `NEL` or `Report-To` to answers and a response-header transform rule on the free plan cannot remove it, **stop here and roll back (section 10)**: the browser would send reports to a third party (invariant 7). That is the owner's decision to take, not a setting to live with.
+Build each match with the field **URI Path** and the operator **starts with** (for example `starts_with(http.request.uri.path, "/assets/")`), and read the expression preview before saving. An empty value or a wildcard on the full URI matches nothing, and the rule then does nothing without any error. Of the three Edge TTL options, the one ending "use default Cloudflare caching behavior if not" is wrong: it caches our `/assets` 404 for Cloudflare's 404 default (measured: `MISS`, then `HIT`).
+
+Everything else keeps the default: HTML, JSON, `/api`, `/status` and `/runtime-config.json` are not cached. The cached trees are static and licence-neutral. Never add a rule for `/api`, `/status`, health or an error status (a cached `503` or `429` would keep a recovered site down).
+
+**`NEL` and `Report-To`.** A free zone adds both to every answer, pointing at `a.nel.cloudflare.com` (measured 2026-10-15), so the browser would send reports to a third party (invariant 7). The response header transform rule of the table removes them:
+
+1. Rules, Overview, Create rule, **Response Header Transform Rule** (not the request header one).
+2. If incoming requests match: **All incoming requests**. A custom filter expression with an empty value matches nothing.
+3. Then: **Remove** `NEL` and **Remove** `Report-To`. Deploy. Our own `Reporting-Endpoints` header is a different one and stays.
+
+To see whether a rule applies at all, add a temporary **Set static** action `X-Rws-Rule-Test` = `1`, look for it with `curl -sI https://<domain>/`, and remove it afterwards. If the rule applies and the two headers stay, **stop here and roll back (section 10)**. That is the owner's decision to take, not a setting to live with.
+
+### 3.1 Settings only the API can change
+
+On a free zone, two Bot Management settings have no dashboard switch: `enable_js` (see Bot Fight Mode) and `cf_robots_variant`. The owner sets them with a token made for this one change:
+
+1. My Profile, API Tokens, Create Token, Custom token: permission **Zone · Bot Management · Edit**, zone resources **Include · Specific zone · `<domain>`**, TTL ending today. Copy the token.
+2. On the VPS (it has `jq`), paste the `read` line **alone** and then the token at its prompt (nothing echoes). The token then reaches neither argv, nor the shell history, nor a chat. Then run the rest, with the zone ID from the zone's Overview page:
+
+   ```bash
+   read -r -s -p 'CF token: ' tok; echo; echo "length ${#tok}"
+   zone=<zone ID>
+   printf 'header = "Authorization: Bearer %s"\n' "$tok" | curl -s -K - -X PUT -H 'Content-Type: application/json' \
+     "https://api.cloudflare.com/client/v4/zones/$zone/bot_management" \
+     --data '{"fight_mode":false,"enable_js":false,"cf_robots_variant":"off"}' \
+     | jq '{success, errors, r: (.result | {fight_mode, enable_js, cf_robots_variant})}'
+   unset tok
+   ```
+
+   Expected: a length of about 50 (0 means the paste did not land), then `success: true` and the three values as sent.
+3. Delete the token at once. The audit log then shows this one `PUT` to `bot_management` and nothing else for the token (section 1, item 5).
+
+Within a minute, `/` holds no `challenge-platform` script and `/robots.txt` answers the origin's 404.
 
 ## 4. The token and the `rws.env` lines
 
@@ -128,8 +164,10 @@ Expected: the second `curl` prints `Cloudflare` (if it prints nothing, `RWS_CDN_
 sudo docker port rws-caddy-1                           # 80/tcp -> 127.0.0.1:80 and nothing else
 sudo docker inspect rws-cloudflared-1 | grep -c 'TUNNEL_TOKEN='    # 0: the token is not in the environment
 sudo nft list chain inet rws from_containers | grep 7844           # the one rule, from the tunnel bridge
-sudo deploy/tests/hardening.sh --prod                              # reads RWS_EDGE from rws.env: with tunnel, cloudflared must run and caddy may publish only 127.0.0.1:80/tcp
+sudo /var/lib/rws/active/deploy/tests/hardening.sh --prod          # reads RWS_EDGE from rws.env: with tunnel, cloudflared must run and caddy may publish only 127.0.0.1:80/tcp
 ```
+
+The VPS has no checkout: `hardening.sh` is the copy in the active release's `deploy/`. While the owner site is off (`RWS_OWNER_SITE` is not `on`), it also reports `api-owner` and `caddy-owner` as missing. That is KG-310, not the tunnel.
 
 In the Cloudflare dashboard the tunnel shows **one connector, healthy** (its connections to two Cloudflare locations are normal) and no second, unknown connector.
 
@@ -211,12 +249,14 @@ The tunnel in the dashboard may stay (idle) or be deleted. The token file may st
 
 | Failing check | Meaning | Action |
 |---|---|---|
-| `edge headers` | `NEL`, `Report-To`, `Set-Cookie` or `Speculation-Rules` on `/` or `/en/` | Find the setting in section 3 that was switched on; if it is `NEL` or `Report-To` and a response-header transform rule cannot remove it, roll back (section 10) |
-| `edge html` | The HTML holds `/cdn-cgi/`, `cloudflareinsights`, `rocket-loader`, `email-decode`, `challenge-platform`, `__cf_bm` or `beacon.min.js` | Switch off Rocket Loader, Email Obfuscation, Web Analytics or Bot Fight Mode; purge the cache for the HTML (it is not cached by default) |
+| `edge headers` | `NEL`, `Report-To`, `Set-Cookie` or `Speculation-Rules` on `/` or `/en/` | Find the setting in section 3 that was switched on. For `NEL` or `Report-To`, check that the "strip NEL" rule is deployed and matches all incoming requests; if it applies and the headers stay, roll back (section 10) |
+| `edge html` | The HTML holds `/cdn-cgi/`, `cloudflareinsights`, `rocket-loader`, `email-decode`, `challenge-platform`, `__cf_bm` or `beacon.min.js` | Switch off Rocket Loader, Email Obfuscation, Web Analytics or Bot Fight Mode; purge the cache for the HTML (it is not cached by default). A `challenge-platform` script that stays with Bot Fight Mode off is `enable_js` (section 3.1); the audit log shows when it was set |
 | `edge tile range` | A `Range` GET of the current tile file is not a 206 with the exact `Content-Range` and 1024 bytes (n/a before the first basemap refresh) | Check cache rule 1 (`/tiles/*` bypass) is first and on |
 | `edge not cached` | `/api/v1/health`, `/api/v1/meta`, `/status/capture.json`, a missing `/data/v1` file or a missing `/assets` file shows a `cf-cache-status` other than absent, `DYNAMIC` or `BYPASS` (`HIT`, `MISS`, `EXPIRED`, `STALE`, `UPDATING`, `REVALIDATED`), or the 404 is no 404 | Fail-closed on `NONE` and `UNKNOWN` too (Cloudflare answered by itself: a rule, a block or a challenge): find which setting or rule answered. Otherwise remove the cache rule that matches; cache rules 2 and 3 must be "use cache-control header if present, bypass cache if not"; never cache `/api`, `/status` or an error |
 | `edge runtime config cdn` | `/runtime-config.json` has an empty `cdn`, or one that is not exactly `Cloudflare` | `RWS_CDN_NAME` is unset or misspelt; it must be exactly `Cloudflare`; section 4 |
 | `owner listener` | The owner name answers on the edge with `WWW-Authenticate` or the owner site's exact headers (`Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow`); a plain Cloudflare error page (404, 502, 530) is the safe state | Stop; check that no DNS record or tunnel route names `owner.<domain>` (incident: `docs/runbooks/owner-exposure.md`) |
+
+Outside the `edge` group: if `robots` fails before the launch because `/robots.txt` is a 200 with Cloudflare's "content signals" comments, set `cf_robots_variant` to `off` (section 3.1), then check again.
 
 ## 12. Token rotation and what agents never do
 
