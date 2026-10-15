@@ -2490,8 +2490,8 @@ rivers:
     km_direction: none
     evidence: "Wikidata Q492188 (no P402; P403 Q668472 Ill), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r1076060 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783923983, rivernet-fixture artifact)"
   - id: bechine
-    name_nl: "Béchine"
-    name_en: "Béchine"
+    name_nl: "Béhine"
+    name_en: "Béhine"
     names:
       FR-1: ["La Bechine"]
     aliases: []
@@ -2619,7 +2619,7 @@ rivers:
     wikidata: Q2268728
     parent_river_id: sauer-alsace
     km_direction: none
-    evidence: "Wikidata Q2268728 (no P402; P403 Q705057 Sauer), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r1916168 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+    evidence: "Wikidata Q2268728 (no P402; P403 Q705057 Sauer), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r1916168 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, B2's fixture; the same in run 38786878827)"
   - id: aviere
     name_nl: "Avière"
     name_en: "Avière"
@@ -2667,7 +2667,7 @@ rivers:
     wikidata: Q541474
     parent_river_id: moselotte
     km_direction: none
-    evidence: "Wikidata Q541474 (no P402; P403 Q896979 Moselotte), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r2770501 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+    evidence: "Wikidata Q541474 (no P402; P403 Q896979 Moselotte), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r2770501 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, B2's fixture; the same in run 38786878827)"
   - id: neune
     name_nl: "Neuné"
     name_en: "Neuné"
@@ -2679,7 +2679,7 @@ rivers:
     wikidata: Q1141675
     parent_river_id: vologne
     km_direction: none
-    evidence: "Wikidata Q1141675 (no P402; P403 Q1192859 Vologne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3284400 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+    evidence: "Wikidata Q1141675 (no P402; P403 Q1192859 Vologne), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3284400 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, B2's fixture; the same in run 38786878827)"
   - id: gitte
     name_nl: "Gitte"
     name_en: "Gitte"
@@ -2763,7 +2763,7 @@ rivers:
     wikidata: Q1475200
     parent_river_id: moselle
     km_direction: none
-    evidence: "Wikidata Q1475200 (no P402; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3295662 (type=waterway, name Ruisseau le Rupt de Mad, no wikidata tag) is a member of the moselle relation in the extract (geo.yml run 38231302342, the committed rivernet fixture); Wikidata has no P402"
+    evidence: "Wikidata Q1475200 (no P402; P403 Q1667 Moselle), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r3295662 (type=waterway, name Ruisseau le Rupt de Mad, no wikidata tag) is a member of the moselle relation in the extract (geo.yml run 38231302342, B2's fixture; the same in run 38786878827); Wikidata has no P402"
   - id: fensch
     name_nl: "Fensch"
     name_en: "Fensch"
@@ -2871,7 +2871,7 @@ rivers:
     wikidata: Q201578
     parent_river_id: saar
     km_direction: none
-    evidence: "Wikidata Q201578 (no P402; P403 Q153972 Saar), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r1263487 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+    evidence: "Wikidata Q201578 (no P402; P403 Q153972 Saar), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); relation r1263487 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, B2's fixture; the same in run 38786878827)"
   - id: bievre
     name_nl: "Bièvre"
     name_en: "Bièvre"
@@ -2918,7 +2918,7 @@ rivers:
     wikidata: Q464507
     parent_river_id: blies
     km_direction: none
-    evidence: "Wikidata Q464507 (no P402; P403 Q585833 Blies), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); gaugeless natural connector that carries the Horn (owner 2026-10-12, #127); relation r2341351 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, the committed rivernet fixture)"
+    evidence: "Wikidata Q464507 (no P402; P403 Q585833 Blies), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); gaugeless natural connector that carries the Horn (owner 2026-10-12, #127); relation r2341351 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38231302342, B2's fixture; the same in run 38786878827)"
   - id: sarre-rouge
     name_nl: "Sarre Rouge"
     name_en: "Sarre Rouge"

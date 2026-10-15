@@ -115,7 +115,7 @@ stations:
   - { station: lu.age.kautenbach, river: wiltz, reason: "catalogue §3.2: Kautenbach 14 follows Wiltz on the Wiltz; AGE publishes no water name; nearest wiltz edge 5 m, sauer 2429 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age.clervaux, unsnapped: true, reason: "catalogue §3.2: Clervaux 35 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
   - { station: lu.age.troisvierges, unsnapped: true, reason: "catalogue §3.2: Troisvierges 37 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
-  - { station: lu.age.schoenfels, river: mamer, reason: "catalogue §3.2: Mamer at Schoenfels 5 (Alzette tributary); AGE publishes no water name; nearest mamer edge 7 m, alzette 1239 m on the extract (OSM 2026-10-14) (#141)" }
+  - { station: lu.age.schoenfels, river: mamer, reason: "catalogue §3.2: Mamer at Schoenfels 5 (Alzette tributary); AGE publishes no water name; nearest mamer vertex 7 m (edge 3 m), alzette vertex 1239 m on the extract (OSM 2026-10-14) (#141)" }
   - { station: lu.age.hunnebuer, river: eisch, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 2415 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age.eischen, river: eisch, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 16991 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age.reichlange, river: attert, reason: "catalogue §3.2: Attert at Reichlange 9 (Alzette tributary); AGE publishes no water name; nearest attert edge 7 m, wark 6478 m on the fixture (OSM 2026-10-11)" }
@@ -129,7 +129,7 @@ stations:
   - { station: lu.age.roodt-sur-syre, unsnapped: true, reason: "catalogue §3.2: Syre: Roodt-Syre 52; the curated syre is one OSM way, the only one tagged with its QID (Q1772641), 1319 m away" }
   - { station: lu.age.ubersyren, unsnapped: true, reason: "catalogue §3.2: Syre: Uebersyren 109; the curated syre is one OSM way, the only one tagged with its QID (Q1772641), 6145 m away" }
   - { station: lu.age.mertert, river: syre, reason: "catalogue §3.2: Syre: Mertert 32, the catalogue lists it on the Syre; AGE publishes no water name; nearest syre edge 11 m, moselle 696 m on the fixture (OSM 2026-10-10)" }
-  - { station: lu.age.mondorf-les-bains, river: gander, reason: "catalogue §3.2: Gander: Mondorf 108 (Moselle tributary); AGE publishes no water name; nearest gander edge 9 m, moselle 6539 m on the extract (OSM 2026-10-14) (#141)" }
+  - { station: lu.age.mondorf-les-bains, river: gander, reason: "catalogue §3.2: Gander: Mondorf 108 (Moselle tributary); AGE publishes no water name; nearest gander vertex 9 m (edge 3 m), moselle vertex 6539 m on the extract (OSM 2026-10-14) (#141)" }
   - { station: lu.age.perl, unsnapped: true, reason: "no coordinates in the AGE source; it is the same gauge as DE-1 Perl (26100100, Moselle km 241.8), which is placed itself (catalogue §3.2 row 7)" }
   # LU-2 (owner twins of the LU-1 gauges; the same reading of catalogue §3.2)
   - { station: lu.age-json.bigonville, river: sauer, reason: "catalogue §3.2: Bigonville 17, \"where the Sûre enters from Belgium\"; nearest sauer edge 2 m on the fixture (OSM 2026-10-01), next other curated river semois 19266 m" }
@@ -155,7 +155,7 @@ stations:
   - { station: lu.age-json.kautenbach, river: wiltz, reason: "catalogue §3.2: Kautenbach 14 follows Wiltz on the Wiltz; AGE publishes no water name; nearest wiltz edge 5 m, sauer 2429 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age-json.clervaux, unsnapped: true, reason: "catalogue §3.2: Clervaux 35 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
   - { station: lu.age-json.troisvierges, unsnapped: true, reason: "catalogue §3.2: Troisvierges 37 is on the Clerve; not a curated river: the extract holds no OSM relation or way tagged with its QID (Q1719767) (#126)" }
-  - { station: lu.age-json.schoenfels, river: mamer, reason: "catalogue §3.2: Mamer at Schoenfels 5 (Alzette tributary); AGE publishes no water name; nearest mamer edge 7 m, alzette 1239 m on the extract (OSM 2026-10-14) (#141)" }
+  - { station: lu.age-json.schoenfels, river: mamer, reason: "catalogue §3.2: Mamer at Schoenfels 5 (Alzette tributary); AGE publishes no water name; nearest mamer vertex 7 m (edge 3 m), alzette vertex 1239 m on the extract (OSM 2026-10-14) (#141)" }
   - { station: lu.age-json.hunnebuer, river: eisch, reason: "catalogue §3.2: Eisch at Hunnebour 6 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 2415 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age-json.eischen, river: eisch, reason: "catalogue §3.2: Eisch at Eischen 107 (Alzette tributary); AGE publishes no water name; nearest eisch edge 3 m, alzette 16991 m on the fixture (OSM 2026-10-11)" }
   - { station: lu.age-json.reichlange, river: attert, reason: "catalogue §3.2: Attert at Reichlange 9 (Alzette tributary); AGE publishes no water name; nearest attert edge 7 m, wark 6478 m on the fixture (OSM 2026-10-11)" }
@@ -169,7 +169,7 @@ stations:
   - { station: lu.age-json.roodt-sur-syre, unsnapped: true, reason: "catalogue §3.2: Syre: Roodt-Syre 52; the curated syre is one OSM way, the only one tagged with its QID (Q1772641), 1319 m away" }
   - { station: lu.age-json.ubersyren, unsnapped: true, reason: "catalogue §3.2: Syre: Uebersyren 109; the curated syre is one OSM way, the only one tagged with its QID (Q1772641), 6145 m away" }
   - { station: lu.age-json.mertert, river: syre, reason: "catalogue §3.2: Syre: Mertert 32, the catalogue lists it on the Syre; AGE publishes no water name; nearest syre edge 11 m, moselle 696 m on the fixture (OSM 2026-10-10)" }
-  - { station: lu.age-json.mondorf-les-bains, river: gander, reason: "catalogue §3.2: Gander: Mondorf 108 (Moselle tributary); AGE publishes no water name; nearest gander edge 9 m, moselle 6539 m on the extract (OSM 2026-10-14) (#141)" }
+  - { station: lu.age-json.mondorf-les-bains, river: gander, reason: "catalogue §3.2: Gander: Mondorf 108 (Moselle tributary); AGE publishes no water name; nearest gander vertex 9 m (edge 3 m), moselle vertex 6539 m on the extract (OSM 2026-10-14) (#141)" }
   - { station: lu.age-json.perl, unsnapped: true, reason: "no coordinates in the AGE source; it is the same gauge as DE-1 Perl (26100100, Moselle km 241.8), which is placed itself (catalogue §3.2 row 7)" }
   # FR-1 (the 8 stations with no published water body, the Belgian partner Chiers and Semois cases, and the Scarpe)
   - { station: fr.sandre.B713000101, river: viroin, reason: "FR-1 publishes no water name; the station name is \"[Le Viroin] en Belgique [...]\" (catalogue §0.6 \"Viroin\"); nearest viroin edge 4 m on the fixture (OSM 2026-10-01), next other curated river meuse 3572 m" }
