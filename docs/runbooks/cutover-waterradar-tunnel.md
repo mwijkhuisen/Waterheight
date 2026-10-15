@@ -18,7 +18,7 @@ An [owner] task. The two runbooks stay the reference for every detail; this one 
 1. edge-switch §1 item 2 (bootstrap twice, the token file exists empty) and item 5 (the Cloudflare account hardening).
 2. DNSSEC for the zone, domain-change §1a. It does not touch the running `rk.` site.
 3. The apex `waterradar.io` holds **no** record (delete any parking record) and **no CAA record yet**, so that Universal SSL issues freely. In SSL/TLS, Edge Certificates, the Universal certificate for `waterradar.io` and `*.waterradar.io` is Active.
-4. The tunnel exists without a public hostname (edge-switch §2.1 and §2.3); the dashboard settings and the three cache rules are in place (edge-switch §3).
+4. The tunnel exists without a public hostname (edge-switch §2.1 and §2.3); the dashboard settings, the "strip NEL" rule and the three cache rules are in place (edge-switch §3), and the two API-only settings are set (edge-switch §3.1).
 5. The owner has approved the NL and EN privacy text that names Cloudflare (E5).
 6. Write down the current `RWS_DOMAIN` (`rk.wijkhuisen.info`): it is the rollback value.
 
@@ -44,7 +44,7 @@ curl -s --resolve waterradar.io:80:127.0.0.1 http://waterradar.io/healthz
 curl -s --resolve waterradar.io:80:127.0.0.1 http://waterradar.io/runtime-config.json | jq -r .cdn   # Cloudflare
 sudo docker port rws-caddy-1                                          # 80/tcp -> 127.0.0.1:80 only
 sudo docker inspect rws-cloudflared-1 | grep -c 'TUNNEL_TOKEN='       # 0
-sudo deploy/tests/hardening.sh --prod
+sudo /var/lib/rws/active/deploy/tests/hardening.sh --prod             # the active release's copy: the VPS has no checkout
 ```
 
 Expected and what to do otherwise: edge-switch §5 and §6. The dashboard shows one healthy connector.
