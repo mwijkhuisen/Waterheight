@@ -5,6 +5,6 @@ import { afterAll, afterEach, beforeAll } from 'vitest';
 // test. Tests run offline; fixtures replace live providers (CLAUDE.md).
 export const server = setupServer();
 
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());

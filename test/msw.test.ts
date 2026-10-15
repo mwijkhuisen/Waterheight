@@ -14,7 +14,7 @@ it('fails a request that has no msw handler, with msw’s error', async () => {
   expect(error).not.toBeNull();
   const text = `${String(error)} ${String((error as { cause?: unknown }).cause)}`;
   expect(text).toMatch(/\[MSW\]/);
-  expect(text).toMatch(/onUnhandledRequest|"error" strategy/);
+  expect(text).toMatch(/onUnhandledFrame|"error" strategy/);
 });
 
 it('lets a handled request through', async () => {

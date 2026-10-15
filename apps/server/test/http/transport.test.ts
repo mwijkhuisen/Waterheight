@@ -1,7 +1,8 @@
 import { once } from 'node:events';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { server as msw } from '../../../../test/msw.setup.ts';
 import { Pinger } from '../../src/capture/pings.ts';
 import { Client, errorCode, readBody, undiciTransport } from '../../src/http/client.ts';
 import { Politeness } from '../../src/http/politeness.ts';
@@ -9,9 +10,13 @@ import type { Transport } from '../../src/http/types.ts';
 import { fakeResolver } from '../helpers.ts';
 
 // The production undici transport, against a local plain-HTTP server (no TLS
-// key is committed). msw never sees undici; nothing here leaves the machine:
-// every name resolves through a fake lookup to 127.0.0.1. Loopback is allowed
-// only by the constructor argument in the positive-path tests.
+// key is committed). Nothing here leaves the machine: every name resolves
+// through a fake lookup to 127.0.0.1. Loopback is allowed only by the
+// constructor argument in the positive-path tests. msw 3 intercepts undici's
+// sockets too, and its emulated socket has no remoteAddress for the
+// connect-time guard, so msw steps aside for this file.
+beforeAll(() => msw.close());
+afterAll(() => msw.listen({ onUnhandledFrame: 'error' }));
 
 const loopbackDns = ((_h: string, _o: unknown, cb: (e: null, a: { address: string; family: number }[]) => void) =>
   cb(null, [{ address: '127.0.0.1', family: 4 }])) as never;
