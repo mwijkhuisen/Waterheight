@@ -43,11 +43,11 @@ Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38793056285 (`pull_request` on `claude/fix-141-stage3-rhine-moselle-saar` at `fb6f98e`, 2026-10-15), job `rivernet fixture` |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38796575684 (`pull_request` on `claude/fix-141-stage3-rhine-moselle-saar` at `1f21ec8`, 2026-10-15), job `rivernet fixture` |
 | Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build` with the bins input), layers `rivers` and `reach_bins`, z0–12 |
 | Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.330476,11.397685,53.443230, 3,858 tiles. Layer `rivers`: one feature per drawn reach (1,583 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation`. Layer `reach_bins`: 8,875 bins (1 to 8 per reach; the file's tilestats, equal to the sum of `binCount` (`apps/web/src/features/flow/reaches/bins.ts`, imported and summed over the 1,583 `reaches` of `test/fixtures/reaches-fixture.json`) of the fixture), each with `reach_id`, `bin`, `seg` and `tidal`, in the tiles of zoom 8 and up only (a z5 or z7 tile holds `rivers` alone) |
-| Bytes | 4,525,732 |
-| sha256 | `55c4cbabe85bf4314bce6bb90d950ff7578265dd3389f97a5eeee4c6381ec100` |
+| Bytes | 4,525,702 |
+| sha256 | `ff0a7e472bc795b7ea3700638026b8f74f5f775998b4a23681d5c50e9ad7dbab` |
 
 A refresh of the fixture graph replaces it with the next run's artifact and regenerates `test/fixtures/reaches-fixture.json` (`UPDATE_FIXTURE=1`); compare the two reaches files first.
 
