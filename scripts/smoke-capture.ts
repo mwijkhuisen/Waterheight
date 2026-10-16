@@ -91,6 +91,27 @@ function args(argv: string[]) {
   return { specs, contact, infoUrl, discover, items };
 }
 
+/**
+ * The --keep-as pre-check, pure: a repeated (spec, name) pair is exit 64, an existing `<spec>-<name>.raw` or
+ * `.meta.json` in the target's directory is exit 1 (a stray meta counts: the write of the second file would fail).
+ */
+export function keepAsProblem(
+  targets: { spec: string; name: string; dir: string }[],
+  exists: (path: string) => boolean,
+): { code: 1 | 64; message: string } | null {
+  const seen = new Set<string>();
+  for (const { spec, name, dir } of targets) {
+    if (seen.has(`${spec}-${name}`)) return { code: 64, message: `${spec}: --keep-as ${name} is given twice` };
+    seen.add(`${spec}-${name}`);
+    for (const ext of ['raw', 'meta.json']) {
+      if (exists(join(dir, `${spec}-${name}.${ext}`))) {
+        return { code: 1, message: `${spec}: fixtures/${spec}-${name}.${ext} exists; --keep-as never replaces a file` };
+      }
+    }
+  }
+  return null;
+}
+
 /** Halves the longest array until the JSON fits in 1 MB; the structure stays. */
 export function trimJson(text: string): string {
   const doc = JSON.parse(text) as unknown;
@@ -235,6 +256,7 @@ async function main(): Promise<number> {
     return 64;
   }
   // --keep-as is checked for every spec before the first request, so a refusal costs nothing.
+  const keepTargets: { spec: string; name: string; dir: string }[] = [];
   for (const { id: specId, row, keepAs } of specs) {
     if (keepAs === undefined) continue;
     if (!KEEP_AS.test(keepAs) || row !== undefined) {
@@ -246,11 +268,12 @@ async function main(): Promise<number> {
       console.error(`${specId}: --keep-as is for a public spec only`);
       return 1;
     }
-    const target = join(fixturesDir(spec.source), `${specId}-${keepAs}.raw`);
-    if (existsSync(target)) {
-      console.error(`${specId}: fixtures/${specId}-${keepAs}.raw exists; --keep-as never replaces a file`);
-      return 1;
-    }
+    keepTargets.push({ spec: specId, name: keepAs, dir: fixturesDir(spec.source) });
+  }
+  const problem = keepAsProblem(keepTargets, existsSync);
+  if (problem !== null) {
+    console.error(problem.message);
+    return problem.code;
   }
   let failed = 0;
   for (const { id: specId, row: want, keepAs } of specs) {

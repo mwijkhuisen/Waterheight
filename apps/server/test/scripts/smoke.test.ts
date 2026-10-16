@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { keepAsProblem } from '../../../../scripts/smoke-capture.ts';
 
 // The opt-in fixture recorder never runs in CI and needs a contact address.
 const script = new URL('../../../../scripts/smoke-capture.ts', import.meta.url).pathname;
@@ -73,6 +74,25 @@ describe('scripts/smoke-capture.ts', () => {
     expect(exists.status).toBe(1);
     expect(exists.stderr).toMatch(/nl-1-fc-1h-lobith-q-20261001t0425z\.raw exists/);
     expect(exists.stdout).toBe('');
+  }, 30_000);
+
+  it('keepAsProblem refuses a stray .meta.json without its .raw, a .raw, and a repeated pair (fake exists)', () => {
+    const t = (name: string) => ({ spec: 'nl-2-wfs', name, dir: '/f' });
+    const only = (path: string) => (p: string) => p === path;
+    expect(keepAsProblem([t('a')], () => false)).toBeNull();
+    expect(keepAsProblem([t('a')], only('/f/nl-2-wfs-a.meta.json'))).toMatchObject({
+      code: 1,
+      message: expect.stringContaining('nl-2-wfs-a.meta.json exists'),
+    });
+    expect(keepAsProblem([t('a')], only('/f/nl-2-wfs-a.raw'))).toMatchObject({ code: 1 });
+    expect(keepAsProblem([t('a'), t('b'), t('a')], () => false)).toMatchObject({ code: 64 });
+  });
+
+  it('--keep-as refuses the same name twice on the command line, before any request', () => {
+    const twice = keep('--spec', 'nl-2-wfs', '--keep-as', 'zz-twice', '--spec', 'nl-2-wfs', '--keep-as', 'zz-twice');
+    expect(twice.status).toBe(64);
+    expect(twice.stderr).toMatch(/given twice/);
+    expect(twice.stdout).toBe('');
   }, 30_000);
 });
 

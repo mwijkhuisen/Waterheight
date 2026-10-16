@@ -3398,7 +3398,7 @@ What batch B5 of stage 3 of KG-250 (umbrella #127; the batches are #139 to #143)
 
 ## 54. Amendment: roadmap 2 (all Dutch waters) (2026-10-16)
 
-Roadmap 2 extends the map from the rivers that flow *into* the Netherlands to **all Dutch waters** (owner decision of 2026-10-03; issues #61 to #69; ADR-0022). It follows roadmap 1 (#13) and rebuilds nothing: it keeps roadmap 1's stack, data model, security invariants (all 11 of `CLAUDE.md`), audience rules (D22, ADR-0017), PR workflow and model rubric, and adds sources, registry rows, a water-body model and map layers. Until P15 merged, the issues were the plan; from this section on, **this section is the plan**, and the issues #61 to #69 are renumbered to match it (§54.2).
+Roadmap 2 extends the map from the rivers that flow *into* the Netherlands to **all Dutch waters** (owner decision of 2026-10-03; issues #61 to #69; ADR-0022). It follows roadmap 1 (#13) and rebuilds nothing: it keeps roadmap 1's stack, data model, security invariants (all 11 of `CLAUDE.md`), audience rules (D22, ADR-0017), PR workflow and model rubric, and adds sources, registry rows, a water-body model and map layers. Until P15 merged, the issues were the plan; from this section on, **this section is the plan**, and P15 prepared the renumbering of the bodies of the issues #61 to #69 to match it (§54.2); the owner applies it on GitHub before the merge.
 
 Roadmap 2 covers:
 - **the rest of the Rijkswaterstaat network:** the lakes (IJsselmeer, Markermeer, Ketelmeer, the Randmeren, Volkerak-Zoommeer, Haringvliet, Hollandsch Diep, Grevelingen, Veerse Meer), the tidal delta (Rotterdam, Dordrecht, the Merwedes, Oude Maas, Hollandsche IJssel), the canals, the coast, the Wadden Sea, the Eastern and Western Scheldt and the offshore platforms;
@@ -3417,7 +3417,7 @@ Roadmap 2 starts when **roadmap 1 is done: P0–P12 closed and the launch checkl
 
 ### 54.2 Reality and renumbering
 
-The issues #61 to #69 were written before the repository's own numbers were checked against them. P15 corrected them, and **the issues were renumbered to match this plan**. Every difference:
+The issues #61 to #69 were written before the repository's own numbers were checked against them. P15 corrected them in this plan and prepared the renumbering of the issue bodies; **the owner applies it on GitHub before the merge**, so until then the GitHub copies still carry the old numbers. Every difference:
 
 | The issues as first written | Reality | In this plan |
 |---|---|---|
@@ -3497,7 +3497,7 @@ Phase numbering continues from roadmap 1, so branch names (`claude/p<N><x>-<slug
 
 | # | Phase | Issue | Lane | Target window | PRs | Build · Code review · Security review |
 |---|---|---|---|---|---|---|
-| P15 | Roadmap 2 plan, catalogue and permission drafts | #63 | docs | 2026-12-07 → 12-11 | one | Opus xhigh · Sonnet high · Sonnet medium |
+| P15 | Roadmap 2 plan, catalogue and permission drafts | #63 | docs | 2026-12-07 → 12-11 | one | Opus xhigh · Sonnet high · Sonnet high (owner, 2026-10-16; the issue said medium) |
 | P16 | Rijkswaterstaat: the rest of the network (lakes, coast, delta, canals, offshore; astronomical tide, high and low water) | #64 | data | 12-14 → 2027-01-15 | a capture + budget · b registry + loading | Opus xhigh · Sonnet xhigh · Sonnet high |
 | P17 | Delta, canals, lakes and sea on the river graph | #65 | geo | 12-14 → 01-22 | a delta + canals · b water bodies, snapping, tiles | Opus xhigh · Sonnet high · Sonnet medium |
 | P18 | Sea level and lakes: tide, surge and honest classes | #66 | data | 01-18 → 02-05 | a tide + surge · b classes + forecasts | Opus xhigh · **Fable high** · Sonnet high |

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
@@ -117,7 +117,7 @@ describe('water-board sources', () => {
 
 /** Functional role addresses only (#62): never a person. Sorted. */
 const ALLOWED = [
-  // C1 to C13, already in docs/permissions.md and registry/providers.yaml
+  // C1 to C13, already in docs/permissions.md and registry/providers.yaml (pinned by C1_C13 below)
   'HWVZ@nlwkn.niedersachsen.de',
   'Pegelinfo@lubw.bwl.de',
   'abfragezentrale@bafu.admin.ch',
@@ -155,6 +155,19 @@ const ALLOWED = [
   'waterschap@zuiderzeeland.nl',
 ];
 
+const C1_C13 = [
+  'HWVZ@nlwkn.niedersachsen.de',
+  'Pegelinfo@lubw.bwl.de',
+  'abfragezentrale@bafu.admin.ch',
+  'hic@vlaanderen.be',
+  'hydrologie@bafu.admin.ch',
+  'hydrometrie@eau.etat.lu',
+  'hydrometrie@spw.wallonie.be',
+  'hydrometrie@waterinfo.be',
+  'poststelle@lfu.rlp.de',
+  'vorhersage@bafg.de',
+];
+
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const strangers = (text: string) => [...text.matchAll(EMAIL)].map((m) => m[0]).filter((a) => !ALLOWED.includes(a));
 
@@ -163,11 +176,28 @@ describe('e-mail allowlist', () => {
     expect(ALLOWED).toHaveLength(28);
   });
 
-  it('the new drafts, the tracker, the providers and catalogue 2.8 hold only allowed addresses', () => {
+  it('each of the 10 C1 to C13 addresses is a real contact: in a c1 to c13 draft or providers.yaml', () => {
+    const drafts = readdirSync(`${repoRoot}docs/legal/requests`).filter((f) => {
+      const n = f.match(/^c(\d+)-/)?.[1];
+      return n !== undefined && Number(n) <= 13;
+    });
+    expect(drafts.length).toBeGreaterThan(0);
+    const known = [providersYaml, ...drafts.map((f) => read(`docs/legal/requests/${f}`))].join('\n');
+    for (const a of C1_C13) {
+      expect(ALLOWED.includes(a), `${a} allowed`).toBe(true);
+      expect(known.includes(a), `${a} in a draft or providers.yaml`).toBe(true);
+    }
+  });
+
+  it('the drafts, tracker, providers, catalogue 0.2 and 2.8, PHASES 6.2 and 54 and ADR-0022 hold only allowed addresses', () => {
     const texts: Record<string, string> = {
       'docs/permissions.md': permissions,
       'registry/providers.yaml': providersYaml,
       'catalogue 2.8': section(catalogue, '### 2.8 Dutch water boards'),
+      'catalogue 0.2': section(catalogue, '### 0.2 Licence gates: act in Phase 0, before go-live'),
+      'PHASES 6.2': section(phases, '### 6.2 Actions'),
+      'PHASES 54': section(phases, '## 54. Amendment: roadmap 2 (all Dutch waters) (2026-10-16)'),
+      'ADR-0022': read('docs/adr/0022-roadmap-2-all-dutch-waters.md'),
     };
     for (const d of DRAFTS) texts[d] = read(d);
     for (const [name, text] of Object.entries(texts)) expect(strangers(text), name).toEqual([]);
