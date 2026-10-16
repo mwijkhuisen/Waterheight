@@ -159,7 +159,7 @@ test('the Chooz to Eijsden gap is grey in every mode; the impounded Meuse is neu
   const s = await start(page, context, baseURL, 'dh');
   await open(page, deep());
   await mapReady(page);
-  await reachesPainted(page, [...GAP, 'meuse.30', 'meuse.35', 'rhine.5']);
+  await reachesPainted(page, [...GAP, 'meuse.30', 'meuse.35', 'rhine.10']);
   // The Δh mode: the gap is checked before the impounded rule, so it is `nodata`; the short reaches are `impounded`.
   expect(await reachKinds(page, GAP)).toEqual({
     'meuse.31': 'nodata',
@@ -171,8 +171,8 @@ test('the Chooz to Eijsden gap is grey in every mode; the impounded Meuse is neu
     'meuse.30': 'impounded',
     'meuse.35': 'impounded',
   });
-  // An ordinary free-flowing reach is coloured (rhine.5: the longest Rhine span, 104.6 km, under GAP_KM).
-  expect((await reachState(page, 'rhine.5'))?.k).toBe('v');
+  // An ordinary free-flowing reach is coloured (rhine.10: the longest Rhine span, 104.6 km, under GAP_KM).
+  expect((await reachState(page, 'rhine.10'))?.k).toBe('v');
   await chooseMode(page, 'q');
   await expect.poll(async () => (await reachState(page, 'meuse.35'))?.k).not.toBe('impounded');
   expect(await reachKinds(page, GAP)).toEqual({
@@ -303,7 +303,7 @@ test('B2: a day file that answers 404 is read from the API with exactly one call
 
 // ---------------------------------------------------------------- #112 PR B: bins and the shift label
 
-test('#112: the legend says the shift is indicative; the bins of rhine.63 are painted at zoom 8 and the reach layer ends there', async ({
+test('#112: the legend says the shift is indicative; the bins of rhine.69 are painted at zoom 8 and the reach layer ends there', async ({
   page,
   context,
   baseURL,
@@ -311,7 +311,7 @@ test('#112: the legend says the shift is indicative; the bins of rhine.63 are pa
   const s = await start(page, context, baseURL, 'dh');
   await open(page, deep());
   await mapReady(page);
-  await reachesPainted(page, ['rhine.63']);
+  await reachesPainted(page, ['rhine.69']);
   // The legend (collapsed by default) names the shift, with the word that says it is no forecast.
   await page.locator('summary', { hasText: nl('legend_heading') }).click();
   await expect(page.getByText(nl('reach_shifted'), { exact: true })).toBeVisible();
@@ -326,7 +326,7 @@ test('#112: the legend says the shift is indicative; the bins of rhine.63 are pa
     map.jumpTo({ center: [6.1, 51.85], zoom: 10 });
     await idle;
   });
-  const ids = Array.from({ length: 8 }, (_, i) => `rhine.63/${i}`);
+  const ids = Array.from({ length: 8 }, (_, i) => `rhine.69/${i}`);
   await expect
     .poll(async () => (await Promise.all(ids.map((id) => binState(page, id)))).every((st) => st !== null), {
       timeout: 30_000,
