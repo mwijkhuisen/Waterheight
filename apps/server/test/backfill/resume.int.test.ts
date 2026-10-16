@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -92,8 +92,8 @@ const load = () => h.loader({ now: LOAD_NOW }).tick();
 
 /**
  * The in-process runner on a fake clock, with the loader keeping up after every chunk as in production (the guard
- * stops a runner more than 2 chunks with data ahead of the ledger, review S6); returns its requests and the lines
- * loaded meanwhile.
+ * stops a runner with any chunk with data ahead of the ledger: review S6, the P14a queue fix); returns its requests
+ * and the lines loaded meanwhile.
  */
 async function run(start: number): Promise<{ calls: Call[]; loaded: number }> {
   await setGuard();
@@ -107,7 +107,12 @@ async function run(start: number): Promise<{ calls: Call[]; loaded: number }> {
       archive: h.archive,
       client,
       now: clock.now,
-      sleep: clock.sleep,
+      // The loader runs beside the runner, as in production: a sleep (the pacer's, the guard's) lets it tick, so a
+      // chunk that a killed runner left unloaded is loaded while the guard holds the new one.
+      sleep: async (ms) => {
+        loaded += (await load()).loaded;
+        await clock.sleep(ms);
+      },
       hooks: {
         afterCursor: async () => {
           loaded += (await load()).loaded;
@@ -400,8 +405,8 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
     expect(await verdict()).toBe('stale');
     await setGuard();
     expect(await verdict()).toBe('ok');
-    // More than 30 chunks of an active job with data that the ledger does not hold (unloaded or quarantined; review
-    // C5/S6, N1): its own verdict. 30 is a loader that ticks every 10 s while the runner writes 1 chunk/s.
+    // Any chunk of an active job with data that the ledger does not hold yet (review C5/S6, N1; the P14a queue fix
+    // lowered it from more than 30): its own verdict. A chunk the loader sets aside has a ledger row too.
     const { rows } = await h.t.admin.query<{ id: string; n: number; status: string }>(
       `SELECT j.id, j.status, j.chunks_with_data - (SELECT count(*) FROM backfill_chunk c WHERE c.job_id = j.id)::int AS n
        FROM backfill_job j WHERE j.source_id = 'NL-1' ORDER BY j.id LIMIT 1`,
@@ -409,7 +414,7 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
     const { id, n, status } = rows[0] as { id: string; n: number; status: string };
     const setBehind = (k: number) =>
       h.t.admin.query('UPDATE backfill_job SET chunks_with_data = chunks_with_data + $2 WHERE id = $1', [id, k]);
-    await setBehind(31 - n);
+    await setBehind(1 - n);
     await h.t.admin.query("UPDATE backfill_job SET status = 'running' WHERE id = $1", [id]);
     expect(await verdict()).toBe('unloaded');
     // A paused job still counts, an aborted or failed one (quarantined chunks of a dead job) does not (review N4).
@@ -426,7 +431,7 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
     await setGuard();
     await setBehind(-1);
     expect(await verdict()).toBe('ok');
-    await setBehind(-(30 - n));
+    await setBehind(n);
   });
 
   it('advance counts a chunk with data in the same update as the cursor', async () => {
@@ -436,6 +441,9 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
       await s.advance(id, { cursor_ts: new Date('1998-02-10T00:00:00Z'), chunk: true, data: true });
       await s.advance(id, { cursor_ts: new Date('1998-03-01T00:00:00Z'), chunk: true });
       expect(await s.get(id)).toMatchObject({ chunks_done: 2, chunks_with_data: 1 });
+      // Its chunk was never archived, so the loader never loads it: out of the guard's count, or every later runner
+      // in this file waits for it and stops `stuck` (the guard allows no unloaded chunk, review Q1).
+      expect(await s.setStatus(id, 'aborted', null, ['planned'])).toBe(true);
     });
   });
 });
@@ -459,7 +467,12 @@ describe('one runner per host: the lease (review C1/S1)', { timeout: 60_000 }, (
           archive: h.archive,
           client,
           now: clock.now,
-          sleep: clock.sleep,
+          // The loader ticks during the runner's sleeps, as beside it in production: a finished job waits for its
+          // last chunk (review Q2).
+          sleep: async (ms) => {
+            await load();
+            await clock.sleep(ms);
+          },
           holder: 'bbbbbbbb-0000-0000-0000-000000000002',
         }),
       );
@@ -487,5 +500,122 @@ describe('one runner per host: the lease (review C1/S1)', { timeout: 60_000 }, (
     } finally {
       await c.end();
     }
+  });
+});
+
+describe('a chunk the loader sets aside (P14a queue fix)', { timeout: 60_000 }, () => {
+  /** A job's manifest lines as the loader names them: the file, the end offset (after the newline) and the key. */
+  const linesOf = (id: number) =>
+    readdirSync(join(h.raw, '_manifest'))
+      .sort()
+      .flatMap((file) => {
+        const buf = readFileSync(join(h.raw, '_manifest', file));
+        const out: { file: string; end: number; key: string }[] = [];
+        for (let start = 0, nl = buf.indexOf(10); nl >= 0; start = nl + 1, nl = buf.indexOf(10, start)) {
+          const l = JSON.parse(buf.toString('utf8', start, nl));
+          if (l.backfill?.job === id) out.push({ file, end: nl + 1, key: l.key });
+        }
+        return out;
+      });
+  /** What the guard compares, for one job: chunks with data the ledger does not hold. */
+  const unloaded = async (id: number) =>
+    (
+      await h.t.admin.query<{ n: number }>(
+        `SELECT j.chunks_with_data - (SELECT count(DISTINCT c.chunk_from) FROM backfill_chunk c WHERE c.job_id = j.id)::int AS n
+         FROM backfill_job j WHERE j.id = $1`,
+        [id],
+      )
+    ).rows[0]?.n;
+  const objectOf = (key: string) => join(h.raw, key.slice('raw/'.length));
+
+  // The first chunk is spoiled before the loader reads it, in each of the three ways a line is set aside.
+  const spoil = {
+    // The setAside closure, skipped: the object is gone.
+    object_missing: async (l: { key: string }) => rmSync(objectOf(l.key)),
+    // The setAside closure, quarantined: the object no longer inflates.
+    archive_corrupt: async (l: { key: string }) => writeFileSync(objectOf(l.key), 'not zstd'),
+    // The tail's MAX_TRIES branch: two passes already failed, so it is quarantined unread.
+    load_error: async (l: { file: string; end: number }) =>
+      h.t.admin.query(
+        `INSERT INTO app_meta (key, value) VALUES ('load_attempt', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [JSON.stringify({ file: l.file, end: l.end, n: 2, code: 'load_error' })],
+      ),
+  };
+
+  it.each([
+    ['object_missing', 2006, 'skipped'],
+    ['archive_corrupt', 2007, 'quarantined'],
+    ['load_error', 2008, 'quarantined'],
+  ] as const)(
+    '%s: an unreconciled ledger row, nothing left unloaded, the job fails unreconciled',
+    async (how, year, status) => {
+      const { from, to } = range(year);
+      const { id } = await plan(from, to);
+      await setGuard();
+      const clock = new Clock(NIGHT);
+      const { client } = fakeClient(clock, history);
+      let first = true;
+      const out = await withStore((store) =>
+        runBackfill({
+          config: CONFIG,
+          store,
+          archive: h.archive,
+          client,
+          now: clock.now,
+          sleep: clock.sleep,
+          hooks: {
+            afterCursor: async () => {
+              if (first) {
+                const lines = linesOf(id);
+                expect(lines).toHaveLength(1);
+                await spoil[how](lines[0] as { file: string; end: number; key: string });
+              }
+              first = false;
+              await load();
+            },
+          },
+        }),
+      );
+      const [line] = linesOf(id);
+      const { rows } = await h.t.admin.query<{ parse_status: string; error: string }>(
+        'SELECT parse_status, error FROM ingest_batch WHERE archive_key = $1',
+        [line?.key],
+      );
+      expect(rows).toEqual([{ parse_status: status, error: how }]);
+      expect(out.jobs.find((j) => j.job === id)).toMatchObject({ status: 'failed', error: 'unreconciled' });
+      expect(await job(id)).toMatchObject({
+        status: 'failed',
+        last_error: 'unreconciled',
+        unreconciled: 1,
+        inserted: 0,
+        chunks_with_data: 1,
+      });
+      expect(await ledger(id)).toMatchObject([{ kept: 0, inserted: 0, revised: 0, skipped: 0, reconciled: false }]);
+      // The guard's own count: nothing of the job is left to wait for (it would be 1 without the ledger row).
+      expect(await unloaded(id)).toBe(0);
+      expect(await stored(from, to)).toEqual([]);
+    },
+  );
+
+  it('counts a chunk fetched again after a kill once (distinct chunk start, review Q2)', async () => {
+    const { from, to } = range(2009);
+    const { id } = await plan(from, to);
+    await setGuard();
+    const { rows } = await h.t.admin.query<{ n: number }>(
+      `WITH j AS (UPDATE backfill_job SET chunks_with_data = 1, status = 'running' WHERE id = $1 RETURNING id)
+       INSERT INTO backfill_chunk (job_id, archive_key, chunk_from, chunk_to, provider_values, kept, inserted, revised,
+                                   skipped, dropped, reconciled)
+       SELECT j.id, k, $2, $3, 0, 0, 0, 0, 0, 0, true FROM j, unnest(ARRAY['raw/a', 'raw/b']) AS k
+       RETURNING 1 AS n`,
+      [id, from, new Date(from.getTime() + CHUNK_MS)],
+    );
+    expect(rows).toHaveLength(2);
+    expect(await unloaded(id)).toBe(0);
+    // One more chunk with data and no ledger row: the guard holds the runner again.
+    await h.t.admin.query('UPDATE backfill_job SET chunks_with_data = 2 WHERE id = $1', [id]);
+    expect(await withStore((s) => s.guard('NL-1'))).toBe('unloaded');
+    await h.t.admin.query("UPDATE backfill_job SET status = 'aborted' WHERE id = $1", [id]);
+    expect(await withStore((s) => s.guard('NL-1'))).toBe('ok');
   });
 });

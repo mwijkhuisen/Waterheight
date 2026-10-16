@@ -586,7 +586,7 @@ export class Loader {
       if (prior.n >= MAX_TRIES) {
         // Two attempts failed or died: quarantine it without reading or parsing it, and move on.
         const batch = batchInput(line, plan.adapterVersion, fetchedAt, backfill);
-        await flush(raw.end, (tx) => setBatchAside(tx, batch, 'quarantined', prior.code));
+        await flush(raw.end, (tx) => setAsideWithChunk(tx, batch, 'quarantined', prior.code, line));
         this.deps.alert('quarantined', { ...ids, code: prior.code });
       } else {
         const next = { ...prior, n: prior.n + 1, code: 'load_crashed' };
@@ -649,7 +649,7 @@ export class Loader {
     const ids = { source: line.source, spec: line.spec };
 
     const setAside = async (status: 'quarantined' | 'skipped', code: string, path = ''): Promise<Outcome> => {
-      await commit((tx) => setBatchAside(tx, batch, status, path === '' ? code : `${code} at ${path}`));
+      await commit((tx) => setAsideWithChunk(tx, batch, status, path === '' ? code : `${code} at ${path}`, line));
       if (status === 'quarantined') this.deps.alert('quarantined', { ...ids, code });
       return { kind: status, code };
     };
@@ -1115,14 +1115,19 @@ export function failureOf(err: unknown): { kind: 'payload' | 'stall'; code: stri
  * payload's transaction: a re-fetched or replayed archive key counts once. A line that names no job of its source and
  * spec (a job aborted and deleted by hand, a forged line) loads without a ledger row. `reconciled`: every value the
  * provider stated was either dropped by normalise or kept, and every kept row was inserted, revised or skipped.
+ * `aside`: the payload was quarantined or skipped, so the row has no counts and is never reconciled (P14a queue fix):
+ * the guard's `unloaded` stops waiting for it and the runner fails the job `unreconciled` at its next pass. A replay
+ * that loads such a chunk later adds no counts to the job (the key's row exists); the job stays failed.
  */
 async function recordChunk(
   tx: Tx,
   line: ManifestLine,
   chunk: NonNullable<ManifestLine['backfill']>,
   c: { provider_values: number; kept: number; inserted: number; revised: number; skipped: number; dropped: number },
+  aside = false,
 ): Promise<void> {
-  const reconciled = c.provider_values === c.kept + c.dropped && c.kept === c.inserted + c.revised + c.skipped;
+  const reconciled =
+    !aside && c.provider_values === c.kept + c.dropped && c.kept === c.inserted + c.revised + c.skipped;
   await sql`
     WITH job AS (
       SELECT id FROM backfill_job WHERE id = ${chunk.job} AND source_id = ${line.source} AND spec_id = ${line.spec}
@@ -1140,6 +1145,21 @@ async function recordChunk(
         revised = j.revised + ${c.revised}, skipped = j.skipped + ${c.skipped}, dropped = j.dropped + ${c.dropped},
         unreconciled = j.unreconciled + ${reconciled ? 0 : 1}, updated_at = now()
     FROM added WHERE j.id = added.job_id`.execute(tx);
+}
+
+const NO_COUNTS = { provider_values: 0, kept: 0, inserted: 0, revised: 0, skipped: 0, dropped: 0 };
+
+/** A batch set aside, with the ledger row of a backfill chunk (`recordChunk` `aside`), in one transaction. */
+async function setAsideWithChunk(
+  tx: Tx,
+  batch: BatchInput,
+  status: 'quarantined' | 'skipped',
+  error: string,
+  line: ManifestLine,
+): Promise<void> {
+  await setBatchAside(tx, batch, status, error);
+  if (batch.origin === 'backfill' && line.backfill !== undefined)
+    await recordChunk(tx, line, line.backfill, NO_COUNTS, true);
 }
 
 function batchInput(line: ManifestLine, adapterVersion: number, fetchedAt: Date, backfill = false): BatchInput {

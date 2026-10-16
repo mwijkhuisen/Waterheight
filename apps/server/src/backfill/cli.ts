@@ -326,8 +326,7 @@ export async function backfillMain(
             guard_waits: result.guard_waits,
           },
         });
-        const stoppedBad =
-          result.stopped === 'breaker_open' || result.stopped === 'busy' || result.stopped === 'throttled';
+        const stoppedBad = ['breaker_open', 'busy', 'throttled', 'stuck'].includes(result.stopped);
         return result.jobs.some((j) => j.status === 'failed') || stoppedBad ? 1 : 0;
       }
     }

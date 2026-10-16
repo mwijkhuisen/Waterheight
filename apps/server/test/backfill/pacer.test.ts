@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { GuardVerdict } from '../../src/backfill/job.ts';
 import { inWindow, Pacer, windowEnd } from '../../src/backfill/pacer.ts';
-import { GUARD_SLEEP_MS, runBackfill, UNLOADED_SLEEP_MS } from '../../src/backfill/run.ts';
+import { GUARD_SLEEP_MS, runBackfill, STUCK_MS, UNLOADED_SLEEP_MS } from '../../src/backfill/run.ts';
 import {
   Clock,
   fakeClient,
@@ -162,20 +163,57 @@ describe('runBackfill', () => {
     expect(out.guard_waits).toBe(3);
   });
 
-  it('is not throttled by a loader that ticks every 10 s: about one chunk a second, no long sleep (review N1)', async () => {
+  it('marks a job done only once its last chunk is loaded (review Q2)', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    // The probe and the one chunk pass the guard; then the loader has not taken the chunk yet, twice.
+    store.verdicts = ['ok', 'ok', 'unloaded', 'unloaded'];
+    const id = await newJob(store, { from: '2026-07-20', to: '2026-08-01' });
+    const { client, calls } = fakeClient(clock, normal);
+    const out = await run(clock, store, client, tempArchive().archive);
+    expect(calls).toHaveLength(2);
+    expect(out.guard_waits).toBe(2);
+    expect(store.verdicts).toEqual([]);
+    expect((await store.get(id))?.status).toBe('done');
+  });
+
+  it('stops stuck after STUCK_MS of unloaded in a row; any other answer starts the count again (review Q1)', async () => {
+    const n = STUCK_MS / UNLOADED_SLEEP_MS;
+    const night = async (verdicts: GuardVerdict[]) => {
+      const clock = new Clock();
+      const store = new MemoryJobStore();
+      store.verdicts = verdicts;
+      const id = await newJob(store, { from: '2026-07-20', to: '2026-08-01' });
+      const { client, calls } = fakeClient(clock, normal);
+      const out = await run(clock, store, client, tempArchive().archive);
+      return { out, calls, job: await store.get(id) };
+    };
+    const stuck = await night(Array(n + 5).fill('unloaded'));
+    expect(stuck.out.stopped).toBe('stuck');
+    expect(stuck.calls).toHaveLength(0);
+    expect(stuck.job?.status).toBe('running');
+    // A backlog pause between two stretches just short of STUCK_MS: no stop.
+    const split = await night([...Array(n - 5).fill('unloaded'), 'backlog', ...Array(n - 5).fill('unloaded')]);
+    expect(split.out.stopped).toBe('done');
+    expect(split.job?.status).toBe('done');
+  });
+
+  it('stays one chunk ahead of a loader that ticks every 10 s, in short sleeps (queue fix; review N1)', async () => {
     const clock = new Clock();
     // The loader reads every 10 s and then has loaded every chunk archived so far; the guard sees the ledger as of that
-    // tick, with the SQL's threshold (more than 30 chunks with data not in the ledger).
+    // tick, with the SQL's threshold (any chunk with data not in the ledger).
     class TickingStore extends MemoryJobStore {
       private lastTick = clock.t;
       private loaded = 0;
+      maxBehind = 0;
       override async guard() {
         if (clock.t - this.lastTick >= 10_000) {
           this.lastTick = clock.t;
           this.loaded = [...this.jobs.values()].reduce((a, j) => a + j.chunks_with_data, 0);
         }
         const behind = [...this.jobs.values()].reduce((a, j) => a + j.chunks_with_data, 0) - this.loaded;
-        return behind > 30 ? 'unloaded' : 'ok';
+        this.maxBehind = Math.max(this.maxBehind, behind);
+        return behind > 0 ? 'unloaded' : 'ok';
       }
     }
     const store = new TickingStore();
@@ -185,11 +223,13 @@ describe('runBackfill', () => {
     const out = await run(clock, store, client, tempArchive().archive);
     const job = await store.get(id);
     expect(job).toMatchObject({ status: 'done', chunks_done: 153 });
-    expect(out.guard_waits).toBe(0);
-    expect(clock.slept.every((ms) => ms <= 1000)).toBe(true);
-    // 154 requests (the probe and the chunks) at 1 req/s: under 3 minutes, not the hours of 5-minute sleeps.
+    // Never more than one chunk in front of the live lines, and no 5-minute sleep: the pacer's and UNLOADED_SLEEP_MS.
+    expect(store.maxBehind).toBe(1);
+    expect(out.guard_waits).toBeGreaterThan(0);
+    expect(clock.slept.every((ms) => ms <= UNLOADED_SLEEP_MS)).toBe(true);
+    // 154 requests (the probe and the chunks), about one per loader tick: under half an hour, not hours.
     expect(calls).toHaveLength(154);
-    expect(clock.t - t0).toBeLessThan(180_000);
+    expect(clock.t - t0).toBeLessThan(153 * 12_000);
   });
 
   it('keeps the guard waiting to the end of the window, then stops without a request', async () => {

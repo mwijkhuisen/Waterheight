@@ -10,7 +10,15 @@ import type { LoadedBackfillSpec, Series } from './spec.ts';
 // truncation check of a response. NL-1 is the only source with a backfill so far; the next one adds a row to
 // PROVIDERS. Requests are built only from the registry row and the spec (invariant 1).
 
-export type Inspect = { ok: true; values: number } | { ok: false; code: 'truncated' | 'schema_drift' };
+/** `drift`: the parser's own fixed code (never provider text), for the run's job line. */
+export type Inspect =
+  | { ok: true; values: number }
+  | { ok: false; code: 'truncated' }
+  | { ok: false; code: 'schema_drift'; drift: string };
+
+/** A SchemaDrift's code as the run prints it: a fixed code, or `other` should one ever carry anything else. */
+export const driftCode = (err: unknown): string =>
+  err instanceof SchemaDrift && /^[a-z0-9_]{1,40}$/.test(err.code) ? err.code : 'other';
 
 export type Provider = {
   chunkRequest(spec: LoadedBackfillSpec, series: Series, chunk: Chunk, now: Date): Req;
@@ -63,7 +71,9 @@ const nl1Provider: Provider = {
       return { ok: true, values };
     } catch (err) {
       if (err instanceof SchemaDrift)
-        return { ok: false, code: CAP_CODES.has(err.code) ? 'truncated' : 'schema_drift' };
+        return CAP_CODES.has(err.code)
+          ? { ok: false, code: 'truncated' }
+          : { ok: false, code: 'schema_drift', drift: driftCode(err) };
       throw err;
     }
   },

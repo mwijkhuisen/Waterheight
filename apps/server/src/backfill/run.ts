@@ -8,13 +8,14 @@ import { DATA_EPOCH } from '../load/dirty.ts';
 import type { JobStatus, JobStore } from './job.ts';
 import { inWindow, Pacer, windowEnd } from './pacer.ts';
 import { nextChunk, planChunks, probeYears, requestBudget, yearEnd } from './plan.ts';
-import { PROVIDERS, type Provider } from './provider.ts';
+import { driftCode, PROVIDERS, type Provider } from './provider.ts';
 import type { LoadedBackfill } from './spec.ts';
 
 // The backfill run loop (P14a, plan §3.3): one-shot, inside the off-peak window, one job at a time in id order.
-// Each pass of a job's loop is: window → budget → guard → pace → request → commit. A chunk commits in this order:
-// (a) Archive.put, (b) Archive.append (a manifest line that always carries `key`), (c) the cursor update; a kill
-// -9 between any two of them resumes at the old cursor, and the second line for the same chunk loads idempotently.
+// Each pass of a job's loop is: window → budget → guard (a finished job's too) → pace → request → commit. A chunk
+// commits in this order: (a) Archive.put, (b) Archive.append (a manifest line that always carries `key`), (c) the
+// cursor update; a kill -9 between any two of them resumes at the old cursor, and the second line for the same chunk
+// loads idempotently.
 // Only fixed codes reach the job table and the output, never provider text. One runner per host: the run holds the
 // host's lease (backfill_lease) from start to exit and renews it before every request (review C1/S1).
 
@@ -22,10 +23,17 @@ export const MAX_ATTEMPTS = 5;
 /** The guard said wait (loader not running, backlog, source stale): look again after this long. */
 export const GUARD_SLEEP_MS = 5 * 60_000;
 /**
- * The guard said `unloaded` (more than 30 chunks archived and not yet loaded): the loader is working through them
- * (it ticks every 10 s), so look again soon rather than after GUARD_SLEEP_MS, which would cost the night (review N1).
+ * The guard said `unloaded` (a chunk with data is archived and not loaded yet): the loader takes it at its next tick
+ * (every 10 s), so look again soon rather than after GUARD_SLEEP_MS, which would cost the night (review N1). Since the
+ * P14a queue fix the guard allows no unloaded chunk, so this wait comes after every chunk with data.
  */
-export const UNLOADED_SLEEP_MS = 15_000;
+export const UNLOADED_SLEEP_MS = 2_000;
+/**
+ * `unloaded` this long in a row, with nothing else holding the runner, is a chunk that will never reach the ledger (a
+ * damaged or recovered manifest line, KG-341): the run stops `stuck` (exit 1) rather than wait silently to the end of
+ * the window (review Q1). A healthy chunk loads within one loader tick and a slow one in about 90 s.
+ */
+export const STUCK_MS = 10 * 60_000;
 /** A truncated response halves the chunk at the cursor, down to this; below it the job fails `truncated` (C3). */
 export const MIN_CHUNK_MS = 86_400_000;
 const EPOCH_MS = Date.parse(DATA_EPOCH);
@@ -71,13 +79,24 @@ export type JobResult = {
   chunks: number;
   requests: number;
   error: string | null;
+  /** With error `schema_drift`: the parser's fixed code (`driftCode`), printed in the run's job line only. */
+  drift?: string;
 };
 /**
  * Why the run ended. `busy`: another runner holds a host's lease. `throttled`: the client backs off past the window
- * after a 403/429/451/5xx or a network failure (an in-memory backoff a restart forgets). `busy`, `throttled` and
- * `breaker_open` exit 1. `interrupted`: the `stop` hook said so (SIGTERM, SIGINT), exit 0.
+ * after a 403/429/451/5xx or a network failure (an in-memory backoff a restart forgets). `stuck`: the guard said
+ * `unloaded` for STUCK_MS in a row. `busy`, `throttled`, `breaker_open` and `stuck` exit 1. `interrupted`: the `stop`
+ * hook said so (SIGTERM, SIGINT), exit 0.
  */
-export type Stopped = 'done' | 'window_closed' | 'until' | 'breaker_open' | 'busy' | 'throttled' | 'interrupted';
+export type Stopped =
+  | 'done'
+  | 'window_closed'
+  | 'until'
+  | 'breaker_open'
+  | 'busy'
+  | 'throttled'
+  | 'stuck'
+  | 'interrupted';
 export type RunResult = { stopped: Stopped; jobs: JobResult[]; guard_waits: number };
 
 type Step =
@@ -93,6 +112,8 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
   const pacers = new Map<string, Pacer>();
   const results: JobResult[] = [];
   let guardWaits = 0;
+  /** Since when the guard has said `unloaded` without a break (the jobs run one at a time; the guard is per source). */
+  let unloadedSince: number | undefined;
   /** The last transient failure's code, for the job that gives up after MAX_ATTEMPTS. */
   let lastTransient = 'upstream_error';
   /** The last answer was a failure the client backs off from: a `backoff` now means throttled, not the window. */
@@ -109,10 +130,11 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
       requests: 0,
       error: null,
     };
-    const finish = async (to: JobStatus, error: string | null) => {
+    const finish = async (to: JobStatus, error: string | null, drift?: string) => {
       await deps.store.setStatus(id, to, error, ['planned', 'running']);
       result.status = to;
       result.error = error;
+      if (drift !== undefined) result.drift = drift;
       return { result };
     };
     const stop = (stopped: Stopped) => ({ result, stopped });
@@ -169,13 +191,20 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
         return { result };
       }
       if (job.unreconciled > 0) return finish('failed', 'unreconciled');
-      if (job.cursor_ts.getTime() >= job.range_to.getTime()) return finish('done', null);
+      const finished = job.cursor_ts.getTime() >= job.range_to.getTime();
 
       // 2. The request budget: a runaway stops here.
-      if (job.requests >= job.request_budget) return finish('paused', 'budget');
+      if (!finished && job.requests >= job.request_budget) return finish('paused', 'budget');
 
-      // 3. The guard: wait for the loader and the source to be healthy.
+      // 3. The guard: wait for the loader and the source to be healthy. A finished job waits only for its last chunk
+      // (review Q2): it is `done` once that chunk is in the ledger, or fails `unreconciled` if the loader set it aside.
       const verdict = await deps.store.guard(entry.source);
+      if (verdict !== 'unloaded') unloadedSince = undefined;
+      else {
+        unloadedSince ??= now.getTime();
+        if (now.getTime() - unloadedSince >= STUCK_MS) return stop('stuck');
+      }
+      if (finished && verdict !== 'unloaded') return finish('done', null);
       if (verdict !== 'ok') {
         guardWaits += 1;
         const wait = verdict === 'unloaded' ? UNLOADED_SLEEP_MS : GUARD_SLEEP_MS;
@@ -215,8 +244,8 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
         let present: boolean;
         try {
           present = provider.parseCheck(res.body);
-        } catch {
-          return finish('failed', 'schema_drift');
+        } catch (err) {
+          return finish('failed', 'schema_drift', driftCode(err));
         }
         if (present) {
           await deps.store.advance(id, { cursor_ts: job.cursor_ts, data_from: job.cursor_ts, chunk: false });
@@ -234,7 +263,7 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
         if (!v.ok) return finish('failed', 'invalid');
         const seen = provider.inspect(res.body);
         if (!seen.ok && seen.code === 'truncated' && halve()) continue;
-        if (!seen.ok) return finish('failed', seen.code);
+        if (!seen.ok) return finish('failed', seen.code, seen.code === 'schema_drift' ? seen.drift : undefined);
         if (v.count !== 0) {
           wrote = true;
           // 9. The commit: (a) put, (b) append, (c) cursor.
