@@ -140,7 +140,7 @@ describe('the modes', () => {
   it('state: the level is rounded from the ends and stays within them', () => {
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 5 }), fc.integer({ min: 1, max: 5 }), (a, b) => {
-        for (const fs of [r, r20, reach('meuse.28'), reach('rhine.5')]) {
+        for (const fs of [r, r20, reach('meuse.28'), reach('rhine.10')]) {
           const p = reachColour(fs, [ev(a), ev(b)], 'state');
           if (fs.span === null || fs.span.pos === null) continue;
           expect(p.k).toBe('v');
@@ -286,18 +286,18 @@ describe('binPaints (#112)', () => {
     changes: new Map(xs.flatMap((x) => [...(x.changes ?? [])])),
   });
 
-  // aare.2: 17.7 km, 8 bins, between ch.bafu.2019 (up) and ch.bafu.2457 (down)
-  const aare = new Map([['aare.2', reach('aare.2')]]);
-  const up = station('ch.bafu.2019');
-  const down = station('ch.bafu.2457');
+  // sitter.2: 16.6 km, 8 bins, between ch.bafu.2112 (up) and ch.bafu.2468 (down)
+  const sitter = new Map([['sitter.2', reach('sitter.2')]]);
+  const up = station('ch.bafu.2112');
+  const down = station('ch.bafu.2468');
   const by = new Map([up, down].map((s) => [s.id, s]));
   const paintsOf = (hv: HourValues, mode: 'delta' | 'q', shift?: Shift) => [
-    ...binPaints(aare, mode, hv.values, hv.changes, by, shift),
+    ...binPaints(sitter, mode, hv.values, hv.changes, by, shift),
   ];
 
   it('keys the paints by <reach>/<i>, one per bin', () => {
     const hv = merge(at(up, 0, 10), at(down, 0, 10));
-    expect(paintsOf(hv, 'delta').map(([k]) => k)).toEqual(Array.from({ length: 8 }, (_, i) => `aare.2/${i}`));
+    expect(paintsOf(hv, 'delta').map(([k]) => k)).toEqual(Array.from({ length: 8 }, (_, i) => `sitter.2/${i}`));
   });
 
   it('shows a gradient along a long reach in the change mode: the first bin near the up value, the last near the down', () => {
@@ -307,7 +307,7 @@ describe('binPaints (#112)', () => {
     expect(colours[0]).toBe(DH_COLOUR[-3]);
     expect(colours[7]).toBe(DH_COLOUR[3]);
     const first = reachColour(
-      { ...reach('aare.2'), span: reach('aare.2').bins[0] ?? null },
+      { ...reach('sitter.2'), span: reach('sitter.2').bins[0] ?? null },
       [ev(-60), ev(60)],
       'delta',
     );
@@ -325,7 +325,7 @@ describe('binPaints (#112)', () => {
   it('paints every bin as the whole reach where the ends are equal', () => {
     for (const mode of ['delta', 'q'] as const) {
       const hv = merge(at(up, 12, 50), at(down, 12, 50));
-      const whole = reachPaints(aare, mode, hv.values, hv.changes, by).get('aare.2');
+      const whole = reachPaints(sitter, mode, hv.values, hv.changes, by).get('sitter.2');
       for (const [, p] of paintsOf(hv, mode)) expect(p).toEqual(whole);
     }
   });
@@ -347,8 +347,8 @@ describe('binPaints (#112)', () => {
   });
 
   describe('with the travel-time shift', () => {
-    // rhine.63: Emmerich to Lobith, T = 5 h, bins at pos (i + 0.5) / 8, so k = round(5 pos) = 0 1 2 2 3 3 4 5
-    const rhine = new Map([['rhine.63', reach('rhine.63')]]);
+    // rhine.69: Emmerich to Lobith, T = 5 h, bins at pos (i + 0.5) / 8, so k = round(5 pos) = 0 1 2 2 3 3 4 5
+    const rhine = new Map([['rhine.69', reach('rhine.69')]]);
     const emmerich = station('de.wsv.2790020');
     const lobith = station('nl.rws.lobith.bovenrijn.tolkamer');
     const sb = new Map([emmerich, lobith].map((s) => [s.id, s]));
@@ -385,7 +385,7 @@ describe('binPaints (#112)', () => {
       expect(paints[0]).toEqual(plain[0]);
       expect(paints[7]?.[1]).not.toEqual(plain[7]?.[1]);
       // and it is the past value: the past has an up end only, so the down end (read at t) is `now`'s Lobith
-      const bin7 = { ...reach('rhine.63'), span: reach('rhine.63').bins[7] ?? null };
+      const bin7 = { ...reach('rhine.69'), span: reach('rhine.69').bins[7] ?? null };
       expect(paints[7]?.[1]).toEqual(reachColour(bin7, [ev(60), ev(0)], 'delta'));
     });
 
