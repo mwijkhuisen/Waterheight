@@ -3,7 +3,7 @@
 // most 30 per run, through the real SSRF-guarded client with a polite contact
 // User-Agent. It refuses to run under CI.
 //
-//   node scripts/smoke-capture.ts --contact <e-mail> --info-url <https url> --spec <id> [--row <variant>] [--spec <id> …]
+//   node scripts/smoke-capture.ts --contact <e-mail> --info-url <https url> --spec <id> [--row <variant> | --keep-as <name>] [--spec <id> …]
 //   node scripts/smoke-capture.ts --contact … --info-url … --discover <SOURCE-ID> <allowlisted https url>
 //   RWS_LIVE=1 node scripts/smoke-capture.ts --contact … --info-url … \
 //     --backfill <backfill spec> --series <provider_key> --from YYYY-MM-DD --to YYYY-MM-DD [--no-hoedanigheid]
@@ -20,7 +20,12 @@
 // and CSV over 1 MB trimmed, keeping their structure) with a .meta.json. An
 // owner-audience payload never leaves .smoke/: only a synthetic copy is
 // committed (invariant 11). --discover writes to .smoke/ only.
-import { mkdirSync, writeFileSync } from 'node:fs';
+//
+// --keep-as <name> (P15; after its --spec, never with --row, public specs only) writes the whole body,
+// never trimmed, to fixtures/<spec>-<name>.raw, and only when the status is 200 and the spec's validity
+// check passed. It never touches <spec>.raw, and it refuses (exit 1, before any request) when
+// fixtures/<spec>-<name>.raw already exists.
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { redactUrl } from '../apps/server/src/archive/manifest.ts';
 import { validate } from '../apps/server/src/archive/validity.ts';
@@ -35,6 +40,7 @@ const MAX_REQUESTS = 30;
 const BACKFILL_MAX_REQUESTS = 5;
 const BACKFILL_GAP_MS = 1100;
 const TRIM_BYTES = 1024 * 1024;
+const KEEP_AS = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const root = join(import.meta.dirname, '..');
 
 type Item = {
@@ -48,7 +54,7 @@ type Item = {
 };
 
 function args(argv: string[]) {
-  const specs: { id: string; row?: string }[] = [];
+  const specs: { id: string; row?: string; keepAs?: string }[] = [];
   let contact = '';
   let infoUrl = '';
   let discover: [string, string] | undefined;
@@ -66,6 +72,10 @@ function args(argv: string[]) {
       const last = specs.at(-1);
       if (last === undefined) throw new Error('--row follows the --spec it belongs to');
       last.row = argv[++i] ?? '';
+    } else if (a === '--keep-as') {
+      const last = specs.at(-1);
+      if (last === undefined) throw new Error('--keep-as follows the --spec it belongs to');
+      last.keepAs = argv[++i] ?? '';
     } else if (a === '--contact') contact = argv[++i] ?? '';
     else if (a === '--info-url') infoUrl = argv[++i] ?? '';
     else if (a === '--backfill' || a === '--check')
@@ -188,6 +198,8 @@ async function backfill(client: Client, items: Item[], now: Date): Promise<numbe
   return failed === 0 ? 0 : 1;
 }
 
+const fixturesDir = (source: string) => join(root, 'apps/server/src/adapters', source.toLowerCase(), 'fixtures');
+
 async function main(): Promise<number> {
   if (process.env.CI) {
     console.error('smoke-capture: refuses to run under CI (live requests are opt-in and manual)');
@@ -222,8 +234,26 @@ async function main(): Promise<number> {
     console.error(`smoke-capture: give 1 to ${MAX_REQUESTS} --spec ids (one request each)`);
     return 64;
   }
+  // --keep-as is checked for every spec before the first request, so a refusal costs nothing.
+  for (const { id: specId, row, keepAs } of specs) {
+    if (keepAs === undefined) continue;
+    if (!KEEP_AS.test(keepAs) || row !== undefined) {
+      console.error(`${specId}: --keep-as takes a name ${KEEP_AS.source} and is not combined with --row`);
+      return 64;
+    }
+    const spec = registry.specs.find((s) => s.id === specId);
+    if (spec?.audience !== 'public') {
+      console.error(`${specId}: --keep-as is for a public spec only`);
+      return 1;
+    }
+    const target = join(fixturesDir(spec.source), `${specId}-${keepAs}.raw`);
+    if (existsSync(target)) {
+      console.error(`${specId}: fixtures/${specId}-${keepAs}.raw exists; --keep-as never replaces a file`);
+      return 1;
+    }
+  }
   let failed = 0;
-  for (const { id: specId, row: want } of specs) {
+  for (const { id: specId, row: want, keepAs } of specs) {
     const spec = registry.specs.find((s) => s.id === specId);
     if (spec === undefined) {
       console.error(`${specId}: no such spec`);
@@ -242,7 +272,7 @@ async function main(): Promise<number> {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
-    const id = want === undefined ? specId : `${specId}-${slug}`;
+    const id = keepAs !== undefined ? `${specId}-${keepAs}` : want === undefined ? specId : `${specId}-${slug}`;
     const r = await client.fetch(spec.source, requestFor(spec, row, now), {
       maxBytes: spec.max_bytes,
       timeoutMs: spec.timeout === 'metadata' ? METADATA_TIMEOUT_MS : TOTAL_TIMEOUT_MS,
@@ -268,17 +298,26 @@ async function main(): Promise<number> {
       trimmed: false,
     };
     let where = '.smoke/ only (owner audience)';
-    if (spec.audience === 'public') {
-      const dir = join(root, 'apps/server/src/adapters', spec.source.toLowerCase(), 'fixtures');
+    if (keepAs !== undefined && (res.status !== 200 || !v.ok)) {
+      where = '.smoke/ only (--keep-as needs a 200 that passes the validity check)';
+      failed += 1;
+    } else if (spec.audience === 'public') {
+      const dir = fixturesDir(spec.source);
       mkdirSync(dir, { recursive: true });
       let body: Buffer = res.body;
-      if (body.length > TRIM_BYTES && (spec.validity.format === 'json' || spec.validity.format === 'csv')) {
+      if (
+        keepAs === undefined &&
+        body.length > TRIM_BYTES &&
+        (spec.validity.format === 'json' || spec.validity.format === 'csv')
+      ) {
         const text = body.toString('utf8');
         body = Buffer.from(spec.validity.format === 'json' ? trimJson(text) : trimCsv(text));
         meta.trimmed = true;
       }
-      writeFileSync(join(dir, `${id}.raw`), body);
-      writeFileSync(join(dir, `${id}.meta.json`), `${JSON.stringify(meta, null, 2)}\n`);
+      // 'wx': a --keep-as file that appeared since the check above is still never replaced.
+      const flag = keepAs === undefined ? 'w' : 'wx';
+      writeFileSync(join(dir, `${id}.raw`), body, { flag });
+      writeFileSync(join(dir, `${id}.meta.json`), `${JSON.stringify(meta, null, 2)}\n`, { flag });
       where = `apps/server/src/adapters/${spec.source.toLowerCase()}/fixtures/${id}.raw${meta.trimmed ? ' (trimmed)' : ''}`;
     }
     console.log(

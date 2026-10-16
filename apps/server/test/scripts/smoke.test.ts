@@ -36,6 +36,44 @@ describe('scripts/smoke-capture.ts', () => {
     );
     expect(tooMany.status).toBe(64);
   });
+
+  // Every --keep-as refusal happens before the first request (no network here: msw is not even loaded).
+  const keep = (...a: string[]) =>
+    spawnSync(process.execPath, [script, '--contact', 'a@b.nl', '--info-url', 'https://x.nl', ...a], {
+      env: { ...process.env, CI: '' },
+      encoding: 'utf8',
+    });
+
+  it('--keep-as takes a lower-case name of at most 40 characters and is never combined with --row', () => {
+    for (const bad of ['Full', '-full', '../x', 'x'.repeat(41)]) {
+      const r = keep('--spec', 'nl-1-catalogue', '--keep-as', bad);
+      expect([bad, r.status]).toEqual([bad, 64]);
+    }
+    const withRow = keep('--spec', 'nl-1-fc-1h', '--row', 'lobith.bovenrijn.tolkamer/Q', '--keep-as', 'full');
+    expect(withRow.status).toBe(64);
+    expect(withRow.stderr).toMatch(/not combined with --row/);
+  }, 30_000);
+
+  it('--keep-as refuses an owner-audience spec and an existing fixture, before any request', () => {
+    const owner = keep('--spec', 'be-3-values', '--keep-as', 'full');
+    expect(owner.status).toBe(1);
+    expect(owner.stderr).toMatch(/public spec only/);
+    // fixtures/nl-1-fc-1h-lobith-q-20261001t0425z.raw is a committed recording; a refusal of the second
+    // spec also spends nothing on the first.
+    const exists = keep(
+      '--spec',
+      'nl-2-wfs',
+      '--keep-as',
+      'x',
+      '--spec',
+      'nl-1-fc-1h',
+      '--keep-as',
+      'lobith-q-20261001t0425z',
+    );
+    expect(exists.status).toBe(1);
+    expect(exists.stderr).toMatch(/nl-1-fc-1h-lobith-q-20261001t0425z\.raw exists/);
+    expect(exists.stdout).toBe('');
+  }, 30_000);
 });
 
 describe('scripts/healthz-smoke.sh (S10)', () => {

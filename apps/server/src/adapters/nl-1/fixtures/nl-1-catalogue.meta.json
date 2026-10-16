@@ -8,5 +8,6 @@
   "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus",
   "bytes": 4859914,
   "trimmed": true,
-  "trim": "kept only the WATHTE/NAP meting, Q meting and verwachting AquoMetadata, their links and the locations they reference"
+  "trim": "kept only the WATHTE/NAP meting, Q meting and verwachting AquoMetadata, their links and the locations they reference",
+  "note": "Trimmed; kept for the tests and scripts/gen-nl1-stations.ts. The untrimmed answer (recorded 2026-10-16) is nl-1-catalogue-full.raw, which scripts/rws-inventory.ts reads."
 }

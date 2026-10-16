@@ -1,0 +1,12 @@
+{
+  "spec": "nl-1-catalogue",
+  "source": "NL-1",
+  "synthetic": false,
+  "recorded_at": "2026-10-16T13:00:58Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/METADATASERVICES/OphalenCatalogus",
+  "bytes": 4881772,
+  "trimmed": false,
+  "note": "Untrimmed: the whole OphalenCatalogus answer (smoke-capture --keep-as full), read by scripts/rws-inventory.ts. The trimmed nl-1-catalogue.raw stays the fixture of the tests and scripts/gen-nl1-stations.ts."
+}
