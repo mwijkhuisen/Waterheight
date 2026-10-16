@@ -16,7 +16,13 @@ FROM caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f43
 # kernel refuses to exec such a binary under cap_drop: ALL (caddy-docker#396).
 # A plain copy drops the xattr. Caddy runs as uid 65533 with no capability and
 # binds 80/443 through the container's net.ipv4.ip_unprivileged_port_start.
-RUN cp /usr/bin/caddy /usr/bin/caddy.plain \
+# #131 (R-095, owner 2026-10-16): the base still carries Alpine's zlib 1.3.2-r0 (CVE-2026-85091), so the fixed
+# revision is pinned (BOM row). Alpine keeps only a branch's newest revision: once r1 is replaced the build fails, and
+# the pin moves, or goes when the caddy image carries the fix. Caddy is a static Go binary and does not link zlib (apk
+# and busybox do), so this clears the image's finding, not a path into Caddy.
+ARG ZLIB_VERSION=1.3.2-r1
+RUN apk add --no-cache "zlib=${ZLIB_VERSION}" \
+  && cp /usr/bin/caddy /usr/bin/caddy.plain \
   && mv /usr/bin/caddy.plain /usr/bin/caddy \
   && mkdir -p /data/access /config \
   && chown -R 65533:65533 /data /config
