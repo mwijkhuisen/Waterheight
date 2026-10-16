@@ -198,11 +198,23 @@ stations:
   - { station: de.wsv.9340010, unsnapped: true, reason: "Emshörn (EMS-km 74.32, tidal estuary gauge): the graph's Ems relation ends 6.8 km from it" }
   - { station: de.wsv.23800600, river: neckar, max_m: 1200, reason: "Kochendorf Schleuse UP (NECKAR-km 103.8): 984 m from the nearest Neckar edge (lock gauges sit at the lock cut), so max_m is raised; nearest neckar edge 984 m on the fixture (OSM 2026-10-01), next other curated river main 52551 m" }
   - { station: de.wsv.26700380, by_km: true, reason: "Wintrich OP (MOSEL-km 141.7), a lock gauge 655 m from the nearest Moselle edge on the fixture (OSM 2026-10-01): its perpendicular foot falls 0.56 km below Wintrich UP (MOSEL-km 141.1), so it is placed by its official km between two Moselle anchors instead" }
-  # CH-1 and CH-2 (BAFU names the water body; only the case where the name matches a different river than the gauge is on)
-  - { station: ch.bafu.2471, unsnapped: true, reason: "Murg at Murgenthal is the Aare tributary (Wikidata Q1953660), not the curated Thurgau murg (Q685327) that the name matches; 86.6 km from the murg, 1256 m from the aare on the fixture (OSM 2026-10-10) [U: an uncurated river]" }
-  - { station: ch.bafu-pq.2471, unsnapped: true, reason: "Murg at Murgenthal is the Aare tributary (Wikidata Q1953660), not the curated Thurgau murg (Q685327) that the name matches; 86.6 km from the murg, 1256 m from the aare on the fixture (OSM 2026-10-10) [U: an uncurated river]" }
+  # CH-1 and CH-2 (BAFU names the water body; only the cases where the name matches a different river than the gauge is on,
+  # or names the Vorderrhein, which OSM maps as the Rhine and rivers.yaml therefore has no entry for (owner, #143))
+  - { station: ch.bafu.2471, river: murg-aare, reason: "Murg at Murgenthal is the Aare tributary (Wikidata Q1953660), curated as murg-aare (#143), not the curated Thurgau murg (Q685327) that the name matches; nearest murg-aare edge 7 m, langeten 94 m, aare 1256 m, murg 86617 m on the extract of geo.yml run 38869567719 (OSM 2026-10-15)" }
+  - { station: ch.bafu-pq.2471, river: murg-aare, reason: "Murg at Murgenthal is the Aare tributary (Wikidata Q1953660), curated as murg-aare (#143), not the curated Thurgau murg (Q685327) that the name matches; nearest murg-aare edge 7 m, langeten 94 m, aare 1256 m, murg 86617 m on the extract of geo.yml run 38869567719 (OSM 2026-10-15)" }
+  - { station: ch.bafu.2033, river: rhine, reason: "BAFU names the water body Vorderrhein (Wikidata Q673896), which OSM maps as the main stream of the Rhine relation r123924 (Tomasee to Reichenau), so Ilanz lies on the curated rhine and the Vorderrhein has no entry of its own (owner, #143); nearest rhine edge 39 m (w174752117, which carries wikidata=Q673896), glenner 378 m on the extract of geo.yml run 38869567719 (OSM 2026-10-15)" }
+  - { station: ch.bafu-pq.2033, river: rhine, reason: "BAFU names the water body Vorderrhein (Wikidata Q673896), which OSM maps as the main stream of the Rhine relation r123924 (Tomasee to Reichenau), so Ilanz lies on the curated rhine and the Vorderrhein has no entry of its own (owner, #143); nearest rhine edge 39 m (w174752117, which carries wikidata=Q673896), glenner 378 m on the extract of geo.yml run 38869567719 (OSM 2026-10-15)" }
   - { station: ch.bafu.2305, river: glatt-thur, reason: "BAFU names the water body Glatt, which the name rule gives to the curated Rhine glatt (Q680765); Herisau Zellersmühle lies on the Thur Glatt (Q1529837); nearest glatt-thur edge 5 m, sitter 4909 m, glatt 45336 m on the fixture (OSM 2026-10-11)" }
   - { station: ch.bafu-pq.2305, river: glatt-thur, reason: "BAFU names the water body Glatt, which the name rule gives to the curated Rhine glatt (Q680765); Herisau Zellersmühle lies on the Thur Glatt (Q1529837); nearest glatt-thur edge 5 m, sitter 4909 m, glatt 45336 m on the fixture (OSM 2026-10-11)" }
+  # B5 gauges (#143) deliberately left without an entry: their river is curated, but in OSM only one way near the mouth
+  # carries its QID, so they stay `no_edge_within_500m` and are placed by themselves once OSM tags more of the river (an
+  # `unsnapped` entry would keep them out). Measured on the extract of geo.yml run 38873561012 (OSM 2026-10-15); KG-250;
+  # both are pinned in test/fixtures/rivernet-golden.yaml.
+  #   ch.bafu.2327 Davos, Kriegsmatte (Dischmabach): 3.2 km from w99067175, the lowest 1.3 km of the Dischmabach
+  #   ch.bafu.2430 Sumvitg, Encardens (Rein da Sumvitg): 3.8 km from w181642606, the lowest 6.2 km of the Rein da Sumvitg
+  # The other B5 gauges that stay unplaced have no rivers.yaml entry (KG-250): lake gauges, canals and mill races, the WSL
+  # research catchments, karst springs, the rivers under `excluded:` and the lake tributaries more than 2 km from a
+  # curated flowline.
   # Tier-1 gauges (#100) deliberately left without an entry: the name rule matches their curated river, but no edge of it
   # lies within 500 m, so they stay `no_edge_within_500m` and are placed by themselves once OSM covers them (an
   # `unsnapped` entry would keep them out after such a fix). Measured on the fixture (OSM 2026-10-10); KG-250; all four
