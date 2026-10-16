@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { GuardVerdict } from '../../src/backfill/job.ts';
 import { inWindow, Pacer, windowEnd } from '../../src/backfill/pacer.ts';
-import { GUARD_SLEEP_MS, runBackfill, UNLOADED_SLEEP_MS } from '../../src/backfill/run.ts';
+import { GUARD_SLEEP_MS, runBackfill, STUCK_MS, UNLOADED_SLEEP_MS } from '../../src/backfill/run.ts';
 import {
   Clock,
   fakeClient,
@@ -160,6 +161,41 @@ describe('runBackfill', () => {
     const out = await run(clock, store, client, tempArchive().archive);
     expect(clock.slept.slice(0, 3)).toEqual([UNLOADED_SLEEP_MS, UNLOADED_SLEEP_MS, GUARD_SLEEP_MS]);
     expect(out.guard_waits).toBe(3);
+  });
+
+  it('marks a job done only once its last chunk is loaded (review Q2)', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    // The probe and the one chunk pass the guard; then the loader has not taken the chunk yet, twice.
+    store.verdicts = ['ok', 'ok', 'unloaded', 'unloaded'];
+    const id = await newJob(store, { from: '2026-07-20', to: '2026-08-01' });
+    const { client, calls } = fakeClient(clock, normal);
+    const out = await run(clock, store, client, tempArchive().archive);
+    expect(calls).toHaveLength(2);
+    expect(out.guard_waits).toBe(2);
+    expect(store.verdicts).toEqual([]);
+    expect((await store.get(id))?.status).toBe('done');
+  });
+
+  it('stops stuck after STUCK_MS of unloaded in a row; any other answer starts the count again (review Q1)', async () => {
+    const n = STUCK_MS / UNLOADED_SLEEP_MS;
+    const night = async (verdicts: GuardVerdict[]) => {
+      const clock = new Clock();
+      const store = new MemoryJobStore();
+      store.verdicts = verdicts;
+      const id = await newJob(store, { from: '2026-07-20', to: '2026-08-01' });
+      const { client, calls } = fakeClient(clock, normal);
+      const out = await run(clock, store, client, tempArchive().archive);
+      return { out, calls, job: await store.get(id) };
+    };
+    const stuck = await night(Array(n + 5).fill('unloaded'));
+    expect(stuck.out.stopped).toBe('stuck');
+    expect(stuck.calls).toHaveLength(0);
+    expect(stuck.job?.status).toBe('running');
+    // A backlog pause between two stretches just short of STUCK_MS: no stop.
+    const split = await night([...Array(n - 5).fill('unloaded'), 'backlog', ...Array(n - 5).fill('unloaded')]);
+    expect(split.out.stopped).toBe('done');
+    expect(split.job?.status).toBe('done');
   });
 
   it('stays one chunk ahead of a loader that ticks every 10 s, in short sleeps (queue fix; review N1)', async () => {

@@ -30,7 +30,7 @@ const APPLIED: Readonly<Record<string, string>> = {
   '20261110000001_backfill.sql': '8c359bc109ed96f1adf95b007d4118eb42f9cf788c33d6c284b131281c68f413',
   '20261110000002_backfill_partitions.sql': '633a3c6364f059da4d448fb6e8a8cebd68f54498b4209cb3d954daa2f5721af5',
   '20261111000001_backfill_guard_60s.sql': '9c46bd4faf87ce9a3daa7f471799aef04749835213799d2026ce3053052db207',
-  '20261112000001_backfill_guard_unloaded.sql': 'd7e3eecddc30ac5a1e80783af0f7fa46f6aa962c5cb6c8c0e7ccf5b43c9e9c94',
+  '20261112000001_backfill_guard_unloaded.sql': 'caaae22a8d78a066a256e4a0049e4688d257810b0441fed1d0a11f44c834e6eb',
 };
 
 const dir = new URL('../db/migrations/', import.meta.url);

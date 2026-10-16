@@ -101,8 +101,7 @@ SPW keeps decades, but the layers hold only the latest value per series, so the 
   ```bash
   sudo mv /srv/rws/raw/_state/seeds/be-3-catchup.json /srv/rws/raw/_state/seeds/be-3-catchup.json.before-<n>
   sudo mv /srv/rws/raw/_state/be-3-catchup.json /srv/rws/raw/_state/be-3-catchup.json.before-<n>
-  sudo docker compose -p rws --project-directory /var/lib/rws/active -f /var/lib/rws/active/compose.yaml \
-    --env-file /etc/rws/rws.env --env-file /var/lib/rws/active/images.env restart capture
+  rwsc restart capture   # rwsc: docs/runbooks/replay.md §2 (rws_compose, with the tunnel and owner overlays)
   ```
 
   The first file is the seed's progress, the second the seen ids of its calls (the last 5,000). The new window ends at the new start, and the round waits for UTC hour 0 if you restart outside the hours.

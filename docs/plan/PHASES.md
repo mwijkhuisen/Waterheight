@@ -3228,10 +3228,11 @@ NL-1 and up to nine other sources were `down` from 01:00 to 04:00 UTC. The loade
   - A chunk the loader sets aside (quarantined or skipped) gets a ledger row with no counts and `reconciled` false, so the guard never waits for it forever. Its job fails `unreconciled`.
   - The job line of a `schema_drift` carries `drift`, the parser's fixed code.
   - The runbooks' `rwsc` and the unattended start call `rws_compose`, which adds the tunnel and owner overlays: no "orphan `rws-cloudflared-1`" warning, and no `--remove-orphans`.
-  - Cost: about 300 to 400 chunks an hour instead of up to 2,000, so the rest of NL-1 (14 jobs) takes about two nights.
+  - Review round 1 (Q1, Q2): the guard counts the ledger by distinct chunk start, so a chunk fetched again after a `kill -9` counts once; a job is `done` only once its last chunk is in the ledger; and a run whose guard says `unloaded` for 10 minutes in a row stops `stuck` (exit 1) instead of waiting silently to the end of the window, for a chunk that never reaches the ledger (a damaged or recovered manifest line, KG-341).
+  - Cost: at the usual 2 s load about 300 to 400 chunks an hour instead of up to 2,000 (fewer in a slow hour, where a load over 60 s also trips `backlog`), so the rest of NL-1 (14 jobs) takes about two nights.
   - Evidence ([CI]):
-    - `resume.int.test.ts`: the guard at one unloaded chunk; a set-aside chunk gets an unreconciled ledger row, the guard answers `ok` and the job fails `unreconciled`, and the test fails without the loader change.
-    - `pacer.test.ts`: the runner stays one chunk ahead of a loader that ticks every 10 s, with short sleeps only.
+    - `resume.int.test.ts`: the guard at one unloaded chunk; for each way a line is set aside (a missing object, skipped; an object that does not inflate, quarantined; the tail's two-attempt quarantine) the chunk gets an unreconciled ledger row, nothing of the job is left unloaded and the job fails `unreconciled` (the test fails without the loader change); a chunk with two ledger rows counts once.
+    - `pacer.test.ts`: the runner stays one chunk ahead of a loader that ticks every 10 s, with short sleeps only; a finished job waits for its last chunk; 10 minutes of `unloaded` in a row stop the run `stuck`, and a break starts the count again.
     - `run.test.ts` and `truncation.test.ts`: the drift code.
 - **The [agent-prod] criterion stays open** (KG-343) until a night passes within the limits.
 
