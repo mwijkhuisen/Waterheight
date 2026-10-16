@@ -21,5 +21,8 @@ Before sending: replace `<NAME>`, `<WEBSITE URL>`, `<CONTACT E-MAIL>`, `<version
 - [C10 · Backlog templates (after launch)](c10-backlog.md)
 - [E1 · BfG Belegexemplar (at launch, by 12-03): German](e1-bfg-belegexemplar.md)
 - [E2 · Go-live notice (12-04): Dutch for RWS, German for ITZBund and BAFU](e2-go-live.md)
+- [C14 · Rijkswaterstaat: wider scope and request budget](c14-rws-roadmap-2.md)
+- [C15 · Het Waterschapshuis and the Unie van Waterschappen: a national route?](c15-umbrella.md)
+- [C16–C36 · Water boards: one template, filled in per board](c16-c36-water-boards.md)
 
 Record every send and answer in [docs/permissions.md](../../permissions.md).
