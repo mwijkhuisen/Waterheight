@@ -45,9 +45,9 @@ function idRows(text: string, expected: number): Map<string, string[]> {
 }
 
 /** §1a: ID → [id, country, provider – service, …]. */
-export const table1a = idRows(section('### 1a. Technical characteristics', '### 1b.'), 52);
+export const table1a = idRows(section('### 1a. Technical characteristics', '### 1b.'), 72);
 /** §1b: ID → [id, licence, attribution, effort, release, risks]. */
-export const table1b = idRows(section('### 1b. Licence, attribution', '\n---\n'), 52);
+export const table1b = idRows(section('### 1b. Licence, attribution', '\n---\n'), 72);
 
 /** §0.8: one entry per source ID named in a row: [source, terms, clause, verdict, audience]. */
 export const table08 = (() => {

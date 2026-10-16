@@ -7,5 +7,6 @@
   "content_type": "application/json;charset=UTF-8",
   "url": "https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=DDAPI20:locatiesmetlaatstewaarneming&outputFormat=application/json&PROPERTYNAME=CODE,NAAM,GROOTHEIDCODE,HOEDANIGHEIDCODE,EENHEIDCODE,WAARDEBEPALINGSMETHODECODE,WAARDE_LAATSTE_METING,TIJDSTIP_LAATSTE_METING,BEMONSTERINGSHOOGTE,OPDRACHTGEVENDE_INSTANTIE,KWALITEITSWAARDE_CODE,GEOMETRY&CQL_FILTER=COMPARTIMENTCODE%3D%27OW%27%20AND%20GROOTHEIDCODE%20IN%20(%27WATHTE%27%2C%27Q%27)%20AND%20TIJDSTIP_LAATSTE_METING%20%3E%20%272026-09-29T01%3A40%27",
   "bytes": 232808,
-  "trimmed": false
+  "trimmed": false,
+  "note": "Kept for the tests, its golden and scripts/gen-nl1-stations.ts. The snapshot of 2026-10-16, nl-2-wfs-20261016.raw, is the one scripts/rws-inventory.ts reads."
 }

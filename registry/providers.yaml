@@ -15,9 +15,109 @@ providers:
     contact: null
     terms_url: null
   - id: nl-waterboards
-    name: Dutch water boards (Vechtstromen, Waterschap Limburg, Rijn en IJssel)
+    name: Dutch water boards, generic placeholder (superseded by the per-board providers, catalogue §2.8)
     country: NL
     contact: null
+    terms_url: null
+  - id: ws-limburg
+    name: 'Waterschap Limburg'
+    country: NL
+    contact: 'Contact form https://www.waterschaplimburg.nl/contact/contactformulier/'
+    terms_url: null
+  - id: vechtstromen
+    name: 'Waterschap Vechtstromen'
+    country: NL
+    contact: 'info@vechtstromen.nl'
+    terms_url: https://www.vechtstromen.nl/algemeen/colofon/
+  - id: de-dommel
+    name: 'Waterschap De Dommel'
+    country: NL
+    contact: 'info@dommel.nl'
+    terms_url: https://www.dommel.nl/proclaimer
+  - id: brabantse-delta
+    name: 'Waterschap Brabantse Delta'
+    country: NL
+    contact: 'Contact form https://formulieren.brabantsedelta.nl/form/contact-opnemen/uw-gegevens-1'
+    terms_url: https://www.brabantsedelta.nl/actueel/kaarten-en-data/open-data-portaal/
+  - id: aa-en-maas
+    name: 'Waterschap Aa en Maas'
+    country: NL
+    contact: 'info@aaenmaas.nl'
+    terms_url: null
+  - id: hunze-en-aas
+    name: 'Waterschap Hunze en Aa''s'
+    country: NL
+    contact: 'gis_info@hunzeenaas.nl'
+    terms_url: https://www.hunzeenaas.nl/open-data/
+  - id: wdodelta
+    name: 'Waterschap Drents Overijsselse Delta'
+    country: NL
+    contact: 'info@wdodelta.nl'
+    terms_url: null
+  - id: hdsr
+    name: 'Hoogheemraadschap De Stichtse Rijnlanden (HDSR)'
+    country: NL
+    contact: 'post@hdsr.nl'
+    terms_url: https://www.hdsr.nl/@3720/waterschap-stelt/
+  - id: rivierenland
+    name: 'Waterschap Rivierenland'
+    country: NL
+    contact: 'info@wsrl.nl'
+    terms_url: null
+  - id: vallei-veluwe
+    name: 'Waterschap Vallei en Veluwe'
+    country: NL
+    contact: 'info@vallei-veluwe.nl'
+    terms_url: null
+  - id: noorderzijlvest
+    name: 'Waterschap Noorderzijlvest'
+    country: NL
+    contact: 'info@noorderzijlvest.nl'
+    terms_url: null
+  - id: wetterskip-fryslan
+    name: 'Wetterskip Fryslân'
+    country: NL
+    contact: 'Information-request form at mijn.wetterskipfryslan.nl (linked from wetterskip.frl/contact)'
+    terms_url: null
+  - id: zuiderzeeland
+    name: 'Waterschap Zuiderzeeland'
+    country: NL
+    contact: 'waterschap@zuiderzeeland.nl'
+    terms_url: null
+  - id: hhnk
+    name: 'Hoogheemraadschap Hollands Noorderkwartier (HHNK)'
+    country: NL
+    contact: 'Contact form hhnk.nl/form/e-mailformulier'
+    terms_url: null
+  - id: agv
+    name: 'Waterschap Amstel, Gooi en Vecht (AGV)'
+    country: NL
+    contact: 'Contact form agv.nl/contact/contactformulier/'
+    terms_url: null
+  - id: rijnland
+    name: 'Hoogheemraadschap van Rijnland'
+    country: NL
+    contact: 'Contact form rijnland.nl/contact/contactformulier/'
+    terms_url: null
+  - id: delfland
+    name: 'Hoogheemraadschap van Delfland'
+    country: NL
+    contact: 'loket@hhdelfland.nl'
+    terms_url: null
+  - id: hhsk
+    name: 'Hoogheemraadschap van Schieland en de Krimpenerwaard (HHSK)'
+    country: NL
+    contact: 'info@hhsk.nl'
+    terms_url: null
+  - id: hollandse-delta
+    name: 'Waterschap Hollandse Delta'
+    country: NL
+    contact: 'info@wshd.nl'
+    terms_url: null
+  - id: scheldestromen
+    name: 'Waterschap Scheldestromen'
+    country: NL
+    contact: 'info@scheldestromen.nl'
     terms_url: null
   - id: wsv
     name: WSV/ITZBund – PEGELONLINE

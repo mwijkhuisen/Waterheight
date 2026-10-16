@@ -87,7 +87,7 @@ describe('registry', () => {
 
   it('lists every §1a source ID exactly once (canaries aside)', () => {
     expect(real.map((s) => s.id).sort()).toEqual([...table1a.keys()].sort());
-    expect(real).toHaveLength(52);
+    expect(real).toHaveLength(72);
   });
 
   it('gives every source its initial audience unless a permission record exists', () => {
