@@ -4,6 +4,15 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## #167 Grype on the third-party images
+
+What #167 leaves (R-095, T-SEC-2). Both rows are open for the owner.
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-357 | security | **cloudflared 2026.9.3, the public edge in tunnel mode, runs with 18 accepted Go findings** (x/net v0.58.0, x/crypto v0.55.0, stdlib go1.26.8; one Critical) until the bump: 2026.10.1 clears them but is under the 7-day release age until 2026-10-22 17:24Z | The bump PR of #169 (agent, on or after 2026-10-22), then the owner's deploy | open |
+| KG-358 | security | **postgres' gosu 1.19 (go1.24.6) keeps 35 accepted stdlib findings with no fix in sight.** It is the latest gosu, never run (`db` and the drill start as 999:999), but every new go1.24.6 advisory turns both Grype gates red and needs an owner decision; the rules end with `.grype.yaml`'s expiry (2026-11-10) | A gosu release built with a current Go and a postgres image that carries it, or our own `db` image without gosu (a separate issue), or the owner renews the acceptance | open |
+
 ## #109 the Cloudflare Tunnel edge
 
 What #109 leaves (ADR-0021, `docs/plan/PHASES.md` §50). Risks: R-102 to R-106; R-097 is updated. KG-228 gets its fix in tunnel mode (below). Every row is open for the owner to accept or do.
