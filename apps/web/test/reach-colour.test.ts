@@ -35,7 +35,7 @@ const reach = (id: string): FeatureSpan => {
 const ev = (v: number, ageS = 0, limitS = 3600): EndValue => ({ v, ageS, limitS });
 const ids = (from: string, a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => `${from}.${a + i}`);
 
-const TIDAL = [...ids('scheldt', 9, 13), ...ids('ems', 30, 40), ...ids('lek', 4, 6), 'meuse.59'];
+const TIDAL = [...ids('scheldt', 12, 16), ...ids('ems', 30, 40), ...ids('lek', 4, 6), 'meuse.63'];
 const MODES = ['state', 'delta', 'q'] as const;
 const colourOf = (p: ReachPaint) => (p.k === 'v' ? p.colour : p.k);
 
@@ -62,14 +62,14 @@ describe('the tidal reaches', () => {
     );
   });
 
-  it('turns the rest of a span with a tidal reach to no data (scheldt.8 shares the Maulde to Antwerpen span)', () => {
-    expect(reachColour(reach('scheldt.8'), [ev(2), ev(3)], 'q')).toEqual({ k: 'nodata' });
+  it('turns the rest of a span with a tidal reach to no data (scheldt.11 shares the Maulde to Antwerpen span)', () => {
+    expect(reachColour(reach('scheldt.11'), [ev(2), ev(3)], 'q')).toEqual({ k: 'nodata' });
   });
 });
 
 describe('no data', () => {
-  const meuse29 = reach('meuse.32'); // 8 km, ordinary, pos 0.5
-  const meuse20 = reach('meuse.23');
+  const meuse29 = reach('meuse.36'); // 8 km, ordinary, pos 0.5
+  const meuse20 = reach('meuse.27');
 
   it('is stale, missing or without a reference', () => {
     for (const mode of MODES) {
@@ -100,13 +100,13 @@ describe('no data', () => {
     expect(meuse20.span?.lengthKm).toBeLessThan(120);
   });
 
-  it('is the 139 km Chooz to Eijsden gap on the public file, while meuse.26 is coloured', () => {
-    for (const id of ['meuse.27', 'meuse.28', 'meuse.29', 'meuse.30'])
+  it('is the 139 km Chooz to Eijsden gap on the public file, while meuse.30 is coloured', () => {
+    for (const id of ['meuse.31', 'meuse.32', 'meuse.33', 'meuse.34'])
       for (const mode of MODES)
         expect(reachColour(reach(id), [ev(2), ev(3)], mode), `${id} ${mode}`).toEqual({ k: 'nodata' });
-    expect(reachColour(reach('meuse.26'), [ev(2), ev(3)], 'state').k).toBe('v');
-    expect(reachColour(reach('meuse.26'), [ev(2), ev(3)], 'q').k).toBe('v');
-    expect(reach('scheldt.8').span?.lengthKm).toBeGreaterThan(120);
+    expect(reachColour(reach('meuse.30'), [ev(2), ev(3)], 'state').k).toBe('v');
+    expect(reachColour(reach('meuse.30'), [ev(2), ev(3)], 'q').k).toBe('v');
+    expect(reach('scheldt.11').span?.lengthKm).toBeGreaterThan(120);
   });
 
   it('is isolated per tributary: no tail before a confluence is coloured by the main stem', () => {
@@ -122,25 +122,25 @@ describe('no data', () => {
 
 describe('impounded reaches', () => {
   it('are neutral in the change mode, and coloured in the others (the server class, the discharge)', () => {
-    for (const id of ids('meuse', 26, 26)) {
+    for (const id of ids('meuse', 30, 30)) {
       expect(reach(id).impounded).toBe(true);
       expect(reachColour(reach(id), [ev(40), ev(-40)], 'delta')).toEqual({ k: 'impounded' });
       expect(reachColour(reach(id), [ev(2), ev(2)], 'state').k).toBe('v');
       expect(reachColour(reach(id), [ev(2), ev(2)], 'q').k).toBe('v');
     }
     // even with missing ends: "gestuwd" needs no data
-    expect(reachColour(reach('meuse.26'), [undefined, undefined], 'delta')).toEqual({ k: 'impounded' });
+    expect(reachColour(reach('meuse.30'), [undefined, undefined], 'delta')).toEqual({ k: 'impounded' });
   });
 });
 
 describe('the modes', () => {
-  const r = reach('meuse.32'); // pos 0.5
-  const r20 = reach('meuse.23'); // pos about 0.94
+  const r = reach('meuse.36'); // pos 0.5
+  const r20 = reach('meuse.27'); // pos about 0.94
 
   it('state: the level is rounded from the ends and stays within them', () => {
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 5 }), fc.integer({ min: 1, max: 5 }), (a, b) => {
-        for (const fs of [r, r20, reach('meuse.24'), reach('rhine.5')]) {
+        for (const fs of [r, r20, reach('meuse.28'), reach('rhine.5')]) {
           const p = reachColour(fs, [ev(a), ev(b)], 'state');
           if (fs.span === null || fs.span.pos === null) continue;
           expect(p.k).toBe('v');
@@ -186,7 +186,7 @@ describe('the modes', () => {
 });
 
 describe('endValues', () => {
-  const grp = reach('meuse.26'); // up B720000001 + B720000004, down B720000002
+  const grp = reach('meuse.30'); // up B720000001 + B720000004, down B720000002
   let n = 1;
   const station = (id: string, ...series: ['H' | 'Q', number][]) =>
     ({
@@ -253,7 +253,7 @@ describe('endValues', () => {
     expect(endValues(open, 'q', values, changes, stations)).toEqual([undefined, undefined]);
     const paints = reachPaints(spans, 'state', values, changes, stations);
     expect(paints.size).toBe(spans.size);
-    expect(paints.get('scheldt.10')).toEqual({ k: 'tidal' });
+    expect(paints.get('scheldt.13')).toEqual({ k: 'tidal' });
   });
 });
 
@@ -331,7 +331,7 @@ describe('binPaints (#112)', () => {
   });
 
   it("gives tidal reaches' bins tidal, and keeps the no-data rules per bin", () => {
-    const t = new Map([['scheldt.10', reach('scheldt.10')]]);
+    const t = new Map([['scheldt.13', reach('scheldt.13')]]);
     const hv = merge(at(up, 0, 10), at(down, 0, 10));
     for (const [, p] of binPaints(t, 'state', hv.values, hv.changes, by)) expect(p).toEqual({ k: 'tidal' });
     // a missing end, a stale end, and an open span

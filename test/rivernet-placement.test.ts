@@ -210,7 +210,7 @@ describe(`canal traps (stations within 1 km of a trap way: ${trapCounts})`, () =
   it('puts every placed station on an edge of its own river', SLOW, () => {
     const placedRules = new Set(['override', 'name', 'official_km']);
     const some = placed.stations.filter((s) => placedRules.has(s.rule));
-    expect(some.length).toBeGreaterThan(970);
+    expect(some.length).toBeGreaterThan(989);
     const wrong = some.filter((s) => s.river === null || !edgeOf(s).rivers.includes(s.river)).map((s) => s.id);
     expect(wrong).toEqual([]);
   });
@@ -238,7 +238,7 @@ describe(`canal traps (stations within 1 km of a trap way: ${trapCounts})`, () =
 
   it('places by name only on the river that the published water body names', SLOW, () => {
     const byName = placed.stations.filter((s) => s.rule === 'name');
-    expect(byName.length).toBeGreaterThan(796);
+    expect(byName.length).toBeGreaterThan(814);
     const wrong = byName
       .filter((s) => riverOf(net, overridesFile, inputs.get(s.id) as never) !== s.river)
       .map((s) => s.id);

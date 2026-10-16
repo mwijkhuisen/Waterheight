@@ -100,7 +100,7 @@ test('OV: Q mode, played: the Meuse reaches whose midpoint sub-span has a seeded
   const s = await start(page, context, baseURL, 'dh');
   const { valued, open: other } = await qSpans(page);
   // Non-vacuous: Chooz (with the SPW gauge co-located) to the first Q gauge downstream is one of them.
-  expect(valued).toContain('meuse.27');
+  expect(valued).toContain('meuse.31');
   await playHold(page);
   await open(page, `/?mode=q&t=${T}`);
   await mapReady(page);
@@ -116,9 +116,9 @@ test('OV: Q mode, played: the Meuse reaches whose midpoint sub-span has a seeded
       timeout: 60_000,
     })
     .toBe(true);
-  // A reach whose midpoint sub-span has an end without a discharge stays grey (never one-ended): meuse.28 and meuse.29.
-  expect(await reachKinds(page, ['meuse.28', 'meuse.29'])).toEqual({ 'meuse.28': 'nodata', 'meuse.29': 'nodata' });
-  expect(other).toEqual(expect.arrayContaining(['meuse.28', 'meuse.29']));
+  // A reach whose midpoint sub-span has an end without a discharge stays grey (never one-ended): meuse.32 and meuse.33.
+  expect(await reachKinds(page, ['meuse.32', 'meuse.33'])).toEqual({ 'meuse.32': 'nodata', 'meuse.33': 'nodata' });
+  expect(other).toEqual(expect.arrayContaining(['meuse.32', 'meuse.33']));
   // The owner host reads the frames from the owner API: at least one call, and no static frames file at all.
   const during = urlsFrom(s, mark);
   expect(during.filter((u) => u.pathname === FRAMES_API).length).toBeGreaterThanOrEqual(1);
@@ -137,13 +137,13 @@ test('OV: Δh mode, played: the owner sub-spans of the impounded Meuse are impou
   await mapReady(page);
   await page.getByRole('button', { name: nl('play'), exact: true }).click();
   await expect(page.getByRole('button', { name: nl('pause'), exact: true })).toBeVisible();
-  const reaches = ['meuse.27', 'meuse.28', 'meuse.29', 'meuse.30'];
+  const reaches = ['meuse.31', 'meuse.32', 'meuse.33', 'meuse.34'];
   await reachesPainted(page, reaches);
   // (on the public site these four are a 139 km gap and grey; the owner gauges cut it into sub-spans)
   await expect
     .poll(async () => Object.values(await reachKinds(page, reaches)).every((k) => k === 'impounded'))
     .toBe(true);
   await chooseMode(page, 'q');
-  await expect.poll(async () => (await reachKinds(page, ['meuse.27']))['meuse.27']).not.toBe('impounded');
+  await expect.poll(async () => (await reachKinds(page, ['meuse.31']))['meuse.31']).not.toBe('impounded');
   await finish(page, s);
 });

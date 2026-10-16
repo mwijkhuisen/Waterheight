@@ -86,7 +86,7 @@ describe('the fixture chains', () => {
         allGroups(sambre.children)
           .map((g) => g.kind === 'group' && g.riverId)
           .sort(),
-    ).toEqual(['hante', 'helpe-majeure', 'helpe-mineure', 'solre', 'thure']);
+    ).toEqual(['flamenne', 'hante', 'helpe-majeure', 'helpe-mineure', 'solre', 'tarsy', 'thure']);
     expect(sambre?.kind === 'group' && idsOf(sambre.children)).toEqual(
       expect.arrayContaining(['fr.sandre.D016221001', 'fr.sandre.D022000101', 'fr.sandre.D022000201']),
     );

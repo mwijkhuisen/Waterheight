@@ -34,18 +34,18 @@ describe('spansOf on the fixture release', () => {
     for (const [id, fs] of spans) if (fs.tidal === true) expect(fs.span === null || fs.span.tidal, id).toBe(true);
   });
 
-  it('measures the Chooz to Eijsden gap as meuse.27 to 30, 139 km, and the next stretch apart', () => {
-    for (const id of ['meuse.27', 'meuse.28', 'meuse.29', 'meuse.30']) {
+  it('measures the Chooz to Eijsden gap as meuse.31 to 34, 139 km, and the next stretch apart', () => {
+    for (const id of ['meuse.31', 'meuse.32', 'meuse.33', 'meuse.34']) {
       expect(at(id)?.up).toEqual(['fr.sandre.B720000002']);
       expect(at(id)?.down).toEqual(['nl.rws.eijsden.grens']);
       expect(at(id)?.lengthKm).toBeCloseTo(139.222, 3);
     }
-    expect(at('meuse.26')?.lengthKm).toBeCloseTo(2.323, 3);
-    expect(at('meuse.31')?.lengthKm).toBeCloseTo(0.174, 3);
+    expect(at('meuse.30')?.lengthKm).toBeCloseTo(2.323, 3);
+    expect(at('meuse.35')?.lengthKm).toBeCloseTo(0.174, 3);
   });
 
   it('groups co-located stations in file order at a span end', () => {
-    expect(at('meuse.26')?.up).toEqual(['fr.sandre.B720000001', 'fr.sandre.B720000004']);
+    expect(at('meuse.30')?.up).toEqual(['fr.sandre.B720000001', 'fr.sandre.B720000004']);
   });
 
   it('walks every arm of a bifurcation, a reach on two paths taking the first in walk order', () => {
@@ -57,11 +57,13 @@ describe('spansOf on the fixture release', () => {
     expect(at('nederrijn.3')?.lengthKm).toBeCloseTo(0.658, 3); // 3 + 4, the first arm
     expect(at('nederrijn.4')?.lengthKm).toBeCloseTo(0.658, 3);
     expect(at('nederrijn.5')?.lengthKm).toBeCloseTo(0.667, 3); // 3 + 5 is only walked second
-    // scheldt.8 into 9 and 10; moselle.19 into 21 and 22.
-    for (const id of ['scheldt.8', 'scheldt.9', 'scheldt.10']) expect(at(id)?.down).toEqual(['nl.rws.antwerpen']);
-    expect(at('scheldt.8')?.lengthKm).toBeCloseTo(165.581, 3);
-    expect(at('scheldt.8')?.tidal).toBe(true); // a span with a tidal reach
-    expect(spans.get('scheldt.8')?.tidal).toBe(false); // the reach itself is not
+    // scheldt.11 into 12 and 13; moselle.19 into 21 and 22.
+    for (const id of ['scheldt.11', 'scheldt.12', 'scheldt.13']) expect(at(id)?.down).toEqual(['nl.rws.antwerpen']);
+    // The first arm in walk order is scheldt.12 (0.406 km, ids sorted as text); via scheldt.13 (0.416 km) it is 165.581.
+    expect(at('scheldt.11')?.lengthKm).toBeCloseTo(165.571, 3);
+    expect(at('scheldt.13')?.lengthKm).toBeCloseTo(165.581, 3);
+    expect(at('scheldt.11')?.tidal).toBe(true); // a span with a tidal reach
+    expect(spans.get('scheldt.11')?.tidal).toBe(false); // the reach itself is not
     expect(at('moselle.19')?.lengthKm).toBeCloseTo(30.17, 3);
     expect(at('moselle.22')?.lengthKm).toBeCloseTo(30.131, 3);
     expect(at('moselle.21')?.down).toEqual(at('moselle.22')?.down);
@@ -69,12 +71,12 @@ describe('spansOf on the fixture release', () => {
 
   it('puts the midpoint of a reach on its span by the lengths before it', () => {
     const len = (id: string) => graph.reaches.find((r) => r.id === id)?.length_km ?? Number.NaN;
-    const total = len('meuse.27') + len('meuse.28') + len('meuse.29') + len('meuse.30');
-    expect(at('meuse.27')?.pos).toBeCloseTo(len('meuse.27') / 2 / total, 9);
-    expect(at('meuse.28')?.pos).toBeCloseTo((len('meuse.27') + len('meuse.28') / 2) / total, 9);
-    expect(at('meuse.29')?.pos).toBeCloseTo((len('meuse.27') + len('meuse.28') + len('meuse.29') / 2) / total, 9);
-    expect(at('meuse.30')?.pos).toBeCloseTo(
-      (len('meuse.27') + len('meuse.28') + len('meuse.29') + len('meuse.30') / 2) / total,
+    const total = len('meuse.31') + len('meuse.32') + len('meuse.33') + len('meuse.34');
+    expect(at('meuse.31')?.pos).toBeCloseTo(len('meuse.31') / 2 / total, 9);
+    expect(at('meuse.32')?.pos).toBeCloseTo((len('meuse.31') + len('meuse.32') / 2) / total, 9);
+    expect(at('meuse.33')?.pos).toBeCloseTo((len('meuse.31') + len('meuse.32') + len('meuse.33') / 2) / total, 9);
+    expect(at('meuse.34')?.pos).toBeCloseTo(
+      (len('meuse.31') + len('meuse.32') + len('meuse.33') + len('meuse.34') / 2) / total,
       9,
     );
   });

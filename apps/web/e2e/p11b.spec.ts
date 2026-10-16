@@ -51,9 +51,9 @@ const XSS_ID = 'nl.e2e.xss';
 const ranged = (river: string, from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => `${river}.${from + i}`);
 /** The tidal reaches of the fixture release (PHASES §P11b: Scheldt, Ems, Lek delta members, the Meuse delta). */
-const TIDAL = [...ranged('scheldt', 9, 13), ...ranged('ems', 30, 40), ...ranged('lek', 4, 6), 'meuse.59'];
+const TIDAL = [...ranged('scheldt', 12, 16), ...ranged('ems', 30, 40), ...ranged('lek', 4, 6), 'meuse.63'];
 /** Chooz to Eijsden: 139.2 km, over GAP_KM (120) and without a station between them. */
-const GAP = ranged('meuse', 27, 30);
+const GAP = ranged('meuse', 31, 34);
 const MID = '2026-10-25T12:00Z';
 
 const deep = (t = MID, mode = 'delta', extra = '') => `/?mode=${mode}&t=${t}${extra}`;
@@ -144,7 +144,7 @@ test('B1: the tidal reaches of the fixture are hatched, never interpolated, in e
   await chooseMode(page, 'delta');
   await play(page).click();
   await expect(pause(page)).toBeVisible();
-  await expect.poll(async () => (await reachKinds(page, TIDAL))['scheldt.12']).toBe('tidal');
+  await expect.poll(async () => (await reachKinds(page, TIDAL))['scheldt.15']).toBe('tidal');
   expect(Object.values(await reachKinds(page, TIDAL)).filter((k) => k !== 'tidal')).toEqual([]);
   await finish(page, s);
 });
@@ -159,32 +159,32 @@ test('the Chooz to Eijsden gap is grey in every mode; the impounded Meuse is neu
   const s = await start(page, context, baseURL, 'dh');
   await open(page, deep());
   await mapReady(page);
-  await reachesPainted(page, [...GAP, 'meuse.26', 'meuse.31', 'rhine.5']);
+  await reachesPainted(page, [...GAP, 'meuse.30', 'meuse.35', 'rhine.5']);
   // The Δh mode: the gap is checked before the impounded rule, so it is `nodata`; the short reaches are `impounded`.
   expect(await reachKinds(page, GAP)).toEqual({
-    'meuse.27': 'nodata',
-    'meuse.28': 'nodata',
-    'meuse.29': 'nodata',
-    'meuse.30': 'nodata',
+    'meuse.31': 'nodata',
+    'meuse.32': 'nodata',
+    'meuse.33': 'nodata',
+    'meuse.34': 'nodata',
   });
-  expect(await reachKinds(page, ['meuse.26', 'meuse.31'])).toEqual({
-    'meuse.26': 'impounded',
-    'meuse.31': 'impounded',
+  expect(await reachKinds(page, ['meuse.30', 'meuse.35'])).toEqual({
+    'meuse.30': 'impounded',
+    'meuse.35': 'impounded',
   });
   // An ordinary free-flowing reach is coloured (rhine.5: the longest Rhine span, 104.6 km, under GAP_KM).
   expect((await reachState(page, 'rhine.5'))?.k).toBe('v');
   await chooseMode(page, 'q');
-  await expect.poll(async () => (await reachState(page, 'meuse.31'))?.k).not.toBe('impounded');
+  await expect.poll(async () => (await reachState(page, 'meuse.35'))?.k).not.toBe('impounded');
   expect(await reachKinds(page, GAP)).toEqual({
-    'meuse.27': 'nodata',
-    'meuse.28': 'nodata',
-    'meuse.29': 'nodata',
-    'meuse.30': 'nodata',
+    'meuse.31': 'nodata',
+    'meuse.32': 'nodata',
+    'meuse.33': 'nodata',
+    'meuse.34': 'nodata',
   });
   await finish(page, s);
 });
 
-test('meuse.26 is coloured once both its ends have a discharge (Chooz given one by a routed stations and frames file)', async ({
+test('meuse.30 is coloured once both its ends have a discharge (Chooz given one by a routed stations and frames file)', async ({
   page,
   context,
   baseURL,
@@ -211,16 +211,16 @@ test('meuse.26 is coloured once both its ends have a discharge (Chooz given one 
     await fulfilJson(route, f);
   });
   await held(page, deep(MID, 'q'));
-  await reachesPainted(page, ['meuse.26', 'meuse.31']);
-  await expect.poll(async () => (await reachState(page, 'meuse.26'))?.k).toBe('v');
-  const st = await reachState(page, 'meuse.26');
+  await reachesPainted(page, ['meuse.30', 'meuse.35']);
+  await expect.poll(async () => (await reachState(page, 'meuse.30'))?.k).toBe('v');
+  const st = await reachState(page, 'meuse.30');
   expect(st?.c).toMatch(/^#[0-9a-f]{6}$/i);
   // The gap stays grey whatever the ends hold.
   expect(await reachKinds(page, GAP)).toEqual({
-    'meuse.27': 'nodata',
-    'meuse.28': 'nodata',
-    'meuse.29': 'nodata',
-    'meuse.30': 'nodata',
+    'meuse.31': 'nodata',
+    'meuse.32': 'nodata',
+    'meuse.33': 'nodata',
+    'meuse.34': 'nodata',
   });
   await finish(page, s);
 });
