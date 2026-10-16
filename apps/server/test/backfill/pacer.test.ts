@@ -162,20 +162,22 @@ describe('runBackfill', () => {
     expect(out.guard_waits).toBe(3);
   });
 
-  it('is not throttled by a loader that ticks every 10 s: about one chunk a second, no long sleep (review N1)', async () => {
+  it('stays one chunk ahead of a loader that ticks every 10 s, in short sleeps (queue fix; review N1)', async () => {
     const clock = new Clock();
     // The loader reads every 10 s and then has loaded every chunk archived so far; the guard sees the ledger as of that
-    // tick, with the SQL's threshold (more than 30 chunks with data not in the ledger).
+    // tick, with the SQL's threshold (any chunk with data not in the ledger).
     class TickingStore extends MemoryJobStore {
       private lastTick = clock.t;
       private loaded = 0;
+      maxBehind = 0;
       override async guard() {
         if (clock.t - this.lastTick >= 10_000) {
           this.lastTick = clock.t;
           this.loaded = [...this.jobs.values()].reduce((a, j) => a + j.chunks_with_data, 0);
         }
         const behind = [...this.jobs.values()].reduce((a, j) => a + j.chunks_with_data, 0) - this.loaded;
-        return behind > 30 ? 'unloaded' : 'ok';
+        this.maxBehind = Math.max(this.maxBehind, behind);
+        return behind > 0 ? 'unloaded' : 'ok';
       }
     }
     const store = new TickingStore();
@@ -185,11 +187,13 @@ describe('runBackfill', () => {
     const out = await run(clock, store, client, tempArchive().archive);
     const job = await store.get(id);
     expect(job).toMatchObject({ status: 'done', chunks_done: 153 });
-    expect(out.guard_waits).toBe(0);
-    expect(clock.slept.every((ms) => ms <= 1000)).toBe(true);
-    // 154 requests (the probe and the chunks) at 1 req/s: under 3 minutes, not the hours of 5-minute sleeps.
+    // Never more than one chunk in front of the live lines, and no 5-minute sleep: the pacer's and UNLOADED_SLEEP_MS.
+    expect(store.maxBehind).toBe(1);
+    expect(out.guard_waits).toBeGreaterThan(0);
+    expect(clock.slept.every((ms) => ms <= UNLOADED_SLEEP_MS)).toBe(true);
+    // 154 requests (the probe and the chunks), about one per loader tick: under half an hour, not hours.
     expect(calls).toHaveLength(154);
-    expect(clock.t - t0).toBeLessThan(180_000);
+    expect(clock.t - t0).toBeLessThan(153 * 12_000);
   });
 
   it('keeps the guard waiting to the end of the window, then stops without a request', async () => {

@@ -1,5 +1,6 @@
+import { SchemaDrift } from '@rws/core';
 import { describe, expect, it } from 'vitest';
-import { PROVIDERS } from '../../src/backfill/provider.ts';
+import { driftCode, PROVIDERS } from '../../src/backfill/provider.ts';
 import { runBackfill } from '../../src/backfill/run.ts';
 import {
   Clock,
@@ -45,11 +46,17 @@ describe('inspect', () => {
   it('refuses more lists than the parser reads', () => {
     expect(nl1.inspect(withValues(2, 51))).toEqual({ ok: false, code: 'truncated' });
   });
-  it('calls any other drift schema_drift, not truncation', () => {
+  it('calls any other drift schema_drift, not truncation, and keeps the parser code', () => {
     expect(nl1.inspect(Buffer.from('{"Succesvol":true,"WaarnemingenLijst":[{"x":1}]}'))).toEqual({
       ok: false,
       code: 'schema_drift',
+      drift: expect.stringMatching(/^[a-z0-9_]{1,40}$/),
     });
+  });
+  it('prints a drift code only when it is a fixed code', () => {
+    expect(driftCode(new SchemaDrift('bad_value'))).toBe('bad_value');
+    expect(driftCode(new SchemaDrift('Bad value <x>'))).toBe('other');
+    expect(driftCode(new Error('bad_value'))).toBe('other');
   });
 });
 

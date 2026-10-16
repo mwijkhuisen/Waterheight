@@ -25,9 +25,15 @@ const { client, calls } = fakeClient(clock, (c) => {
   return history(c);
 });
 const { db } = openDb(dbConfig({ DATABASE_URL: url }, 'rws_backfill') as DbConfig, { max: 1 });
+/** No loader runs beside the child, and the guard allows no unloaded chunk: this test is about the kill, not the guard. */
+class Unguarded extends SqlJobStore {
+  override async guard(): Promise<'ok'> {
+    return 'ok';
+  }
+}
 await runBackfill({
   config: narrowed([LOBITH_H]),
-  store: new SqlJobStore(db),
+  store: new Unguarded(db),
   archive: new Archive(raw),
   client,
   now: clock.now,

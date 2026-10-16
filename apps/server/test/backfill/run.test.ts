@@ -234,8 +234,27 @@ describe('probe', () => {
       status: 200,
       body: Buffer.from('{"Succesvol":true,"WaarnemingenAanwezig":true}'),
     }));
-    await go(clock, store, client, tempArchive().archive);
+    const out = await go(clock, store, client, tempArchive().archive);
     expect(await store.get(id)).toMatchObject({ status: 'failed', last_error: 'schema_drift' });
+    // The job line carries the parser's fixed code, so the night's journal says what drifted (P14a queue fix).
+    expect(out.jobs[0]?.drift).toMatch(/^[a-z0-9_]{1,40}$/);
+  });
+
+  it('a chunk answer the parser refuses fails the job as schema_drift, with the drift code in the job line', async () => {
+    const clock = new Clock();
+    const store = new MemoryJobStore();
+    const id = await newJob(store);
+    const { client } = fakeClient(clock, (c) => ({
+      status: 200,
+      body: Buffer.from(
+        c.check
+          ? '{"Succesvol":true,"WaarnemingenAanwezig":"true"}'
+          : '{"Succesvol":true,"WaarnemingenLijst":[{"x":1}]}',
+      ),
+    }));
+    const out = await go(clock, store, client, tempArchive().archive);
+    expect(await store.get(id)).toMatchObject({ status: 'failed', last_error: 'schema_drift' });
+    expect(out.jobs[0]).toMatchObject({ error: 'schema_drift', drift: expect.stringMatching(/^[a-z0-9_]{1,40}$/) });
   });
 });
 

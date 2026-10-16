@@ -54,7 +54,7 @@ CREATE FUNCTION public.backfill_guard(p_source text) RETURNS text
         SELECT 1 FROM public.backfill_job j
         WHERE j.source_id = p_source
           AND j.status IN ('planned', 'running', 'paused')
-          AND j.chunks_with_data - (SELECT count(*) FROM public.backfill_chunk c WHERE c.job_id = j.id) > 30
+          AND j.chunks_with_data - (SELECT count(*) FROM public.backfill_chunk c WHERE c.job_id = j.id) > 0
       ) THEN 'unloaded'
     WHEN h.status IS DISTINCT FROM 'ok' THEN 'stale'
     ELSE 'ok'
@@ -2803,4 +2803,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261109000001'),
     ('20261110000001'),
     ('20261110000002'),
-    ('20261111000001');
+    ('20261111000001'),
+    ('20261112000001');

@@ -8,7 +8,7 @@ import { DATA_EPOCH } from '../load/dirty.ts';
 import type { JobStatus, JobStore } from './job.ts';
 import { inWindow, Pacer, windowEnd } from './pacer.ts';
 import { nextChunk, planChunks, probeYears, requestBudget, yearEnd } from './plan.ts';
-import { PROVIDERS, type Provider } from './provider.ts';
+import { driftCode, PROVIDERS, type Provider } from './provider.ts';
 import type { LoadedBackfill } from './spec.ts';
 
 // The backfill run loop (P14a, plan §3.3): one-shot, inside the off-peak window, one job at a time in id order.
@@ -22,10 +22,11 @@ export const MAX_ATTEMPTS = 5;
 /** The guard said wait (loader not running, backlog, source stale): look again after this long. */
 export const GUARD_SLEEP_MS = 5 * 60_000;
 /**
- * The guard said `unloaded` (more than 30 chunks archived and not yet loaded): the loader is working through them
- * (it ticks every 10 s), so look again soon rather than after GUARD_SLEEP_MS, which would cost the night (review N1).
+ * The guard said `unloaded` (a chunk with data is archived and not loaded yet): the loader takes it at its next tick
+ * (every 10 s), so look again soon rather than after GUARD_SLEEP_MS, which would cost the night (review N1). Since the
+ * P14a queue fix the guard allows no unloaded chunk, so this wait comes after every chunk with data.
  */
-export const UNLOADED_SLEEP_MS = 15_000;
+export const UNLOADED_SLEEP_MS = 2_000;
 /** A truncated response halves the chunk at the cursor, down to this; below it the job fails `truncated` (C3). */
 export const MIN_CHUNK_MS = 86_400_000;
 const EPOCH_MS = Date.parse(DATA_EPOCH);
@@ -71,6 +72,8 @@ export type JobResult = {
   chunks: number;
   requests: number;
   error: string | null;
+  /** With error `schema_drift`: the parser's fixed code (`driftCode`), printed in the run's job line only. */
+  drift?: string;
 };
 /**
  * Why the run ended. `busy`: another runner holds a host's lease. `throttled`: the client backs off past the window
@@ -109,10 +112,11 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
       requests: 0,
       error: null,
     };
-    const finish = async (to: JobStatus, error: string | null) => {
+    const finish = async (to: JobStatus, error: string | null, drift?: string) => {
       await deps.store.setStatus(id, to, error, ['planned', 'running']);
       result.status = to;
       result.error = error;
+      if (drift !== undefined) result.drift = drift;
       return { result };
     };
     const stop = (stopped: Stopped) => ({ result, stopped });
@@ -215,8 +219,8 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
         let present: boolean;
         try {
           present = provider.parseCheck(res.body);
-        } catch {
-          return finish('failed', 'schema_drift');
+        } catch (err) {
+          return finish('failed', 'schema_drift', driftCode(err));
         }
         if (present) {
           await deps.store.advance(id, { cursor_ts: job.cursor_ts, data_from: job.cursor_ts, chunk: false });
@@ -234,7 +238,7 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
         if (!v.ok) return finish('failed', 'invalid');
         const seen = provider.inspect(res.body);
         if (!seen.ok && seen.code === 'truncated' && halve()) continue;
-        if (!seen.ok) return finish('failed', seen.code);
+        if (!seen.ok) return finish('failed', seen.code, seen.code === 'schema_drift' ? seen.drift : undefined);
         if (v.count !== 0) {
           wrote = true;
           // 9. The commit: (a) put, (b) append, (c) cursor.

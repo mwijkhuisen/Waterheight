@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -92,8 +92,8 @@ const load = () => h.loader({ now: LOAD_NOW }).tick();
 
 /**
  * The in-process runner on a fake clock, with the loader keeping up after every chunk as in production (the guard
- * stops a runner more than 2 chunks with data ahead of the ledger, review S6); returns its requests and the lines
- * loaded meanwhile.
+ * stops a runner with any chunk with data ahead of the ledger: review S6, the P14a queue fix); returns its requests
+ * and the lines loaded meanwhile.
  */
 async function run(start: number): Promise<{ calls: Call[]; loaded: number }> {
   await setGuard();
@@ -107,7 +107,12 @@ async function run(start: number): Promise<{ calls: Call[]; loaded: number }> {
       archive: h.archive,
       client,
       now: clock.now,
-      sleep: clock.sleep,
+      // The loader runs beside the runner, as in production: a sleep (the pacer's, the guard's) lets it tick, so a
+      // chunk that a killed runner left unloaded is loaded while the guard holds the new one.
+      sleep: async (ms) => {
+        loaded += (await load()).loaded;
+        await clock.sleep(ms);
+      },
       hooks: {
         afterCursor: async () => {
           loaded += (await load()).loaded;
@@ -400,8 +405,8 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
     expect(await verdict()).toBe('stale');
     await setGuard();
     expect(await verdict()).toBe('ok');
-    // More than 30 chunks of an active job with data that the ledger does not hold (unloaded or quarantined; review
-    // C5/S6, N1): its own verdict. 30 is a loader that ticks every 10 s while the runner writes 1 chunk/s.
+    // Any chunk of an active job with data that the ledger does not hold yet (review C5/S6, N1; the P14a queue fix
+    // lowered it from more than 30): its own verdict. A chunk the loader sets aside has a ledger row too.
     const { rows } = await h.t.admin.query<{ id: string; n: number; status: string }>(
       `SELECT j.id, j.status, j.chunks_with_data - (SELECT count(*) FROM backfill_chunk c WHERE c.job_id = j.id)::int AS n
        FROM backfill_job j WHERE j.source_id = 'NL-1' ORDER BY j.id LIMIT 1`,
@@ -409,7 +414,7 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
     const { id, n, status } = rows[0] as { id: string; n: number; status: string };
     const setBehind = (k: number) =>
       h.t.admin.query('UPDATE backfill_job SET chunks_with_data = chunks_with_data + $2 WHERE id = $1', [id, k]);
-    await setBehind(31 - n);
+    await setBehind(1 - n);
     await h.t.admin.query("UPDATE backfill_job SET status = 'running' WHERE id = $1", [id]);
     expect(await verdict()).toBe('unloaded');
     // A paused job still counts, an aborted or failed one (quarantined chunks of a dead job) does not (review N4).
@@ -426,7 +431,7 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
     await setGuard();
     await setBehind(-1);
     expect(await verdict()).toBe('ok');
-    await setBehind(-(30 - n));
+    await setBehind(n);
   });
 
   it('advance counts a chunk with data in the same update as the cursor', async () => {
@@ -487,5 +492,60 @@ describe('one runner per host: the lease (review C1/S1)', { timeout: 60_000 }, (
     } finally {
       await c.end();
     }
+  });
+});
+
+describe('a chunk the loader sets aside (P14a queue fix)', { timeout: 60_000 }, () => {
+  /** The archive keys of a job's manifest lines. */
+  const keysOf = (id: number): string[] =>
+    readdirSync(join(h.raw, '_manifest')).flatMap((f) =>
+      readFileSync(join(h.raw, '_manifest', f), 'utf8')
+        .split('\n')
+        .filter((l) => l !== '')
+        .map((l) => JSON.parse(l))
+        .filter((l) => l.backfill?.job === id)
+        .map((l) => l.key as string),
+    );
+
+  it('gets an unreconciled ledger row: the guard stops waiting and the runner fails the job unreconciled', async () => {
+    const { from, to } = range(2006);
+    const { id } = await plan(from, to);
+    await setGuard();
+    const clock = new Clock(NIGHT);
+    const { client } = fakeClient(clock, history);
+    let first = true;
+    const out = await withStore((store) =>
+      runBackfill({
+        config: CONFIG,
+        store,
+        archive: h.archive,
+        client,
+        now: clock.now,
+        sleep: clock.sleep,
+        hooks: {
+          afterCursor: async () => {
+            // The first chunk's object is gone before the loader reads it: the loader skips the line (object_missing).
+            if (first) {
+              const keys = keysOf(id);
+              expect(keys).toHaveLength(1);
+              rmSync(join(h.raw, (keys[0] as string).slice('raw/'.length)));
+            }
+            first = false;
+            await load();
+          },
+        },
+      }),
+    );
+    expect(out.jobs.find((j) => j.job === id)).toMatchObject({ status: 'failed', error: 'unreconciled' });
+    expect(await job(id)).toMatchObject({
+      status: 'failed',
+      last_error: 'unreconciled',
+      unreconciled: 1,
+      inserted: 0,
+      chunks_with_data: 1,
+    });
+    expect(await ledger(id)).toMatchObject([{ kept: 0, inserted: 0, revised: 0, skipped: 0, reconciled: false }]);
+    expect(await stored(from, to)).toEqual([]);
+    expect(await withStore((s) => s.guard('NL-1'))).toBe('ok');
   });
 });
