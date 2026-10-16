@@ -4,8 +4,9 @@
 # third-party binaries we installed as released. #131 cleared them: Caddy 2.11.7 (#158) for the web image, and restic,
 # dbmate and go-pmtiles built from their release modules with go1.27.2 and the fixed modules (backup and server images,
 # GO_FIXES in their Dockerfiles). What is left is Caddy 2.11.7's Go stdlib go1.26.8 and golang.org/x/net v0.59.0 (owner,
-# 2026-10-15), fixed only in go1.26.9 and x/net v0.60.0, which no Caddy release has yet. Alpine's zlib is pinned to
-# its fixed revision in the web Dockerfile (owner, 2026-10-16). The owner's plan for the rest (2026-10-16): bump to
+# 2026-10-15; GO-2026-6617, which Grype's database added later, owner 2026-10-16), fixed only in go1.26.9 and x/net
+# v0.60.0, which no Caddy release has yet. Alpine's zlib is pinned to its fixed revision in the web Dockerfile (owner,
+# 2026-10-16). The owner's plan for the rest (2026-10-16): bump to
 # Caddy 2.11.8 once its image is 7 days old; if none is by 2026-11-02, build Caddy from source like the three above.
 # Every rule names the vulnerability, the package, its version and type, so a new finding, or the same one in another
 # version, still fails the gate.
@@ -31,6 +32,11 @@ ignore:
       version: v0.59.0
       type: go-module
   - vulnerability: GO-2026-6612
+    package:
+      name: golang.org/x/net
+      version: v0.59.0
+      type: go-module
+  - vulnerability: GO-2026-6617
     package:
       name: golang.org/x/net
       version: v0.59.0
@@ -82,6 +88,11 @@ ignore:
       version: go1.26.8
       type: go-module
   - vulnerability: GO-2026-6613
+    package:
+      name: stdlib
+      version: go1.26.8
+      type: go-module
+  - vulnerability: GO-2026-6617
     package:
       name: stdlib
       version: go1.26.8
