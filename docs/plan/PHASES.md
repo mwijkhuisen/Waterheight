@@ -1528,6 +1528,15 @@ Defaults are recommended. "Needed by" is the phase whose build needs the answer.
 | D21 | **Rivers not covered in the first release** (catalogue gap item 14, §9 Q32) | **Accepted as proposed (owner, 2026-10-06; P10b).** Accept for the first release and list them on the Method page: the Kempen rivers entering NL directly (Mark, Dommel, Aa/Weerijs, Warmbeek, Keersop, Merkske, Voer) until VMM (P13); the RLP tributaries Ahr, Kyll, Prüm and Nahe with LHP classes only until RLP (P13); the NL water-board stretches through German upstream gauges and RWS (backlog, §9 Q10); canal transfers only at the RWS points (`smeermaas.zuidwillemsvaart`, `kanne`). **Austria and Liechtenstein** (Ill, Bregenzerach, Bodensee at Bregenz): out of scope for the first release; the Alpine Rhine and Bodensee come from CH-1 | P6, P10 (Method page), P13 |
 | D22 | **Hybrid audience** (decided by the owner, 2026-09-24; ADR-0017; catalogue §0.8) | **Decided:** keep the public site with the open sources exactly as planned, and add a login-only **owner view** that also shows the sources whose terms allow personal use: BE-3, LU-2, LU-3, LU-4, DE-3, DE-2 until the Belegexemplar, CH-2/CH-4/CH-5 if BAFU objects to public use, and BE-1/BE-2 once their credentials arrive. Only the owner uses it; giving anyone else access (credentials, a WireGuard peer, screenshots) is forbidden, because it would be distribution to third parties. Access: WireGuard only, then `basic_auth`. HIC and VMM are asked for credentials for a personal, non-commercial, private viewer (optionally also about public display); SPW and AGE are asked only for public display | P0 (registry), P1 (capture), P2, P5c, P7–P12, P13, P14 |
 | D23 | **Public name Water Radar** (was Rivierkijker; issues #90 and #128, the owner's design document of 2026-09-29) | **Amended (owner, 2026-10-10; P10f, #128, §47): the public name is Water Radar**, the same in NL and EN, two words in running text, with a new mark (a radar scope over water) and the same colours; the internal names stay. **Decided first (owner, 2026-10-06; P10c).** The public site is Rivierkijker in NL and EN, with one translated subtitle; the repository, the packages, the user agent and the internal names keep theirs. The meta description says "forecasts and warnings where available" (not "official forecasts and alert levels" for every river); the map's colours stay and are documented as the signal set; the fonts are vendored woff2, sha256-pinned. `docs/design/BRAND.md`. |
+| D24 | **Scope of roadmap 2** (roadmap 2, §54; D23 in the issues as first written, §54.2) | Every live Rijkswaterstaat level (WATHTE) and discharge (Q) location in the Netherlands and on the border waters that the NL-2 WFS shows as live. Structure-internal gauges are **registered `off` with a reason** and never shown: lock chambers (`kolk`), gate slots (`schuif`), pumping-station internals and `pannerden.regelwerk.*` (catalogue §2.1 WFS pitfall 5). Offshore platforms are included, in cm MSL. The site tagline becomes "Waterstanden van Nederland en de rivieren die het binnenstromen" / "Water levels of the Netherlands and the rivers that flow into it". **Status 2026-10-16: open, default proposed (no answer on #62).** | P15 (2026-12-07) |
+| D25 | **Rijkswaterstaat request budget** | Cadence tiers: **10 min** for the key coastal and delta gauges (P15 proposes about 30), **30 min** for the other tidal and river gauges, **60 min** for lakes, canals and regulated waters; the astronomical tide fetched monthly, the measured high and low waters daily; the cap in `budget.test.ts` goes from **400 to 900 requests in any 60 minutes**. The higher cap takes effect only ≥ 10 working days after C14 and only if Rijkswaterstaat has not objected; it is cut back at once if they ask. Alternatives: a lower cap with slower tiers, or waiting for an explicit "yes". **Status 2026-10-16: open, default proposed (no answer on #62).** | P16a (2026-12-14) |
+| D26 | **Sea level on the map** | Coastal, estuary and Wadden gauges show the **surge** (measured − astronomical tide, in cm) as their map value and colour, labelled "opzet"/"surge" and marked as derived; the station panel shows the measured level, the astronomical tide as a band, the measured and predicted high and low waters, and the Rijkswaterstaat forecast; offshore platforms (cm MSL) are never compared with NAP gauges; tidal gauges stay hatched and are never interpolated (D12). Alternative: the raw measured level, hatched, without surge. **Status 2026-10-16: open, default proposed (no answer on #62).** | P18 (2027-01-18) |
+| D27 | **Lakes on the map** | A lake polygon is coloured only by the NL-4 class of **one named reference gauge** per lake, and the legend names that gauge; every other gauge on the lake is drawn as its own point, so wind set-up (one shore up, the other down) stays visible; a lake value is never an average. P18b proposes the reference gauges (for example Krabbersgat or Lemmer for the IJsselmeer, Markermeer midden for the Markermeer). **Status 2026-10-16: open, default proposed (no answer on #62).** | P18 (2027-01-18); P19 |
+| D28 | **Water-board audience** (extends D22) | `public` once the board grants publication, recorded in `registry/permissions/<ID>.md`; `owner` if the board allows personal, non-commercial use only, with the clause quoted as its `private_basis` (D22, ADR-0017; Vechtstromen's and De Dommel's site terms contain such a clause); `off` otherwise. A board's viewer, app or portal is never scraped without consent, and an open endpoint is not consent. **Status 2026-10-16: open, default proposed (no answer on #62).** | The first P21 PR |
+| D29 | **Offshore platforms north of 54° N** (F3, A12, D15; outside the basemap's Rhine-basin cut) | Points over the world basemap (z0–6) only; the basemap cut stays. Alternative: extend the cut to 56° N; P20 measures the size. **Status 2026-10-16: open, default proposed (no answer on #62).** | P19 (2027-01-25) |
+| D30 | **Class crosswalk addendum for coast and lakes** (catalogue §4.9; extends D18) | Adopt the addendum that P18b proposes, which maps the NL-4 coastal classes ("Stormvloed" …) and the seasonal lake classes (`IJsselmeerWinter`/`Zomer`, `Grevelingen_*`, `VeerseMeer*`, `Haringvliet_*`) to the common scale. They are labelled as Waterinfo display classes, never as warnings, and official storm-surge warnings are a link to the national service, not data. The owner reads the addendum before answering: every coloured coast and lake on the map follows from it. **Status 2026-10-16: open, default proposed (no answer on #62).** | P18b (before it merges) |
+| D31 | **The tidal delta on the map** | The tidal network (Noord, Oude Maas, Nieuwe Maas, Dordtsche Kil, Spui, the Merwedes, Hollandsch Diep, Haringvliet) is hatched, with no flow animation. "Follow the water" ends at the sea or a lake with a label (Nieuwe Waterweg, Haringvliet sluices, Ketelmeer → IJsselmeer). **Status 2026-10-16: open, default proposed (no answer on #62).** | P17 (2026-12-14) |
+| D32 | **Waters still uncovered after roadmap 2** (successor of D21) | The Method page lists each water board without a grant, with its rivers and the nearest gauge the map does show (German, Belgian or Rijkswaterstaat). **Status 2026-10-16: open, default proposed (no answer on #62).** | P19b (2027-02-08) |
 
 ### 6.2 Actions
 
@@ -1544,6 +1553,7 @@ Everything non-code the owner must do, with the phase each item gates. The e-mai
 | A6 | healthchecks.io | Create an account and a project. Add e-mail + phone/push integrations. Create a project API key for `rws-hc-sync` | 09-28 | P1b (alerts) |
 | A7 | Put secrets on the VPS | `/etc/rws/secrets/` (0600): restic password, S3 keys, healthchecks API key (plus a GHCR read token if the repo is private). DB role passwords are generated by bootstrap in P2 | as each phase asks (P1b, P2) | P1b, P2 |
 | A8 | **Set up WireGuard for the owner view** (D22; A§11.5) | On the VPS: run the P12a WireGuard script (`wg0` 10.66.0.1/24, UDP 51820). On each of **your own** devices (laptop, phone): install WireGuard, generate the key pair on the device, add it with `rws-wg-peer add <name>`, and add the owner hostname to the tunnel's DNS or hosts entry. Install the exported Caddy root CA on each device. Generate the `basic_auth` password (≥ 32 random characters, kept in your password manager) and put its bcrypt hash in `/etc/rws/secrets/owner_basic_auth`. Never add another person's device or share the password. Run `verify-owner.sh` and paste the output | ≤ 11-26 (or as soon as P12a's WireGuard PR merges, if pulled forward) | **P12a** (owner site live) |
+| A9 | **Capacity headroom for roadmap 2** (§54) | After P16 has run for two weeks, read the disk trend and the archive growth (`/status/ops.json`, `docs/capacity.md`). P20 projects year 1 with the new Rijkswaterstaat bytes. If the projection passes 60% of the disk, enlarge the VPS disk (or the volume) before P20b releases, then confirm in a comment on #62. **Status 2026-10-16: open** | 2027-02-15 | **P20** (P20b release) |
 | **B — GitHub** | | | | |
 | B1 | Run `scripts/gh-settings.sh`, then `--check` | Ruleset on `main`: PR required (**0 required approvals**, because the owner is the only merger), required checks `ci` and `security`, linear history, no force push, no deletion. Tag ruleset protecting `legacy-v0`. Require SHA-pinned actions. Allowed-actions list. Default `GITHUB_TOKEN` read-only; Actions may not approve PRs. Secret scanning + push protection. Private vulnerability reporting. Dependabot alerts | right after P0b merges (09-26) | Closing P0; every later PR |
 | B2 | Create the `production` environment | Required reviewer: owner. Deployment branch: `main`. **No environment secrets** | before P1b's first release | P1b onward (every deploy) |
@@ -1561,11 +1571,34 @@ Everything non-code the owner must do, with the phase each item gates. The e-mai
 | C7 | **RWS** (NL-1): the "Servicedesk Data" contact form on rijkswaterstaatdata.nl, optionally also https://github.com/Rijkswaterstaat/WaterWebservices/discussions | Courtesy notice of the load (about 9k requests/day), the `X-API-KEY` value and the contact address. Ask about the forecast cadence ("elke 6 uur"), **whether the API hosts change with the CTD migration on 2026-11-05** (§10 R4; also ask in GitHub Discussions), the meaning of quality code 25, **whether the longer waterinfo fan/ensemble forecasts exist as data, whether the NL-4 classes correspond to the WMCN warning phases and whether those phases exist machine-readably** (§10 R3), where the next NL-4 edition will be published, and **what the `kanne` Q series measures** (§10 R9) | before 10-02 | Courtesy for P1 (not blocking); the answers inform P2b, P5 (`kanne`), P7 (NL-4 labelling) and P8 |
 | C8 | **ITZBund / WSV** (DE-1/DE-5): contact address not in the research; use the contact on pegelonline.wsv.de | Courtesy notice. Ask whether `WV` and the third-party mirrors fall under DL-DE Zero, and ask permission for scripted use of the history form (DE-5) | 09-28 | Courtesy for P1; P14 (DE-5) |
 | C9 | **BAFU** (CH-1…CH-8): `abfragezentrale@bafu.admin.ch` (live data), `hydrologie@bafu.admin.ch` (history orders) | Courtesy notice of 10-min LINDAS/hydrodaten use. Ask what `threshold_customer` means, about the history order (CH-8), and whether the CSV is UTC or UTC+1. (The hydrodaten polling permission is C13; one e-mail may carry both) | 09-28 | Courtesy for P1; P14 (CH-8) |
-| C10 | Backlog providers | HLNUG, LfU Bayern and the Dutch water boards (Vechtstromen, Rijn en IJssel, Waterschap Limburg, and the Brabant boards De Dommel, Brabantse Delta and Aa en Maas, §10 R8): addresses not researched. (LfU RLP and LUBW moved to C11/C12) | after launch | Backlog |
+| C10 | Backlog providers | HLNUG, LfU Bayern and the Dutch water boards (Vechtstromen, Rijn en IJssel, Waterschap Limburg, and the Brabant boards De Dommel, Brabantse Delta and Aa en Maas, §10 R8): addresses not researched. (LfU RLP and LUBW moved to C11/C12.) **The water-board part is superseded by C15–C36 (roadmap 2, §54; contacts researched 2026-10-03)** | after launch | Backlog |
 | C11 | **LfU Rheinland-Pfalz** (DE-10) — **send now**: `poststelle@lfu.rlp.de`; Landesamt für Umwelt Rheinland-Pfalz, Kaiser-Friedrich-Straße 7, 55116 Mainz, tel. 06131 6033-0 | Consent (Impressum: *"nur mit Zustimmung des LfU … vervielfältigt … an Dritte abgegeben … öffentlichen Wiedergaben"*) to capture, store and publicly display the **forecasts at 66 gauges** (p10…p90), the **46 alert regions** and the W/Q values, with the source credit "LfU" and the Bearbeitungsdatum; the §0.2 API/export and history questions. The single most valuable forecast permission (catalogue §0.5): Rhine Maxau → Emmerich, Mosel incl. Perl/Stadtbredimus/Wasserbillig, Ahr, Nahe, Lahn, Sauer, Our, Kyll, Prüm | 09-28 | **P13 (DE-10)**; the P8 coverage matrix row "after a permission" |
 | C12 | **LUBW** (DE-12) — send now: `Pegelinfo@lubw.bwl.de` | Consent under the Impressum for the Upper Rhine tributaries (Murg, Kinzig); ask whether forecasts are published as data (UNVERIFIED); the §0.2 API/export and history questions | 09-28 | P13 (DE-12); not needed for the first release |
 | C13 | **BAFU hydrodaten polling**: `abfragezentrale@bafu.admin.ch` | Ask whether polling the undocumented hydrodaten website files is acceptable, and at what interval: CH-2 `hydro_sensor_pq.geojson` (thresholds `wl_1..wl_4`), CH-4 `q_forecast` (forecasts) and CH-5 `hydro_warn_levels` (warning sections); whether the 10-min rule of the BAFU 2019 conditions applies to them; and whether thresholds and forecasts are, or will be, on LINDAS (§10 R5). CH-2/4/5 are public under the BAFU conditions ("Freie Nutzung", §6 10-min rule, §8 forecasts free; catalogue §0.8), and silence by the go/no-go date keeps them public. **Fallback if BAFU objects to public use: the owner audience** (D22), instead of stopping: CH-2/4/5 stay in the owner view, and the public site shows CH-1 LINDAS `dangerLevel` plus the open CH-6 geo.admin.ch classes and national warning map (no permission needed; added in P7) and no Swiss forecasts. Only an explicit request to stop fetching the files stops their capture | 09-28; go/no-go 10-31 (P7) and 11-06 (P8) | P1 (capture continues), **P7 (CH-2, CH-5 audience)**, **P8 (CH-4 audience)** |
-| **D — During the build** (action IDs D1–D8 are separate from the decision IDs D1–D22 of §6.1; the text says "owner action Dn" for these) | | | | |
+| C14 | **Rijkswaterstaat** (NL-1), roadmap 2: the "Servicedesk Data" contact form on rijkswaterstaatdata.nl (or the CTD successor page after 2026-11-05), optionally also GitHub Discussions (without the `X-API-KEY` value) | Courtesy notice of the wider scope and load (about 900 requests per hour at peak, about 20,000 per day, from the same `X-API-KEY` and User-Agent). Questions: is that load acceptable, and what cadence do they prefer; is an endpoint for several locations per request planned; which gauges are structure-internal (lock chambers, gate slots); the meaning of `MSL` at the offshore platforms; is the storm-surge warning service (WMCN Kust) available as data; when will the astronomical tide for 2028 be published. Draft: `docs/legal/requests/c14-rws-roadmap-2.md`. Status 2026-10-16: not sent | ≥ 10 working days before P16a deploys (2026-12-14 at the latest) | **P16a** (the D25 cap of 900 deploys only if Rijkswaterstaat has not objected by then) |
+| C15 | **Het Waterschapshuis and the Unie van Waterschappen** (the umbrella; wave 1): `datastromen@hetwaterschapshuis.nl` (the data contact in the data.overheid.nl metadata of the IMWA datasets) or `servicedesk@hetwaterschapshuis.nl` (their homepage); `info@uvw.nl` (organisaties.overheid.nl) | One question: is there, or will there be, a public route to live water-quantity data of the water boards (the Gegevensknooppunt Waterschappen, the Digitale Delta API), and under which licence? Today they publish map objects only, under CC-BY-SA 4.0 (share-alike). Do not wait for the answer before sending C16–C36. Draft: `docs/legal/requests/c15-umbrella.md`. Status 2026-10-16: not sent | any time (recommended: now or right after launch) | P21 (a national route would be a source of its own, catalogue §2.8) |
+| C16 | **Waterschap Limburg** (NL-7; wave 1): the form https://www.waterschaplimburg.nl/contact/contactformulier/ | Roer, Niers, Geul, Swalm, Worm, Jeker, Geleenbeek (the most border rivers). Data: live levels at waterstandlimburg.nl and an app, but no open endpoint (403 to automated fetches; 0 public Lizard series). Terms: none found; a search snippet says 31 of its stations feed Copernicus EFAS (UNVERIFIED). Draft: `docs/legal/requests/c16-c36-water-boards.md`. Status 2026-10-16: not sent | any time (recommended: now or right after launch) | P21 (NL-7, per D28) |
+| C17 | **Waterschap Rijn en IJssel** (NL-5, keeps its ID; wave 1): `info@wrij.nl`, or the form at wrij.nl/direct-regelen/stel-vraag | Oude IJssel, Berkel, Bocholter Aa, Slinge, Baakse Beek, Schipbeek. Data: an undocumented ArcGIS layer `opengeo.wrij.nl … WaterData/Nexus_P` (catalogue NL-5); also ask whether its timestamps are UTC or local time. Terms: the site asks to be contacted about reuse and attribution. Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-5, per D28) |
+| C18 | **Waterschap Vechtstromen** (NL-8; wave 1): `info@vechtstromen.nl` | Vecht from De Haandrik, Dinkel, Regge. Data: none found (a HydroNET embed in earlier research). Terms (colofon): publication, copying or editing without permission is not allowed "anders dan voor persoonlijk en niet commercieel gebruik en met vermelding van de bron"; so ask explicitly for public display, or at least the owner view. Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-8, per D28) |
+| C19 | **Waterschap De Dommel** (NL-9; wave 1): `info@dommel.nl` | Dommel, Tongelreep, Keersop, Reusel, Beerze, Run. Data: "Dommelportaal" (ArcGIS, HydroNET behind it); one ArcGIS layer has 36 points with the latest value and class but **no timestamp**. Terms: the open-data page says "Iedereen kan en mag deze gebruiken", but the proclaimer allows personal use only without written permission; ask for written confirmation and a named licence. Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-9, per D28) |
+| C20 | **Waterschap Brabantse Delta** (NL-10; wave 1): the form https://formulieren.brabantsedelta.nl/form/contact-opnemen/uw-gegevens-1 | Mark, Aa of Weerijs, Donge, Dintel. Data: an "open, tenzij" open-data portal, but no live surface-water levels in it; ask whether live levels can be published. Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-10, per D28) |
+| C21 | **Waterschap Aa en Maas** (NL-11; wave 1): `info@aaenmaas.nl` | Aa, Raam, Hertogswetering, Leijgraaf, Peelse Loop. Data: `gisservices.aaenmaas.nl … EXTERN/Stuwinstellingen_waterstanden/MapServer` holds current weir levels with a date. Terms: none found. Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-11, per D28) |
+| C22 | **Waterschap Hunze en Aa's** (NL-12; wave 1): the open-data contact `gis_info@hunzeenaas.nl` | Westerwoldse Aa, Hunze, Drentsche Aa. Data: none live found (94 public Lizard series, last updated 2020). Terms: "open, tenzij"; "Iedereen is vrij om deze data te hergebruiken". Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-12, per D28) |
+| C23 | **Waterschap Drents Overijsselse Delta** (NL-13; wave 1): `info@wdodelta.nl` | Lower Vecht, Reest, Sallandse Weteringen. Data: none live found (48 public Lizard series, none updated since 2017); its map datasets on data.overheid.nl are CC0. Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-13, per D28) |
+| C24 | **Hoogheemraadschap De Stichtse Rijnlanden, HDSR** (NL-14; wave 1): `post@hdsr.nl` | Kromme Rijn, Hollandse IJssel, Leidsche Rijn. Data: a **live public Lizard API** (hdsr.lizard.net: 3,205 public series, 2,438 updated since 2026-10-01). Terms: a 2012 statement says anyone may use the data and build applications with it, but names no licence; the likeliest quick "yes": ask to confirm, and for a named licence. Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-14, per D28; the likeliest first board) |
+| C25 | **Waterschap Rivierenland** (NL-15; wave 1): `info@wsrl.nl` | Linge, Giessen, Alblas. Data: an ArcGIS layer of 1,178 locations, whose values sit behind HydroNET chart URLs. Terms: a disclaimer only. Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-15, per D28) |
+| C26 | **Waterschap Vallei en Veluwe** (NL-16; wave 1): `info@vallei-veluwe.nl` | Eem, Grift/Valleikanaal, Veluwe streams to the IJssel. Data: an ArcGIS layer of 748 points with the latest value and no timestamp (HydroNET behind it). Terms: none found. Draft: as C16. Status 2026-10-16: not sent | as C16 | P21 (NL-16, per D28) |
+| C27 | **Waterschap Noorderzijlvest** (NL-17; wave 2): `info@noorderzijlvest.nl` | Reitdiep, Winsumerdiep. Data: an ArcGIS app; 22 public Lizard series, stale since 2015. Draft: as C16. Status 2026-10-16: not sent | optional, any time (boezem and polder levels; lower value for a river map) | P21 (NL-17, per D28) |
+| C28 | **Wetterskip Fryslân** (NL-18; wave 2): the information-request form at mijn.wetterskipfryslan.nl (linked from wetterskip.frl/contact) | Frisian boezem. Data: the average boezem level, hourly, in an ArcGIS app. Draft: as C16 | as C27 | P21 (NL-18, per D28) |
+| C29 | **Waterschap Zuiderzeeland** (NL-19; wave 2): `waterschap@zuiderzeeland.nl` | Flevoland polders. Data: 3,893 live public Lizard series. Terms: none found. Draft: as C16 | as C27 | P21 (NL-19, per D28) |
+| C30 | **Hoogheemraadschap Hollands Noorderkwartier, HHNK** (NL-20; wave 2): the form at hhnk.nl/form/e-mailformulier | Noord-Holland boezem. Data: 7,270 live public Lizard series, some apparently forecasts. Terms: none found. Draft: as C16 | as C27 | P21 (NL-20, per D28) |
+| C31 | **Waterschap Amstel, Gooi en Vecht, AGV** (NL-21; wave 2): the form at agv.nl/contact/contactformulier/ | Amstel, Utrechtse Vecht. Draft: as C16 | as C27 | P21 (NL-21, per D28) |
+| C32 | **Hoogheemraadschap van Rijnland** (NL-22; wave 2): the form at rijnland.nl/contact/contactformulier/ | Oude Rijn, Rijnland boezem. Draft: as C16 | as C27 | P21 (NL-22, per D28) |
+| C33 | **Hoogheemraadschap van Delfland** (NL-23; wave 2): `loket@hhdelfland.nl` | Delfland boezem. Draft: as C16 | as C27 | P21 (NL-23, per D28) |
+| C34 | **Hoogheemraadschap van Schieland en de Krimpenerwaard, HHSK** (NL-24; wave 2): `info@hhsk.nl` | Rotte. Data: an ArcGIS "Actuele metingen water" app, historical CSV downloads. Draft: as C16 | as C27 | P21 (NL-24, per D28) |
+| C35 | **Waterschap Hollandse Delta** (NL-25; wave 2): `info@wshd.nl` | Island polders. Draft: as C16 | as C27 | P21 (NL-25, per D28) |
+| C36 | **Waterschap Scheldestromen** (NL-26; wave 2): `info@scheldestromen.nl` | Zeeland polders; outlets from Belgium in Zeeuws-Vlaanderen (UNVERIFIED). Draft: as C16 | as C27 | P21 (NL-26, per D28) |
+| **D — During the build** (action IDs D1–D10 are separate from the decision IDs D1–D32 of §6.1; the text says "owner action Dn" for these) | | | | |
 | D1 | Approve each `/plan`, merge PRs and approve `production` deployments | – | continuous | every phase |
 | D2 | Run the `[owner]` acceptance items | The scripts and checklists are supplied in each PR | per phase | closing each issue |
 | D3 | DST weekend | On 2026-10-25 after 03:00 local, check `/status/capture.json`: every spec is fresh, and LU-1 and NL-2 payloads are archived | 10-25 | P5 (DST fixtures) |
@@ -1574,12 +1607,30 @@ Everything non-code the owner must do, with the phase each item gates. The e-mai
 | D6 | RWS CTD switch | On 2026-11-05/06 check the nightly contract check and the RWS updates page; if the API hosts or the NL-4 file path moved, update the base URLs in config (§10 R4) | 11-06 | P2b, P8 (NL-1 continuity) |
 | D7 | First flood event | When an NL-bound Vigicrues forecast, a Swiss warning section above level 1, or an LHP class ≥ 2 appears live, tell the agent: the archived payloads become regression fixtures (§10 R2) | when it happens | P7, P8 (fixtures; not blocking) |
 | D8 | Answer the gap-check decisions | D18 (crosswalk) before P7b; D21 (uncovered rivers) before P10b; D19 and D20 before P12 | D18 10-31; D21 11-10 (answered 2026-10-06); D19/D20 11-26 | P7b, P10b, P12 |
+| D9 | **First storm surge** (roadmap 2; not the decision D9 of §6.1) | When a storm surge appears live, tell the agent: the archived payloads become regression fixtures for P18 and P20 (like owner action D7). Trigger: a Rijkswaterstaat "Stormvloed" class at a coastal gauge, or a surge of more than 1 m at Den Helder, Harlingen, Delfzijl, Hoek van Holland or Vlissingen | when it happens | P18, P20 (fixtures; not blocking) |
+| D10 | **Approve each `/plan`, merge each PR, approve the `production` deploys and run the [owner] items** of every roadmap 2 phase (the roadmap 2 counterpart of owner actions D1 and D2) | The acceptance items per phase are in the table below this one | continuous | every roadmap 2 phase (P15–P21) |
 | **E — Launch** | | | | |
 | E1 | Send the BfG Belegexemplar (C6) and record it | `registry/permissions/DE-2.md` | ≤ 12-03 | P12 (DE-2 from `owner` to `public`). P12b proves the gate (`GATED`, `DE-2.md.template`, the flip simulation) in CI; the flip is a one-commit follow-up after the answer (§44) |
 | E2 | Tell RWS, ITZBund and BAFU about go-live | Courtesy | 12-04 | – |
 | E3 | Timed rebuild drill on a temporary VPS | Delete the temporary VPS afterwards. Kit: `docs/runbooks/vps-rebuild.md`, `docs/drills/rebuild-timing-sheet.md`, `deploy/tests/rebuild-check.sh` (offline test in CI); the drill itself is owner work (KG-320) | ≤ 12-03 | P12 |
 | E4 | Sign the launch checklist | `docs/launch-checklist.md` (ships unticked; `test/launch-checklist.test.ts` holds it to the registry; `docs/security/launch-verdict.md` holds the security review verdict: E4 is blocked until the owner clears SR-1 and SR-7). After the signature a one-commit follow-up flips the site to `launch` (§44) | 12-04 | **Public launch** |
 | E5 | Approve the legal pages | The disclaimer, colophon (operator name and contact) and privacy notice in NL and EN (catalogue gap item 18); confirm the privacy notice matches the logging configuration. P12b: `test/privacy-policy.test.ts` checks the notice against the real Caddy and compose files; the approval date is an owner line in the checklist (KG-319) | 11-25 | P10b, P12 (launch checklist) |
+| E6 | **Sign the roadmap 2 release checklist** (the `docs/launch-checklist.md` addendum that P20b writes) | Every new series' audience and channels, no structure-internal or `off` gauge in a public file, the Rijkswaterstaat budget within D25, and the owner channel still clean. Status 2026-10-16: open | 2027-03-05 | **P20b** (release of roadmap 2) |
+| E7 | **Tell Rijkswaterstaat that the wider map is live** | A courtesy; P20b adds the draft in `docs/legal/requests/` (like E2) | at the release | – |
+
+**Roadmap 2 requests (C14–C36).** The e-mail drafts are in `docs/legal/requests/` (`c14-rws-roadmap-2.md`, `c15-umbrella.md`, `c16-c36-water-boards.md`; P15), and the tracker rows in `docs/permissions.md`. Contacts are functional addresses or forms only, read from each board's own website on 2026-10-03: open the page once before sending, and never write a staff member's name or personal address into the repository. **Every water-board request asks** whether the data may be shown publicly, under which licence (preferably CC0 or CC-BY 4.0) and with which attribution text, whether our public API and exports may carry it, whether we may keep and republish a history archive, an acceptable polling interval (we propose every 10–15 minutes) and whether their existing endpoint may be used (Lizard, ArcGIS, Nexus) or which one they prefer (catalogue §0.2, §0.7). **If publication is not possible,** the request also asks whether the owner may fetch the data for a strictly personal, non-commercial, private view (the D22 owner view). Record each answer in `docs/permissions.md` as an audience (`public`, `owner` or `off`) plus the channel flags granted, and set a go/no-go date; a grant starts the matching P21 PR, a refusal keeps the board `off`, and D32 lists its rivers on the Method page. Partial grants: "display only" keeps `api` and the exports off, "personal use only" means `owner` (D28), and share-alike terms (CC-BY-SA) need a reviewed decision before any use, because the station data must stay a separate collective database. Wave 1 (C15–C26) may go out at any time (§54.1); wave 2 (C27–C36, boezem and polder levels) is optional. C15–C36 supersede C10's water-board part.
+
+**Action D10: the acceptance items per roadmap 2 phase** (the [owner] items; the dates are §54.4's):
+
+| Phase | Your acceptance items |
+|---|---|
+| P15 (#63) | D24 answered; C14 sent or scheduled; C15–C26 sent with go/no-go dates (or a date for each) |
+| P16 (#64) | C14 sent ≥ 10 working days before the P16a deploy with no objection; after the deploy, `/status/capture.json` shows the new NL-1 specs fresh |
+| P17 (#65) | `geo.yml` dispatched on `main` after each P17 merge; `rws-rivers-refresh` run after the P17b deploy |
+| P18 (#66) | D26, D27 and D30 answered |
+| P19 (#67) | A look at the map on a phone and a desktop around one high tide; D29 and D32 answered |
+| P20 (#68) | A9 done; the k6 burst run in a quiet hour; E6 signed |
+| P21 (#69) | Per board: the grant recorded (no staff names, no secrets) before its PR merges; for an `owner` board, `verify-owner.sh` shows it healthy in the owner status |
 
 ---
 
@@ -1614,6 +1665,8 @@ It contains:
 | One VPS with Docker Compose, DB + worker + API + TLS proxy | P1b, P2, P9 (A§11) |
 | Fresh start: tag `legacy-v0`, nothing reused | P0a, ADR-0001, blob check |
 | Phase issues with Build, Code review and Security review prompts, and a roadmap issue | §4 template, per-phase model tables, §7 |
+| Other rivers, lakes and sea level of the Netherlands (roadmap 2: the rest of the Rijkswaterstaat network, the astronomical tide and surge, lakes as water bodies, the tidal delta) | P15–P20 (§54; ADR-0022) |
+| Water boards (one source ID per board feed, in the audience each answer allows) | P15 (catalogue §2.8, C15–C36), P21 |
 
 ---
 
@@ -3342,3 +3395,857 @@ What batch B5 of stage 3 of KG-250 (umbrella #127; the batches are #139 to #143)
 - **Fixture refresh** from `geo.yml` run 38873561012 (OSM 2026-10-15); the placement bounds (1049 and 870, the measured 1,064 placed rows and 885 placed by name, each minus 15) and B5's 25 new golden rows follow it; the Murgenthal row is now the `murg-aare` override.
 - **Budget.** 14 of the 50 stage-3 Wikidata requests are used (B1 and B2 10, B3 2, B4 1, B5 1; no response or address is committed); B5's `geo.yml` branch dispatches 2 of 3 (runs 38869567719 and 38873561012).
 - **Gaps:** KG-250 stays `accepted` with stage 3 complete; KG-161 gains the two joins and the detached Aabach piece; KG-165 gains one station without an entry node, 145 of 815 placed (144 of 785 before); KG-301 follows `rhine.69`.
+
+## 54. Amendment: roadmap 2 (all Dutch waters) (2026-10-16)
+
+Roadmap 2 extends the map from the rivers that flow *into* the Netherlands to **all Dutch waters** (owner decision of 2026-10-03; issues #61 to #69; ADR-0022). It follows roadmap 1 (#13) and rebuilds nothing: it keeps roadmap 1's stack, data model, security invariants (all 11 of `CLAUDE.md`), audience rules (D22, ADR-0017), PR workflow and model rubric, and adds sources, registry rows, a water-body model and map layers. Until P15 merged, the issues were the plan; from this section on, **this section is the plan**, and the issues #61 to #69 are renumbered to match it (§54.2).
+
+Roadmap 2 covers:
+- **the rest of the Rijkswaterstaat network:** the lakes (IJsselmeer, Markermeer, Ketelmeer, the Randmeren, Volkerak-Zoommeer, Haringvliet, Hollandsch Diep, Grevelingen, Veerse Meer), the tidal delta (Rotterdam, Dordrecht, the Merwedes, Oude Maas, Hollandsche IJssel), the canals, the coast, the Wadden Sea, the Eastern and Western Scheldt and the offshore platforms;
+- **sea level**, shown honestly: measured level, astronomical (predicted) tide and **surge** (measured − astronomical);
+- **the smaller rivers that the 21 water boards measure** (Roer, Niers, Geul, Berkel, Oude IJssel, Dinkel, Regge, Dommel, Aa, Mark, Westerwoldse Aa, Kromme Rijn, Linge …), **one water board at a time, as permissions arrive**.
+
+The IDs continue roadmap 1's: decisions **D24–D32** (§6.1), infrastructure **A9**, permission and notice requests **C14–C36**, build actions **Action D9–D10** and release tasks **E6–E7** (§6.2); ADR-0022 (A§13); water-board sources **NL-7…NL-26** (catalogue §2.8, §54.2). The non-code prerequisites are tracked in #62 until `docs/permissions.md` takes over the C rows.
+
+### 54.1 Start gate
+
+Roadmap 2 starts when **roadmap 1 is done: P0–P12 closed and the launch checklist signed (E4 in #14)**. P13 (#28, gated sources as permissions arrive) and P14 (#29, LATER: backfill in 2027) are open-ended by design: they keep running alongside roadmap 2, and neither roadmap waits for them.
+
+**One exception: the water-board e-mails (C15–C36) may go out as soon as the owner likes.** Water boards answer slowly, nothing in roadmap 1 depends on them, and an early "yes" lets P21 start sooner.
+
+**Early start of P15 (owner, 2026-10-16).** Roadmap 1's E4 is **not signed**: the site is in prelaunch (§44). The owner chose on 2026-10-16 to run P15 now. P15 writes documents, a generator and `off` registry rows only: no capture spec, no migration, no runtime dependency and no change of behaviour, so it does not touch the launch. **P16 to P20 still wait for the gate above**, and every date below still assumes that roadmap 1 launches on 2026-12-04.
+
+### 54.2 Reality and renumbering
+
+The issues #61 to #69 were written before the repository's own numbers were checked against them. P15 corrected them, and **the issues were renumbered to match this plan**. Every difference:
+
+| The issues as first written | Reality | In this plan |
+|---|---|---|
+| Decisions D23–D31 | D23 is the brand decision (P10c, P10f, §6.1) | **D24–D32** (D23 → D24 … D31 → D32); the brand history is untouched |
+| ADR-0018 (`0018-roadmap-2-…`) | `0018-code-licence-polyform-strict.md` exists; the highest ADR was 0021 | **ADR-0022**, `docs/adr/0022-roadmap-2-all-dutch-waters.md`, with a bullet in A§13 |
+| PHASES.md §22 | §22 is "Amendment: P6b build"; the highest section was §53 | **§54** (the next free number when P15 was built) |
+| The NL-7… rows carry `permission_required: true` with all four channels false | The registry validation fails that shape: the §0.7 default of a permission-based source is `display` on, so a permission-based source with every channel false is rejected | The **NL-5/NL-6 shape**: `permission_required: false`, all four channels false, `licence_kind: null`, `licence_text: null`, `private_basis: null`, `audience: "off"`, `capture_enabled: false`. No core change; the null (not open) licence plus D28 keeps each board `off` until a permission record exists |
+| The untrimmed NL-1 catalogue is recorded with `scripts/smoke-capture.ts` | smoke-capture trims a public body above 1 MB and would overwrite `nl-1-catalogue.raw` (the trimmed fixture that the tests read) | One new flag, **`--keep-as <name>`**: it writes `fixtures/<spec>-<name>.raw` whole (never trimmed, never overwriting) with an honest meta; the trimmed fixtures stay for the tests |
+| The off-source tests "pass unchanged" | Two hard-coded counts: `toHaveLength(52)` in `packages/contracts/test/registry.test.ts` and `idRows(…, 52)` in `test/catalogue.ts` | **52 → 72** (20 new sources). These are data counts, not logic |
+| The status of D24–D32 is "recorded in #62's comments" | #62 has one comment, the e-mail drafts; no answer has been posted | The status in §6.1 and §6.2 reads "open, default proposed (no answer on #62 as of 2026-10-16)" |
+
+**Water-board source IDs** (one per board feed; no board has two live feeds as of 2026-10-03; a second feed found later takes the next free ID):
+
+| C | Board | ID | C | Board | ID |
+|---|---|---|---|---|---|
+| C16 | Limburg | **NL-7** | C27 | Noorderzijlvest | **NL-17** |
+| C17 | Rijn en IJssel | **NL-5** (keeps its ID) | C28 | Wetterskip Fryslân | **NL-18** |
+| C18 | Vechtstromen | **NL-8** | C29 | Zuiderzeeland | **NL-19** |
+| C19 | De Dommel | **NL-9** | C30 | Hollands Noorderkwartier (HHNK) | **NL-20** |
+| C20 | Brabantse Delta | **NL-10** | C31 | Amstel, Gooi en Vecht (AGV) | **NL-21** |
+| C21 | Aa en Maas | **NL-11** | C32 | Rijnland | **NL-22** |
+| C22 | Hunze en Aa's | **NL-12** | C33 | Delfland | **NL-23** |
+| C23 | Drents Overijsselse Delta | **NL-13** | C34 | Schieland en de Krimpenerwaard (HHSK) | **NL-24** |
+| C24 | De Stichtse Rijnlanden (HDSR) | **NL-14** | C35 | Hollandse Delta | **NL-25** |
+| C25 | Rivierenland | **NL-15** | C36 | Scheldestromen | **NL-26** |
+| C26 | Vallei en Veluwe | **NL-16** | | | |
+
+**NL-6** stays as the generic placeholder, renamed so that it says it is superseded by NL-7…NL-26 (catalogue §2.8). The `SourceId` pattern `NL-[1-9][0-9]?` allows NL-26. Provider IDs follow `^[a-z][a-z0-9-]*$`: one new provider per board; NL-5 keeps `wrij` and NL-6 keeps `nl-waterboards`. **C15–C36 supersede C10's water-board part.**
+
+### 54.3 Why the plan is shaped this way
+
+- **Most of it is already open data.** The recorded NL-2 WFS snapshot (2026-09-29, in the repository) shows **247 live Rijkswaterstaat level locations** that roadmap 1 does not register. P15 makes the grouping exact; by name they are roughly:
+  - about 40 on lakes and closed estuaries;
+  - about 45 on the coast, the Wadden Sea and the Scheldt estuaries;
+  - about 20 in the tidal delta;
+  - about 25 more river points, including 9 on the Grensmaas;
+  - **12 offshore platforms**, in cm MSL rather than NAP;
+  - about 100 canal, lock and regulated-water gauges.
+
+  There are also **92 more live discharge locations**. All of it is CC0 and served by the NL-1 adapter that already runs.
+
+  **Exact counts: the generated inventory in catalogue §2.1 (P15).** Every figure of this kind in §54 (247 level locations, 92 discharge locations, about 250 more locations, the per-type numbers, about 40, 45, 20, 25, 12 and 100) is an estimate from the research of 2026-10-03; the generated block replaces them.
+- **Forecast history is already there.** Since P1 (#16) the recorder has archived the forecast runs of **all 183 Rijkswaterstaat forecast locations**, the coast and the lakes included. Registering those series in P16 lets a replay load their forecast history from go-live.
+- **The request budget is the bottleneck.** NL-1 asks one location per request, and roadmap 1 uses **373 of its own cap of 400 requests per hour**. About 250 more locations at sensible cadences need roughly 800–900. Rijkswaterstaat publishes no limit; the 400 is our own politeness rule. So Rijkswaterstaat is told first (C14), the owner sets the cap and cadences (D25), and CI keeps asserting the budget.
+- **Sea level is mostly tide.** A coastal gauge swings 2–4 m a day, and what matters in a storm is the **surge**, the measured level minus the astronomical tide. Rijkswaterstaat publishes the astronomical tide up to the end of 2027 at 98 locations, plus measured and astronomical high and low waters (catalogue §2.1).
+  - P18 computes the surge, labels it as derived, and never compares MSL with NAP.
+  - Tidal water is never interpolated, in time or along the coast (D12, extended).
+  - The astronomical tide lies in the future, and invariant 4 rejects future values in `obs`, so it gets a store of its own.
+- **Lakes are not rivers.**
+  - The IJsselmeer and Markermeer are held at seasonal target levels, and wind piles their water up against one shore while the other drops. So one gauge never silently stands for a whole lake (D27).
+  - NL-4 already has seasonal classes for the IJsselmeer, the Grevelingen, the Veerse Meer and the Haringvliet.
+  - Lakes become **water bodies** (polygons), not graph edges.
+- **The delta is a network, not a tree.** The Noord, the Dordtsche Kil and the Spui connect the branches, and the tide reverses their flow. Roadmap 1's graph builder fails on any cycle, by design. P17 adds a declared **tidal zone** where cycles are allowed and no direction is asserted; everywhere else the cycle check stays.
+- **Water boards need permission, one at a time.** The research of 2026-10-03 is summarised in catalogue §2.8.
+  - Four boards state in writing that their data may be reused (De Dommel, Hunze en Aa's, Brabantse Delta, De Stichtse Rijnlanden), and none of them names a licence.
+  - Vechtstromen forbids reuse without permission. Most of the others state nothing.
+  - Few publish live levels in a machine-readable form: the HDSR Lizard API, Aa en Maas weir levels, Rijn en IJssel's Nexus layer, and the De Dommel, Rivierenland and Vallei en Veluwe ArcGIS layers without timestamps.
+  - The umbrella organisations (Het Waterschapshuis, Unie van Waterschappen) have **no public live-data feed**. Their open map objects are CC-BY-SA, which is share-alike.
+
+  So every board gets its own request, and the umbrella gets one question (C15). Each grant is a small PR in **P21**, in the audience the answer allows (D28): `public` with a permission record, `owner` if only personal use is allowed (D22), `off` otherwise. Until then the map keeps showing the German and Belgian gauges just upstream, and the Rijkswaterstaat points.
+- **Flood and storm season.** Roadmap 2 runs from December to March, the Rhine and Meuse flood season and the North Sea storm season, on a site that is already public.
+  - Every roadmap 2 deploy follows roadmap 1's rules: signed, pull-based, with rollback.
+  - Recommendation: no roadmap 2 deploy while an official flood or storm-surge warning is active.
+  - The first real storm surge becomes a fixture (Action D9).
+
+**Audience of roadmap 2** (D22, ADR-0017; per source, never widened by a series):
+
+| Audience | Sources | Basis |
+|---|---|---|
+| `public` | **NL-1, extended**: every D24 location (H, Q, MSL offshore), the astronomical tide and the high and low waters; NL-2 for discovery (stores nothing); NL-4 classes of the new series | Rijkswaterstaat CC0, unchanged |
+| `off` → `public` or `owner` on a grant | **The water boards** (NL-7…NL-26; NL-5 keeps its ID; NL-6 stays `off` and is superseded) | Each board's answer to C16–C36 (D28); the CC-BY-SA of Het Waterschapshuis' map objects is share-alike and needs a reviewed decision before any use |
+| `off` | Structure-internal Rijkswaterstaat gauges (D24); NL-3 (unchanged) | No use, or undocumented |
+
+### 54.4 Phases, dates and dependencies
+
+Phase numbering continues from roadmap 1, so branch names (`claude/p<N><x>-<slug>`), PR titles and the PR template keep working. The phase blocks follow below; the tracker rows C14–C36 are in §6.2 and `docs/permissions.md`.
+
+| # | Phase | Issue | Lane | Target window | PRs | Build · Code review · Security review |
+|---|---|---|---|---|---|---|
+| P15 | Roadmap 2 plan, catalogue and permission drafts | #63 | docs | 2026-12-07 → 12-11 | one | Opus xhigh · Sonnet high · Sonnet medium |
+| P16 | Rijkswaterstaat: the rest of the network (lakes, coast, delta, canals, offshore; astronomical tide, high and low water) | #64 | data | 12-14 → 2027-01-15 | a capture + budget · b registry + loading | Opus xhigh · Sonnet xhigh · Sonnet high |
+| P17 | Delta, canals, lakes and sea on the river graph | #65 | geo | 12-14 → 01-22 | a delta + canals · b water bodies, snapping, tiles | Opus xhigh · Sonnet high · Sonnet medium |
+| P18 | Sea level and lakes: tide, surge and honest classes | #66 | data | 01-18 → 02-05 | a tide + surge · b classes + forecasts | Opus xhigh · **Fable high** · Sonnet high |
+| P19 | Lakes, coast and sea on the map | #67 | web | 01-25 → 02-19 | a layers + legend · b panels, pages, "to the sea" | Opus xhigh · Sonnet xhigh · Sonnet xhigh |
+| P20 | Capacity, storm-surge drill and **release of roadmap 2** | #68 | ops | 02-22 → **03-05** | a capacity + drill · b release | Opus xhigh · **Fable high** · **Fable xhigh** |
+| P21 | Water boards, as permissions arrive | #69 | data | as each permission arrives | one per board (or per platform) | Opus high · Sonnet xhigh · Opus xhigh (first board), Opus high (later) |
+
+**The dates are proposed targets.** They assume roadmap 1 launches on 2026-12-04 (P12). If it launches later, shift every date by the same number of days, and change them to fit the owner's own pace.
+
+Other dated events:
+- **≥ 10 working days before P16a deploys:** C14 sent to Rijkswaterstaat, and no objection received.
+- **End of 2027:** the published astronomical tide ends (catalogue §2.1). P16 alerts when the stored horizon drops below 60 days.
+- **The RWS CTD move (2026-11-05):** if the API hosts moved, roadmap 1 handled it (Action D6). P16 reads the hosts from config only.
+
+```mermaid
+gantt
+  dateFormat YYYY-MM-DD
+  axisFormat %d %b
+  section Start
+  Roadmap 1 launched (E4)              :milestone, m0, 2026-12-04, 0d
+  P15 Plan, catalogue, e-mail drafts   :p15, 2026-12-07, 2026-12-11
+  section Data lane
+  P16 RWS: the rest of the network     :p16, 2026-12-14, 2027-01-15
+  P18 Tide, surge, classes             :p18, 2027-01-18, 2027-02-05
+  section Geo lane
+  P17 Delta, canals, lakes, sea        :p17, 2026-12-14, 2027-01-22
+  section Web lane
+  P19 Lakes, coast and sea on the map  :p19, 2027-01-25, 2027-02-19
+  section Release
+  P20 Capacity, surge drill, release   :crit, p20, 2027-02-22, 2027-03-05
+  section On permission
+  P21 Water boards (as answers arrive) :p21, 2027-01-04, 2027-06-30
+```
+
+```mermaid
+flowchart LR
+  R1["Roadmap 1 done (#13)"] --> P15
+  P15 --> P16 --> P18 --> P19 --> P20
+  P15 --> P17 --> P19
+  P16 --> P17
+  P15 -.->|"permission per board"| P21
+  P16 -.->|"adapter patterns"| P21
+```
+
+**How every phase runs** is roadmap 1's way (§2.2, §3, §4): build in a fresh session on `main` with `/plan`; code review in a fresh session with a **different model**; security review in a fresh session; fix with the build model; gate (CI green, [CI] criteria ticked with evidence, no open High or Critical finding, Medium findings fixed or accepted in `docs/risk-register.md`); the owner merges and approves `production`, the agent ticks the [agent-prod] items with `scripts/verify-prod.sh`, and the [owner] items are the owner's. Models: Opus 5.5 at `xhigh` is the default builder; **Fable 5.1** reviews where a miss would mislead the public during a storm or flood, P18 (surge and classes) and the P20 release gate; Sonnet 5 reviews conformance; Haiku is not used.
+
+---
+
+### P15 · Roadmap 2 plan, catalogue and permission drafts
+
+**Window:** 2026-12-07 → 12-11 (run early on 2026-10-16, §54.1) · **Lane:** docs · **Depends on:** roadmap 1 done (#13: P0–P12 closed, launch checklist signed; the owner waived the wait for this docs-only phase, §54.1) · **PRs:** one (#63)
+
+**Unblocks:** P16 (#64), P17 (#65), P21 (#69). **Owner prerequisites (#62):** decision **D24** (scope of roadmap 2) answered, or its default accepted; the e-mail drafts in #62's first comment reviewed; standing action **Action D10**. **Not blocking:** D25–D32 (later phases); the answers to C14–C36.
+
+**Goal.** Write roadmap 2 into the binding plan and the source catalogue **before any code**. The issues #61–#69 are the plan until this phase merges. P15:
+- writes them into `docs/plan/PHASES.md` §54, the ARCHITECTURE amendments and ADR-0022;
+- makes the Rijkswaterstaat inventory exact from the recorded fixtures (catalogue §2.1), with a generator instead of hand-typed counts;
+- records the water-board research as catalogue §2.8 with one source ID per board feed;
+- adds those sources to the registry as `off`;
+- copies the e-mail drafts into `docs/legal/requests/`, with tracker rows in `docs/permissions.md`.
+
+It is the roadmap 2 counterpart of roadmap 1's planning branch and P0b.
+
+**Scope in**
+- **`docs/plan/PHASES.md` §54 "Amendment: roadmap 2 (all Dutch waters)":**
+  - the start gate;
+  - P15–P21 with goal, scope, acceptance criteria and model table, copied from #63–#69 with source IDs and criterion tags unchanged;
+  - the timeline table and dependency graph of #61;
+  - D24–D32, A9, C14–C36, Action D9–D10 and E6–E7 added to §6, with defaults and status;
+  - §8 traceability rows: other rivers, lakes and sea level; water boards.
+- **`docs/plan/ARCHITECTURE.md` amendments,** in the existing "(P15: …)" note style:
+  - §1: a product-constraint row (all Dutch waters, lakes as water bodies, sea level as surge);
+  - §6: the planned water-body model (P17b) and the astronomical-tide store (P16b, never `obs`, invariant 4);
+  - §7.2: the new NL-1 rows;
+  - §7.3: the budget per D25;
+  - §13: an ADR-0022 bullet.
+- **ADR-0022** "Roadmap 2: from the inflowing rivers to all Dutch waters":
+  - context, decision and consequences: a tidal zone in the graph, surge as a derived value, water boards by permission only;
+  - rejected alternatives: scraping board viewers; `OphalenLaatsteWaarnemingen` in the core loop (catalogue §2.1).
+- **Catalogue §2.1, the Rijkswaterstaat inventory, generated.** `scripts/rws-inventory.ts [--check]` reads the recorded NL-1 catalogue and NL-2 WFS fixtures and writes a marked block of §2.1.
+  - The block counts locations and live series by water type: lake and closed estuary, coast and Wadden Sea, Scheldt estuaries, tidal delta, river, canal and regulated water, offshore (MSL), structure-internal.
+  - Series per type: H, Q, forecast, astronomical, measured and astronomical high and low water.
+  - The type comes from a curated table in the script (location code → type). Each structure-internal row carries a reason (lock chamber, gate slot, pumping station, `pannerden.regelwerk.*`). A live location missing from the table fails the script.
+  - The NL-1 catalogue fixture is **trimmed** (WATHTE/NAP meting, Q meting and verwachting only). Record an untrimmed one, so MSL, `astronomisch` and the `GETET*` groupings are covered: opt-in `scripts/smoke-capture.ts` with the new `--keep-as` flag (§54.2), at most 3 requests. Keep the old fixture where tests use it.
+  - `--check` runs in CI beside the other generators.
+- **Catalogue §2.8 "Dutch water boards" (new):**
+  - one row per board, from the research summary of 2026-10-03: website, contact route, rivers, viewer and platform, machine endpoint, terms quoted verbatim with URL, checked 2026-10-03;
+  - the umbrella routes (Het Waterschapshuis, Unie van Waterschappen, Lizard, HydroNET, Waterinfo);
+  - **source IDs NL-7…NL-26** (§54.2), one per board feed; NL-5 (Rijn en IJssel Nexus) keeps its ID; NL-6 stays as the superseded placeholder;
+  - §0.2 licence-gate rows and §10 open items.
+- **Registry:**
+  - `registry/sources.yaml` rows for NL-7…NL-26: `audience: "off"`, `capture_enabled: false`, all four channels false, `licence_kind: null`, in the NL-5/NL-6 shape with `permission_required: false` (§54.2; the issue text said `true`);
+  - `registry/providers.yaml` rows;
+  - `packages/contracts/src/baseline.ts` entries (approved baseline `off`; a reviewed change);
+  - NL-6's name marks it superseded;
+  - the hard-coded source counts of the registry tests go 52 → 72 (§54.2);
+  - no capture spec for any of them.
+- **Permissions:**
+  - `docs/legal/requests/c14-rws-roadmap-2.md`, `c15-umbrella.md` and `c16-c36-water-boards.md`, verbatim from #62's first comment, with the "Verbatim from issue …" header line the C1–C13 drafts carry;
+  - links in the README;
+  - rows C14–C36 in `docs/permissions.md`;
+  - C10's water-board part marked "superseded by C15–C36".
+- **`CLAUDE.md`:** a commands row for `scripts/rws-inventory.ts`; the source-ID note for NL-7….
+
+**Scope out**
+- **P16:** new capture specs, seed rows, budget changes.
+- **P17:** graph and water-body geometry.
+- **P21:** any adapter or capture for a water board, after a grant.
+- **Live checks** beyond ≤ 10 opt-in requests in total.
+
+**Deliverables**
+- PHASES.md §54 and the §6 and §8 additions; the ARCHITECTURE notes; `docs/adr/0022-roadmap-2-all-dutch-waters.md`.
+- `scripts/rws-inventory.ts` with tests; the untrimmed catalogue fixture (`.raw` + `.meta.json`); the generated §2.1 block; the new §2.8; §0.2 and §10 rows.
+- `registry/sources.yaml`, `registry/providers.yaml` and `baseline.ts` rows for NL-7…NL-26.
+- `docs/legal/requests/c14…`, `c15…`, `c16-c36…`; `docs/permissions.md` rows; `CLAUDE.md` rows.
+
+**Acceptance criteria**
+- [ ] [CI] `node scripts/rws-inventory.ts --check` passes in CI:
+  - the §2.1 inventory block equals what the recorded catalogue and WFS fixtures contain;
+  - every live location has a water type;
+  - every structure-internal one has a reason;
+  - a live location missing from the curated table fails it (test).
+- [ ] [CI] Every §2.8 source ID has a `registry/sources.yaml` row (`audience: "off"`, no channel), a provider and a baseline entry, and no capture spec. The registry and baseline tests pass.
+- [ ] [CI] `docs/permissions.md` has rows C14–C36, each linked to a draft that exists. A test fails if a draft or the tracker holds an e-mail address outside the functional addresses listed in #62.
+- [ ] [CI] `test/docs.test.ts` passes (the invariant block is unchanged). A docs test asserts that PHASES.md §54 names P15–P21 and §6 names D24–D32.
+- [ ] [owner] D24 answered; C14 scheduled (≥ 10 working days before the P16a deploy); C15–C26 sent or dated.
+
+**Review focus**
+- *Code review:* faithfulness of §54 to #63–#69 (every phase, criterion, tag and model table, without loss or invention); the inventory is generated, never typed, and the curated table covers every live location and fails on a missing or extra row; the untrimmed fixture's meta is honest (`recorded_at`, url, no trimming claimed); NL-5 and NL-6 keep their IDs and NL-7… are one per feed, each in `sources.yaml` (off, no channel), `providers.yaml` and `baseline.ts`, with no capture spec; the drafts are verbatim, the tracker links resolve, no personal address and no staff name anywhere; no migration, spec or dependency.
+- *Security review:* an audience or channel widened by mistake; personal data in a public repository (functional addresses and forms only; website quotes stay data); the opt-in recording stays within its request count, never under CI, with the project User-Agent and no secret; no owner-audience data in the diff (invariant 11); the new script reads fixtures only, has no network access and writes only its marked block.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | xhigh | A docs-heavy PR whose generated inventory and registry rows feed every later phase. A wrong water type or a missing structure-internal reason would surface in P16 to P19. Opus 5.5 defaults to medium effort, which is too low here |
+| Code review | `sonnet` | `/code-review high` | Configuration, docs and a generator whose correctness its tests assert (§3.3: Sonnet at high, as in P0, P3 and P6); a different model from the Opus build |
+| Security review | `sonnet` | medium (the owner chose high for this PR, 2026-10-16) | A docs and registry diff with no runtime surface. The risks are an audience or channel widened by mistake, personal data in a public repository and an opt-in recording that breaks its budget; all three can be checked against a list (§3.4) |
+
+---
+
+### P16 · Rijkswaterstaat: the rest of the network
+
+**Window:** 2026-12-14 → 2027-01-15 (P16a 12-14 → 12-23; P16b 01-04 → 01-15) · **Lane:** data · **Depends on:** P15 (#63: the inventory, the water types, the structure-internal list); roadmap 1's NL-1 adapter and generator (P2b, #17); the forecast run model (P8, #23) · **PRs:** a capture + budget · b registry + loading (#64)
+
+**Unblocks:** P17b (#65 snaps the new rows), P18 (#66 builds on the tide and the high and low waters). **Owner prerequisites (#62):** decisions **D24** (scope) and **D25** (request budget) answered; **C14** sent to Rijkswaterstaat **≥ 10 working days before the P16a deploy**, with no objection received; standing action Action D10.
+
+**Goal.** Capture and load every D24 Rijkswaterstaat location within the D25 request budget:
+- the lakes and closed estuaries, the tidal delta, the canals and regulated waters, the coast, the Wadden Sea and the Scheldt estuaries;
+- the offshore platforms (cm MSL);
+- the **astronomical tide** and the **measured and astronomical high and low waters**.
+
+All of it is CC0 and goes through the NL-1 adapter that already runs. Registering the series also lets a replay load the forecast runs the recorder has archived since P1 for all 183 Rijkswaterstaat forecast locations. **Capture first:** P16a deploys the capture before P16b parses it (A§2 principle 1).
+
+**Scope in**
+
+*P16a: capture and budget*
+- **`registry/seed/nl-1.csv`:**
+  - every D24 location and quantity (H and Q) of the P15 inventory;
+  - tiers per D25: `sea` every 10 min (the key coastal and delta gauges P15 proposes, about 30), `other` every 30 min (other tidal and river gauges), `slow` every 60 min (lakes, canals, regulated waters);
+  - offshore platforms as a new kind with `Hoedanigheid` `MSL`;
+  - structure-internal locations stay out of the seed.
+- **`registry/capture.yaml`:**
+  - `nl-1-obs-sea` and `nl-1-obs-slow`, offset from `nl-1-obs-key` and `nl-1-obs-other`;
+  - `nl-1-astro`: `ProcesType` `astronomisch`, method F012 (F227 at Knock); monthly, at night; the window runs to the end of the published horizon, within 160,000 values per request; catalogue §2.1;
+  - `nl-1-hwlw`: measured high and low water, `Groepering` `GETETM2` (`GETETMSL2` offshore); daily; a 3-day window;
+  - `nl-1-hwlw-astro`: `GETETBRKD2` (`GETETBRKDMSL2` offshore); monthly.
+  - Each spec keeps the NL-1 validity rules (JSON, `Succesvol`, `WaarnemingenLijst`, 204 allowed) and gets a `max_bytes` measured from a real payload.
+- **Budget:**
+  - `apps/server/test/capture/budget.test.ts` raises the RWS cap from 400 to the **D25 cap** (default 900) in any 60 minutes of a simulated week;
+  - roadmap 1's specs alone stay ≤ 400;
+  - at most two concurrent requests to the host (A§7.3);
+  - `capture --dry-run` prints the busiest hour.
+- **`verify-prod`:** `interval NL-1 <spec>` for each new spec, its cadence less 5 s.
+- **The nightly contract check:** at most one more request (`nl-1-astro`), so it stays ≤ 9.
+
+*P16b: registry and loading*
+- **`scripts/gen-nl1-stations.ts`** (byte-for-byte generator) gains:
+  - the new seed rows;
+  - flags: `tidal: true` for coast, Wadden, Scheldt and tidal delta; `lake: true` for lakes and closed estuaries;
+  - datum `MSL` for offshore rows (`TO_NAP` leaves MSL unconverted, so no NAP height is ever shown for them);
+  - a curated `water_name` table: RWS metadata has no water name; never invent one, null otherwise;
+  - structure-internal locations as `off` rows with a reason, so the loader knows them and stores nothing;
+  - tier 1 for the key coastal gauges and the D27 lake reference gauges.
+- **The NL-1 adapter** parses and normalises strictly:
+  - the `astronomisch` series;
+  - the high and low waters. The field that tells a high water from a low water is **[U]**: find it in the real payload and fail closed (drift) when it is missing.
+  - New real fixtures recorded with `scripts/smoke-capture.ts` (opt-in), meeting the fixture standard: an astronomical payload, measured high and low water, astronomical high and low water, an offshore MSL gauge, a lake gauge, a tidal-delta gauge.
+  - Caps for every new JSON shape (`boundedJson`), measured from the fixtures.
+- **The astronomical tide is not an observation.** Invariant 4 rejects timestamps more than 15 min ahead in `obs`. It is stored outside `obs`:
+  - **either** through the P8 run model as a run of kind `astronomical` (issued = `fetched_at`; the horizon is what Rijkswaterstaat published),
+  - **or** in a table of its own.
+
+  The plan picks one, with an ADR-lite line. Its readers get views in both families through `scripts/gen-views.ts` (`LATER`, a migration of its own), and only `apps/server/src/db/audience.ts` names them.
+- **High and low waters** are stored so P18 can list each day's high and low waters with their times, measured and astronomical. They never enter the map snapshot as a station value.
+- **Catch-up:** a seed to the data epoch for every new series (Rijkswaterstaat keeps decades), off-peak and within the D25 cap.
+- **Forecast runs:** once the series are registered, a `replay` of the archived `nl-1-fc-*` lines loads their runs through the P8 model, back to go-live. The runbook `docs/runbooks/replay.md` gets the commands.
+- **NL-4 classes:** the registry sync in `migrate` writes NL-4 rows for the new series by itself. Report how many new H series have classes.
+- **Health:** tier-1 freshness and Q7 coverage for the new tiers. `/api/v1/health/sources` shows the astronomical horizon (the last stored instant per source), and the alert `astro_horizon` fires when it drops below 60 days ahead (the publication ends 2027-12-31).
+
+**Scope out**
+- Surge, classes, the crosswalk addendum → P18.
+- Map display → P19.
+- Graph, snapping and water bodies → P17.
+- Water boards → P21.
+- `OphalenLaatsteWaarnemingen` stays out of the core loop (catalogue §2.1).
+
+**Deliverables**
+- `registry/seed/nl-1.csv`, `registry/capture.yaml` (new specs), `budget.test.ts`, `verify-prod` checks, the contract-check spec list.
+- `scripts/gen-nl1-stations.ts` and the regenerated `registry/stations/nl-1.yaml`.
+- The NL-1 adapter extensions with real fixtures, goldens and properties.
+- The astronomical-tide store (migration, generated views, `audience.ts`).
+- The high- and low-water store.
+- The catch-up seed; health and `astro_horizon`.
+- Runbook updates (`replay.md`; a new `docs/runbooks/tide.md`); CLAUDE.md gotchas; `docs/threat-model.md` delta.
+
+**Acceptance criteria**
+
+*P16a: capture and budget*
+- [ ] [CI] `budget.test.ts`: Rijkswaterstaat ≤ the D25 cap in any 60 minutes of a simulated week; roadmap 1's specs alone ≤ 400; at most two concurrent requests to the host.
+- [ ] [CI] Every new spec takes its targets only from the registry seeds (invariant 1), and no structure-internal location of the P15 table is requested (test).
+- [ ] [CI] `capture --dry-run` lists the new specs and prints the busiest hour (output in the PR).
+- [ ] [agent-prod] After the deploy, `/status/capture.json` shows `nl-1-obs-sea`, `nl-1-obs-slow`, `nl-1-astro` and `nl-1-hwlw` fresh, and `interval NL-1 <spec>` passes for each.
+- [ ] [owner] C14 was sent ≥ 10 working days before the deploy, and Rijkswaterstaat did not object.
+
+*P16b: registry and loading*
+- [ ] [CI] `gen-nl1-stations.ts` regenerates `registry/stations/nl-1.yaml` byte for byte. In it:
+  - every D24 location appears once per quantity;
+  - structure-internal locations are `off` with a reason;
+  - coast, Wadden, Scheldt and tidal-delta rows are `tidal: true`;
+  - lake rows are `lake: true`;
+  - offshore rows have datum `MSL`;
+  - no row carries an invented water name or km.
+- [ ] [CI] The new parser paths meet the fixture standard: real goldens for astronomical, measured high and low water, astronomical high and low water and MSL offshore; ≥ 90% line coverage of `adapters/nl-1/parse.ts` and `normalise.ts`; a fast-check property.
+- [ ] [CI] Integration (PostgreSQL 18):
+  - no astronomical value ever lands in `obs` (a future-timestamp test);
+  - the astronomical store is readable only through its view pair, `rws_api` reading the public one;
+  - a replay with an unchanged parser writes nothing.
+- [ ] [CI] A replay of archived `nl-1-fc-*` fixture lines loads forecast runs for at least one newly registered coastal series.
+- [ ] [CI] NL-4 rows are synced for the new series, and the PR reports the coverage.
+- [ ] [agent-prod] `verify-prod` checks:
+  - `fresh NL-1 coast` and `fresh NL-1 lakes`: ≥ 90% of the new tier-1 gauges hold a value ≤ 45 min old at `meta.now`;
+  - `health NL-1` is green;
+  - the catch-up reaches ≥ 95% of buckets since the data epoch for the new tier-1 series;
+  - `astro horizon` is ≥ 60 days.
+
+**Review focus**
+- *Code review (P16a):* simulate the week yourself from the cron lines and the seed: the busiest 60 minutes stay within the D25 cap, roadmap 1's specs alone within 400, no minute starts more than two RWS requests; the astronomical and high/low-water requests fit the 160,000-value cap and send both `ProcesType` and `Hoedanigheid`; every target comes from the seed, no structure-internal location is requested, and `max_bytes` was measured, not guessed.
+- *Code review (P16b):* byte-for-byte regeneration, flags per water type, MSL rows never get a NAP height, no invented water name or km; the high/low-water marker is read from a field that exists in the real payloads and a payload without it is drift, never a guess; MSL and NAP never mix in one series; timestamps keep their fixed `+01:00` and come out UTC; the astronomical tide never reaches `obs`, its views exist in both families and only `audience.ts` names them, and the new migration is pinned; the forecast replay really loads runs for a new coastal series; NL-4 coverage is reported; the catch-up respects the cap; health shows the astronomical horizon.
+- *Security review:* invariant 1 (targets from registry seeds, no new egress host); politeness as a safety property (the budget test cannot be bypassed by a spec outside its simulation; backoff and the circuit breaker apply to the new specs; a 429 slows every NL-1 spec); parser hardening (every new JSON shape bounded; a hostile payload is drift or quarantine, never a partial write or a crash loop); invariant 4 (no future value reaches `obs`; the astronomical store cannot be read as observations by the at-T functions); invariant 2 and the view rule (generated, read-only views in the right family, no SQL concatenation); invariant 6 (the `X-API-KEY` never appears in a fixture, meta, log or manifest line); invariant 3 (names stay data).
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build (a and b) | `opus` | xhigh | A patterned extension of an adapter that already runs, but with three new semantics: a predicted series that must stay out of `obs` (invariant 4), typed high and low waters and the MSL datum; the request budget sits on top. Both PRs use the same settings |
+| Code review (each PR) | `sonnet` | `/code-review xhigh` | Conformance to the NL-1 adapter, generator and loader patterns and to the catalogue's pitfall list (§3.3, as P5a and P13), with an independent model from the Opus build. One prompt for both PRs |
+| Security review (each PR) | `sonnet` | high | New parser paths behind the established guards, and more requests to a host that is already allowed (§3.4: Sonnet at high, as P7 and P8). One prompt for both PRs |
+
+---
+
+### P17 · Delta, canals, lakes and sea on the river graph
+
+**Window:** 2026-12-14 → 2027-01-22 (P17a 12-14 → 01-08; P17b 01-11 → 01-22) · **Lane:** geo · **Depends on:** P15 (#63: the inventory and its water types); roadmap 1's graph pipeline and snapping (P6, #21), as built; additionally for P17b, P16b (#64: the new station rows) · **PRs:** a delta + canals · b water bodies, snapping, tiles (#65)
+
+**Unblocks:** P19 (#67: lake, delta and sea layers; "follow the water to the sea"). **Owner prerequisites (#62):** decision **D31** (the tidal delta on the map) answered; D15 (ODbL publication; decided in roadmap 1) still applies; after each merge, dispatch `geo.yml` on `main` once; after the P17b deploy, run `rws-rivers-refresh` once; standing action Action D10.
+
+**Goal.** Extend roadmap 1's directed river graph so the water can be followed **past the delta to the sea and into the lakes**:
+- the lower Rhine–Meuse delta (the Merwedes, Noord, Oude Maas, Nieuwe Maas, Nieuwe Waterweg, Hollandsche IJssel, Dordtsche Kil, Spui, Amer, Bergsche Maas, Hollandsch Diep, Haringvliet);
+- the Zwarte Water;
+- the canals that carry Rijkswaterstaat gauges;
+- a new **water-body model** for lakes, closed estuaries and the sea.
+
+The tide makes the delta a network with loops, so the builder gets a declared **tidal zone**. Inside it cycles are allowed and no direction is asserted; everywhere else the cycle check stays. Every new station of P16 is snapped to a channel or a water body, never by distance alone.
+
+**Scope in**
+
+*P17a: delta and canals in the graph*
+- **`registry/rivers.yaml`** gains:
+  - the lower-delta channels: Boven-Merwede, Beneden-Merwede, Nieuwe Merwede, Noord, Oude Maas, Nieuwe Maas, Nieuwe Waterweg, Hollandsche IJssel, Dordtsche Kil, Spui, Amer, Bergsche Maas, Hollandsch Diep and Haringvliet, as channels where OSM draws them as waterways;
+  - the Zwarte Water;
+  - the canals of P15's "canal and regulated water" rows (for example Amsterdam-Rijnkanaal, Lekkanaal, Noordzeekanaal, Twentekanaal, Maas-Waalkanaal, Julianakanaal, Zuid-Willemsvaart, Wilhelminakanaal, Kanaal Gent-Terneuzen, Van Starkenborghkanaal, Prinses Margrietkanaal; the exact list comes from the inventory).
+
+  Each gets a `kind` (`river`, `delta_channel`, `canal`), reviewed `name_nl` and `name_en`, and documented evidence for its OSM and Wikidata IDs, never a guess. Take a QID only with its mouth (P403), as roadmap 1 does.
+- **The tidal zone:**
+  - the channels flagged `tidal_zone: true` (the delta below the tidal limit, per D31);
+  - inside it, cycles are allowed and edges carry `direction: none`;
+  - outside it, a cycle still fails the build and names its ways.
+- **Canals:** `direction: none`, unless a documented regulated direction exists. The P6 canal traps still give 0 name-mismatched snaps: river stations stay on rivers.
+- **Mouths:** curated end points where a channel enters a water body or the sea. Examples: Nieuwe Waterweg → Noordzee; Haringvliet sluices → Noordzee; IJssel → Ketelmeer; Zwarte Water → Zwarte Meer; Eems → Dollard; Westerschelde → Noordzee. Each carries the water-body id that P17b defines.
+- **EU-Hydro QA:** agreement measured on edges outside the tidal zone; edges inside it are reported, not scored.
+- **Fixture:** the fixture PBF is extended with the delta and the canals, as a committed `geo.yml` artifact; outputs stay byte-identical across runs.
+
+*P17b: water bodies, snapping and tiles*
+- **`registry/waterbodies.yaml`** (schema and validator in `packages/contracts`):
+  - lakes and closed estuaries as polygons from OSM: the lakes of the P15 inventory, for example IJsselmeer, Markermeer, Ketelmeer, Zwarte Meer, Vossemeer, Drontermeer, Veluwemeer, Wolderwijd, Nuldernauw, Nijkerkernauw, Eemmeer, Gooimeer, Volkerak, Zoommeer, Grevelingenmeer, Veerse Meer and Haringvliet;
+  - each with relation or way ID and evidence, Wikidata, reviewed `name_nl`/`name_en`, `kind` (`lake`, `closed_estuary`, `estuary`, `sea`), `managed_level` and outflows (for example IJsselmeer → Waddenzee through the Afsluitdijk sluices at Den Oever and Kornwerderzand);
+  - **the open sea and the tidal estuaries** (Noordzee, Waddenzee, Oosterschelde, Westerschelde, Eems-Dollard) as **point-only** water bodies unless OSM has a usable polygon ([U]). A polygon is never hand-drawn without review.
+- **Snapping** (extends P6b):
+  - a lake or sea station snaps to its water body by containment, or ≤ 500 m from the shore, plus a name, Wikidata or curated match, **never distance alone**;
+  - delta and canal stations snap to their channel;
+  - overrides go in `registry/snap-overrides.yaml`;
+  - the snap report lists every rule used.
+- **Reaches and contract:**
+  - `reaches-<ver>.json` gains the water bodies: id, kind, names, stations, the **D27 reference gauge** or null, outflows, and the mouths of P17a;
+  - the Zod contract in `packages/contracts` takes a `schemaVersion` bump;
+  - delta edges carry the `tidal` flag.
+- **Tiles and download:**
+  - a `waterbodies` layer in `rivers-<ver>.pmtiles` (or a file of its own, with the size budget below);
+  - the ODbL download includes the water bodies, with attribution.
+- **Registry sync:** the station's water-body field is written into `registry/stations/*.yaml` by the snap script and synced by `migrate` (a migration only for a missing column).
+- **Audience:** no owner-audience or `off` station in any public file (invariants 8 and 11).
+
+**Scope out**
+- Rendering and animation → P19.
+- Surge and classes → P18.
+- Water-board streams → P21; the rivers they need are already in `rivers.yaml` since P6a.
+- Travel times inside the tidal zone: none, by design.
+
+**Deliverables**
+- `registry/rivers.yaml` additions; `registry/waterbodies.yaml` with schema and validator tests; `registry/snap-overrides.yaml` additions.
+- Builder changes: tidal zone, `direction: none`, mouths. The extended fixture PBF and exports.
+- Snapping to water bodies; a golden list of 40 hand-checked lake, coast, delta and canal stations.
+- The `reaches-<ver>.json` contract bump; tiles and download with water bodies.
+- ADR-0012 and ADR-0022 notes; `docs/runbooks/geo-refresh.md`; `docs/threat-model.md` delta.
+
+**Acceptance criteria**
+
+*P17a: delta and canals in the graph*
+- [ ] [CI] On the fixture PBF, outside the declared tidal zone, the graph is acyclic: a planted cycle outside the zone fails the build and names its ways. Inside the zone, the Noord–Oude Maas–Dordtsche Kil loop exists and its edges carry `direction: none`.
+- [ ] [CI] These paths exist on the fixture:
+  - Lobith → Waal → Boven-Merwede → Beneden-Merwede or Noord → Nieuwe Maas → Nieuwe Waterweg → the sea mouth;
+  - Lobith → Waal → Nieuwe Merwede → Hollandsch Diep → Haringvliet;
+  - Eijsden → Maas → Bergsche Maas → Amer;
+  - IJssel → the Ketelmeer mouth;
+  - Vecht → Zwarte Water → the Zwarte Meer mouth.
+- [ ] [CI] Every new river has a reviewed `name_nl`/`name_en`, evidence for its IDs and a `kind`; two runs on the same input give byte-identical outputs.
+- [ ] [agent-prod] A full `geo.yml` run succeeds; EU-Hydro agreement is ≥ 98% on edges outside the tidal zone, and the edges inside it are listed.
+
+*P17b: water bodies, snapping and tiles*
+- [ ] [CI] Every registered public D24 station snaps to a river or canal edge or a water body, or stays unsnapped with a reason, never by distance alone. A golden list of 40 hand-checked lake, coast, delta and canal stations snaps 100% correctly.
+- [ ] [CI] Every lake of the P15 inventory has a polygon with reviewed names. Each water body lists its stations and its D27 reference gauge (or null).
+- [ ] [CI] `reaches-<ver>.json` validates against the bumped contract, and a test proves that no owner-audience or `off` station appears in any public file.
+- [ ] [agent-prod] `rivers-<ver>.pmtiles` with water bodies is < 40 MB and served, and the ODbL download includes the water bodies with the attribution text.
+
+**Review focus**
+- *Code review (P17a):* the tidal zone is declared, not inferred; outside it the cycle check is unchanged (a planted cycle fails with its ways named); inside it edges carry `direction: none` and no travel time; canals are `direction: none` unless evidence says otherwise; every new river or canal ID has evidence, a reviewed name pair and a `kind`, and QIDs were taken with their mouth; the five paths exist, the mouths resolve, and EU-Hydro agreement excludes the zone and lists it.
+- *Code review (P17b):* snapping never uses distance alone; containment and the 500 m shore rule use the full geometry, not the simplified tile geometry; the 40 golden stations are hand-checkable (station, target, reason); point-only water bodies stay point-only unless a real OSM polygon was found, with no hand-drawn polygon; the reaches contract bump is backward-compatible where needed and the D27 reference gauge is a registered public station or null; no owner or `off` station in any public file; determinism (two runs, shuffled input).
+- *Security review:* `geo.yml` (SHA pins, `permissions: {}`, least privilege per job, `persist-credentials: false`, no `pull_request_target`, no expression injection, no caches; `rivernet-publish` the only job with a write token, `main` only); OSM tags and Wikidata labels capped and kept as data, multipolygon extraction bounded (size, vertex and member caps); the Wikidata lookup stays opt-in (never in CI, at most 80 requests, https to `query.wikidata.org` only); (P17b) `rws-rivers-refresh` verifies cosign and sha256 before an atomic swap for every file, rejects path traversal in asset names, caps sizes and keeps the previous version, and Caddy serves the new files with the right `Content-Type` and the A§12.2 headers; invariants 8 and 11 for the reaches file, tiles and download; ODbL attribution in the tiles metadata, the download and the page text, with station data kept out of the ODbL database.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build (a and b) | `opus` | xhigh | Subtle topology again: a zone with loops inside an acyclic graph, canals beside rivers, polygons beside edges. The tools (osmium, tippecanoe) are thin in model knowledge. Both PRs use the same settings |
+| Code review (each PR) | `sonnet` | `/code-review high` | Golden lists and graph invariants make the review concrete (§3.3: Sonnet at high, as P6); an independent model from the Opus build. One prompt for both PRs |
+| Security review (each PR) | `sonnet` | medium | Offline geo tooling with no runtime surface. The risks sit in the workflow, the asset hand-over to the VPS and keeping owner-audience stations out of public files (§3.4: Sonnet at medium, as P6). One prompt for both PRs |
+
+---
+
+### P18 · Sea level and lakes: tide, surge and honest classes
+
+**Window:** 2027-01-18 → 02-05 (P18a 01-18 → 01-27; P18b 01-25 → 02-05) · **Lane:** data · **Depends on:** P16 (#64: the astronomical-tide store, the high and low waters, the new series); roadmap 1's classification engine and crosswalk (P7, #22; D18); the forecast run model (P8, #23); the publisher and API contracts (P9, #24) · **PRs:** a tide + surge · b classes + forecasts (#66)
+
+**Unblocks:** P19 (#67 draws what P18 computes), P20 (#68 drills it). **Owner prerequisites (#62):** decisions **D26** (sea level on the map) and **D27** (lakes) answered by 2027-01-18; **D30** (the crosswalk addendum) signed off before P18b merges; standing action Action D10. **Not blocking:** Action D9 (a real storm surge becomes a fixture when it happens).
+
+**Goal.** Show sea level and lake levels **honestly**, in the same spirit as roadmap 1's states with a stated basis:
+- **Surge = measured − astronomical tide**, at the measured value's own instant and in the same datum. It is labelled as a derived value, never stored as an observation, and never computed across datums (MSL offshore, NAP inland).
+- **The day's high and low waters,** measured and astronomical, with their times.
+- **Coastal and lake classes** from NL-4, including the seasonal lake windows, through the P7 engine. A §4.9 crosswalk addendum (D30) maps them to the common scale. "Stormvloed" is a Waterinfo display class, never a warning.
+- **The Rijkswaterstaat forecasts at the coast and the lakes,** loaded through P8 with history since go-live, plus **forecast surge** (forecast − astronomical).
+- **Lakes:** the state comes only from the named reference gauge (D27). The spread across the lake (highest minus lowest gauge at T) is shown as information, so wind set-up stays visible, never as a state.
+- **Official storm-surge warnings** are linked, never copied.
+
+During a storm surge the public will read these numbers, so the code review is Fable's.
+
+**Scope in**
+
+*P18a: tide and surge*
+- **Surge, computed and never stored as `obs`:**
+  - measured − astronomical at the measured value's own timestamp (never at the query instant T, never across a carried-forward gap);
+  - both in the same datum (NAP, or MSL offshore);
+  - a missing astronomical value at that instant gives `null`, never an interpolated one.
+
+  The plan picks where it is computed (an at-T function pair beside `pub_obs_at`/`own_obs_at`, or the publisher), with an ADR-lite line; the view and function names live only in `audience.ts`.
+- **High and low waters:** each day's measured and astronomical high and low waters with their times, per station, from the P16b store.
+- **Contracts (`packages/contracts`, OpenAPI, the P9 static files):**
+  - snapshot items of tidal stations gain `astro`, `surge` (with `derived: "surge"`) and the previous and next high and low water;
+  - `/series/{id}` returns measured, astronomical and surge;
+  - the static `recent`, `latest` and `settled` files carry them.
+
+  The API cache keys and the P9 versioning stay closed.
+- **Tidal rules (D12, extended):**
+  - no interpolation in time beyond the staleness limit, and never in space;
+  - tidal stations keep `tidal: true` in every contract.
+- **Health:** surge coverage per source (the share of tier-1 tidal gauges with a surge at now).
+
+*P18b: classes, lakes and forecasts*
+- **NL-4 classes** for coastal and lake series through the P7 engine, including the seasonal windows (`IJsselmeerWinter`/`Zomer`, `Grevelingen_*`, `VeerseMeer*`, `Haringvliet_*`, `Winterstand`/`Zomerstand`) and their wrap-around (catalogue §2.1 NL-4).
+- **Crosswalk addendum** (catalogue §4.9, owner sign-off D30):
+  - every NL-4 coastal and lake label stem mapped to the common scale, with basis `provider_class`;
+  - "Stormvloed" and the lake classes are never labelled as warnings.
+- **The map colour of a coastal gauge follows D26.** By default it is a continuous surge scale with fixed breakpoints in cm, labelled "derived, not an official class". The station's state on the P7 ordinal scale stays the NL-4 class of the measured level.
+- **Lakes:**
+  - a water body's state comes only from its D27 reference gauge, labelled as such;
+  - the spread (max − min of the lake's NAP gauges at T) is information only;
+  - a short NL/EN wind-set-up note is attached.
+- **Forecasts:**
+  - the coastal and lake runs (loaded by P16b's replay) go through the P8 future snapshot;
+  - forecast surge = forecast − astronomical at the same instant, or `null`.
+- **Official warnings:** a link per coastal region to the national storm-surge warning page. The URL lives in config, taken from C14's answer or the catalogue ([U] until verified). No warning text is ever copied.
+
+**Scope out**
+- Drawing it → P19.
+- Load and drill → P20.
+- A surge model of our own, wind data, or Delta works (Maeslantkering) status as data → never in roadmap 2.
+
+**Deliverables**
+- The surge function or publisher step with an ADR-lite line; the high- and low-water reader.
+- Contract and OpenAPI updates; P9 static-file updates; health fields.
+- The P7 engine changes for seasonal windows; the catalogue §4.9 addendum.
+- Lake reference-gauge state and spread; forecast surge.
+- Runbook `docs/runbooks/tide.md` (surge, horizon, storm checklist); CLAUDE.md gotchas; `docs/threat-model.md` delta.
+
+**Acceptance criteria**
+
+*P18a: tide and surge*
+- [ ] [CI] Property test: surge equals measured − astronomical only at the measured value's own instant and in the same datum. MSL never mixes with NAP, and a missing astronomical value gives `null`, never an interpolated one.
+- [ ] [CI] A hand-built storm-surge fixture (synthetic, marked `synthetic: true`; for example measured +2.5 m above the astronomical tide at Den Helder for six hours) gives the expected surge series and the right high- and low-water listing. Input timestamps carry the fixed `+01:00` and come out UTC.
+- [ ] [CI] The snapshot and series contracts carry `astro`, `surge` (`derived: "surge"`) and the high and low waters. The OpenAPI snapshot test and every P9 static file validate.
+- [ ] [CI] Tidal stations are never interpolated in time beyond their staleness limit, and never in space (a test on the publisher output).
+- [ ] [agent-prod] `verify-prod` `surge`: ≥ 90% of tier-1 tidal gauges carry a surge at `meta.now`.
+
+*P18b: classes, lakes and forecasts*
+- [ ] [CI] A table test shows the seasonal NL-4 windows select the right classes on both sides of every boundary date, wrap-around included.
+- [ ] [CI] The addendum maps every NL-4 coastal and lake label stem to the common scale. A test fails if "Stormvloed" or a lake class is labelled as a warning, or lacks basis `provider_class`.
+- [ ] [CI] A lake's state comes only from its D27 reference gauge, and the spread is never a state (test).
+- [ ] [CI] Forecast surge equals forecast − astronomical at the same instant, and is `null` without an astronomical value. The P8 future snapshot shows coastal forecasts.
+- [ ] [CI] The owner canary, withheld canary and channel canary tests pass unchanged.
+- [ ] [owner] D30 signed off before P18b merges.
+
+**Review focus**
+- *Code review (P18a):* the instant: surge is taken at the measured value's own timestamp (check the at-T path with a carried-forward value, T = 10:10 with the last measurement at 10:00, and with a gap; no interpolated astronomical value anywhere); datums: an offshore MSL gauge and a NAP gauge never meet in one subtraction, one series or one comparison, and a datum change inside the window is handled or refused; high and low waters: times are UTC, measured and astronomical are kept apart, and a local-time day boundary does not drop or double one; contracts: `derived: "surge"` is present wherever surge is, caching keys stay closed, static files and API agree.
+- *Code review (P18b):* seasonal windows on both sides of every boundary, wrap-around, priority order (lower wins) and the NL-4 dedup rule; no NL-4 class (Stormvloed, Streefpeil …) is rendered or named as a warning, with basis `provider_class` everywhere and the official warning a link, never copied text; lakes: the state comes from the named reference gauge only, the spread is information, no average anywhere; forecast surge uses the same instant and datum, and a run without an astronomical value gives `null`; performance: `bench-q1` and the future-snapshot timing stay within budget.
+- *Security review:* invariant 2 (new functions and views read-only, `SECURITY DEFINER` only where needed with a fixed `search_path` and `SET TimeZone = 'UTC'`, granted to the right role family only, named only in `audience.ts`, no SQL string concatenation); invariants 8 and 11 (surge, classes and forecasts of owner-audience or `off` series never reach a public output; the canary tests; the channel canary still holds); API surface (no new parameter echoes input, refusals stay `{"error": <code>}`, the LRU key space stays closed, no bypass of the span or range limits); invariant 3 (NL-4 labels and water-body names reach the browser as data for text nodes); the warning link comes from config, not from data.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build (a and b) | `opus` | xhigh | The semantics are subtle: derived values at the right instant, datums that must not mix, seasonal windows that wrap, a state that must come from one named gauge. The patterns (P7, P8, P9) exist to follow. Both PRs use the same settings |
+| Code review (each PR) | `fable` | `/code-review high` | During a storm surge the public reads these numbers. A surge taken at the wrong instant, a datum mixed or a display class shown as a warning would mislead people at the worst moment: the §3.3 rule for Fable (as P7 and P8). One prompt for both PRs |
+| Security review (each PR) | `sonnet` | high | New readers and contract fields behind the established guards (§3.4: Sonnet at high, as P7 and P8). One prompt for both PRs |
+
+---
+
+### P19 · Lakes, coast and sea on the map
+
+**Window:** 2027-01-25 → 02-19 (P19a 01-25 → 02-05; P19b 02-08 → 02-19) · **Lane:** web · **Depends on:** P17 (#65: water bodies, the tidal zone, tiles); P18 (#66: surge, high and low waters, classes, lake states); roadmap 1's web app (P10, #25) and "follow the water" (P11, #26) · **PRs:** a layers + legend · b panels, pages, "to the sea" (#67)
+
+**Unblocks:** P20 (#68, the release). **Owner prerequisites (#62):** decisions **D29** (offshore platforms), **D31** (tidal delta) and **D32** (waters still uncovered) answered; after the deploy, a look at the map on a phone and a desktop around one high tide; standing action Action D10.
+
+**Goal.** Put the lakes, the coast, the sea and the tidal delta on the public map, in NL and EN, with the same care as the rivers:
+- **lake polygons** coloured by their reference gauge's state;
+- **coastal and Wadden points** showing the surge;
+- **offshore platforms**;
+- **the tidal delta** hatched, without flow animation;
+- **canals** drawn as canals.
+
+The station panels explain tide, surge, high and low water and lake set-up. "Follow the water" continues past the delta to the sea and into the IJsselmeer. The Method page lists what is still uncovered (D32). Every rule of roadmap 1's web app still holds: no third-party request, the strict CSP, provider and OSM names as text only, and the bundle budget.
+
+**Scope in**
+
+*P19a: layers and legend*
+- **Lakes:** polygons from the `waterbodies` tile layer, coloured by the D27 reference-gauge state, or a neutral "no class" when there is none. The lake's other gauges are drawn on top as their own points.
+- **Coast:** coastal, estuary and Wadden points coloured per D26 (by default the surge scale), hatched as tidal.
+- **Offshore platforms:** shown with an "MSL" marker. A measured MSL level is never put on a NAP scale. The surge is a difference within one datum, so it may share the surge scale.
+- **Platforms north of 54° N** over the world basemap at low zoom (D29).
+- **Tidal delta channels:** hatched, no flow animation (D31).
+- **Canals:** drawn distinctly, with no flow.
+- **Layer toggles:** rivers / lakes / coast and sea, kept in the URL state of `lib/url` (strictly parsed, dropped when invalid).
+- **Legend (NL and EN):** the surge scale says "afgeleid, geen officiële klasse" / "derived, not an official class". Hatching and colours have a non-colour encoding (patterns, ▲/▼, labels).
+- **The time slider** works on every layer: the past through the P9 files, the future through P8.
+- **Budgets:** the initial JS budget unchanged (250 KB gzip, `map-build.test.ts`); new tiles and chunks lazy; the snapshot size within the P9 budget (measured with every new station).
+
+*P19b: panels, pages and "to the sea"*
+- **Tidal station panel:**
+  - measured level, the astronomical tide as a band, the surge, the day's high and low waters;
+  - the Rijkswaterstaat forecast and forecast surge;
+  - the class with its basis;
+  - the official storm-surge warning link (P18b), as a link only.
+- **Lake panel:**
+  - the reference gauge and its state;
+  - the other gauges and the spread;
+  - the season's target-level classes;
+  - the wind set-up note.
+- **Follow the water (P11):**
+  - from Lobith and Eijsden through the delta channels to the labelled exits (Nieuwe Waterweg, Haringvliet sluices);
+  - from the IJssel to the Ketelmeer, the IJsselmeer and through the Afsluitdijk to the Waddenzee;
+  - each chain ending with a label at the water body (D31);
+  - no animation inside the tidal zone.
+- **Method page (D32):**
+  - the waters still uncovered: each water board whose source is `off`, with its rivers and the nearest gauge the map shows, generated from the registry and never typed by hand;
+  - short sections on surge and on lakes.
+- **About page:** the D24 tagline.
+
+**Scope out**
+- Load tests and the storm drill → P20.
+- Water-board stations → P21, which fills the D32 list as grants arrive.
+- An owner-view variant beyond what the owner publisher already gives: the owner view inherits the layers.
+
+**Deliverables**
+- Map layers, legend, toggles and URL state; panels; follow-the-water extensions; Method and About page texts (Paraglide NL and EN).
+- e2e seed additions (`apps/server/test/e2e/api.ts`): synthetic tide, surge and lake test stations under `nl.e2e.*`, including an offshore MSL point and an HTML-looking water-body name.
+- Playwright specs and axe views; CLAUDE.md gotchas; `docs/threat-model.md` delta.
+
+**Acceptance criteria**
+
+*P19a: layers and legend*
+- [ ] [CI] Playwright (Chromium, Firefox, WebKit), on the e2e seed:
+  - the lake layer, the coast points, an offshore point and the tidal delta render;
+  - a lake without a reference gauge shows "no class";
+  - there is no CSP violation and no off-origin request (invariant 7).
+- [ ] [CI] The e2e API seeds synthetic tide, surge and lake data for `nl.e2e.*` test stations, including an offshore MSL point, and the surge legend says "derived".
+- [ ] [CI] The initial bundle budget is unchanged (`map-build.test.ts`); `check-i18n` passes; no production file contains `__rws`.
+- [ ] [CI] An HTML-looking water-body name in the e2e seed renders inert (text node only; invariant 3).
+
+*P19b: panels, pages and "to the sea"*
+- [ ] [CI] Playwright: the tidal panel of a seeded coastal station shows measured, astronomical, surge, high and low waters and the forecast; the lake panel shows the reference gauge and the spread. axe passes on three new views.
+- [ ] [CI] "Follow the water" from Lobith reaches the Nieuwe Waterweg and Haringvliet labels, and from the IJssel reaches the IJsselmeer. No flow animation runs inside the tidal zone (test on the layer configuration).
+- [ ] [CI] The Method page lists every water board whose source is `off`, generated from the registry (test).
+- [ ] [agent-prod] `verify-prod`: the new tile layer and pages are served with the site headers, and `fresh NL-1 coast` passes.
+- [ ] [owner] A look on a phone and a desktop around one high tide (Action D10).
+
+**Review focus**
+- *Code review:* honest display (no measured MSL level on a NAP scale; surge labelled derived wherever it appears; a lake coloured only by its named reference gauge; tidal water hatched and never animated; canals without flow); (P19a) toggles: the URL state is parsed strictly and dropped when invalid, the throttled `replaceState` rule still holds and the language link keeps the toggles; budgets: the initial bundle is unchanged, new code is in lazy chunks and the snapshot size is measured; (P19b) the panels show the right series at the right instant (against the P18 contract), the warning is a link, never fetched or copied, the follow-the-water chains end at labelled water bodies with nothing animating inside the tidal zone, and the Method page is generated from the registry and catalogue (adding an `off` water-board source changes it without a code edit); accessibility (non-colour encodings, axe, keyboard paths); Playwright tests assert behaviour in all three browsers, not screenshots.
+- *Security review:* invariant 3 (every water-body, station and provider name reaches the DOM as a text node; ECharts tooltips `richText` only; the HTML-looking e2e name stays inert in all three browsers); invariant 7 and the CSP (no third-party request, the warning link is a link and not a fetch, no CSP change, no `blob:` or `unsafe-eval`); URL state (the new toggle parameter validated strictly, bounded in length, never reflected unescaped, cannot inject into a request); invariants 8 and 11 (no owner-audience station, value or canary rendering in the public bundle or the answers the page reads); `window.__rws` stays out of every production file.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build (a and b) | `opus` | xhigh | A multi-file UI change on MapLibre 6, React 19 and ECharts 6 under a strict CSP and a bundle budget, with honest-display rules: no mixed datums, derived values labelled, tidal water never animated. Both PRs use the same settings |
+| Code review (each PR) | `sonnet` | `/code-review xhigh` | Conformance to the P10 and P11 patterns and the display rules (§3.3: Sonnet at xhigh, as P10 and P11); an independent model from the Opus build. One prompt for both PRs |
+| Security review (each PR) | `sonnet` | xhigh | New client surface: layers, panels, URL state, names from OSM and providers, checked against the web checklist (§3.4: Sonnet at xhigh, as P10). One prompt for both PRs |
+
+---
+
+### P20 · Capacity, storm-surge drill and release of roadmap 2
+
+**Window:** 2027-02-22 → **03-05** (P20a 02-22 → 02-26; P20b 03-01 → 03-05) · **Lane:** ops · **Depends on:** P16 (#64), P17 (#65), P18 (#66) and P19 (#67), all merged and deployed; roadmap 1's hardening and launch tooling (P12, #27): k6, the flood drill, `verify-prod`, the launch checklist · **PRs:** a capacity + drill · b release (#68)
+
+**Unblocks:** the roadmap 2 release; #61 closes when this phase does (P21 stays open as permissions arrive, like P13). **Owner prerequisites (#62):** **A9** (capacity headroom); the k6 static burst run in a quiet hour; **E6** (sign the release checklist addendum); **E7** (tell Rijkswaterstaat); standing action Action D10.
+
+**Goal.** Prove that the wider map holds on a storm day and release it.
+- **Capacity:** the database, API and publisher stay within their budgets with roughly twice the public series. Disk and archive growth are projected for year 1.
+- **Storm-surge drill:** the coastal side gets a drill like roadmap 1's flood drill. It replays archived payloads (from Action D9 if a storm has happened) and a hand-built storm under load. Surge, classes and hatching must stay right, degraded mode must still work, and no owner value may leak.
+- **Release:** `verify-prod` gathers every roadmap 2 check, and the launch checklist gets a roadmap 2 addendum for the owner to sign (E6).
+
+**Scope in**
+
+*P20a: capacity and drill*
+- **Benchmark:**
+  - `scripts/bench-q1.ts` takes a series count. It runs at ≥ 4,000 series × 60 days: median < 50 ms through `pub_obs_at`, and the backward index scan is asserted.
+  - The API phase: `/snapshot` cold p95 < 150 ms and warm < 50 ms; `/series` over 14 days raw < 50 ms; with the P18 surge path included.
+- **Publisher:** the run time per 10-minute bucket and the gzip size of `latest.json`, `recent/…` and `settled/…` stay within the P9 budgets with every new station; measured and recorded.
+- **Archive and disk:** bytes per day of each new NL-1 spec, from the manifest and `/status/capture.json`. `docs/capacity.md` gets a year-1 projection against the disk and the bucket, and the A§7.3 alert thresholds are checked against it.
+- **Storm-surge drill** (compose e2e, beside roadmap 1's flood drill):
+  - the hand-built storm fixture and any real storm payloads from Action D9, replayed under a k6 static burst;
+  - checks: surge, classes, colours and hatching; the publisher keeps up; the degraded mode (`handle_errors` serving the static `latest.json` with `X-Degraded: 1`); no owner canary in any public output.
+- **k6:** `loadtest.yml` gets the new tile layer and pages; the owner runs it in a quiet hour.
+- **Egress:** the A§11 egress budget recomputed with the new layers, and with D29's choice if the basemap cut was extended.
+
+*P20b: release*
+- **`verify-prod`:**
+  - every roadmap 2 check in one list: `interval NL-1 <spec>`, `fresh NL-1 coast`, `fresh NL-1 lakes`, `astro horizon`, `surge`, the water-body tiles, the new pages;
+  - the CI deploy job's allow-fail list grows only by checks that need live data;
+  - the owner-leak grep covers the new files.
+- **The launch checklist addendum** (`docs/launch-checklist.md`, E6):
+  - every new series' audience and channels;
+  - no structure-internal or `off` gauge in a public file;
+  - the Rijkswaterstaat budget within D25;
+  - the owner channel clean;
+  - the Method page lists the uncovered waters (D32).
+- **Runbooks:** `docs/runbooks/tide.md` complete, with a "storm day" section (what to watch, what never to do: no hot fixes during an active storm-surge warning without a rollback plan); `geo-refresh.md` with water bodies; the status page lists the new specs.
+- **E7:** a draft go-live notice to Rijkswaterstaat in `docs/legal/requests/`.
+
+**Scope out**
+- Water boards → P21.
+- New sources, a second collector or a CDN change: those are roadmap 1 decisions D19 and D20, revisited only if the measurements demand it.
+
+**Deliverables**
+- The `bench-q1.ts` series-count option and evidence; publisher and snapshot measurements; `docs/capacity.md`.
+- The storm-surge drill in the compose e2e; k6 additions.
+- `verify-prod` and `ci.yml` allow-fail updates; the launch checklist addendum.
+- Runbook updates; the E7 draft; CLAUDE.md; `docs/threat-model.md` delta.
+
+**Acceptance criteria**
+
+*P20a: capacity and drill*
+- [ ] [CI] `bench-q1.ts` at ≥ 4,000 series × 60 days:
+  - median < 50 ms with the backward index scan;
+  - API phase `/snapshot` cold p95 < 150 ms and warm < 50 ms;
+  - `/series` over 14 days raw < 50 ms.
+- [ ] [CI] The storm-surge drill (compose e2e) passes:
+  - the expected surge, classes and hatching under the hand-built storm;
+  - the publisher keeps up;
+  - the degraded mode serves the static `latest.json` with `X-Degraded: 1`;
+  - no owner canary appears in any public output.
+- [ ] [CI] The publisher's gzip sizes and run time per bucket stay within the P9 budgets with every new station (test or bench output).
+- [ ] [agent-prod] `docs/capacity.md` shows the measured bytes per day of the new specs and the year-1 projection.
+
+*P20b: release*
+- [ ] [CI] `verify-prod --dry-run` lists every roadmap 2 check. The CI deploy job requires PASS for every check that needs no live data.
+- [ ] [agent-prod] `scripts/verify-prod.sh <domain>` passes every roadmap 2 check in production.
+- [ ] [owner] A9 done; the k6 burst run in a quiet hour, with its output attached; E6 signed; E7 sent.
+
+**Review focus**
+- *Code review (P20a):* the benchmark measures what production runs (the real at-T path with the surge, a realistic series mix, cold and warm separated; the numbers in the PR are observed, with machine and method); the drill: the storm fixture really drives surge and classes to the high end, the degraded path is exercised and not mocked, and the owner-canary grep covers every public output in both renderings; the capacity projection uses measured bytes per day and the real retention classes, and the alert thresholds still fit.
+- *Code review (P20b):* each roadmap 2 `verify-prod` check fails when it should (break one locally); the allow-fail list holds only live-data checks, each with its reason; the checklist addendum covers every new series' audience and channels and the owner channel; the runbook's storm-day section is actionable.
+- *Security review:* the roadmap 2 attack surface as a whole, not only the diff: every new public output (static files, API fields, tiles, pages) against invariants 2, 3, 7, 8 and 11; the Caddy routes and headers for the new files (correct `Content-Type`, cache classes, the `file` matcher on immutable routes, no directory listing, `noindex` where roadmap 1 requires it, no CSP change); the capture side (the RWS budget and backoff as a safety property, no new egress, the contract check's request count); the drill and k6 tooling (no production credentials, no secrets in fixtures or logs, k6 runs only by the owner); `docs/threat-model.md` lists every roadmap 2 component (P16 capture, the astronomical store, the surge function, water-body tiles, the new layers) with its threats and mitigations.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build (a and b) | `opus` | xhigh | Multi-file ops and test work across the database, publisher, Caddy and compose e2e. The patterns exist from P12, but the numbers must be measured, not assumed. Both PRs use the same settings |
+| Code review (each PR) | `fable` | `/code-review high` | This is the release gate of roadmap 2, ahead of the next storm and flood season. Cache, publisher and drill mistakes would mislead the public at the worst moment (§3.3: Fable, as P12). One prompt for both PRs |
+| Security review (each PR) | `fable` | xhigh | The whole-system gate of roadmap 2. The public surface roughly doubled in series and gained layers, routes and files; one leak of owner data or one relaxed header here is public. §3.4 uses Fable at max for roadmap 1's launch gate; xhigh suits this smaller delta. One prompt for both PRs |
+
+---
+
+### P21 · Water boards, as permissions arrive
+
+**Window:** as each permission arrives (it may come before or after the P20 release); target 2027-01-04 → 06-30 · **Lane:** data · **Depends on:** P15 (#63: catalogue §2.8 and the `off` source rows NL-7…NL-26); the adapter patterns of roadmap 1 (P5, P13) and P16; **for each board, its permission**: a grant recorded in #62, or the owner's decision in #62 to use a board's published personal-use clause for the owner view (D28) · **PRs:** one per board, or one per platform when several boards are granted at once (#69)
+
+**Unblocks:** the D32 list on the Method page shrinks with each board. **Owner prerequisites (#62):** decision **D28** (water-board audience) answered; per board, the grant recorded in a comment (no staff names, no secrets); a token or key placed only in `/etc/rws/secrets/` on the VPS (A7), if a board gives one; standing action Action D10.
+
+**Goal.** Show the smaller rivers that the water boards measure, **one board at a time, as permissions arrive**. Among them:
+- **Roer, Niers, Geul, Swalm** (Limburg);
+- **Oude IJssel, Berkel** (Rijn en IJssel);
+- **Vecht, Dinkel, Regge** (Vechtstromen);
+- **Dommel and its Belgian tributaries** (De Dommel);
+- **Mark and Aa of Weerijs** (Brabantse Delta);
+- **Aa and Raam** (Aa en Maas);
+- **Westerwoldse Aa** (Hunze en Aa's);
+- **Kromme Rijn** (De Stichtse Rijnlanden), **Linge** (Rivierenland), **Eem** (Vallei en Veluwe).
+
+This is roadmap 2's counterpart of P13: each board is a small PR in the audience its answer allows (D28).
+- `public`, with `registry/permissions/<ID>.md`, when the board allows publication;
+- `owner`, with a `private_basis`, when it allows personal, non-commercial use only (D22);
+- `off` otherwise.
+
+**No board is fetched before its permission.** An open endpoint is not consent, and a viewer or portal is never scraped.
+
+**Expected order:** by arrival of the grants. The research of 2026-10-03 suggests these are quickest to say yes:
+- **De Stichtse Rijnlanden** (NL-14): a public Lizard API and a public reuse statement;
+- **De Dommel** (NL-9), **Hunze en Aa's** (NL-12) and **Brabantse Delta** (NL-10): written reuse statements without a licence;
+- **Aa en Maas** (NL-11): a live MapServer of weir levels;
+- **Rijn en IJssel** (NL-5): the Nexus layer.
+
+The border-river boards **Limburg** (NL-7) and **Vechtstromen** (NL-8) matter most but have no open endpoint.
+
+**Scope in** (per board PR)
+- **The permission first.** For `public`: `registry/permissions/<ID>.md` with the four §0.7 channels the grant names (channels it does not name stay off), the attribution and date duties, and `granted_by`/`granted_on`/`evidence` (where the e-mail is kept, never its text or a name). For `owner`: the `private_basis` (the clause verbatim, its URL and retrieval date) in `registry/sources.yaml` and catalogue §0.8. CODEOWNERS and the registry tests apply.
+- **Capture:**
+  - a spec in `registry/capture.yaml` whose targets come only from the registry;
+  - the board's host added to the spec's allowlist;
+  - the polling interval the board agreed, or every 15 minutes at most if it named none;
+  - conditional GETs where the endpoint supports them;
+  - the existing backoff and circuit breaker;
+  - `budget.test.ts` holds the interval.
+- **Shared platform clients**, built with the first board that needs them, like `_shared/kiwis` in P5c:
+  - `adapters/_shared/lizard/`: Lizard API v4 time series, paged only to the same host, every array bounded;
+  - `adapters/_shared/arcgis/`: ArcGIS REST FeatureServer and MapServer `query` with fixed parameters from the registry (`where`, `outFields`, `f=json`, `outSR=4326`), a capped `resultRecordCount`, and `exceededTransferLimit` treated as drift, never as a silently truncated answer.
+
+  `check-boundaries` gains `SHARED_PROTOCOLS` entries for these, for the boards' providers only.
+- **The adapter:**
+  - `parse.ts` (strict Zod, bounded) and `normalise.ts` (pure);
+  - the time convention declared: an explicit offset or IANA zone; an offset-less local time needs its DST fixtures and a `DST_PROOF` entry (the P5b gate);
+  - **a value without its own timestamp is never stored.** The De Dommel, Rivierenland and Vallei en Veluwe ArcGIS layers carry none; those boards need a timestamped source first;
+  - units mapped to the canonical cm and m³/s; datum NAP or a declared gauge zero;
+  - sentinels declared.
+- **Fixtures:**
+  - a `public` board gets ≥ 3 real goldens (recorded with `scripts/smoke-capture.ts` after the grant), ≥ 90% line coverage and a fast-check property;
+  - an `owner` board gets synthetic fixtures only (`pnpm fixtures:synth`, the P5c rules).
+- **Registry:**
+  - a generator `scripts/gen-<id>-stations.ts` from recorded metadata (byte for byte; it fails on anything it does not know); identification only for an owner board;
+  - tier 1 for the gauges nearest the border or the main river;
+  - rivers missing from `registry/rivers.yaml` (for example Regge, Raam, Slinge, Kromme Rijn, Linge, Eem, Westerwoldse Aa) added through the geo pipeline;
+  - snapping to the board's own rivers, never by distance alone;
+  - **twins** where a board gauge and a DE-7, BE or Rijkswaterstaat gauge measure the same place (`registry/twins.yaml` for public pairs, `registry/twins/<source>.yaml` for owner pairs).
+- **Catch-up** to the data epoch where the board offers history, within the agreed load.
+- **A documented purge procedure** in case permission is withdrawn.
+- **Health and `verify-prod`:** `health <ID>`, `tier-1 <ID>`, `fresh <ID>` for a public board. An owner board shows in the owner status only; public health counts it in `owner_sources`.
+- **The Method page (D32)** drops the board from the uncovered list by itself (P19b generates it).
+
+**Scope out**
+- Any board without a recorded grant or an owner decision under D28.
+- Boezem and polder dashboards, beyond showing their gauges as points, unless the owner asks.
+- A national feed: it comes only if C15 opens one, as a new source of its own.
+
+**Deliverables** (per board)
+- `registry/permissions/<ID>.md` or the `private_basis`.
+- The capture spec, adapter, fixtures, goldens and properties.
+- Shared clients where needed.
+- The station generator and registry rows; river and twin additions.
+- Health and `verify-prod` checks; the purge runbook section; CLAUDE.md gotchas; `docs/threat-model.md` delta.
+
+**Board lines** (the platform seen on 2026-10-03; the IDs are §54.2's):
+
+| C | Board | ID | Platform seen 2026-10-03 | Notes |
+|---|---|---|---|---|
+| C16 | Waterschap Limburg | NL-7 | own site, app; no open endpoint | Roer, Niers, Geul, Swalm, Worm, Jeker, Geleenbeek; twins with DE-7 (Rur at Stah, Niers at Goch) where the same gauge |
+| C17 | Waterschap Rijn en IJssel | NL-5 | ArcGIS FeatureServer `WaterData/Nexus_P` | timestamps UTC or local: ask (C17); Berkel and Oude IJssel twins with DE-7 near the border |
+| C18 | Waterschap Vechtstromen | NL-8 | none found | Vecht at De Haandrik, Dinkel, Regge; the colofon allows personal use with attribution (D28) |
+| C19 | Waterschap De Dommel | NL-9 | ArcGIS (HydroNET behind it), **no timestamps** | needs a timestamped source first |
+| C20 | Waterschap Brabantse Delta | NL-10 | open-data portal, no live levels | Mark, Aa of Weerijs |
+| C21 | Waterschap Aa en Maas | NL-11 | ArcGIS MapServer `EXTERN/Stuwinstellingen_waterstanden` (weir levels with a date) | Aa, Raam |
+| C22 | Waterschap Hunze en Aa's | NL-12 | Lizard (stale since 2020) | Westerwoldse Aa |
+| C23 | Waterschap Drents Overijsselse Delta | NL-13 | Lizard (stale since 2017) | lower Vecht, Reest |
+| C24 | Hoogheemraadschap De Stichtse Rijnlanden | NL-14 | **Lizard API v4, live** | Kromme Rijn, Hollandse IJssel |
+| C25 | Waterschap Rivierenland | NL-15 | ArcGIS (values behind HydroNET chart URLs) | needs a timestamped source first |
+| C26 | Waterschap Vallei en Veluwe | NL-16 | ArcGIS (HydroNET behind it), **no timestamps** | needs a timestamped source first |
+| C27–C36 | wave 2 boards | NL-17…NL-26 | see catalogue §2.8 | boezem and polder levels |
+
+**Acceptance criteria**
+
+*Every P21 PR*
+- [ ] [CI] The adapter meets the fixture standard: a `public` board has ≥ 3 real goldens, ≥ 90% line coverage of `parse.ts` and `normalise.ts` and a fast-check property; an `owner` board uses synthetic fixtures only (`fixture-standard.test.ts`).
+- [ ] [CI] Every fetch target comes from the registry, the host is allowlisted for that spec only, and `budget.test.ts` holds the agreed interval.
+- [ ] [CI] CI blocks:
+  - `audience: public` for the board without its permission record;
+  - `audience: owner` without a `private_basis`;
+  - any channel the grant does not name.
+- [ ] [CI] Every timestamp has an explicit offset or zone, and an offset-less local time passes the P5b DST gate. A value without its own timestamp is never stored (test).
+- [ ] [CI] An `owner` board passes the owner-canary and audience integration tests: none of its rows reaches a public output.
+- [ ] [CI] Every station snaps to its own river or stays unsnapped with a reason, never by distance alone.
+- [ ] [CI] If the board issued a token or key, it comes only from Compose secrets, and a canary secret never appears in logs, the manifest, archive metadata or `ingest_batch` (redaction test).
+- [ ] [agent-prod] For a `public` board:
+  - `health <ID>` is green;
+  - ≥ 90% of its tier-1 gauges are fresh;
+  - catch-up reaches ≥ 95% of buckets where history exists;
+  - the Method page no longer lists it.
+- [ ] [owner] For an `owner` board, `verify-owner.sh` shows it healthy in the owner status, and public health lists only the `owner_sources` count.
+
+*The first PR with a Lizard board*
+- [ ] [CI] The Lizard client follows `next` only to the same host and path prefix, caps pages and series, and bounds every array before its elements are parsed.
+
+*The first PR with an ArcGIS board*
+- [ ] [CI] The ArcGIS client sends only the fixed query parameters from the registry, caps `resultRecordCount`, and treats `exceededTransferLimit` as drift.
+
+**Review focus**
+- *Code review:* the permission record or `private_basis` matches the grant exactly, the registry uses no more audience or channel than it grants, and there is no staff name, e-mail text or secret; capture targets only from the registry, the host allowed for this spec only, the interval as agreed; a new shared client pages on the same host only, with caps, `exceededTransferLimit` as drift and fixed query parameters only; strict and bounded parsing, the time convention declared, a value without its own timestamp never stored, units and datum per series, sentinels; fixtures real for a public board and synthetic for an owner board (the fixture-standard test agrees); the generator is byte-for-byte, snapping never by distance alone, new rivers have evidence and reviewed names, twins where the same gauge exists; an owner board appears in no public output.
+- *Security review:* invariant 1 and SSRF (targets only from the registry, the new host allowlisted for this spec only, paging cannot leave the host or path prefix, redirects refused per the P1 fetcher rules); untrusted input (every array and document bounded before parsing, a hostile payload is drift or quarantine, never a partial write); invariant 6 (a board token or key only from Compose secrets, never in logs, the manifest, archive metadata, `ingest_batch`, fixtures or the browser, with a redaction test that fails without the fix); invariants 8 and 11 (audience and channels match the permission record or `private_basis`, a display-only grant keeps the `api` channel off, an owner board's rows, stations, attribution and `private_basis` never reach a public output); the purge procedure is real, removes objects and rows, and cannot be undone by a replay.
+
+| Step | Model | Effort | Justification |
+|---|---|---|---|
+| Build | `opus` | high | The adapter pattern is established (P5, P13, P16), and each board is a small PR (§3.2: Opus at high, as P13). The first Lizard and the first ArcGIS client are the only new kinds |
+| Code review | `sonnet` | `/code-review xhigh` | Conformance to the adapter template and to the permission record (§3.3: Sonnet at xhigh, as P13); an independent model from the Opus build |
+| Security review | `opus` | xhigh for the first board PR (first new platform client, possibly the first board credential); high after that | A new kind of upstream (water-board platforms), possibly with credentials, and the first `owner` water board, if one comes, must stay in the owner channel (§3.4: Opus, as P13). A fresh session with a security-only mandate gives the independence |
+
+The issue for this phase (#69) stays open, like P13's, until the owner closes it. A board's row in `docs/permissions.md` and the tracker in #61 are updated with each PR.
