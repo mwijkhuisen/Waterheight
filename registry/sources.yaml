@@ -125,7 +125,467 @@ sources:
     series: []
   - id: NL-6
     provider: nl-waterboards
-    name: "Water boards: Vechtstromen, Waterschap Limburg (waterstandlimburg.nl returned 403), WRIJ portal (waterdata.wrij.nl unreachable)"
+    name: "Water boards: generic placeholder, superseded by NL-7…NL-26 (catalogue §2.8)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-7
+    provider: ws-limburg
+    name: "Waterschap Limburg – live levels (no open endpoint found; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-8
+    provider: vechtstromen
+    name: "Waterschap Vechtstromen – live levels (no machine endpoint found; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-9
+    provider: de-dommel
+    name: "Waterschap De Dommel – Dommelportaal ArcGIS layer (latest value, no timestamp; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-10
+    provider: brabantse-delta
+    name: "Waterschap Brabantse Delta – open-data portal (no live surface-water levels; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-11
+    provider: aa-en-maas
+    name: "Waterschap Aa en Maas – ArcGIS MapServer EXTERN/Stuwinstellingen_waterstanden (weir levels with a date; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-12
+    provider: hunze-en-aas
+    name: "Waterschap Hunze en Aa's – Lizard (stale since 2020; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-13
+    provider: wdodelta
+    name: "Waterschap Drents Overijsselse Delta – Lizard (stale since 2017; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-14
+    provider: hdsr
+    name: "Hoogheemraadschap De Stichtse Rijnlanden – Lizard API v4 (hdsr.lizard.net, live; placeholder for its feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-15
+    provider: rivierenland
+    name: "Waterschap Rivierenland – ArcGIS layer (values behind HydroNET chart URLs, no timestamp; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-16
+    provider: vallei-veluwe
+    name: "Waterschap Vallei en Veluwe – ArcGIS layer (latest value, no timestamp; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-17
+    provider: noorderzijlvest
+    name: "Waterschap Noorderzijlvest – ArcGIS app and Lizard (stale since 2015; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-18
+    provider: wetterskip-fryslan
+    name: "Wetterskip Fryslân – boezem level in an ArcGIS app (hourly average; placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-19
+    provider: zuiderzeeland
+    name: "Waterschap Zuiderzeeland – Lizard (live polder levels; placeholder for its feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-20
+    provider: hhnk
+    name: "Hoogheemraadschap Hollands Noorderkwartier – Lizard (live boezem and polder levels; placeholder for its feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-21
+    provider: agv
+    name: "Waterschap Amstel, Gooi en Vecht – placeholder for its future feed (no endpoint researched)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-22
+    provider: rijnland
+    name: "Hoogheemraadschap van Rijnland – placeholder for its future feed (no endpoint researched)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-23
+    provider: delfland
+    name: "Hoogheemraadschap van Delfland – placeholder for its future feed (no endpoint researched)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-24
+    provider: hhsk
+    name: "Hoogheemraadschap van Schieland en de Krimpenerwaard – ArcGIS app \"Actuele metingen water\" (placeholder for its future feed)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-25
+    provider: hollandse-delta
+    name: "Waterschap Hollandse Delta – placeholder for its future feed (no endpoint researched)"
+    country: NL
+    licence_text: null
+    licence_kind: null
+    audience: "off"
+    capture_enabled: false
+    permission_required: false
+    private_basis: null
+    display: false
+    api: false
+    bulk_export: false
+    history_export: false
+    attribution_text: null
+    attribution_lang: null
+    attribution_url: null
+    attribution_required: false
+    attribution_variants: []
+    needs_last_updated: false
+    needs_retrieval_date: false
+    logo_allowed: null
+    series: []
+  - id: NL-26
+    provider: scheldestromen
+    name: "Waterschap Scheldestromen – placeholder for its future feed (no endpoint researched)"
     country: NL
     licence_text: null
     licence_kind: null

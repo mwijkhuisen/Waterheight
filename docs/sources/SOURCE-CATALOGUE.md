@@ -112,7 +112,27 @@ On the first run, pull every rolling window once so the database starts with wee
 | DE-2/DE-3 BfG forecasts | BfG terms require a source credit **and a free copy of the publication (Belegexemplar)**. It is ambiguous whether `WV` inside PEGELONLINE is covered by DL-DE Zero. | vorhersage@bafg.de | Treat `WV` as BfG data and credit it. Ask in the same e-mail how `WV` behaves above HSW / Marke II (§0.4). |
 | **DE-10 LfU Rheinland-Pfalz** (moved to Phase 0) | Impressum: *"Sie dürfen nur mit Zustimmung des LfU verändert, vervielfältigt, in Vervielfältigungen an Dritte abgegeben oder zu öffentlichen Wiedergaben verwendet werden. Als Quelle ist das LfU zu nennen, soweit möglich mit Angabe des Bearbeitungsdatums."* | **poststelle@lfu.rlp.de**; Landesamt für Umwelt Rheinland-Pfalz, Kaiser-Friedrich-Straße 7, 55116 Mainz, tel. 06131 6033-0 (from the hochwasser.rlp.de Impressum) [V] | **This is the single most valuable forecast permission** (§0.5): RLP publishes p10–p90 forecasts for **66 gauges**, including 20 Rhine gauges from Maxau to Emmerich, 9 Mosel gauges (Perl, Stadtbredimus, Wasserbillig, Trier …), the Ahr (3), Nahe (5), Lahn (4), Sauer (2), Our (2), Kyll, Prüm, Saar and Sieg, plus 46 regional alert classes. Without it: LHP classes only for the Ahr, Kyll, Prüm and Nahe. |
 | DE-12 LUBW, DE-13 Bayern LfU, DE-14 Saarland | Their Impressum requires consent. Bayern contradicts its own CC BY 4.0 statement, and Saarland is unreachable. | Pegelinfo@lubw.bwl.de, LfU Bayern | LUBW: send in Phase 0 too (Upper Rhine tributaries Murg and Kinzig); not needed for the first release. |
-| NL-5 WRIJ Nexus / NL-6 water boards | There is no licence and no documentation, or no API at all. | Vechtstromen, Rijn en IJssel, Waterschap Limburg (addresses not researched) | Use the upstream German gauges (DE-7) and the RWS Vecht stations. |
+| NL-5 WRIJ Nexus / NL-6 water boards (generic; the boards have their own rows below and in §2.8) | There is no licence and no documentation, or no API at all. | Vechtstromen, Rijn en IJssel, Waterschap Limburg (addresses not researched) | Use the upstream German gauges (DE-7) and the RWS Vecht stations. |
+| NL-7 Waterschap Limburg (C16) | No licence, no documentation and no open endpoint: the levels sit behind a viewer and an app (waterstandlimburg.nl answered 403 to automated fetches). | form https://www.waterschaplimburg.nl/contact/contactformulier/ | Upstream German gauges (DE-7: Rur at Stah, Niers at Goch where it is the same gauge) and the RWS Meuse stations; D32 lists the rivers. |
+| NL-8 Waterschap Vechtstromen (C18) | The colofon forbids making the site's information public without permission, except for personal, non-commercial use with the source named; no endpoint exists. | info@vechtstromen.nl | Upstream German gauges (DE-7) and the RWS Vecht stations; D32 lists the rivers. |
+| NL-9 Waterschap De Dommel (C19) | A reuse statement without a licence, contradicted by the proclaimer (personal use only without written permission); the ArcGIS layer has no timestamp, so no value can be stored from it. | info@dommel.nl | Nearest Belgian (BE-2, itself gated) or RWS gauge; D32 lists the rivers. |
+| NL-10 Waterschap Brabantse Delta (C20) | An "open, unless" statement without a licence or an attribution text, and no live levels in the portal. | form https://formulieren.brabantsedelta.nl/form/contact-opnemen/uw-gegevens-1 | Nearest Belgian (BE-2, itself gated) or RWS gauge; D32 lists the rivers. |
+| NL-11 Waterschap Aa en Maas (C21) | No terms found; the MapServer is an open endpoint, which is not consent. | info@aaenmaas.nl | Stays `off`; D32 lists the rivers. |
+| NL-12 Waterschap Hunze en Aa's (C22) | A reuse statement without a licence; the Lizard series are stale since 2020. | gis_info@hunzeenaas.nl (the open-data contact) | Stays `off`; D32 lists the rivers. |
+| NL-13 Waterschap Drents Overijsselse Delta (C23) | No live endpoint; the CC0 on its map datasets does not cover water levels. | info@wdodelta.nl | RWS Vecht stations; D32 lists the rivers. |
+| NL-14 Hoogheemraadschap De Stichtse Rijnlanden (HDSR) (C24) | A 2012 reuse statement without a licence; Lizard "public" is an access flag, not a licence. | post@hdsr.nl | Stays `off`; D32 lists the rivers. The likeliest quick yes (ask for a named licence). |
+| NL-15 Waterschap Rivierenland (C25) | A disclaimer only; the layer has no usable timestamped value. | info@wsrl.nl | Stays `off`; D32 lists the rivers. |
+| NL-16 Waterschap Vallei en Veluwe (C26) | No terms found; the layer has no timestamp, so no value can be stored from it. | info@vallei-veluwe.nl | Stays `off`; D32 lists the rivers. |
+| NL-17 Waterschap Noorderzijlvest (C27) | No terms found; no live endpoint. | info@noorderzijlvest.nl | Stays `off`; D32 lists the rivers. |
+| NL-18 Wetterskip Fryslân (C28) | No terms found; no endpoint recorded. | information-request form at mijn.wetterskipfryslan.nl (linked from wetterskip.frl/contact) | Stays `off`; D32 lists the waters. |
+| NL-19 Waterschap Zuiderzeeland (C29) | No terms found; Lizard "public" is an access flag, not a licence. | waterschap@zuiderzeeland.nl | Stays `off`; D32 lists the waters. |
+| NL-20 Hoogheemraadschap Hollands Noorderkwartier (HHNK) (C30) | No terms found; Lizard "public" is an access flag, not a licence. | form hhnk.nl/form/e-mailformulier | Stays `off`; D32 lists the waters. |
+| NL-21 Waterschap Amstel, Gooi en Vecht (AGV) (C31) | Nothing researched beyond the contact route. | form agv.nl/contact/contactformulier/ | Stays `off`; D32 lists the waters. |
+| NL-22 Hoogheemraadschap van Rijnland (C32) | Nothing researched beyond the contact route. | form rijnland.nl/contact/contactformulier/ | Stays `off`; D32 lists the waters. |
+| NL-23 Hoogheemraadschap van Delfland (C33) | Nothing researched beyond the contact route. | loket@hhdelfland.nl | Stays `off`; D32 lists the waters. |
+| NL-24 Hoogheemraadschap van Schieland en de Krimpenerwaard (HHSK) (C34) | No terms found; a viewer is never scraped. | info@hhsk.nl | Stays `off`; D32 lists the waters. |
+| NL-25 Waterschap Hollandse Delta (C35) | Nothing researched beyond the contact route. | info@wshd.nl | Stays `off`; D32 lists the waters. |
+| NL-26 Waterschap Scheldestromen (C36) | Nothing researched beyond the contact route. | info@scheldestromen.nl | Stays `off`; D32 lists the waters. |
 | EU High-Value Datasets (Regulation (EU) 2023/138) | **Not a lever for real-time hydrometry.** The Earth-observation-and-environment category covers the INSPIRE themes (including Hydrography and Environmental Monitoring Facilities) and data reported under the water and flood directives, delivered "through APIs and bulk download". It sets **no real-time or update-frequency requirement** for hydrometry; only the meteorological category requires 5–10-min real-time weather-station data. Applies since about June 2024. [D] EUR-Lex CELEX 32023R0138 | – | Mention it as a soft argument only. RWS already labels its DDAPI20 WFS an HVD dataset (NGR record). |
 
 **Sources safe for the first release without asking** (open licence, documented or official, no key needed): NL-1, NL-2, NL-4, DE-1, DE-6, DE-7, FR-1, FR-4, FR-5, LU-1 (but see the third-party question above), LU-5, LU-6, CH-1. CH-2, CH-4 and CH-5 are usable under BAFU terms, but they are undocumented website internals; ask BAFU (§10 R5).
@@ -249,7 +269,27 @@ Quantities: **H** = water level, **Q** = discharge, **F** = forecast, **T** = th
 | NL-3 | NL | waterinfo.rws.nl internal JSON | `https://waterinfo.rws.nl/api/point/latestmeasurement?parameterId=…` | yes | Latest H with Waterinfo class label, colour and `possiblyFaulty` | about 13 min lag; `max-age=300` | Latest only | None | Undocumented |
 | NL-4 | NL | RWS Waterinfo legend-class spreadsheet (**display classes, not alert levels**) | `https://rijkswaterstaatdata.nl/publish/pages/223004/grenswaarden-en-legendakleuren-zoals-gebruikt-op-waterinfo-15-4-2026-.xlsx` | yes (495 KB; parsed in the gap check) | T: per-location H classes (237 codes) and Q classes (27 codes), **varying by month or season** (`Period`, `FromMonth`…`ToDay`), with `Priority` and slug duplicates; see the parser specification in §2.1 | "Quarterly" per the file; only the 15-4-2026 edition was online on 2026-09-23 | – | None | URL may break when the site becomes CTD on 5 Nov 2026 |
 | NL-5 | NL | Waterschap Rijn en IJssel – Nexus ArcGIS FeatureServer | `https://opengeo.wrij.nl/arcgis/rest/services/WaterData/Nexus_P/FeatureServer/0/query` | yes | H (m NAP), Q, F (`Afvoeren_verw_534`, `Waterstandsverw_539`) at 3,622 points | Syncs about every 30 min; hourly values | UNVERIFIED | None | Undocumented, no licence |
-| NL-6 | NL | Water boards: Vechtstromen, Waterschap Limburg (`waterstandlimburg.nl` returned 403), WRIJ portal (`waterdata.wrij.nl` unreachable) | – | no API found | – | – | – | – | – |
+| NL-6 | NL | Water boards: generic placeholder, superseded by NL-7…NL-26 (catalogue §2.8) | – | no API found | – | – | – | – | – |
+| NL-7 | NL | Waterschap Limburg – live levels (no open endpoint found; placeholder for its future feed) | – | no API found | – | – | – | – | – |
+| NL-8 | NL | Waterschap Vechtstromen – live levels (no machine endpoint found; placeholder for its future feed) | – | no API found | – | – | – | – | – |
+| NL-9 | NL | Waterschap De Dommel – Dommelportaal ArcGIS layer (latest value, no timestamp; placeholder for its future feed) | – | no timestamped API found | – | – | – | – | – |
+| NL-10 | NL | Waterschap Brabantse Delta – open-data portal (no live surface-water levels; placeholder for its future feed) | – | no API found | – | – | – | – | – |
+| NL-11 | NL | Waterschap Aa en Maas – ArcGIS MapServer EXTERN/Stuwinstellingen_waterstanden (weir levels with a date; placeholder for its future feed) | – | MapServer seen, not used | – | – | – | – | – |
+| NL-12 | NL | Waterschap Hunze en Aa's – Lizard (stale since 2020; placeholder for its future feed) | – | Lizard (stale) | – | – | – | – | – |
+| NL-13 | NL | Waterschap Drents Overijsselse Delta – Lizard (stale since 2017; placeholder for its future feed) | – | Lizard (stale) | – | – | – | – | – |
+| NL-14 | NL | Hoogheemraadschap De Stichtse Rijnlanden – Lizard API v4 (hdsr.lizard.net, live; placeholder for its feed) | – | Lizard API v4 seen, not used | – | – | – | – | – |
+| NL-15 | NL | Waterschap Rivierenland – ArcGIS layer (values behind HydroNET chart URLs, no timestamp; placeholder for its future feed) | – | no timestamped API found | – | – | – | – | – |
+| NL-16 | NL | Waterschap Vallei en Veluwe – ArcGIS layer (latest value, no timestamp; placeholder for its future feed) | – | no timestamped API found | – | – | – | – | – |
+| NL-17 | NL | Waterschap Noorderzijlvest – ArcGIS app and Lizard (stale since 2015; placeholder for its future feed) | – | no API found | – | – | – | – | – |
+| NL-18 | NL | Wetterskip Fryslân – boezem level in an ArcGIS app (hourly average; placeholder for its future feed) | – | no API found | – | – | – | – | – |
+| NL-19 | NL | Waterschap Zuiderzeeland – Lizard (live polder levels; placeholder for its feed) | – | Lizard seen, not used | – | – | – | – | – |
+| NL-20 | NL | Hoogheemraadschap Hollands Noorderkwartier – Lizard (live boezem and polder levels; placeholder for its feed) | – | Lizard seen, not used | – | – | – | – | – |
+| NL-21 | NL | Waterschap Amstel, Gooi en Vecht – placeholder for its future feed (no endpoint researched) | – | no API found | – | – | – | – | – |
+| NL-22 | NL | Hoogheemraadschap van Rijnland – placeholder for its future feed (no endpoint researched) | – | no API found | – | – | – | – | – |
+| NL-23 | NL | Hoogheemraadschap van Delfland – placeholder for its future feed (no endpoint researched) | – | no API found | – | – | – | – | – |
+| NL-24 | NL | Hoogheemraadschap van Schieland en de Krimpenerwaard – ArcGIS app "Actuele metingen water" (placeholder for its future feed) | – | no API found | – | – | – | – | – |
+| NL-25 | NL | Waterschap Hollandse Delta – placeholder for its future feed (no endpoint researched) | – | no API found | – | – | – | – | – |
+| NL-26 | NL | Waterschap Scheldestromen – placeholder for its future feed (no endpoint researched) | – | no API found | – | – | – | – | – |
 | **DE-1** | DE (federal waterways) | WSV/ITZBund – PEGELONLINE REST API v2 | `https://www.pegelonline.wsv.de/webservices/rest-api/v2` | yes | H (`W`, cm above gauge zero PNP; some series in `m+NN`) at 737 series; Q at 94 stations (17 on the Rhine). T: characteristic values (W only) and state flags | Mostly 15 min (some 1, 5 or 10 min); a new value appears about 2 min after its timestamp | About 31 days | None | None documented. ETag/`If-None-Match` gives 304; gzip; CORS `*` |
 | **DE-2** | DE (Rhine) | BfG forecasts inside PEGELONLINE (`WV`) | `…/rest-api/v2/stations/{uuid}/WV/measurements.json` | yes | F: W, 2-hourly, 0–48 h "forecast" plus 48–96 h "estimate", for 7 Rhine gauges | Runs on working days, and also at weekends and on holidays when Ruhrort is below 4 m [D] (BfG "Vorhersagen" page, re-read 2026-09-23); a 07:00 run was seen. Behaviour above HSW is unknown (§0.4) | Latest run only | None | As DE-1 |
 | DE-3 | DE (Rhine) | BfG CSV forecasts | `https://vorhersage.bafg.de/14-Tage-Vorhersage/`, `https://vorhersage.bafg.de/6-Wochen-Vorhersage/index.html` | yes | F: 14-day daily-mean quantiles (7 gauges); 6-week weekly W/Q box quantiles | Daily (`Last-Modified` 09:45 GMT) | Latest | None | – |
@@ -308,7 +348,27 @@ Attribution strings are exact where a provider or report gives them. "Suggested"
 | NL-3 | Undocumented, no terms | – | – | **Not recommended** (inspiration for colour classes only) | Can change without notice; `/api/legend/legend` returned 500 |
 | NL-4 | As NL-1; the file itself says *"hier kunnen geen rechten aan worden ontleend"* | As NL-1 | M (seasonal periods, priorities, slug duplicates) | **First release** (Waterinfo display classes for NL stations, labelled as such, **not** as official warnings) | Covers 49 of 54 curated live H series and 14 of 18 Q series; the "quarterly" update has not appeared since 15-4-2026; the URL may break with the CTD launch on 5 Nov 2026 |
 | NL-5 | None stated; described as an internal dashboard layer | – | – | **Not recommended** without WRIJ consent (later phase at best) | Timestamp semantics UNVERIFIED (its Lobith mirror showed 6.28 m at "16:00Z" while RWS had 628 cm at 19:00Z) |
-| NL-6 | – | – | – | Later (negotiate feeds) | No API |
+| NL-6 | – | – | – | Superseded by NL-7…NL-26 (§2.8) | No API |
+| NL-7 | – | – | – | Later (as its grant arrives, P21) | No open endpoint; viewer returns 403 to automated fetches; EFAS link UNVERIFIED |
+| NL-8 | – | – | – | Later (as its grant arrives, P21) | No endpoint; personal-use clause only (R19) |
+| NL-9 | – | – | – | Later (as its grant arrives, P21) | Layer carries no timestamp (R15); statement and proclaimer disagree |
+| NL-10 | – | – | – | Later (as its grant arrives, P21) | Portal holds no live levels (R8) |
+| NL-11 | – | – | – | Later (as its grant arrives, P21) | No terms; weir levels, not gauges |
+| NL-12 | – | – | – | Later (as its grant arrives, P21) | Series stale since 2020; no licence |
+| NL-13 | – | – | – | Later (as its grant arrives, P21) | Series stale since 2017 |
+| NL-14 | – | – | – | Later (as its grant arrives, P21) | No named licence (R14) |
+| NL-15 | – | – | – | Later (as its grant arrives, P21) | No timestamped source (R15) |
+| NL-16 | – | – | – | Later (as its grant arrives, P21) | No timestamped source (R15) |
+| NL-17 | – | – | – | Later (as its grant arrives, P21) | Lizard series stale since 2015 |
+| NL-18 | – | – | – | Later (as its grant arrives, P21) | Boezem average only |
+| NL-19 | – | – | – | Later (as its grant arrives, P21) | No terms (R14) |
+| NL-20 | – | – | – | Later (as its grant arrives, P21) | No terms (R14) |
+| NL-21 | – | – | – | Later (as its grant arrives, P21) | Not researched |
+| NL-22 | – | – | – | Later (as its grant arrives, P21) | Not researched |
+| NL-23 | – | – | – | Later (as its grant arrives, P21) | Not researched |
+| NL-24 | – | – | – | Later (as its grant arrives, P21) | Viewer only |
+| NL-25 | – | – | – | Later (as its grant arrives, P21) | Not researched |
+| NL-26 | – | – | – | Later (as its grant arrives, P21) | Not researched; Belgian outlets UNVERIFIED (R18) |
 | **DE-1** | DL-DE→Zero-2.0 (terms "Stand: 21.05.2024"): *"Jede Nutzung ist ohne Einschränkungen oder Bedingungen zulässig."* | Suggested: **"Pegeldaten: WSV/GDWS via PEGELONLINE (pegelonline.wsv.de), Datenlizenz Deutschland – Zero – Version 2.0 (https://www.govdata.de/dl-de/zero-2-0). Ungeprüfte Rohdaten."** | S | **First release** | 31-day retention. Raw data. Q goes stale or stops. Mixed datums and units. Whether third-party mirrors (RWS, BAFU Basel, RP Freiburg Konstanz, Ruhrverband Hattingen) are covered by DL-DE Zero is unclear: take those from their original sources. |
 | **DE-2** | Ambiguous: DL-DE Zero (PEGELONLINE) or BfG terms. Treat it as BfG. | **"Wasserstandsvorhersage: Bundesanstalt für Gewässerkunde (BfG)"**, labelled forecast/estimate. BfG terms: *"…die BfG als Datenquelle zu nennen und der BfG ein entsprechendes Belegexemplar unentgeltlich zur Verfügung zu stellen."* | S | **First release** (product requirement), once the Belegexemplar obligation is accepted | Only 7 gauges; latest run only; CSV percentiles empty today |
 | DE-3 | BfG terms (credit plus free copy) | As DE-2 | S | Later | 14-day CSV: `---` above 640 cm; "GMT+1"; `DD.MM.YYYY`; stamped at the start of the day |
@@ -544,11 +604,50 @@ GET https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs?SERVICE=WFS&VERS
 - Fields: `EVENT_VALUE` (m NAP or m³/s) and `EVENT_TIMESTAMP` (epoch ms). Coordinates are RD New; `outSR=4326` works.
 - Examples: `175_BOV` Verdeelwerk Haarlo (Berkel), `28_BOV` Verdeelwerk Lochem (Berkel), `101_TDB` Stuw De Pol (Oude IJssel), Q 0.191 m³/s.
 
-**Water boards (NL-6):**
+**Water boards (NL-6, superseded by NL-7…NL-26 in §2.8):**
 - Vechtstromen shows levels only in news items and a HydroNET embed. Its ArcGIS Online account `services1.arcgis.com/3RkP6F5u2r7jKHC9` has structures but no measurement feed.
 - Waterschap Limburg's `https://www.waterstandlimburg.nl` (e.g. `/Home/Waterstanden/147` Roer Vlodrop, `/LocatieInfo/ONIER06_H` Niers) returned 403; possibly a WAF or geo-block (UNVERIFIED). Lizard lists the board with 0 public time series.
 - Hunze en Aa's (Westerwoldse Aa) was not researched.
 - The Digitale Delta API (DD-API v3, IHW) won the "Gouden API 2026" on 21 Sep 2026, but no public DD-API endpoint serves water-board water-quantity data.
+
+<!-- rws-inventory:begin -->
+<!-- Generated by scripts/rws-inventory.ts from nl-1-catalogue-full.raw (sha256 a87a3b62946c…) and nl-2-wfs-20261016.raw (sha256 6d2f1de5aad0…). Do not edit: run node scripts/rws-inventory.ts. -->
+
+**Rijkswaterstaat inventory (generated, P15).** A live location is a distinct `CODE` of the NL-2 WFS snapshot (WATHTE and Q, last 12 h); its water type is curated in `TABLE` of `scripts/rws-inventory.ts`. H and Q count the distinct live WFS series (location, quantity, Hoedanigheid, method). The other columns count, for the same locations, the WATHTE combinations of the full NL-1 catalogue: Forecast `verwachting` (Q included), Astronomical `astronomisch` without a grouping, HW/LW measured `GETETM2`/`GETETMSL2`, HW/LW astronomical `GETETBRKD2`/`GETETBRKDMSL2` (`GETETOZBRKD2`, the computed surge at the extremes, is not counted).
+
+| Water type | Locations | H | Q | Forecast | Astronomical | HW/LW measured | HW/LW astronomical |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Lake and closed estuary | 33 | 32 | 3 | 18 | 0 | 4 | 0 |
+| Coast and Wadden Sea | 34 | 34 | 0 | 28 | 28 | 49 | 36 |
+| Scheldt estuaries | 23 | 23 | 0 | 17 | 16 | 26 | 18 |
+| Tidal delta | 32 | 32 | 1 | 13 | 21 | 41 | 21 |
+| River | 83 | 84 | 19 | 74 | 5 | 12 | 5 |
+| Canal and regulated water | 156 | 100 | 77 | 4 | 0 | 1 | 0 |
+| Offshore (MSL) | 12 | 12 | 0 | 2 | 9 | 6 | 9 |
+| Structure-internal | 18 | 6 | 12 | 0 | 0 | 0 | 0 |
+| **Total** | **391** | **323** | **112** | **156** | **79** | **139** | **89** |
+
+Structure-internal locations (registered `off` with a reason, never shown):
+
+- `beekendonk.sluis6.kolk` · lock chamber
+- `brouwersdam.spui.binnen.schuif6` · gate slot
+- `brouwersdam.spui.buiten.schuif2` · gate slot
+- `haghorst.sluis4.kolk` · lock chamber
+- `haghorst.sluis4.schuif` · gate slot
+- `haghorst.sluis4.schuif1` · gate slot
+- `kats.zandkreeksluis.kolk1` · lock chamber
+- `oosterhout.sluis1.kolk` · lock chamber
+- `oosterhout.sluis1.spuikanaal.kleprechts` · gate slot
+- `pannerden.regelwerk.beneden` · pannerden.regelwerk.*
+- `pannerden.regelwerk.boven` · pannerden.regelwerk.*
+- `schijndel.sluis.kolk` · lock chamber
+- `tilburg.sluis3.kolk` · lock chamber
+- `willemstad.volkeraksluizen.schuif2` · gate slot
+- `willemstad.volkeraksluizen.schuif3` · gate slot
+- `zwartsluis.gemaal.pomp1` · pumping station
+- `zwartsluis.gemaal.pomp2` · pumping station
+- `zwartsluis.gemaal.pomp3` · pumping station
+<!-- rws-inventory:end -->
 
 ### 2.2 DE-1 to DE-5: PEGELONLINE (WSV/ITZBund) and BfG
 
@@ -1397,6 +1496,61 @@ SELECT ?id ?name ?water ?time ?q ?w ?t ?dl ?wkt WHERE {
 - Coordinates: EPSG:2056 (LV95) in the GeoJSON files, WGS84 WKT in LINDAS.
 - opendata.swiss CKAN rejects the default curl User-Agent, so always send a descriptive UA with a contact address.
 - The "Meine Pegel" app (hochwasserzentralen.info) is another distribution channel but not an API.
+
+### 2.8 Dutch water boards
+
+Added by P15 (2026-10-16, PHASES §54). The research behind the table is issue #62 (2026-10-03, one or two requests per endpoint, none repeated); on 2026-10-16 the terms and colofon pages of six rows were read again (NL-5, NL-8, NL-9, NL-10, NL-12, NL-14) and quoted verbatim below. **Nothing was fetched from any board feed**, and no board has a capture spec or host: every row is `audience: "off"` in `registry/sources.yaml`.
+
+**ID rule.**
+- One source ID per board feed, NL-7 upward, in the order of the permission requests C16 to C36. A board with no feed found has one placeholder ID for its future feed.
+- No board has two live feeds as of 2026-10-03. A second feed found later takes the next free ID.
+- NL-5 (Waterschap Rijn en IJssel, the Nexus layer) keeps its ID and is C17. NL-6 stays as the generic placeholder of roadmap 1 and is **superseded** by NL-7…NL-26; it carries no data.
+- The IDs are the registry's (`registry/sources.yaml`, one provider per board in `registry/providers.yaml`) and are used unchanged in the permission drafts, `docs/permissions.md` and the P21 pull requests (#69).
+
+**Audience rule (D28).**
+- `public`, once the board grants publication and `registry/permissions/<ID>.md` records the grant and the channels it names.
+- `owner`, if the board allows only personal, non-commercial use (D22, ADR-0017) and the owner decides to use it: the clause is quoted as the source's `private_basis` and in §0.8.
+- `off` otherwise. All 20 new rows start `off`, with all four §0.7 channels false, as NL-6 did.
+- A board's viewer, app or portal is never scraped, and an open endpoint is not consent. A value without its own timestamp is never stored (R15).
+
+| ID | Board | Website | Contact route | Rivers | Viewer and platform | Machine endpoint | Terms (verbatim, with URL) | Checked |
+|---|---|---|---|---|---|---|---|---|
+| NL-7 (C16) | Waterschap Limburg | waterschaplimburg.nl (levels: waterstandlimburg.nl) | form https://www.waterschaplimburg.nl/contact/contactformulier/ | Roer, Niers, Geul, Swalm, Worm, Jeker, Geleenbeek | waterstandlimburg.nl and an app (403 to automated fetches) | none found (0 public Lizard series). A search snippet says 31 of its stations feed Copernicus EFAS (UNVERIFIED, R17) | none found | 2026-10-03 (URL not recorded) |
+| NL-5 (C17) | Waterschap Rijn en IJssel | wrij.nl | `info@wrij.nl`, or the form at wrij.nl/direct-regelen/stel-vraag | Oude IJssel, Berkel, Bocholter Aa, Slinge, Baakse Beek, Schipbeek | ArcGIS Server (`opengeo.wrij.nl`); site notes only | ArcGIS FeatureServer `WaterData/Nexus_P` (the NL-5 layer; undocumented; timestamps UTC or local: open, R16) | no data licence found. For the site's texts, images and videos: *"Neem contact met ons op voor mogelijkheden en eisen aan bronvermelding."* (https://www.wrij.nl/over-deze-website) | 2026-10-16 |
+| NL-8 (C18) | Waterschap Vechtstromen | vechtstromen.nl | `info@vechtstromen.nl` | Vecht (from De Haandrik), Dinkel, Regge | levels only in news items and a HydroNET embed; its ArcGIS Online account holds structures, no measurement feed | none found | colofon: *"Het is niet toegestaan zonder toestemming informatie en beelden van deze site openbaar te maken"* … *"anders dan voor persoonlijk en niet commercieel gebruik en met vermelding van de bron."* (https://www.vechtstromen.nl/algemeen/colofon/). The clause covers the site's information and images, not a data feed; a personal-use reading is a D28 decision (R19) | 2026-10-16 |
+| NL-9 (C19) | Waterschap De Dommel | dommel.nl | `info@dommel.nl` | Dommel, Tongelreep, Keersop, Reusel, Beerze, Run | Dommelportaal (ArcGIS Instant App; HydroNET behind it) | ArcGIS layer of 36 points with the latest value and class and no timestamp (R15) | open-data page: *"Iedereen kan en mag deze gebruiken."* (https://www.dommel.nl/waterdata-openbare-gegevens-over-water); proclaimer: *"Behoudens uitzonderingen krachtens de Auteurswet 1912, mag daarom niets van deze website anders dan voor persoonlijk (niet-commercieel) gebruik worden verveelvoudigd"* … *"openbaar gemaakt of verspreid zonder onze schriftelijke toestemming."* (https://www.dommel.nl/proclaimer). No licence is named; ask for it in writing | 2026-10-16 |
+| NL-10 (C20) | Waterschap Brabantse Delta | brabantsedelta.nl | form https://formulieren.brabantsedelta.nl/form/contact-opnemen/uw-gegevens-1 | Mark, Aa of Weerijs, Donge, Dintel | open-data portal (ArcGIS Hub; the page redirected to opendata-wbd.opendata.arcgis.com) | none: the portal holds geographic data and no live surface-water levels | *"De data in het Open Data Portaal stellen we beschikbaar volgens het principe 'open, tenzij'."* and *"Je mag de open data gebruiken om bijvoorbeeld te importeren in softwareproducten of om afgeleide producten te maken."* (https://www.brabantsedelta.nl/actueel/kaarten-en-data/open-data-portaal/). No licence and no attribution text are stated | 2026-10-16 |
+| NL-11 (C21) | Waterschap Aa en Maas | aaenmaas.nl | `info@aaenmaas.nl` | Aa, Raam, Hertogswetering, Leijgraaf, Peelse Loop | not recorded | ArcGIS MapServer `gisservices.aaenmaas.nl … EXTERN/Stuwinstellingen_waterstanden/MapServer` (current weir levels with a date) | none found | 2026-10-03 (URL not recorded) |
+| NL-12 (C22) | Waterschap Hunze en Aa's | hunzeenaas.nl | `gis_info@hunzeenaas.nl` (the open-data contact) | Westerwoldse Aa, Hunze, Drentsche Aa | Lizard portal (stale) | Lizard: 94 public series, last updated 2020; no live endpoint found | *"Iedereen is vrij is om deze data te hergebruiken."* (sic) and *"Wij stellen onze data beschikbaar volgens het principe open, tenzij."* (https://www.hunzeenaas.nl/open-data/). No licence or attribution text is stated | 2026-10-16 |
+| NL-13 (C23) | Waterschap Drents Overijsselse Delta | wdodelta.nl | `info@wdodelta.nl` | lower (Overijsselse) Vecht, Reest, Sallandse Weteringen | Lizard portal (stale) | Lizard: 48 public series, none updated since 2017; no live endpoint found. Its map datasets on data.overheid.nl are CC0 | none found | 2026-10-03 (URL not recorded) |
+| NL-14 (C24) | Hoogheemraadschap De Stichtse Rijnlanden (HDSR) | hdsr.nl | `post@hdsr.nl` | Kromme Rijn, Hollandse IJssel, Leidsche Rijn | Lizard portal hdsr.lizard.net | Lizard API v4, live: 3,205 public series, 2,438 updated since 2026-10-01 (R14) | news item of 14 June 2012: *"Iedereen die dat wil kan deze gegevens gebruiken en er toepassingen, zoals apps, voor ontwikkelen."* (https://www.hdsr.nl/@3720/waterschap-stelt/). No licence is named. Lizard "public" is an access flag, not a licence | 2026-10-16 |
+| NL-15 (C25) | Waterschap Rivierenland | wsrl.nl | `info@wsrl.nl` | Linge, Giessen, Alblas | ArcGIS layer of 1,178 locations | values sit behind HydroNET chart URLs; no timestamped value found (R15) | a disclaimer only | 2026-10-03 (URL not recorded) |
+| NL-16 (C26) | Waterschap Vallei en Veluwe | vallei-veluwe.nl | `info@vallei-veluwe.nl` | Eem, Grift, Valleikanaal, Veluwe streams to the IJssel | ArcGIS layer of 748 points (HydroNET behind it) | latest value with no timestamp (R15) | none found | 2026-10-03 (URL not recorded) |
+| NL-17 (C27) | Waterschap Noorderzijlvest | noorderzijlvest.nl | `info@noorderzijlvest.nl` | Reitdiep, Winsumerdiep | ArcGIS app | Lizard: 22 public series, stale since 2015; no live endpoint found | none found | 2026-10-03 (URL not recorded) |
+| NL-18 (C28) | Wetterskip Fryslân | wetterskip.frl | information-request form at mijn.wetterskipfryslan.nl (linked from wetterskip.frl/contact) | Frisian boezem | ArcGIS app (average boezem level, hourly) | none recorded | none found | 2026-10-03 (URL not recorded) |
+| NL-19 (C29) | Waterschap Zuiderzeeland | zuiderzeeland.nl | `waterschap@zuiderzeeland.nl` | Flevoland polders | Lizard portal | Lizard: 3,893 live public series (R14) | none found | 2026-10-03 (URL not recorded) |
+| NL-20 (C30) | Hoogheemraadschap Hollands Noorderkwartier (HHNK) | hhnk.nl | form hhnk.nl/form/e-mailformulier | Noord-Holland boezem | Lizard portal | Lizard: 7,270 live public series, some apparently forecasts (R14) | none found | 2026-10-03 (URL not recorded) |
+| NL-21 (C31) | Waterschap Amstel, Gooi en Vecht (AGV) | agv.nl | form agv.nl/contact/contactformulier/ | Amstel, Utrechtse Vecht | not recorded | none found (not researched) | none found | 2026-10-03 (URL not recorded) |
+| NL-22 (C32) | Hoogheemraadschap van Rijnland | rijnland.nl | form rijnland.nl/contact/contactformulier/ | Oude Rijn, Rijnland boezem | not recorded | none found (not researched) | none found | 2026-10-03 (URL not recorded) |
+| NL-23 (C33) | Hoogheemraadschap van Delfland | hhdelfland.nl | `loket@hhdelfland.nl` | Delfland boezem | not recorded | none found (not researched) | none found | 2026-10-03 (URL not recorded) |
+| NL-24 (C34) | Hoogheemraadschap van Schieland en de Krimpenerwaard (HHSK) | hhsk.nl | `info@hhsk.nl` | Rotte | ArcGIS app "Actuele metingen water" | historical CSV downloads; whether a machine endpoint stands behind the app is not known | none found | 2026-10-03 (URL not recorded) |
+| NL-25 (C35) | Waterschap Hollandse Delta | wshd.nl | `info@wshd.nl` | waters of the Zuid-Hollandse islands | not recorded | none found (not researched) | none found | 2026-10-03 (URL not recorded) |
+| NL-26 (C36) | Waterschap Scheldestromen | scheldestromen.nl | `info@scheldestromen.nl` | Zeeland waters; outlets from Belgium in Zeeuws-Vlaanderen (UNVERIFIED, R18) | not recorded | none found (not researched) | none found | 2026-10-03 (URL not recorded) |
+
+**Platforms seen.** Lizard: NL-12, NL-13, NL-14, NL-17, NL-19, NL-20. ArcGIS: NL-5, NL-9, NL-11, NL-15, NL-16, NL-17, NL-18, NL-24. HydroNET sits behind the viewers of NL-8, NL-9, NL-15 and NL-16. The data-licence column of §1b stays `–` for every new row: no board names a licence for its measurements, and Lizard "public" is an access flag, not a licence.
+
+**Umbrella routes**
+
+| Route | What it offers | Terms and limits | Contact | Use |
+|---|---|---|---|---|
+| Het Waterschapshuis (Gegevensknooppunt Waterschappen) | Open map objects of the boards (IMWA: surface waters, structures, flood defences) on data.overheid.nl and PDOK. No live water-quantity data. | CC-BY-SA 4.0 (share-alike), per #62 and a search of 2026-10-16 that also showed one older flood-defence record as CC-0 (UNVERIFIED: the dataset pages were not opened, two fetches returned 404). | `datastromen@hetwaterschapshuis.nl`, or `servicedesk@hetwaterschapshuis.nl` | Any use needs a reviewed decision first: share-alike would make the station data a separate collective database (§10 R20). C15 asks for a national route. |
+| Unie van Waterschappen | The union of the boards; no public live feed. | – | `info@uvw.nl` | Cc of C15. |
+| Digitale Delta API (DD-API v3) | The national data API of the water sector; won the "Gouden API 2026" (§2.1). | No public endpoint serves water-board water-quantity data. | Via C15. | None until C15 opens a route. |
+| Lizard | A time-series platform that six boards use (see above). | "Public" is an access flag on a series, not a licence. | The board (C22, C23, C24, C27, C29, C30). | Per board, after its grant. A shared client is built with the first Lizard board (P21). |
+| HydroNET | The charting platform behind four viewers. | No public API found; chart URLs are not a data feed. | The board. | None. |
+| Waterinfo and Waterinfo Extra | Rijkswaterstaat's viewers. | National waters only; they hold no water-board gauges. NL-3 is the internal JSON and is not recommended (§1a). | – | None for the boards. |
+
+**Fallback while a board is `off`.** The Method page (D32, P19b) lists each board without a grant with its rivers and the nearest gauge the map does show (German, Belgian or Rijkswaterstaat).
 
 ---
 
@@ -2627,11 +2781,20 @@ Items from `plan/CATALOGUE-GAPS.md` that could not be closed from the sandbox, w
 | R5 | Permission answers: HIC, VMM, SPW, AGE (incl. CC0 scope of third-party gauges in LU-1), NLWKN, BfG, **LfU RLP**, LUBW, BAFU (hydrodaten polling) | Requires sending e-mails; the owner must decide who sends them (§9 Q2) | Phase 0 permission tracker (§0.2) |
 | R6 | IGN69 offset and French gauge zeros | EPSG accuracy is 0.1 m; the EVRF2019 grid is not on the PROJ CDN; the BKG EVRS site and IGN Circé were not reachable or not scriptable from the sandbox; Hub'Eau Hanweiler zero is wrong by about 1.1 m | Hand-curate a zero table; ask DREAL/SCHAPI about A940000101; use IGN Circé manually for the curated stations |
 | R7 | Endpoint reachability from the production VPS (IPv4 and IPv6) and re-test of sandbox failures (waterstandlimburg.nl 403, Saarland Bunny Shield, `server.wver.de`, `evrs.bkg.bund.de`, GitHub HTML) | Cannot be tested from the sandbox | Smoke test from the VPS with body signatures (gap item 11) |
-| R8 | Whether the VMM Kempen gauges (Mark, Dommel, Warmbeek, Kleine Aa, Noordermark) deliver live values; Brabant water-board open data | Metadata only (anonymous); the Aa en Maas and Brabantse Delta ArcGIS hubs were not checked for real-time series | After the VMM token; check the ArcGIS hubs |
+| R8 | Whether the VMM Kempen gauges (Mark, Dommel, Warmbeek, Kleine Aa, Noordermark) deliver live values; Brabant water-board open data | Metadata only (anonymous); the Aa en Maas and Brabantse Delta ArcGIS hubs were not checked for real-time series | After the VMM token; check the ArcGIS hubs (2026-10: NL-10 and NL-11, §2.8) |
 | R9 | What RWS `kanne` Q measures (Jeker/Geer or canal) | Not documented in the catalogue | RWS Servicedesk or compare with SPW/VMM |
 | R10 | Austria/Liechtenstein inflows (Ill, Bregenzerach, Bodensee at Bregenz) | Owner decision; not researched | §9 Q32 |
 | R11 | Volume budget (gap item 16), backup/RPO and isolation (item 9), bandwidth budget (item 10), DST fixtures (item 12), seed list and coverage metric (item 17), privacy and legal pages (item 18), multilingual names (item 19) | Design and prototype work, not source facts | Phase planning; the partial data points gathered are: LU-Alert archive 30 MB for 15 months; InfoVigiCru 2.2 MB per change (not per poll); `pegeldaten.zip` 10 MB per daily copy (128 MB unpacked), about 3.7 GB a year if every copy is kept |
 | R12 | Owner decisions: go-live date (C35), commercial or not (§9 Q1), who sends the permission e-mails (§9 Q2), crosswalk sign-off (§9 Q31) | Owner input | Product owner |
+| R13 | A national route to live water-board levels (Gegevensknooppunt Waterschappen, Digitale Delta API) | Het Waterschapshuis publishes map objects only; no public endpoint serves water-quantity data | C15 to `datastromen@hetwaterschapshuis.nl`, cc `info@uvw.nl`; owner |
+| R14 | Licences of the Lizard boards (NL-12, NL-13, NL-14, NL-17, NL-19, NL-20) | Lizard "public" is an access flag, not a licence; HDSR's 2012 statement and Hunze en Aa's "free to reuse" name no licence | Ask in C22, C23, C24, C27, C29 and C30 for a named licence, attribution text and interval; owner |
+| R15 | Timestamp-less ArcGIS layers (NL-9 De Dommel, NL-15 Rivierenland, NL-16 Vallei en Veluwe) | The layers hold the latest value without a timestamp, and a value without its own timestamp is never stored | Ask in C19, C25 and C26 for a timestamped source; until then these boards stay `off` |
+| R16 | Whether the timestamps of the WRIJ Nexus layer (NL-5) are UTC or local time | Its Lobith mirror showed 6.28 m at "16:00Z" while RWS had 628 cm at 19:00Z (§1b) | Ask in C17 (question 4 of the template); owner |
+| R17 | Whether Waterschap Limburg's stations feed Copernicus EFAS (NL-7) | UNVERIFIED: a search snippet says 31 stations do; the board's viewer returns 403 to automated fetches | Ask in C16; do not fetch EFAS for it without a source that names the board |
+| R18 | Whether Scheldestromen (NL-26) has outlets from Belgium in Zeeuws-Vlaanderen | UNVERIFIED: from the research summary of #62, not read on a board page | Ask in C36; check the Flemish side (BE-2) before showing any |
+| R19 | Whether the site terms of Vechtstromen (NL-8) and De Dommel (NL-9) can support an `owner` decision (D22) | Both allow personal, non-commercial use of the site's content, but neither names a data feed, and De Dommel's open-data page says anyone may use the data while its proclaimer asks for written permission | The owner's D28 answer; ask in C18 and C19 for written confirmation |
+| R20 | Share-alike terms of the Het Waterschapshuis map objects (CC-BY-SA 4.0) | The station data would have to stay a separate collective database; the older CC-0 flood-defence record is UNVERIFIED | A reviewed decision before any use; ask in C15 |
+| R21 | Boards with no endpoint researched (NL-21, NL-22, NL-23, NL-25, NL-26) | Only the contact route is known | Wave 2 of the requests (C31, C32, C33, C35, C36) |
 
 ---
 
