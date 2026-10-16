@@ -3205,6 +3205,537 @@ rivers:
     parent_river_id: decours
     km_direction: none
     evidence: "Wikidata Q3051616 (no P402; P403 Q3042898 Décours), SPARQL by id 2026-10-15 (#142); P31 brook; relation r9083483 (type=waterway) carries wikidata=<this id> in the extract (geo.yml run 38783389922, rivernet-fixture artifact)"
+  - id: plessur
+    name_nl: "Plessur"
+    name_en: "Plessur"
+    names:
+      CH-1: ["Plessur"]
+      CH-2: ["Plessur"]
+    aliases: []
+    osm_relation_id: 2842861
+    osm_way_name: null
+    wikidata: Q671083
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q671083 (P402 2842861; P403 Q584 Rhine), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: landquart
+    name_nl: "Landquart"
+    name_en: "Landquart"
+    names:
+      CH-1: ["Landquart"]
+      CH-2: ["Landquart"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Landquart"
+    wikidata: Q673824
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q673824 (no P402; P403 Q584 Rhine), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: ergolz
+    name_nl: "Ergolz"
+    name_en: "Ergolz"
+    names:
+      CH-1: ["Ergolz"]
+      CH-2: ["Ergolz"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Ergolz"
+    wikidata: Q667412
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q667412 (no P402; P403 Q584 Rhine), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: wiese
+    name_nl: "Wiese"
+    name_en: "Wiese"
+    names:
+      CH-1: ["Wiese"]
+      CH-2: ["Wiese"]
+    aliases: []
+    osm_relation_id: 4779106
+    osm_way_name: null
+    wikidata: Q666946
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q666946 (P402 4779106; P403 Q584 Rhine), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); DE and CH, mouth at Basel; the other Wikidata Wiese Q19311616 has no P403"
+  - id: glenner
+    name_nl: "Glenner"
+    name_en: "Glogn"
+    names:
+      CH-1: ["Glenner"]
+      CH-2: ["Glenner"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Glenner"
+    wikidata: Q493411
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q493411 (no P402; P403 Q673896 Vorderrhein, which OSM maps as the main stream of the Rhine relation r123924 (Tomasee to Reichenau)), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); rm Glogn"
+  - id: albula
+    name_nl: "Albula"
+    name_en: "Albula"
+    names:
+      CH-1: ["Albula"]
+      CH-2: ["Albula"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Albula"
+    wikidata: Q165200
+    parent_river_id: hinterrhein
+    km_direction: none
+    evidence: "Wikidata Q165200 (no P402; P403 Q668852 Hinterrhein), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); rm Alvra"
+  - id: julia
+    name_nl: "Julia"
+    name_en: "Julia"
+    names:
+      CH-1: ["Julia"]
+      CH-2: ["Julia"]
+    aliases: []
+    osm_relation_id: 4808125
+    osm_way_name: null
+    wikidata: Q686341
+    parent_river_id: albula
+    km_direction: none
+    evidence: "Wikidata Q686341 (P402 4808125; P403 Q165200 Albula), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); rm Gelgia"
+  - id: landwasser
+    name_nl: "Landwasser"
+    name_en: "Landwasser"
+    names:
+      CH-1: ["Landwasser"]
+      CH-2: ["Landwasser"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Landwasser"
+    wikidata: Q674635
+    parent_river_id: albula
+    km_direction: none
+    evidence: "Wikidata Q674635 (no P402; P403 Q165200 Albula), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: dischmabach
+    name_nl: "Dischmabach"
+    name_en: "Dischmabach"
+    names:
+      CH-1: ["Dischmabach"]
+      CH-2: ["Dischmabach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Dischmabach"
+    wikidata: Q690754
+    parent_river_id: landwasser
+    km_direction: none
+    evidence: "Wikidata Q690754 (no P402; P403 Q674635 Landwasser), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: duennern
+    name_nl: "Dünnern"
+    name_en: "Dünnern"
+    names:
+      CH-1: ["Dünnern"]
+      CH-2: ["Dünnern"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Dünnern"
+    wikidata: Q685393
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q685393 (no P402; P403 Q1675 Aare), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: guerbe
+    name_nl: "Gürbe"
+    name_en: "Gürbe"
+    names:
+      CH-1: ["Gürbe"]
+      CH-2: ["Gürbe"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Gürbe"
+    wikidata: Q684789
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q684789 (no P402; P403 Q1675 Aare), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: suhre
+    name_nl: "Suhre"
+    name_en: "Suhre"
+    names:
+      CH-1: ["Suhre"]
+      CH-2: ["Suhre"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Suhre"
+    wikidata: Q16945
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q16945 (no P402; P403 Q1675 Aare), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: wigger
+    name_nl: "Wigger"
+    name_en: "Wigger"
+    names:
+      CH-1: ["Wigger"]
+      CH-2: ["Wigger"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Wigger"
+    wikidata: Q16944
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q16944 (no P402; P403 Q1675 Aare), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: luthern
+    name_nl: "Luthern"
+    name_en: "Luthern"
+    names:
+      CH-1: ["Luthern"]
+      CH-2: ["Luthern"]
+    aliases: []
+    osm_relation_id: 17314373
+    osm_way_name: null
+    wikidata: Q116729
+    parent_river_id: wigger
+    km_direction: none
+    evidence: "Wikidata Q116729 (P402 17314373; P403 Q16944 Wigger), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: worble
+    name_nl: "Worble"
+    name_en: "Worble"
+    names:
+      CH-1: ["Worble"]
+      CH-2: ["Worble"]
+    aliases: []
+    osm_relation_id: 3428708
+    osm_way_name: null
+    wikidata: Q2593377
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q2593377 (P402 3428708; P403 Q1675 Aare), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: aabach-seetal
+    name_nl: "Aabach (Seetal)"
+    name_en: "Aabach (Seetal)"
+    names:
+      CH-1: ["Aabach"]
+      CH-2: ["Aabach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Aabach"
+    wikidata: Q300674
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q300674 (no P402; P403 Q1675 Aare), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Aabach items Q300669 (mouth Afte), Q300670 (Hessel), Q300671 (Greifensee) and Q300672 (Lake Zurich) have other mouths; the gauge Hitzkirch, Richensee lies on the Seetal Aabach between the Baldeggersee and the Hallwilersee"
+  - id: ilfis
+    name_nl: "Ilfis"
+    name_en: "Ilfis"
+    names:
+      CH-1: ["Ilfis"]
+      CH-2: ["Ilfis"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Ilfis"
+    wikidata: Q1471046
+    parent_river_id: emme
+    km_direction: none
+    evidence: "Wikidata Q1471046 (no P402; P403 Q688240 Emme), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: necker
+    name_nl: "Necker"
+    name_en: "Necker"
+    names:
+      CH-1: ["Necker"]
+      CH-2: ["Necker"]
+    aliases: []
+    osm_relation_id: 2207448
+    osm_way_name: null
+    wikidata: Q667617
+    parent_river_id: thur
+    km_direction: none
+    evidence: "Wikidata Q667617 (P402 2207448; P403 Q14339 Thur), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: scheulte
+    name_nl: "Scheltenbach"
+    name_en: "Scheulte"
+    names:
+      CH-1: ["Scheulte"]
+      CH-2: ["Scheulte"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Scheulte"
+    wikidata: Q2233139
+    parent_river_id: birs
+    km_direction: none
+    evidence: "Wikidata Q2233139 (no P402; P403 Q14340 Birs), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: sorne
+    name_nl: "Sorne"
+    name_en: "Sorne"
+    names:
+      CH-1: ["Sorne"]
+      CH-2: ["Sorne"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Sorne"
+    wikidata: Q967877
+    parent_river_id: birs
+    km_direction: none
+    evidence: "Wikidata Q967877 (no P402; P403 Q14340 Birs), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Sorne Q27991925 flows into the Vallière (France)"
+  - id: sense
+    name_nl: "Sense"
+    name_en: "Sense"
+    names:
+      CH-1: ["Sense"]
+      CH-2: ["Sense"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Sense"
+    wikidata: Q676671
+    parent_river_id: saane
+    km_direction: none
+    evidence: "Wikidata Q676671 (no P402; P403 Q14333 Saane), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: schaechen
+    name_nl: "Schächen"
+    name_en: "Schächen"
+    names:
+      CH-1: ["Schächen"]
+      CH-2: ["Schächen"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Schächen"
+    wikidata: Q18027769
+    parent_river_id: reuss
+    km_direction: none
+    evidence: "Wikidata Q18027769 (no P402; P403 Q4015 Reuss), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: sihl
+    name_nl: "Sihl"
+    name_en: "Sihl"
+    names:
+      CH-1: ["Sihl"]
+      CH-2: ["Sihl"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Sihl"
+    wikidata: Q660909
+    parent_river_id: limmat
+    km_direction: none
+    evidence: "Wikidata Q660909 (no P402; P403 Q14338 Limmat), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: alp
+    name_nl: "Alp"
+    name_en: "Alp"
+    names:
+      CH-1: ["Alp"]
+      CH-2: ["Alp"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Alp"
+    wikidata: Q2650720
+    parent_river_id: sihl
+    km_direction: none
+    evidence: "Wikidata Q2650720 (no P402; P403 Q660909 Sihl), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Alp Q13731 is in Italy (no P403)"
+  - id: biber
+    name_nl: "Biber"
+    name_en: "Biber"
+    names:
+      CH-1: ["Biber"]
+      CH-2: ["Biber"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Biber"
+    wikidata: Q856130
+    parent_river_id: alp
+    km_direction: none
+    evidence: "Wikidata Q856130 (no P402; P403 Q2650720 Alp), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Biber items have other mouths: Q681992 (Rhine, Schaffhausen), Q320342 (Danube), Q856141 (Möhne), Q12149780 (San)"
+  - id: minster
+    name_nl: "Minster"
+    name_en: "Minster"
+    names:
+      CH-1: ["Minster"]
+      CH-2: ["Minster"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Minster"
+    wikidata: Q1454605
+    parent_river_id: sihl
+    km_direction: none
+    evidence: "Wikidata Q1454605 (no P402; P403 Q660909 Sihl), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Minster Q1816613 is in the United States"
+  - id: langeten
+    name_nl: "Langete"
+    name_en: "Langete"
+    names:
+      CH-1: ["Langeten"]
+      CH-2: ["Langete"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Langete"
+    wikidata: Q693806
+    parent_river_id: murg-aare
+    km_direction: none
+    evidence: "Wikidata Q693806 (no P402; P403 Q1953660 Murg), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); BAFU spells it Langeten (CH-1) and Langete (CH-2)"
+  - id: murg-aare
+    name_nl: "Murg (Aare)"
+    name_en: "Murg (Aare)"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Murg"
+    wikidata: Q1953660
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q1953660 (no P402; P403 Q1675 Aare), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the gaugeless connector of the Langeten (the Kander precedent); named Murg (Aare) because the curated Thurgau murg Q685327 holds the BAFU name Murg; Murgenthal, Walliswil (2471) lies on it (station override)"
+  - id: luetschine
+    name_nl: "Lütschine"
+    name_en: "Lütschine"
+    names:
+      CH-1: ["Lütschine"]
+      CH-2: ["Lütschine"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Lütschine"
+    wikidata: Q572425
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q572425 (no P402; P403 Q14442 Lake Brienz, whose outflow is the Aare), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: weisse-luetschine
+    name_nl: "Weisse Lütschine"
+    name_en: "Weisse Lütschine"
+    names:
+      CH-1: ["Weisse Lütschine"]
+      CH-2: ["Weisse Lütschine"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Weisse Lütschine"
+    wikidata: Q83196288
+    parent_river_id: luetschine
+    km_direction: none
+    evidence: "Wikidata Q83196288 (no P402; no P403; it forms the Lütschine Q572425 with the Schwarze Lütschine Q84177697 (P403 Q572425) at Zweilütschinen), SPARQL by id 2026-10-16 (#143); P31 river, P625 at the head of the Lauterbrunnen valley; the other Wikidata Weisse Lütschine Q83381315 is the Grindelwald stream (P625 8.04 E) and Q55721592 a disambiguation page"
+  - id: suze
+    name_nl: "Suze"
+    name_en: "Suze"
+    names:
+      CH-1: ["Suze"]
+      CH-2: ["Suze"]
+    aliases: []
+    osm_relation_id: 2198044
+    osm_way_name: null
+    wikidata: Q385243
+    parent_river_id: aare
+    km_direction: none
+    evidence: "Wikidata Q385243 (P402 2198044; P403 Q14429 Lake Biel, which the Aare flows through), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); de Schüss; the other Wikidata Suze Q219290 is in France (no P403)"
+  - id: muota
+    name_nl: "Muota"
+    name_en: "Muota"
+    names:
+      CH-1: ["Muota"]
+      CH-2: ["Muota"]
+    aliases: []
+    osm_relation_id: 11166314
+    osm_way_name: null
+    wikidata: Q1433898
+    parent_river_id: reuss
+    km_direction: none
+    evidence: "Wikidata Q1433898 (P402 11166314; P403 Q14381 Lake Lucerne, whose outflow is the Reuss), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: engelberger-aa
+    name_nl: "Engelberger Aa"
+    name_en: "Engelberger Aa"
+    names:
+      CH-1: ["Engelberger Aa"]
+      CH-2: ["Engelberger Aa"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Engelberger Aa"
+    wikidata: Q668892
+    parent_river_id: reuss
+    km_direction: none
+    evidence: "Wikidata Q668892 (no P402; P403 Q14381 Lake Lucerne, whose outflow is the Reuss), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: sarner-aa
+    name_nl: "Sarner Aa"
+    name_en: "Sarner Aa"
+    names:
+      CH-1: ["Sarner Aa"]
+      CH-2: ["Sarneraa"]
+    aliases: []
+    osm_relation_id: 15824606
+    osm_way_name: null
+    wikidata: Q689719
+    parent_river_id: reuss
+    km_direction: none
+    evidence: "Wikidata Q689719 (P402 15824606; P403 Q14381 Lake Lucerne, whose outflow is the Reuss), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); BAFU spells it Sarner Aa (CH-1) and Sarneraa (CH-2)"
+  - id: chli-schliere
+    name_nl: "Chli Schliere"
+    name_en: "Chli Schliere"
+    names:
+      CH-1: ["Chli Schliere"]
+      CH-2: ["Chli Schliere"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Chli Schliere"
+    wikidata: Q22495972
+    parent_river_id: sarner-aa
+    km_direction: none
+    evidence: "Wikidata Q22495972 (no P402; no P403; P31 watercourse, P625 at Alpnach, where the Grosse Schliere Q15111829 (P403 Q689719 Sarner Aa) also ends), SPARQL by id 2026-10-16 (#143); de alias Kleine Schliere"
+  - id: sionge
+    name_nl: "Sionge"
+    name_en: "Sionge"
+    names:
+      CH-1: ["Sionge"]
+      CH-2: ["Sionge"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Sionge"
+    wikidata: Q1581322
+    parent_river_id: saane
+    km_direction: none
+    evidence: "Wikidata Q1581322 (no P402; P403 Q682189 Lac de la Gruyère, a reservoir of the Saane), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: grossbach
+    name_nl: "Grossbach"
+    name_en: "Grossbach"
+    names:
+      CH-1: ["Grossbach"]
+      CH-2: ["Grossbach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Grossbach"
+    wikidata: Q28500823
+    parent_river_id: sihl
+    km_direction: none
+    evidence: "Wikidata Q28500823 (no P402; P403 Q688846 Sihlsee, a reservoir of the Sihl), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: aach
+    name_nl: "Aach"
+    name_en: "Aach"
+    names:
+      CH-1: ["Aach"]
+      CH-2: ["Aach"]
+    aliases: []
+    osm_relation_id: 11163320
+    osm_way_name: null
+    wikidata: Q300690
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q300690 (P402 11163320; P403 Q4127 Lake Constance, which the Rhine flows through), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts); the other Wikidata Aach items Q300691, Q32134472 and Q62158 have no P403"
+  - id: goldach
+    name_nl: "Goldach"
+    name_en: "Goldach"
+    names:
+      CH-1: ["Goldach"]
+      CH-2: ["Goldach"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Goldach"
+    wikidata: Q1534651
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q1534651 (no P402; P403 Q4127 Lake Constance, which the Rhine flows through), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: seez
+    name_nl: "Seez"
+    name_en: "Seez"
+    names:
+      CH-1: ["Seez"]
+      CH-2: ["Seez"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Seez"
+    wikidata: Q679177
+    parent_river_id: linth
+    km_direction: none
+    evidence: "Wikidata Q679177 (no P402; P403 Q14444 Walensee, whose outflow is the Linth), SPARQL 2026-10-12 (tools/geo/rivernet/lookup-wikidata.ts)"
+  - id: rein-da-sumvitg
+    name_nl: "Rein da Sumvitg"
+    name_en: "Rein da Sumvitg"
+    names:
+      CH-1: ["Rein da Sumvitg"]
+      CH-2: ["Rein da Sumvitg"]
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Rein da Sumvitg"
+    wikidata: Q18027187
+    parent_river_id: rhine
+    km_direction: none
+    evidence: "Wikidata Q18027187 (no P402; P403 Q668852 Hinterrhein, a Wikidata error: its P625 (8.959 E, 46.728 N) is at Sumvitg on the Vorderrhein, which OSM maps as the main stream of the Rhine relation r123924 (Tomasee to Reichenau)), SPARQL by id 2026-10-16 (#143); found by its label \"Rein da Sumvitg\"@de"
 excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283

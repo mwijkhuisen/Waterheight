@@ -410,3 +410,46 @@ fr:Courant de Coutiches
 fr:Courant de l'Hôpital
 fr:Courant Frenelet
 fr:Vieille Lys
+# Stage 3 B5 (#143, KG-250): CH-1 Rhine-basin single-gauge tributaries and the Aare's Murg connector
+de:Plessur
+de:Landquart
+de:Ergolz
+de:Wiese
+de:Glenner
+rm:Glogn
+de:Albula
+de:Julia
+de:Landwasser
+de:Dischmabach
+de:Dünnern
+de:Gürbe
+de:Suhre
+de:Wigger
+de:Luthern
+de:Worble
+de:Aabach
+de:Ilfis
+de:Necker
+fr:Scheulte
+fr:Sorne
+de:Sense
+de:Schächen
+de:Sihl
+de:Alp
+de:Biber
+de:Minster
+de:Langete
+de:Lütschine
+de:Weisse Lütschine
+de:Schüss
+fr:Suze
+de:Muota
+de:Engelberger Aa
+de:Sarner Aa
+de:Chli Schliere
+fr:Sionge
+de:Grossbach
+de:Aach
+de:Goldach
+de:Seez
+de:Rein da Sumvitg
