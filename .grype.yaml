@@ -140,7 +140,8 @@ ignore:
       name: golang.org/x/crypto
       version: v0.55.0
       type: go-module
-  # libssl3t64 3.5.7-1~deb13u2 (deb) in cloudflared: its distroless base, never loaded (CGO_ENABLED=0; #167)
+  # libssl3t64 3.5.7-1~deb13u2 (deb) in cloudflared: its distroless base, never loaded (CGO_ENABLED=0; #167).
+  # Our server image has deb13u3; delete these once cloudflared's base moves past deb13u2.
   - vulnerability: CVE-2026-54873
     package:
       name: libssl3t64

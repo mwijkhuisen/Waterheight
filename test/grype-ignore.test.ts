@@ -61,12 +61,21 @@ describe('scripts/third-party-images.sh (#167)', () => {
     for (const ref of refs) expect(ref).toMatch(/@sha256:[0-9a-f]{64}$/);
   });
 
-  it('fails on an image without a digest, and when there is no third-party image', () => {
+  it('fails when there is no third-party image, on one without a digest, and on an image: it cannot read', () => {
     const dir = mkdtempSync(join(tmpdir(), 'third-party-'));
-    writeFileSync(join(dir, 'compose.yaml'), `services:\n  web:\n    image: \${RWS_WEB_IMAGE:?}\n`);
-    expect(run(dir).status).toBe(1);
-    writeFileSync(join(dir, 'compose.extra.yaml'), 'services:\n  x:\n    image: example/x:1.0\n');
-    expect(run(dir).status).toBe(1);
-    rmSync(dir, { recursive: true });
+    const fails = (compose: string, message: string) => {
+      writeFileSync(join(dir, 'compose.yaml'), compose);
+      const r = run(dir);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(message);
+    };
+    try {
+      fails(`services:\n  web:\n    image: \${RWS_WEB_IMAGE:?}\n`, 'no third-party image');
+      fails('services:\n  x:\n    image: example/x:1.0\n', 'not pinned by tag and digest');
+      fails(`services:\n  x:\n    image:\n      example/x:1.0@sha256:${'0'.repeat(64)}\n`, 'on one line');
+      fails('services:\n  x: {image: example/x:1.0}\n', 'on one line');
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
   });
 });
