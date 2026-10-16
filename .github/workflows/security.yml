@@ -136,6 +136,7 @@ jobs:
   # P12a: the weekly rescan of what is deployed. The PR gate (release.yml build-pr) sees only the
   # day a dependency was pinned; a new advisory against an old image shows up here. It scans the
   # images of the latest release manifest (public GHCR packages, pulled anonymously, by digest),
+  # and, #167, the third-party images its deploy bundle's compose files pin (postgres, cloudflared),
   # not a fresh build, so it costs no build and is exactly what the VPS runs. It is not part of
   # the aggregate `security` check (a new advisory must never block an unrelated PR); a red run
   # is the signal: bump the pin, or the owner decides (docs/risk-register.md). The only ignore entries are the
@@ -175,7 +176,7 @@ jobs:
             tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP/bin" "$t"
           done
           echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
-      - name: Scan the three images of the latest release (fixable High or Critical fails)
+      - name: Scan the images of the latest release, ours and the third-party ones (fixable High or Critical fails)
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -184,7 +185,7 @@ jobs:
           syft --version
           grype --version
           mkdir "$RUNNER_TEMP/rel"
-          gh release download --repo "$GH_REPO" --pattern release-manifest.json --dir "$RUNNER_TEMP/rel"
+          gh release download --repo "$GH_REPO" --pattern release-manifest.json --pattern deploy-bundle.tar.gz --dir "$RUNNER_TEMP/rel"
           fail=0
           for name in server web backup; do
             ref=$(jq -r --arg n "$name" '.images[$n]' "$RUNNER_TEMP/rel/release-manifest.json")
@@ -193,6 +194,19 @@ jobs:
             echo "$name: $(jq '.artifacts | length' "$RUNNER_TEMP/sbom-$name.json") packages in the SBOM"
             grype -c .grype.yaml "sbom:$RUNNER_TEMP/sbom-$name.json" --only-fixed --fail-on high || fail=1
           done
+          # #167: the third-party images (postgres, cloudflared) as the release's deploy bundle pins them, which is what
+          # the VPS runs even while main has moved on.
+          sha=$(jq -r '.bundle.sha256' "$RUNNER_TEMP/rel/release-manifest.json")
+          [[ $sha =~ ^[0-9a-f]{64}$ ]] || { echo "::error::unexpected bundle sha256" >&2; exit 1; }
+          echo "$sha  $RUNNER_TEMP/rel/deploy-bundle.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/rel/deploy-bundle.tar.gz" -C "$RUNNER_TEMP/rel" --wildcards 'deploy/compose*.yaml'
+          refs=$(scripts/third-party-images.sh "$RUNNER_TEMP/rel/deploy")
+          while read -r ref; do
+            name=${ref%%@*} && name=${name##*/} && name=${name/:/-}
+            syft "registry:$ref" --platform linux/amd64 -o "syft-json=$RUNNER_TEMP/sbom-$name.json" -q
+            echo "$ref: $(jq '.artifacts | length' "$RUNNER_TEMP/sbom-$name.json") packages in the SBOM"
+            grype -c .grype.yaml "sbom:$RUNNER_TEMP/sbom-$name.json" --only-fixed --fail-on high || fail=1
+          done <<<"$refs"
           exit "$fail"
 
   security:

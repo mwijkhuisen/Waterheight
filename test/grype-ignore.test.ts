@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
@@ -28,7 +30,7 @@ describe('.grype.yaml', () => {
       expect(Object.keys(r).sort()).toEqual(['package', 'vulnerability']);
       expect(r.vulnerability).toMatch(/^(CVE-\d{4}-\d+|GHSA(-[0-9a-z]{4}){3}|GO-\d{4}-\d+)$/);
       expect(Object.keys(r.package).sort()).toEqual(['name', 'type', 'version']);
-      expect(r.package.type).toMatch(/^(go-module|apk)$/);
+      expect(r.package.type).toMatch(/^(go-module|apk|deb)$/);
       for (const v of Object.values(r.package)) expect(v).not.toMatch(/[*?]/);
       const k = `${r.vulnerability} ${r.package.name} ${r.package.version}`;
       expect(keys.has(k), k).toBe(false);
@@ -37,11 +39,34 @@ describe('.grype.yaml', () => {
     expect(keys.size).toBeGreaterThan(0);
   });
 
-  it('is read by both Grype gates', () => {
+  it('is read by both Grype gates, which also scan the third-party images (#167)', () => {
     for (const f of ['release.yml', 'security.yml']) {
       const wf = readFileSync(join(root, '.github/workflows', f), 'utf8');
       expect(wf).toMatch(/grype -c \.grype\.yaml "sbom:/);
       expect(wf).not.toMatch(/grype "sbom:/);
+      expect(wf).toMatch(/refs=\$\(scripts\/third-party-images\.sh "?[^\s)]*deploy"?\)/);
     }
+  });
+});
+
+describe('scripts/third-party-images.sh (#167)', () => {
+  const script = join(root, 'scripts/third-party-images.sh');
+  const run = (dir: string) => spawnSync(script, [dir], { encoding: 'utf8' });
+
+  it('lists the pinned postgres and cloudflared images of deploy/, not our release images', () => {
+    const r = run(join(root, 'deploy'));
+    expect(r.status, r.stderr).toBe(0);
+    const refs = r.stdout.trim().split('\n');
+    expect(refs.map((ref) => ref.split(':')[0])).toEqual(['cloudflare/cloudflared', 'postgres']);
+    for (const ref of refs) expect(ref).toMatch(/@sha256:[0-9a-f]{64}$/);
+  });
+
+  it('fails on an image without a digest, and when there is no third-party image', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'third-party-'));
+    writeFileSync(join(dir, 'compose.yaml'), `services:\n  web:\n    image: \${RWS_WEB_IMAGE:?}\n`);
+    expect(run(dir).status).toBe(1);
+    writeFileSync(join(dir, 'compose.extra.yaml'), 'services:\n  x:\n    image: example/x:1.0\n');
+    expect(run(dir).status).toBe(1);
+    rmSync(dir, { recursive: true });
   });
 });
