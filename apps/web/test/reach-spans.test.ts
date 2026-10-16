@@ -57,16 +57,16 @@ describe('spansOf on the fixture release', () => {
     expect(at('nederrijn.3')?.lengthKm).toBeCloseTo(0.658, 3); // 3 + 4, the first arm
     expect(at('nederrijn.4')?.lengthKm).toBeCloseTo(0.658, 3);
     expect(at('nederrijn.5')?.lengthKm).toBeCloseTo(0.667, 3); // 3 + 5 is only walked second
-    // scheldt.11 into 12 and 13; moselle.16 into 18 and 19.
+    // scheldt.11 into 12 and 13; moselle.19 into 21 and 22.
     for (const id of ['scheldt.11', 'scheldt.12', 'scheldt.13']) expect(at(id)?.down).toEqual(['nl.rws.antwerpen']);
     // The first arm in walk order is scheldt.12 (0.406 km, ids sorted as text); via scheldt.13 (0.416 km) it is 165.581.
     expect(at('scheldt.11')?.lengthKm).toBeCloseTo(165.571, 3);
     expect(at('scheldt.13')?.lengthKm).toBeCloseTo(165.581, 3);
     expect(at('scheldt.11')?.tidal).toBe(true); // a span with a tidal reach
     expect(spans.get('scheldt.11')?.tidal).toBe(false); // the reach itself is not
-    expect(at('moselle.16')?.lengthKm).toBeCloseTo(30.17, 3);
-    expect(at('moselle.19')?.lengthKm).toBeCloseTo(30.131, 3);
-    expect(at('moselle.18')?.down).toEqual(at('moselle.19')?.down);
+    expect(at('moselle.19')?.lengthKm).toBeCloseTo(30.17, 3);
+    expect(at('moselle.22')?.lengthKm).toBeCloseTo(30.131, 3);
+    expect(at('moselle.21')?.down).toEqual(at('moselle.22')?.down);
   });
 
   it('puts the midpoint of a reach on its span by the lengths before it', () => {
@@ -196,11 +196,11 @@ describe('the bins of a reach (#112)', () => {
       const fs = spans.get(r.id);
       expect(fs?.bins.length, r.id).toBe(binCount(r.length_km));
     }
-    expect(spans.get('rhine.62')?.bins).toHaveLength(8);
+    expect(spans.get('rhine.63')?.bins).toHaveLength(8);
   });
 
   it('puts bin i at (i + 0.5) / n of the reach, so pos increases along them', () => {
-    const fs = spans.get('rhine.62');
+    const fs = spans.get('rhine.63');
     expect(fs?.bins.map((b) => b?.pos)).toEqual(Array.from({ length: 8 }, (_, i) => expect.closeTo((i + 0.5) / 8, 9)));
     // a 1-bin reach is its midpoint; every bin of a multi-bin reach lies on the reach's own span
     for (const [id, f] of spans) {

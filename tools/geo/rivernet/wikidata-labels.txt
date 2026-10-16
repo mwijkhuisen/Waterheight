@@ -329,6 +329,60 @@ nl:Groenlose Slinge
 de:Ahauser Aa
 de:Steinfurter Aa
 nl:Boven-Slinge
+# KG-250 stage 3 B3 (#141): FR-1 Rhine, Moselle and Saar tributaries, LU-1 Gander and Mamer
+fr:Thalbach
+de:Traubach
+fr:Andlau
+fr:Béhine
+fr:Lièpvrette
+fr:Ehn
+de:Kleine Fecht
+fr:Strengbach
+fr:Lauter
+fr:Zinsel du Sud
+fr:Eberbach
+de:Falkensteinerbach
+fr:Falkensteinerbach
+fr:Zinsel du Nord
+fr:Seltzbach
+fr:Avière
+fr:Moselotte
+fr:Vologne
+fr:Cleurie
+fr:Neuné
+fr:Gitte
+fr:Blette
+fr:Plaine
+fr:Sânon
+fr:petite Seille
+fr:Esch
+fr:Rupt de Mad
+fr:Fensch
+fr:ruisseau de la Vallée
+fr:ruisseau de Vaux
+fr:Kiesel
+fr:Canner
+fr:Conroy
+fr:ruisseau de Veymerange
+fr:Albe
+fr:Isch
+fr:Bièvre
+de:Bist
+fr:Bisten
+fr:Horn
+de:Hornbach
+de:Schwarzbach
+fr:Sarre rouge
+de:Gondrexange
+de:Rossel
+fr:Rosselle
+de:Gander
+fr:Gander
+lb:Gander
+de:Mamer
+fr:Mamer
+lb:Mamer
+fr:Brénon
 # Stage 3 B4 (#142, KG-250): FR-1 Meuse, Sambre and Scheldt single-gauge tributaries and the Décours connector
 fr:Aroffe
 fr:Othain
