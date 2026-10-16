@@ -3203,6 +3203,38 @@ NL-1 and up to nine other sources were `down` from 01:00 to 04:00 UTC. The loade
 - **Not in this fix ([U], `docs/known-gaps.md`).** KG-353 (`findCoverage` grew from 0.5 s to 3 s), KG-354 (health still inside the load loop), KG-355 (job 7, Eijsden Q F216, `schema_drift` at chunk 2010-12-27; cross-reference KG-342).
 - **The [agent-prod] criterion stays open** until a backfill night passes with live lag within the limits (KG-343): the owner starts the next night (`docs/runbooks/backfill.md` §3) and the per-hour lag query of §6 is the evidence.
 
+### Nights 2 and 3 (2026-10-14/15 and 2026-10-15/16) and the queue fix (issue #29)
+
+- **Night 2 did not run.** The owner scheduled it at 14:37Z with `systemd-run`, and a reboot at 17:01Z (issue #155) removed the transient timer: no journal entry, no chunk. With no backfill, live lag p95 was 16.7 to 29.1 s all night (`/api/v1/health`, every 30 minutes). Runbook §3 now says to check `systemctl list-timers` after a reboot.
+- **Night 3 ran** from 22:01 to 05:03 UTC. Chunks rose from 2,072 to 6,083 and rows from 7.29M to 21.09M. 21 of the 41 jobs are done, 13 planned, 1 running. 5 more jobs failed `schema_drift` (KG-355). There was no `health_slow` and no `load_stalled`. NL-1's tier 1 stayed fresh (41/41), but **live freshness failed again**:
+
+  | Hour (UTC) | Backfill batches | Chunk load p50 / max | Live p95 |
+  |---|---|---|---|
+  | 22h | 595 | 2 / 88 s | 631 s |
+  | 23h | 63 | 57 / 72 s | 1,284 s |
+  | 00h | 303 | 2 / 87 s | 2,037 s |
+  | 01h | 1,996 | 2 / 12 s | 57 s |
+  | 02h | 459 | 2 / 30 s | 760 s |
+  | 03h | 253 | 8 / 21 s | 490 s |
+  | 04h | 292 | 6 / 27 s | 377 s |
+
+- **Cause.**
+  - Backfill lines share the daily manifest with the live lines, and the loader reads a manifest in order (its cursor is a byte offset). So every unloaded chunk sits in front of the live lines written after it.
+  - The guard let 30 chunks wait (`unloaded`). That number was sized for the runner's pace, not for load time: 30 chunks of 2 s are a minute, but 30 of about a minute each are half an hour. That is the lag measured (2,037 s, about 30 × 68 s).
+  - The hour with the most chunks (01h) had the lowest lag.
+  - Why a chunk sometimes takes a minute is not isolated (KG-356). There were 4 forced checkpoints since 10-01, and autovacuum ran on the yearly partitions in bursts after 01:30.
+- **The fix.**
+  - Migration `20261112000001_backfill_guard_unloaded.sql` answers `unloaded` for any chunk of an active job that is not in the ledger (it was more than 30). The runner looks again after 2 s (it was 15 s). It stays one chunk ahead of the loader, so at most one chunk waits in front of a live line.
+  - A chunk the loader sets aside (quarantined or skipped) gets a ledger row with no counts and `reconciled` false, so the guard never waits for it forever. Its job fails `unreconciled`.
+  - The job line of a `schema_drift` carries `drift`, the parser's fixed code.
+  - The runbooks' `rwsc` and the unattended start call `rws_compose`, which adds the tunnel and owner overlays: no "orphan `rws-cloudflared-1`" warning, and no `--remove-orphans`.
+  - Cost: about 300 to 400 chunks an hour instead of up to 2,000, so the rest of NL-1 (14 jobs) takes about two nights.
+  - Evidence ([CI]):
+    - `resume.int.test.ts`: the guard at one unloaded chunk; a set-aside chunk gets an unreconciled ledger row, the guard answers `ok` and the job fails `unreconciled`, and the test fails without the loader change.
+    - `pacer.test.ts`: the runner stays one chunk ahead of a loader that ticks every 10 s, with short sleeps only.
+    - `run.test.ts` and `truncation.test.ts`: the drift code.
+- **The [agent-prod] criterion stays open** (KG-343) until a night passes within the limits.
+
 ## 50. Amendment: fix #109, the Cloudflare Tunnel edge (2026-10-12)
 
 What #109 built (ADR-0021, owner decisions of 2026-10-12): the public site can run behind a Cloudflare Tunnel on the current home host (KG-228), switched back to Caddy direct by one line. Direct mode is unchanged byte for byte (`deploy/tests/caddy-edge.test.sh` compares the adapted Caddy JSON with today's text; measured equal to main's). The domain moves to `waterradar.io` first, in direct mode and without code (`docs/runbooks/domain-change.md`); the tunnel follows (`docs/runbooks/edge-switch.md`).

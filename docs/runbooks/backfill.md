@@ -14,12 +14,12 @@ The `backfill` role is a one-shot job. It plans one job per series, fetches the 
 | Fetch targets come only from `registry/` (invariant 1). The hosts of `registry/backfill.yaml` must be hosts of the same source in `registry/capture.yaml`; the body of every request is built from the registry row of the series, and the series is looked up in the registry again before **every** request | A job whose key the registry no longer selects fails as `unregistered`. No command line or database value reaches a URL |
 | **One runner per host.** At start a run takes the lease of every host its jobs use (a row of `backfill_lease`, owned by a random id per process), renews it to now + 2 minutes before every request, and gives it back at exit | A second `run` while one holds the lease exits 1 at once with `"stopped":"busy"` and sends nothing. After a `kill -9`, a reboot or a lost container the lease lapses **within 2 minutes**: a `run` started sooner is `busy`; wait 2 minutes and start it again |
 | It works only inside the off-peak window **22:00–05:00 UTC** and exits when the window closes or the jobs are done | Start it at about 22:00 UTC. A run that is stopped by the window is a success (exit 0); start it again the next evening |
-| Pacing: at least 1 s between two requests (probes included) and at most 3,600 an hour, on top of the live capture's 400 an hour for NL-1 (`registry/backfill.yaml`; the budget test asserts both) | About 4.2 hours for NL-1 (§7), counted at one request a second; the guard's short `unloaded` pause (15 seconds, below) does not add to it while the loader keeps up, and a night in which it lags for good ends at the window instead |
+| Pacing: at least 1 s between two requests (probes included) and at most 3,600 an hour, on top of the live capture's 400 an hour for NL-1 (`registry/backfill.yaml`; the budget test asserts both) | About 4.2 hours of requests for NL-1 (§7), counted at one request a second. Since the P14a queue fix the runner also waits for the loader after every chunk with data (`unloaded`, below: one loader tick, up to about 10 seconds), so a night loads some 300 to 400 chunks an hour and the NL-1 history takes several nights; a night in which the loader lags for good ends at the window |
 | Each job has a **request budget** (planned chunks and probes plus 20 %) | A job that has used it is `paused` with `budget` (§5) |
 | **The job row is checked before any request** (review S2): its chunk must be the spec's, its range must lie in [the spec floor, the data epoch 2026-10-02], and its budget may not exceed what `plan` gives that range | A job row changed by hand or through the `rws_backfill` login fails as `invalid_job` before it sends anything |
 | The upper end of every range is at most the **data epoch, 2026-10-02T00:00:00Z** (`DATA_EPOCH`, the first production capture, app_meta `data_epoch`): `plan` defaults `--to` to it and refuses a later one, and the loader drops a backfill row at or after it | The history meets the live rows at the epoch and never reaches the newest live point, so `obs_latest` never needs a backfill (KG-345) |
 | **The loader's window** (review S3): a backfill row outside its manifest line's chunk `[from, to)`, below the spec floor (1990-01-01) or at or after the data epoch is dropped as `outside_backfill` and counted in `dropped` | A forged or misplaced line stores nothing outside its chunk, and the ledger identities still hold |
-| `backfill_guard` (a database function) answers whether the loader and the source are healthy; while it does not answer `ok` the runner sleeps and looks again: 15 seconds after `unloaded`, 5 minutes after any other answer | The backfill never competes with the live loader: it waits while the loader's health pass is older than **150 seconds** or has no time at all (`loader_lag`; 5 minutes until the P14a health-scan fix: the pass rewrites it every 60 to 90 seconds, so an older one is a stalled load loop), while the manifest backlog is over 3 files or older than **60 seconds** (`backlog`; 600 seconds, five times the 120-second freshness limit, until the P14a health-scan fix: the runner now stops starting chunks once live data is a minute behind), or an active job of the source (`planned`, `running` or `paused`; an aborted, failed or done one is not counted) has more than 30 chunks with data (`chunks_with_data`) that the loader's ledger does not hold yet (`unloaded`: archived and not yet loaded, or quarantined), or while the source is not healthy (`stale`). The 30 is the arithmetic of a healthy night: the runner writes at most one chunk a second, the loader reads every 10 seconds for up to 20 seconds a tick, so 10 to 30 chunks wait normally; more is a loader that falls behind, and the runner then looks every 15 seconds until it has caught up |
+| `backfill_guard` (a database function) answers whether the loader and the source are healthy; while it does not answer `ok` the runner sleeps and looks again: 2 seconds after `unloaded`, 5 minutes after any other answer | The backfill never competes with the live loader: it waits while the loader's health pass is older than **150 seconds** or has no time at all (`loader_lag`; 5 minutes until the P14a health-scan fix: the pass rewrites it every 60 to 90 seconds, so an older one is a stalled load loop), while the manifest backlog is over 3 files or older than **60 seconds** (`backlog`; 600 seconds, five times the 120-second freshness limit, until the P14a health-scan fix: the runner now stops starting chunks once live data is a minute behind), or an active job of the source (`planned`, `running` or `paused`; an aborted, failed or done one is not counted) has **any** chunk with data (`chunks_with_data`) that the loader's ledger does not hold yet (`unloaded`), or while the source is not healthy (`stale`). **Why no unloaded chunk at all** (the P14a queue fix; it allowed 30 before): backfill lines go into the same daily manifest as the live lines, and the loader reads a manifest in order, so every unloaded chunk sits in front of the live lines written after it. On the night of 2026-10-15/16 a chunk took 2 seconds to load at the median but up to about a minute at times, and 30 of them held live data back by up to 34 minutes. Now at most one chunk waits in front of a live line. A chunk the loader sets aside (quarantined or skipped) gets a ledger row too, with no counts and `reconciled` false, so the guard never waits for it; the runner then fails that job `unreconciled` (§5) and goes on with the next |
 | A chunk is committed in this order: (a) the object in the archive, (b) a manifest line (`retention: backfill`, spec `nl-1-backfill-obs`, an empty `variant`), (c) the job's cursor | A `kill -9` or a reboot at any point resumes at the old cursor; the chunk is fetched again and the second line loads as a no-op. No duplicates, no gaps |
 | A chunk answered `204`, or with no value, moves the cursor and writes **no** manifest line | Fetch health does not see a `key: null` line |
 | The probe asks `CheckWaarnemingenAanwezig` year by year from the start of the range until the first year that has data under the series' own method; **probes are not archived** | `data_from` is that year. A series without data in the range ends `done` |
@@ -35,14 +35,13 @@ Job states: `planned`, `running`, `paused`, `done`, `failed`, `aborted`. The fix
 
 ## 2. Run it
 
-`backfill` runs as a one-off container of the `backfill` service (profile `jobs`; the only service on both `egress` and `db`; secrets `db_rws_backfill` and `rws_x_api_key`; the raw archive mounted read-write). It needs the compose files of the running release and the secret `db_rws_backfill`, which `bootstrap.sh` creates. A release that adds a database role or a secret needs its bootstrap **before** its deploy (the migration grants to the new role, and `migrate` fails and rolls back without it): run the new bootstrap of the verified release, then deploy it (`docs/runbooks/bootstrap.md`). Define this once per shell; it is the same command line as in `docs/runbooks/replay.md` §2:
+`backfill` runs as a one-off container of the `backfill` service (profile `jobs`; the only service on both `egress` and `db`; secrets `db_rws_backfill` and `rws_x_api_key`; the raw archive mounted read-write). It needs the compose files of the running release and the secret `db_rws_backfill`, which `bootstrap.sh` creates. A release that adds a database role or a secret needs its bootstrap **before** its deploy (the migration grants to the new role, and `migrate` fails and rolls back without it): run the new bootstrap of the verified release, then deploy it (`docs/runbooks/bootstrap.md`). Define this once per shell (every new login needs it again); it is the same as in `docs/runbooks/replay.md` §2, `rws_compose` of the installed `rws-lib.sh`, the command line of every deploy:
 
 ```bash
-rwsc() { sudo docker compose -p rws --project-directory /var/lib/rws/active -f /var/lib/rws/active/compose.yaml \
-  --env-file /etc/rws/rws.env --env-file /var/lib/rws/active/images.env "$@"; }
+rwsc() { sudo bash -c '. /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose "$@"' rwsc "$@"; }
 ```
 
-`rwsc` already holds `sudo`: never write `sudo rwsc`.
+`rwsc` already holds `sudo`: never write `sudo rwsc`. It adds the tunnel and owner overlays as a deploy does. The plain `-f compose.yaml` line this runbook had until the P14a queue fix warns of an orphan `rws-cloudflared-1` on a tunnel host: **never** answer that warning with `--remove-orphans`, which removes the tunnel and takes the site off line.
 
 `compose run` replaces the service's command, so the role name is given again: `backfill backfill <subcommand>`.
 
@@ -79,11 +78,14 @@ rwsc run --rm --no-deps -T backfill backfill run --until 2026-10-14T03:00:00Z   
 
 ```bash
 sudo systemd-run --unit=rws-backfill-nl1 --collect --on-calendar='<date> 22:01:00 UTC' --timer-property=AccuracySec=1s \
-  /usr/bin/docker compose -p rws --project-directory /var/lib/rws/active -f /var/lib/rws/active/compose.yaml \
-  --env-file /etc/rws/rws.env --env-file /var/lib/rws/active/images.env run --rm --no-deps -T backfill backfill run
+  /bin/bash -c '. /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose run --rm --no-deps -T backfill backfill run'
+systemctl list-timers --all | grep rws-backfill   # the timer and the time it fires
 ```
 
-It is not a function call, so `sudo` goes in front of `systemd-run` and the compose command is written out. To cancel it before it fires: `sudo systemctl stop rws-backfill-nl1.timer`. To read the run afterwards (or while it goes): `sudo journalctl -u rws-backfill-nl1` (add `-f` to follow). `--collect` lets the next evening reuse the unit name even after a run that exited 1. To stop a running night, stop its container (`sudo docker ps --filter name=backfill-run`, then `sudo docker stop <id>`: a SIGTERM, clean as below); stopping the unit alone may leave the container running. The window still closes the run at 05:00 UTC.
+It is not a function call, so `sudo` goes in front of `systemd-run` and the command is written out. To cancel it before it fires: `sudo systemctl stop rws-backfill-nl1.timer`. To read the run afterwards (or while it goes): `sudo journalctl -u rws-backfill-nl1` (add `-f` to follow). `--collect` lets the next evening reuse the unit name even after a run that exited 1. To stop a running night, stop its container (`sudo docker ps --filter name=backfill-run`, then `sudo docker stop <id>`: a SIGTERM, clean as below); stopping the unit alone may leave the container running. The window still closes the run at 05:00 UTC.
+
+- **A reboot removes the timer.** A transient timer lives in `/run`: a reboot before it fires drops it, and nothing runs that night (2026-10-14: a reboot at 17:01Z, no entries in the journal). After any reboot or bootstrap before 22:00, run `systemctl list-timers --all | grep rws-backfill` again and schedule it anew if it is gone.
+- **"Unit rws-backfill-nl1.service was already loaded".** A unit of an earlier night is left (one started without `--collect`, which ended failed): `sudo systemctl reset-failed rws-backfill-nl1.service`, then `systemd-run` again. "Unit … not loaded" from `stop` or `reset-failed` of a timer that is gone is harmless.
 
 Ctrl-C and `docker stop` (SIGINT, SIGTERM) are safe and clean: the run ends between two chunks (never between the archive object, the manifest line and the cursor), gives the lease back and exits 0 with `"stopped":"interrupted"`, so the next `run` starts at once. A `kill -9`, a reboot or a lost container leaves the lease, which lapses within 2 minutes (a `run` before that exits `busy`). Either way the next `run` continues at each job's cursor (§1). The window closing between two chunks is the normal end of a night; `run` again the next evening until `status` shows every job `done`.
 
@@ -93,7 +95,7 @@ Ctrl-C and `docker stop` (SIGINT, SIGTERM) are safe and clean: the run ends betw
 rwsc run --rm --no-deps -T backfill backfill status
 ```
 
-One JSON line per job (`job`, `series`, `status`, `range_from`, `range_to`, `data_from`, `cursor`, `chunks_done`, `chunks_with_data`, `requests`, `request_budget`, `attempts`, `provider_values`, `inserted`, `revised`, `skipped`, `dropped`, `unreconciled`, `error`) and a totals line (`jobs`, `by_status`, `chunks_done`, `requests`, `inserted`, `revised`, `unreconciled`). The counters are kept by the loader, so they follow the run with a delay of a loader pass. The same numbers, summed per source, are in `/api/v1/health/sources` as `backfill` (`jobs`, `active`, `chunks_done`, `chunks_with_data`, `inserted`, `revised`, `unreconciled`, and `quarantined`: the backfill payloads of the source the loader set aside) for a source that has jobs. `chunks_with_data` well above the ledger's chunk count, or `quarantined` above 0, means archived history that did not load: past 30 such chunks of an active job the guard holds the runner (`unloaded`, a 15-second pause); look at the quarantined batches (`docs/runbooks/schema-drift.md`) before anything else.
+One JSON line per job (`job`, `series`, `status`, `range_from`, `range_to`, `data_from`, `cursor`, `chunks_done`, `chunks_with_data`, `requests`, `request_budget`, `attempts`, `provider_values`, `inserted`, `revised`, `skipped`, `dropped`, `unreconciled`, `error`) and a totals line (`jobs`, `by_status`, `chunks_done`, `requests`, `inserted`, `revised`, `unreconciled`). The counters are kept by the loader, so they follow the run with a delay of a loader pass. The same numbers, summed per source, are in `/api/v1/health/sources` as `backfill` (`jobs`, `active`, `chunks_done`, `chunks_with_data`, `inserted`, `revised`, `unreconciled`, and `quarantined`: the backfill payloads of the source the loader set aside) for a source that has jobs. `chunks_with_data` above the ledger's chunk count means archived history not loaded yet: one such chunk of an active job holds the runner (`unloaded`, a 2-second pause) until the loader has it. `quarantined` above 0 means a chunk the loader set aside: it has a ledger row with no counts, and its job fails `unreconciled` (§5); look at the quarantined batches (`docs/runbooks/schema-drift.md`) before anything else.
 
 ## 5. Pause, resume, abort
 
@@ -108,12 +110,12 @@ A running `run` notices a pause or abort before its next request and goes on to 
 | `status` / `error` | What it means and what to do |
 |---|---|
 | `paused` / `budget` | The job used its request budget (retries, halvings, or far more chunks than planned). **Look first** (`attempts`, `requests` against `chunks_done`): a runaway is a bug. If the use is explained, re-plan the rest (below). Raising `request_budget` by hand does not work: the runner refuses a budget above what `plan` gives the range (`invalid_job`) |
-| `failed` / `unreconciled` | A chunk's counts do not add up (`provider_values = kept + dropped` and `kept = inserted + revised + skipped`): a bug. Do not resume. Keep the output of `status` and the job number, and open an issue |
+| `failed` / `unreconciled` | A chunk's counts do not add up (`provider_values = kept + dropped` and `kept = inserted + revised + skipped`): a bug; **or** the loader set a chunk aside (quarantined or skipped; since the P14a queue fix its ledger row has no counts and `reconciled` false, and the batch says why: `docs/runbooks/schema-drift.md`). Do not resume. Keep the output of `status` and the job number, and open an issue |
 | `failed` / `truncated` | Even a one-day chunk reached 90 % of the parser's cap, or 144,000 values. Nothing was committed for it. Report it (KG-339) |
 | `failed` / `invalid_job` | The job row is not one `plan` makes: another chunk, a range outside [floor, data epoch] or a budget above the plan's. Someone changed it by hand or through the runner's login: find out who, then `abort` it and plan again |
 | `failed` / `unregistered` | The registry no longer selects the series. Restore the registry row or `abort` the job |
 | `failed` / `upstream_error`, `throttled`, `network`, `timeout`, `dns` | Five failed attempts in a row. Wait, check `docs/runbooks/provider-outage.md`, then `resume` |
-| `failed` / `schema_drift`, `invalid`, `unexpected_status`, `client_error` | The provider changed or refused. Look at `docs/runbooks/schema-drift.md`; the object is not archived. `resume` after a fix, or `abort` |
+| `failed` / `schema_drift`, `invalid`, `unexpected_status`, `client_error` | The provider changed or refused. Look at `docs/runbooks/schema-drift.md`; the object is not archived. Since the P14a queue fix the run's job line (the night's journal, `sudo journalctl -u rws-backfill-nl1`) carries `drift`, the parser's fixed code, for a `schema_drift`; `status` does not. `resume` after a fix, or `abort` (KG-355) |
 | `failed` / `archive` | The archive write failed (disk full? `docs/runbooks/disk-full.md`). `resume` after the cause is gone |
 
 **Re-planning the rest of a paused job** (owner only, after looking): abort it and plan its series again from the day of its cursor (`status` shows `cursor`), which makes a new job with a fresh budget. Re-fetching the cursor's day is safe (§1).
@@ -157,19 +159,27 @@ After a run (or each night), from the VPS:
 
    The limits: `status` stays `ok` (no `degraded` or `down` that the backfill caused), `lag_p95_s` stays under 120, `backlog_age_s` under 60 (the guard holds the runner there since the P14a health-scan fix), and NL-1's `tier1.fresh` equals its `total` (apart from a `provider_stale` the provider caused) with `last_new_data` moving. Paste the samples (they hold no secret and no owner value) into the PR or issue; an agent ticks the [agent-prod] criterion from them (KG-343).
 
-   The samples show the outside view. In the morning, the owner (or an agent given the output) reads the per-hour live lag from the ledger, `loaded_at - fetched_at` of the live batches. It is the measure that failed on the night of 2026-10-12 (§ Incident in `docs/plan/PHASES.md` §49):
+   The samples show the outside view. In the morning, the owner (or an agent given the output) reads the per-hour live lag from the ledger, `loaded_at - fetched_at` of the live batches, beside the backfill batches of the same hour and how long each took (`took`: from that batch to the next one the loader started, about its load time). It is the measure that failed on the nights of 2026-10-12 and 2026-10-15 (§ Incidents in `docs/plan/PHASES.md` §49):
 
    ```bash
-   sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
-     "SELECT date_trunc('hour', loaded_at) AS hour, count(*) AS batches,
-             round(percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM loaded_at - fetched_at))::numeric, 1) AS p50_s,
-             round(percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM loaded_at - fetched_at))::numeric, 1) AS p95_s,
-             round(max(extract(epoch FROM loaded_at - fetched_at))::numeric, 1) AS max_s
-        FROM ingest_batch WHERE origin = 'live' AND loaded_at > now() - interval '36 hours'
-        GROUP BY 1 ORDER BY 1"
+   sudo docker exec -i rws-db-1 psql -X -U postgres -d rws <<'SQL'
+   WITH b AS (
+     SELECT origin, loaded_at, fetched_at,
+            lead(loaded_at) OVER (ORDER BY loaded_at, id) - loaded_at AS took
+     FROM ingest_batch WHERE loaded_at > now() - interval '36 hours')
+   SELECT to_char(date_trunc('hour', loaded_at), 'MM-DD HH24"h"') AS hour,
+     count(*) FILTER (WHERE origin = 'backfill') AS bf,
+     round(extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY took) FILTER (WHERE origin = 'backfill'))) AS bf_took_p50_s,
+     round(extract(epoch FROM max(took) FILTER (WHERE origin = 'backfill'))) AS bf_took_max_s,
+     count(*) FILTER (WHERE origin = 'live') AS live,
+     round(extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY loaded_at - fetched_at) FILTER (WHERE origin = 'live'))) AS live_p50_s,
+     round(extract(epoch FROM percentile_cont(0.95) WITHIN GROUP (ORDER BY loaded_at - fetched_at) FILTER (WHERE origin = 'live'))) AS live_p95_s,
+     round(extract(epoch FROM max(loaded_at - fetched_at) FILTER (WHERE origin = 'live'))) AS live_max_s
+   FROM b GROUP BY 1 ORDER BY 1;
+   SQL
    ```
 
-   Before the backfill p50 was about 5 s and p95 about 10 s. During the failed night they were 157 to 2,660 s and 743 to 3,598 s. Paste the table beside the samples.
+   Before the backfill live p50 was about 5 s and p95 about 10 s. On the night of 2026-10-12/13 (the health scan) p95 was 743 to 3,598 s; on 2026-10-15/16 (30 chunks allowed in front of the live lines) 57 to 2,037 s, with `bf_took_p50_s` 2 s but 57 s in the worst hour. Paste the table beside the samples.
 
 ## 7. How much database it will use (A§11.4)
 

@@ -36,12 +36,13 @@ Adapter table today: `DE-1` with the specs `de-1-basin`, `de-1-series` and `de-1
 
 ## 2. Run it
 
-`replay` runs as a one-off container of the `load` service (role `rws_load`, the raw archive mounted, network `db`). It needs the compose files of the running release. Define this once per shell; it is the same command line as `rws_compose` in `rws-lib.sh`:
+`replay` runs as a one-off container of the `load` service (role `rws_load`, the raw archive mounted, network `db`). It needs the compose files of the running release. Define this once per shell; it calls `rws_compose` of the installed `rws-lib.sh`, the command line of every deploy:
 
 ```bash
-rwsc() { sudo docker compose -p rws --project-directory /var/lib/rws/active -f /var/lib/rws/active/compose.yaml \
-  --env-file /etc/rws/rws.env --env-file /var/lib/rws/active/images.env "$@"; }
+rwsc() { sudo bash -c '. /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose "$@"' rwsc "$@"; }
 ```
+
+`rws_compose` adds the owner overlay while the owner site is on and the tunnel overlay while `RWS_EDGE=tunnel`, so compose knows every service of the project. A plain `-f compose.yaml` line (this runbook's until the P14a queue fix) warns of an orphan `rws-cloudflared-1` on a tunnel host: **never** answer that warning with `--remove-orphans`, which removes the tunnel and takes the site off line.
 
 First count what it would touch (`--dry-run` reads the manifest and counts lines, and writes nothing):
 
