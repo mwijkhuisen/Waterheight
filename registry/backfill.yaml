@@ -2,7 +2,7 @@ version: 1
 hosts:
   ddapi20-waterwebservices.rijkswaterstaat.nl:
     min_interval_ms: 1000        # ≤ 1 request/s (runner pacer)
-    max_per_hour: 3600           # on top of the live ≤ 400/h; the budget test asserts both
+    max_per_hour: 3600           # on top of the live ≤ 1,000/h (P16a); the budget test asserts both
     window_utc: { from: "22:00", to: "05:00" }
 specs:
   - id: nl-1-backfill-obs
