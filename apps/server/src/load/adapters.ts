@@ -59,12 +59,22 @@ import {
   TIME as NL1_TIME,
   normalise as normaliseNl1,
   normaliseForecast as normaliseNl1Forecast,
+  normaliseTide as normaliseNl1Tide,
+  type TideKind,
 } from '../adapters/nl-1/normalise.ts';
-import { parseWaarnemingen } from '../adapters/nl-1/parse.ts';
+import {
+  ASTRO_CAPS,
+  CATCHUP_CAPS,
+  parseWaarnemingen,
+  TIDE_CAPS,
+  type WaarnemingenCaps,
+} from '../adapters/nl-1/parse.ts';
 import { driftReport as driftNl2 } from '../adapters/nl-2/drift.ts';
 import { TIME as NL2_TIME, normalise as normaliseNl2 } from '../adapters/nl-2/normalise.ts';
 import { parseCollection } from '../adapters/nl-2/parse.ts';
 import { checkZip, type Encoding, flatNames, GuardFailure, lineSplitter } from '../http/guards.ts';
+// Read at call time only: dirty.ts imports FILLED_BY from this module, so a top-level read could meet it uninitialised.
+import { DATA_EPOCH } from './dirty.ts';
 import type { SeriesRow } from './store.ts';
 import * as wireCh4 from './wire/ch-4.ts';
 import * as wireCh5 from './wire/ch-5.ts';
@@ -174,6 +184,13 @@ export type SpecLoader = {
    * upsertObs) and keeps the job's ledger; its `run` returns a Backfilled. Decided by the spec, never by the line.
    */
   backfill?: true;
+  /**
+   * P16b: a catch-up seed (nl-1-obs-*-catchup): each payload revises every settled day from DATA_EPOCH on, so its day
+   * bumps are deferred into app_meta `bump_pending` and flushed by the loader's tick with one bumpDays per family, an
+   * hour after the set's first deferral or once none came for 15 minutes (dirty.ts `bumpsDue`), not once per payload.
+   * Its dirty rows are written as for any payload.
+   */
+  deferBumps?: true;
 };
 
 /**
@@ -354,6 +371,37 @@ const nl1Forecasts: SpecLoader = {
   run: (b, c) => normaliseNl1Forecast(parseWaarnemingen(b), c),
 };
 
+/**
+ * P16b: the astronomical tide (nl-1-astro, P400D ahead, about 17 MB: the spec's max_bytes is 25 MiB) and the high and
+ * low waters (nl-1-hwlw measured, nl-1-hwlw-astro astronomical): `tide` rows of the registered measured H series of
+ * the location and datum, never `obs`. The lists name their own series, so a `recovered` line loads too.
+ */
+const nl1Tide = (kind: TideKind, caps: WaarnemingenCaps, maxBytes: number): SpecLoader => ({
+  maxBytes,
+  needsVariant: false,
+  run: (b, c) => normaliseNl1Tide(parseWaarnemingen(b, caps), c, kind),
+});
+
+/**
+ * P16b: one catch-up window (nl-1-obs-{sea,wide,slow}-catchup: DATA_EPOCH to the seed's start, one request per row) of
+ * a live series: the observation loader in live mode with no age limit (a window can reach more than 45 days back),
+ * the future check kept, and every row before DATA_EPOCH dropped as `before_epoch` (the P14a backfill owns that past).
+ * Its day bumps are deferred (`deferBumps`).
+ */
+const nl1Catchup: SpecLoader = {
+  maxBytes: 25 * MIB,
+  needsVariant: false,
+  deferBumps: true,
+  run: (b, c) => {
+    const out = normaliseNl1(parseWaarnemingen(b, CATCHUP_CAPS), { ...c, maxAgeMs: null });
+    const epoch = Date.parse(DATA_EPOCH);
+    const obs = out.obs.filter((r) => Date.parse(r.ts) >= epoch);
+    if (obs.length < out.obs.length)
+      out.dropped.before_epoch = (out.dropped.before_epoch ?? 0) + out.obs.length - obs.length;
+    return { ...out, obs };
+  },
+};
+
 /** P7a: the sources wired in load/wire/ (one file each, so their adapters are built side by side). */
 const WIRED = [wireDe6, wireFr5, wireCh5, wireLu5, wireLu4, wireDe2, wireLu3, wireCh4, wireFr4, wireDe3] as const;
 
@@ -377,7 +425,8 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       },
     },
   },
-  // Observations and, since P8a, the `verwachting` runs (nl-1-fc-*); the catalogue is not a series payload.
+  // Observations and, since P8a, the `verwachting` runs (nl-1-fc-*), since P16b the tide; the catalogue is not a
+  // series payload.
   'NL-1': {
     version: 1,
     specs: {
@@ -389,6 +438,16 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       'nl-1-obs-other': nl1Observations,
       'nl-1-obs-twin': nl1Observations,
       'nl-1-backfill-obs': nl1Backfill,
+      // P16b: the roadmap-2 observation tiers, the tide and the catch-up to the data epoch.
+      'nl-1-obs-sea': nl1Observations,
+      'nl-1-obs-wide': nl1Observations,
+      'nl-1-obs-slow': nl1Observations,
+      'nl-1-hwlw': nl1Tide('extreme', TIDE_CAPS, 2 * MIB),
+      'nl-1-hwlw-astro': nl1Tide('extreme_astro', TIDE_CAPS, 2 * MIB),
+      'nl-1-astro': nl1Tide('astro', ASTRO_CAPS, 25 * MIB),
+      'nl-1-obs-sea-catchup': nl1Catchup,
+      'nl-1-obs-wide-catchup': nl1Catchup,
+      'nl-1-obs-slow-catchup': nl1Catchup,
     },
   },
   // Every page of an observations_tr walk is its own payload and names its own series; a recovered line loads too.

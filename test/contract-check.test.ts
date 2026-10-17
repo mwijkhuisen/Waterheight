@@ -159,7 +159,7 @@ const nl1 = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => 
 
 // Each run parses the whole registry (about 2,000 series since P5b) and twelve payloads: seconds on a CI runner.
 describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
-  it('passes DE-1, NL-1 (observations and forecasts), NL-2, FR-1, CH-1, CH-2, DE-7, LU-1, the CH-4 figure and the FR-4 list through the loader parse and the astro tide through the capture check: all twelve ok', async () => {
+  it('passes DE-1, NL-1 (observations, forecasts and, since P16b, the astro tide), NL-2, FR-1, CH-1, CH-2, DE-7, LU-1, the CH-4 figure and the FR-4 list through the loader parse: all twelve ok', async () => {
     const { codes, report } = await run();
     expect(codes).toEqual({
       'de-1-basin': 'ok',
@@ -232,12 +232,12 @@ const forecast = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }
   return answer(JSON.stringify(doc));
 };
 
-describe('the NL-1 astro probe (P16a): capture validity only, until P16b gives it a loader', {
+describe('the NL-1 astro probe (P16a; through its loader since P16b)', {
   timeout: 90_000,
 }, () => {
   const astro = (doc: unknown) => answer(JSON.stringify(doc));
 
-  it('asks ProcesType astronomisch for the Vlissingen NAP row and is ok on the recorded body', async () => {
+  it('asks ProcesType astronomisch for the Vlissingen NAP row and is ok on the recorded body (its tide rows count)', async () => {
     const { codes, bodies } = await run();
     expect(codes['nl-1-astro']).toBe('ok');
     const sent = JSON.parse(bodies.at(-1) ?? '{}') as {
@@ -264,6 +264,16 @@ describe('the NL-1 astro probe (P16a): capture validity only, until P16b gives i
     expect(bad.codes['nl-1-astro']).toMatch(/^invalid_[a-z_]+$/);
     expect(bad.codes['nl-1-obs-key']).toBe('ok');
     expect(reportLines(down.report)).not.toContain('PROVIDER-SECRET-TEXT');
+  });
+
+  it('a body whose every value is a gap (quality 99) yields no tide row: no_rows', async () => {
+    const doc = JSON.parse(BODY['nl-1-astro'].toString('utf8')) as {
+      WaarnemingenLijst: { MetingenLijst: { WaarnemingMetadata: { Kwaliteitswaardecode: string } }[] }[];
+    };
+    for (const list of doc.WaarnemingenLijst)
+      for (const m of list.MetingenLijst) m.WaarnemingMetadata.Kwaliteitswaardecode = '99';
+    const { codes } = await run({ 'nl-1-astro': astro(doc) });
+    expect(codes['nl-1-astro']).toBe('no_rows');
   });
 });
 

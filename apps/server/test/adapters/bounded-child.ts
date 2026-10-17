@@ -27,7 +27,7 @@ import { JSON_CAPS as LU2_CAPS, parseJson as parseLu2 } from '../../src/adapters
 import { parsePercentile as parseLu3 } from '../../src/adapters/lu-3/parse.ts';
 import { parsePage as parseLu4 } from '../../src/adapters/lu-4/parse.ts';
 import { JSON_CAPS as LU6_CAPS, parseFeatures as parseLu6 } from '../../src/adapters/lu-6/parse.ts';
-import { JSON_CAPS as NL1_CAPS, parseWaarnemingen } from '../../src/adapters/nl-1/parse.ts';
+import { ASTRO_CAPS, JSON_CAPS as NL1_CAPS, parseWaarnemingen } from '../../src/adapters/nl-1/parse.ts';
 import { JSON_CAPS as NL2_CAPS, parseCollection } from '../../src/adapters/nl-2/parse.ts';
 import { parse as parseNl4 } from '../../src/adapters/nl-4/parse.ts';
 import { checkXmlText, GuardFailure } from '../../src/http/guards.ts';
@@ -209,6 +209,14 @@ export const BODIES: Record<string, [() => string | Uint8Array, (b: Uint8Array) 
   ],
   'nl1-values': [() => waarnemingen(list(NL1_CAPS.maxNodes - 100, '0')), parseWaarnemingen],
   'nl1-issues': [() => waarnemingen(list(NL1_CAPS.maxValues, '{}')), parseWaarnemingen],
+  // P16b, nl-1-astro at the loader's 25 MiB cap and at ASTRO_CAPS (a longer value list, and the full-length list of
+  // wrong-shaped values), through the parser's caps argument.
+  'nl1-astro-bytes': [() => objects(25 * MIB), (b) => parseWaarnemingen(b, ASTRO_CAPS)],
+  'nl1-astro-values': [
+    () => waarnemingen(list(ASTRO_CAPS.maxNodes - 100, '0')),
+    (b) => parseWaarnemingen(b, ASTRO_CAPS),
+  ],
+  'nl1-astro-issues': [() => waarnemingen(list(ASTRO_CAPS.maxValues, '{}')), (b) => parseWaarnemingen(b, ASTRO_CAPS)],
   // NL-2 at its loader byte cap (8 MiB); a collection whose feature array is as long as the node cap allows; and a
   // full-length feature array in which every feature has the wrong shape.
   'nl2-bytes': [() => objects(8 * MIB), parseCollection],

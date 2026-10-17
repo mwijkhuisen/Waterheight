@@ -35,7 +35,8 @@ describe('registry/thresholds/nl-4-map.yaml', () => {
     const listed = map.none.map((n) => `${n.code}/${n.quantity}`);
     expect(new Set(listed).size).toBe(listed.length);
     expect([...listed].sort()).toEqual(expected);
-    expect(expected).toHaveLength(10);
+    // 10 of the roadmap-1 series; P16b adds the new public primary NAP H and Q series the edition has no class for.
+    expect(expected).toHaveLength(147);
     for (const n of map.none) expect(n.reason.length).toBeGreaterThan(10);
   });
 

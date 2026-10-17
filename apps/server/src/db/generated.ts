@@ -361,6 +361,15 @@ export interface StationAlias {
   station_id: string;
 }
 
+export interface Tide {
+  batch_id: Int8;
+  hilo: string | null;
+  kind: string;
+  series_id: number;
+  ts: Timestamp;
+  value: number;
+}
+
 export interface Twin {
   id: string;
   relation: Generated<Json>;
@@ -423,6 +432,7 @@ export interface DB {
   source_health: SourceHealth;
   station: Station;
   station_alias: StationAlias;
+  tide: Tide;
   twin: Twin;
   twin_check: TwinCheck;
   warning_area: WarningArea;

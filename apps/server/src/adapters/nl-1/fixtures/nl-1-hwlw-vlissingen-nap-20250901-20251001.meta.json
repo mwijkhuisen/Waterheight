@@ -1,0 +1,16 @@
+{
+  "spec": "nl-1-hwlw",
+  "variant": "vlissingen/NAP",
+  "source": "NL-1",
+  "synthetic": false,
+  "recorded_at": "2026-10-17T12:30:24Z",
+  "status": 204,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 0,
+  "trimmed": false,
+  "window": {
+    "from": "2025-09-01T00:00:00.000Z",
+    "to": "2025-10-01T00:00:00.000Z"
+  }
+}

@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   buildNlForecastFixtureArchive,
   NL_FORECAST_FIXTURES,
+  NL_FORECAST_P16B,
   recorded,
   writePayload,
 } from '../../../../scripts/fixture-archive.ts';
@@ -336,5 +337,45 @@ describe('replay over the fixture archive', { timeout: 300_000 }, () => {
     expect(await h.loader({ now: NOW }).tick()).toMatchObject({ lines: NL_FORECAST_FIXTURES.length });
     assertRuns(await stored());
     expect(await h.count('forecast_value')).toBe(TOTAL_POINTS);
+  });
+});
+
+// P16b criterion 4 (D7): the forecast captures archived for a location before the registry knew it (counted
+// `unknown`, the object kept) load as runs once a registry change registers the location and a replay runs.
+describe('replay of the archived captures of a newly registered coastal series (P16b)', { timeout: 300_000 }, () => {
+  const SCHEVENINGEN_H = 'scheveningen/WATHTE/NAP/other:F007';
+  const P16B = { ...REPLAY, from: '2026-10-17', to: '2026-10-17' };
+  beforeAll(async () => {
+    h = await harness();
+  }, 120_000);
+  afterAll(() => h.close());
+
+  it('scheveningen H: the replay loads its run, a second pass writes nothing', async () => {
+    expect(registry.has(SCHEVENINGEN_H)).toBe(true);
+    const lines = await buildNlForecastFixtureArchive(h.raw, undefined, NL_FORECAST_P16B);
+    expect(lines).toHaveLength(1);
+    const first = await replay(deps(), P16B);
+    expect(first).toMatchObject({ lines: 1, loaded: 1, quarantined: 0, skipped: 0, n_changed: 0 });
+    const runs = await q(
+      `SELECT r.id::text AS id, (SELECT count(*)::int FROM forecast_value v WHERE v.run_id = r.id) AS n
+       FROM forecast_run r JOIN series s ON s.id = r.series_id
+       WHERE r.source_id = 'NL-1' AND s.provider_key = $1`,
+      [SCHEVENINGEN_H],
+    );
+    expect(runs.length).toBeGreaterThanOrEqual(1);
+    expect(first.n_new).toBe(runs.reduce((n, r) => n + (r.n as number), 0));
+    expect(await batches('nl-1-fc-3h-0')).toEqual([
+      { n_rows: first.n_new, n_new: first.n_new, n_changed: 0, n_skipped: 0, parse_status: 'ok' },
+    ]);
+    const before = await stored();
+    expect(await replay(deps(), P16B)).toEqual({
+      lines: 1,
+      loaded: 1,
+      quarantined: 0,
+      skipped: 0,
+      n_new: 0,
+      n_changed: 0,
+    });
+    expect(await stored()).toEqual(before);
   });
 });

@@ -234,6 +234,57 @@ specs:
     max_bytes: 2097152
     retention: obs
     validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  # P16b catch-up (D4): one request per row, from the data epoch to the seed's start, in the off-peak hours
+  # 00:00-05:00 UTC. The seeds of the host run one after the other (seeds.ts), so the budget model takes the busiest
+  # seed, not their sum; pace_ms keeps live + seed at or below 1,000 requests in any 60 minutes.
+  - id: nl-1-obs-sea-catchup
+    source: NL-1
+    version: 1
+    cron: null
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1, where: { tier: sea }, key: [code, quantity, hoedanigheid] }
+    params: { proces: meting }
+    window: { default: PT3H, max: P31D, overlap: PT1H }
+    max_bytes: 26214400
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+    seed: { kind: once, from: '2026-10-02T00:00:00Z', utc_hours: [0, 5], pace_ms: 85000 }
+  - id: nl-1-obs-wide-catchup
+    source: NL-1
+    version: 1
+    cron: null
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1, where: { tier: wide }, key: [code, quantity, hoedanigheid] }
+    params: { proces: meting }
+    window: { default: PT6H, max: P31D, overlap: PT1H }
+    max_bytes: 26214400
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+    seed: { kind: once, from: '2026-10-02T00:00:00Z', utc_hours: [0, 5], pace_ms: 85000 }
+  - id: nl-1-obs-slow-catchup
+    source: NL-1
+    version: 1
+    cron: null
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1, where: { tier: slow }, key: [code, quantity, hoedanigheid] }
+    params: { proces: meting }
+    window: { default: PT6H, max: P31D, overlap: PT1H }
+    max_bytes: 26214400
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+    seed: { kind: once, from: '2026-10-02T00:00:00Z', utc_hours: [0, 5], pace_ms: 85000 }
   # The tide, one request per location and Hoedanigheid (nl-1-tide.csv): measured high and low water daily, the
   # astronomical tide and its high and low water monthly. `space_ms` 179000 makes a 180 s period (1 s of latency
   # plus the pause), at most 20 requests an hour each, and a run of about 4 h: hwlw 83 rows 00:00-04:06, hwlw-astro

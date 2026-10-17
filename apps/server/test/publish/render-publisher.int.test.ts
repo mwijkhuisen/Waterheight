@@ -63,6 +63,7 @@ async function seed() {
   await q(`SELECT ensure_partitions('2026-09-30'::timestamptz, '2026-10-06'::timestamptz)`);
   const { rows } = await q(
     `SELECT s.id, s.station_id FROM series s WHERE s.source_id = 'NL-1' AND s.active AND s.role = 'primary'
+       AND EXISTS (SELECT 1 FROM reference_value r WHERE r.series_id = s.id AND r.source_id = 'NL-4')
        AND NOT EXISTS (SELECT 1 FROM series o WHERE o.station_id = s.station_id AND o.id <> s.id)
      ORDER BY s.id LIMIT 3`,
   );

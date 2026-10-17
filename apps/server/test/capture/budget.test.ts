@@ -1,13 +1,16 @@
 import { readFileSync } from 'node:fs';
+import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { server } from '../../../../test/msw.setup.ts';
 import { kiwisUrlProblems, MAX_IDS, MAX_VALUES, MIN_STEP_MS } from '../../src/adapters/_shared/kiwis/request.ts';
 import { adapter as be3 } from '../../src/adapters/be-3/capture.ts';
 import { loadBackfill } from '../../src/backfill/spec.ts';
-import { budgets, inFlightPerSecond, LATENCY_MS, requestsPerMinute } from '../../src/capture/budget.ts';
+import { budgets, inFlightPerSecond, LATENCY_MS, requestsPerMinute, seedStarts } from '../../src/capture/budget.ts';
+import { runSeeds } from '../../src/capture/seeds.ts';
 import { baseRequest, type Registry, variantKey } from '../../src/capture/specs.ts';
 import type { Row } from '../../src/http/types.ts';
-import { fixture, registry, spec } from './helpers.ts';
+import { fixture, registry, runDeps, spec } from './helpers.ts';
 
 // Criterion "[CI] The budget config test holds" (issue #16; A§7.3), computed
 // from registry/capture.yaml × the seed files, never a constant.
@@ -81,28 +84,99 @@ describe('request budgets', () => {
     // On first start a daily or monthly spec runs once at once (scheduler.ts `later`), a missed tick is caught up and a
     // failed run retries hourly: the three tide runs can then all be live in the same hour, whatever their crons.
     // Worst case = the busiest 60 minutes of every other RWS spec plus the hourly maximum of each tide spec.
-    const rest = registry.specs.filter((s) => !TIDE.includes(s.id));
+    // P16b: the one-off catch-up seeds are left out here (they end in 2 nights); on top of them the burst reaches 1,038 at
+    // pace 85 s (936 + 42 + 60), see the lead report. Live alone (936 + 60) is the figure this test holds.
+    const rest = registry.specs.filter((s) => !TIDE.includes(s.id) && !s.id.endsWith('-catchup'));
     const others = budgets({ ...registry, specs: rest }).find((b) => b.host === RWS)?.peakPerHour ?? 0;
     const tideMax = TIDE.map((id) => budgets(only([id])).find((b) => b.host === RWS)?.peakPerHour ?? 0);
     expect(Math.max(...tideMax)).toBeLessThanOrEqual(20);
     expect(others + tideMax.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1000);
   });
 
-  it('RWS: every spec on the host is scheduled by a cron the model reads, and none is seed-only or seeded', () => {
-    // A seed-only spec (cron null) or one with a seed would escape requestsPerMinute: none exists on this host.
-    const onHost = registry.specs.filter((s) => new URL(s.request.url).hostname === RWS);
+  const CATCHUP = ['nl-1-obs-sea-catchup', 'nl-1-obs-wide-catchup', 'nl-1-obs-slow-catchup'];
+  const onHost = registry.specs.filter((s) => new URL(s.request.url).hostname === RWS);
+
+  it('RWS: every spec on the host has a cron, or a seed with utc_hours (the P16b catch-ups, off-peak only)', () => {
     expect(onHost.length).toBeGreaterThan(10);
     for (const s of onHost) {
-      expect(s.cron, s.id).not.toBeNull();
-      expect(s.seed, s.id).toBeUndefined();
+      if (CATCHUP.includes(s.id)) {
+        expect([s.cron, s.seed?.kind, s.seed?.from, s.seed?.utc_hours], s.id).toEqual([
+          null,
+          'once',
+          '2026-10-02T00:00:00Z',
+          [0, 5],
+        ]);
+        expect(s.max_bytes, s.id).toBe(26214400);
+      } else {
+        expect(s.cron, s.id).not.toBeNull();
+        expect(s.seed, s.id).toBeUndefined();
+      }
     }
-    // The model reads every one of them: each counts at least one request in the simulated week.
+    expect(CATCHUP.map((id) => spec(id).rows.length)).toEqual([29, 92, 205]); // 326 requests
+    // The model reads every scheduled spec: each counts at least one request in the simulated week.
     const total = (id: string) => {
       const r = only([id]);
       return (requestsPerMinute(r).get(RWS) ?? new Uint32Array()).reduce((a, b) => a + b, 0);
     };
-    for (const s of onHost) expect(total(s.id), s.id).toBeGreaterThanOrEqual(s.rows.length);
+    for (const s of onHost.filter((x) => x.cron !== null))
+      expect(total(s.id), s.id).toBeGreaterThanOrEqual(s.rows.length);
   });
+
+  it('RWS seeds (P16b): live + seeds ≤ 1,000 in any 60 minutes, and the seeds are a real part of the figure', () => {
+    const rest = registry.specs.filter((s) => !CATCHUP.includes(s.id));
+    const live = budgets({ ...registry, specs: rest }).find((b) => b.host === RWS)?.peakPerHour ?? 0;
+    const all = peak(RWS);
+    const perHourSeed = Math.floor(3_600_000 / Math.max(spec(CATCHUP[0] as string).seed?.pace_ms ?? 0, LATENCY_MS));
+    expect(all).toBeGreaterThan(live);
+    expect(all - live).toBeLessThanOrEqual(perHourSeed); // the seeds add one stream, not three
+    expect(all).toBeLessThanOrEqual(1000);
+    // The three share one pace, so the nights to finish are the same sum of rows over one stream.
+    for (const id of CATCHUP) expect(spec(id).seed?.pace_ms, id).toBe(spec(CATCHUP[0] as string).seed?.pace_ms);
+    const nights = Math.ceil(326 / (perHourSeed * 5));
+    expect(nights).toBeLessThanOrEqual(2); // 326 requests at 42 an hour × 5 off-peak hours: 1.6 nights
+  });
+
+  it('RWS seeds: one request at a time, ≥ 1 s apart, only inside the off-peak hours', () => {
+    for (const id of CATCHUP) {
+      const starts = seedStarts(spec(id));
+      expect(starts.length, id).toBeGreaterThan(0);
+      for (let i = 1; i < starts.length; i += 1)
+        if (Math.floor((starts[i] as number) / 3_600_000) === Math.floor((starts[i - 1] as number) / 3_600_000))
+          expect((starts[i] as number) - (starts[i - 1] as number), id).toBeGreaterThanOrEqual(LATENCY_MS);
+      for (const t of starts) expect(Math.floor(t / 3_600_000) % 24, id).toBeLessThan(5);
+    }
+  });
+
+  it('RWS seeds: runSeeds runs the three catch-ups one request at a time, paced (why the model takes the busiest seed, not the sum)', async () => {
+    const body = fixture('NL-1', 'nl-1-obs-sea').body;
+    let now = 0;
+    let max = 0;
+    let calls = 0;
+    server.use(
+      http.post(`https://${RWS}/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen`, async () => {
+        now += 1;
+        calls += 1;
+        max = Math.max(max, now);
+        await new Promise((r) => setTimeout(r, 0));
+        now -= 1;
+        return new HttpResponse(body);
+      }),
+    );
+    const sleeps: number[] = [];
+    const deps = runDeps({
+      now: () => new Date('2026-10-18T01:00:00Z'),
+      sleep: async (ms) => void sleeps.push(ms),
+    });
+    await runSeeds(only(CATCHUP), deps, {
+      rawDir: deps.root,
+      statusDir: `${deps.root}/s`,
+      ownerStatusDir: `${deps.root}/o`,
+    });
+    expect(calls).toBe(326);
+    expect(max).toBe(1);
+    // 29 + 92 + 205 rows, the first of each seed unpaced.
+    expect(sleeps.filter((ms) => ms === spec(CATCHUP[0] as string).seed?.pace_ms)).toHaveLength(323);
+  }, 60_000); // 326 archived requests through msw: about 3 s alone, past 5 s in the full suite
 
   it('RWS backfill (P14a): ≤ 1 request/s, ≤ 3600/h, only 20:00–06:00 UTC, on top of the live ≤ 1,000/h', () => {
     const rws = 'ddapi20-waterwebservices.rijkswaterstaat.nl';

@@ -62,7 +62,9 @@ jobs:
     name: integration
     runs-on: ubuntu-24.04
     # P9a's publisher tests (200-run properties, 20 SIGKILLed children) take the suite to about 12 minutes locally.
-    timeout-minutes: 30
+    # P16b: every test database syncs the larger NL-1 registry (2,974 series, 2,311 NL-4 rows); the suite took 28
+    # minutes on the runner before the round-1 tests and was cut off at 30 after them.
+    timeout-minutes: 45
     permissions:
       contents: read
     services:
@@ -388,7 +390,7 @@ jobs:
   e2e:
     name: e2e
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     permissions:
       contents: read
     services:
@@ -523,7 +525,9 @@ jobs:
       # Xvfb's ready signal, which a PID 1 never gets, so without an init process it hangs silently.
       - name: Playwright (Chromium, Firefox, WebKit) in the pinned Playwright image
         # P11a: about 160 more tests (the chain, the flow, the owner chain, fps) on top of the ~26 minutes before.
-        timeout-minutes: 45
+        # P16b: 918 tests took 44.6 minutes on main (29084d1) and ran past 45 with the larger NL-1 registry (the table
+        # and the map hold 1,301 public stations): 60, the job 75.
+        timeout-minutes: 60
         run: |
           # P10a: every project (the owner one reaches the owner Caddy; WebKit does not resolve *.localhost itself).
           # The password reaches the container by name only (-e E2E_OWNER_PW takes it from the step's environment).

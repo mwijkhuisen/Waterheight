@@ -6,33 +6,444 @@
 edition: "2026-04-15"
 rule: "NL-4 Code = NL-1 Locatie.Code; H classes belong to the NAP level series, Q classes to the discharge series."
 none:
+  - code: aa.helmond
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: aarlerixtel.goorloop.wilhelminakanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: aarlerixtel.schabbert.beneden
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: aarlerixtel.schabbert.inlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: aarlerixtel.schabbert.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
   - code: antwerpen
     quantity: H
     reason: Belgian point served by RWS; the edition has no class row for this code and quantity.
+  - code: beekendonk.biezenloop
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: beekendonk.sluis6.beneden
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: beekendonk.sluis6.boven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: beekendonk.sluis6.inlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: beekendonk.sluis6.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: berlicum.schijndelseloop
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: blaarthem.dommel
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: borgsweer.verbindingskanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: borssele
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: brouwershavensche.gat.08
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: bruinisse.krammersluis.oosterschelde.2
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: bunde.kanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: cadzand.1
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: dantziggat.pietscheveplaat.zuid
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: denhelder.veersteiger
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: denoever.ijsselmeer.binnenhaven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: denoever.waddenzee.voorhaven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: desteeg
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: dongen.kanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: dronten.reevesluis.drontermeer
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: dronten.reevesluis.vossemeer
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: eemdijk
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: eindhoven.blaarthem.kanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: eindhoven.gender
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: eisdenmazenhove.maas
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: eisdenmazenhove.maesbempdergreend
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: elburg.elburgerbrug
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: erp.sluis5.inlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: erp.sluis5.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: europoort.harmsenbrug
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: europoort.hartelbrug
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
   - code: hagestein.boven
     quantity: Q
     reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
+  - code: haghorst.sluis4.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.aflaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.devries
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.guldenaa
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.guldenaa.a
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.guldenaa.b
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.scheepstal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.schotenseloop
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.sluis.aflaat1
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.sluis.aflaat1
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.sluis.boven
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.sluis7
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.sluis9.inlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.sluis9.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.spaarpand
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: helmond.zuidwillemsvaart.inlaatnieuweaa
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: hengelo.koppelleiding
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
   - code: herenlaak
     quantity: H
     reason: Belgian point (Maaseik, Herenlaak) served by RWS; the edition has no class row for this code and quantity.
   - code: holtheme.vecht
     quantity: H
     reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
+  - code: holwerd.vaargeul
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
   - code: kanne
     quantity: Q
     reason: Belgian point (Kanne) served by RWS; the edition has no class row for this code and quantity.
+  - code: kornwerderzand.ijsselmeer.binnenhaven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: kornwerderzand.waddenzee.buitenhaven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: lemmer.stroomkanaal.teroelsterkolk
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: lemmer.woudagemaal.stroomkanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: lierop.sluis9
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: lieshout.donkersvoortseloop
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
   - code: lith.beneden
     quantity: H
     reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
   - code: lixhebiefaval
     quantity: H
     reason: Belgian point (Lixhe, Bief Aval) served by RWS; the edition has no class row for this code and quantity.
+  - code: maarssen.kanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: maastricht.bosscherveld
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: maastricht.sintpieter.zuid
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: maasvlakte.amaliahaven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: maasvlakte.europahaven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: maasvlakte.hartelhaven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: malden.maaswaalkanaal.inlaatteersesluispolder
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: markermeer.trintelzand
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: maurik.mauriksewetering
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: meeswijk
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: meijel.kanaal.beneden
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: mierlo.goorloop.gemaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: mierlo.goorloop.inlaat1
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
   - code: millingenaanderijn
     quantity: Q
     reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
   - code: millingenaanderijn.pannerdensekop
     quantity: H
     reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
+  - code: nederweert.sluis15.voedingskanaal
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: negenoord.west
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: nieuwegein.doorslag
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: nieuwegein.doorslag
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: nieuwegein.lekkanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: nijmegen.maaswaalkanaal.inlaatlandsweijer
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: nijmegen.maaswaalkanaal.inlaatweurt
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: ommen.ommerkanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: oosterhout.marksluis.inlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: oosterhout.marksluis.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: oosterhout.sluis1.gemaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: oosterhout.sluis1.inlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: oosterhout.sluis1.spui
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: oosterhout.sluis1.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: oosterschelde.roompotsluis.binnen
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: panheel.gemaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: panheel.sluis.inlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: panheel.sluis.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: parksluis
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: poeldonk.aa.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: ramspolkering.ketelmeer
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
   - code: rhenen.grebbeberg
     quantity: H
     reason: No class row for this code and quantity in the edition; the series shows no Waterinfo class.
+  - code: rijswijk.betuwepand
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: rijswijk.drielandenpunt
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: roermond.hambeek
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: rosmalen.hintham.beneden
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: rosmalen.hinthamsluis.beneden
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: rosmalen.hinthamsluis.boven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: rotterdam.ijzerwerkerkade
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: rozenburgsesluis.noordzijde
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: rozenburgsesluis.zuidzijde
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: schijndel
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: schijndel.sluis.boven
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: schijndel.sluis.inlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: shertogenbosch.empel.kanaal
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: shertogenbosch.empel.maas
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: shertogenbosch.engelen
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: shertogenbosch.poeldonk.aa
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: shertogenbosch.poeldonk.zuidwillemsvaart
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: someren.sluis13
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: someren.sluis13
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: sonenbreugel.beeksewaterloop
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: sonenbreugel.wilhelminakanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: spaanjerd
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: stavoren.gemaalhoogland.buiten
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: stavoren.johanfrisokanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: suurhofbrug.noordzijde
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: swifterbant.ketelmeer
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: terneuzen.westsluis.buiten
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: tiel.sluis.kanaal
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: tilburg.sluis3
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: veghel.sluis4.inlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: veghel.sluis4.uitlaat
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: velsenzuid.velsertunnel
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: weesp.amsterdamrijnkanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: werkendam.binnenkievitswaard
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: werkendam.happenhennip
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: werkendam.kleinezalm
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: werkendam.kooike
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: werkendam.middelstekievitswaard
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: werkendam.steenenmuur
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: werkendam.steurgat
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: werkendam.vogelenzang
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: westervoort.hondsbroekschepleij.ijssel
+    quantity: H
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.
+  - code: wijkbijduurstede.amsterdamrijnkanaal
+    quantity: Q
+    reason: P16b series; the edition has no class row for this code and quantity, so the series shows no Waterinfo class.

@@ -52,6 +52,47 @@ function runStarts(cron: string): number[] {
 /** Row j of a run starts j × (latency + space_ms) after the run: rows are sequential, each followed by the pause. */
 const rowStepMs = (spec: Registry['specs'][number]) => LATENCY_MS + (spec.variants?.space_ms ?? 0);
 
+/**
+ * Start (ms into the simulated week) of every request of a seed with `utc_hours`, in every night of the week (the
+ * worst case: a seed that is not finished runs again the next night). seeds.ts paces a row `pace_ms` after the
+ * previous request ends, so one request per max(pace_ms, LATENCY_MS) is the ceiling: floor(3,600,000 / that) in
+ * each hour of the window.
+ */
+export function seedStarts(spec: Registry['specs'][number]): number[] {
+  const seed = spec.seed;
+  if (seed?.utc_hours === undefined) return [];
+  const step = Math.max(seed.pace_ms, LATENCY_MS);
+  const out: number[] = [];
+  for (let day = 0; day < 7; day += 1)
+    for (let h = seed.utc_hours[0]; h < seed.utc_hours[1]; h += 1)
+      for (let k = 0; k < Math.floor(3_600_000 / step); k += 1) out.push((day * 24 + h) * 3600_000 + k * step);
+  return out;
+}
+
+/**
+ * The seeds of a host as one stream. runSeeds (seeds.ts) runs the unfinished seeds strictly one after the other,
+ * one request at a time (`for … await seedOne`, a round starts only after the previous one ends), so the seeds of a
+ * host never add up: each minute (second) takes the busiest seed, not their sum. test/capture/budget.test.ts proves
+ * the sequencing (runSeeds over the three catch-up specs: one request in flight). ponytail: every seed fills every night; a finished seed frees its share, which only lowers the real figure.
+ */
+function seedStream(registry: Registry, size: number, unit: number): Map<string, Uint32Array> {
+  const byHost = new Map<string, Uint32Array>();
+  for (const spec of registry.specs) {
+    const starts = seedStarts(spec);
+    if (starts.length === 0) continue;
+    const mine = new Uint32Array(size);
+    for (const t of starts) {
+      const i = Math.floor(t / unit) % size;
+      mine[i] = (mine[i] as number) + 1;
+    }
+    const host = hostOf(spec.request.url);
+    const acc = byHost.get(host) ?? new Uint32Array(size);
+    byHost.set(host, acc);
+    for (let i = 0; i < size; i += 1) acc[i] = Math.max(acc[i] as number, mine[i] as number);
+  }
+  return byHost;
+}
+
 export function requestsPerMinute(registry: Registry): Map<string, Uint32Array> {
   const byHost = new Map<string, Uint32Array>();
   for (const spec of registry.specs) {
@@ -68,13 +109,20 @@ export function requestsPerMinute(registry: Registry): Map<string, Uint32Array> 
       }
     }
   }
+  for (const [host, seeds] of seedStream(registry, WEEK_MIN, 60_000)) {
+    const minutes = byHost.get(host) ?? new Uint32Array(WEEK_MIN);
+    byHost.set(host, minutes);
+    for (let i = 0; i < WEEK_MIN; i += 1) minutes[i] = (minutes[i] as number) + (seeds[i] as number);
+  }
   return byHost;
 }
 
 /**
  * Requests in flight per second of the simulated week, per host (same runs as requestsPerMinute): rows are
  * sequential within a run, each LATENCY_MS long, space_ms apart. Two runs of one host can overlap, and the
- * transport allows two connections per origin, so the peak must stay at 2.
+ * transport allows two connections per origin, so the peak must stay at 2. Seeds are not in this count: they are one
+ * sequential stream (seedStream), at most one request at a time (seedStarts are ≥ LATENCY_MS apart), and a seed
+ * request that meets two scheduled ones queues behind the transport's two connections for the rest of that second.
  */
 export function inFlightPerSecond(registry: Registry): Map<string, Uint8Array> {
   const byHost = new Map<string, Uint8Array>();

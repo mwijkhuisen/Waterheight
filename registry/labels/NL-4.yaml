@@ -22,4 +22,18 @@ labels:
   - { scale: stem, code: Verlaagde afvoer, nl: "Verlaagde afvoer (Waterinfo-klasse)", en: "Lowered discharge (Waterinfo class)" }
   - { scale: stem, code: Verlaagde waterstand, nl: "Verlaagde waterstand (Waterinfo-klasse)", en: "Lowered water level (Waterinfo class)" }
   - { scale: stem, code: Verlagde waterstand, nl: "Verlaagde waterstand (Waterinfo-klasse)", en: "Lowered water level (Waterinfo class)" }
+  - { scale: stem, code: Licht verhoogde afvoer, nl: "Licht verhoogde afvoer (Waterinfo-klasse)", en: "Slightly elevated discharge (Waterinfo class)" }
+  - { scale: stem, code: Licht verhoogde waterstand, nl: "Licht verhoogde waterstand (Waterinfo-klasse)", en: "Slightly elevated water level (Waterinfo class)" }
+  - { scale: stem, code: Licht vehoogd, nl: "Licht verhoogd (Waterinfo-klasse)", en: "Slightly elevated (Waterinfo class)" }
+  - { scale: stem, code: Licht verhogd, nl: "Licht verhoogd (Waterinfo-klasse)", en: "Slightly elevated (Waterinfo class)" }
+  - { scale: stem, code: Veroogd, nl: "Verhoogd (Waterinfo-klasse)", en: "Elevated (Waterinfo class)" }
+  - { scale: stem, code: Vorhoogde waterstand, nl: "Verhoogde waterstand (Waterinfo-klasse)", en: "Elevated water level (Waterinfo class)" }
+  - { scale: stem, code: Verhoogde aanvoer, nl: "Verhoogde aanvoer (Waterinfo-klasse)", en: "Elevated supply (Waterinfo class)" }
+  - { scale: stem, code: Verhoogde instroom naar Veerse Meer, nl: "Verhoogde instroom naar het Veerse Meer (Waterinfo-klasse)", en: "Elevated inflow to the Veerse Meer (Waterinfo class)" }
+  - { scale: stem, code: Verhoogd uitstroom uit Veerse Meer, nl: "Verhoogde uitstroom uit het Veerse Meer (Waterinfo-klasse)", en: "Elevated outflow from the Veerse Meer (Waterinfo class)" }
+  - { scale: stem, code: Hoog water, nl: "Hoog water (Waterinfo-klasse)", en: "High water (Waterinfo class)" }
+  - { scale: stem, code: Extreem hoog water, nl: "Extreem hoog water (Waterinfo-klasse)", en: "Extreme high water (Waterinfo class)" }
+  - { scale: stem, code: Extreem hoog, nl: "Extreem hoog (Waterinfo-klasse)", en: "Extremely high (Waterinfo class)" }
+  - { scale: stem, code: Streefpeil, nl: "Streefpeil (Waterinfo-klasse)", en: "Target level (Waterinfo class)" }
+  - { scale: stem, code: Strefpeil, nl: "Streefpeil (Waterinfo-klasse)", en: "Target level (Waterinfo class)" }
   - { scale: stem, code: Geen klasse-indeling, nl: "Geen klasse-indeling", en: "No class division" }

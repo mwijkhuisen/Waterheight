@@ -31,6 +31,7 @@ export const VIEWS = {
     ingestBatch: 'pub_ingest_batch',
     meta: 'pub_meta',
     gaugeZero: 'pub_gauge_zero',
+    tide: 'pub_tide',
     dirty: 'pub_dirty',
     dayVersion: 'pub_day_version',
     source: 'pub_source',
@@ -61,6 +62,7 @@ export const VIEWS = {
     ingestBatch: 'own_ingest_batch',
     meta: 'own_meta',
     gaugeZero: 'own_gauge_zero',
+    tide: 'own_tide',
     dirty: 'own_dirty',
     dayVersion: 'own_day_version',
     source: 'own_source',
@@ -94,6 +96,7 @@ export type DisplayView =
   | 'ingestBatch'
   | 'meta'
   | 'gaugeZero'
+  | 'tide'
   | 'dirty'
   | 'dayVersion'
   | 'source';

@@ -386,6 +386,48 @@ The loader of the releases before P8b had no entry for `ch-4-forecast`, `fr-4` o
 
 A **registry change** that releases values later (an NL-bound FR-4 station added to FR-1, or a CH-1 series no longer `off`) is a replay of `fr-4` or `ch-4-forecast` from the first day, `--dry-run` first, with the same second pass of 0/0. A fix to a parser or normaliser that changes what a run holds (a value, a flag, an issue time) changes the content hash, so a replay stores the corrected run as a **new run beside the old one**, which stays (§11): decide with the owner before replaying a forecast spec after such a fix, and say so in the PR.
 
+## 13. After the P16b deploy: load the roadmap-2 NL-1 payloads and forecast runs
+
+The loader of the releases before P16b had no entry for the six roadmap-2 NL-1 specs (`nl-1-obs-sea`, `nl-1-obs-wide`, `nl-1-obs-slow`, `nl-1-hwlw`, `nl-1-astro`, `nl-1-hwlw-astro`) and no series for the 326 new rows, so it moved its cursor past their lines and stored nothing. The lines are all still in the archive (the specs have no `ingest_batch` row, so the pruner never touched them). The forecast lines `nl-1-fc-*` were archived since 2026-09-29, but 125 of their 196 locations had no series, so the replay now loads the runs of the newly registered ones. NL-1 is a public source and the order does not matter. Use today's UTC day as `<today>` and the `rwsc` function of §2.
+
+1. Count first (`--dry-run` writes nothing), one spec at a time. For the forecast specs:
+
+   ```bash
+   for s in nl-1-fc-1h nl-1-fc-3h-0 nl-1-fc-3h-1 nl-1-fc-3h-2; do
+     rwsc run --rm --no-deps -T load replay --source NL-1 --spec $s --from 2026-09-29 --to <today> --dry-run
+   done
+   ```
+
+   and for the six P16a specs, from the day the P16a release was deployed (`<P16a day>`, the first day `/status/capture.json` or the archive shows them):
+
+   ```bash
+   for s in nl-1-obs-sea nl-1-obs-wide nl-1-obs-slow nl-1-hwlw nl-1-astro nl-1-hwlw-astro; do
+     rwsc run --rm --no-deps -T load replay --source NL-1 --spec $s --from <P16a day> --to <today> --dry-run
+   done
+   ```
+
+   `lines` counts the lines that have an object; `nl-1-hwlw` answers 204, which writes no object, so it has none (KG-366).
+2. Replay each `nl-1-fc-*` spec from 2026-09-29 to the deploy day without `--dry-run`. Expect `"quarantined":0` and `"n_new"` above 0: runs of the 71 registered locations, now also of the newly registered coastal ones. The runs merge as in §11 (a capture that is the tail of a stored run joins it). **The 38 forecast-seed codes that are not in `registry/seed/nl-1.csv` stay unregistered** and count `unknown` in `n_skipped` (the objects are kept, KG-376); that is expected, not an alert.
+3. Replay the six P16a specs from `<P16a day>`. Expect `"quarantined":0`:
+   - the three observation specs load into `obs` the values of the new series from the P16a deploy on (the catch-up fills the days before, `tide.md` §6);
+   - `nl-1-astro` and `nl-1-hwlw-astro` load into `tide`, not `obs`; after `nl-1-astro` `/api/v1/health/sources` shows `astro_horizon` for NL-1 at once (the horizon of the newest monthly run, about 400 days ahead);
+   - a list whose high and low waters do not alternate is the retained drop `hwlw_unlabelled` (alert and `n_skipped`, nothing stored for that series, the object kept; `tide.md` §6, KG-370);
+   - the alerts of the retained codes fire during a replay too, one line per payload and code: count them before you act on them (§5 step 5).
+4. Run every command of steps 2 and 3 a second time: each must print `"n_new":0,"n_changed":0`. The tide table is idempotent by its own rule (a row is written only when its fetch is newer and its value or label differs), so an unchanged re-fetch writes nothing. Check the counts:
+
+   ```bash
+   sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
+     "SELECT kind, count(*) AS rows, count(DISTINCT series_id) AS series, min(ts) AS first, max(ts) AS last FROM tide GROUP BY 1 ORDER BY 1"
+   sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c \
+     "SELECT spec_id, parse_status, count(*) AS batches, sum(n_skipped) AS skipped
+      FROM ingest_batch WHERE spec_id LIKE 'nl-1-%' GROUP BY 1, 2 ORDER BY 1, 2"
+   ```
+
+   None of the astronomical tide is in `obs`: `tide` is the only place its future values sit.
+5. Run `scripts/verify-prod.sh <domain>`: `astro horizon` passes once `nl-1-astro` has loaded; the other P16b checks (`fresh NL-1 coast`, `fresh NL-1 lakes`, `catch-up NL-1`) need the catch-up as well (`tide.md` §6).
+
+A **registry change** that releases values later (a forecast-only location registered, or an `off` structure row turned on) is a replay of the `nl-1-fc-*` specs from 2026-09-29, `--dry-run` first, with the same second pass of 0/0.
+
 ## What not to do
 
 - Do not replay to "fix" a value the provider itself corrected: a newer payload already wins, and the older revision is in `obs_revision`.

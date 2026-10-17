@@ -3,7 +3,7 @@
 // most 30 per run, through the real SSRF-guarded client with a polite contact
 // User-Agent. It refuses to run under CI.
 //
-//   node scripts/smoke-capture.ts --contact <e-mail> --info-url <https url> --spec <id> [--row <variant> | --keep-as <name>] [--spec <id> …]
+//   node scripts/smoke-capture.ts --contact <e-mail> --info-url <https url> --spec <id> [--row <variant> | --keep-as <name>] [--from <D> --to <D>] [--method other:F###] [--spec <id> …]
 //   node scripts/smoke-capture.ts --contact … --info-url … --discover <SOURCE-ID> <allowlisted https url>
 //   RWS_LIVE=1 node scripts/smoke-capture.ts --contact … --info-url … \
 //     --backfill <backfill spec> --series <provider_key> --from YYYY-MM-DD --to YYYY-MM-DD [--no-hoedanigheid]
@@ -20,6 +20,12 @@
 // and CSV over 1 MB trimmed, keeping their structure) with a .meta.json. An
 // owner-audience payload never leaves .smoke/: only a synthetic copy is
 // committed (invariant 11). --discover writes to .smoke/ only.
+//
+// --from/--to after a --spec (P16b; NL-1 specs whose adapter builds the body, not ahead or verwachting) ask
+// that window instead of the spec's own: from < to, at most 31 days, to at most now + 1 day. --method
+// other:F### replaces the chosen row's method for that request only (NL-1 H rows; the registry is untouched).
+// Either one appends -<from>-<to> (YYYYMMDD) and/or -<method slug> to the file name and adds window/method
+// to the meta.
 //
 // --keep-as <name> (P15; after its --spec, never with --row, public specs only) writes the whole body,
 // never trimmed, to fixtures/<spec>-<name>.raw, and only when the status is 200 and the spec's validity
@@ -53,12 +59,14 @@ type Item = {
   noHoedanigheid?: boolean;
 };
 
-function args(argv: string[]) {
-  const specs: { id: string; row?: string; keepAs?: string }[] = [];
+export function args(argv: string[]) {
+  const specs: { id: string; row?: string; keepAs?: string; from?: string; to?: string; method?: string }[] = [];
   let contact = '';
   let infoUrl = '';
   let discover: [string, string] | undefined;
   const items: Item[] = [];
+  // --from/--to belong to whichever of --spec or --backfill/--check came last.
+  let lastIsSpec = false;
   const lastItem = () => {
     const last = items.at(-1);
     if (last === undefined)
@@ -67,8 +75,18 @@ function args(argv: string[]) {
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
-    if (a === '--spec') specs.push({ id: argv[++i] ?? '' });
-    else if (a === '--row') {
+    if (a === '--spec') {
+      specs.push({ id: argv[++i] ?? '' });
+      lastIsSpec = true;
+    } else if (a === '--method') {
+      const last = specs.at(-1);
+      if (last === undefined) throw new Error('--method follows the --spec it belongs to');
+      last.method = argv[++i] ?? '';
+    } else if ((a === '--from' || a === '--to') && lastIsSpec) {
+      const last = specs.at(-1);
+      if (last === undefined) throw new Error(`${a} follows the --spec it belongs to`);
+      last[a === '--from' ? 'from' : 'to'] = argv[++i] ?? '';
+    } else if (a === '--row') {
       const last = specs.at(-1);
       if (last === undefined) throw new Error('--row follows the --spec it belongs to');
       last.row = argv[++i] ?? '';
@@ -78,9 +96,10 @@ function args(argv: string[]) {
       last.keepAs = argv[++i] ?? '';
     } else if (a === '--contact') contact = argv[++i] ?? '';
     else if (a === '--info-url') infoUrl = argv[++i] ?? '';
-    else if (a === '--backfill' || a === '--check')
+    else if (a === '--backfill' || a === '--check') {
       items.push({ kind: a === '--check' ? 'check' : 'backfill', spec: argv[++i] ?? '', series: '' });
-    else if (a === '--series') lastItem().series = argv[++i] ?? '';
+      lastIsSpec = false;
+    } else if (a === '--series') lastItem().series = argv[++i] ?? '';
     else if (a === '--from') lastItem().from = argv[++i] ?? '';
     else if (a === '--to') lastItem().to = argv[++i] ?? '';
     else if (a === '--year') lastItem().year = argv[++i] ?? '';
@@ -110,6 +129,42 @@ export function keepAsProblem(
     }
   }
   return null;
+}
+
+const METHOD = /^other:F\d{3}$/;
+const DAY_MS = 86_400_000;
+
+/**
+ * The --from/--to/--method pre-check, pure: a fixed message (exit 64) or the parsed window. `spec` is the
+ * loaded spec's source, build flag and params; `row` the chosen registry row.
+ */
+export function windowProblem(
+  spec: { source: string; request: { build?: boolean }; params?: Record<string, string> },
+  row: Readonly<Record<string, string>>,
+  want: { from?: string; to?: string; method?: string },
+  now: Date,
+): { message: string } | { window?: { from: Date; to: Date } } {
+  const { from, to, method } = want;
+  if (from === undefined && to === undefined && method === undefined) return {};
+  if (spec.source !== 'NL-1' || !spec.request.build)
+    return { message: '--from, --to and --method are for an NL-1 spec that builds its body' };
+  if (method !== undefined) {
+    if (!METHOD.test(method)) return { message: `--method takes ${METHOD.source}` };
+    if (row.quantity === 'Q') return { message: '--method is refused on a Q row' };
+  }
+  if (from === undefined && to === undefined) return {};
+  if (from === undefined || to === undefined) return { message: '--from and --to are given together' };
+  if (spec.params?.ahead !== undefined || spec.params?.proces === 'verwachting')
+    return { message: '--from and --to are ignored by an ahead or verwachting spec' };
+  const at = (v: string) =>
+    /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?Z)?$/.test(v) ? new Date(v) : new Date(Number.NaN);
+  const w = { from: at(from), to: at(to) };
+  if (Number.isNaN(w.from.getTime()) || Number.isNaN(w.to.getTime()))
+    return { message: '--from and --to take YYYY-MM-DD or a UTC instant ending in Z' };
+  if (w.from >= w.to) return { message: '--from must be before --to' };
+  if (w.to.getTime() - w.from.getTime() > 31 * DAY_MS) return { message: 'the window is at most 31 days' };
+  if (w.to.getTime() > now.getTime() + DAY_MS) return { message: '--to is at most one day after now' };
+  return { window: w };
 }
 
 /** Halves the longest array until the JSON fits in 1 MB; the structure stays. */
@@ -275,8 +330,23 @@ async function main(): Promise<number> {
     console.error(problem.message);
     return problem.code;
   }
+  // Window and method are checked for every spec before the first request too.
+  const asked = new Map<string, { from: Date; to: Date } | undefined>();
+  for (const [n, s] of specs.entries()) {
+    const spec = registry.specs.find((x) => x.id === s.id);
+    if (spec === undefined) continue;
+    const row =
+      s.row === undefined ? (spec.rows[0] ?? {}) : spec.rows.find((r) => variantKey(r, spec.variants?.key) === s.row);
+    if (row === undefined) continue;
+    const p = windowProblem(spec, row, s, now);
+    if ('message' in p) {
+      console.error(`${s.id}: ${p.message}`);
+      return 64;
+    }
+    asked.set(String(n), p.window);
+  }
   let failed = 0;
-  for (const { id: specId, row: want, keepAs } of specs) {
+  for (const [n, { id: specId, row: want, keepAs, method }] of specs.entries()) {
     const spec = registry.specs.find((s) => s.id === specId);
     if (spec === undefined) {
       console.error(`${specId}: no such spec`);
@@ -284,19 +354,27 @@ async function main(): Promise<number> {
       continue;
     }
     // Only ever one of the registry's own rows (invariant 1): --row picks it by its variant key.
-    const row =
+    const found =
       want === undefined ? (spec.rows[0] ?? {}) : spec.rows.find((r) => variantKey(r, spec.variants?.key) === want);
+    const row = found === undefined || method === undefined ? found : { ...found, method };
+    const window = asked.get(String(n));
     if (row === undefined) {
       console.error(`${specId}: no registry row ${want}`);
       failed += 1;
       continue;
     }
-    const slug = (want ?? '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    const id = keepAs !== undefined ? `${specId}-${keepAs}` : want === undefined ? specId : `${specId}-${slug}`;
-    const r = await client.fetch(spec.source, requestFor(spec, row, now), {
+    const slugOf = (v: string) =>
+      v
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+    const ymd = (d: Date) => d.toISOString().slice(0, 10).replaceAll('-', '');
+    const extra =
+      (window === undefined ? '' : `-${ymd(window.from)}-${ymd(window.to)}`) +
+      (method === undefined ? '' : `-${slugOf(method)}`);
+    const id =
+      keepAs !== undefined ? `${specId}-${keepAs}` : `${specId}${want === undefined ? '' : `-${slugOf(want)}`}${extra}`;
+    const r = await client.fetch(spec.source, requestFor(spec, row, now, window), {
       maxBytes: spec.max_bytes,
       timeoutMs: spec.timeout === 'metadata' ? METADATA_TIMEOUT_MS : TOTAL_TIMEOUT_MS,
     });
@@ -319,6 +397,8 @@ async function main(): Promise<number> {
       url: redactUrl(res.url),
       bytes: res.body.length,
       trimmed: false,
+      ...(window === undefined ? {} : { window: { from: window.from.toISOString(), to: window.to.toISOString() } }),
+      ...(method === undefined ? {} : { method }),
     };
     let where = '.smoke/ only (owner audience)';
     if (keepAs !== undefined && (res.status !== 200 || !v.ok)) {

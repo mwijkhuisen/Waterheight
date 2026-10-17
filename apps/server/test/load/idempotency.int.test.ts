@@ -767,14 +767,27 @@ describe('the NL fixture archive: NL-1 and NL-2 payloads load, and a replay chan
       // The newest payload was fetched at 15:49:46Z.
       const loader = n.loader({ now: new Date('2026-09-30T16:00:00Z') });
       expect(await loader.tick()).toEqual({ lines: 7, loaded: 6 });
-      // The snapshot lists two series that NL-1 does not register: a drift report in app_meta, no alert.
-      expect(n.alerts).toEqual([]);
+      // P16b: the NL-1 registry is generated from the newer WFS snapshot (nl-2-wfs-20261016), so this 2026-09-30
+      // recording lacks five registered series (vanished: the one alert) and lists three it does not register.
+      expect(n.alerts.splice(0)).toEqual([
+        { code: 'registry_drift', fields: { source: 'NL-2', unregistered: 3, vanished: 5, changed: 0 } },
+      ]);
       const drift = await n.t.admin.query("SELECT value FROM app_meta WHERE key = 'registry_drift:NL-2'");
       expect(drift.rows[0]?.value).toMatchObject({
         spec: 'nl-2-wfs',
         changed: [],
-        vanished: [],
-        unregistered: ['driel.boven/Q/NVT/other:F103', 'epen.geul.cottessen/Q/NVT/other:F007'],
+        vanished: [
+          'borgsweer.verbindingskanaal/Q/NVT/other:F007',
+          'delfzijl.oudeeemskanaal.spuisluis/WATHTE/NAP/other:F007',
+          'dorkwerd.reitdiep/WATHTE/NAP/other:F007',
+          'oosterschelde.14/WATHTE/NAP/other:F007',
+          'slochtersluis.boven/WATHTE/NAP/other:F007',
+        ],
+        unregistered: [
+          'driel.boven/Q/NVT/other:F103',
+          'eindhoven.gender/Q/NVT/other:F007',
+          'sonenbreugel.wilhelminakanaal/Q/NVT/other:F007',
+        ],
       });
 
       // One batch per payload; the 204 line made none. NL-2 is discovery only.

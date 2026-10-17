@@ -119,10 +119,12 @@ describe('registry sync', { timeout: 60_000 }, () => {
       { source_id: 'DE-1', n: 1 },
       { source_id: 'FR-1', n: 5 },
       { source_id: 'LU-1', n: 2 },
+      // P16b: the 18 structure-internal NL-1 rows (lock chambers, gate slots, pumping stations).
+      { source_id: 'NL-1', n: 18 },
     ]);
     // DE-1 238, NL-1 85, FR-1 550, FR-3 26, CH-1 412, CH-2 380, DE-7 251 and LU-1 42 series, and from P5c the owner
     // audience's BE-3 607 and LU-2 39 (registry/stations/*.yaml).
-    expect(await h.count('series')).toBe(2630);
+    expect(await h.count('series')).toBe(2974);
     // A cm series without a published gauge zero has a local datum: 8 before P5b, and the 41 LU-1 gauges in cm
     // (their zeros are LU-4's, an owner source; Esch-Sure is a level in m NG95). The 251 DE-7 gauges are NHN.
     const local = (
@@ -136,8 +138,9 @@ describe('registry sync', { timeout: 60_000 }, () => {
       // Torgny); CH-1: 17 and 210; the 15 FR-3 and 207 CH-2 twin stations are tier 2. P5b: DE-7 9 and 242; LU-1 11
       // (Bollendorf, withheld, among them) and 31 (28 primary, 3 twins).
       // P5c: BE-3 19 and 313, LU-2 39 (twins, tier 2).
-      { tier: 1, n: 168 },
-      { tier: 2, n: 1520 },
+      // P16b: the 29 coast, estuary and lake stations of the sea tier are tier 1 (319 new NL-1 stations).
+      { tier: 1, n: 197 },
+      { tier: 2, n: 1810 },
     ]);
   });
 
@@ -186,7 +189,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
       { source_id: 'LU-1', role: 'primary', n: 39 },
       { source_id: 'LU-1', role: 'twin', n: 3 },
       { source_id: 'LU-2', role: 'twin', n: 39 },
-      { source_id: 'NL-1', role: 'primary', n: 72 },
+      { source_id: 'NL-1', role: 'primary', n: 391 },
     ]);
     const mirrors = (
       await h.t.admin.query(
@@ -220,9 +223,9 @@ describe('registry sync', { timeout: 60_000 }, () => {
     // off: 193 and 231. NL-1: its 72 stations, and its 85 series less the Eijsden-grens TAW twin. FR-1: 304 stations
     // less 6 mirrors and 3 off: 295, with 536 series. CH-1: 227 less 75 off: 152, with 276 series. No FR-3 or CH-2
     // (twin) station. P5b: DE-7's 251 stations and series, and LU-1's 42 stations less 2 off and 3 twins: 37, and
-    // 37 series.
-    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.station}`)).rows).toEqual([{ n: 1000 }]);
-    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.series}`)).rows).toEqual([{ n: 1415 }]);
+    // 37 series. P16b: NL-1 adds 301 public stations and 325 public series (344 new rows less 18 structure rows off and the Elsloo TAW twin).
+    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.station}`)).rows).toEqual([{ n: 1301 }]);
+    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.series}`)).rows).toEqual([{ n: 1740 }]);
   });
 
   it('is idempotent: a second sync keeps every series id and changes nothing', async () => {
@@ -231,7 +234,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const result = await syncRegistry(owner.db, readRegistry());
     await owner.close();
     // P5c: 332 BE-3 and 39 LU-2 stations; 7 public twin pairs, 38 BE-3 and 39 LU-1/LU-2 owner pairs.
-    expect(result).toMatchObject({ stations: 1688, series: 2630, deactivated: 0, twins: 84, references: 742 });
+    expect(result).toMatchObject({ stations: 2007, series: 2974, deactivated: 0, twins: 84, references: 2311 });
     expect((await h.t.admin.query('SELECT id, provider_key, active FROM series ORDER BY id')).rows).toEqual(before);
   });
 
@@ -314,16 +317,16 @@ describe('registry sync', { timeout: 60_000 }, () => {
     // P5a adds the 7 Belgian points of catalogue §0.6 (6 H, 3 Q), fetched every 30 minutes: 90 min.
     expect(rows).toEqual([
       {
-        series: 85,
-        stations: 72,
-        h_nap: 68,
-        q: 16,
-        twin: 1,
-        ten_minutes: 85,
-        stale60: 26,
-        stale90: 58,
+        series: 429,
+        stations: 391,
+        h_nap: 306,
+        q: 109,
+        twin: 2,
+        ten_minutes: 429,
+        stale60: 55,
+        stale90: 150,
         stale120: 1,
-        narrowed: 0,
+        narrowed: 18,
       },
     ]);
     // Eijsden Q arrives about 75 minutes late: the one series with two hours.
@@ -344,16 +347,25 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const tidal = await h.t.admin.query(
       "SELECT id FROM station WHERE flags->>'tidal' = 'true' AND id LIKE 'nl.rws.%' ORDER BY 1",
     );
-    expect(tidal.rows.map((r) => r.id)).toEqual([
-      // P5a: the Zeeschelde at Antwerp (catalogue §0.6).
-      'nl.rws.antwerpen',
-      'nl.rws.delfzijl',
-      'nl.rws.hansweert',
-      'nl.rws.nieuwestatenzijl.dollard',
-      'nl.rws.rilland.bath',
-      'nl.rws.terneuzen',
-      'nl.rws.vlissingen',
-    ]);
+    // P16b: the roadmap-1 tidal stations (P5a: the Zeeschelde at Antwerp, catalogue §0.6; heesbeen, hoekvanholland,
+    // moerdijk and werkendam.nieuwemerwede flagged in P16b) stay flagged among the 101 tidal NL-1 stations.
+    const tidalIds = tidal.rows.map((r) => r.id);
+    expect(tidalIds).toHaveLength(101);
+    expect(tidalIds).toEqual(
+      expect.arrayContaining([
+        'nl.rws.antwerpen',
+        'nl.rws.delfzijl',
+        'nl.rws.hansweert',
+        'nl.rws.heesbeen',
+        'nl.rws.hoekvanholland',
+        'nl.rws.moerdijk',
+        'nl.rws.nieuwestatenzijl.dollard',
+        'nl.rws.rilland.bath',
+        'nl.rws.terneuzen',
+        'nl.rws.vlissingen',
+        'nl.rws.werkendam.nieuwemerwede',
+      ]),
+    );
     // No audience or channel flag of an RWS source changed (invariant 8): NL-3 stays off.
     const sources = await h.t.admin.query(
       "SELECT id, audience::text, lic_display, lic_api, lic_bulk_export, lic_history_export FROM source WHERE id IN ('NL-1', 'NL-2', 'NL-3', 'NL-4') ORDER BY 1",
@@ -402,7 +414,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     );
     // 58 level and 11 discharge series have classes; a class row is one or two bounds.
     // P5a: lanaken H, maaseik H and Q and smeermaas.zuidwillemsvaart H and Q (Belgian points) bring their classes.
-    expect(totals.rows).toEqual([{ n: 742, series: 74, as_declared: 742, unit_ok: 742, on_nl1: 742 }]);
+    expect(totals.rows).toEqual([{ n: 2311, series: 254, as_declared: 2311, unit_ok: 2311, on_nl1: 2311 }]);
 
     // Lobith discharge (issue #17): the whole-year bounds, and Normaal/Verlaagd at 1,400 in May, 1,000 in September.
     const lobith = 'lobith.bovenrijn.tolkamer/Q/NVT/other:F230';
@@ -469,21 +481,31 @@ describe('registry sync', { timeout: 60_000 }, () => {
        ORDER BY 1`,
     );
     // P5a: four of the Belgian points have no NL-4 classes (antwerpen, herenlaak, kanne Q, lixhebiefaval).
-    expect(without.rows.map((r) => r.provider_key.split('/').slice(0, 2).join('/'))).toEqual([
-      'antwerpen/WATHTE',
-      'hagestein.boven/Q',
-      'herenlaak/WATHTE',
-      'holtheme.vecht/WATHTE',
-      'kanne/Q',
-      'lith.beneden/WATHTE',
-      'lixhebiefaval/WATHTE',
-      'millingenaanderijn.pannerdensekop/WATHTE',
-      'millingenaanderijn/Q',
-      'rhenen.grebbeberg/WATHTE',
-    ]);
+    // P16b: the new tiers add many series without classes (164 of 232 new NAP H and 12 of 81 new Q have them);
+    // the roadmap-1 ones stay among them.
+    expect(without.rows.map((r) => r.provider_key.split('/').slice(0, 2).join('/'))).toEqual(
+      expect.arrayContaining([
+        'antwerpen/WATHTE',
+        'hagestein.boven/Q',
+        'herenlaak/WATHTE',
+        'holtheme.vecht/WATHTE',
+        'kanne/Q',
+        'lith.beneden/WATHTE',
+        'lixhebiefaval/WATHTE',
+        'millingenaanderijn.pannerdensekop/WATHTE',
+        'millingenaanderijn/Q',
+        'rhenen.grebbeberg/WATHTE',
+      ]),
+    );
     // The public reader sees them through its reference view, by the audience of NL-4 itself.
     const api = await h.t.connectAs('rws_api');
-    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.reference}`)).rows).toEqual([{ n: 742 }]);
+    // P16b: not the 18 structure-internal rows, which are off and carry classes of their own.
+    const offRows = await h.t.admin.query(
+      `SELECT count(*)::int AS n FROM reference_value r JOIN series s ON s.id = r.series_id
+       WHERE s.audience = 'off' OR s.role <> 'primary'`,
+    );
+    expect(offRows.rows).toEqual([{ n: 42 }]);
+    expect((await api.query(`SELECT count(*)::int AS n FROM ${VIEWS.public.reference}`)).rows).toEqual([{ n: 2269 }]);
   });
 
   it('NL-4: a second sync replaces the classes with the same rows, and a registry without the file has none', async () => {
@@ -496,7 +518,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
         )
         .then((r) => r.rows);
     const before = await rows();
-    expect((await syncRegistry(owner.db, input)).references).toBe(742);
+    expect((await syncRegistry(owner.db, input)).references).toBe(2311);
     expect(await rows()).toEqual(before);
     expect((await syncRegistry(owner.db, { ...input, thresholds: null })).references).toBe(0);
     expect(await h.count('reference_value')).toBe(0);
@@ -518,7 +540,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const dir = mkdtempSync(`${tmpdir()}/rws-registry-`);
     cpSync(new URL('../../../../registry/', import.meta.url), dir, { recursive: true });
     const url = pathToFileURL(`${dir}/`);
-    expect(readRegistry(url).stations).toHaveLength(2630);
+    expect(readRegistry(url).stations).toHaveLength(2974);
     // An owner source that loses its private_basis.
     const sources = read(`${dir}/sources.yaml`, 'utf8');
     writeFileSync(
@@ -533,7 +555,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     writeFileSync(`${dir}/permissions/BE-3.md`, '---\nsource: BE-3\n---\n');
     expect(() => readRegistry(url)).toThrow(/permissions/);
     rmSync(`${dir}/permissions/BE-3.md`);
-    expect(readRegistry(url).stations).toHaveLength(2630);
+    expect(readRegistry(url).stations).toHaveLength(2974);
     // A withholding record names registered series that are audience off, else the sync refuses it.
     const record = read(`${dir}/permissions/LU-1.md`, 'utf8');
     writeFileSync(`${dir}/permissions/LU-1.md`, record.replace('[Bollendorf, Gemünd_Our]', '[Bollendorf, Diekirch]'));

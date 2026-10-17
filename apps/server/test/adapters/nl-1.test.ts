@@ -103,6 +103,22 @@ describe('golden files (real payloads)', () => {
   });
 });
 
+describe('golden files, P16b locations (real payloads)', () => {
+  const cases: [string, string, string][] = [
+    ['nl-1-obs-wide-a12-h-msl', 'a12/WATHTE/MSL/other:F007', 'an offshore platform (H, MSL)'],
+    ['nl-1-obs-slow-markermeer-midden-h-nap', 'markermeer.midden/WATHTE/NAP/other:F007', 'a lake (Markermeer midden)'],
+    ['nl-1-obs-sea-hellevoetsluis-h-nap', 'hellevoetsluis/WATHTE/NAP/other:F007', 'a tidal delta (Hellevoetsluis)'],
+  ];
+  it.each(cases)('%s: %s, %s', (name, series) => {
+    const out = run(name);
+    expect(out).toEqual(golden(name, out));
+    expect(out.obs.length).toBeGreaterThan(0);
+    expect(new Set(out.obs.map((r) => r.series))).toEqual(new Set([series]));
+    expect(out.tide).toBeUndefined();
+    expect(out.unknown).toBe(0);
+  });
+});
+
 describe('empty and error payloads', () => {
   it('"no data" is HTTP 204 with an empty body (real): not a payload, and never handed to the adapter', () => {
     const { body, meta } = rawFixture('NL-1', 'nl-1-obs-other-arnhem-nederrijn-q');
@@ -256,7 +272,9 @@ describe('rules', () => {
         unknown: 0,
       });
     }
-    expect([...registry.keys()].some((k) => k.startsWith('pannerden.regelwerk.'))).toBe(false);
+    // P16b: the registry holds both gauges as `off` structure rows (audience off: it stores nothing), so the
+    // exclusion above is what keeps them out before any registry lookup.
+    expect(registry.has('pannerden.regelwerk.boven/WATHTE/NAP/other:F155')).toBe(true);
   });
 
   it('only measurements: a forecast, an astronomical tide, another compartment and a grouped extreme are dropped', () => {
@@ -297,8 +315,8 @@ describe('rules', () => {
   });
 
   it('a series the registry does not know is counted, never registered; an inherited name is no series', () => {
-    // sasvangent is a live RWS point in NL that the registry does not hold (catalogue §0.6 correction).
-    for (const code of ['sasvangent', 'nowhere', 'constructor', '__proto__', 'toString']) {
+    // P16b registered sasvangent; a code that is no RWS point at all stands for the unregistered ones.
+    for (const code of ['not.a.rws.point', 'nowhere', 'constructor', '__proto__', 'toString']) {
       expect([code, normalise(recode(eijsden, code), base)]).toEqual([
         code,
         { obs: [], gaugeZeros: [], dropped: {}, unknown: 1 },

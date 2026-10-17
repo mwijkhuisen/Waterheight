@@ -67,6 +67,7 @@ import { parse as parseYaml } from 'yaml';
 import { ROUTES } from '../apps/server/src/api/channels.ts';
 import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
+import { DATA_EPOCH } from '../apps/server/src/load/dirty.ts';
 import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
 import { OpsStatus } from '../apps/server/src/watchdog/watchdog.ts';
 import { PAGE_ROUTES } from '../apps/web/src/lib/routes.ts';
@@ -1720,6 +1721,112 @@ export function checkBelgianSet(
     : miss(check, detail);
 }
 
+// ---------------------------------------------------------------- NL-1 roadmap 2 (P16b)
+
+/** The astronomical tide must reach this far past the server's own now. */
+export const ASTRO_MIN_AHEAD_MS = 60 * 86_400_000;
+/** A new tier-1 series must reach back to DATA_EPOCH within this much. */
+export const CATCHUP_SLACK_MS = 3_600_000;
+
+type TideStation = {
+  id: string;
+  source: string;
+  role: string;
+  tier: number;
+  provider_code: string;
+  flags: { tidal: boolean | null; lake?: boolean | undefined };
+};
+
+/**
+ * The NL-1 tier-1 primary stations by kind: `coast` (flags.tidal), `lakes` (flags.lake) and `added`, those of either
+ * kind that roadmap 2 brought in (a row of tier `sea` in registry/seed/nl-1.csv: the registry cannot tell a roadmap-1
+ * row from a new one, the seed can). Read from the files at run time.
+ */
+export function nl1TideSets(
+  stations: readonly TideStation[] = readRegistry().stations,
+  seed: readonly Readonly<Record<string, string>>[] = readSeed(REGISTRY_DIR, 'nl-1'),
+) {
+  const sea = new Set(seed.filter((r) => r.tier === 'sea').map((r) => r.code));
+  const t1 = stations.filter((st) => st.source === 'NL-1' && st.role === 'primary' && st.tier === 1);
+  const ids = (rows: readonly TideStation[]) => [...new Set(rows.map((st) => st.id))].sort();
+  const coast = t1.filter((st) => st.flags.tidal === true);
+  const lakes = t1.filter((st) => st.flags.lake === true);
+  return {
+    coast: ids(coast),
+    lakes: ids(lakes),
+    added: ids([...coast, ...lakes].filter((st) => sea.has(st.provider_code))),
+  };
+}
+
+/**
+ * P16b [agent-prod]: at least 90% of the stations have a value in the "now" snapshot no older than 45 minutes
+ * (`FRESH_MAX_AGE_S`) at the server's own now. A station the API does not list counts as not fresh. Counts only.
+ */
+export function checkFreshSet(
+  check: string,
+  ids: readonly string[],
+  stations: Stations | undefined,
+  snapshot: Snapshot | undefined,
+  now: string | undefined,
+): Result {
+  if (snapshot === undefined || stations === undefined || now === undefined)
+    return noDocument(check, snapshot === undefined ? 'snapshot' : stations === undefined ? 'stations' : 'meta');
+  if (ids.length === 0) return miss(check, 'no station to look for');
+  const nowMs = Date.parse(now);
+  const ageOf = new Map(snapshot.values.map((v) => [v.series, Math.round((nowMs - Date.parse(v.ts)) / 1000)]));
+  const byId = new Map(stations.stations.map((st) => [st.id, st]));
+  const listed = ids.filter((id) => byId.has(id)).length;
+  const fresh = ids.filter((id) =>
+    byId.get(id)?.series.some((x) => (ageOf.get(x.id) ?? Number.POSITIVE_INFINITY) <= FRESH_MAX_AGE_S),
+  ).length;
+  const detail = `listed ${listed}/${ids.length}, fresh ${fresh}/${ids.length} (a value no older than ${FRESH_MAX_AGE_S} s)`;
+  return fresh * 100 >= ids.length * BELGIAN_FRESH_PCT ? pass(check, detail) : miss(check, detail);
+}
+
+/**
+ * P16b: NL-1 `astro_horizon` (health/sources: the earliest of its series' newest astronomical instants, so the series
+ * that runs out first) is at least 60 days past the server's own now.
+ */
+export function checkAstroHorizon(doc: HealthSources | undefined, now: string | undefined): Result {
+  const check = 'astro horizon';
+  if (doc === undefined || now === undefined) return noDocument(check, doc === undefined ? 'health/sources' : 'meta');
+  const s = sourceOf(doc, 'NL-1');
+  if (s === undefined) return miss(check, 'NL-1 is not listed in /api/v1/health/sources');
+  if (s.astro_horizon === null) return miss(check, 'NL-1 has stored no astronomical tide yet');
+  const ahead = Date.parse(s.astro_horizon) - Date.parse(now);
+  const detail = `the earliest series horizon of the astronomical tide is ${Math.floor(ahead / 86_400_000)} days past now (${s.astro_horizon})`;
+  return ahead >= ASTRO_MIN_AHEAD_MS
+    ? pass(check, detail)
+    : miss(check, `${detail}; under ${ASTRO_MIN_AHEAD_MS / 86_400_000} days`);
+}
+
+/**
+ * P16b: the catch-up reached back (every series of the roadmap-2 tier-1 stations has `dataSince` at most
+ * DATA_EPOCH + 1 h) and is dense (NL-1 `coverage.ratio` at least `COVERAGE_MIN`).
+ */
+export function checkCatchupNl1(
+  ids: readonly string[],
+  stations: Stations | undefined,
+  doc: HealthSources | undefined,
+): Result {
+  const check = 'catch-up NL-1';
+  if (stations === undefined || doc === undefined)
+    return noDocument(check, stations === undefined ? 'stations' : 'health/sources');
+  if (ids.length === 0) return miss(check, 'no new tier-1 station to look for');
+  const limit = Date.parse(DATA_EPOCH) + CATCHUP_SLACK_MS;
+  const byId = new Map(stations.stations.map((st) => [st.id, st]));
+  const series = ids.flatMap((id) => byId.get(id)?.series ?? []);
+  const absent = ids.filter((id) => !byId.has(id)).length;
+  const late = series.filter((x) => x.dataSince === null || Date.parse(x.dataSince) > limit).length;
+  const c = sourceOf(doc, 'NL-1')?.coverage ?? null;
+  const detail =
+    `${series.length - late} of ${series.length} series of ${ids.length - absent}/${ids.length} listed stations reach back to ${DATA_EPOCH}` +
+    `; coverage ${c === null ? 'none yet' : `${(100 * c.ratio).toFixed(1)}%`}`;
+  return absent === 0 && late === 0 && c !== null && c.ratio >= COVERAGE_MIN
+    ? pass(check, detail)
+    : miss(check, detail);
+}
+
 // ---------------------------------------------------------------- static publisher (P9a)
 
 /** Cache-Control per class of /data/v1 (plan §4.1, deploy/web/site.caddy), compared exactly. */
@@ -3013,6 +3120,10 @@ export const CHECKS = [
       `fresh ${id}: in the "now" snapshot at least one ${id} series has a value no older than ${freshLimit(id)} s at the server's own now (/meta)`,
   ),
   "label offset LU-1: /api/v1/health/sources lists LU-1 with a label_offset whose latest measured UTC day, decided or not, is no older than 2 days before the server's own now (/meta); any offset passes, the detail prints that day (decided, its instants and share; or undecided), and the offset in force in minutes (15 is the AGE file's habit) with the day that decided it; none measured yet is a FAIL",
+  `fresh NL-1 coast: the NL-1 tier-1 stations with flags.tidal (read from the registry) have >= ${BELGIAN_FRESH_PCT}% a value in the "now" snapshot no older than ${FRESH_MAX_AGE_S} s at the server's own now`,
+  `fresh NL-1 lakes: the same over the NL-1 tier-1 stations with flags.lake`,
+  `astro horizon: NL-1 astro_horizon in /api/v1/health/sources (the earliest of its series' newest astronomical instants) is at least 60 days past the server's own now`,
+  `catch-up NL-1: every series of the roadmap-2 tier-1 tidal and lake stations (a seed row of tier sea) has dataSince <= ${DATA_EPOCH} + 1 h, and NL-1 coverage.ratio >= ${COVERAGE_MIN * 100}%`,
   `belgian set: the 25 points of catalogue §0.6 (the NL-1 locations ${BELGIAN_NL1.join(', ')} as nl.rws.<code>, the 18 FR-1 partners of registry/seed/fr-1-be.csv as fr.sandre.<code>) are all stations of /api/v1/stations, and >= ${BELGIAN_FRESH_PCT}% have a value in the "now" snapshot no older than ${BELGIAN_MAX_AGE_S / 3600} h at the server's own now`,
   `tiles manifest: GET /tiles/manifest.json is 200 with Cache-Control exactly "${MANIFEST_CACHE}" (never immutable) and a body parseTilesManifest accepts`,
   `tiles <file>: every file the manifest lists (current and previous), GET with Range: ${TILE_HEADERS.range} and Accept-Encoding: ${TILE_HEADERS['accept-encoding']}, is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
@@ -3224,6 +3335,14 @@ async function main(argv: string[]): Promise<number> {
       ),
       checkLabelOffset(sources.data, metaRead.data?.now),
       checkBelgianSet(belgianIds(), stationsRead.data, snapReads.get('now')?.data, metaRead.data?.now),
+    );
+    const tide = nl1TideSets();
+    const nowSnap = snapReads.get('now')?.data;
+    results.push(
+      checkFreshSet('fresh NL-1 coast', tide.coast, stationsRead.data, nowSnap, metaRead.data?.now),
+      checkFreshSet('fresh NL-1 lakes', tide.lakes, stationsRead.data, nowSnap, metaRead.data?.now),
+      checkAstroHorizon(sources.data, metaRead.data?.now),
+      checkCatchupNl1(tide.added, stationsRead.data, sources.data),
     );
 
     // The P3 basemap (A§9.1): the manifest, every file it lists read with a 16-byte Range, the 404s, one pinned asset.

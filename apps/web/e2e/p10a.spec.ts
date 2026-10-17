@@ -140,7 +140,8 @@ test('the mode radios set ?mode=, the marker paint and the table column', async 
     .locator('tbody tr')
     .filter({ has: page.getByRole('button', { name: 'Lobith, Bovenrijn, Tolkamer', exact: true }) });
   await expect(lobith).toHaveCount(2); // its stage and its discharge
-  await expect(lobith.locator('td:nth-child(5)')).toHaveText(['–', /^93\d([.,]\d+)? m³\/s$/]);
+  // A discharge in m³/s: the e2e seed adds series_id % 50 to its sine, and the ids move with the registry (P16b).
+  await expect(lobith.locator('td:nth-child(5)')).toHaveText(['–', /^\d{3}([.,]\d+)? m³\/s$/]);
   await chooseMode(page, 'delta', 'nl');
   await expect(table.locator('thead th').nth(4)).toHaveText(msg('nl', 'col_dh'));
   await expect(lobith.locator('td:nth-child(5)')).toHaveText([/\d/, /\d/]);
@@ -884,7 +885,8 @@ test("latest.json's lapsed ages: stale past the limit, hidden after 25 hours (KG
   age = 25 * 3600 + 1;
   await open(page, '/');
   await searchButton(page).click();
-  await searchBox(page).fill('Lobith');
+  // Tolkamer, not Lobith: since P16b a second Lobith station (Bovenrijn, haven) is listed and stays found.
+  await searchBox(page).fill('Tolkamer');
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(0);
   await open(page, `/?s=${LOBITH}`);
   await expect(panelOf(page)).toContainText(msg('nl', 'lapsed_hidden_note'));

@@ -198,11 +198,11 @@ describe('GET /api/v1/health and /api/v1/health/sources', () => {
     expect(doc.quarantined_batches).toEqual([]);
     expect(doc.twins).toEqual([]);
     expect(doc.owner_sources).toEqual({ healthy: 1, total: OWNER_CAPTURED });
-    // A source that was never fetched: its 41 tier-1 series are all without a value, and it has no checksum.
+    // A source that was never fetched: its 71 tier-1 series are all without a value, and it has no checksum.
     expect(doc.sources.find((s) => s.id === 'NL-1')).toMatchObject({
       status: 'unknown',
       last_fetch_ok: null,
-      tier1: { total: 41, fresh: 0, provider_stale: 0 },
+      tier1: { total: 71, fresh: 0, provider_stale: 0 },
       outage: null,
       partitions: [],
     });
@@ -363,7 +363,7 @@ describe('owner isolation (invariant 11) and the withheld canary', () => {
     // The withheld canary series is NL-1's (tier 1, with a value), yet NL-1's tier-1 numbers do not count it and
     // NL-1 has no checksum of it: every public source reads exactly as before.
     expect(sourcesAfter.sources.find((s) => s.id === 'NL-1')).toMatchObject({
-      tier1: { total: 41, fresh: 0, provider_stale: 0 },
+      tier1: { total: 71, fresh: 0, provider_stale: 0 },
       partitions: [],
     });
     expect(sourcesAfter.sources).toEqual(sourcesBefore.sources);

@@ -25,6 +25,10 @@ const ALIAS: Record<string, string> = {
   'nl-1-obs-other': 'nl-1-obs-key',
   // P16a: the smoke recordings of 2026-10-17 (one row each; sea and slow are named by their spec id).
   'nl-1-obs-wide': 'nl-1-obs-wide-a12-h-msl',
+  // P16b: a catch-up spec asks what its live twin asks, so it shares the twin's recording.
+  'nl-1-obs-sea-catchup': 'nl-1-obs-sea',
+  'nl-1-obs-wide-catchup': 'nl-1-obs-wide-a12-h-msl',
+  'nl-1-obs-slow-catchup': 'nl-1-obs-slow',
   'nl-1-hwlw': 'nl-1-hwlw-vlissingen-nap',
   'nl-1-astro': 'nl-1-astro-vlissingen-nap',
   'nl-1-hwlw-astro': 'nl-1-hwlw-astro-goeree-lichteiland-msl',

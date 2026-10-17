@@ -1,0 +1,109 @@
+{
+ "obs": [
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T09:30:00.000Z",
+   "value": 57,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T09:40:00.000Z",
+   "value": 58,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T09:50:00.000Z",
+   "value": 58,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T10:00:00.000Z",
+   "value": 58,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T10:10:00.000Z",
+   "value": 58,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T10:20:00.000Z",
+   "value": 58,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T10:30:00.000Z",
+   "value": 58,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T10:40:00.000Z",
+   "value": 58,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T10:50:00.000Z",
+   "value": 57,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T11:00:00.000Z",
+   "value": 57,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T11:10:00.000Z",
+   "value": 56,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T11:20:00.000Z",
+   "value": 56,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T11:30:00.000Z",
+   "value": 54,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T11:40:00.000Z",
+   "value": 53,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T11:50:00.000Z",
+   "value": 51,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T12:00:00.000Z",
+   "value": 50,
+   "qc": 1
+  },
+  {
+   "series": "hellevoetsluis/WATHTE/NAP/other:F007",
+   "ts": "2026-10-17T12:10:00.000Z",
+   "value": 48,
+   "qc": 1
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0
+}

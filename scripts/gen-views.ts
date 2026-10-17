@@ -71,6 +71,7 @@ WHERE ${seriesVisible('e', p)}
 export const LATER = {
   meta: new URL('../db/migrations/20261014000002_views_meta.sql', import.meta.url),
   gaugeZero: new URL('../db/migrations/20261024000001_views_gauge_zero.sql', import.meta.url),
+  tide: new URL('../db/migrations/20261113000002_views_tide.sql', import.meta.url),
 } as const;
 
 const ROLLUP_COLUMNS = 'o.series_id, o.bucket, o.vmin, o.vmax, o.vavg, o.vlast, o.n, o.qc_or';
@@ -176,6 +177,15 @@ SELECT z.series_id, z.value_m, z.datum, z.valid
 FROM gauge_zero z
 JOIN series_eff e ON e.series_id = z.series_id
 WHERE ${seriesVisible('e', p)}`,
+
+  // P16b: the astronomical tide and the high and low waters (NL-1) of the family's visible series (the registered
+  // measured H series they attach to), with the history rule of the observation views. No batch id.
+  tide: (p: Params) => `
+SELECT d.series_id, d.kind, d.ts, d.value, d.hilo
+FROM tide d
+JOIN series_eff e ON e.series_id = d.series_id
+WHERE ${seriesVisible('e', p)}
+  AND ${historyAllowed('e', 'd.ts')}`,
 
   // P9a: the publishers' dirty log of the family (the loader writes one row per kind per transaction; A§9.1).
   dirty: (p: Params) => `

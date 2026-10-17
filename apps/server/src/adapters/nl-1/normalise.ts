@@ -11,6 +11,7 @@ import {
   rangeBit,
   SchemaDrift,
   scale,
+  type TideRowIn,
   type TimeConvention,
   TimeError,
   toIso,
@@ -344,6 +345,190 @@ export function normaliseForecast(lists: readonly Waarnemingen[], ctx: Context):
       issuedAt: null,
       providerSegmentEnd: null,
       points,
+    });
+  }
+  return out;
+}
+
+/** P16b: which tide a payload holds (its spec decides: nl-1-astro, nl-1-hwlw, nl-1-hwlw-astro). */
+export type TideKind = 'astro' | 'extreme' | 'extreme_astro';
+
+// ------------------------------------------------------------------------------------------------ tide (P16b)
+// The astronomical tide (spec nl-1-astro), the measured high and low waters (nl-1-hwlw, Grouping GETETM2) and the
+// astronomical ones (nl-1-hwlw-astro, GETETBRKD2) of one location, as `tide` rows, never `obs`. Declared here:
+//  - the provider must answer what the request asked: WATHTE in cm in OW, the ProcesType and Groepering of the
+//    kind (below), a `*MSL2` grouping exactly with Hoedanigheid MSL; anything else is drift of the whole payload
+//    (`tide_quantity`, `tide_unit`, `tide_compartment`, `tide_process`, `tide_grouping`, `tide_datum`);
+//  - series: the one registered key under `<code>/WATHTE/<NAP|MSL>/` (the measured H series of that location and
+//    datum); none or several is `unknown` (counted once per combination, the object is kept for a replay). A
+//    registered series of another datum cannot match by construction, so there is no `datum_mismatch` here: an MSL
+//    list at a location registered in NAP only is `unknown`;
+//  - method: astronomical lists must be other:F012 (the catalogue's only method); measured extremes one of GETETM2's
+//    F009, F010, F029 or none ('' or 'NVT'); another is `unregistered_method` (retained);
+//  - time: `extreme` drops `future` and `too_old` as observations do; the astronomical kinds accept rows from
+//    fetch − P1D to fetch + P400D + P1D (`before_window`, `beyond_horizon`, both retained);
+//  - quality 99 is a gap, any code outside the observation list `unknown_quality`; an instant stated twice with the
+//    same value is one row (`duplicate`), with different values neither (`conflict`); a value outside the range the
+//    observation path applies to the series (`rangeBit` of its value kind) is dropped as `out_of_range` (review SR-4:
+//    a garbled number, or one a `real` cannot hold);
+//  - high and low (Q1, owner decision 2026-10-17): RWS labels no extreme in this response, so the label is derived by
+//    strict alternation over the merged, time-ordered values of a series: each value is a strict extreme of its
+//    neighbours and highs and lows alternate. A series that breaks it (fewer than 2 values, equal neighbours, two
+//    highs or two lows in a row), that lost a value between its first and last kept one (`gap`, `unknown_quality`,
+//    `conflict`, `out_of_range`: the rest may still alternate with every label after the hole flipped, review CR-2)
+//    or whose consecutive extremes lie more than 10 h apart (a missing extreme) stores nothing from this payload and
+//    counts its values as `hwlw_unlabelled` (retained). `astro` rows carry no label.
+
+const TIDE_PROCESS: Record<TideKind, string> = {
+  astro: 'astronomisch',
+  extreme: 'meting',
+  extreme_astro: 'astronomisch',
+};
+/** The Groepering asked, by Hoedanigheid (an astronomical tide has none). */
+const TIDE_GROUPING: Record<TideKind, { NAP: string; MSL: string }> = {
+  astro: { NAP: '', MSL: '' },
+  extreme: { NAP: 'GETETM2', MSL: 'GETETMSL2' },
+  extreme_astro: { NAP: 'GETETBRKD2', MSL: 'GETETBRKDMSL2' },
+};
+const TIDE_METHODS: Record<TideKind, ReadonlySet<string>> = {
+  astro: new Set(['other:F012']),
+  extreme: new Set(['other:F009', 'other:F010', 'other:F029', '', 'NVT']),
+  extreme_astro: new Set(['other:F012']),
+};
+const DAY_MS = 86_400_000;
+/** The request asks P400D from now (adapters/nl-1/capture.ts); one day of slack on both sides. */
+const TIDE_AHEAD_MS = 401 * DAY_MS;
+
+/**
+ * Consecutive extremes further apart than this mean one is missing (review CR-2): the measured spacing is 4.48 to
+ * 8.00 h at Goeree lichteiland over 400 days and 5.48 to 7.20 h at Vlissingen; a missing extreme leaves about 12 h.
+ */
+const EXTREME_MAX_SPACING_MS = 10 * 3_600_000;
+
+/** `high`/`low` by strict alternation, or null when the values do not alternate. */
+function alternation(values: readonly number[]): ('high' | 'low')[] | null {
+  if (values.length < 2) return null;
+  const up = values.slice(1).map((v, i) => v > (values[i] as number));
+  for (let i = 0; i < values.length - 1; i++) {
+    if (values[i + 1] === values[i]) return null;
+    if (i > 0 && up[i] === up[i - 1]) return null;
+  }
+  return values.map((_, i) => (i === 0 ? (up[0] ? 'low' : 'high') : up[i - 1] ? 'high' : 'low'));
+}
+
+/**
+ * P16b: the astronomical tide or the high and low waters of one `OphalenWaarnemingen` response, as `tide` rows
+ * (never `obs`) of the registered measured H series of the same location and datum.
+ */
+export function normaliseTide(lists: readonly Waarnemingen[], ctx: Context, kind: TideKind): Normalised {
+  const tide: TideRowIn[] = [];
+  const out = { ...emptyNormalised(), tide };
+  const maxAge = ctx.maxAgeMs === undefined ? MAX_AGE_MS : ctx.maxAgeMs;
+  const byCombination = new Map<string, string[]>();
+  for (const key of ctx.registry.keys()) {
+    const combination = key.slice(0, key.lastIndexOf('/'));
+    byCombination.set(combination, [...(byCombination.get(combination) ?? []), key]);
+  }
+  // `holes`: the instants of every value dropped from a series (only those between its first and last kept value
+  // matter: the time-window drops lie outside by construction).
+  const merged = new Map<string, { samples: Map<number, number>; conflicts: Set<number>; holes: number[] }>();
+  const unknown = new Set<string>();
+
+  for (const { aquo, locatie, metingen } of lists) {
+    const hoedanigheid = aquo.Hoedanigheid.Code;
+    if (aquo.Grootheid.Code !== 'WATHTE') throw new SchemaDrift('tide_quantity');
+    if (aquo.Eenheid.Code !== 'cm') throw new SchemaDrift('tide_unit');
+    if (aquo.Compartiment.Code !== 'OW') throw new SchemaDrift('tide_compartment');
+    if (aquo.ProcesType !== TIDE_PROCESS[kind]) throw new SchemaDrift('tide_process');
+    if (hoedanigheid !== 'NAP' && hoedanigheid !== 'MSL') throw new SchemaDrift('tide_datum');
+    if (aquo.Groepering.Code !== TIDE_GROUPING[kind][hoedanigheid]) {
+      // A grouping of the kind but of the other datum is a datum problem, any other grouping is not what we asked.
+      const other = TIDE_GROUPING[kind][hoedanigheid === 'NAP' ? 'MSL' : 'NAP'];
+      throw new SchemaDrift(aquo.Groepering.Code === other ? 'tide_datum' : 'tide_grouping');
+    }
+    const combination = `${locatie.Code}/WATHTE/${hoedanigheid}`;
+    const keys = byCombination.get(combination);
+    const key = keys?.length === 1 ? keys[0] : undefined;
+    if (key === undefined) {
+      unknown.add(combination);
+      continue;
+    }
+    if (!TIDE_METHODS[kind].has(aquo.WaardeBepalingsMethode.Code)) {
+      count(out, 'unregistered_method', metingen.length);
+      continue;
+    }
+
+    // A WATHTE key: the H range of the observation path (a level unless the row declares a stage).
+    const valueKind = ctx.registry.get(key)?.value_kind ?? 'level';
+    let series = merged.get(key);
+    if (series === undefined) {
+      series = { samples: new Map(), conflicts: new Set(), holes: [] };
+      merged.set(key, series);
+    }
+    for (const m of metingen) {
+      const ts = instant(m.Tijdstip);
+      const quality = m.WaarnemingMetadata.Kwaliteitswaardecode;
+      const late = kind === 'extreme' ? isFuture(ts, ctx.fetchedAt) : ts > ctx.fetchedAt + TIDE_AHEAD_MS;
+      const early = kind === 'extreme' ? maxAge !== null && ts < ctx.fetchedAt - maxAge : ts < ctx.fetchedAt - DAY_MS;
+      const dropped =
+        quality === GAP
+          ? 'gap'
+          : !KNOWN_QUALITY.has(quality)
+            ? 'unknown_quality'
+            : late
+              ? kind === 'extreme'
+                ? 'future'
+                : 'beyond_horizon'
+              : early
+                ? kind === 'extreme'
+                  ? 'too_old'
+                  : 'before_window'
+                : series.conflicts.has(ts)
+                  ? 'conflict'
+                  : rangeBit(valueKind, m.Meetwaarde.Waarde_Numeriek) !== 0
+                    ? 'out_of_range'
+                    : null;
+      if (dropped !== null) {
+        count(out, dropped);
+        series.holes.push(ts);
+        continue;
+      }
+      const value = m.Meetwaarde.Waarde_Numeriek;
+      const before = series.samples.get(ts);
+      if (before === undefined) {
+        series.samples.set(ts, value);
+      } else if (before === value) {
+        count(out, 'duplicate');
+      } else {
+        // Two values for one instant: neither is stored.
+        series.samples.delete(ts);
+        series.conflicts.add(ts);
+        series.holes.push(ts);
+        count(out, 'conflict', 2);
+      }
+    }
+  }
+
+  out.unknown = unknown.size;
+  for (const [key, { samples, holes }] of merged) {
+    const rows = [...samples].sort((a, b) => a[0] - b[0]);
+    if (kind === 'astro') {
+      for (const [ts, value] of rows) tide.push({ series: key, kind, ts: toIso(ts), value, hilo: null });
+      continue;
+    }
+    if (rows.length === 0) continue;
+    const first = (rows[0] as [number, number])[0];
+    const last = (rows[rows.length - 1] as [number, number])[0];
+    const whole =
+      !holes.some((ts) => ts > first && ts < last) &&
+      rows.every(([ts], i) => i === 0 || ts - (rows[i - 1] as [number, number])[0] <= EXTREME_MAX_SPACING_MS);
+    const labels = whole ? alternation(rows.map((r) => r[1])) : null;
+    if (labels === null) {
+      count(out, 'hwlw_unlabelled', rows.length);
+      continue;
+    }
+    rows.forEach(([ts, value], i) => {
+      tide.push({ series: key, kind, ts: toIso(ts), value, hilo: labels[i] as 'high' | 'low' });
     });
   }
   return out;

@@ -274,13 +274,14 @@ describe('NL-1 observations', { timeout: 60_000 }, () => {
     };
     // Its newest value is 105 minutes old (limit 90): stale. Stated 25 minutes ago: inside two 30-minute
     // cadences, outside two of the source's shortest (10 minutes).
-    expect(await tier1()).toEqual({ total: 41, fresh: 0, provider_stale: 0 });
+    // P16b: 71 tier-1 series = the 41 of roadmap 1, the 29 `sea` rows and the new Q row of a tier-1 station (epen).
+    expect(await tier1()).toEqual({ total: 71, fresh: 0, provider_stale: 0 });
     const specs = new Map([
       ['nl-1-obs-key', 600],
       ['nl-1-obs-other', 1800],
       ['nl-1-obs-twin', 600],
     ]);
-    expect(await tier1(specs)).toEqual({ total: 41, fresh: 0, provider_stale: 1 });
+    expect(await tier1(specs)).toEqual({ total: 71, fresh: 0, provider_stale: 1 });
   });
 
   // Last, because it loads a day later: the tests above count fresh series at 2026-09-30T17:15Z.

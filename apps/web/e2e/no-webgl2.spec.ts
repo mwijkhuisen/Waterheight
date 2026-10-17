@@ -86,7 +86,8 @@ test('without WebGL2 a station of the table shows its upstream chain, and the fl
   await open(page, '/');
   await expect(page.locator('table')).toHaveCount(1);
   await expect(page.locator('.maplibregl-canvas')).toHaveCount(0);
-  await pickStation(page, 'Lobith', /Lobith/);
+  // Since P16b "Lobith" finds two stations (Bovenrijn, haven too): pick Tolkamer, the one with an upstream chain.
+  await pickStation(page, 'Lobith', /Tolkamer/);
   await expect(page.locator('aside').getByRole('heading', { level: 2, name: /Lobith/ })).toBeVisible();
   const chain = page
     .locator('aside section')
