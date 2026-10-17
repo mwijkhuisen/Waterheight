@@ -1,12 +1,19 @@
 import type { ExpressionSpecification, FilterSpecification, Map as MapLibreMap } from 'maplibre-gl';
 import { createFlowAnimation, DASH_SEQ, type FlowHost } from './animation.ts';
 
-// The flow direction on the river lines (P11a, issue #26): a dash layer `rivers-flow` over the non-tidal reaches of
-// the `rivers` source, stepped by the animation clock, and a static arrow layer `rivers-flow-arrows` shown while the
-// clock is stopped (reduced motion, a hidden tab, the pause control off). A lazy chunk: StationsMap imports it once
-// the river layer exists. The tile lines run in the flow direction (the reaches run up to down).
+// The flow direction on the river lines (P11a, issue #26): dash layers over the non-tidal reaches of the `rivers`
+// source, stepped by the animation clock, and a static arrow layer `rivers-flow-arrows` shown while the clock is
+// stopped (reduced motion, a hidden tab, the pause control off). A lazy chunk: StationsMap imports it once the river
+// layer exists. The tile lines run in the flow direction (the reaches run up to down).
 
 const FLOW = 'rivers-flow';
+// One dash layer per step of DASH_SEQ (`rivers-flow`, `rivers-flow-1`, …), each with its own fixed pattern; a step only
+// moves `line-opacity` from one to the next (#177). Setting `line-dasharray` instead, a cross-faded property, makes
+// MapLibre 6 reload every tile of the source on each step; a constant opacity is a plain paint change, a line layer
+// at opacity 0 is not drawn, and the layers share one layout (same source, filter and layout), so the tiles are laid
+// out once.
+const PHASES = DASH_SEQ.map((_, i) => (i === 0 ? FLOW : `${FLOW}-${i}`));
+const OPACITY = 0.9;
 const ARROWS = 'rivers-flow-arrows';
 const ARROW = 'flow-arrow';
 const SOURCE = 'rivers';
@@ -21,7 +28,7 @@ const WIDTH: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 4, 
 export interface FlowHandle {
   /** The pause control (FlowToggle). */
   setEnabled(on: boolean): void;
-  /** Stops the clock, removes its listeners and both layers. */
+  /** Stops the clock, removes its listeners and every flow layer. */
   dispose(): void;
 }
 
@@ -49,25 +56,26 @@ export function arrowIcon(): { width: number; height: number; data: Uint8Clamped
 export function addFlow(map: MapLibreMap, beforeId: string, enabled: boolean): FlowHandle {
   const before = map.getLayer(beforeId) === undefined ? undefined : beforeId;
   if (!map.hasImage(ARROW)) map.addImage(ARROW, arrowIcon(), { pixelRatio: 1 });
-  map.addLayer(
-    {
-      id: FLOW,
-      type: 'line',
-      source: SOURCE,
-      'source-layer': 'rivers',
-      filter: FILTER,
-      layout: { 'line-cap': 'butt', 'line-join': 'round', visibility: 'none' },
-      paint: {
-        'line-color': '#e6f3fb',
-        'line-opacity': 0.9,
-        'line-width': WIDTH,
-        'line-dasharray': [...(DASH_SEQ[0] as readonly number[])],
-        // A step is a hard cut: no blend between two patterns.
-        'line-dasharray-transition': { duration: 0, delay: 0 },
+  for (const [i, id] of PHASES.entries())
+    map.addLayer(
+      {
+        id,
+        type: 'line',
+        source: SOURCE,
+        'source-layer': 'rivers',
+        filter: FILTER,
+        layout: { 'line-cap': 'butt', 'line-join': 'round', visibility: 'none' },
+        paint: {
+          'line-color': '#e6f3fb',
+          'line-opacity': i === 0 ? OPACITY : 0,
+          // A step is a hard cut: no blend between two patterns.
+          'line-opacity-transition': { duration: 0, delay: 0 },
+          'line-width': WIDTH,
+          'line-dasharray': [...(DASH_SEQ[i] as readonly number[])],
+        },
       },
-    },
-    before,
-  );
+      before,
+    );
   map.addLayer(
     {
       id: ARROWS,
@@ -93,6 +101,7 @@ export function addFlow(map: MapLibreMap, beforeId: string, enabled: boolean): F
     if (map.getLayer(id) !== undefined) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
   };
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  let shown = 0;
   const host: FlowHost = {
     raf: (cb) => requestAnimationFrame(cb),
     caf: (id) => cancelAnimationFrame(id),
@@ -112,13 +121,16 @@ export function addFlow(map: MapLibreMap, beforeId: string, enabled: boolean): F
       },
     },
     onTick(step) {
-      if (map.getLayer(FLOW) !== undefined)
-        map.setPaintProperty(FLOW, 'line-dasharray', [...(DASH_SEQ[step] as readonly number[])]);
+      if (step !== shown && map.getLayer(FLOW) !== undefined) {
+        map.setPaintProperty(PHASES[shown] as string, 'line-opacity', 0);
+        map.setPaintProperty(PHASES[step] as string, 'line-opacity', OPACITY);
+        shown = step;
+      }
       // The e2e build counts the steps (apps/web/e2e); the production bundle holds no trace of this.
       if (import.meta.env.MODE === 'e2e') window.__rwsFlowFrames = (window.__rwsFlowFrames ?? 0) + 1;
     },
     onRunning(running) {
-      show(FLOW, running);
+      for (const id of PHASES) show(id, running);
       show(ARROWS, !running);
     },
   };
@@ -129,7 +141,7 @@ export function addFlow(map: MapLibreMap, beforeId: string, enabled: boolean): F
       animation.dispose();
       // StationsMap disposes on unmount, which may run after map.remove(): a removed map has no style to ask.
       try {
-        for (const id of [ARROWS, FLOW]) if (map.getLayer(id) !== undefined) map.removeLayer(id);
+        for (const id of [ARROWS, ...PHASES]) if (map.getLayer(id) !== undefined) map.removeLayer(id);
       } catch {
         // the map is already gone, and its layers with it
       }

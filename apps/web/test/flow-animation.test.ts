@@ -88,7 +88,7 @@ describe('the dash sequence', () => {
     return false;
   }
 
-  it('has arrays of one length and one period (MapLibre warns on a mismatch)', () => {
+  it('has arrays of one length and one period', () => {
     expect(DASH_SEQ.length).toBeGreaterThan(1);
     for (const a of DASH_SEQ) {
       expect(a.length).toBe((DASH_SEQ[0] as readonly number[]).length);
