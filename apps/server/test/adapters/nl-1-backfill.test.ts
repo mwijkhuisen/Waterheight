@@ -213,6 +213,15 @@ describe('P16a request bodies', () => {
     expect(() => b({ ...row, method: 'other:F12' }, { proces: 'meting' }, win)).toThrow(/method/);
   });
 
+  it('a Q row cannot name a grouping or a method, and ahead needs astronomisch (CR-6)', () => {
+    const q = { code: 'a', quantity: 'Q' };
+    expect(() => b({ ...q, groepering: 'GETETM2' }, { proces: 'meting' }, win)).toThrow(/Q row/);
+    expect(() => b({ ...q, method: 'other:F012' }, { proces: 'meting' }, win)).toThrow(/Q row/);
+    expect(() => b({ code: 'a', quantity: 'H' }, { proces: 'meting', ahead: 'P2D' })).toThrow(/ahead/);
+    expect(() => b({ code: 'a', quantity: 'H' }, { ahead: 'P2D' })).toThrow(/ahead/);
+    expect(() => b(q, { proces: 'verwachting', ahead: 'P2D' })).toThrow(/ahead/);
+  });
+
   // The request fields come back in the recorded answers (smoke recordings of 2026-10-17, trimmed copies).
   it.each([
     ['nl-1-astro-vlissingen-nap', 'NAP', ''],

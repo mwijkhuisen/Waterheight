@@ -33,6 +33,9 @@ export const adapter: Adapter = {
     if (groepering !== '' && !GROEPERING.has(groepering)) throw new Error('nl-1: bad groepering');
     const method = row.method ?? '';
     if (method !== '' && !METHOD.test(method)) throw new Error('nl-1: bad method');
+    // The Q body has no place for either: a seed row that names one is a registry mistake, not something to ignore.
+    if (q && (groepering !== '' || method !== '')) throw new Error('nl-1: groepering or method on a Q row');
+    if (params.ahead !== undefined && proces !== 'astronomisch') throw new Error('nl-1: ahead needs astronomisch');
     const aquo = q
       ? {
           Grootheid: { Code: 'Q' },

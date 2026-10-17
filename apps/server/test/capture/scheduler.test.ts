@@ -227,6 +227,60 @@ describe('recorder', () => {
     expect((await deps.state.read<SpecState>('fr-5-sections'))?.failed_items).toEqual([]);
   });
 
+  it('a daily spec of three rows retries after an hour only the row that failed (CR-2)', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-02T12:00:00Z') });
+    const base = spec('nl-1-hwlw');
+    const three = {
+      ...base,
+      rows: base.rows.slice(0, 3),
+      variants: { ...(base.variants as NonNullable<typeof base.variants>), space_ms: 0 },
+    };
+    const codes = three.rows.map((r) => r.code as string);
+    const calls: Record<string, number> = {};
+    let failFirst = true;
+    server.use(
+      http.post(
+        'https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen',
+        async ({ request }) => {
+          const code = (JSON.parse(await request.text()) as { Locatie: { Code: string } }).Locatie.Code;
+          calls[code] = (calls[code] ?? 0) + 1;
+          if (code === codes[1] && failFirst) {
+            failFirst = false;
+            return new HttpResponse('unavailable', { status: 503 });
+          }
+          return new HttpResponse(null, { status: 204 });
+        },
+      ),
+    );
+    const deps = runDeps({ now: () => new Date() });
+    await deps.state.update<SpecState>(three.id, () => ({
+      enabled_since: '2026-10-01T00:00:00.000Z',
+      last_attempt: new Date().toISOString(), // no catch-up
+      variants: {},
+      seen: [],
+      pending_page: [],
+    }));
+    const rec = await startRecorder({
+      ...deps,
+      registry: { ...registry, specs: [three], groups: [] },
+      pinger: new Pinger(undefined, 'ua', quiet),
+      paths: { rawDir: deps.root, statusDir: `${deps.root}/s`, ownerStatusDir: `${deps.root}/o` },
+      seeds: () => [],
+    });
+    try {
+      await rec.run(three);
+      expect(codes.map((c) => calls[c])).toEqual([1, 1, 1]);
+      await vi.advanceTimersByTimeAsync(3_600_000);
+      await vi.waitFor(() => expect(calls[codes[1] as string]).toBe(2));
+      expect(codes.map((c) => calls[c])).toEqual([1, 2, 1]); // only the row that failed
+      await vi.advanceTimersByTimeAsync(3_600_000); // the retry succeeded: no further one
+      await rec.stop();
+      expect(codes.map((c) => calls[c])).toEqual([1, 2, 1]);
+    } finally {
+      await rec.stop();
+    }
+  });
+
   it('pings the group: /start, then success when fresh, /fail with no body for an owner group', async () => {
     const pings: { path: string; body: string }[] = [];
     server.use(

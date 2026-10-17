@@ -100,7 +100,15 @@ const RUNS_EXPECTED: ReadonlySet<string> = new Set(['ch-4-forecast']);
  * validity check only (a 200 with WaarnemingenLijst >= 1, or a 204, is `ok`). P16b gives nl-1-astro its loader and
  * moves it to the loader path below; delete this set then.
  */
-const CAPTURE_ONLY: ReadonlySet<string> = new Set(['nl-1-astro']);
+export const CAPTURE_ONLY: ReadonlySet<string> = new Set(['nl-1-astro']);
+
+/**
+ * Params that replace the spec's own for the probe's request only (the registry is unchanged). The nightly probe
+ * of nl-1-astro asks 2 days ahead, not the 400 of the real run: the same shape, a body 17 MB lighter.
+ */
+export const PROBE_PARAMS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'nl-1-astro': { ahead: 'P2D' },
+};
 
 /** The one code of a spec: `ok` or what went wrong. Throws only on a bug or a registry that does not load. */
 async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRegistry>, stations: Stations) {
@@ -114,7 +122,8 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
   // No loader: the list above is wrong. Nothing is fetched for it (capture-only specs aside).
   if (loader === undefined && !CAPTURE_ONLY.has(id)) return 'no_adapter';
 
-  const req = requestFor(spec, row, deps.now);
+  const probe = Object.hasOwn(PROBE_PARAMS, id) ? { ...spec, params: { ...spec.params, ...PROBE_PARAMS[id] } } : spec;
+  const req = requestFor(probe, row, deps.now);
   const r = await deps.fetch(spec.source, req, {
     maxBytes: spec.max_bytes,
     timeoutMs: spec.timeout === 'metadata' ? METADATA_TIMEOUT_MS : TOTAL_TIMEOUT_MS,

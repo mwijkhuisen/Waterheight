@@ -241,12 +241,18 @@ describe('the NL-1 astro probe (P16a): capture validity only, until P16b gives i
     const { codes, bodies } = await run();
     expect(codes['nl-1-astro']).toBe('ok');
     const sent = JSON.parse(bodies.at(-1) ?? '{}') as {
+      Periode: { Begindatumtijd: string; Einddatumtijd: string };
       Locatie: { Code: string };
       AquoPlusWaarnemingMetadata: { AquoMetadata: { ProcesType: string; Hoedanigheid?: { Code: string } } };
     };
     expect(sent.Locatie.Code).toBe('vlissingen');
     expect(sent.AquoPlusWaarnemingMetadata.AquoMetadata.ProcesType).toBe('astronomisch');
     expect(sent.AquoPlusWaarnemingMetadata.AquoMetadata.Hoedanigheid?.Code).toBe('NAP');
+    // CR-4: a short window (2 days), not the 400 days of the real run; the registry spec itself is unchanged.
+    const span = Date.parse(sent.Periode.Einddatumtijd) - Date.parse(sent.Periode.Begindatumtijd);
+    expect(span).toBeGreaterThan(0);
+    expect(span).toBeLessThanOrEqual(2 * 86_400_000);
+    expect(capture.specs.find((s) => s.id === 'nl-1-astro')?.params.ahead).toBe('P400D');
   });
 
   it('a 500 is http_500; a 204 is ok; a body without WaarnemingenLijst is an invalid_ code; the others stay ok', async () => {

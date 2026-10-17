@@ -1,4 +1,4 @@
-import { Cron, CronPattern } from 'croner';
+import { CronPattern } from 'croner';
 import type { Registry } from './specs.ts';
 
 // Request budgets (A§7.3), computed from registry/capture.yaml × the seed CSVs:
@@ -8,7 +8,6 @@ import type { Registry } from './specs.ts';
 
 const WEEK_MIN = 7 * 24 * 60;
 const WEEK_S = WEEK_MIN * 60;
-const START = Date.parse('2026-10-05T00:00:00Z'); // a Monday
 /**
  * The modelled time of one request. ponytail: a constant, every request takes 1 s whatever the payload; the
  * real runtime cap is the undici Agent of http/client.ts (`connections: 2`, proven by
@@ -21,32 +20,32 @@ export type HostBudget = { host: string; peakPerHour: number; perWeek: number };
 
 const hostOf = (url: string) => new URL(url.replace(/\{!?[a-z_]+\}/g, 'x')).hostname;
 
-/** Seconds into the simulated week at which each run of a cron starts. */
+/**
+ * Seconds into the simulated week (it starts on a Monday) at which each run of a cron starts, read from croner's
+ * parsed pattern. A cron restricted by day of month, month, year, `L`, `W` or an nth weekday (`5#1`, `5L`) can
+ * fall on any weekday in some week, so it is projected onto every day of the week at its time of day (the worst
+ * case); a plain weekday list is read as it is. Every second the pattern allows counts, at its own minute. A cron
+ * that yields no run throws: a spec the model cannot read must not count 0.
+ */
 function runStarts(cron: string): number[] {
   const p = new CronPattern(cron, 'UTC');
+  // 63 is croner's "every occurrence" mask of a weekday; any other non-zero value is an nth or last one.
+  const nth = Array.from(p.dayOfWeek).some((v) => v !== 0 && v !== 63);
+  const projected =
+    !p.starDOM ||
+    !p.starYear ||
+    p.lastDayOfMonth ||
+    p.lastWeekday ||
+    nth ||
+    p.nearestWeekdays.some(Boolean) ||
+    !p.month.every((x) => x === 1);
   const out: number[] = [];
-  if (p.second[0] === 1 && p.second.indexOf(1, 1) < 0) {
-    // A day-of-month restriction (a monthly spec) is projected onto every day of the week at its time of day: the
-    // 1st can be any weekday, so the worst case is every day. The month field is ignored for the same reason.
-    const monthly = !p.day.every((d) => d === 1) || !p.month.every((x) => x === 1);
-    for (let m = 0; m < WEEK_MIN; m += 1) {
-      const dow = (1 + Math.floor(m / 1440)) % 7; // START is a Monday
-      if (p.minute[m % 60] && p.hour[Math.floor(m / 60) % 24] && (monthly || p.dayOfWeek[dow])) {
-        out.push(m * 60);
-      }
-    }
-    return out;
+  for (let m = 0; m < WEEK_MIN; m += 1) {
+    const dow = (1 + Math.floor(m / 1440)) % 7;
+    if (!p.minute[m % 60] || !p.hour[Math.floor(m / 60) % 24] || !(projected || p.dayOfWeek[dow])) continue;
+    for (let sec = 0; sec < 60; sec += 1) if (p.second[sec]) out.push(m * 60 + sec);
   }
-  const job = new Cron(cron, { timezone: 'UTC', paused: true });
-  let t: Date | null = new Date(START - 1000);
-  for (;;) {
-    t = job.nextRun(t);
-    if (t === null) break;
-    const sec = Math.floor((t.getTime() - START) / 1000);
-    if (sec >= WEEK_S) break;
-    out.push(sec);
-  }
-  job.stop();
+  if (out.length === 0) throw new Error(`budget: cron "${cron}" has no run in the simulated week`);
   return out;
 }
 

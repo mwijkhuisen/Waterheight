@@ -1235,7 +1235,10 @@ describe('DE-7 and LU-1 health, tier-1, coverage, interval, bytes and label offs
       ['NL-1 nl-1-obs-wide', 'nl-1-obs-wide', 1795],
       ['NL-1 nl-1-obs-slow', 'nl-1-obs-slow', 3595],
     ] as const;
+    const specs = loadRegistry().specs;
     for (const [id, spec, minS] of rules) {
+      // CR-10: the threshold is the registry's cadence less 5 s, never a number typed apart from the cron.
+      expect(minS, id).toBe((specs.find((x) => x.id === spec)?.cadence_s as number) - 5);
       const at = (...entries: { spec: string; seconds: number }[]) =>
         checkInterval(s(sourcesDoc({ sources: [nl1({ min_interval_s: entries })] })).data, id);
       expect(at({ spec, seconds: minS })).toMatchObject({ check: `interval ${id}`, ok: true });

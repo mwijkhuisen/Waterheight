@@ -44,6 +44,7 @@ describe('request budgets', () => {
     'nl-1-fc-3h-2',
     'nl-1-catalogue',
   ];
+  const TIDE = ['nl-1-hwlw', 'nl-1-astro', 'nl-1-hwlw-astro'];
   const only = (ids: string[]): Registry => ({ ...registry, specs: registry.specs.filter((s) => ids.includes(s.id)) });
 
   it('RWS: ≤ 1,000 requests in any 60 minutes (D25; ddapi20-waterwebservices.rijkswaterstaat.nl)', () => {
@@ -68,11 +69,39 @@ describe('request budgets', () => {
   });
 
   it('RWS: the three tide runs (daily, monthly, monthly), each projected onto every day, never overlap each other', () => {
-    const tide = only(['nl-1-hwlw', 'nl-1-astro', 'nl-1-hwlw-astro']);
+    const tide = only(TIDE);
     expect(tide.specs).toHaveLength(3);
     expect((inFlightPerSecond(tide).get(RWS) as Uint8Array).reduce((a, b) => Math.max(a, b), 0)).toBe(1);
-    // Spread by space_ms: about 30 requests an hour each.
-    expect(budgets(tide).find((b) => b.host === RWS)?.peakPerHour).toBeLessThanOrEqual(31);
+    // Spread by space_ms 179000: a 180 s period, at most 20 requests an hour each (they never overlap, so also in all).
+    expect(budgets(tide).find((b) => b.host === RWS)?.peakPerHour).toBeLessThanOrEqual(20);
+    for (const id of TIDE) expect(spec(id).variants?.space_ms, id).toBe(179000);
+  });
+
+  it('RWS: the first start, a catch-up or hourly retries add at most the three tide specs at once, still ≤ 1,000', () => {
+    // On first start a daily or monthly spec runs once at once (scheduler.ts `later`), a missed tick is caught up and a
+    // failed run retries hourly: the three tide runs can then all be live in the same hour, whatever their crons.
+    // Worst case = the busiest 60 minutes of every other RWS spec plus the hourly maximum of each tide spec.
+    const rest = registry.specs.filter((s) => !TIDE.includes(s.id));
+    const others = budgets({ ...registry, specs: rest }).find((b) => b.host === RWS)?.peakPerHour ?? 0;
+    const tideMax = TIDE.map((id) => budgets(only([id])).find((b) => b.host === RWS)?.peakPerHour ?? 0);
+    expect(Math.max(...tideMax)).toBeLessThanOrEqual(20);
+    expect(others + tideMax.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1000);
+  });
+
+  it('RWS: every spec on the host is scheduled by a cron the model reads, and none is seed-only or seeded', () => {
+    // A seed-only spec (cron null) or one with a seed would escape requestsPerMinute: none exists on this host.
+    const onHost = registry.specs.filter((s) => new URL(s.request.url).hostname === RWS);
+    expect(onHost.length).toBeGreaterThan(10);
+    for (const s of onHost) {
+      expect(s.cron, s.id).not.toBeNull();
+      expect(s.seed, s.id).toBeUndefined();
+    }
+    // The model reads every one of them: each counts at least one request in the simulated week.
+    const total = (id: string) => {
+      const r = only([id]);
+      return (requestsPerMinute(r).get(RWS) ?? new Uint32Array()).reduce((a, b) => a + b, 0);
+    };
+    for (const s of onHost) expect(total(s.id), s.id).toBeGreaterThanOrEqual(s.rows.length);
   });
 
   it('RWS backfill (P14a): ≤ 1 request/s, ≤ 3600/h, only 20:00–06:00 UTC, on top of the live ≤ 1,000/h', () => {
@@ -375,6 +404,27 @@ describe('budget model', () => {
     expect(m.reduce((a, b) => a + b, 0)).toBe(7 * 3);
     for (let d = 0; d < 7; d += 1) expect(m[d * 1440 + 4 * 60]).toBe(3);
     expect(budgets(tiny('0 4 1 * *', 3))[0]?.perWeek).toBe(21);
+  });
+
+  it('(b) projects L, nth-weekday and a non-zero seconds field onto every day, once per day at that time (CR-1)', () => {
+    // 30 s past 04:00 on the 1st; the last day of the month; the first Friday: none falls in every week, so all
+    // three count on each of the 7 days, at 04:00 (the seconds field counts at its own minute).
+    for (const cron of ['30 0 4 1 * *', '0 4 L * *', '0 4 * * 5#1']) {
+      const m = perMinute(tiny(cron, 1));
+      expect(
+        m.reduce((a, b) => a + b, 0),
+        cron,
+      ).toBe(7);
+      for (let d = 0; d < 7; d += 1) expect(m[d * 1440 + 4 * 60], cron).toBe(1);
+    }
+    // A plain weekday list is not projected: Monday only.
+    expect(perMinute(tiny('0 4 * * MON', 1)).reduce((a, b) => a + b, 0)).toBe(1);
+    // Seconds count as runs: every 20 s is 3 runs in the minute.
+    expect(perMinute(tiny('*/20 0 4 * * *', 1))[4 * 60]).toBe(3);
+  });
+
+  it('(b) a cron the model cannot read throws, it never counts 0', () => {
+    expect(() => requestsPerMinute(tiny('not a cron', 1))).toThrow();
   });
 
   it('in flight: sequential rows, space_ms apart, one second each; runs that meet add up', () => {

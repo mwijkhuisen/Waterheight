@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { loadRegistry, REGISTRY_DIR, readSeed } from '../apps/server/src/capture/specs.ts';
+import { LOAD_ADAPTERS } from '../apps/server/src/load/adapters.ts';
+import { CAPTURE_ONLY } from '../scripts/contract-check.ts';
 import { CATALOGUE, locations, WFS } from '../scripts/rws-inventory.ts';
 import { repoRoot } from './catalogue.ts';
 
@@ -171,6 +173,13 @@ describe('invariant 1: the P16a specs ask only what the seeds say', () => {
       'nl-1-obs-slow',
       'nl-1-obs-wide',
     ]);
+  });
+
+  // Tripwire (SR-4): until P16b these specs are captured and archived only. A loader entry would put their values
+  // (a forecast, 400 days of astronomical tide) into obs. P16b replaces this test with the real loader tests.
+  it('none of the six, and none of the capture-only contract probes, has a loader entry yet', () => {
+    const loaded = Object.keys(LOAD_ADAPTERS['NL-1']?.specs ?? {});
+    for (const id of [...specs.map((s) => s.id), ...CAPTURE_ONLY]) expect(loaded, id).not.toContain(id);
   });
 
   it('each is built by the adapter from a fixed URL and takes its rows from a seed through its where', () => {
