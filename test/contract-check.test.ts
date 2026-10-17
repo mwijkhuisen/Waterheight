@@ -14,7 +14,7 @@ import { repoRoot } from './catalogue.ts';
 import { server } from './msw.setup.ts';
 import { zip } from './zip.ts';
 
-// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1; P8b: eleven specs). The
+// scripts/contract-check.ts and .github/workflows/contract-check.yml (issue #17; A§7.1; P8b: eleven specs; P16a: twelve with nl-1-astro). The
 // recorded fixtures stand in for the live providers; nothing here reaches the network.
 
 type Spec = (typeof SPECS)[number];
@@ -40,6 +40,7 @@ const BODY: Record<Spec, Buffer> = {
   'lu-1-csv': readFileSync(join(fixtureDir('lu-1'), 'lu-1-csv.raw')),
   'ch-4-forecast': readFileSync(join(fixtureDir('ch-4'), 'ch-4-forecast.raw')),
   'fr-4': readFileSync(join(fixtureDir('fr-4'), 'fr-4.raw')),
+  'nl-1-astro': readFileSync(join(fixtureDir('nl-1'), 'nl-1-astro-vlissingen-nap.raw')),
 };
 /** The fixtures were recorded together on 2026-09-29: a minute later, no value is old or in the future. */
 const recordedAt = (source: string, spec: string) =>
@@ -98,6 +99,7 @@ const GOOD: Record<Spec, Answer> = {
   'lu-1-csv': answer(BODY['lu-1-csv'], 200, 'text/csv'),
   'ch-4-forecast': answer(BODY['ch-4-forecast']),
   'fr-4': answer(BODY['fr-4'], 200, 'application/json;charset=UTF-8'),
+  'nl-1-astro': answer(BODY['nl-1-astro']),
 };
 
 type Seen = { method: string; host: string; path: string; userAgent: string | null; apiKey: boolean };
@@ -126,8 +128,13 @@ async function run(answers: Partial<Record<Spec, Answer>> = {}, now = NOW) {
         const body = request.method === 'POST' ? await request.clone().text() : '';
         bodies.push(body);
         // The forecast spec of NL-1 asks for ProcesType verwachting, the observation specs for meting.
-        const forecast = body.includes('"ProcesType":"verwachting"');
-        const t = group.find((x) => x.id.includes('-fc-') === forecast) ?? first;
+        // P16a: the astro spec asks for astronomisch.
+        const kindOf = (b: string) =>
+          b.includes('"ProcesType":"verwachting"') ? 'fc' : b.includes('"ProcesType":"astronomisch"') ? 'astro' : 'obs';
+        const t =
+          group.find(
+            (x) => (x.id.includes('-fc-') ? 'fc' : x.id.includes('-astro') ? 'astro' : 'obs') === kindOf(body),
+          ) ?? first;
         return (answers[t.id as Spec] ?? GOOD[t.id as Spec])();
       });
     }),
@@ -150,9 +157,9 @@ const nl1 = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => 
   return answer(JSON.stringify(doc));
 };
 
-// Each run parses the whole registry (about 2,000 series since P5b) and eleven payloads: seconds on a CI runner.
+// Each run parses the whole registry (about 2,000 series since P5b) and twelve payloads: seconds on a CI runner.
 describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
-  it('passes DE-1, NL-1 (observations and forecasts), NL-2, FR-1, CH-1, CH-2, DE-7, LU-1, the CH-4 figure and the FR-4 list through the loader parse: all eleven ok', async () => {
+  it('passes DE-1, NL-1 (observations and forecasts), NL-2, FR-1, CH-1, CH-2, DE-7, LU-1, the CH-4 figure and the FR-4 list through the loader parse and the astro tide through the capture check: all twelve ok', async () => {
     const { codes, report } = await run();
     expect(codes).toEqual({
       'de-1-basin': 'ok',
@@ -166,14 +173,15 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
       'lu-1-csv': 'ok',
       'ch-4-forecast': 'ok',
       'fr-4': 'ok',
+      'nl-1-astro': 'ok',
     });
     expect(report.at).toBe(NOW.toISOString());
     expect(reportLines(report)).toBe(
-      'de-1-basin ok\nnl-1-obs-key ok\nnl-1-fc-1h ok\nnl-2-wfs ok\nfr-1-obs ok\nch-1-lindas ok\nch-2-pq ok\nde-7-messwerte ok\nlu-1-csv ok\nch-4-forecast ok\nfr-4 ok',
+      'de-1-basin ok\nnl-1-obs-key ok\nnl-1-fc-1h ok\nnl-2-wfs ok\nfr-1-obs ok\nch-1-lindas ok\nch-2-pq ok\nde-7-messwerte ok\nlu-1-csv ok\nch-4-forecast ok\nfr-4 ok\nnl-1-astro ok',
     );
   });
 
-  it('sends exactly the eleven registry targets, with the contact User-Agent and no API key', async () => {
+  it('sends exactly the twelve registry targets, with the contact User-Agent and no API key', async () => {
     const { seen } = await run();
     expect(seen).toEqual(
       targets.map((t) => ({ method: t.method, host: t.host, path: t.path, userAgent: UA, apiKey: false })),
@@ -190,9 +198,10 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
       'GET inondations.public.lu/dam-assets/ctie/datas/Water-Levels-LocalTime.csv',
       'GET www.hydrodaten.admin.ch/plots/q_forecast/2091_q_forecast_de.json',
       'GET www.vigicrues.gouv.fr/services/v1.1/prevision.json',
+      'POST ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen',
     ]);
-    expect(targets).toHaveLength(11);
-    expect(seen).toHaveLength(11);
+    expect(targets).toHaveLength(12);
+    expect(seen).toHaveLength(12);
   });
 
   it('asks inondations.public.lu without a query string (its robots.txt says Disallow: /*?*)', () => {
@@ -212,7 +221,7 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
     const { codes, seen } = await run({ 'fr-1-obs': answer(JSON.stringify(doc)) });
     expect(codes['fr-1-obs']).toBe('ok');
     expect(seen.filter((r) => r.host === 'hubeau.eaufrance.fr')).toHaveLength(1);
-    expect(seen).toHaveLength(11);
+    expect(seen).toHaveLength(12);
   });
 });
 
@@ -222,6 +231,35 @@ const forecast = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }
   change(doc);
   return answer(JSON.stringify(doc));
 };
+
+describe('the NL-1 astro probe (P16a): capture validity only, until P16b gives it a loader', {
+  timeout: 90_000,
+}, () => {
+  const astro = (doc: unknown) => answer(JSON.stringify(doc));
+
+  it('asks ProcesType astronomisch for the Vlissingen NAP row and is ok on the recorded body', async () => {
+    const { codes, bodies } = await run();
+    expect(codes['nl-1-astro']).toBe('ok');
+    const sent = JSON.parse(bodies.at(-1) ?? '{}') as {
+      Locatie: { Code: string };
+      AquoPlusWaarnemingMetadata: { AquoMetadata: { ProcesType: string; Hoedanigheid?: { Code: string } } };
+    };
+    expect(sent.Locatie.Code).toBe('vlissingen');
+    expect(sent.AquoPlusWaarnemingMetadata.AquoMetadata.ProcesType).toBe('astronomisch');
+    expect(sent.AquoPlusWaarnemingMetadata.AquoMetadata.Hoedanigheid?.Code).toBe('NAP');
+  });
+
+  it('a 500 is http_500; a 204 is ok; a body without WaarnemingenLijst is an invalid_ code; the others stay ok', async () => {
+    const down = await run({ 'nl-1-astro': () => new HttpResponse('PROVIDER-SECRET-TEXT', { status: 500 }) });
+    expect(down.codes['nl-1-astro']).toBe('http_500');
+    const none = await run({ 'nl-1-astro': () => new HttpResponse(null, { status: 204 }) });
+    expect(none.codes['nl-1-astro']).toBe('ok');
+    const bad = await run({ 'nl-1-astro': astro({ Succesvol: true, WaarnemingenLijst: [] }) });
+    expect(bad.codes['nl-1-astro']).toMatch(/^invalid_[a-z_]+$/);
+    expect(bad.codes['nl-1-obs-key']).toBe('ok');
+    expect(reportLines(down.report)).not.toContain('PROVIDER-SECRET-TEXT');
+  });
+});
 
 describe('the NL-1 forecast probe (P8a)', { timeout: 90_000 }, () => {
   it('asks the registered row lobith.bovenrijn.tolkamer/Q, not the first (stale) row of the seed', async () => {
@@ -343,7 +381,7 @@ describe('the CH-4 and FR-4 probes (P8b)', { timeout: 90_000 }, () => {
         apiKey: false,
       },
     ]);
-    expect(queries.at(-1)).toBe('?FormatDate=iso&GrdSimul=H');
+    expect(queries.at(-2)).toBe('?FormatDate=iso&GrdSimul=H');
     expect(queries.join('\n')).not.toContain('CdEntVigiCru');
     expect(codes['fr-4']).toBe('ok');
   });
@@ -859,10 +897,10 @@ describe('the workflow', () => {
       expect(Math.min(Math.abs(minute - f), 60 - Math.abs(minute - f))).toBeGreaterThanOrEqual(5);
   });
 
-  it('says eleven requests, never three, six, eight or nine', () => {
-    expect(text).toContain('Eleven live requests');
-    expect(text).not.toMatch(/\b(three|six|eight|nine)\b/i);
-    expect(SPECS).toHaveLength(11);
+  it('says twelve requests, never three, six, eight, nine or eleven', () => {
+    expect(text).toContain('Twelve live requests');
+    expect(text).not.toMatch(/\b(three|six|eight|nine|eleven)\b/i);
+    expect(SPECS).toHaveLength(12);
   });
 
   it('writes issues in the report job only, and that job has no contents permission and no checkout', () => {
