@@ -13,7 +13,7 @@ import { isFresh, type SeedRecord, type StatusPaths, writeDailyReport, writeStat
 // process was down runs once, staggered. A spec seen for the first time counts
 // as fresh until its first attempt, and a daily or weekly one runs once,
 // staggered (A§7.2 "once at first start"). A failed daily/weekly run retries
-// hourly until its next tick. The group's shortest-cadence spec drives the
+// hourly until its next tick, asking only for the variants that did not succeed (P16a). The group's shortest-cadence spec drives the
 // healthchecks ping: /start, then success when every spec of the group is
 // fresh and no page alert is pending, else /fail.
 
@@ -60,6 +60,8 @@ export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
   const jobs = new Map<string, Cron>();
   const running = new Set<Promise<void>>();
   const retries = new Map<string, NodeJS.Timeout>();
+  /** Variants an hourly retry leaves out because they succeeded; taken by the run the retry starts. */
+  const retrySkip = new Map<string, Set<string>>();
   const timers: NodeJS.Timeout[] = [];
 
   const groupOf = (spec: LoadedSpec): Group | undefined => registry.groups.find((g) => g.anchor === spec.id);
@@ -89,15 +91,28 @@ export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
 
   async function runScheduled(spec: LoadedSpec): Promise<void> {
     const cadence = (spec.cadence_s as number) * 1000;
+    // Taken before the first await, so a skip never outlives the retry that set it.
+    const skip = retrySkip.get(spec.id);
+    retrySkip.delete(spec.id);
     const group = groupOf(spec);
     if (group) await deps.pinger.ping(group.slug, 'start');
-    const summary = await runSpec(spec, deps, { deadline: deps.now().getTime() + 0.9 * cadence });
+    const summary = await runSpec(spec, deps, {
+      deadline: deps.now().getTime() + 0.9 * cadence,
+      ...(skip === undefined ? {} : { skip }),
+    });
     if (cadence >= 24 * HOUR && (summary.transient || summary.ok === 0)) {
       const next = jobs.get(spec.id)?.nextRun()?.getTime() ?? Number.POSITIVE_INFINITY;
       if (next - deps.now().getTime() > HOUR && !retries.has(spec.id)) {
+        // doneVariants are the variants whose request ended ok (a 204 the spec allows included): a retry asks only
+        // for the others. A spec that expands keeps all its roots (a root's stage 2 may be what failed).
+        const done =
+          spec.rows.length > 1 && !spec.request.expand
+            ? new Set([...(skip ?? []), ...summary.doneVariants])
+            : undefined;
         const t = setTimeout(() => {
           retries.delete(spec.id);
-          void fire.get(spec.id)?.();
+          if (done !== undefined) retrySkip.set(spec.id, done);
+          if (fire.get(spec.id)?.() === undefined) retrySkip.delete(spec.id);
         }, HOUR);
         t.unref();
         retries.set(spec.id, t);

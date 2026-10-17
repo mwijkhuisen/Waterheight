@@ -690,6 +690,9 @@ describe('freshness, soak and capacity', () => {
       'coverage LU-1',
       'interval CH-1',
       'interval DE-7',
+      'interval NL-1 nl-1-obs-sea',
+      'interval NL-1 nl-1-obs-wide',
+      'interval NL-1 nl-1-obs-slow',
       'bytes DE-7',
       'api meta',
       'api build',
@@ -1224,6 +1227,31 @@ describe('DE-7 and LU-1 health, tier-1, coverage, interval, bytes and label offs
     expect(checkInterval(undefined, 'DE-7')).toMatchObject({ check: 'interval DE-7', ok: false });
     // CH-1 stays the default, with its own rule.
     expect(checkInterval(s(sourcesDoc({ sources: [de1()] })).data).check).toBe('interval CH-1');
+  });
+
+  it('interval NL-1: one rule per observation spec, the cadence less 5 s', () => {
+    const rules = [
+      ['NL-1 nl-1-obs-sea', 'nl-1-obs-sea', 595],
+      ['NL-1 nl-1-obs-wide', 'nl-1-obs-wide', 1795],
+      ['NL-1 nl-1-obs-slow', 'nl-1-obs-slow', 3595],
+    ] as const;
+    const specs = loadRegistry().specs;
+    for (const [id, spec, minS] of rules) {
+      // CR-10: the threshold is the registry's cadence less 5 s, never a number typed apart from the cron.
+      expect(minS, id).toBe((specs.find((x) => x.id === spec)?.cadence_s as number) - 5);
+      const at = (...entries: { spec: string; seconds: number }[]) =>
+        checkInterval(s(sourcesDoc({ sources: [nl1({ min_interval_s: entries })] })).data, id);
+      expect(at({ spec, seconds: minS })).toMatchObject({ check: `interval ${id}`, ok: true });
+      expect(at({ spec, seconds: minS - 1 })).toMatchObject({ ok: false, detail: /under/ });
+      expect(at({ spec: 'nl-1-obs-key', seconds: 1 })).toMatchObject({
+        ok: false,
+        detail: 'no interval measured yet',
+      });
+      expect(checkInterval(s(sourcesDoc({ sources: [de1()] })).data, id)).toMatchObject({
+        ok: false,
+        detail: /not listed/,
+      });
+    }
   });
 
   it('bytes DE-7: a day over 90 MB fails, the biggest of the days is named, the spec must be in capture.json', () => {

@@ -23,6 +23,11 @@ const ALIAS: Record<string, string> = {
   'nl-1-fc-3h-1': 'nl-1-fc-1h',
   'nl-1-fc-3h-2': 'nl-1-fc-1h',
   'nl-1-obs-other': 'nl-1-obs-key',
+  // P16a: the smoke recordings of 2026-10-17 (one row each; sea and slow are named by their spec id).
+  'nl-1-obs-wide': 'nl-1-obs-wide-a12-h-msl',
+  'nl-1-hwlw': 'nl-1-hwlw-vlissingen-nap',
+  'nl-1-astro': 'nl-1-astro-vlissingen-nap',
+  'nl-1-hwlw-astro': 'nl-1-hwlw-astro-goeree-lichteiland-msl',
   // The same Vigicrues request as the seed, for two of its rows (P5a).
   'fr-3-twin': 'fr-3-obs',
   // P7a: the weekly refs root is the ts_id list; its stage 2 is the values document.
@@ -39,7 +44,7 @@ export const STAGE2: Record<string, string> = {
   'lu-5-cap': 'lu-5-file',
 };
 
-export type Fixture = { file: string; body: Buffer; meta: { synthetic: boolean; spec: string } };
+export type Fixture = { file: string; body: Buffer; meta: { synthetic: boolean; spec: string; status?: number } };
 
 export function fixture(source: string, name: string): Fixture {
   const dir = join(ADAPTERS_DIR, source.toLowerCase(), 'fixtures');

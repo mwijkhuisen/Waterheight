@@ -146,10 +146,29 @@ export const DE7_SPEC = 'de-7-messwerte';
 export const DE7_INTERVAL_MIN_S = 895;
 /** P5b: the zstd bytes one UTC day of `de-7-messwerte` may store (96 fetches of a 0.9 MB ZIP). */
 export const DE7_BYTES_MAX = 90_000_000;
-/** The sources with an interval rule: the spec, the least gap in seconds, and why. */
+/**
+ * P16a: the three NL-1 observation specs by cadence (every 10, 30 and 60 minutes), each never more often than its
+ * cadence less 5 s of jitter. The daily and monthly specs get no rule: `min_interval_s` is the gap over 24 h, which
+ * never holds two of their runs (the `freshness` check covers them).
+ */
+const NL1_WHY = 'requested more often than its schedule';
+/** The interval rules by check name: the source, the spec, the least gap in seconds, and why. */
 export const INTERVAL_RULES = {
-  'CH-1': { spec: INTERVAL_SPEC, minS: INTERVAL_MIN_S, why: 'BAFU: at most one download per 10 minutes' },
-  'DE-7': { spec: DE7_SPEC, minS: DE7_INTERVAL_MIN_S, why: 'requested more often than every 15 minutes' },
+  'CH-1': {
+    source: 'CH-1',
+    spec: INTERVAL_SPEC,
+    minS: INTERVAL_MIN_S,
+    why: 'BAFU: at most one download per 10 minutes',
+  },
+  'DE-7': {
+    source: 'DE-7',
+    spec: DE7_SPEC,
+    minS: DE7_INTERVAL_MIN_S,
+    why: 'requested more often than every 15 minutes',
+  },
+  'NL-1 nl-1-obs-sea': { source: 'NL-1', spec: 'nl-1-obs-sea', minS: 595, why: NL1_WHY },
+  'NL-1 nl-1-obs-wide': { source: 'NL-1', spec: 'nl-1-obs-wide', minS: 1795, why: NL1_WHY },
+  'NL-1 nl-1-obs-slow': { source: 'NL-1', spec: 'nl-1-obs-slow', minS: 3595, why: NL1_WHY },
 } as const;
 /**
  * The twin pairs of registry/twins.yaml (test/verify-prod.test.ts keeps the two lists equal): `--soak` asks for
@@ -670,9 +689,9 @@ export function checkCoverage(doc: HealthSources | undefined, id: string): Resul
 export function checkInterval(doc: HealthSources | undefined, id: keyof typeof INTERVAL_RULES = 'CH-1'): Result {
   const check = `interval ${id}`;
   if (doc === undefined) return noDocument(check, 'health/sources');
-  const s = sourceOf(doc, id);
-  if (s === undefined) return miss(check, 'not listed in /api/v1/health/sources');
   const rule = INTERVAL_RULES[id];
+  const s = sourceOf(doc, rule.source);
+  if (s === undefined) return miss(check, 'not listed in /api/v1/health/sources');
   const m = s.min_interval_s.find((x) => x.spec === rule.spec);
   if (m === undefined) return miss(check, 'no interval measured yet');
   const detail = `${rule.spec}: the shortest gap between two requests of one variant in 24 h is ${m.seconds} s`;
@@ -2967,6 +2986,9 @@ export const CHECKS = [
   ]),
   `interval CH-1: the min_interval_s of ${INTERVAL_SPEC} is >= ${INTERVAL_MIN_S} s (BAFU: at most one download per 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL. The gap is per spec and variant: river and lake are two LINDAS downloads seconds apart every 10 minutes (whether BAFU counts them as one is asked in C13), and a recorder restart can run a catch-up under 10 minutes before the next tick, so this can FAIL for up to 24 h after a restart without a breach (KG-125)`,
   `interval DE-7: the min_interval_s of ${DE7_SPEC} is >= ${DE7_INTERVAL_MIN_S} s (every 15 minutes, less 5 s for the scheduling jitter of a fetch start); the detail prints the seconds, 3600 while the spec is hourly and about 900 once it runs every 15 minutes; no entry yet is a FAIL`,
+  `interval NL-1 nl-1-obs-sea: the min_interval_s of nl-1-obs-sea is >= 595 s (every 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
+  `interval NL-1 nl-1-obs-wide: the min_interval_s of nl-1-obs-wide is >= 1795 s (every 30 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
+  `interval NL-1 nl-1-obs-slow: the min_interval_s of nl-1-obs-slow is >= 3595 s (every 60 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
   `bytes DE-7: the days of /status/capture.json (today, partial, and the two before) each hold at most ${DE7_BYTES_MAX / 1e6} MB of zstd bytes stored for ${DE7_SPEC}; the spec missing from capture.json, or no bytes in any day, is a FAIL`,
   `owner sources: /api/v1/health/sources (the contract document, max-age=30) counts at least ${OWNER_SOURCES_MIN} owner sources (owner_sources.total, which the registry sync writes, captured or not) and lists no owner-audience source of registry/sources.yaml in sources[]; the detail holds counts only`,
   'owner health: /api/v1/health/sources has owner_sources.healthy = owner_sources.total (needs live owner capture; the detail holds counts only)',
@@ -3158,6 +3180,9 @@ async function main(argv: string[]): Promise<number> {
       ]),
       checkInterval(sources.data),
       checkInterval(sources.data, 'DE-7'),
+      checkInterval(sources.data, 'NL-1 nl-1-obs-sea'),
+      checkInterval(sources.data, 'NL-1 nl-1-obs-wide'),
+      checkInterval(sources.data, 'NL-1 nl-1-obs-slow'),
       checkOwnerSources(sources, ownerSourceIds(registry)),
       checkOwnerHealth(sources),
       checkOwnerIds(

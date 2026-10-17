@@ -1,4 +1,4 @@
-import { Cron, CronPattern } from 'croner';
+import { CronPattern } from 'croner';
 import type { Registry } from './specs.ts';
 
 // Request budgets (A§7.3), computed from registry/capture.yaml × the seed CSVs:
@@ -7,40 +7,91 @@ import type { Registry } from './specs.ts';
 // stations, new files) are data-driven and not part of this count.
 
 const WEEK_MIN = 7 * 24 * 60;
-const START = Date.parse('2026-10-05T00:00:00Z'); // a Monday
+const WEEK_S = WEEK_MIN * 60;
+/**
+ * The modelled time of one request. ponytail: a constant, every request takes 1 s whatever the payload; the
+ * real runtime cap is the undici Agent of http/client.ts (`connections: 2`, proven by
+ * apps/server/test/http/transport.test.ts), so a slower provider queues instead of exceeding it. Measure the
+ * latencies (status.json) and turn this into a per-spec figure if the model ever needs to be tighter.
+ */
+export const LATENCY_MS = 1000;
 
 export type HostBudget = { host: string; peakPerHour: number; perWeek: number };
+
+const hostOf = (url: string) => new URL(url.replace(/\{!?[a-z_]+\}/g, 'x')).hostname;
+
+/**
+ * Seconds into the simulated week (it starts on a Monday) at which each run of a cron starts, read from croner's
+ * parsed pattern. A cron restricted by day of month, month, year, `L`, `W` or an nth weekday (`5#1`, `5L`) can
+ * fall on any weekday in some week, so it is projected onto every day of the week at its time of day (the worst
+ * case); a plain weekday list is read as it is. Every second the pattern allows counts, at its own minute. A cron
+ * that yields no run throws: a spec the model cannot read must not count 0.
+ */
+function runStarts(cron: string): number[] {
+  const p = new CronPattern(cron, 'UTC');
+  // 63 is croner's "every occurrence" mask of a weekday; any other non-zero value is an nth or last one.
+  const nth = Array.from(p.dayOfWeek).some((v) => v !== 0 && v !== 63);
+  const projected =
+    !p.starDOM ||
+    !p.starYear ||
+    p.lastDayOfMonth ||
+    p.lastWeekday ||
+    nth ||
+    p.nearestWeekdays.some(Boolean) ||
+    !p.month.every((x) => x === 1);
+  const out: number[] = [];
+  for (let m = 0; m < WEEK_MIN; m += 1) {
+    const dow = (1 + Math.floor(m / 1440)) % 7;
+    if (!p.minute[m % 60] || !p.hour[Math.floor(m / 60) % 24] || !(projected || p.dayOfWeek[dow])) continue;
+    for (let sec = 0; sec < 60; sec += 1) if (p.second[sec]) out.push(m * 60 + sec);
+  }
+  if (out.length === 0) throw new Error(`budget: cron "${cron}" has no run in the simulated week`);
+  return out;
+}
+
+/** Row j of a run starts j × (latency + space_ms) after the run: rows are sequential, each followed by the pause. */
+const rowStepMs = (spec: Registry['specs'][number]) => LATENCY_MS + (spec.variants?.space_ms ?? 0);
 
 export function requestsPerMinute(registry: Registry): Map<string, Uint32Array> {
   const byHost = new Map<string, Uint32Array>();
   for (const spec of registry.specs) {
     if (spec.cron === null) continue;
-    const host = new URL(spec.request.url.replace(/\{!?[a-z_]+\}/g, 'x')).hostname;
+    const host = hostOf(spec.request.url);
     const minutes = byHost.get(host) ?? new Uint32Array(WEEK_MIN);
     byHost.set(host, minutes);
-    const p = new CronPattern(spec.cron, 'UTC');
-    const simple =
-      p.second[0] === 1 && p.second.indexOf(1, 1) < 0 && p.day.every((d) => d === 1) && p.month.every((m) => m === 1);
-    if (simple) {
-      // Minute, hour and weekday fields only (all of capture.yaml): read croner's parsed flags per minute.
-      for (let m = 0; m < WEEK_MIN; m += 1) {
-        const dow = (1 + Math.floor(m / 1440)) % 7; // START is a Monday
-        if (p.minute[m % 60] && p.hour[Math.floor(m / 60) % 24] && p.dayOfWeek[dow]) {
-          minutes[m] = (minutes[m] as number) + spec.rows.length;
+    const step = rowStepMs(spec);
+    for (const start of runStarts(spec.cron)) {
+      // A run that spills past Sunday 23:59 continues on Monday, as the sliding window wraps.
+      for (let j = 0; j < spec.rows.length; j += 1) {
+        const m = Math.floor((start * 1000 + j * step) / 60_000) % WEEK_MIN;
+        minutes[m] = (minutes[m] as number) + 1;
+      }
+    }
+  }
+  return byHost;
+}
+
+/**
+ * Requests in flight per second of the simulated week, per host (same runs as requestsPerMinute): rows are
+ * sequential within a run, each LATENCY_MS long, space_ms apart. Two runs of one host can overlap, and the
+ * transport allows two connections per origin, so the peak must stay at 2.
+ */
+export function inFlightPerSecond(registry: Registry): Map<string, Uint8Array> {
+  const byHost = new Map<string, Uint8Array>();
+  for (const spec of registry.specs) {
+    if (spec.cron === null) continue;
+    const host = hostOf(spec.request.url);
+    const seconds = byHost.get(host) ?? new Uint8Array(WEEK_S);
+    byHost.set(host, seconds);
+    const step = rowStepMs(spec);
+    for (const start of runStarts(spec.cron)) {
+      for (let j = 0; j < spec.rows.length; j += 1) {
+        const from = start * 1000 + j * step;
+        for (let sec = Math.floor(from / 1000); sec <= Math.floor((from + LATENCY_MS - 1) / 1000); sec += 1) {
+          seconds[sec % WEEK_S] = (seconds[sec % WEEK_S] as number) + 1;
         }
       }
-      continue;
     }
-    const job = new Cron(spec.cron, { timezone: 'UTC', paused: true });
-    let t: Date | null = new Date(START - 1000);
-    for (;;) {
-      t = job.nextRun(t);
-      if (t === null) break;
-      const m = Math.floor((t.getTime() - START) / 60_000);
-      if (m >= WEEK_MIN) break;
-      minutes[m] = (minutes[m] as number) + spec.rows.length;
-    }
-    job.stop();
   }
   return byHost;
 }

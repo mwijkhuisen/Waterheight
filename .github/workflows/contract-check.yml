@@ -53,7 +53,7 @@ jobs:
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      - name: Eleven live requests through the loader's parse; the report is the job output
+      - name: Twelve live requests through the loader's parse; the report is the job output
         id: run
         env:
           RWS_DOMAIN: ${{ vars.RWS_DOMAIN }}

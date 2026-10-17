@@ -537,14 +537,31 @@ export type Counts = {
 const COLUMNS = ['locations', 'h', 'q', 'forecast', 'astronomical', 'hwlwMeasured', 'hwlwAstronomical'] as const;
 export type Inventory = { counts: Record<WaterType, Counts>; structure: [string, Reason][] };
 
+type Kind = 'forecast' | 'astronomical' | 'hwlwMeasured' | 'hwlwAstronomical';
+/** One catalogue (location, AquoMetadata) link of a live location: what P16a's tide seed is made of. */
+export type Combo = { id: number; hoedanigheid: string; groepering: string; method: string };
+/** A live location: its row, its live WFS series (`quantity/Hoedanigheid` -> methods) and its catalogue links. */
+export type Location = {
+  row: Row;
+  /** The distinct live WFS series: quantity, Hoedanigheid as the WFS states it, and the methods it carries. */
+  series: { quantity: 'H' | 'Q'; hoedanigheid: string; methods: string[] }[];
+  /** The WATHTE (forecast: or Q) catalogue links by kind, one entry per distinct AquoMetadata. */
+  combos: Record<Kind, Combo[]>;
+};
+
 /**
- * Counts per water type. H and Q: the distinct live WFS series (`CODE/GROOTHEID/HOEDANIGHEID/METHOD`, so a
- * duplicate feature counts once). The catalogue counts are distinct (location, AquoMetadata) links of the live
- * locations: forecast = WATHTE or Q `verwachting`; astronomical = WATHTE `astronomisch` without a grouping;
- * high and low water = WATHTE under a GETET* grouping, by its GROUPINGS kind.
+ * The live locations with their series and catalogue combinations (what `inventory()` counts, and what the
+ * P16a seeds list). H and Q: the distinct live WFS series (`CODE/GROOTHEID/HOEDANIGHEID/METHOD`, so a duplicate
+ * feature counts once). The catalogue links are distinct (location, AquoMetadata) pairs of the live locations:
+ * forecast = WATHTE or Q `verwachting`; astronomical = WATHTE `astronomisch` without a grouping; high and low
+ * water = WATHTE under a GETET* grouping, by its GROUPINGS kind. Sorted by code.
  */
-export function inventory(catalogue: unknown, wfs: unknown, table: Readonly<Record<string, Row>> = TABLE): Inventory {
-  const live = new Map<string, { h: Set<string>; q: Set<string> }>();
+export function locations(
+  catalogue: unknown,
+  wfs: unknown,
+  table: Readonly<Record<string, Row>> = TABLE,
+): Map<string, Location> {
+  const live = new Map<string, Map<string, Set<string>>>();
   for (const [i, raw] of arr(obj(wfs, 'wfs').features, 'wfs.features').entries()) {
     const at = `features[${i}]`;
     const p = obj(obj(raw, at).properties, `${at}.properties`);
@@ -552,9 +569,9 @@ export function inventory(catalogue: unknown, wfs: unknown, table: Readonly<Reco
     const c = prop('CODE');
     const g = prop('GROOTHEIDCODE');
     if (g !== 'WATHTE' && g !== 'Q') throw new Error(`${at}: unexpected GROOTHEIDCODE ${g}`);
-    const key = `${c}/${g}/${prop('HOEDANIGHEIDCODE')}/${prop('WAARDEBEPALINGSMETHODECODE')}`;
-    const l = live.get(c) ?? { h: new Set<string>(), q: new Set<string>() };
-    (g === 'WATHTE' ? l.h : l.q).add(key);
+    const l = live.get(c) ?? new Map<string, Set<string>>();
+    const key = `${g}/${prop('HOEDANIGHEIDCODE')}`;
+    l.set(key, (l.get(key) ?? new Set<string>()).add(prop('WAARDEBEPALINGSMETHODECODE')));
     live.set(c, l);
   }
 
@@ -575,8 +592,7 @@ export function inventory(catalogue: unknown, wfs: unknown, table: Readonly<Reco
     const l = obj(raw, `LocatieLijst[${i}]`);
     codes.set(int(l.Locatie_MessageID, `LocatieLijst[${i}].Locatie_MessageID`), str(l.Code, `LocatieLijst[${i}].Code`));
   }
-  type Kind = 'forecast' | 'astronomical' | 'hwlwMeasured' | 'hwlwAstronomical';
-  const kinds = new Map<number, Kind>();
+  const kinds = new Map<number, { kind: Kind; combo: Combo }>();
   for (const [i, raw] of arr(doc.AquoMetadataLijst, 'catalogue.AquoMetadataLijst').entries()) {
     const at = `AquoMetadataLijst[${i}]`;
     const a = obj(raw, at);
@@ -592,20 +608,49 @@ export function inventory(catalogue: unknown, wfs: unknown, table: Readonly<Reco
       if (k !== null && g === 'WATHTE') kind = k === 'measured' ? 'hwlwMeasured' : 'hwlwAstronomical';
     } else if (grouping === '' && proces === 'verwachting' && (g === 'WATHTE' || g === 'Q')) kind = 'forecast';
     else if (grouping === '' && proces === 'astronomisch' && g === 'WATHTE') kind = 'astronomical';
-    if (kind !== undefined) kinds.set(id, kind);
+    if (kind !== undefined)
+      kinds.set(id, {
+        kind,
+        combo: {
+          id,
+          hoedanigheid: code(a.Hoedanigheid, `${at}.Hoedanigheid`),
+          groepering: grouping,
+          method: code(a.WaardeBepalingsMethode, `${at}.WaardeBepalingsMethode`),
+        },
+      });
   }
-  const links = new Map<string, Set<string>>();
+
+  const out = new Map<string, Location>();
+  for (const c of [...live.keys()].sort()) {
+    const series = [...(live.get(c) as Map<string, Set<string>>)].map(([key, methods]) => {
+      const [g, hoedanigheid] = key.split('/') as [string, string];
+      return { quantity: g === 'WATHTE' ? ('H' as const) : ('Q' as const), hoedanigheid, methods: [...methods].sort() };
+    });
+    out.set(c, {
+      row: rows.get(c) as Row,
+      series,
+      combos: { forecast: [], astronomical: [], hwlwMeasured: [], hwlwAstronomical: [] },
+    });
+  }
+  const seen = new Set<string>();
   for (const [i, raw] of arr(doc.AquoMetadataLocatieLijst, 'catalogue.AquoMetadataLocatieLijst').entries()) {
     const at = `AquoMetadataLocatieLijst[${i}]`;
     const l = obj(raw, at);
     const a = int(l.AquoMetaData_MessageID, `${at}.AquoMetaData_MessageID`);
     const c = codes.get(int(l.Locatie_MessageID, `${at}.Locatie_MessageID`));
-    const kind = kinds.get(a);
-    if (c === undefined || kind === undefined || !live.has(c)) continue;
-    const key = `${c}/${kind}`;
-    links.set(key, (links.get(key) ?? new Set()).add(String(a)));
+    const k = kinds.get(a);
+    const loc = c === undefined ? undefined : out.get(c);
+    if (c === undefined || k === undefined || loc === undefined || seen.has(`${c}/${a}`)) continue;
+    seen.add(`${c}/${a}`);
+    loc.combos[k.kind].push(k.combo);
   }
+  for (const loc of out.values())
+    for (const k of Object.keys(loc.combos) as Kind[]) loc.combos[k].sort((x, y) => x.id - y.id);
+  return out;
+}
 
+/** Counts per water type, from `locations()`. */
+export function inventory(catalogue: unknown, wfs: unknown, table: Readonly<Record<string, Row>> = TABLE): Inventory {
   const zero = (): Counts => ({
     locations: 0,
     h: 0,
@@ -617,15 +662,13 @@ export function inventory(catalogue: unknown, wfs: unknown, table: Readonly<Reco
   });
   const counts = Object.fromEntries(Object.keys(TYPES).map((t) => [t, zero()])) as Record<WaterType, Counts>;
   const structure: [string, Reason][] = [];
-  for (const [c, l] of live) {
-    const row = rows.get(c) as Row;
-    const n = counts[row.type];
+  for (const [c, l] of locations(catalogue, wfs, table)) {
+    const n = counts[l.row.type];
     n.locations += 1;
-    n.h += l.h.size;
-    n.q += l.q.size;
+    for (const s of l.series) n[s.quantity === 'H' ? 'h' : 'q'] += s.methods.length;
     for (const k of ['forecast', 'astronomical', 'hwlwMeasured', 'hwlwAstronomical'] as const)
-      n[k] += links.get(`${c}/${k}`)?.size ?? 0;
-    if (row.reason !== undefined) structure.push([c, row.reason]);
+      n[k] += l.combos[k].length;
+    if (l.row.reason !== undefined) structure.push([c, l.row.reason]);
   }
   structure.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return { counts, structure };

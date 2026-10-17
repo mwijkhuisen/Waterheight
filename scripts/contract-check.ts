@@ -1,5 +1,6 @@
-// Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a, P5b, P8a, P8b): one payload each of DE-1, NL-1
-// (observations and, since P8a, forecasts), NL-2, FR-1, CH-1, CH-2, DE-7, LU-1 and, since P8b, the CH-4 forecast
+// Nightly live contract check (issue #17; A§7.1; PHASES P2b, P5a, P5b, P8a, P8b, P16a): one payload each of DE-1, NL-1
+// (observations, since P8a forecasts and, since P16a, the astronomical tide of Vlissingen, judged by the capture
+// validity check only until P16b gives it a loader), NL-2, FR-1, CH-1, CH-2, DE-7, LU-1 and, since P8b, the CH-4 forecast
 // figure of one station and the FR-4 national list is fetched live and run through the exact code the loader uses
 // (validity, strict parse, normalise, and for forecasts the run checks). A provider
 // that changed its format or moved its host (the RWS CTD switch on 2026-11-05) turns the night red;
@@ -8,7 +9,7 @@
 //   RWS_DOMAIN=… RWS_CONTACT_EMAIL=… node scripts/contract-check.ts [--out <file>]
 //
 // Targets come only from registry/capture.yaml (invariant 1): no argument names a URL or a host.
-// Eleven requests at most (one per spec, the first row of each unless `ROW` names another registry row; FR-1 only
+// Twelve requests at most (one per spec, the first row of each unless `ROW` names another registry row; FR-1 only
 // its first page, never `next`; FR-4 only its national list, never a station), one after the other, through the
 // SSRF-guarded client with the contact User-Agent and no secret header (no RWS API key ever leaves CI). It does
 // not refuse under CI. BAFU asks LINDAS users for
@@ -47,6 +48,7 @@ export const SPECS = [
   'lu-1-csv',
   'ch-4-forecast',
   'fr-4',
+  'nl-1-astro',
 ] as const;
 
 export type Report = { at: string; results: { spec: string; code: string }[] };
@@ -83,6 +85,8 @@ type Stations = ReturnType<typeof readRegistry>['stations'];
 export const ROW: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   'nl-1-fc-1h': { code: 'lobith.bovenrijn.tolkamer', quantity: 'Q' },
   'ch-4-forecast': { id: '2091' },
+  // P16a: Vlissingen NAP, the row of the recorded fixture (57,600 values; a full-size body of 17 MB).
+  'nl-1-astro': { code: 'vlissingen', hoedanigheid: 'NAP' },
 };
 
 /**
@@ -90,6 +94,21 @@ export const ROW: Readonly<Record<string, Readonly<Record<string, string>>>> = {
  * payload that parses and yields no run is still drift. (FR-4's probe is the national list, which holds no run.)
  */
 const RUNS_EXPECTED: ReadonlySet<string> = new Set(['ch-4-forecast']);
+
+/**
+ * Specs with a capture spec but no loader entry yet: fetched through the same client and judged by the capture
+ * validity check only (a 200 with WaarnemingenLijst >= 1, or a 204, is `ok`). P16b gives nl-1-astro its loader and
+ * moves it to the loader path below; delete this set then.
+ */
+export const CAPTURE_ONLY: ReadonlySet<string> = new Set(['nl-1-astro']);
+
+/**
+ * Params that replace the spec's own for the probe's request only (the registry is unchanged). The nightly probe
+ * of nl-1-astro asks 2 days ahead, not the 400 of the real run: the same shape, a body 17 MB lighter.
+ */
+export const PROBE_PARAMS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'nl-1-astro': { ahead: 'P2D' },
+};
 
 /** The one code of a spec: `ok` or what went wrong. Throws only on a bug or a registry that does not load. */
 async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRegistry>, stations: Stations) {
@@ -100,10 +119,11 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
   if (spec === undefined || row === undefined) return 'no_spec';
   const adapter = Object.hasOwn(LOAD_ADAPTERS, spec.source) ? LOAD_ADAPTERS[spec.source] : undefined;
   const loader = adapter !== undefined && Object.hasOwn(adapter.specs, id) ? adapter.specs[id] : undefined;
-  // No loader: the list above is wrong. Nothing is fetched for it.
-  if (loader === undefined) return 'no_adapter';
+  // No loader: the list above is wrong. Nothing is fetched for it (capture-only specs aside).
+  if (loader === undefined && !CAPTURE_ONLY.has(id)) return 'no_adapter';
 
-  const req = requestFor(spec, row, deps.now);
+  const probe = Object.hasOwn(PROBE_PARAMS, id) ? { ...spec, params: { ...spec.params, ...PROBE_PARAMS[id] } } : spec;
+  const req = requestFor(probe, row, deps.now);
   const r = await deps.fetch(spec.source, req, {
     maxBytes: spec.max_bytes,
     timeoutMs: spec.timeout === 'metadata' ? METADATA_TIMEOUT_MS : TOTAL_TIMEOUT_MS,
@@ -116,6 +136,7 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
   if (!v.ok) return v.reason === 'status' ? `http_${status}` : coded('invalid', v.reason, 'invalid');
   // Valid and empty is the RWS 204 "no data" (allow_status): nothing to parse.
   if (body.length === 0) return 'ok';
+  if (loader === undefined) return 'ok';
   if (body.length > loader.maxBytes) return 'too_large';
 
   const registry = declarationsOf(stations, spec.source);

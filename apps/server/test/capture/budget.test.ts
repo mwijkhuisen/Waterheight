@@ -4,8 +4,8 @@ import { parse } from 'yaml';
 import { kiwisUrlProblems, MAX_IDS, MAX_VALUES, MIN_STEP_MS } from '../../src/adapters/_shared/kiwis/request.ts';
 import { adapter as be3 } from '../../src/adapters/be-3/capture.ts';
 import { loadBackfill } from '../../src/backfill/spec.ts';
-import { budgets, requestsPerMinute } from '../../src/capture/budget.ts';
-import { baseRequest, variantKey } from '../../src/capture/specs.ts';
+import { budgets, inFlightPerSecond, LATENCY_MS, requestsPerMinute } from '../../src/capture/budget.ts';
+import { baseRequest, type Registry, variantKey } from '../../src/capture/specs.ts';
 import type { Row } from '../../src/http/types.ts';
 import { fixture, registry, spec } from './helpers.ts';
 
@@ -32,13 +32,79 @@ function composeEnv(service: string): Record<string, string> {
 }
 
 describe('request budgets', () => {
-  it('RWS: ≤ 400 requests in any 60 minutes (ddapi20-waterwebservices.rijkswaterstaat.nl)', () => {
-    const rws = peak('ddapi20-waterwebservices.rijkswaterstaat.nl');
+  const RWS = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
+  // Roadmap 1's NL-1 specs: their rows are untouched by P16a, so they keep the old cap on their own.
+  const ROADMAP_1 = [
+    'nl-1-obs-key',
+    'nl-1-obs-other',
+    'nl-1-obs-twin',
+    'nl-1-fc-1h',
+    'nl-1-fc-3h-0',
+    'nl-1-fc-3h-1',
+    'nl-1-fc-3h-2',
+    'nl-1-catalogue',
+  ];
+  const TIDE = ['nl-1-hwlw', 'nl-1-astro', 'nl-1-hwlw-astro'];
+  const only = (ids: string[]): Registry => ({ ...registry, specs: registry.specs.filter((s) => ids.includes(s.id)) });
+
+  it('RWS: ≤ 1,000 requests in any 60 minutes (D25; ddapi20-waterwebservices.rijkswaterstaat.nl)', () => {
+    const rws = peak(RWS);
     expect(rws).toBeGreaterThan(300); // the whole tiered set is really counted
+    expect(rws).toBeLessThanOrEqual(1000);
+  });
+
+  it('RWS: roadmap 1 alone stays ≤ 400 in any 60 minutes, so cutting the P16a specs back restores it', () => {
+    const rws = budgets(only(ROADMAP_1)).find((b) => b.host === RWS)?.peakPerHour ?? 0;
+    expect(rws).toBeGreaterThan(300);
     expect(rws).toBeLessThanOrEqual(400);
   });
 
-  it('RWS backfill (P14a): ≤ 1 request/s, ≤ 3600/h, only 20:00–06:00 UTC, on top of the live ≤ 400/h', () => {
+  it('RWS: at most 2 requests in flight in any second of the week (the transport opens 2 connections per origin)', () => {
+    // The runtime guarantee is the undici Agent of http/client.ts (connections: 2, pipelining: 1), proven by
+    // apps/server/test/http/transport.test.ts ("opens at most two connections per origin"); a third request would
+    // queue there, never run. This is the schedule's own claim: the model never needs that queue.
+    const inFlight = inFlightPerSecond(registry).get(RWS) as Uint8Array;
+    expect(inFlight.reduce((a, b) => Math.max(a, b), 0)).toBeLessThanOrEqual(2);
+    expect(inFlight.some((n) => n === 2)).toBe(true); // key and twin start together: the model really overlaps runs
+  });
+
+  it('RWS: the three tide runs (daily, monthly, monthly), each projected onto every day, never overlap each other', () => {
+    const tide = only(TIDE);
+    expect(tide.specs).toHaveLength(3);
+    expect((inFlightPerSecond(tide).get(RWS) as Uint8Array).reduce((a, b) => Math.max(a, b), 0)).toBe(1);
+    // Spread by space_ms 179000: a 180 s period, at most 20 requests an hour each (they never overlap, so also in all).
+    expect(budgets(tide).find((b) => b.host === RWS)?.peakPerHour).toBeLessThanOrEqual(20);
+    for (const id of TIDE) expect(spec(id).variants?.space_ms, id).toBe(179000);
+  });
+
+  it('RWS: the first start, a catch-up or hourly retries add at most the three tide specs at once, still ≤ 1,000', () => {
+    // On first start a daily or monthly spec runs once at once (scheduler.ts `later`), a missed tick is caught up and a
+    // failed run retries hourly: the three tide runs can then all be live in the same hour, whatever their crons.
+    // Worst case = the busiest 60 minutes of every other RWS spec plus the hourly maximum of each tide spec.
+    const rest = registry.specs.filter((s) => !TIDE.includes(s.id));
+    const others = budgets({ ...registry, specs: rest }).find((b) => b.host === RWS)?.peakPerHour ?? 0;
+    const tideMax = TIDE.map((id) => budgets(only([id])).find((b) => b.host === RWS)?.peakPerHour ?? 0);
+    expect(Math.max(...tideMax)).toBeLessThanOrEqual(20);
+    expect(others + tideMax.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1000);
+  });
+
+  it('RWS: every spec on the host is scheduled by a cron the model reads, and none is seed-only or seeded', () => {
+    // A seed-only spec (cron null) or one with a seed would escape requestsPerMinute: none exists on this host.
+    const onHost = registry.specs.filter((s) => new URL(s.request.url).hostname === RWS);
+    expect(onHost.length).toBeGreaterThan(10);
+    for (const s of onHost) {
+      expect(s.cron, s.id).not.toBeNull();
+      expect(s.seed, s.id).toBeUndefined();
+    }
+    // The model reads every one of them: each counts at least one request in the simulated week.
+    const total = (id: string) => {
+      const r = only([id]);
+      return (requestsPerMinute(r).get(RWS) ?? new Uint32Array()).reduce((a, b) => a + b, 0);
+    };
+    for (const s of onHost) expect(total(s.id), s.id).toBeGreaterThanOrEqual(s.rows.length);
+  });
+
+  it('RWS backfill (P14a): ≤ 1 request/s, ≤ 3600/h, only 20:00–06:00 UTC, on top of the live ≤ 1,000/h', () => {
     const rws = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
     const limits = loadBackfill(registry.hosts).hosts[rws];
     expect(limits).toBeDefined();
@@ -52,8 +118,8 @@ describe('request budgets', () => {
     expect(minutes(from)).toBeGreaterThan(minutes(to));
     expect(minutes(from)).toBeGreaterThanOrEqual(20 * 60);
     expect(minutes(to)).toBeLessThanOrEqual(6 * 60);
-    // Live capture keeps its own budget in the same hour.
-    expect(peak(rws)).toBeLessThanOrEqual(400);
+    // Live capture keeps its own budget in the same hour (P16a: 1,000 with the roadmap-2 specs, D25).
+    expect(peak(rws)).toBeLessThanOrEqual(1000);
   });
 
   it('CH-1 (LINDAS) never runs more often than every 10 min', () => {
@@ -297,5 +363,75 @@ describe('request budgets', () => {
     expect(owners).toEqual(registered.map(([id]) => id).sort());
     expect(owners).toContain('DE-3');
     for (const id of owners) expect(registry.sources.get(id)?.private_basis, id).not.toBeNull();
+  });
+});
+
+// The counting rules on a tiny registry (P16a): rows are sequential, so row j of a run falls in minute
+// start + floor(j × (latency + space_ms) / 60 000), and a day-of-month cron counts on every day of the week.
+describe('budget model', () => {
+  const tiny = (cron: string, rows: number, spaceMs?: number): Registry =>
+    ({
+      specs: [
+        {
+          cron,
+          request: { url: 'https://example.invalid/x' },
+          rows: Array.from({ length: rows }, () => ({})),
+          ...(spaceMs === undefined ? {} : { variants: { space_ms: spaceMs } }),
+        },
+      ],
+    }) as unknown as Registry;
+  const perMinute = (r: Registry) => requestsPerMinute(r).get('example.invalid') as Uint32Array;
+
+  it('(a) counts row j at minute start + floor(j × (latency + space_ms) / 60 000)', () => {
+    expect(LATENCY_MS).toBe(1000);
+    const m = perMinute(tiny('5 0 * * *', 130, 29_000)); // step 30 s: two rows a minute
+    // Run starts 00:05 on each of 7 days; rows 0..129 reach minute 5 + 64.
+    expect([m[5], m[6], m[69], m[70]]).toEqual([2, 2, 2, 0]);
+    expect(m.reduce((a, b) => a + b, 0)).toBe(7 * 130);
+    // No spacing: 62 sequential rows of 1 s spill into the next minute.
+    const spill = perMinute(tiny('5 0 * * *', 62));
+    expect([spill[5], spill[6], spill[7]]).toEqual([60, 2, 0]);
+  });
+
+  it('(a) the sliding hour sees a spaced run spread out', () => {
+    const peakOf = (r: Registry) => budgets(r)[0]?.peakPerHour;
+    expect(peakOf(tiny('0 1 * * *', 80, 0))).toBe(80);
+    expect(peakOf(tiny('0 1 * * *', 80, 119_000))).toBe(30); // one request every 2 minutes
+  });
+
+  it('(b) projects a day-of-month cron onto every day of the simulated week', () => {
+    const m = perMinute(tiny('0 4 1 * *', 3));
+    expect(m.reduce((a, b) => a + b, 0)).toBe(7 * 3);
+    for (let d = 0; d < 7; d += 1) expect(m[d * 1440 + 4 * 60]).toBe(3);
+    expect(budgets(tiny('0 4 1 * *', 3))[0]?.perWeek).toBe(21);
+  });
+
+  it('(b) projects L, nth-weekday and a non-zero seconds field onto every day, once per day at that time (CR-1)', () => {
+    // 30 s past 04:00 on the 1st; the last day of the month; the first Friday: none falls in every week, so all
+    // three count on each of the 7 days, at 04:00 (the seconds field counts at its own minute).
+    for (const cron of ['30 0 4 1 * *', '0 4 L * *', '0 4 * * 5#1']) {
+      const m = perMinute(tiny(cron, 1));
+      expect(
+        m.reduce((a, b) => a + b, 0),
+        cron,
+      ).toBe(7);
+      for (let d = 0; d < 7; d += 1) expect(m[d * 1440 + 4 * 60], cron).toBe(1);
+    }
+    // A plain weekday list is not projected: Monday only.
+    expect(perMinute(tiny('0 4 * * MON', 1)).reduce((a, b) => a + b, 0)).toBe(1);
+    // Seconds count as runs: every 20 s is 3 runs in the minute.
+    expect(perMinute(tiny('*/20 0 4 * * *', 1))[4 * 60]).toBe(3);
+  });
+
+  it('(b) a cron the model cannot read throws, it never counts 0', () => {
+    expect(() => requestsPerMinute(tiny('not a cron', 1))).toThrow();
+  });
+
+  it('in flight: sequential rows, space_ms apart, one second each; runs that meet add up', () => {
+    const f = (r: Registry) => inFlightPerSecond(r).get('example.invalid') as Uint8Array;
+    const one = f(tiny('0 0 * * *', 3, 1000)); // starts at 0 s, 2 s, 4 s
+    expect([0, 1, 2, 3, 4, 5].map((i) => one[i])).toEqual([1, 0, 1, 0, 1, 0]);
+    const two = { specs: [...tiny('0 0 * * *', 3).specs, ...tiny('0 0 * * *', 1).specs] } as Registry;
+    expect([0, 1, 2, 3].map((i) => f(two)[i])).toEqual([2, 1, 1, 0]);
   });
 });
