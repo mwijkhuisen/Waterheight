@@ -24,7 +24,7 @@ import {
   WITHHELD_CANARY,
   WITHHELD_KEYS,
 } from './seed.ts';
-import { createTestDb, type TestDb } from './testdb.ts';
+import { createTestDb, sqlState, type TestDb } from './testdb.ts';
 
 // The audience filter at every join (issue #17; invariants 8 and 11). Every
 // query below runs as a real reader login, through the view names of audience.ts.
@@ -37,9 +37,38 @@ let ids: Record<string, number>;
 const PUB = VIEWS.public;
 const OWN = VIEWS.owner;
 
+/**
+ * P16b: tide rows on the fixture's series (here, not in seed.ts, which other tests share): a public row; the owner
+ * canary on its owner series and owner rows on an owner-only and a narrowed series; the withheld canary on every
+ * series that must stay hidden; and two rows 40 days old, under a 30-day window with and without history export.
+ */
+async function seedTide(admin: pg.Client, ids: Record<string, number>): Promise<void> {
+  const rows: [string, string, number, string | null, string][] = [
+    ['public', 'astro', 300, null, "now() + interval '1 hour'"],
+    ['ownerCanary', 'astro', OWNER_CANARY, null, "now() + interval '1 hour'"],
+    ['onlyOwner', 'extreme', 301, 'high', "now() - interval '1 hour'"],
+    ['narrowedOwner', 'extreme_astro', 302, 'low', "now() + interval '1 hour'"],
+    ...WITHHELD_KEYS.map((k): [string, string, number, string | null, string] => [
+      k,
+      'astro',
+      WITHHELD_CANARY,
+      null,
+      "now() + interval '1 hour'",
+    ]),
+    ['window', 'astro', 303, null, "now() - interval '40 days'"],
+    ['windowExport', 'astro', 304, null, "now() - interval '40 days'"],
+  ];
+  for (const [key, kind, value, hilo, at] of rows)
+    await admin.query(
+      `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id) VALUES ($1, $2, ${at}, $3, $4, 1)`,
+      [ids[key], kind, value, hilo],
+    );
+}
+
 beforeAll(async () => {
   t = await createTestDb();
   ids = await seedAudienceFixture(t.admin);
+  await seedTide(t.admin, ids);
   api = await t.connectAs('rws_api');
   owner = await t.connectAs('rws_owner_api');
 });
@@ -441,6 +470,48 @@ describe('dependent rows are filtered by their own source AND their parent', () 
   });
 });
 
+describe('the tide view pair (P16b)', () => {
+  it('keeps the visible primary series of its family, under the history rule', async () => {
+    expect(await column(api, `SELECT series_id FROM ${PUB.tide}`)).toEqual([ids.public, ids.windowExport].sort());
+    expect(await column(owner, `SELECT series_id FROM ${OWN.tide}`)).toEqual(
+      [ids.public, ids.windowExport, ids.ownerCanary, ids.onlyOwner, ids.narrowedOwner].sort(),
+    );
+  });
+
+  it('shows the owner canary in the owner view only, and the withheld canary in neither', async () => {
+    const text = async (client: pg.Client, view: string) =>
+      (await client.query<{ j: string }>(`SELECT row_to_json(v)::text AS j FROM ${view} v`)).rows
+        .map((r) => r.j)
+        .join('\n');
+    const pub = await text(api, PUB.tide);
+    const own = await text(owner, OWN.tide);
+    expect(pub).toContain('"value":300');
+    expect(found(pub, NEVER_PUBLIC)).toEqual([]);
+    expect(own).toContain(OWNER_CANARY_REAL);
+    expect(found(own, NEVER_OWNER)).toEqual([]);
+  });
+
+  it('the table is read by no reader role, and each view by its own family only', async () => {
+    for (const client of [api, owner]) expect(await sqlState(client, 'SELECT 1 FROM tide LIMIT 1')).toBe('42501');
+    expect(await sqlState(api, `SELECT 1 FROM ${OWN.tide} LIMIT 1`)).toBe('42501');
+    expect(await sqlState(owner, `SELECT 1 FROM ${PUB.tide} LIMIT 1`)).toBe('42501');
+  });
+
+  it('a tide view that lost its filter would be caught by the sweep (mutation check)', async () => {
+    await t.admin.query(`
+      CREATE SCHEMA mutant;
+      CREATE VIEW mutant.tide_without_filter AS SELECT d.series_id, d.kind, d.ts, d.value, d.hilo FROM tide d;`);
+    try {
+      expect(found(await sweep(t.admin, ['mutant.tide_without_filter']), NEVER_PUBLIC)).toEqual([
+        CANARIES.owner.real,
+        CANARIES.withheld.real,
+      ]);
+    } finally {
+      await t.admin.query('DROP SCHEMA mutant CASCADE');
+    }
+  });
+});
+
 describe('the canaries', () => {
   it('are grepped in the spelling PostgreSQL prints for a stored `real`, and in their decimal spelling', async () => {
     for (const canary of Object.values(CANARIES)) {
@@ -542,6 +613,7 @@ describe('the withheld canary on every series that must stay hidden (invariant 8
         family.reference,
         family.forecastRun,
         family.api.forecastRun,
+        family.tide,
       ];
       for (const view of bySeries)
         expect(
@@ -621,7 +693,7 @@ describe('the families are one template', () => {
     const { api: ownApi, ...ownDisplay } = OWN;
     for (const k of Object.keys(pubDisplay) as (keyof typeof pubDisplay)[]) pairs.push([pubDisplay[k], ownDisplay[k]]);
     for (const k of Object.keys(pubApi) as (keyof typeof pubApi)[]) pairs.push([pubApi[k], ownApi[k]]);
-    expect(pairs).toHaveLength(26);
+    expect(pairs).toHaveLength(27);
     for (const [pub, own] of pairs) {
       const d = await def(pub);
       // The meta pair holds the two display-window instants and no audience data, so it has no filter; the dirty and

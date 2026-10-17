@@ -1371,6 +1371,39 @@ CREATE VIEW public.own_station WITH (security_barrier='true') AS
 
 
 --
+-- Name: tide; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tide (
+    series_id integer NOT NULL,
+    kind text NOT NULL,
+    ts timestamp with time zone NOT NULL,
+    value real NOT NULL,
+    hilo text,
+    batch_id bigint NOT NULL,
+    CONSTRAINT tide_check CHECK (((kind = 'astro'::text) = (hilo IS NULL))),
+    CONSTRAINT tide_hilo_check CHECK ((hilo = ANY (ARRAY['high'::text, 'low'::text]))),
+    CONSTRAINT tide_kind_check CHECK ((kind = ANY (ARRAY['astro'::text, 'extreme'::text, 'extreme_astro'::text]))),
+    CONSTRAINT tide_value_check CHECK (((value <> 'NaN'::real) AND (abs(value) <> 'Infinity'::real)))
+);
+
+
+--
+-- Name: own_tide; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.own_tide WITH (security_barrier='true') AS
+ SELECT d.series_id,
+    d.kind,
+    d.ts,
+    d.value,
+    d.hilo
+   FROM (public.tide d
+     JOIN public.series_eff e ON ((e.series_id = d.series_id)))
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (d.ts >= (statement_timestamp() - e.history_window))));
+
+
+--
 -- Name: twin; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1955,6 +1988,21 @@ CREATE VIEW public.pub_station WITH (security_barrier='true') AS
 
 
 --
+-- Name: pub_tide; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.pub_tide WITH (security_barrier='true') AS
+ SELECT d.series_id,
+    d.kind,
+    d.ts,
+    d.value,
+    d.hilo
+   FROM (public.tide d
+     JOIN public.series_eff e ON ((e.series_id = d.series_id)))
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND (e.lic_history_export OR (d.ts >= (statement_timestamp() - e.history_window))));
+
+
+--
 -- Name: pub_twin_check; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -2365,6 +2413,14 @@ ALTER TABLE ONLY public.station
 
 
 --
+-- Name: tide tide_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tide
+    ADD CONSTRAINT tide_pkey PRIMARY KEY (series_id, kind, ts);
+
+
+--
 -- Name: twin_check twin_check_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2741,6 +2797,14 @@ ALTER TABLE ONLY public.station
 
 
 --
+-- Name: tide tide_series_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tide
+    ADD CONSTRAINT tide_series_id_fkey FOREIGN KEY (series_id) REFERENCES public.series(id);
+
+
+--
 -- Name: twin_check twin_check_twin_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2804,4 +2868,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261110000001'),
     ('20261110000002'),
     ('20261111000001'),
-    ('20261112000001');
+    ('20261112000001'),
+    ('20261113000001'),
+    ('20261113000002');
