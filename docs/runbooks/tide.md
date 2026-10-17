@@ -19,9 +19,9 @@ All specs are source NL-1, host `ddapi20-waterwebservices.rijkswaterstaat.nl`, `
 | `nl-1-obs-slow` | 207 | `53 * * * *` | lakes and canals, H and Q, window PT6H | 2 MiB | obs |
 | `nl-1-hwlw` | 83 | `30 0 0 * * *` (00:00:30 to 04:06:31) | measured high and low water, `Groepering` `GETETM2` (`GETETMSL2` offshore), window P3D | 2 MiB | obs |
 | `nl-1-astro` | 79 | `30 0 20 1 * *` (20:00:30 to 23:54:30 on the 1st) | astronomical tide, `ProcesType` `astronomisch`, method `other:F012`, from now to now + P400D, `timeout: metadata` (120 s) | 25 MiB | forever |
-| `nl-1-hwlw-astro` | 79 | `30 30 4 2 * *` (04:30:30 to 08:24:30 on the 2nd) | astronomical high and low water, `GETETBRKD2` (`GETETBRKDMSL2` offshore), P400D | 2 MiB | forever |
+| `nl-1-hwlw-astro` | 158 (79 locations × 2) | `30 30 4 2 * *` (04:30:30 to about 12:24:30 on the 2nd) | per location first RWS's own high/low label series (`Typering` `GETETTPE`, no `Hoedanigheid`), 180 s later the astronomical high and low water heights, `GETETBRKD2` (`GETETBRKDMSL2` offshore), P400D | 2 MiB | forever |
 
-The three tide specs space their requests with `space_ms: 179000` (a 180 s period, at most 20 requests an hour each) and carry a seconds field in the cron, so that no spaced request meets the 10-minute NL-1 starts; they run at different times and never overlap each other. A first start, a catch-up or a retry can run all three at once; that worst case (the busiest hour of every other RWS spec, 926, plus 3 × 20) is 986 and is tested. Together all NL-1 specs peak at 946 requests in any 60 minutes (limit 1,000); roadmap 1's specs alone are 373 (limit 400). `node apps/server/dist/main.js capture --dry-run` prints the figure.
+The three tide specs space their requests with `space_ms: 179000` (a 180 s period, at most 20 requests an hour each) and carry a seconds field in the cron, so that no spaced request meets the 10-minute NL-1 starts; they run at different times and never overlap each other. A first start, a catch-up or a retry can run all three at once; that worst case (the busiest hour of every other RWS spec, 926, plus 3 × 20) is 986 and is tested. Since #174 `nl-1-hwlw-astro` asks each location twice (79 more requests a month; the run is about 7.9 h at 20 an hour and still clears `nl-1-astro` at 20:00), and no hourly figure changes. Together all NL-1 specs peak at 998 requests in any 60 minutes with the catch-up seeds (live alone 956; limit 1,000); roadmap 1's specs alone are 373 (limit 400). `node apps/server/dist/main.js capture --dry-run` prints the figure.
 
 The seed files are data: `nl-1.csv` has the columns `code,quantity,tier,note,hoedanigheid` (tiers `sea`, `wide`, `slow` are the new ones; the 88 roadmap-1 rows are unchanged), `nl-1-tide.csv` has `code,series,hoedanigheid,groepering,method`. A change of either is a reviewed PR, regenerated against the inventory tests (`test/nl1-seed.test.ts`); structure-internal locations never appear in them.
 
@@ -31,7 +31,7 @@ The astro window is P400D from the moment of the request (the nightly contract c
 
 The 17 MB astro body runs under `timeout: metadata` (120 s), because all specs of the host share one politeness state: a failing or timing-out astro request counts towards the host's circuit breaker (5 consecutive failures) and can delay the tier-1 NL-1 fetches. The hourly retry after a transient failure re-runs only the variants that did not succeed.
 
-Measured sizes (2026-10-17): astro Vlissingen 17,003,443 B raw, 445,693 B at zstd -3 (25 MiB `max_bytes` is 1.54 times the body); 79 locations are about 1.3 GB downloaded a month and about 35 MB a month in the archive, kept forever (about 420 MB a year). hwlw-astro 457,172 B per location.
+Measured sizes (2026-10-17): astro Vlissingen 17,003,443 B raw, 445,693 B at zstd -3 (25 MiB `max_bytes` is 1.54 times the body); 79 locations are about 1.3 GB downloaded a month and about 35 MB a month in the archive, kept forever (about 420 MB a year). hwlw-astro 457,172 B per location; its type series is about the same size (1,546 labels at Vlissingen).
 
 ## 3. Checking that it runs
 
@@ -76,10 +76,22 @@ P16b registers the roadmap-2 stations (`registry/stations/nl-1.yaml`: 429 rows a
 | `nl-1-obs-sea`, `nl-1-obs-wide`, `nl-1-obs-slow` | the NL-1 observation loader | `obs`, with the roadmap-1 series |
 | `nl-1-obs-sea-catchup`, `-wide-catchup`, `-slow-catchup` | `nl1Catchup`: no age limit, rows before the data epoch (2026-10-02) dropped as `before_epoch` | `obs` |
 | `nl-1-astro` | tide loader, kind `astro`, 25 MiB | `tide` (`hilo` null) |
-| `nl-1-hwlw-astro` | tide loader, kind `extreme_astro` | `tide` (`hilo` high or low) |
+| `nl-1-hwlw-astro` | tide loader, kind `extreme_astro`, one dispatch on the first list's `Typering.Code`: a `GETETTPE` payload gives labels, the heights payload gives rows | labels in `tide_label`; heights in `tide` (`hilo` high or low) |
 | `nl-1-hwlw` | tide loader, kind `extreme` | `tide`; the live answer is still 204, so nothing is stored (KG-366) |
 
 The tide values attach to the registered primary measured H series of the same location and datum. Readers see them only through `pub_tide` and `own_tide`.
+
+**Labels of the high and low waters (#174).** The heights payload has no high or low marker. Per location `nl-1-hwlw-astro` therefore fetches RWS's own type series first (`hoogwater`, `laagwater`) and the heights 180 s later. The loader (in one transaction, under the loader lock) labels each `extreme_astro` row like this:
+
+1. RWS's label from `tide_label` wins.
+2. Without one, the label from strict alternation inside the list stays (the fallback).
+3. With neither, the row is not stored (`hwlw_unlabelled`, below).
+
+`tide_label` is read by the loader only: no view, no API, publish or owner role. The type window starts at the run, so there is no replay of earlier lines to restate labels; a type payload that loads after its heights relabels nothing until the next heights fetch (180 s after its type, next month) or a replay (KG-381). So when the hourly retry of the 2nd re-ran a type variant (`<code>/<NAP|MSL>/GETETTPE` failed first, then succeeded: the capture log and `/status/capture.json`), replay the spec for that day once the run has ended; the heights then take RWS's labels, and an agger location whose heights were withheld as `hwlw_unlabelled` is stored:
+
+```bash
+rwsc run --rm --no-deps -T load replay --source NL-1 --spec nl-1-hwlw-astro --from <YYYY-MM-02> --to <YYYY-MM-03>
+```
 
 **The deploy rule (owner, 2026-10-17; KG-377, R-108).** The live NL-1 specs plus the catch-up seeds peak at 998 requests an hour (limit 1,000). A capture restart that fires the three tide specs while a seed runs reaches 1,038, which the owner accepted on these conditions:
 
@@ -92,6 +104,9 @@ The tide values attach to the registered primary measured H series of the same l
 
    (`rwsc` is the compose function of `replay.md` §2. `backfill pause --job <id>` pauses a running job; `resume` starts it again after the catch-up.)
 3. Do not restart `capture` in 00:00 to 05:00 UTC until the catch-up seed report says done (below).
+4. (#174) Never deploy or restart `capture` on the 2nd of a month between 04:30 and 12:30 UTC. The `nl-1-hwlw-astro` run of about 7.9 h has no resume: the start-up catch-up of the scheduler (`startRecorder` in `capture/scheduler.ts`) fires only for a tick that is later than the spec's `last_attempt`, and the run's own start set that, so a run cut short is not repeated until the next month. The hourly retry after a transient failure re-runs only the variants that did not succeed, but a killed process has no retry.
+
+The first start after the #174 deploy runs `nl-1-hwlw-astro` at once (scheduler `later`, because the spec is monthly): about 7.9 h at 20 requests an hour, so approve that deploy in the 06:00 to 22:00 window and read the labels the next morning (`select count(*), count(distinct series_id) from tide_label` as the database owner; expect about 79 × 1,500 rows over the locations that answered 200).
 
 **Watching the catch-up.** Each of the three seeds fetches one window [2026-10-02, the seed's first start] per row, at 85 s a request in UTC hours 0 to 5: 42 requests an hour, 210 a night, so 326 requests take about two nights, one seed after another. A seed ends a night at 05:00 and resumes the next night through the rows it has seen.
 
@@ -115,10 +130,14 @@ scripts/verify-prod.sh <domain>
 
 `verify-prod`'s `astro horizon` fails while the horizon is under `meta.now` + 60 days.
 
-**`hwlw_unlabelled`.** The payload carries no high or low marker, so the loader derives it by strict alternation inside each list (CLAUDE.md, the P16b Gotcha; KG-369). A list that breaks the alternation (fewer than 2 values, equal neighbours, two highs or two lows in a row, as at the agger stations with a double low water), that lost a value between its first and last kept one (`gap`, `unknown_quality`, `conflict`, `out_of_range`: the rest could still alternate with every label after the hole flipped) or whose consecutive extremes lie more than 10 h apart (a missing extreme; the real spacing is 4.5 to 8 h) is the retained drop `hwlw_unlabelled`: an alert with `source`, `spec` and `n`, **nothing stored for that series from that payload**, and the object kept (the batch's `n_skipped` is above 0, so the pruner keeps it). It is not a parser fault. A single-value list is one too: acceptable now, because the measured extremes answer 204 and a P3D window holds about 12 values, so a lone value is a provider fault worth the alert. It is released by a replay after a change that labels such a list, or by capturing RWS's own type series (`Typering GETETTPE`, issue #174). Do not edit stored rows. KG-370 lists the stations.
+**`hwlw_unlabelled`.** Neither RWS's label nor strict alternation can label a row (CLAUDE.md, the P16b/#174 Gotcha; KG-370): the type series has no label at that instant and the list breaks alternation. Alternation fails for a list of fewer than 2 values, equal neighbours, two highs or two lows in a row (an agger's double low water), a lost value between the first and last kept one (`gap`, `unknown_quality`, `conflict`, `out_of_range`) or consecutive extremes more than 12 h apart (a missing extreme; the real spacing is 4.5 to 10.1 h). It is the retained drop: an alert with `source`, `spec` and `n`, the row not stored, and the object kept (the batch's `n_skipped` is above 0, so the pruner keeps it). It is not a parser fault. A replay after the type series has loaded (or after a change that labels such a list) releases it. Do not edit stored rows.
 
-**Drift.** A `tide_*` code (`tide_quantity`, `tide_unit`, `tide_compartment`, `tide_process`, `tide_grouping`, `tide_datum`) quarantines the payload: RWS answered something other than what the request asked for. Follow `schema-drift.md`.
+**`hwlw_type_conflict`.** The alternation label of a row differs from RWS's label. The row is stored with RWS's label; the code is counted in the batch and alerted once per payload with `source`, `spec` and `n` (not retained: nothing is withheld). A replay alerts again. Compare the instants with the Waterinfo tide table of the location (the high and low water times RWS shows); if RWS's labels are right, nothing is wrong (a list that lost a value can flip the alternation). If RWS's labels look wrong, or the alert returns every month for one location, report it to the owner with the location code, the spec and the payload's archive key. Never edit `tide` or `tide_label`.
 
-**Replay.** After the deploy, `docs/runbooks/replay.md` §13 loads the archived astro and high and low water lines and the forecast runs of the newly registered locations.
+**`hwlw_type_unknown`.** A value of the type series is a word other than `hoogwater` or `laagwater`. The value is dropped, counted per value (retained: `n_skipped` above 0, alert with `source`, `spec` and `n`), and the word is never stored, logged or alerted. Read one payload with `docs/runbooks/schema-drift.md` §2 to see the word, compare it with Waterinfo, and report it to the owner: a new word needs a reviewed mapping (fixture, golden, adapter change), then a replay. Only `hoogwater` and `laagwater` have been seen (Vlissingen, Goeree lichteiland, 2026-10-17).
+
+**Drift.** A `tide_*` code (`tide_quantity`, `tide_typering`, `tide_unit`, `tide_compartment`, `tide_process`, `tide_grouping`, `tide_datum`) quarantines the payload: RWS answered something other than what the request asked for. Follow `schema-drift.md`.
+
+**Replay.** After the deploy, `docs/runbooks/replay.md` §13 loads the archived astro and high and low water lines and the forecast runs of the newly registered locations. Lines of `nl-1-hwlw-astro` archived before #174 have no type series, so their extremes take the alternation label; the type window starts at the first #174 run.
 
 Notes carried over from P16a: the Meuse TAW series at maastricht.sintpieter, maastricht.borgharen.maas.beneden and stevensweert (and the roadmap-1 twin eijsden.grens) are not new rows; `schaarvandenoord` H's live method is `RWSM-F232`, not `other:F007`; the hwlw-astro answer states `WaardeBepalingsMethode` `other:F012` although neither the seed row nor the request names a method (the series key needs it).
