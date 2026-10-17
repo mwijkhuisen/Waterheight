@@ -6,7 +6,7 @@
 - a spec that fails with `invalid_too_large` or an `http_*` code;
 - Rijkswaterstaat asks us to slow down or stop (§5).
 
-Scope: capture only. Since P16a the six specs below fetch and archive; none has a loader entry, so nothing is parsed, stored in `obs` or shown until P16b (§6). The archived payloads are never pruned: a line of a spec with no loader entry writes no `ingest_batch` row, and the pruner deletes only payloads whose batch parsed `ok` with `n_skipped` 0.
+Scope: capture (§1 to §5) and, since P16b, loading (§6). Since P16a the six specs below fetch and archive. Until the P16b release was deployed none had a loader entry, so nothing was parsed, stored or shown, and the archived payloads were never pruned (a line of a spec with no loader entry writes no `ingest_batch` row, and the pruner deletes only payloads whose batch parsed `ok` with `n_skipped` 0). With P16b they load (§6); the replay that loads the lines archived since the P16a deploy is `docs/runbooks/replay.md` §13.
 
 All specs are source NL-1, host `ddapi20-waterwebservices.rijkswaterstaat.nl`, `OphalenWaarnemingen` POST, one location per request, targets only from the registry seeds `registry/seed/nl-1.csv` and `registry/seed/nl-1-tide.csv`.
 
@@ -44,7 +44,7 @@ scripts/verify-prod.sh <domain>
 
 - A spec is fresh while its last success is at most 3 × its cadence old: 30 min, 90 min, 3 h, 3 days, and 84 days for the two monthly specs. Until the first monthly run (the 1st at 20:00 UTC and the 2nd at 04:30 UTC) `nl-1-astro` and `nl-1-hwlw-astro` show no success; that is not a failure.
 - `interval NL-1 nl-1-obs-sea` (at least 595 s), `… nl-1-obs-wide` (1795 s) and `… nl-1-obs-slow` (3595 s) read `min_interval_s`, the shortest gap in the last 24 h. There is no such check for the daily and monthly specs; `freshness` covers them.
-- `nl-1-hwlw` may log nothing but 204 answers: at Vlissingen `GETETM2` answered 204 on 2026-10-17 for a 3-day and a 31-day window. A 204 passes the validity check (it is an answer with no data); whether RWS publishes measured extremes through `OphalenWaarnemingen` is still to be established (KG-366).
+- `nl-1-hwlw` may log nothing but 204 answers: at Vlissingen `GETETM2` answered 204 on 2026-10-17 for a 3-day and a 31-day window. A 204 passes the validity check (it is an answer with no data); whether RWS publishes measured extremes through `OphalenWaarnemingen` is still to be established (KG-366; P16b probed September 2025 as well, with and without `other:F010`, and both answered 204).
 - Health of NL-1 itself is unchanged: roadmap 1's series are judged as before.
 
 ## 4. `invalid_too_large`, `http_*` and other failures
@@ -65,6 +65,60 @@ The wider load is announced in C14 (`docs/legal/requests/c14-rws-roadmap-2.md`) 
 
 Payloads already archived stay (retention `forever` for the two monthly specs).
 
-## 6. P16b: storage, the astro_horizon alert and replay (to be written)
+## 6. P16b: loading, the catch-up, the astro_horizon alert and the deploy rule
 
-P16b registers the 326 new rows, adds the loader entries, the astronomical-tide and high/low-water stores (never `obs`; ADR-0022 decision 4), the `astro_horizon` alert and the replay of the lines archived since the P16a deploy. This section is written then. Notes carried over: the Meuse TAW series at maastricht.sintpieter, maastricht.borgharen.maas.beneden and stevensweert (and the roadmap-1 twin eijsden.grens) are not new rows; `schaarvandenoord` H's live method is `RWSM-F232`, not `other:F007`; the hwlw-astro answer states `WaardeBepalingsMethode` `other:F012` although neither the seed row nor the request names a method (the series key needs it).
+P16b registers the roadmap-2 stations (`registry/stations/nl-1.yaml`: 429 rows at 391 stations, 18 of them `audience: off` structure-internal rows), adds the loader entries and stores the astronomical tide and the high and low waters in the table `tide` (never `obs`; ADR-0022 decision 4, A§6). The numbers and codes are in CLAUDE.md, Gotcha "NL-1 tide and roadmap-2 loading (P16b)".
+
+**What loads where.**
+
+| Spec | Loader | Lands in |
+|---|---|---|
+| `nl-1-obs-sea`, `nl-1-obs-wide`, `nl-1-obs-slow` | the NL-1 observation loader | `obs`, with the roadmap-1 series |
+| `nl-1-obs-sea-catchup`, `-wide-catchup`, `-slow-catchup` | `nl1Catchup`: no age limit, rows before the data epoch (2026-10-02) dropped as `before_epoch` | `obs` |
+| `nl-1-astro` | tide loader, kind `astro`, 25 MiB | `tide` (`hilo` null) |
+| `nl-1-hwlw-astro` | tide loader, kind `extreme_astro` | `tide` (`hilo` high or low) |
+| `nl-1-hwlw` | tide loader, kind `extreme` | `tide`; the live answer is still 204, so nothing is stored (KG-366) |
+
+The tide values attach to the registered primary measured H series of the same location and datum. Readers see them only through `pub_tide` and `own_tide`.
+
+**The deploy rule (owner, 2026-10-17; KG-377, R-108).** The live NL-1 specs plus the catch-up seeds peak at 998 requests an hour (limit 1,000). A capture restart that fires the three tide specs while a seed runs reaches 1,038, which the owner accepted on these conditions:
+
+1. Approve the P16b deploy between 06:00 and 22:00 UTC, never in the seed hours 00:00 to 05:00.
+2. Check the P14a backfill first and pause it if it runs. It shares the RWS host and is not in the budget model (KG-365):
+
+   ```bash
+   rwsc run --rm --no-deps -T backfill backfill status
+   ```
+
+   (`rwsc` is the compose function of `replay.md` §2. `backfill pause --job <id>` pauses a running job; `resume` starts it again after the catch-up.)
+3. Do not restart `capture` in 00:00 to 05:00 UTC until the catch-up seed report says done (below).
+
+**Watching the catch-up.** Each of the three seeds fetches one window [2026-10-02, the seed's first start] per row, at 85 s a request in UTC hours 0 to 5: 42 requests an hour, 210 a night, so 326 requests take about two nights, one seed after another. A seed ends a night at 05:00 and resumes the next night through the rows it has seen.
+
+```bash
+curl -s https://<domain>/status/capture.json \
+  | jq -r '.specs[] | select(.spec|test("^nl-1-obs-(sea|wide|slow)-catchup$")) | "\(.spec) \(.last_success) \(.last_failure_status)"'
+scripts/verify-prod.sh <domain> --dry-run | grep -E 'catch-up NL-1|fresh NL-1|astro horizon'
+scripts/verify-prod.sh <domain>
+```
+
+- A seed is done when it appears in `.seeds[]` of `/status/capture.json` (the file lists finished seeds only, each with its `done_at`) (`curl -s https://<domain>/status/capture.json | jq '.seeds[] | select(.spec|test("catchup"))'`; the state file is `/srv/rws/raw/_state/seeds/<spec>.json` on the host, `docs/runbooks/owner-drift.md` §3 describes the same fields). Until then a row that failed or was cut at 05:00 is fetched the next night.
+- `catch-up NL-1` passes when every tier-1 tidal and lake series of tier `sea` has `dataSince` at most the data epoch + 1 h and the NL-1 `coverage.ratio` is at least 0.95. It needs the catch-up and the loader to have finished, so it fails before that (it is in the allow-fail list of the CI deploy job).
+- `fresh NL-1 coast` and `fresh NL-1 lakes` pass when at least 90 % of the tier-1 gauges with `flags.tidal` and `flags.lake` hold a value no older than 45 minutes at `meta.now`.
+- While the catch-up loads, a settled day's version is bumped at most once an hour (or after 15 quiet minutes): the loader holds the days in `app_meta` `bump_pending` and flushes them with one bump per family. A publisher that re-renders many settled days in the first morning after the catch-up is expected, once.
+- Backoff, the circuit breaker and 429 apply to the seeds: they go through the same runner and the same HTTP client as the cron specs (`http/politeness.ts`, `http/client.ts`, the runner's transient set; tests `test/http/client.test.ts`, `test/http/politeness.test.ts`, `test/capture/seeds.test.ts`). A 429 or a run of failures slows every NL-1 spec, the seeds included. If RWS objects, go to §5.
+
+**`astro_horizon`.** `/api/v1/health/sources` shows `astro_horizon` for NL-1: the latest instant of the stored astronomical tide, or null when there is none. The alert `astro_horizon` (fields `source`, `days`) fires once per UTC day while the horizon is less than 60 days ahead. Causes and actions:
+
+- The monthly `nl-1-astro` run failed or has not run yet (it runs on the 1st at 20:00:30 UTC). Check its status in `/status/capture.json`; a `invalid_too_large` is §4. The horizon is null until the first run has loaded or the replay (`replay.md` §13) has run.
+- RWS has not published further: the P400D window then returns what exists (2027-12-31 now, KG-367). Nothing to fix; the alert stays until 2028 is published.
+
+`verify-prod`'s `astro horizon` fails while the horizon is under `meta.now` + 60 days.
+
+**`hwlw_unlabelled`.** The payload carries no high or low marker, so the loader derives it by strict alternation inside each list (CLAUDE.md, the P16b Gotcha; KG-369). A list that breaks the alternation (fewer than 2 values, equal neighbours, two highs or two lows in a row, as at the agger stations with a double low water) is the retained drop `hwlw_unlabelled`: an alert with `source`, `spec` and `n`, **nothing stored for that series from that payload**, and the object kept (the batch's `n_skipped` is above 0, so the pruner keeps it). It is not a parser fault. It is released by a replay after a change that labels such a list, or by capturing RWS's own type series (`Typering GETETTPE`, issue #174). Do not edit stored rows. KG-370 lists the stations.
+
+**Drift.** A `tide_*` code (`tide_quantity`, `tide_unit`, `tide_compartment`, `tide_process`, `tide_grouping`, `tide_datum`) quarantines the payload: RWS answered something other than what the request asked for. Follow `schema-drift.md`.
+
+**Replay.** After the deploy, `docs/runbooks/replay.md` §13 loads the archived astro and high and low water lines and the forecast runs of the newly registered locations.
+
+Notes carried over from P16a: the Meuse TAW series at maastricht.sintpieter, maastricht.borgharen.maas.beneden and stevensweert (and the roadmap-1 twin eijsden.grens) are not new rows; `schaarvandenoord` H's live method is `RWSM-F232`, not `other:F007`; the hwlw-astro answer states `WaardeBepalingsMethode` `other:F012` although neither the seed row nor the request names a method (the series key needs it).
