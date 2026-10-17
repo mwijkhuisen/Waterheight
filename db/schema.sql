@@ -2144,6 +2144,19 @@ CREATE TABLE public.station_alias (
 
 
 --
+-- Name: tide_label; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tide_label (
+    series_id integer NOT NULL,
+    ts timestamp with time zone NOT NULL,
+    hilo text NOT NULL,
+    batch_id bigint NOT NULL,
+    CONSTRAINT tide_label_hilo_check CHECK ((hilo = ANY (ARRAY['high'::text, 'low'::text])))
+);
+
+
+--
 -- Name: warning_area_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2410,6 +2423,14 @@ ALTER TABLE ONLY public.station_alias
 
 ALTER TABLE ONLY public.station
     ADD CONSTRAINT station_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tide_label tide_label_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tide_label
+    ADD CONSTRAINT tide_label_pkey PRIMARY KEY (series_id, ts);
 
 
 --
@@ -2797,6 +2818,14 @@ ALTER TABLE ONLY public.station
 
 
 --
+-- Name: tide_label tide_label_series_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tide_label
+    ADD CONSTRAINT tide_label_series_id_fkey FOREIGN KEY (series_id) REFERENCES public.series(id);
+
+
+--
 -- Name: tide tide_series_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2870,4 +2899,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261111000001'),
     ('20261112000001'),
     ('20261113000001'),
-    ('20261113000002');
+    ('20261113000002'),
+    ('20261114000001');

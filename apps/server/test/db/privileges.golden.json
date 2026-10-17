@@ -383,6 +383,10 @@
       "rws_backup": "SELECT",
       "rws_load": "SELECT,INSERT,UPDATE"
     },
+    "tide_label": {
+      "rws_backup": "SELECT",
+      "rws_load": "SELECT,INSERT,UPDATE"
+    },
     "twin": {
       "rws_backup": "SELECT",
       "rws_load": "SELECT"
