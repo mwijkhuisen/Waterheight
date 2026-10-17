@@ -43,11 +43,13 @@ import {
   capacity,
   ch4ExpectedSeries,
   checkApiParams,
+  checkAstroHorizon,
   checkBelgianSet,
   checkBuild,
   checkBytes,
   checkCacheControl,
   checkCapture,
+  checkCatchupNl1,
   checkClassCoverage,
   checkCoverage,
   checkDe2Credit,
@@ -55,6 +57,7 @@ import {
   checkForecastCoverage,
   checkForecastNl1,
   checkFresh,
+  checkFreshSet,
   checkHeaders,
   checkHealth,
   checkHealthParams,
@@ -136,6 +139,7 @@ import {
   META_CACHE,
   NOINDEX_PATHS,
   NOT_FOUND_PATHS,
+  nl1TideSets,
   noIpv6Here,
   OPENAPI_CACHE,
   OpenApi31,
@@ -716,6 +720,10 @@ describe('freshness, soak and capacity', () => {
       'fresh LU-1',
       'label offset LU-1',
       'belgian set',
+      'fresh NL-1 coast',
+      'fresh NL-1 lakes',
+      'astro horizon',
+      'catch-up NL-1',
       'owner sources',
       'owner health',
       'owner stations',
@@ -773,6 +781,7 @@ const de1 = (over: Partial<SourceRow> = {}): SourceRow => ({
   min_interval_s: [],
   label_offset: null,
   forecast: null,
+  astro_horizon: null,
   partitions: [{ partition: '2026-10', md5: 'a'.repeat(32), rows: 9000 }],
   partitions_at: ago(60_000),
   ...over,
@@ -2987,6 +2996,117 @@ describe('belgian set (catalogue §0.6)', () => {
     expect(found[0]).toContain('registry/seed/fr-1-be.csv');
     expect(found[0]).toContain('>= 90%');
     expect(found[0]).toContain('3 h');
+  });
+});
+
+describe('NL-1 roadmap-2 checks (P16b)', () => {
+  const NOW_ISO = new Date(NOW_MS).toISOString();
+  const ids = [
+    'nl.rws.a',
+    'nl.rws.b',
+    'nl.rws.c',
+    'nl.rws.d',
+    'nl.rws.e',
+    'nl.rws.f',
+    'nl.rws.g',
+    'nl.rws.h',
+    'nl.rws.i',
+    'nl.rws.j',
+  ];
+  const stationsOf = (list: readonly string[], since: string | null = '2026-10-01T00:00:00.000Z') =>
+    Stations.parse({
+      stations: list.map((id, i) => stationDoc(id, 'NL', [{ ...seriesDoc(100 + i, 'NL-1', 'H'), dataSince: since }])),
+    });
+  const ages = (age: number, n = 10) => Object.fromEntries(Array.from({ length: n }, (_, i) => [100 + i, age]));
+
+  it('fresh set: 90% of the stations need a value of at most 2700 s; an unlisted station is not fresh', () => {
+    const f = (a: Record<number, number>, list = ids, st = stationsOf(ids)) =>
+      checkFreshSet('fresh NL-1 coast', list, st, snapshotDoc(NOW_MS, a), NOW_ISO);
+    expect(f(ages(2700))).toEqual({
+      check: 'fresh NL-1 coast',
+      ok: true,
+      detail: 'listed 10/10, fresh 10/10 (a value no older than 2700 s)',
+    });
+    expect(f(ages(2701)).ok).toBe(false);
+    expect(f({ ...ages(600), 109: 9999 }).ok).toBe(true);
+    expect(f({ ...ages(600), 109: 9999, 108: 9999 }).ok).toBe(false);
+    expect(f(ages(600), [...ids, 'nl.rws.zz']).detail).toContain('listed 10/11, fresh 10/11');
+    expect(f(ages(600), []).ok).toBe(false);
+    expect(checkFreshSet('x', ids, undefined, snapshotDoc(NOW_MS), NOW_ISO).detail).toContain(
+      'no valid stations document',
+    );
+  });
+
+  it('astro horizon: at least 60 days past meta.now; null, a missing source and a missing document fail', () => {
+    const doc = (h: string | null) => sourcesDoc({ sources: [nl1({ astro_horizon: h })] });
+    const day = 86_400_000;
+    expect(checkAstroHorizon(doc(new Date(NOW_MS + 60 * day).toISOString()), NOW_ISO)).toMatchObject({ ok: true });
+    expect(checkAstroHorizon(doc(new Date(NOW_MS + 60 * day - 1).toISOString()), NOW_ISO)).toMatchObject({ ok: false });
+    expect(checkAstroHorizon(doc(null), NOW_ISO)).toMatchObject({
+      ok: false,
+      detail: 'NL-1 has stored no astronomical tide yet',
+    });
+    expect(checkAstroHorizon(sourcesDoc(), NOW_ISO)).toMatchObject({ ok: false });
+    expect(checkAstroHorizon(undefined, NOW_ISO).detail).toContain('no valid');
+  });
+
+  it('catch-up: every series reaches back to DATA_EPOCH + 1 h and NL-1 coverage is at least 95%', () => {
+    const cov = (ratio: number) => ({
+      from: '2026-10-02T00:00:00.000Z',
+      ratio,
+      series: 3,
+      series_below_95: 0,
+      gaps: [],
+    });
+    const doc = (ratio: number | null) =>
+      sourcesDoc({ sources: [nl1({ coverage: ratio === null ? null : cov(ratio) })] });
+    const list = ids.slice(0, 3);
+    expect(checkCatchupNl1(list, stationsOf(list, '2026-10-02T01:00:00.000Z'), doc(0.95))).toMatchObject({ ok: true });
+    expect(checkCatchupNl1(list, stationsOf(list, '2026-10-02T01:00:01.000Z'), doc(0.99))).toMatchObject({ ok: false });
+    expect(checkCatchupNl1(list, stationsOf(list, null), doc(0.99))).toMatchObject({ ok: false });
+    expect(checkCatchupNl1(list, stationsOf(list), doc(0.94))).toMatchObject({ ok: false });
+    expect(checkCatchupNl1(list, stationsOf(list), doc(null))).toMatchObject({ ok: false });
+    expect(checkCatchupNl1(list, stationsOf(ids.slice(0, 2)), doc(0.99))).toMatchObject({ ok: false });
+    expect(checkCatchupNl1([], stationsOf(list), doc(0.99))).toMatchObject({ ok: false });
+    expect(checkCatchupNl1(list, undefined, doc(0.99)).detail).toContain('no valid');
+  });
+
+  it('nl1TideSets: tier-1 primary tidal and lake stations; added = a seed row of tier sea', () => {
+    const st = (
+      id: string,
+      code: string,
+      flags: { tidal: boolean | null; lake?: boolean },
+      tier = 1,
+      role = 'primary',
+    ) => ({
+      id,
+      source: 'NL-1',
+      role,
+      tier,
+      provider_code: code,
+      flags,
+    });
+    const sets = nl1TideSets(
+      [
+        st('nl.rws.a', 'a', { tidal: true }),
+        st('nl.rws.a', 'a', { tidal: true }),
+        st('nl.rws.old', 'old', { tidal: true }),
+        st('nl.rws.l', 'l', { tidal: false, lake: true }),
+        st('nl.rws.r', 'r', { tidal: false }),
+        st('nl.rws.t2', 't2', { tidal: true }, 2),
+        st('nl.rws.tw', 'tw', { tidal: true }, 1, 'twin'),
+      ],
+      [
+        { code: 'a', tier: 'sea' },
+        { code: 'l', tier: 'sea' },
+        { code: 'old', tier: 'key' },
+      ],
+    );
+    expect(sets).toEqual({ coast: ['nl.rws.a', 'nl.rws.old'], lakes: ['nl.rws.l'], added: ['nl.rws.a', 'nl.rws.l'] });
+    const real = nl1TideSets();
+    expect(real.coast.length).toBeGreaterThan(0);
+    expect(real.lakes.length).toBeGreaterThan(0);
+    expect(real.added.length).toBeGreaterThan(0);
   });
 });
 

@@ -54,6 +54,9 @@ export type ForecastDetail = {
 
 /** app_meta key of the last due day `forecast_run_late` was raised for (DE-2); the day, so one alert per due day. */
 const LATE_KEY = 'forecast_late:DE-2';
+/** The astronomical tide must reach this far ahead (P16b D5); less raises `astro_horizon`, once a UTC day per source. */
+const ASTRO_MIN_MS = 60 * 86_400_000;
+const astroKey = (source: string) => `astro_horizon:${source}`;
 
 export type Coverage = {
   from: string;
@@ -402,6 +405,11 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
   const intervalsOf = new Map(intervals.rows.map((r) => [r.key.slice('intervals:'.length), r.value]));
   const batchOf = new Map(batches.rows.map((r) => [r.source_id, r]));
   const nowMs = inputs.now.getTime();
+  // P16b D5: the newest astronomical tide time per source, over its active series (base tables: the loader is rws_load).
+  const astro = await sql<{ source_id: string; horizon: Date }>`
+    SELECT s.source_id, max(t.ts) AS horizon FROM tide t JOIN series s ON s.id = t.series_id
+    WHERE t.kind = 'astro' AND s.active GROUP BY s.source_id`.execute(db);
+  const astroOf = new Map(astro.rows.map((r) => [r.source_id, r.horizon]));
 
   await db.transaction().execute(async (tx) => {
     await lock(tx);
@@ -444,6 +452,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
         ...(src.has_series && outageOf.has(src.id) ? { outage: outageOf.get(src.id) } : {}),
         ...(inputs.coverage?.has(src.id) ? { coverage: inputs.coverage.get(src.id) } : {}),
         ...(forecasts.has(src.id) ? { forecast: forecasts.get(src.id) } : {}),
+        ...(astroOf.has(src.id) ? { astro_horizon: astroOf.get(src.id)?.toISOString() } : {}),
         ...(backfillOf.has(src.id) ? { backfill: backfillOf.get(src.id) } : {}),
         min_interval_s: minIntervals(intervalsOf.get(src.id) ?? { last: {}, hours: {} }, inputs.now),
       };
@@ -456,7 +465,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
           quarantine_count = EXCLUDED.quarantine_count,
           lag_p95 = EXCLUDED.lag_p95,
           status = EXCLUDED.status,
-          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage' - 'coverage' - 'min_interval_s' - 'forecast' - 'backfill')
+          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage' - 'coverage' - 'min_interval_s' - 'forecast' - 'astro_horizon' - 'backfill')
                    || EXCLUDED.detail,
           updated_at = EXCLUDED.updated_at`.execute(tx);
       // P8a: a due DE-2 run that missed its deadline raises `forecast_run_late` once per due day (the day is
@@ -470,6 +479,22 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
             INSERT INTO app_meta (key, value, updated_at) VALUES (${LATE_KEY}, ${JSON.stringify(late)}::jsonb, ${inputs.now})
             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`.execute(tx);
           raised.push(['forecast_run_late', { source: src.id, day: late }]);
+        }
+      }
+      // P16b D5: a horizon under now + 60 days raises `astro_horizon` once per UTC day (no tide value in the alert).
+      const horizon = astroOf.get(src.id);
+      if (horizon !== undefined && horizon.getTime() < nowMs + ASTRO_MIN_MS) {
+        const today = inputs.now.toISOString().slice(0, 10);
+        const { rows } = await sql<{ day: string | null }>`
+          SELECT value #>> '{}' AS day FROM app_meta WHERE key = ${astroKey(src.id)}`.execute(tx);
+        if (rows[0]?.day !== today) {
+          await sql`
+            INSERT INTO app_meta (key, value, updated_at) VALUES (${astroKey(src.id)}, ${JSON.stringify(today)}::jsonb, ${inputs.now})
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`.execute(tx);
+          raised.push([
+            'astro_horizon',
+            { source: src.id, days: Math.max(0, Math.floor((horizon.getTime() - nowMs) / 86_400_000)) },
+          ]);
         }
       }
     }

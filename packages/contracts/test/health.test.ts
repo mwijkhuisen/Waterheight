@@ -46,6 +46,7 @@ const source = {
   min_interval_s: [],
   label_offset: null,
   forecast: null,
+  astro_horizon: null,
   partitions: [{ partition: '2026-09', md5: 'a'.repeat(32), rows: 1234 }],
   partitions_at: ago(60_000),
 };
@@ -167,6 +168,19 @@ describe('ClassCoverage', () => {
     expect(ok({ ...coverage, mode: 'dh' })).toBe(true);
     expect(ok({ ...coverage, mode: 'map' })).toBe(false);
     expect(ok({ ...coverage, t: '2026-10-05T12:00:00+02:00' })).toBe(false);
+  });
+});
+
+describe('astro_horizon of HealthSources (P16b)', () => {
+  const ok = (over: Record<string, unknown>) =>
+    HealthSources.safeParse(sources({ sources: [{ ...source, ...over }] })).success;
+  it('is required: null or a UTC instant', () => {
+    expect(ok({ astro_horizon: ago(-90 * 86_400_000) })).toBe(true);
+    expect(ok({ astro_horizon: null })).toBe(true);
+    const { astro_horizon: _, ...without } = source;
+    expect(HealthSources.safeParse(sources({ sources: [without] })).success).toBe(false);
+    expect(ok({ astro_horizon: '2027-01-01' })).toBe(false);
+    expect(ok({ astro_horizon: 5 })).toBe(false);
   });
 });
 

@@ -195,6 +195,11 @@ export const healthSources = (source: z.ZodString) =>
             })
             .nullable(),
           /**
+           * The newest astronomical tide time stored for the source's active series (P16b; NL-1 only), null for a
+           * source with none. It should stay at least 60 days ahead of now.
+           */
+          astro_horizon: iso.nullable(),
+          /**
            * Backfill jobs (P14a), for a source that has some (omitted otherwise): their number, those still active
            * (planned, running or paused) and the sums of their chunks, inserted and revised rows and unreconciled chunks;
            * `chunks_with_data` (chunks that wrote a manifest line, compared with the ledger) and `quarantined` (backfill

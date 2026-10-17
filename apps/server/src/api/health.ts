@@ -173,6 +173,7 @@ export const Detail = z.object({
       late: z.string().nullable(),
     })
     .optional(),
+  astro_horizon: z.string().optional(),
   backfill: z
     .object({
       jobs: z.number(),
@@ -343,6 +344,7 @@ export async function readFamilySources(
         min_interval_s: detail.min_interval_s ?? [],
         label_offset: detail.label_offset ?? null,
         forecast: detail.forecast ?? null,
+        astro_horizon: detail.astro_horizon ?? null,
         ...(detail.backfill === undefined ? {} : { backfill: detail.backfill }),
         partitions: Object.entries(detail.partitions ?? {})
           .sort(([a], [b]) => a.localeCompare(b))
