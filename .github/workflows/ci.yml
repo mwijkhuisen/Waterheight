@@ -62,7 +62,9 @@ jobs:
     name: integration
     runs-on: ubuntu-24.04
     # P9a's publisher tests (200-run properties, 20 SIGKILLed children) take the suite to about 12 minutes locally.
-    timeout-minutes: 30
+    # P16b: every test database syncs the larger NL-1 registry (2,974 series, 2,311 NL-4 rows); the suite took 28
+    # minutes on the runner before the round-1 tests and was cut off at 30 after them.
+    timeout-minutes: 45
     permissions:
       contents: read
     services:

@@ -1307,8 +1307,11 @@ E2E_OWNER_PW=$OWNER_PW docker run --rm --init --network host --ipc=host --add-ho
   -e CI=true -e E2E_COMPOSE=1 -e E2E_OWNER_SMOKE=1 -e "E2E_OWNER_URL=https://owner.$DOMAIN" -e "E2E_COMPOSE_URL=https://$DOMAIN" -e E2E_OWNER_PW \
   -v "$repo:/work" -w /work/apps/web \
   "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
-  node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium ||
+  node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium || {
+  # Each failed test's page snapshot (error-context.md), as the e2e job prints it: what the page showed at the failure.
+  find "$repo/apps/web/test-results" -name error-context.md -print -exec head -n 80 {} \; 2>/dev/null | head -n 400 || true
   fail "the owner smoke (owner-smoke.spec.ts) failed"
+}
 proof "owner smoke: Playwright (Chromium, host network, https://owner.$DOMAIN, hosts entry -> $owner_ip: the WireGuard address, port 443) signed in to caddy-owner on the production build: /runtime-config.json says owner and the owner banner shows (owner-smoke.spec.ts)"
 
 step "Go public (P12b): verify-prod's public-site checks in both profiles from the stack's phase, caddy recreated in between"
