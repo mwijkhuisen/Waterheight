@@ -1783,7 +1783,10 @@ export function checkFreshSet(
   return fresh * 100 >= ids.length * BELGIAN_FRESH_PCT ? pass(check, detail) : miss(check, detail);
 }
 
-/** P16b: NL-1 `astro_horizon` (health/sources) is at least 60 days past the server's own now. */
+/**
+ * P16b: NL-1 `astro_horizon` (health/sources: the earliest of its series' newest astronomical instants, so the series
+ * that runs out first) is at least 60 days past the server's own now.
+ */
 export function checkAstroHorizon(doc: HealthSources | undefined, now: string | undefined): Result {
   const check = 'astro horizon';
   if (doc === undefined || now === undefined) return noDocument(check, doc === undefined ? 'health/sources' : 'meta');
@@ -1791,7 +1794,7 @@ export function checkAstroHorizon(doc: HealthSources | undefined, now: string | 
   if (s === undefined) return miss(check, 'NL-1 is not listed in /api/v1/health/sources');
   if (s.astro_horizon === null) return miss(check, 'NL-1 has stored no astronomical tide yet');
   const ahead = Date.parse(s.astro_horizon) - Date.parse(now);
-  const detail = `the astronomical tide reaches ${Math.floor(ahead / 86_400_000)} days past now (${s.astro_horizon})`;
+  const detail = `the earliest series horizon of the astronomical tide is ${Math.floor(ahead / 86_400_000)} days past now (${s.astro_horizon})`;
   return ahead >= ASTRO_MIN_AHEAD_MS
     ? pass(check, detail)
     : miss(check, `${detail}; under ${ASTRO_MIN_AHEAD_MS / 86_400_000} days`);
@@ -3119,7 +3122,7 @@ export const CHECKS = [
   "label offset LU-1: /api/v1/health/sources lists LU-1 with a label_offset whose latest measured UTC day, decided or not, is no older than 2 days before the server's own now (/meta); any offset passes, the detail prints that day (decided, its instants and share; or undecided), and the offset in force in minutes (15 is the AGE file's habit) with the day that decided it; none measured yet is a FAIL",
   `fresh NL-1 coast: the NL-1 tier-1 stations with flags.tidal (read from the registry) have >= ${BELGIAN_FRESH_PCT}% a value in the "now" snapshot no older than ${FRESH_MAX_AGE_S} s at the server's own now`,
   `fresh NL-1 lakes: the same over the NL-1 tier-1 stations with flags.lake`,
-  `astro horizon: NL-1 astro_horizon in /api/v1/health/sources is at least 60 days past the server's own now`,
+  `astro horizon: NL-1 astro_horizon in /api/v1/health/sources (the earliest of its series' newest astronomical instants) is at least 60 days past the server's own now`,
   `catch-up NL-1: every series of the roadmap-2 tier-1 tidal and lake stations (a seed row of tier sea) has dataSince <= ${DATA_EPOCH} + 1 h, and NL-1 coverage.ratio >= ${COVERAGE_MIN * 100}%`,
   `belgian set: the 25 points of catalogue §0.6 (the NL-1 locations ${BELGIAN_NL1.join(', ')} as nl.rws.<code>, the 18 FR-1 partners of registry/seed/fr-1-be.csv as fr.sandre.<code>) are all stations of /api/v1/stations, and >= ${BELGIAN_FRESH_PCT}% have a value in the "now" snapshot no older than ${BELGIAN_MAX_AGE_S / 3600} h at the server's own now`,
   `tiles manifest: GET /tiles/manifest.json is 200 with Cache-Control exactly "${MANIFEST_CACHE}" (never immutable) and a body parseTilesManifest accepts`,

@@ -111,3 +111,69 @@ describe('the catch-up through the loader', { timeout: 300_000 }, () => {
     ).toBe(8);
   });
 });
+
+// Review SR-5: a malformed pending set never throws in the tick (it is cleared or replaced, with one alert), and a
+// flush that fails is alerted and leaves the tail running.
+describe('a malformed pending set and a failing flush', { timeout: 300_000 }, () => {
+  const T1 = T0 + 200 * MIN;
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const setMeta = (key: string, value: unknown) =>
+    q(
+      `INSERT INTO app_meta (key, value, updated_at) VALUES ($1, $2::jsonb, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [key, JSON.stringify(value)],
+    );
+  const codes = () => h.alerts.map((a) => a.code);
+
+  it('an idle tick clears a malformed set with one alert each, and stalls nothing', async () => {
+    h.alerts.length = 0;
+    const bad = [
+      5,
+      { days: { public: 'x' }, since: iso(T1), last: iso(T1) },
+      { days: { public: ['2026-13-40'] }, since: iso(T1), last: iso(T1) },
+      { days: {}, since: 'never', last: iso(T1) },
+      { days: {}, since: iso(T1), last: iso(T1), more: 1 },
+    ];
+    for (const value of bad) {
+      await setMeta(PENDING_BUMPS_KEY, value);
+      expect(await tick(T1)).toEqual({ lines: 0, loaded: 0 });
+      expect(await meta<Pending>(PENDING_BUMPS_KEY)).toBeNull();
+    }
+    expect(codes()).toEqual(bad.map(() => 'bump_pending_bad'));
+    expect(h.alerts.every((a) => Object.keys(a.fields).length === 0)).toBe(true);
+  });
+
+  it('a catch-up payload replaces a malformed set with its own days, alerted once', async () => {
+    h.alerts.length = 0;
+    await setMeta(PENDING_BUMPS_KEY, { days: { public: ['not a day'] }, since: iso(T1), last: iso(T1) });
+    await put(T1 + MIN - 1000);
+    expect(await tick(T1 + MIN)).toEqual({ lines: 1, loaded: 1 });
+    const pending = (await meta<Pending>(PENDING_BUMPS_KEY)) as NonNullable<Pending>;
+    expect(pending.days.public?.[0]).toBe(DATA_EPOCH.slice(0, 10));
+    expect([pending.since, pending.last]).toEqual([iso(T1 + MIN), iso(T1 + MIN)]);
+    expect(h.alerts).toEqual([
+      {
+        code: 'bump_pending_bad',
+        fields: expect.objectContaining({ source: 'NL-1', spec: 'nl-1-obs-sea-catchup', n: 1 }),
+      },
+    ]);
+  });
+
+  it('a failing flush is alerted, keeps the set and stalls no payload; the next good tick flushes', async () => {
+    h.alerts.length = 0;
+    const good = await versions('public');
+    // A version map bumpDays cannot write into: the flush throws.
+    await setMeta(versionKey('public'), 5);
+    expect(await tick(T1 + 17 * MIN)).toEqual({ lines: 0, loaded: 0 });
+    expect(h.alerts).toEqual([{ code: 'bump_flush_failed', fields: { code: 'unknown' } }]);
+    expect(await meta<Pending>(PENDING_BUMPS_KEY)).not.toBeNull();
+    // The tail still loads.
+    await put(T1 + 18 * MIN - 1000);
+    expect(await tick(T1 + 18 * MIN)).toEqual({ lines: 1, loaded: 1 });
+    expect(codes()).not.toContain('load_stalled');
+    await setMeta(versionKey('public'), good);
+    expect(await tick(T1 + 34 * MIN)).toEqual({ lines: 0, loaded: 0 });
+    expect(await meta<Pending>(PENDING_BUMPS_KEY)).toBeNull();
+    expect(codes()).toEqual(['bump_flush_failed']);
+  });
+});

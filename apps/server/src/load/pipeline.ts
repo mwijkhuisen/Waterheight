@@ -366,15 +366,22 @@ export class Loader {
 
   /**
    * P16b: the catch-up's deferred day bumps (dirty.ts `deferBumps`), flushed once due: one read per tick, and the
-   * loader lock only when a set is due. A replay's deferred bumps are flushed by the tail's next tick.
+   * loader lock only when a set is due or malformed (cleared, `bump_pending_bad`). A replay's deferred bumps are
+   * flushed by the tail's next tick. A failure is alerted (`bump_flush_failed`) and never stalls the tail (review
+   * SR-5): the set stays and the next tick tries again.
    */
   private async flushBumps(): Promise<void> {
-    const held = await pendingBumps(this.deps.db);
-    if (held === undefined || held === null || !bumpsDue(held, this.deps.now().getTime())) return;
-    await this.deps.db.transaction().execute(async (tx) => {
-      await lock(tx);
-      await flushBumps(tx, this.deps.now());
-    });
+    try {
+      const held = await pendingBumps(this.deps.db);
+      if (held === null || (held !== 'bad' && !bumpsDue(held, this.deps.now().getTime()))) return;
+      const flushed = await this.deps.db.transaction().execute(async (tx) => {
+        await lock(tx);
+        return flushBumps(tx, this.deps.now());
+      });
+      if (flushed === 'bad') this.deps.alert('bump_pending_bad', {});
+    } catch (err) {
+      this.deps.alert('bump_flush_failed', { code: errorCode(err) });
+    }
   }
 
   private resumed(result: TickResult): TickResult {
@@ -842,6 +849,7 @@ export class Loader {
     let warnChanges: Changes = {};
     let classChanged = 0;
     let closesFull = false;
+    let pendingBad = false;
     let units: Set<string> | undefined;
     const before = health && { newestTs: health.newestTs, lastNewData: health.lastNewData };
     const touches: Record<DirtyKind, Touch[]> = {
@@ -907,7 +915,7 @@ export class Loader {
       if (spec.backfill === true) touches.obs = touches.obs.filter((t) => t.to === undefined || t.to >= FLOOR_MS);
       // P9a: what the publishers render again, and the settled days this payload revised (under the loader lock).
       const maps = [registry, fillRegistry, zeroRegistry, ...(refRegistries?.values() ?? [])];
-      await markDirty(
+      pendingBad = await markDirty(
         tx,
         this.deps.now(),
         await this.dirtyEntries(tx, line.source, touches, maps),
@@ -1023,6 +1031,7 @@ export class Loader {
     const warned = (warnChanges.new ?? 0) + (warnChanges.changed ?? 0) + (warnChanges.removed ?? 0);
     if (warned > 0) this.deps.alert('warning_changed', { ...ids, n: warned });
     if (closesFull) this.deps.alert('cap_closes_full', { ...ids, n: 1 });
+    if (pendingBad) this.deps.alert('bump_pending_bad', { ...ids, n: 1 });
     if (result.unknown > 0) this.deps.info?.('series not in the registry', { ...ids, n: result.unknown });
     return outcome;
   }

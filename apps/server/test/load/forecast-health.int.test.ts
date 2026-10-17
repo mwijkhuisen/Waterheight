@@ -1,7 +1,7 @@
 import { HealthSourcesAnswer } from '@rws/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.ts';
-import { computeHealth, forecastDetails, type HealthInputs } from '../../src/load/health.ts';
+import { astroHorizons, computeHealth, forecastDetails, type HealthInputs } from '../../src/load/health.ts';
 import { type Harness, harness } from './harness.ts';
 
 // P8a (C9): `detail.forecast` per source that has stored runs, and the DE-2 alert `forecast_run_late`, once per due
@@ -250,8 +250,9 @@ describe('the public health document', { timeout: 300_000 }, () => {
   });
 });
 
-// P16b (D5): `detail.astro_horizon`, the newest astronomical tide time of a source's active series, and the alert
-// `astro_horizon` (a horizon under now + 60 days), once per UTC day and without a tide value.
+// P16b (D5): `detail.astro_horizon`, the earliest of the newest astronomical tide times of a source's active,
+// displayed primary series of the source's own audience, and the alert `astro_horizon` (a horizon under now + 60
+// days), once per UTC day and without a tide value.
 describe('detail.astro_horizon', { timeout: 300_000 }, () => {
   const NOW = Date.parse('2026-10-26T14:00:00Z');
   const DAY = 24 * HOUR;
@@ -300,6 +301,31 @@ describe('detail.astro_horizon', { timeout: 300_000 }, () => {
     await q('UPDATE series SET active = true WHERE id = $1', [sea]);
   });
 
+  it('is the earliest of the series horizons; owner-narrowed, off, undisplayed and non-primary series do not count (review CR-4, SR-3)', async () => {
+    alerts.length = 0;
+    const second = await seriesOf('nl.rws.vlissingen', 'H', 'NL-1');
+    const [twin] = await q<{ id: number }>(
+      `SELECT id FROM series WHERE source_id = 'NL-1' AND role <> 'primary' AND active ORDER BY id LIMIT 1`,
+    );
+    const nonPrimary = (twin as { id: number }).id;
+    // borssele reaches +90 d; vlissingen +70 d; the twin +20 d (it would be the earliest if it counted).
+    await q(
+      `INSERT INTO tide (series_id, kind, ts, value, batch_id) VALUES ($1, 'astro', $2, 100, 1), ($3, 'astro', $4, 100, 1)`,
+      [second, iso(NOW + 70 * DAY), nonPrimary, iso(NOW + 20 * DAY)],
+    );
+    const horizon = async () => (await detail('NL-1'))?.detail.astro_horizon;
+    await health(NOW);
+    expect(await horizon()).toBe(iso(NOW + 70 * DAY));
+    for (const narrow of [`audience = 'owner'`, `audience = 'off'`, `lic_override = '{"display": false}'`]) {
+      await q(`UPDATE series SET ${narrow} WHERE id = $1`, [second]);
+      await health(NOW);
+      expect(await horizon()).toBe(iso(NOW + 90 * DAY));
+      await q('UPDATE series SET audience = NULL, lic_override = NULL WHERE id = $1', [second]);
+    }
+    expect(astroAlerts()).toEqual([]);
+    await q('DELETE FROM tide WHERE series_id IN ($1, $2)', [second, nonPrimary]);
+  });
+
   it('under now + 60 days it alerts once a UTC day with the source and the days, never a value', async () => {
     alerts.length = 0;
     await q(`DELETE FROM tide WHERE series_id = $1 AND ts > $2`, [sea, iso(NOW + 30 * DAY)]);
@@ -330,5 +356,30 @@ describe('detail.astro_horizon', { timeout: 300_000 }, () => {
     } finally {
       await api.close();
     }
+  });
+
+  // Review CR-1: the old form (a grouped max over every astro row) was a seq scan of tide, 349-372 ms on 4.68 M rows.
+  it('EXPLAIN: one backward probe of the primary key per series, no seq scan of tide', async () => {
+    // 6,000 astro rows on 60 series, in the past (this is the last test of the file).
+    await q(
+      `INSERT INTO tide (series_id, kind, ts, value, batch_id)
+       SELECT s.id, 'astro', $1::timestamptz - make_interval(mins => 10 * g), 100, 1
+       FROM (SELECT id FROM series WHERE source_id = 'NL-1' AND role = 'primary' ORDER BY id LIMIT 60) s,
+            generate_series(1, 100) g
+       ON CONFLICT DO NOTHING`,
+      [iso(NOW - 400 * DAY)],
+    );
+    await q('ANALYZE tide');
+    const plan = async (text: string, args: readonly unknown[] = []) =>
+      (await q<{ 'QUERY PLAN': string }>(`EXPLAIN ${text}`, [...args])).map((r) => r['QUERY PLAN']).join('\n');
+    // The old form, for contrast: with these rows the planner reads the whole table.
+    expect(
+      await plan(`SELECT s.source_id, max(t.ts) FROM tide t JOIN series s ON s.id = t.series_id
+                  WHERE t.kind = 'astro' AND s.active GROUP BY s.source_id`),
+    ).toMatch(/Seq Scan on tide/);
+    const c = astroHorizons().compile(h.load.db);
+    const now = await plan(c.sql, c.parameters);
+    expect(now).toMatch(/Index (Only )?Scan Backward using tide_pkey on tide/);
+    expect(now).not.toMatch(/Seq Scan on tide/);
   });
 });

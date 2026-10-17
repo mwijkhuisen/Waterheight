@@ -316,6 +316,22 @@ export const q7Outage = (source: string, from: Date, to: Date, now: Date, lookba
                         AND o.ts >= ${since}::timestamptz AND o.ts < ${now}::timestamptz)`;
 };
 
+/**
+ * P16b D5: per source, the earliest of its series' newest astronomical tide instants (the series that runs out
+ * first; review CR-4), over the active primary series that share their source's audience and are displayed
+ * (review SR-3). One backward probe of tide's primary key per series, never a scan of the table (review CR-1).
+ * Base tables: the loader is rws_load. A source none of whose series has astro rows has no row.
+ */
+export const astroHorizons = () => sql<{ source_id: string; horizon: Date }>`
+  SELECT s.source_id, min(a.ts) AS horizon
+  FROM series s
+  JOIN source src ON src.id = s.source_id
+  CROSS JOIN LATERAL (SELECT t.ts FROM tide t WHERE t.series_id = s.id AND t.kind = 'astro'
+                      ORDER BY t.ts DESC LIMIT 1) a
+  WHERE s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}
+    AND src.lic_display AND COALESCE((s.lic_override ->> 'display')::boolean, true)
+  GROUP BY s.source_id`;
+
 type Tier1 = { total: number; fresh: number; provider_stale: number };
 
 /**
@@ -405,10 +421,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
   const intervalsOf = new Map(intervals.rows.map((r) => [r.key.slice('intervals:'.length), r.value]));
   const batchOf = new Map(batches.rows.map((r) => [r.source_id, r]));
   const nowMs = inputs.now.getTime();
-  // P16b D5: the newest astronomical tide time per source, over its active series (base tables: the loader is rws_load).
-  const astro = await sql<{ source_id: string; horizon: Date }>`
-    SELECT s.source_id, max(t.ts) AS horizon FROM tide t JOIN series s ON s.id = t.series_id
-    WHERE t.kind = 'astro' AND s.active GROUP BY s.source_id`.execute(db);
+  const astro = await astroHorizons().execute(db);
   const astroOf = new Map(astro.rows.map((r) => [r.source_id, r.horizon]));
 
   await db.transaction().execute(async (tx) => {

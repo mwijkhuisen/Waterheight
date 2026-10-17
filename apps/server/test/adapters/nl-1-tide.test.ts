@@ -243,6 +243,71 @@ describe('drift and drops', () => {
     expect(labels([10, 90, 20, 20])).toEqual(none(4));
   });
 
+  // Rows at hours after 2026-10-17T12:00Z: [hours, value, quality code].
+  const hours = (...entries: [number, number, string?][]): Waarnemingen[] =>
+    alter(
+      base,
+      {},
+      undefined,
+      entries.map(([h, v, q = '00']) => ({
+        ...first,
+        Meetwaarde: { Waarde_Alfanumeriek: String(v), Waarde_Numeriek: v },
+        Tijdstip: `${new Date(Date.parse('2026-10-17T13:00:00Z') + h * 3_600_000).toISOString().slice(0, 23)}+01:00`,
+        WaarnemingMetadata: { ...first.WaarnemingMetadata, Kwaliteitswaardecode: q },
+      })),
+    );
+  const result = (l: Waarnemingen[]) => {
+    const out = code(l) as Normalised;
+    return { hilo: out.tide?.map((r) => r.hilo), dropped: out.dropped };
+  };
+
+  it('labels: a value dropped between the first and last kept one withholds the series (review CR-2)', () => {
+    // The reviewer's case: the high between -100 and -120 is a gap; the rest alternates and would label -100 high.
+    expect(result(hours([0, -100], [6, -120], [12, 160], [18, -110], [24, 155]))).toEqual({
+      hilo: ['high', 'low', 'high', 'low', 'high'],
+      dropped: {},
+    });
+    expect(result(hours([0, -100], [3, 0, '99'], [6, -120], [12, 160], [18, -110], [24, 155]))).toEqual({
+      hilo: [],
+      dropped: { gap: 1, hwlw_unlabelled: 5 },
+    });
+    // A hole near the end, an unknown quality, a conflict and an out-of-range value alike.
+    expect(result(hours([0, -100], [6, 120], [12, -110], [15, 0, '50'], [18, 155]))).toEqual({
+      hilo: [],
+      dropped: { unknown_quality: 1, hwlw_unlabelled: 4 },
+    });
+    expect(result(hours([0, -100], [3, 5], [3, 6], [6, 120], [12, -110]))).toEqual({
+      hilo: [],
+      dropped: { conflict: 2, hwlw_unlabelled: 3 },
+    });
+    expect(result(hours([0, -100], [3, 600_000], [6, 120], [12, -110]))).toEqual({
+      hilo: [],
+      dropped: { out_of_range: 1, hwlw_unlabelled: 3 },
+    });
+    // A drop outside the kept values (here after the last one) leaves the labels determined.
+    expect(result(hours([0, -100], [6, 120], [12, -110], [18, 0, '99']))).toEqual({
+      hilo: ['low', 'high', 'low'],
+      dropped: { gap: 1 },
+    });
+  });
+
+  it('labels: consecutive extremes more than 10 h apart withhold the series (a missing extreme)', () => {
+    expect(result(hours([0, -100], [6, 120], [18, -110], [24, 130]))).toEqual({
+      hilo: [],
+      dropped: { hwlw_unlabelled: 4 },
+    });
+    expect(result(hours([0, -100], [10, 120]))).toEqual({ hilo: ['low', 'high'], dropped: {} });
+  });
+
+  it('values outside the observation range of the series are dropped as out_of_range (review SR-4)', () => {
+    const astro = alter(hours([0, 10], [1, 1e39], [2, -2001], [3, 500_000], [4, -2000], [5, 500_001]), {
+      Groepering: '',
+    });
+    const out = normaliseTide(astro, ctx(name), 'astro');
+    expect(out.tide?.map((r) => r.value)).toEqual([10, 500_000, -2000]);
+    expect(out.dropped).toEqual({ out_of_range: 3 });
+  });
+
   it('labels do not leak across series: one bad series leaves the other stored', () => {
     const good = series([10, 90, 20]);
     const bad = alter(series([10, 90, 95]), {}, 'vlissingen', undefined).map((l) => ({
@@ -298,11 +363,12 @@ describe('drift and drops', () => {
     const m = base[0]?.metingen[0] as Waarnemingen['metingen'][number];
     const day = 86_400_000;
     const stamp = (ms: number) => `${new Date(ms + 3_600_000).toISOString().slice(0, 23)}+01:00`;
+    // Values alternate by position, inside the range of the series.
     const rows = (...offsets: number[]) =>
-      offsets.map((o) => ({
+      offsets.map((o, i) => ({
         ...m,
         Tijdstip: stamp(at.fetchedAt + o),
-        Meetwaarde: { Waarde_Alfanumeriek: '1', Waarde_Numeriek: o },
+        Meetwaarde: { Waarde_Alfanumeriek: '1', Waarde_Numeriek: i % 2 === 0 ? -50 : 50 },
       }));
     const p = (kind: TideKind, ...offsets: number[]) => {
       const out = normaliseTide(
@@ -315,7 +381,7 @@ describe('drift and drops', () => {
     const measuredList = lists('nl-1-hwlw-vlissingen-nap-measured.synthetic');
     // extreme: 16 minutes ahead is future, 46 days back is too old.
     const measured = normaliseTide(
-      alter(measuredList, {}, undefined, rows(16 * 60_000, -46 * day, -day, 0)),
+      alter(measuredList, {}, undefined, rows(16 * 60_000, -46 * day, -6 * 3_600_000, 0)),
       at,
       'extreme',
     );
@@ -328,7 +394,7 @@ describe('drift and drops', () => {
     expect(p('extreme_astro', 400 * day + 5, 402 * day)[1]).toEqual({ beyond_horizon: 1, hwlw_unlabelled: 1 });
     // maxAgeMs null: nothing is too old (a catch-up).
     const old = normaliseTide(
-      alter(measuredList, {}, undefined, rows(-100 * day, -day)),
+      alter(measuredList, {}, undefined, rows(-100 * day, -100 * day + 6 * 3_600_000)),
       { ...at, maxAgeMs: null },
       'extreme',
     );
@@ -436,6 +502,34 @@ describe('property and fuzz tests', () => {
           }
         });
       }),
+      { numRuns: 300 },
+    );
+  });
+
+  it('a value dropped between the first and last kept one never yields a stored label (review CR-2)', () => {
+    const m = (doc.WaarnemingenLijst[0].MetingenLijst as Waarnemingen['metingen']).at(
+      0,
+    ) as Waarnemingen['metingen'][number];
+    const base = parseWaarnemingen(rawFixture('NL-1', name).body, TIDE_CAPS);
+    const drop = fc.constantFrom<[string, number]>(['99', 0], ['50', 0], ['00', 600_000]);
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer({ min: -300, max: 400 }), { minLength: 3, maxLength: 40 }),
+        fc.nat(),
+        drop,
+        (values, pick, [q, v]) => {
+          const hole = 1 + (pick % (values.length - 2));
+          const metingen = values.map((value, i) => ({
+            ...m,
+            Meetwaarde: { Waarde_Alfanumeriek: '', Waarde_Numeriek: i === hole ? v : value },
+            Tijdstip: `${new Date(at.fetchedAt + 3_600_000 + i * 21_600_000).toISOString().slice(0, 23)}+01:00`,
+            WaarnemingMetadata: { ...m.WaarnemingMetadata, Kwaliteitswaardecode: i === hole ? q : '00' },
+          }));
+          const out = normaliseTide(alter(base, {}, undefined, metingen), at, 'extreme_astro');
+          expect(out.tide).toEqual([]);
+          expect(out.dropped.hwlw_unlabelled).toBe(values.length - 1);
+        },
+      ),
       { numRuns: 300 },
     );
   });

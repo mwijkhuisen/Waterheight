@@ -195,8 +195,9 @@ export const healthSources = (source: z.ZodString) =>
             })
             .nullable(),
           /**
-           * The newest astronomical tide time stored for the source's active series (P16b; NL-1 only), null for a
-           * source with none. It should stay at least 60 days ahead of now.
+           * The earliest of the newest astronomical tide times stored for the source's active, displayed primary
+           * series of its own audience (P16b; NL-1 only: the series that runs out first), null for a source with
+           * none. It should stay at least 60 days ahead of now.
            */
           astro_horizon: iso.nullable(),
           /**
