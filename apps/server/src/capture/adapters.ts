@@ -36,11 +36,11 @@ export const ADAPTERS: Readonly<Record<string, Adapter>> = {
 
 /**
  * The request of one registry row as a first run builds it (no capture state,
- * so the default window): what the smoke recorder and the contract check send.
+ * so the default window, unless the smoke recorder passes one): what it and the contract check send.
  */
-export function requestFor(spec: LoadedSpec, row: Row, now: Date): Req {
+export function requestFor(spec: LoadedSpec, row: Row, now: Date, window?: { from: Date; to: Date }): Req {
   const req = baseRequest(spec, row);
   const adapter = ADAPTERS[spec.source];
   if (!spec.request.build || adapter?.build === undefined) return req;
-  return adapter.build({ req, row, now, window: windowFor(spec, now, undefined), params: spec.params });
+  return adapter.build({ req, row, now, window: window ?? windowFor(spec, now, undefined), params: spec.params });
 }

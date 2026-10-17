@@ -3,7 +3,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { keepAsProblem } from '../../../../scripts/smoke-capture.ts';
+import { args, keepAsProblem, windowProblem } from '../../../../scripts/smoke-capture.ts';
+import { requestFor } from '../../src/capture/adapters.ts';
+import { loadRegistry } from '../../src/capture/specs.ts';
 
 // The opt-in fixture recorder never runs in CI and needs a contact address.
 const script = new URL('../../../../scripts/smoke-capture.ts', import.meta.url).pathname;
@@ -94,6 +96,75 @@ describe('scripts/smoke-capture.ts', () => {
     expect(twice.stderr).toMatch(/given twice/);
     expect(twice.stdout).toBe('');
   }, 30_000);
+});
+
+describe('smoke-capture --from/--to/--method (P16b)', () => {
+  const now = new Date('2026-10-20T12:00:00Z');
+  const reg = loadRegistry();
+  const spec = (id: string) => {
+    const s = reg.specs.find((x) => x.id === id);
+    if (s === undefined) throw new Error(id);
+    return s;
+  };
+  const hwlw = spec('nl-1-hwlw');
+  const hRow = { code: 'vlissingen', quantity: 'WATHTE', hoedanigheid: 'NAP' };
+  const win = { from: '2025-09-01', to: '2025-09-30' };
+
+  it('attaches --from/--to to the last --spec and still to the last --backfill', () => {
+    const a = args([
+      '--spec',
+      'a',
+      '--spec',
+      'nl-1-hwlw',
+      '--from',
+      '2025-09-01',
+      '--to',
+      '2025-09-30',
+      '--method',
+      'other:F010',
+    ]);
+    expect(a.specs[0]).toEqual({ id: 'a' });
+    expect(a.specs[1]).toMatchObject({ from: '2025-09-01', to: '2025-09-30', method: 'other:F010' });
+    expect(a.items).toEqual([]);
+    const b = args(['--spec', 'a', '--backfill', 's', '--series', 'k', '--from', '2025-09-01', '--to', '2025-09-02']);
+    expect(b.specs[0]).toEqual({ id: 'a' });
+    expect(b.items[0]).toMatchObject({ from: '2025-09-01', to: '2025-09-02' });
+  });
+
+  it('accepts a window and a method on an NL-1 H row', () => {
+    const p = windowProblem(hwlw, hRow, { ...win, method: 'other:F010' }, now);
+    expect(p).toEqual({ window: { from: new Date('2025-09-01T00:00:00Z'), to: new Date('2025-09-30T00:00:00Z') } });
+  });
+
+  it('refuses a long span, from >= to, a bad date, a far end, a non-NL-1 spec, an ahead spec', () => {
+    const msg = (s: Parameters<typeof windowProblem>[0], w: Parameters<typeof windowProblem>[2]) =>
+      (windowProblem(s, hRow, w, now) as { message?: string }).message;
+    expect(msg(hwlw, { from: '2025-09-01', to: '2025-10-03' })).toMatch(/at most 31 days/);
+    expect(msg(hwlw, { from: '2025-09-30', to: '2025-09-30' })).toMatch(/before --to/);
+    expect(msg(hwlw, { from: 'x', to: '2025-09-30' })).toMatch(/YYYY-MM-DD/);
+    expect(msg(hwlw, { from: '2026-10-20', to: '2026-10-22' })).toMatch(/one day after now/);
+    expect(msg(hwlw, { from: '2025-09-01' })).toMatch(/together/);
+    expect(msg(spec('lu-1-csv'), win)).toMatch(/NL-1 spec/);
+    expect(msg(spec('nl-1-astro'), win)).toMatch(/ahead or verwachting/);
+    expect(msg(spec('nl-1-fc-1h'), win)).toMatch(/ahead or verwachting/);
+  });
+
+  it('refuses a bad --method and a method on a Q row', () => {
+    const m = (row: Record<string, string>, method: string) =>
+      (windowProblem(hwlw, row, { method }, now) as { message?: string }).message;
+    for (const bad of ['F010', 'other:F10', 'RWSM-F232', 'other:F0100']) expect(m(hRow, bad)).toMatch(/--method takes/);
+    expect(m({ code: 'lobith', quantity: 'Q' }, 'other:F010')).toMatch(/Q row/);
+  });
+
+  it('passes the window and a method override into the NL-1 body', () => {
+    const w = { from: new Date('2025-09-01T00:00:00Z'), to: new Date('2025-09-30T00:00:00Z') };
+    const body = JSON.parse(String(requestFor(hwlw, { ...hRow, method: 'other:F010' }, now, w).body));
+    expect(body.Periode).toEqual({
+      Begindatumtijd: '2025-09-01T00:00:00Z',
+      Einddatumtijd: '2025-09-30T00:00:00Z',
+    });
+    expect(JSON.stringify(body)).toContain('other:F010');
+  });
 });
 
 describe('scripts/healthz-smoke.sh (S10)', () => {
