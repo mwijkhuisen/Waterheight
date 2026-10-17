@@ -26,6 +26,10 @@ export interface HookMap {
   getSource(id: string): { getData(): Promise<unknown> } | undefined;
   jumpTo(o: { center: [number, number]; zoom: number }): void;
   once(event: string, fn: () => void): void;
+  on(event: string, fn: (e: { sourceId?: string; tile?: { tileID?: { key?: unknown } } }) => void): void;
+  off(event: string, fn: (e: { sourceId?: string; tile?: { tileID?: { key?: unknown } } }) => void): void;
+  isSourceLoaded(id: string): boolean;
+  isMoving(): boolean;
   project(lngLat: [number, number]): { x: number; y: number };
   getZoom(): number;
   getPadding(): { top: number; right: number; bottom: number; left: number };

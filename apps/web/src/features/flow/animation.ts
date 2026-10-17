@@ -8,13 +8,13 @@ export const FLOW_FPS = 25;
 // One dash of DASH line widths in a period of PERIOD, moved STEP at a time along the line. The lines are drawn in the
 // flow direction (P6 reaches run up to down), and a pattern is laid out from the line's start, so a dash that starts a
 // little later every step travels downstream. Every array has four entries (dash, gap, dash, gap; a zero is dropped by
-// MapLibre's line atlas): MapLibre interpolates arrays of one length and warns on a mismatch.
+// MapLibre's line atlas) and one period; flowLayer.ts gives each step its own layer (#177).
 const PERIOD = 7;
 const DASH = 3;
 const GAP = PERIOD - DASH;
 const STEP = 0.5;
 
-/** The dash pattern of each step (`line-dasharray`, in line widths); every array has the same length. */
+/** The dash pattern of each step (`line-dasharray`, in line widths, one layer each); every array has the same length. */
 export const DASH_SEQ: readonly (readonly number[])[] = Array.from({ length: PERIOD / STEP }, (_, i) => {
   const s = i * STEP;
   return s <= GAP ? [0, s, DASH, GAP - s] : [s - GAP, GAP, PERIOD - s, 0];
