@@ -44,7 +44,8 @@ describe('RWS (NL-1) seed lists against the recorded OphalenCatalogus', () => {
   const s = rwsSets();
 
   it('every observation code exists with the requested quantity; Q only where Q meting exists', () => {
-    const rows = seed('nl-1');
+    // The P16a tiers (sea, wide, slow) are held to the full catalogue and the WFS by test/nl1-seed.test.ts.
+    const rows = seed('nl-1').filter((r) => ['key', 'other', 'twin'].includes(r.tier ?? ''));
     expect(rows.filter((r) => r.tier === 'key' && r.quantity === 'H').length).toBeGreaterThanOrEqual(20);
     expect(rows.filter((r) => r.tier === 'other').length).toBeGreaterThanOrEqual(40);
     for (const r of rows)
@@ -54,7 +55,7 @@ describe('RWS (NL-1) seed lists against the recorded OphalenCatalogus', () => {
 
   it('the only twin row is the Eijsden-grens TAW series, which the recorded WFS snapshot shows live', () => {
     expect(seed('nl-1').filter((r) => r.tier === 'twin')).toEqual([
-      { code: 'eijsden.grens', quantity: 'H', tier: 'twin', note: 'taw' },
+      { code: 'eijsden.grens', quantity: 'H', tier: 'twin', note: 'taw', hoedanigheid: '' },
     ]);
     type Wfs = { features: { properties: { CODE: string; GROOTHEIDCODE: string; HOEDANIGHEIDCODE: string } }[] };
     const taw = json<Wfs>('NL-2', 'nl-2-wfs').features.filter(

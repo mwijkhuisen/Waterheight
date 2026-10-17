@@ -192,6 +192,8 @@ function build(inputs: Inputs): { rows: PublicStation[]; skipped: Skipped[] } {
   for (const [i, r] of inputs.seed.entries()) {
     const code = str(r.code, `seed[${i}].code`);
     const quantity = r.quantity;
+    // The sea, wide and slow tiers are captured from P16a and registered as stations in P16b.
+    if (r.tier === 'sea' || r.tier === 'wide' || r.tier === 'slow') continue;
     const kind = KINDS.get(`${quantity}/${r.tier}`);
     if (kind === undefined || (quantity !== 'H' && quantity !== 'Q')) {
       throw new Error(`seed ${code}: unknown quantity/tier ${quantity}/${r.tier}`);
