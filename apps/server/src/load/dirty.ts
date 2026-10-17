@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { type RawBuilder, sql } from 'kysely';
+import { type Kysely, type RawBuilder, sql } from 'kysely';
 import { CHANNEL_AUDIENCES, type ChannelAudience, VIEWS } from '../db/audience.ts';
+import type { DB } from '../db/generated.ts';
 import { FILLED_BY } from './adapters.ts';
 import { readMeta, type Tx, writeMeta } from './store.ts';
 
@@ -115,9 +116,10 @@ export function bumpedDays(from: number, to: number, nowMs: number): string[] {
 /**
  * Writes the transaction's dirty rows and bumps. A public change dirties both families (the owner family sees public
  * rows); an owner change only the owner family; an `off` one nothing. Ranges are clipped to [DATA_FLOOR, now].
- * Forecast entries name stations only and never bump a day.
+ * Forecast entries name stations only and never bump a day. `defer` (P16b, a catch-up payload): the bumps go into
+ * the pending set (`deferBumps`) instead; the dirty rows are written all the same.
  */
-export async function markDirty(tx: Tx, now: Date, entries: readonly DirtyEntry[]): Promise<void> {
+export async function markDirty(tx: Tx, now: Date, entries: readonly DirtyEntry[], defer = false): Promise<void> {
   const nowMs = now.getTime();
   type Group = { family: ChannelAudience; kind: DirtyKind; from: number; to: number; stations: Set<string> };
   const groups = new Map<string, Group>();
@@ -148,7 +150,51 @@ export async function markDirty(tx: Tx, now: Date, entries: readonly DirtyEntry[
     for (const d of bumpedDays(g.from, g.to, nowMs)) days.add(d);
     bumps.set(g.family, days);
   }
-  for (const [family, days] of bumps) await bumpDays(tx, family, days, 'revision', now);
+  if (defer) await deferBumps(tx, bumps, now);
+  else for (const [family, days] of bumps) await bumpDays(tx, family, days, 'revision', now);
+}
+
+/**
+ * P16b: the day bumps of the catch-up seeds, deferred (app_meta `bump_pending`, loader-private like the version maps):
+ * the days per family, when the oldest of them was deferred (`since`) and when the newest (`last`). A catch-up payload
+ * revises every settled day from DATA_EPOCH on, so bumping per payload would raise each such day about 330 times a
+ * night and keep the publisher re-rendering them. `null` once flushed: rws_load has no DELETE on app_meta.
+ */
+export type PendingBumps = { days: Partial<Record<ChannelAudience, string[]>>; since: string; last: string };
+export const PENDING_BUMPS_KEY = 'bump_pending';
+/** A pending set is flushed once its oldest day waited this long (at most one bump an hour while a catch-up runs)… */
+export const BUMP_DEFER_MS = 3_600_000;
+/**
+ * …or once no catch-up payload was deferred for this long: the night's window or the seed ended. Longer than any
+ * seed pace (one request every ~85 s), so a paced catch-up is not flushed between two of its payloads.
+ */
+export const BUMP_QUIET_MS = 15 * 60_000;
+
+async function deferBumps(tx: Tx, bumps: ReadonlyMap<ChannelAudience, ReadonlySet<string>>, now: Date): Promise<void> {
+  if ([...bumps.values()].every((d) => d.size === 0)) return;
+  const held = await readMeta<PendingBumps | null>(tx, PENDING_BUMPS_KEY);
+  const days = { ...held?.days };
+  for (const [family, add] of bumps) days[family] = [...new Set([...(days[family] ?? []), ...add])].sort();
+  await writeMeta(tx, PENDING_BUMPS_KEY, { days, since: held?.since ?? now.toISOString(), last: now.toISOString() });
+}
+
+/** Whether a pending set is due at `nowMs` (BUMP_DEFER_MS after its first deferral, or BUMP_QUIET_MS after its last). */
+export const bumpsDue = (p: PendingBumps, nowMs: number): boolean =>
+  nowMs - Date.parse(p.since) >= BUMP_DEFER_MS || nowMs - Date.parse(p.last) >= BUMP_QUIET_MS;
+
+/** Reads the pending set (no lock): the loader's tick asks this first, so an idle tick takes no lock. */
+export const pendingBumps = (db: Kysely<DB>) => readMeta<PendingBumps | null>(db, PENDING_BUMPS_KEY);
+
+/**
+ * Flushes a due pending set under the caller's loader lock: one bumpDays per family with every deferred day, then the
+ * set is cleared. Returns whether it flushed.
+ */
+export async function flushBumps(tx: Tx, now: Date): Promise<boolean> {
+  const held = await readMeta<PendingBumps | null>(tx, PENDING_BUMPS_KEY);
+  if (held === undefined || held === null || !bumpsDue(held, now.getTime())) return false;
+  for (const family of CHANNEL_AUDIENCES) await bumpDays(tx, family, held.days[family] ?? [], 'revision', now);
+  await writeMeta(tx, PENDING_BUMPS_KEY, null);
+  return true;
 }
 
 /**

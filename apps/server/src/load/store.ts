@@ -1,4 +1,4 @@
-import { type GaugeZeroRow, type ObsRow, QC, type SeriesDecl } from '@rws/core';
+import { type GaugeZeroRow, type ObsRow, QC, type SeriesDecl, type TideRowIn } from '@rws/core';
 import { type Kysely, sql, type Transaction } from 'kysely';
 import type { DB } from '../db/generated.ts';
 import type { Audience, Touch } from './dirty.ts';
@@ -430,6 +430,60 @@ export async function upsertObs(
   for (const w of mine) if (newest === null || w.ts > newest) newest = w.ts;
   const n_new = mine.filter((w) => w.inserted).length;
   return { n_new, n_changed: mine.length - n_new, newest, writes: written.length, inserted, revised, skipped };
+}
+
+/** P16b: a tide row with the id of the series it attaches to; `counted`: the series shares its source's audience. */
+export type ResolvedTide = TideRowIn & { id: number; counted: boolean };
+
+/**
+ * P16b: the astronomical tide and the high and low waters (`tide`, never `obs`). Newest fetch wins, as in upsertObs:
+ * a row is written where none is stored, or where the stored row's batch is older than this one, or is this very
+ * batch (a replay after a fix), and only when its value or high/low label differs. A newer fetch that states the same
+ * row changes nothing, not even its batch_id: a monthly re-fetch of an unchanged curve writes no tuple (79 series ×
+ * 57,600 values a month). So a replay of the same lines writes nothing. A timestamp stated twice in a payload keeps
+ * its last value. No touch: tide is in no published file yet (P18), so it dirties nothing and bumps no day.
+ * Returns the rows inserted and updated of the series that share their source's audience, and every write.
+ */
+// ponytail: a confirmation keeps the older batch_id, so a value that flaps A→B→A over three fetches and is replayed
+// in the order 1, 3, 2 ends as B (fetch 2 is newer than the holder, fetch 1). The tide is near-static; move batch_id on
+// a confirmation, as upsertObs does, if that order ever matters.
+export async function applyTide(
+  tx: Tx,
+  rows: readonly ResolvedTide[],
+  batch: string,
+  fetchedAt: Date,
+): Promise<{ n_new: number; n_changed: number; writes: number }> {
+  if (rows.length === 0) return { n_new: 0, n_changed: 0, writes: 0 };
+  for (const r of rows) if (!Number.isFinite(r.value)) throw new RangeError('load: tide value is not finite');
+  const counted = new Set(rows.filter((r) => r.counted).map((r) => r.id));
+  const { rows: written } = await sql<{ series_id: number; inserted: boolean }>`
+    WITH incoming AS (
+      SELECT DISTINCT ON (i.series_id, i.kind, i.ts) i.series_id, i.kind, i.ts, i.value, i.hilo
+      FROM unnest(${rows.map((r) => r.id)}::int[], ${rows.map((r) => r.kind)}::text[],
+                  ${rows.map((r) => r.ts)}::timestamptz[], ${rows.map((r) => r.value)}::real[],
+                  ${rows.map((r) => r.hilo)}::text[])
+           WITH ORDINALITY AS i(series_id, kind, ts, value, hilo, ord)
+      ORDER BY i.series_id, i.kind, i.ts, i.ord DESC
+    ),
+    wins AS (
+      SELECT i.series_id, i.kind, i.ts, i.value, i.hilo
+      FROM incoming i
+      LEFT JOIN tide t ON t.series_id = i.series_id AND t.kind = i.kind AND t.ts = i.ts
+      LEFT JOIN ingest_batch b ON b.id = t.batch_id
+      WHERE t.series_id IS NULL
+         OR ((t.value, t.hilo) IS DISTINCT FROM (i.value, i.hilo)
+             AND (b.id IS NULL OR b.id = ${batch}::bigint
+                  OR (b.fetched_at, b.id) < (${fetchedAt}::timestamptz, ${batch}::bigint)))
+    )
+    -- Under the loader lock, like every obs write: nothing changes the stored row between wins and this write.
+    INSERT INTO tide AS t (series_id, kind, ts, value, hilo, batch_id)
+    SELECT series_id, kind, ts, value, hilo, ${batch}::bigint FROM wins
+    ON CONFLICT (series_id, kind, ts) DO UPDATE
+      SET value = EXCLUDED.value, hilo = EXCLUDED.hilo, batch_id = EXCLUDED.batch_id
+    RETURNING t.series_id, old.series_id IS NULL AS inserted`.execute(tx);
+  const mine = written.filter((w) => counted.has(w.series_id));
+  const n_new = mine.filter((w) => w.inserted).length;
+  return { n_new, n_changed: mine.length - n_new, writes: written.length };
 }
 
 export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'changed';

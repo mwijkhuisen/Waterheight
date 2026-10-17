@@ -8,12 +8,15 @@ import { errorCode } from '../db/pool.ts';
 import { type Backfilled, LOAD_ADAPTERS, type LoadAdapter, type SpecLoader } from './adapters.ts';
 import {
   type Audience,
+  bumpsDue,
   DATA_EPOCH,
   DATA_FLOOR,
   type DirtyEntry,
   type DirtyKind,
   dirtyEntriesOf,
+  flushBumps,
   markDirty,
+  pendingBumps,
   type Touch,
 } from './dirty.ts';
 import {
@@ -33,6 +36,7 @@ import {
   advanceCursor,
   applyFetchHealth,
   applyGaugeZeros,
+  applyTide,
   type BatchInput,
   clearAttempt,
   closeBatch,
@@ -43,6 +47,7 @@ import {
   openBatch,
   ownerSources,
   previousLoad,
+  type ResolvedTide,
   readAttempt,
   type SeriesRow,
   seriesOf,
@@ -141,6 +146,7 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * `incomplete_run`, a staged LU-3 group whose five files never all arrived (evicted or expired); `combine_drift`,
  * a staged group that its combiner refused; `run_mismatch` and `step_mismatch`, a complete LU-3 group whose files
  * disagree on their times or are not one hour apart (the whole run is withheld, as for an incomplete one).
+ * P16b: `hwlw_unlabelled`, a list of high and low waters the adapter cannot label (nothing of it is stored).
  */
 export const RETAINED = [
   'unit_mismatch',
@@ -161,6 +167,7 @@ export const RETAINED = [
   'combine_drift',
   'run_mismatch',
   'step_mismatch',
+  'hwlw_unlabelled',
 ] as const;
 
 const FLOOR_MS = Date.parse(DATA_FLOOR);
@@ -331,23 +338,43 @@ export class Loader {
       for (const { file, size } of await this.deps.reader.manifests()) {
         let offset = done.get(file) ?? 0;
         while (offset < size) {
-          if (lines > 0 && cut()) return { lines, loaded, more: true };
+          if (lines > 0 && cut()) {
+            await this.flushBumps();
+            return { lines, loaded, more: true };
+          }
           const chunk = await this.deps.reader.lines(file, offset);
           if (chunk.length === 0) break;
           const result = await this.consume(file, offset, chunk, cut);
           lines += result.lines;
           loaded += result.loaded;
           if (result.stalled) return { lines, loaded };
-          if (result.cut) return this.resumed({ lines, loaded, more: true });
+          if (result.cut) {
+            await this.flushBumps();
+            return this.resumed({ lines, loaded, more: true });
+          }
           offset = result.offset;
         }
       }
+      await this.flushBumps();
     } catch (err) {
       // Nothing of the failed step was committed: the next tick starts again from the cursor.
       this.stall(errorCode(err), {});
       return { lines, loaded };
     }
     return this.resumed({ lines, loaded });
+  }
+
+  /**
+   * P16b: the catch-up's deferred day bumps (dirty.ts `deferBumps`), flushed once due: one read per tick, and the
+   * loader lock only when a set is due. A replay's deferred bumps are flushed by the tail's next tick.
+   */
+  private async flushBumps(): Promise<void> {
+    const held = await pendingBumps(this.deps.db);
+    if (held === undefined || held === null || !bumpsDue(held, this.deps.now().getTime())) return;
+    await this.deps.db.transaction().execute(async (tx) => {
+      await lock(tx);
+      await flushBumps(tx, this.deps.now());
+    });
   }
 
   private resumed(result: TickResult): TickResult {
@@ -771,6 +798,18 @@ export class Loader {
     };
     const forecastUnknown = new Set<string>();
     const forecasts = resolveRuns(checked, result.dropped, forecastUnknown);
+    // P16b: a tide row attaches to a primary series of the payload's own source (the adapter names the registered
+    // measured H series of its location and datum); a withheld (`off`) series takes none, a key the registry does not
+    // know is unknown (once per key), another role is counted.
+    const tide: ResolvedTide[] = [];
+    const tideUnknown = new Set<string>();
+    for (const r of result.tide ?? []) {
+      const s = registry.get(r.series);
+      if (s === undefined) tideUnknown.add(r.series);
+      else if (s.off) continue;
+      else if (s.role !== 'primary') result.dropped.tide_not_primary = (result.dropped.tide_not_primary ?? 0) + 1;
+      else tide.push({ ...r, id: s.id, counted: s.sameAudience });
+    }
     const headDrops = forecastDecl(line.source)?.headDrops ?? false;
     const points = (runs: readonly ResolvedRun[]) => runs.reduce((n, r) => n + r.run.points.length, 0);
     const classes = result.classes ?? [];
@@ -785,7 +824,8 @@ export class Loader {
       fill.length +
       refs.filter((r) => r.counted).length +
       warningRows +
-      points(forecasts);
+      points(forecasts) +
+      tide.filter((r) => r.counted).length;
     let n_rows = n_rows_base;
     // Values a registry or parser change could still load: the pruner keeps this object until a replay stores them.
     const n_skipped_base =
@@ -793,6 +833,7 @@ export class Loader {
       fillUnknown.size +
       refUnknown.size +
       forecastUnknown.size +
+      tideUnknown.size +
       RETAINED.reduce((n, code) => n + (result.dropped[code] ?? 0), 0);
     let n_skipped = n_skipped_base;
     let outcome: Outcome = { kind: 'loaded', n_rows, n_new: 0, n_changed: 0 };
@@ -859,12 +900,19 @@ export class Loader {
       if (result.providerUpdated !== undefined) await storeProviderUpdated(tx, line.source, result.providerUpdated);
       const fw = await applyForecasts(tx, line.source, forecasts, state.id, fetchedAt, headDrops, touches.forecast);
       const staged = await this.stage(tx, line, spec, result, refRegistry, state.id, fetchedAt, touches.forecast);
+      // P16b: in no published file yet, so no touch.
+      const tw = await applyTide(tx, tide, state.id, fetchedAt);
       // P14a: a backfill's change that ends before DATA_FLOOR is in no published file or day; markDirty would clip it
       // onto the floor's first day (a dirty row and a bump of 2026-08-01 for every chunk of history).
       if (spec.backfill === true) touches.obs = touches.obs.filter((t) => t.to === undefined || t.to >= FLOOR_MS);
       // P9a: what the publishers render again, and the settled days this payload revised (under the loader lock).
       const maps = [registry, fillRegistry, zeroRegistry, ...(refRegistries?.values() ?? [])];
-      await markDirty(tx, this.deps.now(), await this.dirtyEntries(tx, line.source, touches, maps));
+      await markDirty(
+        tx,
+        this.deps.now(),
+        await this.dirtyEntries(tx, line.source, touches, maps),
+        spec.deferBumps === true,
+      );
       const fc: ForecastWritten = {
         n_new: fw.n_new + staged.written.n_new,
         n_changed: fw.n_changed + staged.written.n_changed,
@@ -901,19 +949,28 @@ export class Loader {
         cls.new +
         cls.changed +
         opened(warnChanges) +
-        fc.n_new;
+        fc.n_new +
+        tw.n_new;
       const n_changed =
         written.n_changed +
         filled.n_changed +
         (zeroChanges.corrected ?? 0) +
         corrected(refChanges) +
         corrected(warnChanges) +
-        fc.n_changed;
+        fc.n_changed +
+        tw.n_changed;
       outcome = { kind: 'loaded', n_rows, n_new, n_changed };
       // A replay that changes nothing leaves the batch exactly as the first load wrote it.
       const changed =
-        written.writes + filled.writes + zeroWrites + refsApplied.writes + cls.writes + warn.writes + fc.writes > 0 ||
-        state.skipped !== n_skipped;
+        written.writes +
+          filled.writes +
+          zeroWrites +
+          refsApplied.writes +
+          cls.writes +
+          warn.writes +
+          fc.writes +
+          tw.writes >
+          0 || state.skipped !== n_skipped;
       if (!state.existed || changed || state.previous !== 'ok') {
         await closeBatch(tx, state.id, batch, { status: 'ok', n_rows, n_new, n_changed, n_skipped, error: null });
       }

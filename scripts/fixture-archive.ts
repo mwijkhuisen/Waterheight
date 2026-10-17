@@ -215,15 +215,28 @@ export const NL_FORECAST_FIXTURES: readonly { spec: string; name: string; varian
   { spec: 'nl-1-fc-3h-0', name: 'nl-1-fc-3h-0-alblasserdam-h-novalue', variant: 'alblasserdam/H' },
 ];
 
-/** The NL-1 forecast captures at their recorded times, in `order` (default: as listed). Returns the lines written. */
+/**
+ * P16b: a forecast capture of a sea code that P16b registers (scheveningen H, RWSM-F232, 2026-10-17): the replay of
+ * the archived captures of a newly registered series loads its runs. Kept out of NL_FORECAST_FIXTURES, whose five
+ * runs the P8a tests pin, and out of the CLI's archive below.
+ */
+export const NL_FORECAST_P16B: readonly { spec: string; name: string; variant: string }[] = [
+  { spec: 'nl-1-fc-3h-0', name: 'nl-1-fc-3h-0-scheveningen-h', variant: 'scheveningen/H' },
+];
+
+/**
+ * The NL-1 forecast captures (`fixtures`, default NL_FORECAST_FIXTURES) at their recorded times, in `order` (default:
+ * as listed). Returns the lines written.
+ */
 export async function buildNlForecastFixtureArchive(
   rawDir: string,
-  order: readonly number[] = NL_FORECAST_FIXTURES.map((_, i) => i),
+  order?: readonly number[],
+  fixtures: readonly { spec: string; name: string; variant: string }[] = NL_FORECAST_FIXTURES,
 ): Promise<ManifestLine[]> {
   const archive = new Archive(rawDir);
   const lines: ManifestLine[] = [];
-  for (const i of order) {
-    const f = NL_FORECAST_FIXTURES[i] as (typeof NL_FORECAST_FIXTURES)[number];
+  for (const i of order ?? fixtures.map((_, j) => j)) {
+    const f = fixtures[i] as (typeof fixtures)[number];
     const { body, at, url } = recorded(f.name, 'NL-1');
     lines.push(
       await writePayload(archive, {
