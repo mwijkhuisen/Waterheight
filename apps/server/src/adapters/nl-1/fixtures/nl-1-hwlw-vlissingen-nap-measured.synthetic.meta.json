@@ -1,0 +1,11 @@
+{
+  "spec": "nl-1-hwlw",
+  "variant": "vlissingen/NAP",
+  "source": "NL-1",
+  "synthetic": true,
+  "derived_from": "hand-made: built from the structure of nl-1-hwlw-astro-goeree-lichteiland-msl.raw with Groepering GETETM2, ProcesType meting, Hoedanigheid NAP, method other:F010, location vlissingen",
+  "values": "every value generated (12 alternating extremes; no archived payload; RWS answered 204 for every measured month probed, Q2)",
+  "recorded_at": "2026-10-17T08:00:00Z",
+  "status": 200,
+  "content_type": "application/json"
+}

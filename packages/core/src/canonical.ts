@@ -162,6 +162,20 @@ export type Normalised = {
   forecasts?: ForecastRunIn[];
   /** P8a: one file of a run that spans several payloads (LU-3), staged until the run is complete. */
   forecastPart?: ForecastPart;
+  /** P16b: astronomical tide and high and low waters (NL-1), stored in `tide`, never in `obs`. */
+  tide?: TideRowIn[];
+};
+
+/**
+ * P16b: one tide value. `series` is the provider key of the registered primary measured H series of the location
+ * and datum the value belongs to; `value` in cm (canonical); `hilo` set exactly for the two extreme kinds.
+ */
+export type TideRowIn = {
+  series: string;
+  kind: 'astro' | 'extreme' | 'extreme_astro';
+  ts: string;
+  value: number;
+  hilo: 'high' | 'low' | null;
 };
 
 /** The observation rows of a Normalised, as one or more arrays (`obsChunks` when the payload set it). */

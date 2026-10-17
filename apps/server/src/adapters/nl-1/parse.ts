@@ -87,16 +87,53 @@ export const JSON_CAPS = {
   maxValues: 10_000,
 } as const satisfies JsonCaps & { maxLists: number; maxValues: number };
 
+export type WaarnemingenCaps = JsonCaps & { maxLists: number; maxValues: number };
+
+/**
+ * P16b, spec nl-1-astro: one location, P400D ahead at 10 minutes. Measured on the untrimmed Vlissingen NAP body of
+ * 2026-10-17 (17,003,443 B): 633,666 nodes, depth 6, 1 list, 57,600 values; about 1.25 × each.
+ */
+export const ASTRO_CAPS = {
+  maxNodes: 800_000,
+  maxDepth: 8,
+  maxLists: 4,
+  maxValues: 72_000,
+} as const satisfies WaarnemingenCaps;
+
+/**
+ * P16b, specs nl-1-hwlw and nl-1-hwlw-astro: the high and low waters of one location. Measured on the Goeree
+ * lichteiland MSL astronomical body of 2026-10-17 (P400D, 457,172 B): 17,072 nodes, depth 6, 1 list, 1,546 values
+ * (about 3.9 a day). The value cap allows an agger station's double low water (6 a day over 401 days: 2,406).
+ */
+export const TIDE_CAPS = {
+  maxNodes: 40_000,
+  maxDepth: 8,
+  maxLists: 4,
+  maxValues: 3_000,
+} as const satisfies WaarnemingenCaps;
+
+/**
+ * P16b, the catch-up seeds nl-1-obs-{sea,wide,slow}-catchup: one window from DATA_EPOCH to the seed's start per row,
+ * 144 values a day (about 11 nodes each). 60,000 values is about 416 days of one list; the spec's 25 MiB byte cap
+ * holds about 88,000 values (about 300 B each, measured on the astro body), so the node cap binds first.
+ */
+export const CATCHUP_CAPS = {
+  maxNodes: 750_000,
+  maxDepth: 8,
+  maxLists: 50,
+  maxValues: 60_000,
+} as const satisfies WaarnemingenCaps;
+
 const decode = (body: Uint8Array) => Buffer.from(body.buffer, body.byteOffset, body.byteLength).toString('utf8');
 
 /** `OphalenWaarnemingen`: every list of the response, in the response's order. */
-export function parseWaarnemingen(body: Uint8Array): Waarnemingen[] {
-  const envelope = parseStrict(Envelope, boundedJson(decode(body), JSON_CAPS));
-  if (envelope.WaarnemingenLijst.length > JSON_CAPS.maxLists) throw new SchemaDrift('too_big', 'WaarnemingenLijst');
+export function parseWaarnemingen(body: Uint8Array, caps: WaarnemingenCaps = JSON_CAPS): Waarnemingen[] {
+  const envelope = parseStrict(Envelope, boundedJson(decode(body), caps));
+  if (envelope.WaarnemingenLijst.length > caps.maxLists) throw new SchemaDrift('too_big', 'WaarnemingenLijst');
   return envelope.WaarnemingenLijst.map((element, i) => {
     const at = ['WaarnemingenLijst', i];
     const lijst = parseStrict(Lijst, element, at);
-    if (lijst.MetingenLijst.length > JSON_CAPS.maxValues) {
+    if (lijst.MetingenLijst.length > caps.maxValues) {
       throw new SchemaDrift('too_big', [...at, 'MetingenLijst'].join('.'));
     }
     return {

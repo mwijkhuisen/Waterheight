@@ -1,0 +1,92 @@
+{
+ "obs": [],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "tide": [
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-14T02:10:00.000Z",
+   "value": 151,
+   "hilo": "high"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-14T08:22:00.000Z",
+   "value": -92,
+   "hilo": "low"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-14T14:34:00.000Z",
+   "value": 163,
+   "hilo": "high"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-14T20:46:00.000Z",
+   "value": -101,
+   "hilo": "low"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-15T02:58:00.000Z",
+   "value": 148,
+   "hilo": "high"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-15T09:10:00.000Z",
+   "value": -88,
+   "hilo": "low"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-15T15:22:00.000Z",
+   "value": 170,
+   "hilo": "high"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-15T21:34:00.000Z",
+   "value": -110,
+   "hilo": "low"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-16T03:46:00.000Z",
+   "value": 158,
+   "hilo": "high"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-16T09:58:00.000Z",
+   "value": -97,
+   "hilo": "low"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-16T16:10:00.000Z",
+   "value": 166,
+   "hilo": "high"
+  },
+  {
+   "series": "vlissingen/WATHTE/NAP/other:F007",
+   "kind": "extreme",
+   "ts": "2026-10-16T22:22:00.000Z",
+   "value": -105,
+   "hilo": "low"
+  }
+ ]
+}
