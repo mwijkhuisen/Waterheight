@@ -187,8 +187,8 @@ describe('the first-release stations and the reach rows', () => {
     byRow.set(key, [...(byRow.get(key) ?? []), st.id]);
   }
 
-  it('there are 148 first-release stations (tier 1 with a public primary series)', () => {
-    expect(stations.size).toBe(148);
+  it('there are 177 first-release stations (tier 1 with a public primary series; 148 before the P16b sea tier)', () => {
+    expect(stations.size).toBe(177);
   });
 
   it('no station is taken by two rows: the rows are disjoint', () => {
@@ -246,7 +246,37 @@ describe('the first-release stations and the reach rows', () => {
       'fr.sandre.E237110501',
       'lu.age.clervaux', // unsnapped
       'lu.age.wiltz', // unsnapped
+      // P16b: the coastal, estuary and lake stations of the sea tier (tier 1), on no river of the table.
+      'nl.rws.borssele',
+      'nl.rws.breskens.handelshaven',
+      'nl.rws.brouwershavensche.gat.08',
+      'nl.rws.bruinisse.krammersluis.oosterschelde.2',
+      'nl.rws.cadzand.1',
+      'nl.rws.denhelder.marsdiep',
+      'nl.rws.denoever.waddenzee.voorhaven',
+      'nl.rws.eemshaven.waddenzee',
       'nl.rws.epen.geul.cottessen', // Geul
+      'nl.rws.haringvliet.10',
+      'nl.rws.harlingen.waddenzee',
+      'nl.rws.hellevoetsluis',
+      'nl.rws.huibertgat',
+      'nl.rws.ijmuiden.buitenhaven',
+      'nl.rws.kornwerderzand.waddenzee.buitenhaven',
+      'nl.rws.krabbersgat.ijsselmeer',
+      'nl.rws.krimpenaandeijssel.hollandscheijssel',
+      'nl.rws.lauwersoog.waddenzee',
+      'nl.rws.maassluis',
+      'nl.rws.markermeer.midden',
+      'nl.rws.oosterschelde.roompotsluis.buiten',
+      'nl.rws.scheveningen',
+      'nl.rws.schiermonnikoog.waddenzee',
+      'nl.rws.stavenisse',
+      'nl.rws.stellendam.buitenhaven',
+      'nl.rws.terschelling.west',
+      'nl.rws.texel.noordzee',
+      'nl.rws.vlieland.haven',
+      'nl.rws.westkapelle',
+      'nl.rws.yerseke',
     ]);
   });
 

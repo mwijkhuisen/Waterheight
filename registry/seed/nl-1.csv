@@ -6,7 +6,8 @@
 #   twin  = every 10 min, asked in TAW instead of NAP (nl-1-obs-twin): the Eijsden-grens twin of registry/twins.yaml;
 #           the WFS snapshot (NL-2) and the live series show it, the trimmed catalogue fixture holds no TAW entry.
 #   sea   = every 10 min (H only): about 30 main tide and storm-surge gauges of the coast, the Wadden Sea, the Scheldt
-#           estuaries and the tidal delta (the 3 key rows of those waters are in the 10-minute tier already).
+#           estuaries and the tidal delta (the 3 key rows of those waters are in the 10-minute tier already), and from
+#           P16b the two lake references krabbersgat.ijsselmeer (IJsselmeer) and markermeer.midden (Markermeer).
 #   wide  = every 30 min: the other coast, Scheldt and delta gauges, the rivers not yet in roadmap 1 and the offshore platforms.
 #   slow  = every 60 min: lakes, canals and regulated water.
 # The sea, wide and slow rows are captured from P16a and registered as stations in P16b (scripts/gen-nl1-stations.ts
@@ -303,7 +304,7 @@ kamperland.schotsman,H,slow,,NAP
 kats.zandkreekdam,Q,slow,,NVT
 ketelhaven.ketelmeer,H,slow,,NAP
 kornwerderzand.ijsselmeer.binnenhaven,H,slow,,NAP
-krabbersgat.ijsselmeer,H,slow,,NAP
+krabbersgat.ijsselmeer,H,sea,,NAP
 krabbersgat.markermeer,H,slow,,NAP
 lelystad.houtribsluis.noord,H,slow,,NAP
 lelystad.houtribsluis.zuid,H,slow,,NAP
@@ -324,7 +325,7 @@ maastricht.bosscherveld,Q,slow,,NVT
 malden.maaswaalkanaal.inlaatteersesluispolder,H,slow,,NAP
 markelo,H,slow,,NAP
 markelo,Q,slow,,NVT
-markermeer.midden,H,slow,,NAP
+markermeer.midden,H,sea,,NAP
 markermeer.trintelzand,H,slow,,NAP
 maurik.mauriksewetering,H,slow,,NAP
 meijel.kanaal.beneden,H,slow,,NAP

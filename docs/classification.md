@@ -61,16 +61,30 @@ Every value gets one state on the scale `no_ref < low < normal < elevated < high
 | NL-4 | stem | Normaal | normal | stage | provider_class | public |  |
 | NL-4 | stem | Normale waterstand | normal | stage | provider_class | public |  |
 | NL-4 | stem | Normale afvoer | normal | stage | provider_class | public |  |
+| NL-4 | stem | Streefpeil | normal | stage | provider_class | public |  |
+| NL-4 | stem | Strefpeil | normal | stage | provider_class | public | a typo of the workbook, kept as published |
 | NL-4 | stem | Licht verhoogd | elevated | stage | provider_class | public | "Licht verhoogd" is elevated, a display class and never a warning (D18) |
 | NL-4 | stem | Verhoogd | elevated | stage | provider_class | public |  |
 | NL-4 | stem | Verhoogde waterstand | elevated | stage | provider_class | public |  |
 | NL-4 | stem | Verhoogde afvoer | elevated | stage | provider_class | public |  |
+| NL-4 | stem | Licht verhoogde afvoer | elevated | stage | provider_class | public |  |
+| NL-4 | stem | Licht verhoogde waterstand | elevated | stage | provider_class | public |  |
+| NL-4 | stem | Licht vehoogd | elevated | stage | provider_class | public | a typo of the workbook, kept as published |
+| NL-4 | stem | Licht verhogd | elevated | stage | provider_class | public | a typo of the workbook, kept as published |
+| NL-4 | stem | Veroogd | elevated | stage | provider_class | public | a typo of the workbook, kept as published |
+| NL-4 | stem | Vorhoogde waterstand | elevated | stage | provider_class | public | a typo of the workbook, kept as published |
+| NL-4 | stem | Verhoogde aanvoer | no_ref | stage | provider_class | public | a reversed-flow band below Normaal: one direction's scale cannot place it (P16b) |
+| NL-4 | stem | Verhoogde instroom naar Veerse Meer | elevated | stage | provider_class | public |  |
+| NL-4 | stem | Verhoogd uitstroom uit Veerse Meer | no_ref | stage | provider_class | public | a reversed-flow band below Normaal (the workbook writes "Verhoogd", kept as published; P16b) |
 | NL-4 | stem | Hoogwater | high | stage | provider_class | public |  |
+| NL-4 | stem | Hoog water | high | stage | provider_class | public |  |
 | NL-4 | stem | Hoge afvoer | high | stage | provider_class | public |  |
 | NL-4 | stem | Hoogwater / Stormvloed | high | stage | provider_class | public |  |
 | NL-4 | stem | Stormvloed | high | stage | provider_class | public | RWS orders it at 2 with Hoogwater, below Extreem: high, not extreme (D18) |
 | NL-4 | stem | Extreem | extreme | stage | provider_class | public |  |
 | NL-4 | stem | Extreem hoogwater | extreme | stage | provider_class | public |  |
+| NL-4 | stem | Extreem hoog water | extreme | stage | provider_class | public |  |
+| NL-4 | stem | Extreem hoog | extreme | stage | provider_class | public |  |
 | NL-4 | stem | Extreme afvoer | extreme | stage | provider_class | public |  |
 | NL-4 | stem | Geen klasse-indeling | no_ref | stage | provider_class | public |  |
 | BE-3 | nivcru | * | no_ref | stage | operational | owner view only | NIVCRU meaning unknown: shown, never classifies (D18) |

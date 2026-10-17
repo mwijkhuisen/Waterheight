@@ -173,7 +173,8 @@ describe('the flood drill through the loader, the renderers and flood-check.mjs'
     await loadBase();
     await seed();
     expect(await q("SELECT 1 FROM ingest_batch WHERE parse_status <> 'ok'")).toEqual([]);
-    expect(new Set(alerts.map((a) => a.code))).toEqual(new Set(['warning_changed']));
+    // registry_drift: the 2026-09-30 NL-2 recording lacks five series the P16b registry takes from a later snapshot.
+    expect(new Set(alerts.map((a) => a.code))).toEqual(new Set(['warning_changed', 'registry_drift']));
     alerts.length = 0;
   });
 

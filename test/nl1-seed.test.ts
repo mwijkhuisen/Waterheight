@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 import { loadRegistry, REGISTRY_DIR, readSeed } from '../apps/server/src/capture/specs.ts';
 import { LOAD_ADAPTERS } from '../apps/server/src/load/adapters.ts';
-import { CAPTURE_ONLY } from '../scripts/contract-check.ts';
+import { StationsFile } from '../packages/contracts/src/index.ts';
 import { CATALOGUE, locations, WFS } from '../scripts/rws-inventory.ts';
 import { repoRoot } from './catalogue.ts';
 
@@ -55,7 +56,9 @@ describe('registry/seed/nl-1.csv, the P16a tiers', () => {
       const t = typeOf(r.code);
       const at = `${r.code}/${r.quantity} ${r.tier}`;
       if (r.tier === 'sea') {
-        expect(['coast', 'scheldt', 'delta'], at).toContain(t);
+        // P16b (Q3): the two lake references krabbersgat.ijsselmeer and markermeer.midden are sea-tier rows.
+        const lakeReference = ['krabbersgat.ijsselmeer', 'markermeer.midden'].includes(r.code ?? '');
+        expect(lakeReference ? ['lake'] : ['coast', 'scheldt', 'delta'], at).toContain(t);
         expect(r.quantity, at).toBe('H');
       } else if (t === 'lake' || t === 'canal') expect(r.tier, at).toBe('slow');
       else expect(r.tier, at).toBe('wide');
@@ -86,15 +89,19 @@ describe('registry/seed/nl-1-tide.csv', () => {
       .filter(([, l]) => l.row.type !== 'structure')
       .flatMap(([code, l]) =>
         (Object.keys(SERIES) as (keyof typeof SERIES)[]).flatMap((series) =>
-          l.combos[SERIES[series]].map((c) =>
-            [
-              code,
-              series,
-              c.hoedanigheid,
-              series === 'astro' ? '' : c.groepering,
-              series === 'astro' ? c.method : '',
-            ].join(','),
-          ),
+          // P16b: only combinations of a Hoedanigheid the location has a live H series in (Goeree lichteiland is
+          // MSL only: its catalogue NAP high and low water has no registered series to attach to).
+          l.combos[SERIES[series]]
+            .filter((c) => l.series.some((x) => x.quantity === 'H' && x.hoedanigheid === c.hoedanigheid))
+            .map((c) =>
+              [
+                code,
+                series,
+                c.hoedanigheid,
+                series === 'astro' ? '' : c.groepering,
+                series === 'astro' ? c.method : '',
+              ].join(','),
+            ),
         ),
       );
     // The hwlw requests carry no method, so combinations that differ only in method are one row.
@@ -118,6 +125,24 @@ describe('registry/seed/nl-1-tide.csv', () => {
         expect(r.method, at).toBe('');
         expect(r.groepering, at).toBe(GROUPING[r.series as keyof typeof GROUPING][r.hoedanigheid as 'NAP' | 'MSL']);
       }
+    }
+  });
+
+  it('maps every row to exactly one registered same-datum primary H series', () => {
+    const registered = StationsFile.parse(
+      parse(readFileSync(`${repoRoot}registry/stations/nl-1.yaml`, 'utf8')),
+    ).stations;
+    for (const r of tide) {
+      const hits = registered.filter(
+        (s) =>
+          s.provider_code === r.code &&
+          s.quantity === 'H' &&
+          s.role === 'primary' &&
+          s.audience === 'public' &&
+          'datum' in s &&
+          s.datum === r.hoedanigheid,
+      );
+      expect(hits, `${r.code}/${r.series}/${r.hoedanigheid}`).toHaveLength(1);
     }
   });
 
@@ -163,24 +188,32 @@ describe('invariant 1: the P16a specs ask only what the seeds say', () => {
     'nl-1-catalogue',
   ];
   const specs = loadRegistry().specs.filter((s) => s.source === 'NL-1' && !ROADMAP_1.includes(s.id));
+  // P16b: the three catch-up specs (seed specs of the same rows) come with the loader.
+  const CATCH_UP = ['nl-1-obs-sea-catchup', 'nl-1-obs-wide-catchup', 'nl-1-obs-slow-catchup'];
 
   it('the six specs exist: three observation tiers and three tide series', () => {
-    expect(specs.map((s) => s.id).sort()).toEqual([
-      'nl-1-astro',
-      'nl-1-hwlw',
-      'nl-1-hwlw-astro',
-      'nl-1-obs-sea',
-      'nl-1-obs-slow',
-      'nl-1-obs-wide',
-    ]);
+    expect(
+      specs
+        .filter((s) => !CATCH_UP.includes(s.id))
+        .map((s) => s.id)
+        .sort(),
+    ).toEqual(['nl-1-astro', 'nl-1-hwlw', 'nl-1-hwlw-astro', 'nl-1-obs-sea', 'nl-1-obs-slow', 'nl-1-obs-wide']);
   });
 
-  // Tripwire (SR-4): until P16b these specs are captured and archived only. A loader entry would put their values
-  // (a forecast, 400 days of astronomical tide) into obs. P16b replaces this test with the real loader tests.
-  it('none of the six, and none of the capture-only contract probes, has a loader entry yet', () => {
+  // P16b (replaces the P16a tripwire, SR-4): the six live specs and the three catch-up specs have a loader entry.
+  it('each of the six live specs and the three catch-up specs has a loader entry', () => {
     const loaded = Object.keys(LOAD_ADAPTERS['NL-1']?.specs ?? {});
-    expect(loaded).toContain('nl-1-obs-key'); // the NL-1 entry exists, so the check below is not vacuous
-    for (const id of [...specs.map((s) => s.id), ...CAPTURE_ONLY]) expect(loaded, id).not.toContain(id);
+    for (const id of [
+      'nl-1-obs-sea',
+      'nl-1-obs-wide',
+      'nl-1-obs-slow',
+      'nl-1-hwlw',
+      'nl-1-hwlw-astro',
+      'nl-1-astro',
+      ...CATCH_UP,
+    ]) {
+      expect(loaded, id).toContain(id);
+    }
   });
 
   it('each is built by the adapter from a fixed URL and takes its rows from a seed through its where', () => {

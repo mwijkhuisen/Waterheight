@@ -63,8 +63,9 @@ if (import.meta.main) {
   writeFileSync(OUTPUT, text);
   const codes = (description: string) =>
     new Set(rows.filter((r) => r.description === description && r.code !== 'alle*').map((r) => r.code)).size;
-  // The curated NL-1 series (tiers key and other; the twin is the same gauge in another datum).
-  const seed = readSeed(REGISTRY_DIR, 'nl-1').filter((r) => r.tier === 'key' || r.tier === 'other');
+  // Every captured NL-1 series in NAP or NVT (P16b: all tiers; the classes belong to those series, so a TAW twin and an
+  // MSL platform series are left out).
+  const seed = readSeed(REGISTRY_DIR, 'nl-1').filter((r) => r.hoedanigheid !== 'TAW' && r.hoedanigheid !== 'MSL');
   const cover = coverage(
     rows,
     seed.map((r) => ({ code: r.code ?? '', quantity: r.quantity ?? '' })),

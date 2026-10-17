@@ -136,6 +136,9 @@ describe('NL-4 stems on registered series', () => {
     for (const r of rows) {
       const row = crosswalkRow('NL-4', 'stem', nl4Stem(r.label));
       if (row === undefined || row.level === 'no_ref') continue;
+      // A zero-width band (From = To: the workbook's Streefpeil marker, P16b) holds no value of [From, To), so it is
+      // never a value's class and cannot invert the order.
+      if (r.from !== null && r.from === r.to) continue;
       const key = `${r.code}\n${r.description}\n${r.from_md}\n${r.to_md}`;
       sets.set(key, [
         ...(sets.get(key) ?? []),

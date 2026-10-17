@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { STALE_SERIES } from '../apps/server/src/adapters/nl-1/normalise.ts';
+import { H_DESCRIPTION, Q_DESCRIPTION } from '../apps/server/src/adapters/nl-4/normalise.ts';
 import {
   PublicStation,
   SourcesFile,
@@ -9,7 +10,8 @@ import {
   validateStations,
   validateTwins,
 } from '../packages/contracts/src/index.ts';
-import { generate, type Inputs, OUTPUT, readInputs } from '../scripts/gen-nl1-stations.ts';
+import { evident, generate, type Inputs, OUTPUT, readInputs, WATERS } from '../scripts/gen-nl1-stations.ts';
+import { locations } from '../scripts/rws-inventory.ts';
 import { repoRoot } from './catalogue.ts';
 
 // registry/stations/nl-1.yaml is generated (scripts/gen-nl1-stations.ts) from the NL-1 seed, the recorded
@@ -24,7 +26,18 @@ const twinsDoc = parse(readFileSync(`${repoRoot}registry/twins.yaml`, 'utf8')) a
   twins: { a: { source: string; provider_key: string }; b: { source: string; provider_key: string } }[];
 };
 
-const rows = StationsFile.parse(parse(committed)).stations.filter((s): s is PublicStation => s.audience !== 'owner');
+const all = StationsFile.parse(parse(committed)).stations.filter((s): s is PublicStation => s.audience !== 'owner');
+// The roadmap-1 rows (P2b, P5a): the series of the seed tiers key, other and twin. P16b adds the sea, wide and slow
+// tiers and the structure-internal off rows; their tests are at the end of the file.
+const ROADMAP_SERIES = new Set(
+  inputs.seed.filter((r) => ['key', 'other', 'twin'].includes(r.tier ?? '')).map((r) => `${r.code}/${r.quantity}`),
+);
+const rows = all.filter(
+  (r) =>
+    r.audience === 'public' &&
+    ROADMAP_SERIES.has(`${r.provider_code}/${r.quantity}`) &&
+    (r.role === 'primary' || r.provider_code === 'eijsden.grens'),
+);
 const stationIds = (of: PublicStation[]) => new Set(of.map((r) => r.id));
 const codes = (of: PublicStation[]) => [...new Set(of.map((r) => r.provider_code))].sort();
 const method = (r: PublicStation) => r.provider_key.split('/')[3];
@@ -177,10 +190,12 @@ describe('registry/stations/nl-1.yaml', () => {
   });
 
   it('flags the seven sea and estuary gauges tidal (tier 2), the tier-1 river gauges not tidal, the rest unknown', () => {
-    expect(codes(rows.filter((r) => r.flags.tidal === true))).toEqual(TIDAL);
+    // P16b: four more roadmap-1 gauges are tidal by their water type (rws-inventory TABLE: delta); no other flag moved.
+    const tidalNow = [...TIDAL, 'heesbeen', 'hoekvanholland', 'moerdijk', 'werkendam.nieuwemerwede'].sort();
+    expect(codes(rows.filter((r) => r.flags.tidal === true))).toEqual(tidalNow);
     expect(rows.filter((r) => TIDAL.includes(r.provider_code)).every((r) => r.tier === 2)).toBe(true);
     for (const r of rows) {
-      const want = TIDAL.includes(r.provider_code) ? true : r.tier === 1 ? false : null;
+      const want = tidalNow.includes(r.provider_code) ? true : r.tier === 1 ? false : null;
       expect([r.id, r.flags.tidal]).toEqual([r.id, want]);
     }
   });
@@ -323,6 +338,181 @@ describe('registry/stations/nl-1.yaml', () => {
   });
 });
 
+describe('registry/stations/nl-1.yaml, the P16b rows (sea, wide and slow tiers, structure-internal off rows)', () => {
+  const catalogue = inputs.catalogue as { LocatieLijst: { Code: string; Naam: string }[] };
+  const nameOf = new Map(catalogue.LocatieLijst.map((l) => [l.Code, l.Naam]));
+  const places = locations(inputs.catalogue, inputs.wfs);
+  const typeOf = (code: string) => places.get(code)?.row.type;
+  const structure = [...places].filter(([, l]) => l.row.type === 'structure');
+  const off = all.filter((r) => r.audience === 'off');
+  const pub = all.filter((r) => r.audience === 'public');
+  const added = pub.filter((r) => !rows.includes(r));
+  const findAny = (code: string) => {
+    const row = pub.find((r) => r.provider_code === code && r.quantity === 'H' && r.role === 'primary');
+    if (row === undefined) throw new Error(`no NL-1 row ${code}`);
+    return row;
+  };
+  const seedTier = (code: string, quantity: string) =>
+    inputs.seed.filter((r) => r.code === code && r.quantity === quantity).map((r) => r.tier);
+
+  it('holds 429 rows at 391 stations: 411 public rows at 373 stations and 18 off rows', () => {
+    expect(all).toHaveLength(429);
+    expect(stationIds(all).size).toBe(391);
+    expect(pub).toHaveLength(411);
+    expect(stationIds(pub).size).toBe(373);
+    expect(off).toHaveLength(18);
+    // 414 seed rows less the three the registry cannot hold (driel.boven Q and arnhem.nederrijn Q are stale, hedel H not live).
+    expect(inputs.seed).toHaveLength(414);
+    expect(added).toHaveLength(411 - rows.length);
+    expect(added.filter((r) => r.role === 'twin').map((r) => r.provider_key)).toEqual([
+      'elsloo.maas/WATHTE/TAW/other:F007',
+    ]);
+    const by = (f: (r: PublicStation) => string) => {
+      const m: Record<string, number> = {};
+      for (const r of pub) m[f(r)] = (m[f(r)] ?? 0) + 1;
+      return m;
+    };
+    expect(by((r) => `${r.datum}`)).toEqual({ NAP: 300, MSL: 12, TAW: 2, null: 97 });
+    expect(by((r) => `${r.quantity}/${r.role}`)).toEqual({ 'H/primary': 312, 'H/twin': 2, 'Q/primary': 97 });
+  });
+
+  it('registers every seed row once, but the three the registry leaves out', () => {
+    const left = ['driel.boven/Q', 'arnhem.nederrijn/Q', 'hedel/H'];
+    const key = (code: string | undefined, quantity: string | undefined, role: string) => `${code}/${quantity}/${role}`;
+    const seeded = inputs.seed.map((r) =>
+      key(r.code, r.quantity, r.tier === 'twin' || r.hoedanigheid === 'TAW' ? 'twin' : 'primary'),
+    );
+    const registered = new Set(pub.map((r) => key(r.provider_code, r.quantity, r.role)));
+    expect(registered.size).toBe(pub.length);
+    const missing = seeded.filter((k) => !registered.has(k)).map((k) => k.slice(0, k.lastIndexOf('/')));
+    expect(missing.sort()).toEqual([...left].sort());
+  });
+
+  it('declares one Hoedanigheid per seed row: NAP, NVT for Q, TAW as a twin, MSL for the offshore platforms only', () => {
+    for (const r of added) {
+      expect(r.provider_key.split('/')[2], r.provider_key).toBe(r.quantity === 'Q' ? 'NVT' : r.datum);
+      expect(['NAP', 'MSL', 'TAW', null], r.provider_key).toContain(r.datum);
+      expect(r.native_step, r.provider_key).toBe('PT10M');
+      expect(r.first_release, r.provider_key).toBe(r.tier === 1 && r.role === 'primary');
+    }
+    // MSL: every MSL row is an offshore location, and every offshore H row is MSL.
+    const msl = pub.filter((r) => r.datum === 'MSL');
+    expect(msl).toHaveLength(12);
+    for (const r of msl) expect([r.id, typeOf(r.provider_code)]).toEqual([r.id, 'offshore']);
+    const offshoreH = pub.filter((r) => r.quantity === 'H' && typeOf(r.provider_code) === 'offshore');
+    expect(offshoreH.map((r) => r.id)).toEqual(msl.map((r) => r.id));
+    for (const r of msl) expect([r.expected_threshold_source, r.expected_forecast_source]).toEqual([null, null]);
+  });
+
+  it('keeps the Elsloo TAW series a twin with no pair in registry/twins.yaml', () => {
+    expect(pub.find((r) => r.provider_code === 'elsloo.maas' && r.role === 'twin')).toMatchObject({
+      datum: 'TAW',
+      tier: 2,
+      expected_forecast_source: null,
+    });
+    expect(twinsDoc.twins.filter((t) => JSON.stringify(t).includes('elsloo'))).toEqual([]);
+  });
+
+  it('sets the staleness limit by tier: sea 1 h, wide 90 min, slow 3 h', () => {
+    for (const r of added) {
+      const tiers = seedTier(r.provider_code, r.quantity);
+      const want = tiers.includes('sea') ? 'PT1H' : tiers.includes('wide') ? 'PT90M' : 'PT3H';
+      expect([r.provider_key, r.staleness_limit]).toEqual([r.provider_key, want]);
+    }
+  });
+
+  it('puts every station with a sea row in tier 1, and no new row in the first release', () => {
+    const seaCodes = new Set(inputs.seed.filter((r) => r.tier === 'sea').map((r) => r.code));
+    expect(seaCodes.size).toBe(29);
+    const tier1Codes = new Set(pub.filter((r) => r.tier === 1).map((r) => r.provider_code));
+    expect([...tier1Codes].sort()).toEqual([...new Set([...TIER1, ...seaCodes])].sort());
+    // first_release is public, primary and tier 1: the 41 roadmap-1 rows, 29 sea rows and the Q row of epen.
+    expect(pub.filter((r) => r.first_release)).toHaveLength(71);
+    expect(pub.every((r) => r.first_release === (r.tier === 1 && r.role === 'primary'))).toBe(true);
+    // The two lake references are tier 1 and not tidal.
+    for (const code of ['krabbersgat.ijsselmeer', 'markermeer.midden']) {
+      expect(findAny(code)).toMatchObject({ tier: 1, flags: { tidal: false, lake: true }, first_release: true });
+    }
+  });
+
+  it('flags tidal by the water type of rws-inventory and lake for the lakes; only four roadmap-1 rows moved', () => {
+    for (const r of pub) {
+      const t = typeOf(r.provider_code);
+      const tidal = TIDAL.includes(r.provider_code) || ['coast', 'scheldt', 'delta', 'offshore'].includes(t ?? '');
+      expect([r.id, r.flags.tidal === true]).toEqual([r.id, tidal]);
+      expect([r.id, r.flags.lake === true]).toEqual([r.id, t === 'lake']);
+      expect(r.flags.lake === undefined || r.flags.lake === true).toBe(true);
+    }
+    const moved = rows.filter((r) => r.flags.tidal === true && !TIDAL.includes(r.provider_code));
+    expect(codes(moved)).toEqual(['heesbeen', 'hoekvanholland', 'moerdijk', 'werkendam.nieuwemerwede']);
+  });
+
+  it('names a water only where the RWS code or the catalogue name contains it, and leaves the roadmap-1 rows null', () => {
+    expect(WATERS.size).toBe(44);
+    for (const [code, water] of WATERS) {
+      expect(evident(water, code, nameOf.get(code) ?? ''), `${code} ${water}`).toBe(true);
+      expect(
+        rows.some((r) => r.provider_code === code),
+        code,
+      ).toBe(false);
+    }
+    for (const r of all) {
+      expect([r.id, r.water_name]).toEqual([r.id, WATERS.get(r.provider_code) ?? null]);
+      expect([r.id, r.km, r.river]).toEqual([r.id, null, null]);
+    }
+    expect(findAny('denoever.waddenzee.voorhaven').water_name).toBe('Waddenzee');
+    expect(findAny('krabbersgat.markermeer').water_name).toBe('Markermeer');
+    expect(findAny('scheveningen').water_name).toBeNull();
+    expect(findAny('dordrecht.oudemaas.benedenmerwede').water_name).toBeNull();
+  });
+
+  it('registers the 18 structure-internal locations as off rows with their reason in the header, none in a seed', () => {
+    expect(structure).toHaveLength(18);
+    expect(off.map((r) => r.provider_code).sort()).toEqual(structure.map(([c]) => c).sort());
+    expect(off.filter((r) => r.quantity === 'H')).toHaveLength(6);
+    expect(off.filter((r) => r.quantity === 'Q')).toHaveLength(12);
+    const flat = committed.slice(0, committed.indexOf('\nstations:')).replace(/\n#\s+/g, ' ');
+    for (const [code, place] of structure) {
+      expect(place.row.reason, code).toBeTruthy();
+      expect(flat, code).toContain(`${code} (${place.row.reason})`);
+      expect(
+        inputs.seed.some((r) => r.code === code),
+        code,
+      ).toBe(false);
+      expect(
+        inputs.forecast.some((r) => r.code === code),
+        code,
+      ).toBe(false);
+    }
+    for (const r of off) {
+      expect([r.id, r.audience, r.first_release, r.expected_threshold_source, r.expected_forecast_source]).toEqual([
+        r.id,
+        'off',
+        false,
+        null,
+        null,
+      ]);
+    }
+  });
+
+  it('names NL-4 and NL-1 for the new NAP and NVT series that the NL-4 file and the forecast list have', () => {
+    const classed = new Set(inputs.thresholds.map((t) => `${t.description}\n${t.code}`));
+    const forecast = new Set(inputs.forecast.map((r) => `${r.code}/${r.quantity}`));
+    for (const r of added.filter((x) => x.role === 'primary' && x.datum !== 'MSL')) {
+      const description = r.quantity === 'H' ? H_DESCRIPTION : Q_DESCRIPTION;
+      expect([r.id, r.quantity, r.expected_forecast_source]).toEqual([
+        r.id,
+        r.quantity,
+        forecast.has(`${r.provider_code}/${r.quantity}`) ? 'NL-1' : null,
+      ]);
+      expect([r.id, r.expected_threshold_source]).toEqual([
+        r.id,
+        classed.has(`${description}\n${r.provider_code}`) ? 'NL-4' : null,
+      ]);
+    }
+  });
+});
+
 describe('scripts/gen-nl1-stations.ts fails loudly', () => {
   type Feature = { properties: Record<string, string>; geometry: { coordinates: number[] } };
   const withWfs = (change: (features: Feature[]) => void) => {
@@ -362,7 +552,8 @@ describe('scripts/gen-nl1-stations.ts fails loudly', () => {
       copy.properties.CODE = 'hedel';
       fs.push(copy);
     });
-    expect(hedel).toThrow(/hedel\/WATHTE\/NAP is in NOT_LIVE but the WFS shows it live/);
+    // The inventory table is read first: a live code it lacks is refused before the NOT_LIVE check.
+    expect(hedel).toThrow(/live location hedel has no TABLE row/);
   });
 
   it('on a series with no live feature, a WFS unit or coordinate that disagrees', () => {
@@ -379,6 +570,13 @@ describe('scripts/gen-nl1-stations.ts fails loudly', () => {
         coordinates[0] = (coordinates[0] ?? 0) + 0.001;
       }),
     ).toThrow(/venlo\/WATHTE\/NAP: WFS coordinates .* disagree with the catalogue/);
+  });
+
+  it('on an unknown Hoedanigheid of a seed row, and on a structure-internal code in the seed', () => {
+    const seed = inputs.seed.map((r) => (r.code === 'a12' ? { ...r, hoedanigheid: 'XYZ' } : r));
+    expect(() => run({ seed })).toThrow(/a12 H\/wide: unknown hoedanigheid "XYZ"/);
+    const lock = { code: 'beekendonk.sluis6.kolk', quantity: 'Q', tier: 'slow', note: '', hoedanigheid: 'NVT' };
+    expect(() => run({ seed: [...inputs.seed, lock] })).toThrow(/beekendonk\.sluis6\.kolk is in the seed/);
   });
 
   it('but takes an exact duplicate feature as one', () => {

@@ -2494,9 +2494,16 @@
  "drift": {
   "unregistered": [
    "driel.boven/Q/NVT/other:F103",
-   "epen.geul.cottessen/Q/NVT/other:F007"
+   "eindhoven.gender/Q/NVT/other:F007",
+   "sonenbreugel.wilhelminakanaal/Q/NVT/other:F007"
   ],
-  "vanished": [],
+  "vanished": [
+   "borgsweer.verbindingskanaal/Q/NVT/other:F007",
+   "delfzijl.oudeeemskanaal.spuisluis/WATHTE/NAP/other:F007",
+   "dorkwerd.reitdiep/WATHTE/NAP/other:F007",
+   "oosterschelde.14/WATHTE/NAP/other:F007",
+   "slochtersluis.boven/WATHTE/NAP/other:F007"
+  ],
   "changed": []
  }
 }

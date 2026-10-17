@@ -122,7 +122,7 @@ describe('forecastCoverage per family', { timeout: 300_000 }, () => {
     publicBefore = await forecastCoverage(pub.db, 'public', NOW);
     expect(ForecastCoverage.safeParse(publicBefore).success).toBe(true);
     expect(publicBefore.t).toBe(iso(NOW));
-    expect(publicBefore.total).toEqual({ stations: 148, covered: 2 });
+    expect(publicBefore.total).toEqual({ stations: 177, covered: 2 });
     expect(reach(publicBefore, 'dutch-rhine-branches')).toMatchObject({ stations: 18, covered: 1, sources: ['NL-1'] });
     expect(reach(publicBefore, 'grensmaas-dutch-meuse')).toMatchObject({ stations: 9, covered: 1, sources: ['NL-1'] });
     // Nijmegen's run ended, Zaltbommel's is not known yet: neither covers its station.
@@ -130,9 +130,9 @@ describe('forecastCoverage per family', { timeout: 300_000 }, () => {
     const nl = publicBefore.countries.find((c) => c.country === 'NL');
     expect(nl?.covered).toBe(2);
     expect(publicBefore.countries.map((c) => c.country)).toEqual(['BE', 'CH', 'DE', 'FR', 'LU', 'NL']);
-    expect(publicBefore.countries.reduce((s, c) => s + c.stations, 0)).toBe(148);
-    // The 27 stations of no row are in the total.
-    expect(publicBefore.other.stations).toBe(27);
+    expect(publicBefore.countries.reduce((s, c) => s + c.stations, 0)).toBe(177);
+    // The 56 stations of no row (27 and, from P16b, 29 Dutch coast, estuary and lake stations) are in the total.
+    expect(publicBefore.other.stations).toBe(56);
   });
 
   it('public: the rows with no public source are no_official_forecast, with the agencies that could change it', () => {
@@ -216,7 +216,7 @@ describe('forecastCoverage per family', { timeout: 300_000 }, () => {
     });
     // NL-1 as in the public report; the total gains the owner runs.
     expect(reach(owner, 'dutch-rhine-branches')).toMatchObject({ covered: 1, sources: ['NL-1'] });
-    expect(owner.total).toEqual({ stations: 148, covered: 6 });
+    expect(owner.total).toEqual({ stations: 177, covered: 6 });
   });
 
   it('the denominator is the same in both families: the same stations per country, reach and other', async () => {
@@ -226,7 +226,7 @@ describe('forecastCoverage per family', { timeout: 300_000 }, () => {
     expect(o.countries.map((c) => [c.country, c.stations])).toEqual(p.countries.map((c) => [c.country, c.stations]));
     expect(o.reaches.map((r) => [r.id, r.stations])).toEqual(p.reaches.map((r) => [r.id, r.stations]));
     // Owner-only stations (BE-3, LU-2) are not first-release and never count.
-    expect(p.total.stations).toBe(148);
+    expect(p.total.stations).toBe(177);
   });
 
   it("P9a: the owner read's public split (the owner status file) equals the public family's coverage", async () => {

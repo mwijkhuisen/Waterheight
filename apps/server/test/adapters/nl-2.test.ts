@@ -35,6 +35,20 @@ const EIJSDEN_Q = 'eijsden.grens/Q/NVT/other:F216';
 const DRIEL_H = 'driel.boven/WATHTE/NAP/other:F007';
 const NIEUWEGEIN_Q = 'nieuwegein.doorslag/Q/NVT/other:F103';
 const AADORP_H = 'aadorp/WATHTE/NAP/other:F155';
+/**
+ * P16b: the registry is generated from the newer snapshot (nl-2-wfs-20261016); these five registered NAP and NVT series
+ * are not in this older recording, so the drift report calls them vanished.
+ */
+const NEWER_SNAPSHOT = [
+  'borgsweer.verbindingskanaal/Q/NVT/other:F007',
+  'delfzijl.oudeeemskanaal.spuisluis/WATHTE/NAP/other:F007',
+  'dorkwerd.reitdiep/WATHTE/NAP/other:F007',
+  'oosterschelde.14/WATHTE/NAP/other:F007',
+  'slochtersluis.boven/WATHTE/NAP/other:F007',
+];
+/** The two canal discharges with a second live feature (F007, RIKZ_AFVOER) beside the registered F058 (P16b). */
+const SECOND_FEATURE = ['eindhoven.gender/Q/NVT/other:F007', 'sonenbreugel.wilhelminakanaal/Q/NVT/other:F007'];
+const napOrNvt = (key: string) => ['NAP', 'NVT'].includes(key.split('/')[2] ?? '');
 
 /** The NL-1 series rows the loader hands the drift report (registry/stations/nl-1.yaml: key and station position). */
 const NL1 = new Map(
@@ -128,8 +142,11 @@ describe('golden files (real payload)', () => {
     expect(featureOf(LOBITH_H).properties.WAARDE_LAATSTE_METING).toBe(607);
     const rest = JSON.parse(readFileSync(goldenUrl('NL-1', 'nl-1-obs-key'), 'utf8')) as Normalised;
     expect(rest.obs.at(-1)).toMatchObject({ series: LOBITH_H, ts: '2026-09-29T13:20:00.000Z', value: 607 });
-    // Every registered NAP or NVT key of NL-1 is in the NL-1 key format the snapshot yields.
-    for (const key of NL1.keys()) if (!key.includes('/TAW/')) expect([key, at.has(key)]).toEqual([key, true]);
+    // Every registered NAP or NVT key of NL-1 is in the NL-1 key format the snapshot yields (but the five that only
+    // the newer snapshot lists).
+    for (const key of NL1.keys()) {
+      if (napOrNvt(key) && !NEWER_SNAPSHOT.includes(key)) expect([key, at.has(key)]).toEqual([key, true]);
+    }
   });
 });
 
@@ -412,9 +429,10 @@ describe('drift report (NL-1 registry)', () => {
 
   it('the recorded snapshot: two live series of registered stations are unregistered; nothing vanished or moved', () => {
     expect(driftReport(NL1, real)).toEqual({
-      // Driel Q is on NL-1's stale list (a stale value under a fresh timestamp); Epen Q is not in the seed list.
-      unregistered: ['driel.boven/Q/NVT/other:F103', 'epen.geul.cottessen/Q/NVT/other:F007'],
-      vanished: [],
+      // Driel Q is on NL-1's stale list (a stale value under a fresh timestamp); Epen Q is registered since P16b; the
+      // two canal discharges have a second feature (F007) beside the registered F058.
+      unregistered: ['driel.boven/Q/NVT/other:F103', ...SECOND_FEATURE],
+      vanished: NEWER_SNAPSHOT,
       changed: [],
     });
   });
@@ -441,14 +459,14 @@ describe('drift report (NL-1 registry)', () => {
 
   it('a registered series the snapshot no longer lists has vanished; the TAW twin never has', () => {
     expect(NL1.has(EIJSDEN_TAW)).toBe(true);
-    expect(driftReport(NL1, replace(LOBITH_Q, null)).vanished).toEqual([LOBITH_Q]);
+    expect(driftReport(NL1, replace(LOBITH_Q, null)).vanished).toEqual([...NEWER_SNAPSHOT, LOBITH_Q].sort());
     // A series dropped by the time rule is not listed either.
-    expect(driftReport(NL1, replace(LOBITH_Q, labelled(LOBITH_Q, '2026-09-29T18:00:00.000Z'))).vanished).toEqual([
-      LOBITH_Q,
-    ]);
-    expect(driftReport(NL1, replace(EIJSDEN_TAW, null)).vanished).toEqual([]);
+    expect(driftReport(NL1, replace(LOBITH_Q, labelled(LOBITH_Q, '2026-09-29T18:00:00.000Z'))).vanished).toEqual(
+      [...NEWER_SNAPSHOT, LOBITH_Q].sort(),
+    );
+    expect(driftReport(NL1, replace(EIJSDEN_TAW, null)).vanished).toEqual(NEWER_SNAPSHOT);
     const empty = driftReport(NL1, collectionOf('nl-2-wfs-empty.synthetic'));
-    expect(empty.vanished).toEqual([...NL1.keys()].filter((k) => !k.includes('/TAW/')).sort());
+    expect(empty.vanished).toEqual([...NL1.keys()].filter(napOrNvt).sort().slice(0, 200)); // the report caps at 200
     expect(empty.vanished).not.toContain(EIJSDEN_TAW);
   });
 
@@ -458,8 +476,9 @@ describe('drift report (NL-1 registry)', () => {
     const lobithNew = withCode(h, { WAARDEBEPALINGSMETHODECODE: 'other:F999' });
     expect(driftReport(NL1, withFeatures([...real.features, ...extra, lobithNew])).unregistered).toEqual([
       'driel.boven/Q/NVT/other:F103',
-      'epen.geul.cottessen/Q/NVT/other:F007',
+      SECOND_FEATURE[0],
       'lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F999',
+      SECOND_FEATURE[1],
     ]);
   });
 
