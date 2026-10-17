@@ -330,7 +330,7 @@ specs:
     validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
   - id: nl-1-hwlw-astro
     source: NL-1
-    version: 1
+    version: 2
     cron: "30 30 4 2 * *"
     request:
       method: POST

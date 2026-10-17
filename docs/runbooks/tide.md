@@ -87,7 +87,11 @@ The tide values attach to the registered primary measured H series of the same l
 2. Without one, the label from strict alternation inside the list stays (the fallback).
 3. With neither, the row is not stored (`hwlw_unlabelled`, below).
 
-`tide_label` is read by the loader only: no view, no API, publish or owner role. The type window starts at the run, so there is no replay of earlier lines to restate labels; a type payload that loads after its heights relabels nothing until the next heights fetch (180 s after its type, next month) or a replay (KG-381).
+`tide_label` is read by the loader only: no view, no API, publish or owner role. The type window starts at the run, so there is no replay of earlier lines to restate labels; a type payload that loads after its heights relabels nothing until the next heights fetch (180 s after its type, next month) or a replay (KG-381). So when the hourly retry of the 2nd re-ran a type variant (`<code>/<NAP|MSL>/GETETTPE` failed first, then succeeded: the capture log and `/status/capture.json`), replay the spec for that day once the run has ended; the heights then take RWS's labels, and an agger location whose heights were withheld as `hwlw_unlabelled` is stored:
+
+```bash
+rwsc run --rm --no-deps -T load replay --source NL-1 --spec nl-1-hwlw-astro --from <YYYY-MM-02> --to <YYYY-MM-03>
+```
 
 **The deploy rule (owner, 2026-10-17; KG-377, R-108).** The live NL-1 specs plus the catch-up seeds peak at 998 requests an hour (limit 1,000). A capture restart that fires the three tide specs while a seed runs reaches 1,038, which the owner accepted on these conditions:
 

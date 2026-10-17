@@ -377,8 +377,9 @@ export type TideKind = 'astro' | 'extreme' | 'extreme_astro';
 //    neighbours and highs and lows alternate. A series that breaks it (fewer than 2 values, equal neighbours, two
 //    highs or two lows in a row), that lost a value between its first and last kept one (`gap`, `unknown_quality`,
 //    `conflict`, `out_of_range`: the rest may still alternate with every label after the hole flipped, review CR-2)
-//    or whose consecutive extremes lie more than 10 h apart (a missing extreme) stores nothing from this payload and
-//    counts its values as `hwlw_unlabelled` (retained). `astro` rows carry no label.
+//    or whose consecutive extremes lie more than 12 h apart (a missing pair, `EXTREME_MAX_SPACING_MS`) has no
+//    alternation label: a measured `extreme` series stores nothing from this payload and counts its values as
+//    `hwlw_unlabelled` (retained); an `extreme_astro` one, see #174 below. `astro` rows carry no label.
 //  - #174: RWS does label the astronomical extremes, in a type series of its own (`normaliseTideType` below), which
 //    the loader reads from `tide_label`. So an `extreme_astro` series that does not alternate keeps its rows with a
 //    null label, and the pipeline takes RWS's label for them or stores nothing (`hwlw_unlabelled` there). Measured
