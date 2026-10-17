@@ -165,8 +165,11 @@ export async function markDirty(tx: Tx, now: Date, entries: readonly DirtyEntry[
  */
 export const PENDING_BUMPS_KEY = 'bump_pending';
 /** Checked on every read (review SR-5): a malformed set is replaced or cleared, never a throw in the tick. */
+/** At most this many deferred days per family (round 2, R2-S3: about 55 years; the writer clips to settled days). */
+const MAX_PENDING_DAYS = 20_000;
+const PendingDays = z.array(z.iso.date()).max(MAX_PENDING_DAYS).optional();
 const PendingSchema = z.strictObject({
-  days: z.strictObject({ public: z.array(z.iso.date()).optional(), owner: z.array(z.iso.date()).optional() }),
+  days: z.strictObject({ public: PendingDays, owner: PendingDays }),
   since: z.iso.datetime(),
   last: z.iso.datetime(),
 });

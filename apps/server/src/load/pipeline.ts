@@ -250,6 +250,8 @@ export class Loader {
   /** The highest end offset of a damaged line counted per file: a line re-read after a stall is not counted again. */
   private readonly badSeen = new Map<string, number>();
   private stalled: { id: string; since: number; alerted: number } | undefined;
+  /** When `bump_flush_failed` was last alerted while the flush keeps failing (round 2, M1: as a stall, not per tick). */
+  private bumpFailAlerted: number | undefined;
   private readonly adapters: Readonly<Record<string, LoadAdapter>>;
   badLines = 0;
 
@@ -379,7 +381,12 @@ export class Loader {
         return flushBumps(tx, this.deps.now());
       });
       if (flushed === 'bad') this.deps.alert('bump_pending_bad', {});
+      this.bumpFailAlerted = undefined;
     } catch (err) {
+      // Alerted when the failure starts, then at most every STALL_ALERT_MS while it lasts (not once per tick).
+      const now = this.deps.now().getTime();
+      if (this.bumpFailAlerted !== undefined && now - this.bumpFailAlerted < STALL_ALERT_MS) return;
+      this.bumpFailAlerted = now;
       this.deps.alert('bump_flush_failed', { code: errorCode(err) });
     }
   }

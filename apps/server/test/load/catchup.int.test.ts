@@ -164,9 +164,16 @@ describe('a malformed pending set and a failing flush', { timeout: 300_000 }, ()
     const good = await versions('public');
     // A version map bumpDays cannot write into: the flush throws.
     await setMeta(versionKey('public'), 5);
-    expect(await tick(T1 + 17 * MIN)).toEqual({ lines: 0, loaded: 0 });
+    // One loader, as in production (the throttle lives in it); the harness reads this Date on every now().
+    const clock = new Date(T1 + 17 * MIN);
+    const failing = h.loader({ now: clock });
+    expect(await failing.tick()).toEqual({ lines: 0, loaded: 0 });
     expect(h.alerts).toEqual([{ code: 'bump_flush_failed', fields: { code: 'unknown' } }]);
     expect(await meta<Pending>(PENDING_BUMPS_KEY)).not.toBeNull();
+    // Throttled like a stall (review round 2, M1): its next failing tick within 15 minutes alerts nothing new.
+    clock.setTime(T1 + 17 * MIN + 30_000);
+    expect(await failing.tick()).toEqual({ lines: 0, loaded: 0 });
+    expect(h.alerts).toHaveLength(1);
     // The tail still loads.
     await put(T1 + 18 * MIN - 1000);
     expect(await tick(T1 + 18 * MIN)).toEqual({ lines: 1, loaded: 1 });
