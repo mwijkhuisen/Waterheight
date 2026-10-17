@@ -13,6 +13,8 @@ export const NOW = new Date('2026-10-26T12:00:00Z');
 export const XSS = '<img src=x onerror=alert(1)>';
 
 /** The few MapLibre and ECharts calls the tests make inside the page. */
+/** A `sourcedata` event, as far as the specs read it (`tile` is set on a tile's load). */
+export type SourceDataEvent = { sourceId?: string; tile?: { tileID?: { key?: unknown } } };
 export interface HookMap {
   getFeatureState(f: { source: string; sourceLayer?: string; id: string }): Record<string, unknown>;
   getPaintProperty(layer: string, name: string): unknown;
@@ -26,8 +28,8 @@ export interface HookMap {
   getSource(id: string): { getData(): Promise<unknown> } | undefined;
   jumpTo(o: { center: [number, number]; zoom: number }): void;
   once(event: string, fn: () => void): void;
-  on(event: string, fn: (e: { sourceId?: string; tile?: { tileID?: { key?: unknown } } }) => void): void;
-  off(event: string, fn: (e: { sourceId?: string; tile?: { tileID?: { key?: unknown } } }) => void): void;
+  on(event: string, fn: (e: SourceDataEvent) => void): void;
+  off(event: string, fn: (e: SourceDataEvent) => void): void;
   isSourceLoaded(id: string): boolean;
   isMoving(): boolean;
   project(lngLat: [number, number]): { x: number; y: number };

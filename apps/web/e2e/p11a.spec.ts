@@ -9,6 +9,7 @@ import {
   msgRx,
   open,
   panelOf,
+  type SourceDataEvent,
   start,
   type W,
   XSS,
@@ -293,7 +294,7 @@ test('a flow step reloads no river tile', async ({ page, context, baseURL }) => 
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
     let loads = new Map<string, number>();
     let lastTile = performance.now();
-    const count = (e: { sourceId?: string; tile?: { tileID?: { key?: unknown } } }) => {
+    const count = (e: SourceDataEvent) => {
       if (e.sourceId !== 'rivers' || e.tile === undefined) return;
       const key = String(e.tile.tileID?.key);
       loads.set(key, (loads.get(key) ?? 0) + 1);
