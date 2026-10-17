@@ -182,6 +182,109 @@ specs:
       required: [Succesvol, AquoMetadataLijst, LocatieLijst, AquoMetadataLocatieLijst]
       count: LocatieLijst
       min: 500
+  # ---- P16a (roadmap 2): the rest of the RWS network, captured only; no loader entry before P16b. One tier per spec
+  # (D25), each from a seed row set: sea (coast, Scheldt and delta stations that matter for the tide) every 10 min,
+  # wide (other coast, delta, offshore and river stations) every 30 min, slow (lakes, canals) hourly. Minutes sit
+  # between the roadmap-1 runs (:01, :03/:33, :25, :45) so that at most two runs are in flight (budget.test.ts).
+  - id: nl-1-obs-sea
+    source: NL-1
+    version: 1
+    cron: "7-59/10 * * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1, where: { tier: sea }, key: [code, quantity, hoedanigheid] }
+    params: { proces: meting }
+    window: { default: PT3H, max: P31D, overlap: PT1H }
+    # measured 2026-10-17: 6.3 KB for PT3H (borssele/H); a P31D catch-up of 10-minute values is about 1.1 MB
+    max_bytes: 2097152
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  - id: nl-1-obs-wide
+    source: NL-1
+    version: 1
+    cron: "13,43 * * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1, where: { tier: wide }, key: [code, quantity, hoedanigheid] }
+    params: { proces: meting }
+    window: { default: PT6H, max: P31D, overlap: PT1H }
+    # measured 2026-10-17: 11.3 KB for PT6H (a12/H, MSL); a P31D catch-up is about 1.1 MB
+    max_bytes: 2097152
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  - id: nl-1-obs-slow
+    source: NL-1
+    version: 1
+    cron: "53 * * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1, where: { tier: slow }, key: [code, quantity, hoedanigheid] }
+    params: { proces: meting }
+    window: { default: PT6H, max: P31D, overlap: PT1H }
+    # measured 2026-10-17: 11.6 KB for PT6H (aa.helmond/Q); a P31D catch-up is about 1.1 MB
+    max_bytes: 2097152
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  # The tide, one request per location and Hoedanigheid (nl-1-tide.csv), spread over the night by `space_ms` (120 s
+  # between two starts) so that the three runs add about 30 requests an hour each and never overlap each other:
+  # measured high and low water daily, the astronomical tide and its high and low water monthly.
+  - id: nl-1-hwlw
+    source: NL-1
+    version: 1
+    cron: "0 1 * * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1-tide, where: { series: hwlw }, key: [code, hoedanigheid], space_ms: 119000 }
+    params: { proces: meting }
+    window: { default: P3D, max: P31D, overlap: P1D }
+    # measured 2026-10-17: HTTP 204 (vlissingen/NAP, GETETM2) for P3D and for a one-off P31D; no size to scale from, so the 2 MiB of the other obs specs
+    max_bytes: 2097152
+    retention: obs
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  # 400 days ahead of the run: 57,600 values a location (under 160,000), the published end is 2027-12-31 and a
+  # later run picks up 2028 once RWS publishes it.
+  - id: nl-1-astro
+    source: NL-1
+    version: 1
+    cron: "0 4 1 * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1-tide, where: { series: astro }, key: [code, hoedanigheid], space_ms: 119000 }
+    params: { proces: astronomisch, ahead: P400D }
+    # measured 2026-10-17: 17.0 MB (57,600 values; 0.45 MB zstd), 1.54x headroom
+    max_bytes: 26214400
+    retention: forever
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
+  - id: nl-1-hwlw-astro
+    source: NL-1
+    version: 1
+    cron: "0 21 2 * *"
+    request:
+      method: POST
+      url: https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen
+      headers: { content-type: application/json, accept: application/json }
+      build: true
+    variants: { seed: nl-1-tide, where: { series: hwlw-astro }, key: [code, hoedanigheid], space_ms: 119000 }
+    params: { proces: astronomisch, ahead: P400D }
+    # measured 2026-10-17: 457 KB (goeree.lichteiland/MSL, GETETBRKDMSL2), 4.6x headroom
+    max_bytes: 2097152
+    retention: forever
+    validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
   - id: nl-2-wfs
     source: NL-2
     version: 1

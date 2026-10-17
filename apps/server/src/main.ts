@@ -57,7 +57,7 @@ const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; wat
   backfill takes <plan|run|status|pause|resume|abort> (plan --spec <id> [--from D] [--to D] [--series key,…] [--dry-run];
   run [--until <instant>]; pause|resume|abort --job <id>))`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
-const RWS_LIMIT = 400;
+const RWS_LIMIT = 1000;
 
 export type Listen = { hostname: string; port: number };
 

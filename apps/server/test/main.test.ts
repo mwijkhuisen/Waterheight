@@ -146,7 +146,7 @@ describe('role dispatcher', () => {
     const out: string[] = [];
     expect(dryRun((l) => out.push(l))).toBe(0);
     const text = out.join('\n');
-    expect(text).toMatch(/specs loaded; RWS requests\/hour \(busiest 60 min\): \d+ \(limit 400\)/);
+    expect(text).toMatch(/specs loaded; RWS requests\/hour \(busiest 60 min\): \d+ \(limit 1000\)/);
     expect(text).toContain('nl-1-fc-1h');
     expect(text).toContain('ddapi20-waterwebservices.rijkswaterstaat.nl');
   });

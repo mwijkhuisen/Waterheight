@@ -18,7 +18,7 @@ describe.each(registry.specs.map((s) => [s.id, s] as const))('%s', (_, s) => {
   const f = fixtureFor(s);
 
   it('passes its recorded fixture', async () => {
-    const v = await validate(s.validity, 200, f.body);
+    const v = await validate(s.validity, f.meta.status ?? 200, f.body); // nl-1-hwlw: GETETM2 answered 204 (P16a)
     expect(v.reason).toBeNull();
     expect(v.ok).toBe(true);
   });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { adapter, buildCheck } from '../../src/adapters/nl-1/capture.ts';
 import { baseRequest } from '../../src/capture/specs.ts';
 import type { Row } from '../../src/http/types.ts';
-import { registry } from '../capture/helpers.ts';
+import { fixture, spec } from '../capture/helpers.ts';
 
 // P14a additions to the NL-1 capture adapter: the optional Q Hoedanigheid (backfill only) and the probe body.
 
@@ -23,8 +23,8 @@ describe('Q Hoedanigheid', () => {
   const to = new Date('2026-06-10T00:00:00Z');
 
   it('live bodies are byte-identical to what they were: every row of every NL-1 observation spec', () => {
-    const specs = registry.specs.filter((s) => s.source === 'NL-1' && s.id.startsWith('nl-1-obs'));
-    expect(specs.length).toBeGreaterThanOrEqual(3);
+    // Roadmap 1's three observation specs; the P16a ones (sea, wide, slow, tide) carry their own rows and bodies.
+    const specs = ['nl-1-obs-key', 'nl-1-obs-other', 'nl-1-obs-twin'].map((id) => spec(id));
     for (const s of specs) {
       expect(s.params.hoedanigheid === undefined || s.params.hoedanigheid === 'TAW', s.id).toBe(true);
       for (const row of s.rows) {
@@ -112,5 +112,121 @@ describe('buildCheck', () => {
     expect(JSON.parse(buildCheck({ code: 'x', quantity: 'H' }, from, to)).AquoMetadataLijst[0].Hoedanigheid).toEqual({
       Code: 'NAP',
     });
+  });
+});
+
+// P16a: roadmap 1's remaining request bodies stay byte-identical (forecast H and Q, backfill Q with NVT), and the new
+// row fields and params build the new bodies; anything outside the enums throws.
+describe('P16a request bodies', () => {
+  const req = { url: 'https://x.invalid/', method: 'POST' as const, headers: {}, variant: 'v' };
+  const now = new Date('2026-10-17T12:34:56Z');
+  const b = (row: Row, params: Record<string, string>, window: { from: Date; to: Date } | null = null) =>
+    (adapter.build as NonNullable<typeof adapter.build>)({ req, row, now, window, params }).body ?? '';
+  const per = (code: string, aquo: string, from: string, to: string) =>
+    `{"Locatie":{"Code":"${code}"},"AquoPlusWaarnemingMetadata":{"AquoMetadata":${aquo}},"Periode":{"Begindatumtijd":"${from}","Einddatumtijd":"${to}"}}`;
+  const win = { from: new Date('2026-10-17T09:00:30Z'), to: new Date('2026-10-17T12:00:00Z') };
+
+  it('forecast H and Q, as they were', () => {
+    const h =
+      '{"Compartiment":{"Code":"OW"},"Grootheid":{"Code":"WATHTE"},"Hoedanigheid":{"Code":"NAP"},"ProcesType":"verwachting"}';
+    const q = '{"Grootheid":{"Code":"Q"},"ProcesType":"verwachting"}';
+    expect(b({ code: 'a', quantity: 'H' }, { proces: 'verwachting' })).toBe(
+      per('a', h, '2026-10-17T12:24:00Z', '2026-10-19T12:34:00Z'),
+    );
+    expect(b({ code: 'a', quantity: 'Q' }, { proces: 'verwachting' })).toBe(
+      per('a', q, '2026-10-17T12:24:00Z', '2026-10-19T12:34:00Z'),
+    );
+    for (const id of ['nl-1-fc-1h', 'nl-1-fc-3h-0']) {
+      const s = spec(id);
+      for (const row of s.rows)
+        expect(b(row, s.params), `${id} ${row.code}`).toBe(
+          per(row.code as string, row.quantity === 'Q' ? q : h, '2026-10-17T12:24:00Z', '2026-10-19T12:34:00Z'),
+        );
+    }
+  });
+
+  it('the backfill Q body (params NVT, a row with no hoedanigheid) is unchanged', () => {
+    expect(b({ code: 'a', quantity: 'Q' }, { proces: 'meting', hoedanigheid: 'NVT' }, win)).toBe(
+      per(
+        'a',
+        '{"Grootheid":{"Code":"Q"},"Hoedanigheid":{"Code":"NVT"},"ProcesType":"meting"}',
+        '2026-10-17T09:00:00Z',
+        '2026-10-17T12:00:00Z',
+      ),
+    );
+    // An empty seed field is no field.
+    expect(b({ code: 'a', quantity: 'Q', hoedanigheid: '' }, { proces: 'meting' }, win)).toBe(
+      per('a', '{"Grootheid":{"Code":"Q"},"ProcesType":"meting"}', '2026-10-17T09:00:00Z', '2026-10-17T12:00:00Z'),
+    );
+  });
+
+  it('the row names its Hoedanigheid, grouping and method', () => {
+    const p = { proces: 'meting' };
+    expect(b({ code: 'a', quantity: 'H', hoedanigheid: 'MSL' }, p, win)).toContain(
+      '"Hoedanigheid":{"Code":"MSL"},"ProcesType":"meting"}',
+    );
+    expect(b({ code: 'a', quantity: 'H', hoedanigheid: 'TAW' }, p, win)).toContain('"Hoedanigheid":{"Code":"TAW"}');
+    expect(b({ code: 'a', quantity: 'Q', hoedanigheid: 'NVT' }, p, win)).toContain('"Hoedanigheid":{"Code":"NVT"}');
+    expect(
+      JSON.parse(b({ code: 'a', quantity: 'H', hoedanigheid: 'NAP', groepering: 'GETETM2' }, p, win))
+        .AquoPlusWaarnemingMetadata.AquoMetadata,
+    ).toEqual({
+      Compartiment: { Code: 'OW' },
+      Grootheid: { Code: 'WATHTE' },
+      Groepering: { Code: 'GETETM2' },
+      Hoedanigheid: { Code: 'NAP' },
+      ProcesType: 'meting',
+    });
+    expect(
+      JSON.parse(
+        b(
+          { code: 'a', quantity: 'H', hoedanigheid: 'NAP', method: 'other:F012' },
+          { proces: 'astronomisch', ahead: 'P400D' },
+        ),
+      ).AquoPlusWaarnemingMetadata.AquoMetadata,
+    ).toEqual({
+      Compartiment: { Code: 'OW' },
+      Grootheid: { Code: 'WATHTE' },
+      Hoedanigheid: { Code: 'NAP' },
+      ProcesType: 'astronomisch',
+      WaardeBepalingsMethode: { Code: 'other:F012' },
+    });
+  });
+
+  it('ahead is a forward window from the minute: 400 days is 57,600 values', () => {
+    const body = JSON.parse(
+      b({ code: 'a', quantity: 'H', hoedanigheid: 'NAP' }, { proces: 'astronomisch', ahead: 'P400D' }),
+    );
+    expect(body.Periode).toEqual({ Begindatumtijd: '2026-10-17T12:34:00Z', Einddatumtijd: '2027-11-21T12:34:00Z' });
+    expect(() => b({ code: 'a', quantity: 'H' }, { proces: 'astronomisch', ahead: 'P1200D' })).toThrow(/160000/);
+    expect(() => b({ code: 'a', quantity: 'H' }, { proces: 'astronomisch', ahead: 'tomorrow' })).toThrow();
+  });
+
+  it('fails closed on anything outside the enums', () => {
+    const row = { code: 'a', quantity: 'H' };
+    expect(() => b(row, { proces: 'forecast' }, win)).toThrow(/proces/);
+    expect(() => b({ ...row, hoedanigheid: 'NVT' }, { proces: 'meting' }, win)).toThrow(/hoedanigheid/);
+    expect(() => b({ code: 'a', quantity: 'Q', hoedanigheid: 'NAP' }, { proces: 'meting' }, win)).toThrow(
+      /hoedanigheid/,
+    );
+    expect(() => b({ ...row, groepering: 'GETETX' }, { proces: 'meting' }, win)).toThrow(/groepering/);
+    expect(() => b({ ...row, method: 'other:F12' }, { proces: 'meting' }, win)).toThrow(/method/);
+  });
+
+  // The request fields come back in the recorded answers (smoke recordings of 2026-10-17, trimmed copies).
+  it.each([
+    ['nl-1-astro-vlissingen-nap', 'NAP', ''],
+    ['nl-1-hwlw-astro-goeree-lichteiland-msl', 'MSL', 'GETETBRKDMSL2'],
+  ])('%s states ProcesType astronomisch, its Hoedanigheid and Groepering', (name, hoedanigheid, groepering) => {
+    const doc = JSON.parse(fixture('NL-1', name).body.toString('utf8')) as {
+      WaarnemingenLijst: {
+        AquoMetadata: { ProcesType: string; Hoedanigheid: { Code: string }; Groepering: { Code: string } };
+      }[];
+    };
+    expect(doc.WaarnemingenLijst).toHaveLength(1);
+    const aquo = doc.WaarnemingenLijst[0]?.AquoMetadata;
+    expect(aquo?.ProcesType).toBe('astronomisch');
+    expect(aquo?.Hoedanigheid?.Code).toBe(hoedanigheid);
+    expect(aquo?.Groepering?.Code).toBe(groepering);
   });
 });

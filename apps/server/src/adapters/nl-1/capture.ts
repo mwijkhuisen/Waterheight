@@ -1,3 +1,4 @@
+import { durationMs } from '@rws/core';
 import type { Adapter } from '../../http/types.ts';
 
 // NL-1 RWS WaterWebservices (catalogue §2.1): POST OphalenWaarnemingen, one
@@ -6,32 +7,61 @@ import type { Adapter } from '../../http/types.ts';
 // A spec with `params.hoedanigheid: TAW` asks for the TAW duplicate instead
 // (the Eijsden-grens twin, §4.1). Forecasts use ProcesType `verwachting` over
 // T−10 min … T+48 h.
+// P16a: a seed row may carry its own `hoedanigheid` (H: NAP, MSL, TAW, PLAATSLR; Q: NVT), a `groepering` (the
+// high and low water groupings) and a `method`; `params.proces` may also be `astronomisch`, and
+// `params.ahead` asks a window forward from now (the astronomical tide). Seed values are registry data,
+// still enum-guarded: anything else throws, so no request is built from an unknown string.
 
 const utc = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 const MINUTE = 60_000;
+const PROCES = new Set(['meting', 'verwachting', 'astronomisch']);
+const H_DATUM = new Set(['NAP', 'MSL', 'TAW', 'PLAATSLR']);
+const GROEPERING = new Set(['GETETM2', 'GETETMSL2', 'GETETBRKD2', 'GETETBRKDMSL2']);
+const METHOD = /^other:F\d{3}$/;
+/** RWS answers at most 160,000 values per request (catalogue §2.1); the finest step asked is 10 minutes. */
+const MAX_VALUES = 160_000;
+const STEP_MS = 10 * MINUTE;
 
 export const adapter: Adapter = {
   build({ req, row, now, window, params }) {
-    const proces = params.proces === 'verwachting' ? 'verwachting' : 'meting';
-    const aquo =
-      row.quantity === 'Q'
-        ? {
-            Grootheid: { Code: 'Q' },
-            // Only the backfill names it (P14a: NVT); live bodies stay as they were.
-            ...(params.hoedanigheid === undefined ? {} : { Hoedanigheid: { Code: params.hoedanigheid } }),
-            ProcesType: proces,
-          }
-        : {
-            Compartiment: { Code: 'OW' },
-            Grootheid: { Code: 'WATHTE' },
-            Hoedanigheid: { Code: params.hoedanigheid === 'TAW' ? 'TAW' : 'NAP' },
-            ProcesType: proces,
-          };
+    const proces = params.proces ?? 'meting';
+    if (!PROCES.has(proces)) throw new Error('nl-1: bad proces');
+    const q = row.quantity === 'Q';
+    const own = row.hoedanigheid ?? '';
+    if (own !== '' && !(q ? own === 'NVT' : H_DATUM.has(own))) throw new Error('nl-1: bad hoedanigheid');
+    const groepering = row.groepering ?? '';
+    if (groepering !== '' && !GROEPERING.has(groepering)) throw new Error('nl-1: bad groepering');
+    const method = row.method ?? '';
+    if (method !== '' && !METHOD.test(method)) throw new Error('nl-1: bad method');
+    const aquo = q
+      ? {
+          Grootheid: { Code: 'Q' },
+          // Only the backfill and the P16a rows name it (NVT); live bodies stay as they were.
+          ...(own !== ''
+            ? { Hoedanigheid: { Code: own } }
+            : params.hoedanigheid === undefined
+              ? {}
+              : { Hoedanigheid: { Code: params.hoedanigheid } }),
+          ProcesType: proces,
+        }
+      : {
+          Compartiment: { Code: 'OW' },
+          Grootheid: { Code: 'WATHTE' },
+          ...(groepering === '' ? {} : { Groepering: { Code: groepering } }),
+          Hoedanigheid: { Code: own !== '' ? own : params.hoedanigheid === 'TAW' ? 'TAW' : 'NAP' },
+          ProcesType: proces,
+          ...(method === '' ? {} : { WaardeBepalingsMethode: { Code: method } }),
+        };
     let from: Date;
     let to: Date;
-    if (proces === 'verwachting') {
-      // Whole minutes, so a repeated fetch of the same run hashes the same.
-      const t = Math.floor(now.getTime() / MINUTE) * MINUTE;
+    // Whole minutes, so a repeated fetch of the same run hashes the same.
+    const t = Math.floor(now.getTime() / MINUTE) * MINUTE;
+    if (params.ahead !== undefined) {
+      const ahead = durationMs(params.ahead);
+      if (ahead / STEP_MS > MAX_VALUES) throw new Error('nl-1: ahead exceeds 160000 values');
+      from = new Date(t);
+      to = new Date(t + ahead);
+    } else if (proces === 'verwachting') {
       from = new Date(t - 10 * MINUTE);
       to = new Date(t + 48 * 60 * MINUTE);
     } else if (window !== null) {
