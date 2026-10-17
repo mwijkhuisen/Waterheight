@@ -13,7 +13,7 @@ import { isFresh, type SeedRecord, type StatusPaths, writeDailyReport, writeStat
 // process was down runs once, staggered. A spec seen for the first time counts
 // as fresh until its first attempt, and a daily or weekly one runs once,
 // staggered (A§7.2 "once at first start"). A failed daily/weekly run retries
-// hourly until its next tick. The group's shortest-cadence spec drives the
+// hourly until its next tick, asking only for the variants that did not succeed (P16a). The group's shortest-cadence spec drives the
 // healthchecks ping: /start, then success when every spec of the group is
 // fresh and no page alert is pending, else /fail.
 
@@ -91,10 +91,11 @@ export async function startRecorder(deps: RecorderDeps): Promise<Recorder> {
 
   async function runScheduled(spec: LoadedSpec): Promise<void> {
     const cadence = (spec.cadence_s as number) * 1000;
-    const group = groupOf(spec);
-    if (group) await deps.pinger.ping(group.slug, 'start');
+    // Taken before the first await, so a skip never outlives the retry that set it.
     const skip = retrySkip.get(spec.id);
     retrySkip.delete(spec.id);
+    const group = groupOf(spec);
+    if (group) await deps.pinger.ping(group.slug, 'start');
     const summary = await runSpec(spec, deps, {
       deadline: deps.now().getTime() + 0.9 * cadence,
       ...(skip === undefined ? {} : { skip }),

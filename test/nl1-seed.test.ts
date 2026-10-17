@@ -179,6 +179,7 @@ describe('invariant 1: the P16a specs ask only what the seeds say', () => {
   // (a forecast, 400 days of astronomical tide) into obs. P16b replaces this test with the real loader tests.
   it('none of the six, and none of the capture-only contract probes, has a loader entry yet', () => {
     const loaded = Object.keys(LOAD_ADAPTERS['NL-1']?.specs ?? {});
+    expect(loaded).toContain('nl-1-obs-key'); // the NL-1 entry exists, so the check below is not vacuous
     for (const id of [...specs.map((s) => s.id), ...CAPTURE_ONLY]) expect(loaded, id).not.toContain(id);
   });
 

@@ -237,9 +237,10 @@ specs:
   # The tide, one request per location and Hoedanigheid (nl-1-tide.csv): measured high and low water daily, the
   # astronomical tide and its high and low water monthly. `space_ms` 179000 makes a 180 s period (1 s of latency
   # plus the pause), at most 20 requests an hour each, and a run of about 4 h: hwlw 83 rows 00:00-04:06, hwlw-astro
-  # 79 rows 04:30-08:24, astro 79 rows 20:00-23:54 UTC. All three start at second 30: a 180 s period would
-  # otherwise put a row on the second at which the 10-minute NL-1 runs start (minutes 21, 51, ...), three requests
-  # at once. A monthly run is projected onto every day by the budget model, and the three windows do not overlap
+  # 79 rows 04:30-08:24, astro 79 rows 20:00-23:54 UTC. All three start at second 30: in the budget model
+  # (1 s a request) a 180 s period would otherwise put a row on the second at which the 10-minute NL-1 runs start
+  # (minutes 21, 51, ...), three requests at once; at a real latency the rows drift, and the transport's two
+  # connections per origin queue any third. A monthly run is projected onto every day by the budget model, and the three windows do not overlap
   # each other (test/capture/budget.test.ts).
   - id: nl-1-hwlw
     source: NL-1
