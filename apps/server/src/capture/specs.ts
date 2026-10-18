@@ -17,8 +17,12 @@ export const REGISTRY_DIR = new URL('../../../../registry/', import.meta.url);
 const Duration = z.string().regex(/^-?P(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?)?$/);
 /** P14b (review S5): a member pattern becomes a RegExp, so it is code-only (a backfill provider's), never registry data. */
 export const RegistryValidity = ValiditySpec.refine(
-  (v) => v.zip?.member_pattern === undefined && v.zip?.header_all === undefined,
-  'zip.member_pattern and zip.header_all are code-only, never from capture.yaml',
+  (v) =>
+    v.zip?.member_pattern === undefined &&
+    v.zip?.header_all === undefined &&
+    v.zip?.max_total === undefined &&
+    v.zip?.max_ratio === undefined,
+  'zip.member_pattern, header_all, max_total and max_ratio are code-only (a backfill provider’s), never capture.yaml',
 );
 
 /** ISO 8601 duration subset (days, hours, minutes; optional leading minus) in ms. */

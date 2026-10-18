@@ -72,6 +72,11 @@ describe('plan --dry-run of the committed open-archive specs', { timeout: 60_000
         expect(r.totals[k], `${spec} ${k}`).toBe(r.rows.reduce((a, x) => a + x[k], 0));
       // Every spec with a target stops at DATA_FLOOR.
       expect(r.totals).toMatchObject({ spec, to: '2026-08-01T00:00:00.000Z' });
+      // A reuse provider (DE-8) also states the night its slices take: each waits for its load (review C4).
+      const t = r.totals as unknown as { hours_with_loads?: number; hours_at_pace: number; chunks: number };
+      if (spec === 'de-8-backfill-w')
+        expect(t.hours_with_loads).toBe(Math.round(t.hours_at_pace * 10 + (t.chunks * 8) / 360) / 10);
+      else expect(t.hours_with_loads, spec).toBeUndefined();
       db += r.totals.db_bytes;
       report.push({ ...r.totals });
     }

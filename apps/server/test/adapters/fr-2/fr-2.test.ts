@@ -167,7 +167,7 @@ describe('the DST proof fixtures (synthetic, before the cutover)', () => {
   });
 
   it('the loader wiring: FR-2 is gated, its spec has the proof, and it is a backfill into FR-1', async () => {
-    expect(TIME).toEqual({ kind: 'naive-local', zone: 'Europe/Paris', dst: { gap: 'reject', overlap: 'reject' } });
+    expect(TIME).toEqual({ kind: 'naive-local', zone: 'Europe/Paris', dst: { gap: 'reject', overlap: 'earlier' } });
     expect(ADAPTER_TIME['FR-2']).toEqual(TIME);
     expect(DST_PROOF['fr-2-backfill-elab']).toEqual({
       fallBack: ['fr-2-elab-dst-fall-back.synthetic'],
@@ -175,7 +175,14 @@ describe('the DST proof fixtures (synthetic, before the cutover)', () => {
     });
     expect(DST_REFUSED).not.toContain('fr-2-backfill-elab');
     const spec = LOAD_ADAPTERS['FR-2']?.specs['fr-2-backfill-elab'];
-    expect(spec).toMatchObject({ maxBytes: 16 * 1024 * 1024, needsVariant: false, backfill: true, obsTarget: 'FR-1' });
+    // windowSlackMs: a pre-2007 day starts at Paris midnight, at most 2 h before its UTC day (the pipeline's clip).
+    expect(spec).toMatchObject({
+      maxBytes: 16 * 1024 * 1024,
+      needsVariant: false,
+      backfill: true,
+      obsTarget: 'FR-1',
+      windowSlackMs: 2 * 3_600_000,
+    });
     // The spec's run is parse + normalise with the line's window.
     const win = window('2007-03-01', '2007-05-01');
     const { body, fetchedAt } = load('fr-2-elab-chooz-hixnj-cutover');
@@ -186,6 +193,14 @@ describe('the DST proof fixtures (synthetic, before the cutover)', () => {
 });
 
 describe('the time rule', () => {
+  it('a day whose midnight came twice starts at the first one (1976-09-26: summer time ended at 01:00; round 2 F1)', () => {
+    expect(new Date(dayInstant('1976-09-26')).toISOString()).toBe('1976-09-25T22:00:00.000Z');
+    expect(new Date(dayInstant('1976-09-27')).toISOString()).toBe('1976-09-26T23:00:00.000Z');
+    // Every day of 1950-2007 has an instant (the property below once drew 1976-09-26 and failed).
+    for (let t = Date.UTC(1950, 0, 1); t < Date.UTC(2007, 2, 23); t += 86_400_000)
+      expect(Number.isFinite(dayInstant(new Date(t).toISOString().slice(0, 10)))).toBe(true);
+  });
+
   it('the cutover is 2007-03-23: the day before is a Paris day, the day itself a UTC day', () => {
     expect(UTC_FROM_DAY).toBe('2007-03-23');
     expect(new Date(dayInstant('2007-03-21')).toISOString()).toBe('2007-03-20T23:00:00.000Z');

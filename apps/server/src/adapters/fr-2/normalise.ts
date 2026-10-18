@@ -38,10 +38,13 @@ import type { ElabRecord } from './parse.ts';
 // Ledger identities (Backfilled): provider_values = rows + Σ dropped + unknown_values.
 
 export const SOURCE = 'FR-2';
+// A day starts at its first midnight (review round 2, F1): on 1976-09-26 summer time ended at 01:00, so 00:00 came twice
+// in Paris (+02:00, then +01:00); `reject` quarantined any record of that day. It is the one ambiguous midnight of
+// 1950-2007 (scanned); no Paris midnight falls in a spring gap.
 export const TIME: TimeConvention = {
   kind: 'naive-local',
   zone: 'Europe/Paris',
-  dst: { gap: 'reject', overlap: 'reject' },
+  dst: { gap: 'reject', overlap: 'earlier' },
 };
 
 /** The first day that is a UTC day (earlier days start at the Paris midnight). */

@@ -55,7 +55,7 @@ const declared: Readonly<Record<string, TimeConvention | null>> = {
   'CH-9': { kind: 'iso-offset' },
   'DE-8': { kind: 'fixed-offset', offset: '+01:00' },
   'FR-1': FR1,
-  'FR-2': { kind: 'naive-local', zone: 'Europe/Paris', dst: { gap: 'reject', overlap: 'reject' } },
+  'FR-2': { kind: 'naive-local', zone: 'Europe/Paris', dst: { gap: 'reject', overlap: 'earlier' } },
   'FR-3': FR3,
   'FR-4': FR4,
   'FR-5': FR5,
