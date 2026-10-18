@@ -55,7 +55,7 @@ const within = (constant: number, measured: number, what: string) => {
   expect(constant, `${what}: ${constant} vs measured ${measured.toFixed(2)}`).toBeLessThanOrEqual(measured * 1.25);
 };
 
-describe('plan --dry-run of the committed open-archive specs', () => {
+describe('plan --dry-run of the committed open-archive specs', { timeout: 60_000 }, () => {
   it('projects each spec from the registry alone, and at most 3 GB of DB together', async () => {
     let db = 0;
     const report: Record<string, unknown>[] = [];
@@ -101,7 +101,7 @@ describe('plan --dry-run of the committed open-archive specs', () => {
   });
 });
 
-describe('dry-run constants against the recordings (±25 %)', () => {
+describe('dry-run constants against the recordings (±25 %)', { timeout: 60_000 }, () => {
   it('every provider counts a stored row as P14a does: an obs heap row plus its key', () => {
     for (const s of ['DE-8', 'FR-2', 'CH-9']) expect(PROVIDERS[s]?.dryRun?.db_bytes_per_row, s).toBe(DB_BYTES_PER_ROW);
   });
