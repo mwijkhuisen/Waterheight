@@ -758,7 +758,11 @@ describe('newest fetch wins, whatever order the payloads arrive in (review C2, C
   });
 });
 
-describe('the NL fixture archive: NL-1 and NL-2 payloads load, and a replay changes nothing', () => {
+// As the describes above: since P16b the NL-1 registry (and the NL-2 drift report against it) is about five times
+// larger, and the CI runner took more than the 5 s default for this replay (PR #181).
+describe('the NL fixture archive: NL-1 and NL-2 payloads load, and a replay changes nothing', {
+  timeout: 60_000,
+}, () => {
   it('loads every payload, stores no NL-2 row, and replaying either source writes nothing', async () => {
     const n = await harness();
     try {
