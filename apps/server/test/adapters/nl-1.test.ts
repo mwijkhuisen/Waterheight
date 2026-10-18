@@ -314,6 +314,40 @@ describe('rules', () => {
     expect(out).toEqual({ obs: [], gaugeZeros: [], dropped: { unregistered_method: 17 }, unknown: 0 });
   });
 
+  it('#184: a processed list (the daily mean GEM24H) of a series we store is counted as processed and never merged', () => {
+    const gem = { WaardeBewerkingsMethode: 'GEM24H' };
+    const nvtOnly = normalise(eijsden, base);
+    expect(nvtOnly.obs).toHaveLength(17);
+    // (i) A GEM24H copy of the registered series' list, before or after it: 17 processed, the rows are the NVT ones.
+    const mean = recode(eijsden, 'eijsden.grens', gem);
+    for (const order of [
+      [...eijsden, ...mean],
+      [...mean, ...eijsden],
+    ]) {
+      const out = normalise(order, base);
+      expect(out.obs).toEqual(nvtOnly.obs);
+      expect(out.dropped).toEqual({ processed: 17 });
+      expect(out.unknown).toBe(0);
+    }
+    expect(normalise(mean, base)).toEqual({ obs: [], gaugeZeros: [], dropped: { processed: 17 }, unknown: 0 });
+    // (ii) Under another method of a registered combination (Lobith Q is F230 here): processed, not unregistered_method.
+    const q = lists('nl-1-obs-other-lobith-bovenrijn-tolkamer-q');
+    const at = ctx('nl-1-obs-other-lobith-bovenrijn-tolkamer-q');
+    const lobith = 'lobith.bovenrijn.tolkamer';
+    const f216 = { WaardeBepalingsMethode: 'other:F216' };
+    expect(normalise(recode(q, lobith, f216), at).dropped).toEqual({ unregistered_method: 35 });
+    expect(normalise(recode(q, lobith, { ...f216, ...gem }), at).dropped).toEqual({ processed: 35 });
+    // (iii) A combination the registry does not hold keeps its old reading: unknown, never processed.
+    expect(normalise(recode(eijsden, 'nowhere', gem), base)).toEqual({
+      obs: [],
+      gaugeZeros: [],
+      dropped: {},
+      unknown: 1,
+    });
+    // (iv) An unregistered TAW combination stays a datum duplicate.
+    expect(normalise(recode(lists('nl-1-obs-twin'), 'stevensweert', gem), base).dropped).toEqual({ datum: 17 });
+  });
+
   it('a series the registry does not know is counted, never registered; an inherited name is no series', () => {
     // P16b registered sasvangent; a code that is no RWS point at all stands for the unregistered ones.
     for (const code of ['not.a.rws.point', 'nowhere', 'constructor', '__proto__', 'toString']) {
@@ -553,6 +587,50 @@ describe('property and fuzz tests', () => {
         expect(normalise(toLists(regrouped), base).obs).toEqual(normalise(toLists(groups), base).obs);
       }),
       { numRuns: 200 },
+    );
+  });
+
+  it('#184: a processed list of a registered key changes nothing but the processed count, whatever it holds or where it stands', () => {
+    const processedValue = fc.record({
+      i: fc.integer({ min: 0, max: template.metingen.length - 1 }),
+      value: fc.oneof(fc.integer({ min: -1_000_000, max: 1_000_000 }), fc.double({ min: -1e6, max: 1e6, noNaN: true })),
+      quality: fc.constantFrom('00', '10', '20', '25', '30', '40', '99', '50', 'AB'),
+      status: fc.constantFrom('Ongecontroleerd', 'Gecontroleerd', 'Definitief'),
+    });
+    const bewerking = fc.oneof(
+      fc.constant('GEM24H'),
+      fc.stringMatching(/^[A-Z0-9]{2,8}$/).filter((s) => s !== 'NVT'),
+    );
+    const reference = normalise([template], base);
+    expect(reference.obs.length).toBeGreaterThan(0);
+    fc.assert(
+      fc.property(
+        bewerking,
+        fc.uniqueArray(processedValue, { selector: (v) => v.i, maxLength: template.metingen.length }),
+        fc.boolean(),
+        (Code, picked, before) => {
+          const processed: Waarnemingen = {
+            ...template,
+            aquo: { ...template.aquo, WaardeBewerkingsMethode: { Code, Omschrijving: '' } },
+            metingen: picked.map(({ i, value, quality, status }) => {
+              const m = template.metingen[i] as Waarnemingen['metingen'][number];
+              return {
+                ...m,
+                Meetwaarde: { Waarde_Alfanumeriek: String(value), Waarde_Numeriek: value },
+                WaarnemingMetadata: { ...m.WaarnemingMetadata, Kwaliteitswaardecode: quality, Statuswaarde: status },
+              } as Waarnemingen['metingen'][number];
+            }),
+          };
+          const out = normalise(before ? [processed, template] : [template, processed], base);
+          expect(out.obs).toEqual(reference.obs);
+          expect(out.unknown).toBe(reference.unknown);
+          expect(out.dropped).toEqual({
+            ...reference.dropped,
+            ...(picked.length > 0 ? { processed: picked.length } : {}),
+          });
+        },
+      ),
+      { numRuns: 100 },
     );
   });
 

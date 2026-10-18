@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { SchemaDrift } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { parseCheck } from '../../src/adapters/nl-1/parse.ts';
+import { parseCheck, parseWaarnemingen, type Waarnemingen } from '../../src/adapters/nl-1/parse.ts';
 import { LOAD_ADAPTERS, type LoadContext } from '../../src/load/adapters.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
@@ -47,12 +47,12 @@ describe('backfill golden files (real payloads)', () => {
     expect(Math.max(...out.obs.map((o) => o.value))).toBe(1666);
   });
 
-  it('Lobith Q 2010 with Hoedanigheid NVT: the hourly F216 list and the daily mean are both dropped as unregistered_method (the registry has F230)', () => {
+  it('Lobith Q 2010 with Hoedanigheid NVT: the hourly F216 list is unregistered_method (the registry has F230), the daily mean GEM24H is processed', () => {
     const out = run('nl-1-backfill-lobith-q-20100101');
     expect(out).toEqual(golden('nl-1-backfill-lobith-q-20100101', out));
     expect(out.obs).toHaveLength(0);
     expect(out.provider_values).toBe(251);
-    expect(out.dropped).toEqual({ unregistered_method: 251 });
+    expect(out.dropped).toEqual({ unregistered_method: 241, processed: 10 });
   });
 
   it('Lobith H 1960: a daily F009 list, not the live method: nothing is stored', () => {
@@ -65,14 +65,30 @@ describe('backfill golden files (real payloads)', () => {
 });
 
 describe('KG-355: older history carries a 4-digit quality code', () => {
-  it('Lith H 2003-01-29 .. 03-10: 5,801 provider values: 5,724 stored (Gecontroleerd), 10 code 1004 unknown_quality, 52 conflict, 14 duplicate, 1 outside_backfill', () => {
+  it('Lith H 2003-01-29 .. 03-10: 5,801 provider values: 5,750 stored (Gecontroleerd), 10 code 1004 unknown_quality, 40 daily means processed, 1 outside_backfill', () => {
     const win = { from: Date.parse('2003-01-29T00:00:00Z'), to: Date.parse('2003-03-10T00:00:00Z') };
     const out = run('nl-1-backfill-lith-h-20030129', win);
     expect(out).toEqual(golden('nl-1-backfill-lith-h-20030129', out));
-    expect(out.obs).toHaveLength(5724);
+    expect(out.obs).toHaveLength(5750);
     expect(out.obs.every((o) => (o.qc & 2) === 2)).toBe(true);
     expect(out.provider_values).toBe(5801);
-    expect(out.dropped).toEqual({ unknown_quality: 10, conflict: 52, duplicate: 14, outside_backfill: 1 });
+    expect(out.dropped).toEqual({ unknown_quality: 10, processed: 40, outside_backfill: 1 });
+    // The second list is RWS's daily mean (GEM24H), stamped D 00:00+01:00 on instants the 10-minute list also states,
+    // with other values at 26 of them. Before #184 it was merged into the series: those 26 midnights became
+    // conflicts and were lost, and the other 14 duplicates. Now every stored row is the instantaneous value.
+    const lists = parseWaarnemingen(rawFixture('NL-1', 'nl-1-backfill-lith-h-20030129').body);
+    const at = (list: Waarnemingen) =>
+      new Map(list.metingen.map((m) => [Date.parse(m.Tijdstip), m.Meetwaarde.Waarde_Numeriek]));
+    const nvt = lists.filter((l) => l.aquo.WaardeBewerkingsMethode.Code === 'NVT').map(at);
+    const means = lists.filter((l) => l.aquo.WaardeBewerkingsMethode.Code === 'GEM24H').map(at);
+    expect([nvt.length, means.length]).toEqual([1, 1]);
+    const stored = new Map(out.obs.map((o) => [Date.parse(o.ts), o.value]));
+    let differing = 0;
+    for (const [ts, mean] of means[0] ?? []) {
+      expect(stored.get(ts)).toBe(nvt[0]?.get(ts));
+      if (mean !== nvt[0]?.get(ts)) differing += 1;
+    }
+    expect(differing).toBe(26);
   });
 });
 

@@ -155,11 +155,15 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * type series that is neither `hoogwater` nor `laagwater` (never stored or logged). `hwlw_type_conflict` (RWS's label and
  * the alternation label of a row differ) is NOT here: the row is stored with RWS's label, so a replay would load
  * nothing more; it is counted in `dropped` and alerted once per payload, outside the RETAINED loop.
+ * #184: `processed`, an NL-1 list of processed values (WaardeBewerkingsMethode other than NVT, such as the daily mean
+ * GEM24H) of a series or combination we store: never merged into the instantaneous series; a registered series of its
+ * own and a replay could load it.
  */
 export const RETAINED = [
   'unit_mismatch',
   'unknown_zero_unit',
   'unregistered_method',
+  'processed',
   'unknown_quality',
   'conflict',
   'registered_dropped',
